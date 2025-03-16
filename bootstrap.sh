@@ -18,6 +18,11 @@ brew bundle --file="$DIR/Brewfile"
 git clone --recursive https://github.com/sorin-ionescu/prezto.git "${ZDOTDIR:-$HOME}/.zprezto"
 git clone --recursive https://github.com/belak/prezto-contrib "${ZDOTDIR:-$HOME}/.zprezto/contrib"
 
+MACOS_GHOSTTY_CONFIG="$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+if [ -f "$MACOS_GHOSTTY_CONFIG" ]; then
+    rm "$MACOS_GHOSTTY_CONFIG"
+fi
+
 stow -t "$HOME" zsh git mise ghostty
 
 # mise
