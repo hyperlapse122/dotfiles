@@ -11,6 +11,8 @@ fi
 # Install Homebrew formulae and casks
 brew bundle --file="$DIR/Brewfile"
 
-# Link mise configuration files and install it
+# Link mise configuration file and install it
 mkdir -p "~/.config/mise" && ln -fs "$DIR/configurations/mise.toml" "$HOME/.config/mise/config.toml" && mise install
+
+# Link git configuration file
 ln -fs "$DIR/configurations/gitconfig" "$HOME/.gitconfig"
