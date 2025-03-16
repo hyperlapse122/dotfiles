@@ -80,3 +80,11 @@ export PATH="$PATH:$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
 
 # mise
 eval "$(mise activate zsh)"
+
+# Android SDK
+ANDROID_HOME=$HOME/Library/Android/sdk
+if [ -d $ANDROID_HOME ]; then
+  export ANDROID_HOME
+  export PATH=$PATH:$ANDROID_HOME/emulator
+  export PATH=$PATH:$ANDROID_HOME/platform-tools
+fi

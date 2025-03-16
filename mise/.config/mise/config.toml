@@ -1,5 +1,10 @@
 [tools]
+bun = "latest"
 "cargo:git-trim" = "latest"
+deno = "latest"
+go = "latest"
+java = "zulu-17"
 node = "latest"
+ruby = "3.2"
 rust = "latest"
 yarn = "latest"

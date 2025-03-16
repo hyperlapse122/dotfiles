@@ -39,3 +39,4 @@ background-opacity = 0.8
 background-blur = true
 font-feature = +tnum
 desktop-notifications = true
+shell-integration-features = sudo
