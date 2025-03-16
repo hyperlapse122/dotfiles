@@ -1,7 +1,10 @@
 #!/usr/bin/env zsh
 
+set -xeuo pipefail
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Install Homebrew
 if ! command -v brew &>/dev/null; then
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/hyperlapse/.zprofile
@@ -11,8 +14,11 @@ fi
 # Install Homebrew formulae and casks
 brew bundle --file="$DIR/Brewfile"
 
-# Link mise configuration file and install it
-mkdir -p "~/.config/mise" && ln -fs "$DIR/configurations/mise.toml" "$HOME/.config/mise/config.toml" && mise install
+# Install prezto
+git clone --recursive https://github.com/sorin-ionescu/prezto.git "${ZDOTDIR:-$HOME}/.zprezto"
+git clone --recursive https://github.com/belak/prezto-contrib "${ZDOTDIR:-$HOME}/.zprezto/contrib"
 
-# Link git configuration file
-ln -fs "$DIR/configurations/gitconfig" "$HOME/.gitconfig"
+stow -t "$HOME" zsh git mise ghostty
+
+# mise
+mise trust --all && mise install
