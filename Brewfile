@@ -1,9 +1,11 @@
 tap "bufbuild/buf"
 tap "homebrew/bundle"
+tap "homebrew/services"
 brew "git"
 brew "git-lfs"
 brew "gnupg"
 brew "libyaml"
+brew "mariadb", restart_service: :changed
 brew "mise"
 brew "pinentry-mac"
 brew "stow"
