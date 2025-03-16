@@ -22,3 +22,4 @@ stow -t "$HOME" zsh git mise ghostty
 
 # mise
 mise trust --all && mise install
+ln -s ~/.local/share/mise ~/.asdf
