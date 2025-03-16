@@ -1,0 +1,13 @@
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[user]
+	name = Joosung Park
+	email = iam@hyperlapse.dev
+	signingkey = A7F1956CD1A035A139BC7ABFCC740A29852C0E95
+[gpg]
+	program = gpg
+[commit]
+	gpgsign = true
