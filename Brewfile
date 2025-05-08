@@ -1,6 +1,7 @@
 tap "bufbuild/buf"
 tap "homebrew/bundle"
 tap "homebrew/services"
+tap "minio/stable"
 brew "git"
 brew "git-lfs"
 brew "gnupg"

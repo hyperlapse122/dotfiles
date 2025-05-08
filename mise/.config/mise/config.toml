@@ -4,10 +4,13 @@ bun = "latest"
 deno = "latest"
 go = "latest"
 java = "zulu-23"
-node = "latest"
+node = "24"
 "pipx:mcp-server-git" = "latest"
 python = "latest"
 ruby = "3.4"
 rust = "latest"
 uv = "latest"
 yarn = "latest"
+
+[settings]
+idiomatic_version_file_enable_tools = []
