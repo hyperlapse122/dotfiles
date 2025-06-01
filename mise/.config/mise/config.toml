@@ -1,16 +1,16 @@
 [tools]
 bun = "latest"
-"cargo:git-trim" = "latest"
 deno = "latest"
 go = "latest"
 java = "zulu-17"
 node = "24"
-"pipx:mcp-server-git" = "latest"
-python = "latest"
 ruby = "3.4"
-rust = "latest"
-uv = "latest"
 yarn = "latest"
+python = "latest"
+uv = "latest"
+"pipx:mcp-server-git" = "latest"
+rust = "latest"
+"cargo:git-trim" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
