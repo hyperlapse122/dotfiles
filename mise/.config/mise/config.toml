@@ -11,6 +11,8 @@ uv = "latest"
 "pipx:mcp-server-git" = "latest"
 rust = "latest"
 "cargo:git-trim" = "latest"
+swift = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
+experimental = true
