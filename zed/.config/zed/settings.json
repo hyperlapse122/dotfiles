@@ -35,9 +35,18 @@
       "settings": {
         "require_config_file": true
       }
+    },
+    "vtsls": {
+      "settings": {
+        // For TypeScript:
+        "typescript": { "tsserver": { "maxTsServerMemory": 16184 } },
+        // For JavaScript:
+        "javascript": { "tsserver": { "maxTsServerMemory": 16184 } }
+      }
     }
   },
   "minimap": {
     "show": "auto"
-  }
+  },
+  "language_servers": ["!biome", "..."]
 }
