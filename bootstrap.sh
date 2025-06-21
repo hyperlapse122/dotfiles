@@ -23,7 +23,7 @@ if [ -f "$MACOS_GHOSTTY_CONFIG" ]; then
     rm "$MACOS_GHOSTTY_CONFIG"
 fi
 
-stow -t "$HOME" zsh git mise ghostty gnupg
+stow -t "$HOME" zsh git mise ghostty gnupg zed
 
 # mise
 mise trust --all && mise install
