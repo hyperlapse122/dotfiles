@@ -12,7 +12,7 @@
   "ui_font_fallbacks": ["Pretendard JP"],
   "buffer_font_size": 14,
   "buffer_font_family": "JetBrainsMono Nerd Font",
-  "buffer_font_fallbacks": ["D2CodingLigature Nerd Font"],
+  "buffer_font_fallbacks": ["D2CodingLigature Nerd Font", "D2Coding ligature"],
   "buffer_font_features": {
     "calt": true
   },
@@ -25,7 +25,9 @@
     "biome": true,
     "graphql": true,
     "html": true,
-    "dockerfile": true
+    "dockerfile": true,
+    "git-firefly": true,
+    "toml": true
   },
   "autosave": "on_window_change",
   "restore_on_startup": "none",
@@ -48,5 +50,5 @@
   "minimap": {
     "show": "auto"
   },
-  "language_servers": ["!biome", "..."]
+  "language_servers": ["!biome", "!typescript-language-server", "..."]
 }
