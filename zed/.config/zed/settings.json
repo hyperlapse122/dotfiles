@@ -27,7 +27,8 @@
     "html": true,
     "dockerfile": true,
     "git-firefly": true,
-    "toml": true
+    "toml": true,
+    "wakatime": true
   },
   "autosave": "on_window_change",
   "restore_on_startup": "none",
