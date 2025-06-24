@@ -12,6 +12,7 @@ uv = "latest"
 rust = "latest"
 "cargo:git-trim" = "latest"
 swift = "latest"
+"npm:@anthropic-ai/claude-code" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
