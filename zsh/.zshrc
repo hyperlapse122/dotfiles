@@ -13,5 +13,7 @@ fi
 # Customize to your needs...
 
 # Task Master aliases
-alias tm='task-master'
-alias taskmaster='task-master'
+if command -v task-master &>/dev/null; then
+  alias tm='task-master'
+  alias taskmaster='task-master'
+fi

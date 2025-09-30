@@ -75,11 +75,15 @@ fi
 # Homebrew
 eval "$(brew shellenv)"
 
-# JetBrains Toolbox
-export PATH="$PATH:$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
-
 # mise
 eval "$(mise activate zsh)"
+
+# JetBrains Toolbox
+JETBRAINS_TOOLBOX_HOME="$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
+if [ -d $ANDROID_HOME ]; then
+  export JETBRAINS_TOOLBOX_HOME
+  export PATH="$PATH:$JETBRAINS_TOOLBOX_HOME"
+fi
 
 # Android SDK
 ANDROID_HOME=$HOME/Library/Android/sdk
@@ -89,6 +93,8 @@ if [ -d $ANDROID_HOME ]; then
   export PATH=$PATH:$ANDROID_HOME/platform-tools
 fi
 
-# Added by OrbStack: command-line tools and integration
-# This won't be added again if you remove it.
-source ~/.orbstack/shell/init.zsh 2>/dev/null || :
+# OrbStack
+ORBSTACK_SHELL_INIT="$HOME/.orbstack/shell/init.zsh"
+if [ -f "$ORBSTACK_SHELL_INIT" ]; then
+  source "ORBSTACK_SHELL_INIT" 2>/dev/null || :
+fi
