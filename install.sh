@@ -2,7 +2,13 @@
 
 set -xeuo pipefail
 
+os=$(uname)
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configure macOS settings
+if [[ "$os" == "Darwin" ]]; then
+  source macos/configure.sh
+fi
 
 # Install Homebrew formulae and casks
 brew bundle --file="$DIR/Brewfile"

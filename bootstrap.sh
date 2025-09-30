@@ -9,8 +9,10 @@ if ! command -v brew &>/dev/null; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
-brew install git git-lfs
-git-lfs install
+if ! command -v git &>/dev/null; then
+  brew install git git-lfs
+  git-lfs install
+fi
 
 # Clone the repo then it's not cloned yet
 if [ ! -d "${ZDOTDIR:-$HOME}/.dotfiles" ]; then
