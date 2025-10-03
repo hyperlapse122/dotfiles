@@ -72,11 +72,17 @@ if [[ -z "$LESSOPEN" ]] && (( $#commands[(i)lesspipe(|.sh)] )); then
   export LESSOPEN="| /usr/bin/env $commands[(i)lesspipe(|.sh)] %s 2>&-"
 fi
 
-# Homebrew
-eval "$(brew shellenv)"
+os=$(uname)
+# Configure macOS settings
+if [[ "$os" == "Darwin" ]]; then
+  # Homebrew
+  eval "$(brew shellenv)"
 
-# mise
-eval "$(mise activate zsh)"
+  # mise
+  eval "$(mise activate zsh)"
+elif [[ "$os" == "Linux" ]]; then
+  eval "$($HOME/.local/bin/mise activate zsh)"
+fi
 
 # JetBrains Toolbox
 JETBRAINS_TOOLBOX_HOME="$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
