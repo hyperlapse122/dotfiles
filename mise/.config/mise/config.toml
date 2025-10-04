@@ -13,6 +13,7 @@ rust = "latest"
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:mcp-remote" = "latest"
 "npm:task-master-ai" = "latest"
+usage = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
