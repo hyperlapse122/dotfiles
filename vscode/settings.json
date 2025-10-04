@@ -12,5 +12,8 @@
             "text": "Use conventional commit message format."
         }
     ],
-    "editor.fontLigatures": true
+    "editor.fontLigatures": true,
+    "git.confirmSync": false,
+    "git.autofetch": true,
+    "git.enableSmartCommit": true
 }
