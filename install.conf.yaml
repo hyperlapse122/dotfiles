@@ -1,0 +1,13 @@
+- defaults:
+    link:
+      relink: true
+
+- link:
+    "~/.config/Code/User/settings.json":
+      path: vscode/settings.json
+      create: true
+      force: true
+    "~/.config/Code/User/keybindings.json":
+      path: vscode/keybindings.json
+      create: true
+      force: true

@@ -1,0 +1,16 @@
+{
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
+    "editor.tabSize": 2,
+    "editor.aiStats.enabled": true,
+    "editor.smoothScrolling": true,
+    "github.copilot.chat.codesearch.enabled": true,
+    "github.copilot.chat.agent.thinkingTool": true,
+    "git.enableCommitSigning": true,
+    "github.copilot.chat.commitMessageGeneration.instructions": [
+        {
+            "text": "Use conventional commit message format."
+        }
+    ],
+    "editor.fontLigatures": true
+}

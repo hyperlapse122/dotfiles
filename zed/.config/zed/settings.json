@@ -11,7 +11,7 @@
     "edit_prediction_provider": "copilot"
   },
   "inlay_hints": {
-    "enabled": true
+    "enabled": false
   },
   "ui_font_size": 16,
   "ui_font_family": "Pretendard",
