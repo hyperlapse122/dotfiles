@@ -2,16 +2,20 @@
 
 set -xeuo pipefail
 
-# Install Homebrew
-if ! command -v brew &>/dev/null; then
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-fi
+_OS=$(uname)
 
-if ! command -v git &>/dev/null; then
-  brew install git git-lfs
-  git-lfs install
+if [[ "$_OS" == "Darwin" ]]; then
+  # Install Homebrew
+  if ! command -v brew &>/dev/null; then
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # shellcheck disable=SC2016
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  fi
+
+  if ! command -v git &>/dev/null; then
+    brew install git git-lfs
+  fi
 fi
 
 # Clone the repo then it's not cloned yet

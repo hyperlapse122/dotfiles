@@ -37,7 +37,6 @@ zstyle ':prezto:load' pmodule \
   'directory' \
   'spectrum' \
   'git' \
-  'gpg' \
   'osx' \
   'utility' \
   'completion' \
