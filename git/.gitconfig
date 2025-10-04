@@ -5,7 +5,7 @@
 	required = true
 [user]
 	name = Joosung Park
-	email = iam@hyperlapse.dev
+	email = iam@h82.dev
 	signingkey = A7F1956CD1A035A139BC7ABFCC740A29852C0E95
 [gpg]
 	program = gpg
