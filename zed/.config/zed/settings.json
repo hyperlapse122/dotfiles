@@ -7,12 +7,18 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "features": {
+    "edit_prediction_provider": "copilot"
+  },
+  "inlay_hints": {
+    "enabled": true
+  },
   "ui_font_size": 16,
   "ui_font_family": "Pretendard",
   "ui_font_fallbacks": ["Pretendard JP"],
   "buffer_font_size": 14,
   "buffer_font_family": "JetBrainsMono Nerd Font",
-  "buffer_font_fallbacks": ["D2CodingLigature Nerd Font", "D2Coding ligature"],
+  "buffer_font_fallbacks": ["D2CodingLigature Nerd Font"],
   "buffer_font_features": {
     "calt": true
   },
@@ -32,7 +38,7 @@
   },
   "autosave": "on_window_change",
   "restore_on_startup": "none",
-  "base_keymap": "JetBrains",
+  "base_keymap": "VSCode",
   "lsp": {
     "biome": {
       "settings": {
