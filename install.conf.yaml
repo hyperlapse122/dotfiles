@@ -11,3 +11,11 @@
       path: vscode/keybindings.json
       create: true
       force: true
+    "/etc/keyd/default.conf":
+      if: '[ `uname` = Linux ]'
+      path: keyd/default.conf
+      create: true
+      force: true
+
+- shell:
+  - [git submodule update --init --recursive, Installing submodules]
