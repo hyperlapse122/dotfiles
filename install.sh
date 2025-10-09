@@ -38,4 +38,5 @@ mise trust --all && mise install
 # Symlink mise to asdf for JetBrains IDEs
 ln -s ~/.local/share/mise ~/.asdf
 
-sudo ./install
+./install
+sudo ./install-root

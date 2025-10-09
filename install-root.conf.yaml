@@ -1,0 +1,10 @@
+- defaults:
+    link:
+      relink: true
+
+- link:
+    "/etc/keyd/default.conf":
+      if: '[ `uname` = Linux ]'
+      path: keyd/default.conf
+      create: true
+      force: true
