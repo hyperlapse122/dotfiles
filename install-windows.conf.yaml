@@ -29,7 +29,12 @@
       force: true
       type: hardlink
 
+- windows:
+    fonts:
+      path: "fonts/"
+
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
-  - [powershell -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
-  - [powershell -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
+  - [pwsh -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
+  # - [pwsh -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
+  # - [pwsh -ExecutionPolicy Bypass -File fonts/InstallNerdFonts.ps1, Installing fonts]

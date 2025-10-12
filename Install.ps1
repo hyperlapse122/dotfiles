@@ -15,4 +15,4 @@ Set-Location $BASEDIR
 git -C $DOTBOT_DIR submodule sync --quiet --recursive
 git submodule update --init --recursive $DOTBOT_DIR
 
-py "$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN" "-d" "$BASEDIR" "-c" "$CONFIG" @args
+py "$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN" "--plugin" "dotbot-windows/dotbot_windows.py" "-d" "$BASEDIR" "-c" "$CONFIG" @args
