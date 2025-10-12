@@ -9,7 +9,12 @@
       force: true
       type: hardlink
     "~/AppData/Roaming/gnupg/gpg.conf":
-      path: gnupg/.gnupg/gpg.conf
+      path: gnupg-windows/gpg.conf
+      create: true
+      force: true
+      type: hardlink
+    "~/AppData/Roaming/gnupg/gpg-agent.conf":
+      path: gnupg-windows/gpg-agent.conf
       create: true
       force: true
       type: hardlink
