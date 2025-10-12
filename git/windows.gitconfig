@@ -1,0 +1,19 @@
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[user]
+	name = Joosung Park
+	email = iam@h82.dev
+	signingkey = A7F1956CD1A035A139BC7ABFCC740A29852C0E95
+[gpg]
+	program = C:\\Program Files (x86)\\GnuPG\\bin\\gpg.exe
+[commit]
+	gpgsign = true
+[push]
+	recurseSubmodules = check
+[init]
+	defaultBranch = main
+[tag]
+	gpgSign = true

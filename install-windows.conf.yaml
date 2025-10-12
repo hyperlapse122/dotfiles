@@ -1,0 +1,28 @@
+- defaults:
+    link:
+      relink: true
+
+- link:
+    "~/.gitconfig":
+      path: git/windows.gitconfig
+      create: true
+      force: true
+      type: hardlink
+    "~/AppData/Roaming/gnupg/gpg.conf":
+      path: gnupg/.gnupg/gpg.conf
+      create: true
+      force: true
+      type: hardlink
+    "~/AppData/Roaming/Code/User/settings.json":
+      path: vscode/settings.json
+      create: true
+      force: true
+      type: hardlink
+    "~/AppData/Roaming/Code/User/keybindings.json":
+      path: vscode/keybindings.json
+      create: true
+      force: true
+      type: hardlink
+
+- shell:
+  - [git submodule update --init --recursive, Installing submodules]
