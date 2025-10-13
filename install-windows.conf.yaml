@@ -2,6 +2,10 @@
     link:
       relink: true
 
+- shell:
+  - [git submodule update --init --recursive, Installing submodules]
+  - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./winget/Install.ps1, Installing applications]
+
 - link:
     "~/.gitconfig":
       path: git/windows.gitconfig
@@ -38,7 +42,6 @@
       path: "fonts/pretendard/packages/"
 
 - shell:
-  - [git submodule update --init --recursive, Installing submodules]
   - [pwsh -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
   # - [pwsh -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
   - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./fonts/InstallNerdFonts.ps1, Installing fonts]
