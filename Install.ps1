@@ -12,7 +12,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 Set-Location $BASEDIR
-git -C $DOTBOT_DIR submodule sync --quiet --recursive
-git submodule update --init --recursive $DOTBOT_DIR
+git submodule sync --quiet --recursive
+git submodule update --init --recursive
 
 py "$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN" "--plugin" "dotbot-windows/dotbot_windows.py" "-d" "$BASEDIR" "-c" "$CONFIG" @args
