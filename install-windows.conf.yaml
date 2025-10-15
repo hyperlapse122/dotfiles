@@ -11,27 +11,22 @@
       path: git/windows.gitconfig
       create: true
       force: true
-      type: hardlink
     "~/AppData/Roaming/gnupg/gpg.conf":
       path: gnupg-windows/gpg.conf
       create: true
       force: true
-      type: hardlink
     "~/AppData/Roaming/gnupg/gpg-agent.conf":
       path: gnupg-windows/gpg-agent.conf
       create: true
       force: true
-      type: hardlink
     "~/AppData/Roaming/Code/User/settings.json":
       path: vscode/settings.json
       create: true
       force: true
-      type: hardlink
     "~/AppData/Roaming/Code/User/keybindings.json":
       path: vscode/keybindings.json
       create: true
       force: true
-      type: hardlink
 
 - windows:
     fonts:
