@@ -35,14 +35,12 @@
     "github.copilot.chat.languageContext.typescript.enabled": true,
     "github.copilot.nextEditSuggestions.enabled": true,
     "github.gitProtocol": "ssh",
-    "javascript.referencesCodeLens.enabled": true,
     "js/ts.implicitProjectConfig.checkJs": true,
     "js/ts.implicitProjectConfig.experimentalDecorators": true,
     "terminal.external.windowsExec": "pwsh.exe",
     "terminal.integrated.enableImages": true,
     "terminal.integrated.fontLigatures.enabled": true,
     "terminal.integrated.windowsUseConptyDll": true,
-    "typescript.referencesCodeLens.enabled": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
     "window.restoreWindows": "none"
 }
