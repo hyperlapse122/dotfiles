@@ -35,6 +35,8 @@
     "github.copilot.chat.languageContext.typescript.enabled": true,
     "github.copilot.nextEditSuggestions.enabled": true,
     "github.gitProtocol": "ssh",
+    "gitlens.ai.model": "vscode",
+    "gitlens.ai.vscode.model": "copilot:gpt-4.1",
     "js/ts.implicitProjectConfig.checkJs": true,
     "js/ts.implicitProjectConfig.experimentalDecorators": true,
     "terminal.external.windowsExec": "pwsh.exe",
