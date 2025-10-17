@@ -27,6 +27,10 @@
       path: vscode/keybindings.json
       create: true
       force: true
+    "~/AppData/Roaming/Code/User/mcp.json":
+      path: vscode/mcp.json
+      create: true
+      force: true
 
 - windows:
     fonts:

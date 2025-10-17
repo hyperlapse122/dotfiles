@@ -7,6 +7,10 @@
       path: vscode/settings.json
       create: true
       force: true
+    "~/.config/Code/User/mcp.json":
+      path: vscode/mcp.json
+      create: true
+      force: true
     "~/.config/Code/User/keybindings.json":
       path: vscode/keybindings.json
       create: true

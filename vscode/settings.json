@@ -44,5 +44,7 @@
     "terminal.integrated.fontLigatures.enabled": true,
     "terminal.integrated.windowsUseConptyDll": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
-    "window.restoreWindows": "none"
+    "window.restoreWindows": "none",
+    "terminal.integrated.stickyScroll.enabled": false,
+    "chat.mcp.gallery.enabled": true
 }
