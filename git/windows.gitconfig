@@ -17,3 +17,5 @@
 	defaultBranch = main
 [tag]
 	gpgSign = true
+[credential "http://59.150.105.130:5000"]
+	provider = generic
