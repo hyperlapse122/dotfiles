@@ -1,20 +1,29 @@
 - defaults:
     link:
       relink: true
+      create: true
+      force: true
 
 - link:
-    "~/.config/Code/User/settings.json":
-      path: vscode/settings.json
+    "~/.config/ghostty/config":
+      if: '[ `uname` = Darwin ]'
+      path: ghostty/config
       create: true
       force: true
-    "~/.config/Code/User/mcp.json":
-      path: vscode/mcp.json
-      create: true
-      force: true
-    "~/.config/Code/User/keybindings.json":
-      path: vscode/keybindings.json
-      create: true
-      force: true
-
+    ~/.config/:
+      glob: true
+      path: dotconf/config/**
+    ~/.config/Code/User/:
+      glob: true
+      path: vscode/**
+    ~/.gnupg/:
+      if: '[ `uname` = Linux ]'
+      glob: true
+      path: gnupg/**
+    ~/.gnupg/:
+      if: '[ `uname` = Darwin ]'
+      glob: true
+      path: gnupg-macos/**
+    
 - shell:
   - [git submodule update --init --recursive, Installing submodules]

@@ -11,26 +11,21 @@
       path: git/windows.gitconfig
       create: true
       force: true
-    "~/AppData/Roaming/gnupg/gpg.conf":
-      path: gnupg-windows/gpg.conf
+      relink: true
+    ~/AppData/Roaming/gnupg/:
+      if: '[ `uname` = Windows ]'
+      glob: true
       create: true
       force: true
-    "~/AppData/Roaming/gnupg/gpg-agent.conf":
-      path: gnupg-windows/gpg-agent.conf
+      relink: true
+      path: gnupg-windows/**
+    ~/AppData/Roaming/Code/User/:
+      if: '[ `uname` = Windows ]'
+      glob: true
       create: true
       force: true
-    "~/AppData/Roaming/Code/User/settings.json":
-      path: vscode/settings.json
-      create: true
-      force: true
-    "~/AppData/Roaming/Code/User/keybindings.json":
-      path: vscode/keybindings.json
-      create: true
-      force: true
-    "~/AppData/Roaming/Code/User/mcp.json":
-      path: vscode/mcp.json
-      create: true
-      force: true
+      relink: true
+      path: vscode/**
 
 - windows:
     fonts:

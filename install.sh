@@ -23,13 +23,6 @@ if [ ! -d "${ZDOTDIR:-$HOME}/.zprezto" ]; then
   git clone --recursive https://github.com/belak/prezto-contrib "${ZDOTDIR:-$HOME}/.zprezto/contrib"
 fi
 
-stow --adopt -t "$HOME" zsh git mise zed
-
-if [[ "$os" == "Darwin" ]]; then
-  stow --adopt -t "$HOME" ghostty gnupg-macos
-else
-  stow --adopt -t "$HOME" gnupg
-fi
 
 # mise
 mise use node@latest
