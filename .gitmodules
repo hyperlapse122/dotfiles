@@ -5,3 +5,6 @@
 [submodule "dotbot-windows"]
 	path = dotbot-windows
 	url = https://github.com/kurtmckee/dotbot-windows.git
+[submodule "dotbot-pacaur"]
+	path = dotbot-pacaur
+	url = https://github.com/ajlende/dotbot-pacaur
