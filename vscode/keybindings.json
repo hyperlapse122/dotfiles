@@ -1,3 +1,32 @@
-// Place your key bindings in this file to override the defaults
 [
+  {
+    "key": "backspace",
+    "command": "deleteFile",
+    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+  },
+  {
+    "key": "backspace",
+    "command": "deleteFile",
+    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+  },
+  {
+    "key": "delete",
+    "command": "deleteFile",
+    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+  },
+  {
+    "key": "shift+delete",
+    "command": "deleteFile",
+    "when": "filesExplorerFocus && foldersViewVisible && !explorerResourceMoveableToTrash && !inputFocus"
+  },
+  {
+    "key": "shift+delete",
+    "command": "-deleteFile",
+    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+  },
+  {
+    "key": "delete",
+    "command": "-deleteFile",
+    "when": "filesExplorerFocus && foldersViewVisible && !explorerResourceMoveableToTrash && !inputFocus"
+  }
 ]

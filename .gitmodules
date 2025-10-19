@@ -5,9 +5,3 @@
 [submodule "dotbot-windows"]
 	path = dotbot-windows
 	url = https://github.com/kurtmckee/dotbot-windows.git
-[submodule "fonts/pretendard"]
-	path = fonts/pretendard
-	url = https://github.com/orioncactus/pretendard.git
-[submodule "fonts/JetBrainsMono"]
-	path = fonts/JetBrainsMono
-	url = https://github.com/JetBrains/JetBrainsMono.git

@@ -5,6 +5,9 @@
       force: true
 
 - link:
+    "~":
+      glob: true
+      path: zsh/.**
     "~/.config/ghostty/config":
       if: '[ `uname` = Darwin ]'
       path: ghostty/config
@@ -13,6 +16,14 @@
     ~/.config/:
       glob: true
       path: dotconf/config/**
+    ~/.gitconfig:
+      path: git/posix.gitconfig
+    ~/.config/mise/config.toml:
+      glob: true
+      path: mise/config.toml
+    "~":
+      glob: true
+      path: mise/.default-**
     ~/.config/Code/User/:
       glob: true
       path: vscode/**
