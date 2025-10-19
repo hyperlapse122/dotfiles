@@ -3,11 +3,13 @@
       relink: true
       create: true
       force: true
-
-- link:
+  link:
     "~":
       glob: true
       path: zsh/.**
+    "~":
+      glob: true
+      path: mise/.default-**
     "~/.config/ghostty/config":
       if: '[ `uname` = Darwin ]'
       path: ghostty/config
@@ -21,9 +23,6 @@
     ~/.config/mise/config.toml:
       glob: true
       path: mise/config.toml
-    "~":
-      glob: true
-      path: mise/.default-**
     ~/.config/Code/User/:
       glob: true
       path: vscode/**
@@ -31,10 +30,10 @@
       if: '[ `uname` = Linux ]'
       glob: true
       path: gnupg/**
-    ~/.gnupg/:
-      if: '[ `uname` = Darwin ]'
-      glob: true
-      path: gnupg-macos/**
+    # ~/.gnupg/:
+    #   if: '[ `uname` = Darwin ]'
+    #   glob: true
+    #   path: gnupg-macos/**
     
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
