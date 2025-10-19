@@ -13,9 +13,9 @@
       path: ghostty/config
       create: true
       force: true
-    ~/.config/:
+    ~/.config/environment.d/:
       glob: true
-      path: dotconf/config/**
+      path: environment.d/**
     ~/.gitconfig:
       path: git/posix.gitconfig
     ~/.config/mise/config.toml:
