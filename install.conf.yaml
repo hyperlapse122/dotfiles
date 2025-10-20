@@ -18,6 +18,9 @@
     ~/.config/environment.d/:
       glob: true
       path: environment.d/**
+    ~/.config/containers/:
+      glob: true
+      path: containers/**
     ~/.gitconfig:
       path: git/posix.gitconfig
     ~/.config/mise/config.toml:

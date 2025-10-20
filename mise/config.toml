@@ -5,7 +5,6 @@ go = "latest"
 java = ["zulu-17", "zulu-24"]
 node = "24"
 yarn = "latest"
-python = "latest"
 uv = "latest"
 "pipx:mcp-server-git" = "latest"
 rust = "latest"
@@ -14,7 +13,7 @@ rust = "latest"
 "npm:mcp-remote" = "latest"
 "npm:task-master-ai" = "latest"
 usage = "latest"
-dotnet = "latest"
+dotnet = ["8.0", "latest"]
 
 [settings]
 idiomatic_version_file_enable_tools = []
