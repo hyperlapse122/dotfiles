@@ -27,15 +27,15 @@
       relink: true
       path: vscode/**
 
-- windows:
-    fonts:
-      path: "fonts/JetBrainsMono/fonts/"
+# - windows:
+#     fonts:
+#       path: "fonts/JetBrainsMono/fonts/"
 
-- windows:
-    fonts:
-      path: "fonts/pretendard/packages/"
+# - windows:
+#     fonts:
+#       path: "fonts/pretendard/packages/"
 
 - shell:
   - [pwsh -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
   # - [pwsh -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
-  - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./fonts/InstallNerdFonts.ps1, Installing fonts]
+  # - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./fonts/InstallNerdFonts.ps1, Installing fonts]
