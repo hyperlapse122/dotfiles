@@ -3,6 +3,7 @@ biomejs.biome
 denoland.vscode-deno
 docker.docker
 eamodio.gitlens
+firefox-devtools.vscode-firefox-debug
 github.codespaces
 github.copilot
 github.copilot-chat
