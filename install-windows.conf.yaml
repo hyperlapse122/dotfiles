@@ -3,6 +3,9 @@
       relink: true
 
 - shell:
+  - ["pwsh -NoProfile -ExecutionPolicy Bypass -File ./Set-Environment.ps1", Running Windows setup script]
+
+- shell:
   - [git submodule update --init --recursive, Installing submodules]
   - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./winget/Install.ps1, Installing applications]
 
