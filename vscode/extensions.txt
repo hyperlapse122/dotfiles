@@ -1,5 +1,5 @@
-anthropic.claude-code
 biomejs.biome
+bradlc.vscode-tailwindcss
 denoland.vscode-deno
 docker.docker
 eamodio.gitlens
