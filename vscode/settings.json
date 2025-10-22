@@ -1,4 +1,7 @@
 {
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
     "[jsonc]": {
         "editor.defaultFormatter": "biomejs.biome"
     },
@@ -11,7 +14,16 @@
     "biome.requireConfiguration": true,
     "biome.suggestInstallingGlobally": false,
     "chat.agent.maxRequests": 1000,
+    "chat.mcp.gallery.enabled": true,
+    "chat.tools.terminal.autoApprove": {
+        "Move-Item": true
+    },
+    "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
+    "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
     "csharp.experimental.debug.hotReload": true,
+    "dotnetAcquisitionExtension.existingDotnetPath": [
+        "~/.local/share/mise/installs/dotnet/9.0.306/dotnet"
+    ],
     "editor.aiStats.enabled": true,
     "editor.autoIndentOnPaste": true,
     "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
@@ -49,14 +61,8 @@
     "terminal.external.windowsExec": "pwsh.exe",
     "terminal.integrated.enableImages": true,
     "terminal.integrated.fontLigatures.enabled": true,
+    "terminal.integrated.stickyScroll.enabled": false,
     "terminal.integrated.windowsUseConptyDll": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
-    "window.restoreWindows": "none",
-    "terminal.integrated.stickyScroll.enabled": false,
-    "chat.mcp.gallery.enabled": true,
-    "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
-    "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
-    "dotnetAcquisitionExtension.existingDotnetPath": [
-        "~/.local/share/mise/installs/dotnet/9.0.306/dotnet"
-    ]
+    "window.restoreWindows": "none"
 }
