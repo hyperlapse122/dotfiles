@@ -25,10 +25,8 @@
         "~/.local/share/mise/installs/dotnet/9.0.306/dotnet"
     ],
     "editor.aiStats.enabled": true,
-    "editor.autoIndentOnPaste": true,
     "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
     "editor.fontLigatures": true,
-    "editor.formatOnPaste": true,
     "editor.smoothScrolling": true,
     "editor.tabSize": 2,
     "files.autoSave": "onFocusChange",
@@ -56,6 +54,7 @@
     "githubPullRequests.codingAgent.promptForConfirmation": false,
     "gitlens.ai.model": "vscode",
     "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+    "gitlens.gitkraken.mcp.autoEnabled": false,
     "js/ts.implicitProjectConfig.checkJs": true,
     "js/ts.implicitProjectConfig.experimentalDecorators": true,
     "terminal.external.windowsExec": "pwsh.exe",
