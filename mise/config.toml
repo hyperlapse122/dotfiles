@@ -14,7 +14,7 @@ rust = "latest"
 "npm:mcp-remote" = "latest"
 "npm:task-master-ai" = "latest"
 usage = "latest"
-dotnet = ["8.0", "latest"]
+python = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []

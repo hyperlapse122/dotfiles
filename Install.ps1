@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $CONFIG = $IsWindows ? "install-windows.conf.yaml" : "install.conf.yaml"
-$PYTHON_EXECUTABLE = $IsWindows ? "py" : "python"
+$PYTHON_EXECUTABLE = "python"
 
 $ROOT_CONFIG = $IsWindows ? $null : "install-root.conf.yaml"
 $DOTBOT_DIR = "dotbot"

@@ -1,1 +1,1 @@
-winget install Schniz.fnm GnuPG.Gpg4win AgileBits.1Password AgileBits.1Password.CLI Microsoft.VisualStudioCode
+winget install GnuPG.Gpg4win AgileBits.1Password AgileBits.1Password.CLI Microsoft.VisualStudioCode

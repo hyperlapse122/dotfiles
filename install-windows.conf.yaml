@@ -22,6 +22,17 @@
       force: true
       relink: true
       path: gnupg-windows/**
+    ~/.config/mise/config.toml:
+      create: true
+      force: true
+      relink: true
+      path: mise/config.toml
+    "~":
+      create: true
+      force: true
+      relink: true
+      glob: true
+      path: mise/.default-**
     ~/AppData/Roaming/Code/User/:
       if: '[ `uname` = Windows ]'
       glob: true
