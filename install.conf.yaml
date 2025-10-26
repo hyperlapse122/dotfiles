@@ -7,9 +7,12 @@
     "~":
       glob: true
       path: zsh/.**
-    "~":
+    "~/":
       glob: true
       path: mise/.default-**
+    ~/.yarnrc.yml:
+      glob: true
+      path: .yarnrc.yml
     "~/.config/ghostty/config":
       if: '[ `uname` = Darwin ]'
       path: ghostty/config
@@ -18,6 +21,8 @@
     ~/.config/environment.d/:
       glob: true
       path: environment.d/**
+    ~/.config/autostart:
+      path: dotconfig/autostart
     ~/.config/containers/:
       glob: true
       path: containers/**
@@ -37,6 +42,9 @@
     #   if: '[ `uname` = Darwin ]'
     #   glob: true
     #   path: gnupg-macos/**
+
+# - shell:
+#   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
     
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
