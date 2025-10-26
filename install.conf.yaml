@@ -29,7 +29,7 @@
       path: dotconfig/autostart
     ~/.config/containers/:
       glob: true
-      path: containers/**
+      path: dotconfig/containers/**
     ~/.gitconfig:
       path: git/posix.gitconfig
     ~/.config/mise/config.toml:
