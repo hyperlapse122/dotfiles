@@ -11,7 +11,6 @@
       glob: true
       path: mise/.default-**
     ~/.yarnrc.yml:
-      glob: true
       path: .yarnrc.yml
     "~/.config/ghostty/config":
       if: '[ `uname` = Darwin ]'
@@ -21,6 +20,11 @@
     ~/.config/environment.d/:
       glob: true
       path: environment.d/**
+    ~/.config/:
+      glob: true
+      path: dotconfig/*.conf
+    ~/.config/fcitx5:
+      path: dotconfig/fcitx5
     ~/.config/autostart:
       path: dotconfig/autostart
     ~/.config/containers/:
