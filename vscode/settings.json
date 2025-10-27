@@ -66,5 +66,6 @@
     "window.restoreWindows": "none",
     "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
     "dev.containers.dockerPath": "podman",
-    "dev.containers.dockerComposePath": "podman-compose"
+    "dev.containers.dockerComposePath": "podman-compose",
+    "emmet.preferences": {}
 }
