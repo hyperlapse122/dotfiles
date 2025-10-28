@@ -21,14 +21,18 @@
     "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
     "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
     "csharp.experimental.debug.hotReload": true,
-    "dotnetAcquisitionExtension.existingDotnetPath": [
-        "~/.local/share/mise/installs/dotnet/9.0.306/dotnet"
-    ],
+    "dev.containers.dockerComposePath": "podman-compose",
+    "dev.containers.dockerPath": "podman",
+    "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
     "editor.aiStats.enabled": true,
     "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
     "editor.fontLigatures": true,
     "editor.smoothScrolling": true,
     "editor.tabSize": 2,
+    "emmet.preferences": {},
+    "emmet.showAbbreviationSuggestions": false,
+    "explorer.autoReveal": false,
+    "explorer.incrementalNaming": "smart",
     "files.autoSave": "onFocusChange",
     "files.enableTrash": false,
     "git.autofetch": true,
@@ -55,6 +59,7 @@
     "gitlens.ai.model": "vscode",
     "gitlens.ai.vscode.model": "copilot:gpt-4.1",
     "gitlens.gitkraken.mcp.autoEnabled": false,
+    "javascript.suggest.completeFunctionCalls": true,
     "js/ts.implicitProjectConfig.checkJs": true,
     "js/ts.implicitProjectConfig.experimentalDecorators": true,
     "terminal.external.windowsExec": "pwsh.exe",
@@ -62,10 +67,10 @@
     "terminal.integrated.fontLigatures.enabled": true,
     "terminal.integrated.stickyScroll.enabled": false,
     "terminal.integrated.windowsUseConptyDll": true,
+    "typescript.preferences.autoImportFileExcludePatterns": [
+        "**/dist/**"
+    ],
+    "typescript.suggest.completeFunctionCalls": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
-    "window.restoreWindows": "none",
-    "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
-    "dev.containers.dockerPath": "podman",
-    "dev.containers.dockerComposePath": "podman-compose",
-    "emmet.preferences": {}
+    "window.restoreWindows": "none"
 }
