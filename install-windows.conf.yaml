@@ -1,6 +1,9 @@
 - defaults:
     link:
+      create: true
+      force: true
       relink: true
+      type: hardlink
 
 - shell:
   - ["pwsh -NoProfile -ExecutionPolicy Bypass -File ./Set-Environment.ps1", Running Windows setup script]
@@ -12,34 +15,17 @@
 - link:
     "~/.gitconfig":
       path: git/windows.gitconfig
-      create: true
-      force: true
-      relink: true
     ~/AppData/Roaming/gnupg/:
-      if: '[ `uname` = Windows ]'
       glob: true
-      create: true
-      force: true
-      relink: true
       path: gnupg-windows/**
     ~/.config/mise/config.toml:
-      create: true
-      force: true
-      relink: true
       path: mise/config.toml
     "~":
-      create: true
-      force: true
-      relink: true
       glob: true
       path: mise/.default-**
     ~/AppData/Roaming/Code/User/:
-      if: '[ `uname` = Windows ]'
       glob: true
-      create: true
-      force: true
-      relink: true
-      path: vscode/**
+      path: vscode/*.json
 
 # - windows:
 #     fonts:
