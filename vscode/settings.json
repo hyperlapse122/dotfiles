@@ -16,7 +16,11 @@
     "chat.agent.maxRequests": 1000,
     "chat.mcp.gallery.enabled": true,
     "chat.tools.terminal.autoApprove": {
-        "Move-Item": true
+        "Move-Item": true,
+        "Remove-Item": true,
+        "yarn": true,
+        "Set-Location": true,
+        "Copy-Item": true
     },
     "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
     "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
@@ -67,6 +71,13 @@
     "terminal.integrated.fontLigatures.enabled": true,
     "terminal.integrated.stickyScroll.enabled": false,
     "terminal.integrated.windowsUseConptyDll": true,
+    "todo-tree.general.tags": [
+        "BUG",
+        "HACK",
+        "FIXME",
+        "TODO",
+        "XXX"
+    ],
     "typescript.preferences.autoImportFileExcludePatterns": [
         "**/dist/**"
     ],

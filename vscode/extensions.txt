@@ -1,11 +1,8 @@
 biomejs.biome
 bradlc.vscode-tailwindcss
-dbaeumer.vscode-eslint
-denoland.vscode-deno
 docker.docker
 eamodio.gitlens
 editorconfig.editorconfig
-esbenp.prettier-vscode
 firefox-devtools.vscode-firefox-debug
 github.codespaces
 github.copilot
@@ -25,7 +22,6 @@ ms-vscode.cpptools-extension-pack
 ms-vscode.cpptools-themes
 ms-vscode.hexeditor
 ms-vscode.powershell
-orta.vscode-jest
 repreng.csv
 visualstudioexptteam.intellicode-api-usage-examples
 visualstudioexptteam.vscodeintellicode

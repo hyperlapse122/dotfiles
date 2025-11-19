@@ -26,6 +26,9 @@
     ~/AppData/Roaming/Code/User/:
       glob: true
       path: vscode/*.json
+    ~/AppData/Roaming/Antigravity/User/:
+      glob: true
+      path: vscode/*.json
 
 # - windows:
 #     fonts:
