@@ -83,5 +83,6 @@
     ],
     "typescript.suggest.completeFunctionCalls": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
-    "window.restoreWindows": "none"
+    "window.restoreWindows": "none",
+    "vscode-edge-devtools.webhintInstallNotification": true
 }
