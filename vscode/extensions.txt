@@ -23,7 +23,5 @@ ms-vscode.cpptools-themes
 ms-vscode.hexeditor
 ms-vscode.powershell
 repreng.csv
-visualstudioexptteam.intellicode-api-usage-examples
-visualstudioexptteam.vscodeintellicode
 vscjava.vscode-java-upgrade
 wakatime.vscode-wakatime

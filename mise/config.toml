@@ -3,16 +3,10 @@ bun = "latest"
 deno = "latest"
 go = "latest"
 java = ["zulu-17", "zulu-24"]
-node = "24"
+node = "latest"
 yarn = "latest"
-uv = "latest"
-"pipx:mcp-server-git" = "latest"
 rust = "latest"
 "cargo:git-trim" = "latest"
-"npm:@anthropic-ai/claude-code" = "latest"
-"npm:@biomejs/biome" = "latest"
-"npm:mcp-remote" = "latest"
-"npm:task-master-ai" = "latest"
 usage = "latest"
 
 [settings]
