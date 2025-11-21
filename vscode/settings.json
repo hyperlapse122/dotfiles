@@ -84,5 +84,6 @@
     "typescript.suggest.completeFunctionCalls": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
     "window.restoreWindows": "none",
-    "vscode-edge-devtools.webhintInstallNotification": true
+    "vscode-edge-devtools.webhintInstallNotification": true,
+    "python.analysis.typeCheckingMode": "basic"
 }

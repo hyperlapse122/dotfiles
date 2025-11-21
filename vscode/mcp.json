@@ -1,9 +1,12 @@
 {
 	"servers": {
-		"github/github-mcp-server": {
-			"type": "http",
-			"url": "https://api.githubcopilot.com/mcp/"
-		}
+		"google-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mcp-server/google-search-mcp@latest"
+      ]
+    }
 	},
 	"inputs": []
 }
