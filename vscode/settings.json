@@ -16,11 +16,11 @@
     "chat.agent.maxRequests": 1000,
     "chat.mcp.gallery.enabled": true,
     "chat.tools.terminal.autoApprove": {
+        "Copy-Item": true,
         "Move-Item": true,
         "Remove-Item": true,
-        "yarn": true,
         "Set-Location": true,
-        "Copy-Item": true
+        "yarn": true
     },
     "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
     "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
@@ -40,7 +40,7 @@
     "files.autoSave": "onFocusChange",
     "files.enableTrash": false,
     "git.autofetch": true,
-    "git.blame.editorDecoration.enabled": true,
+    "git.blame.editorDecoration.enabled": false,
     "git.confirmSync": false,
     "git.enableCommitSigning": true,
     "git.enableSmartCommit": true,
@@ -66,6 +66,7 @@
     "javascript.suggest.completeFunctionCalls": true,
     "js/ts.implicitProjectConfig.checkJs": true,
     "js/ts.implicitProjectConfig.experimentalDecorators": true,
+    "python.analysis.typeCheckingMode": "basic",
     "terminal.external.windowsExec": "pwsh.exe",
     "terminal.integrated.enableImages": true,
     "terminal.integrated.fontLigatures.enabled": true,
@@ -83,7 +84,6 @@
     ],
     "typescript.suggest.completeFunctionCalls": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
-    "window.restoreWindows": "none",
     "vscode-edge-devtools.webhintInstallNotification": true,
-    "python.analysis.typeCheckingMode": "basic"
+    "window.restoreWindows": "none"
 }

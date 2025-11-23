@@ -29,7 +29,7 @@ mise use node@latest
 mise trust --all && mise install
 
 # Symlink mise to asdf for JetBrains IDEs
-ln -s ~/.local/share/mise ~/.asdf
+# ln -s ~/.local/share/mise ~/.asdf
 
 ./install
 sudo ./install-root
