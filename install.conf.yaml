@@ -12,32 +12,11 @@
       path: mise/.default-**
     ~/.yarnrc.yml:
       path: .yarnrc.yml
-    "~/.config/ghostty/config":
-      if: '[ `uname` = Darwin ]'
-      path: ghostty/config
-      create: true
-      force: true
-    ~/.config/environment.d/:
-      glob: true
-      path: environment.d/**
     ~/.config/:
       glob: true
-      path: dotconfig/*.conf
-    ~/.config/fcitx5:
-      path: dotconfig/fcitx5
-    ~/.config/autostart:
-      path: dotconfig/autostart
-    ~/.config/containers/:
-      glob: true
-      path: dotconfig/containers/**
+      path: dotconfig/**/*
     ~/.gitconfig:
       path: git/posix.gitconfig
-    ~/.config/mise/config.toml:
-      glob: true
-      path: mise/config.toml
-    ~/.config/Code/User/:
-      glob: true
-      path: vscode/**
     ~/.local/share/applications/:
       glob: true
       path: dotlocal/share/applications/*.desktop
@@ -45,10 +24,6 @@
       if: '[ `uname` = Linux ]'
       glob: true
       path: gnupg/**
-    # ~/.gnupg/:
-    #   if: '[ `uname` = Darwin ]'
-    #   glob: true
-    #   path: gnupg-macos/**
 
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
