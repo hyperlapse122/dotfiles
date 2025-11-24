@@ -10,7 +10,6 @@
 
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
-  - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./winget/Install.ps1, Installing applications]
 
 - link:
     "~/.gitconfig":
