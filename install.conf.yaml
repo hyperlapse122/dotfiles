@@ -38,6 +38,9 @@
     ~/.config/Code/User/:
       glob: true
       path: vscode/**
+    ~/.local/share/applications/:
+      glob: true
+      path: dotlocal/share/applications/*.desktop
     ~/.gnupg/:
       if: '[ `uname` = Linux ]'
       glob: true
