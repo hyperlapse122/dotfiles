@@ -18,6 +18,22 @@ backend = "core:deno"
 checksum = "blake3:04f655503bd28e8a6842cc88b43102347dfd73436490d44d64ec208526a82359"
 size = 45849694
 
+[[tools.dotnet]]
+version = "10.0.100"
+backend = "asdf:dotnet"
+
+[[tools.dotnet]]
+version = "9.0.308"
+backend = "asdf:dotnet"
+
+[[tools.dotnet]]
+version = "8.0.416"
+backend = "asdf:dotnet"
+
+[[tools."dotnet:PowerShell"]]
+version = "7.5.4"
+backend = "dotnet:PowerShell"
+
 [[tools.go]]
 version = "1.25.4"
 backend = "core:go"
