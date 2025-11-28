@@ -3,7 +3,6 @@
       create: true
       force: true
       relink: true
-      type: hardlink
 
 - shell:
   - ["pwsh -NoProfile -ExecutionPolicy Bypass -File ./Set-Environment.ps1", Running Windows setup script]
@@ -18,16 +17,16 @@
       glob: true
       path: gnupg-windows/**
     ~/.config/mise/config.toml:
-      path: mise/config.toml
+      path: dotconfig/mise/config.toml
     "~":
       glob: true
       path: mise/.default-**
     ~/AppData/Roaming/Code/User/:
       glob: true
-      path: vscode/*.json
+      path: dotconfig/Code/User/*.json
     ~/AppData/Roaming/Antigravity/User/:
       glob: true
-      path: vscode/*.json
+      path: dotconfig/Code/User/*.json
 
 # - windows:
 #     fonts:

@@ -19,7 +19,7 @@ git submodule sync --quiet --recursive
 git submodule update --init --recursive
 
 if($IsWindows) {
-    & "$PYTHON_EXECUTABLE" "$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN" "--plugin" "dotbot-windows/dotbot_windows.py" "-d" "$BASEDIR" "-c" "$CONFIG" @args
+    & "$PYTHON_EXECUTABLE" "$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN" "-d" "$BASEDIR" "-c" "$CONFIG" @args
 }
 else {
     & "$PYTHON_EXECUTABLE" "$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN" "-d" "$BASEDIR" "-c" "$CONFIG" @args
