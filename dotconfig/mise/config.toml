@@ -8,7 +8,9 @@ yarn = "latest"
 rust = "latest"
 "cargo:git-trim" = "latest"
 usage = "latest"
+"npm:@github/copilot" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
 experimental = true
+lockfile = true

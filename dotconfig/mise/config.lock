@@ -1,0 +1,39 @@
+[[tools.bun]]
+version = "1.3.3"
+backend = "core:bun"
+
+[[tools."cargo:git-trim"]]
+version = "0.4.4"
+backend = "cargo:git-trim"
+
+[[tools.deno]]
+version = "2.5.6"
+backend = "core:deno"
+
+[[tools.go]]
+version = "1.25.4"
+backend = "core:go"
+
+[[tools.java]]
+version = "zulu-17.62.17.0"
+backend = "core:java"
+
+[[tools.java]]
+version = "zulu-24.32.13.0"
+backend = "core:java"
+
+[[tools.node]]
+version = "25.2.1"
+backend = "core:node"
+
+[[tools."npm:@github/copilot"]]
+version = "0.0.365"
+backend = "npm:@github/copilot"
+
+[[tools.rust]]
+version = "1.91.1"
+backend = "core:rust"
+
+[[tools.yarn]]
+version = "4.12.0"
+backend = "vfox:yarn"
