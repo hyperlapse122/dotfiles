@@ -26,6 +26,10 @@ backend = "core:java"
 version = "25.2.1"
 backend = "core:node"
 
+[[tools."npm:@biomejs/biome"]]
+version = "2.3.8"
+backend = "npm:@biomejs/biome"
+
 [[tools."npm:@github/copilot"]]
 version = "0.0.365"
 backend = "npm:@github/copilot"
