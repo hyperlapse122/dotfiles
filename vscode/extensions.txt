@@ -1,5 +1,6 @@
 biomejs.biome
 bradlc.vscode-tailwindcss
+denoland.vscode-deno
 docker.docker
 eamodio.gitlens
 editorconfig.editorconfig
@@ -9,7 +10,7 @@ github.copilot
 github.copilot-chat
 github.vscode-github-actions
 github.vscode-pull-request-github
-idleberg.nsis
+gruntfuggly.todo-tree
 mechatroner.rainbow-csv
 ms-azuretools.vscode-containers
 ms-azuretools.vscode-docker
@@ -17,4 +18,6 @@ ms-ceintl.vscode-language-pack-ko
 ms-vscode-remote.remote-containers
 ms-vscode.hexeditor
 ms-vscode.powershell
+typescriptteam.native-preview
 wakatime.vscode-wakatime
+yoavbls.pretty-ts-errors
