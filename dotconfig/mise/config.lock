@@ -6,6 +6,10 @@ backend = "core:bun"
 checksum = "blake3:21d78fbc47b9175cc18a79bc228c6b3aa92d102c3f9c006934101c6b588cc900"
 size = 39185481
 
+[tools.bun.platforms.windows-x64]
+checksum = "blake3:ccf6ccb1f36fef3e2517ee79b583781c6d94e18c1fbc36ad304e2e8389be2467"
+size = 40853922
+
 [[tools."cargo:git-trim"]]
 version = "0.4.4"
 backend = "cargo:git-trim"
@@ -18,17 +22,9 @@ backend = "core:deno"
 checksum = "blake3:04f655503bd28e8a6842cc88b43102347dfd73436490d44d64ec208526a82359"
 size = 45849694
 
-[[tools.dotnet]]
-version = "10.0.100"
-backend = "asdf:dotnet"
-
-[[tools.dotnet]]
-version = "9.0.308"
-backend = "asdf:dotnet"
-
-[[tools.dotnet]]
-version = "8.0.416"
-backend = "asdf:dotnet"
+[tools.deno.platforms.windows-x64]
+checksum = "blake3:9d1d108b5ac8d922f530228314ef33cc1fb31276db8ab6dca23632cf38a48c2c"
+size = 44790131
 
 [[tools."dotnet:PowerShell"]]
 version = "7.5.4"
@@ -43,6 +39,11 @@ checksum = "sha256:9fa5ffeda4170de60f67f3aa0f824e426421ba724c21e133c1e35d6159ca1
 size = 59766394
 url = "https://dl.google.com/go/go1.25.4.linux-amd64.tar.gz"
 
+[tools.go.platforms.windows-x64]
+checksum = "sha256:6dad204d42719795f22067553b2b042c0e710b32c5a00f6c67892865167fdfd0"
+size = 67441487
+url = "https://dl.google.com/go/go1.25.4.windows-amd64.zip"
+
 [[tools.java]]
 version = "zulu-17.62.17.0"
 backend = "core:java"
@@ -52,6 +53,11 @@ checksum = "sha256:1dcbbed73e95dc35f5c60402a84936f6830ff43c2a0dc0037a5657dbc2547
 size = 198856545
 url = "https://cdn.azul.com/zulu/bin/zulu17.62.17-ca-jdk17.0.17-linux_x64.tar.gz"
 
+[tools.java.platforms.windows-x64]
+checksum = "sha256:bd8a942bb543f109a28d3eadf3ec2f29a3ee28ab53506e31d2858292f63c6949"
+size = 196564135
+url = "https://cdn.azul.com/zulu/bin/zulu17.62.17-ca-jdk17.0.17-win_x64.zip"
+
 [[tools.java]]
 version = "zulu-24.32.13.0"
 backend = "core:java"
@@ -60,6 +66,11 @@ backend = "core:java"
 checksum = "sha256:b1e665e686661c994016c391ea6140bd7f42118f966ad2887986e2ed6f113bf5"
 size = 230212049
 url = "https://cdn.azul.com/zulu/bin/zulu24.32.13-ca-jdk24.0.2-linux_x64.tar.gz"
+
+[tools.java.platforms.windows-x64]
+checksum = "sha256:4805783d38332ab9d2144b49f51858dc56bc26eb3a810131f385229c8f2614db"
+size = 228502916
+url = "https://cdn.azul.com/zulu/bin/zulu24.32.13-ca-jdk24.0.2-win_x64.zip"
 
 [[tools.node]]
 version = "25.2.1"
