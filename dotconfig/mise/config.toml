@@ -10,8 +10,6 @@ rust = "latest"
 usage = "latest"
 "npm:@github/copilot" = "latest"
 "npm:@biomejs/biome" = "latest"
-dotnet = ["10", "9", "8"]
-"dotnet:PowerShell" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []

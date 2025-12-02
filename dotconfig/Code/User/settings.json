@@ -50,7 +50,7 @@
     "github.copilot.chat.codesearch.enabled": true,
     "github.copilot.chat.commitMessageGeneration.instructions": [
         {
-            "text": "Use conventional commit message format."
+            "text": "Use multi-line conventional commit message format. First line should be a short summary (max 72 characters), followed by a blank line, and then a detailed description if necessary.",
         }
     ],
     "github.copilot.chat.languageContext.fix.typescript.enabled": true,
@@ -85,5 +85,6 @@
     "typescript.suggest.completeFunctionCalls": true,
     "typescript.updateImportsOnFileMove.enabled": "never",
     "vscode-edge-devtools.webhintInstallNotification": true,
-    "window.restoreWindows": "none"
+    "window.restoreWindows": "none",
+    "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce"
 }
