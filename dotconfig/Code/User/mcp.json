@@ -1,12 +1,23 @@
 {
-	"servers": {
-		"google-search": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@mcp-server/google-search-mcp@latest"
-      ]
+	"inputs": [
+		{
+      "type": "promptString",
+      "id": "perplexity-key",
+      "description": "Perplexity API Key",
+      "password": true
     }
-	},
-	"inputs": []
+	],
+	"servers": {
+		"perplexity": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@perplexity-ai/mcp-server"
+			],
+			"env": {
+        "PERPLEXITY_API_KEY": "${input:perplexity-key}"
+      }
+		}
+	}
 }
