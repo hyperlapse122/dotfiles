@@ -70,6 +70,15 @@ checksum = "sha256:45b1c2942324650969b4d16c83a62d2018aa48fa0274365fb10bd3aed5f05
 size = 2810306
 url = "https://github.com/jdx/usage/releases/download/v2.8.0/usage-x86_64-unknown-linux-musl.tar.gz"
 
+[[tools.uv]]
+version = "0.9.15"
+backend = "aqua:astral-sh/uv"
+
+[tools.uv.platforms.windows-x64]
+checksum = "sha256:a6887c93a54c46de7dcc0bc798f84a130d7f411124ad43252716f75d0c2c33e0"
+size = 21099767
+url = "https://github.com/astral-sh/uv/releases/download/0.9.15/uv-x86_64-pc-windows-msvc.zip"
+
 [[tools.yarn]]
 version = "4.12.0"
 backend = "vfox:yarn"
