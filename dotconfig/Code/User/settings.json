@@ -83,5 +83,10 @@
     "vscode-edge-devtools.webhintInstallNotification": true,
     "window.restoreWindows": "none",
     "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
-    "sherlock.previewLanguageTag": "en"
+    "sherlock.previewLanguageTag": "en",
+    "terminal.integrated.autoReplies": {
+        "Terminate batch job (Y/N)": "Y\r",
+        "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r"
+    },
+    "javascript.updateImportsOnFileMove.enabled": "never"
 }
