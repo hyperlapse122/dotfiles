@@ -16,4 +16,3 @@ uv = "latest"
 idiomatic_version_file_enable_tools = []
 experimental = true
 lockfile = true
-locked = true
