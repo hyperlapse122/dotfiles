@@ -1,6 +1,5 @@
 [tools]
 bun = "latest"
-deno = "latest"
 go = "latest"
 java = ["zulu-17", "zulu-24"]
 node = "latest"
@@ -11,6 +10,7 @@ usage = "latest"
 "npm:@github/copilot" = "latest"
 "npm:@biomejs/biome" = "latest"
 uv = "latest"
+"ubi:sst/opencode" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
