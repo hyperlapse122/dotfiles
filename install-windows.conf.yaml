@@ -16,9 +16,9 @@
     ~/AppData/Roaming/gnupg/:
       glob: true
       path: gnupg-windows/**
-    ~/.config/mise:
+    ~/.config:
       glob: true
-      path: dotconfig/mise/*
+      path: dotconfig/**/*
     "~":
       glob: true
       path: mise/.default-**

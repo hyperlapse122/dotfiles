@@ -88,5 +88,9 @@
         "Terminate batch job (Y/N)": "Y\r",
         "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r"
     },
-    "javascript.updateImportsOnFileMove.enabled": "never"
+    "javascript.updateImportsOnFileMove.enabled": "never",
+    "chat.instructionsFilesLocations": {
+        ".github/instructions": true,
+        "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
+    }
 }
