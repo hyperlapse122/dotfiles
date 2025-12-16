@@ -3,10 +3,10 @@
   "google_auth": false,
   "agents": {
     "OmO": {
-      "model": "openai/gpt-5.2"
+      "model": "google/gemini-3-pro-preview"
     },
     "OmO-Plan": {
-      "model": "openai/gpt-5.2"
+      "model": "google/gemini-3-pro-preview"
     }
   }
 }
