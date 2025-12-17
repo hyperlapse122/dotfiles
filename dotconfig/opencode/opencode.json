@@ -3,13 +3,7 @@
   "plugin": [
     "oh-my-opencode"
   ],
+  "model": "openrouter/google/gemini-3-pro-preview",
   "small_model": "openrouter/moonshotai/kimi-k2-thinking",
-  "mcp": {
-    "exa": {
-      "type": "remote",
-      "url": "https://mcp.exa.ai/mcp",
-      "headers": {},
-      "oauth": {}
-    }
-  }
+  "mcp": {}
 }
