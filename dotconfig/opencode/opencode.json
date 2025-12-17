@@ -3,5 +3,13 @@
   "plugin": [
     "oh-my-opencode"
   ],
-  "small_model": "openrouter/moonshotai/kimi-k2-thinking"
+  "small_model": "openrouter/moonshotai/kimi-k2-thinking",
+  "mcp": {
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "headers": {},
+      "oauth": {}
+    }
+  }
 }

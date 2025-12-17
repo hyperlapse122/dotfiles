@@ -26,5 +26,6 @@
     "multimodal-looker": {
       "model": "openrouter/google/gemini-2.5-flash"
     }
-  }
+  },
+  "disabled_mcps": ["websearch_exa"]
 }
