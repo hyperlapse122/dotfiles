@@ -11,6 +11,7 @@ usage = "latest"
 "npm:@biomejs/biome" = "latest"
 "npm:opencode-ai" = "latest"
 uv = "latest"
+"pipx:unrpa" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
