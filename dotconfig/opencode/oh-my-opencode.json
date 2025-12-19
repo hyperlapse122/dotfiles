@@ -5,7 +5,7 @@
     "Sisyphus": {
       "model": "openrouter/google/gemini-3-pro-preview"
     },
-    "Sisyphus-Plan": {
+    "Planner-Sisyphus": {
       "model": "openrouter/google/gemini-3-pro-preview"
     },
     "OmO": {
