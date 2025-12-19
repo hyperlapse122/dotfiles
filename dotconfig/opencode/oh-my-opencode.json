@@ -8,12 +8,6 @@
     "Planner-Sisyphus": {
       "model": "openrouter/openai/gpt-5.2"
     },
-    "OmO": {
-      "model": "openrouter/openai/gpt-5.2"
-    },
-    "OmO-Plan": {
-      "model": "openrouter/openai/gpt-5.2"
-    },
     "oracle": {
       "model": "openrouter/openai/gpt-5.2"
     },
