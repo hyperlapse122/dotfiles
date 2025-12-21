@@ -1,23 +1,20 @@
 {
-	"inputs": [
-		{
+  "inputs": [
+    {
       "type": "promptString",
       "id": "perplexity-key",
       "description": "Perplexity API Key",
       "password": true
     }
-	],
-	"servers": {
-		"perplexity": {
-			"type": "stdio",
-			"command": "npx",
-			"args": [
-				"-y",
-				"@perplexity-ai/mcp-server"
-			],
-			"env": {
+  ],
+  "servers": {
+    "perplexity": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@perplexity-ai/mcp-server"],
+      "env": {
         "PERPLEXITY_API_KEY": "${input:perplexity-key}"
       }
-		}
-	}
+    }
+  }
 }

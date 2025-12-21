@@ -1,10 +1,10 @@
 {
-    "toolchains": [],
-    "excluded": [],
-    "plugins": [
-        {
-            "type": "add",
-            "pluginName": "fleet.shell"
-        }
-    ]
+  "toolchains": [],
+  "excluded": [],
+  "plugins": [
+    {
+      "type": "add",
+      "pluginName": "fleet.shell"
+    }
+  ]
 }

@@ -1,96 +1,88 @@
 {
-    "[json]": {
-        "editor.defaultFormatter": "vscode.json-language-features"
-    },
-    "[jsonc]": {
-        "editor.defaultFormatter": "biomejs.biome"
-    },
-    "[typescript]": {
-        "editor.defaultFormatter": "biomejs.biome"
-    },
-    "[typescriptreact]": {
-        "editor.defaultFormatter": "biomejs.biome"
-    },
-    "biome.requireConfiguration": true,
-    "biome.suggestInstallingGlobally": false,
-    "chat.agent.maxRequests": 1000,
-    "chat.mcp.gallery.enabled": true,
-    "chat.tools.terminal.autoApprove": {
-        "/.*/": true
-    },
-    "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
-    "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
-    "csharp.experimental.debug.hotReload": true,
-    "dev.containers.dockerComposePath": "podman-compose",
-    "dev.containers.dockerPath": "podman",
-    "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
-    "editor.aiStats.enabled": true,
-    "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
-    "editor.fontLigatures": true,
-    "editor.smoothScrolling": true,
-    "editor.tabSize": 2,
-    "emmet.preferences": {},
-    "emmet.showAbbreviationSuggestions": false,
-    "explorer.autoReveal": false,
-    "explorer.incrementalNaming": "smart",
-    "files.autoSave": "onFocusChange",
-    "files.enableTrash": false,
-    "git.autofetch": true,
-    "git.blame.editorDecoration.enabled": false,
-    "git.confirmSync": false,
-    "git.enableCommitSigning": true,
-    "git.enableSmartCommit": true,
-    "git.followTagsWhenSync": true,
-    "git.replaceTagsWhenPull": true,
-    "github.copilot.chat.agent.thinkingTool": true,
-    "github.copilot.chat.codesearch.enabled": true,
-    "github.copilot.chat.commitMessageGeneration.instructions": [
-        {
-            "text": "Use multi-line conventional commit message format. First line should be a short summary (max 72 characters), followed by a blank line, and then a detailed description if necessary.",
-        }
-    ],
-    "github.copilot.chat.languageContext.fix.typescript.enabled": true,
-    "github.copilot.chat.languageContext.inline.typescript.enabled": true,
-    "github.copilot.chat.languageContext.typescript.enabled": true,
-    "github.copilot.chat.localeOverride": "ko",
-    "github.copilot.nextEditSuggestions.enabled": true,
-    "github.gitProtocol": "ssh",
-    "githubPullRequests.codingAgent.promptForConfirmation": false,
-    "gitlens.ai.model": "vscode",
-    "gitlens.ai.vscode.model": "copilot:gpt-4.1",
-    "gitlens.gitkraken.mcp.autoEnabled": false,
-    "javascript.suggest.completeFunctionCalls": true,
-    "js/ts.implicitProjectConfig.checkJs": true,
-    "js/ts.implicitProjectConfig.experimentalDecorators": true,
-    "python.analysis.typeCheckingMode": "basic",
-    "terminal.external.windowsExec": "pwsh.exe",
-    "terminal.integrated.enableImages": true,
-    "terminal.integrated.fontLigatures.enabled": true,
-    "terminal.integrated.stickyScroll.enabled": false,
-    "terminal.integrated.windowsUseConptyDll": true,
-    "todo-tree.general.tags": [
-        "BUG",
-        "HACK",
-        "FIXME",
-        "TODO",
-        "XXX"
-    ],
-    "typescript.preferences.autoImportFileExcludePatterns": [
-        "**/dist/**"
-    ],
-    "typescript.suggest.completeFunctionCalls": true,
-    "typescript.updateImportsOnFileMove.enabled": "never",
-    "vscode-edge-devtools.webhintInstallNotification": true,
-    "window.restoreWindows": "none",
-    "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
-    "sherlock.previewLanguageTag": "en",
-    "terminal.integrated.autoReplies": {
-        "Terminate batch job (Y/N)": "Y\r",
-        "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r"
-    },
-    "javascript.updateImportsOnFileMove.enabled": "never",
-    "chat.instructionsFilesLocations": {
-        ".github/instructions": true,
-        "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "biome.requireConfiguration": true,
+  "biome.suggestInstallingGlobally": false,
+  "chat.agent.maxRequests": 1000,
+  "chat.mcp.gallery.enabled": true,
+  "chat.tools.terminal.autoApprove": {
+    "/.*/": true
+  },
+  "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
+  "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
+  "csharp.experimental.debug.hotReload": true,
+  "dev.containers.dockerComposePath": "podman-compose",
+  "dev.containers.dockerPath": "podman",
+  "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
+  "editor.aiStats.enabled": true,
+  "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
+  "editor.fontLigatures": true,
+  "editor.smoothScrolling": true,
+  "editor.tabSize": 2,
+  "emmet.preferences": {},
+  "emmet.showAbbreviationSuggestions": false,
+  "explorer.autoReveal": false,
+  "explorer.incrementalNaming": "smart",
+  "files.autoSave": "onFocusChange",
+  "files.enableTrash": false,
+  "git.autofetch": true,
+  "git.blame.editorDecoration.enabled": false,
+  "git.confirmSync": false,
+  "git.enableCommitSigning": true,
+  "git.enableSmartCommit": true,
+  "git.followTagsWhenSync": true,
+  "git.replaceTagsWhenPull": true,
+  "github.copilot.chat.agent.thinkingTool": true,
+  "github.copilot.chat.codesearch.enabled": true,
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Use multi-line conventional commit message format. First line should be a short summary (max 72 characters), followed by a blank line, and then a detailed description if necessary."
     }
+  ],
+  "github.copilot.chat.languageContext.fix.typescript.enabled": true,
+  "github.copilot.chat.languageContext.inline.typescript.enabled": true,
+  "github.copilot.chat.languageContext.typescript.enabled": true,
+  "github.copilot.chat.localeOverride": "ko",
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "github.gitProtocol": "ssh",
+  "githubPullRequests.codingAgent.promptForConfirmation": false,
+  "gitlens.ai.model": "vscode",
+  "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+  "gitlens.gitkraken.mcp.autoEnabled": false,
+  "javascript.suggest.completeFunctionCalls": true,
+  "js/ts.implicitProjectConfig.checkJs": true,
+  "js/ts.implicitProjectConfig.experimentalDecorators": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "terminal.external.windowsExec": "pwsh.exe",
+  "terminal.integrated.enableImages": true,
+  "terminal.integrated.fontLigatures.enabled": true,
+  "terminal.integrated.stickyScroll.enabled": false,
+  "terminal.integrated.windowsUseConptyDll": true,
+  "todo-tree.general.tags": ["BUG", "HACK", "FIXME", "TODO", "XXX"],
+  "typescript.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
+  "typescript.suggest.completeFunctionCalls": true,
+  "typescript.updateImportsOnFileMove.enabled": "never",
+  "vscode-edge-devtools.webhintInstallNotification": true,
+  "window.restoreWindows": "none",
+  "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
+  "sherlock.previewLanguageTag": "en",
+  "terminal.integrated.autoReplies": {
+    "Terminate batch job (Y/N)": "Y\r",
+    "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r"
+  },
+  "javascript.updateImportsOnFileMove.enabled": "never",
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true,
+    "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
+  }
 }
