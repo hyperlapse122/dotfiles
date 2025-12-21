@@ -1,0 +1,12 @@
+{
+  "name": "dotfiles",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:hyperlapse122/dotfiles.git",
+  "author": "Joosung Park <iam@h82.dev>",
+  "license": "MIT",
+  "packageManager": "yarn@4.12.0",
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.10"
+  }
+}
