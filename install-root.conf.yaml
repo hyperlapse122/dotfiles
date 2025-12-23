@@ -8,3 +8,9 @@
       path: keyd/default.conf
       create: true
       force: true
+    "/etc/libinput":
+      if: '[ `uname` = Linux ]'
+      path: libinput/**
+      glob: true
+      create: true
+      force: true
