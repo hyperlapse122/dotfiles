@@ -84,5 +84,21 @@
   "chat.instructionsFilesLocations": {
     ".github/instructions": true,
     "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
-  }
+  },
+  // allow autocomplete for ArkType expressions like "string | num"
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  // prioritize ArkType's "type" for autoimports
+  "typescript.preferences.autoImportSpecifierExcludeRegexes": [
+    "^(node:)?os$",
+    "^node_modules.+$",
+    "^type$"
+  ],
+  "kilo-code.allowedCommands": [
+    "git log",
+    "git diff",
+    "git show"
+  ],
+  "kilo-code.deniedCommands": []
 }

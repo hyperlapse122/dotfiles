@@ -2,14 +2,15 @@
   "$schema": "https://opencode.ai/config.json",
   "plugin": ["oh-my-opencode"],
   "model": "openrouter/openai/gpt-5.2",
-  "small_model": "openrouter/google/gemini-3-flash-preview",
+  "small_model": "openrouter/mistralai/mistral-small-3.2-24b-instruct",
   "mcp": {},
   "provider": {
     "openrouter": {
       "models": {
-        "perplexity/sonar-pro-search": {},
-        "perplexity/sonar-deep-research": {},
-        "google/gemini-3-pro-preview": {}
+        "google/gemini-3-pro-preview": {},
+        "moonshotai/kimi-k2-thinking": {},
+        "z-ai/glm-4.7": {},
+        "mistralai/mistral-small-3.2-24b-instruct": {}
       }
     }
   }
