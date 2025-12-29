@@ -19,6 +19,9 @@
     ~/.config:
       glob: true
       path: dotconfig/**/*
+    ~/.ssh/:
+      glob: true
+      path: dotssh/**/*
     "~":
       glob: true
       path: mise/.default-**

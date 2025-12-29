@@ -15,6 +15,9 @@
     ~/.config/:
       glob: true
       path: dotconfig/**/*
+    ~/.ssh/:
+      glob: true
+      path: dotssh/**/*
     ~/.gitconfig:
       path: git/posix.gitconfig
     ~/.local/share/applications/:
