@@ -224,8 +224,7 @@
         "zsh-completions",
         "zsh-history-substring-search",
         "zsh-syntax-highlighting",
-        "zshdb",
-        "gcc14"
+        "zshdb"
     ],
     "parallel_downloads": 5,
     "profile_config": {
