@@ -83,6 +83,18 @@
                 "hidden": false,
                 "name": "archlinux",
                 "source": "Microsoft.WSL"
+            },
+            {
+                "guid": "{ee33393d-d662-5f9d-b88b-78ac79cd5d3b}",
+                "hidden": false,
+                "name": "Ubuntu",
+                "source": "Microsoft.WSL"
+            },
+            {
+                "guid": "{1435e583-24bd-5bea-8406-3e60a09c5ff9}",
+                "hidden": false,
+                "name": "archlinux",
+                "source": "Microsoft.WSL"
             }
         ]
     },
