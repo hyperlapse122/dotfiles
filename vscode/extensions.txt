@@ -5,7 +5,6 @@ denoland.vscode-deno
 docker.docker
 eamodio.gitlens
 editorconfig.editorconfig
-firefox-devtools.vscode-firefox-debug
 github.codespaces
 github.copilot
 github.copilot-chat
@@ -13,9 +12,7 @@ github.vscode-github-actions
 github.vscode-pull-request-github
 gruntfuggly.todo-tree
 huggingface.huggingface-vscode-chat
-idleberg.nsis
 inlang.vs-code-extension
-jetbrains.resharper-code
 ms-azuretools.vscode-azureresourcegroups
 ms-azuretools.vscode-containers
 ms-azuretools.vscode-docker
