@@ -10,6 +10,7 @@ github.copilot
 github.copilot-chat
 github.vscode-github-actions
 github.vscode-pull-request-github
+gitlab.gitlab-workflow
 gruntfuggly.todo-tree
 huggingface.huggingface-vscode-chat
 inlang.vs-code-extension

@@ -85,11 +85,13 @@
     ".github/instructions": true,
     "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
   },
-  // allow autocomplete for ArkType expressions like "string | num"
+  "gitlab.duoCodeSuggestions.enabled": false,
+  "gitlab.duoChat.enabled": false,
+  "gitlab.duoAgentPlatform.enabled": false
+  },
   "editor.quickSuggestions": {
     "strings": "on"
   },
-  // prioritize ArkType's "type" for autoimports
   "typescript.preferences.autoImportSpecifierExcludeRegexes": [
     "^(node:)?os$",
     "^node_modules.+$",
