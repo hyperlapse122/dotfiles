@@ -171,6 +171,8 @@
         "cairo",
         "cmake",
         "clang",
+        "firefox-developer-edition",
+        "firefox-developer-edition-i18n-ko",
         "firewalld",
         "git",
         "git-lfs",
