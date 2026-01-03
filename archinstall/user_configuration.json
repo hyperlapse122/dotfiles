@@ -1,250 +1,238 @@
 {
-    "app_config": {
-        "audio_config": {
-            "audio": "pipewire"
-        },
-        "bluetooth_config": {
-            "enabled": true
-        }
+  "app_config": {
+    "audio_config": {
+      "audio": "pipewire"
     },
-    "archinstall-language": "English",
-    "auth_config": {},
-    "bootloader_config": {
-        "bootloader": "Systemd-boot",
-        "removable": false,
-        "uki": true
+    "bluetooth_config": {
+      "enabled": true
+    }
+  },
+  "archinstall-language": "English",
+  "auth_config": {},
+  "bootloader_config": {
+    "bootloader": "Systemd-boot",
+    "removable": false,
+    "uki": true
+  },
+  "custom_commands": [],
+  "disk_config": {
+    "btrfs_options": {
+      "snapshot_config": {
+        "type": "Timeshift"
+      }
     },
-    "custom_commands": [],
-    "disk_config": {
-        "btrfs_options": {
-            "snapshot_config": {
-                "type": "Timeshift"
-            }
-        },
-        "config_type": "default_layout",
-        "device_modifications": [
-            {
-                "device": "/dev/nvme0n1",
-                "partitions": [
-                    {
-                        "btrfs": [],
-                        "dev_path": null,
-                        "flags": [
-                            "boot",
-                            "esp"
-                        ],
-                        "fs_type": "fat32",
-                        "mount_options": [],
-                        "mountpoint": "/boot",
-                        "obj_id": "aa45de9a-0014-4f81-8722-4ad9ea4c2e80",
-                        "size": {
-                            "sector_size": {
-                                "unit": "B",
-                                "value": 512
-                            },
-                            "unit": "GiB",
-                            "value": 1
-                        },
-                        "start": {
-                            "sector_size": {
-                                "unit": "B",
-                                "value": 512
-                            },
-                            "unit": "MiB",
-                            "value": 1
-                        },
-                        "status": "create",
-                        "type": "primary"
-                    },
-                    {
-                        "btrfs": [
-                            {
-                                "mountpoint": "/",
-                                "name": "@"
-                            },
-                            {
-                                "mountpoint": "/home",
-                                "name": "@home"
-                            },
-                            {
-                                "mountpoint": "/var/log",
-                                "name": "@log"
-                            },
-                            {
-                                "mountpoint": "/var/cache/pacman/pkg",
-                                "name": "@pkg"
-                            }
-                        ],
-                        "dev_path": null,
-                        "flags": [],
-                        "fs_type": "btrfs",
-                        "mount_options": [
-                            "compress=zstd"
-                        ],
-                        "mountpoint": null,
-                        "obj_id": "1fd209a7-5be8-4cd2-85a7-765a24353b1e",
-                        "size": {
-                            "sector_size": {
-                                "unit": "B",
-                                "value": 512
-                            },
-                            "unit": "B",
-                            "value": 1999323004928
-                        },
-                        "start": {
-                            "sector_size": {
-                                "unit": "B",
-                                "value": 512
-                            },
-                            "unit": "B",
-                            "value": 1074790400
-                        },
-                        "status": "create",
-                        "type": "primary"
-                    }
-                ],
-                "wipe": true
-            }
-        ],
-        "disk_encryption": {
-            "encryption_type": "luks",
-            "lvm_volumes": [],
-            "partitions": [
-                "1fd209a7-5be8-4cd2-85a7-765a24353b1e"
-            ]
-        }
-    },
-    "hostname": "h82-zenbook",
-    "kernels": [
-        "linux-zen"
-    ],
-    "locale_config": {
-        "kb_layout": "us",
-        "sys_enc": "UTF-8",
-        "sys_lang": "ko_KR.UTF-8"
-    },
-    "mirror_config": {
-        "custom_repositories": [],
-        "custom_servers": [],
-        "mirror_regions": {
-            "South Korea": [
-                "http://ftp.kaist.ac.kr/ArchLinux/$repo/os/$arch",
-                "http://kr.mirrors.cicku.me/archlinux/$repo/os/$arch",
-                "https://kr.mirrors.cicku.me/archlinux/$repo/os/$arch",
-                "http://ftp.lanet.kr/pub/archlinux/$repo/os/$arch",
-                "https://ftp.lanet.kr/pub/archlinux/$repo/os/$arch",
-                "http://mirror.siwoo.org/archlinux/$repo/os/$arch",
-                "https://mirror.siwoo.org/archlinux/$repo/os/$arch",
-                "http://mirror.funami.tech/arch/$repo/os/$arch",
-                "https://mirror.funami.tech/arch/$repo/os/$arch",
-                "http://mirror.keiminem.com/archlinux/$repo/os/$arch",
-                "http://mirror2.keiminem.com/archlinux/$repo/os/$arch",
-                "https://mirror.keiminem.com/archlinux/$repo/os/$arch",
-                "https://mirror2.keiminem.com/archlinux/$repo/os/$arch",
-                "http://ftp.hrts.kr/archlinux/$repo/os/$arch",
-                "https://ftp.hrts.kr/archlinux/$repo/os/$arch",
-                "https://mirror.krfoss.org/archlinux/$repo/os/$arch",
-                "http://mirror.distly.kr/archlinux/$repo/os/$arch",
-                "https://mirror.distly.kr/archlinux/$repo/os/$arch",
-                "https://mirror.hemino.net/archlinux/$repo/os/$arch",
-                "http://mirror.techlabs.co.kr/archlinux/$repo/os/$arch",
-                "https://mirror.techlabs.co.kr/archlinux/$repo/os/$arch",
-                "http://mirror.wane.kr/archlinux/$repo/os/$arch",
-                "https://mirror.wane.kr/archlinux/$repo/os/$arch"
-            ]
-        },
-        "optional_repositories": [
-            "multilib"
-        ]
-    },
-    "network_config": {
-        "type": "nm"
-    },
-    "ntp": true,
-    "packages": [
-        "amd-ucode",
-        "base",
-        "base-devel",
-        "bash",
-        "bash-completion",
-        "bash-language-server",
-        "cairo",
-        "cmake",
-        "clang",
-        "firefox-developer-edition",
-        "firefox-developer-edition-i18n-ko",
-        "firewalld",
-        "git",
-        "git-lfs",
-        "git-zsh-completion",
-        "github-cli",
-        "gtk3",
-        "gtk4",
-        "keyd",
-        "kleopatra",
-        "layer-shell-qt",
-        "libxcb",
-        "linux-firmware",
-        "linux-firmware-amdgpu",
-        "linux-firmware-atheros",
-        "linux-firmware-broadcom",
-        "linux-firmware-cirrus",
-        "linux-firmware-intel",
-        "linux-firmware-liquidio",
-        "linux-firmware-marvell",
-        "linux-firmware-mediatek",
-        "linux-firmware-mellanox",
-        "linux-firmware-nfp",
-        "linux-firmware-nvidia",
-        "linux-firmware-other",
-        "linux-firmware-qcom",
-        "linux-firmware-qlogic",
-        "linux-firmware-radeon",
-        "linux-firmware-realtek",
-        "linux-firmware-whence",
-        "linux-zen",
-        "linux-zen-headers",
-        "llvm",
-        "mise",
-        "noto-fonts",
-        "noto-fonts-cjk",
-        "noto-fonts-emoji",
-        "noto-fonts-extra",
-        "openssh",
-        "polkit",
-        "powerdevil",
-        "power-profiles-daemon",
-        "plymouth",
-        "qt5-base",
-        "qt6-base",
-        "rustup",
-        "sbctl",
-        "shellcheck",
-        "zsh",
-        "zsh-autocomplete",
-        "zsh-autosuggestions",
-        "zsh-completions",
-        "zsh-history-substring-search",
-        "zsh-syntax-highlighting",
-        "zshdb"
-    ],
-    "parallel_downloads": 5,
-    "profile_config": {
-        "gfx_driver": "AMD / ATI (open-source)",
-        "greeter": "sddm",
-        "profile": {
-            "custom_settings": {
-                "KDE Plasma": {}
+    "config_type": "default_layout",
+    "device_modifications": [
+      {
+        "device": "/dev/nvme0n1",
+        "partitions": [
+          {
+            "btrfs": [],
+            "dev_path": null,
+            "flags": ["boot", "esp"],
+            "fs_type": "fat32",
+            "mount_options": [],
+            "mountpoint": "/boot",
+            "obj_id": "aa45de9a-0014-4f81-8722-4ad9ea4c2e80",
+            "size": {
+              "sector_size": {
+                "unit": "B",
+                "value": 512
+              },
+              "unit": "GiB",
+              "value": 1
             },
-            "details": [
-                "KDE Plasma"
+            "start": {
+              "sector_size": {
+                "unit": "B",
+                "value": 512
+              },
+              "unit": "MiB",
+              "value": 1
+            },
+            "status": "create",
+            "type": "primary"
+          },
+          {
+            "btrfs": [
+              {
+                "mountpoint": "/",
+                "name": "@"
+              },
+              {
+                "mountpoint": "/home",
+                "name": "@home"
+              },
+              {
+                "mountpoint": "/var/log",
+                "name": "@log"
+              },
+              {
+                "mountpoint": "/var/cache/pacman/pkg",
+                "name": "@pkg"
+              }
             ],
-            "main": "Desktop"
-        }
+            "dev_path": null,
+            "flags": [],
+            "fs_type": "btrfs",
+            "mount_options": ["compress=zstd"],
+            "mountpoint": null,
+            "obj_id": "1fd209a7-5be8-4cd2-85a7-765a24353b1e",
+            "size": {
+              "sector_size": {
+                "unit": "B",
+                "value": 512
+              },
+              "unit": "B",
+              "value": 1999323004928
+            },
+            "start": {
+              "sector_size": {
+                "unit": "B",
+                "value": 512
+              },
+              "unit": "B",
+              "value": 1074790400
+            },
+            "status": "create",
+            "type": "primary"
+          }
+        ],
+        "wipe": true
+      }
+    ],
+    "disk_encryption": {
+      "encryption_type": "luks",
+      "lvm_volumes": [],
+      "partitions": ["1fd209a7-5be8-4cd2-85a7-765a24353b1e"]
+    }
+  },
+  "hostname": "h82-zenbook",
+  "kernels": ["linux-zen"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "ko_KR.UTF-8"
+  },
+  "mirror_config": {
+    "custom_repositories": [],
+    "custom_servers": [],
+    "mirror_regions": {
+      "South Korea": [
+        "http://ftp.kaist.ac.kr/ArchLinux/$repo/os/$arch",
+        "http://kr.mirrors.cicku.me/archlinux/$repo/os/$arch",
+        "https://kr.mirrors.cicku.me/archlinux/$repo/os/$arch",
+        "http://ftp.lanet.kr/pub/archlinux/$repo/os/$arch",
+        "https://ftp.lanet.kr/pub/archlinux/$repo/os/$arch",
+        "http://mirror.siwoo.org/archlinux/$repo/os/$arch",
+        "https://mirror.siwoo.org/archlinux/$repo/os/$arch",
+        "http://mirror.funami.tech/arch/$repo/os/$arch",
+        "https://mirror.funami.tech/arch/$repo/os/$arch",
+        "http://mirror.keiminem.com/archlinux/$repo/os/$arch",
+        "http://mirror2.keiminem.com/archlinux/$repo/os/$arch",
+        "https://mirror.keiminem.com/archlinux/$repo/os/$arch",
+        "https://mirror2.keiminem.com/archlinux/$repo/os/$arch",
+        "http://ftp.hrts.kr/archlinux/$repo/os/$arch",
+        "https://ftp.hrts.kr/archlinux/$repo/os/$arch",
+        "https://mirror.krfoss.org/archlinux/$repo/os/$arch",
+        "http://mirror.distly.kr/archlinux/$repo/os/$arch",
+        "https://mirror.distly.kr/archlinux/$repo/os/$arch",
+        "https://mirror.hemino.net/archlinux/$repo/os/$arch",
+        "http://mirror.techlabs.co.kr/archlinux/$repo/os/$arch",
+        "https://mirror.techlabs.co.kr/archlinux/$repo/os/$arch",
+        "http://mirror.wane.kr/archlinux/$repo/os/$arch",
+        "https://mirror.wane.kr/archlinux/$repo/os/$arch"
+      ]
     },
-    "script": null,
-    "services": [],
-    "swap": false,
-    "timezone": "Asia/Seoul",
-    "version": "3.0.14"
+    "optional_repositories": ["multilib"]
+  },
+  "network_config": {
+    "type": "nm"
+  },
+  "ntp": true,
+  "packages": [
+    "amd-ucode",
+    "base",
+    "base-devel",
+    "bash",
+    "bash-completion",
+    "bash-language-server",
+    "cairo",
+    "cargo",
+    "cmake",
+    "clang",
+    "firefox-developer-edition",
+    "firefox-developer-edition-i18n-ko",
+    "firewalld",
+    "git",
+    "git-lfs",
+    "git-zsh-completion",
+    "github-cli",
+    "gtk3",
+    "gtk4",
+    "keyd",
+    "kleopatra",
+    "layer-shell-qt",
+    "libxcb",
+    "linux-firmware",
+    "linux-firmware-amdgpu",
+    "linux-firmware-atheros",
+    "linux-firmware-broadcom",
+    "linux-firmware-cirrus",
+    "linux-firmware-intel",
+    "linux-firmware-liquidio",
+    "linux-firmware-marvell",
+    "linux-firmware-mediatek",
+    "linux-firmware-mellanox",
+    "linux-firmware-nfp",
+    "linux-firmware-nvidia",
+    "linux-firmware-other",
+    "linux-firmware-qcom",
+    "linux-firmware-qlogic",
+    "linux-firmware-radeon",
+    "linux-firmware-realtek",
+    "linux-firmware-whence",
+    "linux-zen",
+    "linux-zen-headers",
+    "llvm",
+    "mise",
+    "noto-fonts",
+    "noto-fonts-cjk",
+    "noto-fonts-emoji",
+    "noto-fonts-extra",
+    "openssh",
+    "polkit",
+    "powerdevil",
+    "power-profiles-daemon",
+    "plymouth",
+    "qt5-base",
+    "qt6-base",
+    "rust",
+    "sbctl",
+    "shellcheck",
+    "zsh",
+    "zsh-autocomplete",
+    "zsh-autosuggestions",
+    "zsh-completions",
+    "zsh-history-substring-search",
+    "zsh-syntax-highlighting",
+    "zshdb"
+  ],
+  "parallel_downloads": 5,
+  "profile_config": {
+    "gfx_driver": "AMD / ATI (open-source)",
+    "greeter": "sddm",
+    "profile": {
+      "custom_settings": {
+        "KDE Plasma": {}
+      },
+      "details": ["KDE Plasma"],
+      "main": "Desktop"
+    }
+  },
+  "script": null,
+  "services": [],
+  "swap": false,
+  "timezone": "Asia/Seoul",
+  "version": "3.0.14"
 }
