@@ -14,3 +14,8 @@
       glob: true
       create: true
       force: true
+    "/etc":
+      path: etc/**
+      glob: true
+      create: true
+      force: true
