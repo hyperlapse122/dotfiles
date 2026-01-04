@@ -34,6 +34,8 @@
     ~/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/:
       glob: true
       path: windows/terminal/*.json
+    ~/AppData/Local/1Password/config/ssh/agent.toml:
+      path: dotconfig/1Password/ssh/agent.toml
 
 # - windows:
 #     fonts:
