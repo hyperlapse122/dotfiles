@@ -11,6 +11,8 @@ systemctl --no-pager enable docker \
   && echo "Docker service enabled."
 systemctl --no-pager enable cups \
   && echo "CUPS service enabled."
+systemctl enable --now systemd-resolved \
+  && echo "systemd-resolved service enabled."
 
 # Set keymap
 localectl set-x11-keymap kr \
