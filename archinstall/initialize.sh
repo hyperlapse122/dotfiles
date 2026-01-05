@@ -3,9 +3,9 @@
 set -e -o pipefail
 
 # Enable services
-systemctl enable firewalld \
+systemctl --no-pager enable firewalld \
   && echo "Firewall service enabled."
-systemctl enable keyd \
+systemctl --no-pager enable keyd \
   && echo "Keyd service enabled."
 
 # Set keymap
@@ -29,6 +29,7 @@ CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --loc
 " | tee /etc/sddm.conf.d/10-wayland.conf \
   && echo "SDDM configured for Wayland."
 
+# Set up Secure Boot
 sbctl create-keys \
   && sbctl enroll-keys -m -f \
   && sbctl verify | sed -E 's|^.* (/.+) is not signed$|sbctl sign -s "\1"|e' \
