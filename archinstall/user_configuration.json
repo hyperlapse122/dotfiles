@@ -228,6 +228,7 @@
     "rust",
     "sbctl",
     "shellcheck",
+    "speech-dispatcher",
     "steam",
     "systemd",
     "system-config-printer",
