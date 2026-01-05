@@ -25,7 +25,7 @@ DisplayServer=wayland
 GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell
 
 [Wayland]
-CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1
+CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1 --output eDP-1
 " | tee /etc/sddm.conf.d/10-wayland.conf \
   && echo "SDDM configured for Wayland."
 
