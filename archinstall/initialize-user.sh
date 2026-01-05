@@ -22,10 +22,7 @@ rm -rf yay
 yay --save \
   --answerdiff None \
   --answeredit None \
-  --answerclean None \
-  --nocleanmenu \
-  --nodiffmenu \
-  --noeditmenu
+  --answerclean None
 
 # Non-interactive yay install of all required packages
 yay -S --needed --noconfirm --mflags "--noconfirm" \
