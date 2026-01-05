@@ -7,6 +7,10 @@ systemctl --no-pager enable firewalld \
   && echo "Firewall service enabled."
 systemctl --no-pager enable keyd \
   && echo "Keyd service enabled."
+systemctl --no-pager enable docker \
+  && echo "Docker service enabled."
+systemctl --no-pager enable cups \
+  && echo "CUPS service enabled."
 
 # Set keymap
 localectl set-x11-keymap kr \
