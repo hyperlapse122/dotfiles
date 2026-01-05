@@ -221,6 +221,7 @@
     "powerdevil",
     "power-profiles-daemon",
     "plymouth",
+    "plymouth-kcm",
     "qt5-base",
     "qt6-base",
     "rust",
