@@ -33,3 +33,4 @@
     
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
+  - [mise exec npm:opencode-wakatime -- opencode-wakatime --install, Installing WakaTime CLI]
