@@ -24,13 +24,12 @@
       glob: true
       path: dotlocal/share/applications/*.desktop
     ~/.gnupg/:
-      if: '[ `uname` = Linux ]'
+      if: "[ `uname` = Linux ]"
       glob: true
       path: gnupg/**
 
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
-    
+
 - shell:
-  - [git submodule update --init --recursive, Installing submodules]
-  - [mise exec npm:opencode-wakatime -- opencode-wakatime --install, Installing WakaTime CLI]
+    - [git submodule update --init --recursive, Installing submodules]

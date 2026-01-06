@@ -15,7 +15,7 @@ uv = "latest"
 "npm:azure-functions-core-tools" = "4"
 "npm:azurite" = "latest"
 dotnet = ["10", "9", "8", "7", "6"]
-"npm:opencode-wakatime" = "latest"
+"npm:opencode-wakatime" = { version = "latest", postinstall = "opencode-wakatime --install" }
 
 [settings]
 idiomatic_version_file_enable_tools = []

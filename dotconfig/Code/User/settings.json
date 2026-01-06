@@ -11,6 +11,14 @@
   "[typescriptreact]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
+  "[yaml]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "explicit",
+    "source.organizeImports.biome": "explicit"
+  },
+  "editor.formatOnSave": true,
   "biome.requireConfiguration": true,
   "biome.suggestInstallingGlobally": false,
   "chat.agent.maxRequests": 1000,
@@ -98,11 +106,8 @@
     "^node_modules.+$",
     "^type$"
   ],
-  "kilo-code.allowedCommands": [
-    "git log",
-    "git diff",
-    "git show"
-  ],
+  "redhat.telemetry.enabled": false,
+  "kilo-code.allowedCommands": ["git log", "git diff", "git show"],
   "kilo-code.deniedCommands": [],
-  "redhat.telemetry.enabled": false
+  "prettier.enable": false
 }
