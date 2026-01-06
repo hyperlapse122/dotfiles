@@ -103,5 +103,6 @@
     "git diff",
     "git show"
   ],
-  "kilo-code.deniedCommands": []
+  "kilo-code.deniedCommands": [],
+  "redhat.telemetry.enabled": false
 }
