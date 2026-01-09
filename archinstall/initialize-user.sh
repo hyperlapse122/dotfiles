@@ -31,6 +31,8 @@ yay -S --needed --noconfirm --mflags "--noconfirm" \
   otf-pretendard-jp otf-pretendard-std ttf-pretendard-gov ttf-pretendard-jp ttf-pretendard-std \
   otf-pretendard ttf-pretendard otf-pretendard-gov
 
+kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/kime.desktop
+
 # Clone dotfiles and run install non-interactively
 cd ~
 if [ ! -d dotfiles ]; then
