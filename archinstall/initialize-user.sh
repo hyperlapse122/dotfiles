@@ -27,7 +27,7 @@ yay --save \
 # Non-interactive yay install of all required packages
 yay -S --needed --noconfirm --mflags "--noconfirm" \
   1password 1password-cli rust cargo qt5-base qt6-base mise kime-git visual-studio-code-bin \
-  google-chrome \
+  google-chrome spotify-launcher zenity ffmpeg4.4 \
   otf-pretendard-jp otf-pretendard-std ttf-pretendard-gov ttf-pretendard-jp ttf-pretendard-std \
   otf-pretendard ttf-pretendard otf-pretendard-gov
 
