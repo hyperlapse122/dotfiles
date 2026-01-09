@@ -152,6 +152,7 @@
   "ntp": true,
   "packages": [
     "amd-ucode",
+    "amdgpu_top",
     "base",
     "base-devel",
     "bash",
