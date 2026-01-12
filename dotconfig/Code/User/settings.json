@@ -14,14 +14,15 @@
   "[yaml]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
-  "editor.codeActionsOnSave": {
-    "source.fixAll.biome": "explicit",
-    "source.organizeImports.biome": "explicit"
-  },
-  "editor.formatOnSave": true,
   "biome.requireConfiguration": true,
   "biome.suggestInstallingGlobally": false,
   "chat.agent.maxRequests": 1000,
+  "chat.disableAIFeatures": true,
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true,
+    "/home/h82/.aitk/instructions/": true,
+    "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
+  },
   "chat.mcp.gallery.enabled": true,
   "chat.tools.terminal.autoApprove": {
     "/.*/": true
@@ -33,8 +34,16 @@
   "dev.containers.dockerPath": "podman",
   "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
   "editor.aiStats.enabled": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "explicit",
+    "source.organizeImports.biome": "explicit"
+  },
   "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
   "editor.fontLigatures": true,
+  "editor.formatOnSave": true,
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
   "editor.smoothScrolling": true,
   "editor.tabSize": 2,
   "emmet.preferences": {},
@@ -64,51 +73,54 @@
   "github.copilot.nextEditSuggestions.enabled": true,
   "github.gitProtocol": "ssh",
   "githubPullRequests.codingAgent.promptForConfirmation": false,
+  "gitlab.duoAgentPlatform.enabled": false,
+  "gitlab.duoChat.enabled": false,
+  "gitlab.duoCodeSuggestions.enabled": false,
   "gitlens.ai.model": "vscode",
   "gitlens.ai.vscode.model": "copilot:gpt-4.1",
   "gitlens.gitkraken.mcp.autoEnabled": false,
   "javascript.suggest.completeFunctionCalls": true,
+  "javascript.updateImportsOnFileMove.enabled": "never",
   "js/ts.implicitProjectConfig.checkJs": true,
   "js/ts.implicitProjectConfig.experimentalDecorators": true,
+  "kilo-code.allowedCommands": [
+    "git log",
+    "git diff",
+    "git show"
+  ],
+  "kilo-code.deniedCommands": [],
+  "kilo-code.provider": "openrouter",
+  "prettier.enable": false,
   "python.analysis.typeCheckingMode": "basic",
+  "redhat.telemetry.enabled": false,
+  "sherlock.previewLanguageTag": "en",
+  "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
   "terminal.external.windowsExec": "pwsh.exe",
+  "terminal.integrated.autoReplies": {
+    "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r",
+    "Terminate batch job (Y/N)": "Y\r"
+  },
   "terminal.integrated.enableImages": true,
   "terminal.integrated.fontLigatures.enabled": true,
   "terminal.integrated.stickyScroll.enabled": false,
   "terminal.integrated.windowsUseConptyDll": true,
-  "todo-tree.general.tags": ["BUG", "HACK", "FIXME", "TODO", "XXX"],
-  "typescript.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
-  "typescript.suggest.completeFunctionCalls": true,
-  "typescript.updateImportsOnFileMove.enabled": "never",
-  "vscode-edge-devtools.webhintInstallNotification": true,
-  "window.restoreWindows": "none",
-  "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
-  "sherlock.previewLanguageTag": "en",
-  "terminal.integrated.autoReplies": {
-    "Terminate batch job (Y/N)": "Y\r",
-    "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r"
-  },
-  "javascript.updateImportsOnFileMove.enabled": "never",
-  "chat.instructionsFilesLocations": {
-    ".github/instructions": true,
-    "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true,
-    "/home/h82/.aitk/instructions/": true
-  },
-  "gitlab.duoCodeSuggestions.enabled": false,
-  "gitlab.duoChat.enabled": false,
-  "gitlab.duoAgentPlatform.enabled": false,
-
-  "editor.quickSuggestions": {
-    "strings": "on"
-  },
+  "todo-tree.general.tags": [
+    "BUG",
+    "HACK",
+    "FIXME",
+    "TODO",
+    "XXX"
+  ],
+  "typescript.preferences.autoImportFileExcludePatterns": [
+    "**/dist/**"
+  ],
   "typescript.preferences.autoImportSpecifierExcludeRegexes": [
     "^(node:)?os$",
     "^node_modules.+$",
     "^type$"
   ],
-  "redhat.telemetry.enabled": false,
-  "kilo-code.allowedCommands": ["git log", "git diff", "git show"],
-  "kilo-code.deniedCommands": [],
-  "prettier.enable": false,
-  "chat.disableAIFeatures": true
+  "typescript.suggest.completeFunctionCalls": true,
+  "typescript.updateImportsOnFileMove.enabled": "never",
+  "vscode-edge-devtools.webhintInstallNotification": true,
+  "window.restoreWindows": "none"
 }
