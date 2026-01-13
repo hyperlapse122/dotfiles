@@ -11,6 +11,9 @@ dnf copr enable -y jdxcode/mise
 # Enable keyd copr
 dnf copr enable alternateved/keyd
 
+# Enable sbctl copr
+copr enable chenxiaolong/sbctl
+
 # Add Docker repository
 dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo
 
@@ -23,7 +26,13 @@ rpm --import https://packages.microsoft.com/keys/microsoft.asc
 echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | tee /etc/yum.repos.d/vscode.repo > /dev/null
 
 # Install Packages
-dnf install -y kime 1password 1password-cli mise zsh code keyd docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+dnf install -y kime 1password 1password-cli mise zsh code keyd sbctl docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+
+# Set up Secure Boot
+sbctl create-keys \
+  && sbctl enroll-keys -m -f \
+  && sbctl verify | sed -E 's|^.* (/.+) is not signed$|sbctl sign -s "\1"|e' \
+  && echo "All boot files are signed. Reboot to apply Secure Boot."
 
 # Enable services
 systemctl enable --now keyd
@@ -32,3 +41,7 @@ systemctl enable --now containerd.service
 
 # Add user to docker group
 usermod -aG docker $USER
+
+# Set keymap
+localectl set-x11-keymap kr \
+  && echo "Keymap set to Korean."
