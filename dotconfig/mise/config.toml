@@ -16,6 +16,7 @@ uv = "latest"
 "npm:azurite" = "latest"
 dotnet = ["10", "9", "8", "7", "6"]
 "npm:opencode-wakatime" = { version = "latest", postinstall = "opencode-wakatime --install" }
+"npm:@bufbuild/buf" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
