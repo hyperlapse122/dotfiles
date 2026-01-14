@@ -1,20 +1,19 @@
 [tools]
 bun = "latest"
 go = "latest"
-java = ["zulu-17", "zulu-21", "zulu-24"]
 node = "latest"
 yarn = "latest"
 rust = "latest"
-"cargo:git-trim" = "latest"
 usage = "latest"
+uv = "latest"
+java = ["zulu-17", "zulu-21", "zulu-24"]
+"cargo:git-trim" = "latest"
 "npm:@github/copilot" = "latest"
 "npm:@biomejs/biome" = "latest"
 "npm:opencode-ai" = "latest"
-uv = "latest"
 "pipx:unrpa" = "latest"
 "npm:azure-functions-core-tools" = "4"
 "npm:azurite" = "latest"
-dotnet = ["10", "9", "8", "7", "6"]
 "npm:opencode-wakatime" = { version = "latest", postinstall = "opencode-wakatime --install" }
 "npm:@bufbuild/buf" = "latest"
 
