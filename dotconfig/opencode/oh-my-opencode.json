@@ -3,28 +3,28 @@
   "google_auth": false,
   "agents": {
     "Sisyphus": {
-      "model": "openrouter/openai/gpt-5.2-codex"
+      "model": "openrouter/openai/gpt-5.2-codex:extended"
     },
     "Planner-Sisyphus": {
-      "model": "openrouter/openai/gpt-5.2-codex"
+      "model": "openrouter/openai/gpt-5.2-codex:extended"
     },
     "oracle": {
       "model": "openrouter/openai/gpt-5.2-codex"
     },
     "librarian": {
-      "model": "opencode/glm-4.7-free"
+      "model": "openrouter/z-ai/glm-4.7:web"
     },
     "explore": {
-      "model": "google/antigravity-gemini-3-flash"
+      "model": "openrouter/google/gemini-3-flash-preview"
     },
     "frontend-ui-ux-engineer": {
-      "model": "google/antigravity-gemini-3-pro-high"
+      "model": "openrouter/google/gemini-3-pro-preview:extended"
     },
     "document-writer": {
-      "model": "google/antigravity-gemini-3-flash"
+      "model": "openrouter/google/gemini-3-flash-preview"
     },
     "multimodal-looker": {
-      "model": "google/antigravity-gemini-3-flash"
+      "model": "openrouter/google/gemini-3-flash-preview"
     }
   }
 }
