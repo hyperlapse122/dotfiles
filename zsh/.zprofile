@@ -72,7 +72,7 @@ if [[ -z "$LESSOPEN" ]] && (( $#commands[(i)lesspipe(|.sh)] )); then
   export LESSOPEN="| /usr/bin/env $commands[(i)lesspipe(|.sh)] %s 2>&-"
 fi
 
-PATH="$PATH:$HOME/.local/bin"
+# Get OS information
 os=$(uname)
 
 # Configure macOS settings
@@ -81,11 +81,14 @@ if [[ "$os" == "Darwin" ]]; then
   eval "$(brew shellenv)"
 fi
 
+DOTNET_HOME="$HOME/.dotnet"
+PATH="$DOTNET_HOME:$HOME/.dotnet/tools:$HOME/.local/bin:${PATH}"
+
 eval "$(mise activate zsh)"
 
 # JetBrains Toolbox
 JETBRAINS_TOOLBOX_HOME="$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
-if [ -d $ANDROID_HOME ]; then
+if [ -d $JETBRAINS_TOOLBOX_HOME ]; then
   export JETBRAINS_TOOLBOX_HOME
   export PATH="$PATH:$JETBRAINS_TOOLBOX_HOME"
 fi

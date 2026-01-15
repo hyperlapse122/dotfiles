@@ -5,6 +5,9 @@ set -xeuo pipefail
 os=$(uname)
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Initialize submodules
+git submodule update --init --recursive
+
 # Configure macOS settings
 if [[ "$os" == "Darwin" ]]; then
   source macos/configure.sh

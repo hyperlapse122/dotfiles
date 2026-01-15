@@ -30,7 +30,7 @@
       if: "[ `uname` = Linux ]"
       glob: true
       path: gnupg/**
-    ~/.local/bin/dotnet-install.sh:
+    ~/.local/bin/dotnet-install:
       path: submodules/dotnet-install-scripts/eng/common/dotnet-install.sh
 
 # - shell:
