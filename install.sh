@@ -27,8 +27,8 @@ if [ ! -d "${ZDOTDIR:-$HOME}/.zprezto" ]; then
 fi
 
 # install dotnet LTS and 8
-sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel LTS
-sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 8.0
+sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel LTS --no-path
+sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 8.0 --no-path
 
 # mise
 mise use node@latest

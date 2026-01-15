@@ -1,30 +1,27 @@
+- shell:
+  - [git submodule update --init --recursive, Installing submodules]
+
 - defaults:
     link:
       create: true
       force: true
       relink: true
-
-- shell:
-  - ["pwsh -NoProfile -ExecutionPolicy Bypass -File ./Set-Environment.ps1", Running Windows setup script]
-
-- shell:
-  - [git submodule update --init --recursive, Installing submodules]
-
-- link:
-    "~/.gitconfig":
-      path: git/windows.gitconfig
-    ~/AppData/Roaming/gnupg/:
+  link:
+    "~/":
       glob: true
-      path: gnupg-windows/**
+      path: home/.*
+    ~/.local/:
+      glob: true
+      path: dotlocal/**/*
     ~/.config:
       glob: true
       path: dotconfig/**/*
+    ~/AppData/Roaming/gnupg/:
+      glob: true
+      path: gnupg-windows/**
     ~/.ssh/:
       glob: true
       path: dotssh/**/*
-    "~":
-      glob: true
-      path: mise/.default-**
     ~/AppData/Roaming/Code/User/:
       glob: true
       path: dotconfig/Code/User/*.json
@@ -38,6 +35,8 @@
       path: dotconfig/1Password/ssh/agent.toml
     ~/.local/bin/dotnet-install.ps1:
       path: dotnet/dotnet-install.ps1
+    ~/.gitconfig.d/windows.gitconfig:
+      path: gitconfig.d/windows.gitconfig
 
 # - windows:
 #     fonts:

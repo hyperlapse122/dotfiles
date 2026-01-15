@@ -6,29 +6,28 @@
   link:
     "~":
       glob: true
-      path: zsh/.**
-    "~/":
-      glob: true
-      path: mise/.default-**
-    ~/.yarnrc.yml:
-      path: .yarnrc.yml
+      path: home/.*
     ~/.config/:
       glob: true
       path: dotconfig/**/*
     ~/.ssh/:
       glob: true
       path: dotssh/**/*
-    ~/.gitconfig:
-      path: git/posix.gitconfig
-    ~/.local/share/applications/:
+    ~/.local/:
       glob: true
-      path: dotlocal/share/applications/*.desktop
+      path: dotlocal/**/*
     ~/.gnupg/:
       if: "[ `uname` = Linux ]"
       glob: true
       path: gnupg/**
     ~/.local/bin/dotnet-install:
       path: dotnet/dotnet-install.sh
+    ~/.gitconfig.d/linux.gitconfig:
+      if: "[ `uname` = Linux ]"
+      path: gitconfig.d/linux.gitconfig
+    ~/.gitconfig.d/macos.gitconfig:
+      if: "[ `uname` = Darwin ]"
+      path: gitconfig.d/macos.gitconfig
 
 - shell:
     - [git submodule update --init --recursive, Installing submodules]
