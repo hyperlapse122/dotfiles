@@ -16,6 +16,7 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "npm:opencode-wakatime" = { version = "latest", postinstall = "opencode-wakatime --install" }
 "npm:@bufbuild/buf" = "latest"
 "pipx:unrpa" = "latest"
+"pipx:git+https://github.com/github/spec-kit.git" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
