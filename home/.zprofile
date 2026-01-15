@@ -80,24 +80,3 @@ if [[ "$os" == "Darwin" ]]; then
   # Homebrew
   eval "$(brew shellenv)"
 fi
-
-# JetBrains Toolbox
-JETBRAINS_TOOLBOX_HOME="$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
-if [ -d $JETBRAINS_TOOLBOX_HOME ]; then
-  export JETBRAINS_TOOLBOX_HOME
-  export PATH="$PATH:$JETBRAINS_TOOLBOX_HOME"
-fi
-
-# Android SDK
-ANDROID_HOME=$HOME/Library/Android/sdk
-if [ -d $ANDROID_HOME ]; then
-  export ANDROID_HOME
-  export PATH=$PATH:$ANDROID_HOME/emulator
-  export PATH=$PATH:$ANDROID_HOME/platform-tools
-fi
-
-# OrbStack
-ORBSTACK_SHELL_INIT="$HOME/.orbstack/shell/init.zsh"
-if [ -f "$ORBSTACK_SHELL_INIT" ]; then
-  source "ORBSTACK_SHELL_INIT" 2>/dev/null || :
-fi
