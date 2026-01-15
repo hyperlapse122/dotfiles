@@ -1,4 +1,4 @@
 [credential]
   helper =
-  helper = ~/.dotnet/tools/git-credential-manager
+  helper = manager
   credentialStore = keychain
