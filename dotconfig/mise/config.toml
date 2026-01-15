@@ -9,7 +9,6 @@ uv = "latest"
 java = ["zulu-17", "zulu-21", "zulu-24"]
 "cargo:git-trim" = "latest"
 "npm:corepack" = { version = "latest", postinstall = "corepack enable" }
-"npm:@github/copilot" = "latest"
 "npm:@biomejs/biome" = "latest"
 "npm:opencode-ai" = "latest"
 "npm:azure-functions-core-tools" = "4"
@@ -20,4 +19,3 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 
 [settings]
 idiomatic_version_file_enable_tools = []
-experimental = true
