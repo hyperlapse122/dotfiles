@@ -11,4 +11,4 @@ if [[ ( "$SHLVL" -eq 1 && ! -o LOGIN ) && -s "${ZDOTDIR:-$HOME}/.zprofile" ]]; t
 fi
 
 export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$DOTNET_ROOT:$HOME/.dotnet/tools:$HOME/.local/bin:${PATH}"
+export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$HOME/.local/bin:${PATH}"
