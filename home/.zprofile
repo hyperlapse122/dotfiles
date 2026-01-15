@@ -81,9 +81,6 @@ if [[ "$os" == "Darwin" ]]; then
   eval "$(brew shellenv)"
 fi
 
-DOTNET_ROOT="$HOME/.dotnet"
-PATH="$DOTNET_ROOT:$HOME/.dotnet/tools:$HOME/.local/bin:${PATH}"
-
 eval "$(mise activate zsh)"
 
 # JetBrains Toolbox
