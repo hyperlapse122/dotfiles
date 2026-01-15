@@ -36,6 +36,8 @@
       path: windows/terminal/*.json
     ~/AppData/Local/1Password/config/ssh/agent.toml:
       path: dotconfig/1Password/ssh/agent.toml
+    ~/.local/bin/dotnet-install.ps1:
+      path: submodules/dotnet-install-scripts/eng/common/dotnet-install.ps1
 
 # - windows:
 #     fonts:

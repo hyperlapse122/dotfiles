@@ -22,5 +22,6 @@ fi
 
 # if $HOME/.dotnet is present add it to PATH
 if [ -d "$HOME/.dotnet" ] ; then
-    PATH="$HOME/.dotnet:${PATH}"
+    DOTNET_HOME="$HOME/.dotnet"
+    PATH="$DOTNET_HOME:${PATH}"
 fi

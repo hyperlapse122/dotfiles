@@ -2,3 +2,8 @@
 	path = dotbot
 	url = https://github.com/anishathalye/dotbot
 	ignore = dirty
+
+[submodule "submodules/dotnet-install-scripts"]
+	path = submodules/dotnet-install-scripts
+	url = https://github.com/dotnet/install-scripts.git
+	ignore = dirty

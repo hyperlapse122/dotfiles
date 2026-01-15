@@ -27,6 +27,8 @@
       if: "[ `uname` = Linux ]"
       glob: true
       path: gnupg/**
+    ~/.local/bin/dotnet-install.sh:
+      path: submodules/dotnet-install-scripts/eng/common/dotnet-install.sh
 
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]

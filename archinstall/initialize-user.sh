@@ -13,19 +13,13 @@ if [ ! -d yay ]; then
   git clone https://aur.archlinux.org/yay.git
 fi
 
-cd yay
-makepkg -si --noconfirm
-cd ..
-rm -rf yay
-
-# Configure yay once to always skip menus / questions
-yay --save \
-  --answerdiff None \
-  --answeredit None \
-  --answerclean None
+cd yay && \
+  makepkg -si --noconfirm && \
+  cd .. && \
+  rm -rf yay
 
 # Non-interactive yay install of all required packages
-yay -S --needed --noconfirm --mflags "--noconfirm" \
+LANG=C yay --noprovides --answerdiff None --answerclean None --mflags "--noconfirm" -S \
   1password 1password-cli rust cargo qt5-base qt6-base mise kime-git visual-studio-code-bin \
   google-chrome spotify-launcher zenity ffmpeg4.4 \
   otf-pretendard-jp otf-pretendard-std ttf-pretendard-gov ttf-pretendard-jp ttf-pretendard-std \
