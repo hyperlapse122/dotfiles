@@ -26,5 +26,6 @@
     "multimodal-looker": {
       "model": "openrouter/google/gemini-3-flash-preview"
     }
-  }
+  },
+  "disabled_hooks": ["todo-continuation-enforcer"]
 }
