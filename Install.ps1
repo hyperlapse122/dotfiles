@@ -18,6 +18,10 @@ Set-Location $BASEDIR
 git submodule sync --quiet --recursive
 git submodule update --init --recursive
 
+# install dotnet LTS and 8
+& "$DIR/dotnet/dotnet-install.ps1" -Channel LTS
+& "$DIR/dotnet/dotnet-install.ps1" -Channel 8.0
+
 $CMD = "$PYTHON_EXECUTABLE `"$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN`" `"-d`" `"$BASEDIR`" `"-c`" `"$CONFIG`" @args"
 Invoke-Expression $CMD
 

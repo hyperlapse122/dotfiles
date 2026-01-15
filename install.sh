@@ -26,6 +26,9 @@ if [ ! -d "${ZDOTDIR:-$HOME}/.zprezto" ]; then
   git clone --recursive https://github.com/belak/prezto-contrib "${ZDOTDIR:-$HOME}/.zprezto/contrib"
 fi
 
+# install dotnet LTS and 8
+sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel LTS
+sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 8.0
 
 # mise
 mise use node@latest

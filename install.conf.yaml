@@ -1,6 +1,3 @@
-- shell:
-    - [git submodule update --init --recursive, Installing submodules]
-
 - defaults:
     link:
       relink: true
@@ -31,7 +28,10 @@
       glob: true
       path: gnupg/**
     ~/.local/bin/dotnet-install:
-      path: submodules/dotnet-install-scripts/eng/common/dotnet-install.sh
+      path: dotnet/dotnet-install.sh
+
+- shell:
+    - [git submodule update --init --recursive, Installing submodules]
 
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
