@@ -14,3 +14,13 @@ fi
 if [ -d "$HOME/.local/bin" ] ; then
     PATH="$HOME/.local/bin:${PATH}"
 fi
+
+# if $HOME/.dotnet/tools is present add it to PATH
+if [ -d "$HOME/.dotnet/tools" ] ; then
+    PATH="$HOME/.dotnet/tools:${PATH}"
+fi
+
+# if $HOME/.dotnet is present add it to PATH
+if [ -d "$HOME/.dotnet" ] ; then
+    PATH="$HOME/.dotnet:${PATH}"
+fi
