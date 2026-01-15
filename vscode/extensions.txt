@@ -1,6 +1,7 @@
 arktypeio.arkdark
 biomejs.biome
 bradlc.vscode-tailwindcss
+bufbuild.vscode-buf
 docker.docker
 eamodio.gitlens
 editorconfig.editorconfig
@@ -28,6 +29,7 @@ ms-vscode.cpptools-themes
 ms-vscode.hexeditor
 ms-vscode.powershell
 orta.vscode-jest
+redhat.vscode-yaml
 repreng.csv
 sst-dev.opencode
 tombi-toml.tombi

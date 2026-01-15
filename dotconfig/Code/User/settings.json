@@ -19,26 +19,19 @@
   "chat.agent.maxRequests": 1000,
   "chat.disableAIFeatures": true,
   "chat.instructionsFilesLocations": {
-    ".github/instructions": true,
-    "/home/h82/.aitk/instructions/": true,
-    "C:\\Users\\HyperLapse\\.aitk\\instructions\\": true
+    ".github/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.tools.terminal.autoApprove": {
     "/.*/": true
   },
-  "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
-  "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
   "csharp.experimental.debug.hotReload": true,
-  "dev.containers.dockerComposePath": "podman-compose",
-  "dev.containers.dockerPath": "podman",
-  "dev.containers.dockerSocketPath": "${env:XDG_RUNTIME_DIR}/podman/podman.sock",
   "editor.aiStats.enabled": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
     "source.organizeImports.biome": "explicit"
   },
-  "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace",
+  "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'D2Coding Nerd Font', 'D2Coding', 'Droid Sans Mono', 'monospace', monospace",
   "editor.fontLigatures": true,
   "editor.formatOnSave": true,
   "editor.quickSuggestions": {
@@ -71,8 +64,11 @@
   "github.copilot.chat.languageContext.typescript.enabled": true,
   "github.copilot.chat.localeOverride": "ko",
   "github.copilot.nextEditSuggestions.enabled": true,
-  "github.gitProtocol": "ssh",
+  "github.gitProtocol": "https",
   "githubPullRequests.codingAgent.promptForConfirmation": false,
+  "gitlab.authentication.oauthClientIds": {
+    "https://git.jpi.app": "c173cf3eb02fabd54c93401cadce5a4a1f8c034e2d85e1f95e9d33dc5e5243e5"
+  },
   "gitlab.duoAgentPlatform.enabled": false,
   "gitlab.duoChat.enabled": false,
   "gitlab.duoCodeSuggestions.enabled": false,
@@ -83,11 +79,7 @@
   "javascript.updateImportsOnFileMove.enabled": "never",
   "js/ts.implicitProjectConfig.checkJs": true,
   "js/ts.implicitProjectConfig.experimentalDecorators": true,
-  "kilo-code.allowedCommands": [
-    "git log",
-    "git diff",
-    "git show"
-  ],
+  "kilo-code.allowedCommands": ["git log", "git diff", "git show"],
   "kilo-code.deniedCommands": [],
   "kilo-code.provider": "openrouter",
   "prettier.enable": false,
@@ -104,16 +96,8 @@
   "terminal.integrated.fontLigatures.enabled": true,
   "terminal.integrated.stickyScroll.enabled": false,
   "terminal.integrated.windowsUseConptyDll": true,
-  "todo-tree.general.tags": [
-    "BUG",
-    "HACK",
-    "FIXME",
-    "TODO",
-    "XXX"
-  ],
-  "typescript.preferences.autoImportFileExcludePatterns": [
-    "**/dist/**"
-  ],
+  "todo-tree.general.tags": ["BUG", "HACK", "FIXME", "TODO", "XXX"],
+  "typescript.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
   "typescript.preferences.autoImportSpecifierExcludeRegexes": [
     "^(node:)?os$",
     "^node_modules.+$",
