@@ -81,8 +81,6 @@ if [[ "$os" == "Darwin" ]]; then
   eval "$(brew shellenv)"
 fi
 
-eval "$(mise activate zsh)"
-
 # JetBrains Toolbox
 JETBRAINS_TOOLBOX_HOME="$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
 if [ -d $JETBRAINS_TOOLBOX_HOME ]; then
