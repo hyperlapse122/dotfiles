@@ -1,0 +1,4 @@
+[credential]
+  helper =
+  helper = ~/.dotnet/tools/git-credential-manager
+  credentialStore = secretservice

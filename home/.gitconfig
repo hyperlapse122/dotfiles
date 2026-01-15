@@ -23,6 +23,8 @@
 	gitLabDevClientId = e7247d5a19cd0fa15c1754dfaae47606bcd27d9cd3dbd1b966993be0b683983b
 	gitLabDevClientSecret = gloas-5992d1284ff2c9b33668eef4271cf6a6765756f1b4bcd413e0d9f55071a72d41
 	provider = gitlab
+[credential "https://dev.azure.com"]
+	useHttpPath = true
 [credential]
 	gitLabAuthModes = browser
 [include]
