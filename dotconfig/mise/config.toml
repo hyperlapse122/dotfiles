@@ -17,7 +17,6 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "npm:@bufbuild/buf" = "latest"
 "pipx:unrpa" = "latest"
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
-"dotnet:git-credential-manager" = { version = "latest", postinstall = "git-credential-manager configure" }
 
 [settings]
 idiomatic_version_file_enable_tools = []
