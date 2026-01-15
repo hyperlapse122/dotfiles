@@ -1,3 +1,6 @@
+- shell:
+    - [git submodule update --init --recursive, Installing submodules]
+
 - defaults:
     link:
       relink: true
@@ -32,6 +35,3 @@
 
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
-
-- shell:
-    - [git submodule update --init --recursive, Installing submodules]
