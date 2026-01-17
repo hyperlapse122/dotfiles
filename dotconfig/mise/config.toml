@@ -17,6 +17,8 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "npm:@bufbuild/buf" = "latest"
 "pipx:unrpa" = "latest"
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
+"npm:@ast-grep/napi" = "latest"
+"npm:@code-yeongyu/comment-checker" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
