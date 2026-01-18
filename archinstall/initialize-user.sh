@@ -19,7 +19,7 @@ cd yay && \
   rm -rf yay
 
 # Non-interactive yay install of all required packages
-LANG=C yay --noprovides --answerdiff None --answerclean None --mflags "--noconfirm" -S \
+LANG=C yay --answerdiff None --answerclean None --mflags "--noconfirm" -S \
   1password 1password-cli rust cargo qt5-base qt6-base mise kime-git visual-studio-code-bin \
   google-chrome spotify-launcher zenity ffmpeg4.4 \
   otf-pretendard-jp otf-pretendard-std ttf-pretendard-gov ttf-pretendard-jp ttf-pretendard-std \
