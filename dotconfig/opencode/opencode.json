@@ -1,29 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["oh-my-opencode@v3.0.0-beta.9"],
-  "model": "openrouter/openai/gpt-5.2",
+  "plugin": ["oh-my-opencode@v3.0.0-beta.10"],
+  "model": "openrouter/openai/gpt-5.2-codex",
   "small_model": "openrouter/mistralai/mistral-small-3.2-24b-instruct",
-  "mcp": {
-    "perplexity": {
-      "type": "local",
-      "enabled": false,
-      "command": ["op", "run", "--", "npx", "-y", "@perplexity-ai/mcp-server"],
-      "environment": {
-        "PERPLEXITY_API_KEY": "op://Private/Perplexity AI/API Key"
-      }
-    },
-    "tanstack": {
-      "type": "remote",
-      "enabled": true,
-      "url": "https://tanstack.com/api/mcp"
-    }
-  },
   "provider": {
     "openrouter": {
       "models": {
-        "google/gemini-3-pro-preview": {
-          "name": "Gemini 3 Pro Preview"
-        },
+        "google/gemini-3-pro-preview": {},
         "moonshotai/kimi-k2-thinking": {},
         "z-ai/glm-4.7": {},
         "mistralai/mistral-small-3.2-24b-instruct": {},
