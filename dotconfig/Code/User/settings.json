@@ -107,5 +107,7 @@
   "typescript.updateImportsOnFileMove.enabled": "never",
   "vscode-edge-devtools.webhintInstallNotification": true,
   "window.restoreWindows": "none",
-  "docker.extension.enableComposeLanguageServer": false
+  "docker.extension.enableComposeLanguageServer": false,
+  "agCockpit.groupingEnabled": true,
+  "agCockpit.notificationEnabled": true
 }
