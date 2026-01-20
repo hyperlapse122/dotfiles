@@ -50,6 +50,10 @@
   "disabled_hooks": ["todo-continuation-enforcer"],
   "google_auth": false,
   "categories": {
+    "general": {
+      "model": "openrouter/openai/gpt-5.2-codex",
+      "temperature": 0.3
+    },
     "visual-engineering": {
       "model": "openrouter/google/gemini-3-pro-preview",
       "temperature": 0.7
@@ -63,20 +67,16 @@
       "temperature": 0.9
     },
     "quick": {
-      "model": "openrouter/google/gemini-3-flash-preview",
+      "model": "openrouter/anthropic/claude-haiku-4.5",
       "temperature": 0.3
-    },
-    "most-capable": {
-      "model": "openrouter/openai/gpt-5.2-codex",
-      "temperature": 0.1
     },
     "writing": {
       "model": "openrouter/google/gemini-3-flash-preview",
       "temperature": 0.5
     },
-    "general": {
+    "most-capable": {
       "model": "openrouter/openai/gpt-5.2-codex",
-      "temperature": 0.3
+      "temperature": 0.1
     }
   }
 }
