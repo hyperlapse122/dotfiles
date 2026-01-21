@@ -44,6 +44,26 @@
     "Momus (Plan Reviewer)": {
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high"
+    },
+    "plan": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
+    },
+    "build": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
+    },
+    "document-writer": {
+      "model": "google/antigravity-gemini-3-flash",
+      "variant": "high"
+    },
+    "frontend-ui-ux-engineer": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
+    },
+    "OpenCode-Builder": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
     }
   },
   "disabled_hooks": ["todo-continuation-enforcer"],
@@ -60,12 +80,18 @@
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high"
     },
-    "quick": { "model": "openrouter/anthropic/claude-haiku-4.5" },
+    "quick": {
+      "model": "google/antigravity-gemini-3-flash"
+    },
     "unspecified-low": {
       "model": "google/antigravity-gemini-3-flash",
       "variant": "high"
     },
     "unspecified-high": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
+    },
+    "general": {
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high"
     },
