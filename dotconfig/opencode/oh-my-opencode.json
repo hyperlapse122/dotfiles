@@ -11,7 +11,7 @@
       "variant": "high",
       "temperature": 0.1
     },
-    "orchestrator-sisyphus": {
+    "Atlas": {
       "model": "google/antigravity-claude-opus-4-5-thinking",
       "variant": "max",
       "temperature": 0.1
@@ -94,6 +94,8 @@
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high"
     },
-    "writing": { "model": "google/antigravity-gemini-3-flash" }
+    "writing": {
+      "model": "google/antigravity-gemini-3-flash"
+    }
   }
 }
