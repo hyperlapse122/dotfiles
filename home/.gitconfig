@@ -27,8 +27,6 @@
 	useHttpPath = true
 [credential]
 	gitLabAuthModes = browser
-[core]
-	autocrlf = false
 [include]
 	path = ~/.gitconfig.d/windows.gitconfig
 	path = ~/.gitconfig.d/linux.gitconfig

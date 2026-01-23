@@ -2,3 +2,5 @@
   helper =
   helper = manager
   credentialStore = secretservice
+[core]
+	autocrlf = false

@@ -2,3 +2,5 @@
   helper =
   helper = manager
   credentialStore = keychain
+[core]
+	autocrlf = false
