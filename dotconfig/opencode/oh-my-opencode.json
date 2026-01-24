@@ -1,19 +1,19 @@
 {
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
   "agents": {
-    "Sisyphus": {
+    "sisyphus": {
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high",
       "temperature": 0.1
     },
-    "Sisyphus-Junior": {
+    "sisyphus-junior": {
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high",
       "temperature": 0.1
     },
-    "Atlas": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
-      "variant": "max",
+    "atlas": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high",
       "temperature": 0.1
     },
     "oracle": {
@@ -32,16 +32,16 @@
       "model": "google/antigravity-gemini-3-flash",
       "temperature": 0.1
     },
-    "Prometheus (Planner)": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
-      "variant": "max",
+    "prometheus": {
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high",
       "temperature": 0.1
     },
-    "Metis (Plan Consultant)": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high"
+    "metis": {
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "max"
     },
-    "Momus (Plan Reviewer)": {
+    "momus": {
       "model": "google/antigravity-claude-opus-4-5-thinking",
       "variant": "max"
     },
