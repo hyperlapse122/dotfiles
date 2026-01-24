@@ -38,12 +38,12 @@
       "temperature": 0.1
     },
     "metis": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
-      "variant": "max"
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
     },
     "momus": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
-      "variant": "max"
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high"
     },
     "plan": {
       "model": "google/antigravity-gemini-3-pro",
