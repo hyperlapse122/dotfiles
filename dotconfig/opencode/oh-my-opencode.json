@@ -7,7 +7,7 @@
       "temperature": 0.1
     },
     "sisyphus-junior": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "google/antigravity-gemini-3-flash",
       "variant": "high",
       "temperature": 0.1
     },
