@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["oh-my-opencode@beta", "opencode-antigravity-auth@beta"],
+  "plugin": ["oh-my-opencode@latest", "opencode-antigravity-auth@beta"],
   "model": "google/antigravity-gemini-3-pro",
   "small_model": "google/antigravity-gemini-3-flash",
   "provider": {
