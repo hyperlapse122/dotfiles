@@ -3,29 +3,27 @@
   "agents": {
     "sisyphus": {
       "model": "google/antigravity-gemini-3-pro",
-      "variant": "high",
       "temperature": 0.1
     },
     "sisyphus-junior": {
       "model": "google/antigravity-gemini-3-flash",
-      "variant": "high",
       "temperature": 0.1
     },
     "atlas": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high",
-      "temperature": 0.1
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "max"
     },
     "oracle": {
-      "model": "openrouter/openai/gpt-5.2-codex",
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "max",
       "temperature": 0.1
     },
     "librarian": {
-      "model": "openrouter/z-ai/glm-4.7",
+      "model": "opencode/big-pickle",
       "temperature": 0.1
     },
     "explore": {
-      "model": "openrouter/x-ai/grok-code-fast-1",
+      "model": "opencode/gpt-5-nano",
       "temperature": 0.1
     },
     "multimodal-looker": {
@@ -33,9 +31,8 @@
       "temperature": 0.1
     },
     "prometheus": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high",
-      "temperature": 0.1
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "max"
     },
     "metis": {
       "model": "google/antigravity-gemini-3-pro",
@@ -60,21 +57,16 @@
     "frontend-ui-ux-engineer": {
       "model": "google/antigravity-gemini-3-pro",
       "variant": "high"
-    },
-    "OpenCode-Builder": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high"
     }
   },
   "google_auth": false,
   "categories": {
     "visual-engineering": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high"
+      "model": "google/antigravity-gemini-3-pro"
     },
     "ultrabrain": {
-      "model": "openrouter/openai/gpt-5.2-codex",
-      "variant": "xhigh"
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "max"
     },
     "artistry": {
       "model": "google/antigravity-gemini-3-pro",
@@ -84,16 +76,14 @@
       "model": "google/antigravity-gemini-3-flash"
     },
     "unspecified-low": {
-      "model": "google/antigravity-gemini-3-flash",
-      "variant": "high"
+      "model": "google/antigravity-claude-sonnet-4-5-thinking"
     },
     "unspecified-high": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high"
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "max"
     },
     "general": {
-      "model": "google/antigravity-gemini-3-pro",
-      "variant": "high"
+      "model": "google/antigravity-gemini-3-pro"
     },
     "writing": {
       "model": "google/antigravity-gemini-3-flash"
