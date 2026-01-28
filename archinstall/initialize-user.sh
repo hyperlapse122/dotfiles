@@ -19,13 +19,13 @@ cd yay && \
   rm -rf yay
 
 # Non-interactive yay install of all required packages
-LANG=C yay --answerdiff None --answerclean None --mflags "--noconfirm" -S \
-  1password 1password-cli rust cargo qt5-base qt6-base mise kime-git visual-studio-code-bin \
-  google-chrome spotify-launcher zenity ffmpeg4.4 \
+LANG=C yay --answerdiff None --answerclean None --mflags "--noconfirm" -S --needed \
+  1password 1password-cli visual-studio-code-bin \
+  google-chrome zenity ffmpeg4.4 \
   otf-pretendard-jp otf-pretendard-std ttf-pretendard-gov ttf-pretendard-jp ttf-pretendard-std \
   otf-pretendard ttf-pretendard otf-pretendard-gov
 
-kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/kime.desktop
+kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/fcitx5-wayland-launcher.desktop
 
 # Clone dotfiles and run install non-interactively
 cd ~

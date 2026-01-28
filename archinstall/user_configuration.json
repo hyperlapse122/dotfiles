@@ -168,6 +168,8 @@
     "docker",
     "docker-buildx",
     "docker-compose",
+    "fcitx5",
+    "fcitx5-hangul",
     "firefox-developer-edition",
     "firefox-developer-edition-i18n-ko",
     "firewalld",
