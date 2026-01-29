@@ -2,19 +2,19 @@
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
   "agents": {
     "sisyphus": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "temperature": 0.1
     },
     "sisyphus-junior": {
-      "model": "google/antigravity-gemini-3-flash",
+      "model": "kimi-for-coding/k2p5",
       "temperature": 0.1
     },
     "atlas": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "model": "kimi-for-coding/k2p5",
       "variant": "max"
     },
     "oracle": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "model": "kimi-for-coding/k2p5",
       "variant": "max",
       "temperature": 0.1
     },
@@ -27,66 +27,66 @@
       "temperature": 0.1
     },
     "multimodal-looker": {
-      "model": "google/antigravity-gemini-3-flash",
+      "model": "kimi-for-coding/k2p5",
       "temperature": 0.1
     },
     "prometheus": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "model": "kimi-for-coding/k2p5",
       "variant": "max"
     },
     "metis": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     },
     "momus": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     },
     "plan": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     },
     "build": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     },
     "document-writer": {
-      "model": "google/antigravity-gemini-3-flash",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     },
     "frontend-ui-ux-engineer": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     }
   },
   "google_auth": false,
   "categories": {
     "visual-engineering": {
-      "model": "google/antigravity-gemini-3-pro"
+      "model": "kimi-for-coding/k2p5"
     },
     "ultrabrain": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "model": "kimi-for-coding/k2p5",
       "variant": "max"
     },
     "artistry": {
-      "model": "google/antigravity-gemini-3-pro",
+      "model": "kimi-for-coding/k2p5",
       "variant": "high"
     },
     "quick": {
-      "model": "google/antigravity-gemini-3-flash"
+      "model": "kimi-for-coding/k2p5"
     },
     "unspecified-low": {
-      "model": "google/antigravity-claude-sonnet-4-5-thinking"
+      "model": "kimi-for-coding/k2p5"
     },
     "unspecified-high": {
-      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "model": "kimi-for-coding/k2p5",
       "variant": "max"
     },
     "general": {
-      "model": "google/antigravity-gemini-3-pro"
+      "model": "kimi-for-coding/k2p5"
     },
     "writing": {
-      "model": "google/antigravity-gemini-3-flash"
+      "model": "kimi-for-coding/k2p5"
     }
   }
 }
