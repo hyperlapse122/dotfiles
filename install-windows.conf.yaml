@@ -14,6 +14,9 @@
     ~/.local/:
       glob: true
       path: dotlocal/**/*
+    ~/.claude/:
+      glob: true
+      path: claude/**/*
     ~/.config:
       glob: true
       path: dotconfig/**/*

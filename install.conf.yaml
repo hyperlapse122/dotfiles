@@ -7,6 +7,9 @@
     "~":
       glob: true
       path: home/.*
+    ~/.claude/:
+      glob: true
+      path: claude/**/*
     ~/.config/:
       glob: true
       path: dotconfig/**/*

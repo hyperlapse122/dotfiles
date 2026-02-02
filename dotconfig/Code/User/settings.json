@@ -111,5 +111,6 @@
   "agCockpit.notificationEnabled": true,
   "remote.SSH.remotePlatform": {
     "100.70.76.25": "linux"
-  }
+  },
+  "claudeCode.preferredLocation": "panel"
 }
