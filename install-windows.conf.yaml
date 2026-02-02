@@ -49,5 +49,6 @@
 
 - shell:
   - [pwsh -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
+  - ["pwsh -c \"irm https://claude.ai/install.ps1 | iex\"", Installing Claude Code]
   # - [pwsh -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
   # - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./fonts/InstallNerdFonts.ps1, Installing fonts]
