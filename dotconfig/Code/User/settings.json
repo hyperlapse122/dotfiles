@@ -17,7 +17,6 @@
   "biome.requireConfiguration": true,
   "biome.suggestInstallingGlobally": false,
   "chat.agent.maxRequests": 1000,
-  "chat.disableAIFeatures": true,
   "chat.instructionsFilesLocations": {
     ".github/instructions": true
   },
@@ -109,5 +108,8 @@
   "window.restoreWindows": "none",
   "docker.extension.enableComposeLanguageServer": false,
   "agCockpit.groupingEnabled": true,
-  "agCockpit.notificationEnabled": true
+  "agCockpit.notificationEnabled": true,
+  "remote.SSH.remotePlatform": {
+    "100.70.76.25": "linux"
+  }
 }
