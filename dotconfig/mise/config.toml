@@ -10,15 +10,12 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "cargo:git-trim" = "latest"
 "npm:corepack" = { version = "latest", postinstall = "corepack enable" }
 "npm:@biomejs/biome" = "latest"
-"npm:opencode-ai" = "latest"
 "npm:azure-functions-core-tools" = "4"
 "npm:azurite" = "latest"
-"npm:opencode-wakatime" = { version = "latest", postinstall = "opencode-wakatime --install" }
 "npm:@bufbuild/buf" = "latest"
 "pipx:unrpa" = "latest"
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
 "npm:@ast-grep/napi" = "latest"
-"npm:@code-yeongyu/comment-checker" = "latest"
 "npm:@electron/asar" = "latest"
 
 [settings]

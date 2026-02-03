@@ -34,7 +34,6 @@ orta.vscode-jest
 redhat.vscode-yaml
 repreng.csv
 rust-lang.rust-analyzer
-sst-dev.opencode
 tombi-toml.tombi
 typescriptteam.native-preview
 usernamehw.errorlens
