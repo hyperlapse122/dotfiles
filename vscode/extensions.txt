@@ -1,3 +1,4 @@
+anthropic.claude-code
 arktypeio.arkdark
 biomejs.biome
 bradlc.vscode-tailwindcss
@@ -32,6 +33,7 @@ ms-vscode.powershell
 orta.vscode-jest
 redhat.vscode-yaml
 repreng.csv
+rust-lang.rust-analyzer
 sst-dev.opencode
 tombi-toml.tombi
 typescriptteam.native-preview
