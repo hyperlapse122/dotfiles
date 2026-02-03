@@ -38,7 +38,7 @@
     - [~/.dotnet/dotnet tool update -g git-credential-manager, Update GCM]
     - [~/.dotnet/dotnet tool install -g powershell, Install PowerShell]
     - [~/.dotnet/dotnet tool update -g powershell, Update PowerShell]
-    - [bach -c "curl -fsSL https://claude.ai/install.sh | bash", Installing Claude Code]
+    - ["bash -c \"curl -fsSL https://claude.ai/install.sh | bash\"", Installing Claude Code]
 
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
