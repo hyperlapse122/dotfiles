@@ -17,7 +17,6 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
 "npm:@ast-grep/napi" = "latest"
 "npm:@electron/asar" = "latest"
-"ubi:gitlab-org/cli" = { version = "latest", exe = "glab", provider = "gitlab" }
 
 [settings]
 idiomatic_version_file_enable_tools = []

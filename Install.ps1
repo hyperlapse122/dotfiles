@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $CONFIG = $IsWindows ? "install-windows.conf.yaml" : "install.conf.yaml"
-$PYTHON_EXECUTABLE = $IsWindows ? "mise exec python@3 -- python" : "python"
+$PYTHON_EXECUTABLE = "python"
 
 $ROOT_CONFIG = $IsWindows ? $null : "install-root.conf.yaml"
 $DOTBOT_DIR = "dotbot"
@@ -9,8 +9,8 @@ $DOTBOT_BIN = "bin/dotbot"
 $BASEDIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 # If there is no Python executable, exit
-if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
-    Write-Host "Mise not found. Please install it from https://mise.jdx.dev/getting-started.html"
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Host "Python not found. Please install it."
     exit 1
 }
 
@@ -22,7 +22,8 @@ git submodule update --init --recursive
 & "$BASEDIR/dotnet/dotnet-install.ps1" -Channel LTS -NoPath
 & "$BASEDIR/dotnet/dotnet-install.ps1" -Channel 8.0 -NoPath
 
-$CMD = "$PYTHON_EXECUTABLE `"$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN`" `"-d`" `"$BASEDIR`" `"-c`" `"$CONFIG`" @args"
+$CMD = "$PYTHON_EXECUTABLE `"$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN`" -d `"$BASEDIR`" -c `"$CONFIG`""
+Write-Output $CMD
 Invoke-Expression $CMD
 
 if ($ROOT_CONFIG -and -not $IsWindows) {
