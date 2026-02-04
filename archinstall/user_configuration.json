@@ -15,98 +15,6 @@
     "uki": true
   },
   "custom_commands": [],
-  "disk_config": {
-    "btrfs_options": {
-      "snapshot_config": {
-        "type": "Timeshift"
-      }
-    },
-    "config_type": "default_layout",
-    "device_modifications": [
-      {
-        "device": "/dev/nvme0n1",
-        "partitions": [
-          {
-            "btrfs": [],
-            "dev_path": null,
-            "flags": ["boot", "esp"],
-            "fs_type": "fat32",
-            "mount_options": [],
-            "mountpoint": "/boot",
-            "obj_id": "aa45de9a-0014-4f81-8722-4ad9ea4c2e80",
-            "size": {
-              "sector_size": {
-                "unit": "B",
-                "value": 512
-              },
-              "unit": "GiB",
-              "value": 1
-            },
-            "start": {
-              "sector_size": {
-                "unit": "B",
-                "value": 512
-              },
-              "unit": "MiB",
-              "value": 1
-            },
-            "status": "create",
-            "type": "primary"
-          },
-          {
-            "btrfs": [
-              {
-                "mountpoint": "/",
-                "name": "@"
-              },
-              {
-                "mountpoint": "/home",
-                "name": "@home"
-              },
-              {
-                "mountpoint": "/var/log",
-                "name": "@log"
-              },
-              {
-                "mountpoint": "/var/cache/pacman/pkg",
-                "name": "@pkg"
-              }
-            ],
-            "dev_path": null,
-            "flags": [],
-            "fs_type": "btrfs",
-            "mount_options": ["compress=zstd"],
-            "mountpoint": null,
-            "obj_id": "1fd209a7-5be8-4cd2-85a7-765a24353b1e",
-            "size": {
-              "sector_size": {
-                "unit": "B",
-                "value": 512
-              },
-              "unit": "B",
-              "value": 1999323004928
-            },
-            "start": {
-              "sector_size": {
-                "unit": "B",
-                "value": 512
-              },
-              "unit": "B",
-              "value": 1074790400
-            },
-            "status": "create",
-            "type": "primary"
-          }
-        ],
-        "wipe": true
-      }
-    ],
-    "disk_encryption": {
-      "encryption_type": "luks",
-      "lvm_volumes": [],
-      "partitions": ["1fd209a7-5be8-4cd2-85a7-765a24353b1e"]
-    }
-  },
   "hostname": "h82-zenbook",
   "kernels": ["linux-zen"],
   "locale_config": {
@@ -184,6 +92,7 @@
     "git-lfs",
     "git-zsh-completion",
     "github-cli",
+    "glab",
     "gnupg",
     "gsfonts",
     "gtk3",
