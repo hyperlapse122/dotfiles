@@ -124,6 +124,8 @@
     "linux-zen",
     "linux-zen-headers",
     "llvm",
+    "man",
+    "man-db",
     "mise",
     "noto-fonts",
     "noto-fonts-cjk",
