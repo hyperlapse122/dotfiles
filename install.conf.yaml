@@ -13,6 +13,9 @@
     ~/.config/:
       glob: true
       path: dotconfig/**/*
+    ~/.gemini/:
+      glob: true
+      path: dotgemini/**/*
     ~/.ssh/:
       glob: true
       path: dotssh/**/*

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/schemas/settings.schema.json",
+  "general": {
+    "enableAutoUpdate": false,
+    "enableAutoUpdateNotification": true,
+    "previewFeatures": true
+  },
+  "hasSeenIdeIntegrationNudge": true,
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  }
+}
