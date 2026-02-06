@@ -33,7 +33,7 @@ Analyze all commits together and organize **by component/area** (not commit-by-c
 2. **Summary**: Break down changes component-by-component (e.g., "### Admin — Purchase Management", "### Commerce — Checkout", "### Infrastructure"). Each component section has bullet points explaining what changed and why.
 3. **Breaking Changes** *(only when applicable)*: List any breaking changes — API changes, removed features, schema migrations, environment variable changes, or anything that requires action from other developers or deployment steps.
 4. **Deployment Notes** *(only when applicable)*: Steps required beyond a normal deploy — migrations, seed data, env variable additions, infrastructure changes, or manual configuration.
-5. **Validation**: A to-do list (`- [ ]` / `- [x]`) of all validation steps (lint, types, unit tests, E2E tests). Mark each as checked when passed, unchecked when failed or not yet run.
+5. **Validation** *(only when the project has no CI/CD pipeline)*: A to-do list (`- [ ]` / `- [x]`) of all validation steps (lint, types, unit tests, E2E tests). Mark each as checked when passed, unchecked when failed or not yet run. Skip this section if the project has automated CI/CD validation.
 6. **Related Issues** *(only when applicable)*: Link related GitLab issues with `Closes #123` or `Relates to #456`.
 
 ### Tips
@@ -44,4 +44,4 @@ Analyze all commits together and organize **by component/area** (not commit-by-c
 
 - **Always use CLI tools** for validation — never use IDE diagnostics (e.g., `mcp__ide__getDiagnostics`).
 - Run the project's CLI commands for linting, type checking, building, and testing (e.g., `yarn lint`, `yarn tsc --noEmit`, `yarn build`, `yarn test`).
-- When validating for an MR/PR, run all applicable validation steps and update the checklist accordingly.
+- When validating for an MR/PR, run all applicable validation steps. If the project has no CI/CD pipeline, include a validation checklist in the MR/PR description. If CI/CD handles validation, skip the checklist.
