@@ -1,2 +1,4 @@
 model = "gpt-5.3-codex"
 model_reasoning_effort = "xhigh"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
