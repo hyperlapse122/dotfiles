@@ -10,6 +10,9 @@
     ~/.claude/:
       glob: true
       path: dotclaude/**/*
+    ~/.codex/:
+      glob: true
+      path: dotcodex/**/*
     ~/.config/:
       glob: true
       path: dotconfig/**/*

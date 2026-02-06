@@ -18,6 +18,7 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "npm:@ast-grep/napi" = "latest"
 "npm:@electron/asar" = "latest"
 "npm:@google/gemini-cli" = "latest"
+"npm:@openai/codex" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
