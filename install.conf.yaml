@@ -9,7 +9,7 @@
       path: home/.*
     ~/.claude/:
       glob: true
-      path: claude/**/*
+      path: dotclaude/**/*
     ~/.config/:
       glob: true
       path: dotconfig/**/*
