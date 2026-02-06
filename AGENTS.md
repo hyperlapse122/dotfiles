@@ -1,142 +1,151 @@
 # AGENTS.md
 
-**Generated:** 2026-01-03 | **Commit:** c3b8b67 | **Branch:** main
+**Generated:** 2026-02-06 | **Commit:** 5858ead | **Branch:** main
 
 ## OVERVIEW
 
-Personal dotfiles using Dotbot for cross-platform (Linux/macOS/Windows) symlink management. Split-privilege architecture: user configs (`install`) + root configs (`install-root`).
+Personal cross-platform dotfiles managed with Dotbot and split into user-level (`install` / `install.conf.yaml`) and root-level (`install-root` / `install-root.conf.yaml`) installation paths.
 
 ## STRUCTURE
 
-```
+```text
 dotfiles/
-├── bootstrap.sh          # Fresh machine entry (clones repo, sources install.sh)
-├── install.sh            # Main installer (mise, prezto, brew, dotbot)
-├── install                # Dotbot shim → install.conf.yaml (user-level)
-├── install-root           # Dotbot shim → install-root.conf.yaml (sudo, /etc/)
-├── install.conf.yaml      # Primary Dotbot config (symlinks to ~/)
-├── install-root.conf.yaml # System configs (/etc/keyd, /etc/libinput)
-├── install-windows.conf.yaml # Windows-specific paths
-├── dotconfig/             # → ~/.config/ (granular glob symlinks)
-├── dotlocal/              # → ~/.local/
-├── dotssh/                # → ~/.ssh/
-├── zsh/                   # → ~/ (shell configs)
-├── gnupg/                 # → ~/.gnupg/ (Linux)
-├── gnupg-macos/           # macOS GPG variant
-├── gnupg-windows/         # Windows GPG variant
-├── git/                   # posix.gitconfig / windows.gitconfig
-├── vscode/                # VS Code settings + extensions
-├── brew/                  # Brewfile (macOS)
-├── archinstall/           # Arch Linux full-system bootstrap
-├── macos/                 # macOS defaults configuration
-├── keyd/                  # Keyboard remapping (Linux /etc/)
-├── libinput/              # Input quirks (Linux /etc/)
-├── dotbot/                # VENDORED - do not modify (see below)
-└── mise.toml              # Runtime versions (node, python)
+├── bootstrap.sh            # Fresh POSIX machine entry (clone + source install.sh)
+├── install.sh              # Main Linux/macOS installer (mise, prezto, brew, dotbot)
+├── Install.ps1             # Main Windows installer (dotbot + tool bootstrap)
+├── install                 # Dotbot shim → install.conf.yaml (user-level)
+├── install-root            # Dotbot shim → install-root.conf.yaml (sudo /etc)
+├── install.conf.yaml       # Primary user-level Dotbot config (Linux/macOS)
+├── install-windows.conf.yaml # Primary user-level Dotbot config (Windows)
+├── install-root.conf.yaml  # System-level Dotbot config → /etc/*
+├── home/                   # Dotfiles linked to ~ (e.g. .zshrc, .gitconfig)
+├── dotconfig/              # → ~/.config/* (glob-linked)
+├── dotlocal/               # → ~/.local/*
+├── dotssh/                 # → ~/.ssh/*
+├── dotclaude/              # → ~/.claude/*
+├── dotcodex/               # → ~/.codex/*
+├── dotgemini/              # → ~/.gemini/*
+├── dotnet/                 # dotnet install scripts (sh + ps1)
+├── gitconfig.d/            # per-OS git config fragments
+├── gnupg/                  # Linux GPG config
+├── gnupg-macos/            # macOS GPG config
+├── gnupg-windows/          # Windows GPG config
+├── etc/                    # root-managed system files (keyd, libinput, etc)
+├── archinstall/            # Arch Linux provisioning scripts/config
+├── fedora/                 # Fedora provisioning scripts
+├── macos/                  # macOS defaults/config script
+├── windows/                # Windows Terminal and related assets
+├── vscode/                 # VS Code extension sync scripts/list
+├── zed/                    # Zed editor config
+├── brew/                   # Brewfile
+├── dotbot/                 # VENDORED submodule (read-only)
+└── mise.toml               # Base runtime versions
 ```
 
 ## WHERE TO LOOK
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Add new dotfile | `dotconfig/`, then re-run `./install.sh` | Auto-globbed to ~/.config/ |
-| Add symlink mapping | `install.conf.yaml` | Use `relink: true, create: true, force: true` |
-| System-level config | `install-root.conf.yaml` + `keyd/` or `etc/` | Requires `sudo` |
-| macOS setup | `macos/configure.sh` + `brew/Brewfile` | Runs via `install.sh` on Darwin |
-| Windows setup | `install-windows.conf.yaml` + `Install.ps1` | Different path mappings |
-| Fresh Arch install | `archinstall/` | Full provisioning scripts |
-| VS Code extensions | `vscode/extensions.txt` | `vscode/install.sh` to sync |
+| Add new shared dotfile | `dotconfig/`, then run installer | Auto-globbed into `~/.config/*` |
+| Add home-level dotfile | `home/` | Linked to `~/.*` via `install*.conf.yaml` |
+| Add agent config | `dotclaude/`, `dotcodex/`, `dotgemini/` | Linked to `~/.claude`, `~/.codex`, `~/.gemini` |
+| Add symlink mapping | `install.conf.yaml` / `install-windows.conf.yaml` | Keep link entries idempotent |
+| Add system-level Linux config | `etc/` + `install-root.conf.yaml` | Requires `sudo` via `install-root` |
+| macOS setup | `macos/configure.sh` + `brew/Brewfile` | Triggered by `install.sh` on Darwin |
+| Windows setup | `Install.ps1` + `install-windows.conf.yaml` | Uses Dotbot with Windows paths |
+| Runtime/tool versions | `mise.toml` + `dotconfig/mise/config.toml` | Includes package CLI tools |
+| VS Code extensions | `vscode/extensions.txt` | Sync via `vscode/install.sh` or `vscode/install.ps1` |
 
 ## CONVENTIONS
 
 ### Naming
-- `dot*` prefix = destination has leading `.` (`dotconfig/` → `~/.config/`)
-- `.d` directories use **numeric prefixes** for load order (`50-input.conf`, `80-pinentry.conf`)
+- `dot*` prefix means destination has a leading dot (for example, `dotconfig/` → `~/.config/`).
+- `.d` directories should use numeric prefixes for load order when relevant.
 
 ### Dotbot Configs
-- ALL link entries MUST use: `relink: true`, `create: true`, `force: true` (idempotency)
-- Platform guards: `if: '[ \`uname\` = Linux ]'` or `if: '[ \`uname\` = Darwin ]'`
-- Glob patterns: `path: dotconfig/**/*` (individual symlinks, not directory links)
-- NO trailing slashes on directory paths
+- User-level install configs should keep link entries idempotent (`relink: true`, `create: true`, `force: true`).
+- Use OS guards in shared configs when a path is platform-specific.
+- Prefer glob-based links for per-file mapping (for example, `path: dotconfig/**/*`).
+
+### Shell Selection
+- Windows command examples and automation should use `pwsh`.
+- Linux/macOS command examples and automation should use `zsh` or `bash`.
 
 ### Shell Scripts
-- Shebang: `#!/usr/bin/env zsh`
-- Error handling: `set -xeuo pipefail`
-- Platform detection: `os=$(uname); [[ "$os" == "Darwin" ]]`
-- Script directory: `DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`
-- Internal vars: underscore prefix (`_OS`, `_PWD`)
+- POSIX scripts use `#!/usr/bin/env zsh` and `set -xeuo pipefail`.
+- Resolve script directory before relative path usage (`DIR=...` pattern).
 
 ### Formatting
-- YAML/JSON: 2-space indent, LF, UTF-8, final newline
-- Biome for JS/JSON (root): `biome format --write`
-- Python (dotbot/): 4-space indent, Ruff (`hatch fmt`)
+- YAML/JSON: 2-space indentation, UTF-8, final newline.
+- JS/JSON formatting: `biome format --write`.
+- Dotbot Python changes (if ever needed): format/lint with `hatch fmt`.
 
 ## ANTI-PATTERNS
 
 | Forbidden | Why |
 |-----------|-----|
-| Edit `dotbot/` or `dotbot/lib/` | Vendored dependency - treat as third-party |
-| `as any`, `@ts-ignore` | Type safety |
-| Non-idempotent YAML entries | Install must be re-runnable |
-| Trailing slash in link paths | Dotbot behavior differs |
-| `print()` in Python | Use project messenger/logging |
-| Recursive clean on `~` | Performance disaster |
+| Edit `dotbot/` or `dotbot/lib/` | Vendored dependency; treat as third-party |
+| Non-idempotent Dotbot link entries | Installers must be safely re-runnable |
+| Unconditional OS-specific paths in shared configs | Breaks cross-platform installs |
+| Recursive clean operations on `~` | High-risk and slow on real machines |
 
 ## VENDORED: dotbot/
 
-Treat as **read-only third-party code**. Currently at upstream commit `04698061`.
+Treat as read-only third-party code. Current submodule pointer: `830da25a`.
 
-If extending Dotbot, create a plugin file elsewhere and register in `install.conf.yaml`:
+If you need Dotbot extensions, add a plugin outside `dotbot/` and register it in install config:
 ```yaml
 - plugins:
     - path/to/my_plugin.py
 ```
 
-Dev commands (from `dotbot/` dir):
+Useful commands (run inside `dotbot/`):
 ```bash
-hatch test                    # Run tests
-hatch test tests/test_link.py # Single file
-hatch fmt                     # Ruff format/lint
-hatch run types:check         # Mypy strict
+hatch test
+hatch test tests/test_link.py
+hatch fmt
+hatch run types:check
 ```
 
 ## COMMANDS
 
 ```bash
-# Fresh machine
-./bootstrap.sh
-
-# Re-run after changes
+# Re-run install (Linux/macOS)
 ./install.sh
 
-# Manual dotbot (user)
+# Re-run install (Windows)
+pwsh -ExecutionPolicy Bypass -File ./Install.ps1
+
+# Manual Dotbot user config (Linux/macOS)
 mise exec -- sh ./install
 
-# Manual dotbot (system)
+# Manual Dotbot system config (Linux/macOS)
 mise exec -- sudo sh ./install-root
 
-# macOS only
+# macOS package sync
 brew bundle --file=brew/Brewfile
 
-# Arch post-install
+# Arch post-install scripts
 curl https://dotfiles.h82.dev/archinstall/initialize.sh | bash      # root
 curl https://dotfiles.h82.dev/archinstall/initialize-user.sh | bash # user
+curl https://dotfiles.h82.dev/archinstall/initialize-after-boot.sh | bash # root (after reboot to system)
 ```
 
 ## PLATFORM MATRIX
 
 | Feature | Linux | macOS | Windows |
 |---------|-------|-------|---------|
-| Entry | `install.sh` | `install.sh` | `Install.ps1` |
-| Config | `install.conf.yaml` | `install.conf.yaml` | `install-windows.conf.yaml` |
-| Git | `git/posix.gitconfig` | `git/posix.gitconfig` | `git/windows.gitconfig` |
-| GPG | `gnupg/` | `gnupg-macos/.gnupg/` | `gnupg-windows/` |
-| Pkg mgr | `pacman`/`yay` | `brew` | `winget` |
-| Shell | `zsh`+prezto | `zsh`+prezto | `pwsh` |
+| Entry point | `install.sh` | `install.sh` | `Install.ps1` |
+| User Dotbot config | `install.conf.yaml` | `install.conf.yaml` | `install-windows.conf.yaml` |
+| Root/system config | `install-root.conf.yaml` | `install-root.conf.yaml` | n/a |
+| Git config fragment | `gitconfig.d/linux.gitconfig` | `gitconfig.d/macos.gitconfig` | `gitconfig.d/windows.gitconfig` |
+| Agent config dirs | `dotclaude`, `dotcodex`, `dotgemini` | `dotclaude`, `dotcodex`, `dotgemini` | `dotclaude`, `dotcodex`, `dotgemini` |
+| GPG config | `gnupg/` | `gnupg-macos/` | `gnupg-windows/` |
+| Preferred shell | `zsh` / `bash` | `zsh` / `bash` | `pwsh` |
 
 ## NOTES
 
-- CI deploys repo to GitHub Pages (`dotfiles.h82.dev`) for `archinstall/` remote access
-- `mise` manages runtimes AND executes dotbot (`mise exec -- sh ./install`)
-- Prezto cloned to `~/.zprezto` on first run (not in repo)
-- `.yarn/releases/` contains Yarn Berry - not application config
+- GitHub Actions deploys repository contents to GitHub Pages (`dotfiles.h82.dev`) for remote provisioning scripts.
+- `mise` manages core runtimes and tool CLIs (including `@openai/codex` in `dotconfig/mise/config.toml`).
+- Prezto is cloned on first install to `~/.zprezto` and is not vendored in this repository.
+- System-level Linux files are centralized under `etc/` and installed through `install-root.conf.yaml`.
