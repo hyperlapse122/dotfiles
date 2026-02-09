@@ -1,6 +1,6 @@
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
-  - ['winget install GnuWin32.Bison GnuWin32.Cpio GnuWin32.DiffUtils GnuWin32.File GnuWin32.GetText GnuWin32.Grep GnuWin32.Gzip GnuWin32.M4 GnuWin32.Make GnuWin32.UnZip GnuWin32.Zip GnuWin32.FindUtils GnuWin32.Gperf GnuWin32.Patch GnuWin32.Tar GnuWin32.Tree GnuWin32.Which', 'Installing GNU utils...']
+  - ['winget install --source winget GnuWin32.Bison GnuWin32.Cpio GnuWin32.DiffUtils GnuWin32.File GnuWin32.GetText GnuWin32.Grep GnuWin32.Gzip GnuWin32.M4 GnuWin32.Make GnuWin32.UnZip GnuWin32.Zip GnuWin32.FindUtils GnuWin32.Gperf GnuWin32.Patch GnuWin32.Tar GnuWin32.Tree GnuWin32.Which', 'Installing GNU utils...']
 
 - defaults:
     link:
@@ -58,6 +58,5 @@
 
 - shell:
   - [pwsh -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
-  - ["pwsh -c \"irm https://claude.ai/install.ps1 | iex\"", Installing Claude Code]
   # - [pwsh -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
   # - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./fonts/InstallNerdFonts.ps1, Installing fonts]

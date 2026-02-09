@@ -1,5 +1,5 @@
 [gpg]
-	program = C:\\Program Files (x86)\\GnuPG\\bin\\gpg.exe
+	program = C:\\Program Files\\GnuPG\\bin\\gpg.exe
 [credential]
   credentialStore = wincredman
 [core]
