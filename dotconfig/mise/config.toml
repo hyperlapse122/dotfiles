@@ -3,7 +3,7 @@ bun = "latest"
 go = "latest"
 node = "latest"
 yarn = "latest"
-rust = "latest"
+rust = { version = "latest", components = "rust-analyzer,rust-src" }
 usage = "latest"
 uv = "latest"
 java = ["zulu-17", "zulu-21", "zulu-24"]
@@ -19,6 +19,7 @@ java = ["zulu-17", "zulu-21", "zulu-24"]
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
 "npm:opencode-ai" = "latest"
+"github:rust-lang/rust-analyzer" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
