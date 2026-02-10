@@ -20,7 +20,10 @@ git submodule update --init --recursive
 
 # install dotnet LTS and 8
 & "$BASEDIR/dotnet/dotnet-install.ps1" -Channel LTS -NoPath
+& "$BASEDIR/dotnet/dotnet-install.ps1" -Channel 9.0 -NoPath
 & "$BASEDIR/dotnet/dotnet-install.ps1" -Channel 8.0 -NoPath
+& "$BASEDIR/dotnet/dotnet-install.ps1" -Channel 7.0 -NoPath
+& "$BASEDIR/dotnet/dotnet-install.ps1" -Channel 6.0 -NoPath
 
 $CMD = "$PYTHON_EXECUTABLE `"$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN`" -d `"$BASEDIR`" -c `"$CONFIG`""
 Write-Output $CMD
