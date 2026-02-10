@@ -6,7 +6,7 @@ yarn = "latest"
 rust = { version = "latest", components = "rust-analyzer,rust-src" }
 usage = "latest"
 uv = "latest"
-java = ["zulu-17", "zulu-21", "zulu-24"]
+java = ["zulu-17", "zulu-21", "zulu-25"]
 "cargo:git-trim" = "latest"
 "npm:@biomejs/biome" = "latest"
 "npm:azure-functions-core-tools" = "4"

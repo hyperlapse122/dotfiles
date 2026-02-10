@@ -120,6 +120,7 @@
     "https://json.schemastore.org/": true,
     "https://json-schema.org/": true,
     "https://opencode.ai": true,
-    "https://models.dev": true
+    "https://models.dev": true,
+    "https://biomejs.dev": true
   }
 }

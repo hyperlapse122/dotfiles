@@ -12,12 +12,12 @@
             "keys": "ctrl+c"
         },
         {
-            "id": "Terminal.FindText",
-            "keys": "ctrl+shift+f"
-        },
-        {
             "id": "Terminal.PasteFromClipboard",
             "keys": "ctrl+v"
+        },
+        {
+            "id": "Terminal.FindText",
+            "keys": "ctrl+shift+f"
         },
         {
             "id": "Terminal.DuplicatePaneAuto",
@@ -118,6 +118,18 @@
                 "guid": "{64c49053-f9a0-502f-a784-6efbdab65c0a}",
                 "hidden": true,
                 "name": "Developer PowerShell for VS 2022",
+                "source": "Windows.Terminal.VisualStudio"
+            },
+            {
+                "guid": "{b6f7b3b4-16c9-5c9b-9603-1bec0b5d6f3e}",
+                "hidden": false,
+                "name": "Developer Command Prompt for VS 18",
+                "source": "Windows.Terminal.VisualStudio"
+            },
+            {
+                "guid": "{eb089a3a-66a6-53c3-82d5-b8e41439d322}",
+                "hidden": false,
+                "name": "Developer PowerShell for VS 18",
                 "source": "Windows.Terminal.VisualStudio"
             }
         ]
