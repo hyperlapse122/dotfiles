@@ -2,5 +2,7 @@
 	program = C:\\Program Files\\GnuPG\\bin\\gpg.exe
 [credential]
   credentialStore = wincredman
+	helper = 
+	helper = C:/Program\\ Files/Git/mingw64/bin/git-credential-manager.exe
 [core]
 	autocrlf = input
