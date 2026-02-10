@@ -3,11 +3,13 @@ arktypeio.arkdark
 biomejs.biome
 bradlc.vscode-tailwindcss
 bufbuild.vscode-buf
+christian-kohler.npm-intellisense
+davidanson.vscode-markdownlint
 docker.docker
+donjayamanne.githistory
 eamodio.gitlens
 editorconfig.editorconfig
 github.codespaces
-github.copilot
 github.copilot-chat
 github.vscode-github-actions
 github.vscode-pull-request-github
@@ -37,6 +39,7 @@ ms-vscode.hexeditor
 ms-vscode.powershell
 ms-vscode.remote-explorer
 orta.vscode-jest
+redhat.java
 redhat.vscode-yaml
 repreng.csv
 rust-lang.rust-analyzer
@@ -45,5 +48,11 @@ tauri-apps.tauri-vscode
 tombi-toml.tombi
 typescriptteam.native-preview
 usernamehw.errorlens
+vscjava.vscode-gradle
+vscjava.vscode-java-debug
+vscjava.vscode-java-dependency
+vscjava.vscode-java-pack
+vscjava.vscode-java-test
+vscjava.vscode-maven
 wakatime.vscode-wakatime
 yoavbls.pretty-ts-errors
