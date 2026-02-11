@@ -14,6 +14,8 @@
   "[yaml]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
+  "agCockpit.groupingEnabled": true,
+  "agCockpit.notificationEnabled": true,
   "biome.requireConfiguration": true,
   "biome.suggestInstallingGlobally": false,
   "chat.agent.maxRequests": 1000,
@@ -24,7 +26,9 @@
   "chat.tools.terminal.autoApprove": {
     "/.*/": true
   },
+  "claudeCode.preferredLocation": "panel",
   "csharp.experimental.debug.hotReload": true,
+  "docker.extension.enableComposeLanguageServer": false,
   "editor.aiStats.enabled": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
@@ -78,12 +82,26 @@
   "javascript.updateImportsOnFileMove.enabled": "never",
   "js/ts.implicitProjectConfig.checkJs": true,
   "js/ts.implicitProjectConfig.experimentalDecorators": true,
+  "json.schemaDownload.trustedDomains": {
+    "https://biomejs.dev": true,
+    "https://json-schema.org/": true,
+    "https://json.schemastore.org/": true,
+    "https://models.dev": true,
+    "https://opencode.ai": true,
+    "https://raw.githubusercontent.com/": true,
+    "https://schemastore.azurewebsites.net/": true,
+    "https://turborepo.dev": true,
+    "https://www.schemastore.org/": true
+  },
   "kilo-code.allowedCommands": ["git log", "git diff", "git show"],
   "kilo-code.deniedCommands": [],
   "kilo-code.provider": "openrouter",
   "prettier.enable": false,
   "python.analysis.typeCheckingMode": "basic",
   "redhat.telemetry.enabled": false,
+  "remote.SSH.remotePlatform": {
+    "100.70.76.25": "linux"
+  },
   "sherlock.previewLanguageTag": "en",
   "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
   "terminal.external.windowsExec": "pwsh.exe",
@@ -105,22 +123,5 @@
   "typescript.suggest.completeFunctionCalls": true,
   "typescript.updateImportsOnFileMove.enabled": "never",
   "vscode-edge-devtools.webhintInstallNotification": true,
-  "window.restoreWindows": "none",
-  "docker.extension.enableComposeLanguageServer": false,
-  "agCockpit.groupingEnabled": true,
-  "agCockpit.notificationEnabled": true,
-  "remote.SSH.remotePlatform": {
-    "100.70.76.25": "linux"
-  },
-  "claudeCode.preferredLocation": "panel",
-  "json.schemaDownload.trustedDomains": {
-    "https://schemastore.azurewebsites.net/": true,
-    "https://raw.githubusercontent.com/": true,
-    "https://www.schemastore.org/": true,
-    "https://json.schemastore.org/": true,
-    "https://json-schema.org/": true,
-    "https://opencode.ai": true,
-    "https://models.dev": true,
-    "https://biomejs.dev": true
-  }
+  "window.restoreWindows": "none"
 }
