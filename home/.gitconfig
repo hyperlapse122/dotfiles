@@ -11,6 +11,7 @@
 	gpgsign = true
 [push]
 	recurseSubmodules = check
+	autoSetupRemote = true
 [init]
 	defaultBranch = main
 [tag]
