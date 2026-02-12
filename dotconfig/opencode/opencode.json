@@ -114,5 +114,34 @@
       }
     }
   },
-  "lsp": {}
+  "lsp": {
+    "biome": {
+      "command": ["npx", "-y", "@biomejs/biome", "lsp-proxy"],
+      "extensions": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".cts",
+        ".ctsx",
+        ".cjs",
+        ".cjsx",
+        ".mts",
+        ".mtsx",
+        ".mjs",
+        ".mjsx",
+        ".json",
+        ".css",
+        ".scss",
+        ".html",
+        ".vue",
+        ".svelte",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".md",
+        ".mdx"
+      ]
+    }
+  }
 }
