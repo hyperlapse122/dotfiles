@@ -20,6 +20,7 @@ java = ["zulu-17", "zulu-21", "zulu-25"]
 "npm:@openai/codex" = "latest"
 "npm:opencode-ai" = "latest"
 "github:rust-lang/rust-analyzer" = "latest"
+"npm:typescript-language-server" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []

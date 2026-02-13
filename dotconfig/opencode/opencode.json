@@ -17,8 +17,14 @@
             "output": 65535
           },
           "modalities": {
-            "input": ["text", "image", "pdf"],
-            "output": ["text"]
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
           },
           "variants": {
             "low": {
@@ -36,8 +42,14 @@
             "output": 65536
           },
           "modalities": {
-            "input": ["text", "image", "pdf"],
-            "output": ["text"]
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
           },
           "variants": {
             "minimal": {
@@ -61,8 +73,14 @@
             "output": 64000
           },
           "modalities": {
-            "input": ["text", "image", "pdf"],
-            "output": ["text"]
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
           }
         },
         "antigravity-claude-sonnet-4-5-thinking": {
@@ -72,8 +90,14 @@
             "output": 64000
           },
           "modalities": {
-            "input": ["text", "image", "pdf"],
-            "output": ["text"]
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
           },
           "variants": {
             "low": {
@@ -95,8 +119,14 @@
             "output": 64000
           },
           "modalities": {
-            "input": ["text", "image", "pdf"],
-            "output": ["text"]
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
           },
           "variants": {
             "low": {
@@ -116,7 +146,14 @@
   },
   "lsp": {
     "biome": {
-      "command": ["npx", "-y", "@biomejs/biome", "lsp-proxy"],
+      "command": [
+        "mise",
+        "exec",
+        "npm:@biomejs/biome",
+        "--",
+        "biome",
+        "lsp-proxy"
+      ],
       "extensions": [
         ".ts",
         ".tsx",
