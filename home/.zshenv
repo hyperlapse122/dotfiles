@@ -5,6 +5,14 @@
 #   Sorin Ionescu <sorin.ionescu@gmail.com>
 #
 
+# Set the list of directories that Zsh searches for programs.
+path=(
+  $HOME/.dotnet/tools(N)
+  /opt/homebrew/{,s}bin(N)
+  '/Applications/Visual Studio Code.app/Contents/Resources/app/bin'(N)
+  $path
+)
+
 eval "$(mise activate zsh)"
 
 export DOTNET_ROOT="$HOME/.dotnet"

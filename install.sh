@@ -10,7 +10,6 @@ git submodule update --init --recursive
 
 # Configure macOS settings
 if [[ "$os" == "Darwin" ]]; then
-  source macos/configure.sh
   # Install Homebrew formulae and casks
   brew bundle --file="$DIR/brew/Brewfile"
 

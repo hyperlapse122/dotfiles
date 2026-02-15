@@ -12,6 +12,7 @@ java = ["zulu-17", "zulu-21", "zulu-25"]
 "npm:azure-functions-core-tools" = "4"
 "npm:azurite" = "latest"
 "npm:@bufbuild/buf" = "latest"
+pipx = "latest"
 "pipx:unrpa" = "latest"
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
 "npm:@ast-grep/napi" = "latest"
