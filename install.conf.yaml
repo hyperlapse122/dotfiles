@@ -29,6 +29,10 @@
       if: "[ `uname` = Linux ]"
       glob: true
       path: gnupg/**
+    ~/Library/Application Support/Code/User:
+      if: "[ `uname` = Darwin ]"
+      glob: true
+      path: dotconfig/Code/User/**
     ~/.gnupg:
       if: "[ `uname` = Darwin ]"
       glob: true
