@@ -39,8 +39,8 @@ font-feature = +tnum
 desktop-notifications = true
 shell-integration-features = sudo
 
-window-padding-x = 12
-window-padding-y = 8
+# window-padding-x = 12
+# window-padding-y = 8
 macos-titlebar-style = tabs
 link-url = true
 # cursor-style = bar
