@@ -123,5 +123,6 @@
   "typescript.suggest.completeFunctionCalls": true,
   "typescript.updateImportsOnFileMove.enabled": "never",
   "vscode-edge-devtools.webhintInstallNotification": true,
-  "window.restoreWindows": "none"
+  "window.restoreWindows": "none",
+  "editor.accessibilitySupport": "off"
 }
