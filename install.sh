@@ -38,4 +38,7 @@ mise trust --all && mise install
 # ln -s ~/.local/share/mise ~/.asdf
 
 mise exec -- sh ./install
-mise exec -- sudo sh ./install-root
+
+if [[ "$os" == "Linux" ]]; then
+  mise exec -- sudo sh ./install-root
+fi

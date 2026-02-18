@@ -4,6 +4,7 @@
 
 - link:
     "/etc":
+      if: "[ `uname` = Linux ]"
       path: etc/**
       glob: true
       create: true
