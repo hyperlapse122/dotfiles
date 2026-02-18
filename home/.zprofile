@@ -81,3 +81,5 @@ if [[ "$os" == "Darwin" ]]; then
   # Homebrew
   eval "$(brew shellenv)"
 fi
+
+[[ -f ~/.orbstack/shell/init.zsh ]] && source ~/.orbstack/shell/init.zsh

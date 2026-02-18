@@ -37,7 +37,7 @@ background-opacity = 0.9
 background-blur = true
 font-feature = +tnum
 desktop-notifications = true
-shell-integration-features = sudo
+shell-integration-features = sudo,ssh-env
 
 # window-padding-x = 12
 # window-padding-y = 8

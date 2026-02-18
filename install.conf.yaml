@@ -25,23 +25,43 @@
     ~/.local/:
       glob: true
       path: dotlocal/**/*
+    ~/.local/bin/dotnet-install:
+      path: dotnet/dotnet-install.sh
+
+# Linux-specific configuration. This is separate from the main configuration to avoid issues with symlinks on non-Linux systems.
+- defaults:
+    link:
+      relink: true
+      create: true
+      force: true
+  link:
     ~/.gnupg/:
       if: "[ `uname` = Linux ]"
       glob: true
       path: gnupg/**
-    ~/Library/Application Support/Code/User:
-      if: "[ `uname` = Darwin ]"
-      glob: true
-      path: dotconfig/Code/User/**
-    ~/.gnupg:
-      if: "[ `uname` = Darwin ]"
-      glob: true
-      path: gnupg-macos/**
-    ~/.local/bin/dotnet-install:
-      path: dotnet/dotnet-install.sh
     ~/.gitconfig.d/linux.gitconfig:
       if: "[ `uname` = Linux ]"
       path: gitconfig.d/linux.gitconfig
+
+# macOS-specific configuration. This is separate from the main configuration to avoid issues with symlinks on non-macOS systems.
+- defaults:
+    link:
+      relink: true
+      create: true
+      force: true
+  link:
+    ~/.ssh/:
+      if: "[ `uname` = Darwin ]"
+      glob: true
+      path: dotssh-macos/**/*
+    ~/Library/Application Support/Code/User/:
+      if: "[ `uname` = Darwin ]"
+      glob: true
+      path: dotconfig/Code/User/**
+    ~/.gnupg/:
+      if: "[ `uname` = Darwin ]"
+      glob: true
+      path: gnupg-macos/**
     ~/.gitconfig.d/macos.gitconfig:
       if: "[ `uname` = Darwin ]"
       path: gitconfig.d/macos.gitconfig
