@@ -4,6 +4,7 @@ bradlc.vscode-tailwindcss
 bufbuild.vscode-buf
 christian-kohler.npm-intellisense
 davidanson.vscode-markdownlint
+dnicolson.binary-plist
 docker.docker
 donjayamanne.githistory
 eamodio.gitlens
