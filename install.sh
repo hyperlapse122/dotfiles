@@ -30,6 +30,9 @@ sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 7.0 -
 sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 8.0 --no-path
 sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 9.0 --no-path
 sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 10.0 --no-path
+if [[ "$os" == "Darwin" ]]; then
+  xattr -d -r com.apple.quarantine "$HOME/.dotnet"
+fi
 
 # mise
 mise use node@latest
