@@ -8,15 +8,13 @@
 # Set the list of directories that Zsh searches for programs.
 path=(
   $HOME/.dotnet/tools(N)
+  $HOME/.local/bin(N)
   /opt/homebrew/{,s}bin(N)
   '/Applications/Visual Studio Code.app/Contents/Resources/app/bin'(N)
   $path
 )
 
 eval "$(mise activate zsh)"
-
-export DOTNET_ROOT="$HOME/.dotnet"
-PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$HOME/.local/bin:${PATH}"
 
 # Ensure that a non-login, non-interactive shell has a defined environment.
 if [[ ( "$SHLVL" -eq 1 && ! -o LOGIN ) && -s "${ZDOTDIR:-$HOME}/.zprofile" ]]; then
