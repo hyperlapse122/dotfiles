@@ -12,7 +12,7 @@ java = ["zulu-17", "zulu-21", "zulu-25"]
 "npm:azure-functions-core-tools" = "4"
 "npm:azurite" = "latest"
 "npm:@bufbuild/buf" = "latest"
-pipx = "latest"
+pipx = { version = "latest", os = ["linux", "macos"] }
 "pipx:unrpa" = "latest"
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
 "npm:@ast-grep/napi" = "latest"
@@ -22,7 +22,11 @@ pipx = "latest"
 "npm:opencode-ai" = "latest"
 "github:rust-lang/rust-analyzer" = "latest"
 "npm:typescript-language-server" = "latest"
-ruby = ["3.4", "3.2"]
+ruby = [
+  { version = "latest" },
+  { version = "3.4", os = ["linux", "macos"] },
+  { version = "3.2", os = ["linux", "macos"] }
+]
 
 [settings]
 idiomatic_version_file_enable_tools = []
