@@ -1,6 +1,10 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["oh-my-opencode@latest", "opencode-wakatime"],
+  "plugin": [
+    "oh-my-opencode@latest",
+    "opencode-anthropic-auth",
+    "opencode-wakatime"
+  ],
   "autoupdate": "notify",
   "provider": {},
   "lsp": {
