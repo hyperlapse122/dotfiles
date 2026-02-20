@@ -57,5 +57,7 @@
 
 - shell:
   - [pwsh -ExecutionPolicy Bypass -File vscode/install.ps1, Installing VSCode extensions]
+  - [dotnet tool install -g csharp-ls, Install C# Language Server]
+  - [dotnet tool update -g csharp-ls, Update C# Language Server]
   # - [pwsh -ExecutionPolicy Bypass -File ImportGpgKeys.ps1, Installing GPG keys]
   # - [pwsh -NoProfile -ExecutionPolicy Bypass -File ./fonts/InstallNerdFonts.ps1, Installing fonts]

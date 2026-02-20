@@ -15,3 +15,9 @@ Only use a fallback shell when `pwsh` is unavailable or the task explicitly requ
 | Windows  | `pwsh`  | `cmd.exe`         |
 | Linux    | `pwsh`  | `bash`, then `sh` |
 | macOS    | `pwsh`  | `bash`, then `sh` |
+
+## Pull Requests / Merge Requests
+
+- When creating a pull request or merge request, **always set the assignee to the authenticated user**.
+  - GitHub: `gh pr create --assignee @me`
+  - GitLab: `glab mr create --assignee $(glab api user | jq -r '.username')`

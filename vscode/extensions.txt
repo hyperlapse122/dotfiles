@@ -18,8 +18,10 @@ github.vscode-pull-request-github
 gitlab.gitlab-workflow
 google.gemini-cli-vscode-ide-companion
 gruntfuggly.todo-tree
+hverlin.mise-vscode
 inlang.vs-code-extension
 mikestead.dotenv
+ms-azuretools.vscode-azurefunctions
 ms-azuretools.vscode-azureresourcegroups
 ms-azuretools.vscode-containers
 ms-azuretools.vscode-docker

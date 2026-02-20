@@ -72,5 +72,7 @@
     - [~/.dotnet/dotnet tool update -g git-credential-manager, Update GCM]
     - [~/.dotnet/dotnet tool install -g powershell, Install PowerShell]
     - [~/.dotnet/dotnet tool update -g powershell, Update PowerShell]
+    - [~/.dotnet/dotnet tool install -g csharp-ls, Install C# Language Server]
+    - [~/.dotnet/dotnet tool update -g csharp-ls, Update C# Language Server]
 # - shell:
 #   - [git clone --recursive https://github.com/sorin-ionescu/prezto.git ~/.zprezto, Cloning Prezto]
