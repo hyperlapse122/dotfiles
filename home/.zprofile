@@ -47,7 +47,7 @@ typeset -gU cdpath fpath mailpath path
 #   $cdpath
 # )
 
-DOTNET_ROOT="$HOME/.dotnet"
+export DOTNET_ROOT="$HOME/.dotnet"
 
 # Set the list of directories that Zsh searches for programs.
 path=(

@@ -26,10 +26,13 @@ if [ ! -d "${ZDOTDIR:-$HOME}/.zprezto" ]; then
 fi
 
 # install dotnet LTS and 8
-sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 7.0 --no-path
-sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 8.0 --no-path
-sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 9.0 --no-path
-sh "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 10.0 --no-path
+curl -sSL https://dot.net/v1/dotnet-install.sh -o "$DIR/dotnet/dotnet-install.sh"
+bash "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 7.0 --no-path
+bash "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 8.0 --no-path
+bash "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 9.0 --no-path
+bash "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel 10.0 --no-path
+bash "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel LTS --no-path
+bash "$DIR/dotnet/dotnet-install.sh" --install-dir "$HOME/.dotnet" --channel STS --no-path
 if [[ "$os" == "Darwin" ]]; then
   xattr -d -r com.apple.quarantine "$HOME/.dotnet"
 fi
