@@ -5,10 +5,11 @@
 #   Sorin Ionescu <sorin.ionescu@gmail.com>
 #
 
-export DOTNET_ROOT="$HOME/.dotnet"
+DOTNET_ROOT="$HOME/.dotnet"
 
 # Set the list of directories that Zsh searches for programs.
 path=(
+  $DOTNET_ROOT(N)
   $DOTNET_ROOT/tools(N)
   $HOME/.local/bin(N)
   $HOME/{,s}bin(N)
