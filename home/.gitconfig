@@ -32,3 +32,4 @@
 	path = ~/.gitconfig.d/windows.gitconfig
 	path = ~/.gitconfig.d/linux.gitconfig
 	path = ~/.gitconfig.d/macos.gitconfig
+	path = ~/.gitconfig.d/99-openclaw.gitconfig
