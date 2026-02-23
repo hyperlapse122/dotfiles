@@ -124,5 +124,14 @@
   "typescript.updateImportsOnFileMove.enabled": "never",
   "vscode-edge-devtools.webhintInstallNotification": true,
   "window.restoreWindows": "none",
-  "editor.accessibilitySupport": "off"
+  "editor.accessibilitySupport": "off",
+  "markdownlint.lintWorkspaceGlobs": [
+    "**/*.{md,mkd,mdwn,mdown,markdown,markdn,mdtxt,mdtext,workbook}",
+    "!**/*.code-search",
+    "!**/bower_components",
+    "!**/node_modules",
+    "!**/.git",
+    "!**/vendor",
+    "!**/.sisyphus"
+  ]
 }
