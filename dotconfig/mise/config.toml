@@ -27,6 +27,7 @@ ruby = [
   { version = "3.4", os = ["linux", "macos"] },
   { version = "3.2", os = ["linux", "macos"] }
 ]
+"npm:npm" = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
