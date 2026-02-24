@@ -15,7 +15,6 @@ java = ["zulu-17", "zulu-21", "zulu-25"]
 pipx = { version = "latest", os = ["linux", "macos"] }
 "pipx:unrpa" = "latest"
 "pipx:git+https://github.com/github/spec-kit.git" = "latest"
-"npm:@ast-grep/napi" = "latest"
 "npm:@electron/asar" = "latest"
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
@@ -31,6 +30,7 @@ ruby = [
 "npm:shadcn" = "latest"
 "npm:lucide-icons-mcp" = "latest"
 "npm:@tanstack/cli" = "latest"
+ast-grep = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = []
