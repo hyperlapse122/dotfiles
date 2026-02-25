@@ -32,6 +32,7 @@ ruby = [
 "npm:@tanstack/cli" = "latest"
 ast-grep = "latest"
 "npm:tokscale" = { version = "latest", os = ["linux", "macos"] }
+"gitlab:gitlab-org/cli" = { version = "latest", exe = "glab" }
 
 [settings]
 idiomatic_version_file_enable_tools = []
