@@ -1,2 +1,3 @@
 # Add *.ptb as binary files
 *.ptb binary
+* text=auto
