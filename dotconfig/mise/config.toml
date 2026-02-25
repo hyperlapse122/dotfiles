@@ -34,6 +34,17 @@ ast-grep = "latest"
 "npm:tokscale" = { version = "latest", os = ["linux", "macos"] }
 "gitlab:gitlab-org/cli" = { version = "latest", exe = "glab" }
 
+[tools."github:wakatime/wakatime-cli"]
+version = "latest"
+rename_exe = "wakatime-cli"
+
+[tools."github:wakatime/wakatime-cli".platforms]
+linux-x64 = { asset_pattern = "wakatime-cli-linux-amd64.zip" }
+linux-arm64 = { asset_pattern = "wakatime-cli-linux-arm64.zip" }
+macos-arm64 = { asset_pattern = "wakatime-cli-darwin-arm64.zip" }
+windows-x64 = { asset_pattern = "wakatime-cli-windows-amd64.zip", rename_exe = "wakatime-cli.exe" }
+windows-arm64 = { asset_pattern = "wakatime-cli-windows-arm64.zip", rename_exe = "wakatime-cli.exe" }
+
 [settings]
 idiomatic_version_file_enable_tools = []
 experimental = true
