@@ -100,7 +100,7 @@
   "python.analysis.typeCheckingMode": "basic",
   "redhat.telemetry.enabled": false,
   "remote.SSH.remotePlatform": {
-    "100.70.76.25": "linux"
+    "deskmini.tetra-gecko.ts.net": "linux"
   },
   "sherlock.previewLanguageTag": "en",
   "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
