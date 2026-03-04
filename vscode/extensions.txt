@@ -4,13 +4,11 @@ bradlc.vscode-tailwindcss
 bufbuild.vscode-buf
 christian-kohler.npm-intellisense
 davidanson.vscode-markdownlint
-dbaeumer.vscode-eslint
 dnicolson.binary-plist
 docker.docker
 donjayamanne.githistory
 eamodio.gitlens
 editorconfig.editorconfig
-esbenp.prettier-vscode
 github.codespaces
 github.copilot-chat
 github.vscode-github-actions
@@ -18,10 +16,7 @@ github.vscode-pull-request-github
 gitlab.gitlab-workflow
 google.gemini-cli-vscode-ide-companion
 gruntfuggly.todo-tree
-hverlin.mise-vscode
 inlang.vs-code-extension
-mikestead.dotenv
-ms-azuretools.vscode-azurefunctions
 ms-azuretools.vscode-azureresourcegroups
 ms-azuretools.vscode-containers
 ms-azuretools.vscode-docker
@@ -50,11 +45,9 @@ redhat.vscode-yaml
 repreng.csv
 rust-lang.rust-analyzer
 sst-dev.opencode
-tamasfe.even-better-toml
 tauri-apps.tauri-vscode
 tombi-toml.tombi
 typescriptteam.native-preview
-unifiedjs.vscode-mdx
 usernamehw.errorlens
 vscjava.vscode-gradle
 vscjava.vscode-java-debug
@@ -63,5 +56,4 @@ vscjava.vscode-java-pack
 vscjava.vscode-java-test
 vscjava.vscode-maven
 wakatime.vscode-wakatime
-wayou.vscode-todo-highlight
 yoavbls.pretty-ts-errors
