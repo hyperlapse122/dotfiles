@@ -5,18 +5,18 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"@biomejs/biome@npm:^2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/biome@npm:2.4.4"
+"@biomejs/biome@npm:^2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/biome@npm:2.4.5"
   dependencies:
-    "@biomejs/cli-darwin-arm64": "npm:2.4.4"
-    "@biomejs/cli-darwin-x64": "npm:2.4.4"
-    "@biomejs/cli-linux-arm64": "npm:2.4.4"
-    "@biomejs/cli-linux-arm64-musl": "npm:2.4.4"
-    "@biomejs/cli-linux-x64": "npm:2.4.4"
-    "@biomejs/cli-linux-x64-musl": "npm:2.4.4"
-    "@biomejs/cli-win32-arm64": "npm:2.4.4"
-    "@biomejs/cli-win32-x64": "npm:2.4.4"
+    "@biomejs/cli-darwin-arm64": "npm:2.4.5"
+    "@biomejs/cli-darwin-x64": "npm:2.4.5"
+    "@biomejs/cli-linux-arm64": "npm:2.4.5"
+    "@biomejs/cli-linux-arm64-musl": "npm:2.4.5"
+    "@biomejs/cli-linux-x64": "npm:2.4.5"
+    "@biomejs/cli-linux-x64-musl": "npm:2.4.5"
+    "@biomejs/cli-win32-arm64": "npm:2.4.5"
+    "@biomejs/cli-win32-x64": "npm:2.4.5"
   dependenciesMeta:
     "@biomejs/cli-darwin-arm64":
       optional: true
@@ -36,62 +36,62 @@ __metadata:
       optional: true
   bin:
     biome: bin/biome
-  checksum: 10c0/f2b7620d39caeeb9e0ed070dd1065cc2378626c7fa6ecda3db84b64df4c94fb4909407726044e28c83e8a95121ad389498cc3f0e5be600a421d906ca705b821c
+  checksum: 10c0/5466d0f69c30bbe1912f3f5f307dd31293e054c8b307c21f1df22edad415de34cf46842b0bd57e150cfc6dc6d698e848f6cd26fc7155d685aa8323e4ead7538e
   languageName: node
   linkType: hard
 
-"@biomejs/cli-darwin-arm64@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-darwin-arm64@npm:2.4.4"
+"@biomejs/cli-darwin-arm64@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-darwin-arm64@npm:2.4.5"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@biomejs/cli-darwin-x64@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-darwin-x64@npm:2.4.4"
+"@biomejs/cli-darwin-x64@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-darwin-x64@npm:2.4.5"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@biomejs/cli-linux-arm64-musl@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-linux-arm64-musl@npm:2.4.4"
+"@biomejs/cli-linux-arm64-musl@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-linux-arm64-musl@npm:2.4.5"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@biomejs/cli-linux-arm64@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-linux-arm64@npm:2.4.4"
+"@biomejs/cli-linux-arm64@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-linux-arm64@npm:2.4.5"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@biomejs/cli-linux-x64-musl@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-linux-x64-musl@npm:2.4.4"
+"@biomejs/cli-linux-x64-musl@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-linux-x64-musl@npm:2.4.5"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@biomejs/cli-linux-x64@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-linux-x64@npm:2.4.4"
+"@biomejs/cli-linux-x64@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-linux-x64@npm:2.4.5"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@biomejs/cli-win32-arm64@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-win32-arm64@npm:2.4.4"
+"@biomejs/cli-win32-arm64@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-win32-arm64@npm:2.4.5"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"@biomejs/cli-win32-x64@npm:2.4.4":
-  version: 2.4.4
-  resolution: "@biomejs/cli-win32-x64@npm:2.4.4"
+"@biomejs/cli-win32-x64@npm:2.4.5":
+  version: 2.4.5
+  resolution: "@biomejs/cli-win32-x64@npm:2.4.5"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
@@ -100,95 +100,95 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@h82/dotfiles@workspace:."
   dependencies:
-    "@biomejs/biome": "npm:^2.4.4"
-    lefthook: "npm:^2.1.1"
+    "@biomejs/biome": "npm:^2.4.5"
+    lefthook: "npm:^2.1.2"
   languageName: unknown
   linkType: soft
 
-"lefthook-darwin-arm64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-darwin-arm64@npm:2.1.1"
+"lefthook-darwin-arm64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-darwin-arm64@npm:2.1.2"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"lefthook-darwin-x64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-darwin-x64@npm:2.1.1"
+"lefthook-darwin-x64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-darwin-x64@npm:2.1.2"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"lefthook-freebsd-arm64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-freebsd-arm64@npm:2.1.1"
+"lefthook-freebsd-arm64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-freebsd-arm64@npm:2.1.2"
   conditions: os=freebsd & cpu=arm64
   languageName: node
   linkType: hard
 
-"lefthook-freebsd-x64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-freebsd-x64@npm:2.1.1"
+"lefthook-freebsd-x64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-freebsd-x64@npm:2.1.2"
   conditions: os=freebsd & cpu=x64
   languageName: node
   linkType: hard
 
-"lefthook-linux-arm64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-linux-arm64@npm:2.1.1"
+"lefthook-linux-arm64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-linux-arm64@npm:2.1.2"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"lefthook-linux-x64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-linux-x64@npm:2.1.1"
+"lefthook-linux-x64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-linux-x64@npm:2.1.2"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"lefthook-openbsd-arm64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-openbsd-arm64@npm:2.1.1"
+"lefthook-openbsd-arm64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-openbsd-arm64@npm:2.1.2"
   conditions: os=openbsd & cpu=arm64
   languageName: node
   linkType: hard
 
-"lefthook-openbsd-x64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-openbsd-x64@npm:2.1.1"
+"lefthook-openbsd-x64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-openbsd-x64@npm:2.1.2"
   conditions: os=openbsd & cpu=x64
   languageName: node
   linkType: hard
 
-"lefthook-windows-arm64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-windows-arm64@npm:2.1.1"
+"lefthook-windows-arm64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-windows-arm64@npm:2.1.2"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"lefthook-windows-x64@npm:2.1.1":
-  version: 2.1.1
-  resolution: "lefthook-windows-x64@npm:2.1.1"
+"lefthook-windows-x64@npm:2.1.2":
+  version: 2.1.2
+  resolution: "lefthook-windows-x64@npm:2.1.2"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"lefthook@npm:^2.1.1":
-  version: 2.1.1
-  resolution: "lefthook@npm:2.1.1"
+"lefthook@npm:^2.1.2":
+  version: 2.1.2
+  resolution: "lefthook@npm:2.1.2"
   dependencies:
-    lefthook-darwin-arm64: "npm:2.1.1"
-    lefthook-darwin-x64: "npm:2.1.1"
-    lefthook-freebsd-arm64: "npm:2.1.1"
-    lefthook-freebsd-x64: "npm:2.1.1"
-    lefthook-linux-arm64: "npm:2.1.1"
-    lefthook-linux-x64: "npm:2.1.1"
-    lefthook-openbsd-arm64: "npm:2.1.1"
-    lefthook-openbsd-x64: "npm:2.1.1"
-    lefthook-windows-arm64: "npm:2.1.1"
-    lefthook-windows-x64: "npm:2.1.1"
+    lefthook-darwin-arm64: "npm:2.1.2"
+    lefthook-darwin-x64: "npm:2.1.2"
+    lefthook-freebsd-arm64: "npm:2.1.2"
+    lefthook-freebsd-x64: "npm:2.1.2"
+    lefthook-linux-arm64: "npm:2.1.2"
+    lefthook-linux-x64: "npm:2.1.2"
+    lefthook-openbsd-arm64: "npm:2.1.2"
+    lefthook-openbsd-x64: "npm:2.1.2"
+    lefthook-windows-arm64: "npm:2.1.2"
+    lefthook-windows-x64: "npm:2.1.2"
   dependenciesMeta:
     lefthook-darwin-arm64:
       optional: true
@@ -212,6 +212,6 @@ __metadata:
       optional: true
   bin:
     lefthook: bin/index.js
-  checksum: 10c0/91d009e3c3c81f001e34cd266b34abafea55a974404daa282cb925bd419d8df44064a05f4cb9e82487fcc75d78ce670301d2d3d87ed8d4dd57336f5f66f61c7b
+  checksum: 10c0/1ebfba3a9b743be23538e331bb4da44ee1e3b442c412fc4e62fb4b854a9a7f52ae487f55739d6ba7812eb6aa86f69e910255046749404c8e161e7676e01b0364
   languageName: node
   linkType: hard
