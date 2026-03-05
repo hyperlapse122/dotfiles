@@ -34,6 +34,7 @@ ast-grep = "latest"
 "npm:tokscale" = { version = "latest", os = ["linux", "macos"] }
 "gitlab:gitlab-org/cli" = { version = "latest", exe = "glab" }
 "npm:sharp-cli" = "latest"
+"npm:portless" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
