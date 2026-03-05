@@ -49,6 +49,7 @@ tauri-apps.tauri-vscode
 tombi-toml.tombi
 typescriptteam.native-preview
 usernamehw.errorlens
+vitest.explorer
 vscjava.vscode-gradle
 vscjava.vscode-java-debug
 vscjava.vscode-java-dependency
