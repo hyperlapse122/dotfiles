@@ -18,7 +18,6 @@ pipx = { version = "latest", os = ["linux", "macos"] }
 "npm:@electron/asar" = "latest"
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
-"npm:opencode-ai" = "latest"
 "github:rust-lang/rust-analyzer" = "latest"
 "npm:typescript-language-server" = "latest"
 ruby = [
@@ -35,6 +34,15 @@ ast-grep = "latest"
 "gitlab:gitlab-org/cli" = { version = "latest", exe = "glab" }
 "npm:sharp-cli" = "latest"
 "npm:portless" = "latest"
+
+[tools."github:anomalyco/opencode"]
+version = "latest"
+
+[tools."github:anomalyco/opencode".platforms]
+linux-x64 = { asset_pattern = "opencode-linux-amd64.tar.gz" }
+linux-arm64 = { asset_pattern = "opencode-linux-arm64.tar.gz" }
+macos-arm64 = { asset_pattern = "opencode-darwin-arm64.zip" }
+windows-x64 = { asset_pattern = "opencode-windows-amd64.zip" }
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
