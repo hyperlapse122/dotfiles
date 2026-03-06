@@ -59,5 +59,6 @@
       "**/.env*.local": "ask",
       "**/.env*": "allow"
     }
-  }
+  },
+  "experimental": {}
 }
