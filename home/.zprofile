@@ -58,6 +58,7 @@ path=(
   /opt/{homebrew,local}/{,s}bin(N)
   /usr/local/{,s}bin(N)
   '/Applications/Visual Studio Code.app/Contents/Resources/app/bin'(N)
+  '/Applications/Obsidian.app/Contents/MacOS'(N)
   $path
 )
 
