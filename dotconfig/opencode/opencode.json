@@ -1,14 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "oh-my-opencode@latest",
-    "opencode-anthropic-auth",
-    "opencode-wakatime"
-  ],
+  "plugin": ["oh-my-openagent@latest", "opencode-wakatime@latest"],
   "model": "openai/gpt-5.4",
   "small_model": "github-copilot/gpt-5-mini",
   "autoupdate": "notify",
-  "provider": {},
   "lsp": {
     "biome": {
       "command": [
@@ -40,9 +35,7 @@
         ".svelte",
         ".json",
         ".yaml",
-        ".yml",
-        ".md",
-        ".mdx"
+        ".yml"
       ]
     }
   },
@@ -60,5 +53,7 @@
       "**/.env*": "allow"
     }
   },
-  "experimental": {}
+  "experimental": {
+    "batch_tool": true
+  }
 }
