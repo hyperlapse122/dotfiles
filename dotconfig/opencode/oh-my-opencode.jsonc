@@ -15,7 +15,7 @@
       "variant": "high"
     },
     "librarian": {
-      "model": "google/gemini-3-flash-preview"
+      "model": "github-copilot/gemini-3-flash-preview"
     },
     "explore": {
       "model": "github-copilot/grok-code-fast-1"
@@ -43,7 +43,7 @@
   },
   "categories": {
     "visual-engineering": {
-      "model": "google/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro-preview",
       "variant": "high"
     },
     "ultrabrain": {
@@ -55,11 +55,11 @@
       "variant": "medium"
     },
     "artistry": {
-      "model": "google/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro-preview",
       "variant": "high"
     },
     "quick": {
-      "model": "google/gemini-3-flash-preview"
+      "model": "github-copilot/gemini-3-flash-preview"
     },
     "unspecified-low": {
       "model": "openai/gpt-5.3-codex",
@@ -70,7 +70,7 @@
       "variant": "high"
     },
     "writing": {
-      "model": "google/gemini-3-flash-preview"
+      "model": "github-copilot/gemini-3-flash-preview"
     }
   },
   "_migrations": [

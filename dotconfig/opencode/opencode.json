@@ -1,12 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "oh-my-opencode@3.11.2",
-    "opencode-wakatime@1.2.5",
+    "oh-my-openagent@latest",
+    "opencode-wakatime@latest",
     "opencode-gemini-auth@latest"
   ],
   "model": "openai/gpt-5.4",
-  "small_model": "google/gemini-3-flash-preview",
+  "small_model": "github-copilot/gpt-5-mini",
   "autoupdate": "notify",
   "lsp": {
     "biome": {
