@@ -33,6 +33,7 @@ ast-grep = "latest"
 "npm:portless" = "latest"
 opencode = "latest"
 glab = { version = "latest", exe = "glab" }
+"npm:@google/gemini-cli" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
