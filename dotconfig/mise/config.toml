@@ -34,6 +34,7 @@ ast-grep = "latest"
 opencode = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:@google/gemini-cli" = "latest"
+"npm:@openai/codex" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
