@@ -39,7 +39,7 @@ ms-vscode.cpptools-themes
 ms-vscode.hexeditor
 ms-vscode.powershell
 ms-vscode.remote-explorer
-orta.vscode-jest
+openai.chatgpt
 redhat.java
 redhat.vscode-yaml
 repreng.csv
