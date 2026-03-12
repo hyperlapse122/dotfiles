@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "wakatime": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/wakatime/claude-code-wakatime.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "claude-code-wakatime@wakatime": true
+  }
+}
