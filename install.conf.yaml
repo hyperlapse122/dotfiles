@@ -62,6 +62,10 @@
       if: "[ `uname` = Darwin ]"
       glob: true
       path: gnupg-macos/**
+    ~/Library/:
+      if: "[ `uname` = Darwin ]"
+      glob: true
+      path: Library/**
     ~/.gitconfig.d/macos.gitconfig:
       if: "[ `uname` = Darwin ]"
       path: gitconfig.d/macos.gitconfig

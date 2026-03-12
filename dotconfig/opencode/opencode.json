@@ -64,5 +64,13 @@
       "**/.env*.local": "ask",
       "**/.env*": "allow"
     }
+  },
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "http://127.0.0.1:3456",
+        "apiKey": "dummy"
+      }
+    }
   }
 }
