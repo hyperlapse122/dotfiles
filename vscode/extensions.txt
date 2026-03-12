@@ -1,3 +1,4 @@
+anthropic.claude-code
 arktypeio.arkdark
 biomejs.biome
 bradlc.vscode-tailwindcss
