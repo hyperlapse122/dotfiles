@@ -49,14 +49,3 @@ mise exec -- sh ./install
 if [[ "$os" == "Linux" ]]; then
   mise exec -- sudo sh ./install-root
 fi
-
-if [[ "$os" == "Darwin" ]]; then
-  # Set up launch agent for claude-max-proxy
-  # Check if the plist file linked well, if it's not, skip loading the launch agent
-  if [ ! -f ~/Library/LaunchAgents/com.claude-max-proxy.plist ]; then
-    echo "Launch agent plist file not found, skipping loading launch agent."
-    exit 0
-  fi
-
-  launchctl load ~/Library/LaunchAgents/com.claude-max-proxy.plist
-fi

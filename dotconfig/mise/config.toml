@@ -53,3 +53,6 @@ experimental = true
 
 [settings.ruby]
 compile = false
+
+[env]
+OPENCODE_DISABLE_DEFAULT_PLUGINS = 1

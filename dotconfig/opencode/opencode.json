@@ -3,7 +3,9 @@
   "plugin": [
     "oh-my-openagent@latest",
     "opencode-wakatime@latest",
-    "opencode-gemini-auth@latest"
+    "opencode-gemini-auth@latest",
+    "@ex-machina/opencode-anthropic-auth@latest",
+    "opencode-copilot-auth@latest"
   ],
   "model": "openai/gpt-5.4",
   "small_model": "github-copilot/gpt-5-mini",
@@ -63,14 +65,6 @@
     "edit": {
       "**/.env*.local": "ask",
       "**/.env*": "allow"
-    }
-  },
-  "provider": {
-    "anthropic": {
-      "options": {
-        "baseURL": "http://127.0.0.1:3456",
-        "apiKey": "dummy"
-      }
     }
   }
 }
