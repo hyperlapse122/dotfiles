@@ -1,4 +1,8 @@
 {
+  "enabledPlugins": {
+    "claude-code-wakatime@wakatime": true,
+    "typescript-lsp@claude-plugins-official": true
+  },
   "extraKnownMarketplaces": {
     "wakatime": {
       "source": {
@@ -7,7 +11,5 @@
       }
     }
   },
-  "enabledPlugins": {
-    "claude-code-wakatime@wakatime": true
-  }
+  "skipDangerousModePermissionPrompt": true
 }
