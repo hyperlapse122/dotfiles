@@ -49,3 +49,12 @@ mise exec -- sh ./install
 if [[ "$os" == "Linux" ]]; then
   mise exec -- sudo sh ./install-root
 fi
+
+# Install gstack when it's not installed or update it when it is
+if [ ! -d "${ZDOTDIR:-$HOME}/.claude/skills/gstack" ]; then
+  git clone --recursive https://github.com/garrytan/gstack.git "${ZDOTDIR:-$HOME}/.claude/skills/gstack"
+else
+  git -C "${ZDOTDIR:-$HOME}/.claude/skills/gstack" pull origin main --rebase
+fi
+
+cd ${ZDOTDIR:-$HOME}/.claude/skills/gstack && ./setup
