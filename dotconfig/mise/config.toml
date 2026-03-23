@@ -37,6 +37,7 @@ glab = { version = "latest", exe = "glab" }
 "npm:@openai/codex" = "latest"
 claude-code = "latest"
 claude-powerline = "latest"
+"npm:@playwright/cli" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
