@@ -10,13 +10,20 @@
     "gitlab@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
     "jdtls-lsp@claude-plugins-official": true,
-    "clangd-lsp@claude-plugins-official": true
+    "clangd-lsp@claude-plugins-official": true,
+    "cc-caffeine@samber": true
   },
   "extraKnownMarketplaces": {
     "wakatime": {
       "source": {
         "source": "git",
         "url": "https://github.com/wakatime/claude-code-wakatime.git"
+      }
+    },
+    "samber": {
+      "source": {
+        "source": "github",
+        "repo": "samber/cc"
       }
     }
   },
