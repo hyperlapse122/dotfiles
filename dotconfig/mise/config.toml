@@ -35,6 +35,8 @@ opencode = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
+claude-code = "latest"
+claude-powerline = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
