@@ -7,6 +7,8 @@
     "~":
       glob: true
       path: home/.*
+    ~/.agents:
+      path: dotagents
     ~/.claude/:
       glob: true
       path: dotclaude/**/*
