@@ -13,6 +13,7 @@ path=(
   $DOTNET_ROOT/tools(N)
   $HOME/.local/bin(N)
   $HOME/{,s}bin(N)
+  $HOME/.lmstudio/bin(N)
   /opt/{homebrew,local}/{,s}bin(N)
   /usr/local/{,s}bin(N)
   '/Applications/Visual Studio Code.app/Contents/Resources/app/bin'(N)

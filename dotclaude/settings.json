@@ -1,27 +1,6 @@
 {
-  "enabledPlugins": {
-    "claude-code-wakatime@wakatime": true,
-    "typescript-lsp@claude-plugins-official": true,
-    "csharp-lsp@claude-plugins-official": true,
-    "rust-analyzer-lsp@claude-plugins-official": true,
-    "jdtls-lsp@claude-plugins-official": true,
-    "clangd-lsp@claude-plugins-official": true,
-    "cc-caffeine@samber": true
-  },
-  "extraKnownMarketplaces": {
-    "wakatime": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/wakatime/claude-code-wakatime.git"
-      }
-    },
-    "samber": {
-      "source": {
-        "source": "github",
-        "repo": "samber/cc"
-      }
-    }
-  },
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {},
   "effortLevel": "max",
   "skipDangerousModePermissionPrompt": true
 }

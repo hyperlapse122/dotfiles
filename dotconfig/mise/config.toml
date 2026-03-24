@@ -38,6 +38,8 @@ glab = { version = "latest", exe = "glab" }
 claude-code = "latest"
 claude-powerline = "latest"
 "npm:@playwright/cli" = "latest"
+"npm:typescript" = "latest"
+"npm:@typescript/native-preview" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
