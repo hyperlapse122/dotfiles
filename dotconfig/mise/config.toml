@@ -40,6 +40,7 @@ claude-powerline = "latest"
 "npm:@playwright/cli" = "latest"
 "npm:typescript" = "latest"
 "npm:@typescript/native-preview" = "latest"
+"npm:wrangler" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
