@@ -10,3 +10,9 @@
 
 - When given a Figma link, **always use the `figma` MCP** to retrieve design information. Never access Figma URLs directly (e.g., via web fetch or browser automation).
 - If the `figma` MCP is unavailable or returns an error, **ask the user to fix the MCP configuration** instead of attempting alternative access methods.
+
+## Scripting Runtime
+
+- **Never use Python** for scripting, tooling, or any code generation tasks.
+- Use **Node.js**, **Deno**, or **Bun** instead.
+- When a task requires a script (e.g., data transformation, automation, CLI tools), default to TypeScript/JavaScript running on one of the above runtimes.
