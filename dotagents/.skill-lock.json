@@ -15,9 +15,9 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel-labs/agent-skills.git",
       "skillPath": "skills/react-best-practices/SKILL.md",
-      "skillFolderHash": "bd8feeee219216aac928d1d8e5c61a928dba23dc",
+      "skillFolderHash": "8742a4cab28092d0de41acbd817e6935e8192569",
       "installedAt": "2026-03-25T00:32:52.891Z",
-      "updatedAt": "2026-03-25T00:32:52.891Z"
+      "updatedAt": "2026-03-31T05:23:25.645Z"
     },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
@@ -51,18 +51,18 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/microsoft/playwright-cli.git",
       "skillPath": "skills/playwright-cli/SKILL.md",
-      "skillFolderHash": "a5a8823e403adc13b2488aae9968d6d92adbd2d7",
+      "skillFolderHash": "63e9dd1320008c8dc9b5da3ba5f41f835829de91",
       "installedAt": "2026-03-25T00:35:19.175Z",
-      "updatedAt": "2026-03-25T00:35:19.175Z"
+      "updatedAt": "2026-03-31T05:23:28.695Z"
     },
     "cloudflare": {
       "source": "cloudflare/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/cloudflare/skills.git",
       "skillPath": "skills/cloudflare/SKILL.md",
-      "skillFolderHash": "bc05e15b7e8215cdeaa288e0d2744323eeb5fd05",
+      "skillFolderHash": "954802448df3da62d2c20d965ed007ba62be3444",
       "installedAt": "2026-03-25T01:01:58.059Z",
-      "updatedAt": "2026-03-25T01:01:58.059Z"
+      "updatedAt": "2026-03-31T05:23:34.866Z"
     },
     "durable-objects": {
       "source": "cloudflare/skills",
@@ -105,9 +105,28 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel/turborepo.git",
       "skillPath": "skills/turborepo/SKILL.md",
-      "skillFolderHash": "063f92585de43960c94d499008b9ff3b467fed77",
+      "skillFolderHash": "fd37069c68cc997a05a58ad09e10f3c4b1c05af9",
       "installedAt": "2026-03-25T01:03:18.420Z",
-      "updatedAt": "2026-03-25T01:03:18.420Z"
+      "updatedAt": "2026-03-31T05:23:44.834Z"
+    },
+    "skill-creator": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/anthropics/skills.git",
+      "skillPath": "skills/skill-creator/SKILL.md",
+      "skillFolderHash": "98a510d1cfef9f82c3b1eec200229ca68725e613",
+      "pluginName": "example-skills",
+      "installedAt": "2026-03-31T05:26:36.085Z",
+      "updatedAt": "2026-03-31T05:26:36.085Z"
+    },
+    "glab": {
+      "source": "henricook/claude-glab-skill",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/henricook/claude-glab-skill.git",
+      "skillPath": "SKILL.md",
+      "skillFolderHash": "",
+      "installedAt": "2026-03-31T05:29:47.329Z",
+      "updatedAt": "2026-03-31T05:29:47.329Z"
     }
   },
   "dismissed": {
