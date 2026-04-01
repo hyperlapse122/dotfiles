@@ -38,28 +38,27 @@ glab = { version = "latest", exe = "glab" }
 "npm:typescript" = "latest"
 "npm:@typescript/native-preview" = "latest"
 "npm:wrangler" = "latest"
+"npm:opencode-ai" = { version = "latest", os = ["windows"] }
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
 rename_exe = "wakatime-cli"
+os = ["linux", "macos"]
 
 [tools."github:wakatime/wakatime-cli".platforms]
 linux-x64 = { asset_pattern = "wakatime-cli-linux-amd64.zip" }
 linux-arm64 = { asset_pattern = "wakatime-cli-linux-arm64.zip" }
 macos-arm64 = { asset_pattern = "wakatime-cli-darwin-arm64.zip" }
-windows-x64 = { asset_pattern = "wakatime-cli-windows-amd64.zip", rename_exe = "wakatime-cli.exe" }
-windows-arm64 = { asset_pattern = "wakatime-cli-windows-arm64.zip", rename_exe = "wakatime-cli.exe" }
 
 [tools."github:anomalyco/opencode"]
 version = "latest"
 rename_exe = "opencode"
+os = ["linux", "macos"]
 
 [tools."github:anomalyco/opencode".platforms]
 linux-x64 = { asset_pattern = "opencode-linux-amd64.zip" }
 linux-arm64 = { asset_pattern = "opencode-linux-arm64.zip" }
 macos-arm64 = { asset_pattern = "opencode-darwin-arm64.zip" }
-windows-x64 = { asset_pattern = "opencode-windows-amd64.zip", rename_exe = "opencode.exe" }
-windows-arm64 = { asset_pattern = "opencode-windows-arm64.zip", rename_exe = "opencode.exe" }
 
 [settings]
 idiomatic_version_file_enable_tools = []
