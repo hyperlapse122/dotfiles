@@ -176,6 +176,15 @@
       "skillFolderHash": "f303999031498939d1c25cc37ad36cb96a0639c5",
       "installedAt": "2026-04-02T04:30:22.883Z",
       "updatedAt": "2026-04-02T04:30:22.883Z"
+    },
+    "neon-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/neondatabase/agent-skills.git",
+      "skillPath": "skills/neon-postgres/SKILL.md",
+      "skillFolderHash": "dffee0820d446d126a566af4ccd7c66bcc870d34",
+      "installedAt": "2026-04-02T05:29:36.257Z",
+      "updatedAt": "2026-04-02T05:29:36.257Z"
     }
   },
   "dismissed": {

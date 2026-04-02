@@ -39,6 +39,7 @@ glab = { version = "latest", exe = "glab" }
 "npm:@typescript/native-preview" = "latest"
 "npm:wrangler" = "latest"
 "npm:opencode-ai" = { version = "latest", os = ["windows"] }
+"npm:neonctl" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
