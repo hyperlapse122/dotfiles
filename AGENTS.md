@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Generated:** 2026-02-06 | **Commit:** 5858ead | **Branch:** main
+**Generated:** 2026-04-03 | **Commit:** 389a20b | **Branch:** main
 
 ## OVERVIEW
 
@@ -21,24 +21,21 @@ dotfiles/
 ├── home/                   # Dotfiles linked to ~ (e.g. .zshrc, .gitconfig)
 ├── dotconfig/              # → ~/.config/* (glob-linked)
 ├── dotlocal/               # → ~/.local/*
-├── dotssh/                 # → ~/.ssh/*
-├── dotclaude/              # → ~/.claude/*
-├── dotcodex/               # → ~/.codex/*
-├── dotgemini/              # → ~/.gemini/*
+├── dotssh/                 # → ~/.ssh/* (shared)
+├── dotssh-macos/           # → ~/.ssh/* (macOS-only, overlays dotssh/)
+├── dotagents/              # → ~/.agents (AI agent skills, see dotagents/AGENTS.md)
 ├── dotnet/                 # dotnet install scripts (sh + ps1)
 ├── gitconfig.d/            # per-OS git config fragments
 ├── gnupg/                  # Linux GPG config
 ├── gnupg-macos/            # macOS GPG config
 ├── gnupg-windows/          # Windows GPG config
-├── etc/                    # root-managed system files (keyd, libinput, etc)
-├── archinstall/            # Arch Linux provisioning scripts/config
-├── fedora/                 # Fedora provisioning scripts
-├── macos/                  # macOS defaults/config script
-├── windows/                # Windows Terminal and related assets
+├── etc/                    # root-managed system files (keyd, libinput, udev, etc)
+├── archinstall/            # Arch Linux 3-phase provisioning (root → user → reboot)
+├── Library/                # macOS ~/Library overrides (LaunchAgents)
 ├── vscode/                 # VS Code extension sync scripts/list
-├── zed/                    # Zed editor config
 ├── brew/                   # Brewfile
 ├── dotbot/                 # VENDORED submodule (read-only)
+├── .github/                # GitHub Actions (Pages deploy for remote provisioning)
 └── mise.toml               # Base runtime versions
 ```
 
@@ -48,13 +45,14 @@ dotfiles/
 |------|----------|-------|
 | Add new shared dotfile | `dotconfig/`, then run installer | Auto-globbed into `~/.config/*` |
 | Add home-level dotfile | `home/` | Linked to `~/.*` via `install*.conf.yaml` |
-| Add agent config | `dotclaude/`, `dotcodex/`, `dotgemini/` | Linked to `~/.claude`, `~/.codex`, `~/.gemini` |
+| Add agent config | `dotagents/`, then run installer | Linked to `~/.agents`; see `dotagents/AGENTS.md` |
 | Add symlink mapping | `install.conf.yaml` / `install-windows.conf.yaml` | Keep link entries idempotent |
 | Add system-level Linux config | `etc/` + `install-root.conf.yaml` | Requires `sudo` via `install-root` |
-| macOS setup | `macos/configure.sh` + `brew/Brewfile` | Triggered by `install.sh` on Darwin |
+| macOS setup | `brew/Brewfile` + `Library/` | Brew triggered by `install.sh` on Darwin |
 | Windows setup | `Install.ps1` + `install-windows.conf.yaml` | Uses Dotbot with Windows paths |
 | Runtime/tool versions | `mise.toml` + `dotconfig/mise/config.toml` | Includes package CLI tools |
 | VS Code extensions | `vscode/extensions.txt` | Sync via `vscode/install.sh` or `vscode/install.ps1` |
+| Editor configs | `dotconfig/zed/`, `dotconfig/Code/User/` | Zed and VS Code settings (glob-linked) |
 
 ## CONVENTIONS
 
@@ -139,7 +137,7 @@ curl https://dotfiles.h82.dev/archinstall/initialize-after-boot.sh | bash # root
 | User Dotbot config | `install.conf.yaml` | `install.conf.yaml` | `install-windows.conf.yaml` |
 | Root/system config | `install-root.conf.yaml` | `install-root.conf.yaml` | n/a |
 | Git config fragment | `gitconfig.d/linux.gitconfig` | `gitconfig.d/macos.gitconfig` | `gitconfig.d/windows.gitconfig` |
-| Agent config dirs | `dotclaude`, `dotcodex`, `dotgemini` | `dotclaude`, `dotcodex`, `dotgemini` | `dotclaude`, `dotcodex`, `dotgemini` |
+| Agent config dirs | `dotagents` → `~/.agents` | `dotagents` → `~/.agents` | `dotagents` → `~/.agents` |
 | GPG config | `gnupg/` | `gnupg-macos/` | `gnupg-windows/` |
 | Preferred shell | `zsh` / `bash` | `zsh` / `bash` | `pwsh` |
 
@@ -149,3 +147,4 @@ curl https://dotfiles.h82.dev/archinstall/initialize-after-boot.sh | bash # root
 - `mise` manages core runtimes and tool CLIs (including `@openai/codex` in `dotconfig/mise/config.toml`).
 - Prezto is cloned on first install to `~/.zprezto` and is not vendored in this repository.
 - System-level Linux files are centralized under `etc/` and installed through `install-root.conf.yaml`.
+- `dotagents/skills/` contains AI agent skills managed by OpenCode's skill system. See `dotagents/AGENTS.md`.
