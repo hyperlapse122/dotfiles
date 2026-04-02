@@ -78,8 +78,6 @@
   "gitlens.ai.model": "vscode",
   "gitlens.ai.vscode.model": "copilot:gpt-4.1",
   "gitlens.gitkraken.mcp.autoEnabled": false,
-  "javascript.suggest.completeFunctionCalls": true,
-  "javascript.updateImportsOnFileMove.enabled": "never",
   "js/ts.implicitProjectConfig.checkJs": true,
   "js/ts.implicitProjectConfig.experimentalDecorators": true,
   "json.schemaDownload.trustedDomains": {
@@ -120,14 +118,14 @@
   "terminal.integrated.stickyScroll.enabled": false,
   "terminal.integrated.windowsUseConptyDll": true,
   "todo-tree.general.tags": ["BUG", "HACK", "FIXME", "TODO", "XXX"],
-  "typescript.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
-  "typescript.preferences.autoImportSpecifierExcludeRegexes": [
+  "js/ts.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
+  "js/ts.preferences.autoImportSpecifierExcludeRegexes": [
     "^(node:)?os$",
     "^node_modules.+$",
     "^type$"
   ],
-  "typescript.suggest.completeFunctionCalls": true,
-  "typescript.updateImportsOnFileMove.enabled": "never",
+  "js/ts.suggest.completeFunctionCalls": true,
+  "js/ts.updateImportsOnFileMove.enabled": "never",
   "vscode-edge-devtools.webhintInstallNotification": true,
   "window.restoreWindows": "none",
   "editor.accessibilitySupport": "off",
@@ -140,5 +138,6 @@
     "!**/vendor",
     "!**/.sisyphus"
   ],
-  "claudeCode.allowDangerouslySkipPermissions": true
+  "claudeCode.allowDangerouslySkipPermissions": true,
+  "js/ts.experimental.useTsgo": true
 }
