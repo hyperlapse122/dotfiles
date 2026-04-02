@@ -11,6 +11,35 @@
   "small_model": "github-copilot/gpt-5-mini",
   "autoupdate": "notify",
   "lsp": {
+    "typescript": {
+      "command": [
+        "mise",
+        "exec",
+        "npm:typescript-language-server",
+        "--",
+        "typescript-language-server",
+        "--stdio"
+      ],
+      "extensions": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mts",
+        ".mtsx",
+        ".mjs",
+        ".mjsx",
+        ".cts",
+        ".ctsx",
+        ".cjs",
+        ".cjsx"
+      ],
+      "initialization": {
+        "preferences": {
+          "importModuleSpecifierPreference": "relative"
+        }
+      }
+    },
     "biome": {
       "command": [
         "mise",
