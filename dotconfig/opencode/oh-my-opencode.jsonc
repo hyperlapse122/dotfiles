@@ -13,7 +13,7 @@
     "oracle": {
       // "model": "openai/gpt-5.4",
       // "variant": "high"
-      "model": "google/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro-preview",
       "variant": "high"
     },
     "librarian": {
@@ -52,13 +52,13 @@
   },
   "categories": {
     "visual-engineering": {
-      "model": "google/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro-preview",
       "variant": "high"
     },
     "ultrabrain": {
       // "model": "openai/gpt-5.4",
       // "variant": "xhigh"
-      "model": "google/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro-preview",
       "variant": "high"
     },
     "deep": {
@@ -68,7 +68,7 @@
       "variant": "max"
     },
     "artistry": {
-      "model": "google/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro-preview",
       "variant": "high"
     },
     "quick": {
@@ -83,7 +83,7 @@
       "variant": "max"
     },
     "writing": {
-      "model": "google/gemini-3-flash-preview"
+      "model": "github-copilot/gemini-3-flash-preview"
     }
   },
   "disabled_mcps": ["playwright"],
