@@ -1,5 +1,27 @@
 # OpenCode Agent Instructions
 
+## Branch Naming
+
+- Before pushing or creating a PR/MR, check if the current branch uses OpenCode's default auto-generated name (e.g., `opencode/playful-engine`).
+- If it does, **rename the branch** to a descriptive name that reflects the changes before pushing.
+- Unless the project specifies its own branch naming convention, follow **Git Flow** branch naming: `<type>/<short-description>` (e.g., `feature/add-auth-flow`, `bugfix/login-redirect`, `hotfix/critical-crash`).
+  - `feature/` — New features or enhancements
+  - `bugfix/` — Bug fixes
+  - `hotfix/` — Urgent production fixes
+  - `release/` — Release preparation
+  - `refactor/` — Code restructuring
+  - `docs/` — Documentation changes
+  - `chore/` — Maintenance and config changes
+- When creating a new branch, **load the `git-flow-branch-creator` skill** to automatically analyze changes and generate the correct Git Flow branch name.
+
+```bash
+# Check current branch
+git branch --show-current
+
+# Rename if it matches the opencode/* pattern
+git branch -m opencode/playful-engine feature/add-auth-flow
+```
+
 ## Pull Requests / Merge Requests
 
 - When creating a pull request or merge request, **always set the assignee to the authenticated user**.

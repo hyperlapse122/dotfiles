@@ -167,6 +167,15 @@
       "skillFolderHash": "3116f3e62dbd02b44a598b1aa690d2a8938e8f89",
       "installedAt": "2026-04-02T00:59:37.957Z",
       "updatedAt": "2026-04-02T00:59:37.957Z"
+    },
+    "git-flow-branch-creator": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/github/awesome-copilot.git",
+      "skillPath": "skills/git-flow-branch-creator/SKILL.md",
+      "skillFolderHash": "f303999031498939d1c25cc37ad36cb96a0639c5",
+      "installedAt": "2026-04-02T04:30:22.883Z",
+      "updatedAt": "2026-04-02T04:30:22.883Z"
     }
   },
   "dismissed": {
