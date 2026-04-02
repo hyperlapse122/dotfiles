@@ -56,9 +56,7 @@ cask "font-pretendard"
 cask "font-pretendard-jp"
 cask "git-credential-manager"
 cask "google-chrome"
-cask "google-drive"
 cask "input-source-pro"
-cask "iterm2"
 cask "jetbrains-toolbox"
 cask "jordanbaird-ice"
 cask "lm-studio"
@@ -70,7 +68,3 @@ cask "protonvpn"
 cask "tailscale-app"
 cask "teamviewer"
 cask "telegram-desktop"
-mas "Bee DICOM Viewer", id: 1590273176
-mas "Flighty", id: 1358823008
-mas "WeChat", id: 836500024
-mas "카카오톡", id: 869223134
