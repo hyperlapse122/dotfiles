@@ -8,12 +8,7 @@
       glob: true
       path: home/.*
     ~/.agents:
-      path: .agents
-    ~/.claude/:
-      glob: true
-      path: dotclaude/**/*
-    ~/.claude/skills:
-      path: .claude/skills
+      path: dotagents
     ~/.codex/:
       glob: true
       path: dotcodex/**/*
@@ -58,9 +53,6 @@
       if: "[ `uname` = Darwin ]"
       glob: true
       path: dotssh-macos/**/*
-    ~/.claude/:
-      glob: true
-      path: dotclaude/**/*
     ~/Library/Application Support/Code/User/:
       if: "[ `uname` = Darwin ]"
       glob: true
