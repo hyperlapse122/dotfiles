@@ -40,6 +40,7 @@ brew "bufbuild/buf/buf"
 brew "dotenvx/brew/dotenvx"
 brew "mobile-dev-inc/tap/maestro"
 brew "oven-sh/bun/bun"
+cask "1password"
 cask "1password-cli"
 cask "adguard"
 cask "alt-tab"
@@ -59,6 +60,7 @@ cask "google-chrome"
 cask "input-source-pro"
 cask "jetbrains-toolbox"
 cask "jordanbaird-ice"
+cask "kitty"
 cask "lm-studio"
 cask "notchnook"
 cask "obsidian"
@@ -68,3 +70,8 @@ cask "protonvpn"
 cask "tailscale-app"
 cask "teamviewer"
 cask "telegram-desktop"
+mas "Flighty", id: 1358823008
+mas "TestFlight", id: 899247664
+mas "WeChat", id: 836500024
+mas "Xcode", id: 497799835
+mas "카카오톡", id: 869223134
