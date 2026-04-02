@@ -49,6 +49,7 @@ os = ["linux", "macos"]
 linux-x64 = { asset_pattern = "wakatime-cli-linux-amd64.zip" }
 linux-arm64 = { asset_pattern = "wakatime-cli-linux-arm64.zip" }
 macos-arm64 = { asset_pattern = "wakatime-cli-darwin-arm64.zip" }
+macos-x64 = { asset_pattern = "wakatime-cli-darwin-amd64.zip" }
 
 [tools."github:anomalyco/opencode"]
 version = "latest"

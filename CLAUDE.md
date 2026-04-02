@@ -35,13 +35,14 @@ Lefthook runs Biome on staged `*.{js,ts,cjs,mjs,jsx,tsx,json,jsonc}` files befor
 ## Architecture
 
 - **Dotbot** handles all symlinking. `install.conf.yaml` is the primary config; `install-root.conf.yaml` handles `/etc` files on Linux. `install-windows.conf.yaml` for Windows.
-- **`dot*` directories** map to dotted destinations: `dotconfig/` → `~/.config/`, `dotssh/` → `~/.ssh/`, `dotclaude/` → `~/.claude/`, etc. Files are glob-linked.
+- **`dot*` directories** map to dotted destinations: `dotconfig/` → `~/.config/`, `dotssh/` → `~/.ssh/`, `dotclaude/` → `~/.claude/`, `dotcodex/` → `~/.codex/`, `dotgemini/` → `~/.gemini/`, etc. Files are glob-linked. macOS has additional `dotssh-macos/` entries.
 - **`home/`** contains files linked directly to `~/` (e.g., `.zshrc`, `.gitconfig`).
 - **`gitconfig.d/`** has per-OS git config fragments, conditionally linked.
 - **`gnupg/`, `gnupg-macos/`, `gnupg-windows/`** — platform-specific GPG configs.
 - **`dotbot/`** is a vendored submodule — treat as read-only third-party code.
 - **`mise.toml`** and `dotconfig/mise/config.toml` manage runtime versions and tool CLIs.
 - **`bootstrap.sh`** is the fresh-machine entry point (installs Homebrew on macOS, clones repo, runs `install.sh`).
+- **GitHub Pages** deploys repo contents to `dotfiles.h82.dev` for remote provisioning scripts (e.g., `archinstall/` curl-based installers).
 
 ## Key Conventions
 

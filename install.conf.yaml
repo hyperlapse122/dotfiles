@@ -9,9 +9,9 @@
       path: home/.*
     ~/.agents:
       path: .agents
-    # ~/.claude/:
-    #   glob: true
-    #   path: dotclaude/**/*
+    ~/.claude/:
+      glob: true
+      path: dotclaude/**/*
     ~/.claude/skills:
       path: .claude/skills
     ~/.codex/:
