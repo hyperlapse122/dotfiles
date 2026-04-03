@@ -22,6 +22,37 @@ git branch --show-current
 git branch -m opencode/playful-engine feature/add-auth-flow
 ```
 
+## Commit Messages
+
+- Follow the **[Conventional Commits](https://www.conventionalcommits.org/)** specification for all commit messages.
+- Format: `<type>(<optional scope>): <description>`
+  - `feat` — New feature
+  - `fix` — Bug fix
+  - `docs` — Documentation only
+  - `style` — Formatting, whitespace (no logic change)
+  - `refactor` — Code restructuring (no feature/fix)
+  - `perf` — Performance improvement
+  - `test` — Adding or updating tests
+  - `build` — Build system or dependencies
+  - `ci` — CI/CD configuration
+  - `chore` — Maintenance tasks
+  - `revert` — Reverting a previous commit
+- **Subject line**: lowercase, imperative mood, no period, max 72 characters.
+- **Scope** (optional): module or area affected (e.g., `feat(auth): add JWT refresh`).
+- **Body** (optional): explain *why*, not *what*. Wrap at 72 characters.
+- **Breaking changes**: add `!` after type/scope and include a `BREAKING CHANGE:` footer (e.g., `feat(api)!: remove v1 endpoints`).
+
+```
+feat(auth): add JWT refresh token rotation
+fix(ui): prevent double-submit on checkout button
+docs: update deployment instructions for Workers
+refactor(db): extract query builders into shared module
+chore: bump dependencies
+feat(api)!: remove deprecated v1 endpoints
+
+BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
+```
+
 ## Pull Requests / Merge Requests
 
 - When creating a pull request or merge request, **always set the assignee to the authenticated user**.
