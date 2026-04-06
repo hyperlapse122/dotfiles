@@ -110,18 +110,18 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/microsoft/playwright-cli.git",
       "skillPath": "skills/playwright-cli/SKILL.md",
-      "skillFolderHash": "63e9dd1320008c8dc9b5da3ba5f41f835829de91",
+      "skillFolderHash": "a45a2cf6381af0007a8d88d3b95f798565ffc5a5",
       "installedAt": "2026-04-02T00:58:57.030Z",
-      "updatedAt": "2026-04-02T00:58:57.030Z"
+      "updatedAt": "2026-04-06T04:38:33.706Z"
     },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel/turborepo.git",
       "skillPath": "skills/turborepo/SKILL.md",
-      "skillFolderHash": "1c88bc7c985cca3bfe2747ccac544e012a119eba",
+      "skillFolderHash": "b886af2e04ae6f9e884541395a482b59694af3e3",
       "installedAt": "2026-04-02T00:59:18.573Z",
-      "updatedAt": "2026-04-02T00:59:18.573Z"
+      "updatedAt": "2026-04-06T04:38:37.384Z"
     },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
@@ -137,9 +137,9 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel-labs/agent-skills.git",
       "skillPath": "skills/react-best-practices/SKILL.md",
-      "skillFolderHash": "190395c0dca241d4edfe36e585373e68ae7fbfa6",
+      "skillFolderHash": "a203aee7243640ceb56ce2c6c4ab286573df5e69",
       "installedAt": "2026-04-02T00:59:36.209Z",
-      "updatedAt": "2026-04-02T00:59:36.209Z"
+      "updatedAt": "2026-04-06T04:38:39.781Z"
     },
     "vercel-react-native-skills": {
       "source": "vercel-labs/agent-skills",
@@ -155,9 +155,9 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel-labs/agent-skills.git",
       "skillPath": "skills/react-view-transitions/SKILL.md",
-      "skillFolderHash": "25212e1e33a31fb4dcc9256b072dcd47b72c09f3",
+      "skillFolderHash": "4d46c637057aae90b9ec5280190c25dc0d90ec28",
       "installedAt": "2026-04-02T00:59:37.306Z",
-      "updatedAt": "2026-04-02T00:59:37.306Z"
+      "updatedAt": "2026-04-06T04:38:42.146Z"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
@@ -185,6 +185,15 @@
       "skillFolderHash": "dffee0820d446d126a566af4ccd7c66bcc870d34",
       "installedAt": "2026-04-02T05:29:36.257Z",
       "updatedAt": "2026-04-02T05:29:36.257Z"
+    },
+    "project-init-orchestrator": {
+      "source": "shipshitdev/library",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/shipshitdev/library.git",
+      "skillPath": "skills/project-init-orchestrator/SKILL.md",
+      "skillFolderHash": "353a9f617f2c8e0195ffda45ff7bce3689ab3bad",
+      "installedAt": "2026-04-06T04:37:50.890Z",
+      "updatedAt": "2026-04-06T04:37:50.890Z"
     }
   },
   "dismissed": {
