@@ -10,6 +10,8 @@
     "~/":
       glob: true
       path: home/.*
+    ~/.agents:
+      path: dotagents
     ~/.local/:
       glob: true
       path: dotlocal/**/*
