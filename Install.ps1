@@ -20,7 +20,7 @@ Set-Location $BASEDIR
 git submodule sync --quiet --recursive
 git submodule update --init --recursive
 
-winget install --source winget Microsoft.DotNet.SDK.10 Microsoft.DotNet.SDK.9 Microsoft.DotNet.SDK.8 Microsoft.DotNet.SDK.7 Microsoft.DotNet.SDK.6 GnuWin32.Bison GnuWin32.Cpio GnuWin32.DiffUtils GnuWin32.File GnuWin32.GetText GnuWin32.Grep GnuWin32.Gzip GnuWin32.M4 GnuWin32.Make GnuWin32.UnZip GnuWin32.Zip GnuWin32.FindUtils GnuWin32.Gperf GnuWin32.Patch GnuWin32.Tar GnuWin32.Tree GnuWin32.Which cURL.cURL
+# winget install --source winget Microsoft.DotNet.SDK.10 Microsoft.DotNet.SDK.9 Microsoft.DotNet.SDK.8 Microsoft.DotNet.SDK.7 Microsoft.DotNet.SDK.6 GnuWin32.Bison GnuWin32.Cpio GnuWin32.DiffUtils GnuWin32.File GnuWin32.GetText GnuWin32.Grep GnuWin32.Gzip GnuWin32.M4 GnuWin32.Make GnuWin32.UnZip GnuWin32.Zip GnuWin32.FindUtils GnuWin32.Gperf GnuWin32.Patch GnuWin32.Tar GnuWin32.Tree GnuWin32.Which cURL.cURL
 
 $CMD = "$PYTHON_EXECUTABLE `"$BASEDIR/$DOTBOT_DIR/$DOTBOT_BIN`" -d `"$BASEDIR`" -c `"$CONFIG`""
 Write-Output $CMD
