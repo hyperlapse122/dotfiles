@@ -41,6 +41,8 @@ glab = { version = "latest", exe = "glab" }
 "npm:opencode-ai" = { version = "latest", os = ["windows"] }
 "npm:neonctl" = "latest"
 claude-code = "latest"
+opencode = "latest"
+"npm:node-gyp" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
