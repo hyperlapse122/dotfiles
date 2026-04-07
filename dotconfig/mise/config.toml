@@ -34,7 +34,6 @@ ast-grep = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
-"npm:@playwright/cli" = "latest"
 "npm:typescript" = "latest"
 "npm:@typescript/native-preview" = "latest"
 "npm:wrangler" = "latest"
