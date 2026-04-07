@@ -55,6 +55,18 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 
 ## Pull Requests / Merge Requests
 
+- **Before creating a PR/MR, ensure all changes are committed and pushed** to the remote repository:
+  ```bash
+  # Check for uncommitted changes
+  git status
+  
+  # Commit any pending changes
+  git add <files>
+  git commit -m "type(scope): description"
+  
+  # Push to remote
+  git push -u origin <branch-name>
+  ```
 - When creating a pull request or merge request, **always set the assignee to the authenticated user**.
   - GitHub: `gh pr create --assignee @me`
   - GitLab: `glab mr create --assignee $(glab api user | jq -r '.username')`
@@ -81,6 +93,12 @@ glab mr create \
 
 - When launching interactive or long-running processes (e.g., dev servers, watch modes, TUI apps), **always use the `tmux` tool** (`mcp_interactive_bash`) instead of regular shell execution.
 - This prevents blocking the agent session and allows the process to run in the background while continuing other work.
+
+## Rebase
+
+- When rebasing a feature branch onto the default branch (e.g., `main`), **prefer changes from the default branch** when resolving conflicts.
+- Treat the current working branch as changes that will be merged *into* the default branch, not the other way around.
+- If a conflict arises during rebase, prefer the version from `main` (the target) over your branch's version (the source being rebased).
 
 ## Scripting Runtime
 
