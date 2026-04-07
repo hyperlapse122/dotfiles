@@ -26,9 +26,11 @@
   "chat.tools.terminal.autoApprove": {
     "/.*/": true
   },
+  "claudeCode.allowDangerouslySkipPermissions": true,
   "claudeCode.preferredLocation": "panel",
   "csharp.experimental.debug.hotReload": true,
   "docker.extension.enableComposeLanguageServer": false,
+  "editor.accessibilitySupport": "off",
   "editor.aiStats.enabled": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
@@ -78,8 +80,17 @@
   "gitlens.ai.model": "vscode",
   "gitlens.ai.vscode.model": "copilot:gpt-4.1",
   "gitlens.gitkraken.mcp.autoEnabled": false,
+  "js/ts.experimental.useTsgo": false,
   "js/ts.implicitProjectConfig.checkJs": true,
   "js/ts.implicitProjectConfig.experimentalDecorators": true,
+  "js/ts.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
+  "js/ts.preferences.autoImportSpecifierExcludeRegexes": [
+    "^(node:)?os$",
+    "^node_modules.+$",
+    "^type$"
+  ],
+  "js/ts.suggest.completeFunctionCalls": true,
+  "js/ts.updateImportsOnFileMove.enabled": "never",
   "json.schemaDownload.trustedDomains": {
     "https://biomejs.dev": true,
     "https://developer.microsoft.com/json-schemas/": true,
@@ -101,6 +112,15 @@
   "kilo-code.allowedCommands": ["git log", "git diff", "git show"],
   "kilo-code.deniedCommands": [],
   "kilo-code.provider": "openrouter",
+  "markdownlint.lintWorkspaceGlobs": [
+    "**/*.{md,mkd,mdwn,mdown,markdown,markdn,mdtxt,mdtext,workbook}",
+    "!**/*.code-search",
+    "!**/bower_components",
+    "!**/node_modules",
+    "!**/.git",
+    "!**/vendor",
+    "!**/.sisyphus"
+  ],
   "prettier.enable": false,
   "python.analysis.typeCheckingMode": "basic",
   "redhat.telemetry.enabled": false,
@@ -111,34 +131,14 @@
   "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
   "terminal.external.windowsExec": "pwsh.exe",
   "terminal.integrated.autoReplies": {
-    "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r",
-    "Terminate batch job (Y/N)": "Y\r"
+    "Terminate batch job (Y/N)": "Y\r",
+    "일괄 작업을 끝내시겠습니까 (Y/N)?": "Y\r"
   },
   "terminal.integrated.enableImages": true,
   "terminal.integrated.fontLigatures.enabled": true,
   "terminal.integrated.stickyScroll.enabled": false,
   "terminal.integrated.windowsUseConptyDll": true,
   "todo-tree.general.tags": ["BUG", "HACK", "FIXME", "TODO", "XXX"],
-  "js/ts.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
-  "js/ts.preferences.autoImportSpecifierExcludeRegexes": [
-    "^(node:)?os$",
-    "^node_modules.+$",
-    "^type$"
-  ],
-  "js/ts.suggest.completeFunctionCalls": true,
-  "js/ts.updateImportsOnFileMove.enabled": "never",
   "vscode-edge-devtools.webhintInstallNotification": true,
-  "window.restoreWindows": "none",
-  "editor.accessibilitySupport": "off",
-  "markdownlint.lintWorkspaceGlobs": [
-    "**/*.{md,mkd,mdwn,mdown,markdown,markdn,mdtxt,mdtext,workbook}",
-    "!**/*.code-search",
-    "!**/bower_components",
-    "!**/node_modules",
-    "!**/.git",
-    "!**/vendor",
-    "!**/.sisyphus"
-  ],
-  "claudeCode.allowDangerouslySkipPermissions": true,
-  "js/ts.experimental.useTsgo": true
+  "window.restoreWindows": "none"
 }
