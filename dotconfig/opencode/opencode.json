@@ -100,5 +100,25 @@
       "type": "remote",
       "url": "http://127.0.0.1:3845/mcp"
     }
+  },
+  "provider": {
+    "anthropic": {
+      "models": {
+        "claude-opus-4-6": {
+          "limit": {
+            "context": 200000,
+            "output": 128000,
+            "input": 200000
+          }
+        },
+        "claude-sonnet-4-6": {
+          "limit": {
+            "context": 200000,
+            "output": 64000,
+            "input": 200000
+          }
+        }
+      }
+    }
   }
 }
