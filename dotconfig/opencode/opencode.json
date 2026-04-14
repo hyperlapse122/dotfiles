@@ -3,11 +3,11 @@
   "plugin": [
     "oh-my-openagent",
     "opencode-wakatime",
-    "@ex-machina/opencode-anthropic-auth",
+    "@ex-machina/opencode-anthropic-auth@1.6.1",
     "opencode-copilot-auth"
   ],
   "model": "openai/gpt-5.4",
-  "small_model": "github-copilot/gpt-5.4-mini",
+  "small_model": "openai/gpt-5.4-mini",
   "autoupdate": "notify",
   "lsp": {
     "typescript": {
