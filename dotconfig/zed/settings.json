@@ -7,6 +7,16 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "agent": {
+    "default_model": {
+      "provider": "copilot_chat",
+      "model": "gpt-5-mini",
+      "enable_thinking": false,
+      "effort": "high"
+    },
+    "favorite_models": [],
+    "model_parameters": []
+  },
   "edit_predictions": {
     "provider": "copilot"
   },
@@ -18,7 +28,7 @@
   "ui_font_size": 16,
   "ui_font_family": "Pretendard",
   "ui_font_fallbacks": ["Pretendard JP"],
-  "buffer_font_size": 14,
+  "buffer_font_size": 12,
   "buffer_font_family": "JetBrainsMono Nerd Font",
   "buffer_font_fallbacks": ["D2CodingLigature Nerd Font"],
   "buffer_font_features": {
