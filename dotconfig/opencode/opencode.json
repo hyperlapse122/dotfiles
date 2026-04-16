@@ -118,11 +118,36 @@
             "input": 200000
           },
           "variants": {
-            "low": {},
-            "medium": {},
-            "high": {},
-            "xhigh": {},
-            "max": {}
+            "low": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "effort": "low"
+            },
+            "medium": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "effort": "medium"
+            },
+            "high": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "effort": "high"
+            },
+            "xhigh": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "effort": "xhigh"
+            },
+            "max": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "effort": "max"
+            }
           }
         },
         "claude-sonnet-4-6": {
