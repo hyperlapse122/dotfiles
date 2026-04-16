@@ -19,6 +19,7 @@ brew "glab"
 brew "gnupg"
 brew "ios-deploy"
 brew "libavif"
+brew "libpq", link: true
 brew "libyaml"
 brew "libzip"
 brew "mas"
@@ -57,6 +58,8 @@ cask "font-pretendard"
 cask "font-pretendard-jp"
 cask "git-credential-manager"
 cask "google-chrome"
+cask "google-drive"
+cask "google-gemini"
 cask "input-source-pro"
 cask "jetbrains-toolbox"
 cask "jordanbaird-ice"
@@ -70,6 +73,8 @@ cask "protonvpn"
 cask "tailscale-app"
 cask "teamviewer"
 cask "telegram-desktop"
+cask "zed"
+mas "1Password for Safari", id: 0
 mas "Flighty", id: 1358823008
 mas "TestFlight", id: 899247664
 mas "WeChat", id: 836500024

@@ -4,12 +4,14 @@ bradlc.vscode-tailwindcss
 bufbuild.vscode-buf
 christian-kohler.npm-intellisense
 davidanson.vscode-markdownlint
+dbaeumer.vscode-eslint
 dnicolson.binary-plist
 docker.docker
 donjayamanne.githistory
 dotjoshjohnson.xml
 eamodio.gitlens
 editorconfig.editorconfig
+esbenp.prettier-vscode
 github.codespaces
 github.copilot-chat
 github.vscode-github-actions
