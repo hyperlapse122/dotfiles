@@ -7,12 +7,14 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  "features": {
-    "edit_prediction_provider": "copilot"
+  "edit_predictions": {
+    "provider": "copilot"
   },
-  "inlay_hints": {
-    "enabled": false
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
   },
+  "base_keymap": "JetBrains",
   "ui_font_size": 16,
   "ui_font_family": "Pretendard",
   "ui_font_fallbacks": ["Pretendard JP"],
@@ -36,9 +38,6 @@
     "toml": true,
     "wakatime": true
   },
-  "autosave": "on_window_change",
-  "restore_on_startup": "none",
-  "base_keymap": "VSCode",
   "lsp": {
     "biome": {
       "settings": {
@@ -54,8 +53,24 @@
       }
     }
   },
+  "autosave": "on_window_change",
+  "restore_on_startup": "launchpad",
   "minimap": {
     "show": "auto"
   },
-  "language_servers": ["!biome", "!typescript-language-server", "..."]
+  "agent_servers": {
+    "OpenCode": {
+      "favorite_config_option_values": {
+        "model": [
+          "anthropic/claude-opus-4-6/max",
+          "anthropic/claude-sonnet-4-6/max",
+          "openai/gpt-5.4/high",
+          "opencode-go/kimi-k2.5"
+        ]
+      },
+      "type": "custom",
+      "command": "opencode",
+      "args": ["acp"]
+    }
+  }
 }

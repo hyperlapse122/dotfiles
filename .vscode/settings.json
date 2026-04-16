@@ -55,5 +55,8 @@
     ".specify/scripts/bash/": true,
     ".specify/scripts/powershell/": true
   },
-  "scm.repositories.selectionMode": "single"
+  "scm.repositories.selectionMode": "single",
+  "files.associations": {
+    "**/dotconfig/zed/*.json": "jsonc"
+  }
 }
