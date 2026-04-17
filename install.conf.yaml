@@ -9,6 +9,10 @@
       path: home/.*
     ~/.agents:
       path: dotagents
+    ~/.claude/CLAUDE.md:
+      path: dotagents/AGENTS.md
+    ~/.claude/skills:
+      path: dotagents/skills
     ~/.codex/:
       glob: true
       path: dotcodex/**/*
