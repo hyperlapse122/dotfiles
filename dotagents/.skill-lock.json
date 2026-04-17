@@ -34,18 +34,18 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/microsoft/playwright-cli.git",
       "skillPath": "skills/playwright-cli/SKILL.md",
-      "skillFolderHash": "7c6c4aacb0169b01c751f174b43d9bf914f30fb0",
+      "skillFolderHash": "b901dcc64256dbb1b32744975a0bafaeb4478da5",
       "installedAt": "2026-04-02T00:58:57.030Z",
-      "updatedAt": "2026-04-13T07:48:47.895Z"
+      "updatedAt": "2026-04-17T05:17:19.274Z"
     },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel/turborepo.git",
       "skillPath": "skills/turborepo/SKILL.md",
-      "skillFolderHash": "a1b852fbc50736c8e244ef2ffd7657d92b639a92",
+      "skillFolderHash": "5cffe587c4552af985368ae579060bdb2f9d05f3",
       "installedAt": "2026-04-02T00:59:18.573Z",
-      "updatedAt": "2026-04-14T04:55:52.409Z"
+      "updatedAt": "2026-04-17T05:17:22.780Z"
     },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
@@ -61,9 +61,9 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/vercel-labs/agent-skills.git",
       "skillPath": "skills/react-best-practices/SKILL.md",
-      "skillFolderHash": "a203aee7243640ceb56ce2c6c4ab286573df5e69",
+      "skillFolderHash": "343db72180d05814949fef7d46be96b5c6ee86b3",
       "installedAt": "2026-04-02T00:59:36.209Z",
-      "updatedAt": "2026-04-06T04:38:39.781Z"
+      "updatedAt": "2026-04-17T05:17:25.045Z"
     },
     "vercel-react-native-skills": {
       "source": "vercel-labs/agent-skills",
