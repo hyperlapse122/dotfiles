@@ -32,16 +32,19 @@ ast-grep = "latest"
 "npm:sharp-cli" = "latest"
 "npm:portless" = "latest"
 glab = { version = "latest", exe = "glab" }
-"npm:@google/gemini-cli" = "latest"
-"npm:@openai/codex" = "latest"
 "npm:typescript" = "latest"
 "npm:@typescript/native-preview" = "latest"
 "npm:wrangler" = "latest"
 "npm:neonctl" = "latest"
-claude-code = "latest"
 "npm:node-gyp" = "latest"
+
+# agentic ai
+"npm:@google/gemini-cli" = "latest"
+"npm:@openai/codex" = "latest"
+claude-code = "latest"
+
+# opencode
 "npm:opencode-ai" = { version = "latest", os = ["windows"] }
-opencode = { version = "latest", os = ["linux", "macos"] }
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
