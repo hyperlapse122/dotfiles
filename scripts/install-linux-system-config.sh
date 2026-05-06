@@ -25,9 +25,16 @@ fi
 # Each entry: <relative-path-under-system/linux>  <mode>
 FILES=(
   "etc/NetworkManager/NetworkManager.conf 644"
+  "etc/NetworkManager/conf.d/80-lo.conf 644"
+  "etc/NetworkManager/conf.d/90-unmanaged-vmware.conf 644"
+  "etc/NetworkManager/conf.d/91-tailscale.conf 644"
+  "etc/NetworkManager/conf.d/92-docker.conf 644"
+  "etc/NetworkManager/conf.d/93-veth.conf 644"
   "etc/locale.conf 644"
   "etc/keyd/default.conf 644"
   "etc/libinput/local-overrides.quirks 644"
+  "etc/plymouth/plymouthd.conf 644"
+  "etc/udev/rules.d/logitech-receiver.rules 644"
 )
 
 for entry in "${FILES[@]}"; do
