@@ -19,6 +19,10 @@ system/linux/etc/NetworkManager/conf.d/wifi-powersave-off.conf
             └── installs to /etc/NetworkManager/conf.d/wifi-powersave-off.conf
 ```
 
+NetworkManager drop-ins under `system/linux/etc/NetworkManager/conf.d/` mirror
+the legacy dotfiles layout. Keep per-interface unmanaged-device rules split into
+separate files there instead of folding them into `NetworkManager.conf`.
+
 | Subdirectory | Used for |
 |---|---|
 | `system/linux/` | Linux-only `/etc/...` and similar |

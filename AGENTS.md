@@ -82,6 +82,8 @@ sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 
 Use `sudo install -D` (atomically sets mode and creates parents). Do **not** use `cp`+`chmod` (loses ownership/mode atomicity), and do **not** try to express `/etc/...` as a dotbot `link:` (no sudo, dotbot will fail or silently link a user-owned file into a root-owned tree).
 
+NetworkManager unmanaged-device rules live as split drop-ins under `system/linux/etc/NetworkManager/conf.d/`, matching the legacy dotfiles layout. Do not collapse them back into `NetworkManager.conf`.
+
 ### archinstall (Arch Linux only)
 
 - archinstall has **no separate post-install `--script` hook**. The `--script` flag selects the installer flavor (`guided`, `minimal`, ...), not a user post-install step. The actual post-install hook is the `custom_commands` array in `user_configuration.json`. Each entry runs in `arch-chroot` of the new system, after package install and before unmount.
