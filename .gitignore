@@ -1,0 +1,27 @@
+# Per-host archinstall credentials — regenerate locally, never commit.
+# Only the example skeleton is tracked.
+archinstall/*/user_credentials.json
+
+# Sisyphus / OpenCode session state
+.sisyphus/
+
+# Generic secret patterns (defense in depth)
+*.pem
+*.key
+*.p12
+*.pfx
+*.gpg
+*.asc
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor backup files
+*.swp
+*.swo
+*~

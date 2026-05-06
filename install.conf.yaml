@@ -1,0 +1,23 @@
+# Shared dotbot tasks — loaded by ALL OSes via:
+#   uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml -c install.<os>.yaml
+#
+# See AGENTS.md for the contract. Per-OS gating belongs in install.<os>.yaml,
+# NOT in `if:` clauses here (Windows can't reliably evaluate `if:`).
+
+- defaults:
+    link:
+      create: true
+      relink: true
+
+# Cross-platform symlinks live here. Path layout under home/ mirrors $HOME.
+# Example shape (uncomment and adapt as you migrate files into home/):
+#
+# - link:
+#     ~/.gitconfig:
+#       path: home/.gitconfig
+#     ~/.config/git/config:
+#       path: home/.config/git/config
+#     ~/.agents:
+#       path: home/.agents
+
+- link: {}

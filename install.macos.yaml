@@ -1,0 +1,22 @@
+# macOS-only dotbot tasks — loaded by install.sh when uname -s = Darwin.
+
+- defaults:
+    link:
+      create: true
+      relink: true
+
+# macOS-only user symlinks. Example:
+#
+# - link:
+#     ~/Library/Application Support/Code/User/settings.json:
+#       path: home/Library/Application Support/Code/User/settings.json
+#     ~/.hammerspoon:
+#       path: home/.hammerspoon
+
+- link: {}
+
+# macOS rarely needs root-owned files in /etc/. If you ever do, mirror the
+# Linux pattern: place files under system/macos/ and `shell:` out via
+# `sudo install -D -m <mode>`. See AGENTS.md "Root-owned config".
+
+- shell: []

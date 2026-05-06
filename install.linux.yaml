@@ -1,0 +1,29 @@
+# Linux-only dotbot tasks — loaded by install.sh when uname -s = Linux.
+#
+# This file ALSO drives root-owned config under system/linux/ via `shell:` +
+# `sudo install -D -m <mode>`. dotbot itself can't write to /etc/, so we shell
+# out. See AGENTS.md "Root-owned config".
+
+- defaults:
+    link:
+      create: true
+      relink: true
+
+# Linux-only user symlinks. Example:
+#
+# - link:
+#     ~/.config/fontconfig/fonts.conf:
+#       path: home/.config/fontconfig/fonts.conf
+
+- link: {}
+
+# Root-owned system config. Each entry is `sudo install -D -m <mode> <src> <dst>`.
+# Example (uncomment + adapt):
+#
+# - shell:
+#     - command: sudo install -D -m 644 system/linux/etc/NetworkManager/conf.d/wifi-powersave-off.conf /etc/NetworkManager/conf.d/wifi-powersave-off.conf
+#       description: Install /etc/NetworkManager/conf.d/wifi-powersave-off.conf
+#       stdout: true
+#       stderr: true
+
+- shell: []

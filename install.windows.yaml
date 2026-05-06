@@ -1,0 +1,22 @@
+# Windows-only dotbot tasks — loaded by install.ps1.
+#
+# Symlinks on Windows require Developer Mode enabled OR running PowerShell
+# as Administrator. Without one of those, dotbot's `link:` will fail.
+#
+# Avoid `if:` directives here — they run via $SHELL which is unreliable on
+# Windows. Use this file directly for Windows-only links.
+
+- defaults:
+    link:
+      create: true
+      relink: true
+
+# Windows-only user symlinks. Example:
+#
+# - link:
+#     ~/AppData/Roaming/Code/User/settings.json:
+#       path: home/AppData/Roaming/Code/User/settings.json
+#     ~/.gitconfig:
+#       path: home/.gitconfig
+
+- link: {}
