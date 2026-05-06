@@ -1,0 +1,14 @@
+[Unit]
+Description=UX5606 Secure Boot signing and TPM2 LUKS enrollment
+Documentation=https://wiki.archlinux.org/title/Unified_Extensible_Firmware_Interface/Secure_Boot#Assisted_process_with_sbctl
+Documentation=https://wiki.archlinux.org/title/Systemd-cryptenroll#Trusted_Platform_Module
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+ConditionPathExists=!/var/lib/ux5606-install/secureboot-tpm.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ux5606-secureboot-tpm-enroll
+
+[Install]
+WantedBy=multi-user.target

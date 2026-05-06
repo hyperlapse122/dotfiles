@@ -15,7 +15,7 @@
     "uki": true
   },
   "custom_commands": [
-    "curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles-next/main/archinstall/post-install.sh | bash -s -- h82"
+    "bash <<'UX5606_ARCHINSTALL'\nset -euo pipefail\n\nUSERNAME=h82\nREPO_URL=https://github.com/hyperlapse122/dotfiles-next.git\nUSER_HOME=$(getent passwd \"$USERNAME\" | cut -d: -f6)\nDOTFILES_DIR=\"$USER_HOME/dotfiles\"\n\nif [ -z \"$USER_HOME\" ]; then\n  echo \"UX5606 post-install: user $USERNAME not found\" >&2\n  exit 1\nfi\n\npacman -Sy --noconfirm --needed git curl sudo base-devel sbctl cryptsetup tpm2-tools efibootmgr\n\nfor service in firewalld keyd docker cups systemd-resolved power-profiles-daemon sddm; do\n  systemctl enable \"$service\" || true\ndone\n\nlocalectl set-x11-keymap kr\nln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf\nchsh -s /usr/bin/zsh \"$USERNAME\"\n\nif findmnt -no FSTYPE / | grep -qx btrfs; then\n  if [ ! -e /swap/swapfile ]; then\n    btrfs subvolume create /swap 2>/dev/null || true\n    btrfs filesystem mkswapfile --size 64g --uuid clear /swap/swapfile\n  fi\n  grep -qF '/swap/swapfile none swap defaults 0 0' /etc/fstab \\\n    || printf '%s\\n' '/swap/swapfile none swap defaults 0 0' >> /etc/fstab\nfi\n\ninstall -Dm644 /dev/stdin /etc/sddm.conf.d/10-wayland.conf <<'SDDM_CONF'\n[General]\nDisplayServer=wayland\nGreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell\n\n[Wayland]\nCompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1\nSDDM_CONF\n\nif [ ! -x \"$USER_HOME/.local/bin/uv\" ]; then\n  sudo -u \"$USERNAME\" sh -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'\nfi\n\nif [ ! -d \"$DOTFILES_DIR/.git\" ]; then\n  sudo -u \"$USERNAME\" git clone \"$REPO_URL\" \"$DOTFILES_DIR\"\nelse\n  sudo -u \"$USERNAME\" git -C \"$DOTFILES_DIR\" pull --ff-only\nfi\n\ninstall -Dm755 \"$DOTFILES_DIR/archinstall/UX5606/secureboot-tpm-enroll.sh\" /usr/local/sbin/ux5606-secureboot-tpm-enroll\ninstall -Dm644 \"$DOTFILES_DIR/archinstall/UX5606/ux5606-secureboot-tpm-enroll.service\" /etc/systemd/system/ux5606-secureboot-tpm-enroll.service\nsystemctl daemon-reload\nsystemctl enable ux5606-secureboot-tpm-enroll.service\n\nsudo -u \"$USERNAME\" bash \"$DOTFILES_DIR/install.sh\"\n\nprintf 'UX5606 archinstall post-install complete for %s\\n' \"$USERNAME\"\nUX5606_ARCHINSTALL"
   ],
   "hostname": "UX5606",
   "kernels": ["linux-zen"],
@@ -73,11 +73,13 @@
     "cargo",
     "cmake",
     "clang",
+    "cryptsetup",
     "cups",
     "cups-pdf",
     "docker",
     "docker-buildx",
     "docker-compose",
+    "efibootmgr",
     "fcitx5",
     "fcitx5-hangul",
     "firefox-developer-edition",
@@ -156,6 +158,7 @@
     "tailscale",
     "telegram-desktop",
     "tmux",
+    "tpm2-tools",
     "ttf-jetbrains-mono",
     "ttf-jetbrains-mono-nerd",
     "wakatime",
@@ -183,7 +186,7 @@
     }
   },
   "script": null,
-  "services": ["cups", "docker", "firewalld", "keyd", "systemd-resolved"],
+  "services": ["cups", "docker", "firewalld", "keyd", "power-profiles-daemon", "sddm", "systemd-resolved"],
   "swap": false,
   "timezone": "Asia/Seoul",
   "version": "3.0.14"

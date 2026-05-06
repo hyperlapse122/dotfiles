@@ -35,6 +35,8 @@ archinstall \
 
 `custom_commands` in `user_configuration.json` clones this repo and runs `install.sh` automatically before first boot. See [`archinstall/README.md`](./archinstall/README.md).
 
+Host configs may also install first-boot services. `archinstall/UX5606` enables a Secure Boot/TPM enrollment service that signs boot artifacts with `sbctl` and enrolls TPM2 unlock for the root LUKS device after the installed system boots.
+
 ## Requirements
 
 | Platform | Required |
