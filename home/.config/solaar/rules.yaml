@@ -1,0 +1,33 @@
+%YAML 1.3
+# Solaar reads this file as ~/.config/solaar/rules.yaml.
+# It contains zero or more YAML documents; each document is one Solaar rule.
+#
+# Rules trigger from HID++ notifications, so buttons usually must first be set
+# to a diverted action in Solaar's Key/Button Diversion setting. Under Wayland,
+# actions that synthesize input use /dev/uinput; the system Logitech module
+# installs Solaar's udev rules through hardware.logitech.wireless.enable.
+#
+# MX Master 4 notes:
+# - Button/key labels are reported by device firmware and Solaar. Verify exact
+#   names with `solaar show` and the Solaar Key/Button Diversion UI.
+# - Common MX Master-family labels include Back Button, Forward Button,
+#   Smart Shift, and Gesture Button, but the MX Master 4 may expose different
+#   labels depending on firmware and connection type.
+# - Useful feature names/tests documented by Solaar include THUMB WHEEL with
+#   thumb_wheel_up/thumb_wheel_down, LOWRES WHEEL with lowres_wheel_up/
+#   lowres_wheel_down, and HIRES WHEEL with hires_wheel_up/hires_wheel_down.
+# - MX Master 4-specific settings in current Solaar include scroll-ratchet,
+#   thumb button click force, haptic force, and haptic-play.
+#
+# Example: map a diverted button press to a key press after verifying the label.
+# ---
+# - Key: [Back Button, pressed]
+# - KeyPress: [Alt_L, Left, click]
+# ...
+#
+# Example: use thumb-wheel notifications for horizontal scrolling.
+# ---
+# - Feature: THUMB WHEEL
+# - Rule: [Test: thumb_wheel_up, MouseScroll: [-1, 0]]
+# - Rule: [Test: thumb_wheel_down, MouseScroll: [1, 0]]
+# ...

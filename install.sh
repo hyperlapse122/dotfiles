@@ -41,8 +41,10 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 # 3. Run dotbot ephemerally via uvx. Pass through extra args (e.g. --only).
+#    NOTE: dotbot's `-c` uses argparse `nargs='+'` (NOT `append`), so multiple
+#    config files MUST be passed under a SINGLE `-c` flag. `-c f1 -c f2` would
+#    only use f2 (the last one wins). Don't change this back.
 exec uvx dotbot \
   -d "$REPO_ROOT" \
-  -c "$REPO_ROOT/install.conf.yaml" \
-  -c "$REPO_ROOT/$OS_YAML" \
+  -c "$REPO_ROOT/install.conf.yaml" "$REPO_ROOT/$OS_YAML" \
   "$@"

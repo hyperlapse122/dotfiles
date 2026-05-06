@@ -1,22 +1,21 @@
-# Windows-only dotbot tasks — loaded by install.ps1.
+# Windows-only dotbot tasks - loaded by install.ps1.
 #
 # Symlinks on Windows require Developer Mode enabled OR running PowerShell
 # as Administrator. Without one of those, dotbot's `link:` will fail.
 #
-# Avoid `if:` directives here — they run via $SHELL which is unreliable on
+# Avoid `if:` directives here - they run via $SHELL which is unreliable on
 # Windows. Use this file directly for Windows-only links.
+#
+# Cross-platform links (git, ssh, docker, mise, opencode, .agents) live in
+# install.conf.yaml and apply here too. This file ONLY adds Windows-specific
+# paths that differ from the Linux/macOS layout.
 
 - defaults:
     link:
       create: true
       relink: true
 
-# Windows-only user symlinks. Example:
-#
-# - link:
-#     ~/AppData/Roaming/Code/User/settings.json:
-#       path: home/AppData/Roaming/Code/User/settings.json
-#     ~/.gitconfig:
-#       path: home/.gitconfig
-
-- link: {}
+- link:
+    # VS Code on Windows - source is the same, target path differs
+    ~/AppData/Roaming/Code/User/settings.json: home/.config/Code/User/settings.json
+    ~/AppData/Roaming/Code/User/keybindings.json: home/.config/Code/User/keybindings.json

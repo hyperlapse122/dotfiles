@@ -1,0 +1,53 @@
+[commit]
+	gpgsign = true
+
+[core]
+	autocrlf = false
+
+[credential]
+	credentialStore = "secretservice"
+	guiPrompt = "true"
+	helper = "/nix/store/j96mq2ki5fh5c68z1ijcjnsyvnhfn96m-git-credential-manager-2.7.3/bin/git-credential-manager"
+
+[credential "https://dev.azure.com"]
+	useHttpPath = true
+
+[credential "https://gist.github.com"]
+	helper = ""
+	helper = "!/nix/store/y3m73nv1ry783kqfjqq17p3kxxaxx5d1-gh-2.92.0/bin/gh auth git-credential"
+
+[credential "https://git.jpi.app"]
+	helper = ""
+	helper = "!/nix/store/dxn5gcfk241yyxslgzvax7y5bnpi6hbs-glab-1.93.0/bin/glab auth git-credential"
+
+[credential "https://github.com"]
+	helper = ""
+	helper = "!/nix/store/y3m73nv1ry783kqfjqq17p3kxxaxx5d1-gh-2.92.0/bin/gh auth git-credential"
+
+[credential "https://gitlab.com"]
+	helper = ""
+	helper = "!/nix/store/dxn5gcfk241yyxslgzvax7y5bnpi6hbs-glab-1.93.0/bin/glab auth git-credential"
+
+[filter "lfs"]
+	clean = "git-lfs clean -- %f"
+	process = "git-lfs filter-process"
+	required = true
+	smudge = "git-lfs smudge -- %f"
+
+[init]
+	defaultBranch = "main"
+
+[pull]
+	rebase = true
+
+[push]
+	autoSetupRemote = true
+	recurseSubmodules = "check"
+
+[tag]
+	gpgSign = true
+
+[user]
+	email = "iam@h82.dev"
+	name = "Joosung Park"
+	signingkey = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"

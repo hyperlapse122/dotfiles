@@ -45,7 +45,8 @@ Every top-level directory MUST have its own `README.md` describing what lives th
   - `uv tool install dotbot` (this is `uv`'s *persistent* install — it is NOT what we want)
   - `brew install dotbot`, `apt install dotbot`, `pacman -S dotbot`, etc.
   - vendoring dotbot's source into this repo or adding a `dotbot/` git submodule (the canonical upstream template uses a submodule — **we deliberately don't**)
-- The single canonical invocation: `uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml -c install.<os>.yaml`. Both `install.sh` and `install.ps1` MUST call exactly this; nothing else may run dotbot.
+- The single canonical invocation: `uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml install.<os>.yaml`. Both `install.sh` and `install.ps1` MUST call exactly this; nothing else may run dotbot.
+- **Pass both yaml files under a SINGLE `-c` flag.** dotbot's `-c` is argparse `nargs='+'` (not `append`); writing `-c install.conf.yaml -c install.<os>.yaml` silently drops the first file (only the last `-c` wins). Don't change this back.
 - The bootstrap scripts' only prerequisite job is "ensure `uv` is on PATH" (via `curl -LsSf https://astral.sh/uv/install.sh | sh` or the matching PowerShell installer). Once `uv` is present, `uvx` handles the rest. **Do not** add a step that installs dotbot itself.
 - `install.conf.yaml` MUST start with `defaults: { link: { create: true, relink: true } }` so individual link entries don't have to repeat them.
 - Per-OS files exist because dotbot's `if:` directive runs in `$SHELL`, which is unreliable on Windows (requires `bash -c` wrapping and an installed bash). **Do platform-gating via per-OS files, not `if:`.** `if:` is acceptable for finer Unix-only conditionals (per-host gates, optional package presence).
@@ -114,6 +115,7 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 
 - Installing dotbot via `pip`, `pipx`, `uv tool install`, `brew`, or distro package manager. **Always `uvx dotbot`** — ephemeral, no install.
 - Adding dotbot as a git submodule or vendoring its source.
+- Splitting yaml files across multiple `-c` flags (`-c f1 -c f2`). dotbot's `-c` is `nargs='+'`, so the second `-c` overwrites the first. Use one `-c f1 f2`.
 - Committing `user_credentials.json`, SSH/age/GPG private keys, API tokens, or anything else `archinstall/.gitignore` (or root `.gitignore`) is meant to keep out.
 - `link: { force: true }` — destroys existing files silently.
 - `cp` for `/etc/` files, or `sudo cp` instead of `sudo install -D -m <mode>`.

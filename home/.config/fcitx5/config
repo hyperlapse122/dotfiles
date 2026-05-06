@@ -1,0 +1,5 @@
+[Hotkey]
+EnumerateWithTriggerKeys=False
+
+[Hotkey/TriggerKeys]
+0=Hangul

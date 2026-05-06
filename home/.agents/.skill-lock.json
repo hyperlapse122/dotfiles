@@ -1,0 +1,60 @@
+{
+  "version": 3,
+  "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/skills.git",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "skillFolderHash": "3013fdeb8a11b10b1eb795ec3ae8bfca38f7c26d",
+      "installedAt": "2026-04-22T04:34:47.109Z",
+      "updatedAt": "2026-05-05T03:54:23.769Z"
+    },
+    "glab": {
+      "source": "gitlab-org/ai/skills",
+      "sourceType": "gitlab",
+      "sourceUrl": "https://gitlab.com/gitlab-org/ai/skills.git",
+      "skillPath": "skills/glab/SKILL.md",
+      "skillFolderHash": "803d9838627cdc624c205a5d855cb4f0c6565b7db8387ba280b1c6f036f52779",
+      "installedAt": "2026-04-23T07:19:26.181Z",
+      "updatedAt": "2026-04-28T10:12:52.842Z"
+    },
+    "playwright-cli": {
+      "source": "microsoft/playwright-cli",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/microsoft/playwright-cli.git",
+      "skillPath": "skills/playwright-cli/SKILL.md",
+      "skillFolderHash": "ff92cdde57ecce01607406a4667dc0f2772dfac1",
+      "installedAt": "2026-04-23T22:53:51.418Z",
+      "updatedAt": "2026-05-04T00:26:14.155Z"
+    },
+    "gh-cli": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/github/awesome-copilot.git",
+      "skillPath": "skills/gh-cli/SKILL.md",
+      "skillFolderHash": "437437f7f20bcdbbdb3081cf164435a388c0a39a",
+      "installedAt": "2026-05-05T04:00:21.828Z",
+      "updatedAt": "2026-05-05T04:00:21.828Z"
+    }
+  },
+  "dismissed": {
+    "findSkillsPrompt": true
+  },
+  "lastSelectedAgents": [
+    "amp",
+    "antigravity",
+    "cline",
+    "codex",
+    "cursor",
+    "deepagents",
+    "dexto",
+    "firebender",
+    "gemini-cli",
+    "github-copilot",
+    "kimi-cli",
+    "opencode",
+    "warp",
+    "claude-code"
+  ]
+}

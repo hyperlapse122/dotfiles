@@ -1,0 +1,159 @@
+{
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[nix]": {
+    "editor.tabSize": 2
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "agCockpit.groupingEnabled": true,
+  "agCockpit.notificationEnabled": true,
+  "biome.requireConfiguration": true,
+  "biome.suggestInstallingGlobally": false,
+  "chat.agent.maxRequests": 1000,
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true
+  },
+  "chat.mcp.gallery.enabled": true,
+  "chat.tools.terminal.autoApprove": {
+    "/.*/": true
+  },
+  "claudeCode.allowDangerouslySkipPermissions": true,
+  "claudeCode.preferredLocation": "panel",
+  "csharp.experimental.debug.hotReload": true,
+  "docker.extension.enableComposeLanguageServer": false,
+  "editor.accessibilitySupport": "off",
+  "editor.aiStats.enabled": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "explicit",
+    "source.organizeImports.biome": "explicit"
+  },
+  "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'D2Coding Nerd Font', 'D2Coding', 'Droid Sans Mono', 'monospace', monospace",
+  "editor.fontLigatures": true,
+  "editor.formatOnSave": true,
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  "editor.smoothScrolling": true,
+  "editor.tabSize": 2,
+  "emmet.preferences": {},
+  "emmet.showAbbreviationSuggestions": false,
+  "explorer.autoReveal": false,
+  "explorer.incrementalNaming": "smart",
+  "extensions.autoCheckUpdates": false,
+  "extensions.autoUpdate": false,
+  "files.autoSave": "onFocusChange",
+  "files.enableTrash": false,
+  "git.autofetch": true,
+  "git.blame.editorDecoration.enabled": false,
+  "git.confirmSync": false,
+  "git.enableCommitSigning": true,
+  "git.enableSmartCommit": true,
+  "git.followTagsWhenSync": true,
+  "git.replaceTagsWhenPull": true,
+  "github.copilot.chat.agent.thinkingTool": true,
+  "github.copilot.chat.codesearch.enabled": true,
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Use multi-line conventional commit message format. First line should be a short summary (max 72 characters), followed by a blank line, and then a detailed description if necessary."
+    }
+  ],
+  "github.copilot.chat.languageContext.fix.typescript.enabled": true,
+  "github.copilot.chat.languageContext.inline.typescript.enabled": true,
+  "github.copilot.chat.languageContext.typescript.enabled": true,
+  "github.copilot.chat.localeOverride": "en",
+  "github.copilot.enable": {
+    "*": true,
+    "json": true,
+    "markdown": false,
+    "plaintext": false,
+    "scminput": false
+  },
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "github.gitProtocol": "https",
+  "githubPullRequests.codingAgent.promptForConfirmation": false,
+  "gitlab.authentication.oauthClientIds": {
+    "https://git.jpi.app": "c173cf3eb02fabd54c93401cadce5a4a1f8c034e2d85e1f95e9d33dc5e5243e5"
+  },
+  "gitlab.duoAgentPlatform.enabled": false,
+  "gitlab.duoChat.enabled": false,
+  "gitlab.duoCodeSuggestions.enabled": false,
+  "gitlens.ai.model": "vscode",
+  "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+  "gitlens.gitkraken.mcp.autoEnabled": false,
+  "js/ts.experimental.useTsgo": false,
+  "js/ts.implicitProjectConfig.checkJs": true,
+  "js/ts.implicitProjectConfig.experimentalDecorators": true,
+  "js/ts.preferences.autoImportFileExcludePatterns": [
+    "**/dist/**"
+  ],
+  "js/ts.preferences.autoImportSpecifierExcludeRegexes": [
+    "^(node:)?os$",
+    "^node_modules.+$",
+    "^type$"
+  ],
+  "js/ts.suggest.completeFunctionCalls": true,
+  "js/ts.updateImportsOnFileMove.enabled": "never",
+  "json.schemaDownload.trustedDomains": {
+    "https://biomejs.dev": true,
+    "https://developer.microsoft.com/json-schemas/": true,
+    "https://inlang.com": true,
+    "https://json-schema.org/": true,
+    "https://json.schemastore.org/": true,
+    "https://models.dev": true,
+    "https://opencode.ai": true,
+    "https://raw.githubusercontent.com/": true,
+    "https://raw.githubusercontent.com/devcontainers/spec/": true,
+    "https://raw.githubusercontent.com/microsoft/vscode/": true,
+    "https://schemastore.azurewebsites.net/": true,
+    "https://turbo.build": true,
+    "https://turborepo.dev": true,
+    "https://ui.shadcn.com": true,
+    "https://unpkg.com": true,
+    "https://www.schemastore.org/": true
+  },
+  "markdownlint.lintWorkspaceGlobs": [
+    "**/*.{md,mkd,mdwn,mdown,markdown,markdn,mdtxt,mdtext,workbook}",
+    "!**/*.code-search",
+    "!**/bower_components",
+    "!**/node_modules",
+    "!**/.git",
+    "!**/vendor",
+    "!**/.sisyphus"
+  ],
+  "nix.enableLanguageServer": true,
+  "nix.serverPath": "/nix/store/cdzdgirz7m8finvpn08b4nlikcpyxnl8-nixd-2.9.0/bin/nixd",
+  "prettier.enable": false,
+  "python.analysis.typeCheckingMode": "basic",
+  "redhat.telemetry.enabled": false,
+  "remote.SSH.remotePlatform": {
+    "deskmini.tetra-gecko.ts.net": "linux"
+  },
+  "sherlock.previewLanguageTag": "en",
+  "sherlock.userId": "f2117860-db4f-4634-9ddb-58c999457bce",
+  "terminal.integrated.enableImages": true,
+  "terminal.integrated.fontLigatures.enabled": true,
+  "terminal.integrated.stickyScroll.enabled": false,
+  "todo-tree.general.tags": [
+    "BUG",
+    "HACK",
+    "FIXME",
+    "TODO",
+    "XXX"
+  ],
+  "update.mode": "none",
+  "vscode-edge-devtools.webhintInstallNotification": true,
+  "window.restoreWindows": "none",
+  "workbench.welcomePage.walkthroughs.openOnInstall": false
+}

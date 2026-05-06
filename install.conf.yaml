@@ -1,23 +1,40 @@
-# Shared dotbot tasks — loaded by ALL OSes via:
+# Shared dotbot tasks - loaded by ALL OSes via:
 #   uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml -c install.<os>.yaml
 #
-# See AGENTS.md for the contract. Per-OS gating belongs in install.<os>.yaml,
-# NOT in `if:` clauses here (Windows can't reliably evaluate `if:`).
+# Only put links here when the same `~` path works correctly on Linux, macOS,
+# AND Windows. OS-specific paths (e.g. ~/Library/... on macOS, ~/AppData/...
+# on Windows) belong in install.<os>.yaml.
+#
+# See AGENTS.md.
 
 - defaults:
     link:
       create: true
       relink: true
 
-# Cross-platform symlinks live here. Path layout under home/ mirrors $HOME.
-# Example shape (uncomment and adapt as you migrate files into home/):
-#
-# - link:
-#     ~/.gitconfig:
-#       path: home/.gitconfig
-#     ~/.config/git/config:
-#       path: home/.config/git/config
-#     ~/.agents:
-#       path: home/.agents
+# Cross-platform links. Path layout under home/ mirrors $HOME.
+- link:
+    # Agent / skills config (used by opencode, claude, etc.)
+    ~/.agents: home/.agents
 
-- link: {}
+    # opencode (running this session)
+    ~/.config/opencode/AGENTS.md: home/.config/opencode/AGENTS.md
+    ~/.config/opencode/opencode.json: home/.config/opencode/opencode.json
+    ~/.config/opencode/oh-my-openagent.jsonc: home/.config/opencode/oh-my-openagent.jsonc
+    ~/.config/opencode/commands/daily-report.md: home/.config/opencode/commands/daily-report.md
+    ~/.config/opencode/commands/git-branch-cleanup.md: home/.config/opencode/commands/git-branch-cleanup.md
+
+    # git (XDG path, picked up by git on all 3 OSes)
+    ~/.config/git/config: home/.config/git/config
+
+    # mise (dev tool version manager, cross-platform)
+    ~/.config/mise/config.toml: home/.config/mise/config.toml
+
+    # Docker CLI (uses %USERPROFILE%/.docker on Windows, same path resolves via ~)
+    ~/.docker/config.json: home/.docker/config.json
+
+    # OpenSSH (Windows OpenSSH uses %USERPROFILE%/.ssh, same path)
+    ~/.ssh/config: home/.ssh/config
+
+    # 1Password SSH agent config
+    ~/.config/1Password/ssh/agent.toml: home/.config/1Password/ssh/agent.toml
