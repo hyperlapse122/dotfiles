@@ -11,7 +11,8 @@ archinstall/
 ├── user_credentials.example.json    # Schema reference (only credentials file in git)
 └── <hostname>/
     ├── user_configuration.json      # Disk, profile, packages, custom_commands
-    └── user_credentials.json        # GITIGNORED — passwords + LUKS keys
+    ├── user_credentials.json        # GITIGNORED — passwords + LUKS keys
+    └── initialize*.sh               # Optional host-specific legacy/manual scripts
 ```
 
 ## Bootstrap from the Arch live ISO
@@ -27,6 +28,12 @@ archinstall \
 ```
 
 archinstall provisions the system, then runs `custom_commands` (defined in `user_configuration.json`) in `arch-chroot` of the new system before unmount. Those `custom_commands` end by invoking [`post-install.sh`](./post-install.sh), which clones this repo and runs `install.sh`. First boot lands on a fully linked system.
+
+## Hosts
+
+| Host | Source | Notes |
+|---|---|---|
+| `UX5606` | Migrated from `~/nix-config/dotfiles-legacy/archinstall/` | Tracks install choices and legacy initialization scripts. Credentials stay local in `archinstall/UX5606/user_credentials.json`. Generic bootstrap still goes through [`post-install.sh`](./post-install.sh); `initialize*.sh` are host-specific/manual legacy scripts. |
 
 ## post-install.sh
 
