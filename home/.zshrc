@@ -1,26 +1,24 @@
+# Interactive zsh init. See AGENTS.md - this file is the canonical source
+# post-NixOS-migration; no /nix/store/... paths or nixos-rebuild aliases.
+
 typeset -U path cdpath fpath manpath
-for profile in ${(z)NIX_PROFILES}; do
-  fpath+=($profile/share/zsh/site-functions $profile/share/zsh/$ZSH_VERSION/functions $profile/share/zsh/vendor-completions)
+
+# Prezto must be sourced before plugins that depend on its modules.
+for _prezto_zshrc in \
+  /usr/share/zsh-prezto/runcoms/zshrc \
+  /opt/homebrew/opt/zsh-prezto/runcoms/zshrc \
+  /usr/local/opt/zsh-prezto/runcoms/zshrc
+do
+  [ -r "$_prezto_zshrc" ] && source "$_prezto_zshrc" && break
 done
+unset _prezto_zshrc
 
-HELPDIR="/nix/store/pbr67bz9gw0by9sz5rb3wgncp6hv4b8y-zsh-5.9/share/zsh/$ZSH_VERSION/help"
-
-source /nix/store/pmr5cr37y4pfzfpssz7dqnjkgyhxk37m-zsh-autosuggestions-0.7.1/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-ZSH_AUTOSUGGEST_STRATEGY=(history)
-
-
-# Load prezto
-source /nix/store/d3m4ppwxkf8ql7zglrwdmw3mx1s8zzjd-zsh-prezto-0-unstable-2025-07-30/share/zsh-prezto/runcoms/zshrc
-
-# History options should be set in .zshrc and after oh-my-zsh sourcing.
-# See https://github.com/nix-community/home-manager/issues/177.
-HISTSIZE="10000"
-SAVEHIST="10000"
-
-HISTFILE="/home/h82/.zsh_history"
+# History
+HISTSIZE=10000
+SAVEHIST=10000
+HISTFILE="$HOME/.zsh_history"
 mkdir -p "$(dirname "$HISTFILE")"
 
-# Set shell options
 set_opts=(
   HIST_FCNTL_LOCK HIST_IGNORE_DUPS HIST_IGNORE_SPACE SHARE_HISTORY
   NO_APPEND_HISTORY NO_EXTENDED_HISTORY NO_HIST_EXPIRE_DUPS_FIRST
@@ -31,33 +29,37 @@ for opt in "${set_opts[@]}"; do
 done
 unset opt set_opts
 
-# Activate mise so PATH and the chpwd hook for directory-based version
-# switching are set up in interactive zsh sessions. Done explicitly here
-# (instead of relying on programs.mise.enableZshIntegration) so the
-# snippet has a known position in .zshrc and is visible in this file.
-eval "$(/nix/store/w164w1qscqmyszrgxz21j7digl6pkxm4-mise-2026.4.20/bin/mise activate zsh)"
+# zsh-autosuggestions (Arch: pacman zsh-autosuggestions; macOS: brew)
+for _autosuggest in \
+  /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+do
+  [ -r "$_autosuggest" ] && source "$_autosuggest" && break
+done
+unset _autosuggest
+ZSH_AUTOSUGGEST_STRATEGY=(history)
 
-rebuild() {
-  sudo nixos-rebuild switch --flake ~/nix-config "$@"
-}
-
-rebuild-test() {
-  sudo nixos-rebuild test --flake ~/nix-config "$@"
-}
-
-rebuild-boot() {
-  sudo nixos-rebuild boot --flake ~/nix-config "$@"
-}
-
-eval "$(/nix/store/vcbik2fsll4m4zr870px0yn27fj54ap7-direnv-2.37.1/bin/direnv hook zsh)"
+# Optional integrations - guarded so missing tools don't break the shell.
+command -v mise >/dev/null && eval "$(mise activate zsh)"
+command -v direnv >/dev/null && eval "$(direnv hook zsh)"
 
 export GPG_TTY=$TTY
 
-alias -- cat=bat
-alias -- gc-all='sudo nix-collect-garbage -d'
-alias -- ll='eza -l'
-alias -- ls=eza
-source /nix/store/7kfw9rxjcaymdn7xhczxx6valclc9nxp-zsh-syntax-highlighting-0.8.0/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+# Conditional aliases - only when target tool exists.
+command -v bat >/dev/null && alias cat=bat
+if command -v eza >/dev/null; then
+  alias ll='eza -l'
+  alias ls=eza
+fi
+
+# zsh-syntax-highlighting must come last per upstream guidance.
+for _highlight in \
+  /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+do
+  [ -r "$_highlight" ] && source "$_highlight" && break
+done
+unset _highlight
 ZSH_HIGHLIGHT_HIGHLIGHTERS=(main)
-
-
