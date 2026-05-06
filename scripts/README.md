@@ -6,7 +6,7 @@ Helpers shared by `install.sh` and `install.ps1`.
 
 | Script | Platform | Called by | Purpose |
 |---|---|---|---|
-| `install-linux-system-config.sh` | Linux only | `install.linux.yaml` `shell:` step | `sudo install -D -m <mode>` each file in `system/linux/etc/` to its absolute path |
+| `install-linux-system-config.sh` | Linux only | `install.linux.yaml` `shell:` step | Recursively discovers files in `system/linux/etc/` and runs `sudo install -D -m 644` to their absolute paths |
 
 ## Script parity rule
 

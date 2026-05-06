@@ -82,7 +82,9 @@ sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 
 Use `sudo install -D` (atomically sets mode and creates parents). Do **not** use `cp`+`chmod` (loses ownership/mode atomicity), and do **not** try to express `/etc/...` as a dotbot `link:` (no sudo, dotbot will fail or silently link a user-owned file into a root-owned tree).
 
-NetworkManager unmanaged-device rules live as split drop-ins under `system/linux/etc/NetworkManager/conf.d/`, matching the legacy dotfiles layout. Do not collapse them back into `NetworkManager.conf`.
+The Linux installer discovers files with a recursive glob under `system/linux/etc/`; adding or removing a root-owned config file should not require editing the install script unless the mode is no longer `0644`.
+
+NetworkManager unmanaged-device rules live as split drop-ins under `system/linux/etc/NetworkManager/conf.d/`, matching the legacy dotfiles layout. Do not consolidate them into a monolithic `NetworkManager.conf` — that file is intentionally absent from this repo.
 
 ### archinstall (Arch Linux only)
 

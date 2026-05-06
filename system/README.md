@@ -10,6 +10,10 @@ sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 
 `install -D` is the only correct tool here — it sets mode atomically and creates parent directories. **Don't** use `sudo cp` (no atomic mode/owner) and **don't** try to express these as dotbot `link:` blocks (no sudo support).
 
+Linux system files are discovered recursively under `system/linux/etc/` and
+installed with mode `0644`. Adding or removing a file there should not require
+editing the installer unless that file needs a different mode.
+
 ## Layout
 
 The path under `system/<os>/` mirrors the absolute install path exactly:
@@ -20,8 +24,8 @@ system/linux/etc/NetworkManager/conf.d/wifi-powersave-off.conf
 ```
 
 NetworkManager drop-ins under `system/linux/etc/NetworkManager/conf.d/` mirror
-the legacy dotfiles layout. Keep per-interface unmanaged-device rules split into
-separate files there instead of folding them into `NetworkManager.conf`.
+the legacy dotfiles layout. Keep per-interface unmanaged-device rules as split
+drop-in files — do not consolidate them into a monolithic `NetworkManager.conf`.
 
 | Subdirectory | Used for |
 |---|---|
