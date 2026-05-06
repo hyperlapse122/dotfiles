@@ -84,7 +84,12 @@ enroll_tpm_for_root_luks() {
   fi
 
   log "enrolling TPM2 token for $luks_device bound to Secure Boot PCR 7."
-  passphrase="$(systemd-ask-password "LUKS passphrase for TPM2 enrollment of $luks_device" || true)"
+  if [[ -r /etc/ux5606-luks-passphrase ]]; then
+    passphrase="$(head -c 1024 /etc/ux5606-luks-passphrase)"
+    log 'using LUKS passphrase from /etc/ux5606-luks-passphrase.'
+  else
+    passphrase="$(systemd-ask-password "LUKS passphrase for TPM2 enrollment of $luks_device" || true)"
+  fi
   if [[ -z "$passphrase" ]]; then
     log 'empty passphrase received; skipping TPM enrollment.'
     return 0
@@ -95,6 +100,18 @@ enroll_tpm_for_root_luks() {
       --unlock-key-file=- \
       --tpm2-device=auto \
       --tpm2-pcrs=7
+
+  shred -u /etc/ux5606-luks-passphrase 2>/dev/null || rm -f /etc/ux5606-luks-passphrase
+
+  if ! grep -qF 'tpm2-device=auto' /etc/crypttab 2>/dev/null; then
+    local mapper_name uuid
+    mapper_name="$(findmnt -no SOURCE / | sed 's|/dev/mapper/||')"
+    uuid="$(blkid -s UUID -o value "$luks_device")"
+    if [[ -n "$mapper_name" && -n "$uuid" ]]; then
+      printf '%s\tUUID=%s\tnone\ttpm2-device=auto\n' "$mapper_name" "$uuid" >> /etc/crypttab
+      log "added /etc/crypttab entry: $mapper_name UUID=$uuid tpm2-device=auto"
+    fi
+  fi
 }
 
 main() {
