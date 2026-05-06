@@ -36,7 +36,7 @@
 # `sudo` prefix when already root, so it works inside arch-chroot too.
 - shell:
     - command: bash scripts/install-linux-system-config.sh
-      description: Install root-owned config to /etc/ (NetworkManager, locale, keyd, libinput, plymouth, udev)
+      description: Install root-owned config to /etc/ (NetworkManager drop-ins, locale, keyd, libinput, plymouth, udev)
       stdin: true
       stdout: true
       stderr: true
