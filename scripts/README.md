@@ -1,6 +1,12 @@
 # scripts/
 
-Helpers shared by `install.sh` and `install.ps1`. Currently empty — populate as the install scripts grow.
+Helpers shared by `install.sh` and `install.ps1`.
+
+## Current scripts
+
+| Script | Platform | Called by | Purpose |
+|---|---|---|---|
+| `install-linux-system-config.sh` | Linux only | `install.linux.yaml` `shell:` step | `sudo install -D -m <mode>` each file in `system/linux/etc/` to its absolute path |
 
 ## Script parity rule
 

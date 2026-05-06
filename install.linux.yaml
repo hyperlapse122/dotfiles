@@ -30,6 +30,13 @@
     ~/.config/Code/User/settings.json: home/.config/Code/User/settings.json
     ~/.config/Code/User/keybindings.json: home/.config/Code/User/keybindings.json
 
-# Root-owned system config. Each entry is `sudo install -D -m <mode> <src> <dst>`.
-# Add entries when migrating /etc/* in the system-config follow-up commit.
-- shell: []
+# Root-owned system config. Delegated to scripts/install-linux-system-config.sh
+# so a single `sudo` prompt covers all files (sudo's credential cache makes
+# subsequent installs in that script password-less). The script also no-ops the
+# `sudo` prefix when already root, so it works inside arch-chroot too.
+- shell:
+    - command: bash scripts/install-linux-system-config.sh
+      description: Install root-owned config to /etc/ (NetworkManager, locale, keyd, libinput)
+      stdin: true
+      stdout: true
+      stderr: true
