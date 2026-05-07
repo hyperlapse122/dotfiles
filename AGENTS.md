@@ -92,6 +92,8 @@ NetworkManager unmanaged-device rules live as split drop-ins under `system/linux
 - End the host's `custom_commands` with the dotfiles bootstrap (install `git` and `uv`, clone this repo, run `install.sh`) so the first boot lands on a fully linked system. Keep the same logic in `archinstall/post-install.sh` for re-running outside the installer.
 - The JSON schema changes between archinstall releases. **Regenerate with `archinstall --dry-run`** and copy the produced config out of `/var/log/archinstall/`. Don't hand-edit fields you don't understand — legacy keys (`audio_config`, `bootloader`, `!root-password`) still parse, but new configs use the current nested shape (`disk_config`, `bootloader_config`, `auth_config`).
 - `user_credentials.json` MUST be gitignored. Only `user_credentials.example.json` lives in git. Same rule for SSH/age/GPG private keys, API tokens, and disk encryption keys — never commit, even briefly.
+- Adding a new host MUST go through the [`archinstall-host`](.opencode/skills/archinstall-host/SKILL.md) skill. The skill enforces: (1) regenerate via `archinstall --dry-run`, (2) write `archinstall/<hostname>/host-metadata.json` with a DMI fingerprint so `archinstall/test-host.sh --detect` returns the host on its target machine, (3) burnable QEMU validation with UEFI Secure Boot + LUKS + TPM2 via `archinstall/test-host.sh <hostname>` BEFORE the host is considered done.
+- `archinstall/inspect-hardware.sh` and `archinstall/test-host.sh` are Linux-only (single-platform exception per "Script parity" above; documented in their headers). No `.ps1` counterparts.
 
 ### Documentation sync (HARD)
 
