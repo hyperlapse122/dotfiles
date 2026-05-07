@@ -51,3 +51,11 @@
 	email = "iam@h82.dev"
 	name = "Joosung Park"
 	signingkey = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"
+
+# OS-specific overrides + a host-local override that's gitignored.
+# Missing include paths are silently skipped by git, so listing all three is safe.
+[include]
+	path = ~/.gitconfig.d/linux.gitconfig
+	path = ~/.gitconfig.d/macos.gitconfig
+	path = ~/.gitconfig.d/windows.gitconfig
+	path = ~/.gitconfig.d/local.gitconfig

@@ -18,6 +18,9 @@
     ~/.gnupg/gpg.conf: home/.gnupg/gpg.conf
     ~/.gnupg/gpg-agent.conf: home/.gnupg/gpg-agent.conf
 
+    # Per-OS git overrides (referenced via [include] in home/.config/git/config)
+    ~/.gitconfig.d/macos.gitconfig: home/.gitconfig.d/macos.gitconfig
+
     # VS Code on macOS - source is the same, target path differs from Linux
     ~/Library/Application Support/Code/User/settings.json: home/.config/Code/User/settings.json
     ~/Library/Application Support/Code/User/keybindings.json: home/.config/Code/User/keybindings.json
