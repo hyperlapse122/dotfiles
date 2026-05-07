@@ -37,6 +37,8 @@ archinstall \
 
 Host configs may also install first-boot services. `archinstall/UX5606` enables a Secure Boot/TPM enrollment service that signs boot artifacts with `sbctl` and enrolls TPM2 unlock for the root LUKS device after the installed system boots.
 
+For the Lenovo ThinkPad T14 Gen 2 profile, follow the physical install guide in [`archinstall/t14-gen2/README.md`](./archinstall/t14-gen2/README.md). It covers real credentials, disk selection, Secure Boot Setup Mode, and first-boot TPM verification.
+
 ## Requirements
 
 | Platform | Required |
