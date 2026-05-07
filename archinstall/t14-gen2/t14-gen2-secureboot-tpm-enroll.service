@@ -1,0 +1,15 @@
+[Unit]
+Description=t14-gen2 Secure Boot signing and TPM2 LUKS enrollment
+Documentation=https://wiki.archlinux.org/title/Unified_Extensible_Firmware_Interface/Secure_Boot#Assisted_process_with_sbctl
+Documentation=https://wiki.archlinux.org/title/Systemd-cryptenroll#Trusted_Platform_Module
+Documentation=https://wiki.archlinux.org/title/Lenovo_ThinkPad_T14/T14s_(Intel)_Gen_2
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+ConditionPathExists=!/var/lib/t14-gen2-install/secureboot-tpm.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/t14-gen2-secureboot-tpm-enroll
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+{
+  "$schema": "host-metadata.v1",
+  "hostname": "t14-gen2",
+  "description": "Lenovo ThinkPad T14 Gen 2 (Intel) — T14 Gen 2 daily driver",
+  "archwiki_page": "https://wiki.archlinux.org/title/Lenovo_ThinkPad_T14/T14s_(Intel)_Gen_2",
+  "dmi_match": {
+    "sys_vendor": "LENOVO",
+    "product_version": "ThinkPad T14*Gen 2*"
+  },
+  "notes": [
+    "Verified DMI on hardware: sys_vendor=LENOVO, product_name=20W1S5DL0H (per-SKU, varies), product_version='ThinkPad T14 Gen 2i' (stable, glob match on this).",
+    "Audio: REQUIRES sof-firmware package (Intel SOF 8086:A0C8). No sound without it.",
+    "Suspend: prefer BIOS 'Windows and Linux' (S0ix) over 'Linux S3' to avoid trackpad-lag bug after S3 resume.",
+    "fwupd works for BIOS, NVMe, fingerprint reader (06CB:00F9 — Synaptics Prometheus, needs LVFS testing remote).",
+    "Host config includes user_configuration.json, local gitignored user_credentials.json, and an inline first-boot Secure Boot/TPM2 enrollment service. The test harness injects a VM-only disk_config for /dev/nvme0n1 during --drive runs."
+  ]
+}
