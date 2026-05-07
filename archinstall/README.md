@@ -2,7 +2,7 @@
 
 Arch Linux unattended provisioning. Each host has its own subdirectory under `archinstall/<hostname>/`.
 
-The reproducible procedure for adding a new host lives in the [`archinstall-host`](../.opencode/skills/archinstall-host/SKILL.md) skill. Load it with `skill(name="archinstall-host")` when adding or testing a host.
+The reproducible procedure for adding a new host lives in the [`archinstall-host`](../.agents/skills/archinstall-host/SKILL.md) skill. Load it with `skill(name="archinstall-host")` when adding or testing a host.
 
 ## Layout
 
@@ -41,7 +41,7 @@ archinstall provisions the system, then runs `custom_commands` (defined in `user
 | Host | Hardware | DMI auto-detect | Notes |
 |---|---|---|---|
 | `UX5606` | ASUS Zenbook UX5606 | (no `host-metadata.json` yet — add to enable auto-detect) | Migrated from `~/nix-config/dotfiles-legacy/archinstall/`. `user_configuration.json` embeds the host post-install automation directly in `custom_commands`: enable KDE/desktop services, create the Btrfs swapfile, configure SDDM Wayland, clone this repo, run `install.sh`, and install the first-boot Secure Boot/TPM systemd service. Credentials stay local in `archinstall/UX5606/user_credentials.json`. `initialize*.sh` are retained as host-specific/manual legacy scripts. |
-| `t14-gen2` | Lenovo ThinkPad T14 Gen 2 (Intel) | `host-metadata.json` matches `LENOVO / "ThinkPad T14*Gen 2*"` ([wiki](https://wiki.archlinux.org/title/Lenovo_ThinkPad_T14/T14s_(Intel)_Gen_2)) | T14 Gen 2 daily driver. Built via the [`archinstall-host`](../.opencode/skills/archinstall-host/SKILL.md) skill. T14 Gen 2 specifics: Intel `intel-ucode`, Iris Xe (`Intel (open-source)` driver, `mesa vulkan-intel intel-media-driver`), AX201 Wi-Fi, Bluetooth `8087:0026`, **REQUIRED `sof-firmware`** for Intel SOF audio, fingerprint reader `06CB:00F9`, `power-profiles-daemon` for laptop power, fwupd with LVFS testing remote for firmware updates. First-boot service `t14-gen2-secureboot-tpm-enroll.service` runs sbctl key enrollment (Setup Mode required) + signs systemd-boot/UKI + binds TPM2 LUKS unlock to PCR 7. Locale `ko_KR.UTF-8`, mirror set to Arch's geo mirror after multiple KR mirrors served mismatched `libnotify` signatures during validation, KDE Plasma + sddm + pipewire. See [`t14-gen2/README.md`](./t14-gen2/README.md) for the physical install procedure. The tracked config does not include a physical `disk_config`; choose the real disk in the TUI or generate a machine-local silent config before installing. |
+| `t14-gen2` | Lenovo ThinkPad T14 Gen 2 (Intel) | `host-metadata.json` matches `LENOVO / "ThinkPad T14*Gen 2*"` ([wiki](https://wiki.archlinux.org/title/Lenovo_ThinkPad_T14/T14s_(Intel)_Gen_2)) | T14 Gen 2 daily driver. Built via the [`archinstall-host`](../.agents/skills/archinstall-host/SKILL.md) skill. T14 Gen 2 specifics: Intel `intel-ucode`, Iris Xe (`Intel (open-source)` driver, `mesa vulkan-intel intel-media-driver`), AX201 Wi-Fi, Bluetooth `8087:0026`, **REQUIRED `sof-firmware`** for Intel SOF audio, fingerprint reader `06CB:00F9`, `power-profiles-daemon` for laptop power, fwupd with LVFS testing remote for firmware updates. First-boot service `t14-gen2-secureboot-tpm-enroll.service` runs sbctl key enrollment (Setup Mode required) + signs systemd-boot/UKI + binds TPM2 LUKS unlock to PCR 7. Locale `ko_KR.UTF-8`, mirror set to Arch's geo mirror after multiple KR mirrors served mismatched `libnotify` signatures during validation, KDE Plasma + sddm + pipewire. See [`t14-gen2/README.md`](./t14-gen2/README.md) for the physical install procedure. The tracked config does not include a physical `disk_config`; choose the real disk in the TUI or generate a machine-local silent config before installing. |
 
 ## inspect-hardware.sh — hardware reporter
 
@@ -53,7 +53,7 @@ archinstall/inspect-hardware.sh -o report.md   # write to file
 sudo archinstall/inspect-hardware.sh -o ...    # full DMI / BIOS / chassis output
 ```
 
-The report includes a "DMI fingerprint" section with a ready-to-paste `host-metadata.json` skeleton populated with the running machine's actual values. See the [`archinstall-host` skill](../.opencode/skills/archinstall-host/SKILL.md), Phase 2.
+The report includes a "DMI fingerprint" section with a ready-to-paste `host-metadata.json` skeleton populated with the running machine's actual values. See the [`archinstall-host` skill](../.agents/skills/archinstall-host/SKILL.md), Phase 2.
 
 Linux-only by design (per-AGENTS.md single-platform exception).
 
