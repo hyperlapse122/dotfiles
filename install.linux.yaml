@@ -28,6 +28,7 @@
     # Linux-only IME and hardware tooling
     ~/.config/fcitx5: home/.config/fcitx5
     ~/.config/solaar/rules.yaml: home/.config/solaar/rules.yaml
+    ~/.local/share/applications: home/.local/share/applications
 
     # VS Code on Linux (path differs on macOS / Windows; see those yaml files)
     ~/.config/Code/User/settings.json: home/.config/Code/User/settings.json
