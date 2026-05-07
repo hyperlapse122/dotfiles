@@ -9,7 +9,7 @@ Cross-platform dotfiles for **Windows + macOS + Arch Linux**, managed by [dotbot
 ### macOS / Linux
 
 ```sh
-git clone https://github.com/hyperlapse122/dotfiles-next.git ~/dotfiles
+git clone https://github.com/hyperlapse122/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 ./install.sh
 ```
@@ -17,7 +17,7 @@ cd ~/dotfiles
 ### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/hyperlapse122/dotfiles-next.git $HOME\dotfiles
+git clone https://github.com/hyperlapse122/dotfiles.git $HOME\dotfiles
 cd $HOME\dotfiles
 .\install.ps1
 ```
@@ -34,6 +34,8 @@ archinstall \
 ```
 
 `custom_commands` in `user_configuration.json` clones this repo and runs `install.sh` automatically before first boot. See [`archinstall/README.md`](./archinstall/README.md).
+
+Host configs may also install first-boot services. `archinstall/UX5606` enables a Secure Boot/TPM enrollment service that signs boot artifacts with `sbctl` and enrolls TPM2 unlock for the root LUKS device after the installed system boots.
 
 ## Requirements
 

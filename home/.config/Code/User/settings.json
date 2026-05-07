@@ -133,7 +133,7 @@
     "!**/.sisyphus"
   ],
   "nix.enableLanguageServer": true,
-  "nix.serverPath": "/nix/store/cdzdgirz7m8finvpn08b4nlikcpyxnl8-nixd-2.9.0/bin/nixd",
+  "nix.serverPath": "nixd",
   "prettier.enable": false,
   "python.analysis.typeCheckingMode": "basic",
   "redhat.telemetry.enabled": false,

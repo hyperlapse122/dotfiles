@@ -19,3 +19,6 @@
     # VS Code on Windows - source is the same, target path differs
     ~/AppData/Roaming/Code/User/settings.json: home/.config/Code/User/settings.json
     ~/AppData/Roaming/Code/User/keybindings.json: home/.config/Code/User/keybindings.json
+
+    # Per-OS git overrides (referenced via [include] in home/.config/git/config)
+    ~/.gitconfig.d/windows.gitconfig: home/.gitconfig.d/windows.gitconfig

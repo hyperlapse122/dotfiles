@@ -1,0 +1,7 @@
+[credential]
+	credentialStore = secretservice
+	helper =
+	helper = manager
+
+[core]
+	autocrlf = false

@@ -38,3 +38,9 @@
 
     # 1Password SSH agent config
     ~/.config/1Password/ssh/agent.toml: home/.config/1Password/ssh/agent.toml
+
+    # mise default-gems list (read by mise/asdf when installing ruby)
+    ~/.default-gems: home/.default-gems
+
+    # Yarn 2+ global config (cross-platform)
+    ~/.yarnrc.yml: home/.yarnrc.yml

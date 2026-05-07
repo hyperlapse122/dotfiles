@@ -12,6 +12,8 @@ archinstall/
 └── <hostname>/
     ├── user_configuration.json      # Disk, profile, packages, custom_commands
     ├── user_credentials.json        # GITIGNORED — passwords + LUKS keys
+    ├── *secureboot*.service         # Optional host first-boot services
+    ├── *secureboot*.sh              # Optional host first-boot helpers
     └── initialize*.sh               # Optional host-specific legacy/manual scripts
 ```
 
@@ -33,7 +35,13 @@ archinstall provisions the system, then runs `custom_commands` (defined in `user
 
 | Host | Source | Notes |
 |---|---|---|
-| `UX5606` | Migrated from `~/nix-config/dotfiles-legacy/archinstall/` | Tracks install choices and legacy initialization scripts. Credentials stay local in `archinstall/UX5606/user_credentials.json`. Generic bootstrap still goes through [`post-install.sh`](./post-install.sh); `initialize*.sh` are host-specific/manual legacy scripts. |
+| `UX5606` | Migrated from `~/nix-config/dotfiles-legacy/archinstall/` | `user_configuration.json` embeds the host post-install automation directly in `custom_commands`: enable KDE/desktop services, create the Btrfs swapfile, configure SDDM Wayland, clone this repo, run `install.sh`, and install the first-boot Secure Boot/TPM systemd service. Credentials stay local in `archinstall/UX5606/user_credentials.json`. `initialize*.sh` are retained as host-specific/manual legacy scripts. |
+
+## UX5606 Secure Boot + TPM enrollment
+
+The UX5606 config installs and enables `ux5606-secureboot-tpm-enroll.service` for first boot. The service runs [`secureboot-tpm-enroll.sh`](./UX5606/secureboot-tpm-enroll.sh), which uses `sbctl` to create/enroll keys only when firmware is in Setup Mode, signs existing systemd-boot/UKI artifacts, then uses `systemd-cryptenroll` to enroll the root LUKS device with TPM2 bound to PCR 7.
+
+TPM enrollment is semi-automated by design: the service asks for the existing LUKS passphrase through `systemd-ask-password` instead of storing disk secrets in git or in `user_configuration.json`. Keep a recovery passphrase/key available before relying on TPM unlock.
 
 ## post-install.sh
 
@@ -46,7 +54,7 @@ Recommended `custom_commands` entry in `user_configuration.json`:
 
 ```json
 "custom_commands": [
-  "curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles-next/main/archinstall/post-install.sh | bash -s -- <username>"
+  "curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles/main/archinstall/post-install.sh | bash -s -- <username>"
 ]
 ```
 
