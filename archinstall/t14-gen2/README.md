@@ -165,4 +165,4 @@ git pull --ff-only
 ./install.sh
 ```
 
-The bootstrap uses `uvx dotbot`; do not install dotbot globally.
+The bootstrap uses mise-managed `uvx dotbot`; do not install dotbot globally.

@@ -16,9 +16,11 @@
       relink: true
 
 - link:
-    # VS Code on Windows - source is the same, target path differs
-    ~/AppData/Roaming/Code/User/settings.json: home/.config/Code/User/settings.json
-    ~/AppData/Roaming/Code/User/keybindings.json: home/.config/Code/User/keybindings.json
+    # VS Code on Windows - source is the same, target path differs.
+    # Only the two tracked *.json files (VS Code writes lots of User/ state).
+    ~/AppData/Roaming/Code/User/:
+      glob: true
+      path: home/.config/Code/User/*.json
 
     # Per-OS git overrides (referenced via [include] in home/.config/git/config)
     ~/.gitconfig.d/windows.gitconfig: home/.gitconfig.d/windows.gitconfig

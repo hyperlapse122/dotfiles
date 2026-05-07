@@ -39,12 +39,7 @@ fi
 # 1. Prereqs (idempotent — pacman --needed skips installed packages).
 pacman -Sy --noconfirm --needed git curl
 
-# 2. Install uv for the target user (drops into ~/.local/bin).
-if [[ ! -x "$USER_HOME/.local/bin/uv" ]]; then
-  sudo -u "$USERNAME" sh -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
-fi
-
-# 3. Clone or update the dotfiles repo into ~/dotfiles.
+# 2. Clone or update the dotfiles repo into ~/dotfiles.
 DOTFILES_DIR="$USER_HOME/dotfiles"
 if [[ ! -d "$DOTFILES_DIR/.git" ]]; then
   sudo -u "$USERNAME" git clone "$REPO_URL" "$DOTFILES_DIR"
@@ -52,7 +47,7 @@ else
   sudo -u "$USERNAME" git -C "$DOTFILES_DIR" pull --ff-only
 fi
 
-# 4. Run install.sh as the target user. install.sh is idempotent.
+# 3. Run install.sh as the target user. install.sh ensures mise and is idempotent.
 sudo -u "$USERNAME" bash "$DOTFILES_DIR/install.sh"
 
 printf 'post-install.sh: bootstrap complete for %s\n' "$USERNAME"

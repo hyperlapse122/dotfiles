@@ -10,17 +10,18 @@
       relink: true
 
 - link:
-    # zsh (zprezto-based; same path on macOS - duplicated in install.macos.yaml)
-    ~/.zshrc: home/.zshrc
-    ~/.zshenv: home/.zshenv
-    ~/.zprofile: home/.zprofile
-    ~/.zlogin: home/.zlogin
-    ~/.zlogout: home/.zlogout
-    ~/.zpreztorc: home/.zpreztorc
+    # zsh (zprezto-based; same path on macOS - duplicated in install.macos.yaml).
+    # Glob picks up every home/.z* dotfile (.zshrc, .zshenv, .zprofile, .zlogin,
+    # .zlogout, .zpreztorc) without listing each.
+    ~/:
+      glob: true
+      path: home/.z*
 
-    # GnuPG (Linux/macOS use ~/.gnupg; Windows uses %APPDATA%/gnupg by default)
-    ~/.gnupg/gpg.conf: home/.gnupg/gpg.conf
-    ~/.gnupg/gpg-agent.conf: home/.gnupg/gpg-agent.conf
+    # GnuPG (Linux/macOS use ~/.gnupg; Windows uses %APPDATA%/gnupg by default).
+    # Only *.conf is linked - we don't want random gpg state files mirrored.
+    ~/.gnupg/:
+      glob: true
+      path: home/.gnupg/*.conf
 
     # Per-OS git overrides (referenced via [include] in home/.config/git/config)
     ~/.gitconfig.d/linux.gitconfig: home/.gitconfig.d/linux.gitconfig
@@ -30,9 +31,12 @@
     ~/.config/solaar/rules.yaml: home/.config/solaar/rules.yaml
     ~/.local/share/applications: home/.local/share/applications
 
-    # VS Code on Linux (path differs on macOS / Windows; see those yaml files)
-    ~/.config/Code/User/settings.json: home/.config/Code/User/settings.json
-    ~/.config/Code/User/keybindings.json: home/.config/Code/User/keybindings.json
+    # VS Code on Linux (path differs on macOS / Windows; see those yaml files).
+    # Only the two tracked *.json files - VS Code writes lots of state into
+    # User/ that we don't want mirrored, so this is intentionally not a dir link.
+    ~/.config/Code/User/:
+      glob: true
+      path: home/.config/Code/User/*.json
 
 # Root-owned system config. Delegated to scripts/install-linux-system-config.sh
 # so a single `sudo` prompt covers all files (sudo's credential cache makes

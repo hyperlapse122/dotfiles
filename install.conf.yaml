@@ -1,5 +1,5 @@
 # Shared dotbot tasks - loaded by ALL OSes via:
-#   uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml -c install.<os>.yaml
+#   mise exec uv@latest -- uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml install.<os>.yaml
 #
 # Only put links here when the same `~` path works correctly on Linux, macOS,
 # AND Windows. OS-specific paths (e.g. ~/Library/... on macOS, ~/AppData/...
@@ -17,12 +17,11 @@
     # Agent / skills config (used by opencode, claude, etc.)
     ~/.agents: home/.agents
 
-    # opencode (running this session)
-    ~/.config/opencode/AGENTS.md: home/.config/opencode/AGENTS.md
-    ~/.config/opencode/opencode.json: home/.config/opencode/opencode.json
-    ~/.config/opencode/oh-my-openagent.jsonc: home/.config/opencode/oh-my-openagent.jsonc
-    ~/.config/opencode/commands/daily-report.md: home/.config/opencode/commands/daily-report.md
-    ~/.config/opencode/commands/git-branch-cleanup.md: home/.config/opencode/commands/git-branch-cleanup.md
+    # opencode (running this session). Recursive glob picks up everything
+    # tracked under home/.config/opencode/, including commands/*.md.
+    ~/.config/opencode/:
+      glob: true
+      path: home/.config/opencode/**
 
     # git (XDG path, picked up by git on all 3 OSes)
     ~/.config/git/config: home/.config/git/config

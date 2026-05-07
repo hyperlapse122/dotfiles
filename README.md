@@ -1,8 +1,8 @@
 # dotfiles
 
-Cross-platform dotfiles for **Windows + macOS + Arch Linux**, managed by [dotbot](https://github.com/anishathalye/dotbot) via `uvx`.
+Cross-platform dotfiles for **Windows + macOS + Arch Linux**, managed by [dotbot](https://github.com/anishathalye/dotbot) via mise-managed `uvx`.
 
-`uvx dotbot` is run **ephemerally** every time — dotbot itself is never installed, only [`uv`](https://docs.astral.sh/uv/) is.
+`uvx dotbot` is run **ephemerally** through [`mise`](https://mise.jdx.dev/) every time — dotbot itself is never installed.
 
 ## Quickstart
 
@@ -43,11 +43,11 @@ For the Lenovo ThinkPad T14 Gen 2 profile, follow the physical install guide in 
 
 | Platform | Required |
 |---|---|
-| macOS | `bash`, `curl`, `git` (Xcode Command Line Tools cover all three) |
-| Linux | `bash`, `curl`, `git` |
-| Windows | PowerShell 5.1+, [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/developer-mode-features-and-debugging) enabled (or run as Administrator) for symlink creation |
+| macOS | `bash`, `curl`, `git`, [`mise`](https://mise.jdx.dev/) (Xcode Command Line Tools cover the first three) |
+| Linux | `bash`, `curl`, `git`, [`mise`](https://mise.jdx.dev/) |
+| Windows | PowerShell 5.1+, [`mise`](https://mise.jdx.dev/), [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/developer-mode-features-and-debugging) enabled (or run as Administrator) for symlink creation |
 
-The bootstrap scripts install [`uv`](https://docs.astral.sh/uv/) automatically if missing. dotbot itself is **never installed** — `uvx dotbot` runs it ephemerally from PyPI on every invocation.
+Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap scripts. dotbot itself is **never installed** — mise provides [`uv`](https://docs.astral.sh/uv/) for the invocation, and `uvx dotbot` runs dotbot ephemerally from PyPI every time.
 
 ## Repo structure
 

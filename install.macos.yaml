@@ -6,24 +6,27 @@
       relink: true
 
 - link:
-    # zsh (zprezto-based; same path on Linux - duplicated in install.linux.yaml)
-    ~/.zshrc: home/.zshrc
-    ~/.zshenv: home/.zshenv
-    ~/.zprofile: home/.zprofile
-    ~/.zlogin: home/.zlogin
-    ~/.zlogout: home/.zlogout
-    ~/.zpreztorc: home/.zpreztorc
+    # zsh (zprezto-based; same path on Linux - duplicated in install.linux.yaml).
+    # Glob picks up every home/.z* dotfile (.zshrc, .zshenv, .zprofile, .zlogin,
+    # .zlogout, .zpreztorc) without listing each.
+    ~/:
+      glob: true
+      path: home/.z*
 
-    # GnuPG (macOS gpg from brew respects ~/.gnupg; Windows uses %APPDATA%/gnupg)
-    ~/.gnupg/gpg.conf: home/.gnupg/gpg.conf
-    ~/.gnupg/gpg-agent.conf: home/.gnupg/gpg-agent.conf
+    # GnuPG (macOS gpg from brew respects ~/.gnupg; Windows uses %APPDATA%/gnupg).
+    # Only *.conf is linked - we don't want random gpg state files mirrored.
+    ~/.gnupg/:
+      glob: true
+      path: home/.gnupg/*.conf
 
     # Per-OS git overrides (referenced via [include] in home/.config/git/config)
     ~/.gitconfig.d/macos.gitconfig: home/.gitconfig.d/macos.gitconfig
 
-    # VS Code on macOS - source is the same, target path differs from Linux
-    ~/Library/Application Support/Code/User/settings.json: home/.config/Code/User/settings.json
-    ~/Library/Application Support/Code/User/keybindings.json: home/.config/Code/User/keybindings.json
+    # VS Code on macOS - source is the same, target path differs from Linux.
+    # Only the two tracked *.json files (VS Code writes lots of User/ state).
+    ~/Library/Application Support/Code/User/:
+      glob: true
+      path: home/.config/Code/User/*.json
 
 # macOS rarely needs root-owned files in /etc/. If you ever do, mirror the
 # Linux pattern: place files under system/macos/ and `shell:` out via
