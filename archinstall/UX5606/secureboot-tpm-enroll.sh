@@ -14,16 +14,67 @@ log() {
   printf 'ux5606-secureboot-tpm: %s\n' "$*"
 }
 
+read_sysfs_value() {
+  local path=$1
+
+  if [[ -r "$path" ]]; then
+    tr -d '\0' < "$path"
+  fi
+}
+
+qemu_uefi_guest() {
+  local product_name sys_vendor virt
+
+  virt="$(systemd-detect-virt --vm 2>/dev/null || true)"
+  sys_vendor="$(read_sysfs_value /sys/class/dmi/id/sys_vendor)"
+  product_name="$(read_sysfs_value /sys/class/dmi/id/product_name)"
+
+  [[ -d /sys/firmware/efi/efivars ]] || return 1
+  [[ "$virt" == qemu || "$virt" == kvm || "$sys_vendor" == QEMU* || "$product_name" == *QEMU* ]]
+}
+
 has_secure_boot_keys() {
-  compgen -G '/usr/share/secureboot/keys/PK/*.key' >/dev/null
+  compgen -G '/var/lib/sbctl/keys/PK/*.key' >/dev/null \
+    || compgen -G '/usr/share/secureboot/keys/PK/*.key' >/dev/null
 }
 
 firmware_setup_mode_enabled() {
-  sbctl status 2>/dev/null | grep -Eiq 'Setup Mode:[[:space:]]*(Enabled|✓)'
+  sbctl status 2>/dev/null | grep -Eiq 'Setup Mode:.*Enabled'
+}
+
+enroll_secure_boot_keys() {
+  if sbctl enroll-keys -m -f; then
+    log 'enrolled Secure Boot keys with Microsoft and firmware builtin keys.'
+    return 0
+  fi
+
+  log 'sbctl could not enroll with firmware builtin keys.'
+
+  if qemu_uefi_guest || [[ "${SBCTL_ALLOW_NO_FIRMWARE_BUILTINS:-0}" == 1 ]]; then
+    log 'falling back to Microsoft keys without firmware builtin keys.'
+    if sbctl enroll-keys -m; then
+      return 0
+    fi
+  fi
+
+  if qemu_uefi_guest || [[ "${SBCTL_ALLOW_OWNER_ONLY_ENROLLMENT:-0}" == 1 ]]; then
+    log 'falling back to owner-only keys with sbctl firmware-risk override.'
+    sbctl enroll-keys --yes-this-might-brick-my-machine
+    return
+  fi
+
+  log 'refusing non-vendor/owner-only Secure Boot enrollment on physical hardware.'
+  log 'inspect missing *Default efivars or opt in manually after confirming OptionROM safety.'
+  return 1
 }
 
 sign_existing_boot_artifacts() {
   local path
+
+  if ! has_secure_boot_keys; then
+    log 'local sbctl keys are not available; skipping boot artifact signing.'
+    return 0
+  fi
 
   shopt -s nullglob
   for path in \
@@ -46,12 +97,51 @@ sign_existing_boot_artifacts() {
   done < <(sbctl verify 2>&1 || true)
 }
 
+configure_tpm_unlock_boot() {
+  local luks_device luks_uuid mapper_name options root_flags root_fstype console_args
+
+  luks_device=$1
+  luks_uuid="$(blkid -s UUID -o value "$luks_device")"
+  mapper_name="$(findmnt -no SOURCE / | sed 's|/dev/mapper/||')"
+  mapper_name="${mapper_name%%[*}"
+
+  if [[ -z "$luks_uuid" || -z "$mapper_name" ]]; then
+    log 'missing LUKS UUID or mapper name; skipping TPM boot configuration.'
+    return 0
+  fi
+
+  if ! grep -Eq '^HOOKS=.*sd-encrypt' /etc/mkinitcpio.conf; then
+    sed -i 's/^HOOKS=.*/HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block sd-encrypt filesystems fsck)/' /etc/mkinitcpio.conf
+    log 'switched mkinitcpio hooks from encrypt to sd-encrypt for TPM2 unlock.'
+  fi
+
+  root_flags="$(findmnt -no OPTIONS / | tr ',' '\n' | grep '^subvol=' | head -n1 || true)"
+  root_fstype="$(findmnt -no FSTYPE / || true)"
+  console_args="$(tr ' ' '\n' < /etc/kernel/cmdline 2>/dev/null | grep '^console=' | xargs || true)"
+  options="rd.luks.name=$luks_uuid=$mapper_name rd.luks.options=tpm2-device=auto root=/dev/mapper/$mapper_name rw"
+  if [[ -n "$root_flags" ]]; then
+    options="$options rootflags=$root_flags"
+  fi
+  if [[ -n "$root_fstype" ]]; then
+    options="$options rootfstype=$root_fstype"
+  fi
+  if [[ -n "$console_args" ]]; then
+    options="$options $console_args"
+  fi
+  printf '%s\n' "$options" > /etc/kernel/cmdline
+  log 'updated /etc/kernel/cmdline for systemd TPM2 unlock.'
+
+  mkinitcpio -P
+  sign_existing_boot_artifacts
+}
+
 root_luks_device() {
   local mapper source
 
   source="$(findmnt -no SOURCE / || true)"
   if [[ "$source" == /dev/mapper/* ]]; then
     mapper="${source#/dev/mapper/}"
+    mapper="${mapper%%[*}"
     cryptsetup status "$mapper" 2>/dev/null \
       | awk -F: '/^[[:space:]]*device:/ { gsub(/^[[:space:]]+/, "", $2); print $2; exit }'
     return
@@ -65,7 +155,7 @@ root_luks_device() {
 }
 
 enroll_tpm_for_root_luks() {
-  local luks_device passphrase
+  local luks_device passphrase passphrase_file
 
   if [[ ! -e /sys/class/tpm/tpm0 ]]; then
     log 'TPM2 device not found; skipping TPM enrollment.'
@@ -80,6 +170,7 @@ enroll_tpm_for_root_luks() {
 
   if cryptsetup luksDump "$luks_device" | grep -q 'systemd-tpm2'; then
     log "TPM2 token already enrolled for $luks_device."
+    configure_tpm_unlock_boot "$luks_device"
     return 0
   fi
 
@@ -95,23 +186,29 @@ enroll_tpm_for_root_luks() {
     return 0
   fi
 
-  printf '%s' "$passphrase" \
-    | systemd-cryptenroll "$luks_device" \
-      --unlock-key-file=- \
-      --tpm2-device=auto \
-      --tpm2-pcrs=7
+  passphrase_file="$(mktemp)"
+  chmod 600 "$passphrase_file"
+  printf '%s' "$passphrase" > "$passphrase_file"
+  systemd-cryptenroll "$luks_device" \
+    --unlock-key-file="$passphrase_file" \
+    --tpm2-device=auto \
+    --tpm2-pcrs=7
+  shred -u "$passphrase_file" 2>/dev/null || rm -f "$passphrase_file"
 
   shred -u /etc/ux5606-luks-passphrase 2>/dev/null || rm -f /etc/ux5606-luks-passphrase
 
   if ! grep -qF 'tpm2-device=auto' /etc/crypttab 2>/dev/null; then
     local mapper_name uuid
     mapper_name="$(findmnt -no SOURCE / | sed 's|/dev/mapper/||')"
+    mapper_name="${mapper_name%%[*}"
     uuid="$(blkid -s UUID -o value "$luks_device")"
     if [[ -n "$mapper_name" && -n "$uuid" ]]; then
       printf '%s\tUUID=%s\tnone\ttpm2-device=auto\n' "$mapper_name" "$uuid" >> /etc/crypttab
       log "added /etc/crypttab entry: $mapper_name UUID=$uuid tpm2-device=auto"
     fi
   fi
+
+  configure_tpm_unlock_boot "$luks_device"
 }
 
 main() {
@@ -140,12 +237,21 @@ main() {
   if ! has_secure_boot_keys; then
     if firmware_setup_mode_enabled; then
       sbctl create-keys
-      sbctl enroll-keys -m -f
     else
-      log 'firmware is not in Setup Mode; skipping key creation/enrollment until the next boot.'
+      log 'firmware is not in Setup Mode; skipping key creation/enrollment.'
       log 'put firmware in Setup Mode, then rerun: sudo systemctl start ux5606-secureboot-tpm-enroll.service'
+    fi
+  fi
+
+  if firmware_setup_mode_enabled; then
+    if ! enroll_secure_boot_keys; then
+      sign_existing_boot_artifacts
+      log 'key enrollment incomplete; skipping TPM2 PCR7 enrollment and leaving service pending.'
       return 0
     fi
+    sign_existing_boot_artifacts
+    log 'Secure Boot keys enrolled; reboot once before TPM2 PCR7 enrollment.'
+    return 0
   fi
 
   sign_existing_boot_artifacts
