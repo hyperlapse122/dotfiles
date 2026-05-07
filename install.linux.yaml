@@ -27,8 +27,12 @@
     ~/.gitconfig.d/linux.gitconfig: home/.gitconfig.d/linux.gitconfig
 
     # Linux-only IME and hardware tooling
+    ~/.config/autostart: home/.config/autostart
+    ~/.config/containers: home/.config/containers
+    ~/.config/environment.d: home/.config/environment.d
     ~/.config/fcitx5: home/.config/fcitx5
     ~/.config/solaar/rules.yaml: home/.config/solaar/rules.yaml
+    ~/.config/zed: home/.config/zed
     ~/.local/share/applications: home/.local/share/applications
 
     # VS Code on Linux (path differs on macOS / Windows; see those yaml files).

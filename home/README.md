@@ -7,6 +7,8 @@ Files in this directory symlink into `$HOME` via dotbot. The path layout under `
 | `home/.gitconfig` | `~/.gitconfig` |
 | `home/.config/nvim/init.lua` | `~/.config/nvim/init.lua` |
 | `home/.agents/` | `~/.agents/` |
+| `home/.config/environment.d/` | `~/.config/environment.d/` |
+| `home/.config/zed/` | `~/.config/zed/` |
 | `home/.local/share/applications/` | `~/.local/share/applications/` |
 
 ## Conventions
@@ -15,7 +17,7 @@ Files in this directory symlink into `$HOME` via dotbot. The path layout under `
 - **OS-specific files** are linked from [`../install.linux.yaml`](../install.linux.yaml), [`../install.macos.yaml`](../install.macos.yaml), or [`../install.windows.yaml`](../install.windows.yaml).
 - The location of the file inside `home/` does NOT determine which OS gets it — the `link:` block in the matching yaml does. You can place a Linux-only file under `home/.config/foo/` and only link it from `install.linux.yaml`.
 - Use forward slashes in YAML paths even for Windows targets (e.g. `~/AppData/...`).
-- Linux desktop entries live under `home/.local/share/applications/` and are linked only from `install.linux.yaml`.
+- Linux-only desktop, container, `environment.d`, editor, and SSH snippets live under their mirrored `home/` paths and are linked only from `install.linux.yaml`.
 
 ## Don't put here
 
