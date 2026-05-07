@@ -9,7 +9,7 @@ Cross-platform dotfiles for **Windows + macOS + Arch Linux**, managed by [dotbot
 ### macOS / Linux
 
 ```sh
-git clone https://github.com/hyperlapse122/dotfiles-next.git ~/dotfiles
+git clone https://github.com/hyperlapse122/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 ./install.sh
 ```
@@ -17,7 +17,7 @@ cd ~/dotfiles
 ### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/hyperlapse122/dotfiles-next.git $HOME\dotfiles
+git clone https://github.com/hyperlapse122/dotfiles.git $HOME\dotfiles
 cd $HOME\dotfiles
 .\install.ps1
 ```

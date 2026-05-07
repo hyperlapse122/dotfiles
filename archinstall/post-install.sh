@@ -22,7 +22,7 @@
 set -euo pipefail
 
 USERNAME="${1:-}"
-REPO_URL="${2:-https://github.com/hyperlapse122/dotfiles-next.git}"
+REPO_URL="${2:-https://github.com/hyperlapse122/dotfiles.git}"
 
 if [[ -z "$USERNAME" || "$USERNAME" == "root" ]]; then
   printf 'post-install.sh: usage: %s <username> [repo-url]\n' "$0" >&2

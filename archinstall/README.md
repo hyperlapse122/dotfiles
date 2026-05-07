@@ -54,7 +54,7 @@ Recommended `custom_commands` entry in `user_configuration.json`:
 
 ```json
 "custom_commands": [
-  "curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles-next/main/archinstall/post-install.sh | bash -s -- <username>"
+  "curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles/main/archinstall/post-install.sh | bash -s -- <username>"
 ]
 ```
 
