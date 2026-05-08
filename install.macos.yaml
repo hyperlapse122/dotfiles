@@ -28,6 +28,12 @@
       glob: true
       path: home/.config/Code/User/*.json
 
+    # Docker credential helpers (Linux/macOS only - Windows uses PATHEXT and
+    # expects .exe/.bat/.cmd, see header comments in each script). Source
+    # files are tracked at mode 100755; the symlink preserves the exec bit.
+    ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
+    ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
+
 # macOS rarely needs root-owned files in /etc/. If you ever do, mirror the
 # Linux pattern: place files under system/macos/ and `shell:` out via
 # `sudo install -D -m <mode>`. See AGENTS.md "Root-owned config".

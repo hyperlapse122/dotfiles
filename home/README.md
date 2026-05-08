@@ -10,6 +10,7 @@ Files in this directory symlink into `$HOME` via dotbot. The path layout under `
 | `home/.config/environment.d/` | `~/.config/environment.d/` |
 | `home/.config/zed/` | `~/.config/zed/` |
 | `home/.local/share/applications/` | `~/.local/share/applications/` |
+| `home/.local/bin/`                | `~/.local/bin/`                |
 
 ## Conventions
 
