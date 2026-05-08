@@ -10,9 +10,6 @@
       relink: true
 
 - link:
-    # zsh (zprezto-based; same path on macOS - duplicated in install.macos.yaml).
-    # Glob picks up every home/.z* dotfile (.zshrc, .zshenv, .zprofile, .zlogin,
-    # .zlogout, .zpreztorc) without listing each.
     ~/:
       glob: true
       path: home/.z*
@@ -27,13 +24,9 @@
     ~/.gitconfig.d/linux.gitconfig: home/.gitconfig.d/linux.gitconfig
 
     # Linux-only IME and hardware tooling
-    ~/.config/autostart: home/.config/autostart
-    ~/.config/containers: home/.config/containers
-    ~/.config/environment.d: home/.config/environment.d
-    ~/.config/fcitx5: home/.config/fcitx5
-    ~/.config/solaar/rules.yaml: home/.config/solaar/rules.yaml
-    ~/.config/zed: home/.config/zed
-    ~/.local/share/applications: home/.local/share/applications
+    ~/.config/:
+      glob: true
+      path: home/.config/**/*
 
     # VS Code on Linux (path differs on macOS / Windows; see those yaml files).
     # Only the two tracked *.json files - VS Code writes lots of state into
