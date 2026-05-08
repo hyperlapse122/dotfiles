@@ -34,6 +34,14 @@
     ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
     ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
 
+# Configure glab with script
+- shell:
+    - command: sh scripts/setup-glab.sh
+      description: Set up glab cli
+      stdin: true
+      stdout: true
+      stderr: true
+
 # macOS rarely needs root-owned files in /etc/. If you ever do, mirror the
 # Linux pattern: place files under system/macos/ and `shell:` out via
 # `sudo install -D -m <mode>`. See AGENTS.md "Root-owned config".

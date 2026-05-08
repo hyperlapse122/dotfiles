@@ -41,6 +41,14 @@
     ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
     ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
 
+# Configure glab with script
+- shell:
+    - command: sh scripts/setup-glab.sh
+      description: Set up glab cli
+      stdin: true
+      stdout: true
+      stderr: true
+
 # Root-owned system config. Delegated to scripts/install-linux-system-config.sh
 # so a single `sudo` prompt covers all files (sudo's credential cache makes
 # subsequent installs in that script password-less). The script also no-ops the
