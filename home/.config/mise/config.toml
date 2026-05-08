@@ -1,2 +1,69 @@
+[tools]
+bun = "latest"
+go = "latest"
+node = "latest"
+yarn = "latest"
+rust = { version = "latest", components = "rust-analyzer,rust-src" }
+usage = "latest"
+uv = "latest"
+"cargo:git-trim" = "latest"
+"npm:@biomejs/biome" = "latest"
+"npm:@bufbuild/buf" = "latest"
+pipx = { version = "latest", os = ["linux", "macos"] }
+"npm:@electron/asar" = "latest"
+"github:rust-lang/rust-analyzer" = "latest"
+"npm:typescript-language-server" = "latest"
+ruby = [
+  { version = "latest", os = ["linux", "macos"] },
+  { version = "3.4", os = ["linux", "macos"] },
+  { version = "3.2", os = ["linux", "macos"] }
+]
+"npm:npm" = "latest"
+"npm:shadcn" = "latest"
+ast-grep = "latest"
+"npm:tokscale" = "latest"
+"npm:sharp-cli" = "latest"
+"npm:portless" = "latest"
+glab = { version = "latest", exe = "glab" }
+"npm:node-gyp" = "latest"
+
+# agentic ai
+"npm:@google/gemini-cli" = "latest"
+"npm:@openai/codex" = "latest"
+claude-code = "latest"
+
+# opencode
+"npm:opencode-ai" = { version = "latest", os = ["windows"] }
+
+[tools."github:wakatime/wakatime-cli"]
+version = "latest"
+rename_exe = "wakatime-cli"
+os = ["linux", "macos"]
+
+[tools."github:wakatime/wakatime-cli".platforms]
+linux-x64 = { asset_pattern = "wakatime-cli-linux-amd64.zip" }
+linux-arm64 = { asset_pattern = "wakatime-cli-linux-arm64.zip" }
+macos-arm64 = { asset_pattern = "wakatime-cli-darwin-arm64.zip" }
+macos-x64 = { asset_pattern = "wakatime-cli-darwin-amd64.zip" }
+
+[tools."github:anomalyco/opencode"]
+version = "latest"
+rename_exe = "opencode"
+os = ["linux", "macos"]
+
+[tools."github:anomalyco/opencode".platforms]
+linux-x64 = { asset_pattern = "opencode-linux-x64.tar.gz" }
+linux-arm64 = { asset_pattern = "opencode-linux-arm64.tar.gz" }
+macos-arm64 = { asset_pattern = "opencode-darwin-arm64.zip" }
+
 [settings]
+idiomatic_version_file_enable_tools = []
+experimental = true
 all_compile = false
+
+[settings.ruby]
+compile = false
+
+[env]
+OPENCODE_DISABLE_DEFAULT_PLUGINS = true
+OPENCODE_EXPERIMENTAL_WORKSPACES = true
