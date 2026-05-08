@@ -1,11 +1,30 @@
-# zsh environment, sourced for all zsh invocations.
-# Cross-platform: graceful fallback when zsh-prezto isn't installed
-# (e.g. before yay -S zsh-prezto on Arch, or before brew install on macOS).
-for _prezto_zshenv in \
-  /usr/share/zsh-prezto/runcoms/zshenv \
-  /opt/homebrew/opt/zsh-prezto/runcoms/zshenv \
-  /usr/local/opt/zsh-prezto/runcoms/zshenv
-do
-  [ -r "$_prezto_zshenv" ] && source "$_prezto_zshenv" && break
-done
-unset _prezto_zshenv
+#
+# Defines environment variables.
+#
+# Authors:
+#   Sorin Ionescu <sorin.ionescu@gmail.com>
+#
+
+export DOTNET_ROOT="$HOME/.dotnet"
+
+# Set the list of directories that Zsh searches for programs.
+path=(
+  $DOTNET_ROOT(N)
+  $DOTNET_ROOT/tools(N)
+  $HOME/.local/bin(N)
+  $HOME/{,s}bin(N)
+  $HOME/.lmstudio/bin(N)
+  /opt/{homebrew,local}/{,s}bin(N)
+  /usr/local/{,s}bin(N)
+  '/Applications/Visual Studio Code.app/Contents/Resources/app/bin'(N)
+  '/opt/homebrew/opt/ffmpeg-full/bin'(N)
+  '/Applications/Obsidian.app/Contents/MacOS'(N)
+  $path
+)
+
+eval "$(mise activate zsh)"
+
+# Ensure that a non-login, non-interactive shell has a defined environment.
+if [[ ( "$SHLVL" -eq 1 && ! -o LOGIN ) && -s "${ZDOTDIR:-$HOME}/.zprofile" ]]; then
+  source "${ZDOTDIR:-$HOME}/.zprofile"
+fi

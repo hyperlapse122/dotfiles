@@ -1,9 +1,93 @@
-# zsh login shell profile. See AGENTS.md for the migration rationale.
-for _prezto_zprofile in \
-  /usr/share/zsh-prezto/runcoms/zprofile \
-  /opt/homebrew/opt/zsh-prezto/runcoms/zprofile \
-  /usr/local/opt/zsh-prezto/runcoms/zprofile
-do
-  [ -r "$_prezto_zprofile" ] && source "$_prezto_zprofile" && break
-done
-unset _prezto_zprofile
+#
+# Executes commands at login pre-zshrc.
+#
+# Authors:
+#   Sorin Ionescu <sorin.ionescu@gmail.com>
+#
+
+#
+# Browser
+#
+
+if [[ -z "$BROWSER" && "$OSTYPE" == darwin* ]]; then
+  export BROWSER='open'
+fi
+
+#
+# Editors
+#
+
+if [[ -z "$EDITOR" ]]; then
+  export EDITOR='nano'
+fi
+if [[ -z "$VISUAL" ]]; then
+  export VISUAL='nano'
+fi
+if [[ -z "$PAGER" ]]; then
+  export PAGER='less'
+fi
+
+#
+# Language
+#
+
+if [[ -z "$LANG" ]]; then
+  export LANG='en_US.UTF-8'
+fi
+
+#
+# Paths
+#
+
+# Ensure path arrays do not contain duplicates.
+typeset -gU cdpath fpath mailpath path
+
+# Set the list of directories that cd searches.
+# cdpath=(
+#   $cdpath
+# )
+
+export DOTNET_ROOT="$HOME/.dotnet"
+
+# Set the list of directories that Zsh searches for programs.
+path=(
+  $DOTNET_ROOT(N)
+  $DOTNET_ROOT/tools(N)
+  $HOME/.local/bin(N)
+  $HOME/{,s}bin(N)
+  $HOME/.lmstudio/bin(N)
+  /opt/{homebrew,local}/{,s}bin(N)
+  /usr/local/{,s}bin(N)
+  '/Applications/Visual Studio Code.app/Contents/Resources/app/bin'(N)
+  '/opt/homebrew/opt/ffmpeg-full/bin'(N)
+  '/Applications/Obsidian.app/Contents/MacOS'(N)
+  $path
+)
+
+#
+# Less
+#
+
+# Set the default Less options.
+# Mouse-wheel scrolling has been disabled by -X (disable screen clearing).
+# Remove -X to enable it.
+if [[ -z "$LESS" ]]; then
+  export LESS='-g -i -M -R -S -w -X -z-4'
+fi
+
+# Set the Less input preprocessor.
+# Try both `lesspipe` and `lesspipe.sh` as either might exist on a system.
+if [[ -z "$LESSOPEN" ]] && (( $#commands[(i)lesspipe(|.sh)] )); then
+  export LESSOPEN="| /usr/bin/env $commands[(i)lesspipe(|.sh)] %s 2>&-"
+fi
+
+# Get OS information
+os=$(uname)
+
+# Configure macOS settings
+if [[ "$os" == "Darwin" ]]; then
+  # Homebrew
+  eval "$(brew shellenv)"
+fi
+
+[[ -f ~/.orbstack/shell/init.zsh ]] && source ~/.orbstack/shell/init.zsh
