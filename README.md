@@ -43,9 +43,11 @@ For the Lenovo ThinkPad T14 Gen 2 profile, follow the physical install guide in 
 
 | Platform | Required |
 |---|---|
-| macOS | `bash`, `curl`, `git`, [`mise`](https://mise.jdx.dev/) (Xcode Command Line Tools cover the first three) |
-| Linux | `bash`, `curl`, `git`, [`mise`](https://mise.jdx.dev/) |
+| macOS | `bash`, `curl`, `git`, `unzip`, [`mise`](https://mise.jdx.dev/) (Xcode Command Line Tools cover all but `mise`) |
+| Linux | `bash`, `curl`, `git`, `unzip`, [`mise`](https://mise.jdx.dev/) |
 | Windows | PowerShell 5.1+, [`mise`](https://mise.jdx.dev/), [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/developer-mode-features-and-debugging) enabled (or run as Administrator) for symlink creation |
+
+`unzip` is needed by [`scripts/install-fonts.sh`](./scripts/install-fonts.sh) (Windows uses built-in `Expand-Archive`).
 
 Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap scripts. dotbot itself is **never installed** — mise provides [`uv`](https://docs.astral.sh/uv/) for the invocation, and `uvx dotbot` runs dotbot ephemerally from PyPI every time.
 
@@ -65,4 +67,6 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 
 ## Re-running
 
-`./install.sh` and `.\install.ps1` are idempotent — dotbot's `relink: true` default replaces existing symlinks in place. Re-run after every `git pull`.
+`./install.sh` and `.\install.ps1` are idempotent — dotbot's `relink: true` default replaces existing symlinks in place, and [`scripts/install-fonts.{sh,ps1}`](./scripts/) skip fonts already on disk via marker check. Re-run after every `git pull`.
+
+The first run downloads ~150 MB of fonts (Pretendard, JetBrains Mono, D2Coding, plus Nerd Font variants of the latter two) into the user font directory — `~/.local/share/fonts` on Linux, `~/Library/Fonts` on macOS, `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows. Run [`scripts/install-fonts.{sh,ps1}`](./scripts/) directly with `--force` / `-Force` to refresh fonts later.

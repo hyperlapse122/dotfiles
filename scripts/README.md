@@ -7,6 +7,21 @@ Helpers shared by `install.sh` and `install.ps1`.
 | Script | Platform | Called by | Purpose |
 |---|---|---|---|
 | `install-linux-system-config.sh` | Linux only | `install.linux.yaml` `shell:` step | Recursively discovers files in `system/linux/etc/` and runs `sudo install -D -m 644` to their absolute paths |
+| `install-fonts.sh` / `install-fonts.ps1` | macOS+Linux / Windows | `install.<os>.yaml` `shell:` step (also runnable manually) | Installs desktop fonts user-wide from GitHub Releases. Skips already-installed fonts unless `--force` / `-Force`. Add fonts via the registry block at the top of each script |
+| `configure-kde-fonts.sh` | Linux only (KDE Plasma 6) | manual | Sets KDE display fonts in `~/.config/kdeglobals` via `kwriteconfig6`: sans-serif (`font`, `menuFont`, `toolBarFont`, `smallestReadableFont`, `[WM] activeFont`) → Pretendard, monospace (`fixed`) → JetBrainsMono Nerd Font. No-ops (exit 0) when `kwriteconfig6` or `plasmashell` is missing. Errors if a requested font isn't installed (run `install-fonts.sh` first). Restart `plasmashell` or re-login to fully apply |
+
+## Adding a new font
+
+Both `install-fonts.sh` and `install-fonts.ps1` keep their list of fonts in a single registry block at the top of the file. Append one entry **to both files** (the parity rule applies to data, not just code):
+
+- **Bash** (pipe-delimited): `name|repo|asset_pattern|marker_glob|src_dirs`
+- **PowerShell** (hashtable): `Name`, `Repo`, `AssetPattern`, `Marker`, `SourceDirs`
+
+`asset_pattern` / `AssetPattern` is a glob handed to `gh release download --pattern`; it MUST match exactly one asset in the upstream repo's latest release.
+
+`marker_glob` / `Marker` is a filename or glob (e.g. `D2Coding-Ver*.ttf`). Any file in the user font directory matching the pattern means "already installed" and the entry is skipped — pass `--force` / `-Force` to override. Pick a marker distinct from other entries' markers to avoid false positives.
+
+`src_dirs` / `SourceDirs` lists directories *inside the unzipped archive* whose `.ttf`, `.otf`, and `.ttc` files should be installed. Use `.` (or `./`) for the archive root. Other files (e.g. `web/`, `webfonts/`, `LICENSE`) are ignored.
 
 ## Script parity rule
 

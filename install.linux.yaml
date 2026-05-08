@@ -59,3 +59,28 @@
       stdin: true
       stdout: true
       stderr: true
+
+# Install desktop fonts to ~/.local/share/fonts/ (no sudo). Placed AFTER the
+# sudo step above so the sudo prompt fires while the user is still attentive;
+# the slow first-run font downloads (~150 MB for Nerd Fonts) can then run
+# unattended. Idempotent: skips fonts already present via marker check.
+- shell:
+    - command: bash scripts/install-fonts.sh
+      description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Configure KDE Plasma 6 display fonts to Pretendard (sans) + JetBrainsMono
+# Nerd Font (mono). Hard-guarded: no-ops (exit 0) when kwriteconfig6 or
+# plasmashell is absent, so this is safe to run on non-KDE Linux (GNOME, sway,
+# headless servers, arch-chroot during archinstall, etc.). Must run AFTER
+# install-fonts.sh: that step finishes with `fc-cache -f`, so fc-match in this
+# script sees the just-installed fonts. Re-runnable; kwriteconfig6 overwrites
+# the same six keys atomically.
+- shell:
+    - command: bash scripts/configure-kde-fonts.sh
+      description: Configure KDE display fonts (skipped on non-KDE systems)
+      stdin: true
+      stdout: true
+      stderr: true

@@ -42,6 +42,15 @@
       stdout: true
       stderr: true
 
+# Install desktop fonts to ~/Library/Fonts/ (no admin). Idempotent: skips
+# fonts already present via marker check. Pass `--force` to reinstall.
+- shell:
+    - command: bash scripts/install-fonts.sh
+      description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
+      stdin: true
+      stdout: true
+      stderr: true
+
 # macOS rarely needs root-owned files in /etc/. If you ever do, mirror the
 # Linux pattern: place files under system/macos/ and `shell:` out via
 # `sudo install -D -m <mode>`. See AGENTS.md "Root-owned config".

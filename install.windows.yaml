@@ -36,3 +36,13 @@
       stdin: true
       stdout: true
       stderr: true
+
+# Install desktop fonts to %LOCALAPPDATA%\Microsoft\Windows\Fonts (no admin;
+# Win10 1803+). Idempotent: skips fonts already present via marker check.
+# Pass `-Force` to reinstall.
+- shell:
+    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-fonts.ps1
+      description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
+      stdin: true
+      stdout: true
+      stderr: true
