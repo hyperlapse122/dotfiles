@@ -84,3 +84,18 @@
       stdin: true
       stdout: true
       stderr: true
+
+# Configure KDE Plasma 6 touchpad: natural scroll + clickfinger right-click
+# (two-finger tap = right-click) on devices listed in TARGET_NAMES. Hard-
+# guarded: no-ops (exit 0) when busctl/plasmashell are absent OR when
+# org.kde.KWin is not on the session bus (no active Plasma session, e.g.
+# arch-chroot, headless servers, GNOME). Setting touchpad config requires
+# talking to a running KWin via DBus, so during an unattended install this
+# step skips and the user re-runs `./install.sh` from inside their Plasma
+# session to apply. Re-runnable; each set-property is idempotent.
+- shell:
+    - command: bash scripts/configure-kde-touchpad.sh
+      description: Configure KDE touchpad (natural scroll + clickfinger; skipped without active Plasma session)
+      stdin: true
+      stdout: true
+      stderr: true
