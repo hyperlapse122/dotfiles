@@ -1,48 +1,48 @@
 [
-  {
-    "args": {
-      "text": "\\\r\n"
-    },
-    "command": "workbench.action.terminal.sendSequence",
-    "key": "shift+enter",
-    "when": "terminalFocus"
-  },
-  {
-    "args": {
-      "text": "\\\r\n"
-    },
-    "command": "workbench.action.terminal.sendSequence",
-    "key": "ctrl+enter",
-    "when": "terminalFocus"
-  },
-  {
-    "command": "deleteFile",
-    "key": "backspace",
-    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
-  },
-  {
-    "command": "deleteFile",
-    "key": "backspace",
-    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
-  },
-  {
-    "command": "deleteFile",
-    "key": "delete",
-    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
-  },
-  {
-    "command": "deleteFile",
-    "key": "shift+delete",
-    "when": "filesExplorerFocus && foldersViewVisible && !explorerResourceMoveableToTrash && !inputFocus"
-  },
-  {
-    "command": "-deleteFile",
-    "key": "shift+delete",
-    "when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
-  },
-  {
-    "command": "-deleteFile",
-    "key": "delete",
-    "when": "filesExplorerFocus && foldersViewVisible && !explorerResourceMoveableToTrash && !inputFocus"
-  }
+	{
+		"args": {
+			"text": "\\\r\n"
+		},
+		"command": "workbench.action.terminal.sendSequence",
+		"key": "shift+enter",
+		"when": "terminalFocus"
+	},
+	{
+		"args": {
+			"text": "\\\r\n"
+		},
+		"command": "workbench.action.terminal.sendSequence",
+		"key": "ctrl+enter",
+		"when": "terminalFocus"
+	},
+	{
+		"command": "deleteFile",
+		"key": "backspace",
+		"when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+	},
+	{
+		"command": "deleteFile",
+		"key": "backspace",
+		"when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+	},
+	{
+		"command": "deleteFile",
+		"key": "delete",
+		"when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+	},
+	{
+		"command": "deleteFile",
+		"key": "shift+delete",
+		"when": "filesExplorerFocus && foldersViewVisible && !explorerResourceMoveableToTrash && !inputFocus"
+	},
+	{
+		"command": "-deleteFile",
+		"key": "shift+delete",
+		"when": "filesExplorerFocus && foldersViewVisible && !inputFocus"
+	},
+	{
+		"command": "-deleteFile",
+		"key": "delete",
+		"when": "filesExplorerFocus && foldersViewVisible && !explorerResourceMoveableToTrash && !inputFocus"
+	}
 ]

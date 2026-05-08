@@ -1,28 +1,28 @@
 [
-  {
-    "context": "Workspace",
-    "bindings": {}
-  },
-  {
-    "context": "Editor && vim_mode == insert",
-    "bindings": {}
-  },
-  {
-    "bindings": {
-      "cmd-alt-o": [
-        "agent::NewExternalAgentThread",
-        {
-          "agent": {
-            "custom": {
-              "name": "OpenCode",
-              "command": {
-                "command": "opencode",
-                "args": ["acp"]
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
+	{
+		"context": "Workspace",
+		"bindings": {}
+	},
+	{
+		"context": "Editor && vim_mode == insert",
+		"bindings": {}
+	},
+	{
+		"bindings": {
+			"cmd-alt-o": [
+				"agent::NewExternalAgentThread",
+				{
+					"agent": {
+						"custom": {
+							"name": "OpenCode",
+							"command": {
+								"command": "opencode",
+								"args": ["acp"]
+							}
+						}
+					}
+				}
+			]
+		}
+	}
 ]
