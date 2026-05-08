@@ -7,7 +7,7 @@
 
 # Set the list of directories that Zsh searches for programs.
 path=(
-  "$HOME/tools/.dotnet"(N)
+  "$HOME/.dotnet/tools"(N)
   $HOME/.local/bin(N)
   $HOME/{,s}bin(N)
   $HOME/.lmstudio/bin(N)
