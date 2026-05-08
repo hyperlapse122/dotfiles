@@ -47,7 +47,9 @@
 				"lsp",
 				"serve"
 			],
-			"extensions": [".proto"]
+			"extensions": [
+				".proto"
+			]
 		},
 		"typescript": {
 			"command": [
@@ -98,7 +100,7 @@
 		}
 	},
 	"plugin": [
-		"oh-my-openagent@3.17.15",
+		"oh-my-openagent@latest",
 		"@ex-machina/opencode-anthropic-auth@latest",
 		"opencode-gemini-auth@latest"
 	],
