@@ -24,3 +24,15 @@
 
     # Per-OS git overrides (referenced via [include] in home/.config/git/config)
     ~/.gitconfig.d/windows.gitconfig: home/.gitconfig.d/windows.gitconfig
+
+# Configure glab with PowerShell counterpart of setup-glab.sh.
+# `-NoProfile` skips the user's PS profile (avoids unrelated errors blocking
+# bootstrap); `-ExecutionPolicy Bypass` lets the unsigned script run without
+# requiring a system policy change. Forward slashes in -File are fine -
+# PowerShell parses the path itself.
+- shell:
+    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-glab.ps1
+      description: Set up glab cli
+      stdin: true
+      stdout: true
+      stderr: true
