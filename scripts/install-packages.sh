@@ -15,7 +15,7 @@ fi
 
 fedora() {
   "${SUDO[@]}" dnf copr enable alternateved/keyd -y
-  "${SUDO[@]}" dnf install fcitx5 fcitx5-hangul keyd dotnet-sdk-10.0 dotnet-sdk-8.0 ripgrep -y
+  "${SUDO[@]}" dnf install fcitx5 fcitx5-hangul keyd dotnet-sdk-10.0 dotnet-sdk-8.0 ripgrep solaar solaar-udev -y
 }
 
 dotnet-tools() {
