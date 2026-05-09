@@ -14,6 +14,8 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 .
 ├── AGENTS.md
 ├── README.md                        # User quickstart, top-level
+├── .agents/                         # Repo-local agent skills
+├── agents/                          # Cross-tool agent rules linked into ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ...
 ├── install.conf.yaml                # Shared dotbot tasks (all OSes)
 ├── install.linux.yaml               # Linux-only dotbot tasks
 ├── install.macos.yaml               # macOS-only dotbot tasks
@@ -21,6 +23,8 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── install.sh                       # Bootstrap for macOS + Linux
 ├── install.ps1                      # Bootstrap for Windows
 ├── home/                            # Files that symlink into $HOME (home/foo -> ~/foo)
+│   ├── .agents/                     # Runtime agent skill tree linked to ~/.agents
+│   └── .config/opencode/            # OpenCode config and global agent rules
 ├── system/<os>/                     # Root-owned files mirroring absolute paths,
 │                                    # e.g. system/linux/etc/NetworkManager/conf.d/...
 │                                    # NOT installed via dotbot — see "Root-owned config".
@@ -33,7 +37,7 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 └── scripts/                         # Helpers used by install scripts
 ```
 
-Every top-level directory MUST have its own `README.md` describing what lives there and how it is consumed.
+Every tracked top-level directory MUST have its own `README.md` describing what lives there and how it is consumed. Untracked tool state directories such as `.git/`, `.codex/`, and `.sisyphus/` are not part of the documented repo surface.
 
 ## Hard rules
 
@@ -86,6 +90,18 @@ The Linux installer discovers files with a recursive glob under `system/linux/et
 
 NetworkManager unmanaged-device rules live as split drop-ins under `system/linux/etc/NetworkManager/conf.d/`, matching the legacy dotfiles layout. Do not consolidate them into a monolithic `NetworkManager.conf` — that file is intentionally absent from this repo.
 
+Current Linux root-owned config includes NetworkManager unmanaged-device drop-ins, keyd defaults, a libinput local override, `locale.conf`, Plymouth config, and a Logitech receiver udev rule. These are all installed mode `0644` by `scripts/install-linux-system-config.sh`.
+
+### Runtime agent config
+
+- `.agents/skills/` contains repo-local skills that are part of this dotfiles source tree. The `archinstall-host` skill is required for adding a new Arch host.
+- `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime. Do not describe it as Nix-managed.
+- `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
+- `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
+- `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global AGENTS.md path: `~/.config/opencode/AGENTS.md` (OpenCode) and `~/.codex/AGENTS.md` (Codex). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
+- `home/.config/opencode/AGENTS.md` MUST NOT exist. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md` (managed in `install.conf.yaml`); a sibling source under `home/.config/opencode/` would conflict with that link. Put cross-tool rules in `agents/SHARED_AGENTS.md`. Put OpenCode-only rules in a new file under `agents/` linked separately from `install.conf.yaml`.
+- Keep all agent rule files in sync when changing agent workflow rules. In this repo that currently means this file, `home/AGENTS.md`, `agents/AGENTS.md`, and `agents/SHARED_AGENTS.md`. The shared file is loaded globally by OpenCode and Codex via the symlinks above, so changes propagate to both tools immediately.
+
 ### archinstall (Arch Linux only)
 
 - archinstall has **no separate post-install `--script` hook**. The `--script` flag selects the installer flavor (`guided`, `minimal`, ...), not a user post-install step. The actual post-install hook is the `custom_commands` array in `user_configuration.json`. Each entry runs in `arch-chroot` of the new system, after package install and before unmount.
@@ -128,6 +144,10 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 - Hand-editing archinstall JSON without `archinstall --dry-run` to verify the current schema first.
 - Adding `.sh` without matching `.ps1`, or vice versa.
 - Adding a top-level directory without a `README.md`, or moving things without updating the layout block in this file.
+- Adding `home/.agents/AGENTS.md`. Use `home/AGENTS.md` for parent-scoped guidance instead.
+- Adding `home/.config/opencode/AGENTS.md`. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md`; a second source would conflict. Edit the shared file, or add a new tool-specific file under `agents/` with its own `link:` entry.
+- Hand-editing `~/.config/opencode/AGENTS.md` or `~/.codex/AGENTS.md`. Those are symlinks to `agents/SHARED_AGENTS.md` — edit the source.
+- Updating agent workflow rules in only one `AGENTS.md` when the change also applies to the linked runtime agent docs.
 - Editing migrated files inside `~/nix-config/`. That source tree is being abandoned — edit the copy in this repo's `home/` instead. Re-deriving from `~/nix-config/*.nix` modules is also wrong: those Nix expressions are not the canonical source post-migration.
 
 ## References
