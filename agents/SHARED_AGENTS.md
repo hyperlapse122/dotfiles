@@ -1,4 +1,4 @@
-# OpenCode Agent Instructions
+# Agent Instructions
 
 > **Precedence**: A project-level `AGENTS.md` (in the repo) **overrides** any rule here when it conflicts. Otherwise these rules apply.
 > **Style**: All directives use [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords — **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**.

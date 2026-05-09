@@ -22,6 +22,10 @@
     ~/.config/opencode/:
       glob: true
       path: home/.config/opencode/**
+    
+    # Link shared agents.md file
+    ~/.config/opencode/AGENTS.md: agents/SHARED_AGENTS.md
+    ~/.codex/AGENTS.md: agents/SHARED_AGENTS.md
 
     # git (XDG path, picked up by git on all 3 OSes)
     ~/.config/git/config: home/.config/git/config
