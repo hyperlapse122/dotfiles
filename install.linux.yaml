@@ -41,6 +41,14 @@
     ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
     ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
 
+    # XDG desktop entries (Linux DE only - macOS uses .app bundles, Windows
+    # uses Start Menu/AppX). One entry per tracked .desktop file. .desktop
+    # files reference Icon= names that must resolve via the icon theme tree
+    # below.
+    ~/.local/share/applications/:
+      glob: true
+      path: home/.local/share/applications/*
+
 # Configure glab with script
 - shell:
     - command: sh scripts/setup-glab.sh
