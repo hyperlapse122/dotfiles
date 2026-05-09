@@ -29,9 +29,13 @@ drop-in files — do not consolidate them into a monolithic `NetworkManager.conf
 
 | Subdirectory | Used for |
 |---|---|
-| `system/linux/` | Linux-only `/etc/...` and similar |
-| `system/macos/` | macOS-only system paths (rarely needed; most macOS settings live under `~/Library` and belong in `home/`) |
+| `system/linux/etc/NetworkManager/conf.d/` | NetworkManager drop-ins for loopback and unmanaged VMware, Tailscale, Docker, and veth interfaces |
+| `system/linux/etc/keyd/` | keyd keyboard remapping defaults |
+| `system/linux/etc/libinput/` | local libinput quirks |
+| `system/linux/etc/locale.conf` | system locale |
+| `system/linux/etc/plymouth/` | Plymouth boot splash config |
+| `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions |
 
-Windows system config (registry tweaks, Group Policy, etc.) is **not** managed here — it doesn't fit the "drop a file at an absolute path" model. Add a `scripts/` helper if needed.
+There is currently no `system/macos/` or `system/windows/` tree. macOS settings usually belong under `home/` because they live in user-owned `~/Library` paths. Windows system config (registry tweaks, Group Policy, etc.) is **not** managed here — it doesn't fit the "drop a file at an absolute path" model. Add a `scripts/` helper if needed.
 
 See [`../AGENTS.md`](../AGENTS.md) for the repo-wide contract.
