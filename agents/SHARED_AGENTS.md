@@ -3,6 +3,18 @@
 > **Precedence**: A project-level `AGENTS.md` (in the repo) **overrides** any rule here when it conflicts. Otherwise these rules apply.
 > **Style**: All directives use [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords — **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**.
 
+## Contents
+
+1. [Branch Naming](#branch-naming)
+2. [Commit Messages](#commit-messages)
+3. [Pull Requests / Merge Requests](#pull-requests--merge-requests)
+4. [Destructive / Bypass Operations](#destructive--bypass-operations)
+5. [Secrets](#secrets)
+6. [Figma](#figma)
+7. [Interactive / Long-Running Processes](#interactive--long-running-processes)
+8. [Rebase](#rebase)
+9. [Scripting Runtime](#scripting-runtime)
+
 ## Branch Naming
 
 **MUST** rename — never re-create — the branch when the current name is OpenCode's auto-generated `opencode/<adjective>-<noun>` form. Use `git branch -m`; the working tree, index, and history move atomically.
@@ -45,7 +57,7 @@ git checkout -b feature/add-auth-flow                      # ❌ leaves opencode
 | `chore`    | Maintenance                              |
 | `revert`   | Reverting a previous commit              |
 
-- **Subject**: lowercase, imperative, no period, ≤72 chars.
+- **Subject**: lowercase, imperative, no period, ≤50 chars (≤72 max).
 - **Scope** (optional): module/area — `feat(auth): add JWT refresh`.
 - **Body** (optional): explain *why*, not *what*. Wrap at 72 chars.
 - **Breaking change**: `!` after type/scope **and** `BREAKING CHANGE:` footer.
@@ -139,5 +151,7 @@ If you picked the wrong side or merged in the wrong direction: `git rebase --abo
 
 **MUST NOT** use Python for any new scripting, tooling, or codegen task.
 **MUST** use Node.js, Deno, or Bun (TypeScript preferred).
+
+**Shell** (`bash` for POSIX, PowerShell for Windows) is acceptable for: system bootstrap, OS-level glue, single-purpose installer scripts. **MUST NOT** use shell for application logic, codegen, or anything that benefits from types and tests — those go to TypeScript.
 
 **Exception**: an established Python project that already has Python tooling — match the project, do not fork the runtime. State the exception explicitly in the response when applying it.
