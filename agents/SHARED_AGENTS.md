@@ -25,8 +25,6 @@ git checkout -b feature/add-auth-flow                      # ❌ leaves opencode
 | `chore/`    | Maintenance / config          | `chore`              |
 | `release/`  | Release preparation           | n/a                  |
 
-**MUST** load the `git-flow-branch-creator` skill when a rename is needed — it analyzes the diff and picks the prefix.
-
 **Rule**: one task = one branch. Name needs changing → rename it. **MUST NOT** create a sibling branch for the same work.
 
 ## Commit Messages
@@ -66,8 +64,10 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 **MUST** commit and push **all** changes before opening a PR/MR. Verify both gates pass:
 
 ```bash
-git status              # MUST be clean (no uncommitted changes)
-git log @{u}..          # MUST be empty (everything pushed)
+git status                                              # MUST be clean (no uncommitted changes)
+git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
+  && git log @{u}..                                     # if upstream exists, MUST be empty
+                                                        # if no upstream: `git push -u origin <branch>` first
 ```
 
 **MUST** assign the PR/MR to the authenticated user:
@@ -94,11 +94,14 @@ Regular shell execution **WILL BLOCK** the agent session and is **forbidden** fo
 
 ## Rebase
 
-When rebasing a feature branch onto the default branch (`main`), conflicts **MUST** resolve in favor of the default branch.
+When rebasing a feature branch onto the default branch (`main`), resolve conflicts by **intent, not reflex**:
 
-Mental model: your branch carries changes *to be merged into main*. Main is the source of truth; your branch is the diff being replayed onto it.
+- **Regenerated / generated artifacts** (lockfiles, build outputs, schema migrations with sequence numbers, generated configs): take `main`'s version, then re-run the generator on top so your additions reproduce on the new base.
+- **Hand-written code**: review both sides and merge intentionally. **MUST NOT** blindly pick `--ours` or `--theirs` — that silently drops one side's work.
 
-If you accidentally picked the other side: `git rebase --abort` and restart. **MUST NOT** continue with a wrong-direction merge.
+Note: during a rebase Git's `--ours` / `--theirs` are **reversed** compared to merge. `--ours` is `main` (the rebase target you're replaying onto); `--theirs` is the feature commit being applied.
+
+If you picked the wrong side or merged in the wrong direction: `git rebase --abort` and restart. **MUST NOT** continue with a wrong-direction rebase.
 
 ## Scripting Runtime
 
