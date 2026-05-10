@@ -14,8 +14,21 @@ else
 fi
 
 fedora() {
+  # Enable keyd COPR
   "${SUDO[@]}" dnf copr enable alternateved/keyd -y
-  "${SUDO[@]}" dnf install fcitx5 fcitx5-hangul keyd dotnet-sdk-10.0 dotnet-sdk-8.0 ripgrep solaar solaar-udev -y
+  "${SUDO[@]}" dnf copr enable jdxcode/mise -y
+
+  # Install RPMFusion and set fedora-cisco-openh264.enabled to 1 for steam and discord
+  # TODO: Skip RPM Fusion installation when the package is already installed
+  "${SUDO[@]}" dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm -y
+  "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
+
+  # Install 1Password repository
+  "${SUDO[@]}" rpm --import https://downloads.1password.com/linux/keys/1password.asc
+  "${SUDO[@]}" sh -c 'echo -e "[1password]\nname=1Password Stable Channel\nbaseurl=https://downloads.1password.com/linux/rpm/stable/\$basearch\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=\"https://downloads.1password.com/linux/keys/1password.asc\"" > /etc/yum.repos.d/1password.repo'
+
+  # Install packages
+  "${SUDO[@]}" dnf install fcitx5 fcitx5-hangul keyd dotnet-sdk-10.0 dotnet-sdk-8.0 ripgrep solaar solaar-udev steam discord 1password 1password-cli mise -y
 }
 
 dotnet-tools() {
