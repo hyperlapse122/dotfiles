@@ -105,5 +105,8 @@
 		"opencode-gemini-auth@latest"
 	],
 	"provider": {},
-	"small_model": "anthropic/claude-haiku-4-5"
+	"small_model": "anthropic/claude-haiku-4-5",
+	"server": {
+		"port": 4096
+	}
 }
