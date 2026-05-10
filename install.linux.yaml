@@ -79,31 +79,24 @@
       stdout: true
       stderr: true
 
-# Configure KDE Plasma 6 display fonts to Pretendard (sans) + JetBrainsMono
-# Nerd Font (mono). Hard-guarded: no-ops (exit 0) when kwriteconfig6 or
-# plasmashell is absent, so this is safe to run on non-KDE Linux (GNOME, sway,
-# headless servers, arch-chroot during archinstall, etc.). Must run AFTER
-# install-fonts.sh: that step finishes with `fc-cache -f`, so fc-match in this
-# script sees the just-installed fonts. Re-runnable; kwriteconfig6 overwrites
-# the same six keys atomically.
+# Configure KDE Plasma 6 user-side settings in three independent steps:
+#   - fonts:    Pretendard (sans) + JetBrainsMono Nerd Font (mono) into
+#               kdeglobals via kwriteconfig6.
+#   - touchpad: libinput natural scroll + clickfinger right-click on devices
+#               in TOUCHPAD_TARGET_NAMES, via KWin's InputDeviceManager DBus.
+#   - panel:    icontasks/taskmanager `groupingStrategy = 0` ("Do not group")
+#               in plasma-org.kde.plasma.desktop-appletsrc.
+# Hard-guarded: each step no-ops (returns 0) when its prereqs are missing
+# (kwriteconfig6/busctl/plasmashell, no active Plasma session on the session
+# bus), and the whole script exits 0 on non-KDE systems - safe to run on
+# non-KDE Linux (GNOME, sway, headless servers, arch-chroot during
+# archinstall, etc.). MUST run AFTER install-fonts.sh: that step finishes
+# with `fc-cache -f`, so fc-match here sees the just-installed fonts. The
+# fonts step errors out (exit 1) if a requested font isn't installed.
+# Re-runnable; every write is idempotent.
 - shell:
-    - command: bash scripts/configure-kde-fonts.sh
-      description: Configure KDE display fonts (skipped on non-KDE systems)
-      stdin: true
-      stdout: true
-      stderr: true
-
-# Configure KDE Plasma 6 touchpad: natural scroll + clickfinger right-click
-# (two-finger tap = right-click) on devices listed in TARGET_NAMES. Hard-
-# guarded: no-ops (exit 0) when busctl/plasmashell are absent OR when
-# org.kde.KWin is not on the session bus (no active Plasma session, e.g.
-# arch-chroot, headless servers, GNOME). Setting touchpad config requires
-# talking to a running KWin via DBus, so during an unattended install this
-# step skips and the user re-runs `./install.sh` from inside their Plasma
-# session to apply. Re-runnable; each set-property is idempotent.
-- shell:
-    - command: bash scripts/configure-kde-touchpad.sh
-      description: Configure KDE touchpad (natural scroll + clickfinger; skipped without active Plasma session)
+    - command: bash scripts/config-kde.sh
+      description: Configure KDE Plasma 6 (fonts, touchpad, panel grouping; skipped on non-KDE systems)
       stdin: true
       stdout: true
       stderr: true
