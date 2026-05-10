@@ -49,6 +49,7 @@ git checkout -b feature/add-auth-flow                      # ❌ leaves opencode
 - **Scope** (optional): module/area — `feat(auth): add JWT refresh`.
 - **Body** (optional): explain *why*, not *what*. Wrap at 72 chars.
 - **Breaking change**: `!` after type/scope **and** `BREAKING CHANGE:` footer.
+- **Trailers** (footer block, when applicable): `Closes #123` / `Fixes #123` (auto-close issues on merge), `Refs #123` / `Refs !456` (reference without closing), `Co-authored-by: Name <email>` (co-attribution).
 
 ```
 feat(auth): add JWT refresh token rotation
@@ -57,11 +58,13 @@ feat(api)!: remove deprecated v1 endpoints
 BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 ```
 
-**MUST NOT**: emojis, sentence case, trailing periods, vague subjects (`update stuff`, `fix things`, `wip`).
+**MUST NOT**: emojis, sentence case, trailing periods, vague subjects (`update stuff`, `fix things`, `wip`), AI-tool branding or attribution (no "Generated with Claude", no `🤖` markers, no `Co-authored-by:` trailers naming an AI).
 
 ## Pull Requests / Merge Requests
 
-**MUST** commit and push **all** changes before opening a PR/MR. Verify both gates pass:
+**Before opening a PR/MR**, the project's standard verification commands (test / lint / typecheck / build — whichever the project defines) **MUST** have run on the current HEAD. **MUST NOT** submit a PR/MR with known-failing checks unless the failure is documented in the PR/MR body and the user has approved it.
+
+**MUST** commit and push **all** changes. Verify both gates pass:
 
 ```bash
 git status                                              # MUST be clean (no uncommitted changes)
@@ -77,9 +80,38 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 | GitHub | `gh pr create --assignee @me`                                                                   |
 | GitLab | `glab mr create --assignee "$(glab api user \| jq -r '.username')" --remove-source-branch`     |
 
+**PR/MR title MUST** follow [Conventional Commits](https://www.conventionalcommits.org/) format (`<type>(<scope>): <description>`) — a squash merge then produces a clean single commit on the default branch.
+**PR/MR body SHOULD** include: problem summary, what changed, how it was verified. Link related work via trailers (`Closes #123`, `Refs !456`).
+**MUST NOT** open as draft unless the user explicitly requested a draft.
+
 **GitLab additionally MUST**:
 - Pass `--remove-source-branch` (cleanup after merge).
 - Pass `--related-issue <N>` when the MR resolves a tracked issue.
+
+## Destructive / Bypass Operations
+
+The following commands silently destroy work or quietly defeat safety nets. **MUST NOT** run any of them without an explicit user request in the same turn:
+
+- `git commit --no-verify`, `git push --no-verify` — bypasses pre-commit / pre-push hooks (including secret scanners).
+- `git push --force` / `git push --force-with-lease` to a shared branch (`main`, `master`, `develop`, or any branch someone else may have pulled).
+- `git reset --hard`, `git clean -fdx` on a tree with uncommitted work.
+- `git commit --amend` on a commit that has already been pushed.
+- `git rebase --interactive` (or any other history rewrite) on already-pushed commits.
+- `rm -rf` outside the repo's own ignored / build directories.
+
+When a destructive action is genuinely the right answer, **MUST** confirm with the user first — name the exact command and state what it will destroy or rewrite.
+
+## Secrets
+
+**MUST NOT** commit, even briefly, even in a fixup commit you plan to squash later:
+
+- `.env`, `.env.*` (except `.env.example`, `.env.sample`, and other clearly-templated variants).
+- Private keys (`*.pem`, `id_*` without `.pub`, `*.age`, GPG private keyrings, SSH host keys).
+- API tokens, OAuth client secrets, webhook signing secrets, deploy keys.
+- Cloud credentials (`~/.aws/credentials`, kubeconfigs with embedded tokens, service-account JSON).
+- Database connection strings with embedded passwords.
+
+If a secret is committed by accident: **STOP**, notify the user, treat the secret as compromised, and rotate it. **MUST NOT** silently rewrite history with `git rebase` / `git filter-repo` / `git filter-branch` to "remove" the secret without explicit user instruction — once a commit is published it propagates to forks, clones, mirrors, and CI caches.
 
 ## Figma
 
