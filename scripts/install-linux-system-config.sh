@@ -15,7 +15,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_ROOT="$REPO_ROOT/system/linux"
 
-# Use sudo only when not already root (post-install.sh in arch-chroot runs as root).
+# Use sudo only when not already root (e.g. when invoked inside chroot/container).
 if [[ "${EUID}" -eq 0 ]]; then
   SUDO=()
 else

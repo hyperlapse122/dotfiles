@@ -1,6 +1,6 @@
 # dotfiles
 
-Cross-platform dotfiles for **Windows + macOS + Arch Linux**, managed by [dotbot](https://github.com/anishathalye/dotbot) via mise-managed `uvx`.
+Cross-platform dotfiles for **Windows + macOS + Fedora Linux**, managed by [dotbot](https://github.com/anishathalye/dotbot) via mise-managed `uvx`.
 
 `uvx dotbot` is run **ephemerally** through [`mise`](https://mise.jdx.dev/) every time — dotbot itself is never installed. The bootstrap also runs a small set of helpers for fonts, GitLab CLI config, Linux `/etc` drop-ins, and KDE touchpad/font preferences where applicable.
 
@@ -22,22 +22,15 @@ cd $HOME\dotfiles
 .\install.ps1
 ```
 
-### Fresh Arch from ISO
+### Fedora packages (optional)
 
-Boot the Arch live ISO, get network up, copy your host's archinstall configs onto the live system, then:
+[`scripts/install-packages.sh`](./scripts/install-packages.sh) enables COPRs (keyd, mise), RPM Fusion, and third-party repos (1Password, VS Code, Docker, Chrome) before installing packages via `dnf`. Run it manually once you're sure of the package set:
 
 ```sh
-archinstall \
-  --config archinstall/<hostname>/user_configuration.json \
-  --creds  archinstall/<hostname>/user_credentials.json \
-  --silent
+./scripts/install-packages.sh
 ```
 
-`custom_commands` in `user_configuration.json` clones this repo and runs `install.sh` automatically before first boot. See [`archinstall/README.md`](./archinstall/README.md).
-
-Host configs may also install first-boot services. `archinstall/UX5606` enables a Secure Boot/TPM enrollment service that signs boot artifacts with `sbctl` and enrolls TPM2 unlock for the root LUKS device after the installed system boots.
-
-For the Lenovo ThinkPad T14 Gen 2 profile, follow the physical install guide in [`archinstall/t14-gen2/README.md`](./archinstall/t14-gen2/README.md). It covers real credentials, disk selection, Secure Boot Setup Mode, and first-boot TPM verification.
+It is **not** invoked from `install.sh` — package selection is opinionated and should be reviewed before running.
 
 ## Requirements
 
@@ -55,11 +48,10 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 
 | Path | Purpose |
 |---|---|
-| `.agents/` | Repo-local agent skills, currently the `archinstall-host` workflow |
+| `.agents/` | Repo-local agent skills (currently empty) |
 | `agents/` | Cross-tool agent rules linked into `~/.config/opencode/AGENTS.md` and `~/.codex/AGENTS.md` |
 | `home/` | Files that symlink into `$HOME` (`home/foo` → `~/foo`) |
 | `system/<os>/` | Root-owned config installed to absolute paths (e.g. `/etc/...`) |
-| `archinstall/` | Arch unattended install configs + post-install bootstrap |
 | `scripts/` | Helpers shared by `install.sh` / `install.ps1` |
 | `install.conf.yaml` | Shared dotbot tasks |
 | `install.<os>.yaml` | Per-OS dotbot tasks |

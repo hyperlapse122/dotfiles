@@ -20,7 +20,7 @@
 #                   clickMethodAreas       -> false
 #                 Other touchpads (e.g. external USB trackpads) untouched.
 #                 Skips cleanly when busctl is missing or no Plasma session
-#                 owns org.kde.KWin (arch-chroot, headless, GNOME, ...).
+#                 owns org.kde.KWin (chroot, headless, GNOME, ...).
 #
 #   3. panel    - kwriteconfig6 -> ~/.config/plasma-org.kde.plasma.desktop-appletsrc
 #                 For every org.kde.plasma.icontasks / org.kde.plasma.taskmanager
@@ -30,18 +30,42 @@
 #                 the dropdown labelled "Group: Do not group" in the
 #                 Icons-Only Task Manager configuration dialog.
 #
+#   4. kickoff  - kwriteconfig6 -> ~/.config/plasma-org.kde.plasma.desktop-appletsrc
+#                 For every org.kde.plasma.kickoff applet at the panel level:
+#                   [Configuration][General] favoritesDisplay    = 1
+#                   [Configuration][General] applicationsDisplay = 1
+#                 1 = "In a list" (per the kickoff main.xml schema:
+#                 "0 = Grid, 1 = List"). Matches the radio buttons labelled
+#                 "Show favorites: In a list" and "Show other applications:
+#                 In a list" in the Application Launcher configuration dialog.
+#
+#   5. virtual  - kwriteconfig6 -> ~/.config/kwinrc
+#      keyboard   [Wayland] InputMethod = /usr/share/applications/fcitx5-wayland-launcher.desktop
+#                 Selects Fcitx 5 Wayland Launcher as the KWin virtual
+#                 keyboard / input-method launcher (matches the System
+#                 Settings > Keyboard > Virtual Keyboard panel). The kcfg
+#                 type is `Path` (per /usr/share/config.kcfg/kwin.kcfg),
+#                 so we use `--type path` and let KConfig write the
+#                 canonical `InputMethod[$e]=...` form. Skips cleanly when
+#                 fcitx5-wayland-launcher is not installed - install
+#                 fcitx5 (scripts/install-packages.sh on Fedora) and re-run.
+#
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
 # registry, so there is nothing equivalent to configure on either. No .ps1
 # counterpart per the script-parity exception in ../AGENTS.md.
 #
 # MUST run as the user owning the Plasma session (touchpad uses session DBus,
-# fonts/panel write to ~/.config); never invoke under sudo.
+# fonts/panel/virtualkeyboard write to ~/.config); never invoke under sudo.
 #
 # Re-runnable: every write is idempotent.
 #
-# After running, restart plasmashell or log out/in to fully apply font and
-# panel changes. Touchpad changes apply live via DBus.
+# After running:
+#   - fonts, panel, kickoff      apply after restarting plasmashell or
+#                                logging out/in.
+#   - touchpad                   applies live via DBus.
+#   - virtualkeyboard            applies after restarting KWin
+#                                (`kwin_wayland --replace`) or logging out/in.
 
 set -euo pipefail
 
@@ -158,7 +182,7 @@ configure_touchpad() {
 
   # Probe org.kde.KWin via the InputDeviceManager and grab the sysnames in
   # the same call. busctl exits non-zero if the service isn't on the session
-  # bus, which is the normal case for non-Plasma / headless / arch-chroot
+  # bus, which is the normal case for non-Plasma / headless / chroot
   # environments - skip cleanly.
   #
   # (`busctl --user list` cannot be used as a precheck: it filters its
@@ -248,8 +272,8 @@ configure_touchpad() {
 # running plasmashell. plasmashell holds it in memory, only re-reads on
 # startup, and re-writes it whenever something changes via the UI. To make
 # this take effect cleanly:
-#   1. Run this script BEFORE plasmashell first starts (e.g. arch-chroot
-#      install, fresh user account); or
+#   1. Run this script BEFORE plasmashell first starts (e.g. fresh user
+#      account, chroot install); or
 #   2. Run it, then restart plasmashell (kquitapp6 plasmashell ; kstart
 #      plasmashell) before touching the panel via the GUI - otherwise
 #      plasmashell's stale in-memory state will overwrite our edit.
@@ -305,11 +329,134 @@ configure_panel() {
 }
 
 # ===========================================================================
+# Step 4: kickoff (show favorites + other applications as list, not grid)
+# ===========================================================================
+#
+# Sets `favoritesDisplay = 1` and `applicationsDisplay = 1` on every
+# panel-level org.kde.plasma.kickoff applet. These map to the radio
+# buttons in the Application Launcher configuration dialog:
+#   - "Show favorites"          -> "In a list"   (favoritesDisplay)
+#   - "Show other applications" -> "In a list"   (applicationsDisplay)
+# 0 = grid, 1 = list - per plasma-desktop/applets/kickoff/main.xml:
+#   <entry name="favoritesDisplay" type="Int">
+#       <label>How to display favorites: 0 = Grid, 1 = List</label>
+#   <entry name="applicationsDisplay" type="Int">
+#       <label>How to display applications: 0 = Grid, 1 = List</label>
+# Upstream defaults are favoritesDisplay=0 (grid) and applicationsDisplay=1
+# (list). We set both explicitly so the final state is deterministic.
+#
+# Same plasmashell-ownership caveat as Step 3: edits to
+# plasma-org.kde.plasma.desktop-appletsrc are only safe before
+# plasmashell first starts, or after restarting it - otherwise the live
+# plasmashell process will overwrite our edit from its in-memory state.
+# The write is idempotent so re-running is safe.
+
+configure_kickoff() {
+  printf 'config-kde.sh: [kickoff] showing favorites and applications as list...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+  if [[ ! -f "$file" ]]; then
+    printf '  %s not found (no Plasma session has ever started?), skipping.\n' "$file"
+    return 0
+  fi
+
+  # Same panel-level regex as Step 3: anchored on `[Containments][N][Applets][M]`
+  # so nested `[Containments][N][Applets][M][Applets][L]` systemtray sub-applets
+  # cannot match. Kickoff should never live inside a systemtray, but be
+  # explicit anyway.
+  local count=0
+  local containment applet plugin
+  while IFS=':' read -r containment applet; do
+    plugin="$(kreadconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --key plugin)"
+    [[ "$plugin" == "org.kde.plasma.kickoff" ]] || continue
+    kwriteconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --group Configuration --group General \
+      --key favoritesDisplay 1
+    kwriteconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --group Configuration --group General \
+      --key applicationsDisplay 1
+    printf '  set [Containments/%s/Applets/%s] (%s) favoritesDisplay=1 applicationsDisplay=1\n' \
+      "$containment" "$applet" "$plugin"
+    count=$((count + 1))
+  done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$file" \
+            | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
+
+  if [[ "$count" -eq 0 ]]; then
+    printf '  no kickoff applet found in panel config, skipping.\n'
+    return 0
+  fi
+
+  printf '  configured %d kickoff applet(s).\n' "$count"
+}
+
+# ===========================================================================
+# Step 5: virtualkeyboard (fcitx5 wayland launcher)
+# ===========================================================================
+#
+# Selects the KWin Wayland virtual-keyboard / input-method launcher.
+# Per the KCfgXT schema at /usr/share/config.kcfg/kwin.kcfg:
+#
+#   <group name="Wayland">
+#       <entry name="InputMethod" type="Path" />
+#
+# So the value is the absolute path to a desktop file flagged with
+# X-KDE-Wayland-VirtualKeyboard=true. KConfig's `Path` type is serialised
+# with the `[$e]` (expand) flag - `kwriteconfig6 --type path` produces
+# the canonical form `InputMethod[$e]=...`, which kreadconfig6 / KWin
+# / kcm_virtualkeyboard.so all consume.
+#
+# Target file is set in VIRTUAL_KEYBOARD_DESKTOP_FILE below. Soft-skips
+# when the .desktop file isn't installed (fcitx5 may not be installed yet
+# when this runs from the dotbot bootstrap; re-run after
+# scripts/install-packages.sh).
+#
+# Wayland-only setting. On X11 sessions KWin ignores it - harmless to
+# write. Applies on next KWin (re)start; no live-reload via DBus.
+
+VIRTUAL_KEYBOARD_DESKTOP_FILE='/usr/share/applications/fcitx5-wayland-launcher.desktop'
+
+configure_virtualkeyboard() {
+  printf 'config-kde.sh: [virtualkeyboard] selecting fcitx5 wayland launcher...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  if [[ ! -f "$VIRTUAL_KEYBOARD_DESKTOP_FILE" ]]; then
+    printf '  %s not installed (install fcitx5 first), skipping.\n' \
+      "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
+    return 0
+  fi
+
+  kwriteconfig6 --file kwinrc \
+    --group Wayland \
+    --key InputMethod \
+    --type path \
+    "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
+  printf '  set [Wayland] InputMethod = %s\n' "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
+}
+
+# ===========================================================================
 # Run all steps. Each is independent; set -e propagates any real failure.
 # ===========================================================================
 
 configure_fonts
 configure_touchpad
 configure_panel
+configure_kickoff
+configure_virtualkeyboard
 
-printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font and panel changes.\n'
+printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font and panel changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard change.\n'

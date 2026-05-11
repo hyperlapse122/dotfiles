@@ -9,19 +9,15 @@ This directory is different from [`home/.agents/`](../home/.agents/): `.agents/`
 ```plain
 .agents/
 +-- skills/
-    +-- archinstall-host/
-        +-- SKILL.md
-        +-- references/
+    +-- (no skills currently tracked)
 ```
 
 ## Current Skills
 
-| Skill | Purpose |
-|---|---|
-| `archinstall-host` | Required workflow for creating, validating, and documenting a new `archinstall/<hostname>/` profile. It covers hardware inspection, archinstall schema regeneration, DMI metadata, and QEMU validation with UEFI Secure Boot, LUKS, and TPM2. |
+None. The directory is reserved for future repo-local skills.
 
 ## Conventions
 
 - Keep repo-local skills here when they describe how to operate this repository.
 - Keep user-installed or runtime-managed skills under `home/.agents/`, not here.
-- Update [`../AGENTS.md`](../AGENTS.md) and the owning README when adding, removing, or changing a repo-local skill workflow.
+- Update [`../AGENTS.md`](../AGENTS.md) and this README when adding, removing, or changing a repo-local skill workflow.

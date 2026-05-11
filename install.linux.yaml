@@ -60,7 +60,7 @@
 # Root-owned system config. Delegated to scripts/install-linux-system-config.sh
 # so a single `sudo` prompt covers all files (sudo's credential cache makes
 # subsequent installs in that script password-less). The script also no-ops the
-# `sudo` prefix when already root, so it works inside arch-chroot too.
+# `sudo` prefix when already root, so it works inside chroot/container too.
 - shell:
     - command: bash scripts/install-linux-system-config.sh
       description: Install root-owned config to /etc/ (NetworkManager drop-ins, locale, keyd, libinput, plymouth, udev)
@@ -79,24 +79,32 @@
       stdout: true
       stderr: true
 
-# Configure KDE Plasma 6 user-side settings in three independent steps:
-#   - fonts:    Pretendard (sans) + JetBrainsMono Nerd Font (mono) into
-#               kdeglobals via kwriteconfig6.
-#   - touchpad: libinput natural scroll + clickfinger right-click on devices
-#               in TOUCHPAD_TARGET_NAMES, via KWin's InputDeviceManager DBus.
-#   - panel:    icontasks/taskmanager `groupingStrategy = 0` ("Do not group")
-#               in plasma-org.kde.plasma.desktop-appletsrc.
+# Configure KDE Plasma 6 user-side settings in five independent steps:
+#   - fonts:           Pretendard (sans) + JetBrainsMono Nerd Font (mono)
+#                      into kdeglobals via kwriteconfig6.
+#   - touchpad:        libinput natural scroll + clickfinger right-click on
+#                      devices in TOUCHPAD_TARGET_NAMES, via KWin's
+#                      InputDeviceManager DBus.
+#   - panel:           icontasks/taskmanager `groupingStrategy = 0`
+#                      ("Do not group") in plasma-org.kde.plasma.desktop-appletsrc.
+#   - kickoff:         favoritesDisplay=1 + applicationsDisplay=1 ("In a
+#                      list") on every panel-level kickoff applet in the
+#                      same appletsrc.
+#   - virtualkeyboard: [Wayland] InputMethod in kwinrc -> Fcitx 5 Wayland
+#                      Launcher (.desktop path). Soft-skips when fcitx5 is
+#                      not installed yet.
 # Hard-guarded: each step no-ops (returns 0) when its prereqs are missing
 # (kwriteconfig6/busctl/plasmashell, no active Plasma session on the session
-# bus), and the whole script exits 0 on non-KDE systems - safe to run on
-# non-KDE Linux (GNOME, sway, headless servers, arch-chroot during
-# archinstall, etc.). MUST run AFTER install-fonts.sh: that step finishes
-# with `fc-cache -f`, so fc-match here sees the just-installed fonts. The
-# fonts step errors out (exit 1) if a requested font isn't installed.
-# Re-runnable; every write is idempotent.
+# bus, fcitx5 not installed), and the whole script exits 0 on non-KDE
+# systems - safe to run on non-KDE Linux (GNOME, sway, headless servers,
+# chroot/container, etc.).
+# MUST run AFTER install-fonts.sh: that step finishes with `fc-cache -f`, so
+# fc-match here sees the just-installed fonts. The fonts step errors out
+# (exit 1) if a requested font isn't installed. Re-runnable; every write is
+# idempotent.
 - shell:
     - command: bash scripts/config-kde.sh
-      description: Configure KDE Plasma 6 (fonts, touchpad, panel grouping; skipped on non-KDE systems)
+      description: Configure KDE Plasma 6 (fonts, touchpad, panel grouping, kickoff list view, virtual keyboard; skipped on non-KDE systems)
       stdin: true
       stdout: true
       stderr: true

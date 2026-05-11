@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Cross-platform dotfiles for **Windows + macOS + Arch Linux**. Symlinks are managed by [dotbot](https://github.com/anishathalye/dotbot) invoked via mise-managed `uvx`. Arch hosts are provisioned by [archinstall](https://github.com/archlinux/archinstall).
+Cross-platform dotfiles for **Windows + macOS + Fedora Linux**. Symlinks are managed by [dotbot](https://github.com/anishathalye/dotbot) invoked via mise-managed `uvx`.
 
 > **Status**: bootstrapped. Framework is in place; per-app dotfile content is migrated from `~/nix-config` (Home Manager outputs) commit-by-commit.
 >
-> **NixOS is being decommissioned.** Home Manager-generated outputs (`~/.config/*`, `~/.zshrc`, `~/.gnupg/*.conf`, etc.) are imported INTO this repo as the new source of truth. **Once a file is migrated, edit it HERE — never in `~/nix-config/`.** The Nix source tree is being abandoned and will be deleted after Arch Linux migration.
+> **NixOS is being decommissioned.** Home Manager-generated outputs (`~/.config/*`, `~/.zshrc`, `~/.gnupg/*.conf`, etc.) are imported INTO this repo as the new source of truth. **Once a file is migrated, edit it HERE — never in `~/nix-config/`.** The Nix source tree is being abandoned and will be deleted after Fedora migration.
 
 User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md`) is for agents only.
 
@@ -14,7 +14,7 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 .
 ├── AGENTS.md
 ├── README.md                        # User quickstart, top-level
-├── .agents/                         # Repo-local agent skills
+├── .agents/                         # Repo-local agent skills (currently empty)
 ├── agents/                          # Cross-tool agent rules linked into ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ...
 ├── install.conf.yaml                # Shared dotbot tasks (all OSes)
 ├── install.linux.yaml               # Linux-only dotbot tasks
@@ -28,12 +28,6 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── system/<os>/                     # Root-owned files mirroring absolute paths,
 │                                    # e.g. system/linux/etc/NetworkManager/conf.d/...
 │                                    # NOT installed via dotbot — see "Root-owned config".
-├── archinstall/
-│   ├── post-install.sh              # Bootstraps dotfiles after archinstall
-│   ├── user_credentials.example.json
-│   └── <hostname>/                  # Per-host configs
-│       ├── user_configuration.json
-│       └── user_credentials.json    # GITIGNORED
 └── scripts/                         # Helpers used by install scripts
 ```
 
@@ -47,7 +41,7 @@ Every tracked top-level directory MUST have its own `README.md` describing what 
   - `pip install dotbot`, `pip install --user dotbot`
   - `pipx install dotbot`
   - `uv tool install dotbot` (this is `uv`'s *persistent* install — it is NOT what we want)
-  - `brew install dotbot`, `apt install dotbot`, `pacman -S dotbot`, etc.
+  - `brew install dotbot`, `apt install dotbot`, `dnf install dotbot`, etc.
   - vendoring dotbot's source into this repo or adding a `dotbot/` git submodule (the canonical upstream template uses a submodule — **we deliberately don't**)
 - The single canonical invocation: `mise exec uv@latest -- uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml install.<os>.yaml`. Both `install.sh` and `install.ps1` MUST call exactly this; nothing else may run dotbot.
 - **Pass both yaml files under a SINGLE `-c` flag.** dotbot's `-c` is argparse `nargs='+'` (not `append`); writing `-c install.conf.yaml -c install.<os>.yaml` silently drops the first file (only the last `-c` wins). Don't change this back.
@@ -67,7 +61,7 @@ Every script ships in **both** forms or it is broken:
 
 Adding `foo.sh` without `foo.ps1` is a regression. The two MUST behave equivalently for their target platforms; if a feature is impossible on one side, the script SHOULD exit with a clear error rather than silently no-op.
 
-Exception: scripts that are inherently single-platform (e.g. `archinstall/post-install.sh` runs only inside an Arch chroot) MAY skip parity — document the reason in a header comment in the script itself.
+Exception: scripts that are inherently single-platform MAY skip parity — document the reason in a header comment in the script itself. Current exceptions: `scripts/install-linux-system-config.sh` (writes to `/etc/`, Linux only), `scripts/install-packages.sh` (uses `dnf`, Fedora only), `scripts/config-kde.sh` (configures KDE Plasma 6, Linux only).
 
 ### Root-owned config (`/etc/...`)
 
@@ -94,22 +88,13 @@ Current Linux root-owned config includes NetworkManager unmanaged-device drop-in
 
 ### Runtime agent config
 
-- `.agents/skills/` contains repo-local skills that are part of this dotfiles source tree. The `archinstall-host` skill is required for adding a new Arch host.
+- `.agents/skills/` is reserved for repo-local skills that describe how to operate this repository. No skills are currently tracked.
 - `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime. Do not describe it as Nix-managed.
 - `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
 - `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
 - `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global AGENTS.md path: `~/.config/opencode/AGENTS.md` (OpenCode) and `~/.codex/AGENTS.md` (Codex). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
 - `home/.config/opencode/AGENTS.md` MUST NOT exist. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md` (managed in `install.conf.yaml`); a sibling source under `home/.config/opencode/` would conflict with that link. Put cross-tool rules in `agents/SHARED_AGENTS.md`. Put OpenCode-only rules in a new file under `agents/` linked separately from `install.conf.yaml`.
 - Keep all agent rule files in sync when changing agent workflow rules. In this repo that currently means this file, `home/AGENTS.md`, `agents/AGENTS.md`, and `agents/SHARED_AGENTS.md`. The shared file is loaded globally by OpenCode and Codex via the symlinks above, so changes propagate to both tools immediately.
-
-### archinstall (Arch Linux only)
-
-- archinstall has **no separate post-install `--script` hook**. The `--script` flag selects the installer flavor (`guided`, `minimal`, ...), not a user post-install step. The actual post-install hook is the `custom_commands` array in `user_configuration.json`. Each entry runs in `arch-chroot` of the new system, after package install and before unmount.
-- End the host's `custom_commands` with the dotfiles bootstrap (install `git` and `curl`, clone this repo, run `install.sh`) so the first boot lands on a fully linked system. Keep the same logic in `archinstall/post-install.sh` for re-running outside the installer.
-- The JSON schema changes between archinstall releases. **Regenerate with `archinstall --dry-run`** and copy the produced config out of `/var/log/archinstall/`. Don't hand-edit fields you don't understand — legacy keys (`audio_config`, `bootloader`, `!root-password`) still parse, but new configs use the current nested shape (`disk_config`, `bootloader_config`, `auth_config`).
-- `user_credentials.json` MUST be gitignored. Only `user_credentials.example.json` lives in git. Same rule for SSH/age/GPG private keys, API tokens, and disk encryption keys — never commit, even briefly.
-- Adding a new host MUST go through the [`archinstall-host`](.agents/skills/archinstall-host/SKILL.md) skill. The skill enforces: (1) regenerate via `archinstall --dry-run`, (2) write `archinstall/<hostname>/host-metadata.json` with a DMI fingerprint so `archinstall/test-host.sh --detect` returns the host on its target machine, (3) burnable QEMU validation with UEFI Secure Boot + LUKS + TPM2 via `archinstall/test-host.sh <hostname>` BEFORE the host is considered done.
-- `archinstall/inspect-hardware.sh` and `archinstall/test-host.sh` are Linux-only (single-platform exception per "Script parity" above; documented in their headers). No `.ps1` counterparts.
 
 ### Documentation sync (HARD)
 
@@ -125,11 +110,10 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 
 | From | Command |
 |---|---|
-| Fresh macOS / Linux | install `mise`, then `./install.sh` (clones if missing, runs mise-managed `uvx dotbot` with shared + OS yaml) |
+| Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml) |
 | Fresh Windows | `.\install.ps1` (same contract, PowerShell) |
-| Fresh Arch from ISO | `archinstall --config archinstall/<host>/user_configuration.json --creds archinstall/<host>/user_credentials.json --silent` — `custom_commands` finishes by running `install.sh` inside chroot |
 | Re-link after pulling repo | same `install.sh` / `install.ps1`; dotbot's `relink: true` default makes it idempotent |
-| Refresh archinstall schema | `archinstall --dry-run`, copy from `/var/log/archinstall/` |
+| Fedora package install | `scripts/install-packages.sh` (manual; enables COPRs + RPM Fusion + third-party repos, then `dnf install`) |
 
 `install.sh` MUST detect OS via `uname -s` (`Darwin` / `Linux`) and pass the matching `install.<os>.yaml` as the second `-c`. `install.ps1` always uses `install.windows.yaml`.
 
@@ -138,10 +122,9 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 - Installing dotbot via `pip`, `pipx`, `uv tool install`, `brew`, or distro package manager. **Always use mise-managed `uvx dotbot`** — ephemeral, no install.
 - Adding dotbot as a git submodule or vendoring its source.
 - Splitting yaml files across multiple `-c` flags (`-c f1 -c f2`). dotbot's `-c` is `nargs='+'`, so the second `-c` overwrites the first. Use one `-c f1 f2`.
-- Committing `user_credentials.json`, SSH/age/GPG private keys, API tokens, or anything else `archinstall/.gitignore` (or root `.gitignore`) is meant to keep out.
+- Committing SSH/age/GPG private keys, API tokens, `.env` files, or anything else `.gitignore` is meant to keep out.
 - `link: { force: true }` — destroys existing files silently.
 - `cp` for `/etc/` files, or `sudo cp` instead of `sudo install -D -m <mode>`.
-- Hand-editing archinstall JSON without `archinstall --dry-run` to verify the current schema first.
 - Adding `.sh` without matching `.ps1`, or vice versa.
 - Adding a top-level directory without a `README.md`, or moving things without updating the layout block in this file.
 - Adding `home/.agents/AGENTS.md`. Use `home/AGENTS.md` for parent-scoped guidance instead.
@@ -153,6 +136,6 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 ## References
 
 - dotbot (schema, cross-platform notes): https://github.com/anishathalye/dotbot
-- archinstall guided install: https://archinstall.archlinux.page/installing/guided.html
 - mise: https://mise.jdx.dev/
 - uv / uvx: https://docs.astral.sh/uv/
+- Fedora package management (`dnf`): https://docs.fedoraproject.org/en-US/quick-docs/dnf/

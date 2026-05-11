@@ -1,7 +1,3 @@
-# Per-host archinstall credentials — regenerate locally, never commit.
-# Only the example skeleton is tracked.
-archinstall/*/user_credentials.json
-
 # Sisyphus / OpenCode session state
 .sisyphus/
 
