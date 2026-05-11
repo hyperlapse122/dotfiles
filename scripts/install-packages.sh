@@ -15,6 +15,7 @@ fi
 
 fedora() {
   # Install repository manager
+  # TODO: make it run when fedora-workstation-repositories is not installed
   "${SUDO[@]}" dnf install fedora-workstation-repositories -y
 
   # Enable third party repositories
@@ -25,7 +26,7 @@ fedora() {
   "${SUDO[@]}" dnf copr enable jdxcode/mise -y
 
   # Install RPMFusion and set fedora-cisco-openh264.enabled to 1 for steam and discord
-  # TODO: Skip RPM Fusion installation when the package is already installed
+  # TODO: Skip RPM Fusion installation when packages are already installed
   "${SUDO[@]}" dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm -y
   "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
 
@@ -41,6 +42,7 @@ fedora() {
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo --overwrite
 
   # Install packages
+  # TODO: install steam and discord for non-vm PC
   "${SUDO[@]}" dnf group install development-tools -y
   "${SUDO[@]}" dnf install pkg-config btop \
     fcitx5 fcitx5-hangul keyd \
@@ -48,22 +50,21 @@ fedora() {
     ripgrep solaar solaar-udev 1password 1password-cli mise code \
     docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
     google-chrome-stable gh -y
-
-  # TODO: install steam and discord for non-vm
 }
 
 dotnet-tools() {
-  dotnet tool install -g git-credential-manager \
-    && dotnet tool install -g powershell
+  dotnet tool install -g git-credential-manager
+  dotnet tool install -g powershell
 }
 
 systemd() {
-  "${SUDO[@]}" systemctl enable keyd
+  "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now docker
 }
 
 user-groups() {
   "${SUDO[@]}" usermod -aG docker,keyd "$USER"
+  # TODO: notify user to re-login
 }
 
 fedora
