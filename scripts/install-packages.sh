@@ -42,7 +42,7 @@ fedora() {
 
   # Install packages
   "${SUDO[@]}" dnf group install development-tools -y
-  "${SUDO[@]}" dnf install pkg-config \
+  "${SUDO[@]}" dnf install pkg-config btop \
     fcitx5 fcitx5-hangul keyd \
     dotnet-sdk-10.0 dotnet-sdk-8.0 \
     ripgrep solaar solaar-udev 1password 1password-cli mise code \
