@@ -41,6 +41,9 @@ fedora() {
   # Install docker repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo --overwrite
 
+  # Add Tailscale repository
+  "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
+
   # Install packages
   # TODO: install steam and discord for non-vm PC
   "${SUDO[@]}" dnf group install development-tools -y
@@ -49,7 +52,7 @@ fedora() {
     dotnet-sdk-10.0 dotnet-sdk-8.0 \
     ripgrep solaar solaar-udev 1password 1password-cli mise code \
     docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
-    google-chrome-stable gh -y
+    google-chrome-stable gh tailscale -y
 }
 
 dotnet-tools() {
@@ -60,6 +63,7 @@ dotnet-tools() {
 systemd() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now docker
+  "${SUDO[@]}" systemctl enable --now tailscaled
 }
 
 user-groups() {
