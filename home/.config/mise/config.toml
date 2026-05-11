@@ -48,6 +48,7 @@ claude-code = "latest"
 # opencode
 "npm:opencode-ai" = { version = "latest", os = ["windows"] }
 shellcheck = "latest"
+"npm:bash-language-server" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
