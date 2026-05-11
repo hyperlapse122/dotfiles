@@ -62,6 +62,11 @@ systemd() {
   "${SUDO[@]}" systemctl enable --now docker
 }
 
+user-groups() {
+  "${SUDO[@]}" usermod -aG docker,keyd "$USER"
+}
+
 fedora
 dotnet-tools
 systemd
+user-groups
