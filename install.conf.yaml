@@ -22,7 +22,7 @@
     ~/.config/opencode/:
       glob: true
       path: home/.config/opencode/**
-    
+
     # Link shared agents.md file
     ~/.config/opencode/AGENTS.md: agents/SHARED_AGENTS.md
     ~/.codex/AGENTS.md: agents/SHARED_AGENTS.md
@@ -47,3 +47,10 @@
 
     # Yarn 2+ global config (cross-platform)
     ~/.yarnrc.yml: home/.yarnrc.yml
+
+- shell:
+    - command: mise install
+      description: Install tools from mise
+      stdin: true
+      stdout: true
+      stderr: true
