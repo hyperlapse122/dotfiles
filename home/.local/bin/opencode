@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# opencode — mise wrapper that pins opencode to the latest published release.
+#
+# Resolves the latest version from anomalyco/opencode's GitHub release manifest
+# at invocation time, then hands it to `mise exec`. This avoids editing
+# ~/.config/mise/config.toml every time upstream publishes a new build, while
+# still pinning the executed version reproducibly within a single invocation.
+#
+# POSIX counterpart of opencode.ps1 (Windows). Mirrors the writeShellApplication
+# wrapper from the legacy nix-config (home/modules/dev/opencode/default.nix);
+# see AGENTS.md for the rule that migrated files become the source of truth
+# here.
+#
+# Manifest: https://github.com/anomalyco/opencode/releases/latest/download/latest.json
+#   { "version": "X.Y.Z", "platforms": { ... } }
+#
+# Dependencies: `mise`, `curl`, `jq` on PATH.
+
+set -euo pipefail
+
+for cmd in mise curl jq; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    printf 'opencode: required dependency `%s` not found on PATH\n' "$cmd" >&2
+    exit 1
+  fi
+done
+
+RESOLVED_VERSION="$(
+  curl -fsSL https://github.com/anomalyco/opencode/releases/latest/download/latest.json |
+    jq -r '.version'
+)"
+
+if [[ -z "$RESOLVED_VERSION" || "$RESOLVED_VERSION" == "null" ]]; then
+  printf 'opencode: failed to resolve latest version from GitHub manifest\n' >&2
+  exit 1
+fi
+
+exec mise exec -q "github:anomalyco/opencode@$RESOLVED_VERSION" -- opencode "$@"

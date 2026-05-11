@@ -34,6 +34,11 @@
     ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
     ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
 
+    # opencode mise wrapper (POSIX side; Windows ships opencode.ps1, see
+    # install.windows.yaml). Resolves the latest release version from GitHub
+    # at invocation time and hands it to `mise exec`.
+    ~/.local/bin/opencode: home/.local/bin/opencode
+
 # Configure glab with script
 - shell:
     - command: sh scripts/setup-glab.sh
