@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/config-kde.sh
 #
-# Combined KDE Plasma 6 user-side configuration. Three independent steps,
+# Combined KDE Plasma 6 user-side configuration. Five independent steps,
 # each guarded so a missing prerequisite skips that step alone (returning 0)
 # without taking the whole script down:
 #
