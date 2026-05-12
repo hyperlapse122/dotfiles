@@ -47,7 +47,7 @@ fedora() {
   # Install packages
   # TODO: install steam and discord for non-vm PC
   "${SUDO[@]}" dnf group install development-tools -y
-  "${SUDO[@]}" dnf install pkg-config btop \
+  "${SUDO[@]}" dnf install pkg-config btop gcc-c++ \
     fcitx5 fcitx5-hangul keyd \
     dotnet-sdk-10.0 dotnet-sdk-8.0 \
     ripgrep solaar solaar-udev 1password 1password-cli mise code \
