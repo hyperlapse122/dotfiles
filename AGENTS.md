@@ -80,11 +80,11 @@ sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 
 Use `sudo install -D` (atomically sets mode and creates parents). Do **not** use `cp`+`chmod` (loses ownership/mode atomicity), and do **not** try to express `/etc/...` as a dotbot `link:` (no sudo, dotbot will fail or silently link a user-owned file into a root-owned tree).
 
-The Linux installer discovers files with a recursive glob under `system/linux/etc/`; adding or removing a root-owned config file should not require editing the install script unless the mode is no longer `0644`.
+The Linux installer discovers files with a recursive glob under `system/linux/etc/`; most files install at mode `0644`. The one exception is `system/linux/etc/sudoers.d/*`, which the installer special-cases: mode `0440` (sudo refuses group/world-readable drop-ins) and gated on `systemd-detect-virt --vm` so the rule only lands on virtual machines, never on bare-metal hosts. Sudoers drop-ins are also syntax-checked with `visudo -c -f` before install. Adding or removing a root-owned config file outside `sudoers.d/` should not require editing the install script; any other file that needs a non-default mode or a platform/host gate does.
 
 NetworkManager unmanaged-device rules live as split drop-ins under `system/linux/etc/NetworkManager/conf.d/`, matching the legacy dotfiles layout. Do not consolidate them into a monolithic `NetworkManager.conf` — that file is intentionally absent from this repo.
 
-Current Linux root-owned config includes NetworkManager unmanaged-device drop-ins, keyd defaults, a libinput local override, `locale.conf`, Plymouth config, and a Logitech receiver udev rule. These are all installed mode `0644` by `scripts/install-linux-system-config.sh`.
+Current Linux root-owned config includes NetworkManager unmanaged-device drop-ins, keyd defaults, a libinput local override, `locale.conf`, Plymouth config, a Logitech receiver udev rule, and a VM-only `sudoers.d/` drop-in granting `%wheel` password-less sudo. All install at mode `0644` except the `sudoers.d/` drop-in (mode `0440`, VM-only) — see `scripts/install-linux-system-config.sh`.
 
 ### Runtime agent config
 

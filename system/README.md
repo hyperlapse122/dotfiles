@@ -11,8 +11,13 @@ sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 `install -D` is the only correct tool here — it sets mode atomically and creates parent directories. **Don't** use `sudo cp` (no atomic mode/owner) and **don't** try to express these as dotbot `link:` blocks (no sudo support).
 
 Linux system files are discovered recursively under `system/linux/etc/` and
-installed with mode `0644`. Adding or removing a file there should not require
-editing the installer unless that file needs a different mode.
+installed with mode `0644` by default. The one exception is
+`system/linux/etc/sudoers.d/*`, which the installer ships at mode `0440`
+(sudo refuses group/world-readable drop-ins) and only when
+`systemd-detect-virt --vm` reports a virtual machine — never on bare-metal
+hosts. Drop-in contents are syntax-checked with `visudo -c -f` before
+install. Adding files outside `sudoers.d/` should not require editing the
+installer unless they need a different mode or a platform/host gate.
 
 ## Layout
 
@@ -34,6 +39,7 @@ drop-in files — do not consolidate them into a monolithic `NetworkManager.conf
 | `system/linux/etc/libinput/` | local libinput quirks |
 | `system/linux/etc/locale.conf` | system locale |
 | `system/linux/etc/plymouth/` | Plymouth boot splash config |
+| `system/linux/etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`) |
 | `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions |
 
 There is currently no `system/macos/` or `system/windows/` tree. macOS settings usually belong under `home/` because they live in user-owned `~/Library` paths. Windows system config (registry tweaks, Group Policy, etc.) is **not** managed here — it doesn't fit the "drop a file at an absolute path" model. Add a `scripts/` helper if needed.

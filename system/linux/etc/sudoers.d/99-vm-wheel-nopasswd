@@ -1,0 +1,19 @@
+# /etc/sudoers.d/99-vm-wheel-nopasswd
+#
+# Password-less sudo for the wheel group. Installed by
+# scripts/install-linux-system-config.sh ONLY on virtual machines
+# (gated on `systemd-detect-virt --vm`); never on bare-metal hosts,
+# where the convenience isn't worth the security trade-off.
+#
+# Drop-ins in /etc/sudoers.d/ MUST be mode 0440 (sudo silently
+# refuses to load group/world-writable files). The installer
+# special-cases this directory to use 0440 instead of the default
+# 0644 used for other root-owned config under system/linux/etc/.
+#
+# Filename has no '.' on purpose: sudoers(5) silently ignores
+# drop-ins whose names contain '.' or end in '~' (covers stray
+# editor backups and *.rpmnew/*.rpmsave). The 99- prefix is so the
+# NOPASSWD rule sorts after, and therefore overrides, the default
+# `%wheel ALL=(ALL) ALL` rule shipped in /etc/sudoers on Fedora.
+
+%wheel ALL=(ALL:ALL) NOPASSWD: ALL

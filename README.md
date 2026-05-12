@@ -65,4 +65,4 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 
 The first run downloads fonts (Pretendard, Pretendard JP, JetBrains Mono, D2Coding, plus Nerd Font variants of the latter two) into the user font directory — `~/.local/share/fonts` on Linux, `~/Library/Fonts` on macOS, `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows. Run [`scripts/install-fonts.{sh,ps1}`](./scripts/) directly with `--force` / `-Force` to refresh fonts later.
 
-On Linux, the bootstrap also installs tracked files under [`system/linux/etc/`](./system/linux/etc/) to `/etc/` with `sudo install -D -m 644`, then applies KDE Plasma 6 font and touchpad preferences when a suitable KDE session is available.
+On Linux, the bootstrap also installs tracked files under [`system/linux/etc/`](./system/linux/etc/) to `/etc/` with `sudo install -D -m 644` (the `etc/sudoers.d/` subtree installs at mode `0440` and only on virtual machines), then applies KDE Plasma 6 font and touchpad preferences when a suitable KDE session is available.
