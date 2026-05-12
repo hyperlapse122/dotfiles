@@ -14,6 +14,7 @@
 7. [Interactive / Long-Running Processes](#interactive--long-running-processes)
 8. [Rebase](#rebase)
 9. [Scripting Runtime](#scripting-runtime)
+10. [JavaScript Package Managers](#javascript-package-managers)
 
 ## Branch Naming
 
@@ -155,3 +156,46 @@ If you picked the wrong side or merged in the wrong direction: `git rebase --abo
 **Shell** (`bash` for POSIX, PowerShell for Windows) is acceptable for: system bootstrap, OS-level glue, single-purpose installer scripts. **MUST NOT** use shell for application logic, codegen, or anything that benefits from types and tests — those go to TypeScript.
 
 **Exception**: an established Python project that already has Python tooling — match the project, do not fork the runtime. State the exception explicitly in the response when applying it.
+
+## JavaScript Package Managers
+
+User-global config hardens **npm, pnpm, Yarn, and Bun** against supply-chain attacks via three switches that **MUST** be preserved by agents working in JS/TS projects:
+
+1. **Lifecycle scripts disabled** (`ignore-scripts` / `enableScripts: false` / `ignoreScripts`).
+2. **Exact version pinning** on every install (`save-exact` / `defaultSemverRangePrefix: ""` / `saveExact` / `[install] exact`).
+3. **One-week cooldown** before any newly-published version is installable (`min-release-age=7` days / `npmMinimalAgeGate: 10080` minutes / `minimumReleaseAge: 10080` minutes / `minimumReleaseAge = 604800` seconds).
+
+**MUST NOT** edit the user-global config files (`~/.npmrc`, `~/.yarnrc.yml`, `~/.bunfig.toml`, `~/.config/pnpm/config.yaml`, or their per-OS equivalents) to relax any of the three switches. Per-project escape hatches below are the supported override.
+
+### Overriding the Lifecycle-Script Block
+
+When a dependency legitimately needs to run its install script (native build, codegen, etc.), opt in at the **narrowest possible scope**:
+
+| Manager | Scope | Mechanism |
+|---|---|---|
+| **Yarn Berry** | **per-package** *(preferred — Yarn is the primary manager in this dotfiles policy)* | Add `dependenciesMeta.<pkg>.built: true` to the project's `package.json`. Only that package's install/build scripts run; all other dependencies stay blocked. |
+| **npm** | **per-repository** | Set `ignore-scripts=false` in a committed project `.npmrc`. npm has no per-package override; it does not recognise `dependenciesMeta`. |
+| **pnpm** | **per-repository** | Add the package to `allowBuilds` (pnpm v11+) or `onlyBuiltDependencies` (v10 and earlier) in `pnpm-workspace.yaml`. **MUST NOT** rely on `dependenciesMeta.<pkg>.built` — pnpm removed that field from its manifest types and silently ignores it. |
+| **Bun** | **per-repository** | Add the package name to the `trustedDependencies` array in the project's `package.json`. |
+
+**MUST** name the specific install-time behaviour being unblocked (native binding, codegen, asset fetch, etc.) in the PR/MR description or as a code comment next to the override. "It failed without this" is not sufficient justification.
+
+### Exact Version Pinning
+
+Every dependency in every `package.json` **MUST** be pinned to an exact version — no `^`, no `~`, no `>=`, no `latest`, no `*`, no `x` placeholders.
+
+The user-global config produces exact specs automatically when adding deps via `yarn add` / `npm install` / `pnpm add` / `bun add` — agents **SHOULD NOT** pass any range flag.
+
+**MUST** correct any existing range specifier (`^x.y.z`, `~x.y.z`, `>=x`, etc.) to an exact version when modifying a `package.json` for any reason.
+**MUST NOT** introduce a new range specifier.
+**MUST NOT** edit a lockfile by hand to dodge the exact-pin rule.
+
+Exception: a project-level `AGENTS.md` may permit ranges where genuinely required (peer-dep flexibility, library `package.json` authored for downstream consumers, etc.) — state the exception explicitly when applying it.
+
+### Cooldown Gate (1 week)
+
+A package version must be **at least one week old** before any of the four managers will resolve it. If `yarn add` / `npm install` / `pnpm add` / `bun add` fails with a "does not meet the minimumReleaseAge constraint" error (or equivalent), the requested version is too fresh and **MUST NOT** be installed.
+
+**MUST** pin to the most recent version that already satisfies the one-week gate.
+**MUST NOT** add the package to a preapproved/exclude list (`npmPreapprovedPackages` in Yarn, `minimumReleaseAgeExclude` in pnpm, `minimumReleaseAgeExcludes` in Bun) without explicit user approval per package — bypassing the gate defeats the supply-chain protection it provides.
+**MUST NOT** lower the cooldown value in any user-global or project-level config to work around a fresh-version failure.

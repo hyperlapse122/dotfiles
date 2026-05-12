@@ -8,7 +8,7 @@ The single source file in this directory is symlinked into each tool's global `A
 
 | File | Purpose |
 |---|---|
-| `SHARED_AGENTS.md` | Tool-agnostic agent rules — branch naming, conventional commits, PR/MR contracts, Figma policy, scripting runtime, etc. |
+| `SHARED_AGENTS.md` | Tool-agnostic agent rules — branch naming, conventional commits, PR/MR contracts, Figma policy, scripting runtime, JavaScript package-manager hardening, etc. |
 | `AGENTS.md` | Agent-facing rules for editing files in **this** directory. |
 | `README.md` | This file. |
 
