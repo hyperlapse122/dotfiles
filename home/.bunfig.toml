@@ -1,2 +1,18 @@
+# Bun install-time hardening.
+#
+# `ignoreScripts` is a defense-in-depth setting. Bun is already deny-by-default
+# for arbitrary dependency lifecycle scripts (only `trustedDependencies` in
+# package.json and ~500 built-in allowlisted packages run scripts), but
+# `ignoreScripts = true` disables *all* of that, including the built-in
+# allowlist. To re-enable a specific package, list it in `trustedDependencies`
+# inside that project's package.json -- there is no global allowlist.
+#
+# Refs:
+#   https://bun.com/docs/runtime/bunfig#install-ignorescripts
+#   https://bun.com/docs/pm/lifecycle
 [install]
-minimumReleaseAge = 86400
+# 1 week (in seconds). Bun's parser: minimum_release_age_ms = value * ms_per_s.
+minimumReleaseAge = 604800
+ignoreScripts = true
+# Pin exact versions for `bun add` -- no ^ / ~ range prefix.
+exact = true
