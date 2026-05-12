@@ -82,6 +82,7 @@ EOF
     btop
     gh
     ripgrep
+    yp-tools
 
     # Korean input method
     fcitx5
