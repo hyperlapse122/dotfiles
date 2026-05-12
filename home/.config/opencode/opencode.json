@@ -80,6 +80,19 @@
 					"importModuleSpecifierPreference": "relative"
 				}
 			}
+		},
+		"marksman": {
+			"command": [
+				"mise",
+				"exec",
+				"-q",
+				"marksman",
+				"--",
+				"marksman"
+			],
+			"extensions": [
+				".md"
+			]
 		}
 	},
 	"mcp": {
@@ -114,7 +127,7 @@
 				"--",
 				"aikido-mcp"
 			],
-			"enabled": true,
+			"enabled": false,
 			"environment": {
 				"AIKIDO_API_KEY": "{file:~/.secrets/akido-mcp-key}",
 			},

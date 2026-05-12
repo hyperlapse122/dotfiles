@@ -57,3 +57,7 @@
       stdin: true
       stdout: true
       stderr: true
+    - command: mise exec node@latest -- node scripts/render-opencode-prompt-append.mjs
+      description: Render OpenCode prompt_append config
+      stdout: true
+      stderr: true
