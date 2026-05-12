@@ -43,6 +43,16 @@
       stdout: true
       stderr: true
 
+# Render tracked *.1password templates into ~/.secrets. The helper no-ops when
+# no templates exist; when templates are present it requires an authenticated
+# `op` CLI session.
+- shell:
+    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/inject-1password-secrets.ps1
+      description: Inject 1Password templates into ~/.secrets
+      stdin: true
+      stdout: true
+      stderr: true
+
 # Install desktop fonts to %LOCALAPPDATA%\Microsoft\Windows\Fonts (no admin;
 # Win10 1803+). Idempotent: skips fonts already present via marker check.
 # Pass `-Force` to reinstall.

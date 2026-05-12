@@ -47,6 +47,16 @@
       stdout: true
       stderr: true
 
+# Render tracked *.1password templates into ~/.secrets. The helper no-ops when
+# no templates exist; when templates are present it requires an authenticated
+# `op` CLI session.
+- shell:
+    - command: bash scripts/inject-1password-secrets.sh
+      description: Inject 1Password templates into ~/.secrets
+      stdin: true
+      stdout: true
+      stderr: true
+
 # Install desktop fonts to ~/Library/Fonts/ (no admin). Idempotent: skips
 # fonts already present via marker check. Pass `--force` to reinstall.
 - shell:
