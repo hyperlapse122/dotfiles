@@ -1,0 +1,35 @@
+# pnpm global config (v11+).
+#
+# From pnpm v11 onward, .npmrc is read for auth/registry settings ONLY.
+# All other settings -- including the install-script kill switch -- live in
+# this YAML file. ~/.npmrc already carries `ignore-scripts=true` for pnpm
+# v10 and earlier (which still read .npmrc); this file is the v11+ source.
+#
+# Global config path varies per OS -- dotbot must link this file to:
+#   Linux   : ~/.config/pnpm/config.yaml          (also $XDG_CONFIG_HOME/pnpm/config.yaml)
+#   macOS   : ~/Library/Preferences/pnpm/config.yaml
+#   Windows : ~/AppData/Local/pnpm/config/config.yaml
+#
+# `ignoreScripts: true` blocks every lifecycle hook pnpm would otherwise run
+# (preinstall / install / postinstall / prepare, plus the native-build path
+# for deps with binding.gyp). It takes precedence over `onlyBuiltDependencies`
+# and `allowBuilds`: when ignoreScripts is true, no build approval list is
+# consulted. Note that pnpm does NOT honor `dependenciesMeta.<pkg>.built` --
+# that field was removed from pnpm's manifest types; use `allowBuilds`
+# (v11+) or `onlyBuiltDependencies` (v10-) in pnpm-workspace.yaml for
+# per-project opt-in.
+#
+# Refs:
+#   https://pnpm.io/settings
+#   https://pnpm.io/cli/config
+#   https://pnpm.io/supply-chain-security
+ignoreScripts: true
+
+# 1 week (in minutes). pnpm computes: maximumPublishedBy = Date.now() - value * 60 * 1000.
+# A published version must be at least this old before pnpm will resolve it,
+# guarding against compromised packages newly pushed to the registry.
+minimumReleaseAge: 10080
+
+# Pin exact versions for `pnpm add` -- no ^ / ~ range prefix.
+# `~/.npmrc save-exact=true` covers pnpm v10-; this is the v11+ equivalent.
+saveExact: true
