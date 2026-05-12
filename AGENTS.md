@@ -110,8 +110,8 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 
 | From | Command |
 |---|---|
-| Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml) |
-| Fresh Windows | `.\install.ps1` (same contract, PowerShell) |
+| Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml; OS yaml also runs `scripts/inject-1password-secrets.sh`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
+| Fresh Windows | `.\install.ps1` (same contract, PowerShell; OS yaml also runs `scripts/inject-1password-secrets.ps1`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
 | Re-link after pulling repo | same `install.sh` / `install.ps1`; dotbot's `relink: true` default makes it idempotent |
 | Fedora package install | `scripts/install-packages.sh` (manual; enables COPRs + RPM Fusion + third-party repos, then `dnf install`) |
 

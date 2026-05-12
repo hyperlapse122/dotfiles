@@ -2,7 +2,7 @@
 
 Cross-platform dotfiles for **Windows + macOS + Fedora Linux**, managed by [dotbot](https://github.com/anishathalye/dotbot) via mise-managed `uvx`.
 
-`uvx dotbot` is run **ephemerally** through [`mise`](https://mise.jdx.dev/) every time — dotbot itself is never installed. The bootstrap also runs a small set of helpers for fonts, GitLab CLI config, Linux `/etc` drop-ins, and KDE touchpad/font preferences where applicable.
+`uvx dotbot` is run **ephemerally** through [`mise`](https://mise.jdx.dev/) every time — dotbot itself is never installed. The bootstrap also runs a small set of helpers for fonts, GitLab CLI config, 1Password template injection, Linux `/etc` drop-ins, and KDE touchpad/font preferences where applicable.
 
 ## Quickstart
 
@@ -40,7 +40,7 @@ It is **not** invoked from `install.sh` — package selection is opinionated and
 | Linux | `bash`, `curl`, `git`, `unzip`, [`mise`](https://mise.jdx.dev/) |
 | Windows | PowerShell 5.1+, [`mise`](https://mise.jdx.dev/), [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/developer-mode-features-and-debugging) enabled (or run as Administrator) for symlink creation |
 
-`unzip` is needed by [`scripts/install-fonts.sh`](./scripts/install-fonts.sh) (Windows uses built-in `Expand-Archive`). The font installer uses GitHub CLI (`gh`) when available and otherwise falls back to `mise exec gh@latest -- gh`.
+`unzip` is needed by [`scripts/install-fonts.sh`](./scripts/install-fonts.sh) (Windows uses built-in `Expand-Archive`). The font installer uses GitHub CLI (`gh`) when available and otherwise falls back to `mise exec gh@latest -- gh`. If any `*.1password` templates are tracked in the repo, the bootstrap renders them into `~/.secrets/` with [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/); install and sign in to the 1Password CLI before bootstrapping on machines that need those secrets.
 
 Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap scripts. dotbot itself is **never installed** — mise provides [`uv`](https://docs.astral.sh/uv/) for the invocation, and `uvx dotbot` runs dotbot ephemerally from PyPI every time.
 
