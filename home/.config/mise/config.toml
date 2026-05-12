@@ -35,16 +35,17 @@ ast-grep = "latest"
 "npm:portless" = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:node-gyp" = "latest"
+shellcheck = "latest"
+"npm:bash-language-server" = "latest"
+marksman = "latest"
 
 # agentic ai
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
 claude-code = "latest"
 
-# opencode
+# opencode for Windows
 "npm:opencode-ai" = { version = "latest", os = ["windows"] }
-shellcheck = "latest"
-"npm:bash-language-server" = "latest"
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
