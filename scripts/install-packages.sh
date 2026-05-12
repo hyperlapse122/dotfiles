@@ -14,9 +14,11 @@ else
 fi
 
 fedora() {
-  # Install repository manager
-  # TODO: make it run when fedora-workstation-repositories is not installed
-  "${SUDO[@]}" dnf install fedora-workstation-repositories -y
+  # Install repository manager only when missing — dnf would otherwise hit the
+  # network just to discover the package is already installed.
+  if ! rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install fedora-workstation-repositories -y
+  fi
 
   # Enable third party repositories
   "${SUDO[@]}" fedora-third-party enable
@@ -25,18 +27,41 @@ fedora() {
   "${SUDO[@]}" dnf copr enable alternateved/keyd -y
   "${SUDO[@]}" dnf copr enable jdxcode/mise -y
 
-  # Install RPMFusion and set fedora-cisco-openh264.enabled to 1 for steam and discord
-  # TODO: Skip RPM Fusion installation when packages are already installed
-  "${SUDO[@]}" dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm -y
+  # Install RPM Fusion (free + nonfree) — skip the network install when both
+  # release packages are already present. fedora-cisco-openh264 is enabled
+  # unconditionally (setopt is idempotent) so steam/discord deps resolve.
+  if ! rpm -q rpmfusion-free-release rpmfusion-nonfree-release >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install -y \
+      "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+      "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+  fi
   "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
 
-  # Install 1Password repository
+  # Install 1Password repository. Quoted heredoc keeps $basearch literal so
+  # dnf substitutes it at install time (not at script-eval time).
   "${SUDO[@]}" rpm --import https://downloads.1password.com/linux/keys/1password.asc
-  "${SUDO[@]}" sh -c 'echo -e "[1password]\nname=1Password Stable Channel\nbaseurl=https://downloads.1password.com/linux/rpm/stable/\$basearch\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=\"https://downloads.1password.com/linux/keys/1password.asc\"" > /etc/yum.repos.d/1password.repo'
+  "${SUDO[@]}" tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
+[1password]
+name=1Password Stable Channel
+baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey="https://downloads.1password.com/linux/keys/1password.asc"
+EOF
 
   # Install Visual Studio Code repository
   "${SUDO[@]}" rpm --import https://packages.microsoft.com/keys/microsoft.asc
-  echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | "${SUDO[@]}" tee /etc/yum.repos.d/vscode.repo > /dev/null
+  "${SUDO[@]}" tee /etc/yum.repos.d/vscode.repo >/dev/null <<'EOF'
+[code]
+name=Visual Studio Code
+baseurl=https://packages.microsoft.com/yumrepos/vscode
+enabled=1
+autorefresh=1
+type=rpm-md
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+EOF
 
   # Install docker repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo --overwrite
@@ -44,15 +69,64 @@ fedora() {
   # Add Tailscale repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
 
-  # Install packages
-  # TODO: install steam and discord for non-vm PC
+  # Install packages, grouped by purpose and alphabetised within each group.
+  # steam/discord are bare-metal-only — systemd-detect-virt exits 0 when
+  # virtualization is detected, 1 on bare metal.
   "${SUDO[@]}" dnf group install development-tools -y
-  "${SUDO[@]}" dnf install pkg-config btop gcc-c++ \
-    fcitx5 fcitx5-hangul keyd \
-    dotnet-sdk-10.0 dotnet-sdk-8.0 \
-    ripgrep solaar solaar-udev 1password 1password-cli mise code \
-    docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
-    google-chrome-stable gh tailscale -y
+  local -a packages=(
+    # Build tooling
+    gcc-c++
+    pkg-config
+
+    # CLI utilities
+    btop
+    gh
+    ripgrep
+
+    # Korean input method
+    fcitx5
+    fcitx5-hangul
+
+    # Keyboard remapper
+    keyd
+
+    # Language toolchains + version manager
+    dotnet-sdk-10.0
+    dotnet-sdk-8.0
+    mise
+
+    # Logitech device manager
+    solaar
+    solaar-udev
+
+    # Password manager
+    1password
+    1password-cli
+
+    # Editor
+    code
+
+    # Container runtime (Docker CE + plugins)
+    containerd.io
+    docker-buildx-plugin
+    docker-ce
+    docker-ce-cli
+    docker-compose-plugin
+
+    # Browser
+    google-chrome-stable
+
+    # Mesh networking / VPN
+    tailscale
+  )
+  if ! systemd-detect-virt --quiet; then
+    # Bare-metal-only: games + chat (both via RPM Fusion nonfree)
+    packages+=(
+      discord
+      steam
+    )
+  fi
+  "${SUDO[@]}" dnf install -y "${packages[@]}"
 }
 
 dotnet-tools() {
@@ -68,7 +142,14 @@ systemd() {
 
 user-groups() {
   "${SUDO[@]}" usermod -aG docker,keyd "$USER"
-  # TODO: notify user to re-login
+
+  # Group changes only take effect on next login. Notify when the current
+  # shell is missing either group — silent on re-runs after re-login.
+  if ! id -nG | grep -qw docker || ! id -nG | grep -qw keyd; then
+    printf '\n'
+    printf 'NOTE: Added "%s" to groups: docker, keyd\n' "$USER"
+    printf '      Log out and back in (or reboot) for group membership to take effect.\n'
+  fi
 }
 
 fedora
