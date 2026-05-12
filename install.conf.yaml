@@ -48,6 +48,9 @@
     # Yarn 2+ global config (cross-platform)
     ~/.yarnrc.yml: home/.yarnrc.yml
 
+    # npm global config (cross-platform)
+    ~/.npmrc: home/.npmrc
+
 - shell:
     - command: mise install
       description: Install tools from mise
