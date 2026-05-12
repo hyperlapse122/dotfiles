@@ -14,7 +14,7 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 .
 ├── AGENTS.md
 ├── README.md                        # User quickstart, top-level
-├── .agents/                         # Repo-local agent skills (currently empty)
+├── .agents/                         # Reserved repo-local agent skill tree (placeholder only today)
 ├── agents/                          # Cross-tool agent rules linked into ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ...
 ├── install.conf.yaml                # Shared dotbot tasks (all OSes)
 ├── install.linux.yaml               # Linux-only dotbot tasks
@@ -24,11 +24,12 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── install.ps1                      # Bootstrap for Windows
 ├── home/                            # Files that symlink into $HOME (home/foo -> ~/foo)
 │   ├── .agents/                     # Runtime agent skill tree linked to ~/.agents
-│   └── .config/opencode/            # OpenCode config and global agent rules
+│   ├── .config/opencode/            # OpenCode config and custom commands (not AGENTS.md)
+│   └── .secrets/*.1password         # 1Password templates rendered to ~/.secrets/
 ├── system/<os>/                     # Root-owned files mirroring absolute paths,
 │                                    # e.g. system/linux/etc/NetworkManager/conf.d/...
 │                                    # NOT installed via dotbot — see "Root-owned config".
-└── scripts/                         # Helpers used by install scripts
+└── scripts/                         # Bootstrap helpers plus manual setup scripts
 ```
 
 Every tracked top-level directory MUST have its own `README.md` describing what lives there and how it is consumed. Untracked tool state directories such as `.git/`, `.codex/`, and `.sisyphus/` are not part of the documented repo surface.
@@ -61,7 +62,7 @@ Every script ships in **both** forms or it is broken:
 
 Adding `foo.sh` without `foo.ps1` is a regression. The two MUST behave equivalently for their target platforms; if a feature is impossible on one side, the script SHOULD exit with a clear error rather than silently no-op.
 
-Exception: scripts that are inherently single-platform MAY skip parity — document the reason in a header comment in the script itself. Current exceptions: `scripts/install-linux-system-config.sh` (writes to `/etc/`, Linux only), `scripts/install-packages.sh` (uses `dnf`, Fedora only), `scripts/config-kde.sh` (configures KDE Plasma 6, Linux only).
+Exception: scripts that are inherently single-platform MAY skip parity — document the reason in a header comment in the script itself. Current exceptions: `scripts/install-linux-system-config.sh` (writes to `/etc/`, Linux only), `scripts/install-packages.sh` (uses `dnf`, Fedora only), `scripts/config-kde.sh` (configures KDE Plasma 6, Linux only), and `scripts/auth-tailscale.sh` (runs Linux `tailscale up` with `sudo`).
 
 ### Root-owned config (`/etc/...`)
 
@@ -110,10 +111,10 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 
 | From | Command |
 |---|---|
-| Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml; OS yaml also runs `scripts/inject-1password-secrets.sh`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
-| Fresh Windows | `.\install.ps1` (same contract, PowerShell; OS yaml also runs `scripts/inject-1password-secrets.ps1`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
+| Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml; shared yaml renders OpenCode prompt appends through mise-managed Node.js; OS yaml also runs `scripts/inject-1password-secrets.sh`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
+| Fresh Windows | `.\install.ps1` (same contract, PowerShell; shared yaml renders OpenCode prompt appends through mise-managed Node.js; OS yaml also runs `scripts/inject-1password-secrets.ps1`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
 | Re-link after pulling repo | same `install.sh` / `install.ps1`; dotbot's `relink: true` default makes it idempotent |
-| Fedora package install | `scripts/install-packages.sh` (manual; enables COPRs + RPM Fusion + third-party repos, then `dnf install`) |
+| Fedora package install | `scripts/install-packages.sh` (manual; enables COPRs, RPM Fusion, 1Password, VS Code, Docker, and Tailscale repos; installs packages, dotnet tools, and enables services) |
 
 `install.sh` MUST detect OS via `uname -s` (`Darwin` / `Linux`) and pass the matching `install.<os>.yaml` as the second `-c`. `install.ps1` always uses `install.windows.yaml`.
 
