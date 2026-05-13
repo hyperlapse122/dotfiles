@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/install-fonts.sh
+# scripts/bootstrap/install-fonts.sh
 #
 # Installs desktop fonts user-wide (no sudo) on macOS and Linux by downloading
 # release archives from GitHub. Add new fonts by appending entries to the FONTS

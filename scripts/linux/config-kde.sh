@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/config-kde.sh
+# scripts/linux/config-kde.sh
 #
 # Combined KDE Plasma 6 user-side configuration. Five independent steps,
 # each guarded so a missing prerequisite skips that step alone (returning 0)
@@ -10,7 +10,7 @@
 #                       [WM] activeFont)            -> Pretendard
 #                 mono (fixed)                      -> JetBrainsMono Nerd Font
 #                 Errors (exit 1) when a requested font isn't installed - run
-#                 scripts/install-fonts.sh first.
+#                 scripts/bootstrap/install-fonts.sh first.
 #
 #   2. touchpad - busctl --user -> KWin's org.kde.KWin.InputDeviceManager
 #                 For each touchpad whose libinput name appears in
@@ -48,7 +48,7 @@
 #                 so we use `--type path` and let KConfig write the
 #                 canonical `InputMethod[$e]=...` form. Skips cleanly when
 #                 fcitx5-wayland-launcher is not installed - install
-#                 fcitx5 (scripts/install-packages.sh on Fedora) and re-run.
+#                 fcitx5 (scripts/linux/install-packages.sh on Fedora) and re-run.
 #
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
@@ -106,7 +106,7 @@ configure_fonts() {
     local matched
     matched="$(fc-match -f '%{family[0]}' "$family")"
     if [[ "$matched" != "$family" ]]; then
-      printf '  font "%s" not installed (fc-match -> "%s"). Run scripts/install-fonts.sh first.\n' \
+      printf '  font "%s" not installed (fc-match -> "%s"). Run scripts/bootstrap/install-fonts.sh first.\n' \
         "$family" "$matched" >&2
       return 1
     fi
@@ -420,7 +420,7 @@ configure_kickoff() {
 # Target file is set in VIRTUAL_KEYBOARD_DESKTOP_FILE below. Soft-skips
 # when the .desktop file isn't installed (fcitx5 may not be installed yet
 # when this runs from the dotbot bootstrap; re-run after
-# scripts/install-packages.sh).
+# scripts/linux/install-packages.sh).
 #
 # Wayland-only setting. On X11 sessions KWin ignores it - harmless to
 # write. Applies on next KWin (re)start; no live-reload via DBus.

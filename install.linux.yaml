@@ -58,7 +58,7 @@
 
 # Configure glab with script
 - shell:
-    - command: sh scripts/setup-glab.sh
+    - command: sh scripts/auth/setup-glab.sh
       description: Set up glab cli
       stdin: true
       stdout: true
@@ -68,18 +68,18 @@
 # no templates exist; when templates are present it requires an authenticated
 # `op` CLI session.
 - shell:
-    - command: bash scripts/inject-1password-secrets.sh
+    - command: bash scripts/bootstrap/inject-1password-secrets.sh
       description: Inject 1Password templates into ~/.secrets
       stdin: true
       stdout: true
       stderr: true
 
-# Root-owned system config. Delegated to scripts/install-linux-system-config.sh
+# Root-owned system config. Delegated to scripts/linux/install-linux-system-config.sh
 # so a single `sudo` prompt covers all files (sudo's credential cache makes
 # subsequent installs in that script password-less). The script also no-ops the
 # `sudo` prefix when already root, so it works inside chroot/container too.
 - shell:
-    - command: bash scripts/install-linux-system-config.sh
+    - command: bash scripts/linux/install-linux-system-config.sh
       description: Install root-owned config to /etc/ (NetworkManager drop-ins, locale, keyd, libinput, plymouth, udev)
       stdin: true
       stdout: true
@@ -90,7 +90,7 @@
 # the slow first-run font downloads (~150 MB for Nerd Fonts) can then run
 # unattended. Idempotent: skips fonts already present via marker check.
 - shell:
-    - command: bash scripts/install-fonts.sh
+    - command: bash scripts/bootstrap/install-fonts.sh
       description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
       stdin: true
       stdout: true
@@ -115,12 +115,12 @@
 # bus, fcitx5 not installed), and the whole script exits 0 on non-KDE
 # systems - safe to run on non-KDE Linux (GNOME, sway, headless servers,
 # chroot/container, etc.).
-# MUST run AFTER install-fonts.sh: that step finishes with `fc-cache -f`, so
+# MUST run AFTER scripts/bootstrap/install-fonts.sh: that step finishes with `fc-cache -f`, so
 # fc-match here sees the just-installed fonts. The fonts step errors out
 # (exit 1) if a requested font isn't installed. Re-runnable; every write is
 # idempotent.
 - shell:
-    - command: bash scripts/config-kde.sh
+    - command: bash scripts/linux/config-kde.sh
       description: Configure KDE Plasma 6 (fonts, touchpad, panel grouping, kickoff list view, virtual keyboard; skipped on non-KDE systems)
       stdin: true
       stdout: true

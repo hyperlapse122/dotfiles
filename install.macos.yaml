@@ -43,7 +43,7 @@
 
 # Configure glab with script
 - shell:
-    - command: sh scripts/setup-glab.sh
+    - command: sh scripts/auth/setup-glab.sh
       description: Set up glab cli
       stdin: true
       stdout: true
@@ -53,7 +53,7 @@
 # no templates exist; when templates are present it requires an authenticated
 # `op` CLI session.
 - shell:
-    - command: bash scripts/inject-1password-secrets.sh
+    - command: bash scripts/bootstrap/inject-1password-secrets.sh
       description: Inject 1Password templates into ~/.secrets
       stdin: true
       stdout: true
@@ -62,7 +62,7 @@
 # Install desktop fonts to ~/Library/Fonts/ (no admin). Idempotent: skips
 # fonts already present via marker check. Pass `--force` to reinstall.
 - shell:
-    - command: bash scripts/install-fonts.sh
+    - command: bash scripts/bootstrap/install-fonts.sh
       description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
       stdin: true
       stdout: true

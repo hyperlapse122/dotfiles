@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# scripts/import-gpg-keys.ps1
+# scripts/auth/import-gpg-keys.ps1
 #
 # PowerShell counterpart to import-gpg-keys.sh. Reads GPG private key from
 # 1Password via `op read` and pipes it into `gpg --batch --import`.

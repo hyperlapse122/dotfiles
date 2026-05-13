@@ -24,10 +24,10 @@ cd $HOME\dotfiles
 
 ### Fedora packages (optional)
 
-[`scripts/install-packages.sh`](./scripts/install-packages.sh) enables COPRs (keyd, mise), RPM Fusion, and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale) before installing packages via `dnf`, installing selected dotnet global tools, enabling `keyd`/`docker`/`tailscaled`, and adding the user to the `docker` and `keyd` groups. Run it manually once you're sure of the package set:
+[`scripts/linux/install-packages.sh`](./scripts/linux/install-packages.sh) enables COPRs (keyd, mise), RPM Fusion, and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale) before installing packages via `dnf`, installing selected dotnet global tools, enabling `keyd`/`docker`/`tailscaled`, and adding the user to the `docker` and `keyd` groups. Run it manually once you're sure of the package set:
 
 ```sh
-./scripts/install-packages.sh
+./scripts/linux/install-packages.sh
 ```
 
 It is **not** invoked from `install.sh` — package selection is opinionated and should be reviewed before running.
@@ -40,7 +40,7 @@ It is **not** invoked from `install.sh` — package selection is opinionated and
 | Linux | `bash`, `curl`, `git`, `unzip`, [`mise`](https://mise.jdx.dev/) |
 | Windows | PowerShell 5.1+, [`mise`](https://mise.jdx.dev/), [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/developer-mode-features-and-debugging) enabled (or run as Administrator) for symlink creation |
 
-`unzip` is needed by [`scripts/install-fonts.sh`](./scripts/install-fonts.sh) (Windows uses built-in `Expand-Archive`). The font installer uses GitHub CLI (`gh`) when available and otherwise falls back to `mise exec gh@latest -- gh`. If any `*.1password` templates are tracked in the repo, the bootstrap renders them into `~/.secrets/` with [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/); install and sign in to the 1Password CLI before bootstrapping on machines that need those secrets.
+`unzip` is needed by [`scripts/bootstrap/install-fonts.sh`](./scripts/bootstrap/install-fonts.sh) (Windows uses built-in `Expand-Archive`). The font installer uses GitHub CLI (`gh`) when available and otherwise falls back to `mise exec gh@latest -- gh`. If any `*.1password` templates are tracked in the repo, the bootstrap renders them into `~/.secrets/` with [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/); install and sign in to the 1Password CLI before bootstrapping on machines that need those secrets.
 
 Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap scripts. dotbot itself is **never installed** — mise provides [`uv`](https://docs.astral.sh/uv/) for the invocation, `uvx dotbot` runs dotbot ephemerally from PyPI every time, and the OpenCode prompt renderer runs through mise-managed Node.js.
 
@@ -52,7 +52,7 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 | `agents/` | Cross-tool agent rules linked into `~/.config/opencode/AGENTS.md` and `~/.codex/AGENTS.md` |
 | `home/` | User-owned dotfiles, runtime skill packages, and `*.1password` templates that install under `$HOME` |
 | `system/<os>/` | Root-owned config installed to absolute paths (e.g. `/etc/...`) |
-| `scripts/` | Bootstrap helpers plus manual auth/package/system setup scripts |
+| `scripts/` | Bootstrap helpers plus manual auth/package/system setup scripts, grouped by role |
 | `install.conf.yaml` | Shared dotbot tasks |
 | `install.<os>.yaml` | Per-OS dotbot tasks |
 | `install.sh` / `install.ps1` | Bootstrap entrypoints |
@@ -63,6 +63,6 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 
 `./install.sh` and `.\install.ps1` are idempotent — dotbot's link defaults create missing parents, relink existing symlinks, and force repo-managed links over real files at managed targets. This is overwrite behavior, not `stow --adopt`: existing target files are replaced by symlinks to the tracked repo files. `mise install` refreshes configured tools, and helper scripts skip or overwrite deterministic targets safely. Re-run after every `git pull`.
 
-The first run downloads fonts (Pretendard, Pretendard JP, JetBrains Mono, D2Coding, plus Nerd Font variants of the latter two) into the user font directory — `~/.local/share/fonts` on Linux, `~/Library/Fonts` on macOS, `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows. Run [`scripts/install-fonts.{sh,ps1}`](./scripts/) directly with `--force` / `-Force` to refresh fonts later.
+The first run downloads fonts (Pretendard, Pretendard JP, JetBrains Mono, D2Coding, plus Nerd Font variants of the latter two) into the user font directory — `~/.local/share/fonts` on Linux, `~/Library/Fonts` on macOS, `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows. Run [`scripts/bootstrap/install-fonts.{sh,ps1}`](./scripts/bootstrap/) directly with `--force` / `-Force` to refresh fonts later.
 
 On Linux, the bootstrap also installs tracked files under [`system/linux/etc/`](./system/linux/etc/) to `/etc/` with `sudo install -D -m 644` (the `etc/sudoers.d/` subtree installs at mode `0440` and only on virtual machines), then applies KDE Plasma 6 font, touchpad, panel grouping, Kickoff list-view, and Fcitx virtual-keyboard preferences when a suitable KDE session is available.

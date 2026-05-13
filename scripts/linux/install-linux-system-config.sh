@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# scripts/install-linux-system-config.sh
+# scripts/linux/install-linux-system-config.sh
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
 # `sudo install -D -m <mode>`. Called from a `shell:` step in
-# ../install.linux.yaml (dotbot has no sudo / root mode, see AGENTS.md).
+# ../../install.linux.yaml (dotbot has no sudo / root mode, see AGENTS.md).
 #
 # Single-platform (Linux only) by design — no .ps1 counterpart per the
 # script-parity exception in AGENTS.md.
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC_ROOT="$REPO_ROOT/system/linux"
 
 # Use sudo only when not already root (e.g. when invoked inside chroot/container).

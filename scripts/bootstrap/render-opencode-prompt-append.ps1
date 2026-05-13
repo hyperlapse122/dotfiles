@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# scripts/render-opencode-prompt-append.ps1
+# scripts/bootstrap/render-opencode-prompt-append.ps1
 #
 # PowerShell wrapper for render-opencode-prompt-append.mjs. Keeps script parity
 # with render-opencode-prompt-append.sh while the rendering logic runs through

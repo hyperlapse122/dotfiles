@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# scripts/auth-glab.ps1
+# scripts/auth/auth-glab.ps1
 #
 # PowerShell counterpart to auth-glab.sh. Prefer system `glab`; fall back to
 # ephemeral `mise exec glab@latest`. Error if neither is available.

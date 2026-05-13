@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# scripts/auth-gh.ps1
+# scripts/auth/auth-gh.ps1
 #
 # PowerShell counterpart to auth-gh.sh. Prefer system `gh`; fall back to
 # ephemeral `mise exec gh@latest`. Error if neither is available.

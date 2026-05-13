@@ -21,7 +21,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.bunfig.toml` | Tracked Bun hardening config source; not linked by the current install yaml |
 | `home/.local/bin/docker-credential-*`, `home/.local/bin/opencode*` | CLI helpers under `~/.local/bin/` for the platforms that use them |
 | `home/.local/share/applications/*.desktop` | Linux desktop entries under `~/.local/share/applications/` |
-| `home/.secrets/*.1password` | Rendered by `scripts/inject-1password-secrets.*` to `~/.secrets/<name>` |
+| `home/.secrets/*.1password` | Rendered by `scripts/bootstrap/inject-1password-secrets.*` to `~/.secrets/<name>` |
 
 ## Conventions
 

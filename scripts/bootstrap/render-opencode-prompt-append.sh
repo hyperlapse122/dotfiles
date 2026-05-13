@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/render-opencode-prompt-append.sh
+# scripts/bootstrap/render-opencode-prompt-append.sh
 #
 # POSIX wrapper for render-opencode-prompt-append.mjs. Keeps script parity with
 # render-opencode-prompt-append.ps1 while the rendering logic runs through

@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# scripts/inject-1password-secrets.ps1
+# scripts/bootstrap/inject-1password-secrets.ps1
 #
 # PowerShell counterpart to inject-1password-secrets.sh. Finds all
 # `*.1password` templates in the repository, renders them with `op inject`, and
@@ -49,7 +49,7 @@ function Set-OwnerOnlyPermissions {
 }
 
 $scriptDir = Split-Path -Parent $PSCommandPath
-$repoRoot = Resolve-Path (Join-Path $scriptDir '..')
+$repoRoot = Resolve-Path (Join-Path $scriptDir '..\..')
 $secretsDir = if ($env:SECRETS_DIR) { $env:SECRETS_DIR } else { Join-Path $HOME '.secrets' }
 
 $templateFiles = @(Get-ChildItem -LiteralPath $repoRoot -Filter '*.1password' -File -Recurse -Force |

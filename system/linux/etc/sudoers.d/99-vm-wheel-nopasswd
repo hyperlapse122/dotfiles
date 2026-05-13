@@ -1,7 +1,7 @@
 # /etc/sudoers.d/99-vm-wheel-nopasswd
 #
 # Password-less sudo for the wheel group. Installed by
-# scripts/install-linux-system-config.sh ONLY on virtual machines
+# scripts/linux/install-linux-system-config.sh ONLY on virtual machines
 # (gated on `systemd-detect-virt --vm`); never on bare-metal hosts,
 # where the convenience isn't worth the security trade-off.
 #

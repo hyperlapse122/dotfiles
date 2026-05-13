@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/render-opencode-prompt-append.mjs
+// scripts/bootstrap/render-opencode-prompt-append.mjs
 //
 // Renders markdown prompt append files into oh-my-openagent.jsonc without
 // requiring JSONC dependencies. The editor preserves surrounding comments and
@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, '..');
+const repoRoot = path.resolve(scriptDir, '../..');
 const configPath = path.join(repoRoot, 'home/.config/opencode/oh-my-openagent.jsonc');
 
 const promptAppends = [
@@ -48,7 +48,7 @@ for (const { agent, promptPath } of promptAppends) {
 
 if (checkOnly) {
   if (config !== originalConfig) {
-    console.error('render-opencode-prompt-append.mjs: config is out of date. Run scripts/render-opencode-prompt-append.sh or .ps1.');
+    console.error('render-opencode-prompt-append.mjs: config is out of date. Run scripts/bootstrap/render-opencode-prompt-append.sh or .ps1.');
     process.exit(1);
   }
   console.log('render-opencode-prompt-append.mjs: config is up to date.');

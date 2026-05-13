@@ -39,7 +39,7 @@
 # requiring a system policy change. Forward slashes in -File are fine -
 # PowerShell parses the path itself.
 - shell:
-    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-glab.ps1
+    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/auth/setup-glab.ps1
       description: Set up glab cli
       stdin: true
       stdout: true
@@ -49,7 +49,7 @@
 # no templates exist; when templates are present it requires an authenticated
 # `op` CLI session.
 - shell:
-    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/inject-1password-secrets.ps1
+    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap/inject-1password-secrets.ps1
       description: Inject 1Password templates into ~/.secrets
       stdin: true
       stdout: true
@@ -59,7 +59,7 @@
 # Win10 1803+). Idempotent: skips fonts already present via marker check.
 # Pass `-Force` to reinstall.
 - shell:
-    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-fonts.ps1
+    - command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap/install-fonts.ps1
       description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
       stdin: true
       stdout: true

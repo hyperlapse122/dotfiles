@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# scripts/auth-tailscale.sh - Authenticate/configure the Linux Tailscale daemon.
+# scripts/auth/auth-tailscale.sh - Authenticate/configure the Linux Tailscale daemon.
 #
 # Single-platform (Linux only) by design. This wraps `tailscale up` for the
-# system service installed/enabled by scripts/install-packages.sh on Fedora;
+# system service installed/enabled by scripts/linux/install-packages.sh on Fedora;
 # macOS and Windows use their native Tailscale apps/flows. No .ps1 counterpart
 # per the script-parity exception in ../AGENTS.md.
 
