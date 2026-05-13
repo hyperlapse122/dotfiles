@@ -47,9 +47,9 @@ Every tracked top-level directory MUST have its own `README.md` describing what 
 - The single canonical invocation: `mise exec uv@latest -- uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml install.<os>.yaml`. Both `install.sh` and `install.ps1` MUST call exactly this; nothing else may run dotbot.
 - **Pass both yaml files under a SINGLE `-c` flag.** dotbot's `-c` is argparse `nargs='+'` (not `append`); writing `-c install.conf.yaml -c install.<os>.yaml` silently drops the first file (only the last `-c` wins). Don't change this back.
 - The bootstrap scripts MUST NOT install `mise`; users install `mise` themselves before running the scripts. The scripts may only verify that `mise` is available, then use `mise exec uv@latest -- uvx`. **Do not** add a step that installs dotbot itself.
-- `install.conf.yaml` MUST start with `defaults: { link: { create: true, relink: true } }` so individual link entries don't have to repeat them.
+- `install.conf.yaml` MUST start with `defaults: { link: { create: true, relink: true, force: true } }` so individual link entries don't have to repeat them. This repo intentionally treats tracked dotfiles as authoritative: real files at managed targets are overwritten with repo symlinks during bootstrap. This is **not** stow-style adoption; do not move target files into the repo unless explicitly asked.
 - Per-OS files exist because dotbot's `if:` directive runs in `$SHELL`, which is unreliable on Windows (requires `bash -c` wrapping and an installed bash). **Do platform-gating via per-OS files, not `if:`.** `if:` is acceptable for finer Unix-only conditionals (per-host gates, optional package presence).
-- Forbidden in `link:` blocks: `force: true` — silently overwrites real files. If you truly need destructive behavior, use a `shell:` step that prompts the user.
+- Per-OS install files SHOULD also keep the same link defaults (`create`, `relink`, and `force`) unless a platform has a specific reason to diverge.
 
 ### Script parity (HARD)
 

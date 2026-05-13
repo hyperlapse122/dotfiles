@@ -61,7 +61,7 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 
 ## Re-running
 
-`./install.sh` and `.\install.ps1` are idempotent — dotbot's `relink: true` default replaces existing symlinks in place, `mise install` refreshes configured tools, and helper scripts skip or overwrite deterministic targets safely. Re-run after every `git pull`.
+`./install.sh` and `.\install.ps1` are idempotent — dotbot's link defaults create missing parents, relink existing symlinks, and force repo-managed links over real files at managed targets. This is overwrite behavior, not `stow --adopt`: existing target files are replaced by symlinks to the tracked repo files. `mise install` refreshes configured tools, and helper scripts skip or overwrite deterministic targets safely. Re-run after every `git pull`.
 
 The first run downloads fonts (Pretendard, Pretendard JP, JetBrains Mono, D2Coding, plus Nerd Font variants of the latter two) into the user font directory — `~/.local/share/fonts` on Linux, `~/Library/Fonts` on macOS, `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows. Run [`scripts/install-fonts.{sh,ps1}`](./scripts/) directly with `--force` / `-Force` to refresh fonts later.
 
