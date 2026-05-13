@@ -3,13 +3,16 @@
 	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/shared/model-requirements.ts
 	"agents": {
 		"sisyphus": {
-			// Preferred
-			// "model": "anthropic/claude-opus-4-7",
-			// "variant": "max"
-
-			// Fallback
-			"model": "openai/gpt-5.5",
-			"variant": "medium"
+			"model": "anthropic/claude-opus-4-7",
+			"variant": "max",
+			"fallback_models": [
+				"opencode-go/kimi-k2.6",
+				"opencode-go/glm-5",
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "medium"
+				}
+			]
 		},
 		"hephaestus": {
 			"model": "openai/gpt-5.5",
@@ -30,47 +33,49 @@
 			"variant": "medium"
 		},
 		"prometheus": {
-			// Preferred
-			// "model": "anthropic/claude-opus-4-7",
-			// "variant": "max",
-			
-			// Fallback
-			"model": "openai/gpt-5.5",
-			"variant": "high",
-
-			// Shared
-			"prompt_append": "# Prometheus additional prompt\n\nMANDATORY post-plan workflow. Perform these steps in order, with no exceptions:\n\n1. Save the plan to `.sisyphus/plans/<name>.md` before presenting it as ready.\n   - Use a descriptive, task-specific filename.\n   - The plan must include scope, assumptions, risks, verification steps, and clear completion criteria.\n2. Self-review the saved plan for clarity, verifiability, and completeness.\n   - Remove vague language.\n   - Ensure every action has an observable outcome.\n   - Ensure verification proves the requested behavior, not just implementation activity.\n3. ALWAYS invoke Momus for high-accuracy review by passing the plan file path as the sole prompt.\n   - This is NON-NEGOTIABLE.\n   - Never skip it.\n   - Never describe Momus review as optional.\n   - Do not substitute an inline plan, summary, or copied plan content for the file path.\n4. Address ALL Momus findings before proceeding.\n   - Update the saved plan when findings require plan changes.\n   - If a finding is intentionally rejected, document the reason in the plan.\n5. Branch hygiene:\n   - If the current branch is `main`, do not rename it.\n   - If the current branch is not `main` and matches `opencode/*`, treat it as an auto-generated dedicated task branch.\n   - Rename that branch in place via `git branch -m` using project rules or git-flow convention (`feature/*`, `bugfix/*`, `refactor/*`, `docs/*`, `chore/*`).\n   - Never create a parallel branch for the same work.\n\nThe plan is not complete until it has been saved, self-reviewed, Momus-reviewed, updated for review findings, and branch hygiene has been handled when applicable.\n"
+			"model": "anthropic/claude-opus-4-7",
+			"variant": "max",
+			"prompt_append": "# Prometheus additional prompt\n\nMANDATORY post-plan workflow. Perform these steps in order, with no exceptions:\n\n1. Save the plan to `.sisyphus/plans/<name>.md` before presenting it as ready.\n   - Use a descriptive, task-specific filename.\n   - The plan must include scope, assumptions, risks, verification steps, and clear completion criteria.\n2. Self-review the saved plan for clarity, verifiability, and completeness.\n   - Remove vague language.\n   - Ensure every action has an observable outcome.\n   - Ensure verification proves the requested behavior, not just implementation activity.\n3. ALWAYS invoke Momus for high-accuracy review by passing the plan file path as the sole prompt.\n   - This is NON-NEGOTIABLE.\n   - Never skip it.\n   - Never describe Momus review as optional.\n   - Do not substitute an inline plan, summary, or copied plan content for the file path.\n4. Address ALL Momus findings before proceeding.\n   - Update the saved plan when findings require plan changes.\n   - If a finding is intentionally rejected, document the reason in the plan.\n5. Branch hygiene:\n   - If the current branch is `main`, do not rename it.\n   - If the current branch is not `main` and matches `opencode/*`, treat it as an auto-generated dedicated task branch.\n   - Rename that branch in place via `git branch -m` using project rules or git-flow convention (`feature/*`, `bugfix/*`, `refactor/*`, `docs/*`, `chore/*`).\n   - Never create a parallel branch for the same work.\n\nThe plan is not complete until it has been saved, self-reviewed, Momus-reviewed, updated for review findings, and branch hygiene has been handled when applicable.\n",
+		  "fallback_models": [
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "high"
+				}
+			]
 		},
 		"metis": {
-			// Preferred
-			// "model": "anthropic/claude-sonnet-4-6"
-			
-			// Fallback
-			"model": "openai/gpt-5.5",
-			"variant": "high"
+			"model": "anthropic/claude-sonnet-4-6",
+			"fallback_models": [
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "high"
+				}
+			]
 		},
 		"momus": {
 			"model": "openai/gpt-5.5",
 			"variant": "xhigh"
 		},
 		"atlas": {
-			// Preferred
-			// "model": "anthropic/claude-sonnet-4-6",
-			
-			// Fallback
-			"model": "openai/gpt-5.5",
-			"variant": "medium",
-
-			// Shared
-			"prompt_append": "# Atlas additional prompt\n\nMANDATORY post-execution workflow. Perform these steps in order, with no exceptions:\n\n1. Capture durable lessons in the relevant AGENTS.md files.\n   - Update only guidance that will help future agents operate this repository correctly.\n   - Keep instructions concise, actionable, and scoped to the owning directory.\n   - Do not add process noise, personal notes, or one-off task details.\n2. Verify the work before publishing.\n   - Run the repository's relevant lint, typecheck, test, build, and runtime verification commands.\n   - If a command is not applicable or unavailable, say so explicitly in the handoff or PR/MR body.\n   - Do not claim success for checks that were not run.\n3. BEFORE push, enforce branch hygiene.\n   - If the current branch matches `opencode/*`, treat it as an auto-generated task branch.\n   - Rename it in place via `git branch -m` using project rules or git-flow convention (`feature/*`, `bugfix/*`, `refactor/*`, `docs/*`, `chore/*`).\n   - Never create a parallel branch for the same work.\n4. Commit and push all changes.\n   - Commit only intentional changes.\n   - Keep secrets, local environment files, and unrelated work out of the commit.\n   - Use the repository's commit-message convention.\n5. If the current branch is not `main`, create or update the PR/MR per project conventions.\n   - Assign it to the authenticated user.\n   - Include a concise summary, verification evidence, and any known limitations or pre-existing failures.\n6. Watch CI/CD until completion.\n   - On pipeline failure, analyze the logs, fix the root cause, push a new commit, and repeat until the pipeline is green.\n   - NEVER abandon a failing pipeline.\n   - If external infrastructure prevents completion, document the blocker and the exact evidence.\n\nExecution is not complete until the work is verified, documented where useful, committed, pushed, reviewed through PR/MR when applicable, and CI/CD is green or an external blocker is clearly documented.\n"
+			"model": "anthropic/claude-sonnet-4-6",
+			"prompt_append": "# Atlas additional prompt\n\nMANDATORY post-execution workflow. Perform these steps in order, with no exceptions:\n\n1. Capture durable lessons in the relevant AGENTS.md files.\n   - Update only guidance that will help future agents operate this repository correctly.\n   - Keep instructions concise, actionable, and scoped to the owning directory.\n   - Do not add process noise, personal notes, or one-off task details.\n2. Verify the work before publishing.\n   - Run the repository's relevant lint, typecheck, test, build, and runtime verification commands.\n   - If a command is not applicable or unavailable, say so explicitly in the handoff or PR/MR body.\n   - Do not claim success for checks that were not run.\n3. BEFORE push, enforce branch hygiene.\n   - If the current branch matches `opencode/*`, treat it as an auto-generated task branch.\n   - Rename it in place via `git branch -m` using project rules or git-flow convention (`feature/*`, `bugfix/*`, `refactor/*`, `docs/*`, `chore/*`).\n   - Never create a parallel branch for the same work.\n4. Commit and push all changes.\n   - Commit only intentional changes.\n   - Keep secrets, local environment files, and unrelated work out of the commit.\n   - Use the repository's commit-message convention.\n5. If the current branch is not `main`, create or update the PR/MR per project conventions.\n   - Assign it to the authenticated user.\n   - Include a concise summary, verification evidence, and any known limitations or pre-existing failures.\n6. Watch CI/CD until completion.\n   - On pipeline failure, analyze the logs, fix the root cause, push a new commit, and repeat until the pipeline is green.\n   - NEVER abandon a failing pipeline.\n   - If external infrastructure prevents completion, document the blocker and the exact evidence.\n\nExecution is not complete until the work is verified, documented where useful, committed, pushed, reviewed through PR/MR when applicable, and CI/CD is green or an external blocker is clearly documented.\n",
+		  "fallback_models": [
+				"opencode-go/kimi-k2.6",
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "medium"
+				}
+			]
 		},
 		"sisyphus-junior": {
-			// Preferred
-			// "model": "anthropic/claude-sonnet-4-6",
-			
-			// Fallback
-			"model": "openai/gpt-5.5",
-			"variant": "medium"
+			"model": "anthropic/claude-sonnet-4-6",
+			"fallback_models": [
+				"opencode-go/kimi-k2.6",
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "medium"
+				}
+			]
 		}
 	},
 	"categories": {
@@ -78,16 +83,16 @@
 			"model": "google/gemini-3.1-pro-preview",
 			"variant": "high",
 			"fallback_models": [
-				// Preferred
-				// {
-				// 	"model": "anthropic/claude-opus-4-7",
-				// 	"variant": "max"
-				// }
-			
-				// Fallback
+				"opencode-go/glm-5",
 				{
-					"model": "openrouter/z-ai/glm-5"
-				}
+					"model": "anthropic/claude-opus-4-7",
+					"variant": "max"
+				},
+				"opencode-go/glm-5.1",
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "medium"
+				},
 			]
 		},
 		"ultrabrain": {
@@ -102,13 +107,10 @@
 			"model": "google/gemini-3.1-pro-preview",
 			"variant": "high",
 			"fallback_models": [
-				// Preferred
-				// {
-				// 	"model": "anthropic/claude-opus-4-7",
-				// 	"variant": "max"
-				// }
-			
-				// Fallback
+				{
+					"model": "anthropic/claude-opus-4-7",
+					"variant": "max"
+				},
 				{
 					"model": "openai/gpt-5.5"
 				}
@@ -118,30 +120,30 @@
 			"model": "openai/gpt-5.4-mini"
 		},
 		"unspecified-low": {
-			// Preferred
-			// "model": "anthropic/claude-sonnet-4-6",
-			
-			// Fallback
-			"model": "openai/gpt-5.3-codex",
-			"variant": "medium"
+			"model": "anthropic/claude-sonnet-4-6",
+			"fallback_models": [
+				{
+					"model": "openai/gpt-5.3-codex",
+					"variant": "medium"
+				}
+			]
 		},
 		"unspecified-high": {
-			// Preferred
-			// "model": "anthropic/claude-opus-4-7",
-			// "variant": "max"
-			
-			// Fallback
-			"model": "openai/gpt-5.5",
-			"variant": "medium"
+			"model": "anthropic/claude-opus-4-7",
+			"variant": "max",
+			"fallback_models": [
+				{
+					"model": "openai/gpt-5.5",
+					"variant": "high"
+				}
+			]
 		},
 		"writing": {
 			"model": "google/gemini-3-flash-preview",
 			"fallback_models": [
-				// Preferred
-				// "anthropic/claude-sonnet-4-6",
-
-				// Fallback
-				"openrouter/moonshotai/kimi-k2.6"
+				"opencode-go/kimi-k2.6",
+				"anthropic/claude-sonnet-4-6",
+				"opencode-go/minimax-m2.7"
 			]
 		}
 	},
