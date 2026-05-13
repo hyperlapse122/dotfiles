@@ -141,7 +141,17 @@
 		},
 		"read": {
 			"**/.env*": "allow",
-			"**/.env*.local": "ask"
+			"**/.env*.local": "ask",
+			"~/.secrets/**": "deny",
+			"~/.local/share/opencode/auth*": "deny"
+		},
+		"bash": {
+			"*": "allow",
+			"cat ~/.secrets/*": "deny",
+			"cat /home/h82/.secrets/*": "deny",
+			"cat ~/.local/share/opencode/auth*": "deny",
+			"env": "ask",
+			"printenv*": "ask"
 		}
 	},
 	"plugin": [
