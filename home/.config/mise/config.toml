@@ -1,18 +1,10 @@
 [tools]
+# Core runtimes and package managers
+aube = "latest"
 bun = "latest"
 go = "latest"
 node = "latest"
-yarn = "latest"
-rust = { version = "latest", components = "rust-analyzer,rust-src" }
-usage = "latest"
-uv = "latest"
-"cargo:git-trim" = "latest"
-"npm:@biomejs/biome" = "latest"
-"npm:@bufbuild/buf" = "latest"
-pipx = { version = "latest", os = ["linux", "macos"] }
-"npm:@electron/asar" = "latest"
-"github:rust-lang/rust-analyzer" = "latest"
-"npm:typescript-language-server" = "latest"
+python = "latest"
 ruby = [
   { version = "latest", os = [
     "linux",
@@ -27,25 +19,40 @@ ruby = [
     "macos",
   ] },
 ]
-"npm:npm" = "latest"
-"npm:shadcn" = "latest"
+rust = { version = "latest", components = "rust-analyzer,rust-src" }
+uv = "latest"
+yarn = "latest"
+
+# Standalone CLIs and language tooling
 ast-grep = "latest"
-"npm:tokscale" = "latest"
-"npm:sharp-cli" = "latest"
-"npm:portless" = "latest"
+"cargo:git-trim" = "latest"
 glab = { version = "latest", exe = "glab" }
-"npm:node-gyp" = "latest"
-shellcheck = "latest"
-"npm:bash-language-server" = "latest"
+"github:rust-lang/rust-analyzer" = "latest"
 marksman = "latest"
+pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
+shellcheck = "latest"
+usage = "latest"
 
-# agentic ai
-"npm:@google/gemini-cli" = "latest"
-"npm:@openai/codex" = "latest"
+# npm tools run through aube
+"npm:@biomejs/biome" = { version = "latest", depends = ["aube"] }
+"npm:@bufbuild/buf" = { version = "latest", depends = ["aube"] }
+"npm:@electron/asar" = { version = "latest", depends = ["aube"] }
+"npm:bash-language-server" = { version = "latest", depends = ["aube"] }
+"npm:node-gyp" = { version = "latest", depends = ["aube"] }
+"npm:npm" = { version = "latest", depends = ["aube"] }
+"npm:portless" = { version = "latest", depends = ["aube"] }
+"npm:shadcn" = { version = "latest", depends = ["aube"] }
+"npm:sharp-cli" = { version = "latest", depends = ["aube"] }
+"npm:tokscale" = { version = "latest", depends = ["aube"] }
+"npm:typescript-language-server" = { version = "latest", depends = ["aube"] }
+
+# Agentic AI
 claude-code = "latest"
+"npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
+"npm:@openai/codex" = { version = "latest", depends = ["aube"] }
 
-# opencode for Windows
-"npm:opencode-ai" = { version = "latest", os = ["windows"] }
+# OpenCode for Windows
+"npm:opencode-ai" = { version = "latest", os = ["windows"], depends = ["aube"] }
 
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
@@ -53,22 +60,22 @@ rename_exe = "wakatime-cli"
 os = ["linux", "macos"]
 
 [tools."github:wakatime/wakatime-cli".platforms]
-linux-x64 = { asset_pattern = "wakatime-cli-linux-amd64.zip" }
 linux-arm64 = { asset_pattern = "wakatime-cli-linux-arm64.zip" }
+linux-x64 = { asset_pattern = "wakatime-cli-linux-amd64.zip" }
 macos-arm64 = { asset_pattern = "wakatime-cli-darwin-arm64.zip" }
 macos-x64 = { asset_pattern = "wakatime-cli-darwin-amd64.zip" }
 
 [settings]
-idiomatic_version_file_enable_tools = []
-experimental = true
 all_compile = false
+experimental = true
+idiomatic_version_file_enable_tools = []
 
 [settings.ruby]
 compile = false
 
 [env]
-OPENCODE_DISABLE_DEFAULT_PLUGINS = 1
-OPENCODE_EXPERIMENTAL_WORKSPACES = 1
 OPENCODE_DISABLE_CLAUDE_CODE = 1
 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT = 1
 OPENCODE_DISABLE_CLAUDE_CODE_SKILLS = 1
+OPENCODE_DISABLE_DEFAULT_PLUGINS = 1
+OPENCODE_EXPERIMENTAL_WORKSPACES = 1
