@@ -14,6 +14,8 @@
     link:
       create: true
       relink: true
+      # Repo-managed dotfiles are authoritative; replace real target files.
+      force: true
 
 - link:
     # VS Code on Windows - source is the same, target path differs.

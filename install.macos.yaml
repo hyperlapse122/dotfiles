@@ -4,6 +4,8 @@
     link:
       create: true
       relink: true
+      # Repo-managed dotfiles are authoritative; replace real target files.
+      force: true
 
 - link:
     # zsh (zprezto-based; same path on Linux - duplicated in install.linux.yaml).

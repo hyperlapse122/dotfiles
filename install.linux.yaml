@@ -8,6 +8,8 @@
     link:
       create: true
       relink: true
+      # Repo-managed dotfiles are authoritative; replace real target files.
+      force: true
 
 - link:
     ~/:
