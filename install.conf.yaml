@@ -24,6 +24,8 @@
     ~/.config/opencode/:
       glob: true
       path: home/.config/opencode/**
+    ~/.config/opencode/.npmrc: home/.config/opencode/.npmrc
+    ~/.config/opencode/.bunfig.toml: home/.config/opencode/.bunfig.toml
 
     # Link shared agents.md file
     ~/.config/opencode/AGENTS.md: agents/SHARED_AGENTS.md
