@@ -92,7 +92,7 @@
 				{
 					"model": "openai/gpt-5.5",
 					"variant": "medium"
-				},
+				}
 			]
 		},
 		"ultrabrain": {
@@ -168,8 +168,5 @@
     "max_fallback_attempts": 1,
     "cooldown_seconds": 10,
     "timeout_seconds": 5
-  },
-	"team_mode": {
-		"enabled": true
-	}
+  }
 }

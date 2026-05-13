@@ -182,7 +182,7 @@
 			}
 		}
 	},
-	"small_model": "openrouter/openrouter/free",
+	"small_model": "opencode-go/deepseek-v4-flash",
 	"server": {
 		"port": 4096
 	}
