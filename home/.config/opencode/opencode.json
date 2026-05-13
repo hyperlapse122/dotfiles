@@ -150,6 +150,16 @@
 		"opencode-gemini-auth@latest"
 	],
 	"provider": {
+		"opencode": {
+			"options": {
+				"apiKey": "{file:~/.secrets/opencode-api-key}",
+			}
+		},
+		"opencode-go": {
+			"options": {
+				"apiKey": "{file:~/.secrets/opencode-api-key}",
+			}
+		},
 		"openrouter": {
 			"options": {
 				"apiKey": "{file:~/.secrets/openrouter-api-key}",
