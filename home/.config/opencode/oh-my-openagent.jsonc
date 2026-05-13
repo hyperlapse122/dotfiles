@@ -161,12 +161,5 @@
 		"include_co_authored_by": false,
 		"git_env_prefix": "GIT_MASTER=1"
 	},
-	"notification": { "force_enable": true },
-	"runtime_fallback": {
-    "enabled": true,
-    "retry_on_errors": [400, 401, 403, 404, 429, 500, 502, 503, 504],
-    "max_fallback_attempts": 1,
-    "cooldown_seconds": 10,
-    "timeout_seconds": 5
-  }
+	"notification": { "force_enable": true }
 }
