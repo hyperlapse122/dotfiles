@@ -2,7 +2,7 @@
 
 Cross-platform dotfiles for **Windows + macOS + Fedora Linux**, managed by [dotbot](https://github.com/anishathalye/dotbot) via mise-managed `uvx`.
 
-`uvx dotbot` is run **ephemerally** through [`mise`](https://mise.jdx.dev/) every time — dotbot itself is never installed. The bootstrap also runs a small set of helpers for fonts, GitLab CLI config, OpenCode prompt rendering, 1Password template injection, Linux `/etc` drop-ins, and KDE touchpad/font preferences where applicable.
+`uvx dotbot` is run **ephemerally** through [`mise`](https://mise.jdx.dev/) every time — dotbot itself is never installed. The bootstrap also runs a small set of helpers for fonts, GitLab CLI config, OpenCode prompt rendering, retired Linux `environment.d` symlink cleanup, 1Password template injection, Linux `/etc` drop-ins, and KDE touchpad/font preferences where applicable.
 
 ## Quickstart
 

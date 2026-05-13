@@ -29,7 +29,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 - **OS-specific files** are linked from [`../install.linux.yaml`](../install.linux.yaml), [`../install.macos.yaml`](../install.macos.yaml), or [`../install.windows.yaml`](../install.windows.yaml).
 - The location of the file inside `home/` does NOT determine which OS gets it — the `link:` block in the matching yaml does. You can place a Linux-only file under `home/.config/foo/` and only link it from `install.linux.yaml`.
 - Use forward slashes in YAML paths even for Windows targets (e.g. `~/AppData/...`).
-- Linux-only desktop, container, `environment.d`, editor, and SSH snippets live under their mirrored `home/` paths and are linked only from `install.linux.yaml`.
+- Linux-only desktop, container, `environment.d`, editor, and SSH snippets live under their mirrored `home/` paths and are linked only from `install.linux.yaml`; that installer also prunes retired `environment.d` symlinks before relinking.
 - `home/.agents/` is linked as a runtime skill tree. Its lockfile and skill package directories are managed by OpenCode / oh-my-openagent, not by hand. Do not place `AGENTS.md` inside `home/.agents/`; keep that guidance in [`AGENTS.md`](./AGENTS.md) at this directory level.
 - `home/.config/opencode/` is linked recursively for OpenCode config. Do not place `AGENTS.md` inside it — `~/.config/opencode/AGENTS.md` is already an explicit symlink to [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md) (managed by [`../install.conf.yaml`](../install.conf.yaml)). Edit the shared file to change cross-tool agent rules.
 
