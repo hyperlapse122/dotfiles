@@ -155,7 +155,7 @@
 		}
 	},
 	"plugin": [
-		"oh-my-openagent@latest",
+		"oh-my-openagent@4.1.2",
 		"@ex-machina/opencode-anthropic-auth@latest",
 		"opencode-gemini-auth@latest"
 	],
