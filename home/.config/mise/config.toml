@@ -51,9 +51,6 @@ claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
 "npm:@openai/codex" = { version = "latest", depends = ["aube"] }
 
-# OpenCode for Windows
-"npm:opencode-ai" = { version = "latest", os = ["windows"], depends = ["aube"] }
-
 [tools."github:wakatime/wakatime-cli"]
 version = "latest"
 rename_exe = "wakatime-cli"
