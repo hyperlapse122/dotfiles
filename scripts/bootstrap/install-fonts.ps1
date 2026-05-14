@@ -115,7 +115,11 @@ function Get-GhCommand {
 
 function Invoke-Gh {
     param([Parameter(Mandatory)][string[]]$Arguments)
-    $gh = Get-GhCommand
+    # @(...) forces array semantics: PowerShell's `return` unwraps single-element
+    # arrays into scalars, so `return @('gh')` from Get-GhCommand would arrive
+    # here as the string 'gh' and $gh[0] would be the character 'g'. Wrapping
+    # the call in @(...) re-collects whatever shape into a proper array.
+    $gh = @(Get-GhCommand)
     $exe = $gh[0]
     $rest = if ($gh.Length -gt 1) { $gh[1..($gh.Length - 1)] } else { @() }
     $argList = @($rest + $Arguments)

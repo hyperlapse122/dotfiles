@@ -85,7 +85,7 @@ function replacePromptAppend(text, agent, prompt) {
   const valueStart = findNextNonWhitespace(text, colon + 1, objectEnd);
   const valueEnd = findStringEnd(text, valueStart);
 
-  return `${text.slice(0, valueStart)}${JSON.stringify(prompt)}${text.slice(valueEnd)}`;
+  return `${text.slice(0, valueStart)}${JSON.stringify(prompt.replaceAll('\r\n', '\n'))}${text.slice(valueEnd)}`;
 }
 
 /**

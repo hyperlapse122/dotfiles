@@ -24,7 +24,8 @@ function Set-OwnerOnlyPermissions {
     if (-not $isWindowsHost) {
         if ((Get-Item -LiteralPath $Path -Force).PSIsContainer) {
             chmod 700 $Path
-        } else {
+        }
+        else {
             chmod 600 $Path
         }
         if ($LASTEXITCODE -ne 0) {
@@ -33,19 +34,12 @@ function Set-OwnerOnlyPermissions {
         return
     }
 
-    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $acl = Get-Acl -LiteralPath $Path
-    $acl.SetAccessRuleProtection($true, $false)
-    foreach ($rule in @($acl.Access)) {
-        [void]$acl.RemoveAccessRule($rule)
-    }
-    $accessRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
-        $identity,
-        $Rights,
-        [System.Security.AccessControl.AccessControlType]::Allow
-    )
-    $acl.AddAccessRule($accessRule)
-    Set-Acl -LiteralPath $Path -AclObject $acl
+    $user = "$env:USERDOMAIN\$env:USERNAME"
+    $item = Get-Item -LiteralPath $Path -Force
+    $perm = if ($item.PSIsContainer) { "${user}:(OI)(CI)F" } else { "${user}:F" }
+
+    icacls $Path /inheritance:r /grant:r $perm | Out-Null
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 $scriptDir = Split-Path -Parent $PSCommandPath
