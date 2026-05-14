@@ -37,7 +37,8 @@ if (-not (Get-Command 'mise' -ErrorAction SilentlyContinue)) {
 
 try {
     $manifest = Invoke-RestMethod -Uri 'https://github.com/anomalyco/opencode/releases/latest/download/latest.json'
-} catch {
+}
+catch {
     Write-Error "opencode: failed to fetch latest version manifest: $_"
     exit 1
 }
@@ -48,5 +49,5 @@ if ([string]::IsNullOrWhiteSpace($resolvedVersion)) {
     exit 1
 }
 
-& mise exec -q "opencode@$resolvedVersion" -- opencode @args
+& mise exec -q "github:anomalyco/opencode@$resolvedVersion" --command "opencode $($args -join " ")"
 exit $LASTEXITCODE
