@@ -1,0 +1,35 @@
+# Cross-platform line-ending policy.
+#
+# This file is the source of truth for line endings in this repo and
+# overrides every contributor's local `core.autocrlf` setting, so behavior
+# is identical on Windows, macOS, and Linux regardless of how each
+# machine's git is configured.
+#
+# Defaults:
+#   * text=auto eol=lf
+#     Auto-detect text vs binary; every text file is LF in both the git
+#     index AND the working tree on every OS. Prevents Windows from
+#     silently rewriting Unix-only files (.sh, Dockerfiles, makefiles,
+#     /etc/ drop-ins) to CRLF — CRLF on those files breaks `/bin/bash`,
+#     container builds, and most Unix parsers.
+#
+# Overrides:
+#   *.ps1 / *.psm1 / *.psd1 / *.bat / *.cmd
+#     CRLF in the working tree on every OS (LF in the index, as always —
+#     git's index storage is always LF for text). Windows-native tooling
+#     (cmd.exe, batch wrappers, Windows PowerShell 5.1 hosts, signing
+#     tooling) round-trips correctly only with CRLF for these formats.
+#
+# Re-normalize the working tree after editing this file:
+#
+#   git add --renormalize .
+#   git status            # review (line-ending-only, content unchanged)
+#   git commit -m "chore: renormalize line endings"
+
+* text=auto eol=lf
+
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
+*.psd1  text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
