@@ -15,6 +15,10 @@ const configPath = path.join(repoRoot, 'home/.config/opencode/oh-my-openagent.js
 
 const promptAppends = [
   {
+    agent: 'hephaestus',
+    promptPath: path.join(repoRoot, 'home/.config/opencode/prompts/hephaestus_prompt_append.md'),
+  },
+  {
     agent: 'prometheus',
     promptPath: path.join(repoRoot, 'home/.config/opencode/prompts/prometheus_prompt_append.md'),
   },

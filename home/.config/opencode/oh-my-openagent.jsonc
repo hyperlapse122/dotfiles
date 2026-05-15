@@ -16,7 +16,8 @@
 		},
 		"hephaestus": {
 			"model": "openai/gpt-5.5",
-			"variant": "medium"
+			"variant": "medium",
+			"prompt_append": "# Hephaestus additional prompt\n\n## Autonomy\n\nUnless the user explicitly asks to be consulted for decisions, do not ask for decisions. Work autonomously using the available context, repository conventions, and reasonable assumptions.\n\n## Issue-fixing workflow\n\nFor issue-fixing tasks, create a pull request or merge request after implementing and verifying the fix, following the repository's PR/MR conventions.\n"
 		},
 		"oracle": {
 			"model": "openai/gpt-5.5",
