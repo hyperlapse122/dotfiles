@@ -9,6 +9,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.gitconfig.d/<os>.gitconfig` | `~/.gitconfig.d/<os>.gitconfig` from the matching OS yaml |
 | `home/.agents/` | `~/.agents/` |
 | `home/.config/opencode/` | `~/.config/opencode/` |
+| `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` |
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |
 | `home/.config/environment.d/` | `~/.config/environment.d/` |
 | `home/.config/fcitx5/`, `home/.config/containers/`, `home/.config/solaar/` | Linux-only XDG config via `install.linux.yaml` |
@@ -32,6 +33,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 - Linux-only desktop, container, `environment.d`, editor, and SSH snippets live under their mirrored `home/` paths and are linked only from `install.linux.yaml`; that installer also prunes retired `environment.d` symlinks before relinking.
 - `home/.agents/` is linked as a runtime skill tree. Its lockfile and skill package directories are managed by OpenCode / oh-my-openagent, not by hand. Do not place `AGENTS.md` inside `home/.agents/`; keep that guidance in [`AGENTS.md`](./AGENTS.md) at this directory level.
 - `home/.config/opencode/` is linked recursively for OpenCode config. Do not place `AGENTS.md` inside it — `~/.config/opencode/AGENTS.md` is already an explicit symlink to [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md) (managed by [`../install.conf.yaml`](../install.conf.yaml)). Edit the shared file to change cross-tool agent rules.
+- OpenCode agent prompt append text lives in `home/.config/opencode/prompts/*_prompt_append.md`; run `scripts/bootstrap/render-opencode-prompt-append.*` to render those markdown sources into `home/.config/opencode/oh-my-openagent.jsonc`.
 
 ## Don't put here
 
