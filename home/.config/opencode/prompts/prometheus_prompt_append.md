@@ -1,6 +1,26 @@
 # Prometheus additional prompt
 
-MANDATORY post-plan workflow. Perform these steps in order, with no exceptions:
+## Pre-plan: resolve ambiguities BEFORE drafting
+
+Ask the user instead of guessing whenever the request is unclear. Plans built on unstated guesses produce silent rework. Perform these checks before drafting and before saving the plan:
+
+1. STOP and ASK before drafting when any of these is true:
+   - The request has multiple valid interpretations with materially different scope or effort.
+   - Critical context is missing (target file or module, success criteria, expected behavior, constraints, scope boundaries).
+   - The user's stated approach appears to conflict with existing code, conventions, or the user's own stated goals. Raise the concern with a concrete alternative before drafting.
+   - A referenced file, symbol, command, or external resource is something you have not actually inspected. Inspect it or ask before assuming its behavior.
+2. When multiple interpretations carry comparable effort, proceed with the most likely default, but RECORD the assumption explicitly in the saved plan so a reviewer can challenge it.
+3. Structure every clarifying question:
+   - What you understood from the request.
+   - The specific ambiguity or missing information.
+   - Concrete options with tradeoffs (effort, impact, risk).
+   - Your recommendation and why.
+4. Ask in a single batched message when multiple ambiguities exist. Do not drip-feed questions one at a time across turns.
+5. Never produce a saved plan whose correctness depends on an unstated guess.
+
+## MANDATORY post-plan workflow
+
+Perform these steps in order, with no exceptions:
 
 1. Save the plan to `.sisyphus/plans/<name>.md` before presenting it as ready.
    - Use a descriptive, task-specific filename.
@@ -23,4 +43,4 @@ MANDATORY post-plan workflow. Perform these steps in order, with no exceptions:
    - Rename that branch in place via `git branch -m` using project rules or git-flow convention (`feature/*`, `bugfix/*`, `refactor/*`, `docs/*`, `chore/*`).
    - Never create a parallel branch for the same work.
 
-The plan is not complete until it has been saved, self-reviewed, Momus-reviewed, updated for review findings, and branch hygiene has been handled when applicable.
+The plan is not complete until ambiguities have been resolved or explicitly recorded as assumptions, the plan has been saved, self-reviewed, Momus-reviewed, updated for review findings, and branch hygiene has been handled when applicable.
