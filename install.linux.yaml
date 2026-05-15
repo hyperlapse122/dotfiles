@@ -11,23 +11,6 @@
       # Repo-managed dotfiles are authoritative; replace real target files.
       force: true
 
-
-# Remove retired environment.d symlinks before the recursive ~/.config link step.
-# dotbot relinks managed paths, but it does not prune filenames removed from
-# this repo; limiting removal to symlinks avoids deleting user-owned files.
-- shell:
-    - command: |
-        for file in 50-input.conf 60-mise.conf 80-pinentry.conf 81-powershell.conf 82-dotnet.conf 83-firefox.conf 84-electron.conf 85-opencode.conf 86-turborepo.conf 87-do-not-track.conf; do
-          target="$HOME/.config/environment.d/$file"
-          if [ -L "$target" ]; then
-            rm "$target"
-          fi
-        done
-      description: Remove retired environment.d symlinks
-      stdin: true
-      stdout: true
-      stderr: true
-
 - link:
     ~/:
       glob: true
