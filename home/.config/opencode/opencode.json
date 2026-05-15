@@ -116,21 +116,6 @@
 			"headers": {
 				"x-api-key": "{file:~/.secrets/exa-api-key}"
 			}
-		},
-		"aikido": {
-			"type": "local",
-			"command": [
-				"mise",
-				"exec",
-				"-q",
-				"npm:@aikidosec/mcp@latest",
-				"--",
-				"aikido-mcp"
-			],
-			"enabled": false,
-			"environment": {
-				"AIKIDO_API_KEY": "{file:~/.secrets/akido-mcp-key}",
-			},
 		}
 	},
 	"model": "openai/gpt-5.5",
