@@ -192,5 +192,5 @@
 			}
 		}
 	},
-	"small_model": "opencode-go/deepseek-v4-flash"
+	"small_model": "openrouter/openrouter/free"
 }
