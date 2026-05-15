@@ -156,8 +156,8 @@
 	},
 	"plugin": [
 		"oh-my-openagent@4.1.2",
-		"@ex-machina/opencode-anthropic-auth@latest",
-		"opencode-gemini-auth@latest"
+		"@ex-machina/opencode-anthropic-auth@1.8.1",
+		"opencode-gemini-auth@1.4.15"
 	],
 	"provider": {
 		"opencode": {
