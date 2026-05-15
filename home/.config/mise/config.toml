@@ -57,9 +57,9 @@ rename_exe = "opencode"
 os = ["linux", "macos"]
 
 [tools."github:anomalyco/opencode".platforms]
-linux-arm64 = { asset_pattern = "wakatime-cli-linux-arm64.zip" }
+linux-arm64 = { asset_pattern = "opencode-linux-arm64.tar.gz" }
 linux-x64 = { asset_pattern = "opencode-linux-x64-baseline.tar.gz" }
-macos-arm64 = { asset_pattern = "wakatime-cli-darwin-arm64.zip" }
+macos-arm64 = { asset_pattern = "opencode-darwin-arm64.zip" }
 macos-x64 = { asset_pattern = "opencode-darwin-x64-baseline.zip" }
 
 [tools."github:wakatime/wakatime-cli"]

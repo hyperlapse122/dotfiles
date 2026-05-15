@@ -11,9 +11,3 @@ if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
 fi
 
 # Customize to your needs...
-
-# Task Master aliases
-if command -v task-master &>/dev/null; then
-  alias tm='task-master'
-  alias taskmaster='task-master'
-fi

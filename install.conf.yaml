@@ -24,6 +24,9 @@
     ~/.config/opencode/:
       glob: true
       path: home/.config/opencode/**
+    ~/.config/zsh/:
+      glob: true
+      path: home/.config/zsh/.*
 
     # Link shared agents.md file
     ~/.config/opencode/AGENTS.md: agents/SHARED_AGENTS.md
