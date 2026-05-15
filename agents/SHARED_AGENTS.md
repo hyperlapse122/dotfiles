@@ -40,6 +40,8 @@ git checkout -b feature/add-auth-flow                      # ❌ leaves opencode
 
 **Rule**: one task = one branch. Name needs changing → rename it. **MUST NOT** create a sibling branch for the same work.
 
+**Issue-resolution rule**: when resolving a GitHub issue or GitLab issue/MR, agents **MUST NOT** keep or push an automatically-generated branch name, including OpenCode's `opencode/<adjective>-<noun>` form or any other tool-generated placeholder. Before committing or pushing, rename the current branch in place with `git branch -m` to a human-readable Git Flow name that reflects the issue being resolved, e.g. `bugfix/<issue-slug>` or `feature/<issue-slug>`.
+
 ## Commit Messages
 
 **MUST** follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)<!>: <description>`.
