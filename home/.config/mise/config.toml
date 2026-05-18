@@ -50,6 +50,7 @@ usage = "latest"
 claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
 "npm:@openai/codex" = { version = "latest", depends = ["aube"] }
+"npm:@playwright/cli" = "latest"
 
 [tools."github:anomalyco/opencode"]
 version = "latest"
