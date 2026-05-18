@@ -26,7 +26,7 @@ yarn = "latest"
 # Standalone CLIs and language tooling
 ast-grep = "latest"
 "cargo:git-trim" = "latest"
-glab = { version = "latest", exe = "glab" }
+glab = { version = "latest", exe = "glab", "postinstall" = "glab skills install --global --force" }
 "github:rust-lang/rust-analyzer" = "latest"
 marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
