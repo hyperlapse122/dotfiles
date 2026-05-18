@@ -62,7 +62,10 @@
       stdin: true
       stdout: true
       stderr: true
+    - command: glab skills install --global --force
+      description: Install or update gitlab cli skills
     - command: mise exec node@latest -- node scripts/bootstrap/render-opencode-prompt-append.mjs
       description: Render OpenCode prompt_append config
       stdout: true
       stderr: true
+
