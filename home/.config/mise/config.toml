@@ -32,6 +32,7 @@ marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
+"npm:@playwright/cli" = { version = "latest", depends = ["aube"] }
 
 # npm tools run through aube
 "npm:@biomejs/biome" = { version = "latest", depends = ["aube"] }
@@ -50,7 +51,6 @@ usage = "latest"
 claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
 "npm:@openai/codex" = { version = "latest", depends = ["aube"] }
-"npm:@playwright/cli" = "latest"
 
 [tools."github:anomalyco/opencode"]
 version = "latest"
