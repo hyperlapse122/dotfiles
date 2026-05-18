@@ -121,10 +121,11 @@ EOF
     tailscale
   )
   if ! systemd-detect-virt --quiet; then
-    # Bare-metal-only: games + chat (both via RPM Fusion nonfree)
+    # Bare-metal-only
     packages+=(
       discord
       steam
+      lm_sensors
     )
   fi
   "${SUDO[@]}" dnf install -y "${packages[@]}"
