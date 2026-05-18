@@ -19,6 +19,17 @@ hosts. Drop-in contents are syntax-checked with `visudo -c -f` before
 install. Adding files outside `sudoers.d/` should not require editing the
 installer unless they need a different mode or a platform/host gate.
 
+After file install, the installer also enables firewalld IPv4
+masquerading on the default zone (`firewall-cmd --permanent
+--add-masquerade` then `--reload`) — required for the Tailscale
+exit-node and VMware NAT egress paths to source-NAT traffic out the
+host's primary interface, on top of the IPv4/IPv6 forwarding enabled
+by `system/linux/etc/sysctl.d/99-tailscale.conf`. Gated on
+`firewall-cmd --state` reporting firewalld is running, and idempotent
+via `--permanent --query-masquerade`. Skipped cleanly when firewalld
+is not the active backend (e.g. masked, missing, or replaced by raw
+nftables / iptables-services).
+
 ## Layout
 
 The path under `system/<os>/` mirrors the absolute install path exactly:

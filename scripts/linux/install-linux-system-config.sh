@@ -2,19 +2,28 @@
 # scripts/linux/install-linux-system-config.sh
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
-# `sudo install -D -m <mode>`. Called from a `shell:` step in
-# ../../install.linux.yaml (dotbot has no sudo / root mode, see AGENTS.md).
+# `sudo install -D -m <mode>`, then enables firewalld masquerading on the
+# default zone. Called from a `shell:` step in ../../install.linux.yaml
+# (dotbot has no sudo / root mode, see AGENTS.md).
 #
 # Single-platform (Linux only) by design — no .ps1 counterpart per the
 # script-parity exception in AGENTS.md.
 #
-# Re-runnable: `install -D` is idempotent.
+# Re-runnable: `install -D` is idempotent, and the firewalld step queries
+# `--permanent --query-masquerade` before mutating.
 #
 # Most files install at mode 0644. The one exception is etc/sudoers.d/*,
 # which installs at 0440 (sudo refuses group/world-readable drop-ins) and
 # only on virtual machines, gated on `systemd-detect-virt --vm`. Sudoers
 # drop-ins are also syntax-checked with `visudo -c -f` before install — a
 # broken drop-in can break sudo globally on the host.
+#
+# firewalld masquerade is required for the Tailscale exit-node and VMware
+# NAT egress paths to source-NAT traffic out the host's primary interface
+# (which lives in the default zone on Fedora Workstation). It rides on top
+# of the IPv4/IPv6 forwarding enabled by etc/sysctl.d/99-tailscale.conf,
+# which this script installs in the same run. The firewalld step is a
+# no-op on hosts where firewalld is not the active backend.
 
 set -euo pipefail
 
@@ -77,3 +86,33 @@ for src in "$SRC_ROOT"/etc/**; do
 done
 
 printf 'install-linux-system-config.sh: %d installed, %d skipped\n' "$count" "$skipped"
+
+# Enable firewalld masquerade on the default zone — required for the
+# Tailscale exit-node and VMware NAT egress paths (see header comment).
+# Scope is the default zone (`FedoraWorkstation` on Fedora Workstation),
+# which by default binds the host's primary network interfaces and is
+# therefore the egress path for both use cases.
+#
+# Gate: `firewall-cmd --state` is firewalld's own liveness probe
+# (https://firewalld.org/documentation/howto/get-firewalld-state.html).
+# It returns 0 when the daemon is running and non-zero when firewalld is
+# masked, missing, or replaced by a different backend (raw nftables,
+# iptables-services). In every non-running case the masquerade step is
+# skipped — we don't program a backend that isn't there.
+#
+# Idempotency: `--permanent --query-masquerade` returns 0 when masquerade
+# is already enabled in the permanent config, so we only mutate when
+# something would change. `--reload` after `--permanent` is what makes
+# the change take effect in the runtime without restarting firewalld
+# (https://firewalld.org/documentation/configuration/runtime-versus-permanent.html).
+if "${SUDO[@]}" firewall-cmd --state >/dev/null 2>&1; then
+  if "${SUDO[@]}" firewall-cmd --permanent --query-masquerade >/dev/null 2>&1; then
+    printf '  -- firewalld masquerade: already enabled (default zone)\n'
+  else
+    printf '  -> firewalld masquerade: enabling on default zone\n'
+    "${SUDO[@]}" firewall-cmd --permanent --add-masquerade >/dev/null
+    "${SUDO[@]}" firewall-cmd --reload >/dev/null
+  fi
+else
+  printf '  -- firewalld masquerade: skipped (firewalld not running)\n'
+fi

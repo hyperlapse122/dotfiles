@@ -88,7 +88,9 @@ The Linux installer discovers files with a recursive glob under `system/linux/et
 
 NetworkManager unmanaged-device rules live as split drop-ins under `system/linux/etc/NetworkManager/conf.d/`, matching the legacy dotfiles layout. Do not consolidate them into a monolithic `NetworkManager.conf` — that file is intentionally absent from this repo.
 
-Current Linux root-owned config includes NetworkManager unmanaged-device drop-ins, keyd defaults, a libinput local override, `locale.conf`, Plymouth config, a Logitech receiver udev rule, and a VM-only `sudoers.d/` drop-in granting `%wheel` password-less sudo. All install at mode `0644` except the `sudoers.d/` drop-in (mode `0440`, VM-only) — see `scripts/linux/install-linux-system-config.sh`.
+Current Linux root-owned config includes NetworkManager unmanaged-device drop-ins, keyd defaults, a libinput local override, `locale.conf`, Plymouth config, a Logitech receiver udev rule, IPv4/IPv6 forwarding via `sysctl.d/`, and a VM-only `sudoers.d/` drop-in granting `%wheel` password-less sudo. All install at mode `0644` except the `sudoers.d/` drop-in (mode `0440`, VM-only) — see `scripts/linux/install-linux-system-config.sh`.
+
+After the file-install loop, the same script enables firewalld IPv4 masquerading on the default zone (`firewall-cmd --permanent --add-masquerade` then `--reload`). The Tailscale exit-node and VMware NAT egress paths source-NAT through the host's primary interface, which lives in the default zone on Fedora Workstation, and they ride on the IPv4/IPv6 forwarding the `sysctl.d/` drop-in enables. The step is idempotent (`--permanent --query-masquerade` before mutating) and gated on `firewall-cmd --state` so it skips cleanly when firewalld is masked, missing, or replaced by another backend.
 
 ### Runtime agent config
 
