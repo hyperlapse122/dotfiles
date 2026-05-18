@@ -1,6 +1,11 @@
 {
 	"$schema": "https://opencode.ai/config.json",
 	"autoupdate": false,
+	"plugin": [
+		"oh-my-openagent@4.2.0",
+		"@ex-machina/opencode-anthropic-auth@1.8.1",
+		"opencode-gemini-auth@1.4.15"
+	],
 	"lsp": {
 		"biome": {
 			"command": [
@@ -139,11 +144,6 @@
 			"printenv*": "ask"
 		}
 	},
-	"plugin": [
-		"oh-my-openagent@4.1.2",
-		"@ex-machina/opencode-anthropic-auth@1.8.1",
-		"opencode-gemini-auth@1.4.15"
-	],
 	"provider": {
 		"opencode": {
 			"options": {
