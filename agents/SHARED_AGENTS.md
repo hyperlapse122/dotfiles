@@ -18,12 +18,13 @@
 
 ## Branch Naming
 
-**MUST** rename — never re-create — the branch when the current name is OpenCode's auto-generated `opencode/<adjective>-<noun>` form. Use `git branch -m`; the working tree, index, and history move atomically.
+**MUST** rename — never re-create — the branch when the current name is an auto-generated agent-tool form, including (but not limited to) OpenCode's `opencode/<adjective>-<noun>` and Codex's `codex/<adjective>-<noun>`. Use `git branch -m`; the working tree, index, and history move atomically.
 
 ```bash
 git branch --show-current                                  # check
 git branch -m opencode/playful-engine feature/add-auth     # ✅ rename in place
-git checkout -b feature/add-auth-flow                      # ❌ leaves opencode/* orphaned
+git branch -m codex/dapper-otter      bugfix/login-500     # ✅ rename in place
+git checkout -b feature/add-auth-flow                      # ❌ leaves opencode/* (or codex/*) orphaned
 ```
 
 **Naming convention** (Git Flow, unless the project defines its own):
@@ -40,7 +41,7 @@ git checkout -b feature/add-auth-flow                      # ❌ leaves opencode
 
 **Rule**: one task = one branch. Name needs changing → rename it. **MUST NOT** create a sibling branch for the same work.
 
-**Issue-resolution rule**: when resolving a GitHub issue or GitLab issue/MR, agents **MUST NOT** keep or push an automatically-generated branch name, including OpenCode's `opencode/<adjective>-<noun>` form or any other tool-generated placeholder. Before committing or pushing, rename the current branch in place with `git branch -m` to a human-readable Git Flow name that reflects the issue being resolved, e.g. `bugfix/<issue-slug>` or `feature/<issue-slug>`.
+**Issue-resolution rule**: when starting work on a GitHub issue or GitLab issue/MR, agents **MUST NOT** keep, commit on, or push an automatically-generated branch name, including OpenCode's `opencode/<adjective>-<noun>` form, Codex's `codex/<adjective>-<noun>` form, or any other tool-generated placeholder. **Before making the first commit or any other change**, rename the current branch in place with `git branch -m` to a human-readable Git Flow name that reflects the issue being resolved, e.g. `bugfix/<issue-slug>` or `feature/<issue-slug>`. Renaming after commits or pushes is too late — the auto-generated name has already leaked to history and to the remote.
 
 ## Commit Messages
 
@@ -76,6 +77,17 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 **MUST NOT**: emojis, sentence case, trailing periods, vague subjects (`update stuff`, `fix things`, `wip`), AI-tool branding or attribution (no "Generated with Claude", no `🤖` markers, no `Co-authored-by:` trailers naming an AI).
 
 ## Pull Requests / Merge Requests
+
+**MUST NOT** use provider built-in "create a branch / MR / PR for this issue" flows — including GitHub's *Development → Create a branch* button on an issue, GitHub's *Linked issues* picker on the PR-creation form, GitLab's *Create merge request* button on an issue (which auto-creates a `N-<issue-slug>` branch and a draft MR), and the equivalent `gh issue develop` / `glab issue develop` commands. These flows fabricate branch names (`N-<issue-slug>`, `<issue-number>-<slug>`, etc.), can open the MR/PR as draft, and bypass the [Branch Naming](#branch-naming) and [Commit Messages](#commit-messages) rules above. Instead: create the branch manually with a Git Flow name, push it, then open the PR/MR yourself with an explicit issue-linking keyword in the body (see table below).
+
+**Linking issues via keywords** — use these in the PR/MR **body** (and, where supported, in commit messages) so the merge auto-closes or auto-links the issue. Plain `#123` autolinks but does **not** auto-close anything.
+
+| Host | Auto-close on merge | Link without closing | Cross-repo / cross-project syntax |
+|---|---|---|---|
+| **GitHub** | `Close[s\|d] #N`, `Fix[es\|ed] #N`, `Resolve[s\|d] #N` (and `CLOSES:` / colon variants) — works in PR body **and** commit messages, only when the PR targets the default branch | bare `#N` autolinks; there is no dedicated "references" keyword | `owner/repo#N` (e.g. `Fixes acme/api#42`) |
+| **GitLab** | `Close[s\|d\|ing] #N`, `Fix[es\|ed\|ing] #N`, `Resolve[s\|d\|ing] #N`, `Implement[s\|ed\|ing] #N` — works in MR description **and** commit messages, only when the MR/commit lands on the default branch | `Related to #N` / `Ref #N` — links but does not close | `group/project#N` for issues; `group/project!N` is an **MR** reference / dependency, not an issue-closer |
+
+Docs: GitHub — <https://docs.github.com/en/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue>; GitLab — <https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically>.
 
 **Before opening a PR/MR**, the project's standard verification commands (test / lint / typecheck / build — whichever the project defines) **MUST** have run on the current HEAD. **MUST NOT** submit a PR/MR with known-failing checks unless the failure is documented in the PR/MR body and the user has approved it.
 
