@@ -41,7 +41,15 @@ git checkout -b feature/add-auth-flow                      # ❌ leaves opencode
 
 **Rule**: one task = one branch. Name needs changing → rename it. **MUST NOT** create a sibling branch for the same work.
 
-**Issue-resolution rule**: when starting work on a GitHub issue or GitLab issue/MR, agents **MUST NOT** keep, commit on, or push an automatically-generated branch name, including OpenCode's `opencode/<adjective>-<noun>` form, Codex's `codex/<adjective>-<noun>` form, or any other tool-generated placeholder. **Before making the first commit or any other change**, rename the current branch in place with `git branch -m` to a human-readable Git Flow name that reflects the issue being resolved, e.g. `bugfix/<issue-slug>` or `feature/<issue-slug>`. Renaming after commits or pushes is too late — the auto-generated name has already leaked to history and to the remote.
+**Issue-resolution rule**: when starting work on a GitHub issue or GitLab issue/MR, agents **MUST NOT** keep, commit on, or push an automatically-generated branch name. This includes, but is not limited to:
+
+- OpenCode's `opencode/<adjective>-<noun>` form.
+- Codex's `codex/<adjective>-<noun>` form.
+- **GitLab's `N-<issue-slug>` form** produced by the *Create merge request* button on an issue or by `glab issue develop` — e.g. `13-feat-requester-rebuild-request-application-flow-from-figma-new-requester-openapi-contract`. These names leak the issue number and a raw issue-title slug into branch history and are forbidden regardless of length.
+- **GitHub's `<issue-number>-<slug>` form** produced by *Development → Create a branch* on an issue or by `gh issue develop`.
+- Any other tool-generated placeholder.
+
+**Before making the first commit or any other change**, rename the current branch in place with `git branch -m` to a human-readable Git Flow name that reflects the issue being resolved, e.g. `bugfix/<short-slug>` or `feature/<short-slug>`. The slug **MUST** be a concise, human-authored summary (3–6 words), not the full issue title and not the issue number. Renaming after commits or pushes is too late — the auto-generated name has already leaked to history and to the remote.
 
 ## Commit Messages
 
@@ -78,7 +86,16 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 
 ## Pull Requests / Merge Requests
 
-**MUST NOT** use provider built-in "create a branch / MR / PR for this issue" flows — including GitHub's *Development → Create a branch* button on an issue, GitHub's *Linked issues* picker on the PR-creation form, GitLab's *Create merge request* button on an issue (which auto-creates a `N-<issue-slug>` branch and a draft MR), and the equivalent `gh issue develop` / `glab issue develop` commands. These flows fabricate branch names (`N-<issue-slug>`, `<issue-number>-<slug>`, etc.), can open the MR/PR as draft, and bypass the [Branch Naming](#branch-naming) and [Commit Messages](#commit-messages) rules above. Instead: create the branch manually with a Git Flow name, push it, then open the PR/MR yourself with an explicit issue-linking keyword in the body (see table below).
+**MUST NOT** use provider built-in "create a branch / MR / PR for this issue" flows — including GitHub's *Development → Create a branch* button on an issue, GitHub's *Linked issues* picker on the PR-creation form, GitLab's *Create merge request* button on an issue (which auto-creates a `N-<issue-slug>` branch and a draft MR), and the equivalent `gh issue develop` / `glab issue develop` commands. These flows fabricate branch names (`N-<issue-slug>`, `<issue-number>-<slug>`, etc.), can open the MR/PR as draft, and bypass the [Branch Naming](#branch-naming) and [Commit Messages](#commit-messages) rules above.
+
+**Required ordering** — issue linking happens **after** the PR/MR exists, never before:
+
+1. Create the branch **manually** with a Git Flow name (`feature/<slug>`, `bugfix/<slug>`, etc.) — see [Branch Naming](#branch-naming). **MUST NOT** start from an issue-linked branch flow.
+2. Commit and push the branch.
+3. **Create the PR/MR first** with `gh pr create` / `glab mr create`. The PR/MR title and body describe the change on its own terms.
+4. **Then link the issue** — either include an issue-closing keyword (`Closes #N`, `Fixes #N`, `Resolves #N`) in the PR/MR body at creation time, or add it post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`. **MUST NOT** rely on the host's "linked issues" UI picker or on `--related-issue` substituting for an explicit body keyword — only the keyword auto-closes the issue on merge.
+
+This ordering ensures the branch name, PR/MR title, and commit history are authored by the agent (not by a provider template) and that the issue link is an explicit, reviewable decision rather than a side effect of how the branch was created.
 
 **Linking issues via keywords** — use these in the PR/MR **body** (and, where supported, in commit messages) so the merge auto-closes or auto-links the issue. Plain `#123` autolinks but does **not** auto-close anything.
 
