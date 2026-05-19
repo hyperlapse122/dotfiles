@@ -1,5 +1,6 @@
 # Sisyphus / OpenCode session state
 .sisyphus/
+.omo/
 
 # Generic secret patterns (defense in depth)
 *.pem
