@@ -92,10 +92,53 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 
 1. Create the branch **manually** with a Git Flow name (`feature/<slug>`, `bugfix/<slug>`, etc.) — see [Branch Naming](#branch-naming). **MUST NOT** start from an issue-linked branch flow.
 2. Commit and push the branch.
-3. **Create the PR/MR first** with `gh pr create` / `glab mr create`. The PR/MR title and body describe the change on its own terms.
-4. **Then link the issue** — either include an issue-closing keyword (`Closes #N`, `Fixes #N`, `Resolves #N`) in the PR/MR body at creation time, or add it post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`. **MUST NOT** rely on the host's "linked issues" UI picker or on `--related-issue` substituting for an explicit body keyword — only the keyword auto-closes the issue on merge.
+3. **Create the PR/MR first** with `gh pr create` / `glab mr create`. The PR/MR title and body describe the change on its own terms. **MUST** pin the source branch explicitly on every create call — see [Source-branch substitution trap](#source-branch-substitution-trap) below.
+4. **Then link the issue** — either include an issue-closing keyword (`Closes #N`, `Fixes #N`, `Resolves #N`) in the PR/MR body at creation time, or add it post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`. **MUST NOT** rely on the host's "linked issues" UI picker, on `gh pr create --issue`, or on `glab mr create --related-issue` substituting for an explicit body keyword — only the keyword auto-closes the issue on merge, and those flags actively trigger the source-branch substitution trap below.
 
 This ordering ensures the branch name, PR/MR title, and commit history are authored by the agent (not by a provider template) and that the issue link is an explicit, reviewable decision rather than a side effect of how the branch was created.
+
+### Source-branch substitution trap
+
+`glab mr create --related-issue <N>`, `gh pr create --issue <N>`, and the *Linked issues* picker on either host's PR/MR creation UI **do not use the branch you currently have pushed**. They scan the remote for a host-fabricated branch named `<N>-<issue-slug>` (GitLab) or `<N>-<slug>` (GitHub) — auto-created the moment anything links the MR/PR to the issue — and use **that** as the `source_branch`. The real branch with the actual commits is silently ignored, the MR/PR opens with `commits: []` and `head_sha == base_sha`, and reviewers see "nothing to merge". The create call **does not fail**.
+
+**MUST NOT** pass `--related-issue` to `glab mr create`. **MUST NOT** pass `--issue` to `gh pr create`. **MUST NOT** use the *Linked issues* picker on either host's PR/MR creation UI. Issue linking is done exclusively via the closing keyword in the PR/MR body (per the "Required ordering" step 4 above).
+
+**MUST** pin the source branch explicitly on every create call — never let the tool infer it:
+
+```bash
+# GitLab
+glab mr create \
+  --source-branch "$(git branch --show-current)" \
+  --target-branch main \
+  ...
+
+# GitHub
+gh pr create \
+  --head "$(git branch --show-current)" \
+  --base main \
+  ...
+```
+
+**MUST** verify the MR/PR immediately after creation. The create call does not fail when the source branch is wrong, so the only signal is a follow-up read:
+
+```bash
+# GitLab — source_branch MUST equal the locally pushed branch; head_sha MUST differ from base_sha
+MR_IID=<iid>
+PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace' | sed 's|/|%2F|g')
+glab api "projects/$PROJECT/merge_requests/$MR_IID" \
+  | jq '{source_branch, head_sha: .diff_refs.head_sha, base_sha: .diff_refs.base_sha}'
+glab api "projects/$PROJECT/merge_requests/$MR_IID/commits" | jq 'length'   # MUST be > 0
+```
+
+```bash
+# GitHub — headRefName MUST equal the locally pushed branch; commit count MUST be > 0
+gh pr view <num> --json headRefName,commits \
+  | jq '{headRefName, commit_count: (.commits | length)}'
+```
+
+If the MR/PR's `source_branch` / `headRefName` matches `^[0-9]+-` (GitLab) or `^[0-9]+-[a-z]` (GitHub) instead of the Git Flow name that was pushed, or if the commit count is `0`, the MR/PR is **broken**. Close it, delete the stray remote branch (`git push origin --delete <N>-<slug>`), and recreate from the correct source.
+
+A stray `<N>-<slug>` ref on the remote is the **trap's bait**, never legitimate work. It is auto-created by the host's integration the moment an issue is referenced and only ever points at the target branch's HEAD (zero commits). Delete it before re-issuing the create call.
 
 **Linking issues via keywords** — use these in the PR/MR **body** (and, where supported, in commit messages) so the merge auto-closes or auto-links the issue. Plain `#123` autolinks but does **not** auto-close anything.
 
@@ -130,7 +173,6 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 
 **GitLab additionally MUST**:
 - Pass `--remove-source-branch` (cleanup after merge).
-- Pass `--related-issue <N>` when the MR resolves a tracked issue.
 
 ## Destructive / Bypass Operations
 
