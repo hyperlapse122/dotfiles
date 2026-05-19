@@ -12,6 +12,13 @@
 # Re-runnable: `install -D` is idempotent, and the firewalld step queries
 # `--permanent --query-masquerade` before mutating.
 #
+# Skip behaviour: when not running as root, stdin is not a TTY, and sudo
+# has no cached credentials, the script exits 0 immediately. Dotbot
+# invokes this from a non-interactive shell step during bootstrap; in
+# that context an uncached sudo would hang or fail. Skipping cleanly
+# keeps the rest of the dotbot run going. Re-run the script manually
+# (`bash scripts/linux/install-linux-system-config.sh`) afterwards.
+#
 # Most files install at mode 0644. The one exception is etc/sudoers.d/*,
 # which installs at 0440 (sudo refuses group/world-readable drop-ins) and
 # only on virtual machines, gated on `systemd-detect-virt --vm`. Sudoers
@@ -35,6 +42,20 @@ if [[ "${EUID}" -eq 0 ]]; then
   SUDO=()
 else
   SUDO=(sudo)
+
+  # Skip cleanly when we'd need to prompt for a password but can't.
+  # `[[ -t 0 ]]` is true only when stdin is a TTY; dotbot's `shell:`
+  # steps connect stdin so this is true under `./install.sh` but false
+  # under agent/CI runs. `sudo -n true` succeeds when sudo has cached
+  # credentials (recent `sudo` invocation) or when the user has
+  # password-less sudo configured — in either case we can proceed
+  # without prompting. Only when both fail do we give up.
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then
+    printf 'install-linux-system-config.sh: skipped (non-interactive shell, no cached sudo credentials).\n'
+    printf '  Re-run manually:\n'
+    printf '    bash %s/scripts/linux/install-linux-system-config.sh\n' "$REPO_ROOT"
+    exit 0
+  fi
 fi
 
 # Discover files at runtime so adding system/linux/etc/... config does not
