@@ -72,7 +72,7 @@ EOF
   # Install packages, grouped by purpose and alphabetised within each group.
   # steam/discord are bare-metal-only — systemd-detect-virt exits 0 when
   # virtualization is detected, 1 on bare metal.
-  "${SUDO[@]}" dnf group install development-tools -y
+  "${SUDO[@]}" dnf group install development-tools virtualization -y
   local -a packages=(
     # Build tooling
     gcc-c++
@@ -140,16 +140,17 @@ systemd() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now docker
   "${SUDO[@]}" systemctl enable --now tailscaled
+  "${SUDO[@]}" systemctl enable --now libvirtd.service
 }
 
 user-groups() {
-  "${SUDO[@]}" usermod -aG docker,keyd "$USER"
+  "${SUDO[@]}" usermod -aG docker,keyd,libvirt "$USER"
 
   # Group changes only take effect on next login. Notify when the current
   # shell is missing either group — silent on re-runs after re-login.
-  if ! id -nG | grep -qw docker || ! id -nG | grep -qw keyd; then
+  if ! id -nG | grep -qw docker || ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt; then
     printf '\n'
-    printf 'NOTE: Added "%s" to groups: docker, keyd\n' "$USER"
+    printf 'NOTE: Added "%s" to groups: docker, keyd, libvirt\n' "$USER"
     printf '      Log out and back in (or reboot) for group membership to take effect.\n'
   fi
 }
