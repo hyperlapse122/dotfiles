@@ -87,6 +87,26 @@ done
 
 printf 'install-linux-system-config.sh: %d installed, %d skipped\n' "$count" "$skipped"
 
+# Reload systemd and enable timers when system/linux/etc/systemd/system/
+# ships any unit files. `daemon-reload` is required so systemd notices the
+# newly-installed units; `enable --now` is idempotent for timers (enables
+# the symlink + starts the timer; no-op if already in that state).
+#
+# docker-prune.timer is gated on `command -v docker` so we don't enable a
+# timer that has no chance of doing useful work on a host that never ran
+# scripts/linux/install-packages.sh. The service unit itself also carries
+# `ConditionPathExists=/usr/bin/docker` as a runtime safety net.
+if [[ -d "$SRC_ROOT/etc/systemd/system" ]]; then
+  "${SUDO[@]}" systemctl daemon-reload
+
+  if command -v docker >/dev/null 2>&1; then
+    printf '  -> systemctl enable --now docker-prune.timer\n'
+    "${SUDO[@]}" systemctl enable --now docker-prune.timer
+  else
+    printf '  -- docker-prune.timer: skipped (docker not installed)\n'
+  fi
+fi
+
 # Enable firewalld masquerade on the default zone — required for the
 # Tailscale exit-node and VMware NAT egress paths (see header comment).
 # Scope is the default zone (`FedoraWorkstation` on Fedora Workstation),

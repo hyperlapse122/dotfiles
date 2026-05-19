@@ -19,8 +19,11 @@ hosts. Drop-in contents are syntax-checked with `visudo -c -f` before
 install. Adding files outside `sudoers.d/` should not require editing the
 installer unless they need a different mode or a platform/host gate.
 
-After file install, the installer also enables firewalld IPv4
-masquerading on the default zone (`firewall-cmd --permanent
+After file install, the installer runs `systemctl daemon-reload`
+when `system/linux/etc/systemd/system/` exists and enables
+`docker-prune.timer` with `systemctl enable --now` (gated on
+`command -v docker` so hosts without docker stay clean). It then
+enables firewalld IPv4 masquerading on the default zone (`firewall-cmd --permanent
 --add-masquerade` then `--reload`) — required for the Tailscale
 exit-node and VMware NAT egress paths to source-NAT traffic out the
 host's primary interface, on top of the IPv4/IPv6 forwarding enabled
@@ -51,6 +54,7 @@ drop-in files — do not consolidate them into a monolithic `NetworkManager.conf
 | `system/linux/etc/locale.conf` | system locale |
 | `system/linux/etc/plymouth/` | Plymouth boot splash config |
 | `system/linux/etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`) |
+| `system/linux/etc/systemd/system/` | system-scope systemd units, currently `docker-prune.service` + `docker-prune.timer` (weekly `docker system prune --force` and `docker volume prune --force`; enabled by the installer when `docker` is present, with `ConditionPathExists=/usr/bin/docker` as runtime safety net) |
 | `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions |
 
 There is currently no `system/macos/` or `system/windows/` tree. macOS settings usually belong under `home/` because they live in user-owned `~/Library` paths. Windows system config (registry tweaks, Group Policy, etc.) is **not** managed here — it doesn't fit the "drop a file at an absolute path" model. Add a `scripts/` helper if needed.

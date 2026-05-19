@@ -1,0 +1,22 @@
+# /etc/systemd/system/docker-prune.timer
+#
+# Fires docker-prune.service weekly (Mon 03:00 local, +0..1h jitter).
+#
+# Persistent=true makes systemd run a missed timer at next boot — important
+# for laptops that were asleep at the scheduled time.
+# RandomizedDelaySec spreads load when multiple managed hosts share an
+# upstream registry / build cache mirror.
+
+[Unit]
+Description=Weekly Docker prune (system + volumes)
+Documentation=https://docs.docker.com/reference/cli/docker/system/prune/
+Documentation=https://docs.docker.com/reference/cli/docker/volume/prune/
+
+[Timer]
+OnCalendar=Mon 03:00
+Persistent=true
+RandomizedDelaySec=1h
+Unit=docker-prune.service
+
+[Install]
+WantedBy=timers.target
