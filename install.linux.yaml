@@ -42,6 +42,7 @@
     # files are tracked at mode 100755; the symlink preserves the exec bit.
     ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
     ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
+    ~/.local/bin/docker-credential-dockerhub: home/.local/bin/docker-credential-dockerhub
 
     # opencode mise wrapper (POSIX side; Windows ships opencode.ps1, see
     # install.windows.yaml). Resolves the latest release version from GitHub
