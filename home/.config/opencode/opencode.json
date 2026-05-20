@@ -126,24 +126,18 @@
 	},
 	"model": "openai/gpt-5.5",
 	"permission": {
-		"edit": {
-			"**/.env*": "allow",
-			"**/.env*.local": "deny"
-		},
 		"read": {
 			"**": "allow",
-			"**/.env*": "allow",
-			"**/.env*.local": "deny",
 			"~/.secrets/**": "deny",
-			"~/.local/share/opencode/auth*": "deny"
+			"/home/h82/.secrets/**": "deny",
+			"~/.local/share/opencode/auth*": "deny",
+			"/home/h82/.local/share/opencode/auth*": "deny"
 		},
 		"bash": {
 			"*": "allow",
 			"cat ~/.secrets/*": "deny",
 			"cat /home/h82/.secrets/*": "deny",
-			"cat ~/.local/share/opencode/auth*": "deny",
-			"env": "deny",
-			"printenv*": "deny"
+			"cat ~/.local/share/opencode/auth*": "deny"
 		}
 	},
 	"provider": {
