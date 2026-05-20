@@ -65,16 +65,6 @@
       stdout: true
       stderr: true
 
-# Render tracked *.1password templates into ~/.secrets. The helper no-ops when
-# no templates exist; when templates are present it requires an authenticated
-# `op` CLI session.
-- shell:
-    - command: bash scripts/bootstrap/inject-1password-secrets.sh
-      description: Inject 1Password templates into ~/.secrets
-      stdin: true
-      stdout: true
-      stderr: true
-
 # Root-owned system config. Delegated to scripts/linux/install-linux-system-config.sh
 # so a single `sudo` prompt covers all files (sudo's credential cache makes
 # subsequent installs in that script password-less). The script also no-ops the
@@ -82,6 +72,16 @@
 - shell:
     - command: bash scripts/linux/install-linux-system-config.sh
       description: Install root-owned config to /etc/ (NetworkManager drop-ins, locale, keyd, libinput, plymouth, udev)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Render tracked *.1password templates into ~/.secrets. The helper no-ops when
+# no templates exist; when templates are present it requires an authenticated
+# `op` CLI session.
+- shell:
+    - command: bash scripts/bootstrap/inject-1password-secrets.sh
+      description: Inject 1Password templates into ~/.secrets
       stdin: true
       stdout: true
       stderr: true

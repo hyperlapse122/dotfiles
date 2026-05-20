@@ -59,7 +59,10 @@
 - shell:
     - command: mise install
       description: Install tools from mise
-      stdin: true
+      stdout: true
+      stderr: true
+    - command: mise up
+      description: Update tools from mise
       stdout: true
       stderr: true
     - command: glab skills install --global --force
