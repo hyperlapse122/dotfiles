@@ -124,6 +124,9 @@ EOF
 
     # Mesh networking / VPN
     tailscale
+
+    # Virtualization
+    gnome-boxes
   )
   if ! systemd-detect-virt --quiet; then
     # Bare-metal-only
