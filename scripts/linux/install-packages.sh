@@ -128,6 +128,8 @@ EOF
     # Virtualization
     virtualbox
     akmods
+    akmod-VirtualBox
+    kernel-devel
   )
   if ! systemd-detect-virt --quiet; then
     # Bare-metal-only
@@ -145,6 +147,77 @@ dotnet-tools() {
   dotnet tool install -g powershell
 }
 
+akmods() {
+  "${SUDO[@]}" akmods
+}
+
+virtualbox-extension-pack() {
+  if ! command -v VBoxManage >/dev/null 2>&1; then
+    printf 'install-packages.sh: VBoxManage not installed; skipping extension pack.\n'
+    return 0
+  fi
+
+  # VBoxManage --version emits e.g. "7.2.8_RPMFUSIONr173730" (RPM Fusion build)
+  # or "7.2.8r166737" (upstream). Strip from the first non-version character
+  # to recover "7.2.8", which is what download.virtualbox.org publishes the
+  # matching extpack under.
+  local vbox_version installed_version pack_file base_url
+  vbox_version="$(VBoxManage --version 2>/dev/null | sed -E 's/[^0-9.].*$//')"
+  if [[ -z "${vbox_version}" ]]; then
+    printf 'install-packages.sh: could not parse VirtualBox version; skipping extension pack.\n' >&2
+    return 1
+  fi
+
+  # Skip if the installed extpack already matches the running VirtualBox.
+  installed_version="$(VBoxManage list extpacks 2>/dev/null \
+    | awk '/^Pack no\. 0:/{found=1} found && /^Version:/{print $2; exit}')"
+  if [[ "${installed_version}" == "${vbox_version}" ]]; then
+    printf 'install-packages.sh: VirtualBox Extension Pack %s already installed; skipping.\n' "${vbox_version}"
+    return 0
+  fi
+
+  pack_file="Oracle_VirtualBox_Extension_Pack-${vbox_version}.vbox-extpack"
+  base_url="https://download.virtualbox.org/virtualbox/${vbox_version}"
+
+  # Subshell scopes the EXIT trap so the tmpdir is cleaned up whether the
+  # work succeeds or fails under set -e, without leaking a RETURN trap
+  # into subsequent functions.
+  (
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "${tmpdir}"' EXIT
+
+    curl -fsSL -o "${tmpdir}/${pack_file}" "${base_url}/${pack_file}"
+    curl -fsSL -o "${tmpdir}/SHA256SUMS"   "${base_url}/SHA256SUMS"
+
+    # SHA256SUMS lines are "<sha256> *<filename>". Pull the line for our exact
+    # filename; refuse to proceed if it is missing (sha256sum -c on empty
+    # stdin exits 0, which would silently skip verification).
+    cd "${tmpdir}"
+    expected="$(awk -v f="*${pack_file}" '$2 == f' SHA256SUMS)"
+    if [[ -z "${expected}" ]]; then
+      printf 'install-packages.sh: %s missing from upstream SHA256SUMS; aborting.\n' "${pack_file}" >&2
+      exit 1
+    fi
+    printf '%s\n' "${expected}" | sha256sum -c -
+
+    # VBoxManage accepts --accept-license=<sha256 of bundled
+    # ExtPack-license.txt> for non-interactive install. Compute it from the
+    # verified archive so a future license change is picked up automatically.
+    license_hash="$(tar -xOzf "${pack_file}" ./ExtPack-license.txt | sha256sum | awk '{print $1}')"
+
+    "${SUDO[@]}" VBoxManage extpack install --replace \
+      --accept-license="${license_hash}" "${tmpdir}/${pack_file}"
+  )
+
+  # A user-owned VBoxSVC started before this install caches "no extpacks"
+  # in-process; without restarting it the user keeps seeing the pre-install
+  # list until next login. See https://www.virtualbox.org/ticket/17034.
+  local target_user="${SUDO_USER:-$USER}"
+  if [[ -n "${target_user}" && "${target_user}" != "root" ]]; then
+    pkill -u "${target_user}" -x VBoxSVC 2>/dev/null || true
+  fi
+}
+
 systemd() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now docker
@@ -154,8 +227,8 @@ systemd() {
   # this may fail until the user reboots to load the vboxdrv kernel module, but enable it anyway so it starts on next boot
   "${SUDO[@]}" systemctl enable vboxdrv
 
-  # Sign all kernel modules
-  "${SUDO[@]}" systemctl start akmods.service
+  # Enabling akmods.service ensures kernel modules are automatically signed and loaded
+  "${SUDO[@]}" systemctl enable --now akmods.service
 
   # Import every akmods MOK signing key under /etc/pki/akmods/certs/ for
   # any out-of-tree kernel modules built by akmods (currently virtualbox).
@@ -223,5 +296,7 @@ user-groups() {
 
 fedora
 dotnet-tools
+akmods
+virtualbox-extension-pack
 systemd
 user-groups
