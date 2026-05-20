@@ -1,1 +1,1 @@
-ACTION=="add", SUBSYSTEM=="net", KERNEL=="veth*", RUN+="/usr/sbin/sysctl -w net.ipv6.conf.%k.disable_ipv6=1"
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="veth*|br-*|docker*", RUN+="/usr/sbin/sysctl -q -w net.ipv6.conf.%k.disable_ipv6=1"
