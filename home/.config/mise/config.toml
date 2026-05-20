@@ -46,6 +46,7 @@ usage = "latest"
 "npm:sharp-cli" = { version = "latest", depends = ["aube"] }
 "npm:tokscale" = { version = "latest", depends = ["aube"] }
 "npm:typescript-language-server" = { version = "latest", depends = ["aube"] }
+"npm:@typescript/native-preview" = { version = "latest", depends = ["aube"] }
 
 # Agentic AI
 claude-code = "latest"

@@ -61,9 +61,10 @@
 				"mise",
 				"exec",
 				"-q",
-				"npm:typescript-language-server@latest",
+				"npm:@typescript/native-preview",
 				"--",
-				"typescript-language-server",
+				"tsgo",
+				"--lsp",
 				"--stdio"
 			],
 			"extensions": [
