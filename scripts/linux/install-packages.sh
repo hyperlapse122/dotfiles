@@ -96,6 +96,11 @@ EOF
     dotnet-sdk-8.0
     mise
 
+    # Ruby build dependencies (consumed by mise's ruby-build).
+    # The runtime libs libffi/libyaml are pulled in transitively.
+    libffi-devel
+    libyaml-devel
+
     # Logitech device manager
     solaar
     solaar-udev
