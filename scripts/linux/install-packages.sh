@@ -157,32 +157,55 @@ systemd() {
   # Sign all kernel modules
   "${SUDO[@]}" systemctl start akmods.service
 
-  # Import the akmods MOK signing key. Skipped unless ALL of:
-  #   1. Booted via UEFI with Secure Boot enabled — otherwise unsigned
-  #      modules load fine and `mokutil --import` would queue a pointless
-  #      MOK enrollment prompt on next boot.
-  #   2. akmods generated the public key (akmods.service writes it on
-  #      first run; bare-metal-only on systems where signing is configured).
-  #   3. The key isn't already enrolled (mokutil --test-key returns "is
-  #      already enrolled") and isn't already queued in --list-new for
-  #      enrollment on next boot — re-importing prompts the user for a
-  #      fresh one-time password and replaces the pending request.
-  local pubkey=/etc/pki/akmods/certs/public_key.der
-  local fp
+  # Import every akmods MOK signing key under /etc/pki/akmods/certs/ for
+  # any out-of-tree kernel modules built by akmods (currently virtualbox).
+  # Skipped entirely unless booted via UEFI with Secure Boot enabled —
+  # otherwise unsigned modules load fine and `mokutil --import` would
+  # queue a pointless MOK Manager prompt on next boot.
+  #
+  # /etc/pki/akmods/certs/ is mode 0750 root:akmods, so every read of the
+  # directory and its contents (listing, existence check, mokutil
+  # --test-key, openssl fingerprint) goes through sudo — a normal user
+  # cannot see files in there even though only --import strictly needs
+  # root. Per-cert enrollment check uses `mokutil --test-key` (which
+  # confusingly exits 1 when the key IS enrolled, so we grep its stdout
+  # for "is already enrolled") and a pending-enrollment check against
+  # `mokutil --list-new` by SHA1 fingerprint so re-runs between import
+  # and reboot don't re-prompt for the one-time password and replace
+  # the pending request. Approved-to-import certs are batched into a
+  # single `mokutil --import` call so the user enters the one-time
+  # password once for all of them.
   if [[ ! -d /sys/firmware/efi ]]; then
     printf 'install-packages.sh: not booted via UEFI; skipping akmods MOK import.\n'
   elif ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
     printf 'install-packages.sh: Secure Boot disabled; skipping akmods MOK import.\n'
-  elif [[ ! -f "${pubkey}" ]]; then
-    printf 'install-packages.sh: %s missing; skipping akmods MOK import.\n' "${pubkey}"
-  elif mokutil --test-key "${pubkey}" 2>/dev/null | grep -q 'is already enrolled'; then
-    printf 'install-packages.sh: akmods MOK already enrolled; skipping import.\n'
-  elif fp="$(openssl x509 -in "${pubkey}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')" \
-       && [[ -n "${fp}" ]] \
-       && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
-    printf 'install-packages.sh: akmods MOK already queued for enrollment on next boot; skipping import.\n'
+  elif ! "${SUDO[@]}" test -d /etc/pki/akmods/certs; then
+    printf 'install-packages.sh: /etc/pki/akmods/certs missing; skipping akmods MOK import.\n'
   else
-    "${SUDO[@]}" mokutil --import "${pubkey}"
+    local -a certs=() to_import=()
+    local cert fp
+    readarray -t certs < <("${SUDO[@]}" find /etc/pki/akmods/certs -maxdepth 1 -type f -name '*.der' -print | sort)
+    if [[ ${#certs[@]} -eq 0 ]]; then
+      printf 'install-packages.sh: no .der certs in /etc/pki/akmods/certs; skipping akmods MOK import.\n'
+    else
+      for cert in "${certs[@]}"; do
+        if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
+          printf 'install-packages.sh: %s already enrolled; skipping.\n' "${cert}"
+          continue
+        fi
+        fp="$("${SUDO[@]}" openssl x509 -in "${cert}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')"
+        if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
+          printf 'install-packages.sh: %s already queued for enrollment on next boot; skipping.\n' "${cert}"
+          continue
+        fi
+        to_import+=("${cert}")
+      done
+      if [[ ${#to_import[@]} -gt 0 ]]; then
+        "${SUDO[@]}" mokutil --import "${to_import[@]}"
+      else
+        printf 'install-packages.sh: all akmods MOK certs already enrolled or queued.\n'
+      fi
+    fi
   fi
 }
 
