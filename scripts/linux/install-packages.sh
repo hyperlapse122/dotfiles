@@ -126,7 +126,8 @@ EOF
     tailscale
 
     # Virtualization
-    gnome-boxes
+    virtualbox
+    akmods
   )
   if ! systemd-detect-virt --quiet; then
     # Bare-metal-only
@@ -149,6 +150,40 @@ systemd() {
   "${SUDO[@]}" systemctl enable --now docker
   "${SUDO[@]}" systemctl enable --now tailscaled
   "${SUDO[@]}" systemctl enable --now libvirtd.service
+  
+  # this may fail until the user reboots to load the vboxdrv kernel module, but enable it anyway so it starts on next boot
+  "${SUDO[@]}" systemctl enable vboxdrv
+
+  # Sign all kernel modules
+  "${SUDO[@]}" systemctl start akmods.service
+
+  # Import the akmods MOK signing key. Skipped unless ALL of:
+  #   1. Booted via UEFI with Secure Boot enabled — otherwise unsigned
+  #      modules load fine and `mokutil --import` would queue a pointless
+  #      MOK enrollment prompt on next boot.
+  #   2. akmods generated the public key (akmods.service writes it on
+  #      first run; bare-metal-only on systems where signing is configured).
+  #   3. The key isn't already enrolled (mokutil --test-key returns "is
+  #      already enrolled") and isn't already queued in --list-new for
+  #      enrollment on next boot — re-importing prompts the user for a
+  #      fresh one-time password and replaces the pending request.
+  local pubkey=/etc/pki/akmods/certs/public_key.der
+  local fp
+  if [[ ! -d /sys/firmware/efi ]]; then
+    printf 'install-packages.sh: not booted via UEFI; skipping akmods MOK import.\n'
+  elif ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    printf 'install-packages.sh: Secure Boot disabled; skipping akmods MOK import.\n'
+  elif [[ ! -f "${pubkey}" ]]; then
+    printf 'install-packages.sh: %s missing; skipping akmods MOK import.\n' "${pubkey}"
+  elif mokutil --test-key "${pubkey}" 2>/dev/null | grep -q 'is already enrolled'; then
+    printf 'install-packages.sh: akmods MOK already enrolled; skipping import.\n'
+  elif fp="$(openssl x509 -in "${pubkey}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')" \
+       && [[ -n "${fp}" ]] \
+       && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
+    printf 'install-packages.sh: akmods MOK already queued for enrollment on next boot; skipping import.\n'
+  else
+    "${SUDO[@]}" mokutil --import "${pubkey}"
+  fi
 }
 
 user-groups() {
