@@ -165,6 +165,30 @@ if [[ -d "$SRC_ROOT/etc/systemd/system" ]]; then
   fi
 fi
 
+# Reload udev rules so freshly-installed rules under /etc/udev/rules.d/
+# (e.g. logitech-receiver.rules, 99-veth-no-ipv6.rules from
+# system/linux/etc/udev/rules.d/) take effect without a reboot.
+# `udevadm control --reload` re-reads the rules database; it does not
+# retrigger events for existing devices (`udevadm trigger` would, and
+# is intentionally omitted to avoid disrupting connected hardware on
+# every bootstrap run).
+if [[ -d "$SRC_ROOT/etc/udev/rules.d" ]]; then
+  printf '  -> udevadm control --reload\n'
+  "${SUDO[@]}" udevadm control --reload
+fi
+
+# Apply sysctl settings so freshly-installed drop-ins under
+# /etc/sysctl.d/ (e.g. 99-tailscale.conf, 99-disable-ipv6-containers.conf
+# from system/linux/etc/sysctl.d/) take effect without a reboot.
+# `sysctl --system` re-reads /etc/sysctl.conf and every conf.d/ drop-in
+# in the documented load order (see sysctl.d(5)), which is the same path
+# systemd-sysctl.service runs at boot — so runtime state matches what a
+# reboot would produce.
+if [[ -d "$SRC_ROOT/etc/sysctl.d" ]]; then
+  printf '  -> sysctl --system\n'
+  "${SUDO[@]}" sysctl --system >/dev/null
+fi
+
 # Enable firewalld masquerade on the default zone — required for the
 # Tailscale exit-node and VMware NAT egress paths (see header comment).
 # Scope is the default zone (`FedoraWorkstation` on Fedora Workstation),
