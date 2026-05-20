@@ -205,6 +205,10 @@ If a secret is committed by accident: **STOP**, notify the user, treat the secre
 **MUST NOT** fetch Figma via web fetch, browser automation, screenshot tools, or any other surface.
 MCP unavailable / errors → **STOP** and ask the user to fix the MCP. **MUST NOT** improvise an alternative.
 
+**MUST re-fetch the latest Figma node every time a node ID is mentioned** — never act on stale memory of a frame's layout, even within the same session. Designers update frames between turns, between commits, and between MR review rounds; assumptions about element placement, copy, components, variants, sizes, or colors silently drift out of sync. Call `figma_get_design_context` (and `figma_get_screenshot` when visual layout matters) at the **start** of every task that references a specific node, and again **before** capturing or refreshing screenshots that claim Figma parity. Cache the response only within the current turn — the next turn re-fetches.
+
+**MUST diff the fresh Figma response against the current implementation** before declaring Figma alignment work complete. If the Figma frame contains components, copy, or buttons that are absent from the implementation (or vice versa), state the gap explicitly — do not silently skip Figma elements on the assumption they are "out of scope". Out-of-scope decisions are the user's to make, not the agent's.
+
 ## Interactive / Long-Running Processes
 
 **MUST** use the `tmux` tool (`mcp_interactive_bash`) for: dev servers, watch modes, TUI apps, REPLs, build watchers — anything that does not terminate.
