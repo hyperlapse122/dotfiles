@@ -128,11 +128,12 @@
 	"permission": {
 		"edit": {
 			"**/.env*": "allow",
-			"**/.env*.local": "ask"
+			"**/.env*.local": "deny"
 		},
 		"read": {
+			"**": "allow",
 			"**/.env*": "allow",
-			"**/.env*.local": "ask",
+			"**/.env*.local": "deny",
 			"~/.secrets/**": "deny",
 			"~/.local/share/opencode/auth*": "deny"
 		},
@@ -141,8 +142,8 @@
 			"cat ~/.secrets/*": "deny",
 			"cat /home/h82/.secrets/*": "deny",
 			"cat ~/.local/share/opencode/auth*": "deny",
-			"env": "ask",
-			"printenv*": "ask"
+			"env": "deny",
+			"printenv*": "deny"
 		}
 	},
 	"provider": {
