@@ -108,6 +108,43 @@ done
 
 printf 'install-linux-system-config.sh: %d installed, %d skipped\n' "$count" "$skipped"
 
+# /etc/ paths that this script previously installed but no longer ships
+# in system/linux/etc/. Listed explicitly so every machine — including
+# ones that pull a committed deletion — removes the orphan on the next
+# bootstrap run. `rm -f` is idempotent, so leaving entries here for a
+# release cycle or two after the deletion is safe (no-op once gone).
+#
+# When deleting a tracked file from system/linux/etc/, add its absolute
+# /etc path to this list in the same commit. Re-deriving the list from
+# git history is intentionally not done (`git status` only sees local
+# uncommitted changes; `git log --diff-filter=D` would catch committed
+# deletions but has no idempotency story and would re-attempt removal
+# forever). An explicit manifest is the simplest mechanism that works
+# across all clones.
+REMOVED_ETC_PATHS=(
+  /etc/NetworkManager/conf.d/80-lo.conf
+  /etc/NetworkManager/conf.d/90-unmanaged-vmware.conf
+  /etc/NetworkManager/conf.d/91-tailscale.conf
+  /etc/NetworkManager/conf.d/92-docker.conf
+  /etc/NetworkManager/conf.d/93-veth.conf
+)
+
+removed_listed=0
+for dst in "${REMOVED_ETC_PATHS[@]}"; do
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    printf '  -> removing %s (listed in REMOVED_ETC_PATHS)\n' "$dst"
+    "${SUDO[@]}" rm -f "$dst"
+    removed_listed=$((removed_listed + 1))
+  fi
+done
+if [[ ${#REMOVED_ETC_PATHS[@]} -eq 0 ]]; then
+  printf '  -- REMOVED_ETC_PATHS: empty (nothing to clean)\n'
+elif [[ "$removed_listed" -eq 0 ]]; then
+  printf '  -- REMOVED_ETC_PATHS: %d entries, all already absent\n' "${#REMOVED_ETC_PATHS[@]}"
+else
+  printf '  -- REMOVED_ETC_PATHS: cleaned %d of %d listed path(s)\n' "$removed_listed" "${#REMOVED_ETC_PATHS[@]}"
+fi
+
 # Reload systemd and enable timers when system/linux/etc/systemd/system/
 # ships any unit files. `daemon-reload` is required so systemd notices the
 # newly-installed units; `enable --now` is idempotent for timers (enables
@@ -156,4 +193,45 @@ if "${SUDO[@]}" firewall-cmd --state >/dev/null 2>&1; then
   fi
 else
   printf '  -- firewalld masquerade: skipped (firewalld not running)\n'
+fi
+
+# Remove dangling symlinks under /etc/NetworkManager/conf.d/. Home
+# Manager (pre-Nix-decommission) installed NM drop-ins as symlinks into
+# /nix/store/...; once the store is garbage-collected those become
+# broken links that NetworkManager logs warnings for on every reload and
+# that `ls -l` flags red. We only delete symlinks whose targets are
+# missing — regular files and live symlinks are left untouched, so this
+# can't accidentally remove a drop-in placed by another tool.
+if [[ -d /etc/NetworkManager/conf.d ]]; then
+  stale=0
+  for link in /etc/NetworkManager/conf.d/*; do
+    [[ -L "$link" && ! -e "$link" ]] || continue
+    printf '  -> removing stale symlink: %s\n' "$link"
+    "${SUDO[@]}" rm -f "$link"
+    stale=$((stale + 1))
+  done
+  if [[ "$stale" -eq 0 ]]; then
+    printf '  -- NetworkManager conf.d: no stale symlinks\n'
+  else
+    printf '  -- NetworkManager conf.d: removed %d stale symlink(s)\n' "$stale"
+  fi
+fi
+
+# Reload NetworkManager so any freshly-installed drop-ins under
+# /etc/NetworkManager/conf.d/ (e.g. the unmanaged-devices rules from
+# system/linux/etc/NetworkManager/conf.d/) take effect without a reboot.
+# `systemctl reload` triggers NetworkManager's SIGHUP handler, which
+# re-reads NetworkManager.conf and every conf.d/ drop-in without
+# disrupting active connections (unlike `restart`, which would).
+#
+# Gate: `systemctl is-active --quiet NetworkManager` returns 0 only when
+# the unit exists and is currently running, covering both "service
+# present" and "service running" in a single check. Hosts without
+# NetworkManager (systemd-networkd, netctl, no network stack at all)
+# skip cleanly.
+if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+  printf '  -> systemctl reload NetworkManager\n'
+  "${SUDO[@]}" systemctl reload NetworkManager
+else
+  printf '  -- NetworkManager reload: skipped (service not running)\n'
 fi
