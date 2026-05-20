@@ -76,14 +76,12 @@ detect_os() {
 # Pick a `gh` invocation, mirroring auth-gh.sh: prefer system gh, fall back to
 # mise-managed `gh@latest`, error otherwise.
 detect_gh() {
-  if command -v gh >/dev/null 2>&1; then
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     GH=(gh)
-  elif command -v mise >/dev/null 2>&1; then
+  elif command -v mise >/dev/null 2>&1 && mise exec gh@latest -- gh auth status >/dev/null 2>&1; then
     GH=(mise exec gh@latest -- gh)
   else
-    err "gh not found and mise unavailable as fallback."
-    err "install GitHub CLI (https://cli.github.com/) or mise (https://mise.jdx.dev/)."
-    exit 1
+    GH=()
   fi
 }
 
@@ -94,6 +92,35 @@ require_cmd() {
       exit 1
     fi
   done
+}
+
+download_release_asset() {
+  local repo="$1" pattern="$2" dir="$3"
+
+  if ((${#GH[@]})); then
+    "${GH[@]}" release download \
+      --repo "$repo" \
+      --pattern "$pattern" \
+      --dir "$dir" \
+      --clobber
+    return
+  fi
+
+  local api_url="https://api.github.com/repos/$repo/releases/latest"
+  local url basename
+  while IFS= read -r url; do
+    basename="${url##*/}"
+    if [[ "$basename" == $pattern ]]; then
+      curl -fL --retry 3 -o "$dir/$basename" "$url"
+      return
+    fi
+  done < <(
+    curl -fsSL "$api_url" |
+      sed -n 's/^[[:space:]]*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/p'
+  )
+
+  err "no release asset matched $repo pattern $pattern"
+  return 1
 }
 
 # Install all .ttf, .otf, and .ttc files from listed src_dirs into
@@ -115,11 +142,7 @@ install_font() {
   local work="$TMP_ROOT/$name"
   mkdir -p "$work"
 
-  "${GH[@]}" release download \
-    --repo "$repo" \
-    --pattern "$pattern" \
-    --dir "$work" \
-    --clobber
+  download_release_asset "$repo" "$pattern" "$work"
 
   local zip
   zip="$(find "$work" -maxdepth 1 -name '*.zip' -print -quit)"
@@ -172,7 +195,7 @@ done
 
 detect_os
 detect_gh
-require_cmd unzip find install mktemp
+require_cmd unzip find install mktemp curl sed
 
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT

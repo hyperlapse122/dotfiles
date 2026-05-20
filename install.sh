@@ -37,6 +37,14 @@ fi
 #    NOTE: dotbot's `-c` uses argparse `nargs='+'` (NOT `append`), so multiple
 #    config files MUST be passed under a SINGLE `-c` flag. `-c f1 -c f2` would
 #    only use f2 (the last one wins). Don't change this back.
+if ! "$MISE_BIN" exec uv@latest -- uvx --version >/dev/null 2>&1 && command -v uvx >/dev/null 2>&1; then
+  printf 'install.sh: mise-managed uvx unavailable; falling back to system uvx.\n' >&2
+  exec uvx dotbot \
+    -d "$REPO_ROOT" \
+    -c "$REPO_ROOT/install.conf.yaml" "$REPO_ROOT/$OS_YAML" \
+    "$@"
+fi
+
 exec "$MISE_BIN" exec uv@latest -- uvx dotbot \
   -d "$REPO_ROOT" \
   -c "$REPO_ROOT/install.conf.yaml" "$REPO_ROOT/$OS_YAML" \

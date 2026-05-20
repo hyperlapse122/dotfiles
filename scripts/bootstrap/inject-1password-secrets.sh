@@ -7,14 +7,27 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 SECRETS_DIR="${SECRETS_DIR:-$HOME/.secrets}"
 
 found=0
+op_checked=0
+op_ready=0
 
 while IFS= read -r -d '' template_file; do
   found=1
 
-  if ! command -v op >/dev/null 2>&1; then
-    printf 'inject-1password-secrets.sh: op command not found. Install and sign in to 1Password CLI first.\n' >&2
-    exit 1
+  if [[ "$op_checked" -eq 0 ]]; then
+    op_checked=1
+    if ! command -v op >/dev/null 2>&1; then
+      printf 'inject-1password-secrets.sh: op command not found; skipping *.1password templates.\n' >&2
+      break
+    fi
+    if op account list >/dev/null 2>&1; then
+      op_ready=1
+    else
+      printf 'inject-1password-secrets.sh: 1Password CLI is not signed in; skipping *.1password templates.\n' >&2
+      break
+    fi
   fi
+
+  [[ "$op_ready" -eq 1 ]] || break
 
   output_name="$(basename -- "${template_file%.1password}")"
   output_path="$SECRETS_DIR/$output_name"

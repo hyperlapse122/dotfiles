@@ -64,11 +64,16 @@
       stdout: true
       stderr: true
 
-# Render tracked *.1password templates into ~/.secrets. The helper no-ops when
-# no templates exist; when templates are present it requires an authenticated
-# `op` CLI session.
+# Render tracked *.1password templates into ~/.secrets. Fedora workstations run
+# the helper; other Linux distributions skip this host-secret step.
 - shell:
-    - command: bash scripts/bootstrap/inject-1password-secrets.sh
+    - command: >
+        bash -c 'source /etc/os-release 2>/dev/null || true;
+        if [[ "${ID:-}" != "fedora" ]]; then
+        printf "inject-1password-secrets.sh: non-Fedora Linux (%s); skipping *.1password templates.\n" "${ID:-unknown}";
+        exit 0;
+        fi;
+        exec bash scripts/bootstrap/inject-1password-secrets.sh'
       description: Inject 1Password templates into ~/.secrets
       stdin: true
       stdout: true

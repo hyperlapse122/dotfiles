@@ -22,9 +22,9 @@ cd $HOME\dotfiles
 .\install.ps1
 ```
 
-### Fedora packages (optional)
+### Linux packages (optional)
 
-[`scripts/linux/install-packages.sh`](./scripts/linux/install-packages.sh) enables COPRs (keyd, mise), RPM Fusion, and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale) before installing packages via `dnf`, installing selected dotnet global tools, enabling `keyd`/`docker`/`tailscaled`, and adding the user to the `docker` and `keyd` groups. Run it manually once you're sure of the package set:
+[`scripts/linux/install-packages.sh`](./scripts/linux/install-packages.sh) supports Fedora plus Rocky/RHEL-family hosts. It enables the relevant COPRs/repositories and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale) before installing packages via `dnf`, installing selected dotnet global tools, enabling available `keyd`/`docker`/`tailscaled` services, and adding the user to available `docker`/`keyd` groups. On Rocky/RHEL, packages that are not published for the current EL release are skipped with a message. Run it manually once you're sure of the package set:
 
 ```sh
 ./scripts/linux/install-packages.sh
@@ -40,9 +40,9 @@ It is **not** invoked from `install.sh` — package selection is opinionated and
 | Linux | `bash`, `curl`, `git`, `unzip`, [`mise`](https://mise.jdx.dev/) |
 | Windows | PowerShell 5.1+, [`mise`](https://mise.jdx.dev/), [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/developer-mode-features-and-debugging) enabled (or run as Administrator) for symlink creation |
 
-`unzip` is needed by [`scripts/bootstrap/install-fonts.sh`](./scripts/bootstrap/install-fonts.sh) (Windows uses built-in `Expand-Archive`). The font installer uses GitHub CLI (`gh`) when available and otherwise falls back to `mise exec gh@latest -- gh`. If any `*.1password` templates are tracked in the repo, the bootstrap renders them into `~/.secrets/` with [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/); install and sign in to the 1Password CLI before bootstrapping on machines that need those secrets.
+`unzip` is needed by [`scripts/bootstrap/install-fonts.sh`](./scripts/bootstrap/install-fonts.sh) (Windows uses built-in `Expand-Archive`). The font installer uses authenticated GitHub CLI (`gh`) when available and otherwise downloads public release assets with `curl`. If any `*.1password` templates are tracked in the repo, the bootstrap renders them into `~/.secrets/` with [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/) when the 1Password CLI is signed in; otherwise it skips those templates so non-secret bootstrap can continue.
 
-Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap scripts. dotbot itself is **never installed** — mise provides [`uv`](https://docs.astral.sh/uv/) for the invocation, `uvx dotbot` runs dotbot ephemerally from PyPI every time, and the OpenCode prompt renderer runs through mise-managed Node.js.
+Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap scripts. dotbot itself is **never installed** — mise normally provides [`uv`](https://docs.astral.sh/uv/) for the invocation, `uvx dotbot` runs dotbot ephemerally from PyPI every time, and the OpenCode prompt renderer runs through mise-managed Node.js. On hosts where mise cannot resolve `uv@latest` from GitHub, `install.sh` falls back to a system `uvx` when available.
 
 ## Repo structure
 

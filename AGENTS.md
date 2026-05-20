@@ -47,7 +47,7 @@ Every tracked top-level directory MUST have its own `README.md` describing what 
   - `uv tool install dotbot` (this is `uv`'s *persistent* install — it is NOT what we want)
   - `brew install dotbot`, `apt install dotbot`, `dnf install dotbot`, etc.
   - vendoring dotbot's source into this repo or adding a `dotbot/` git submodule (the canonical upstream template uses a submodule — **we deliberately don't**)
-- The single canonical invocation: `mise exec uv@latest -- uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml install.<os>.yaml`. Both `install.sh` and `install.ps1` MUST call exactly this; nothing else may run dotbot.
+- The canonical invocation is `mise exec uv@latest -- uvx dotbot -d "$REPO_ROOT" -c install.conf.yaml install.<os>.yaml`. Both `install.sh` and `install.ps1` MUST prefer this path; on hosts where mise cannot resolve `uv@latest` from GitHub, `install.sh` may fall back to system `uvx` while still running dotbot ephemerally. Do not install dotbot itself.
 - **Pass both yaml files under a SINGLE `-c` flag.** dotbot's `-c` is argparse `nargs='+'` (not `append`); writing `-c install.conf.yaml -c install.<os>.yaml` silently drops the first file (only the last `-c` wins). Don't change this back.
 - The bootstrap scripts MUST NOT install `mise`; users install `mise` themselves before running the scripts. The scripts may only verify that `mise` is available, then use `mise exec uv@latest -- uvx`. **Do not** add a step that installs dotbot itself.
 - `install.conf.yaml` MUST start with `defaults: { link: { create: true, relink: true, force: true } }` so individual link entries don't have to repeat them. This repo intentionally treats tracked dotfiles as authoritative: real files at managed targets are overwritten with repo symlinks during bootstrap. This is **not** stow-style adoption; do not move target files into the repo unless explicitly asked.
@@ -119,7 +119,7 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 | Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml; shared yaml renders OpenCode prompt appends through mise-managed Node.js; OS yaml also runs `scripts/bootstrap/inject-1password-secrets.sh`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
 | Fresh Windows | `.\install.ps1` (same contract, PowerShell; shared yaml renders OpenCode prompt appends through mise-managed Node.js; OS yaml also runs `scripts/bootstrap/inject-1password-secrets.ps1`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
 | Re-link after pulling repo | same `install.sh` / `install.ps1`; dotbot's `relink: true` default makes it idempotent |
-| Fedora package install | `scripts/linux/install-packages.sh` (manual; enables COPRs, RPM Fusion, 1Password, VS Code, Docker, and Tailscale repos; installs packages, dotnet tools, and enables services) |
+| Linux package install | `scripts/linux/install-packages.sh` (manual; supports Fedora plus Rocky/RHEL-family hosts; enables distro-appropriate repos plus 1Password, VS Code, Docker, Chrome, and Tailscale repos; installs available packages, dotnet tools, and enables available services) |
 
 `install.sh` MUST detect OS via `uname -s` (`Darwin` / `Linux`) and pass the matching `install.<os>.yaml` as the second `-c`. `install.ps1` always uses `install.windows.yaml`.
 
