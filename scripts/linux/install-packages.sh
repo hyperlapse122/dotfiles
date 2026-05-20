@@ -210,13 +210,13 @@ systemd() {
 }
 
 user-groups() {
-  "${SUDO[@]}" usermod -aG docker,keyd,libvirt "$USER"
+  "${SUDO[@]}" usermod -aG docker,keyd,libvirt,vboxusers "$USER"
 
   # Group changes only take effect on next login. Notify when the current
   # shell is missing either group — silent on re-runs after re-login.
-  if ! id -nG | grep -qw docker || ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt; then
+  if ! id -nG | grep -qw docker || ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt || ! id -nG | grep -qw vboxusers; then
     printf '\n'
-    printf 'NOTE: Added "%s" to groups: docker, keyd, libvirt\n' "$USER"
+    printf 'NOTE: Added "%s" to groups: docker, keyd, libvirt, vboxusers\n' "$USER"
     printf '      Log out and back in (or reboot) for group membership to take effect.\n'
   fi
 }
