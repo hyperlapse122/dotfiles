@@ -162,7 +162,7 @@ virtualbox-extension-pack() {
   # to recover "7.2.8", which is what download.virtualbox.org publishes the
   # matching extpack under.
   local vbox_version installed_version pack_file base_url
-  vbox_version="$(VBoxManage --version 2>/dev/null | sed -E 's/[^0-9.].*$//')"
+  vbox_version="$(VBoxManage --version 2>/dev/null | awk -F_ '/^[0-9]+\.[0-9]+\.[0-9]+_/ {print $1}')"
   if [[ -z "${vbox_version}" ]]; then
     printf 'install-packages.sh: could not parse VirtualBox version; skipping extension pack.\n' >&2
     return 1
