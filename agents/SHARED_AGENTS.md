@@ -181,7 +181,33 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 
 ## Issues / Tasks
 
-### Host: `git.jpi.app` (GitLab)
+### Host: `git.jpi.app` (GitLab, self-managed)
+
+#### Reading an issue or work item
+
+**MUST** use `glab issue view` to read issues and work items. **MUST NOT** hit `glab api projects/.../issues/...` for read access — `glab issue view` already wraps the API, handles host resolution from the URL, renders the body cleanly, and accepts `--comments` for the discussion thread and `-F json` for machine-readable output.
+
+**Work items vs. issues — URL gotcha**: GitLab is migrating issues to the unified *work items* system. The web UI now serves the same IID under **both** `/-/issues/<iid>` and `/-/work_items/<iid>`. `glab issue view` accepts the `/-/issues/<iid>` form but **rejects** `/-/work_items/<iid>` with `Invalid issue format`. **MUST** rewrite any `/-/work_items/<iid>` URL the user pastes to `/-/issues/<iid>` before passing it to `glab issue view`. (`glab work-items` exists but is EXPERIMENTAL and has no `view` subcommand — list/create/update/delete only.)
+
+**Self-managed host resolution**: `glab` resolves the host in this order: (1) the current repo's git remote, (2) the host embedded in a URL argument, (3) `GITLAB_HOST` env var, (4) the global default (`gitlab.com`). When the cwd is a clone of a self-managed project (e.g. anything under `git.jpi.app`), bare `glab issue view <iid>` works — no env var, no `-R`, no URL. The env var is **only** required when none of the higher-priority sources point at the right host (e.g. running from an unrelated repo, or — like this dotfiles repo — a GitHub-hosted clone) **and** you don't want to pass the full URL:
+
+```bash
+# Inside a clone of the target project — host auto-detected from the git remote.
+glab issue view 22 --comments
+
+# From an unrelated cwd — full URL form (host extracted from the URL). Preferred for one-off reads.
+glab issue view "https://git.jpi.app/products/examvue-duo/examvue-apps/-/issues/22" --comments
+
+# From an unrelated cwd, scripting multiple calls against the same host — GITLAB_HOST + -R + IID.
+GITLAB_HOST=git.jpi.app glab issue view 22 -R products/examvue-duo/examvue-apps --comments
+
+# JSON for downstream processing.
+glab issue view 22 -F json | jq .
+```
+
+`glab api` is the fallback **only** when `glab issue view` cannot express the call (custom fields, batch queries, GraphQL work-item queries). State the reason inline when reaching for `glab api`.
+
+#### Creating an issue or work item
 
 When creating an issue or work item (task) on `git.jpi.app`:
 
