@@ -1,6 +1,6 @@
 {
 	"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/assets/oh-my-opencode.schema.json",
-	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/shared/model-requirements.ts
+	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-requirements.ts
 	"agents": {
 		"sisyphus": {
 			"model": "anthropic/claude-opus-4-7",
@@ -81,10 +81,8 @@
 	},
 	"categories": {
 		"visual-engineering": {
-			"model": "google/gemini-3.1-pro-preview",
-			"variant": "high",
+			"model": "opencode-go/glm-5",
 			"fallback_models": [
-				"opencode-go/glm-5",
 				{
 					"model": "anthropic/claude-opus-4-7",
 					"variant": "max"
@@ -105,13 +103,9 @@
 			"variant": "medium"
 		},
 		"artistry": {
-			"model": "google/gemini-3.1-pro-preview",
-			"variant": "high",
+			"model": "anthropic/claude-opus-4-7",
+			"variant": "max",
 			"fallback_models": [
-				{
-					"model": "anthropic/claude-opus-4-7",
-					"variant": "max"
-				},
 				{
 					"model": "openai/gpt-5.5-fast"
 				}
@@ -140,9 +134,8 @@
 			]
 		},
 		"writing": {
-			"model": "google/gemini-3-flash-preview",
+			"model": "opencode-go/kimi-k2.6",
 			"fallback_models": [
-				"opencode-go/kimi-k2.6",
 				"anthropic/claude-sonnet-4-6",
 				"opencode-go/minimax-m2.7"
 			]

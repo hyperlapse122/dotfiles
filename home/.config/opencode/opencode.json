@@ -3,8 +3,7 @@
 	"autoupdate": false,
 	"plugin": [
 		"oh-my-openagent@4.2.3",
-		"@ex-machina/opencode-anthropic-auth@1.8.1",
-		"opencode-gemini-auth@1.4.15"
+		"@ex-machina/opencode-anthropic-auth@1.8.1"
 	],
 	"lsp": {
 		"biome": {
