@@ -124,6 +124,7 @@ EOF
 
     # Mesh networking / VPN
     tailscale
+    wl-clipboard
 
     # Virtualization
     virtualbox
