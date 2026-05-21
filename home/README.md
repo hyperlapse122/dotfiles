@@ -8,8 +8,8 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.config/git/config` | `~/.config/git/config` |
 | `home/.gitconfig.d/<os>.gitconfig` | `~/.gitconfig.d/<os>.gitconfig` from the matching OS yaml |
 | `home/.agents/` | `~/.agents/` |
-| `home/.config/opencode/` | `~/.config/opencode/` |
-| `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` |
+| `home/.config/opencode/*.{json,jsonc}` | `~/.config/opencode/` (only top-level OpenCode JSON config; subdirs handled separately) |
+| `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` (not symlinked anywhere) |
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |
 | `home/.config/environment.d/` | `~/.config/environment.d/` |
 | `home/.config/fcitx5/`, `home/.config/containers/`, `home/.config/solaar/` | Linux-only XDG config via `install.linux.yaml` |
@@ -32,8 +32,8 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 - Use forward slashes in YAML paths even for Windows targets (e.g. `~/AppData/...`).
 - Linux-only desktop, container, `environment.d`, editor, and SSH snippets live under their mirrored `home/` paths and are linked only from `install.linux.yaml`; that installer also prunes retired `environment.d` symlinks before relinking.
 - `home/.agents/` is linked as a runtime skill tree. Its lockfile and skill package directories are managed by OpenCode / oh-my-openagent, not by hand. Do not place `AGENTS.md` inside `home/.agents/`; keep that guidance in [`AGENTS.md`](./AGENTS.md) at this directory level.
-- `home/.config/opencode/` is linked recursively for OpenCode config. Do not place `AGENTS.md` inside it — `~/.config/opencode/AGENTS.md` is already an explicit symlink to [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md) (managed by [`../install.conf.yaml`](../install.conf.yaml)). Edit the shared file to change cross-tool agent rules.
-- OpenCode agent prompt append text lives in `home/.config/opencode/prompts/*_prompt_append.md`; run `scripts/bootstrap/render-opencode-prompt-append.*` to render those markdown sources into `home/.config/opencode/oh-my-openagent.jsonc`.
+- `home/.config/opencode/` is linked with a narrow `*.{json,jsonc}` glob (top-level JSON config only). Do not place `AGENTS.md` or a `commands/` subdir inside it — `~/.config/opencode/AGENTS.md` is already an explicit symlink to [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md) and `~/.config/opencode/commands` is an explicit symlink to [`../agents/commands`](../agents/commands) (both managed by [`../install.conf.yaml`](../install.conf.yaml)). Edit those sources under `agents/` to change cross-tool agent rules or slash commands.
+- OpenCode agent prompt append text lives in `home/.config/opencode/prompts/*_prompt_append.md`; run `scripts/bootstrap/render-opencode-prompt-append.*` to render those markdown sources into `home/.config/opencode/oh-my-openagent.jsonc`. The `prompts/` directory itself is **not** symlinked anywhere — it is only a source for the renderer.
 
 ## Don't put here
 
@@ -42,5 +42,6 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 - Runtime-managed skill package contents under `home/.agents/skills/`, unless updating through the skill manager.
 - `home/.agents/AGENTS.md` — it would be linked into `~/.agents` and can affect every agent run from this user account.
 - `home/.config/opencode/AGENTS.md` — it would conflict with the explicit symlink that points `~/.config/opencode/AGENTS.md` at [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md). Edit the shared file instead.
+- `home/.config/opencode/commands/` — it would conflict with the explicit symlink that points `~/.config/opencode/commands` at [`../agents/commands`](../agents/commands). Put new slash commands in `agents/commands/` instead.
 
 See [`../AGENTS.md`](../AGENTS.md) for the repo-wide contract.

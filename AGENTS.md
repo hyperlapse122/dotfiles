@@ -15,7 +15,9 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── AGENTS.md
 ├── README.md                        # User quickstart, top-level
 ├── .agents/                         # Reserved repo-local agent skill tree (placeholder only today)
-├── agents/                          # Cross-tool agent rules linked into ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ...
+├── agents/                          # Cross-tool agent rules + shared slash commands / prompts.
+│                                    # SHARED_AGENTS.md links into ~/.config/opencode/AGENTS.md and ~/.codex/AGENTS.md.
+│                                    # commands/ links into ~/.config/opencode/commands and ~/.codex/prompts.
 ├── install.conf.yaml                # Shared dotbot tasks (all OSes)
 ├── install.linux.yaml               # Linux-only dotbot tasks
 ├── install.macos.yaml               # macOS-only dotbot tasks
@@ -24,7 +26,8 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── install.ps1                      # Bootstrap for Windows
 ├── home/                            # Files that symlink into $HOME (home/foo -> ~/foo)
 │   ├── .agents/                     # Runtime agent skill tree linked to ~/.agents
-│   ├── .config/opencode/            # OpenCode config and custom commands (not AGENTS.md)
+│   ├── .config/opencode/            # OpenCode config files (*.json, *.jsonc).
+│                                    # AGENTS.md, commands/ are linked from agents/, not here.
 │   └── .secrets/*.1password         # 1Password templates rendered to ~/.secrets/
 ├── system/<os>/                     # Root-owned files mirroring absolute paths,
 │                                    # e.g. system/linux/etc/NetworkManager/conf.d/...
@@ -99,7 +102,9 @@ The script exits 0 immediately when invoked from a non-interactive shell (stdin 
 - `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
 - `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
 - `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global AGENTS.md path: `~/.config/opencode/AGENTS.md` (OpenCode) and `~/.codex/AGENTS.md` (Codex). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
+- `agents/commands/` is the cross-tool shared slash-command / prompt directory. `install.conf.yaml` symlinks the whole directory into each tool's command path: `~/.config/opencode/commands` (OpenCode slash commands) and `~/.codex/prompts` (Codex prompts). Each `*.md` file is a single command/prompt and works in either tool — keep the body tool-agnostic. Add a new command by dropping a `<name>.md` file in `agents/commands/`; no further wiring is needed. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` pointing that tool's command path at `agents/commands` and updating the linkage table in [`agents/README.md`](agents/README.md).
 - `home/.config/opencode/AGENTS.md` MUST NOT exist. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md` (managed in `install.conf.yaml`); a sibling source under `home/.config/opencode/` would conflict with that link. Put cross-tool rules in `agents/SHARED_AGENTS.md`. Put OpenCode-only rules in a new file under `agents/` linked separately from `install.conf.yaml`.
+- `home/.config/opencode/commands/` MUST NOT exist. `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`; a sibling source under `home/.config/opencode/commands/` would conflict with that link. Put new slash commands in `agents/commands/`. The OpenCode glob link for `home/.config/opencode/` is intentionally narrowed to `*.{json,jsonc}` so a stray `commands/` subdir there cannot collide.
 - Keep all agent rule files in sync when changing agent workflow rules. In this repo that currently means this file, `home/AGENTS.md`, `agents/AGENTS.md`, and `agents/SHARED_AGENTS.md`. The shared file is loaded globally by OpenCode and Codex via the symlinks above, so changes propagate to both tools immediately.
 
 ### Documentation sync (HARD)
@@ -135,7 +140,8 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 - Adding a top-level directory without a `README.md`, or moving things without updating the layout block in this file.
 - Adding `home/.agents/AGENTS.md`. Use `home/AGENTS.md` for parent-scoped guidance instead.
 - Adding `home/.config/opencode/AGENTS.md`. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md`; a second source would conflict. Edit the shared file, or add a new tool-specific file under `agents/` with its own `link:` entry.
-- Hand-editing `~/.config/opencode/AGENTS.md` or `~/.codex/AGENTS.md`. Those are symlinks to `agents/SHARED_AGENTS.md` — edit the source.
+- Adding `home/.config/opencode/commands/`. `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`; a sibling source would conflict. Put new slash commands in `agents/commands/`.
+- Hand-editing `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/commands/*`, or `~/.codex/prompts/*`. Those are symlinks into `agents/` — edit the source under `agents/`.
 - Updating agent workflow rules in only one `AGENTS.md` when the change also applies to the linked runtime agent docs.
 - Editing migrated files inside `~/nix-config/`. That source tree is being abandoned — edit the copy in this repo's `home/` instead. Re-deriving from `~/nix-config/*.nix` modules is also wrong: those Nix expressions are not the canonical source post-migration.
 

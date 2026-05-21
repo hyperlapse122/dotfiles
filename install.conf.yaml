@@ -19,11 +19,19 @@
     # Agent / skills config (used by opencode, claude, etc.)
     ~/.agents: home/.agents
 
-    # opencode (running this session). Recursive glob picks up everything
-    # tracked under home/.config/opencode/, including commands/*.md.
+    # opencode top-level JSON config (opencode.json, oh-my-openagent.jsonc,
+    # tui.json, etc.). Narrow glob — *.{json,jsonc} only — so subdirs like
+    # commands/ and prompts/ stay un-linked here. Commands are explicitly
+    # symlinked below from agents/commands/.
     ~/.config/opencode/:
       glob: true
-      path: home/.config/opencode/**
+      path: home/.config/opencode/*.{json,jsonc}
+
+    # Shared slash commands / prompts (tool-agnostic) — one source, two
+    # consumers. See agents/README.md for the full linkage table.
+    ~/.config/opencode/commands: agents/commands
+    ~/.codex/prompts: agents/commands
+
     ~/.config/zsh/:
       glob: true
       path: home/.config/zsh/.*
