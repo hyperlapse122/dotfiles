@@ -50,6 +50,45 @@
 #                 fcitx5-wayland-launcher is not installed - install
 #                 fcitx5 (scripts/linux/install-packages.sh on Fedora) and re-run.
 #
+#   6. digital  - kwriteconfig6 -> ~/.config/plasma-org.kde.plasma.desktop-appletsrc
+#      clock      For every org.kde.plasma.digitalclock applet at the panel level:
+#                   [Configuration][Appearance] dateFormat = longDate
+#                 Matches the "날짜 형식: 긴 날짜" / "Date format: Long Date"
+#                 dropdown in the Digital Clock configuration dialog
+#                 (e.g. preview "2026년 5월 21일 목..."). Valid values per
+#                 the upstream schema are shortDate, longDate, isoDate,
+#                 custom. Defaults to shortDate.
+#
+#   7. calendar - Three writes that together enable the calendar popup
+#                 features in the Digital Clock - holidays + PIM events
+#                 for South Korea, with every locally-available PIM
+#                 calendar (personal ical + birthdays) selected:
+#                   a) kwriteconfig6 -> ~/.config/plasma-org.kde.plasma.desktop-appletsrc
+#                      For every org.kde.plasma.digitalclock applet at the panel level:
+#                        [Configuration][Appearance] enabledCalendarPlugins
+#                            = holidaysevents,pimevents
+#                      Matches the "공휴일" + "캘린더 이벤트" checkboxes
+#                      under the "달력 / Calendar" tab. Other plugins
+#                      ("대체 달력" / "천문 현상") stay disabled.
+#                   b) kwriteconfig6 -> ~/.config/plasma_calendar_holiday_regions
+#                        [General] selectedRegions = kr_ko
+#                      Matches the "South Korea" entry under the "공휴일
+#                      / Holidays" tab.
+#                   c) kwriteconfig6 -> ~/.config/plasmashellrc
+#                        [PIMEventsPlugin] calendars = <comma-separated Akonadi collection IDs>
+#                      IDs are discovered at runtime by querying the
+#                      local Akonadi MariaDB over its UNIX socket for
+#                      every CollectionTable row carrying a calendar
+#                      MIME type (text/calendar,
+#                      application/x-vnd.akonadi.calendar.event,
+#                      .calendar.todo, .calendar.journal). Matches the
+#                      "캘린더 이벤트 / Calendar Events" tab with every
+#                      calendar checked. Sub-steps (a) and (b) write
+#                      regardless; sub-step (c) soft-skips when mariadb
+#                      client is missing, the akonadi socket is absent
+#                      (akonadi not running), or the query returns zero
+#                      collections (no PIM resources configured yet).
+#
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
 # registry, so there is nothing equivalent to configure on either. No .ps1
@@ -66,6 +105,8 @@
 #   - touchpad                   applies live via DBus.
 #   - virtualkeyboard            applies after restarting KWin
 #                                (`kwin_wayland --replace`) or logging out/in.
+#   - digitalclock, calendar     apply after restarting plasmashell or
+#                                logging out/in (same caveat as panel/kickoff).
 
 set -euo pipefail
 
@@ -450,6 +491,189 @@ configure_virtualkeyboard() {
 }
 
 # ===========================================================================
+# Step 6: digitalclock (show date in long format)
+# ===========================================================================
+#
+# Sets `dateFormat = longDate` on every panel-level org.kde.plasma.digitalclock
+# applet. Maps to the "Date format" dropdown in the Digital Clock
+# configuration dialog (Korean: "날짜 형식: 긴 날짜", e.g. preview
+# "2026년 5월 21일 목요일"). The Appearance group is plain-text key/value,
+# no `[$e]` flag - kwriteconfig6 writes `dateFormat=longDate` directly.
+# Valid values: shortDate (default), longDate, isoDate, custom.
+#
+# Same plasmashell-ownership caveat as Steps 3 and 4: edits to
+# plasma-org.kde.plasma.desktop-appletsrc are only safe before plasmashell
+# first starts, or after restarting it - otherwise the live plasmashell
+# process will overwrite our edit from its in-memory state. The write is
+# idempotent so re-running is safe.
+
+configure_digitalclock() {
+  printf 'config-kde.sh: [digitalclock] setting date format to long...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+  if [[ ! -f "$file" ]]; then
+    printf '  %s not found (no Plasma session has ever started?), skipping.\n' "$file"
+    return 0
+  fi
+
+  local count=0
+  local containment applet plugin
+  while IFS=':' read -r containment applet; do
+    plugin="$(kreadconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --key plugin)"
+    [[ "$plugin" == "org.kde.plasma.digitalclock" ]] || continue
+    kwriteconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --group Configuration --group Appearance \
+      --key dateFormat longDate
+    printf '  set [Containments/%s/Applets/%s] (%s) dateFormat = longDate\n' \
+      "$containment" "$applet" "$plugin"
+    count=$((count + 1))
+  done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$file" \
+            | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
+
+  if [[ "$count" -eq 0 ]]; then
+    printf '  no digitalclock applet found in panel config, skipping.\n'
+    return 0
+  fi
+
+  printf '  configured %d digitalclock applet(s).\n' "$count"
+}
+
+# ===========================================================================
+# Step 7: calendar (holidays + PIM events + South Korea + all calendars)
+# ===========================================================================
+#
+# Three independent writes that together turn on the digital clock's
+# calendar popup features. See the header step index for the full mapping
+# to the GUI tabs.
+#
+# Sub-step (c) discovers Akonadi calendar collection IDs at runtime. The
+# IDs are local, assigned in resource-creation order, and differ between
+# machines - hardcoding the values from one host (2,8 here) would silently
+# enable the wrong calendars (or no calendars) elsewhere. We query the
+# local MariaDB that Akonadi runs over its UNIX socket. The socket path
+# comes from akonadiserverrc (Options="UNIX_SOCKET=..."); on stock Akonadi
+# it always resolves to /run/user/$UID/akonadi/mysql.socket, but we still
+# parse the config so a non-standard runtime dir doesn't break us.
+#
+# Same plasmashell-ownership caveat as Steps 3, 4, and 6: edits to
+# plasma-org.kde.plasma.desktop-appletsrc are only safe before plasmashell
+# first starts, or after restarting it. The two non-applet files
+# (plasma_calendar_holiday_regions, plasmashellrc [PIMEventsPlugin]) are
+# read on demand by the calendar plugin and reflect on the next popup
+# open after a plasmashell restart.
+
+configure_calendar() {
+  printf 'config-kde.sh: [calendar] enabling holidays + pimevents, South Korea, all PIM calendars...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  # ---- (a) enabledCalendarPlugins on each panel digitalclock applet ----
+  local applet_file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+  if [[ ! -f "$applet_file" ]]; then
+    printf '  %s not found (no Plasma session has ever started?), skipping (a).\n' "$applet_file"
+  else
+    local count=0
+    local containment applet plugin
+    while IFS=':' read -r containment applet; do
+      plugin="$(kreadconfig6 --file "$applet_file" \
+        --group Containments --group "$containment" \
+        --group Applets --group "$applet" \
+        --key plugin)"
+      [[ "$plugin" == "org.kde.plasma.digitalclock" ]] || continue
+      kwriteconfig6 --file "$applet_file" \
+        --group Containments --group "$containment" \
+        --group Applets --group "$applet" \
+        --group Configuration --group Appearance \
+        --key enabledCalendarPlugins "holidaysevents,pimevents"
+      printf '  set [Containments/%s/Applets/%s] (%s) enabledCalendarPlugins = holidaysevents,pimevents\n' \
+        "$containment" "$applet" "$plugin"
+      count=$((count + 1))
+    done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$applet_file" \
+              | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
+
+    if [[ "$count" -eq 0 ]]; then
+      printf '  no digitalclock applet found in panel config, skipping (a).\n'
+    else
+      printf '  (a) configured %d digitalclock applet(s).\n' "$count"
+    fi
+  fi
+
+  # ---- (b) South Korea holiday region ----
+  kwriteconfig6 --file plasma_calendar_holiday_regions \
+    --group General \
+    --key selectedRegions "kr_ko"
+  printf '  (b) set [General] selectedRegions = kr_ko in plasma_calendar_holiday_regions\n'
+
+  # ---- (c) enable every Akonadi calendar collection in PIMEventsPlugin ----
+  if ! command -v mariadb >/dev/null 2>&1; then
+    printf '  (c) mariadb client not found, skipping (PIM calendars left unchanged).\n'
+    return 0
+  fi
+
+  local akonadi_rc="$HOME/.config/akonadi/akonadiserverrc"
+  local socket=""
+  if [[ -f "$akonadi_rc" ]]; then
+    # Options="UNIX_SOCKET=/run/user/1000/akonadi/mysql.socket"
+    socket="$(grep -E '^Options=' "$akonadi_rc" \
+      | sed -nE 's/.*UNIX_SOCKET=([^"]+).*/\1/p' | head -n1)"
+  fi
+  [[ -n "$socket" ]] || socket="/run/user/$(id -u)/akonadi/mysql.socket"
+
+  if [[ ! -S "$socket" ]]; then
+    printf '  (c) akonadi socket %s not found (akonadi not running?), skipping.\n' "$socket"
+    return 0
+  fi
+
+  # Calendar-bearing MIME types (per MimeTypeTable). text/calendar is the
+  # iCalendar root type; the .calendar.{event,todo,journal} types are the
+  # KDE-specific subtypes that live alongside it. Using a fixed list of
+  # type *names* (looked up to IDs in the query) is robust across hosts -
+  # MimeTypeTable IDs themselves are local, just like collection IDs.
+  local ids
+  if ! ids="$(mariadb --socket="$socket" -u root akonadi \
+      -B --skip-column-names --silent \
+      -e "SELECT DISTINCT c.id
+            FROM CollectionTable c
+            JOIN CollectionMimeTypeRelation cmr ON cmr.Collection_id = c.id
+            JOIN MimeTypeTable m ON m.id = cmr.MimeType_id
+           WHERE m.name IN ('text/calendar',
+                            'application/x-vnd.akonadi.calendar.event',
+                            'application/x-vnd.akonadi.calendar.todo',
+                            'application/x-vnd.akonadi.calendar.journal')
+           ORDER BY c.id;" 2>/dev/null)"; then
+    printf '  (c) failed to query akonadi MariaDB on %s, skipping.\n' "$socket"
+    return 0
+  fi
+
+  # Join newline-separated IDs into a comma list, dropping blanks.
+  local csv
+  csv="$(printf '%s\n' "$ids" | awk 'NF' | paste -sd, -)"
+
+  if [[ -z "$csv" ]]; then
+    printf '  (c) akonadi returned 0 calendar collections (no PIM resources configured?), skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file plasmashellrc \
+    --group PIMEventsPlugin \
+    --key calendars "$csv"
+  printf '  (c) set [PIMEventsPlugin] calendars = %s in plasmashellrc\n' "$csv"
+}
+
+# ===========================================================================
 # Run all steps. Each is independent; set -e propagates any real failure.
 # ===========================================================================
 
@@ -458,5 +682,7 @@ configure_touchpad
 configure_panel
 configure_kickoff
 configure_virtualkeyboard
+configure_digitalclock
+configure_calendar
 
-printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font and panel changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard change.\n'
+printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard change.\n'
