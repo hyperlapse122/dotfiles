@@ -8,14 +8,15 @@
 1. [Branch Naming](#branch-naming)
 2. [Commit Messages](#commit-messages)
 3. [Pull Requests / Merge Requests](#pull-requests--merge-requests)
-4. [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)
-5. [Destructive / Bypass Operations](#destructive--bypass-operations)
-6. [Secrets](#secrets)
-7. [Figma](#figma)
-8. [Interactive / Long-Running Processes](#interactive--long-running-processes)
-9. [Rebase](#rebase)
-10. [Scripting Runtime](#scripting-runtime)
-11. [JavaScript Package Managers](#javascript-package-managers)
+4. [Issues / Tasks](#issues--tasks)
+5. [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)
+6. [Destructive / Bypass Operations](#destructive--bypass-operations)
+7. [Secrets](#secrets)
+8. [Figma](#figma)
+9. [Interactive / Long-Running Processes](#interactive--long-running-processes)
+10. [Rebase](#rebase)
+11. [Scripting Runtime](#scripting-runtime)
+12. [JavaScript Package Managers](#javascript-package-managers)
 
 ## Branch Naming
 
@@ -177,6 +178,28 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 |---|---|---|
 | GitHub | `gh pr create --assignee @me` | — |
 | GitLab | `glab mr create --assignee "$(glab api user \| jq -r '.username')"` | `--remove-source-branch` (cleanup after merge) |
+
+## Issues / Tasks
+
+### Host: `git.jpi.app` (GitLab)
+
+When creating an issue or work item (task) on `git.jpi.app`:
+
+- **MUST** assign labels (tags) yourself. Choose labels that accurately reflect the work — type (`bug`, `feature`, `chore`, `docs`, `refactor`, etc.), area/component, priority, and any other dimension already in use on the project.
+- **MUST** inspect the project's existing label set first (`glab label list -R <project>`) and reuse existing labels rather than inventing parallel names. Create a new label only when no existing label fits.
+- **MUST NOT** open an issue/task with zero labels. Unlabelled items rot in triage. Pick the best available labels; if uncertain, add the closest match and note the uncertainty in the body.
+- **SHOULD** apply multiple labels when the work spans multiple dimensions (e.g. `bug` + `area::auth` + `priority::high`).
+
+```bash
+# List existing labels on the target project before creating
+glab label list -R <group>/<project>
+
+# Create an issue with labels in one call
+glab issue create -R <group>/<project> \
+  --title "..." \
+  --description "..." \
+  --label "bug,area::auth,priority::high"
+```
 
 ## CI/CD Pipeline Monitoring
 
