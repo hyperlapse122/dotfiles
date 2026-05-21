@@ -83,6 +83,7 @@ EOF
     gh
     ripgrep
     yp-tools
+    fd-find
 
     # Korean input method
     fcitx5
