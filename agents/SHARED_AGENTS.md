@@ -227,6 +227,135 @@ glab issue create -R <group>/<project> \
   --label "bug,area::auth,priority::high"
 ```
 
+#### Rich content in issue/task descriptions
+
+Plain-text walls of bullet points are hard to triage. **MUST** use the host's full markdown surface to make descriptions scannable. Both GitHub and GitLab render the same primitives natively — no extension, no plugin.
+
+**Required when applicable**:
+
+- **MUST** embed at least one of: a diagram (mermaid), a screenshot/image (bug reports, UI work), a state/flow table, or a comparison table — whenever the issue describes a flow, a system interaction, a UI surface, or a before/after change. A bug report without a reproduction screenshot or trace, or a feature with a non-trivial flow described only in prose, is incomplete.
+- **MUST** prefer mermaid over ASCII art for any diagram. Mermaid renders inline on both hosts; ASCII art breaks on mobile and in copy-paste.
+- **MUST** use fenced code blocks with a language tag for every code snippet, log excerpt, config sample, or command. Bare indented blocks lose syntax highlighting and break copy-paste.
+- **SHOULD** use task lists (`- [ ]`) for acceptance criteria and subtask breakdowns — both hosts render them as interactive checkboxes that contributors can tick without editing the description.
+- **SHOULD** use collapsible `<details><summary>…</summary>…</details>` blocks for long logs, full stack traces, and reproduction transcripts that would otherwise bury the description.
+
+**Mermaid** — fence with `mermaid`. Both hosts render natively:
+
+````markdown
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API as Auth API
+    participant DB as DB
+    U->>API: POST /login
+    API->>DB: SELECT user
+    DB-->>API: row
+    API-->>U: 200 {token}
+```
+````
+
+Supported diagram types include `flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `erDiagram`, `classDiagram`, `gantt`, and `gitGraph`. Pick the one that matches the artifact being described — sequence diagrams for request flows, state diagrams for lifecycles, flowcharts for decision trees, ER diagrams for data models.
+
+**Images and screenshots** — host them on the platform, not on third-party image hosts:
+
+- GitHub: drag-and-drop into the web editor uploads to `user-images.githubusercontent.com` and inlines the `![](…)` markdown. From the CLI, attach via the web UI after `gh issue create`, or reference an asset already committed in the repo (`![label](docs/images/foo.png)`).
+- GitLab: drag-and-drop uploads to `/uploads/<hash>/<filename>` on the project and inlines the markdown. From `glab`, upload first via `glab api projects/:id/uploads -F "file=@./screenshot.png"` and paste the returned `markdown` field into the description.
+- **MUST NOT** hotlink to Slack, Notion, Google Drive, Dropbox, or any host requiring auth — the image will 403 for anyone outside the original session.
+- **MUST** provide alt text in every `![alt](url)` — screen readers, and the alt is what surfaces when the image 404s later.
+
+**Tables** for comparisons, state matrices, and option breakdowns. Headers required (GitHub/GitLab both reject header-less tables).
+
+**Math** (when genuinely needed for algorithm/perf/statistics issues): both hosts render LaTeX inside `$…$` (inline) and `$$…$$` (block).
+
+**Bug-report description template** (adapt freely; the headings are the floor, not the ceiling):
+
+```markdown
+## Summary
+One-sentence description of the defect.
+
+## Steps to reproduce
+1. …
+2. …
+3. …
+
+## Expected vs. actual
+| | Expected | Actual |
+|---|---|---|
+| Outcome | … | … |
+| HTTP status | 200 | 500 |
+
+## Screenshot / video
+![login form 500 toast](/uploads/abc123/login-500.png)
+
+## Flow
+
+```mermaid
+sequenceDiagram
+    Client->>API: POST /login
+    API->>DB: SELECT user
+    DB--xAPI: timeout
+    API-->>Client: 500
+```
+
+## Logs
+
+<details><summary>API stderr (excerpt)</summary>
+
+```
+2026-05-21T09:14:02Z ERROR pg: connection timed out after 5s
+…
+```
+
+</details>
+
+## Environment
+- Host: …
+- Browser / client: …
+- Commit / version: …
+```
+
+**Feature-request description template**:
+
+```markdown
+## Problem
+What the user can't do today, and why it hurts.
+
+## Proposed solution
+What we'll build, at a level a reviewer can sanity-check.
+
+## Acceptance criteria
+- [ ] …
+- [ ] …
+- [ ] …
+
+## Flow / state
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Submitted: submit
+    Submitted --> Approved: approve
+    Submitted --> Rejected: reject
+```
+
+## Out of scope
+- …
+```
+
+When piping a description from a file (recommended for anything non-trivial — shell quoting mangles mermaid backticks and nested code fences):
+
+```bash
+glab issue create -R <group>/<project> \
+  --title "fix(auth): login 500 on stale session" \
+  --description-file ./issue-body.md \
+  --label "bug,area::auth,priority::high"
+
+gh issue create \
+  --title "fix(auth): login 500 on stale session" \
+  --body-file ./issue-body.md \
+  --label "bug,area/auth,priority/high"
+```
+
 ## CI/CD Pipeline Monitoring
 
 The pipeline (GitHub Actions / GitLab CI/CD / configured equivalent) is the canonical verification surface. Local runs are necessary but not sufficient — the pipeline runs in a clean environment with additional jobs (integration tests, security scans, matrix builds, deploy previews) and is the gate reviewers and merge automation actually trust.
