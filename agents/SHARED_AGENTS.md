@@ -212,20 +212,54 @@ glab issue view 22 -F json | jq .
 When creating an issue or work item (task) on `git.jpi.app`:
 
 - **MUST** assign labels (tags) yourself. Choose labels that accurately reflect the work — type (`bug`, `feature`, `chore`, `docs`, `refactor`, etc.), area/component, priority, and any other dimension already in use on the project.
-- **MUST** inspect the project's existing label set first (`glab label list -R <project>`) and reuse existing labels rather than inventing parallel names. Create a new label only when no existing label fits.
-- **MUST NOT** open an issue/task with zero labels. Unlabelled items rot in triage. Pick the best available labels; if uncertain, add the closest match and note the uncertainty in the body.
+- **MUST** inspect the project's existing label set first (`glab label list -R <project> --per-page 100`) and reuse existing labels rather than inventing parallel names.
+- **MUST NOT** open an issue/task with zero labels. Unlabelled items rot in triage.
 - **SHOULD** apply multiple labels when the work spans multiple dimensions (e.g. `bug` + `area::auth` + `priority::high`).
 
-```bash
-# List existing labels on the target project before creating
-glab label list -R <group>/<project>
+##### Required workflow (list → match → create-if-missing → apply)
 
-# Create an issue with labels in one call
-glab issue create -R <group>/<project> \
-  --title "..." \
-  --description "..." \
-  --label "bug,area::auth,priority::high"
-```
+The rule is "**reuse first, create when missing — never skip**". A dimension that has no good existing label is **not** an excuse to omit that dimension; it is a signal to create the label. The list-and-skip pattern (search the existing set, find nothing matching, then create the issue with zero labels or only the labels that happened to exist) is the primary failure mode this section forbids.
+
+1. **List** the project's label set (and the parent group's, since group labels are inherited by child projects):
+
+   ```bash
+   glab label list -R <group>/<project> --per-page 100 -F json | jq -r '.[].name'
+   glab label list -g <group> --per-page 100 -F json | jq -r '.[].name'   # inherited group labels
+   ```
+
+2. **Match** the work across every dimension already in use on the project: type, area/component, priority, status, plus any other axis you see in the listed labels. If a dimension has an existing label that fits, reuse it.
+
+3. **Create-if-missing** — for every dimension where no existing label fits, **MUST** create the missing label *before* opening the issue, not after. Creating a label is cheap, reversible, and the only way to avoid silently dropping a dimension.
+
+   ```bash
+   # Create at project scope (visible only on this project).
+   glab label create -R <group>/<project> \
+     --name "area::reporting" \
+     --color "#1F75CB" \
+     --description "Reporting and analytics surface"
+
+   # Create at group scope (inherited by every child project — prefer this for cross-project taxonomies
+   # like type/priority labels).
+   glab label create -g <group> \
+     --name "priority::high" \
+     --color "#D9534F" \
+     --description "Should be picked up in the current iteration"
+   ```
+
+   Every newly-created label **MUST** carry: `--name`, `--color` (HEX), `--description`. A label without a description rots in triage just like an unlabelled issue. Scoped labels (`scope::value`) auto-replace siblings within their scope — prefer scoped labels for any mutually-exclusive dimension (priority, status, area, severity).
+
+4. **Apply** — pass the full set on `glab issue create`. The `--label` value is a comma-separated list and accepts both pre-existing and just-created label names:
+
+   ```bash
+   glab issue create -R <group>/<project> \
+     --title "..." \
+     --description-file /tmp/issue-body.md \
+     --label "bug,area::reporting,priority::high"
+   ```
+
+##### When uncertain
+
+If the right label genuinely cannot be determined from existing context (e.g. priority is ambiguous, area boundary is unclear), pick the closest existing label, note the uncertainty in the issue body, and ask the user in the same turn. **MUST NOT** silently downgrade to fewer labels or omit the uncertain dimension.
 
 #### Rich content in issue/task descriptions
 
@@ -259,9 +293,87 @@ Supported diagram types include `flowchart`, `sequenceDiagram`, `stateDiagram-v2
 **Images and screenshots** — host them on the platform, not on third-party image hosts:
 
 - GitHub: drag-and-drop into the web editor uploads to `user-images.githubusercontent.com` and inlines the `![](…)` markdown. From the CLI, attach via the web UI after `gh issue create`, or reference an asset already committed in the repo (`![label](docs/images/foo.png)`).
-- GitLab: drag-and-drop uploads to `/uploads/<hash>/<filename>` on the project and inlines the markdown. From `glab`, upload first via `glab api projects/:id/uploads -F "file=@./screenshot.png"` and paste the returned `markdown` field into the description.
+- GitLab: drag-and-drop uploads to `/uploads/<hash>/<filename>` on the project and inlines the markdown. From the CLI, **MUST** upload via `glab api` (see [GitLab image uploads from the CLI](#gitlab-image-uploads-from-the-cli) below).
 - **MUST NOT** hotlink to Slack, Notion, Google Drive, Dropbox, or any host requiring auth — the image will 403 for anyone outside the original session.
 - **MUST** provide alt text in every `![alt](url)` — screen readers, and the alt is what surfaces when the image 404s later.
+
+#### GitLab image uploads from the CLI
+
+**MUST** upload through `glab api`. `glab api` is GitLab's authenticated HTTP wrapper — it reuses the session stored by `glab auth login` and injects credentials internally. The agent never sees, reads, parses, or passes a token.
+
+**MUST NOT** read or pass GitLab tokens by any other means. Forbidden, all of these:
+
+- `curl -H "PRIVATE-TOKEN: $TOKEN" ...` / `curl -H "Authorization: Bearer ..."` against the GitLab API.
+- `wget --header="PRIVATE-TOKEN: ..."`, `httpie` with a manual token header, or any other raw HTTP client carrying a GitLab credential.
+- Reading the token out of `glab auth status -t`, `~/.config/glab-cli/config.yml`, the macOS Keychain, libsecret, environment variables (`GITLAB_TOKEN`, `GITLAB_API_TOKEN`, `CI_JOB_TOKEN`, etc.), or any `.env` / `op://` reference, then handing it to a non-glab tool.
+- Asking the user to paste a token. The token already lives in glab's session; ask the user to run `glab auth login` if `glab api user` fails, never to surface the secret.
+
+**Flag — `--form`, not `--field`**: `glab api` has two distinct flags:
+
+- `-F` / `--field` builds a JSON body. **Wrong for files.**
+- `--form` builds a `multipart/form-data` body and supports `@<path>` for file uploads. **Required for `/uploads`.**
+
+There is no short alias for `--form`; spell it out.
+
+**Endpoint**: `POST /projects/:id/uploads`. Returns:
+
+```json
+{
+  "id": 123,
+  "alt": "screenshot",
+  "url": "/uploads/abc123def456/screenshot.png",
+  "full_path": "/-/project/42/uploads/abc123def456/screenshot.png",
+  "markdown": "![screenshot](/uploads/abc123def456/screenshot.png)"
+}
+```
+
+Use the returned `markdown` field verbatim in the issue/MR/comment body — it is already a project-relative path GitLab renders correctly anywhere inside that project. **MUST NOT** hand-build the markdown from `url` or `full_path` — `full_path` is a numeric project-id internal route (`/-/project/<id>/uploads/...`), not a human-readable group/project path; only the `markdown` field's `/uploads/<hash>/<name>` form is the stable, project-relative reference that survives copy-paste across issues, comments, and MRs in the same project.
+
+**Filenames with spaces or non-ASCII characters** work — pass the path unquoted-but-inside-the-`--form`-value-string (e.g. `--form "file=@/path/with spaces/판독문.png"`). GitLab rewrites spaces to underscores in the returned `alt` and `markdown` (e.g. `판독문 최종확인.png` → `판독문_최종확인`). Don't try to pre-rename — the rewrite is server-side and consistent.
+
+**Worked example — create an issue with an inline screenshot**:
+
+```bash
+# 1. Upload the file. Use :fullpath (URL-encoded namespace/project) or :id; both work.
+#    Capture the response into a variable so the markdown snippet survives for the next step.
+UPLOAD_JSON=$(glab api --method POST projects/:fullpath/uploads \
+  --form "file=@./screenshot.png")
+
+IMAGE_MD=$(echo "$UPLOAD_JSON" | jq -r '.markdown')
+
+# 2. Build the description body in a file (per the rule on shell-quoting markdown).
+cat > /tmp/issue-body.md <<EOF
+## Summary
+Login form returns 500 on stale session.
+
+## Screenshot
+$IMAGE_MD
+EOF
+
+# 3. Create the issue, referencing the description file.
+glab issue create \
+  --title "fix(auth): login 500 on stale session" \
+  --description-file /tmp/issue-body.md \
+  --label "bug,area::auth,priority::high"
+```
+
+**Attaching to an existing issue** — same upload step, then either edit the description or post a comment:
+
+```bash
+# Edit description in place. Fetch current body, append the new markdown, push back.
+CURRENT=$(glab issue view <iid> -F json | jq -r '.description')
+printf '%s\n\n%s\n' "$CURRENT" "$IMAGE_MD" > /tmp/issue-body.md
+glab issue update <iid> --description "$(cat /tmp/issue-body.md)"
+
+# Or attach via a comment (preferred when adding evidence to an in-flight discussion).
+glab issue note <iid> -m "Reproduction screenshot:
+
+$IMAGE_MD"
+```
+
+**Self-managed hosts** — same rules. `glab api` honours the host resolution order from [Reading an issue or work item](#reading-an-issue-or-work-item): repo remote → URL → `GITLAB_HOST` → `gitlab.com`. From an unrelated cwd, pin the host: `GITLAB_HOST=git.jpi.app glab api --method POST projects/products%2Fexamvue-duo%2Fexamvue-apps/uploads --form "file=@./screenshot.png"`.
+
+**Verification** — if `glab api user` returns `401`, the glab session is missing or expired. **STOP** and ask the user to run `glab auth login --hostname <host>`. **MUST NOT** work around it by reaching for a raw token.
 
 **Tables** for comparisons, state matrices, and option breakdowns. Headers required (GitHub/GitLab both reject header-less tables).
 
