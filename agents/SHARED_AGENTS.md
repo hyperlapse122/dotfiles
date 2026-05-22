@@ -191,6 +191,74 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 
 **Work items vs. issues — URL gotcha**: GitLab is migrating issues to the unified *work items* system. The web UI now serves the same IID under **both** `/-/issues/<iid>` and `/-/work_items/<iid>`. `glab issue view` accepts the `/-/issues/<iid>` form but **rejects** `/-/work_items/<iid>` with `Invalid issue format`. **MUST** rewrite any `/-/work_items/<iid>` URL the user pastes to `/-/issues/<iid>` before passing it to `glab issue view`. (`glab work-items` exists but is EXPERIMENTAL and has no `view` subcommand — list/create/update/delete only.)
 
+**Issues vs. tasks — choose the right GitLab type**: GitLab exposes both as work items, but they are not interchangeable. An **issue** is the externally visible problem, feature, or bug that owns the branch/MR, review, and closing keyword. A **task** is a smaller implementation unit under or alongside an issue. **MUST NOT** create every unit of work as an issue by default. Before creating anything, decide whether it needs independent triage/release notes/customer visibility (issue) or is only a breakdown item for execution (task).
+
+Use the task-specific `glab work-items` commands for task work items — **MUST NOT** fake tasks as checkbox-only prose when the project expects GitLab task objects:
+
+```bash
+# List existing tasks before creating duplicates.
+glab work-items list --type task -R <group>/<project> --per-page 100 --output json
+
+# Create a task work item. Include the parent issue reference in the description when
+# the CLI cannot express the hierarchy directly.
+cat > /tmp/task-body.md <<'EOF'
+Parent: #42
+
+Acceptance:
+- [ ] Reject addresses without @
+EOF
+
+glab work-items create \
+  --type task \
+  -R <group>/<project> \
+  --title "Implement validateEmail()" \
+  --description "$(cat /tmp/task-body.md)" \
+  --output json
+
+# Update task state fields through the work-item surface.
+glab work-items update <task-iid> \
+  -R <group>/<project> \
+  --assignee "$(glab api user | jq -r '.username')" \
+  --startdate "$(date +%F)" \
+  --duedate "2026-05-29" \
+  --weight 1
+```
+
+`glab work-items` is marked EXPERIMENTAL by GitLab, but it is the CLI surface that can create and update work item types such as `task`. Use it for task objects. Use `glab issue ...` for issue-specific operations such as comments, close/reopen, issue boards, issue time tracking, and issue descriptions.
+
+#### Starting work: start date and estimate
+
+When starting implementation for a GitLab issue or task, **MUST** set or update the planning metadata before opening the branch/MR:
+
+- **Start date**: set to the day work actually starts (`$(date +%F)`), not the day the issue was created.
+- **Estimate**: set or update the expected effort using GitLab's time-tracking duration format (`30m`, `2h`, `1d`, `1w`, etc.) when the work is issue-sized. For tiny tasks where the project uses weights instead of time, set a task weight instead.
+- **Due date**: set only when the issue, milestone, or user supplied a deadline. **MUST NOT** invent a deadline just to fill the field.
+
+Prefer direct CLI flags where they exist. `glab work-items update` supports `--startdate`, `--duedate`, `--weight`, and `--assignee`; `glab issue create` supports `--time-estimate`, `--time-spent`, `--due-date`, and `--weight`. `glab issue update` does **not** expose start-date or time-estimate flags, so use `glab work-items update` for the start date and the GitLab issue time-tracking API through `glab api` for an estimate on an existing issue:
+
+```bash
+# Existing issue: mark the actual start date through the work-item surface.
+glab work-items update <issue-iid> \
+  -R <group>/<project> \
+  --startdate "$(date +%F)" \
+  --assignee "$(glab api user | jq -r '.username')"
+
+# Existing issue: set or replace the GitLab time estimate.
+glab api --method POST \
+  projects/:fullpath/issues/<issue-iid>/time_estimate \
+  -f "duration=4h"
+
+# New issue: set the estimate at creation time when known.
+glab issue create \
+  -R <group>/<project> \
+  --title "fix(auth): reject expired sessions" \
+  --description "$(cat /tmp/issue-body.md)" \
+  --time-estimate 4h \
+  --due-date 2026-05-29
+```
+
+**MUST** record the estimate source in the issue/MR body when it is non-obvious (for example, “Estimate: 4h based on two UI screens plus API validation”). If the user explicitly provided an estimate, preserve it exactly unless new evidence makes it wrong; then update it and leave a brief issue comment explaining the change.
+
 **Self-managed host resolution**: `glab` resolves the host in this order: (1) the current repo's git remote, (2) the host embedded in a URL argument, (3) `GITLAB_HOST` env var, (4) the global default (`gitlab.com`). When the cwd is a clone of a self-managed project (e.g. anything under `git.jpi.app`), bare `glab issue view <iid>` works — no env var, no `-R`, no URL. The env var is **only** required when none of the higher-priority sources point at the right host (e.g. running from an unrelated repo, or — like this dotfiles repo — a GitHub-hosted clone) **and** you don't want to pass the full URL:
 
 ```bash
@@ -256,7 +324,7 @@ The rule is "**reuse first, create when missing — never skip**". A dimension t
    ```bash
    glab issue create -R <group>/<project> \
      --title "..." \
-     --description-file /tmp/issue-body.md \
+     --description "$(cat /tmp/issue-body.md)" \
      --label "bug,area::reporting,priority::high"
    ```
 
@@ -356,7 +424,7 @@ EOF
 # 3. Create the issue, referencing the description file.
 glab issue create \
   --title "fix(auth): login 500 on stale session" \
-  --description-file /tmp/issue-body.md \
+  --description "$(cat /tmp/issue-body.md)" \
   --label "bug,area::auth,priority::high"
 ```
 
@@ -462,7 +530,7 @@ When piping a description from a file (recommended for anything non-trivial — 
 ```bash
 glab issue create -R <group>/<project> \
   --title "fix(auth): login 500 on stale session" \
-  --description-file ./issue-body.md \
+  --description "$(cat ./issue-body.md)" \
   --label "bug,area::auth,priority::high"
 
 gh issue create \
