@@ -88,12 +88,14 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 
 ## Pull Requests / Merge Requests
 
-**Required ordering** — issue linking happens **after** the PR/MR exists, never before:
+**Required ordering** — open a **draft** PR/MR up-front, then work against it, then promote to ready. Issue linking happens **after** the PR/MR exists, never before:
 
 1. Create the branch **manually** with a Git Flow name (see [Branch Naming](#branch-naming)). **MUST NOT** start from any issue-linked branch flow.
-2. Commit and push.
-3. Create the PR/MR with `gh pr create` / `glab mr create`. **MUST** pin the source branch explicitly (see [trap](#source-branch-substitution-trap)).
-4. Link the issue **only** via a closing keyword in the PR/MR body — at creation time, or post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`.
+2. Make an initial commit and push (a scaffolding commit, the issue checklist mirrored into the body, or even an empty commit with `git commit --allow-empty -m "chore: open draft"` is fine — the goal is to have a pushed branch so the draft can open).
+3. **Open the PR/MR as a draft** with `gh pr create --draft` / `glab mr create --draft`. **MUST** pin the source branch explicitly (see [trap](#source-branch-substitution-trap)). Drafts are the default — they signal work-in-progress, block accidental merges on most hosts, and give the agent a stable surface to push to.
+4. Link the issue via a closing keyword in the draft body — at creation time, or post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`. Mirror the issue's checklist into the draft body so reviewers can watch progress in one place (see [Tracking checkbox progress](#tracking-checkbox-progress-on-an-issue-or-prmr)).
+5. Do the work. Commit and push frequently to the draft. **MUST** tick the issue's checkboxes (and the mirrored boxes in the PR/MR body) as each item lands — never batch checkbox updates at the end.
+6. When the work is complete, verified, and the pipeline is green (see [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)), **promote the draft to ready** with `gh pr ready <num>` / `glab mr update <num> --ready`. **MUST NOT** promote a draft whose checklist still has unchecked items unless those items are explicitly out of scope and noted as such in the body.
 
 **Forbidden flows** (all fabricate branch names and bypass the rules above):
 
@@ -170,9 +172,9 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 ### Create rules
 
 - **Title MUST** follow Conventional Commits — a squash merge then produces a clean single commit on the default branch.
-- **Body SHOULD** include: problem summary, what changed, how it was verified. Link related work via trailers (`Closes #123`, `Refs !456`).
+- **Body SHOULD** include: problem summary, what changed, how it was verified. Link related work via trailers (`Closes #123`, `Refs !456`). When the linked issue has a tracking checklist, **MUST** mirror that checklist into the PR/MR body so reviewers and merge automation see the same state on both surfaces.
 - **MUST** assign the PR/MR to the authenticated user.
-- **MUST NOT** open as draft unless the user explicitly requested a draft.
+- **MUST** open as a draft (`--draft`) on initial creation, per [Required ordering](#pull-requests--merge-requests). Promote to ready only after the work is complete, verified, and the pipeline is green — see [Tracking checkbox progress](#tracking-checkbox-progress-on-an-issue-or-prmr) for the readiness gate.
 
 | Host | Assign-to-self | Additional flags |
 |---|---|---|
@@ -468,6 +470,56 @@ gh issue create \
   --body-file ./issue-body.md \
   --label "bug,area/auth,priority/high"
 ```
+
+### Tracking checkbox progress on an issue or PR/MR
+
+GitHub and GitLab both render `- [ ]` / `- [x]` lines in issue and PR/MR bodies as interactive checkboxes. They are the canonical, host-rendered progress surface — reviewers, dashboards, and merge automation all read them. **MUST** keep them in sync with reality as work happens, not after the fact.
+
+**Required behaviour**:
+
+- **MUST** tick each checkbox **at the moment** the corresponding item lands (commit pushed, file written, sub-task verified) — never batch ticks at the end of a session, never tick speculatively before the work is done.
+- **MUST** keep the issue's checklist and the PR/MR body's mirrored checklist in lock-step. Update both in the same turn; a mismatch between the two surfaces is a defect.
+- **MUST NOT** edit checkbox text or reorder items as a side effect of ticking. Tick state changes only — copy, ordering, and indentation stay byte-identical so diff history is readable.
+- **MUST NOT** delete unchecked items to "make progress visible". Out-of-scope items get an explicit `~~strikethrough~~` and an inline note (`- [ ] ~~Item Z~~ — deferred, see #N`), not deletion.
+- **MUST NOT** promote a draft PR/MR to ready while its checklist still has unchecked items unless every remaining item is explicitly marked out of scope in the same body.
+- **SHOULD** post a brief comment summarising progress when a meaningful batch of checkboxes flips (e.g. all items in one section), so watchers get a notification — silent in-place edits do not trigger notifications on either host.
+
+**Updating from the CLI** — both hosts require a full-body replacement; there is no per-checkbox API. Fetch the current body, flip the exact `- [ ]` → `- [x]` lines, push the whole body back. Preserve every other byte:
+
+```bash
+# GitLab — issue
+CURRENT=$(glab issue view <iid> -F json | jq -r '.description')
+# Flip a specific line. MUST match the full line to avoid touching look-alikes.
+UPDATED=$(printf '%s' "$CURRENT" | sed 's|^- \[ \] Implement validateEmail()$|- [x] Implement validateEmail()|')
+printf '%s' "$UPDATED" > /tmp/issue-body.md
+glab issue update <iid> --description "$(cat /tmp/issue-body.md)"
+
+# GitLab — MR body (same pattern)
+CURRENT=$(glab mr view <iid> -F json | jq -r '.description')
+# ... edit ...
+glab mr update <iid> --description "$(cat /tmp/mr-body.md)"
+
+# GitHub — issue
+CURRENT=$(gh issue view <num> --json body -q '.body')
+# ... edit ...
+gh issue edit <num> --body-file /tmp/issue-body.md
+
+# GitHub — PR body
+CURRENT=$(gh pr view <num> --json body -q '.body')
+# ... edit ...
+gh pr edit <num> --body-file /tmp/pr-body.md
+```
+
+**MUST NOT** hand-edit by passing a fresh body that omits sections you did not regenerate — that silently deletes prose, comments, or other checklists. Always start from the live `description` / `body` and apply targeted line flips.
+
+**Promotion to ready** — once every required checkbox is ticked, the verification gates have passed, and the pipeline is green:
+
+```bash
+gh pr ready <num>                              # GitHub: flip draft → ready
+glab mr update <iid> --ready                   # GitLab: flip draft → ready
+```
+
+Verify the flip landed (`gh pr view <num> --json isDraft` should return `false`; `glab mr view <iid> -F json | jq .draft` should return `false`). A draft that won't promote usually means a required check is still pending — finish the check, do not work around it by editing the draft state through the API.
 
 ## CI/CD Pipeline Monitoring
 
