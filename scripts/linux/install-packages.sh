@@ -225,6 +225,10 @@ systemd() {
   "${SUDO[@]}" systemctl enable --now docker
   "${SUDO[@]}" systemctl enable --now tailscaled
   "${SUDO[@]}" systemctl enable --now libvirtd.service
+
+  # Set up time synchronization
+  "${SUDO[@]}" systemctl unmask systemd-timesyncd
+  "${SUDO[@]}" systemctl enable --now systemd-timesyncd
   
   # this may fail until the user reboots to load the vboxdrv kernel module, but enable it anyway so it starts on next boot
   "${SUDO[@]}" systemctl enable vboxdrv
@@ -284,6 +288,11 @@ systemd() {
   fi
 }
 
+timedatectl() {
+  "${SUDO[@]}" timedatectl set-local-rtc 0
+  "${SUDO[@]}" timedatectl set-ntp true
+}
+
 user-groups() {
   "${SUDO[@]}" usermod -aG docker,keyd,libvirt,vboxusers "$USER"
 
@@ -300,5 +309,6 @@ fedora
 dotnet-tools
 akmods
 virtualbox-extension-pack
+timedatectl
 systemd
 user-groups
