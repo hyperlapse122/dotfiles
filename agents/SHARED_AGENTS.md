@@ -215,6 +215,7 @@ When creating an issue or work item (task) on `git.jpi.app`:
 - **MUST** inspect the project's existing label set first (`glab label list -R <project> --per-page 100`) and reuse existing labels rather than inventing parallel names.
 - **MUST NOT** open an issue/task with zero labels. Unlabelled items rot in triage.
 - **SHOULD** apply multiple labels when the work spans multiple dimensions (e.g. `bug` + `area::auth` + `priority::high`).
+- **MUST** assign the issue/task to the authenticated user on creation. Use `--assignee "$(glab api user | jq -r '.username')"` on `glab issue create` — resolve the username dynamically every time, do **not** hard-code a username. The same rule applies when re-assigning later via `glab issue update <iid> --assignee "$(glab api user | jq -r '.username')"`. **MUST NOT** substitute a literal username (yours, the user's, or anyone else's) — the authenticated session is the only source of truth, and hard-coded usernames break the moment the script runs under a different account or against a different host.
 
 ##### Required workflow (list → match → create-if-missing → apply)
 
