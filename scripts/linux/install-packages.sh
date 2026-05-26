@@ -69,6 +69,9 @@ EOF
   # Add Tailscale repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
 
+  # Update package metadata before installing anything, since we've added new repos and some of them (e.g. 1Password) are needed to resolve dependencies of packages
+  "${SUDO[@]}" dnf makecache
+
   # Install packages, grouped by purpose and alphabetised within each group.
   # steam/discord are bare-metal-only — systemd-detect-virt exits 0 when
   # virtualization is detected, 1 on bare metal.
