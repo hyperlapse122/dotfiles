@@ -91,8 +91,8 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 **Required ordering** — open a **draft** PR/MR up-front, then work against it, then promote to ready. Issue linking happens **after** the PR/MR exists, never before:
 
 1. Create the branch **manually** with a Git Flow name (see [Branch Naming](#branch-naming)). **MUST NOT** start from any issue-linked branch flow.
-2. Make an initial commit and push (a scaffolding commit, the issue checklist mirrored into the body, or even an empty commit with `git commit --allow-empty -m "chore: open draft"` is fine — the goal is to have a pushed branch so the draft can open).
-3. **Open the PR/MR as a draft** with `gh pr create --draft` / `glab mr create --draft`. **MUST** pin the source branch explicitly (see [trap](#source-branch-substitution-trap)). Drafts are the default — they signal work-in-progress, block accidental merges on most hosts, and give the agent a stable surface to push to.
+2. Make the **first real commit** on the branch and push it. The commit **MUST** carry actual work — a real code/doc/config change tied to the task. **MUST NOT** use `git commit --allow-empty` or fabricate a scaffolding/placeholder commit just to open the draft. If there is nothing concrete to commit yet, the draft is premature: do the first slice of work, commit that, then open the draft.
+3. **Immediately after the first commit lands on the remote**, open the PR/MR as a draft with `gh pr create --draft` / `glab mr create --draft`. **MUST** pin the source branch explicitly (see [trap](#source-branch-substitution-trap)). Do not accumulate multiple local commits before opening the draft — the draft is the working surface, and reviewers/automation should see it as soon as there is one real commit to show. Drafts signal work-in-progress, block accidental merges on most hosts, and give the agent a stable surface to push to.
 4. Link the issue via a closing keyword in the draft body — at creation time, or post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`. Mirror the issue's checklist into the draft body so reviewers can watch progress in one place (see [Tracking checkbox progress](#tracking-checkbox-progress-on-an-issue-or-prmr)).
 5. Do the work. Commit and push frequently to the draft. **MUST** tick the issue's checkboxes (and the mirrored boxes in the PR/MR body) as each item lands — never batch checkbox updates at the end.
 6. When the work is complete, verified, and the pipeline is green (see [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)), **promote the draft to ready** with `gh pr ready <num>` / `glab mr update <num> --ready`. **MUST NOT** promote a draft whose checklist still has unchecked items unless those items are explicitly out of scope and noted as such in the body.
@@ -646,6 +646,23 @@ glab api "projects/$PROJECT/merge_requests/$MR_IID/pipelines" \
 - `rm -rf` outside the repo's ignored / build directories.
 
 When genuinely required: **MUST** confirm with the user first — name the exact command and what it destroys or rewrites.
+
+### Git config — NEVER touch
+
+**MUST NOT** modify any git configuration under any circumstances. The user's git config is sacred — it encodes identity, signing keys, aliases, hooks, credential helpers, merge/diff drivers, and machine-specific behaviour the agent has no business changing.
+
+Forbidden, all of these:
+
+- `git config ...` at any scope (`--system`, `--global`, `--worktree`, or repo-local — including `--local`, which is the default).
+- Editing `~/.gitconfig`, `~/.config/git/config`, `/etc/gitconfig`, `.git/config`, or any included config file directly.
+- Setting `user.name`, `user.email`, `user.signingkey`, `commit.gpgsign`, `tag.gpgsign`, `core.editor`, `core.autocrlf`, `init.defaultBranch`, `pull.rebase`, `push.default`, `credential.helper`, `gpg.format`, `gpg.ssh.allowedSignersFile`, or anything else — neither to "fix" a problem nor to "match the project's convention" nor to silence a warning.
+- Setting `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env vars to override identity for a commit.
+- Running `git commit --author "..."` to forge a different author.
+- Adding includes (`include.path`, `includeIf.*.path`) or rewriting URL rewrites (`url.*.insteadOf`).
+
+If a commit fails because git identity is missing/wrong, signing fails, a hook misbehaves, or any other config-driven issue: **STOP** and ask the user to fix their config. **MUST NOT** work around it by mutating config, exporting env overrides, or passing `--author`/`-c user.email=...` to a single command. The only acceptable response is to surface the problem and wait.
+
+This rule has no exceptions and applies even when the user gives a general instruction to "fix the git setup" — confirm the exact `git config` invocation with the user first, then run only that one command.
 
 ## Secrets
 
