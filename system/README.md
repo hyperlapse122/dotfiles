@@ -38,23 +38,26 @@ nftables / iptables-services).
 The path under `system/<os>/` mirrors the absolute install path exactly:
 
 ```
-system/linux/etc/NetworkManager/conf.d/wifi-powersave-off.conf
-            └── installs to /etc/NetworkManager/conf.d/wifi-powersave-off.conf
+system/linux/etc/NetworkManager/conf.d/20-wifi-powersave-off.conf
+            └── installs to /etc/NetworkManager/conf.d/20-wifi-powersave-off.conf
 ```
 
-NetworkManager drop-ins under `system/linux/etc/NetworkManager/conf.d/` mirror
-the legacy dotfiles layout. Keep per-interface unmanaged-device rules as split
-drop-in files — do not consolidate them into a monolithic `NetworkManager.conf`.
+NetworkManager drop-ins under `system/linux/etc/NetworkManager/conf.d/` include
+the consolidated unmanaged-device rules and a Wi-Fi default that disables power
+saving for throughput/latency stability. Keep the unmanaged-device rules in
+`99-unmanaged-devices.conf` — do not split them back out or consolidate them
+further into a monolithic `NetworkManager.conf`.
 
 | Subdirectory | Used for |
 |---|---|
-| `system/linux/etc/NetworkManager/conf.d/` | NetworkManager drop-ins for loopback and unmanaged VMware, Tailscale, Docker, and veth interfaces |
+| `system/linux/etc/NetworkManager/conf.d/` | NetworkManager drop-ins for Wi-Fi power saving and unmanaged loopback, VMware, Tailscale, Docker, and veth interfaces |
 | `system/linux/etc/keyd/` | keyd keyboard remapping defaults |
 | `system/linux/etc/libinput/` | local libinput quirks |
 | `system/linux/etc/locale.conf` | system locale |
 | `system/linux/etc/plymouth/` | Plymouth boot splash config |
 | `system/linux/etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`) |
 | `system/linux/etc/systemd/system/` | system-scope systemd units, currently `docker-prune.service` + `docker-prune.timer` (weekly `docker system prune --force` and `docker volume prune --force`; enabled by the installer when `docker` is present, with `ConditionPathExists=/usr/bin/docker` as runtime safety net) |
+| `system/linux/etc/sysctl.d/` | sysctl drop-ins for forwarding and container network defaults |
 | `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions |
 
 There is currently no `system/macos/` or `system/windows/` tree. macOS settings usually belong under `home/` because they live in user-owned `~/Library` paths. Windows system config (registry tweaks, Group Policy, etc.) is **not** managed here — it doesn't fit the "drop a file at an absolute path" model. Add a `scripts/` helper if needed.
