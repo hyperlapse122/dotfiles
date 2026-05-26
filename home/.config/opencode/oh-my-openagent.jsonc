@@ -154,5 +154,9 @@
 		"include_co_authored_by": false,
 		"git_env_prefix": "GIT_MASTER=1"
 	},
-	"notification": { "force_enable": true }
+	"notification": { "force_enable": true },
+	"team_mode": {
+		"enabled": true,
+		"tmux_visualization": true
+	}
 }
