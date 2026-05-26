@@ -119,6 +119,7 @@ EOF
     docker-ce
     docker-ce-cli
     docker-compose-plugin
+    podman
 
     # Browser
     google-chrome-stable
