@@ -2,15 +2,15 @@
 # scripts/linux/install-linux-system-config.sh
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
-# `sudo install -D -m <mode>`, then enables firewalld masquerading on the
-# default zone. Called from a `shell:` step in ../../install.linux.yaml
+# `sudo install -D -m <mode>`, then configures firewalld for Tailscale
+# and VMware. Called from a `shell:` step in ../../install.linux.yaml
 # (dotbot has no sudo / root mode, see AGENTS.md).
 #
 # Single-platform (Linux only) by design — no .ps1 counterpart per the
 # script-parity exception in AGENTS.md.
 #
-# Re-runnable: `install -D` is idempotent, and the firewalld step queries
-# `--permanent --query-masquerade` before mutating.
+# Re-runnable: `install -D` is idempotent, and every firewalld change is
+# gated on a `--query-*` probe before mutating.
 #
 # Skip behaviour: when not running as root, stdin is not a TTY, and sudo
 # has no cached credentials, the script exits 0 immediately. Dotbot
@@ -25,12 +25,17 @@
 # drop-ins are also syntax-checked with `visudo -c -f` before install — a
 # broken drop-in can break sudo globally on the host.
 #
-# firewalld masquerade is required for the Tailscale exit-node and VMware
-# NAT egress paths to source-NAT traffic out the host's primary interface
-# (which lives in the default zone on Fedora Workstation). It rides on top
-# of the IPv4/IPv6 forwarding enabled by etc/sysctl.d/99-tailscale.conf,
-# which this script installs in the same run. The firewalld step is a
-# no-op on hosts where firewalld is not the active backend.
+# firewalld setup covers three things: (1) IPv4 masquerade on the default
+# zone, required for the Tailscale exit-node and VMware NAT egress paths
+# to source-NAT traffic out the host's primary interface (which lives in
+# the default zone on Fedora Workstation); (2) binding tailscale0 to the
+# `trusted` zone, per Tailscale's recommendation for firewalld hosts; and
+# (3) opening UDP 41641 (WireGuard) + UDP 3478 (STUN) on the `public`
+# zone so direct peer connections work behind a host firewall. The
+# masquerade path rides on top of the IPv4/IPv6 forwarding enabled by
+# etc/sysctl.d/99-tailscale.conf, which this script installs in the same
+# run. The whole firewalld block is a no-op on hosts where firewalld is
+# not the active backend.
 
 set -euo pipefail
 
@@ -189,34 +194,72 @@ if [[ -d "$SRC_ROOT/etc/sysctl.d" ]]; then
   "${SUDO[@]}" sysctl --system >/dev/null
 fi
 
-# Enable firewalld masquerade on the default zone — required for the
-# Tailscale exit-node and VMware NAT egress paths (see header comment).
-# Scope is the default zone (`FedoraWorkstation` on Fedora Workstation),
-# which by default binds the host's primary network interfaces and is
-# therefore the egress path for both use cases.
+# Configure firewalld for Tailscale and VMware:
+#
+#   1. Masquerade on the default zone — required for the Tailscale
+#      exit-node and VMware NAT egress paths (see header comment) to
+#      source-NAT out the host's primary interface. Scope is the default
+#      zone (`FedoraWorkstation` on Fedora Workstation), which by default
+#      binds the host's primary network interfaces.
+#
+#   2. Bind `tailscale0` to the `trusted` zone — Tailscale's own
+#      recommendation for hosts running firewalld. The trusted zone
+#      accepts all traffic by default, which is what we want for the
+#      mesh interface (peer ACLs are enforced at the Tailscale layer,
+#      not the host firewall).
+#      https://tailscale.com/kb/1077/secure-server-linux/
+#
+#   3. Open UDP 41641 (Tailscale's WireGuard listener) and UDP 3478
+#      (STUN, used for NAT traversal) on the `public` zone so direct
+#      peer connections work when the host sits behind a firewall.
+#      https://tailscale.com/kb/1082/firewall-ports/
 #
 # Gate: `firewall-cmd --state` is firewalld's own liveness probe
 # (https://firewalld.org/documentation/howto/get-firewalld-state.html).
 # It returns 0 when the daemon is running and non-zero when firewalld is
 # masked, missing, or replaced by a different backend (raw nftables,
-# iptables-services). In every non-running case the masquerade step is
+# iptables-services). In every non-running case all firewalld steps are
 # skipped — we don't program a backend that isn't there.
 #
-# Idempotency: `--permanent --query-masquerade` returns 0 when masquerade
-# is already enabled in the permanent config, so we only mutate when
-# something would change. `--reload` after `--permanent` is what makes
-# the change take effect in the runtime without restarting firewalld
-# (https://firewalld.org/documentation/configuration/runtime-versus-permanent.html).
+# Idempotency: every change is gated on a `--query-*` probe so we only
+# mutate when something would change. A single `--reload` at the end
+# applies all permanent changes to the runtime without restarting
+# firewalld (https://firewalld.org/documentation/configuration/runtime-versus-permanent.html).
 if "${SUDO[@]}" firewall-cmd --state >/dev/null 2>&1; then
+  fw_changed=0
+
   if "${SUDO[@]}" firewall-cmd --permanent --query-masquerade >/dev/null 2>&1; then
     printf '  -- firewalld masquerade: already enabled (default zone)\n'
   else
     printf '  -> firewalld masquerade: enabling on default zone\n'
     "${SUDO[@]}" firewall-cmd --permanent --add-masquerade >/dev/null
+    fw_changed=1
+  fi
+
+  if "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --query-interface=tailscale0 >/dev/null 2>&1; then
+    printf '  -- firewalld: tailscale0 already bound to trusted zone\n'
+  else
+    printf '  -> firewalld: binding tailscale0 to trusted zone\n'
+    "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 >/dev/null
+    fw_changed=1
+  fi
+
+  for port in 41641/udp 3478/udp; do
+    if "${SUDO[@]}" firewall-cmd --permanent --zone=public --query-port="$port" >/dev/null 2>&1; then
+      printf '  -- firewalld: public/%s already open\n' "$port"
+    else
+      printf '  -> firewalld: opening public/%s\n' "$port"
+      "${SUDO[@]}" firewall-cmd --permanent --zone=public --add-port="$port" >/dev/null
+      fw_changed=1
+    fi
+  done
+
+  if [[ "$fw_changed" -eq 1 ]]; then
+    printf '  -> firewall-cmd --reload\n'
     "${SUDO[@]}" firewall-cmd --reload >/dev/null
   fi
 else
-  printf '  -- firewalld masquerade: skipped (firewalld not running)\n'
+  printf '  -- firewalld: skipped (firewalld not running)\n'
 fi
 
 # Remove dangling symlinks under /etc/NetworkManager/conf.d/. Home
