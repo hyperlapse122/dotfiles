@@ -53,6 +53,9 @@ claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
 "npm:@openai/codex" = { version = "latest", depends = ["aube"] }
 
+# Intuneme (https://github.com/frostyard/intuneme)
+"go:github.com/frostyard/intuneme" = { version = "latest" }
+
 # Docker credential helpers from docker/docker-credential-helpers. The
 # release ships pass + secretservice + osxkeychain + wincred as four
 # separate raw binaries under one tag. mise's "Multiple Assets from the

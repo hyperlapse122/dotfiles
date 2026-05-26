@@ -132,6 +132,7 @@ EOF
     akmods
     akmod-VirtualBox
     kernel-devel
+    systemd-container
   )
   if ! systemd-detect-virt --quiet; then
     # Bare-metal-only
