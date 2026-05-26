@@ -32,12 +32,13 @@ marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
-"npm:@playwright/cli" = { version = "latest", depends = ["aube"] }
 
 # npm tools run through aube
 "npm:@biomejs/biome" = { version = "latest", depends = ["aube"] }
 "npm:@bufbuild/buf" = { version = "latest", depends = ["aube"] }
 "npm:@electron/asar" = { version = "latest", depends = ["aube"] }
+"npm:@playwright/cli" = { version = "latest", depends = ["aube"] }
+"npm:@typescript/native-preview" = { version = "latest", depends = ["aube"] }
 "npm:bash-language-server" = { version = "latest", depends = ["aube"] }
 "npm:node-gyp" = { version = "latest", depends = ["aube"] }
 "npm:npm" = { version = "latest", depends = ["aube"] }
@@ -46,15 +47,12 @@ usage = "latest"
 "npm:sharp-cli" = { version = "latest", depends = ["aube"] }
 "npm:tokscale" = { version = "latest", depends = ["aube"] }
 "npm:typescript-language-server" = { version = "latest", depends = ["aube"] }
-"npm:@typescript/native-preview" = { version = "latest", depends = ["aube"] }
+"npm:wrangler" = { version = "latest", depends = ["aube"] }
 
 # Agentic AI
 claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
 "npm:@openai/codex" = { version = "latest", depends = ["aube"] }
-
-# Intuneme (https://github.com/frostyard/intuneme)
-"go:github.com/frostyard/intuneme" = { version = "latest" }
 
 # Docker credential helpers from docker/docker-credential-helpers. The
 # release ships pass + secretservice + osxkeychain + wincred as four
