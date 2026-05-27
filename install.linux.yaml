@@ -97,12 +97,12 @@
       stdout: true
       stderr: true
 
-# Configure KDE Plasma 6 user-side settings in five independent steps:
+# Configure KDE Plasma 6 user-side settings in eight independent steps:
 #   - fonts:           Pretendard (sans) + JetBrainsMono Nerd Font (mono)
 #                      into kdeglobals via kwriteconfig6.
-#   - touchpad:        libinput natural scroll + clickfinger right-click on
-#                      devices in TOUCHPAD_TARGET_NAMES, via KWin's
-#                      InputDeviceManager DBus.
+#   - touchpad:        libinput natural scroll, tap-to-click, and clickfinger
+#                      right-click on devices in TOUCHPAD_TARGET_NAMES, via
+#                      KWin's InputDeviceManager DBus.
 #   - panel:           icontasks/taskmanager `groupingStrategy = 0`
 #                      ("Do not group") in plasma-org.kde.plasma.desktop-appletsrc.
 #   - kickoff:         favoritesDisplay=1 + applicationsDisplay=1 ("In a
@@ -111,6 +111,11 @@
 #   - virtualkeyboard: [Wayland] InputMethod in kwinrc -> Fcitx 5 Wayland
 #                      Launcher (.desktop path). Soft-skips when fcitx5 is
 #                      not installed yet.
+#   - digitalclock:    long date format on every panel-level Digital Clock.
+#   - calendar:        holidays + PIM events in Digital Clock calendar popup,
+#                      South Korea holidays, and all local Akonadi calendars.
+#   - edges:           disables KWin screen edge/corner actions and the
+#                      multi-monitor pointer edge barrier in kwinrc.
 # Hard-guarded: each step no-ops (returns 0) when its prereqs are missing
 # (kwriteconfig6/busctl/plasmashell, no active Plasma session on the session
 # bus, fcitx5 not installed), and the whole script exits 0 on non-KDE
