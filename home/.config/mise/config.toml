@@ -53,6 +53,10 @@ usage = "latest"
 claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
 "npm:@openai/codex" = { version = "latest", depends = ["aube"] }
+"github:njbrake/agent-of-empires" = { version = "latest", rename_exe = "aoe", os = [
+  "linux",
+  "macos",
+] }
 
 # Docker credential helpers from docker/docker-credential-helpers. The
 # release ships pass + secretservice + osxkeychain + wincred as four
