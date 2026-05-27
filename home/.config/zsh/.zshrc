@@ -11,3 +11,5 @@ if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
 fi
 
 # Customize to your needs...
+
+[[ -f /opt/adguard-cli/bash-completion.sh ]] && source /opt/adguard-cli/bash-completion.sh
