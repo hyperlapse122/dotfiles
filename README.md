@@ -24,7 +24,7 @@ cd $HOME\dotfiles
 
 ### Fedora packages (optional)
 
-[`scripts/linux/install-packages.sh`](./scripts/linux/install-packages.sh) enables COPRs (keyd, mise), RPM Fusion, and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale) before installing packages via `dnf`, installing selected dotnet global tools, enabling `keyd`/`docker`/`tailscaled`, and adding the user to the `docker` and `keyd` groups. Run it manually once you're sure of the package set:
+[`scripts/linux/install-packages.sh`](./scripts/linux/install-packages.sh) enables COPRs (keyd, mise), RPM Fusion, and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale, Proton VPN) before installing packages via `dnf`, installing selected dotnet global tools, enabling `keyd`/`docker`/`tailscaled`, and adding the user to the `docker` and `keyd` groups. Run it manually once you're sure of the package set:
 
 ```sh
 ./scripts/linux/install-packages.sh

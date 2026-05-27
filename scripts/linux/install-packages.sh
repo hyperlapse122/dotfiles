@@ -69,8 +69,18 @@ EOF
   # Add Tailscale repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
 
+  # Add Proton VPN repository. The GUI package is still named
+  # proton-vpn-gnome-desktop upstream; Proton documents limited support for
+  # other Fedora desktop environments such as KDE.
+  if ! rpm -q protonvpn-stable-release >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install -y \
+      "https://repo.protonvpn.com/fedora-$(rpm -E %fedora)-stable/protonvpn-stable-release/protonvpn-stable-release-1.0.4-1.noarch.rpm"
+  fi
+
   # Update package metadata before installing anything, since we've added new repos and some of them (e.g. 1Password) are needed to resolve dependencies of packages
   "${SUDO[@]}" dnf makecache
+
+  "${SUDO[@]}" dnf install -y clang21-libs
 
   # Install packages, grouped by purpose and alphabetised within each group.
   # steam/discord are bare-metal-only — systemd-detect-virt exits 0 when
@@ -128,6 +138,7 @@ EOF
     google-chrome-stable
 
     # Mesh networking / VPN
+    proton-vpn-gnome-desktop
     tailscale
     wl-clipboard
 
