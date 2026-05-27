@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/linux/config-kde.sh
 #
-# Combined KDE Plasma 6 user-side configuration. Five independent steps,
+# Combined KDE Plasma 6 user-side configuration. Eight independent steps,
 # each guarded so a missing prerequisite skips that step alone (returning 0)
 # without taking the whole script down:
 #
@@ -89,6 +89,16 @@
 #                      (akonadi not running), or the query returns zero
 #                      collections (no PIM resources configured yet).
 #
+#   8. edges    - kwriteconfig6 -> ~/.config/kwinrc
+#                   [ElectricBorders] Top/TopRight/Right/BottomRight/
+#                                     Bottom/BottomLeft/Left/TopLeft = None
+#                   [EdgeBarrier] CornerBarrier = false
+#                                 EdgeBarrier   = 0
+#                 Disables every screen edge/corner action and the Plasma 6
+#                 multi-monitor pointer barrier that resists cursor movement
+#                 across monitor edges. Applies after restarting KWin or
+#                 logging out/in.
+#
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
 # registry, so there is nothing equivalent to configure on either. No .ps1
@@ -107,6 +117,7 @@
 #                                (`kwin_wayland --replace`) or logging out/in.
 #   - digitalclock, calendar     apply after restarting plasmashell or
 #                                logging out/in (same caveat as panel/kickoff).
+#   - edges                      apply after restarting KWin or logging out/in.
 
 set -euo pipefail
 
@@ -183,7 +194,7 @@ configure_fonts() {
 }
 
 # ===========================================================================
-# Step 2: touchpad (libinput natural scroll + clickfinger via KWin DBus)
+# Step 2: touchpad (libinput natural scroll + tap-to-click + clickfinger via KWin DBus)
 # ===========================================================================
 
 # Only touchpads whose libinput `name` exactly matches an entry here are
@@ -274,6 +285,14 @@ configure_touchpad() {
       _dbus_set_b "$path" naturalScroll true
     else
       printf '    skip naturalScroll: not supported by device\n'
+    fi
+
+    local tap_finger_count
+    tap_finger_count="$(_dbus_get "$path" tapFingerCount)"
+    if [[ -n "$tap_finger_count" && "$tap_finger_count" != "0" ]]; then
+      _dbus_set_b "$path" tapToClick true
+    else
+      printf '    skip tapToClick: not supported by device\n'
     fi
 
     # Clickfinger (two-finger = right, three-finger = middle). The two
@@ -674,6 +693,51 @@ configure_calendar() {
 }
 
 # ===========================================================================
+# Step 8: edges (disable screen-corner actions + monitor-edge pointer barrier)
+# ===========================================================================
+#
+# KWin stores the screen edge/corner assignments in kwinrc [ElectricBorders].
+# The kcfg schema defaults every key below to `None`, but a user/session can
+# persist actions such as PresentWindows or ShowDesktop; write all eight
+# explicitly so the final state is deterministic.
+#
+# Plasma 6's multi-monitor pointer barrier lives under [EdgeBarrier]. The GUI
+# label is "Mouse pointer: Prevent pointer from crossing edges"; setting the
+# barrier width to 0 and the corner barrier to false removes the cursor
+# resistance/snapping at monitor boundaries. Applies on next KWin restart.
+
+configure_edges() {
+  printf 'config-kde.sh: [edges] disabling screen edge actions and monitor-edge pointer barrier...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local edge
+  for edge in Top TopRight Right BottomRight Bottom BottomLeft Left TopLeft; do
+    kwriteconfig6 --file kwinrc \
+      --group ElectricBorders \
+      --key "$edge" None
+    printf '  set [ElectricBorders] %-11s = None\n' "$edge"
+  done
+
+  kwriteconfig6 --file kwinrc \
+    --group EdgeBarrier \
+    --key CornerBarrier \
+    --type bool \
+    false
+  printf '  set [EdgeBarrier] CornerBarrier = false\n'
+
+  kwriteconfig6 --file kwinrc \
+    --group EdgeBarrier \
+    --key EdgeBarrier \
+    --type int \
+    0
+  printf '  set [EdgeBarrier] EdgeBarrier = 0\n'
+}
+
+# ===========================================================================
 # Run all steps. Each is independent; set -e propagates any real failure.
 # ===========================================================================
 
@@ -684,5 +748,6 @@ configure_kickoff
 configure_virtualkeyboard
 configure_digitalclock
 configure_calendar
+configure_edges
 
-printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard change.\n'
+printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes.\n'
