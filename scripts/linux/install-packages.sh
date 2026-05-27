@@ -85,7 +85,7 @@ EOF
   # Install packages, grouped by purpose and alphabetised within each group.
   # steam/discord are bare-metal-only — systemd-detect-virt exits 0 when
   # virtualization is detected, 1 on bare metal.
-  "${SUDO[@]}" dnf group install development-tools virtualization -y
+  "${SUDO[@]}" dnf group install development-tools virtualization "c-development" -y
   local -a packages=(
     # Build tooling
     gcc-c++
@@ -148,6 +148,16 @@ EOF
     akmod-VirtualBox
     kernel-devel
     systemd-container
+
+    # Tauri
+    webkit2gtk4.1-devel
+    openssl-devel
+    curl
+    wget
+    file
+    libappindicator-gtk3-devel
+    librsvg2-devel
+    libxdo-devel
   )
   if ! systemd-detect-virt --quiet; then
     # Bare-metal-only
