@@ -92,7 +92,6 @@
 	"gitlens.ai.model": "vscode",
 	"gitlens.ai.vscode.model": "copilot:gpt-4.1",
 	"gitlens.gitkraken.mcp.autoEnabled": false,
-	"js/ts.experimental.useTsgo": true,
 	"js/ts.implicitProjectConfig.checkJs": true,
 	"js/ts.implicitProjectConfig.experimentalDecorators": true,
 	"js/ts.preferences.autoImportFileExcludePatterns": ["**/dist/**"],
