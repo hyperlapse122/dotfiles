@@ -9,14 +9,15 @@
 2. [Commit Messages](#commit-messages)
 3. [Pull Requests / Merge Requests](#pull-requests--merge-requests)
 4. [Issues / Tasks](#issues--tasks)
-5. [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)
-6. [Destructive / Bypass Operations](#destructive--bypass-operations)
-7. [Secrets](#secrets)
-8. [Figma](#figma)
-9. [Interactive / Long-Running Processes](#interactive--long-running-processes)
-10. [Rebase](#rebase)
-11. [Scripting Runtime](#scripting-runtime)
-12. [JavaScript Package Managers](#javascript-package-managers)
+5. [Tracking Checkbox Progress](#tracking-checkbox-progress)
+6. [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)
+7. [Rebase](#rebase)
+8. [Destructive / Bypass Operations](#destructive--bypass-operations)
+9. [Secrets](#secrets)
+10. [Figma](#figma)
+11. [Interactive / Long-Running Processes](#interactive--long-running-processes)
+12. [Scripting Runtime](#scripting-runtime)
+13. [JavaScript Package Managers](#javascript-package-managers)
 
 ## Branch Naming
 
@@ -88,19 +89,48 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 
 ## Pull Requests / Merge Requests
 
-**Required ordering** — open a **draft** PR/MR up-front, then work against it, then promote to ready. Issue linking happens **after** the PR/MR exists, never before:
+**Required ordering** — draft up-front, work against it, promote to ready. Issue linking happens **after** the PR/MR exists, never before:
 
 1. Create the branch **manually** with a Git Flow name (see [Branch Naming](#branch-naming)). **MUST NOT** start from any issue-linked branch flow.
-2. Make the **first real commit** on the branch and push it. The commit **MUST** carry actual work — a real code/doc/config change tied to the task. **MUST NOT** use `git commit --allow-empty` or fabricate a scaffolding/placeholder commit just to open the draft. If there is nothing concrete to commit yet, the draft is premature: do the first slice of work, commit that, then open the draft.
-3. **Immediately after the first commit lands on the remote**, open the PR/MR as a draft with `gh pr create --draft` / `glab mr create --draft`. **MUST** pin the source branch explicitly (see [trap](#source-branch-substitution-trap)). Do not accumulate multiple local commits before opening the draft — the draft is the working surface, and reviewers/automation should see it as soon as there is one real commit to show. Drafts signal work-in-progress, block accidental merges on most hosts, and give the agent a stable surface to push to.
-4. Link the issue via a closing keyword in the draft body — at creation time, or post-creation with `gh pr edit <num> --body ...` / `glab mr update <num> --description ...`. Mirror the issue's checklist into the draft body so reviewers can watch progress in one place (see [Tracking checkbox progress](#tracking-checkbox-progress-on-an-issue-or-prmr)).
-5. Do the work. Commit and push frequently to the draft. **MUST** tick the issue's checkboxes (and the mirrored boxes in the PR/MR body) as each item lands — never batch checkbox updates at the end.
-6. When the work is complete, verified, and the pipeline is green (see [CI/CD Pipeline Monitoring](#cicd-pipeline-monitoring)), **promote the draft to ready** with `gh pr ready <num>` / `glab mr update <num> --ready`. **MUST NOT** promote a draft whose checklist still has unchecked items unless those items are explicitly out of scope and noted as such in the body.
+2. Make the **first real commit** carrying actual work and push it. **MUST NOT** use `git commit --allow-empty` or fabricate a scaffolding commit just to open the draft. If nothing concrete exists, the draft is premature.
+3. **Immediately after the first push**, open as draft (`gh pr create --draft` / `glab mr create --draft`). **MUST** pin the source branch explicitly (see [trap](#source-branch-substitution-trap)). Don't accumulate local commits before opening — the draft is the working surface.
+4. Link the issue via a closing keyword in the draft body (at creation or via `gh pr edit --body` / `glab mr update --description`). Mirror the issue's checklist into the draft body (see [Tracking Checkbox Progress](#tracking-checkbox-progress)).
+5. Commit and push frequently. **MUST** tick checkboxes as each item lands — never batch at the end.
+6. When work is complete, verified, and the pipeline is green, promote with `gh pr ready <num>` / `glab mr update <iid> --ready`. **MUST NOT** promote a draft with unchecked items unless they're explicitly marked out of scope in the body.
 
 **Forbidden flows** (all fabricate branch names and bypass the rules above):
 
 - GitHub: *Development → Create a branch*, *Linked issues* picker on the PR-creation form, `gh issue develop`, `gh pr create --issue <N>`.
 - GitLab: *Create merge request* button on an issue, *Linked issues* picker, `glab issue develop`, `glab mr create --related-issue <N>`.
+
+### Duplicate-create trap
+
+`glab mr create` and `gh pr create` are **not** idempotent. If the create response is lost (network blip, terminal redraw, conversation reflow, truncation, timeout, MCP hiccup), the agent has no signal the server already accepted the request. Retrying creates a **second** MR/PR — the host's dedupe is server-side and races allow both calls to win. `glab` may also error *after* the server accepted the create, misleading the agent.
+
+**MUST** query for an existing open MR/PR on the source branch **before every** create call:
+
+```bash
+# GitLab — non-empty array means an open MR exists; abort the create.
+BRANCH=$(git branch --show-current)
+PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace' | sed 's|/|%2F|g')
+glab api "projects/$PROJECT/merge_requests?source_branch=$BRANCH&state=opened" \
+  | jq '[.[] | {iid, web_url, title}]'
+
+# GitHub — non-empty list means an open PR exists; abort the create.
+gh pr list --head "$(git branch --show-current)" --state open --json number,url,title
+```
+
+Non-empty result: **STOP**. View/edit/comment on the existing MR/PR instead.
+
+**MUST NOT** retry `glab mr create` / `gh pr create` after any of these without first re-running the pre-create query:
+
+- Previous output lost, truncated, or interrupted.
+- `409 Conflict` (often "Another open merge request already exists for this source branch").
+- `glab` printed `Failed to create merge request. Created recovery file: …` — use `glab mr create --recover` instead (and only after the pre-create query confirms no MR exists).
+- Timeout, MCP transport error, or non-success without a confirmed server-side rejection.
+- Previous call hit the source-branch substitution trap (below) — the broken MR/PR **does** exist server-side and **MUST** be closed before recreate.
+
+If a duplicate is detected after the fact (two open MRs, same source branch, same head SHA): keep the **oldest** by `created_at`, note `glab mr note create <newer-iid> -m "Duplicate of !<older-iid>. Closing."`, then `glab mr close <newer-iid>` / `gh pr close <newer-num>`. **MUST NOT** delete the source branch to "fix" the conflict — that destroys the older MR's diff too.
 
 ### Source-branch substitution trap
 
@@ -109,36 +139,29 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 **Mitigations**:
 
 - **MUST NOT** pass `--related-issue` to `glab mr create` or `--issue` to `gh pr create`.
-- **MUST NOT** use the *Linked issues* UI picker on the PR/MR creation form.
+- **MUST NOT** use the *Linked issues* UI picker on the create form.
 - **MUST** pin the source branch on every create call:
 
 ```bash
 # GitLab
-glab mr create \
-  --source-branch "$(git branch --show-current)" \
-  --target-branch main \
-  ...
+glab mr create --source-branch "$(git branch --show-current)" --target-branch main ...
 
 # GitHub
-gh pr create \
-  --head "$(git branch --show-current)" \
-  --base main \
-  ...
+gh pr create --head "$(git branch --show-current)" --base main ...
 ```
 
 **MUST** verify immediately after creation — the create call does not fail when the source branch is wrong:
 
 ```bash
-# GitLab — source_branch MUST match the pushed branch; head_sha MUST differ from base_sha
+# GitLab — source_branch matches pushed branch; head_sha differs from base_sha; commits > 0
 MR_IID=<iid>
 PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace' | sed 's|/|%2F|g')
 glab api "projects/$PROJECT/merge_requests/$MR_IID" \
   | jq '{source_branch, head_sha: .diff_refs.head_sha, base_sha: .diff_refs.base_sha}'
-glab api "projects/$PROJECT/merge_requests/$MR_IID/commits" | jq 'length'   # MUST be > 0
+glab api "projects/$PROJECT/merge_requests/$MR_IID/commits" | jq 'length'
 
-# GitHub — headRefName MUST match the pushed branch; commit count MUST be > 0
-gh pr view <num> --json headRefName,commits \
-  | jq '{headRefName, commit_count: (.commits | length)}'
+# GitHub — headRefName matches pushed branch; commit count > 0
+gh pr view <num> --json headRefName,commits | jq '{headRefName, commit_count: (.commits | length)}'
 ```
 
 If `source_branch` / `headRefName` matches `^[0-9]+-` instead of the pushed Git Flow name, or commit count is `0`: the PR/MR is **broken**. Close it, delete the stray remote branch (`git push origin --delete <N>-<slug>`), recreate.
@@ -160,7 +183,7 @@ Docs: GitHub — <https://docs.github.com/en/github/managing-your-work-on-github
 
 **MUST** run the project's verification commands (test / lint / typecheck / build — whichever it defines) on the current HEAD. **MUST NOT** submit with known-failing checks unless documented in the body and user-approved.
 
-**MUST** commit and push all changes. Both gates pass:
+**MUST** commit and push all changes:
 
 ```bash
 git status                                              # MUST be clean
@@ -171,10 +194,10 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 
 ### Create rules
 
-- **Title MUST** follow Conventional Commits — a squash merge then produces a clean single commit on the default branch.
-- **Body SHOULD** include: problem summary, what changed, how it was verified. Link related work via trailers (`Closes #123`, `Refs !456`). When the linked issue has a tracking checklist, **MUST** mirror that checklist into the PR/MR body so reviewers and merge automation see the same state on both surfaces.
+- **Title MUST** follow Conventional Commits — squash merge then produces a clean single commit on the default branch.
+- **Body SHOULD** include: problem summary, what changed, how it was verified. Link via trailers (`Closes #123`, `Refs !456`). When the linked issue has a tracking checklist, **MUST** mirror that checklist into the PR/MR body.
 - **MUST** assign the PR/MR to the authenticated user.
-- **MUST** open as a draft (`--draft`) on initial creation, per [Required ordering](#pull-requests--merge-requests). Promote to ready only after the work is complete, verified, and the pipeline is green — see [Tracking checkbox progress](#tracking-checkbox-progress-on-an-issue-or-prmr) for the readiness gate.
+- **MUST** open as a draft (`--draft`) on initial creation. Promote to ready only after work is complete, verified, and the pipeline is green.
 
 | Host | Assign-to-self | Additional flags |
 |---|---|---|
@@ -187,20 +210,19 @@ git rev-parse --abbrev-ref @{u} >/dev/null 2>&1 \
 
 #### Reading an issue or work item
 
-**MUST** use `glab issue view` to read issues and work items. **MUST NOT** hit `glab api projects/.../issues/...` for read access — `glab issue view` already wraps the API, handles host resolution from the URL, renders the body cleanly, and accepts `--comments` for the discussion thread and `-F json` for machine-readable output.
+**MUST** use `glab issue view` to read issues and work items. **MUST NOT** hit `glab api projects/.../issues/...` for read access — `glab issue view` already wraps the API, handles host resolution, renders the body cleanly, and accepts `--comments` and `-F json`.
 
-**Work items vs. issues — URL gotcha**: GitLab is migrating issues to the unified *work items* system. The web UI now serves the same IID under **both** `/-/issues/<iid>` and `/-/work_items/<iid>`. `glab issue view` accepts the `/-/issues/<iid>` form but **rejects** `/-/work_items/<iid>` with `Invalid issue format`. **MUST** rewrite any `/-/work_items/<iid>` URL the user pastes to `/-/issues/<iid>` before passing it to `glab issue view`. (`glab work-items` exists but is EXPERIMENTAL and has no `view` subcommand — list/create/update/delete only.)
+**Work items vs. issues — URL gotcha**: GitLab is migrating issues to the unified *work items* system. The web UI serves the same IID under **both** `/-/issues/<iid>` and `/-/work_items/<iid>`. `glab issue view` accepts the `/-/issues/<iid>` form but **rejects** `/-/work_items/<iid>` with `Invalid issue format`. **MUST** rewrite any `/-/work_items/<iid>` URL to `/-/issues/<iid>` before passing it. (`glab work-items` is EXPERIMENTAL and has no `view` subcommand — list/create/update/delete only.)
 
-**Issues vs. tasks — choose the right GitLab type**: GitLab exposes both as work items, but they are not interchangeable. An **issue** is the externally visible problem, feature, or bug that owns the branch/MR, review, and closing keyword. A **task** is a smaller implementation unit under or alongside an issue. **MUST NOT** create every unit of work as an issue by default. Before creating anything, decide whether it needs independent triage/release notes/customer visibility (issue) or is only a breakdown item for execution (task).
+**Issues vs. tasks — choose the right GitLab type**: An **issue** is the externally visible problem/feature/bug that owns the branch/MR, review, and closing keyword. A **task** is a smaller implementation unit under or alongside an issue. **MUST NOT** default to creating everything as an issue. Decide whether the unit needs independent triage/release notes/customer visibility (issue) or is only a breakdown item (task).
 
-Use the task-specific `glab work-items` commands for task work items — **MUST NOT** fake tasks as checkbox-only prose when the project expects GitLab task objects:
+Use the task-specific `glab work-items` commands for tasks — **MUST NOT** fake tasks as checkbox prose when the project expects task objects:
 
 ```bash
 # List existing tasks before creating duplicates.
 glab work-items list --type task -R <group>/<project> --per-page 100 --output json
 
-# Create a task work item. Include the parent issue reference in the description when
-# the CLI cannot express the hierarchy directly.
+# Create a task. Reference the parent issue in the description when the CLI can't express hierarchy directly.
 cat > /tmp/task-body.md <<'EOF'
 Parent: #42
 
@@ -208,141 +230,127 @@ Acceptance:
 - [ ] Reject addresses without @
 EOF
 
-glab work-items create \
-  --type task \
-  -R <group>/<project> \
+glab work-items create --type task -R <group>/<project> \
   --title "Implement validateEmail()" \
   --description "$(cat /tmp/task-body.md)" \
   --output json
 
-# Update task state fields through the work-item surface.
-glab work-items update <task-iid> \
-  -R <group>/<project> \
+# Update task state fields.
+glab work-items update <task-iid> -R <group>/<project> \
   --assignee "$(glab api user | jq -r '.username')" \
   --startdate "$(date +%F)" \
   --duedate "2026-05-29" \
   --weight 1
 ```
 
-`glab work-items` is marked EXPERIMENTAL by GitLab, but it is the CLI surface that can create and update work item types such as `task`. Use it for task objects. Use `glab issue ...` for issue-specific operations such as comments, close/reopen, issue boards, issue time tracking, and issue descriptions.
+`glab work-items` is EXPERIMENTAL but is the CLI surface that creates/updates task work items. Use `glab issue ...` for issue-specific operations (comments, close/reopen, boards, time tracking, descriptions).
 
-#### Starting work: start date and estimate
-
-When starting implementation for a GitLab issue or task, **MUST** set or update the planning metadata before opening the branch/MR:
-
-- **Start date**: set to the day work actually starts (`$(date +%F)`), not the day the issue was created.
-- **Estimate**: set or update the expected effort using GitLab's time-tracking duration format (`30m`, `2h`, `1d`, `1w`, etc.) when the work is issue-sized. For tiny tasks where the project uses weights instead of time, set a task weight instead.
-- **Due date**: set only when the issue, milestone, or user supplied a deadline. **MUST NOT** invent a deadline just to fill the field.
-
-Prefer direct CLI flags where they exist. `glab work-items update` supports `--startdate`, `--duedate`, `--weight`, and `--assignee`; `glab issue create` supports `--time-estimate`, `--time-spent`, `--due-date`, and `--weight`. `glab issue update` does **not** expose start-date or time-estimate flags, so use `glab work-items update` for the start date and the GitLab issue time-tracking API through `glab api` for an estimate on an existing issue:
+**Self-managed host resolution**: `glab` resolves the host in this order: (1) current repo's git remote, (2) host embedded in a URL argument, (3) `GITLAB_HOST` env var, (4) global default (`gitlab.com`). Inside a clone of the target project, bare `glab issue view <iid>` works. The env var is only required when none of the higher-priority sources point at the right host **and** you don't want to pass the full URL:
 
 ```bash
-# Existing issue: mark the actual start date through the work-item surface.
-glab work-items update <issue-iid> \
-  -R <group>/<project> \
-  --startdate "$(date +%F)" \
-  --assignee "$(glab api user | jq -r '.username')"
-
-# Existing issue: set or replace the GitLab time estimate.
-glab api --method POST \
-  projects/:fullpath/issues/<issue-iid>/time_estimate \
-  -f "duration=4h"
-
-# New issue: set the estimate at creation time when known.
-glab issue create \
-  -R <group>/<project> \
-  --title "fix(auth): reject expired sessions" \
-  --description "$(cat /tmp/issue-body.md)" \
-  --time-estimate 4h \
-  --due-date 2026-05-29
-```
-
-**MUST** record the estimate source in the issue/MR body when it is non-obvious (for example, “Estimate: 4h based on two UI screens plus API validation”). If the user explicitly provided an estimate, preserve it exactly unless new evidence makes it wrong; then update it and leave a brief issue comment explaining the change.
-
-**Self-managed host resolution**: `glab` resolves the host in this order: (1) the current repo's git remote, (2) the host embedded in a URL argument, (3) `GITLAB_HOST` env var, (4) the global default (`gitlab.com`). When the cwd is a clone of a self-managed project (e.g. anything under `git.jpi.app`), bare `glab issue view <iid>` works — no env var, no `-R`, no URL. The env var is **only** required when none of the higher-priority sources point at the right host (e.g. running from an unrelated repo, or — like this dotfiles repo — a GitHub-hosted clone) **and** you don't want to pass the full URL:
-
-```bash
-# Inside a clone of the target project — host auto-detected from the git remote.
+# Inside the target project clone.
 glab issue view 22 --comments
 
-# From an unrelated cwd — full URL form (host extracted from the URL). Preferred for one-off reads.
+# From an unrelated cwd — full URL (preferred for one-off reads).
 glab issue view "https://git.jpi.app/products/examvue-duo/examvue-apps/-/issues/22" --comments
 
-# From an unrelated cwd, scripting multiple calls against the same host — GITLAB_HOST + -R + IID.
+# From an unrelated cwd, scripting multiple calls.
 GITLAB_HOST=git.jpi.app glab issue view 22 -R products/examvue-duo/examvue-apps --comments
 
-# JSON for downstream processing.
+# JSON.
 glab issue view 22 -F json | jq .
 ```
 
-`glab api` is the fallback **only** when `glab issue view` cannot express the call (custom fields, batch queries, GraphQL work-item queries). State the reason inline when reaching for `glab api`.
+`glab api` is the fallback **only** when `glab issue view` can't express the call (custom fields, batch queries, GraphQL work-item queries). State the reason inline when reaching for `glab api`.
+
+#### Starting work: start date and estimate
+
+Before opening the branch/MR for a GitLab issue or task, **MUST** set or update planning metadata:
+
+- **Start date**: actual day work starts (`$(date +%F)`), not the day the issue was created.
+- **Estimate**: GitLab time-tracking duration (`30m`, `2h`, `1d`, `1w`) for issue-sized work. For tiny tasks where the project uses weights, set a weight instead.
+- **Due date**: only when the issue/milestone/user supplied one. **MUST NOT** invent a deadline.
+
+Prefer direct CLI flags. `glab work-items update` supports `--startdate`, `--duedate`, `--weight`, `--assignee`; `glab issue create` supports `--time-estimate`, `--time-spent`, `--due-date`, `--weight`. `glab issue update` does **not** expose start-date or time-estimate flags — use `glab work-items update` for the start date and the time-tracking API for an estimate on an existing issue:
+
+```bash
+# Existing issue: mark the actual start date.
+glab work-items update <issue-iid> -R <group>/<project> \
+  --startdate "$(date +%F)" \
+  --assignee "$(glab api user | jq -r '.username')"
+
+# Existing issue: set or replace the time estimate.
+glab api --method POST projects/:fullpath/issues/<issue-iid>/time_estimate -f "duration=4h"
+
+# New issue: set estimate at creation.
+glab issue create -R <group>/<project> \
+  --title "fix(auth): reject expired sessions" \
+  --description "$(cat /tmp/issue-body.md)" \
+  --time-estimate 4h --due-date 2026-05-29
+```
+
+**MUST** record the estimate source in the issue/MR body when non-obvious (e.g. "Estimate: 4h based on two UI screens plus API validation"). If the user supplied an estimate, preserve it exactly unless new evidence makes it wrong; then update it and leave a brief comment explaining the change.
 
 #### Creating an issue or work item
 
-When creating an issue or work item (task) on `git.jpi.app`:
-
-- **MUST** assign labels (tags) yourself. Choose labels that accurately reflect the work — type (`bug`, `feature`, `chore`, `docs`, `refactor`, etc.), area/component, priority, and any other dimension already in use on the project.
-- **MUST** inspect the project's existing label set first (`glab label list -R <project> --per-page 100`) and reuse existing labels rather than inventing parallel names.
+- **MUST** assign labels yourself reflecting type (`bug`, `feature`, `chore`, `docs`, `refactor`), area/component, priority, and any other dimension already in use.
+- **MUST** inspect the project's existing label set first and reuse existing labels rather than inventing parallel names.
 - **MUST NOT** open an issue/task with zero labels. Unlabelled items rot in triage.
-- **SHOULD** apply multiple labels when the work spans multiple dimensions (e.g. `bug` + `area::auth` + `priority::high`).
-- **MUST** assign the issue/task to the authenticated user on creation. Use `--assignee "$(glab api user | jq -r '.username')"` on `glab issue create` — resolve the username dynamically every time, do **not** hard-code a username. The same rule applies when re-assigning later via `glab issue update <iid> --assignee "$(glab api user | jq -r '.username')"`. **MUST NOT** substitute a literal username (yours, the user's, or anyone else's) — the authenticated session is the only source of truth, and hard-coded usernames break the moment the script runs under a different account or against a different host.
+- **SHOULD** apply multiple labels when work spans multiple dimensions (e.g. `bug` + `area::auth` + `priority::high`).
+- **MUST** assign the issue/task to the authenticated user on creation: `--assignee "$(glab api user | jq -r '.username')"`. Resolve dynamically every time — **MUST NOT** hard-code a username (yours, the user's, or anyone else's). Same rule on `glab issue update --assignee`.
 
 ##### Required workflow (list → match → create-if-missing → apply)
 
-The rule is "**reuse first, create when missing — never skip**". A dimension that has no good existing label is **not** an excuse to omit that dimension; it is a signal to create the label. The list-and-skip pattern (search the existing set, find nothing matching, then create the issue with zero labels or only the labels that happened to exist) is the primary failure mode this section forbids.
+The rule is "**reuse first, create when missing — never skip**". A dimension with no good existing label is **not** an excuse to omit that dimension; it is a signal to create the label. The list-and-skip pattern (search, find nothing matching, create with zero labels or only the labels that happened to exist) is the primary failure mode this section forbids.
 
-1. **List** the project's label set (and the parent group's, since group labels are inherited by child projects):
+1. **List** project labels (and parent group's, since group labels are inherited):
 
    ```bash
    glab label list -R <group>/<project> --per-page 100 -F json | jq -r '.[].name'
-   glab label list -g <group> --per-page 100 -F json | jq -r '.[].name'   # inherited group labels
+   glab label list -g <group> --per-page 100 -F json | jq -r '.[].name'   # inherited
    ```
 
-2. **Match** the work across every dimension already in use on the project: type, area/component, priority, status, plus any other axis you see in the listed labels. If a dimension has an existing label that fits, reuse it.
+2. **Match** the work across every dimension already in use: type, area/component, priority, status, plus any other axis visible in the listed labels. If a dimension has an existing label that fits, reuse it.
 
-3. **Create-if-missing** — for every dimension where no existing label fits, **MUST** create the missing label *before* opening the issue, not after. Creating a label is cheap, reversible, and the only way to avoid silently dropping a dimension.
+3. **Create-if-missing** — for every dimension where no existing label fits, **MUST** create the missing label *before* opening the issue:
 
    ```bash
-   # Create at project scope (visible only on this project).
+   # Project scope.
    glab label create -R <group>/<project> \
-     --name "area::reporting" \
-     --color "#1F75CB" \
+     --name "area::reporting" --color "#1F75CB" \
      --description "Reporting and analytics surface"
 
-   # Create at group scope (inherited by every child project — prefer this for cross-project taxonomies
-   # like type/priority labels).
+   # Group scope (inherited — prefer for cross-project taxonomies like type/priority).
    glab label create -g <group> \
-     --name "priority::high" \
-     --color "#D9534F" \
+     --name "priority::high" --color "#D9534F" \
      --description "Should be picked up in the current iteration"
    ```
 
-   Every newly-created label **MUST** carry: `--name`, `--color` (HEX), `--description`. A label without a description rots in triage just like an unlabelled issue. Scoped labels (`scope::value`) auto-replace siblings within their scope — prefer scoped labels for any mutually-exclusive dimension (priority, status, area, severity).
+   Every new label **MUST** carry `--name`, `--color` (HEX), `--description`. A label without a description rots in triage. Scoped labels (`scope::value`) auto-replace siblings within their scope — prefer scoped labels for mutually-exclusive dimensions (priority, status, area, severity).
 
-4. **Apply** — pass the full set on `glab issue create`. The `--label` value is a comma-separated list and accepts both pre-existing and just-created label names:
+4. **Apply** — pass the full set on `glab issue create` (`--label` is comma-separated and accepts pre-existing and just-created names):
 
    ```bash
-   glab issue create -R <group>/<project> \
-     --title "..." \
+   glab issue create -R <group>/<project> --title "..." \
      --description "$(cat /tmp/issue-body.md)" \
      --label "bug,area::reporting,priority::high"
    ```
 
 ##### When uncertain
 
-If the right label genuinely cannot be determined from existing context (e.g. priority is ambiguous, area boundary is unclear), pick the closest existing label, note the uncertainty in the issue body, and ask the user in the same turn. **MUST NOT** silently downgrade to fewer labels or omit the uncertain dimension.
+If the right label genuinely can't be determined from existing context, pick the closest existing label, note the uncertainty in the issue body, and ask the user in the same turn. **MUST NOT** silently downgrade to fewer labels or omit the uncertain dimension.
 
 #### Rich content in issue/task descriptions
 
-Plain-text walls of bullet points are hard to triage. **MUST** use the host's full markdown surface to make descriptions scannable. Both GitHub and GitLab render the same primitives natively — no extension, no plugin.
+Plain-text walls of bullet points are hard to triage. **MUST** use the host's full markdown surface. Both GitHub and GitLab render the same primitives natively — no extension, no plugin.
 
 **Required when applicable**:
 
 - **MUST** embed at least one of: a diagram (mermaid), a screenshot/image (bug reports, UI work), a state/flow table, or a comparison table — whenever the issue describes a flow, a system interaction, a UI surface, or a before/after change. A bug report without a reproduction screenshot or trace, or a feature with a non-trivial flow described only in prose, is incomplete.
-- **MUST** prefer mermaid over ASCII art for any diagram. Mermaid renders inline on both hosts; ASCII art breaks on mobile and in copy-paste.
-- **MUST** use fenced code blocks with a language tag for every code snippet, log excerpt, config sample, or command. Bare indented blocks lose syntax highlighting and break copy-paste.
-- **SHOULD** use task lists (`- [ ]`) for acceptance criteria and subtask breakdowns — both hosts render them as interactive checkboxes that contributors can tick without editing the description.
-- **SHOULD** use collapsible `<details><summary>…</summary>…</details>` blocks for long logs, full stack traces, and reproduction transcripts that would otherwise bury the description.
+- **MUST** prefer mermaid over ASCII art. Mermaid renders inline on both hosts; ASCII breaks on mobile and copy-paste.
+- **MUST** use fenced code blocks with a language tag for every code snippet, log excerpt, config sample, or command.
+- **SHOULD** use task lists (`- [ ]`) for acceptance criteria and subtask breakdowns — both hosts render interactive checkboxes.
+- **SHOULD** use collapsible `<details><summary>…</summary>…</details>` blocks for long logs and stack traces that would otherwise bury the description.
 
 **Mermaid** — fence with `mermaid`. Both hosts render natively:
 
@@ -359,32 +367,36 @@ sequenceDiagram
 ```
 ````
 
-Supported diagram types include `flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `erDiagram`, `classDiagram`, `gantt`, and `gitGraph`. Pick the one that matches the artifact being described — sequence diagrams for request flows, state diagrams for lifecycles, flowcharts for decision trees, ER diagrams for data models.
+Supported types: `flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `erDiagram`, `classDiagram`, `gantt`, `gitGraph`. Pick the one that matches the artifact — sequence for request flows, state for lifecycles, flowchart for decision trees, ER for data models.
 
-**Images and screenshots** — host them on the platform, not on third-party image hosts:
+**Images and screenshots** — host them on the platform:
 
-- GitHub: drag-and-drop into the web editor uploads to `user-images.githubusercontent.com` and inlines the `![](…)` markdown. From the CLI, attach via the web UI after `gh issue create`, or reference an asset already committed in the repo (`![label](docs/images/foo.png)`).
-- GitLab: drag-and-drop uploads to `/uploads/<hash>/<filename>` on the project and inlines the markdown. From the CLI, **MUST** upload via `glab api` (see [GitLab image uploads from the CLI](#gitlab-image-uploads-from-the-cli) below).
-- **MUST NOT** hotlink to Slack, Notion, Google Drive, Dropbox, or any host requiring auth — the image will 403 for anyone outside the original session.
-- **MUST** provide alt text in every `![alt](url)` — screen readers, and the alt is what surfaces when the image 404s later.
+- GitHub: drag-and-drop in the web editor uploads to `user-images.githubusercontent.com`. From the CLI, attach via the web UI after `gh issue create`, or reference an asset committed in the repo (`![label](docs/images/foo.png)`).
+- GitLab: drag-and-drop uploads to `/uploads/<hash>/<filename>`. From the CLI, **MUST** upload via `glab api` (see [GitLab image uploads from the CLI](#gitlab-image-uploads-from-the-cli)).
+- **MUST NOT** hotlink Slack, Notion, Google Drive, Dropbox, or any auth-requiring host — the image will 403 outside the original session.
+- **MUST** provide alt text in every `![alt](url)`.
+
+**Tables** for comparisons, state matrices, and option breakdowns. Headers required (both hosts reject header-less tables).
+
+**Math** (when genuinely needed for algorithm/perf/statistics issues): both hosts render LaTeX inside `$…$` (inline) and `$$…$$` (block).
 
 #### GitLab image uploads from the CLI
 
-**MUST** upload through `glab api`. `glab api` is GitLab's authenticated HTTP wrapper — it reuses the session stored by `glab auth login` and injects credentials internally. The agent never sees, reads, parses, or passes a token.
+**MUST** upload through `glab api`. It reuses the session stored by `glab auth login` and injects credentials internally. The agent never sees, reads, parses, or passes a token.
 
-**MUST NOT** read or pass GitLab tokens by any other means. Forbidden, all of these:
+**MUST NOT** read or pass GitLab tokens by any other means. Forbidden:
 
 - `curl -H "PRIVATE-TOKEN: $TOKEN" ...` / `curl -H "Authorization: Bearer ..."` against the GitLab API.
 - `wget --header="PRIVATE-TOKEN: ..."`, `httpie` with a manual token header, or any other raw HTTP client carrying a GitLab credential.
-- Reading the token out of `glab auth status -t`, `~/.config/glab-cli/config.yml`, the macOS Keychain, libsecret, environment variables (`GITLAB_TOKEN`, `GITLAB_API_TOKEN`, `CI_JOB_TOKEN`, etc.), or any `.env` / `op://` reference, then handing it to a non-glab tool.
+- Reading the token out of `glab auth status -t`, `~/.config/glab-cli/config.yml`, the macOS Keychain, libsecret, env vars (`GITLAB_TOKEN`, `GITLAB_API_TOKEN`, `CI_JOB_TOKEN`), or any `.env` / `op://` reference, then handing it to a non-glab tool.
 - Asking the user to paste a token. The token already lives in glab's session; ask the user to run `glab auth login` if `glab api user` fails, never to surface the secret.
 
-**Flag — `--form`, not `--field`**: `glab api` has two distinct flags:
+**Flag — `--form`, not `--field`**:
 
 - `-F` / `--field` builds a JSON body. **Wrong for files.**
-- `--form` builds a `multipart/form-data` body and supports `@<path>` for file uploads. **Required for `/uploads`.**
+- `--form` builds `multipart/form-data` and supports `@<path>` for files. **Required for `/uploads`.**
 
-There is no short alias for `--form`; spell it out.
+No short alias for `--form`; spell it out.
 
 **Endpoint**: `POST /projects/:id/uploads`. Returns:
 
@@ -398,21 +410,18 @@ There is no short alias for `--form`; spell it out.
 }
 ```
 
-Use the returned `markdown` field verbatim in the issue/MR/comment body — it is already a project-relative path GitLab renders correctly anywhere inside that project. **MUST NOT** hand-build the markdown from `url` or `full_path` — `full_path` is a numeric project-id internal route (`/-/project/<id>/uploads/...`), not a human-readable group/project path; only the `markdown` field's `/uploads/<hash>/<name>` form is the stable, project-relative reference that survives copy-paste across issues, comments, and MRs in the same project.
+Use the returned `markdown` field verbatim. **MUST NOT** hand-build from `url` or `full_path` — `full_path` is a numeric project-id internal route, not a stable project-relative reference. Only the `markdown` field's `/uploads/<hash>/<name>` form survives copy-paste across issues, comments, and MRs in the same project.
 
-**Filenames with spaces or non-ASCII characters** work — pass the path unquoted-but-inside-the-`--form`-value-string (e.g. `--form "file=@/path/with spaces/판독문.png"`). GitLab rewrites spaces to underscores in the returned `alt` and `markdown` (e.g. `판독문 최종확인.png` → `판독문_최종확인`). Don't try to pre-rename — the rewrite is server-side and consistent.
+**Filenames with spaces or non-ASCII** work — pass unquoted inside the `--form` value string (e.g. `--form "file=@/path/with spaces/판독문.png"`). GitLab rewrites spaces to underscores in the returned `alt` and `markdown`. Don't pre-rename — the rewrite is server-side and consistent.
 
 **Worked example — create an issue with an inline screenshot**:
 
 ```bash
-# 1. Upload the file. Use :fullpath (URL-encoded namespace/project) or :id; both work.
-#    Capture the response into a variable so the markdown snippet survives for the next step.
-UPLOAD_JSON=$(glab api --method POST projects/:fullpath/uploads \
-  --form "file=@./screenshot.png")
-
+# 1. Upload. :fullpath (URL-encoded namespace/project) or :id both work.
+UPLOAD_JSON=$(glab api --method POST projects/:fullpath/uploads --form "file=@./screenshot.png")
 IMAGE_MD=$(echo "$UPLOAD_JSON" | jq -r '.markdown')
 
-# 2. Build the description body in a file (per the rule on shell-quoting markdown).
+# 2. Build description in a file (shell quoting mangles nested fences).
 cat > /tmp/issue-body.md <<EOF
 ## Summary
 Login form returns 500 on stale session.
@@ -421,36 +430,33 @@ Login form returns 500 on stale session.
 $IMAGE_MD
 EOF
 
-# 3. Create the issue, referencing the description file.
-glab issue create \
-  --title "fix(auth): login 500 on stale session" \
+# 3. Create.
+glab issue create --title "fix(auth): login 500 on stale session" \
   --description "$(cat /tmp/issue-body.md)" \
   --label "bug,area::auth,priority::high"
 ```
 
-**Attaching to an existing issue** — same upload step, then either edit the description or post a comment:
+**Attaching to an existing issue**:
 
 ```bash
-# Edit description in place. Fetch current body, append the new markdown, push back.
+# Edit description in place.
 CURRENT=$(glab issue view <iid> -F json | jq -r '.description')
 printf '%s\n\n%s\n' "$CURRENT" "$IMAGE_MD" > /tmp/issue-body.md
 glab issue update <iid> --description "$(cat /tmp/issue-body.md)"
 
-# Or attach via a comment (preferred when adding evidence to an in-flight discussion).
+# Or attach via a comment (preferred for evidence in an in-flight discussion).
 glab issue note <iid> -m "Reproduction screenshot:
 
 $IMAGE_MD"
 ```
 
-**Self-managed hosts** — same rules. `glab api` honours the host resolution order from [Reading an issue or work item](#reading-an-issue-or-work-item): repo remote → URL → `GITLAB_HOST` → `gitlab.com`. From an unrelated cwd, pin the host: `GITLAB_HOST=git.jpi.app glab api --method POST projects/products%2Fexamvue-duo%2Fexamvue-apps/uploads --form "file=@./screenshot.png"`.
+**Self-managed hosts**: same host resolution as [Reading](#reading-an-issue-or-work-item). From an unrelated cwd, pin the host: `GITLAB_HOST=git.jpi.app glab api --method POST projects/products%2Fexamvue-duo%2Fexamvue-apps/uploads --form "file=@./screenshot.png"`.
 
-**Verification** — if `glab api user` returns `401`, the glab session is missing or expired. **STOP** and ask the user to run `glab auth login --hostname <host>`. **MUST NOT** work around it by reaching for a raw token.
+**Verification**: if `glab api user` returns `401`, the glab session is missing or expired. **STOP** and ask the user to run `glab auth login --hostname <host>`. **MUST NOT** work around it with a raw token.
 
-**Tables** for comparisons, state matrices, and option breakdowns. Headers required (GitHub/GitLab both reject header-less tables).
+#### Description templates
 
-**Math** (when genuinely needed for algorithm/perf/statistics issues): both hosts render LaTeX inside `$…$` (inline) and `$$…$$` (block).
-
-**Bug-report description template** (adapt freely; the headings are the floor, not the ceiling):
+**Bug report** (headings are the floor, not the ceiling):
 
 ```markdown
 ## Summary
@@ -497,7 +503,7 @@ sequenceDiagram
 - Commit / version: …
 ```
 
-**Feature-request description template**:
+**Feature request**:
 
 ```markdown
 ## Problem
@@ -525,7 +531,7 @@ stateDiagram-v2
 - …
 ```
 
-When piping a description from a file (recommended for anything non-trivial — shell quoting mangles mermaid backticks and nested code fences):
+Pipe descriptions from a file for anything non-trivial — shell quoting mangles mermaid backticks and nested code fences:
 
 ```bash
 glab issue create -R <group>/<project> \
@@ -533,65 +539,60 @@ glab issue create -R <group>/<project> \
   --description "$(cat ./issue-body.md)" \
   --label "bug,area::auth,priority::high"
 
-gh issue create \
-  --title "fix(auth): login 500 on stale session" \
+gh issue create --title "fix(auth): login 500 on stale session" \
   --body-file ./issue-body.md \
   --label "bug,area/auth,priority/high"
 ```
 
-### Tracking checkbox progress on an issue or PR/MR
+## Tracking Checkbox Progress
 
-GitHub and GitLab both render `- [ ]` / `- [x]` lines in issue and PR/MR bodies as interactive checkboxes. They are the canonical, host-rendered progress surface — reviewers, dashboards, and merge automation all read them. **MUST** keep them in sync with reality as work happens, not after the fact.
+Applies to **issues and PR/MR bodies on both hosts.** `- [ ]` / `- [x]` lines render as interactive checkboxes — the canonical, host-rendered progress surface that reviewers, dashboards, and merge automation read. **MUST** keep them in sync with reality as work happens, not after the fact.
 
 **Required behaviour**:
 
-- **MUST** tick each checkbox **at the moment** the corresponding item lands (commit pushed, file written, sub-task verified) — never batch ticks at the end of a session, never tick speculatively before the work is done.
-- **MUST** keep the issue's checklist and the PR/MR body's mirrored checklist in lock-step. Update both in the same turn; a mismatch between the two surfaces is a defect.
-- **MUST NOT** edit checkbox text or reorder items as a side effect of ticking. Tick state changes only — copy, ordering, and indentation stay byte-identical so diff history is readable.
-- **MUST NOT** delete unchecked items to "make progress visible". Out-of-scope items get an explicit `~~strikethrough~~` and an inline note (`- [ ] ~~Item Z~~ — deferred, see #N`), not deletion.
-- **MUST NOT** promote a draft PR/MR to ready while its checklist still has unchecked items unless every remaining item is explicitly marked out of scope in the same body.
-- **SHOULD** post a brief comment summarising progress when a meaningful batch of checkboxes flips (e.g. all items in one section), so watchers get a notification — silent in-place edits do not trigger notifications on either host.
+- **MUST** tick each checkbox **at the moment** the corresponding item lands (commit pushed, file written, sub-task verified) — never batch ticks, never tick speculatively.
+- **MUST** keep the issue's checklist and the PR/MR body's mirrored checklist in lock-step. Update both in the same turn; a mismatch is a defect.
+- **MUST NOT** edit checkbox text or reorder items as a side effect of ticking. Tick state changes only — copy, ordering, indentation stay byte-identical so diff history is readable.
+- **MUST NOT** delete unchecked items to "make progress visible". Out-of-scope items get `~~strikethrough~~` and an inline note (`- [ ] ~~Item Z~~ — deferred, see #N`), not deletion.
+- **MUST NOT** promote a draft PR/MR to ready while the checklist has unchecked items unless every remaining item is explicitly marked out of scope in the same body.
+- **SHOULD** post a brief progress comment when a meaningful batch flips (e.g. all items in one section) — silent in-place edits don't trigger notifications on either host.
 
-**Updating from the CLI** — both hosts require a full-body replacement; there is no per-checkbox API. Fetch the current body, flip the exact `- [ ]` → `- [x]` lines, push the whole body back. Preserve every other byte:
+**Updating from the CLI** — both hosts require a full-body replacement; no per-checkbox API. Fetch the current body, flip the exact `- [ ]` → `- [x]` lines, push the whole body back. Preserve every other byte:
 
 ```bash
 # GitLab — issue
 CURRENT=$(glab issue view <iid> -F json | jq -r '.description')
-# Flip a specific line. MUST match the full line to avoid touching look-alikes.
 UPDATED=$(printf '%s' "$CURRENT" | sed 's|^- \[ \] Implement validateEmail()$|- [x] Implement validateEmail()|')
 printf '%s' "$UPDATED" > /tmp/issue-body.md
 glab issue update <iid> --description "$(cat /tmp/issue-body.md)"
 
 # GitLab — MR body (same pattern)
 CURRENT=$(glab mr view <iid> -F json | jq -r '.description')
-# ... edit ...
 glab mr update <iid> --description "$(cat /tmp/mr-body.md)"
 
 # GitHub — issue
 CURRENT=$(gh issue view <num> --json body -q '.body')
-# ... edit ...
 gh issue edit <num> --body-file /tmp/issue-body.md
 
 # GitHub — PR body
 CURRENT=$(gh pr view <num> --json body -q '.body')
-# ... edit ...
 gh pr edit <num> --body-file /tmp/pr-body.md
 ```
 
-**MUST NOT** hand-edit by passing a fresh body that omits sections you did not regenerate — that silently deletes prose, comments, or other checklists. Always start from the live `description` / `body` and apply targeted line flips.
+**MUST NOT** pass a fresh body that omits sections you didn't regenerate — that silently deletes prose, comments, or other checklists. Always start from the live `description` / `body` and apply targeted line flips.
 
-**Promotion to ready** — once every required checkbox is ticked, the verification gates have passed, and the pipeline is green:
+**Promotion to ready** — once every required checkbox is ticked, gates pass, and pipeline is green:
 
 ```bash
-gh pr ready <num>                              # GitHub: flip draft → ready
-glab mr update <iid> --ready                   # GitLab: flip draft → ready
+gh pr ready <num>                              # GitHub
+glab mr update <iid> --ready                   # GitLab
 ```
 
-Verify the flip landed (`gh pr view <num> --json isDraft` should return `false`; `glab mr view <iid> -F json | jq .draft` should return `false`). A draft that won't promote usually means a required check is still pending — finish the check, do not work around it by editing the draft state through the API.
+Verify the flip landed (`gh pr view <num> --json isDraft` → `false`; `glab mr view <iid> -F json | jq .draft` → `false`). A draft that won't promote usually means a required check is still pending — finish the check, don't work around it via API.
 
 ## CI/CD Pipeline Monitoring
 
-The pipeline (GitHub Actions / GitLab CI/CD / configured equivalent) is the canonical verification surface. Local runs are necessary but not sufficient — the pipeline runs in a clean environment with additional jobs (integration tests, security scans, matrix builds, deploy previews) and is the gate reviewers and merge automation actually trust.
+The pipeline is the canonical verification surface. Local runs are necessary but not sufficient — the pipeline runs in a clean environment with additional jobs (integration tests, security scans, matrix builds, deploy previews) and is the gate reviewers and merge automation trust.
 
 **MUST monitor the pipeline to completion on every push that opens or updates a PR/MR.** "Push and walk away" is forbidden. The task is done when the pipeline lands green, not when the push succeeds.
 
@@ -612,12 +613,12 @@ glab api "projects/$PROJECT/merge_requests/$MR_IID/pipelines" \
   | jq '.[0] | {id, status, sha, web_url}'
 ```
 
-**If the pipeline fails, MUST fix it until green.** A red pipeline is an open defect on the PR/MR — in-scope regardless of whether the failing job tests code the agent touched directly:
+**If the pipeline fails, MUST fix it until green.** A red pipeline is an open defect on the PR/MR — in-scope regardless of whether the failing job tests code you touched directly:
 
 1. Read the failing job's log (`gh run view --log-failed`, `glab ci trace`). Identify the actual error, not just the exit code.
-2. Diagnose root cause — real regression, flake, env drift, missing secret, dependency cooldown, lint trip, etc.
-3. Fix at the source. For genuinely flaky tests outside the change, **surface the flake to the user** before retrying — do not mask flakes by re-running.
-4. Commit, push, resume monitoring on the new run.
+2. Diagnose root cause — real regression, flake, env drift, missing secret, dependency cooldown, lint trip.
+3. Fix at the source. For genuinely flaky tests outside the change, **surface the flake to the user** before retrying — don't mask flakes by re-running.
+4. Commit, push, resume monitoring.
 5. Repeat until `success`.
 
 **MUST NOT** declare ready, hand off, or mark complete while the pipeline is failing, cancelled, or still running.
@@ -630,9 +631,20 @@ glab api "projects/$PROJECT/merge_requests/$MR_IID/pipelines" \
 - Pushing `[skip ci]` / `[ci skip]` / `--ci-skip` on a change-bearing commit.
 - Force-pushing to hide failed pipeline history.
 
-**Exception — pre-existing failures**: if the failing job was already red on the default branch (verify by checking the latest default-branch pipeline), document in the PR/MR body, surface to the user, do not block on it. **MUST NOT** assume "pre-existing" without verifying — "looks unrelated" is not verification.
+**Exception — pre-existing failures**: if the failing job was already red on the default branch (verify against the latest default-branch pipeline), document in the PR/MR body, surface to the user, don't block. **MUST NOT** assume "pre-existing" without verifying — "looks unrelated" is not verification.
 
 **Auto-merge** (GitHub auto-merge, GitLab "Merge when pipeline succeeds") does not absolve monitoring. It merges on green; it does not fix red.
+
+## Rebase
+
+Resolve conflicts by **intent, not reflex**:
+
+- **Regenerated / generated artifacts** (lockfiles, build outputs, sequence-numbered migrations, generated configs): take `main`'s version, then re-run the generator on top so your additions reproduce on the new base.
+- **Hand-written code**: review both sides and merge intentionally. **MUST NOT** blindly pick `--ours` or `--theirs` — that silently drops one side's work.
+
+**Note**: during a rebase, Git's `--ours` / `--theirs` are **reversed** vs. merge. `--ours` is `main` (the rebase target being replayed onto); `--theirs` is the feature commit being applied.
+
+Wrong side / wrong direction: `git rebase --abort` and restart. **MUST NOT** continue.
 
 ## Destructive / Bypass Operations
 
@@ -651,18 +663,18 @@ When genuinely required: **MUST** confirm with the user first — name the exact
 
 **MUST NOT** modify any git configuration under any circumstances. The user's git config is sacred — it encodes identity, signing keys, aliases, hooks, credential helpers, merge/diff drivers, and machine-specific behaviour the agent has no business changing.
 
-Forbidden, all of these:
+Forbidden:
 
-- `git config ...` at any scope (`--system`, `--global`, `--worktree`, or repo-local — including `--local`, which is the default).
+- `git config ...` at any scope (`--system`, `--global`, `--worktree`, or repo-local — including `--local`, the default).
 - Editing `~/.gitconfig`, `~/.config/git/config`, `/etc/gitconfig`, `.git/config`, or any included config file directly.
 - Setting `user.name`, `user.email`, `user.signingkey`, `commit.gpgsign`, `tag.gpgsign`, `core.editor`, `core.autocrlf`, `init.defaultBranch`, `pull.rebase`, `push.default`, `credential.helper`, `gpg.format`, `gpg.ssh.allowedSignersFile`, or anything else — neither to "fix" a problem nor to "match the project's convention" nor to silence a warning.
 - Setting `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env vars to override identity for a commit.
 - Running `git commit --author "..."` to forge a different author.
 - Adding includes (`include.path`, `includeIf.*.path`) or rewriting URL rewrites (`url.*.insteadOf`).
 
-If a commit fails because git identity is missing/wrong, signing fails, a hook misbehaves, or any other config-driven issue: **STOP** and ask the user to fix their config. **MUST NOT** work around it by mutating config, exporting env overrides, or passing `--author`/`-c user.email=...` to a single command. The only acceptable response is to surface the problem and wait.
+If a commit fails because git identity is missing/wrong, signing fails, a hook misbehaves, or any other config-driven issue: **STOP** and ask the user to fix their config. **MUST NOT** work around it by mutating config, exporting env overrides, or passing `--author`/`-c user.email=...` to a single command.
 
-This rule has no exceptions and applies even when the user gives a general instruction to "fix the git setup" — confirm the exact `git config` invocation with the user first, then run only that one command.
+No exceptions, even when the user gives a general instruction to "fix the git setup" — confirm the exact `git config` invocation with the user first, then run only that one command.
 
 ## Secrets
 
@@ -687,17 +699,6 @@ Accidental commit: **STOP**, notify the user, treat the secret as compromised, r
 ## Interactive / Long-Running Processes
 
 **MUST** use the `tmux` tool (`mcp_interactive_bash`) for: dev servers, watch modes, TUI apps, REPLs, build watchers — anything that does not terminate. Regular shell execution **WILL BLOCK** the agent session and is **forbidden** for non-terminating commands.
-
-## Rebase
-
-Resolve conflicts by **intent, not reflex**:
-
-- **Regenerated / generated artifacts** (lockfiles, build outputs, sequence-numbered migrations, generated configs): take `main`'s version, then re-run the generator on top so your additions reproduce on the new base.
-- **Hand-written code**: review both sides and merge intentionally. **MUST NOT** blindly pick `--ours` or `--theirs` — that silently drops one side's work.
-
-**Note**: during a rebase, Git's `--ours` / `--theirs` are **reversed** vs. merge. `--ours` is `main` (the rebase target being replayed onto); `--theirs` is the feature commit being applied.
-
-Wrong side / wrong direction: `git rebase --abort` and restart. **MUST NOT** continue.
 
 ## Scripting Runtime
 
@@ -738,12 +739,12 @@ Opt in at the **narrowest possible scope**:
 - **MUST** correct any existing range specifier to an exact version when modifying a `package.json` for any reason.
 - **MUST NOT** introduce a new range specifier.
 - **MUST NOT** edit a lockfile by hand to dodge the rule.
-- **Exception**: a project-level `AGENTS.md` may permit ranges where genuinely required (peer-dep flexibility, library `package.json` authored for downstream consumers, etc.) — state the exception explicitly when applying it.
+- **Exception**: a project-level `AGENTS.md` may permit ranges where genuinely required (peer-dep flexibility, library `package.json` authored for downstream consumers) — state the exception explicitly when applying it.
 
 ### Cooldown gate (1 week)
 
 A version must be **at least one week old** before any manager resolves it. "Does not meet the minimumReleaseAge constraint" (or equivalent) means the version is too fresh and **MUST NOT** be installed.
 
 - **MUST** pin to the most recent version that already satisfies the gate.
-- **MUST NOT** add the package to a preapproved/exclude list (`npmPreapprovedPackages` in Yarn, `minimumReleaseAgeExclude` in pnpm, `minimumReleaseAgeExcludes` in Bun) without explicit per-package user approval — bypassing the gate defeats the supply-chain protection it provides.
+- **MUST NOT** add the package to a preapproved/exclude list (`npmPreapprovedPackages` in Yarn, `minimumReleaseAgeExclude` in pnpm, `minimumReleaseAgeExcludes` in Bun) without explicit per-package user approval.
 - **MUST NOT** lower the cooldown value in any user-global or project-level config to work around a fresh-version failure.
