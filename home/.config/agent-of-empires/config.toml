@@ -17,7 +17,7 @@ path_template = "../{repo-name}-worktrees/{branch}"
 bare_repo_path_template = "./{branch}"
 auto_cleanup = true
 show_branch_in_tui = true
-delete_branch_on_cleanup = false
+delete_branch_on_cleanup = true
 workspace_path_template = "../{branch}-workspace-{session-id}"
 init_submodules = true
 
@@ -55,6 +55,8 @@ click_action = "live_send"
 context_lines = 3
 
 [hooks]
+on_create = ["git submodule update --init", "mise trust", "mise install"]
+on_destroy = ["git submodule deinit -f --all"]
 
 [sound]
 enabled = true
