@@ -1,17 +1,17 @@
 ---
 name: ship-issue
-description: End-to-end issue automation — triage (or re-triage) a GitHub/GitLab issue, work item, or MR; implement the fix; push directly on the default branch or open a PR/MR; then monitor GitHub Actions / GitLab CI/CD and self-heal until the pipeline goes green. Triggers on phrases like "check <issue/MR/work-item URL> and create PR/MR for fix", "ship this issue", "triage and fix <URL>", "monitor pipeline and fix until green", or any single URL pointing at a GitHub issue/PR or GitLab issue/work_item/merge_request.
+description: End-to-end issue automation — triage (or re-triage) a GitHub/GitLab issue, work item, or MR; implement the fix; create exactly one PR/MR per issue regardless of size; then monitor GitHub Actions / GitLab CI/CD and self-heal until the pipeline goes green. Triggers on phrases like "check <issue/MR/work-item URL> and create PR/MR for fix", "ship this issue", "triage and fix <URL>", "monitor pipeline and fix until green", or any single URL pointing at a GitHub issue/PR or GitLab issue/work_item/merge_request.
 ---
 
 # ship-issue
 
-End-to-end automation: take a single GitHub/GitLab URL (issue, work item, PR, or MR) and drive it to a green pipeline on the default branch.
+End-to-end automation: take a single GitHub/GitLab URL (issue, work item, PR, or MR) and drive it to exactly one PR/MR with a green pipeline.
 
 The user prompt usually looks like:
 
 > check `<URL>` and create MR for fix. monitor pipeline and fix pipeline until pipeline goes green
 
-or any subset thereof. Treat a bare URL as the same intent.
+or any subset thereof. Treat a bare URL as the same intent. For issue/work-item URLs, **MUST** create exactly one PR/MR for exactly one issue, regardless of implementation size. Large issues get one branch, one PR/MR, and as many commits as needed; **MUST NOT** split one issue across multiple PRs/MRs unless the user explicitly changes the issue scope first.
 
 **Load skills first.** Before doing host operations:
 
@@ -65,6 +65,8 @@ Per user contract: **always re-triage from scratch**, even when the issue body a
 
 ### 2a. Fetch the issue/work-item/MR
 
+For GitLab issue/work-item URLs, use the project path exactly as `<group>/<project>` with slashes intact. **MUST NOT** URL-encode the project path into `group%2Fproject` or any other percent-encoded form.
+
 **GitHub issue/PR:**
 
 ```bash
@@ -75,21 +77,14 @@ gh pr view <N> --repo <owner>/<repo> --json title,body,labels,headRefName,baseRe
 gh pr diff <N> --repo <owner>/<repo>
 ```
 
-**GitLab issue:**
+**GitLab issue/work item:**
+
+Rewrite any `/-/work_items/<N>` URL to the matching `/-/issues/<N>` form before calling `glab`. **MUST** use `glab issue view` for GitLab issue/work-item reads. **MUST NOT** use `glab api projects/.../issues/...`, `glab api projects/.../work_items/...`, or any direct API call to check the issue body/comments.
 
 ```bash
 glab issue view <N> -R <group>/<project> --comments
+glab issue view <N> -R <group>/<project> -F json
 ```
-
-**GitLab work item** (a separate API surface from classic issues — `glab issue view` may not resolve a `work_items/<N>` URL). Fall back to the REST API via `glab api`:
-
-```bash
-PROJECT_ENC=$(printf '%s' '<group>/<project>' | sed 's|/|%2F|g')
-glab api "projects/$PROJECT_ENC/work_items/<N>" | jq .
-glab api "projects/$PROJECT_ENC/work_items/<N>/notes"  | jq -r '.[].body'
-```
-
-If the work-item endpoint returns 404 (older GitLab versions or non-work-item types), retry as a classic issue: `glab issue view <N> -R <group>/<project> --comments`.
 
 **GitLab MR:**
 
@@ -132,8 +127,8 @@ gh issue comment <N> --repo <owner>/<repo> --body-file -
 # GitLab classic issue
 glab issue note <N> -R <group>/<project> --message "$(cat note.md)"
 
-# GitLab work item — use the work-items notes endpoint
-glab api -X POST "projects/$PROJECT_ENC/work_items/<N>/notes" --field body=@note.md
+# GitLab issue/work item (work-item URLs are rewritten to /-/issues/<N>)
+glab issue note <N> -R <group>/<project> --message "$(cat note.md)"
 ```
 
 Then end the run and wait for the reporter.
@@ -146,8 +141,11 @@ Then end the run and wait for the reporter.
 git branch --show-current
 ```
 
-- If current branch == `$DEFAULT_BRANCH` **and** the change is genuinely trivial (single-line fix, doc typo) **and** the user explicitly invited a direct push ("just push", "push directly", "on main"), stay on the default branch — Phase 4 will push instead of opening a PR/MR.
-- Otherwise, create a Git Flow branch from `$DEFAULT_BRANCH`:
+- If current branch == `$DEFAULT_BRANCH`, create a Git Flow branch from `$DEFAULT_BRANCH`. Direct pushes are forbidden for this command, even for trivial fixes.
+- If already on a valid Git Flow branch for this same issue, continue on it; that branch still produces exactly one PR/MR.
+- If already on a branch for a different issue, **STOP** and ask which checkout/branch to use rather than combining issues.
+
+Create a Git Flow branch from `$DEFAULT_BRANCH` when needed:
 
 ```bash
 git fetch origin
@@ -179,7 +177,7 @@ git add -A
 git commit -m "fix(<scope>): <description>"
 ```
 
-If the fix spans multiple logical concerns, split into multiple commits. Reference the issue in the **body**, not the subject, using a closing keyword the host will auto-action on merge:
+If the fix spans multiple logical concerns, split into multiple commits on the same branch. **MUST NOT** split one issue across multiple PRs/MRs because of size. Reference the issue in the **body**, not the subject, using a closing keyword the host will auto-action on merge:
 
 ```
 fix(auth): handle expired refresh tokens
@@ -190,19 +188,13 @@ Closes #25
 GitHub keywords that auto-close: `Close[s|d]`, `Fix[es|ed]`, `Resolve[s|d]`.
 GitLab keywords that auto-close: `Close[s|d|ing]`, `Fix[es|ed|ing]`, `Resolve[s|d|ing]`, `Implement[s|ed|ing]`.
 
-**Work items**: GitLab work items currently do not auto-close from MR-description keywords on all instances. If the URL was a work-item URL, plan to close it manually in Phase 5 via the API.
+**Work items**: Treat GitLab work-item URLs as issue URLs by rewriting `/-/work_items/<N>` to `/-/issues/<N>`. If this instance does not auto-close the work item from MR-description keywords, close it with `glab issue close` after merge only when the user explicitly asked for end-to-end closure.
 
-## Phase 4 — Push, PR/MR (or direct push)
+## Phase 4 — Push and open exactly one PR/MR
 
-### 4a. Direct push branch (only when staying on `$DEFAULT_BRANCH`)
+Direct pushes are not part of this command. For every issue/work-item URL, **MUST** ship exactly one PR/MR for that one issue, regardless of size. If the issue is large, keep one branch and one PR/MR and use multiple commits/checklist items inside it. **MUST NOT** create multiple PRs/MRs for one issue, and **MUST NOT** combine multiple issues into one PR/MR unless the user explicitly says the issues are the same scope.
 
-```bash
-git push origin "$(git branch --show-current)"
-```
-
-Skip to Phase 5. CI runs from the default-branch push.
-
-### 4b. Feature branch — open the PR/MR
+### 4a. Feature branch — open the PR/MR
 
 Push the branch first, with upstream:
 
@@ -262,7 +254,7 @@ EOF
 
 Do not open as draft unless the user asked for it.
 
-### 4c. Verify the PR/MR is real
+### 4b. Verify the PR/MR is real
 
 The create call does not fail when the source branch was substituted. Verify immediately:
 
@@ -272,10 +264,10 @@ gh pr view <NUM> --json headRefName,commits \
   | jq '{headRefName, commit_count: (.commits | length)}'
 
 # GitLab
-PROJECT_ENC=$(printf '%s' '<group>/<project>' | sed 's|/|%2F|g')
-glab api "projects/$PROJECT_ENC/merge_requests/<IID>" \
+PROJECT_PATH='<group>/<project>'
+glab api "projects/$PROJECT_PATH/merge_requests/<IID>" \
   | jq '{source_branch, head_sha: .diff_refs.head_sha, base_sha: .diff_refs.base_sha}'
-glab api "projects/$PROJECT_ENC/merge_requests/<IID>/commits" | jq 'length'   # MUST be > 0
+glab api "projects/$PROJECT_PATH/merge_requests/<IID>/commits" | jq 'length'   # MUST be > 0
 ```
 
 `headRefName` / `source_branch` MUST match the locally pushed Git Flow branch. Commit count MUST be `> 0`. `head_sha != base_sha`.
@@ -297,11 +289,6 @@ Loop until the pipeline on the latest pushed commit is green or until an explici
 **GitHub Actions:**
 
 ```bash
-# Direct-push case (no PR): poll runs for this commit
-gh run list --branch "$DEFAULT_BRANCH" --limit 5 --json databaseId,headSha,status,conclusion,name,event \
-  | jq '.[] | select(.headSha=="'"$HEAD_SHA"'")'
-
-# PR case: block until checks complete
 gh pr checks <PR_NUM> --watch
 gh pr checks <PR_NUM> --json name,state,bucket,link
 ```
@@ -309,24 +296,20 @@ gh pr checks <PR_NUM> --json name,state,bucket,link
 **GitLab CI/CD:**
 
 ```bash
-# MR case
 glab mr view <MR_IID> -R <group>/<project>           # quick text view
 glab ci status --branch "$(git branch --show-current)"
 # Or stream:
 glab ci view --branch "$(git branch --show-current)"
-
-# Direct-push case (default branch)
-glab ci status --branch "$DEFAULT_BRANCH"
 ```
 
 For unattended polling, prefer the JSON form via `glab api`:
 
 ```bash
-PROJECT_ENC=$(printf '%s' '<group>/<project>' | sed 's|/|%2F|g')
+PROJECT_PATH='<group>/<project>'
 # Latest pipeline for the current branch
-glab api "projects/$PROJECT_ENC/pipelines?ref=$(git branch --show-current)&per_page=1" | jq '.[0]'
+glab api "projects/$PROJECT_PATH/pipelines?ref=$(git branch --show-current)&per_page=1" | jq '.[0]'
 # Jobs for that pipeline
-glab api "projects/$PROJECT_ENC/pipelines/<PIPELINE_ID>/jobs" | jq '.[] | {id, name, stage, status}'
+glab api "projects/$PROJECT_PATH/pipelines/<PIPELINE_ID>/jobs" | jq '.[] | {id, name, stage, status}'
 ```
 
 ### 5b. If green — done
@@ -351,7 +334,7 @@ gh run view <RUN_ID> --log | tail -n 500                # full log tail
 
 ```bash
 glab ci trace --branch "$(git branch --show-current)"   # tail of running/last job
-glab api "projects/$PROJECT_ENC/jobs/<JOB_ID>/trace" | tail -n 500
+glab api "projects/$PROJECT_PATH/jobs/<JOB_ID>/trace" | tail -n 500
 ```
 
 Then:
@@ -359,7 +342,7 @@ Then:
 1. Parse the failure. Group failures: lint, typecheck, test, build, infra/transient.
 2. **Infra/transient** (runner offline, dependency mirror timeout, flake) → re-run only that job:
    - GitHub: `gh run rerun <RUN_ID> --failed`
-   - GitLab: `glab api -X POST "projects/$PROJECT_ENC/jobs/<JOB_ID>/retry"`
+   - GitLab: `glab api -X POST "projects/$PROJECT_PATH/jobs/<JOB_ID>/retry"`
 3. **Real failure** → reproduce locally if possible, fix, commit (Conventional Commits), push:
 
    ```bash
@@ -375,10 +358,10 @@ Never delete failing tests to make the pipeline green. Never disable a check wit
 
 ### 5d. Issue/work-item linkage on completion
 
-If the URL was a **GitLab work item** and the PR/MR's closing keyword does not auto-close work items on this instance, close it manually after merge:
+If the URL was a **GitLab work item** and the PR/MR's closing keyword does not auto-close it on this instance, close it manually after merge:
 
 ```bash
-glab api -X PATCH "projects/$PROJECT_ENC/work_items/<N>" --field state_event=close
+glab issue close <N> -R <group>/<project>
 ```
 
 (The user normally does this; only do it yourself if the user explicitly asked for the end-to-end close.)
@@ -399,6 +382,9 @@ End the run and report to the user when **any** of these is true:
 - **MUST** pin `--head` (gh) / `--source-branch` (glab) explicitly on every PR/MR create.
 - **MUST** verify the PR/MR after creation (`commits > 0`, `headRefName` / `source_branch` matches local).
 - **MUST** assign the PR/MR to the authenticated user.
+- **MUST** create exactly one PR/MR for exactly one issue/work-item URL, regardless of size.
+- **MUST NOT** split one issue across multiple PRs/MRs, and **MUST NOT** combine multiple issues into one PR/MR unless the user explicitly says they share one scope.
+- **MUST** use `glab issue view` to check GitLab issue/work-item body/comments; **MUST NOT** use direct issue/work-item API reads.
 - **MUST NOT** open as draft unless the user asked.
 - **MUST NOT** commit secrets (`.env`, private keys, tokens) even transiently.
 - **MUST NOT** run destructive shortcuts (`--no-verify`, `--force` to shared branches, history rewrite on pushed commits, `[skip ci]`) without explicit user request.

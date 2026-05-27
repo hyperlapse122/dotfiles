@@ -112,7 +112,7 @@ BREAKING CHANGE: v1 API endpoints have been removed. Migrate to v2.
 ```bash
 # GitLab — non-empty array means an open MR exists; abort the create.
 BRANCH=$(git branch --show-current)
-PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace' | sed 's|/|%2F|g')
+PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace')
 glab api "projects/$PROJECT/merge_requests?source_branch=$BRANCH&state=opened" \
   | jq '[.[] | {iid, web_url, title}]'
 
@@ -155,7 +155,7 @@ gh pr create --head "$(git branch --show-current)" --base main ...
 ```bash
 # GitLab — source_branch matches pushed branch; head_sha differs from base_sha; commits > 0
 MR_IID=<iid>
-PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace' | sed 's|/|%2F|g')
+PROJECT=$(glab repo view -F json | jq -r '.path_with_namespace')
 glab api "projects/$PROJECT/merge_requests/$MR_IID" \
   | jq '{source_branch, head_sha: .diff_refs.head_sha, base_sha: .diff_refs.base_sha}'
 glab api "projects/$PROJECT/merge_requests/$MR_IID/commits" | jq 'length'
@@ -167,6 +167,10 @@ gh pr view <num> --json headRefName,commits | jq '{headRefName, commit_count: (.
 If `source_branch` / `headRefName` matches `^[0-9]+-` instead of the pushed Git Flow name, or commit count is `0`: the PR/MR is **broken**. Close it, delete the stray remote branch (`git push origin --delete <N>-<slug>`), recreate.
 
 A `<N>-<slug>` ref on the remote is the trap's bait — host-auto-created the moment an issue is referenced, points at the target branch's HEAD, zero commits. Never legitimate. Delete before retrying.
+
+### GitLab project paths in CLI/API calls
+
+When passing a GitLab project to `glab` or `glab api`, **MUST** use the project path with slashes intact (for example, `products/examvue-duo/examvue-apps`). **MUST NOT** URL-encode the project path into `products%2Fexamvue-duo%2Fexamvue-apps`, `some%20path`, or any other percent-encoded project id. Prefer `:fullpath` when the current repo remote points at the target project; otherwise pass the plain slash path.
 
 ### Issue-linking keywords
 
@@ -417,7 +421,7 @@ Use the returned `markdown` field verbatim. **MUST NOT** hand-build from `url` o
 **Worked example — create an issue with an inline screenshot**:
 
 ```bash
-# 1. Upload. :fullpath (URL-encoded namespace/project) or :id both work.
+# 1. Upload. Prefer :fullpath when the current repo remote points at the target project.
 UPLOAD_JSON=$(glab api --method POST projects/:fullpath/uploads --form "file=@./screenshot.png")
 IMAGE_MD=$(echo "$UPLOAD_JSON" | jq -r '.markdown')
 
@@ -450,7 +454,7 @@ glab issue note <iid> -m "Reproduction screenshot:
 $IMAGE_MD"
 ```
 
-**Self-managed hosts**: same host resolution as [Reading](#reading-an-issue-or-work-item). From an unrelated cwd, pin the host: `GITLAB_HOST=git.jpi.app glab api --method POST projects/products%2Fexamvue-duo%2Fexamvue-apps/uploads --form "file=@./screenshot.png"`.
+**Self-managed hosts**: same host resolution as [Reading](#reading-an-issue-or-work-item). From an unrelated cwd, pin the host and keep the project path slash-separated: `GITLAB_HOST=git.jpi.app glab api --method POST projects/products/examvue-duo/examvue-apps/uploads --form "file=@./screenshot.png"`.
 
 **Verification**: if `glab api user` returns `401`, the glab session is missing or expired. **STOP** and ask the user to run `glab auth login --hostname <host>`. **MUST NOT** work around it with a raw token.
 
