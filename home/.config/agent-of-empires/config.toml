@@ -1,62 +1,77 @@
 default_profile = ""
 
-[theme]
-name = ""
-color_mode = "truecolor"
-idle_decay_minutes = 0
+[app_state]
+has_acknowledged_agent_hooks = false
+has_seen_custom_instruction_warning = false
+has_seen_welcome = true
+last_seen_version = "1.9.2"
 
-[updates]
-update_check_mode = "notify"
-check_interval_hours = 24
-notify_in_cli = true
-web_poll_interval_minutes = 60
-
-[worktree]
-enabled = true
-path_template = "../{repo-name}-worktrees/{branch}"
-bare_repo_path_template = "./{branch}"
-auto_cleanup = true
-show_branch_in_tui = true
-delete_branch_on_cleanup = true
-workspace_path_template = "../{branch}-workspace-{session-id}"
-init_submodules = true
-
-[sandbox]
-enabled_by_default = false
-default_image = "ghcr.io/njbrake/aoe-sandbox:latest"
-extra_volumes = []
-environment = ["TERM", "COLORTERM", "FORCE_COLOR", "NO_COLOR"]
-auto_cleanup = true
-default_terminal_mode = "host"
-volume_ignores = []
-mount_ssh = false
-container_runtime = "docker"
-
-[tmux]
-status_bar = "auto"
-mouse = "auto"
-clipboard = "auto"
-
-[session]
-default_tool = "opencode"
-yolo_mode_default = false
-agent_status_hooks = true
-strict_hotkeys = false
-snooze_duration_minutes = 30
-restart_wake_message = "wake up: pick up what you were doing"
-row_tag = "none"
-session_id_poller_max_threads = 50
-live_send_exit_chord = "C-q"
-new_session_attach_mode = "tmux"
-default_attach_mode = "tmux"
-click_action = "live_send"
+[cockpit]
+default_agent = "aoe-agent"
+default_for_claude = true
+enabled = false
+force_end_turn_threshold_secs = 30
+max_concurrent_resumes = 4
+max_concurrent_workers = 5
+node_path = ""
+queue_drain_mode = "combined"
+replay_bytes = 5242880
+replay_events = 0
+show_tool_durations = true
+silent_orphan_fast_grace_secs = 20
+silent_orphan_grace_secs = 120
 
 [diff]
 context_lines = 3
 
 [hooks]
-on_create = ["git submodule update --init", "mise trust", "mise install"]
+on_create = [
+    "git submodule update --init",
+    "mise trust",
+    "mise install",
+]
 on_destroy = ["git submodule deinit -f --all"]
+
+[logging]
+default_level = "info"
+file_path = "debug.log"
+keep_count = 5
+max_size_mib = 50
+output = "file"
+rotation = "size"
+show_spans = false
+
+[logging.targets]
+
+[sandbox]
+auto_cleanup = true
+container_runtime = "docker"
+default_image = "ghcr.io/agent-of-empires/aoe-sandbox:latest"
+default_terminal_mode = "host"
+enabled_by_default = false
+environment = [
+    "TERM",
+    "COLORTERM",
+    "FORCE_COLOR",
+    "NO_COLOR",
+]
+extra_volumes = []
+mount_ssh = false
+volume_ignores = []
+
+[session]
+agent_status_hooks = true
+click_action = "live_send"
+default_attach_mode = "tmux"
+default_tool = "opencode"
+live_send_exit_chord = "C-q"
+new_session_attach_mode = "tmux"
+restart_wake_message = "wake up: pick up what you were doing"
+row_tag = "none"
+session_id_poller_max_threads = 50
+snooze_duration_minutes = 30
+strict_hotkeys = false
+yolo_mode_default = false
 
 [sound]
 enabled = true
@@ -65,41 +80,35 @@ mode = "random"
 [status_hooks]
 enabled = false
 
-[app_state]
-has_seen_welcome = true
-last_seen_version = "1.9.2"
-has_seen_custom_instruction_warning = false
-has_acknowledged_agent_hooks = false
+[theme]
+color_mode = "truecolor"
+idle_decay_minutes = 0
+name = ""
+
+[tmux]
+clipboard = "auto"
+mouse = "auto"
+status_bar = "auto"
+
+[updates]
+check_interval_hours = 24
+notify_in_cli = true
+update_check_mode = "notify"
+web_poll_interval_minutes = 60
 
 [web]
 notifications_enabled = true
-notify_on_waiting = true
-notify_on_idle = false
 notify_on_error = true
+notify_on_idle = false
+notify_on_waiting = true
 notify_on_wake_fire = true
 
-[cockpit]
-enabled = false
-default_for_claude = true
-default_agent = "aoe-agent"
-max_concurrent_workers = 5
-replay_events = 0
-replay_bytes = 5242880
-node_path = ""
-show_tool_durations = true
-queue_drain_mode = "combined"
-max_concurrent_resumes = 4
-force_end_turn_threshold_secs = 30
-silent_orphan_grace_secs = 120
-silent_orphan_fast_grace_secs = 20
-
-[logging]
-default_level = "info"
-output = "file"
-file_path = "debug.log"
-rotation = "size"
-max_size_mib = 50
-keep_count = 5
-show_spans = false
-
-[logging.targets]
+[worktree]
+auto_cleanup = true
+bare_repo_path_template = "./{branch}"
+delete_branch_on_cleanup = true
+enabled = true
+init_submodules = true
+path_template = "../{repo-name}-worktrees/{branch}"
+show_branch_in_tui = true
+workspace_path_template = "../{branch}-workspace-{session-id}"
