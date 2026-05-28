@@ -36,4 +36,4 @@ if [[ -z "$RESOLVED_VERSION" || "$RESOLVED_VERSION" == "null" ]]; then
   exit 1
 fi
 
-exec mise exec -q "github:anomalyco/opencode@$RESOLVED_VERSION" -- opencode "$@"
+exec mise exec -yq "github:anomalyco/opencode@$RESOLVED_VERSION" -- opencode "$@"
