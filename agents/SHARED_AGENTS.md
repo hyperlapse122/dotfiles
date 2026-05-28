@@ -21,24 +21,58 @@
 
 ## Branch Naming
 
-**MUST NOT** keep, commit on, or push any auto-generated branch name. Rename in place with `git branch -m` **before the first commit** — renaming after commits/pushes leaks the name to history and remote.
+### Hard prefix gate (MUST run before the first commit)
 
-**Forbidden patterns** (rename, never re-create):
+Every branch name **MUST** start with one of the Git Flow prefixes in the [naming convention table](#naming-convention-git-flow) below — or the project's documented equivalent. There is no second line of defence: CI does not check this, hooks do not check this, the host does not check this. The agent enforces it by reading this file.
 
-- OpenCode: `opencode/<adjective>-<noun>`
-- Codex: `codex/<adjective>-<noun>`
-- GitLab issue button / `glab issue develop`: `<N>-<issue-slug>` (e.g. `13-feat-requester-rebuild-...`)
-- GitHub *Development → Create a branch* / `gh issue develop`: `<N>-<slug>`
-- Any other tool-generated placeholder
+Before the **very first commit** on any newly-created or newly-switched-to branch, **MUST** run:
 
 ```bash
-git branch --show-current                                  # check
-git branch -m opencode/playful-engine feature/add-auth     # ✅ rename in place
-git branch -m codex/dapper-otter      bugfix/login-500     # ✅ rename in place
+git branch --show-current
+```
+
+and **MUST** confirm the output starts with one of: `feature/`, `bugfix/`, `hotfix/`, `refactor/`, `docs/`, `chore/`, `release/` (or the project-defined equivalent set, where the project's `AGENTS.md` defines one).
+
+Treat **every** freshly-created branch as failing the gate until that confirmation has been made explicitly. The gate runs once per branch — re-running it on every commit is unnecessary, skipping it on the first commit is forbidden.
+
+If the gate fails: **MUST** rename in place *before* the first commit lands:
+
+```bash
+git branch -m <current-name> <prefix>/<3-6-word-slug>
+```
+
+Renaming **after** commits land (and especially after the branch is pushed) leaks the bad name into commit history, the remote, and any open PR/MR. It is **forbidden** as a workaround for skipping the pre-first-commit gate.
+
+### Forbidden branch-name shapes (all caught by the same gate)
+
+The list below is **illustrative**, not exhaustive. The single rule is "**MUST start with a Git Flow prefix**" — anything that fails that rule is forbidden, regardless of how it was created.
+
+| Shape | Example | Why it fails |
+|---|---|---|
+| OpenCode auto-generated | `opencode/playful-engine` | No Git Flow prefix |
+| Codex auto-generated | `codex/dapper-otter` | No Git Flow prefix |
+| GitLab issue button / `glab issue develop` | `13-feat-requester-rebuild` | Numeric prefix, not Git Flow |
+| GitHub *Development → Create a branch* / `gh issue develop` | `42-add-auth` | Numeric prefix, not Git Flow |
+| **Bare human-authored slug** | `add-auth`, `fix-login`, `adding-figma-mcp`, `cleanup-deps` | **No Git Flow prefix — same severity as auto-generated** |
+| IDE / tool placeholder | `branch1`, `wip`, `temp`, `test` | No Git Flow prefix |
+| Any other tool-generated placeholder | (varies) | No Git Flow prefix |
+
+A bare human-authored slug is **just as forbidden** as an auto-generated name. Do not assume "I picked it manually, so it's fine" — the gate rejects shape, not provenance.
+
+### Rename recipes
+
+```bash
+git branch --show-current                                  # always run this first
+git branch -m opencode/playful-engine feature/add-auth     # ✅ rename in place (auto-generated → prefix)
+git branch -m codex/dapper-otter      bugfix/login-500     # ✅ rename in place (auto-generated → prefix)
+git branch -m adding-figma-mcp        feature/figma-mcp    # ✅ rename in place (bare slug → prefix)
+git branch -m 13-feat-requester       feature/requester-rebuild  # ✅ rename in place (numeric → prefix)
 git checkout -b feature/add-auth                           # ❌ leaves the old branch orphaned
 ```
 
-**Naming convention** (Git Flow, unless the project defines its own):
+### Naming convention (Git Flow)
+
+Unless the project defines its own equivalent set:
 
 | Prefix | Use for | Matching commit type |
 |---|---|---|
@@ -47,10 +81,10 @@ git checkout -b feature/add-auth                           # ❌ leaves the old 
 | `hotfix/` | Urgent production fixes | `fix` |
 | `refactor/` | Code restructuring | `refactor` |
 | `docs/` | Documentation | `docs` |
-| `chore/` | Maintenance / config | `chore` |
+| `chore/` | Maintenance / config / deps / tooling | `chore` |
 | `release/` | Release preparation | n/a |
 
-Slug **MUST** be a 3–6 word human-authored summary — not the full issue title, not the issue number.
+Slug **MUST** be a 3–6 word human-authored summary — not the full issue title, not the issue number, not a single word, not a placeholder. Words separated by `-`.
 
 **One task = one branch.** Name needs changing → rename it. **MUST NOT** create a sibling branch for the same work.
 
