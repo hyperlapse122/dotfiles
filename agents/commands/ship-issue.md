@@ -93,6 +93,82 @@ glab mr view <N> -R <group>/<project> --comments
 glab mr diff <N> -R <group>/<project>
 ```
 
+### 2a-bis. Always check the parent issue/work item
+
+GitLab work items (tasks especially) and GitHub sub-issues are scoped fragments of a broader story. The parent carries the real acceptance criteria, the surrounding flow, sibling tasks, and any constraints the child inherits. Implementing a child without reading the parent routinely produces fixes that satisfy the child checkbox and contradict the parent's intent.
+
+**MUST** resolve and read the parent of every issue/work-item URL passed to this command (when one exists). **MUST** include the parent's title, body, and open comments in the triage context. **MUST** also enumerate sibling work items under the same parent — a sibling already in progress or merged can change the right approach for the child. For PR/MR URLs, resolve the linked issue first (via closing keyword in the description), then apply the same parent lookup to that issue.
+
+**GitLab — parent + siblings via the work-items GraphQL surface.** The REST `links` endpoint only shows "related" links, not the hierarchical parent/child relation. Use GraphQL:
+
+```bash
+PROJECT_PATH='<group>/<project>'
+
+# Parent of the current work item (issue IID works as the work-item IID).
+glab api graphql -f query='
+  query($projectPath: ID!, $iid: String!) {
+    project(fullPath: $projectPath) {
+      workItem(iid: $iid) {
+        id
+        title
+        workItemType { name }
+        widgets {
+          ... on WorkItemWidgetHierarchy {
+            parent { id iid title workItemType { name } webUrl }
+          }
+        }
+      }
+    }
+  }' -f projectPath="$PROJECT_PATH" -f iid="<N>"
+
+# If a parent exists, fetch its full context the same way every other issue is read.
+glab issue view <PARENT_IID> -R "$PROJECT_PATH" --comments
+glab issue view <PARENT_IID> -R "$PROJECT_PATH" -F json
+
+# Siblings: children of the parent (excluding the current work item).
+glab api graphql -f query='
+  query($projectPath: ID!, $iid: String!) {
+    project(fullPath: $projectPath) {
+      workItem(iid: $iid) {
+        widgets {
+          ... on WorkItemWidgetHierarchy {
+            children { nodes { iid title state workItemType { name } webUrl } }
+          }
+        }
+      }
+    }
+  }' -f projectPath="$PROJECT_PATH" -f iid="<PARENT_IID>"
+```
+
+If GraphQL returns `parent: null`, the issue/work item has no parent — proceed without one. Do not invent a parent from "related" links or label heuristics.
+
+**GitHub — sub-issues / parent issue.** GitHub's sub-issues feature exposes the parent via the REST API:
+
+```bash
+# Parent of the current issue (if it is a sub-issue).
+gh api "repos/<owner>/<repo>/issues/<N>" --jq '.sub_issues_summary, .parent'
+gh api "repos/<owner>/<repo>/issues/<N>/parent" 2>/dev/null \
+  | jq '{number, title, state, html_url}'
+
+# If a parent exists, fetch its full context the same way every other issue is read.
+gh issue view <PARENT_NUM> --repo <owner>/<repo> --comments
+gh issue view <PARENT_NUM> --repo <owner>/<repo> --json title,body,labels,state
+
+# Siblings: other sub-issues under the same parent.
+gh api "repos/<owner>/<repo>/issues/<PARENT_NUM>/sub_issues" \
+  | jq '.[] | {number, title, state, html_url}'
+```
+
+If the `parent` endpoint returns `404`, the issue has no parent — proceed without one.
+
+**Recurse one level only.** If the parent itself has a parent (epic-of-epic), note it in the triage block but do not pull its full body unless the user asks. One hop is the default; deeper is a judgment call surfaced to the user.
+
+**Stop conditions specific to parent context:**
+
+- Parent describes a different scope than the child claims → STOP and ask the user which scope wins before implementing.
+- Parent has open sibling work items that overlap the planned fix → STOP and ask whether to coordinate or take over.
+- Parent has been closed/cancelled while the child is still open → STOP and ask whether the child is still relevant.
+
 ### 2b. Gather codebase context
 
 Now triage from scratch. In parallel, fan out **before** writing any fix:
@@ -110,9 +186,11 @@ Before touching code, produce a short structured triage block (post it as a comm
 ```
 ## Triage
 - **Kind**: bug | feat | docs | chore | …
+- **Parent**: <#N title or "none"> — one-line summary of the parent's scope, or "none" if the issue has no parent
+- **Siblings**: <#N1, #N2> — open/in-progress siblings under the same parent that touch overlapping code, or "none"
 - **Root cause hypothesis**: …
 - **Affected files**: path/to/a.ts, path/to/b.ts
-- **Scope**: what is and is NOT in scope
+- **Scope**: what is and is NOT in scope (cross-checked against the parent's scope)
 - **Acceptance criteria**: bullet list of observable conditions for "fixed"
 - **Verification plan**: how the fix will be proven (which tests / which manual flow)
 - **Risk / rollback**: side effects, feature flags, migrations
@@ -385,6 +463,7 @@ End the run and report to the user when **any** of these is true:
 - **MUST** create exactly one PR/MR for exactly one issue/work-item URL, regardless of size.
 - **MUST NOT** split one issue across multiple PRs/MRs, and **MUST NOT** combine multiple issues into one PR/MR unless the user explicitly says they share one scope.
 - **MUST** use `glab issue view` to check GitLab issue/work-item body/comments; **MUST NOT** use direct issue/work-item API reads.
+- **MUST** resolve and read the parent issue/work item (when one exists) before implementing, and enumerate open siblings under the same parent. One hop up is the default; deeper recursion is the user's call.
 - **MUST NOT** open as draft unless the user asked.
 - **MUST NOT** commit secrets (`.env`, private keys, tokens) even transiently.
 - **MUST NOT** run destructive shortcuts (`--no-verify`, `--force` to shared branches, history rewrite on pushed commits, `[skip ci]`) without explicit user request.
