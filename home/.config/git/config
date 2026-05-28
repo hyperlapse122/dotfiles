@@ -36,10 +36,6 @@
 	name = "Joosung Park"
 	signingkey = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"
 
-# Configure the default remote tracking branch for all branches to be origin.
-[remote "origin"]
-	fetch = +refs/heads/*:refs/remotes/origin/*
-
 # OS-specific overrides + a host-local override that's gitignored.
 # Missing include paths are silently skipped by git, so listing all three is safe.
 [include]
