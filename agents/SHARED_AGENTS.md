@@ -106,7 +106,7 @@ Slug **MUST** be a 3–6 word human-authored summary — not the full issue titl
 | `chore` | Maintenance |
 | `revert` | Reverting a previous commit |
 
-- **Subject**: lowercase, imperative, no period, ≤50 chars (≤72 max).
+- **Subject**: lowercase, imperative, no period, ≤50 chars (≤72 max). **The ENTIRE subject MUST be lowercase** — no exceptions for acronyms (`mcp`, `api`, `jwt`, `ssr`, `url`, `html`, `css`, `aws`), brand names (`figma`, `github`, `gitlab`, `playwright`, `tailwind`, `react`, `vite`), proper nouns, or initialisms. The default commitlint rule `subject-case: [2, 'always', 'lower-case']` rejects any uppercase character in the subject — preserving case for "real" names will fail the commit-msg hook and CI. If a token genuinely must appear in its canonical case for clarity, put it in the body (which has no case rule), not the subject.
 - **Scope** (optional): module/area — `feat(auth): add JWT refresh`.
 - **Body** (optional): explain *why*, not *what*. Wrap at 72 chars.
 - **Breaking change**: `!` after type/scope **and** `BREAKING CHANGE:` footer.
