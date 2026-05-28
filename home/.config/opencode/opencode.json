@@ -6,40 +6,6 @@
 		"@ex-machina/opencode-anthropic-auth@1.8.1"
 	],
 	"lsp": {
-		"biome": {
-			"command": [
-				"mise",
-				"exec",
-				"-q",
-				"npm:@biomejs/biome@latest",
-				"--",
-				"biome",
-				"lsp-proxy"
-			],
-			"extensions": [
-				".ts",
-				".tsx",
-				".js",
-				".jsx",
-				".cts",
-				".ctsx",
-				".cjs",
-				".cjsx",
-				".mts",
-				".mtsx",
-				".mjs",
-				".mjsx",
-				".json",
-				".css",
-				".scss",
-				".html",
-				".vue",
-				".svelte",
-				".json",
-				".yaml",
-				".yml"
-			]
-		},
 		"buf": {
 			"command": [
 				"mise",
