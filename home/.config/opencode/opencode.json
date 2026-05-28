@@ -67,11 +67,6 @@
 		}
 	},
 	"mcp": {
-		"figma": {
-			"type": "remote",
-			"enabled": true,
-			"url": "https://mcp.figma.com/mcp"
-		},
 		"context7": {
 			"type": "remote",
 			"enabled": true,
