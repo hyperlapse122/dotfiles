@@ -51,6 +51,7 @@ The list below is **illustrative**, not exhaustive. The single rule is "**MUST s
 |---|---|---|
 | OpenCode auto-generated | `opencode/playful-engine` | No Git Flow prefix |
 | Codex auto-generated | `codex/dapper-otter` | No Git Flow prefix |
+| agent-of-empires (aoe) auto-generated | `Koreans`, `Japaneses`, `Aztecs` | No Git Flow prefix (civilization codename, not a slug) |
 | GitLab issue button / `glab issue develop` | `13-feat-requester-rebuild` | Numeric prefix, not Git Flow |
 | GitHub *Development → Create a branch* / `gh issue develop` | `42-add-auth` | Numeric prefix, not Git Flow |
 | **Bare human-authored slug** | `add-auth`, `fix-login`, `adding-figma-mcp`, `cleanup-deps` | **No Git Flow prefix — same severity as auto-generated** |
