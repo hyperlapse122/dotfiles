@@ -30,28 +30,32 @@
 #   this by calling KWin's DBus interface directly instead of synthesizing
 #   Super+W via /dev/uinput.
 
-# Haptic thumb button — tap-vs-hold Overview control (idempotent).
-#   Tap  (release before threshold): ensure Overview OPEN. Opens if
-#        closed; no-op if already open. A tap never closes Overview.
-#   Hold (release after threshold):  ensure Overview CLOSED on release.
-#        Opens on press, then closes on release — a peek if Overview was
-#        closed, or a plain close if it was already open.
+# Haptic thumb button — tap-vs-hold Overview control.
+#   Tap  (release before threshold): TOGGLE Overview. Opens it when
+#        closed, closes it when open — so a first tap opens and a second
+#        tap closes. This is a plain toggle on press, NOT idempotent.
+#   Hold (release after threshold):  peek. Opens on press when closed,
+#        then ensure-CLOSEs on release, so Overview always ends closed
+#        after a hold (the common peek-from-closed case is unchanged).
 #   Threshold is the `Later: [<seconds>, ...]` delay on the press rule.
 #   Tune by editing that single number; comments below assume the current value.
 #
-# Idempotent, not toggle. KWin's only Overview activation primitive is the
-# "Overview" global shortcut, which TOGGLES (Plasma 6.6.5 exposes no
-# explicit show/hide DBus call — the overview effect registers no DBus
-# object, unlike WindowView1's activate()). To get deterministic
-# open/close we gate the toggle on current state, read from
-# `Effects.activeEffects` (contains "overview" iff Overview is on screen):
-#   ensure-OPEN : activeEffects has overview  || invokeShortcut Overview
+# KWin's only Overview activation primitive is the "Overview" global
+# shortcut, which TOGGLES (Plasma 6.6.5 exposes no explicit show/hide
+# DBus call — the overview effect registers no DBus object, unlike
+# WindowView1's activate()). The tap path invokes that toggle directly
+# (invokeShortcut Overview) — that IS the requested second-press-closes
+# behavior, so the press is deliberately not state-gated. The hold-release
+# path instead gates the toggle on current state, read from
+# `Effects.activeEffects` (contains "overview" iff Overview is on screen),
+# so a hold deterministically ends closed regardless of how it started:
 #   ensure-CLOSE: activeEffects has overview  && invokeShortcut Overview
-# This makes a stray external close/open (Esc, click-away) safe: the rule
-# re-checks live state instead of blindly toggling.
+# (Edge case: pressing-and-holding while Overview is ALREADY open closes
+# it on press — the toggle — then the release ensure-CLOSE is a no-op; it
+# still ends closed, just without the visible peek.)
 #
 # Implementation:
-#   - Press rule clears any stale marker, ensure-OPENs Overview, and
+#   - Press rule clears any stale marker, TOGGLEs Overview, and
 #     schedules a deferred marker-set after the threshold, guarded by
 #     `KeyIsDown: Haptic`.
 #   - The `Later` callback fires unconditionally at the threshold, but the
@@ -120,7 +124,7 @@
 ---
 - Key: [Haptic, pressed]
 - Execute: [rm, -f, /tmp/solaar-haptic-held]
-- Execute: [bash, -c, "qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview || qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview"]
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
 - Later: [0.3, KeyIsDown: Haptic, Execute: [mxm4-haptic, "SUBTLE COLLISION"], Execute: [touch, /tmp/solaar-haptic-held]]
 ...
 ---
@@ -128,13 +132,13 @@
 - Execute: [bash, -c, "[ -f /tmp/solaar-haptic-held ] && rm -f /tmp/solaar-haptic-held && qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
 ...
 
-# MX Master 3S thumb button (Mouse Gesture Button) — same idempotent
-# tap-vs-hold Overview control as the MX Master 4 Haptic rule above,
-# MINUS the haptic pulse (the 3S has no HAPTIC feature / motor). The 3S
-# thumb button is labeled "Mouse Gesture Button" (control 195), diverted
-# by scripts/linux/config-solaar.sh. Same ensure-OPEN / ensure-CLOSE
-# state-gating on Effects.activeEffects as the MX4 rule (see that block
-# for the full rationale).
+# MX Master 3S thumb button (Mouse Gesture Button) — same tap-vs-hold
+# Overview control as the MX Master 4 Haptic rule above, MINUS the haptic
+# pulse (the 3S has no HAPTIC feature / motor). The 3S thumb button is
+# labeled "Mouse Gesture Button" (control 195), diverted by
+# scripts/linux/config-solaar.sh. Tap TOGGLEs Overview (plain toggle on
+# press); hold ensure-CLOSEs on release (see that block for the full
+# rationale).
 #
 # `Device: MX Master 3S` scopes these rules to the 3S. Required because
 # the MX Master 4 ALSO exposes a "Mouse Gesture Button" label — without
@@ -148,7 +152,7 @@
 - Device: MX Master 3S
 - Key: [Mouse Gesture Button, pressed]
 - Execute: [rm, -f, /tmp/solaar-mgesture-held]
-- Execute: [bash, -c, "qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview || qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview"]
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
 - Later: [0.3, KeyIsDown: Mouse Gesture Button, Execute: [touch, /tmp/solaar-mgesture-held]]
 ...
 ---
