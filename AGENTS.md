@@ -24,6 +24,8 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── install.windows.yaml             # Windows-only dotbot tasks
 ├── install.sh                       # Bootstrap for macOS + Linux
 ├── install.ps1                      # Bootstrap for Windows
+├── crates/                          # Rust crates built into ~/.local/bin during bootstrap.
+│                                    # mxm4-haptic: MX Master 4 HID++ haptic helper (Linux-only).
 ├── home/                            # Files that symlink into $HOME (home/foo -> ~/foo)
 │   ├── .agents/                     # Runtime agent skill tree linked to ~/.agents
 │   ├── .config/opencode/            # OpenCode config files (*.json, *.jsonc).
@@ -41,6 +43,15 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 Every tracked top-level directory MUST have its own `README.md` describing what lives there and how it is consumed. Untracked tool state directories such as `.git/`, `.codex/`, and `.sisyphus/` are not part of the documented repo surface.
 
 ## Hard rules
+
+### Branching — `main` only (overrides global Git Flow gate)
+
+This repository commits directly to `main`. It does **not** use Git Flow branches (`feature/`, `bugfix/`, `hotfix/`, `refactor/`, `docs/`, `chore/`, `release/`) or any other topic-branch workflow. The branch-naming convention and pre-first-commit prefix gate in the global agent rules (`~/.config/opencode/AGENTS.md` / `~/.codex/AGENTS.md`) **do not apply here** — this project-level rule overrides them per the precedence rule (project `AGENTS.md` wins on conflict).
+
+- **Commit straight to `main`.** Do not create, rename to, or switch to a topic branch before committing.
+- **Do not run the prefix gate** (`git branch --show-current` check, `git branch -m <prefix>/<slug>` rename) on this repo. It is a single-maintainer dotfiles repo; the Git Flow ceremony adds no value.
+- **No PRs/MRs required.** Push commits to `main` directly. (If a PR is ever explicitly requested, open it from `main` against `main` of a fork, or as instructed — but the default is direct commit.)
+- Everything else in the global rules still applies: Conventional Commits message format, no committing secrets, no destructive/bypass git operations without explicit confirmation, no git-config edits.
 
 ### dotbot — mise-managed `uvx` only, NEVER install
 
@@ -145,9 +156,41 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 - Updating agent workflow rules in only one `AGENTS.md` when the change also applies to the linked runtime agent docs.
 - Editing migrated files inside `~/nix-config/`. That source tree is being abandoned — edit the copy in this repo's `home/` instead. Re-deriving from `~/nix-config/*.nix` modules is also wrong: those Nix expressions are not the canonical source post-migration.
 
+## Solaar haptic playback (MX Master 4)
+
+The MX Master 4 exposes HID++ feature `0x19B0` (HAPTIC) with 16 built-in waveforms. Solaar surfaces this as the `haptic-play` setting — a write-only action setting, not stateful. From shell:
+
+```bash
+solaar config "MX Master 4" haptic-play "<WAVEFORM>" 2>/dev/null || true
+```
+
+The `2>/dev/null || true` swallows the Solaar 1.1.19 + Python 3.14 `Gio.Application.run` marshalling crash (`TypeError: Unable to marshal str as an array`) — the same upstream bug that breaks `solaar config divert-keys`. The runtime HID++ command is dispatched before the persistence step crashes, so the mouse pulses regardless; only the post-dispatch persistence layer crashes. Track the upstream fix at <https://github.com/pwr-Solaar/Solaar>.
+
+**Spawn cost per pulse is ~3.7 SECONDS** on this host (cold-cache `time` measurement, repeated three times) — the CLI bootstraps the full Solaar Python stack on every call. That makes `solaar config haptic-play` **unsuitable for any latency-sensitive feedback**: if you fire it from inside a Solaar rule via `Execute`, the pulse arrives 3-4 seconds after the trigger, which is well past any normal button hold.
+
+**Inside Solaar rules, use the [`mxm4-haptic`](crates/mxm4-haptic/) binary** — `Execute: [mxm4-haptic, "<WAVEFORM>"]`. A zero-dependency Rust binary ([`crates/mxm4-haptic/`](crates/mxm4-haptic/), built into `~/.local/bin/` during bootstrap) that writes one HID++ Long report directly to the Bolt receiver's `:1.2` hidraw interface with **no ack wait** (~1-2 ms cold). An earlier Python helper did the same job at ~14 ms — interpreter startup was the entire cost, so it was rewritten in Rust. Solaar's own `Set: [null, haptic-play, "<WAVEFORM>"]` is the obvious-looking alternative and was tried first; it's in-process (no spawn) but `PlayHapticWaveForm` doesn't set `no_reply=True` on `FeatureRW`, so Solaar waits for an HID++ ack — and Bolt-wireless ack timing varies 30-300 ms, making some pulses feel "missing" because they arrive after the user has stopped paying attention. The binary bypasses that entirely.
+
+The binary requires `~/.cache/mxm4-haptic.json` populated by [`scripts/linux/config-solaar.sh`](scripts/linux/config-solaar.sh) during dotbot bootstrap (parses `solaar show` for the MX Master 4 device index on the Bolt receiver and the HAPTIC feature index). The binary also caches the resolved `/dev/hidrawN` node there on first run (hidraw numbering isn't stable across reboots, so it re-resolves on open failure). Re-run that script after re-pairing the mouse.
+
+For shell scripts where you don't have a Solaar rule context, either invoke the binary directly (`mxm4-haptic "<WAVEFORM>"`) or fall back to `solaar config haptic-play "<WAVEFORM>" 2>/dev/null || true` — accept the 3.7s spawn latency for the latter. **Do not chain `solaar config` calls in a tight loop** under any path — the HID++ queue backlogs. Concurrent use of the binary with a running Solaar autostart session is safe: writes go to the same hidraw node Solaar holds, and Solaar's reader is unaffected by fire-and-forget writes from another process.
+
+Waveforms (from `logitech_receiver.hidpp20_constants.HapticWaveForms`):
+
+| Theme | Names |
+|---|---|
+| State / collision | `SHARP STATE CHANGE`, `DAMP STATE CHANGE`, `SHARP COLLISION`, `DAMP COLLISION`, `SUBTLE COLLISION`, `WHISPER COLLISION` |
+| Alerts | `HAPPY ALERT`, `ANGRY ALERT`, `COMPLETED`, `MAD` |
+| Rhythmic | `SQUARE`, `WAVE`, `FIREWORK`, `KNOCK`, `JINGLE`, `RINGING` |
+
+Multi-word names **require quoting**. Intensity scales with `haptic-level` (0-100, persists across reconnect; set in the Solaar GUI — the dotfiles bootstrap deliberately does NOT enforce a level since the helper's no-ack-wait path makes mid-range intensities reliably perceived). A current consumer of this API: the Haptic-hold-detection rule in [`home/.config/solaar/rules.yaml`](home/.config/solaar/rules.yaml) pulses a waveform from a `Later` callback when hold-mode is detected, giving tactile confirmation that the threshold was crossed.
+
+For a non-Solaar path (direct HID++ over `/dev/hidraw5` to feature `0x19B0`), the byte sequence is what `mxm4-haptic` implements — see that script for the exact packet layout. The shortcut to write your own variant from scratch is documented in the Logitech HID++ 2.0 spec.
+
 ## References
 
 - dotbot (schema, cross-platform notes): https://github.com/anishathalye/dotbot
 - mise: https://mise.jdx.dev/
 - uv / uvx: https://docs.astral.sh/uv/
 - Fedora package management (`dnf`): https://docs.fedoraproject.org/en-US/quick-docs/dnf/
+- Solaar rules reference: https://pwr-solaar.github.io/Solaar/rules
+- Solaar HID++ feature implementations: <https://github.com/pwr-Solaar/Solaar/tree/master/lib/logitech_receiver>
