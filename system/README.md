@@ -54,7 +54,6 @@ further into a monolithic `NetworkManager.conf`.
 | `system/linux/etc/keyd/` | keyd keyboard remapping defaults |
 | `system/linux/etc/libinput/` | local libinput quirks |
 | `system/linux/etc/locale.conf` | system locale |
-| `system/linux/etc/modprobe.d/` | kernel module options, currently `audio-hda-no-powersave.conf` disabling Intel HD-Audio power saving so HDMI/DP audio power transitions stop retraining the DisplayPort link and blanking the external monitor |
 | `system/linux/etc/plymouth/` | Plymouth boot splash config |
 | `system/linux/etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`) |
 | `system/linux/etc/systemd/system/` | system-scope systemd units, currently `docker-prune.service` + `docker-prune.timer` (weekly `docker system prune --force` and `docker volume prune --force`; enabled by the installer when `docker` is present, with `ConditionPathExists=/usr/bin/docker` as runtime safety net) |

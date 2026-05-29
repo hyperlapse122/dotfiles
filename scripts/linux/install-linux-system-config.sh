@@ -132,6 +132,7 @@ REMOVED_ETC_PATHS=(
   /etc/NetworkManager/conf.d/91-tailscale.conf
   /etc/NetworkManager/conf.d/92-docker.conf
   /etc/NetworkManager/conf.d/93-veth.conf
+  /etc/modprobe.d/audio-hda-no-powersave.conf
 )
 
 removed_listed=0
