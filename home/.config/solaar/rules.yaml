@@ -1,4 +1,3 @@
-%YAML 1.3
 # Solaar reads this file as ~/.config/solaar/rules.yaml.
 # It contains zero or more YAML documents; each document is one Solaar rule.
 #
@@ -7,25 +6,127 @@
 # actions that synthesize input use /dev/uinput; the system Logitech module
 # installs Solaar's udev rules through hardware.logitech.wireless.enable.
 #
-# MX Master 4 notes:
-# - Button/key labels are reported by device firmware and Solaar. Verify exact
-#   names with `solaar show` and the Solaar Key/Button Diversion UI.
-# - Common MX Master-family labels include Back Button, Forward Button,
-#   Smart Shift, and Gesture Button, but the MX Master 4 may expose different
-#   labels depending on firmware and connection type.
+# MX Master 4 notes (verified via `solaar show` on this host):
+# - Reprogrammable buttons reported by the device: Left Button, Right Button,
+#   Middle Button, Back Button, Forward Button, Mouse Gesture Button,
+#   Smart Shift, Haptic, Virtual Gesture Button.
+# - The new haptic thumb button is labeled exactly `Haptic`. Its firmware
+#   default maps to `unknown:0109`, which behaves like Back on Linux.
 # - Useful feature names/tests documented by Solaar include THUMB WHEEL with
 #   thumb_wheel_up/thumb_wheel_down, LOWRES WHEEL with lowres_wheel_up/
 #   lowres_wheel_down, and HIRES WHEEL with hires_wheel_up/hires_wheel_down.
-# - MX Master 4-specific settings in current Solaar include scroll-ratchet,
-#   thumb button click force, haptic force, and haptic-play.
+# - MX Master 4-specific settings include scroll-ratchet, thumb button click
+#   force, haptic force, and haptic-play.
 #
-# Example: map a diverted button press to a key press after verifying the label.
+# Required setup for the Haptic rules below:
+#   Haptic must be diverted. The dotfiles bootstrap runs
+#   scripts/linux/config-solaar.sh, which sets `divert-keys[416] = 1` in
+#   ~/.config/solaar/config.yaml for model B04200000000 and restarts
+#   Solaar. Without divert, the firmware default (Back-equivalent) fires
+#   and these rules never see the press.
+#
+# Wayland caveat (printed by `solaar show`):
+#   "rules cannot access modifier keys in Wayland". The rules below sidestep
+#   this by calling KWin's DBus interface directly instead of synthesizing
+#   Super+W via /dev/uinput.
+
+# Haptic thumb button — tap-vs-hold toggle for KWin Overview.
+#   Tap   (press, release before threshold): open Overview, leave it open.
+#   Hold  (press, release after threshold):  open on press, close on release.
+#   Threshold is the `Later: [<seconds>, ...]` delay on the press rule.
+#   Tune by editing that single number; comments below assume the current value.
+#
+# Implementation:
+#   - The first Execute on press is `loadEffect overview` — defensive
+#     self-heal. invokeShortcut Overview SILENTLY does nothing when the
+#     overview plugin is unloaded (qdbus exits 0, KGlobalAccel dispatches,
+#     KWin has no handler) and unload can happen via System Settings
+#     -> Desktop Effects, KWin reconfigure, or stray Effects.toggleEffect
+#     calls. loadEffect is idempotent at the KWin level (already-loaded
+#     is a no-op). Cost: one extra DBus call per press, ~1 ms.
+#   - Press rule then clears any stale marker, opens Overview, and schedules
+#     a deferred marker-set after the threshold delay, guarded by
+#     `KeyIsDown: Haptic`.
+#   - The `Later` callback fires unconditionally at the threshold, but the
+#     `KeyIsDown` condition short-circuits it when the user has already
+#     released (tap path), so neither the marker NOR the haptic pulse
+#     fires for taps. On hold, both Actions run sequentially: touch the
+#     marker, then pulse a haptic waveform via the `mxm4-haptic` binary
+#     (Rust crate at `crates/mxm4-haptic/`, built into `~/.local/bin/`
+#     during bootstrap). It writes a single HID++ Long report straight
+#     to the Bolt receiver's hidraw node and exits — no ack wait,
+#     ~1-2 ms cold. Three earlier paths were rejected and must not be
+#     reintroduced:
+#       Execute: solaar config haptic-play <wf>     ~3.7 s spawn cost
+#                                                    (pulse arrives after
+#                                                    release on any hold
+#                                                    shorter than ~4 s).
+#       Set: [null, haptic-play, <wf>]              in-process but waits
+#                                                    for HID++ ack;
+#                                                    PlayHapticWaveForm
+#                                                    doesn't set
+#                                                    no_reply=True so
+#                                                    Bolt-wireless ack
+#                                                    variance (30-300 ms)
+#                                                    makes some pulses
+#                                                    feel "missing" at
+#                                                    haptic-level 60-ish.
+#       Direct hidraw writes in `Execute: [bash, -c, ...]` inline
+#                                                    correct mechanism
+#                                                    but unmaintainable
+#                                                    as YAML one-liner.
+#     The helper requires ~/.cache/mxm4-haptic.json populated with the
+#     MX Master 4 device index on the Bolt receiver and the HAPTIC
+#     feature index. scripts/linux/config-solaar.sh writes this during
+#     dotbot bootstrap by parsing `solaar show`. See the root AGENTS.md
+#     "Solaar haptic playback (MX Master 4)" section for the full
+#     waveform catalog if you want to swap the current waveform.
+#   - Release rule checks for the marker via `bash -c [ -f … ]` (Solaar
+#     has no native file-exists test). If present (= hold), it deletes the
+#     marker and invokes Overview again to close. If absent (= tap), it
+#     no-ops and Overview stays open.
+#
+# Why the marker file: Solaar rules have no rule-local variable system.
+# `Set:` writes real device settings, not scratch state. `Later` schedules
+# evaluation but cannot be cancelled and cannot carry a flag. Filesystem
+# state is the smallest carrier across the press->Later->release event
+# chain. Marker path is in /tmp (cleared on reboot) and per-user-Solaar
+# in practice (one Haptic-diverted MX Master 4 per user session).
+#
+# Why `bash -c` despite the "no shell wrappers" guidance in AGENTS.md:
+# that guidance is about portability papering (qdbus binary naming).
+# Here `bash` is used for conditional file-test + chained-command logic
+# that has no native Solaar primitive. Inline list form (not string form)
+# keeps shell=False semantics for argv delivery; bash only interprets its
+# own -c argument.
+#
+# Verified host: Plasma 6.6.5, qdbus-qt6 at /usr/bin/qdbus-qt6, kwin
+# shortcut "Overview" present, Solaar 1.1.19 (Later float support, see
+# https://github.com/pwr-Solaar/Solaar/issues/2915 for the maintainer's
+# note that rules cannot cancel a Later or carry rule-local state).
+# Do NOT use `org.kde.kwin.Effects.toggleEffect overview` here: that DBus
+# method manages the effect plugin's load state, not runtime activation,
+# and repeated calls will UNLOAD the plugin (silent invokeShortcut failures).
+---
+- Key: [Haptic, pressed]
+- Execute: [qdbus-qt6, org.kde.KWin, /Effects, org.kde.kwin.Effects.loadEffect, overview]
+- Execute: [rm, -f, /tmp/solaar-haptic-held]
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
+- Later: [0.3, KeyIsDown: Haptic, Execute: [mxm4-haptic, "SUBTLE COLLISION"], Execute: [touch, /tmp/solaar-haptic-held]]
+...
+---
+- Key: [Haptic, released]
+- Execute: [bash, -c, "[ -f /tmp/solaar-haptic-held ] && rm -f /tmp/solaar-haptic-held && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
+...
+
+# Example: map a diverted Back Button press to Alt+Left.
 # ---
 # - Key: [Back Button, pressed]
 # - KeyPress: [Alt_L, Left, click]
 # ...
 #
 # Example: use thumb-wheel notifications for horizontal scrolling.
+# Requires THUMB WHEEL diversion enabled in Solaar.
 # ---
 # - Feature: THUMB WHEEL
 # - Rule: [Test: thumb_wheel_up, MouseScroll: [-1, 0]]
