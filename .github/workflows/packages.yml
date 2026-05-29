@@ -1,0 +1,61 @@
+name: packages
+
+# Build, typecheck, and test the TypeScript/JS workspace under packages/
+# (the @h82/dotfiles Yarn Berry monorepo). The toolchain (Node + Yarn) is
+# managed by mise from packages/mise.toml; mise's tool installs and Yarn's
+# global package cache are both cached between runs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - ".github/workflows/packages.yml"
+  pull_request:
+    paths:
+      - "packages/**"
+      - ".github/workflows/packages.yml"
+
+permissions:
+  contents: read
+
+# One in-flight run per ref; newer pushes cancel older runs.
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages
+
+jobs:
+  test:
+    name: build · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Installs Node + Yarn from packages/mise.toml and caches the mise tool
+      # installs (keyed on the mise config). working_directory points mise at
+      # the workspace so it reads packages/mise.toml.
+      - name: Set up mise toolchain (Node + Yarn)
+        uses: jdx/mise-action@v2
+        with:
+          working_directory: packages
+
+      # Yarn 4 uses a global cache (enableGlobalCache, the Yarn 4 default) at
+      # ~/.yarn/berry/cache. Cache it across runs, keyed on the lockfile.
+      - name: Cache Yarn global cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-berry-${{ runner.os }}-${{ hashFiles('packages/yarn.lock') }}
+          restore-keys: |
+            yarn-berry-${{ runner.os }}-
+
+      - name: Install dependencies (immutable)
+        run: yarn install --immutable
+
+      - name: Build, typecheck, and test
+        run: yarn turbo run build typecheck test

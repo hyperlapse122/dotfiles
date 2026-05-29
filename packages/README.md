@@ -14,11 +14,13 @@ is this directory. It holds the repo's TypeScript/JavaScript library packages.
 
 ## What this is NOT
 
-- **Not bootstrap-installed.** Unlike [`../crates/`](../crates/) (whose Rust
-  binaries are `cargo install`'d into `~/.local/bin` during dotbot bootstrap), a
-  library here ships nothing to install. `install.*.yaml` does not touch
-  `packages/`, and dotbot does not link anything from it. Consumers install and
-  build a package themselves.
+- **Built at bootstrap, never installed.** Unlike [`../crates/`](../crates/)
+  (whose Rust binaries are `cargo install`'d into `~/.local/bin`), a library
+  here ships nothing to install and dotbot links nothing from `packages/`. The
+  Linux bootstrap ([`../install.linux.yaml`](../install.linux.yaml)) does run
+  `yarn build` (turbo) in place via `mise -C packages exec` (soft-skipping when
+  mise is absent), so the workspace is built after a checkout; macOS/Windows
+  bootstrap do not. Nothing is symlinked or copied out.
 - **Not published.** Members are `private: true`; the `@h82/` scope is a naming
   namespace, not a registry target.
 
