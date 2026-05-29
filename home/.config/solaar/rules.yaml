@@ -30,22 +30,29 @@
 #   this by calling KWin's DBus interface directly instead of synthesizing
 #   Super+W via /dev/uinput.
 
-# Haptic thumb button — tap-vs-hold toggle for KWin Overview.
-#   Tap   (press, release before threshold): open Overview, leave it open.
-#   Hold  (press, release after threshold):  open on press, close on release.
+# Haptic thumb button — tap-vs-hold Overview control (idempotent).
+#   Tap  (release before threshold): ensure Overview OPEN. Opens if
+#        closed; no-op if already open. A tap never closes Overview.
+#   Hold (release after threshold):  ensure Overview CLOSED on release.
+#        Opens on press, then closes on release — a peek if Overview was
+#        closed, or a plain close if it was already open.
 #   Threshold is the `Later: [<seconds>, ...]` delay on the press rule.
 #   Tune by editing that single number; comments below assume the current value.
 #
+# Idempotent, not toggle. KWin's only Overview activation primitive is the
+# "Overview" global shortcut, which TOGGLES (Plasma 6.6.5 exposes no
+# explicit show/hide DBus call — the overview effect registers no DBus
+# object, unlike WindowView1's activate()). To get deterministic
+# open/close we gate the toggle on current state, read from
+# `Effects.activeEffects` (contains "overview" iff Overview is on screen):
+#   ensure-OPEN : activeEffects has overview  || invokeShortcut Overview
+#   ensure-CLOSE: activeEffects has overview  && invokeShortcut Overview
+# This makes a stray external close/open (Esc, click-away) safe: the rule
+# re-checks live state instead of blindly toggling.
+#
 # Implementation:
-#   - The first Execute on press is `loadEffect overview` — defensive
-#     self-heal. invokeShortcut Overview SILENTLY does nothing when the
-#     overview plugin is unloaded (qdbus exits 0, KGlobalAccel dispatches,
-#     KWin has no handler) and unload can happen via System Settings
-#     -> Desktop Effects, KWin reconfigure, or stray Effects.toggleEffect
-#     calls. loadEffect is idempotent at the KWin level (already-loaded
-#     is a no-op). Cost: one extra DBus call per press, ~1 ms.
-#   - Press rule then clears any stale marker, opens Overview, and schedules
-#     a deferred marker-set after the threshold delay, guarded by
+#   - Press rule clears any stale marker, ensure-OPENs Overview, and
+#     schedules a deferred marker-set after the threshold, guarded by
 #     `KeyIsDown: Haptic`.
 #   - The `Later` callback fires unconditionally at the threshold, but the
 #     `KeyIsDown` condition short-circuits it when the user has already
@@ -55,8 +62,8 @@
 #     (Rust crate at `crates/mxm4-haptic/`, built into `~/.local/bin/`
 #     during bootstrap). It writes a single HID++ Long report straight
 #     to the Bolt receiver's hidraw node and exits — no ack wait,
-#     ~1-2 ms cold. Three earlier paths were rejected and must not be
-#     reintroduced:
+#     ~1-2 ms cold. Three earlier haptic paths were rejected and must not
+#     be reintroduced:
 #       Execute: solaar config haptic-play <wf>     ~3.7 s spawn cost
 #                                                    (pulse arrives after
 #                                                    release on any hold
@@ -82,9 +89,8 @@
 #     "Solaar haptic playback (MX Master 4)" section for the full
 #     waveform catalog if you want to swap the current waveform.
 #   - Release rule checks for the marker via `bash -c [ -f … ]` (Solaar
-#     has no native file-exists test). If present (= hold), it deletes the
-#     marker and invokes Overview again to close. If absent (= tap), it
-#     no-ops and Overview stays open.
+#     has no native file-exists test). Present (= hold) -> consume marker
+#     and ensure-CLOSE Overview. Absent (= tap) -> no-op, Overview stays.
 #
 # Why the marker file: Solaar rules have no rule-local variable system.
 # `Set:` writes real device settings, not scratch state. `Later` schedules
@@ -95,7 +101,7 @@
 #
 # Why `bash -c` despite the "no shell wrappers" guidance in AGENTS.md:
 # that guidance is about portability papering (qdbus binary naming).
-# Here `bash` is used for conditional file-test + chained-command logic
+# Here `bash` is used for conditional state-test + chained-command logic
 # that has no native Solaar primitive. Inline list form (not string form)
 # keeps shell=False semantics for argv delivery; bash only interprets its
 # own -c argument.
@@ -104,26 +110,31 @@
 # shortcut "Overview" present, Solaar 1.1.19 (Later float support, see
 # https://github.com/pwr-Solaar/Solaar/issues/2915 for the maintainer's
 # note that rules cannot cancel a Later or carry rule-local state).
-# Do NOT use `org.kde.kwin.Effects.toggleEffect overview` here: that DBus
-# method manages the effect plugin's load state, not runtime activation,
-# and repeated calls will UNLOAD the plugin (silent invokeShortcut failures).
+# The Overview effect is enabled by default (System Settings -> Desktop
+# Effects). If it is ever disabled there, invokeShortcut Overview will
+# silently no-op and activeEffects will never report overview — re-enable
+# the effect rather than re-adding a per-press loadEffect call. Do NOT
+# use `org.kde.kwin.Effects.toggleEffect overview`: that DBus method
+# manages the effect plugin's load state, not runtime activation, and
+# repeated calls UNLOAD the plugin (silent invokeShortcut failures).
 ---
 - Key: [Haptic, pressed]
-- Execute: [qdbus-qt6, org.kde.KWin, /Effects, org.kde.kwin.Effects.loadEffect, overview]
 - Execute: [rm, -f, /tmp/solaar-haptic-held]
-- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
+- Execute: [bash, -c, "qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview || qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview"]
 - Later: [0.3, KeyIsDown: Haptic, Execute: [mxm4-haptic, "SUBTLE COLLISION"], Execute: [touch, /tmp/solaar-haptic-held]]
 ...
 ---
 - Key: [Haptic, released]
-- Execute: [bash, -c, "[ -f /tmp/solaar-haptic-held ] && rm -f /tmp/solaar-haptic-held && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
+- Execute: [bash, -c, "[ -f /tmp/solaar-haptic-held ] && rm -f /tmp/solaar-haptic-held && qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
 ...
 
-# MX Master 3S thumb button (Mouse Gesture Button) — same tap-vs-hold
-# Overview toggle as the MX Master 4 Haptic rule above, MINUS the haptic
-# pulse (the 3S has no HAPTIC feature / motor). The 3S thumb button is
-# labeled "Mouse Gesture Button" (control 195), diverted to Diverted by
-# scripts/linux/config-solaar.sh.
+# MX Master 3S thumb button (Mouse Gesture Button) — same idempotent
+# tap-vs-hold Overview control as the MX Master 4 Haptic rule above,
+# MINUS the haptic pulse (the 3S has no HAPTIC feature / motor). The 3S
+# thumb button is labeled "Mouse Gesture Button" (control 195), diverted
+# by scripts/linux/config-solaar.sh. Same ensure-OPEN / ensure-CLOSE
+# state-gating on Effects.activeEffects as the MX4 rule (see that block
+# for the full rationale).
 #
 # `Device: MX Master 3S` scopes these rules to the 3S. Required because
 # the MX Master 4 ALSO exposes a "Mouse Gesture Button" label — without
@@ -136,15 +147,14 @@
 ---
 - Device: MX Master 3S
 - Key: [Mouse Gesture Button, pressed]
-- Execute: [qdbus-qt6, org.kde.KWin, /Effects, org.kde.kwin.Effects.loadEffect, overview]
 - Execute: [rm, -f, /tmp/solaar-mgesture-held]
-- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
+- Execute: [bash, -c, "qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview || qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview"]
 - Later: [0.3, KeyIsDown: Mouse Gesture Button, Execute: [touch, /tmp/solaar-mgesture-held]]
 ...
 ---
 - Device: MX Master 3S
 - Key: [Mouse Gesture Button, released]
-- Execute: [bash, -c, "[ -f /tmp/solaar-mgesture-held ] && rm -f /tmp/solaar-mgesture-held && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
+- Execute: [bash, -c, "[ -f /tmp/solaar-mgesture-held ] && rm -f /tmp/solaar-mgesture-held && qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
 ...
 
 # Example: map a diverted Back Button press to Alt+Left.

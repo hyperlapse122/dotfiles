@@ -30,6 +30,21 @@ Probe with `qdbus-qt6 <service> <path>` before using; the surface changes betwee
 
 `org.kde.kwin.Effects.toggleEffect` looks like an activation API but is **not** — it toggles the effect plugin's *load state* (equivalent to checking/unchecking the effect in System Settings → Window Management → Desktop Effects), not its runtime activation. Verified by inspection of `qdbus-qt6 org.kde.KWin /Effects`: the only state-changing methods are `loadEffect` / `unloadEffect` / `toggleEffect` / `reconfigureEffect`, all plugin-lifecycle. There is no `activate*` / `run*` / `show*` method on `/Effects`. The canonical runtime activation path is `kglobalaccel` invocation by shortcut name; the shortcut name is stable across rebinds (only KWin upstream renaming the shortcut would break a rule). Do not reach for `toggleEffect` thinking it bypasses keybindings — invoking it twice will *unload the effect plugin*, leaving Overview unreachable until Solaar / KWin is restarted or the plugin is re-enabled.
 
+### No native non-toggle for Overview — gate on `activeEffects` instead
+
+The `Overview` global shortcut **toggles**; Plasma 6.6.5 exposes no explicit show/hide for it. Verified: the overview effect registers **no** dedicated DBus object (unlike `WindowView1`, which has `org.kde.KWin.Effect.WindowView1.activate(QStringList)`), and `shortcutNames` lists only toggles (`Overview`, `Cycle Overview`, `Cycle Overview Opposite`, `Grid View`). To get a deterministic open or close, gate the toggle on live state read from `Effects.activeEffects` (its list contains `overview` iff Overview is on screen):
+
+```bash
+# ensure OPEN (idempotent — opens if closed, no-op if already open)
+qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview \
+  || qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview
+# ensure CLOSE (idempotent — closes if open, no-op if already closed)
+qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects | grep -qx overview \
+  && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true
+```
+
+`activeEffects` lags ~0.5-1s during the open/close animation, so this is reliable only at human-paced intervals (fine for button hold/release; not for tight loops). `grep -qx` matches the whole line because qdbus prints the effect list one entry per line.
+
 ### Silent-failure trap: `invokeShortcut` on an unloaded effect
 
 When the target effect's plugin is **unloaded**, `qdbus-qt6 invokeShortcut <name>` exits 0 with no stderr, KGlobalAccel dispatches the shortcut to KWin, KWin has no handler registered, and the call silently no-ops. From the rule's side this looks identical to success: `Execute` logs the action, `subprocess.Popen` returns immediately, and nothing visible happens.
@@ -44,21 +59,11 @@ qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview
 qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.activeEffects
 ```
 
-If `isEffectLoaded` returns `false`, recover with `qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect <name>` — synchronous, idempotent (no-op when already loaded), returns `true` on success.
+If `isEffectLoaded` returns `false`, recover by re-enabling the effect in **System Settings → Window Management → Desktop Effects** (or one-shot `qdbus-qt6 org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect <name>`).
 
 How effects get into an unloaded state: System Settings → Window Management → Desktop Effects checkbox toggled off; `kwriteconfig6` writes to `~/.config/kwinrc [Plugins]` followed by KWin reconfigure; stray `org.kde.kwin.Effects.toggleEffect <name>` calls (which is what triggered this trap during initial development of the Haptic rule — empirical balanced toggling was overrun by a parallel KWin reconfigure).
 
-**Defensive pattern for effect-activating rules**: prefix every press path with `loadEffect`. One extra DBus call per press (~1 ms), self-heals against future unloads:
-
-```yaml
----
-- Key: [<Label>, pressed]
-- Execute: [qdbus-qt6, org.kde.KWin, /Effects, org.kde.kwin.Effects.loadEffect, <effect>]
-- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, <ShortcutName>]
-...
-```
-
-Reference: the Haptic press rule in [`rules.yaml`](rules.yaml) uses exactly this pattern.
+**Do NOT prefix rules with a per-press `loadEffect`.** An earlier version did exactly that as a defensive self-heal; it was removed. The Overview effect is enabled by default and stays loaded in normal use — the only times it unloaded were stray `toggleEffect` calls during development. Worse, a per-press `loadEffect` does not actually fix the rule: the idempotent state-gating above reads `activeEffects`, which never reports `overview` while the plugin is unloaded, so the gate keeps firing a no-op `invokeShortcut` regardless. The correct fix for a genuinely-disabled effect is to re-enable it in System Settings, not to paper over it per press. The current Haptic / Mouse Gesture Button rules in [`rules.yaml`](rules.yaml) use the idempotent ensure-OPEN / ensure-CLOSE pattern and no `loadEffect`.
 
 ## Reloading after edits
 
