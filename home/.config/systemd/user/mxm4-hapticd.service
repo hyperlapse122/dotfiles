@@ -1,0 +1,15 @@
+[Unit]
+Description=MX Master 4 haptic daemon (owns the Bolt receiver HID++ session)
+# Sole owner of the hidraw device: does HID++ discovery, debounce, queueing
+# and paced playback. The thin client (mxm4-haptic, spawned by Solaar rules)
+# and the notification bridge (mxm4-haptic-notify) talk to it over the
+# AF_UNIX socket at $XDG_RUNTIME_DIR/mxm4-haptic.sock.
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/mxm4-hapticd
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

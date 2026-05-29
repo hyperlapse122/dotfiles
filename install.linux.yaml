@@ -97,12 +97,16 @@
       stdout: true
       stderr: true
 
-# Build + install the mxm4-haptic Rust binary into ~/.local/bin. It fires
-# MX Master 4 haptic waveforms via direct HID++ to the Bolt receiver,
-# invoked by the Haptic rule in home/.config/solaar/rules.yaml. Native
-# Rust (~1-2 ms cold) replaces an earlier Python helper (~14 ms — the
-# interpreter startup was the whole cost). Linux-only: uses
-# /sys/class/hidraw + /dev/hidraw*. `mise exec rust@latest` because
+# Build + install the mxm4-haptic crate's three binaries into ~/.local/bin:
+# mxm4-hapticd (haptic daemon — sole owner of the Bolt receiver HID++
+# session, discovers the MX Master 4 natively over HID++ with no cache),
+# mxm4-haptic-notify (desktop-notification -> haptic bridge), and
+# mxm4-haptic (thin client invoked by the Haptic rule in
+# home/.config/solaar/rules.yaml). One cargo install builds all three; the
+# two services are linked by dotbot under home/.config/systemd/user/ and
+# enabled manually (no session bus during bootstrap — see that dir's
+# README). Linux-only: uses /sys/class/hidraw + /dev/hidraw*, AF_UNIX, and
+# (for the notify bridge) dbus-monitor. `mise exec rust@latest` because
 # dotbot's shell steps run under non-interactive bash where mise
 # activation from ~/.bashrc is not loaded. `--root ~/.local` puts the
 # binary alongside dotbot's hand-linked ~/.local/bin entries (already on
@@ -110,16 +114,17 @@
 # re-runs idempotent (rebuilds only on source change). See crates/README.md.
 - shell:
     - command: 'command -v cargo >/dev/null 2>&1 && mise exec rust@latest -- cargo install --path crates/mxm4-haptic --root "$HOME/.local" --locked --force --quiet || echo "config-solaar: cargo unavailable; skipping mxm4-haptic build" >&2'
-      description: Build + install mxm4-haptic Rust binary to ~/.local/bin (MX Master 4 haptic helper; skipped when cargo absent)
+      description: Build + install mxm4-haptic binaries (daemon, notification bridge, client) to ~/.local/bin (skipped when cargo absent)
       stdin: true
       stdout: true
       stderr: true
 
 # Apply per-device Solaar settings to ~/.config/solaar/config.yaml that
 # can't be expressed via the symlinked rules.yaml (currently divert-keys
-# for MX Master 4 / Haptic), and populate ~/.cache/mxm4-haptic.json with
-# the device + HAPTIC feature indices the mxm4-haptic binary needs. Why a
-# script and not a tracked config.yaml: the file embeds per-physical-device
+# for the MX Master 4 Haptic and MX Master 3S gesture buttons). The
+# mxm4-hapticd daemon discovers device/HAPTIC indices natively at runtime,
+# so there is no cache file to populate here. Why a script and not a
+# tracked config.yaml: the file embeds per-physical-device
 # _serial / _unitId / _battery / _absent fields that would couple the repo
 # to one mouse unit and produce noisy diffs every Solaar save. Soft-skips
 # when Solaar is not installed, the config file hasn't been generated yet,
@@ -128,7 +133,7 @@
 # scripts/linux/config-solaar.sh header for the full target schema.
 - shell:
     - command: bash scripts/linux/config-solaar.sh
-      description: Apply per-device Solaar config + haptic cache (MX Master 4; skipped when Solaar/device absent)
+      description: Apply per-device Solaar divert-keys config (MX Master 4 + 3S; skipped when Solaar/device absent)
       stdin: true
       stdout: true
       stderr: true

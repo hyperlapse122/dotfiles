@@ -99,8 +99,8 @@ Marker file location: `/tmp` is acceptable for single-user-Solaar machines (one 
 **Dedicated helper binaries are preferred over inline shell** when:
 
 1. The logic exceeds what a YAML one-liner can express cleanly (multi-step state, parsing, error handling).
-2. Solaar's native primitive (`Set`, `KeyPress`, etc.) has a documented failure mode for the use case. E.g. `Set: [null, haptic-play, <wf>]` waits for an HID++ ack (PlayHapticWaveForm doesn't pass `no_reply=True`); Bolt-wireless ack variance (30-300 ms) makes pulses feel inconsistent. The [`mxm4-haptic`](../../.local/bin/mxm4-haptic) helper exists exactly to bypass that — direct hidraw write, no ack wait, ~5-15 ms flat. See the root AGENTS.md "Solaar haptic playback (MX Master 4)" section for the canonical alternatives table.
-3. The helper has external state that's expensive to recompute per call (e.g. `mxm4-haptic`'s device/feature index cache, populated once by `scripts/linux/config-solaar.sh`).
+2. Solaar's native primitive (`Set`, `KeyPress`, etc.) has a documented failure mode for the use case. E.g. `Set: [null, haptic-play, <wf>]` waits for an HID++ ack (PlayHapticWaveForm doesn't pass `no_reply=True`); Bolt-wireless ack variance (30-300 ms) makes pulses feel inconsistent. The [`mxm4-haptic`](../../../crates/mxm4-haptic/) client + `mxm4-hapticd` daemon exist exactly to bypass that — the daemon does the direct hidraw write with no ack wait. See the root AGENTS.md "Solaar haptic playback (MX Master 4)" section for the canonical alternatives table.
+3. The helper has runtime state that's expensive to recompute per call — e.g. `mxm4-hapticd` discovers the device index + HAPTIC feature index over HID++ once at startup and holds them in memory for the session (re-discovering only on reconnect; no per-pulse rediscovery, no cache file).
 
 Reference implementation: the Haptic tap-vs-hold rules in [`rules.yaml`](rules.yaml). The Later callback chains `Execute: [touch, ...]` (marker) and `Execute: [mxm4-haptic, "<WAVEFORM>"]` (helper) — both within a single `KeyIsDown`-gated sub-rule so neither fires on a tap.
 

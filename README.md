@@ -50,7 +50,7 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 |---|---|
 | `.agents/` | Reserved repo-local agent skill tree; only the placeholder `skills/.gitkeep` is tracked today |
 | `agents/` | Cross-tool agent rules linked into `~/.config/opencode/AGENTS.md` and `~/.codex/AGENTS.md` |
-| `crates/` | Rust crates built into `~/.local/bin` during bootstrap (e.g. `mxm4-haptic`, a Linux-only MX Master 4 haptic helper) |
+| `crates/` | Rust crates built into `~/.local/bin` during bootstrap (e.g. the Linux-only `mxm4-haptic` set — an MX Master 4 haptic daemon, a desktop-notification bridge, and a Solaar client) |
 | `home/` | User-owned dotfiles, runtime skill packages, and `*.1password` templates that install under `$HOME` |
 | `system/<os>/` | Root-owned config installed to absolute paths (e.g. `/etc/...`) |
 | `scripts/` | Bootstrap helpers plus manual auth/package/system setup scripts, grouped by role |

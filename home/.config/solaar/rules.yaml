@@ -62,11 +62,12 @@
 #     `KeyIsDown` condition short-circuits it when the user has already
 #     released (tap path), so neither the marker NOR the haptic pulse
 #     fires for taps. On hold, both Actions run sequentially: touch the
-#     marker, then pulse a haptic waveform via the `mxm4-haptic` binary
+#     marker, then pulse a haptic waveform via the `mxm4-haptic` client
 #     (Rust crate at `crates/mxm4-haptic/`, built into `~/.local/bin/`
-#     during bootstrap). It writes a single HID++ Long report straight
-#     to the Bolt receiver's hidraw node and exits — no ack wait,
-#     ~1-2 ms cold. Three earlier haptic paths were rejected and must not
+#     during bootstrap). The client forwards the waveform name to the
+#     mxm4-hapticd daemon over an AF_UNIX socket and exits (~1-2 ms); the
+#     daemon owns the Bolt receiver and writes the HID++ Long play report
+#     with no ack wait. Three earlier haptic paths were rejected and must not
 #     be reintroduced:
 #       Execute: solaar config haptic-play <wf>     ~3.7 s spawn cost
 #                                                    (pulse arrives after
@@ -86,12 +87,12 @@
 #                                                    correct mechanism
 #                                                    but unmaintainable
 #                                                    as YAML one-liner.
-#     The helper requires ~/.cache/mxm4-haptic.json populated with the
-#     MX Master 4 device index on the Bolt receiver and the HAPTIC
-#     feature index. scripts/linux/config-solaar.sh writes this during
-#     dotbot bootstrap by parsing `solaar show`. See the root AGENTS.md
-#     "Solaar haptic playback (MX Master 4)" section for the full
-#     waveform catalog if you want to swap the current waveform.
+#     The mxm4-hapticd daemon discovers the MX Master 4 device index on
+#     the Bolt receiver and the HAPTIC feature index natively over HID++
+#     at runtime (no cache file, no `solaar show`), holds them in memory,
+#     and re-discovers on reconnect. See the root AGENTS.md "Solaar haptic
+#     playback (MX Master 4)" section for the full waveform catalog if you
+#     want to swap the current waveform.
 #   - Release rule checks for the marker via `bash -c [ -f … ]` (Solaar
 #     has no native file-exists test). Present (= hold) -> consume marker
 #     and ensure-CLOSE Overview. Absent (= tap) -> no-op, Overview stays.

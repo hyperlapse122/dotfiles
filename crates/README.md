@@ -6,7 +6,16 @@ Rust crates built and installed during dotbot bootstrap.
 
 | Path | Built into | Built by |
 |---|---|---|
-| [`mxm4-haptic/`](mxm4-haptic/) | `~/.local/bin/mxm4-haptic` | `cargo install --path crates/mxm4-haptic --root ~/.local --locked --force` invoked from [`../install.linux.yaml`](../install.linux.yaml) |
+| [`mxm4-haptic/`](mxm4-haptic/) | `~/.local/bin/mxm4-hapticd`, `mxm4-haptic-notify`, `mxm4-haptic` | `cargo install --path crates/mxm4-haptic --root ~/.local --locked --force` invoked from [`../install.linux.yaml`](../install.linux.yaml) (one install builds all three bins) |
+
+The `mxm4-haptic` crate is a `[lib]` plus three `[[bin]]`s: a haptic **daemon**
+(`mxm4-hapticd`, the sole owner of the Bolt receiver's HID++ session — native
+device discovery, debounce + paced playback, AF_UNIX server), a **notification
+bridge** (`mxm4-haptic-notify`), and a thin **client** (`mxm4-haptic`, spawned
+by Solaar rules). The daemon and bridge run as `systemd --user` services from
+[`../home/.config/systemd/user/`](../home/.config/systemd/user/) (linked by
+dotbot, enabled manually). See the root [`AGENTS.md`](../AGENTS.md) "Solaar
+haptic playback" section for the architecture and HID++ details.
 
 ## Conventions
 
