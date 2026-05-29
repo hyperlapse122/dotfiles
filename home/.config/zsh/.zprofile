@@ -42,6 +42,11 @@ fi
 # Ensure path arrays do not contain duplicates.
 typeset -gU cdpath fpath mailpath path
 
+# Custom zsh completions (generated at bootstrap, e.g. _mxm4-haptic). Set
+# here in .zprofile so the dir is on fpath BEFORE Prezto's completion module
+# runs compinit during .zshrc.
+fpath=( "${ZDOTDIR:-$HOME/.config/zsh}/completions" $fpath )
+
 # Set the list of directories that cd searches.
 # cdpath=(
 #   $cdpath

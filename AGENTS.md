@@ -180,6 +180,8 @@ There is **no `~/.cache/mxm4-haptic.json`** any more — discovery is native and
 
 dotbot links the unit files but cannot enable them during bootstrap (no graphical session / user manager bus in an agent or CI run). Enable them manually once: `systemctl --user daemon-reload && systemctl --user enable --now mxm4-hapticd.service mxm4-haptic-notify.service`.
 
+The `mxm4-haptic` client also emits its CLI spec via `--usage` ([usage](https://usage.jdx.dev) KDL, waveform `choices` generated from the `WAVEFORMS` table so they never drift). The Linux bootstrap pipes it through `usage` into a static zsh completion at `~/.config/zsh/completions/_mxm4-haptic` (on `fpath` via [`home/.config/zsh/.zprofile`](home/.config/zsh/.zprofile), so it loads before Prezto's `compinit`) — giving `mxm4-haptic <TAB>` waveform-name completion. The completion is a generated artifact, not tracked.
+
 Waveforms (from `logitech_receiver.hidpp20_constants.HapticWaveForms`):
 
 | Theme | Names |

@@ -119,6 +119,22 @@
       stdout: true
       stderr: true
 
+# Generate the zsh completion for the mxm4-haptic client into
+# ~/.config/zsh/completions/_mxm4-haptic (on fpath via .zprofile). The
+# client emits its CLI spec with `--usage` (waveform choices generated from
+# its WAVEFORMS table); `usage` turns that into a static completion script
+# baked at bootstrap, so the shell never spawns the binary per completion.
+# A generated artifact, NOT tracked in the repo. `mise exec usage@latest`
+# because dotbot's non-interactive bash has no mise activation; the client
+# is referenced by absolute path for the same reason. Soft-skips when the
+# binary wasn't built (cargo absent) or mise is unavailable.
+- shell:
+    - command: 'command -v mise >/dev/null 2>&1 && [ -x "$HOME/.local/bin/mxm4-haptic" ] && { mkdir -p "$HOME/.config/zsh/completions" && "$HOME/.local/bin/mxm4-haptic" --usage | mise exec usage@latest -- usage generate completion zsh mxm4-haptic -f - > "$HOME/.config/zsh/completions/_mxm4-haptic"; } || echo "mxm4-haptic: skipping zsh completion (binary or mise unavailable)" >&2'
+      description: Generate _mxm4-haptic zsh completion via usage (skipped when binary/mise absent)
+      stdin: true
+      stdout: true
+      stderr: true
+
 # Apply per-device Solaar settings to ~/.config/solaar/config.yaml that
 # can't be expressed via the symlinked rules.yaml (currently divert-keys
 # for the MX Master 4 Haptic and MX Master 3S gesture buttons). The

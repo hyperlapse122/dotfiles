@@ -17,6 +17,12 @@ by Solaar rules). The daemon and bridge run as `systemd --user` services from
 dotbot, enabled manually). See the root [`AGENTS.md`](../AGENTS.md) "Solaar
 haptic playback" section for the architecture and HID++ details.
 
+The client exposes `--usage` (its CLI spec in [usage](https://usage.jdx.dev)
+KDL, with the waveform `choices` generated from the crate's `WAVEFORMS`
+table). The Linux bootstrap pipes that through `usage` to generate a zsh
+completion at `~/.config/zsh/completions/_mxm4-haptic` (on `fpath` via
+`home/.config/zsh/.zprofile`) — a generated artifact, not tracked.
+
 ## Conventions
 
 - Every crate is built with `mise exec rust@latest -- cargo …` so the bootstrap doesn't rely on system Rust. mise's rust toolchain is declared in [`~/.config/mise/config.toml`](https://mise.jdx.dev/) (mirrored by [`home/.config/mise/`](../home/.config/mise/) if tracked).
