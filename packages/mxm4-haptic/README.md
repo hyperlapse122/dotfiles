@@ -36,7 +36,7 @@ this directory.
 ```sh
 # from the workspace root (packages/)
 yarn install --immutable                 # restore deps (single root yarn.lock)
-yarn workspace @h82/mxm4-haptic build     # tsc -> dist/index.js (ESM) + dist/index.d.ts
+yarn workspace @h82/mxm4-haptic build     # tsdown -> dist/index.js (ESM) + dist/index.d.ts
 yarn workspace @h82/mxm4-haptic typecheck # tsc --noEmit
 yarn workspace @h82/mxm4-haptic test      # node --test (also runnable via `bun test`)
 
@@ -44,8 +44,10 @@ yarn workspace @h82/mxm4-haptic test      # node --test (also runnable via `bun 
 yarn build && yarn test
 ```
 
-The package is ESM-only (`"type": "module"`) and builds with plain `tsc` (no
-bundler).
+The package is ESM-only (`"type": "module"`) and builds with
+[`tsdown`](https://tsdown.dev) (Rolldown-based), configured in
+[`tsdown.config.ts`](tsdown.config.ts), emitting `dist/index.js` + bundled
+`dist/index.d.ts`. Type-checking is a separate `tsc --noEmit` pass.
 
 ## Usage
 
