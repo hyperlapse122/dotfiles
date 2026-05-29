@@ -21,6 +21,35 @@
 				".proto"
 			]
 		},
+		"eslint": {
+			"command": [
+				"mise",
+				"exec",
+				"npm:vscode-langservers-extracted",
+				"--",
+				"vscode-eslint-language-server",
+				"--stdio"
+			],
+			"extensions": [
+				".js",
+				".jsx",
+				".ts",
+				".tsx",
+				".mjs",
+				".mts",
+				".cjs",
+				".cts",
+				".vue"
+			],
+			"initialization": {
+				"validate": "on",
+				"workingDirectories": [
+					{
+						"mode": "auto"
+					}
+				]
+			}
+		},
 		"typescript": {
 			"command": [
 				"mise",

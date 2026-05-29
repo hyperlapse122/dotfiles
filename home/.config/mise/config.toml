@@ -33,6 +33,7 @@ marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
+"npm:vscode-langservers-extracted" = { version = "latest", depends = ["aube"] }
 
 # npm tools run through aube
 "npm:@biomejs/biome" = { version = "latest", depends = ["aube"] }
@@ -126,3 +127,4 @@ compile = false
 OPENCODE_DISABLE_CLAUDE_CODE = 1
 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT = 1
 OPENCODE_DISABLE_CLAUDE_CODE_SKILLS = 1
+OPENCODE_EXPERIMENTAL_WEBSOCKETS = 1
