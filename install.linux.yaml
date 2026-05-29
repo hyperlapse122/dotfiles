@@ -119,6 +119,22 @@
       stdout: true
       stderr: true
 
+# Enable both mxm4-haptic units now that their binaries are built and their
+# units are linked (by the ~/.config/**/* glob above). No `--now`: plain
+# `enable` only wires the WantedBy symlinks, so systemd starts each unit when
+# its target is reached — mxm4-hapticd.service with default.target, and
+# mxm4-haptic-notify.service when graphical-session.target comes up. Guarded
+# soft-skip: requires the built binaries AND a working `systemctl --user`
+# connection, which is absent in agent/CI/chroot runs with no user session
+# bus. In that case it prints a hint and exits 0 (the user enables them
+# manually once a session exists). Idempotent: re-`enable` is a no-op.
+- shell:
+    - command: '[ -x "$HOME/.local/bin/mxm4-hapticd" ] && systemctl --user daemon-reload >/dev/null 2>&1 && systemctl --user enable mxm4-hapticd.service mxm4-haptic-notify.service >/dev/null 2>&1 && echo "mxm4-haptic: services enabled" || echo "mxm4-haptic: skipping enable (binaries missing or no user session bus); enable manually, see home/.config/systemd/user/README.md" >&2'
+      description: Enable mxm4-hapticd + mxm4-haptic-notify services (skipped when binaries missing or no user session bus)
+      stdin: true
+      stdout: true
+      stderr: true
+
 # Generate the zsh completion for the mxm4-haptic client into
 # ~/.config/zsh/completions/_mxm4-haptic (on fpath via .zprofile). The
 # client emits its CLI spec with `--usage` (waveform choices generated from

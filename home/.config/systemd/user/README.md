@@ -18,13 +18,20 @@ needs no unit — it is launched per button press by the rules in
 
 ## Enabling
 
-dotbot links the unit files but cannot enable them during bootstrap (no
-graphical session / user manager bus in an agent or CI run — same
-constraint as `scripts/linux/config-solaar.sh`). Enable manually once:
+Both units are enabled automatically during bootstrap by the guarded
+`systemctl --user enable` step in
+[`../../../install.linux.yaml`](../../../install.linux.yaml), right after the
+`cargo install` step builds their binaries. There is no `--now`: plain `enable`
+only wires the `WantedBy` symlinks, so systemd starts each unit when its target
+is reached — `mxm4-hapticd.service` with `default.target`, and
+`mxm4-haptic-notify.service` when `graphical-session.target` comes up. The step
+soft-skips when there is no reachable user manager bus (agent / CI / chroot runs,
+same constraint as `scripts/linux/config-solaar.sh`) — in that case enable them
+manually once a session exists:
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now mxm4-hapticd.service mxm4-haptic-notify.service
+systemctl --user enable mxm4-hapticd.service mxm4-haptic-notify.service
 ```
 
 Verify:
