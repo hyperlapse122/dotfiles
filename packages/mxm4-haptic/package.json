@@ -1,0 +1,29 @@
+{
+  "name": "@h82/mxm4-haptic",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript client for the mxm4-hapticd AF_UNIX daemon (MX Master 4 haptics).",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "typescript": "6.0.3"
+  }
+}

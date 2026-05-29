@@ -1,0 +1,102 @@
+# @h82/mxm4-haptic
+
+A tiny, zero-runtime-dependency **TypeScript client** for the `mxm4-hapticd`
+daemon. It sends MX Master 4 haptic waveform commands over the daemon's AF_UNIX
+socket (`$XDG_RUNTIME_DIR/mxm4-haptic.sock`).
+
+It mirrors the portable client surface of the Rust crate
+[`../../crates/mxm4-haptic/src/lib.rs`](../../crates/mxm4-haptic/src/lib.rs). It
+does **not** touch hidraw, does **not** do device discovery, and does **not**
+replace the daemon — all device I/O, debounce, queueing, and pacing live in
+`mxm4-hapticd`. This is purely the "hand a waveform name to the daemon" half.
+
+> The latency-critical Solaar hot path still uses the Rust `mxm4-haptic` client
+> binary. This library is for **Node/Bun** consumers (scripts, tooling, MCP
+> servers, etc.) that want to trigger haptics from a JavaScript runtime.
+
+## Status
+
+- **Runtimes**: tested on **Node ≥20** (developed on Node 26). Works under
+  **Bun** via its `node:net` compatibility layer. **Deno is not supported** /
+  not claimed.
+- **Platform**: Linux only at runtime — the daemon it talks to owns Linux
+  `hidraw`. The library itself only needs `node:net` + `$XDG_RUNTIME_DIR`, but
+  there is nothing for it to talk to off Linux.
+- **Dependencies**: zero runtime dependencies (`node:net` + `process.env`).
+- **Not published.** `private: true`; the `@h82/` scope is a naming namespace,
+  not a registry target. Not installed by the dotfiles bootstrap.
+
+## Install / build / test
+
+```sh
+yarn install --immutable   # first-ever lockfile gen needs `yarn add` or --no-immutable
+yarn build                 # tsc -> dist/index.js (ESM) + dist/index.d.ts
+yarn typecheck             # tsc --noEmit
+yarn test                  # node --test (built-in runner; also runnable via `bun test`)
+```
+
+The package is ESM-only (`"type": "module"`) and builds with plain `tsc` (no
+bundler).
+
+## Usage
+
+```ts
+import { sendCommand, waveformNames, waveformId } from "@h82/mxm4-haptic";
+
+// Fire a pulse. ALWAYS await — see the warning below.
+await sendCommand("SHARP COLLISION");
+
+waveformNames();              // -> readonly ["SHARP STATE CHANGE", ..., "WHISPER COLLISION"]
+waveformId("subtle collision"); // -> 4 (case-insensitive)
+waveformId("nope");           // -> undefined
+```
+
+### ⚠️ Always `await sendCommand`
+
+`sendCommand` resolves **only after the bytes have flushed** to the daemon (on
+the socket's clean `close`). Node buffers writes, so a fire-and-forget caller
+that does `sendCommand(...)` and then exits the process **without awaiting** may
+drop the pulse. The Rust client got away with fire-and-forget because dropping a
+`UnixStream` flushes synchronously; in Node you must await.
+
+## API
+
+| Export | Signature | Notes |
+|---|---|---|
+| `WAVEFORMS` | `readonly [readonly [name, id], ...]` | 16 `[name, id]` tuples in firmware order |
+| `WaveformName` | `type` | Union of the 16 literal waveform names |
+| `waveformNames()` | `() => readonly string[]` | Names in source order |
+| `waveformId(name)` | `(name: string) => number \| undefined` | Case-insensitive (uppercases input) |
+| `socketPath()` | `() => string \| undefined` | `$XDG_RUNTIME_DIR/mxm4-haptic.sock`, `undefined` if unset |
+| `sendCommand(name)` | `(name: string) => Promise<void>` | Validates, connects, writes `NAME\n`, resolves on flush |
+
+### Errors
+
+All thrown/rejected errors extend `HapticError` (which carries a discriminant
+`code`):
+
+| Class | `code` | When |
+|---|---|---|
+| `UnknownWaveformError` | `UNKNOWN_WAVEFORM` | Name not in the table (thrown **before** connecting) |
+| `XdgRuntimeDirUnsetError` | `XDG_RUNTIME_DIR_UNSET` | `$XDG_RUNTIME_DIR` not set |
+| `SocketMissingError` | `SOCKET_MISSING` | No socket at the path (daemon not running) — `ENOENT` |
+| `ConnectionRefusedError` | `CONNECTION_REFUSED` | Socket exists but refused — `ECONNREFUSED` |
+| `HapticTimeoutError` | `TIMEOUT` | Connect+write exceeded ~500ms |
+
+## Waveforms
+
+The waveform id table is mirrored from the Rust crate. Note the **firmware enum
+gap**: ids are contiguous `0..14` for the first 15 waveforms, then
+`WHISPER COLLISION = 27` (not 15). A `node:test` drift-guard
+([`test/drift-guard.test.ts`](test/drift-guard.test.ts)) parses the Rust
+`WAVEFORMS` table and asserts byte-for-byte parity, so the two tables cannot
+silently drift.
+
+| Theme | Names |
+|---|---|
+| State / collision | `SHARP STATE CHANGE`, `DAMP STATE CHANGE`, `SHARP COLLISION`, `DAMP COLLISION`, `SUBTLE COLLISION`, `WHISPER COLLISION` |
+| Alerts | `HAPPY ALERT`, `ANGRY ALERT`, `COMPLETED`, `MAD` |
+| Rhythmic | `SQUARE`, `WAVE`, `FIREWORK`, `KNOCK`, `JINGLE`, `RINGING` |
+
+See the root [`AGENTS.md`](../../AGENTS.md) "Solaar haptic playback (MX Master
+4)" section for the full daemon architecture and HID++ details.

@@ -31,6 +31,9 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 │   ├── .config/opencode/            # OpenCode config files (*.json, *.jsonc).
 │                                    # AGENTS.md, commands/ are linked from agents/, not here.
 │   └── .secrets/*.1password         # 1Password templates rendered to ~/.secrets/
+├── packages/                        # Standalone TS/JS leaf packages (own package.json +
+│                                    # lockfile). NOT a Yarn workspace, NOT bootstrap-installed.
+│                                    # mxm4-haptic: TS client for the mxm4-hapticd daemon.
 ├── system/<os>/                     # Root-owned files mirroring absolute paths,
 │                                    # e.g. system/linux/etc/NetworkManager/conf.d/...
 │                                    # NOT installed via dotbot — see "Root-owned config".
@@ -193,6 +196,8 @@ Waveforms (from `logitech_receiver.hidpp20_constants.HapticWaveForms`):
 Multi-word names **require quoting**. Intensity scales with `haptic-level` (0-100, persists across reconnect; set in the Solaar GUI — the dotfiles bootstrap deliberately does NOT enforce a level since the helper's no-ack-wait path makes mid-range intensities reliably perceived). A current consumer of this API: the Haptic-hold-detection rule in [`home/.config/solaar/rules.yaml`](home/.config/solaar/rules.yaml) pulses a waveform from a `Later` callback when hold-mode is detected, giving tactile confirmation that the threshold was crossed.
 
 For a non-Solaar path (direct HID++ over the Bolt receiver's `:1.2` hidraw to feature `0x19B0`), the byte sequence is what `mxm4-hapticd` implements — see [`crates/mxm4-haptic/src/lib.rs`](crates/mxm4-haptic/src/lib.rs) for the exact packet layout. The full HID++ 2.0 spec documents the rest.
+
+For Node/Bun consumers there is a TypeScript client library, [`@h82/mxm4-haptic`](packages/mxm4-haptic/), under [`packages/`](packages/). It is a thin client that mirrors the Rust crate's portable surface (waveform table + lookups + `socketPath()` + a flush-confirmed `sendCommand()`) and talks to the running `mxm4-hapticd` daemon over the same `$XDG_RUNTIME_DIR/mxm4-haptic.sock` AF_UNIX socket — it does **not** touch hidraw or replace the daemon. It is **not** wired into dotbot/bootstrap (a library ships nothing to `~/.local/bin`); it is a standalone leaf package installed/built only by its own consumers. The Rust `mxm4-haptic` client binary remains the latency-critical path used by Solaar rules.
 
 ## References
 
