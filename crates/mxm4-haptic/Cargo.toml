@@ -1,0 +1,20 @@
+[package]
+name = "mxm4-haptic"
+version = "0.1.0"
+edition = "2021"
+description = "Fire a haptic waveform on the Logitech MX Master 4 via direct HID++ to the Bolt receiver (Linux-only, zero-dependency)"
+license = "MIT"
+
+[[bin]]
+name = "mxm4-haptic"
+path = "src/main.rs"
+
+# Optimize the release binary for a fast cold start and small size. This
+# binary is invoked once per button-hold from a Solaar rule, so startup
+# latency is the metric that matters — not throughput.
+[profile.release]
+opt-level = "z"   # optimize for size (no hot loops; smaller = faster page-in)
+lto = true        # cross-crate inlining; trims dead std paths
+codegen-units = 1 # better optimization at the cost of build parallelism
+panic = "abort"   # no unwinding tables; we never catch panics
+strip = true      # drop symbols; binary ~300 KB instead of ~4 MB

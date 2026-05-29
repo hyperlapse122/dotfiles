@@ -51,6 +51,7 @@ typeset -gU cdpath fpath mailpath path
 path=(
   "$HOME/.dotnet/tools"(N)
   $HOME/.local/bin(N)
+  $HOME/.cargo/bin(N)
   $HOME/{,s}bin(N)
   $HOME/.lmstudio/bin(N)
   /opt/{homebrew,local}/{,s}bin(N)
