@@ -119,6 +119,34 @@
 - Execute: [bash, -c, "[ -f /tmp/solaar-haptic-held ] && rm -f /tmp/solaar-haptic-held && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
 ...
 
+# MX Master 3S thumb button (Mouse Gesture Button) — same tap-vs-hold
+# Overview toggle as the MX Master 4 Haptic rule above, MINUS the haptic
+# pulse (the 3S has no HAPTIC feature / motor). The 3S thumb button is
+# labeled "Mouse Gesture Button" (control 195), diverted to Diverted by
+# scripts/linux/config-solaar.sh.
+#
+# `Device: MX Master 3S` scopes these rules to the 3S. Required because
+# the MX Master 4 ALSO exposes a "Mouse Gesture Button" label — without
+# the Device guard, diverting the MX4 gesture button later would fire
+# these Overview rules too. The Device condition matches device.name /
+# codename / serial / unitId; the readable name is used here.
+#
+# Separate marker file (/tmp/solaar-mgesture-held) so a 3S hold can't
+# collide with an in-flight MX4 Haptic hold when both mice are connected.
+---
+- Device: MX Master 3S
+- Key: [Mouse Gesture Button, pressed]
+- Execute: [qdbus-qt6, org.kde.KWin, /Effects, org.kde.kwin.Effects.loadEffect, overview]
+- Execute: [rm, -f, /tmp/solaar-mgesture-held]
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
+- Later: [0.3, KeyIsDown: Mouse Gesture Button, Execute: [touch, /tmp/solaar-mgesture-held]]
+...
+---
+- Device: MX Master 3S
+- Key: [Mouse Gesture Button, released]
+- Execute: [bash, -c, "[ -f /tmp/solaar-mgesture-held ] && rm -f /tmp/solaar-mgesture-held && qdbus-qt6 org.kde.kglobalaccel /component/kwin invokeShortcut Overview || true"]
+...
+
 # Example: map a diverted Back Button press to Alt+Left.
 # ---
 # - Key: [Back Button, pressed]

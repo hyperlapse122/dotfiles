@@ -61,7 +61,10 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 #                              3=Mouse Gestures (per
 #                              logitech_receiver.settings_templates.DivertKeys).
 #                              Control IDs from `solaar show` reprogrammable
-#                              keys section: 416 = Haptic thumb button.
+#                              keys section: 416 = MX Master 4 Haptic thumb
+#                              button; 195 = Mouse Gesture Button (the
+#                              MX Master 3S thumb button; also present on
+#                              the MX Master 4 but left Regular there).
 #
 # For nested-dict settings the path is `<setting>.<int_key>` (e.g.
 # `divert-keys.416`). For scalar settings the path is just the setting
@@ -70,6 +73,7 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 # needs lockstep cross-machine state).
 TARGETS=(
   "B04200000000:divert-keys.416:1:MX Master 4 / Haptic -> Diverted"
+  "B03400000000:divert-keys.195:1:MX Master 3S / Mouse Gesture Button -> Diverted"
 )
 
 # 0. Skip if Solaar isn't installed: nothing to configure.
