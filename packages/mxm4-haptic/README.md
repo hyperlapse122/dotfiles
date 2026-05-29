@@ -28,11 +28,20 @@ replace the daemon — all device I/O, debounce, queueing, and pacing live in
 
 ## Install / build / test
 
+This package is a member of the `@h82/dotfiles` Yarn workspace rooted at
+[`../`](../) (see [`../README.md`](../README.md)). Install once from the
+workspace root; build/test either from the workspace root via a selector or from
+this directory.
+
 ```sh
-yarn install --immutable   # first-ever lockfile gen needs `yarn add` or --no-immutable
-yarn build                 # tsc -> dist/index.js (ESM) + dist/index.d.ts
-yarn typecheck             # tsc --noEmit
-yarn test                  # node --test (built-in runner; also runnable via `bun test`)
+# from the workspace root (packages/)
+yarn install --immutable                 # restore deps (single root yarn.lock)
+yarn workspace @h82/mxm4-haptic build     # tsc -> dist/index.js (ESM) + dist/index.d.ts
+yarn workspace @h82/mxm4-haptic typecheck # tsc --noEmit
+yarn workspace @h82/mxm4-haptic test      # node --test (also runnable via `bun test`)
+
+# or from this directory (packages/mxm4-haptic/)
+yarn build && yarn test
 ```
 
 The package is ESM-only (`"type": "module"`) and builds with plain `tsc` (no

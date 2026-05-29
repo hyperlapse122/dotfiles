@@ -52,7 +52,7 @@ Install [`mise`](https://mise.jdx.dev/) yourself before running the bootstrap sc
 | `agents/` | Cross-tool agent rules linked into `~/.config/opencode/AGENTS.md` and `~/.codex/AGENTS.md` |
 | `crates/` | Rust crates built into `~/.local/bin` during bootstrap (e.g. the Linux-only `mxm4-haptic` set — an MX Master 4 haptic daemon, a desktop-notification bridge, and a Solaar client) |
 | `home/` | User-owned dotfiles, runtime skill packages, and `*.1password` templates that install under `$HOME` |
-| `packages/` | Standalone TypeScript/JavaScript leaf packages with their own `package.json` and lockfile (e.g. `@h82/mxm4-haptic`, a Node/Bun client for the `mxm4-hapticd` daemon). Not a Yarn workspace, not installed by bootstrap |
+| `packages/` | Yarn Berry monorepo (the private `@h82/dotfiles` workspace, rooted at `packages/`) of TypeScript/JavaScript libraries (e.g. `@h82/mxm4-haptic`, a Node/Bun client for the `mxm4-hapticd` daemon). Not installed by bootstrap |
 | `system/<os>/` | Root-owned config installed to absolute paths (e.g. `/etc/...`) |
 | `scripts/` | Bootstrap helpers plus manual auth/package/system setup scripts, grouped by role |
 | `install.conf.yaml` | Shared dotbot tasks |

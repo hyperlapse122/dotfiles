@@ -31,8 +31,8 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 │   ├── .config/opencode/            # OpenCode config files (*.json, *.jsonc).
 │                                    # AGENTS.md, commands/ are linked from agents/, not here.
 │   └── .secrets/*.1password         # 1Password templates rendered to ~/.secrets/
-├── packages/                        # Standalone TS/JS leaf packages (own package.json +
-│                                    # lockfile). NOT a Yarn workspace, NOT bootstrap-installed.
+├── packages/                        # Yarn Berry monorepo root (@h82/dotfiles workspace,
+│                                    # private). TS/JS library members; NOT bootstrap-installed.
 │                                    # mxm4-haptic: TS client for the mxm4-hapticd daemon.
 ├── system/<os>/                     # Root-owned files mirroring absolute paths,
 │                                    # e.g. system/linux/etc/NetworkManager/conf.d/...
@@ -121,6 +121,17 @@ The script exits 0 immediately when invoked from a non-interactive shell (stdin 
 - `home/.config/opencode/commands/` MUST NOT exist. `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`; a sibling source under `home/.config/opencode/commands/` would conflict with that link. Put new slash commands in `agents/commands/`. The OpenCode glob link for `home/.config/opencode/` is intentionally narrowed to `*.{json,jsonc}` so a stray `commands/` subdir there cannot collide.
 - Keep all agent rule files in sync when changing agent workflow rules. In this repo that currently means this file, `home/AGENTS.md`, `agents/AGENTS.md`, and `agents/SHARED_AGENTS.md`. The shared file is loaded globally by OpenCode and Codex via the symlinks above, so changes propagate to both tools immediately.
 
+### TypeScript/JS packages — Yarn Berry monorepo at `packages/`
+
+- **All TypeScript/JavaScript libraries live under [`packages/`](packages/)** as members of a single Yarn Berry workspace. The workspace ROOT is `packages/` itself — `packages/package.json` is the private `@h82/dotfiles` root (`"workspaces": ["*"]`). The monorepo root is deliberately `packages/`, **NOT** the repo root: there is no `package.json`/`yarn.lock`/`.yarn/` at `/` so `cd ~/dotfiles` stays a plain checkout, while `cd ~/dotfiles/packages` is the Yarn project. Do **not** add a root-level `package.json`.
+- **Add a new TS library** by creating `packages/<name>/` with its own `package.json` (`@h82/<name>`, `private: true`, `"type": "module"`). The `"workspaces": ["*"]` glob picks it up automatically. Reference sibling packages with the `workspace:*` protocol.
+- **One lockfile**: the workspace-root `packages/yarn.lock` is the only lockfile and is **tracked**. `node_modules/` hoists to `packages/node_modules/`. There are no per-member lockfiles or `node_modules`.
+- **Yarn config**: `packages/.yarnrc.yml` sets only `nodeLinker: node-modules` (so plain `tsc`/`node --test` resolve normally). All hardening from the user-global `~/.yarnrc.yml` — `enableScripts: false`, `enableImmutableInstalls: true`, exact pins (`defaultSemverRangePrefix: ""`), the 1-week cooldown gate (`npmMinimalAgeGate`) — cascades and MUST NOT be relaxed. Pin every dependency to an exact, cooldown-valid (≥7 days old) version.
+- **First install gotcha**: `enableImmutableInstalls: true` makes the very first `yarn install` (which must create `packages/yarn.lock`) fail. Use `yarn add <pkg>@<exact>` (mutating) or `yarn install --no-immutable` for the initial lockfile; thereafter `yarn install --immutable` is clean.
+- **Task runner: Turborepo.** `packages/turbo.json` defines the `build`, `typecheck`, and `test` tasks (`build` outputs `dist/**`; `typecheck`/`test` `dependsOn` `^build`). The workspace-root scripts (`yarn build`/`yarn test`/`yarn typecheck`) delegate to `turbo run …`, so run those from `packages/`. Each member exposes matching `build`/`typecheck`/`test` scripts that turbo invokes. `turbo` is pinned exact in the root `devDependencies` and has no install lifecycle script (safe under `enableScripts: false`). Turbo's caches (`packages/.turbo/`, `packages/*/.turbo/`) are git-ignored — keep them ignored or turbo folds its own logs into the input hash and never caches.
+- **Not bootstrap-wired.** A library ships nothing to `~/.local/bin`, so `install.*.yaml` and dotbot do not touch `packages/`. Consumers build/test it themselves (`yarn build` / `yarn test` from `packages/`, or `yarn workspace @h82/<name> build`). Build output (`packages/*/dist/`) is git-ignored.
+- Each member directory keeps its own `README.md`; see [`packages/README.md`](packages/README.md) for the full conventions.
+
 ### Documentation sync (HARD)
 
 Every change to repo structure, conventions, or bootstrap flow MUST update, in the same commit:
@@ -197,7 +208,7 @@ Multi-word names **require quoting**. Intensity scales with `haptic-level` (0-10
 
 For a non-Solaar path (direct HID++ over the Bolt receiver's `:1.2` hidraw to feature `0x19B0`), the byte sequence is what `mxm4-hapticd` implements — see [`crates/mxm4-haptic/src/lib.rs`](crates/mxm4-haptic/src/lib.rs) for the exact packet layout. The full HID++ 2.0 spec documents the rest.
 
-For Node/Bun consumers there is a TypeScript client library, [`@h82/mxm4-haptic`](packages/mxm4-haptic/), under [`packages/`](packages/). It is a thin client that mirrors the Rust crate's portable surface (waveform table + lookups + `socketPath()` + a flush-confirmed `sendCommand()`) and talks to the running `mxm4-hapticd` daemon over the same `$XDG_RUNTIME_DIR/mxm4-haptic.sock` AF_UNIX socket — it does **not** touch hidraw or replace the daemon. It is **not** wired into dotbot/bootstrap (a library ships nothing to `~/.local/bin`); it is a standalone leaf package installed/built only by its own consumers. The Rust `mxm4-haptic` client binary remains the latency-critical path used by Solaar rules.
+For Node/Bun consumers there is a TypeScript client library, [`@h82/mxm4-haptic`](packages/mxm4-haptic/), a member of the [`packages/`](packages/) Yarn workspace (the `@h82/dotfiles` monorepo rooted at `packages/`). It is a thin client that mirrors the Rust crate's portable surface (waveform table + lookups + `socketPath()` + a flush-confirmed `sendCommand()`) and talks to the running `mxm4-hapticd` daemon over the same `$XDG_RUNTIME_DIR/mxm4-haptic.sock` AF_UNIX socket — it does **not** touch hidraw or replace the daemon. It is **not** wired into dotbot/bootstrap (a library ships nothing to `~/.local/bin`); it is built only by its own consumers. The Rust `mxm4-haptic` client binary remains the latency-critical path used by Solaar rules.
 
 ## References
 

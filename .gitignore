@@ -26,10 +26,13 @@ desktop.ini
 # Rust build artifacts
 target/
 
-# packages/mxm4-haptic leaf (standalone Yarn Berry node-modules project).
-# Leaf-scoped so the rest of the dotfiles repo is unaffected. yarn.lock is
-# intentionally TRACKED (lockfile convention, like the Rust Cargo.lock).
-packages/mxm4-haptic/node_modules/
-packages/mxm4-haptic/dist/
-packages/mxm4-haptic/.yarn/
-packages/mxm4-haptic/.pnp.*
+# packages/ Yarn Berry monorepo (workspace root, node-modules linker).
+# Scoped to packages/ so the rest of the dotfiles repo is unaffected. The
+# single workspace-root packages/yarn.lock is intentionally TRACKED (lockfile
+# convention, like the Rust Cargo.lock); per-member dist/ build output is not.
+packages/node_modules/
+packages/.yarn/
+packages/.pnp.*
+packages/*/dist/
+packages/.turbo/
+packages/*/.turbo/
