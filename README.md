@@ -50,7 +50,7 @@ This enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, 
 - **Editors & agents** — VS Code and Zed settings, plus cross-tool AI agent rules and slash commands linked into OpenCode and Codex from a single source in [`agents/`](./agents/).
 - **Fonts** — Pretendard, Pretendard JP, JetBrains Mono, D2Coding, and Nerd Font variants, installed user-wide (no admin) into the platform font directory.
 - **Secrets** — any tracked `*.1password` template is rendered into `~/.secrets/` via [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/) (no-ops when there are none).
-- **Local helpers** — Rust [`crates/`](./crates/) built into `~/.local/bin` and a TypeScript [`packages/`](./packages/) Yarn workspace built in place (e.g. the MX Master 4 haptic stack on Linux).
+- **Local helpers** — Rust [`crates/`](./crates/) built into `~/.local/bin` and a TypeScript [`packages/`](./packages/) Yarn workspace built in place (e.g. the MX Master 4 haptic stack — Linux + macOS via `hidapi`, autostarted by `systemd --user` / launchd respectively).
 - **Linux desktop polish** — root-owned `/etc` drop-ins, firewalld rules for Tailscale & VMware, and KDE Plasma 6 font/touchpad/panel preferences.
 
 ## Requirements
@@ -73,7 +73,7 @@ Install [`mise`](https://mise.jdx.dev/) before bootstrapping — it supplies [`u
 | [`home/`](./home/) | User-owned dotfiles, runtime skill tree, and `*.1password` templates that install under `$HOME` |
 | [`system/`](./system/)`<os>/` | Root-owned config installed to absolute paths (e.g. `/etc/...`) via `sudo install -D` |
 | [`scripts/`](./scripts/) | Bootstrap helpers plus manual auth/package/system setup, in `.sh` + `.ps1` pairs |
-| [`crates/`](./crates/) | Rust crates `cargo install`'d into `~/.local/bin` during bootstrap (e.g. the Linux-only MX Master 4 haptic daemon, notification bridge, and Solaar client) |
+| [`crates/`](./crates/) | Rust crates `cargo install`'d into `~/.local/bin` during bootstrap (e.g. the MX Master 4 haptic daemon + Solaar client — Linux + macOS via `hidapi`, autostarted via `systemd --user`/launchd; the notification bridge is Linux-only) |
 | [`packages/`](./packages/) | Private `@h82/dotfiles` Yarn Berry monorepo of TS/JS libraries — built in place, never installed |
 | [`agents/`](./agents/) | Cross-tool AI agent rules and slash commands linked into OpenCode & Codex |
 | [`.agents/`](./.agents/) | Reserved repo-local agent skill tree (placeholder today) |

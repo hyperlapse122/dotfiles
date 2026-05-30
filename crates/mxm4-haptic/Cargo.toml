@@ -2,7 +2,7 @@
 name = "mxm4-haptic"
 version = "0.1.0"
 edition = "2021"
-description = "MX Master 4 haptic daemon + notification bridge + Solaar client, talking HID++ directly to the Bolt receiver (Linux-only, zero-dependency)"
+description = "MX Master 4 haptic daemon + notification bridge + Solaar client, talking HID++ to the Bolt receiver via hidapi (Linux + macOS)"
 license = "MIT"
 
 # Shared internals (waveform table, socket protocol, hidraw discovery,
@@ -28,6 +28,17 @@ path = "src/bin/mxm4-haptic-notify.rs"
 [[bin]]
 name = "mxm4-hapticd"
 path = "src/bin/mxm4-hapticd.rs"
+
+[dependencies]
+# Cross-platform raw-HID access. Linux uses the hidraw backend (NOT libusb) so
+# the daemon shares the /dev/hidraw node with a running Solaar instead of
+# seizing it via a detached kernel driver; macOS uses IOKit opened in shared
+# (non-seizing) mode. Only the daemon (mxm4-hapticd) links this; the thin
+# client and notify bridge never touch the device, so they stay hidapi-free.
+hidapi = { version = "=2.6.5", default-features = false, features = [
+    "linux-static-hidraw",
+    "macos-shared-device",
+] }
 
 # Optimize release binaries for fast cold start and small size. The client
 # is invoked once per button-hold from a Solaar rule, so startup latency is

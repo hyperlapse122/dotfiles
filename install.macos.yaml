@@ -42,6 +42,12 @@
     # at invocation time and hands it to `mise exec`.
     ~/.local/bin/opencode: home/.local/bin/opencode
 
+    # launchd LaunchAgent for the MX Master 4 haptic daemon — the macOS
+    # counterpart of the Linux systemd --user unit. Runs ~/.local/bin/mxm4-hapticd
+    # (built by the cargo install step below) at login and keeps it alive. The
+    # notification bridge has no agent: it is Linux-only and exits on macOS.
+    ~/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist: home/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
+
 # Configure glab with script
 - shell:
     - command: sh scripts/auth/setup-glab.sh
@@ -65,6 +71,49 @@
 - shell:
     - command: bash scripts/bootstrap/install-fonts.sh
       description: Install desktop fonts user-wide (Pretendard, JetBrains Mono, D2Coding, Nerd Font variants)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Build + install the mxm4-haptic crate on macOS. Only the daemon and the thin
+# client are installed (`--bin`): the notify bridge is Linux-only and would be a
+# no-op stub here. hidapi pulls in the system IOKit/CoreFoundation frameworks
+# (Xcode Command Line Tools provide the C toolchain) — no extra packages, no
+# libudev (that is the Linux hidraw backend only). `mise exec rust@latest`
+# because dotbot's shell steps run under non-interactive bash with no mise
+# activation; `--root ~/.local` matches dotbot's linked ~/.local/bin entries;
+# `--locked` honors Cargo.lock; `--force` makes re-runs idempotent. Soft-skips
+# (exit 0) when cargo is unavailable. See crates/README.md.
+- shell:
+    - command: 'command -v cargo >/dev/null 2>&1 && mise exec rust@latest -- cargo install --path crates/mxm4-haptic --root "$HOME/.local" --bin mxm4-hapticd --bin mxm4-haptic --locked --force --quiet || echo "mxm4-haptic: cargo unavailable; skipping build" >&2'
+      description: Build + install mxm4-haptic daemon + client to ~/.local/bin (macOS; notify bridge is Linux-only)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Load the mxm4-hapticd launchd agent now that its binary is built and the
+# plist is linked (the link entry above). `bootout` before `bootstrap` makes
+# re-runs idempotent (reload with the current plist); the `|| true` swallows
+# bootout's "not loaded" on a first run. RunAtLoad starts it immediately and at
+# every login. Guarded soft-skip: requires the built binary AND a GUI session
+# (`gui/$(id -u)` domain is absent in SSH/CI/headless runs) — in that case it
+# prints a hint and exits 0 (load manually once logged in, see
+# home/Library/LaunchAgents/README.md).
+- shell:
+    - command: 'if [ -x "$HOME/.local/bin/mxm4-hapticd" ] && command -v launchctl >/dev/null 2>&1; then launchctl bootout "gui/$(id -u)/dev.h82.mxm4-hapticd" 2>/dev/null || true; launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist" 2>/dev/null && echo "mxm4-haptic: launchd agent loaded" || echo "mxm4-haptic: skipping launchd load (no GUI session?); load manually, see home/Library/LaunchAgents/README.md" >&2; else echo "mxm4-haptic: skipping launchd load (binary or launchctl missing)" >&2; fi'
+      description: Load mxm4-hapticd launchd agent (macOS; skipped when binary missing or no GUI session)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Generate the zsh completion for the mxm4-haptic client into
+# ~/.config/zsh/completions/_mxm4-haptic (on fpath via the linked .zprofile).
+# Same mechanism as Linux: the client emits its CLI spec with `--usage` and
+# `usage` bakes a static completion. A generated artifact, NOT tracked.
+# Soft-skips when the binary wasn't built or mise is unavailable.
+- shell:
+    - command: 'command -v mise >/dev/null 2>&1 && [ -x "$HOME/.local/bin/mxm4-haptic" ] && { mkdir -p "$HOME/.config/zsh/completions" && "$HOME/.local/bin/mxm4-haptic" --usage | mise exec usage@latest -- usage generate completion zsh mxm4-haptic -f - > "$HOME/.config/zsh/completions/_mxm4-haptic"; } || echo "mxm4-haptic: skipping zsh completion (binary or mise unavailable)" >&2'
+      description: Generate _mxm4-haptic zsh completion via usage (macOS; skipped when binary/mise absent)
       stdin: true
       stdout: true
       stderr: true

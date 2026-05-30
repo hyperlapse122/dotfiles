@@ -20,15 +20,26 @@
 //! critical (2) -> SHARP COLLISION. Linux/KDE-only (session bus +
 //! dbus-monitor). See crates/README.md.
 
+// Linux/KDE-only: it eavesdrops the D-Bus session bus via `dbus-monitor`.
+// macOS/Windows expose no public API to observe other apps' notifications, so
+// off Linux this binary compiles to a stub that exits with a clear message
+// (the [[bin]] target must still exist for `cargo build` on every platform).
+use std::process::ExitCode;
+
+#[cfg(target_os = "linux")]
 use std::io::{BufRead, BufReader};
-use std::process::{Command, ExitCode, Stdio};
+#[cfg(target_os = "linux")]
+use std::process::{Command, Stdio};
+#[cfg(target_os = "linux")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "linux")]
 fn env_u64(key: &str, default: u64) -> u64 {
     std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
 
 /// First `string "..."` arg in a dbus-monitor message block = app_name.
+#[cfg(target_os = "linux")]
 fn first_string(text: &str) -> Option<String> {
     for line in text.lines() {
         if let Some(rest) = line.trim_start().strip_prefix("string \"") {
@@ -40,6 +51,7 @@ fn first_string(text: &str) -> Option<String> {
 }
 
 /// First `uint32 N` arg = replaces_id.
+#[cfg(target_os = "linux")]
 fn first_uint32(text: &str) -> Option<u32> {
     for line in text.lines() {
         if let Some(rest) = line.trim_start().strip_prefix("uint32 ") {
@@ -51,6 +63,7 @@ fn first_uint32(text: &str) -> Option<u32> {
 
 /// `urgency` hint is a byte in the hints dict: the `byte N` line that
 /// follows the `string "urgency"` entry. Absent => spec default normal (1).
+#[cfg(target_os = "linux")]
 fn urgency_byte(text: &str) -> Option<u8> {
     let mut after_urgency = false;
     for line in text.lines() {
@@ -67,6 +80,16 @@ fn urgency_byte(text: &str) -> Option<u8> {
     None
 }
 
+#[cfg(not(target_os = "linux"))]
+fn main() -> ExitCode {
+    eprintln!(
+        "mxm4-haptic-notify is Linux-only (D-Bus desktop-notification bridge); \
+         not supported on this platform."
+    );
+    ExitCode::from(1)
+}
+
+#[cfg(target_os = "linux")]
 fn main() -> ExitCode {
     let min_gap = Duration::from_millis(env_u64("MXM4_NOTIFY_MIN_GAP_MS", 800));
     let skip_replaces =
@@ -107,7 +130,7 @@ fn main() -> ExitCode {
         let replaces = first_uint32(&text).unwrap_or(0);
         let urgency = urgency_byte(&text).unwrap_or(1);
 
-        if deny.iter().any(|d| *d == app) {
+        if deny.contains(&app) {
             return;
         }
         if skip_replaces && replaces != 0 {

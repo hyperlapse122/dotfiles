@@ -9,10 +9,9 @@
 //! keeps a single owner of the HID++ session and removes the on-disk
 //! cache the old single-shot binary needed.
 //!
-//! Linux-only: hidraw (`/sys/class/hidraw`, `/dev/hidraw*`) + AF_UNIX.
-//! See crates/README.md.
+//! Linux + macOS. Device access goes through the `hidapi` crate (daemon
+//! only); the AF_UNIX socket works on both platforms. See crates/README.md.
 
-use std::fs;
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
@@ -52,12 +51,21 @@ pub fn waveform_names() -> Vec<&'static str> {
 }
 
 /// AF_UNIX rendezvous between the clients and the daemon. Lives in the
-/// per-user runtime dir so the kernel reaps it on logout and it is never
-/// reachable outside this user session.
+/// per-user runtime dir so it is never reachable outside this user session.
+///
+/// Linux: `$XDG_RUNTIME_DIR` (a 0700 tmpfs the kernel reaps on logout).
+/// macOS: there is no `XDG_RUNTIME_DIR`; fall back to `$TMPDIR`, which
+/// launchd sets per-user to the private 0700 `DARWIN_USER_TEMP_DIR`
+/// (`/var/folders/.../T/`) — the closest equivalent. Last-resort `/tmp`
+/// keeps the client/daemon able to rendezvous on an unusual session.
 pub fn socket_path() -> Option<String> {
-    std::env::var("XDG_RUNTIME_DIR")
+    let dir = std::env::var("XDG_RUNTIME_DIR")
         .ok()
-        .map(|d| format!("{d}/mxm4-haptic.sock"))
+        .filter(|d| !d.is_empty())
+        .or_else(|| std::env::var("TMPDIR").ok().filter(|d| !d.is_empty()))
+        .unwrap_or_else(|| "/tmp".to_string());
+    let dir = dir.trim_end_matches('/');
+    Some(format!("{dir}/mxm4-haptic.sock"))
 }
 
 /// Connect to the daemon and hand it one waveform name. Fire-and-return:
@@ -79,33 +87,17 @@ pub fn send_command(name: &str) -> io::Result<()> {
 // crate can reuse them; unused by the client/watcher binaries.
 // ---------------------------------------------------------------------------
 
-pub const SYS_HIDRAW: &str = "/sys/class/hidraw";
-// Substrings sought in /sys/class/hidraw/hidrawN/device/uevent:
-//   HID_ID=0003:0000046D:0000C548  (Bolt receiver VID/PID, upper hex)
-//   HID_PHYS=usb-<addr>/input2     (the :1.2 HID++ control interface)
-// Only input2 accepts HID++ reports cleanly; input0/1/3 either EPIPE on
-// the second write or accept-then-discard (silent no-op). Matching both
-// substrings pins the correct node.
-pub const BOLT_ID_HEX: &str = "046D:0000C548";
-pub const HID_PHYS_IFACE: &str = "/input2\n";
-
-/// Walk /sys/class/hidraw and return the Bolt :1.2 hidraw device path.
-/// hidraw numbering is not stable across reboots/reconnects, so the
-/// daemon re-resolves through this on every open failure.
-pub fn discover_hidraw() -> Option<String> {
-    for entry in fs::read_dir(SYS_HIDRAW).ok()?.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        let uevent = format!("{SYS_HIDRAW}/{name}/device/uevent");
-        let Ok(text) = fs::read_to_string(&uevent) else {
-            continue;
-        };
-        if text.to_uppercase().contains(BOLT_ID_HEX) && text.contains(HID_PHYS_IFACE) {
-            return Some(format!("/dev/{name}"));
-        }
-    }
-    None
-}
+// Logitech Bolt receiver USB IDs (the MX Master 4 pairs through it).
+pub const BOLT_VID: u16 = 0x046D;
+pub const BOLT_PID: u16 = 0xC548;
+// The receiver's HID++ control endpoint, used to pick the right node out of
+// hidapi's enumeration (a receiver exposes several HID interfaces). On Linux
+// it is USB interface 2 (the old code's `input2`); only this interface
+// accepts HID++ reports cleanly (others EPIPE or silently discard). macOS
+// reports interface_number as -1, so there it is matched by the Logitech
+// vendor usage page 0xFF00 instead. The daemon accepts either.
+pub const HIDPP_INTERFACE: i32 = 2;
+pub const HIDPP_USAGE_PAGE: u16 = 0xFF00;
 
 /// HID++ Long report (0x11) that plays one waveform: feature 0x19B0,
 /// function 4 (PlayHapticWaveForm), sw_id 0 = fire-and-forget (sw_id 0 in
