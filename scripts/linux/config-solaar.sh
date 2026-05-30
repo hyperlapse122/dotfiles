@@ -57,9 +57,10 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 #   label        : free-form, only for log output.
 #
 # Setting reference for MX Master 4 (model B04200000000):
-#   divert-keys.<control_id> : 0=Regular, 1=Diverted, 2=Sliding DPI,
-#                              3=Mouse Gestures (per
-#                              logitech_receiver.settings_templates.DivertKeys).
+#   divert-keys.<control_id> : 0=Regular, 1=Diverted, 2=Mouse Gestures,
+#                              3=Sliding DPI (per
+#                              logitech_receiver.settings_templates.DivertKeys
+#                              choices_universe).
 #                              Control IDs from `solaar show` reprogrammable
 #                              keys section: 416 = MX Master 4 Haptic thumb
 #                              button; 195 = Mouse Gesture Button (the
@@ -72,8 +73,8 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 # scalar target is currently enforced; add one here if a future setting
 # needs lockstep cross-machine state).
 TARGETS=(
-  "B04200000000:divert-keys.416:1:MX Master 4 / Haptic -> Diverted"
-  "B03400000000:divert-keys.195:1:MX Master 3S / Mouse Gesture Button -> Diverted"
+  "B04200000000:divert-keys.416:2:MX Master 4 / Haptic -> Mouse Gestures"
+  "B03400000000:divert-keys.195:2:MX Master 3S / Mouse Gesture Button -> Mouse Gestures"
 )
 
 # 0. Skip if Solaar isn't installed: nothing to configure.

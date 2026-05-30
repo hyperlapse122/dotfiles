@@ -1,71 +1,83 @@
 # Solaar reads this file as ~/.config/solaar/rules.yaml.
 # It contains zero or more YAML documents; each document is one Solaar rule.
 #
-# Rules trigger from HID++ notifications, so buttons usually must first be set
-# to a diverted action in Solaar's Key/Button Diversion setting. Under Wayland,
+# Rules trigger from HID++ notifications, so buttons must first be set to a
+# diverted action in Solaar's Key/Button Diversion setting. Under Wayland,
 # actions that synthesize input use /dev/uinput; the system Logitech module
 # installs Solaar's udev rules through hardware.logitech.wireless.enable.
 #
-# MX Master 4 notes (verified via `solaar show` on this host):
-# - Reprogrammable buttons reported by the device: Left Button, Right Button,
-#   Middle Button, Back Button, Forward Button, Mouse Gesture Button,
-#   Smart Shift, Haptic, Virtual Gesture Button.
-# - The new haptic thumb button is labeled exactly `Haptic`. Its firmware
-#   default maps to `unknown:0109`, which behaves like Back on Linux.
-# - Useful feature names/tests documented by Solaar include THUMB WHEEL with
-#   thumb_wheel_up/thumb_wheel_down, LOWRES WHEEL with lowres_wheel_up/
-#   lowres_wheel_down, and HIRES WHEEL with hires_wheel_up/hires_wheel_down.
-# - MX Master 4-specific settings include scroll-ratchet, thumb button click
-#   force, haptic force, and haptic-play.
+# === Thumb-button mouse gestures (MX Master 4 + MX Master 3S) ===
 #
-# Required setup for the Haptic rule below:
-#   Haptic must be diverted. The dotfiles bootstrap runs
-#   scripts/linux/config-solaar.sh, which sets `divert-keys[416] = 1` in
-#   ~/.config/solaar/config.yaml for model B04200000000 and restarts
-#   Solaar. Without divert, the firmware default (Back-equivalent) fires
-#   and this rule never sees the press.
+# Both mice drive the SAME directional gesture scheme from their thumb button.
+# On the MX Master 4 that thumb button is `Haptic` (control 416); on the
+# MX Master 3S it is `Mouse Gesture Button` (control 195). The two buttons sit
+# in the same physical thumb position, so they intentionally share one rule
+# set and behave identically.
 #
-# Wayland caveat (printed by `solaar show`):
-#   "rules cannot access modifier keys in Wayland". The rule below sidesteps
-#   this by calling KWin's DBus interface directly instead of synthesizing
-#   Super+W via /dev/uinput.
-
-# Haptic thumb button — TOGGLE Overview on press. Opens it when closed,
-# closes it when open: a first press opens, a second press closes.
+# Each button is set to "Mouse Gestures" divert mode (divert-keys = 2) by
+# scripts/linux/config-solaar.sh. In that mode the button reports the
+# MOUSE_GESTURE feature with directional data while held, instead of a plain
+# key press. The rules below key on the `MouseGesture` condition (a feature
+# match), NOT a key label, so one rule set fires for whichever mouse sent the
+# gesture. No `Device:` guard is needed or wanted here: the goal is for both
+# thumb buttons to act the same. (The MX Master 4 ALSO exposes its own
+# `Mouse Gesture Button` at control 195, but it is left Regular — firmware
+# handled, never reaches the rule engine — so it cannot collide with these.)
 #
-# KWin's only Overview activation primitive is the "Overview" global
-# shortcut, which TOGGLES (Plasma 6.6.5 exposes no explicit show/hide
-# DBus call — the overview effect registers no DBus object, unlike
-# WindowView1's activate()). The press invokes that toggle directly
-# (invokeShortcut Overview).
+# Gesture map. Verified host: Plasma 6.6.5 Wayland; qdbus-qt6 at
+# /usr/bin/qdbus-qt6; KWin shortcuts "Grid View", "Show Desktop",
+# "Window Quick Tile Left", "Window Quick Tile Right" all present
+# (qdbus-qt6 org.kde.kglobalaccel /component/kwin shortcutNames); krunner
+# method org.kde.krunner.App.toggleDisplay present (qdbus-qt6 org.kde.krunner
+# /App). Solaar 1.1.19.
 #
-# Verified host: Plasma 6.6.5, qdbus-qt6 at /usr/bin/qdbus-qt6, kwin
-# shortcut "Overview" present, Solaar 1.1.19. The Overview effect is
-# enabled by default (System Settings -> Desktop Effects). If it is ever
-# disabled there, invokeShortcut Overview will silently no-op — re-enable
-# the effect rather than adding a per-press loadEffect call. Do NOT use
-# `org.kde.kwin.Effects.toggleEffect overview`: that DBus method manages
-# the effect plugin's load state, not runtime activation, and repeated
-# calls UNLOAD the plugin (silent invokeShortcut failures).
+#   hold + flick Up    -> Desktop Grid         (Grid View)
+#   hold + flick Down  -> Show Desktop / peek   (Show Desktop)
+#   hold + flick Left  -> snap window left      (Window Quick Tile Left)
+#   hold + flick Right -> snap window right     (Window Quick Tile Right)
+#   press, no movement -> KRunner launcher      (krunner toggleDisplay)
+#
+# Wayland caveat (printed by `solaar show`): "rules cannot access modifier
+# keys in Wayland". Every action below uses a DBus Execute instead of a
+# KeyPress so it never depends on modifier state; invokeShortcut on the
+# org.kde.kglobalaccel /component/kwin interface bypasses keymap/layout. The
+# Grid View and Overview effects must stay enabled in System Settings ->
+# Desktop Effects; if disabled, invokeShortcut silently no-ops (re-enable the
+# effect rather than adding a per-press loadEffect call).
+#
+# Diversion setup is owned by scripts/linux/config-solaar.sh (TARGETS array):
+#   B04200000000 divert-keys.416 = 2  (MX Master 4 Haptic -> Mouse Gestures)
+#   B03400000000 divert-keys.195 = 2  (MX Master 3S Gesture Button -> Mouse Gestures)
+# Do NOT divert via `solaar config ... divert-keys` on 1.1.19 (it flips the
+# runtime state but crashes during persistence); config-solaar.sh edits
+# config.yaml directly and restarts Solaar only when something changed.
 ---
-- Key: [Haptic, pressed]
-- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
+- MouseGesture: Mouse Up
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Grid View]
 ...
 
-# MX Master 3S thumb button (Mouse Gesture Button) — same TOGGLE Overview
-# on press as the MX Master 4 Haptic rule above. The 3S thumb button is
-# labeled "Mouse Gesture Button" (control 195), diverted by
-# scripts/linux/config-solaar.sh.
-#
-# `Device: MX Master 3S` scopes this rule to the 3S. Required because the
-# MX Master 4 ALSO exposes a "Mouse Gesture Button" label — without the
-# Device guard, diverting the MX4 gesture button later would fire this
-# Overview rule too. The Device condition matches device.name / codename /
-# serial / unitId; the readable name is used here.
 ---
-- Device: MX Master 3S
-- Key: [Mouse Gesture Button, pressed]
-- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Overview]
+- MouseGesture: Mouse Down
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Show Desktop]
+...
+
+---
+- MouseGesture: Mouse Left
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Left]
+...
+
+---
+- MouseGesture: Mouse Right
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Right]
+...
+
+# Press with no movement (a plain click on the gesture-diverted thumb button)
+# reports a zero-movement MOUSE_GESTURE, matched by an empty MouseGesture list.
+# It cannot collide with the directional rules above: each gesture notification
+# matches exactly one of these five documents (the movement count differs).
+---
+- MouseGesture: []
+- Execute: [qdbus-qt6, org.kde.krunner, /App, org.kde.krunner.App.toggleDisplay]
 ...
 
 # Example: map a diverted Back Button press to Alt+Left.

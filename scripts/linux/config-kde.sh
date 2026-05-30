@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/linux/config-kde.sh
 #
-# Combined KDE Plasma 6 user-side configuration. Eight independent steps,
+# Combined KDE Plasma 6 user-side configuration. Ten independent steps,
 # each guarded so a missing prerequisite skips that step alone (returning 0)
 # without taking the whole script down:
 #
@@ -99,6 +99,39 @@
 #                 across monitor edges. Applies after restarting KWin or
 #                 logging out/in.
 #
+#   9. krunner  - kwriteconfig6 -> ~/.config/krunnerrc
+#                   [General] FreeFloating    = true
+#                   [General] historyBehavior = ImmediateCompletion
+#                 Makes KRunner behave like macOS Spotlight: a free-floating
+#                 box centered on screen instead of docked at the top, with
+#                 inline history auto-completion as you type. Maps to the
+#                 KRunner settings dialog:
+#                   "Position on screen: Center"  (FreeFloating; default false
+#                                                  = Top)
+#                   "History: Enable autocompletion"  (historyBehavior; per
+#                       krunnersettingsbase.kcfg the enum is Disabled /
+#                       ImmediateCompletion / CompletionSuggestion, default
+#                       CompletionSuggestion = "Enable suggestions").
+#                 Writes krunnerrc directly (kwriteconfig6 creates it if
+#                 absent), so no file-exists guard is needed. Applies on the
+#                 next KRunner launch (kquitapp6 krunner to reload a running
+#                 instance).
+#
+#  10. killruner - kwriteconfig6 -> ~/.config/krunnerrc
+#                   [Runners][krunner_kill] useTriggerWord = true
+#                   [Runners][krunner_kill] triggerWord    = kill
+#                   [Runners][krunner_kill] sorting        = 1
+#                 Configures the "Terminate Applications" (kill) runner: a
+#                 fixed English trigger word "kill" (the default is i18n("kill"),
+#                 which localizes - e.g. Korean "죽이기" - so we pin it), and
+#                 sorts process matches by CPU usage. Keys and the storage group
+#                 are from plasma-workspace runners/kill: the KCM writes
+#                 [Runners][<KRUNNER_PLUGIN_NAME>] with KRUNNER_PLUGIN_NAME =
+#                 "krunner_kill" (CMakeLists target_compile_definitions), and the
+#                 sorting enum (config_keys.h) is NONE=0, CPU=1, CPUI=2 -> 1 is
+#                 "CPU usage". Same direct-write rationale and KRunner-launch
+#                 reload caveat as step 9.
+#
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
 # registry, so there is nothing equivalent to configure on either. No .ps1
@@ -118,6 +151,8 @@
 #   - digitalclock, calendar     apply after restarting plasmashell or
 #                                logging out/in (same caveat as panel/kickoff).
 #   - edges                      apply after restarting KWin or logging out/in.
+#   - krunner, killrunner        apply on next KRunner launch (kquitapp6
+#                                krunner to reload a running instance).
 
 set -euo pipefail
 
@@ -738,6 +773,69 @@ configure_edges() {
 }
 
 # ===========================================================================
+# Step 9: krunner (center free-floating box + history autocompletion)
+# ===========================================================================
+#
+# Sets two keys in krunnerrc [General]:
+#   FreeFloating    = true                 -> centered floating box (default
+#                                             false docks it at the screen top)
+#   historyBehavior = ImmediateCompletion  -> inline auto-completion of the
+#                                             prior search as you type
+# Together these give a macOS-Spotlight-style launcher. Enum values come from
+# /usr/share/config.kcfg/krunnersettingsbase.kcfg (Disabled /
+# ImmediateCompletion / CompletionSuggestion). Unlike the appletsrc steps,
+# krunnerrc is not owned by a long-lived plasmashell process: KRunner reads it
+# at launch, so kwriteconfig6 can create/edit it directly with no file-exists
+# guard. The write is idempotent.
+
+configure_krunner() {
+  printf 'config-kde.sh: [krunner] centering search box + enabling history autocompletion...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file krunnerrc --group General --key FreeFloating --type bool true
+  printf '  set [General] FreeFloating    = true\n'
+
+  kwriteconfig6 --file krunnerrc --group General --key historyBehavior ImmediateCompletion
+  printf '  set [General] historyBehavior = ImmediateCompletion\n'
+}
+
+# ===========================================================================
+# Step 10: killrunner (kill trigger word + CPU-usage sorting)
+# ===========================================================================
+#
+# Configures the "Terminate Applications" runner. Storage group and keys come
+# from plasma-workspace runners/kill: the runner reads config()'s group
+# [Runners][krunner_kill] (KRUNNER_PLUGIN_NAME="krunner_kill"), with sorting
+# values NONE=0 / CPU=1 / CPUI=2 per config_keys.h. We pin the trigger word to
+# the literal "kill" (the default is localized via i18n("kill")) and sort by
+# CPU usage (1). Same direct-write / next-launch-reload behavior as step 9.
+
+configure_killrunner() {
+  printf 'config-kde.sh: [killrunner] setting kill trigger word + CPU-usage sorting...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file krunnerrc --group Runners --group krunner_kill \
+    --key useTriggerWord --type bool true
+  printf '  set [Runners][krunner_kill] useTriggerWord = true\n'
+
+  kwriteconfig6 --file krunnerrc --group Runners --group krunner_kill \
+    --key triggerWord kill
+  printf '  set [Runners][krunner_kill] triggerWord    = kill\n'
+
+  kwriteconfig6 --file krunnerrc --group Runners --group krunner_kill \
+    --key sorting 1
+  printf '  set [Runners][krunner_kill] sorting        = 1 (CPU usage)\n'
+}
+
+# ===========================================================================
 # Run all steps. Each is independent; set -e propagates any real failure.
 # ===========================================================================
 
@@ -749,5 +847,7 @@ configure_virtualkeyboard
 configure_digitalclock
 configure_calendar
 configure_edges
+configure_krunner
+configure_killrunner
 
-printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes.\n'
+printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes; KRunner picks up its changes on next launch.\n'
