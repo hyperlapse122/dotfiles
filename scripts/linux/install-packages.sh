@@ -93,10 +93,11 @@ EOF
 
     # CLI utilities
     btop
+    fd-find
     gh
     ripgrep
+    xxd
     yp-tools
-    fd-find
 
     # Korean input method
     fcitx5
@@ -143,28 +144,28 @@ EOF
     wl-clipboard
 
     # Virtualization
-    virtualbox
-    akmods
     akmod-VirtualBox
+    akmods
     kernel-devel
     systemd-container
+    virtualbox
 
     # Tauri
-    webkit2gtk4.1-devel
-    openssl-devel
     curl
-    wget
     file
     libappindicator-gtk3-devel
     librsvg2-devel
     libxdo-devel
+    openssl-devel
+    webkit2gtk4.1-devel
+    wget
   )
   if ! systemd-detect-virt --quiet; then
     # Bare-metal-only
     packages+=(
       discord
-      steam
       lm_sensors
+      steam
     )
   fi
   "${SUDO[@]}" dnf install -y "${packages[@]}"
