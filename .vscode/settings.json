@@ -1,0 +1,5 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "crates/mxm4-haptic/Cargo.toml"
+  ]
+}
