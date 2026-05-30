@@ -52,15 +52,6 @@ export class UnknownWaveformError extends HapticError<"UNKNOWN_WAVEFORM"> {
   }
 }
 
-export class XdgRuntimeDirUnsetError extends HapticError<"XDG_RUNTIME_DIR_UNSET"> {
-  constructor() {
-    super(
-      "XDG_RUNTIME_DIR_UNSET",
-      "XDG_RUNTIME_DIR is unset; cannot locate the mxm4-hapticd socket.",
-    );
-  }
-}
-
 export class SocketMissingError extends HapticError<"SOCKET_MISSING"> {
   constructor(path: string, options?: ErrorOptions) {
     super(
@@ -87,9 +78,18 @@ export class HapticTimeoutError extends HapticError<"TIMEOUT"> {
   }
 }
 
-function socketPath(): string | undefined {
-  const runtimeDir = process.env.XDG_RUNTIME_DIR;
-  return runtimeDir ? `${runtimeDir}/mxm4-haptic.sock` : undefined;
+// Mirrors the Rust daemon's socket_path() (crates/mxm4-haptic/src/lib.rs):
+// XDG_RUNTIME_DIR (Linux) -> TMPDIR (macOS, where launchd sets the per-user
+// DARWIN_USER_TEMP_DIR) -> /tmp. Always resolves, so there is no "runtime dir
+// unset" failure mode — an absent daemon surfaces later as SocketMissingError.
+function socketPath(): string {
+  const dir = nonEmptyEnv("XDG_RUNTIME_DIR") ?? nonEmptyEnv("TMPDIR") ?? "/tmp";
+  return `${dir.replace(/\/+$/, "")}/mxm4-haptic.sock`;
+}
+
+function nonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value !== undefined && value.length > 0 ? value : undefined;
 }
 
 /**
@@ -105,10 +105,6 @@ export async function sendCommand(name: WaveformName): Promise<void> {
   }
 
   const path = socketPath();
-  if (path === undefined) {
-    throw new XdgRuntimeDirUnsetError();
-  }
-
   const payload = `${name}\n`;
 
   await new Promise<void>((resolve, reject) => {

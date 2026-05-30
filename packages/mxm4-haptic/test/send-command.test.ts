@@ -8,7 +8,6 @@ import { describe, test } from "node:test";
 import {
   sendCommand,
   SocketMissingError,
-  XdgRuntimeDirUnsetError,
   UnknownWaveformError,
   HapticTimeoutError,
   type WaveformName,
@@ -59,15 +58,42 @@ describe("sendCommand", () => {
     }
   });
 
-  test("rejects when XDG_RUNTIME_DIR is unset", async () => {
-    const runtime = createRuntimeDir();
+  test("falls back to TMPDIR when XDG_RUNTIME_DIR is unset (macOS path)", async () => {
+    // Mirrors the Rust daemon's socket_path() fallback: with XDG_RUNTIME_DIR
+    // unset but TMPDIR set (as launchd does on macOS), the client must connect
+    // to $TMPDIR/mxm4-haptic.sock and flush there.
+    const originalXdg = process.env.XDG_RUNTIME_DIR;
+    const originalTmp = process.env.TMPDIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mxm4-"));
+    const socketPath = path.join(dir, "mxm4-haptic.sock");
+
+    let resolveReceived: (value: string) => void = () => {};
+    const received = new Promise<string>((resolve) => {
+      resolveReceived = resolve;
+    });
+    const server = net.createServer((socket: SocketLike) => {
+      const chunks: string[] = [];
+      socket.setEncoding("utf8");
+      socket.on("data", (chunk) => chunks.push(String(chunk)));
+      socket.on("end", () => {
+        resolveReceived(chunks.join(""));
+        socket.end();
+      });
+    });
 
     try {
+      await listen(server, socketPath);
       delete process.env.XDG_RUNTIME_DIR;
+      process.env.TMPDIR = dir;
 
-      await assert.rejects(sendCommand("KNOCK"), XdgRuntimeDirUnsetError);
+      await sendCommand("KNOCK");
+      assert.equal(await received, "KNOCK\n");
     } finally {
-      runtime.cleanup();
+      restoreXdgRuntimeDir(originalXdg);
+      restoreEnv("TMPDIR", originalTmp);
+      await closeServer(server);
+      fs.rmSync(socketPath, { force: true });
+      fs.rmSync(dir, { force: true, recursive: true });
     }
   });
 
@@ -152,12 +178,16 @@ function createRuntimeDir(): RuntimeDir {
 }
 
 function restoreXdgRuntimeDir(value: string | undefined): void {
+  restoreEnv("XDG_RUNTIME_DIR", value);
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) {
-    delete process.env.XDG_RUNTIME_DIR;
+    delete process.env[name];
     return;
   }
 
-  process.env.XDG_RUNTIME_DIR = value;
+  process.env[name] = value;
 }
 
 async function listen(server: net.Server, socketPath: string): Promise<void> {

@@ -2,7 +2,9 @@
 
 A tiny, zero-runtime-dependency **TypeScript client** for the `mxm4-hapticd`
 daemon. It sends MX Master 4 haptic waveform commands over the daemon's AF_UNIX
-socket (`$XDG_RUNTIME_DIR/mxm4-haptic.sock`).
+socket — `$XDG_RUNTIME_DIR/mxm4-haptic.sock` on Linux, `$TMPDIR/mxm4-haptic.sock`
+on macOS (the resolver mirrors the Rust daemon's `socket_path()`:
+`XDG_RUNTIME_DIR` → `TMPDIR` → `/tmp`).
 
 It mirrors the portable client surface of the Rust crate
 [`../../crates/mxm4-haptic/src/lib.rs`](../../crates/mxm4-haptic/src/lib.rs). It
@@ -19,9 +21,11 @@ replace the daemon — all device I/O, debounce, queueing, and pacing live in
 - **Runtimes**: tested on **Node ≥20** (developed on Node 26). Works under
   **Bun** via its `node:net` compatibility layer. **Deno is not supported** /
   not claimed.
-- **Platform**: Linux only at runtime — the daemon it talks to owns Linux
-  `hidraw`. The library itself only needs `node:net` + `$XDG_RUNTIME_DIR`, but
-  there is nothing for it to talk to off Linux.
+- **Platform**: Linux + macOS at runtime — wherever the `mxm4-hapticd` daemon
+  runs (the daemon reaches the device via `hidapi`: Linux hidraw, macOS IOKit).
+  The library itself only needs `node:net` + a runtime dir (`$XDG_RUNTIME_DIR`
+  on Linux, `$TMPDIR` on macOS), but there is nothing for it to talk to unless
+  the daemon is running.
 - **Dependencies**: zero runtime dependencies (`node:net` + `process.env`).
 - **Not published.** `private: true`; the `@h82/` scope is a naming namespace,
   not a registry target. Not installed by the dotfiles bootstrap.
@@ -101,7 +105,6 @@ All thrown/rejected errors extend `HapticError` (which carries a discriminant
 | Class | `code` | When |
 |---|---|---|
 | `UnknownWaveformError` | `UNKNOWN_WAVEFORM` | Name not in the table (thrown **before** connecting) |
-| `XdgRuntimeDirUnsetError` | `XDG_RUNTIME_DIR_UNSET` | `$XDG_RUNTIME_DIR` not set |
 | `SocketMissingError` | `SOCKET_MISSING` | No socket at the path (daemon not running) — `ENOENT` |
 | `ConnectionRefusedError` | `CONNECTION_REFUSED` | Socket exists but refused — `ECONNREFUSED` |
 | `HapticTimeoutError` | `TIMEOUT` | Connect+write exceeded ~500ms |
