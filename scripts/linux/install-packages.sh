@@ -88,8 +88,12 @@ EOF
   "${SUDO[@]}" dnf group install development-tools virtualization "c-development" -y
   local -a packages=(
     # Build tooling
+    clang
     gcc-c++
     pkg-config
+    # libudev headers (libudev.pc) for the mxm4-haptic crate's hidapi
+    # linux-static-hidraw backend; provided by systemd-devel on Fedora.
+    systemd-devel
 
     # CLI utilities
     btop
