@@ -15,10 +15,31 @@ event to a waveform.
 
 | OpenCode event | Waveform sent | Meaning |
 |---|---|---|
-| `session.idle` | `COMPLETED` | The agent finished its turn / the session went idle. |
+| `session.idle` | `COMPLETED` | A **root** session finished **and** all of its sub-agents are idle too (see gating below). |
+| `session.error` | `MAD` | The agent hit an error or was aborted. |
+| `permission.updated` | `RINGING` | The agent is waiting on **you** to decide (a native permission / approval request) — answer it. |
+| `Question` tool call | `RINGING` | The agent ran the `Question` tool to ask you to choose — answer it. Caught via the `tool.execute.before` hook (the tool emits no `permission.updated`). |
 
-That is the entire behavior today (see [`src/index.ts`](src/index.ts)). Add more
-`event.type` branches to react to other OpenCode events.
+See [`src/index.ts`](src/index.ts). The non-idle event mappings live in the
+`EVENT_WAVEFORMS` table; add a row there to react to another OpenCode event. The
+`Question`-tool ring is matched in the `tool.execute.before` hook against
+`QUESTION_TOOLS`.
+
+### `session.idle` gating
+
+`session.idle` fires for **every** session that goes idle — including each
+sub-agent (`task()`) session, which carries a `parentID`. Buzzing on every one
+of those would fire repeatedly during a single fan-out run. So the plugin:
+
+- **Skips child sessions.** A session with a `parentID` (a sub-agent) going idle
+  produces no pulse.
+- **Waits for all children.** A root session can report idle while a sub-agent
+  is still wrapping up, so the `COMPLETED` buzz only fires once the root **and**
+  every one of its child sessions are idle.
+
+Both checks query the OpenCode `client` (`session.get`, `session.children`,
+`session.status`). If those calls fail transiently, the plugin biases toward
+**still** delivering the buzz rather than silently dropping a completion.
 
 ## Status
 
@@ -120,20 +141,26 @@ change to take effect.
 
 | Export | Type | Notes |
 |---|---|---|
-| `MXMaster4HapticPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns an `event` hook that pulses on `session.idle`. |
+| `MXMaster4HapticPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns an `event` hook (`COMPLETED` on a fully-idle root session, `MAD` on `session.error`, `RINGING` on `permission.updated`) and a `tool.execute.before` hook (`RINGING` when the `Question` tool runs). |
 
 ## Extending
 
-Add branches inside the `event` hook in [`src/index.ts`](src/index.ts), mapping
-OpenCode event types to waveform names. The full waveform table (16 names, e.g.
-`SHARP COLLISION`, `HAPPY ALERT`, `MAD`) is documented in
-[`../mxm4-haptic/README.md`](../mxm4-haptic/README.md). Always `await
-sendCommand(...)` — it resolves only after the bytes flush to the daemon.
+For most events, add a row to the `EVENT_WAVEFORMS` table in
+[`src/index.ts`](src/index.ts), mapping an OpenCode `event.type` to a waveform
+name. The full waveform table (16 names, e.g. `SHARP COLLISION`, `HAPPY ALERT`,
+`MAD`) is documented in [`../mxm4-haptic/README.md`](../mxm4-haptic/README.md).
+Always `await sendCommand(...)` — it resolves only after the bytes flush to the
+daemon.
 
 ```ts
-event: async ({ event }) => {
-  if (event.type === "session.idle") await sendCommand("COMPLETED");
-  // e.g. react to other events:
-  // if (event.type === "session.error") await sendCommand("MAD");
-}
+const EVENT_WAVEFORMS = {
+  "session.error": "MAD",
+  "permission.updated": "RINGING",
+  // e.g. react to another event:
+  // "session.compacted": "WAVE",
+} as const satisfies Partial<Record<string, WaveformName>>;
 ```
+
+Events that need more than a flat type→waveform mapping (like `session.idle`,
+which inspects parent/child session state via the `client`) get their own branch
+in the `event` hook above the table lookup.
