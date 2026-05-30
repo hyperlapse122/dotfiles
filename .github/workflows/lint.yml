@@ -1,0 +1,65 @@
+name: lint
+
+# Lint and format-check the TypeScript/JS workspace under packages/ (the
+# @h82/dotfiles Yarn Berry monorepo). ESLint does the linting; Prettier does the
+# formatting check. Separate from packages.yml (build/typecheck/test) so a style
+# regression is reported independently of a build/test failure. The toolchain
+# (Node + Yarn) is managed by mise from packages/mise.toml; mise's tool installs
+# and Yarn's global package cache are both cached between runs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - ".github/workflows/lint.yml"
+  pull_request:
+    paths:
+      - "packages/**"
+      - ".github/workflows/lint.yml"
+
+permissions:
+  contents: read
+
+# One in-flight run per ref; newer pushes cancel older runs.
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages
+
+jobs:
+  lint:
+    name: eslint · prettier
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Installs Node + Yarn from packages/mise.toml and caches the mise tool
+      # installs (keyed on the mise config). working_directory points mise at
+      # the workspace so it reads packages/mise.toml.
+      - name: Set up mise toolchain (Node + Yarn)
+        uses: jdx/mise-action@v2
+        with:
+          working_directory: packages
+
+      # Yarn 4 uses a global cache (enableGlobalCache, the Yarn 4 default) at
+      # ~/.yarn/berry/cache. Cache it across runs, keyed on the lockfile.
+      - name: Cache Yarn global cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-berry-${{ runner.os }}-${{ hashFiles('packages/yarn.lock') }}
+          restore-keys: |
+            yarn-berry-${{ runner.os }}-
+
+      - name: Install dependencies (immutable)
+        run: yarn install --immutable
+
+      # ESLint (eslint.config.mjs per member) + Prettier --check. No build is
+      # needed — neither task dependsOn ^build in turbo.json.
+      - name: Lint and check formatting
+        run: yarn turbo run lint format:check

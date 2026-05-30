@@ -1,0 +1,6 @@
+{
+  // Extensions VS Code recommends when this workspace (packages/) is opened.
+  // Pairs with .vscode/settings.json: ESLint for linting, Prettier for
+  // formatting. Scoped to packages/ — the rest of the dotfiles repo is unaffected.
+  "recommendations": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+}

@@ -8,6 +8,7 @@ the repository root.
 | Path | Purpose |
 |---|---|
 | [`workflows/packages.yml`](workflows/packages.yml) | CI for the [`packages/`](../packages/) Yarn workspace — builds, typechecks, and tests every member on pushes to `main` and on PRs that touch `packages/**`. |
+| [`workflows/lint.yml`](workflows/lint.yml) | CI for the [`packages/`](../packages/) Yarn workspace — ESLint lint + Prettier format-check on every member, on the same triggers. Split from `packages.yml` so a style regression is reported independently of a build/test failure. |
 
 ## `workflows/packages.yml`
 
@@ -22,6 +23,18 @@ the repository root.
 - **Steps.** `yarn install --immutable` (the committed lockfile must already be
   up to date), then `yarn turbo run build typecheck test` — Turborepo runs and
   caches each member's tasks.
+
+## `workflows/lint.yml`
+
+- **Same toolchain + caching as `packages.yml`.** mise installs Node + Yarn from
+  [`packages/mise.toml`](../packages/mise.toml); the mise tool installs and Yarn 4's
+  global cache (`~/.yarn/berry/cache`) are both cached.
+- **Steps.** `yarn install --immutable`, then `yarn turbo run lint format:check` —
+  ESLint (per-member `eslint.config.mjs`) plus Prettier `--check`. Neither task
+  `dependsOn ^build` in `turbo.json`, so no build runs.
+- **Why a separate workflow.** Lint/format checks are split from build/test so a
+  style regression surfaces independently. There is intentionally **no Biome** —
+  the workspace uses ESLint for linting and Prettier for formatting.
 
 There is intentionally no bootstrap/dotbot wiring here: workflows are consumed by
 GitHub Actions, not symlinked into `$HOME`.

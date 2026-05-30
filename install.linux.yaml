@@ -84,6 +84,23 @@
       stdout: true
       stderr: true
 
+# Auto-load the @h82/opencode-mxm4-haptic plugin built by the yarn step above.
+# OpenCode scans top-level *.ts / *.js files in BOTH ~/.config/opencode/plugin/
+# and ~/.config/opencode/plugins/ (singular and plural) and loads them at
+# startup — no opencode.json `plugin` array entry needed. The link target name
+# is deliberately `mxm4-haptic.js` (NOT .mjs) so it matches that *.js auto-scan
+# glob; .mjs is NOT auto-scanned, so we point a `.js` symlink at the ESM
+# dist/index.mjs build output. The companion `.js.map` link is the sourcemap
+# (ends in .map, so it is NOT picked up as a plugin) for readable stack traces.
+# Linux-only: macOS/Windows bootstrap don't build the packages/ workspace, so
+# they don't link this. Requires the preceding yarn build to have produced
+# dist/; if that step soft-skipped (mise absent), the symlink dangles until the
+# workspace is built manually. The plugin pulses the MX Master 4 on OpenCode
+# events (session.idle -> COMPLETED) via the running mxm4-hapticd daemon.
+- link:
+    ~/.config/opencode/plugins/mxm4-haptic.js: packages/opencode-mxm4-haptic/dist/index.mjs
+    ~/.config/opencode/plugins/mxm4-haptic.js.map: packages/opencode-mxm4-haptic/dist/index.mjs.map
+
 # Root-owned system config. Delegated to scripts/linux/install-linux-system-config.sh
 # so a single `sudo` prompt covers all files (sudo's credential cache makes
 # subsequent installs in that script password-less). The script also no-ops the

@@ -1,0 +1,30 @@
+{
+  // VS Code settings SCOPED to the @h82/dotfiles Yarn workspace.
+  //
+  // This file lives under packages/.vscode (NOT the repo root) on purpose: the
+  // workspace root is packages/, so `cd ~/dotfiles` stays a plain checkout
+  // while opening packages/ as the folder activates ESLint + Prettier here and
+  // ONLY here. The rest of the dotfiles repo is never touched by these settings.
+
+  // Prettier owns formatting; format TypeScript/JS on save. (Prettier respects
+  // each package's .prettierignore, so JSON/Markdown/dist are left alone.)
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  // Only format files that have a resolved Prettier config (every member has
+  // its own .prettierrc.json), so stray files outside a package aren't touched.
+  "prettier.requireConfig": true,
+
+  // ESLint does the linting (flat config, one eslint.config.mjs per member).
+  // `{ "mode": "auto" }` makes the extension pick each file's nearest package
+  // dir as the working directory, so per-package configs resolve correctly.
+  "eslint.useFlatConfig": true,
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+  "eslint.validate": ["javascript", "typescript"],
+  // Apply ESLint autofixes on save (logic only — eslint-config-prettier turns
+  // off every stylistic rule, so ESLint and Prettier never fight).
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  }
+}

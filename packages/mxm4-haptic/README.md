@@ -39,15 +39,24 @@ yarn install --immutable                 # restore deps (single root yarn.lock)
 yarn workspace @h82/mxm4-haptic build     # tsdown -> dist/index.js (ESM) + dist/index.d.ts
 yarn workspace @h82/mxm4-haptic typecheck # tsc --noEmit
 yarn workspace @h82/mxm4-haptic test      # node --test (also runnable via `bun test`)
+yarn workspace @h82/mxm4-haptic lint      # eslint .
+yarn workspace @h82/mxm4-haptic format    # prettier --write .
 
 # or from this directory (packages/mxm4-haptic/)
 yarn build && yarn test
+yarn lint && yarn format:check
 ```
 
 The package is ESM-only (`"type": "module"`) and builds with
 [`tsdown`](https://tsdown.dev) (Rolldown-based), configured in
 [`tsdown.config.ts`](tsdown.config.ts), emitting `dist/index.js` + bundled
 `dist/index.d.ts`. Type-checking is a separate `tsc --noEmit` pass.
+
+Linting is ESLint ([`eslint.config.mjs`](eslint.config.mjs):
+`@eslint/js` + `typescript-eslint` recommended) and formatting is Prettier
+([`.prettierrc.json`](.prettierrc.json), `printWidth: 100`), with
+`eslint-config-prettier` keeping the two from disagreeing on style. See
+[`../README.md`](../README.md#lint--format) for the workspace-wide convention.
 
 ## Usage
 

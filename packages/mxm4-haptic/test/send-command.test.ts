@@ -7,14 +7,10 @@ import { describe, test } from "node:test";
 
 import {
   sendCommand,
-  waveformId,
-  waveformNames,
-  WAVEFORMS,
   SocketMissingError,
   XdgRuntimeDirUnsetError,
   UnknownWaveformError,
   HapticTimeoutError,
-  ConnectionRefusedError,
 } from "../src/index.ts";
 
 describe("sendCommand", () => {
@@ -190,7 +186,10 @@ async function closeServer(server: net.Server, sockets = new Set<SocketLike>()):
   });
 }
 
-async function assertRejectsAs(promise: Promise<unknown>, ErrorClass: Function): Promise<unknown> {
+async function assertRejectsAs(
+  promise: Promise<unknown>,
+  ErrorClass: abstract new (...args: never[]) => Error,
+): Promise<unknown> {
   let rejection: unknown;
 
   await assert.rejects(
