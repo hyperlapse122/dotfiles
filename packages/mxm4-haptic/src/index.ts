@@ -27,8 +27,14 @@ export const WAVEFORMS = [
 
 export type WaveformName = (typeof WAVEFORMS)[number][0];
 
-const WAVEFORM_IDS: ReadonlyMap<string, number> = new Map(WAVEFORMS);
-const WAVEFORM_NAMES = WAVEFORMS.map(([name]) => name);
+const WAVEFORM_NAMES: ReadonlySet<WaveformName> = new Set(WAVEFORMS.map(([name]) => name));
+
+// Runtime guard for plain-JS callers that bypass the `WaveformName` type;
+// typed TypeScript callers are already constrained at compile time. Keep it:
+// it is not dead code despite `sendCommand` declaring a `WaveformName` param.
+function isWaveformName(name: string): name is WaveformName {
+  return WAVEFORM_NAMES.has(name as WaveformName);
+}
 
 export class HapticError<Code extends string = string> extends Error {
   readonly code: Code;
@@ -81,15 +87,7 @@ export class HapticTimeoutError extends HapticError<"TIMEOUT"> {
   }
 }
 
-export function waveformNames(): readonly string[] {
-  return WAVEFORM_NAMES;
-}
-
-export function waveformId(name: string): number | undefined {
-  return WAVEFORM_IDS.get(name.toUpperCase());
-}
-
-export function socketPath(): string | undefined {
+function socketPath(): string | undefined {
   const runtimeDir = process.env.XDG_RUNTIME_DIR;
   return runtimeDir ? `${runtimeDir}/mxm4-haptic.sock` : undefined;
 }
@@ -101,8 +99,8 @@ export function socketPath(): string | undefined {
  * pulse — Node buffers writes; the Rust client flushed synchronously on socket
  * drop.
  */
-export async function sendCommand(name: string): Promise<void> {
-  if (waveformId(name) === undefined) {
+export async function sendCommand(name: WaveformName): Promise<void> {
+  if (!isWaveformName(name)) {
     throw new UnknownWaveformError(name);
   }
 
@@ -111,7 +109,7 @@ export async function sendCommand(name: string): Promise<void> {
     throw new XdgRuntimeDirUnsetError();
   }
 
-  const payload = `${name.toUpperCase()}\n`;
+  const payload = `${name}\n`;
 
   await new Promise<void>((resolve, reject) => {
     const socket = net.createConnection({ path });

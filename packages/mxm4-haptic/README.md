@@ -61,14 +61,16 @@ Linting is ESLint ([`eslint.config.mjs`](eslint.config.mjs):
 ## Usage
 
 ```ts
-import { sendCommand, waveformNames, waveformId } from "@h82/mxm4-haptic";
+import { sendCommand, WAVEFORMS, type WaveformName } from "@h82/mxm4-haptic";
 
 // Fire a pulse. ALWAYS await — see the warning below.
+// `sendCommand` only accepts a `WaveformName`, so typos are a compile error.
 await sendCommand("SHARP COLLISION");
 
-waveformNames();              // -> readonly ["SHARP STATE CHANGE", ..., "WHISPER COLLISION"]
-waveformId("subtle collision"); // -> 4 (case-insensitive)
-waveformId("nope");           // -> undefined
+const wave: WaveformName = "COMPLETED";
+await sendCommand(wave);
+
+WAVEFORMS; // -> readonly [["SHARP STATE CHANGE", 0], ..., ["WHISPER COLLISION", 27]]
 ```
 
 ### ⚠️ Always `await sendCommand`
@@ -83,12 +85,13 @@ drop the pulse. The Rust client got away with fire-and-forget because dropping a
 
 | Export | Signature | Notes |
 |---|---|---|
-| `WAVEFORMS` | `readonly [readonly [name, id], ...]` | 16 `[name, id]` tuples in firmware order |
-| `WaveformName` | `type` | Union of the 16 literal waveform names |
-| `waveformNames()` | `() => readonly string[]` | Names in source order |
-| `waveformId(name)` | `(name: string) => number \| undefined` | Case-insensitive (uppercases input) |
-| `socketPath()` | `() => string \| undefined` | `$XDG_RUNTIME_DIR/mxm4-haptic.sock`, `undefined` if unset |
-| `sendCommand(name)` | `(name: string) => Promise<void>` | Validates, connects, writes `NAME\n`, resolves on flush |
+| `WAVEFORMS` | `readonly [readonly [name, id], ...]` | The available waveforms: 16 `[name, id]` tuples in firmware order. Source of truth for `WaveformName`. |
+| `WaveformName` | `type` | Union of the 16 literal waveform names, derived from `WAVEFORMS`. |
+| `sendCommand(name)` | `(name: WaveformName) => Promise<void>` | Type-safe entry point. Validates, connects, writes `NAME\n`, resolves on flush. |
+
+The lookup helpers (`waveformNames`, `waveformId`) and `socketPath` are
+**internal** — they are no longer exported. Enumerate the catalogue via
+`WAVEFORMS` and let the `WaveformName` type guard call sites instead.
 
 ### Errors
 

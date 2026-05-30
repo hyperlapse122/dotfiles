@@ -11,6 +11,7 @@ import {
   XdgRuntimeDirUnsetError,
   UnknownWaveformError,
   HapticTimeoutError,
+  type WaveformName,
 } from "../src/index.ts";
 
 describe("sendCommand", () => {
@@ -81,7 +82,9 @@ describe("sendCommand", () => {
     try {
       await listen(server, runtime.socketPath);
 
-      await assert.rejects(sendCommand("bogus"), UnknownWaveformError);
+      // Simulate a plain-JS caller bypassing the WaveformName type, exercising
+      // the runtime guard that rejects before opening a connection.
+      await assert.rejects(sendCommand("bogus" as WaveformName), UnknownWaveformError);
       assert.equal(connections, 0);
     } finally {
       await closeServer(server);
