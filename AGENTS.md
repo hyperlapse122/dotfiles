@@ -2,9 +2,7 @@
 
 Cross-platform dotfiles for **Windows + macOS + Fedora Linux**. Symlinks are managed by [dotbot](https://github.com/anishathalye/dotbot) invoked via mise-managed `uvx`.
 
-> **Status**: bootstrapped. Framework is in place; per-app dotfile content is migrated from `~/nix-config` (Home Manager outputs) commit-by-commit.
->
-> **NixOS is being decommissioned.** Home Manager-generated outputs (`~/.config/*`, `~/.zshrc`, `~/.gnupg/*.conf`, etc.) are imported INTO this repo as the new source of truth. **Once a file is migrated, edit it HERE — never in `~/nix-config/`.** The Nix source tree is being abandoned and will be deleted after Fedora migration.
+> **Status**: fully bootstrapped and migrated. This repo is the single source of truth for every tracked dotfile — edit files HERE.
 
 User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md`) is for agents only.
 
@@ -47,6 +45,8 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ```
 
 Every tracked top-level directory MUST have its own `README.md` describing what lives there and how it is consumed. Untracked tool state directories such as `.git/`, `.codex/`, and `.sisyphus/` are not part of the documented repo surface.
+
+**Exception — `.github/`.** This directory MUST NOT contain a `README.md`. GitHub gives `.github/README.md` precedence over the root `README.md` for the repository landing page, so a readme here would shadow the top-level `README.md`. Document `.github/` in [`.github/WORKFLOWS.md`](.github/WORKFLOWS.md) instead (GitHub does not treat that filename as a profile readme).
 
 ## Hard rules
 
@@ -115,7 +115,7 @@ The script exits 0 immediately when invoked from a non-interactive shell (stdin 
 ### Runtime agent config
 
 - `.agents/skills/` is reserved for repo-local skills that describe how to operate this repository. No skills are currently tracked.
-- `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime. Do not describe it as Nix-managed.
+- `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime.
 - `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
 - `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
 - `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global AGENTS.md path: `~/.config/opencode/AGENTS.md` (OpenCode) and `~/.codex/AGENTS.md` (Codex). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
@@ -175,7 +175,7 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 - Adding `home/.config/opencode/commands/`. `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`; a sibling source would conflict. Put new slash commands in `agents/commands/`.
 - Hand-editing `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/commands/*`, or `~/.codex/prompts/*`. Those are symlinks into `agents/` — edit the source under `agents/`.
 - Updating agent workflow rules in only one `AGENTS.md` when the change also applies to the linked runtime agent docs.
-- Editing migrated files inside `~/nix-config/`. That source tree is being abandoned — edit the copy in this repo's `home/` instead. Re-deriving from `~/nix-config/*.nix` modules is also wrong: those Nix expressions are not the canonical source post-migration.
+- Adding a `README.md` under `.github/`. It would shadow the root `README.md` on GitHub's landing page — document `.github/` in `.github/WORKFLOWS.md` instead.
 
 ## Solaar haptic playback (MX Master 4)
 
@@ -215,7 +215,7 @@ Multi-word names **require quoting**. Intensity scales with `haptic-level` (0-10
 
 For a non-Solaar path (direct HID++ over the Bolt receiver's `:1.2` hidraw to feature `0x19B0`), the byte sequence is what `mxm4-hapticd` implements — see [`crates/mxm4-haptic/src/lib.rs`](crates/mxm4-haptic/src/lib.rs) for the exact packet layout. The full HID++ 2.0 spec documents the rest.
 
-For Node/Bun consumers there is a TypeScript client library, [`@h82/mxm4-haptic`](packages/mxm4-haptic/), a member of the [`packages/`](packages/) Yarn workspace (the `@h82/dotfiles` monorepo rooted at `packages/`). It is a thin client that mirrors the Rust crate's portable surface (waveform table + lookups + `socketPath()` + a flush-confirmed `sendCommand()`) and talks to the running `mxm4-hapticd` daemon over the same `$XDG_RUNTIME_DIR/mxm4-haptic.sock` AF_UNIX socket — it does **not** touch hidraw or replace the daemon. It is **not** installed or symlinked by dotbot (a library ships nothing to `~/.local/bin`); the Linux bootstrap only `yarn build`s the workspace in place. The Rust `mxm4-haptic` client binary remains the latency-critical path used by Solaar rules.
+For Node/Bun consumers there is a TypeScript client library, [`@h82/mxm4-haptic`](packages/mxm4-haptic/), a member of the [`packages/`](packages/) Yarn workspace (the `@h82/dotfiles` monorepo rooted at `packages/`). It is a thin client that mirrors the Rust crate's portable surface, exporting only the `WAVEFORMS` catalogue, the derived `WaveformName` type, and a type-safe, flush-confirmed `sendCommand(name: WaveformName)` (waveform lookups and the socket-path resolver are kept internal); it talks to the running `mxm4-hapticd` daemon over the same `$XDG_RUNTIME_DIR/mxm4-haptic.sock` AF_UNIX socket — it does **not** touch hidraw or replace the daemon. It is **not** installed or symlinked by dotbot (a library ships nothing to `~/.local/bin`); the Linux bootstrap only `yarn build`s the workspace in place. The Rust `mxm4-haptic` client binary remains the latency-critical path used by Solaar rules.
 
 One consumer of `@h82/mxm4-haptic` is [`@h82/opencode-mxm4-haptic`](packages/opencode-mxm4-haptic/), an OpenCode plugin (also a `packages/` workspace member) that pulses a waveform on OpenCode events — currently `session.idle` → `COMPLETED`, giving a tactile "agent finished" buzz. It bundles `@h82/mxm4-haptic` into its build output (`alwaysBundle`) and leaves `@opencode-ai/plugin` external (`neverBundle`, host-provided); it exports `MXMaster4HapticPlugin`. On **Linux** the bootstrap enables it automatically: after the `yarn build` step, [`install.linux.yaml`](install.linux.yaml) symlinks the built `dist/index.mjs` to `~/.config/opencode/plugins/mxm4-haptic.js`. OpenCode auto-loads top-level `*.ts`/`*.js` files in both `~/.config/opencode/plugin/` and `~/.config/opencode/plugins/` (singular and plural) at startup, so no `opencode.json` `plugin` array entry is needed — the symlink is named `.js` (not `.mjs`, which is **not** in OpenCode's auto-scan glob) to match. macOS/Windows don't build the workspace, so they don't link it; enable it manually there by adding the built module to an OpenCode config's `plugin` array.
 

@@ -263,13 +263,13 @@ else
   printf '  -- firewalld: skipped (firewalld not running)\n'
 fi
 
-# Remove dangling symlinks under /etc/NetworkManager/conf.d/. Home
-# Manager (pre-Nix-decommission) installed NM drop-ins as symlinks into
-# /nix/store/...; once the store is garbage-collected those become
-# broken links that NetworkManager logs warnings for on every reload and
-# that `ls -l` flags red. We only delete symlinks whose targets are
-# missing — regular files and live symlinks are left untouched, so this
-# can't accidentally remove a drop-in placed by another tool.
+# Remove dangling symlinks under /etc/NetworkManager/conf.d/. A drop-in
+# installed by another tool as a symlink into a store/cache path becomes a
+# broken link once that target is removed; NetworkManager then logs
+# warnings on every reload and `ls -l` flags it red. We only delete
+# symlinks whose targets are missing — regular files and live symlinks are
+# left untouched, so this can't accidentally remove a drop-in placed by
+# another tool.
 if [[ -d /etc/NetworkManager/conf.d ]]; then
   stale=0
   for link in /etc/NetworkManager/conf.d/*; do
