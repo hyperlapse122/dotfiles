@@ -139,12 +139,12 @@
 	"provider": {
 		"opencode": {
 			"options": {
-				"apiKey": "{file:~/.secrets/opencode-api-key}",
+				"apiKey": "{file:~/.secrets/opencode-api-key}"
 			}
 		},
 		"opencode-go": {
 			"options": {
-				"apiKey": "{file:~/.secrets/opencode-api-key}",
+				"apiKey": "{file:~/.secrets/opencode-api-key}"
 			}
 		},
 		"openrouter": {

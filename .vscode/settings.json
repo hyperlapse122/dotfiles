@@ -1,4 +1,11 @@
 {
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.formatOnSave": true
+  },
+  "files.associations": {
+    "*.json": "json"
+  },
   "rust-analyzer.linkedProjects": [
     "crates/mxm4-haptic/Cargo.toml"
   ]
