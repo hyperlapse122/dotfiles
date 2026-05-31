@@ -31,11 +31,22 @@
 # method org.kde.krunner.App.toggleDisplay present (qdbus-qt6 org.kde.krunner
 # /App). Solaar 1.1.19.
 #
-#   hold + flick Up    -> Desktop Grid         (Grid View)
-#   hold + flick Down  -> Show Desktop / peek   (Show Desktop)
-#   hold + flick Left  -> snap window left      (Window Quick Tile Left)
-#   hold + flick Right -> snap window right     (Window Quick Tile Right)
+#   hold + flick Up    -> Desktop Grid         (Grid View)        + haptic
+#   hold + flick Down  -> Show Desktop / peek   (Show Desktop)     + haptic
+#   hold + flick Left  -> snap window left      (Window Quick Tile Left)  + haptic
+#   hold + flick Right -> snap window right     (Window Quick Tile Right) + haptic
 #   press, no movement -> KRunner launcher      (krunner toggleDisplay)
+#
+# Haptic confirm: each of the four DIRECTIONAL gestures also fires
+# `mxm4-haptic "SUBTLE COLLISION"` — a tactile "your flick registered" tick,
+# Logi-action-ring style. It uses the mxm4-hapticd daemon client (binary in
+# ~/.local/bin, on the user PATH the autostart Solaar service inherits), NOT
+# `Set: [null, haptic-play, ...]`: the daemon does a direct hidraw write with
+# no HID++ ack wait, so the pulse is instant and consistent (see the root
+# AGENTS.md "Solaar haptic playback" alternatives table). The press-with-no-
+# movement KRunner rule is intentionally left silent — KRunner visibly pops up,
+# so it is self-confirming and needs no tick. The Execute list form runs
+# through subprocess.Popen with shell=False (no quoting/injection surface).
 #
 # Wayland caveat (printed by `solaar show`): "rules cannot access modifier
 # keys in Wayland". Every action below uses a DBus Execute instead of a
@@ -54,21 +65,25 @@
 ---
 - MouseGesture: Mouse Up
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Grid View]
+- Execute: [mxm4-haptic, "SUBTLE COLLISION"]
 ...
 
 ---
 - MouseGesture: Mouse Down
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Show Desktop]
+- Execute: [mxm4-haptic, "SUBTLE COLLISION"]
 ...
 
 ---
 - MouseGesture: Mouse Left
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Left]
+- Execute: [mxm4-haptic, "SUBTLE COLLISION"]
 ...
 
 ---
 - MouseGesture: Mouse Right
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Right]
+- Execute: [mxm4-haptic, "SUBTLE COLLISION"]
 ...
 
 # Press with no movement (a plain click on the gesture-diverted thumb button)
