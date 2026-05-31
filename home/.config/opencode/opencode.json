@@ -180,7 +180,7 @@
 			}
 		}
 	},
-	"small_model": "openai/gpt-5.4-mini-fast",
+	"small_model": "openai/gpt-5.4-mini",
 	"server": {
 		"hostname": "0.0.0.0"
 	}
