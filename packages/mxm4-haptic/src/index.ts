@@ -2,10 +2,23 @@ import * as net from "node:net";
 
 const SEND_TIMEOUT_MS = 500;
 
-// WAVEFORM IDS MIRROR crates/mxm4-haptic/src/lib.rs (WAVEFORMS, lines ~24-41).
-// The firmware enum has a GAP between MAD (11) and WHISPER COLLISION (27):
-// WHISPER COLLISION = 27, NOT 15. Do NOT "fix" this to a contiguous 0..15.
-// Source: logitech_receiver.hidpp20_constants.HapticWaveForms.
+// WAVEFORM IDS MIRROR crates/mxm4-haptic/src/lib.rs (WAVEFORMS). The Rust
+// const is the source of truth; test/drift-guard.test.ts asserts parity.
+// The firmware enum has a GAP: ids run 0x00..0x0E contiguously, then
+// 0x0F..0x1A are unused and WHISPER COLLISION jumps to 0x1B (27), NOT 15.
+// Do NOT "fix" this to a contiguous 0..15.
+//
+// Feature 0x19B0 (HAPTIC) and its waveform set are NOT in Logitech's public
+// HID++ 2.0 docs; the catalogue is community reverse-engineered and
+// cross-verified against four independent impls (canonical = Solaar):
+// - Solaar HapticWaveForms enum (1st source):
+//   https://github.com/pwr-Solaar/Solaar/blob/f68230b83d2ea83c222e1bdfc7f404777f78dc1b/lib/logitech_receiver/hidpp20_constants.py#L368-L385
+// - Solaar HAPTIC = 0x19B0 + PlayHapticWaveForm setting (write_fnid 0x40):
+//   https://github.com/pwr-Solaar/Solaar/blob/f68230b83d2ea83c222e1bdfc7f404777f78dc1b/lib/logitech_receiver/settings_templates.py#L4411-L4432
+// - JuhLabs/juhradial-mx Mx4HapticPattern (Rust, same enum):
+//   https://github.com/JuhLabs/juhradial-mx/blob/48939bae45fd074b209264f0cafd709844a4a996/daemon/src/hidpp/patterns.rs#L77-L166
+// - olafnew/MasterMice raw HID++ haptic packets (func 0x04 = 0x4A play):
+//   https://github.com/olafnew/MasterMice/blob/878f294e64ea5c527997a238de4afc1a0b5650c/service/internal/hidpp/haptic.go#L106-L159
 export const WAVEFORMS = [
   ["SHARP STATE CHANGE", 0],
   ["DAMP STATE CHANGE", 1],

@@ -18,8 +18,29 @@ use std::time::Duration;
 
 /// (name, id) for every HAPTIC waveform. IDs from
 /// logitech_receiver.hidpp20_constants.HapticWaveForms. Note WHISPER
-/// COLLISION = 27, not 15 — the firmware enum has a gap between MAD (11)
-/// and WHISPER COLLISION (27).
+/// COLLISION = 27 (0x1B), not 15 — the firmware enum has a gap: ids run
+/// 0x00..=0x0E contiguously, then 0x0F..=0x1A are unused and the last
+/// waveform jumps to 0x1B. Do NOT "fix" this to a contiguous 0..15.
+///
+/// Feature 0x19B0 (HAPTIC) and its waveform set are NOT in Logitech's
+/// public HID++ 2.0 docs (cpg-docs only specifies the generic packet /
+/// IRoot.GetFeature mechanism); the catalogue below is community
+/// reverse-engineered and cross-verified against four independent impls:
+///
+/// References (canonical source = Solaar):
+/// - Solaar HapticWaveForms enum (1st source):
+///   <https://github.com/pwr-Solaar/Solaar/blob/f68230b83d2ea83c222e1bdfc7f404777f78dc1b/lib/logitech_receiver/hidpp20_constants.py#L368-L385>
+/// - Solaar HAPTIC = 0x19B0 + PlayHapticWaveForm setting (write_fnid 0x40,
+///   probes feature_request(HAPTIC, 0x00) for supported waveforms):
+///   <https://github.com/pwr-Solaar/Solaar/blob/f68230b83d2ea83c222e1bdfc7f404777f78dc1b/lib/logitech_receiver/settings_templates.py#L4411-L4432>
+/// - JuhLabs/juhradial-mx Mx4HapticPattern (Rust, same enum):
+///   <https://github.com/JuhLabs/juhradial-mx/blob/48939bae45fd074b209264f0cafd709844a4a996/daemon/src/hidpp/patterns.rs#L77-L166>
+/// - olafnew/MasterMice raw HID++ haptic packets (func 0x02 = 0x2A,
+///   func 0x04 = 0x4A play):
+///   <https://github.com/olafnew/MasterMice/blob/878f294e64ea5c527997a238de4afc1a0b5650c/service/internal/hidpp/haptic.go#L106-L159>
+///
+/// Feature 0x19B0 functions (community-documented): 0x00 query supported
+/// waveform bitmask, 0x02 enable/intensity, 0x04 play.
 pub const WAVEFORMS: &[(&str, u8)] = &[
     ("SHARP STATE CHANGE", 0),
     ("DAMP STATE CHANGE", 1),
