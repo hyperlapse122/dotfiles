@@ -99,6 +99,11 @@ EOF
     btop
     fd-find
     gh
+    # kdotool: Wayland xdotool clone that queries KWin's active window via KWin
+    # scripting (no X11 dependency). Installed to support focus-gating the
+    # .zshrc long-command haptic hook — so a finished long command can stay
+    # silent when the focused window is the terminal you are already watching.
+    kdotool
     ripgrep
     xxd
     yp-tools
