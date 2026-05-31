@@ -77,7 +77,7 @@ Install [`mise`](https://mise.jdx.dev/) before bootstrapping — it supplies [`u
 | [`packages/`](./packages/) | Private `@h82/dotfiles` Yarn Berry monorepo of TS/JS libraries — built in place, never installed |
 | [`agents/`](./agents/) | Cross-tool AI agent rules and slash commands linked into OpenCode & Codex |
 | [`.agents/`](./.agents/) | Reserved repo-local agent skill tree (placeholder today) |
-| [`.github/`](./.github/) | CI: `packages.yml` (build/typecheck/test) and `lint.yml` (ESLint + Prettier) for the `packages/` workspace |
+| [`.github/`](./.github/) | CI: `packages.yml` (build/typecheck/test) and `lint.yml` (ESLint + Prettier) for the `packages/` workspace, plus an hourly workflow that opens PRs bumping opencode plugins to their latest GitHub release |
 
 [`AGENTS.md`](./AGENTS.md) is the authoritative source for repo conventions — read it before adding files. Every tracked top-level directory carries its own `README.md`.
 

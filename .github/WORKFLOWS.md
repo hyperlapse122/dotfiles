@@ -15,6 +15,8 @@ the repository root.
 |---|---|
 | [`workflows/packages.yml`](workflows/packages.yml) | CI for the [`packages/`](../packages/) Yarn workspace — builds, typechecks, and tests every member on pushes to `main` and on PRs that touch `packages/**`. |
 | [`workflows/lint.yml`](workflows/lint.yml) | CI for the [`packages/`](../packages/) Yarn workspace — ESLint lint + Prettier format-check on every member, on the same triggers. Split from `packages.yml` so a style regression is reported independently of a build/test failure. |
+| [`workflows/opencode-plugin-updates.yml`](workflows/opencode-plugin-updates.yml) | Hourly (cron) + manual dispatcher that fans out over a matrix of opencode plugins, calling the reusable `update-opencode-plugin.yml` once per plugin. |
+| [`workflows/update-opencode-plugin.yml`](workflows/update-opencode-plugin.yml) | Reusable (`workflow_call`) workflow that compares one plugin's pinned version in [`home/.config/opencode/opencode.json`](../home/.config/opencode/opencode.json) against the latest GitHub release of its upstream repo and opens a PR bumping it. |
 
 ## `workflows/packages.yml`
 
@@ -41,6 +43,37 @@ the repository root.
 - **Why a separate workflow.** Lint/format checks are split from build/test so a
   style regression surfaces independently. There is intentionally **no Biome** —
   the workspace uses ESLint for linting and Prettier for formatting.
+
+## `workflows/opencode-plugin-updates.yml` + `workflows/update-opencode-plugin.yml`
+
+Keep the opencode plugins pinned in
+[`home/.config/opencode/opencode.json`](../home/.config/opencode/opencode.json)
+up to date with their upstream GitHub releases.
+
+- **Dispatcher (`opencode-plugin-updates.yml`).** Runs hourly (`cron: "0 * * * *"`,
+  UTC) and on manual `workflow_dispatch`. A single job uses a `matrix` (one entry
+  per plugin) to call the reusable workflow with two inputs: the plugin's package
+  name *exactly as written in the config `plugin` array* and the GitHub
+  `owner/repo` that publishes its releases. **To track a new plugin, add one
+  matrix entry — nothing else changes.** `fail-fast: false` keeps one plugin's
+  failure from aborting the others.
+- **Reusable worker (`update-opencode-plugin.yml`, `workflow_call`).** For one
+  plugin: reads the latest release tag via `gh release view` (strips the
+  `tag-prefix`, default `v`), reads the currently pinned version from the config,
+  and when they differ, bumps the version and opens a PR (assigned to the repo
+  owner) on a per-version branch `automation/opencode-plugin/<slug>/<version>`.
+  It is idempotent — an existing branch for that exact version short-circuits —
+  and it closes superseded automation PRs for the same plugin so only the newest
+  bump stays open.
+- **Format-preserving bump.** The worker does a literal substitution (Perl
+  `\Q..\E`) on the single version token rather than a `jq` rewrite, so the
+  config's exact formatting (tabs, key order, spacing) is preserved and the diff
+  stays one line. A `jq` pass would reserialize and reformat the whole file.
+- **Requirements.** Both workflows declare `contents: write` + `pull-requests: write`.
+  The repo setting *Settings → Actions → General → Workflow permissions → Allow
+  GitHub Actions to create and approve pull requests* must be enabled for the
+  default `GITHUB_TOKEN` to open the PRs. PRs opened by `GITHUB_TOKEN` do not
+  trigger further workflow runs.
 
 There is intentionally no bootstrap/dotbot wiring here: workflows are consumed by
 GitHub Actions, not symlinked into `$HOME`.

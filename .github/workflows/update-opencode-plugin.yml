@@ -1,0 +1,179 @@
+name: update-opencode-plugin
+
+# Reusable workflow: check ONE opencode plugin's pinned version in the opencode
+# config against the latest GitHub release of its upstream repo, and open a PR
+# bumping it when they differ. Parameterized so it can be reused for any plugin
+# added to opencode later — the caller (opencode-plugin-updates.yml) drives it
+# once per plugin via a matrix.
+#
+# The version bump is a literal, formatting-preserving text substitution
+# (Perl \Q..\E) on the single version token, not a jq rewrite: it preserves the
+# config's exact formatting (tabs, key order, spacing) and keeps the diff to one
+# line. A jq pass would reserialize and reformat the whole file.
+
+on:
+  workflow_call:
+    inputs:
+      plugin:
+        description: >-
+          Plugin package name exactly as it appears in the opencode config
+          "plugin" array, WITHOUT the @version suffix
+          (e.g. "oh-my-openagent" or "@ex-machina/opencode-anthropic-auth").
+        required: true
+        type: string
+      repository:
+        description: >-
+          GitHub "owner/repo" whose latest release is the source of truth for
+          this plugin's version (e.g. "code-yeongyu/oh-my-openagent").
+        required: true
+        type: string
+      tag-prefix:
+        description: >-
+          Prefix stripped from the release tag to derive the bare version.
+          Both current upstreams tag as "vX.Y.Z" while the config pins "X.Y.Z".
+        required: false
+        default: "v"
+        type: string
+      config-path:
+        description: Path (repo-relative) to the opencode config file to update.
+        required: false
+        default: "home/.config/opencode/opencode.json"
+        type: string
+
+# Needs write to push the branch and open/close PRs. The caller must grant at
+# least these; a reusable workflow cannot escalate beyond the caller's grant.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: ${{ inputs.plugin }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve current vs latest version
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLUGIN: ${{ inputs.plugin }}
+          REPO: ${{ inputs.repository }}
+          TAG_PREFIX: ${{ inputs.tag-prefix }}
+          CONFIG: ${{ inputs.config-path }}
+        run: |
+          set -euo pipefail
+
+          # Latest published release tag from upstream, prefix stripped.
+          tag="$(gh release view --repo "$REPO" --json tagName --jq '.tagName')"
+          latest="${tag#"$TAG_PREFIX"}"
+
+          # Currently pinned entry in the config. Escape the package name
+          # for the grep regex (it may contain '.', etc.; '/' is not special in
+          # ERE so it is left alone to avoid grep's "stray \ before /" warning),
+          # then locate the literal `"<plugin>@<version>"` token.
+          esc="$(printf '%s' "$PLUGIN" | sed -E 's/[][\.^$*+?(){}|]/\\&/g')"
+          entry="$(grep -oE "\"${esc}@[^\"]+\"" "$CONFIG" | head -n1 || true)"
+          if [ -z "$entry" ]; then
+            echo "::error::Plugin '$PLUGIN' not found in $CONFIG"
+            exit 1
+          fi
+          # Strip the literal `"<plugin>@` prefix and trailing `"` via bash
+          # parameter expansion (quoted patterns => literal; no regex delimiter
+          # to clash with '/' in scoped package names).
+          tmp="${entry#"\"${PLUGIN}@"}"
+          current="${tmp%\"}"
+
+          {
+            echo "tag=$tag"
+            echo "current=$current"
+            echo "latest=$latest"
+          } >>"$GITHUB_OUTPUT"
+
+          if [ "$current" = "$latest" ]; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+            echo "✓ $PLUGIN is up to date ($current)"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+            echo "↑ $PLUGIN: $current → $latest"
+          fi
+
+      - name: Bump version and open PR
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          PLUGIN: ${{ inputs.plugin }}
+          REPO: ${{ inputs.repository }}
+          CONFIG: ${{ inputs.config-path }}
+          CURRENT: ${{ steps.versions.outputs.current }}
+          LATEST: ${{ steps.versions.outputs.latest }}
+          RELEASE_TAG: ${{ steps.versions.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # Branch carries the target version, so each distinct bump gets its own
+          # branch + PR and we never force-push a shared branch.
+          slug="$(printf '%s' "$PLUGIN" | sed -E 's#^@##; s#[/@]+#-#g')"
+          branch="automation/opencode-plugin/${slug}/${LATEST}"
+
+          # Idempotent: if this exact-version branch already exists on the remote,
+          # a previous run already opened the PR — nothing to do.
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Branch $branch already exists; PR already open. Skipping."
+            exit 0
+          fi
+
+          # Literal, formatting-preserving substitution. \Q..\E quotes every
+          # metacharacter in the package name and version; env vars avoid @ARGV
+          # confusion with the target file.
+          OLD="\"${PLUGIN}@${CURRENT}\"" NEW="\"${PLUGIN}@${LATEST}\"" \
+            perl -i -pe 's/\Q$ENV{OLD}\E/$ENV{NEW}/g' "$CONFIG"
+
+          if git diff --quiet -- "$CONFIG"; then
+            echo "::error::Version bump produced no change to $CONFIG; aborting."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git switch -c "$branch"
+          git add -- "$CONFIG"
+          git commit -m "chore(opencode): bump ${PLUGIN} to ${LATEST}"
+          git push -u origin "$branch"
+
+          body="$(cat <<EOF
+          Automated update of \`${PLUGIN}\` in \`${CONFIG}\`.
+
+          | | Version |
+          |---|---|
+          | Current | \`${CURRENT}\` |
+          | Latest | \`${LATEST}\` |
+
+          Source: https://github.com/${REPO}/releases/tag/${RELEASE_TAG}
+
+          Opened by the \`opencode-plugin-updates\` automation.
+          EOF
+          )"
+
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore(opencode): bump ${PLUGIN} to ${LATEST}" \
+            --body "$body" \
+            --assignee "$OWNER"
+
+          # Close any superseded automation PRs for the same plugin (older target
+          # versions), so only the newest bump stays open.
+          gh pr list --state open --json number,headRefName \
+            --jq ".[]
+                  | select(.headRefName | startswith(\"automation/opencode-plugin/${slug}/\"))
+                  | select(.headRefName != \"${branch}\")
+                  | .number" \
+          | while read -r num; do
+              [ -n "$num" ] || continue
+              gh pr comment "$num" --body "Superseded by the bump to \`${LATEST}\`. Closing."
+              gh pr close "$num" --delete-branch
+            done
