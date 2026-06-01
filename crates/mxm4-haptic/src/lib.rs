@@ -9,11 +9,16 @@
 //! keeps a single owner of the HID++ session and removes the on-disk
 //! cache the old single-shot binary needed.
 //!
-//! Linux + macOS. Device access goes through the `hidapi` crate (daemon
-//! only); the AF_UNIX socket works on both platforms. See crates/README.md.
+//! Linux + macOS + Windows. Device access goes through the `hidapi` crate
+//! (daemon only). The client<->daemon rendezvous is an AF_UNIX socket on
+//! Unix and a Win32 named pipe on Windows (std has no AF_UNIX there); both
+//! are abstracted behind `socket_path()`, `send_command()`, and `IpcServer`.
+//! See crates/README.md.
 
 use std::io::{self, Write};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
+#[cfg(unix)]
 use std::time::Duration;
 
 /// (name, id) for every HAPTIC waveform. IDs from
@@ -71,28 +76,47 @@ pub fn waveform_names() -> Vec<&'static str> {
     WAVEFORMS.iter().map(|(n, _)| *n).collect()
 }
 
-/// AF_UNIX rendezvous between the clients and the daemon. Lives in the
-/// per-user runtime dir so it is never reachable outside this user session.
+/// Windows named-pipe endpoint, shared byte-for-byte with the TS client
+/// `@h82/mxm4-haptic` (packages/mxm4-haptic/src/index.ts). The two MUST
+/// agree. Unlike the per-user POSIX runtime dir, this is the machine-global
+/// `\\.\pipe` namespace; the server relies on the pipe's default ACL (which
+/// grants the creating user full control) — see the crate README caveat.
+#[cfg(windows)]
+pub const WINDOWS_PIPE_PATH: &str = r"\\.\pipe\mxm4-haptic";
+
+/// Rendezvous endpoint between the clients and the daemon.
 ///
-/// Linux: `$XDG_RUNTIME_DIR` (a 0700 tmpfs the kernel reaps on logout).
-/// macOS: there is no `XDG_RUNTIME_DIR`; fall back to `$TMPDIR`, which
-/// launchd sets per-user to the private 0700 `DARWIN_USER_TEMP_DIR`
-/// (`/var/folders/.../T/`) — the closest equivalent. Last-resort `/tmp`
-/// keeps the client/daemon able to rendezvous on an unusual session.
+/// Windows: a named pipe (`\\.\pipe\mxm4-haptic`); std has no AF_UNIX there.
+///
+/// Unix: an AF_UNIX socket in the per-user runtime dir so it is never
+/// reachable outside this user session.
+///   Linux: `$XDG_RUNTIME_DIR` (a 0700 tmpfs the kernel reaps on logout).
+///   macOS: there is no `XDG_RUNTIME_DIR`; fall back to `$TMPDIR`, which
+///   launchd sets per-user to the private 0700 `DARWIN_USER_TEMP_DIR`
+///   (`/var/folders/.../T/`) — the closest equivalent. Last-resort `/tmp`
+///   keeps the client/daemon able to rendezvous on an unusual session.
 pub fn socket_path() -> Option<String> {
-    let dir = std::env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|d| !d.is_empty())
-        .or_else(|| std::env::var("TMPDIR").ok().filter(|d| !d.is_empty()))
-        .unwrap_or_else(|| "/tmp".to_string());
-    let dir = dir.trim_end_matches('/');
-    Some(format!("{dir}/mxm4-haptic.sock"))
+    #[cfg(windows)]
+    {
+        Some(WINDOWS_PIPE_PATH.to_string())
+    }
+    #[cfg(unix)]
+    {
+        let dir = std::env::var("XDG_RUNTIME_DIR")
+            .ok()
+            .filter(|d| !d.is_empty())
+            .or_else(|| std::env::var("TMPDIR").ok().filter(|d| !d.is_empty()))
+            .unwrap_or_else(|| "/tmp".to_string());
+        let dir = dir.trim_end_matches('/');
+        Some(format!("{dir}/mxm4-haptic.sock"))
+    }
 }
 
 /// Connect to the daemon and hand it one waveform name. Fire-and-return:
 /// the daemon owns debounce/queue/pacing, so the caller must not block on
 /// playback. A missing socket or refused connection is a normal error
 /// (daemon not running) and is surfaced to the caller, not swallowed.
+#[cfg(unix)]
 pub fn send_command(name: &str) -> io::Result<()> {
     let path = socket_path()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "XDG_RUNTIME_DIR unset"))?;
@@ -102,6 +126,152 @@ pub fn send_command(name: &str) -> io::Result<()> {
     stream.write_all(b"\n")?;
     Ok(())
 }
+
+/// Windows client: open the daemon's named pipe and write one waveform name.
+/// A named-pipe client is just a `CreateFileW` open, so std's `OpenOptions`
+/// is sufficient — no `windows-sys` on the client side. A missing pipe
+/// surfaces as `NotFound` (daemon not running), like the Unix branch.
+#[cfg(windows)]
+pub fn send_command(name: &str) -> io::Result<()> {
+    let path = socket_path()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no named-pipe path"))?;
+    let mut pipe = std::fs::OpenOptions::new().write(true).open(&path)?;
+    pipe.write_all(name.as_bytes())?;
+    pipe.write_all(b"\n")?;
+    pipe.flush()?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// IPC server (daemon only). The daemon's single AF_UNIX/named-pipe listener,
+// abstracted so mxm4-hapticd is platform-agnostic. Each `next_name()` blocks
+// for one client and returns its single newline-terminated waveform name,
+// trimmed + uppercased (matching waveform_id()'s lookup).
+// ---------------------------------------------------------------------------
+
+#[cfg(unix)]
+mod ipc_server {
+    use std::io::{self, BufRead, BufReader};
+    use std::os::unix::net::UnixListener;
+
+    pub struct IpcServer {
+        listener: UnixListener,
+        endpoint: String,
+    }
+
+    impl IpcServer {
+        pub fn bind() -> io::Result<Self> {
+            let endpoint = super::socket_path()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no runtime dir for socket"))?;
+            // Remove any stale socket from an unclean exit before binding.
+            let _ = std::fs::remove_file(&endpoint);
+            let listener = UnixListener::bind(&endpoint)?;
+            Ok(Self { listener, endpoint })
+        }
+
+        pub fn endpoint(&self) -> &str {
+            &self.endpoint
+        }
+
+        pub fn next_name(&self) -> io::Result<Option<String>> {
+            let (stream, _) = self.listener.accept()?;
+            let mut line = String::new();
+            let mut reader = BufReader::new(stream);
+            if reader.read_line(&mut line).is_err() {
+                return Ok(None);
+            }
+            Ok(Some(line.trim().to_uppercase()))
+        }
+    }
+}
+
+#[cfg(windows)]
+mod ipc_server {
+    use std::ffi::OsStr;
+    use std::io;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+    use windows_sys::Win32::Storage::FileSystem::{ReadFile, PIPE_ACCESS_INBOUND};
+    use windows_sys::Win32::System::Pipes::{
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
+        PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+    };
+
+    pub struct IpcServer {
+        /// UTF-16, NUL-terminated pipe name for CreateNamedPipeW.
+        name_wide: Vec<u16>,
+        endpoint: String,
+    }
+
+    impl IpcServer {
+        pub fn bind() -> io::Result<Self> {
+            let endpoint = super::socket_path()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no named-pipe path"))?;
+            let name_wide = OsStr::new(&endpoint).encode_wide().chain(Some(0)).collect();
+            Ok(Self { name_wide, endpoint })
+        }
+
+        pub fn endpoint(&self) -> &str {
+            &self.endpoint
+        }
+
+        /// Create a fresh single-use inbound pipe instance, wait for one client,
+        /// read its line, then tear the instance down. PIPE_ACCESS_INBOUND: the
+        /// client only ever writes (a waveform name), never reads.
+        pub fn next_name(&self) -> io::Result<Option<String>> {
+            let pipe = unsafe {
+                CreateNamedPipeW(
+                    self.name_wide.as_ptr(),
+                    PIPE_ACCESS_INBOUND,
+                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                    PIPE_UNLIMITED_INSTANCES,
+                    0,
+                    512,
+                    0,
+                    ptr::null::<SECURITY_ATTRIBUTES>(),
+                )
+            };
+            if pipe == INVALID_HANDLE_VALUE {
+                return Err(io::Error::last_os_error());
+            }
+
+            let connected = unsafe { ConnectNamedPipe(pipe, ptr::null_mut()) };
+            if connected == 0 {
+                let err = unsafe { GetLastError() };
+                // A client that connected between create and ConnectNamedPipe
+                // yields ERROR_PIPE_CONNECTED — that is still a live client.
+                if err != ERROR_PIPE_CONNECTED {
+                    unsafe { CloseHandle(pipe) };
+                    return Err(io::Error::from_raw_os_error(err as i32));
+                }
+            }
+
+            let mut buf = [0u8; 64];
+            let mut read: u32 = 0;
+            let ok = unsafe {
+                ReadFile(pipe, buf.as_mut_ptr(), buf.len() as u32, &mut read, ptr::null_mut())
+            };
+            let name = if ok != 0 && read > 0 {
+                Some(String::from_utf8_lossy(&buf[..read as usize]).trim().to_uppercase())
+            } else {
+                None
+            };
+
+            unsafe {
+                DisconnectNamedPipe(pipe);
+                CloseHandle(pipe);
+            }
+            Ok(name)
+        }
+    }
+}
+
+pub use ipc_server::IpcServer;
 
 // ---------------------------------------------------------------------------
 // Daemon-only device internals (used by mxm4-hapticd). Public so the binary
@@ -114,9 +284,10 @@ pub const BOLT_PID: u16 = 0xC548;
 // The receiver's HID++ control endpoint, used to pick the right node out of
 // hidapi's enumeration (a receiver exposes several HID interfaces). On Linux
 // it is USB interface 2 (the old code's `input2`); only this interface
-// accepts HID++ reports cleanly (others EPIPE or silently discard). macOS
-// reports interface_number as -1, so there it is matched by the Logitech
-// vendor usage page 0xFF00 instead. The daemon accepts either.
+// accepts HID++ reports cleanly (others EPIPE or silently discard). macOS and
+// Windows report interface_number as -1 and instead expose the Logitech vendor
+// usage page 0xFF00 on the HID++ collection, so there it is matched by usage
+// page. The daemon accepts either.
 pub const HIDPP_INTERFACE: i32 = 2;
 pub const HIDPP_USAGE_PAGE: u16 = 0xFF00;
 

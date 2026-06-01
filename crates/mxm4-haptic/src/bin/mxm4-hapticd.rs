@@ -6,8 +6,9 @@
 //! playback with debounce + per-pulse pacing, and re-discovers when the
 //! mouse disconnects/reconnects (possibly at a different receiver slot).
 //!
-//! Inputs: waveform names on the AF_UNIX socket from the thin client
-//! (Solaar rules) and the notification bridge. Output: HID++ play reports.
+//! Inputs: waveform names on the IPC endpoint (AF_UNIX socket on Unix, Win32
+//! named pipe on Windows; see lib::IpcServer) from the thin client (Solaar
+//! rules) and the notification bridge. Output: HID++ play reports.
 //!
 //! Concurrency — a SINGLE I/O-owner thread holds the one `hidapi::HidDevice`
 //! (that type is `Send` but not `Sync`, and macOS IOKit does not promise that
@@ -17,7 +18,7 @@
 //! - main thread: owns the HidDevice; a short read_timeout() poll loop drains
 //!   input reports (0x41 reconnect notifications, Root.GetFeature replies during
 //!   discovery) and services play/discovery requests between reads.
-//! - accept thread: the UnixListener accept loop; forwards waveform ids to the
+//! - accept thread: the IpcServer accept loop; forwards waveform ids to the
 //!   I/O thread over an mpsc channel.
 //!
 //! Discovery (verified against Solaar receiver.py / libratbag hidpp20.c):
@@ -29,12 +30,11 @@
 //!   would block the full 4 s device timeout), so only connected slots are
 //!   probed. Spontaneous 0x41s thereafter drive reconnect re-discovery.
 //!
-//! Linux (hidraw backend) + macOS (IOKit, shared open). See crates/README.md.
+//! Linux (hidraw backend) + macOS (IOKit, shared open) + Windows (native HID +
+//! named-pipe IPC). See crates/README.md.
 
-use std::io::{BufRead, BufReader};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::process::ExitCode;
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -249,18 +249,6 @@ fn io_loop(device: HidDevice, rx: Receiver<u8>) -> ! {
     }
 }
 
-fn handle_conn(stream: UnixStream, tx: &Sender<u8>) {
-    let mut line = String::new();
-    let mut reader = BufReader::new(stream);
-    if reader.read_line(&mut line).is_err() {
-        return;
-    }
-    let name = line.trim().to_uppercase();
-    if let Some(wf_id) = lib::waveform_id(&name) {
-        let _ = tx.send(wf_id);
-    }
-}
-
 /// Enumerate the Bolt receiver's HID++ control interface and open it,
 /// retrying until the receiver is present (e.g. daemon started before the
 /// dongle is plugged, or just restarted). The `HidApi` context is kept alive
@@ -294,29 +282,31 @@ fn open_hidpp(api: &mut HidApi) -> HidDevice {
 }
 
 fn main() -> ExitCode {
-    let Some(sock_path) = lib::socket_path() else {
-        eprintln!("mxm4-hapticd: no runtime dir (XDG_RUNTIME_DIR/TMPDIR); cannot create socket");
-        return ExitCode::from(1);
-    };
-
-    // Fresh socket: remove any stale one from an unclean exit, then bind. The
-    // accept loop runs on its own thread so the main thread can own the device.
-    let _ = std::fs::remove_file(&sock_path);
-    let listener = match UnixListener::bind(&sock_path) {
-        Ok(l) => l,
+    // The accept loop runs on its own thread so the main thread can own the
+    // device. IpcServer::bind is the AF_UNIX socket (Unix) or named pipe
+    // (Windows); both yield one waveform name per accepted client.
+    let server = match lib::IpcServer::bind() {
+        Ok(s) => s,
         Err(e) => {
-            eprintln!("mxm4-hapticd: bind {sock_path} failed ({e})");
+            eprintln!("mxm4-hapticd: IPC bind failed ({e})");
             return ExitCode::from(1);
         }
     };
-    eprintln!("mxm4-hapticd: listening on {sock_path}");
+    eprintln!("mxm4-hapticd: listening on {}", server.endpoint());
 
     let (tx, rx) = mpsc::channel::<u8>();
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            match stream {
-                Ok(s) => handle_conn(s, &tx),
-                Err(e) => eprintln!("mxm4-hapticd: accept error ({e})"),
+    thread::spawn(move || loop {
+        match server.next_name() {
+            Ok(Some(name)) => {
+                if let Some(wf_id) = lib::waveform_id(&name) {
+                    let _ = tx.send(wf_id);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("mxm4-hapticd: accept error ({e})");
+                // Avoid a hot error loop if the endpoint is persistently broken.
+                thread::sleep(Duration::from_millis(200));
             }
         }
     });

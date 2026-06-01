@@ -10,26 +10,37 @@ Rust crates built and installed during dotbot bootstrap.
 
 The `mxm4-haptic` crate is a `[lib]` plus three `[[bin]]`s: a haptic **daemon**
 (`mxm4-hapticd`, the sole owner of the Bolt receiver's HID++ session — device
-discovery, debounce + paced playback, AF_UNIX server), a **notification
-bridge** (`mxm4-haptic-notify`), and a thin **client** (`mxm4-haptic`, spawned
-by Solaar rules). The daemon and bridge run as `systemd --user` services from
+discovery, debounce + paced playback, IPC server — an AF_UNIX socket on Unix, a
+Win32 named pipe on Windows), a **notification bridge** (`mxm4-haptic-notify`),
+and a thin **client** (`mxm4-haptic`, spawned by Solaar rules). The daemon and
+bridge run as `systemd --user` services from
 [`../home/.config/systemd/user/`](../home/.config/systemd/user/) (linked by
 dotbot, enabled manually). See the root [`AGENTS.md`](../AGENTS.md) "Solaar
 haptic playback" section for the architecture and HID++ details.
 
-**Platform: Linux + macOS.** The daemon reaches the device through the
-cross-platform [`hidapi`](https://crates.io/crates/hidapi) crate — the Linux
+**Platform: Linux + macOS + Windows.** The daemon reaches the device through
+the cross-platform [`hidapi`](https://crates.io/crates/hidapi) crate — the Linux
 **hidraw** backend (shares the `/dev/hidraw` node with a running Solaar instead
-of seizing it) and macOS **IOKit** opened in shared mode. Only `mxm4-hapticd`
-links `hidapi`; the client and notify bridge talk to it over the AF_UNIX socket
-and stay dependency-free. The build needs `libudev` headers on Linux
-(`systemd-devel`, installed by [`../scripts/linux/install-packages.sh`](../scripts/linux/install-packages.sh)).
+of seizing it), macOS **IOKit** opened in shared mode, and the pure-Rust
+**`windows-native`** backend on Windows. Only `mxm4-hapticd` links `hidapi`; the
+client and notify bridge talk to it over the IPC endpoint (AF_UNIX socket on
+Unix, named pipe on Windows) and stay `hidapi`-free. The IPC server's only
+platform dependency is `windows-sys` (compile-time FFI for `CreateNamedPipeW`),
+gated to Windows targets via `[target.'cfg(windows)'.dependencies]` so Unix
+builds never see it; the thin client uses std's `CreateFileW`-backed
+`OpenOptions` and needs no `windows-sys`. The build needs `libudev` headers on
+Linux (`systemd-devel`, installed by [`../scripts/linux/install-packages.sh`](../scripts/linux/install-packages.sh)).
 The notification bridge is **Linux-only** (it eavesdrops the D-Bus session bus);
-off Linux it compiles to a stub that exits with a message. Both the Linux and
-macOS bootstraps build and autostart the daemon: Linux via a `systemd --user`
-unit ([`../home/.config/systemd/user/`](../home/.config/systemd/user/)), macOS
-via a launchd agent ([`../home/Library/LaunchAgents/`](../home/Library/LaunchAgents/)).
+off Linux it compiles to a stub that exits with a message.
+
+Both the Linux and macOS bootstraps build and autostart the daemon: Linux via a
+`systemd --user` unit ([`../home/.config/systemd/user/`](../home/.config/systemd/user/)),
+macOS via a launchd agent ([`../home/Library/LaunchAgents/`](../home/Library/LaunchAgents/)).
 On macOS only the daemon + client are installed (the notify bridge is skipped).
+**Windows is code-level compatible only**: the crate compiles and runs (verified
+via `cargo check --target x86_64-pc-windows-gnu`), but bootstrap does **not**
+build, install, or autostart it on Windows — build and run it manually. HID
+caveat: Logitech Options+ may hold the device; close it if writes fail.
 
 The client exposes `--usage` (its CLI spec in [usage](https://usage.jdx.dev)
 KDL, with the waveform `choices` generated from the crate's `WAVEFORMS`
@@ -40,8 +51,8 @@ completion at `~/.config/zsh/completions/_mxm4-haptic` (on `fpath` via
 ## Conventions
 
 - Every crate is built with `mise exec rust@latest -- cargo …` so the bootstrap doesn't rely on system Rust. mise's rust toolchain is declared in [`~/.config/mise/config.toml`](https://mise.jdx.dev/) (mirrored by [`home/.config/mise/`](../home/.config/mise/) if tracked).
-- Crates are **Linux-only by intent** when they wrap Linux-specific kernel surfaces (e.g. `/dev/uinput`). Cross-platform helpers go in [`scripts/`](../scripts/), not here. State the platform constraint in the crate's `README.md` and the binary's `--help` output. (`mxm4-haptic` was Linux-only when it spoke raw `/dev/hidraw`; it is now Linux + macOS because it moved to the cross-platform `hidapi` crate. A platform constraint is worth keeping only while the crate genuinely wraps a single-OS surface.)
-- **Zero or minimal external dependencies.** Pure-`std` crates keep build time near zero and binary size under a few hundred KB. Add a dep only when standardising it is clearly worth the build-time cost — and **justify it in the crate's `Cargo.toml`/`README.md`**. `mxm4-haptic` is the one exception so far: `hidapi` is the price of cross-platform HID (there is no pure-`std` path to HID off Linux), and it's confined to the daemon binary.
+- Crates are **Linux-only by intent** when they wrap Linux-specific kernel surfaces (e.g. `/dev/uinput`). Cross-platform helpers go in [`scripts/`](../scripts/), not here. State the platform constraint in the crate's `README.md` and the binary's `--help` output. (`mxm4-haptic` was Linux-only when it spoke raw `/dev/hidraw`; it is now Linux + macOS + Windows because it moved to the cross-platform `hidapi` crate and a `cfg`-gated named-pipe IPC server. A platform constraint is worth keeping only while the crate genuinely wraps a single-OS surface.)
+- **Zero or minimal external dependencies.** Pure-`std` crates keep build time near zero and binary size under a few hundred KB. Add a dep only when standardising it is clearly worth the build-time cost — and **justify it in the crate's `Cargo.toml`/`README.md`**. `mxm4-haptic` is the one exception so far, with two confined deps: `hidapi` is the price of cross-platform HID (no pure-`std` path to HID off Linux), and `windows-sys` is the price of a Win32 named-pipe server (no AF_UNIX in std on Windows) — `windows-sys` is `[target.'cfg(windows)'.dependencies]`-gated so Unix builds never pull it, and only the daemon binary links either.
 - `Cargo.lock` is **tracked** (every crate here ships a binary, not a library). Even when the crate has no external deps the lock file is generated by `cargo` and tracking it is the canonical convention.
 - `target/` directories are git-ignored repo-wide via the root `.gitignore`.
 - Bootstrap uses `cargo install --root ~/.local --locked --force`. The `--root` places the binary in the same `~/.local/bin/` directory dotbot's hand-authored link entries use, so PATH is already set up.
@@ -61,4 +72,4 @@ completion at `~/.config/zsh/completions/_mxm4-haptic` (on `fpath` via
 | Check in compiled binaries to the repo | Compromises auditability and is platform-specific. Bootstrap builds from source per machine. |
 | Build without `mise exec rust@latest --` | dotbot's shell steps run under non-interactive bash; mise activation lives in `~/.bashrc` and is not loaded there. Explicit `mise exec` is the supported pattern. |
 | Add an external crate dep "just in case" | Each new dep adds compile time on every fresh machine. Justify in the crate's `README.md`. |
-| Skip the platform-constraint note (when one applies) | Future contributors will try to port a genuinely OS-locked crate and waste time before discovering the kernel-surface dependency. State it only when true — `mxm4-haptic` is Linux + macOS, not Linux-only. |
+| Skip the platform-constraint note (when one applies) | Future contributors will try to port a genuinely OS-locked crate and waste time before discovering the kernel-surface dependency. State it only when true — `mxm4-haptic` is Linux + macOS + Windows, not Linux-only. |
