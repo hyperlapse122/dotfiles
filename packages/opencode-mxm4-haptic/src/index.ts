@@ -1,7 +1,11 @@
-import type { Plugin, PluginInput } from "@opencode-ai/plugin";
+import type { Plugin, PluginInput, Hooks } from "@opencode-ai/plugin";
 import { sendCommand, type WaveformName } from "@h82/mxm4-haptic";
+import { match, P } from "ts-pattern";
 
 type Client = PluginInput["client"];
+type Event = Parameters<NonNullable<Hooks["event"]>>[0]["event"];
+
+const serviceName = "mxm4-haptic" as const;
 
 /**
  * Map of OpenCode event types to the waveform pulsed when they fire.
@@ -9,11 +13,11 @@ type Client = PluginInput["client"];
  * `session.idle` and `session.error` are handled separately (they need
  * parent/child gating, see below), so they are intentionally absent here.
  */
-const EVENT_WAVEFORMS = {
+const EVENT_WAVEFORMS: Partial<Record<Event["type"], WaveformName>> = {
   // The agent is waiting on you to decide (a permission / approval request) —
   // ring for attention, like a phone waiting to be answered.
   "permission.updated": "RINGING",
-} as const satisfies Partial<Record<string, WaveformName>>;
+} as const;
 
 /**
  * Tool names that present a blocking question for the user to decide. The
@@ -33,8 +37,19 @@ const QUESTION_TOOLS = new Set(["question", "ask_user_question", "askuserquestio
  */
 async function isChildSession(client: Client, sessionID: string): Promise<boolean> {
   try {
-    const { data } = await client.session.get({ path: { id: sessionID } });
-    return Boolean(data?.parentID);
+    return match(await client.session.get({ path: { id: sessionID } }))
+      .with({ data: { parentID: P.string } }, () => true)
+      .otherwise(async ({ error }) => {
+        await client.app.log({
+          body: {
+            service: serviceName,
+            level: "warn",
+            message: `Failed to resolve session ${sessionID} to check if it's a child session — assuming it's a root session and buzzing accordingly.`,
+            extra: { error },
+          },
+        });
+        return false;
+      });
   } catch {
     return false;
   }
@@ -69,29 +84,30 @@ async function allChildrenIdle(client: Client, sessionID: string): Promise<boole
 export const MXMaster4HapticPlugin: Plugin = async ({ client }: PluginInput) => {
   return {
     event: async ({ event }) => {
-      if (event.type === "session.idle") {
-        const { sessionID } = event.properties;
-        // Sub-agent (child) sessions finishing shouldn't buzz — only the
-        // top-level session's completion is worth a pulse.
-        if (await isChildSession(client, sessionID)) return;
-        // Only buzz once the root session AND all of its sub-agents are idle.
-        if (!(await allChildrenIdle(client, sessionID))) return;
-        await sendCommand("COMPLETED");
-        return;
-      }
-
-      if (event.type === "session.error") {
-        const { sessionID } = event.properties;
-        // Sub-agent (child) errors shouldn't buzz — only the top-level
-        // session's failure is worth a pulse. An absent sessionID can't be
-        // resolved, so it biases toward still buzzing.
-        if (sessionID && (await isChildSession(client, sessionID))) return;
-        await sendCommand("MAD");
-        return;
-      }
-
-      const waveform = EVENT_WAVEFORMS[event.type as keyof typeof EVENT_WAVEFORMS];
-      if (waveform) await sendCommand(waveform);
+      await match(event)
+        .with({ type: "session.idle" }, async (event) => {
+          const { sessionID } = event.properties;
+          // Sub-agent (child) sessions finishing shouldn't buzz — only the
+          // top-level session's completion is worth a pulse.
+          if (await isChildSession(client, sessionID)) return;
+          // Only buzz once the root session AND all of its sub-agents are idle.
+          if (!(await allChildrenIdle(client, sessionID))) return;
+          await sendCommand("COMPLETED");
+        })
+        .with({ type: "session.error" }, async (event) => {
+          const { sessionID } = event.properties;
+          // Sub-agent (child) errors shouldn't buzz — only the top-level
+          // session's failure is worth a pulse. An absent sessionID can't be
+          // resolved, so it biases toward still buzzing.
+          if (sessionID && (await isChildSession(client, sessionID))) return;
+          await sendCommand("MAD");
+        })
+        .otherwise(async (event) => {
+          if (event.type in EVENT_WAVEFORMS) {
+            const waveform = EVENT_WAVEFORMS[event.type];
+            if (waveform) await sendCommand(waveform);
+          }
+        });
     },
     "tool.execute.before": async ({ tool }) => {
       if (QUESTION_TOOLS.has(tool.toLowerCase())) await sendCommand("RINGING");

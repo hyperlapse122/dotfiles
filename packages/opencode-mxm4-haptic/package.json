@@ -18,7 +18,8 @@
     "dist"
   ],
   "dependencies": {
-    "@h82/mxm4-haptic": "workspace:*"
+    "@h82/mxm4-haptic": "workspace:*",
+    "ts-pattern": "5.9.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
