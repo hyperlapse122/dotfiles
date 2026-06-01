@@ -2,7 +2,7 @@
 name = "mxm4-haptic"
 version = "0.1.0"
 edition = "2021"
-description = "MX Master 4 haptic daemon + notification bridge + Solaar client, talking HID++ to the Bolt receiver via hidapi (Linux + macOS)"
+description = "MX Master 4 haptic daemon + notification bridge + Solaar client, talking HID++ to the Bolt receiver via hidapi (Linux + macOS + Windows)"
 license = "MIT"
 
 # Shared internals (waveform table, socket protocol, hidraw discovery,
@@ -33,11 +33,30 @@ path = "src/bin/mxm4-hapticd.rs"
 # Cross-platform raw-HID access. Linux uses the hidraw backend (NOT libusb) so
 # the daemon shares the /dev/hidraw node with a running Solaar instead of
 # seizing it via a detached kernel driver; macOS uses IOKit opened in shared
-# (non-seizing) mode. Only the daemon (mxm4-hapticd) links this; the thin
-# client and notify bridge never touch the device, so they stay hidapi-free.
+# (non-seizing) mode; Windows uses the pure-Rust `windows-native` backend (no
+# bundled C / libusb build). Backend selection is target-gated, so listing all
+# three platform features in one stanza is harmless — only the matching OS
+# branch compiles. Only the daemon (mxm4-hapticd) links this; the thin client
+# and notify bridge never touch the device, so they stay hidapi-free.
 hidapi = { version = "=2.6.5", default-features = false, features = [
     "linux-static-hidraw",
     "macos-shared-device",
+    "windows-native",
+] }
+
+# Windows-only: the named-pipe IPC server (the daemon's AF_UNIX replacement;
+# std has no AF_UNIX on Windows and Node's `net` does local IPC via named pipes,
+# so the TS client `@h82/mxm4-haptic` and this daemon rendezvous on a pipe).
+# Compile-time FFI bindings only, gated to Windows targets so Linux/macOS builds
+# never see it. The thin client uses std's CreateFileW-backed OpenOptions and
+# needs no windows-sys.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
 ] }
 
 # Optimize release binaries for fast cold start and small size. The client
