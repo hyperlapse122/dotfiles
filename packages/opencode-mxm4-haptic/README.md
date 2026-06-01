@@ -16,7 +16,7 @@ event to a waveform.
 | OpenCode event | Waveform sent | Meaning |
 |---|---|---|
 | `session.idle` | `COMPLETED` | A **root** session finished **and** all of its sub-agents are idle too (see gating below). |
-| `session.error` | `MAD` | The agent hit an error or was aborted. |
+| `session.error` | `MAD` | A **root** session hit an error or was aborted (child/sub-agent errors are skipped — see gating below). |
 | `permission.updated` | `RINGING` | The agent is waiting on **you** to decide (a native permission / approval request) — answer it. |
 | `Question` tool call | `RINGING` | The agent ran the `Question` tool to ask you to choose — answer it. Caught via the `tool.execute.before` hook (the tool emits no `permission.updated`). |
 
@@ -40,6 +40,15 @@ of those would fire repeatedly during a single fan-out run. So the plugin:
 Both checks query the OpenCode `client` (`session.get`, `session.children`,
 `session.status`). If those calls fail transiently, the plugin biases toward
 **still** delivering the buzz rather than silently dropping a completion.
+
+### `session.error` gating
+
+`session.error` likewise fires for any session that errors — including
+sub-agent (`task()`) sessions, which carry a `parentID`. The plugin **skips
+child sessions** so a failing sub-agent doesn't buzz; only a **root** session's
+error pulses `MAD`. The event's `sessionID` is optional — if it is absent the
+session can't be resolved, so (consistent with the idle gating) the plugin
+biases toward **still** buzzing rather than dropping the error.
 
 ## Status
 
@@ -141,7 +150,7 @@ change to take effect.
 
 | Export | Type | Notes |
 |---|---|---|
-| `MXMaster4HapticPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns an `event` hook (`COMPLETED` on a fully-idle root session, `MAD` on `session.error`, `RINGING` on `permission.updated`) and a `tool.execute.before` hook (`RINGING` when the `Question` tool runs). |
+| `MXMaster4HapticPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns an `event` hook (`COMPLETED` on a fully-idle root session, `MAD` on a root `session.error`, `RINGING` on `permission.updated`) and a `tool.execute.before` hook (`RINGING` when the `Question` tool runs). |
 
 ## Extending
 
@@ -154,13 +163,12 @@ daemon.
 
 ```ts
 const EVENT_WAVEFORMS = {
-  "session.error": "MAD",
   "permission.updated": "RINGING",
   // e.g. react to another event:
   // "session.compacted": "WAVE",
 } as const satisfies Partial<Record<string, WaveformName>>;
 ```
 
-Events that need more than a flat type→waveform mapping (like `session.idle`,
-which inspects parent/child session state via the `client`) get their own branch
-in the `event` hook above the table lookup.
+Events that need more than a flat type→waveform mapping (like `session.idle` and
+`session.error`, which inspect parent/child session state via the `client`) get
+their own branch in the `event` hook above the table lookup.

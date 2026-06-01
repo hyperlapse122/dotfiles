@@ -6,12 +6,10 @@ type Client = PluginInput["client"];
 /**
  * Map of OpenCode event types to the waveform pulsed when they fire.
  *
- * `session.idle` is handled separately (it needs parent/child gating, see
- * below), so it is intentionally absent here.
+ * `session.idle` and `session.error` are handled separately (they need
+ * parent/child gating, see below), so they are intentionally absent here.
  */
 const EVENT_WAVEFORMS = {
-  // The agent hit an error / aborted — a sharp, unpleasant buzz.
-  "session.error": "MAD",
   // The agent is waiting on you to decide (a permission / approval request) —
   // ring for attention, like a phone waiting to be answered.
   "permission.updated": "RINGING",
@@ -79,6 +77,16 @@ export const MXMaster4HapticPlugin: Plugin = async ({ client }: PluginInput) => 
         // Only buzz once the root session AND all of its sub-agents are idle.
         if (!(await allChildrenIdle(client, sessionID))) return;
         await sendCommand("COMPLETED");
+        return;
+      }
+
+      if (event.type === "session.error") {
+        const { sessionID } = event.properties;
+        // Sub-agent (child) errors shouldn't buzz — only the top-level
+        // session's failure is worth a pulse. An absent sessionID can't be
+        // resolved, so it biases toward still buzzing.
+        if (sessionID && (await isChildSession(client, sessionID))) return;
+        await sendCommand("MAD");
         return;
       }
 
