@@ -13,7 +13,16 @@ import {
   type WaveformName,
 } from "../src/index.ts";
 
-describe("sendCommand", () => {
+// These exercises drive the resolver through XDG_RUNTIME_DIR/TMPDIR and listen
+// on filesystem sockets — both POSIX-only. On Windows socketPath() returns the
+// fixed \\.\pipe\mxm4-haptic endpoint and ignores those env vars, so the suite
+// can't steer it; the named-pipe path is covered by the Rust daemon instead.
+const posixOnly =
+  process.platform === "win32"
+    ? { skip: "POSIX socket path; Windows uses a fixed named pipe" }
+    : {};
+
+describe("sendCommand", posixOnly, () => {
   test("flush-confirms a valid waveform command", async () => {
     const runtime = createRuntimeDir();
     let resolveReceived: (value: string) => void = () => {};
