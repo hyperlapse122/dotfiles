@@ -8,5 +8,11 @@
   },
   "rust-analyzer.linkedProjects": [
     "crates/mxm4-haptic/Cargo.toml"
-  ]
+  ],
+  "yaml.schemas": {
+    "https://yarnpkg.com/configuration/yarnrc.json": [
+      ".yarnrc.yml",
+      "home/.yarnrc.yml"
+    ]
+  }
 }
