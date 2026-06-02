@@ -156,6 +156,7 @@ EOF
     akmod-VirtualBox
     akmods
     kernel-devel
+    libguestfs
     systemd-container
     virtualbox
 
