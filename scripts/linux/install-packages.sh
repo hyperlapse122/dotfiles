@@ -155,6 +155,7 @@ EOF
     # Virtualization
     akmod-VirtualBox
     akmods
+    guestfs-tools
     kernel-devel
     libguestfs
     ntfs-3g
