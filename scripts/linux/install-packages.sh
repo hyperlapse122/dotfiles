@@ -157,6 +157,8 @@ EOF
     akmods
     kernel-devel
     libguestfs
+    ntfs-3g
+    qemu-img
     systemd-container
     virtualbox
 
