@@ -57,6 +57,7 @@ further into a monolithic `NetworkManager.conf`.
 | `system/linux/etc/modprobe.d/` | kernel module options, currently `bluetooth-no-autosuspend.conf` (sets `btusb enable_autosuspend=0` so Intel combo Wi-Fi/BT controllers don't suspend mid-session and drop AirPods / Galaxy Buds; applies on next boot or `modprobe -r btusb && modprobe btusb`) |
 | `system/linux/etc/plymouth/` | Plymouth boot splash config |
 | `system/linux/etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`) |
+| `system/linux/etc/bluetooth/main.conf` | BlueZ daemon config (minimal); sets `Experimental = true` + `KernelExperimental = true` to enable Bluetooth LE Audio (BAP). `KernelExperimental` turns on the kernel ISO sockets BAP needs and has no bluetoothd command-line flag (main.conf only). Applies on the next `systemctl restart bluetooth` or reboot |
 | `system/linux/etc/systemd/system/` | system-scope systemd units, currently `docker-prune.service` + `docker-prune.timer` (weekly `docker system prune --force` and `docker volume prune --force`; enabled by the installer when `docker` is present, with `ConditionPathExists=/usr/bin/docker` as runtime safety net) |
 | `system/linux/etc/sysctl.d/` | sysctl drop-ins for forwarding and container network defaults |
 | `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions |
