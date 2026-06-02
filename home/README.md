@@ -13,6 +13,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |
 | `home/.config/environment.d/` | `~/.config/environment.d/` |
 | `home/.config/fcitx5/`, `home/.config/containers/`, `home/.config/solaar/` | Linux-only XDG config via `install.linux.yaml` |
+| `home/.config/wireplumber/wireplumber.conf.d/*.conf` | Linux-only WirePlumber 0.5 drop-ins via the `install.linux.yaml` XDG config glob, currently `51-disable-bt-autoswitch.conf` (sets `bluetooth.autoswitch-to-headset-profile = false` so Bluetooth headsets stay in stable A2DP and don't collapse into fragile HFP when an app opens the mic; the mic profile stays available, just not auto-selected) |
 | `home/.config/zed/` | `~/.config/zed/` |
 | `home/.gnupg/*.conf` | `~/.gnupg/*.conf` on Linux and macOS |
 | `home/.ssh/config` | `~/.ssh/config` |
