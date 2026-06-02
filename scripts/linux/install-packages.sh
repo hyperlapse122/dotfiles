@@ -155,6 +155,10 @@ EOF
     # Virtualization
     akmod-VirtualBox
     akmods
+    # refs-fuse (unsound/refsprogs) build deps for read-only ReFS / Windows
+    # Dev Drive access on vhdx mounts; autotools come from development-tools.
+    fuse3
+    fuse3-devel
     guestfs-tools
     kernel-devel
     libguestfs
