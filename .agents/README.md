@@ -9,12 +9,15 @@ This directory is different from [`home/.agents/`](../home/.agents/): `.agents/`
 ```plain
 .agents/
 +-- skills/
-    +-- (no skills currently tracked)
+    +-- galaxy-buds-le-audio/
+        +-- SKILL.md
 ```
 
 ## Current Skills
 
-None. The directory is reserved for future repo-local skills.
+| Skill | Purpose |
+|---|---|
+| `galaxy-buds-le-audio` | Pair Samsung Galaxy Buds 4 Pro for Bluetooth LE Audio (BAP/LC3) in stereo on this Fedora/BlueZ host: prerequisites (the repo's `system/linux/etc/bluetooth/main.conf` `Experimental`/`KernelExperimental` + controller CIS support), the coordinated-set (CSIS) pairing both earbuds need, the live `bluetoothctl`/tmux procedure that beats RPA rotation, and troubleshooting (mono/one-ear, A2DP-instead-of-LE, RPA rotation, CIS failures). |
 
 ## Conventions
 

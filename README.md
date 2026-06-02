@@ -76,7 +76,7 @@ Install [`mise`](https://mise.jdx.dev/) before bootstrapping — it supplies [`u
 | [`crates/`](./crates/) | Rust crates `cargo install`'d into `~/.local/bin` during bootstrap (e.g. the MX Master 4 haptic daemon + Solaar client — Linux + macOS via `hidapi`, autostarted via `systemd --user`/launchd; the notification bridge is Linux-only) |
 | [`packages/`](./packages/) | Private `@h82/dotfiles` Yarn Berry monorepo of TS/JS libraries — built in place, never installed |
 | [`agents/`](./agents/) | Cross-tool AI agent rules and slash commands linked into OpenCode & Codex |
-| [`.agents/`](./.agents/) | Reserved repo-local agent skill tree (placeholder today) |
+| [`.agents/`](./.agents/) | Repo-local agent skills (tracked); currently `galaxy-buds-le-audio` (LE Audio pairing for Galaxy Buds 4 Pro) |
 | [`.github/`](./.github/) | CI: `packages.yml` (build/typecheck/test) and `lint.yml` (ESLint + Prettier) for the `packages/` workspace, plus an hourly workflow that opens PRs bumping opencode plugins to their latest GitHub release |
 
 [`AGENTS.md`](./AGENTS.md) is the authoritative source for repo conventions — read it before adding files. Every tracked top-level directory carries its own `README.md`.
