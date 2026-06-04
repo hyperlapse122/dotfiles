@@ -31,7 +31,8 @@ target/
 # single workspace-root packages/yarn.lock is intentionally TRACKED (lockfile
 # convention, like the Rust Cargo.lock); per-member dist/ build output is not.
 packages/node_modules/
-packages/.yarn/
+packages/.yarn/*
+!packages/.yarn/releases
 packages/.pnp.*
 packages/*/dist/
 .turbo/
