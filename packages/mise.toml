@@ -11,4 +11,4 @@
 # Yarn is pinned to the exact version in package.json's `packageManager` field.
 [tools]
 node = "26"
-yarn = "4.15.0"
+yarn = "4.16.0"
