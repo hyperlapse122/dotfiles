@@ -1,0 +1,41 @@
+{
+  "name": "@h82/opencode-playwright-cli-session-injection",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode plugin for injecting OpenCode session ID to PLAYWRIGHT_CLI_SESSION env variable for Playwright CLI.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@opencode-ai/plugin": "1.15.10",
+    "@types/node": "25.9.1",
+    "eslint": "10.4.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.8.3",
+    "tsdown": "0.22.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.59.4"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "slugify": "1.6.9"
+  }
+}

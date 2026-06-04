@@ -35,6 +35,16 @@
     ~/.config/opencode/commands: agents/commands
     ~/.codex/prompts: agents/commands
 
+    # @h82/opencode-playwright-cli-session-injection plugin (cross-platform).
+    # Auto-loaded by OpenCode from ~/.config/opencode/plugins/ (top-level *.js).
+    # Linked from the built dist/index.mjs; the .js name (not .mjs) matches
+    # OpenCode's auto-scan glob, and the sibling .js.map carries the sourcemap.
+    # Only the Linux bootstrap `yarn build`s the workspace, so on macOS/Windows
+    # this symlink dangles until `yarn workspace @h82/opencode-playwright-cli-session-injection build` runs.
+    ~/.config/opencode/plugins/playwright-cli-session-injection.js: packages/opencode-playwright-cli-session-injection/dist/index.mjs
+    ~/.config/opencode/plugins/playwright-cli-session-injection.js.map: packages/opencode-playwright-cli-session-injection/dist/index.mjs.map
+
+    # zsh config (cross-platform, as long as we avoid macOS-specific syntax in .zshrc)
     ~/.config/zsh/:
       glob: true
       path: home/.config/zsh/.*
