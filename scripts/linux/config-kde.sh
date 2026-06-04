@@ -132,6 +132,22 @@
 #                 "CPU usage". Same direct-write rationale and KRunner-launch
 #                 reload caveat as step 9.
 #
+#  11. dolphin  - kwriteconfig6 -> ~/.config/dolphinrc
+#                   [General] RememberOpenedTabs = false
+#                   [General] HomeUrl            = $HOME
+#                 Makes Dolphin open the home folder on startup instead of
+#                 restoring the previous session's folders/tabs. Maps to the
+#                 Dolphin "Startup" settings page: clearing "Remember open
+#                 folders and tabs" (RememberOpenedTabs, default true) makes
+#                 Dolphin open the "Start in:" location (HomeUrl) on launch,
+#                 which we pin to $HOME. Keys/types are from Dolphin's
+#                 dolphin_generalsettings.kcfg (RememberOpenedTabs = Bool,
+#                 HomeUrl = String, default QDir::homePath()). Like krunnerrc,
+#                 dolphinrc is read by Dolphin at launch (not owned by a
+#                 long-lived process), so kwriteconfig6 creates/edits it
+#                 directly with no file-exists guard. Applies to the next
+#                 Dolphin launch; the write is idempotent.
+#
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
 # registry, so there is nothing equivalent to configure on either. No .ps1
@@ -836,6 +852,34 @@ configure_killrunner() {
 }
 
 # ===========================================================================
+# Step 11: dolphin (open home folder on startup)
+# ===========================================================================
+#
+# Clears RememberOpenedTabs (default true) so Dolphin opens HomeUrl on launch
+# instead of restoring the previous session, and pins HomeUrl to $HOME. Keys
+# and types are from Dolphin's dolphin_generalsettings.kcfg (RememberOpenedTabs
+# = Bool, HomeUrl = String). Same direct-write / next-launch behavior as the
+# krunnerrc steps: dolphinrc is read by Dolphin at launch, so kwriteconfig6
+# creates/edits it directly with no file-exists guard. The write is idempotent.
+
+configure_dolphin() {
+  printf 'config-kde.sh: [dolphin] opening home folder on startup...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file dolphinrc --group General \
+    --key RememberOpenedTabs --type bool false
+  printf '  set [General] RememberOpenedTabs = false\n'
+
+  kwriteconfig6 --file dolphinrc --group General \
+    --key HomeUrl "$HOME"
+  printf '  set [General] HomeUrl            = %s\n' "$HOME"
+}
+
+# ===========================================================================
 # Run all steps. Each is independent; set -e propagates any real failure.
 # ===========================================================================
 
@@ -849,5 +893,6 @@ configure_calendar
 configure_edges
 configure_krunner
 configure_killrunner
+configure_dolphin
 
-printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes; KRunner picks up its changes on next launch.\n'
+printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes; KRunner and Dolphin pick up their changes on next launch.\n'
