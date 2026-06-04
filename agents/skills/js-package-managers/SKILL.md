@@ -36,17 +36,32 @@ Opt in at the **narrowest possible scope**. Per-manager mechanics + the
 
 ## Exact version pinning
 
-- Every dependency in every `package.json` **MUST** be pinned to an exact version — no `^`,
-  `~`, `>=`, `latest`, `*`, `x`.
+- Every dependency in `dependencies`, `devDependencies`, and `optionalDependencies` of every
+  `package.json` **MUST** be pinned to an exact version — no `^`, `~`, `>=`, `latest`, `*`,
+  `x`.
 - The user-global config produces exact specs automatically via `yarn add` / `npm install`
   / `pnpm add` / `bun add` — agents **SHOULD NOT** pass any range flag.
 - **MUST** correct any existing range specifier to an exact version when modifying a
   `package.json` for any reason.
 - **MUST NOT** introduce a new range specifier.
 - **MUST NOT** edit a lockfile by hand to dodge the rule.
-- **Exception**: a project-level `AGENTS.md` may permit ranges where genuinely required
-  (peer-dep flexibility, library `package.json` authored for downstream consumers) — state
-  the exception explicitly when applying it.
+
+### `peerDependencies` are exempt — use ranges or wildcards
+
+- `peerDependencies` (and the matching `peerDependenciesMeta`) **MUST NOT** be exact-pinned.
+  Pinning a peer to one exact version forces that single version on every downstream
+  consumer and provokes peer-conflict errors — the opposite of the intent.
+- **MUST** express peers as the widest range the package actually supports: a caret/`>=`
+  range (`^18.0.0`, `>=18`), a multi-major OR range (`^18 || ^19`), or `*` when genuinely
+  version-agnostic.
+- **MUST NOT** "correct" an existing peer range to an exact pin — leave peer ranges alone,
+  and when adding a peer, author the range deliberately rather than copying the installed
+  exact version.
+- The cooldown gate and lifecycle-script switches still apply to whatever concrete version
+  ends up installed to satisfy the peer.
+- **Other exception**: a project-level `AGENTS.md` may permit ranges elsewhere where
+  genuinely required (e.g. a library `package.json` authored for downstream consumers) —
+  state the exception explicitly when applying it.
 
 ## Cooldown gate (1 week)
 
