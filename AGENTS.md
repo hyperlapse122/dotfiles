@@ -12,7 +12,6 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 .
 ├── AGENTS.md
 ├── README.md                        # User quickstart, top-level
-├── .agents/                         # Repo-local agent skill tree (tracked); skills/galaxy-buds-le-audio
 ├── .github/                         # GitHub config; workflows/packages.yml (build/typecheck/test)
 │                                    # and workflows/lint.yml (eslint/prettier) = CI for packages/;
 │                                    # workflows/opencode-plugin-updates.yml + update-opencode-plugin.yml
@@ -116,7 +115,6 @@ The script exits 0 immediately when invoked from a non-interactive shell (stdin 
 
 ### Runtime agent config
 
-- `.agents/skills/` holds repo-local skills that describe how to operate this repository. Currently tracked: `galaxy-buds-le-audio` (pairing Samsung Galaxy Buds 4 Pro for Bluetooth LE Audio on this Fedora/BlueZ host — the coordinated-set pairing procedure that complements the LE Audio enablement shipped in `system/linux/etc/bluetooth/main.conf`).
 - `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime. Its `skills/` subtree is additionally linked to `~/.claude/skills` so Claude Code reads the same runtime skill packages.
 - `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
 - `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
