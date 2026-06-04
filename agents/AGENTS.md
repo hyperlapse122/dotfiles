@@ -17,11 +17,11 @@ Files in this directory are **cross-tool agent rule files, shared slash commands
 | `agents/SHARED_AGENTS.md` | `~/.claude/CLAUDE.md` | Claude Code (global rules) |
 | `agents/commands/` | `~/.config/opencode/commands` | OpenCode (slash commands) |
 | `agents/commands/` | `~/.codex/prompts` | Codex (prompts) |
-| `agents/skills/` | `~/.agents/skills` | OpenCode (runtime skills) |
+| `agents/skills/` | `~/.agents/skills` | OpenCode **and Codex** (runtime skills) |
 | `agents/skills/` | `~/.claude/skills` | Claude Code (runtime skills) |
 | `agents/.skill-lock.json` | `~/.agents/.skill-lock.json` | `skills` CLI lockfile |
 
-Codex (and the other agents in `.skill-lock.json`'s `lastSelectedAgents`) are **not** dotbot-linked for skills — `npx skills` syncs the selected skills into each tool's own dir (e.g. `~/.codex/skills`, beside Codex's built-in `.system` skills). Skill distribution there is the `skills` CLI's job, not dotbot's.
+OpenCode and Claude Code take a **whole-dir** symlink (`~/.agents/skills`, `~/.claude/skills` → `agents/skills/`). Codex needs no separate skill link: it scans the **USER** scope `$HOME/.agents/skills` and [follows symlinked skill folders](https://developers.openai.com/codex/skills#where-to-save-skills), so the existing `~/.agents/skills → agents/skills/` symlink already exposes **every** skill in this tree to Codex — hand-authored and CLI-managed alike. (`npx skills` may also copy CLI-managed skills into `~/.codex/skills`; `codex` is in `.skill-lock.json`'s `lastSelectedAgents`. That path is redundant for discovery and does not touch the hand-authored rule-skills.) A new hand-authored skill is therefore visible to all three tools the moment its `skills/<name>/SKILL.md` exists — no `install.conf.yaml` change.
 
 The symlinks resolve live. Edits to `SHARED_AGENTS.md` or any file under `commands/` take effect for every linked tool the next time that tool reads them — no dotbot re-run needed unless the symlink itself is missing.
 

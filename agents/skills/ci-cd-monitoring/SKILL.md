@@ -1,0 +1,72 @@
+---
+name: ci-cd-monitoring
+description: >
+  Playbook for monitoring and fixing a CI/CD pipeline after a push.
+  Load this BEFORE polling a pipeline's status, tailing a job log,
+  diagnosing a red/failed pipeline, or deciding whether a failing check is
+  pre-existing. It covers the terminal-state poll list, the `gh`/`glab` CLI
+  recipes for watching runs and fetching failed-job logs, the
+  fix-red-until-green procedure, the forbidden "fixes" (disable/skip/rerun/
+  `[skip ci]`/force-push), the pre-existing-failure exception, and the
+  auto-merge caveat. Do NOT load it for opening or promoting a PR/MR (use
+  `pr-mr`) or for local-only test runs that never touch a pipeline. The
+  binding one-liners (monitor to terminal state; never bypass red) are in
+  core AGENTS.md and apply regardless of whether this skill is loaded.
+---
+
+# CI/CD pipeline monitoring
+
+The pipeline is the canonical verification surface. Local runs are necessary but not
+sufficient — the pipeline runs in a clean environment with additional jobs (integration
+tests, security scans, matrix builds, deploy previews) and is the gate reviewers and merge
+automation trust.
+
+**MUST monitor the pipeline to completion on every push that opens or updates a PR/MR.**
+"Push and walk away" is forbidden. The task is done when the pipeline lands green, not when
+the push succeeds.
+
+## Poll until a terminal state
+
+**MUST poll until a terminal state**: `success`, `failure`, `cancelled`, `timed_out`,
+`action_required`. `pending` / `queued` / `running` / `in-progress` are **NOT** terminal —
+keep polling. CLI recipes (`gh pr checks --watch`, `gh run view --log-failed`,
+`glab ci status`, `glab ci trace`, the pipelines `jq`) →
+[`references/commands.md`](references/commands.md).
+
+## If the pipeline fails, fix it until green
+
+A red pipeline is an open defect on the PR/MR — in-scope regardless of whether the failing
+job tests code you touched directly:
+
+1. Read the failing job's log. Identify the actual error, not just the exit code.
+2. Diagnose root cause — real regression, flake, env drift, missing secret, dependency
+   cooldown, lint trip.
+3. Fix at the source. For genuinely flaky tests outside the change, **surface the flake to
+   the user** before retrying — don't mask flakes by re-running.
+4. Commit, push, resume monitoring.
+5. Repeat until `success`.
+
+**MUST NOT** declare ready, hand off, or mark complete while the pipeline is failing,
+cancelled, or still running.
+
+## Forbidden "fixes" for a red pipeline
+
+**MUST NOT** "fix" a red pipeline by:
+
+- Disabling, skipping, or deleting the failing job/check.
+- Marking the failing test as skipped/expected-failure without explicit user approval.
+- Re-running failed jobs hoping for a different result (more than once, only for genuinely
+  flaky unrelated jobs, and only after surfacing the flake).
+- Pushing `[skip ci]` / `[ci skip]` / `--ci-skip` on a change-bearing commit.
+- Force-pushing to hide failed pipeline history.
+
+## Exception — pre-existing failures
+
+If the failing job was already red on the default branch (**verify against the latest
+default-branch pipeline**), document in the PR/MR body, surface to the user, don't block.
+**MUST NOT** assume "pre-existing" without verifying — "looks unrelated" is not verification.
+
+## Auto-merge
+
+Auto-merge (GitHub auto-merge, GitLab "Merge when pipeline succeeds") does **not** absolve
+monitoring. It merges on green; it does not fix red.
