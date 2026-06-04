@@ -34,5 +34,6 @@ packages/node_modules/
 packages/.yarn/
 packages/.pnp.*
 packages/*/dist/
+.turbo/
 packages/.turbo/
 packages/*/.turbo/
