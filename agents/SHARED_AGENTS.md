@@ -16,8 +16,9 @@
 9. [Secrets](#secrets)
 10. [Figma](#figma)
 11. [Interactive / Long-Running Processes](#interactive--long-running-processes)
-12. [Scripting Runtime](#scripting-runtime)
-13. [JavaScript Package Managers](#javascript-package-managers)
+12. [Browser Automation (Playwright)](#browser-automation-playwright)
+13. [Scripting Runtime](#scripting-runtime)
+14. [JavaScript Package Managers](#javascript-package-managers)
 
 ## Branch Naming
 
@@ -738,6 +739,35 @@ Accidental commit: **STOP**, notify the user, treat the secret as compromised, r
 ## Interactive / Long-Running Processes
 
 **MUST** use the `tmux` tool (`mcp_interactive_bash`) for: dev servers, watch modes, TUI apps, REPLs, build watchers — anything that does not terminate. Regular shell execution **WILL BLOCK** the agent session and is **forbidden** for non-terminating commands.
+
+## Browser Automation (Playwright)
+
+Playwright's bundled browsers and their system dependencies are only supported on a narrow set of distros — Ubuntu LTS, Debian stable, and their derivatives. `npx playwright install-deps` shells out to `apt-get`, so it **fails on Fedora, RHEL, Arch, and every other non-Debian host**, and running the browsers directly there crashes with missing shared libraries. This dotfiles host is Fedora — **direct host execution is unsupported**.
+
+- **MUST NOT** run Playwright browsers directly on a non-Ubuntu-LTS host. No `npx playwright test`, `npx playwright install`, `playwright install-deps`, or the `playwright-cli` skill driving a host-installed browser. Installing the browsers to `~/.cache/ms-playwright` and launching them on Fedora is forbidden — it is unsupported and crashes.
+- **MUST** run Playwright inside the official container image, which is built on Ubuntu Noble (24.04 LTS) and ships every browser dependency preinstalled: `mcr.microsoft.com/playwright:v<X.Y.Z>-noble`. The `playwright-cli` skill, when used, **MUST** drive a browser inside this container, never one installed on the host.
+- **MUST** pin the image tag to the **exact** Playwright version the project depends on (`@playwright/test` / `playwright` in `package.json`). A mismatch between the image's bundled browsers and the project's Playwright client is unsupported — bump both together.
+- **MUST** run the container as a **non-root** user, never as root. The image ships a bundled non-root `pwuser` (uid 1000): pass `--user pwuser`. When the container bind-mounts host files that must stay user-owned, pass `--user "$(id -u):$(id -g)"` instead so output is owned by the host user. Root execution lets browser processes write root-owned files into bind-mounted workspaces and runs untrusted page content with unnecessary privilege.
+- **MUST** pass `--ipc=host` — Chromium exhausts the default 64 MB `/dev/shm` and crashes otherwise — and **SHOULD** pass `--init` to reap zombie browser processes.
+- On Fedora, **`podman` is the native rootless engine** and is preferred; it accepts the same flags as `docker` and already runs the container in a rootless user namespace. `--user pwuser` still applies (it selects the non-root user *inside* the container).
+
+```bash
+# Pin <X.Y.Z> to the project's @playwright/test version; this tag is illustrative.
+podman run --rm -it \
+  --ipc=host --init \
+  --user pwuser \
+  -v "$PWD:/work" -w /work \
+  mcr.microsoft.com/playwright:v1.49.1-noble \
+  npx playwright test
+
+# Bind-mounting host files that must stay user-owned: match the host uid/gid.
+docker run --rm -it \
+  --ipc=host --init \
+  --user "$(id -u):$(id -g)" \
+  -v "$PWD:/work" -w /work \
+  mcr.microsoft.com/playwright:v1.49.1-noble \
+  npx playwright test
+```
 
 ## Scripting Runtime
 
