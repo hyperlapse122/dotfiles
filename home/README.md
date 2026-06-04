@@ -7,7 +7,6 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.z*` | `~/.z*` on Linux and macOS |
 | `home/.config/git/config` | `~/.config/git/config` |
 | `home/.gitconfig.d/<os>.gitconfig` | `~/.gitconfig.d/<os>.gitconfig` from the matching OS yaml |
-| `home/.agents/` | `~/.agents/` (and `home/.agents/skills/` → `~/.claude/skills/` for Claude Code) |
 | `home/.config/opencode/*.{json,jsonc}` | `~/.config/opencode/` (only top-level OpenCode JSON config; subdirs handled separately) |
 | `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` (not symlinked anywhere) |
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |
@@ -32,7 +31,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 - The location of the file inside `home/` does NOT determine which OS gets it — the `link:` block in the matching yaml does. You can place a Linux-only file under `home/.config/foo/` and only link it from `install.linux.yaml`.
 - Use forward slashes in YAML paths even for Windows targets (e.g. `~/AppData/...`).
 - Linux-only desktop, container, `environment.d`, editor, and SSH snippets live under their mirrored `home/` paths and are linked only from `install.linux.yaml`; that installer also prunes retired `environment.d` symlinks before relinking.
-- `home/.agents/` is linked as a runtime skill tree. Its lockfile and skill package directories are managed by OpenCode / oh-my-openagent, not by hand. Do not place `AGENTS.md` inside `home/.agents/`; keep that guidance in [`AGENTS.md`](./AGENTS.md) at this directory level.
+- The runtime skill tree is **not** under `home/` — it lives in [`../agents/skills`](../agents/skills) (with [`../agents/.skill-lock.json`](../agents/.skill-lock.json)), linked into `~/.agents/skills` and `~/.claude/skills`. See [`../agents/README.md`](../agents/README.md).
 - `home/.config/opencode/` is linked with a narrow `*.{json,jsonc}` glob (top-level JSON config only). Do not place `AGENTS.md` or a `commands/` subdir inside it — `~/.config/opencode/AGENTS.md` is already an explicit symlink to [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md) and `~/.config/opencode/commands` is an explicit symlink to [`../agents/commands`](../agents/commands) (both managed by [`../install.conf.yaml`](../install.conf.yaml)). Edit those sources under `agents/` to change cross-tool agent rules or slash commands.
 - OpenCode agent prompt append text lives in `home/.config/opencode/prompts/*_prompt_append.md`; run `scripts/bootstrap/render-opencode-prompt-append.*` to render those markdown sources into `home/.config/opencode/oh-my-openagent.jsonc`. The `prompts/` directory itself is **not** symlinked anywhere — it is only a source for the renderer.
 
@@ -40,8 +39,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 
 - Rendered secrets — keep only `*.1password` templates here. The generated `~/.secrets/*` files are local machine output and MUST NOT be committed.
 - Generated files (caches, lock files for shells, etc.) — link the *config* that produces them, not the output.
-- Runtime-managed skill package contents under `home/.agents/skills/`, unless updating through the skill manager.
-- `home/.agents/AGENTS.md` — it would be linked into `~/.agents` and can affect every agent run from this user account.
+- A `home/.agents/` skill tree — it moved to [`../agents/skills`](../agents/skills); don't reintroduce it here.
 - `home/.config/opencode/AGENTS.md` — it would conflict with the explicit symlink that points `~/.config/opencode/AGENTS.md` at [`../agents/SHARED_AGENTS.md`](../agents/SHARED_AGENTS.md). Edit the shared file instead.
 - `home/.config/opencode/commands/` — it would conflict with the explicit symlink that points `~/.config/opencode/commands` at [`../agents/commands`](../agents/commands). Put new slash commands in `agents/commands/` instead.
 

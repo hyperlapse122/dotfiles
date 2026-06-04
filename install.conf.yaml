@@ -17,9 +17,10 @@
 # Cross-platform links. Path layout under home/ mirrors $HOME.
 - link:
     # Agent / skills config (used by opencode, claude, etc.)
-    ~/.agents: home/.agents
+    ~/.agents/skills: agents/skills
+    ~/.agents/.skill-lock.json: agents/.skill-lock.json
     # Claude Code skills dir — same runtime skill tree as ~/.agents/skills.
-    ~/.claude/skills: home/.agents/skills
+    ~/.claude/skills: agents/skills
 
     # opencode top-level JSON config (opencode.json, oh-my-openagent.jsonc,
     # tui.json, etc.). Narrow glob — *.{json,jsonc} only — so subdirs like
@@ -76,7 +77,7 @@
       description: Update tools from mise
       stdout: true
       stderr: true
-    - command: glab skills install --global --force
+    - command: mise exec glab -- glab skills install -f --path ./agents/skills
       description: Install or update gitlab cli skills
     - command: mise exec node -- node scripts/bootstrap/render-opencode-prompt-append.mjs
       description: Render OpenCode prompt_append config

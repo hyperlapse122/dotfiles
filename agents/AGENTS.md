@@ -1,6 +1,8 @@
 # agents/ Agent Instructions
 
-Files in this directory are **cross-tool agent rule files and shared slash commands** linked into multiple AI assistants' global paths. Editing any linked file here changes the global rules or commands for every linked tool, on every machine running this dotfiles checkout.
+Files in this directory are **cross-tool agent rule files, shared slash commands, and the runtime skill tree** linked into multiple AI assistants' global paths. Editing any linked file here changes the global rules or commands for every linked tool, on every machine running this dotfiles checkout.
+
+> **`skills/` mixes CLI-managed and hand-authored skills.** Some skills are installed by the `skills` CLI (`npx skills`, tracked in `.skill-lock.json`) or by `glab skills install`; others are hand-authored. You MAY add or edit a skill by hand (create `skills/<name>/SKILL.md`), but **check the source first** — editing a CLI-managed skill (one in `.skill-lock.json`, or the `glab` skill) is overwritten on the next CLI run. `.skill-lock.json` itself is CLI-owned — don't hand-edit it. The rules below about tool-agnostic hand-authoring apply to `SHARED_AGENTS.md` and `commands/`, not to `skills/`.
 
 > **Style**: Use [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords (**MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**) for directives. Match the tone and structure of `SHARED_AGENTS.md`.
 
@@ -15,6 +17,11 @@ Files in this directory are **cross-tool agent rule files and shared slash comma
 | `agents/SHARED_AGENTS.md` | `~/.claude/CLAUDE.md` | Claude Code (global rules) |
 | `agents/commands/` | `~/.config/opencode/commands` | OpenCode (slash commands) |
 | `agents/commands/` | `~/.codex/prompts` | Codex (prompts) |
+| `agents/skills/` | `~/.agents/skills` | OpenCode (runtime skills) |
+| `agents/skills/` | `~/.claude/skills` | Claude Code (runtime skills) |
+| `agents/.skill-lock.json` | `~/.agents/.skill-lock.json` | `skills` CLI lockfile |
+
+Codex (and the other agents in `.skill-lock.json`'s `lastSelectedAgents`) are **not** dotbot-linked for skills — `npx skills` syncs the selected skills into each tool's own dir (e.g. `~/.codex/skills`, beside Codex's built-in `.system` skills). Skill distribution there is the `skills` CLI's job, not dotbot's.
 
 The symlinks resolve live. Edits to `SHARED_AGENTS.md` or any file under `commands/` take effect for every linked tool the next time that tool reads them — no dotbot re-run needed unless the symlink itself is missing.
 
@@ -29,6 +36,7 @@ This file (`agents/AGENTS.md`) is **NOT** linked into any tool's global path. It
 | Add a tool-specific rule file (only OpenCode, only Codex, ...) | New file in this directory + new explicit `link:` in `../install.conf.yaml` |
 | Add support for a new AI tool | New `link:` entries in `../install.conf.yaml` (rules and/or commands), then update `README.md` linkage table |
 | Add a project-specific rule | The owning repo's `AGENTS.md`, NOT here |
+| Add/update/remove a skill | Hand-author it under `skills/<name>/SKILL.md`, OR run `npx skills` / `glab skills install`. Before editing an existing skill, check its source — CLI-managed ones (in `.skill-lock.json` or the `glab` skill) are overwritten on the next CLI run. Never hand-edit `.skill-lock.json`. |
 
 ## Commands
 
@@ -62,5 +70,7 @@ OpenCode-style frontmatter (`name`, `description`) is allowed and ignored by Cod
 | Adding `home/.config/opencode/AGENTS.md` to make global OpenCode rules | `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md`. A second source would conflict. Edit the shared file. |
 | Adding `home/.config/opencode/commands/` | `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`. A sibling source would conflict. Put new commands in `agents/commands/`. |
 | Tool-specific divergent copy of the same command (e.g. one file for OpenCode, one for Codex) | Both surfaces share `commands/`. Keep one tool-agnostic file; branch inline if needed. |
+| Hand-editing a CLI-managed `skills/` package (one in `.skill-lock.json` or the `glab` skill) without checking its source, or hand-editing `.skill-lock.json` | Those are CLI-owned; a manual edit is overwritten on the next `npx skills` / `glab skills install` run. Hand-authoring a *new* skill under `skills/<name>/SKILL.md` is fine — just verify it isn't already CLI-managed first. |
+| Adding an `AGENTS.md` under `skills/` | `skills/` is linked into `~/.agents/skills` and `~/.claude/skills`, so a file there could be injected into every agent run. Put repo guidance in this file (`agents/AGENTS.md`), a sibling of `skills/`. |
 
 See [`README.md`](./README.md) for the human-facing description and [`../AGENTS.md`](../AGENTS.md) for the repo-wide contract.

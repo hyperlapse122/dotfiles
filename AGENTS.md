@@ -16,9 +16,10 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 │                                    # and workflows/lint.yml (eslint/prettier) = CI for packages/;
 │                                    # workflows/opencode-plugin-updates.yml + update-opencode-plugin.yml
 │                                    # = hourly opencode plugin release-bump PRs.
-├── agents/                          # Cross-tool agent rules + shared slash commands / prompts.
+├── agents/                          # Cross-tool agent rules + shared slash commands + runtime skill tree.
 │                                    # SHARED_AGENTS.md links into ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, and ~/.claude/CLAUDE.md.
 │                                    # commands/ links into ~/.config/opencode/commands and ~/.codex/prompts.
+│                                    # skills/ + .skill-lock.json link into ~/.agents/ and ~/.claude/skills.
 ├── install.conf.yaml                # Shared dotbot tasks (all OSes)
 ├── install.linux.yaml               # Linux-only dotbot tasks
 ├── install.macos.yaml               # macOS-only dotbot tasks
@@ -28,7 +29,6 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── crates/                          # Rust crates built into ~/.local/bin during bootstrap.
 │                                    # mxm4-haptic: MX Master 4 HID++ haptic helper (Linux + macOS + Windows via hidapi).
 ├── home/                            # Files that symlink into $HOME (home/foo -> ~/foo)
-│   ├── .agents/                     # Runtime agent skill tree linked to ~/.agents
 │   ├── .config/opencode/            # OpenCode config files (*.json, *.jsonc).
 │                                    # AGENTS.md, commands/ are linked from agents/, not here.
 │   └── .secrets/*.1password         # 1Password templates rendered to ~/.secrets/
@@ -115,9 +115,9 @@ The script exits 0 immediately when invoked from a non-interactive shell (stdin 
 
 ### Runtime agent config
 
-- `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime. Its `skills/` subtree is additionally linked to `~/.claude/skills` so Claude Code reads the same runtime skill packages.
-- `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
-- `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
+- `agents/skills/` is the runtime skill tree and `agents/.skill-lock.json` its lockfile — both managed by the `skills` CLI (`npx skills`) and tracked in the repo. `install.conf.yaml` links `agents/skills` to `~/.agents/skills` (OpenCode) and `~/.claude/skills` (Claude Code), and `agents/.skill-lock.json` to `~/.agents/.skill-lock.json`. The lockfile's `lastSelectedAgents` array lists every agent `npx skills` distributes to (it already includes `codex`, `cursor`, `gemini-cli`, and others), so re-running `npx skills` also syncs the selected skills into those tools' own skill dirs — e.g. Codex picks them up under `~/.codex/skills` (alongside its built-in `~/.codex/skills/.system` skills, which are left intact). `agents/skills/` holds a mix of CLI-managed and hand-authored skills: you MAY add or edit a skill by hand (create `agents/skills/<name>/SKILL.md` directly), but **check the source before editing an existing one** — a skill tracked in `.skill-lock.json` (installed via `npx skills`) or the `glab` skill (`glab skills install`) is CLI-managed and a hand edit is overwritten on the next CLI run. `agents/.skill-lock.json` itself is CLI-owned — don't hand-edit it.
+- The `glab` skill is installed separately by the bootstrap step `mise exec glab -- glab skills install -f --path ./agents/skills`, so it is **not** tracked in `agents/.skill-lock.json` (the `skills` CLI owns that lockfile for the skills it manages, e.g. `find-skills`, `playwright-cli`).
+- An `AGENTS.md` MUST NOT exist under `agents/skills/`. That subtree is linked into `~/.agents/skills` and `~/.claude/skills`, so a file there could be injected into every agent run from this user account. Put repo guidance in `agents/AGENTS.md` (a sibling of `skills/`, not linked into any tool) instead.
 - `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global rules path: `~/.config/opencode/AGENTS.md` (OpenCode), `~/.codex/AGENTS.md` (Codex), and `~/.claude/CLAUDE.md` (Claude Code). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
 - `agents/commands/` is the cross-tool shared slash-command / prompt directory. `install.conf.yaml` symlinks the whole directory into each tool's command path: `~/.config/opencode/commands` (OpenCode slash commands) and `~/.codex/prompts` (Codex prompts). Each `*.md` file is a single command/prompt and works in either tool — keep the body tool-agnostic. Add a new command by dropping a `<name>.md` file in `agents/commands/`; no further wiring is needed. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` pointing that tool's command path at `agents/commands` and updating the linkage table in [`agents/README.md`](agents/README.md).
 - `home/.config/opencode/AGENTS.md` MUST NOT exist. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md` (managed in `install.conf.yaml`); a sibling source under `home/.config/opencode/` would conflict with that link. Put cross-tool rules in `agents/SHARED_AGENTS.md`. Put OpenCode-only rules in a new file under `agents/` linked separately from `install.conf.yaml`.
@@ -170,7 +170,7 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 - `cp` for `/etc/` files, or `sudo cp` instead of `sudo install -D -m <mode>`.
 - Adding `.sh` without matching `.ps1`, or vice versa.
 - Adding a top-level directory without a `README.md`, or moving things without updating the layout block in this file.
-- Adding `home/.agents/AGENTS.md`. Use `home/AGENTS.md` for parent-scoped guidance instead.
+- Adding an `AGENTS.md` under `agents/skills/`. That subtree links into `~/.agents/skills` and `~/.claude/skills` and could be injected into every agent run; put repo guidance in `agents/AGENTS.md` instead.
 - Adding `home/.config/opencode/AGENTS.md`. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md`; a second source would conflict. Edit the shared file, or add a new tool-specific file under `agents/` with its own `link:` entry.
 - Adding `home/.config/opencode/commands/`. `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`; a sibling source would conflict. Put new slash commands in `agents/commands/`.
 - Hand-editing `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/commands/*`, or `~/.codex/prompts/*`. Those are symlinks into `agents/` — edit the source under `agents/`.

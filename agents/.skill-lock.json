@@ -10,15 +10,6 @@
       "installedAt": "2026-04-22T04:34:47.109Z",
       "updatedAt": "2026-05-05T03:54:23.769Z"
     },
-    "glab": {
-      "source": "gitlab-org/ai/skills",
-      "sourceType": "gitlab",
-      "sourceUrl": "https://gitlab.com/gitlab-org/ai/skills.git",
-      "skillPath": "skills/glab/SKILL.md",
-      "skillFolderHash": "803d9838627cdc624c205a5d855cb4f0c6565b7db8387ba280b1c6f036f52779",
-      "installedAt": "2026-04-23T07:19:26.181Z",
-      "updatedAt": "2026-04-28T10:12:52.842Z"
-    },
     "playwright-cli": {
       "source": "microsoft/playwright-cli",
       "sourceType": "github",
@@ -45,7 +36,6 @@
     "github-copilot",
     "kimi-cli",
     "opencode",
-    "warp",
-    "claude-code"
+    "warp"
   ]
 }
