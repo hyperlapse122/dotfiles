@@ -32,7 +32,7 @@ The bootstrap deliberately does **not** install system packages — that list is
 ./scripts/linux/install-packages.sh
 ```
 
-This enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, VS Code, Docker, Chrome, Tailscale, Proton VPN, VirtualBox), installs the package set and selected dotnet global tools, enables `keyd` / `docker` / `tailscaled` / `libvirtd`, and adds you to the relevant groups.
+This enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, VSCodium, Docker, Chrome, Tailscale, Proton VPN, VirtualBox), installs the package set and selected dotnet global tools, enables `keyd` / `docker` / `tailscaled` / `libvirtd`, and adds you to the relevant groups.
 
 ## How it works
 
@@ -47,7 +47,7 @@ This enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, 
 ## What you get
 
 - **Shell & tools** — zsh (Prezto-based), a curated [mise](https://mise.jdx.dev/) toolchain (Node, Bun, Go, Python, Ruby, Rust, plus CLIs like `gh`, `glab`, `ast-grep`, `shellcheck`), git, SSH, GnuPG, and Docker credential helpers.
-- **Editors & agents** — VS Code and Zed settings, plus cross-tool AI agent rules and slash commands linked into OpenCode and Codex from a single source in [`agents/`](./agents/).
+- **Editors & agents** — VS Code, VSCodium, and Zed settings, plus cross-tool AI agent rules and slash commands linked into OpenCode and Codex from a single source in [`agents/`](./agents/).
 - **Fonts** — Pretendard, Pretendard JP, JetBrains Mono, D2Coding, and Nerd Font variants, installed user-wide (no admin) into the platform font directory.
 - **Secrets** — any tracked `*.1password` template is rendered into `~/.secrets/` via [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/) (no-ops when there are none).
 - **Local helpers** — Rust [`crates/`](./crates/) built into `~/.local/bin` and a TypeScript [`packages/`](./packages/) Yarn workspace built in place (e.g. the MX Master 4 haptic stack — Linux + macOS via `hidapi`, autostarted by `systemd --user` / launchd respectively — plus OpenCode plugins auto-linked into `~/.config/opencode/plugins/`, such as the cross-platform `playwright-cli` per-project session injector).

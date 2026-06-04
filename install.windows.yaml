@@ -23,6 +23,12 @@
     ~/AppData/Roaming/Code/User/:
       glob: true
       path: home/.config/Code/User/*.json
+      
+    # VSCodium on Windows - source is the same, target path differs.
+    # Only the two tracked *.json files (VSCodium writes lots of User/ state).
+    ~/AppData/Roaming/VSCodium/User/:
+      glob: true
+      path: home/.config/VSCodium/User/*.json
 
     # Per-OS git overrides (referenced via [include] in home/.config/git/config)
     ~/.gitconfig.d/windows.gitconfig: home/.gitconfig.d/windows.gitconfig
@@ -32,6 +38,12 @@
     # as a bare command once %USERPROFILE%\.local\bin is on PATH - that
     # PATH entry is the user's responsibility.
     ~/.local/bin/opencode.ps1: home/.local/bin/opencode.ps1
+
+    # code -> codium shim (Windows side; POSIX ships code, see
+    # install.linux.yaml / install.macos.yaml). Runs VS Codium when `code` is
+    # invoked. PowerShell resolves `code` as a bare command once
+    # %USERPROFILE%\.local\bin is on PATH.
+    ~/.local/bin/code.ps1: home/.local/bin/code.ps1
 
 # Configure glab with PowerShell counterpart of setup-glab.sh.
 # `-NoProfile` skips the user's PS profile (avoids unrelated errors blocking

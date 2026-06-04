@@ -1,6 +1,9 @@
 {
   "recommendations": [
     "rust-lang.rust-analyzer",
-    "redhat.vscode-yaml"
+    "redhat.vscode-yaml",
+    "biomejs.biome",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode"
   ]
 }

@@ -10,6 +10,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.config/opencode/*.{json,jsonc}` | `~/.config/opencode/` (only top-level OpenCode JSON config; subdirs handled separately) |
 | `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` (not symlinked anywhere) |
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |
+| `home/.config/VSCodium/User/*.json` | VSCodium user settings/keybindings at the platform-specific VSCodium user path (Linux `~/.config/VSCodium/User/`, macOS `~/Library/Application Support/VSCodium/User/`, Windows `~/AppData/Roaming/VSCodium/User/`); only the tracked `*.json` files are linked, not the whole `User/` dir |
 | `home/.config/environment.d/` | `~/.config/environment.d/` |
 | `home/.config/fcitx5/`, `home/.config/containers/`, `home/.config/solaar/` | Linux-only XDG config via `install.linux.yaml` |
 | `home/.config/wireplumber/wireplumber.conf.d/*.conf` | Linux-only WirePlumber 0.5 drop-ins via the `install.linux.yaml` XDG config glob, currently `51-disable-bt-autoswitch.conf` (sets `bluetooth.autoswitch-to-headset-profile = false` so Bluetooth headsets stay in stable A2DP and don't collapse into fragile HFP when an app opens the mic; the mic profile stays available, just not auto-selected) |
@@ -20,7 +21,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.npmrc`, `home/.yarnrc.yml` | Cross-platform package-manager hardening config |
 | `home/.config/pnpm/config.yaml` | Linux package-manager hardening config via the XDG config glob |
 | `home/.bunfig.toml` | Tracked Bun hardening config source; not linked by the current install yaml |
-| `home/.local/bin/docker-credential-*`, `home/.local/bin/opencode*` | CLI helpers under `~/.local/bin/` for the platforms that use them |
+| `home/.local/bin/docker-credential-*`, `home/.local/bin/opencode*`, `home/.local/bin/code*` | CLI helpers under `~/.local/bin/` for the platforms that use them. `code`/`code.ps1` is the VS Codium shim (runs `codium`) that lets the `code` command keep working in non-interactive shells and editor-launching tools after the VS Code -> VS Codium migration |
 | `home/.local/share/applications/*.desktop` | Linux desktop entries under `~/.local/share/applications/` |
 | `home/.secrets/*.1password` | Rendered by `scripts/bootstrap/inject-1password-secrets.*` to `~/.secrets/<name>` |
 

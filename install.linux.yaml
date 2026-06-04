@@ -37,6 +37,13 @@
       glob: true
       path: home/.config/Code/User/*.json
 
+    # VSCodium on Linux (path differs on macOS / Windows; see those yaml files).
+    # Only the two tracked *.json files - VSCodium writes lots of state into
+    # User/ that we don't want mirrored, so this is intentionally not a dir link.
+    ~/.config/VSCodium/User/:
+      glob: true
+      path: home/.config/VSCodium/User/*.json
+
     # Docker credential helpers (Linux/macOS only - Windows uses PATHEXT and
     # expects .exe/.bat/.cmd, see header comments in each script). Source
     # files are tracked at mode 100755; the symlink preserves the exec bit.
@@ -48,6 +55,10 @@
     # install.windows.yaml). Resolves the latest release version from GitHub
     # at invocation time and hands it to `mise exec`.
     ~/.local/bin/opencode: home/.local/bin/opencode
+
+    # code -> codium shim (POSIX side; Windows ships code.ps1, see
+    # install.windows.yaml). Runs VS Codium when `code` is invoked.
+    ~/.local/bin/code: home/.local/bin/code
 
     # XDG desktop entries (Linux DE only - macOS uses .app bundles, Windows
     # uses Start Menu/AppX). One entry per tracked .desktop file. .desktop

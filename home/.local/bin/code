@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# code — VS Codium shim. Runs `codium` so the `code` command keeps working
+# after migrating from VS Code to VS Codium.
+#
+# Replaces the former `alias code=codium` in ~/.config/zsh/.zshrc: a real
+# executable on PATH also covers non-interactive shells, scripts, and any tool
+# that shells out to `code` (e.g. `git config core.editor`, `$EDITOR`, `$VISUAL`,
+# or another program's "open in editor" feature), none of which a zsh alias can.
+#
+# POSIX counterpart of code.ps1 (Windows).
+#
+# Dependencies: `codium` on PATH (VS Codium install).
+
+set -euo pipefail
+
+if ! command -v codium >/dev/null 2>&1; then
+  printf 'code: `codium` not found on PATH (install VS Codium)\n' >&2
+  exit 127
+fi
+
+exec codium "$@"

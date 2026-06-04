@@ -50,17 +50,18 @@ repo_gpgcheck=1
 gpgkey="https://downloads.1password.com/linux/keys/1password.asc"
 EOF
 
-  # Install Visual Studio Code repository
-  "${SUDO[@]}" rpm --import https://packages.microsoft.com/keys/microsoft.asc
+  # Install VSCodium repository (written to vscode.repo so it overwrites any
+  # prior Microsoft VS Code repo file in place)
+  "${SUDO[@]}" rpm --import https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
   "${SUDO[@]}" tee /etc/yum.repos.d/vscode.repo >/dev/null <<'EOF'
-[code]
-name=Visual Studio Code
-baseurl=https://packages.microsoft.com/yumrepos/vscode
+[gitlab.com_paulcarroty_vscodium_repo]
+name=gitlab.com_paulcarroty_vscodium_repo
+baseurl=https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
 enabled=1
-autorefresh=1
-type=rpm-md
 gpgcheck=1
-gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+repo_gpgcheck=1
+gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+metadata_expire=1h
 EOF
 
   # Install docker repository
@@ -134,7 +135,7 @@ EOF
     1password-cli
 
     # Editor
-    code
+    codium
 
     # Container runtime (Docker CE + plugins)
     containerd.io
