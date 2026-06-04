@@ -4,7 +4,7 @@ This directory mirrors files that dotbot links into `$HOME`. The path under `hom
 
 ## Runtime Agent Skill Tree
 
-`home/.agents/` is linked to `~/.agents` by [`../install.conf.yaml`](../install.conf.yaml). OpenCode and oh-my-openagent manage the lockfile and installed skill packages there at runtime.
+`home/.agents/` is linked to `~/.agents` by [`../install.conf.yaml`](../install.conf.yaml). OpenCode and oh-my-openagent manage the lockfile and installed skill packages there at runtime. The same file additionally links `home/.agents/skills` to `~/.claude/skills`, so Claude Code reads the same skill packages.
 
 Do not add `home/.agents/AGENTS.md`. Files under `~/.agents` can be injected into every agent run from this user account, so scoped guidance for this repo belongs in this parent file instead.
 
@@ -14,9 +14,9 @@ Do not add `home/.agents/AGENTS.md`. Files under `~/.agents` can be injected int
 |------|----------|-------|
 | Understand active runtime skills | `home/.agents/skills/*/SKILL.md` | Read-only unless using the skill system. |
 | Track installed runtime skill versions | `home/.agents/.skill-lock.json` | Managed artifact. |
-| Change `~/.agents` symlink behavior | `../install.conf.yaml` | Links `home/.agents` to `~/.agents`. |
+| Change `~/.agents` symlink behavior | `../install.conf.yaml` | Links `home/.agents` to `~/.agents`, and `home/.agents/skills` to `~/.claude/skills`. |
 | Add/update runtime skills | OpenCode skill system | Do not hand-edit generated skill files. |
-| Change cross-tool global agent rules | `../agents/SHARED_AGENTS.md` | Linked into `~/.config/opencode/AGENTS.md` and `~/.codex/AGENTS.md` from `../install.conf.yaml`. Do not place a literal `AGENTS.md` inside `home/.config/opencode/`. |
+| Change cross-tool global agent rules | `../agents/SHARED_AGENTS.md` | Linked into `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, and `~/.claude/CLAUDE.md` from `../install.conf.yaml`. Do not place a literal `AGENTS.md` inside `home/.config/opencode/`. |
 
 ## Conventions
 

@@ -12,6 +12,7 @@ Files in this directory are **cross-tool agent rule files and shared slash comma
 |---|---|---|
 | `agents/SHARED_AGENTS.md` | `~/.config/opencode/AGENTS.md` | OpenCode (global rules) |
 | `agents/SHARED_AGENTS.md` | `~/.codex/AGENTS.md` | Codex (global rules) |
+| `agents/SHARED_AGENTS.md` | `~/.claude/CLAUDE.md` | Claude Code (global rules) |
 | `agents/commands/` | `~/.config/opencode/commands` | OpenCode (slash commands) |
 | `agents/commands/` | `~/.codex/prompts` | Codex (prompts) |
 

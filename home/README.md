@@ -7,7 +7,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.z*` | `~/.z*` on Linux and macOS |
 | `home/.config/git/config` | `~/.config/git/config` |
 | `home/.gitconfig.d/<os>.gitconfig` | `~/.gitconfig.d/<os>.gitconfig` from the matching OS yaml |
-| `home/.agents/` | `~/.agents/` |
+| `home/.agents/` | `~/.agents/` (and `home/.agents/skills/` → `~/.claude/skills/` for Claude Code) |
 | `home/.config/opencode/*.{json,jsonc}` | `~/.config/opencode/` (only top-level OpenCode JSON config; subdirs handled separately) |
 | `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` (not symlinked anywhere) |
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |

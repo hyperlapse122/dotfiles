@@ -18,6 +18,8 @@
 - link:
     # Agent / skills config (used by opencode, claude, etc.)
     ~/.agents: home/.agents
+    # Claude Code skills dir — same runtime skill tree as ~/.agents/skills.
+    ~/.claude/skills: home/.agents/skills
 
     # opencode top-level JSON config (opencode.json, oh-my-openagent.jsonc,
     # tui.json, etc.). Narrow glob — *.{json,jsonc} only — so subdirs like
@@ -39,6 +41,7 @@
     # Link shared agents.md file
     ~/.config/opencode/AGENTS.md: agents/SHARED_AGENTS.md
     ~/.codex/AGENTS.md: agents/SHARED_AGENTS.md
+    ~/.claude/CLAUDE.md: agents/SHARED_AGENTS.md
 
     # git (XDG path, picked up by git on all 3 OSes)
     ~/.config/git/config: home/.config/git/config

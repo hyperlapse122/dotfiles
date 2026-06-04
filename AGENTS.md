@@ -18,7 +18,7 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 │                                    # workflows/opencode-plugin-updates.yml + update-opencode-plugin.yml
 │                                    # = hourly opencode plugin release-bump PRs.
 ├── agents/                          # Cross-tool agent rules + shared slash commands / prompts.
-│                                    # SHARED_AGENTS.md links into ~/.config/opencode/AGENTS.md and ~/.codex/AGENTS.md.
+│                                    # SHARED_AGENTS.md links into ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, and ~/.claude/CLAUDE.md.
 │                                    # commands/ links into ~/.config/opencode/commands and ~/.codex/prompts.
 ├── install.conf.yaml                # Shared dotbot tasks (all OSes)
 ├── install.linux.yaml               # Linux-only dotbot tasks
@@ -54,7 +54,7 @@ Every tracked top-level directory MUST have its own `README.md` describing what 
 
 ### Branching — `main` only (overrides global Git Flow gate)
 
-This repository commits directly to `main`. It does **not** use Git Flow branches (`feature/`, `bugfix/`, `hotfix/`, `refactor/`, `docs/`, `chore/`, `release/`) or any other topic-branch workflow. The branch-naming convention and pre-first-commit prefix gate in the global agent rules (`~/.config/opencode/AGENTS.md` / `~/.codex/AGENTS.md`) **do not apply here** — this project-level rule overrides them per the precedence rule (project `AGENTS.md` wins on conflict).
+This repository commits directly to `main`. It does **not** use Git Flow branches (`feature/`, `bugfix/`, `hotfix/`, `refactor/`, `docs/`, `chore/`, `release/`) or any other topic-branch workflow. The branch-naming convention and pre-first-commit prefix gate in the global agent rules (`~/.config/opencode/AGENTS.md` / `~/.codex/AGENTS.md` / `~/.claude/CLAUDE.md`) **do not apply here** — this project-level rule overrides them per the precedence rule (project `AGENTS.md` wins on conflict).
 
 - **Commit straight to `main`.** Do not create, rename to, or switch to a topic branch before committing.
 - **Do not run the prefix gate** (`git branch --show-current` check, `git branch -m <prefix>/<slug>` rename) on this repo. It is a single-maintainer dotfiles repo; the Git Flow ceremony adds no value.
@@ -117,14 +117,14 @@ The script exits 0 immediately when invoked from a non-interactive shell (stdin 
 ### Runtime agent config
 
 - `.agents/skills/` holds repo-local skills that describe how to operate this repository. Currently tracked: `galaxy-buds-le-audio` (pairing Samsung Galaxy Buds 4 Pro for Bluetooth LE Audio on this Fedora/BlueZ host — the coordinated-set pairing procedure that complements the LE Audio enablement shipped in `system/linux/etc/bluetooth/main.conf`).
-- `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime.
+- `home/.agents/` is linked to `~/.agents` and is intentionally writable by OpenCode / oh-my-openagent at runtime. Its `skills/` subtree is additionally linked to `~/.claude/skills` so Claude Code reads the same runtime skill packages.
 - `home/.agents/.skill-lock.json` and `home/.agents/skills/*` are managed artifacts. Do not hand-edit them unless explicitly working through the skill manager.
 - `home/.agents/AGENTS.md` MUST NOT exist. Because `home/.agents/` links to `~/.agents`, that file can be injected into every agent run from this user account. Put that guidance in `home/AGENTS.md` instead.
-- `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global AGENTS.md path: `~/.config/opencode/AGENTS.md` (OpenCode) and `~/.codex/AGENTS.md` (Codex). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
+- `agents/SHARED_AGENTS.md` is the cross-tool agent rules file. `install.conf.yaml` symlinks it to each AI tool's global rules path: `~/.config/opencode/AGENTS.md` (OpenCode), `~/.codex/AGENTS.md` (Codex), and `~/.claude/CLAUDE.md` (Claude Code). Edit `agents/SHARED_AGENTS.md` once; every linked tool sees the change. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` and updating the linkage table in [`agents/README.md`](agents/README.md).
 - `agents/commands/` is the cross-tool shared slash-command / prompt directory. `install.conf.yaml` symlinks the whole directory into each tool's command path: `~/.config/opencode/commands` (OpenCode slash commands) and `~/.codex/prompts` (Codex prompts). Each `*.md` file is a single command/prompt and works in either tool — keep the body tool-agnostic. Add a new command by dropping a `<name>.md` file in `agents/commands/`; no further wiring is needed. Add support for a new tool by adding a new explicit `link:` entry in `install.conf.yaml` pointing that tool's command path at `agents/commands` and updating the linkage table in [`agents/README.md`](agents/README.md).
 - `home/.config/opencode/AGENTS.md` MUST NOT exist. `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md` (managed in `install.conf.yaml`); a sibling source under `home/.config/opencode/` would conflict with that link. Put cross-tool rules in `agents/SHARED_AGENTS.md`. Put OpenCode-only rules in a new file under `agents/` linked separately from `install.conf.yaml`.
 - `home/.config/opencode/commands/` MUST NOT exist. `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`; a sibling source under `home/.config/opencode/commands/` would conflict with that link. Put new slash commands in `agents/commands/`. The OpenCode glob link for `home/.config/opencode/` is intentionally narrowed to `*.{json,jsonc}` so a stray `commands/` subdir there cannot collide.
-- Keep all agent rule files in sync when changing agent workflow rules. In this repo that currently means this file, `home/AGENTS.md`, `agents/AGENTS.md`, and `agents/SHARED_AGENTS.md`. The shared file is loaded globally by OpenCode and Codex via the symlinks above, so changes propagate to both tools immediately.
+- Keep all agent rule files in sync when changing agent workflow rules. In this repo that currently means this file, `home/AGENTS.md`, `agents/AGENTS.md`, and `agents/SHARED_AGENTS.md`. The shared file is loaded globally by OpenCode, Codex, and Claude Code via the symlinks above, so changes propagate to all three tools immediately.
 
 ### TypeScript/JS packages — Yarn Berry monorepo at `packages/`
 

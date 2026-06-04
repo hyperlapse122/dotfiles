@@ -21,6 +21,7 @@ The source files in this directory are symlinked into each tool's global paths s
 |---|---|---|
 | `agents/SHARED_AGENTS.md` | OpenCode | `~/.config/opencode/AGENTS.md` |
 | `agents/SHARED_AGENTS.md` | Codex | `~/.codex/AGENTS.md` |
+| `agents/SHARED_AGENTS.md` | Claude Code | `~/.claude/CLAUDE.md` |
 | `agents/commands/` | OpenCode | `~/.config/opencode/commands` |
 | `agents/commands/` | Codex | `~/.codex/prompts` |
 
