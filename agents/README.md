@@ -36,6 +36,8 @@ Each target points at a single source. Edit `SHARED_AGENTS.md` or any file under
 
 > **Note — editing skills.** You MAY add or edit a skill under `skills/` by hand (create `skills/<name>/SKILL.md`), but **check the source first**: a skill tracked in `.skill-lock.json` (installed via `npx skills`) or the `glab` skill (`glab skills install`) is CLI-managed and a hand edit is overwritten on the next CLI run — prefer the CLI for those. Skills not tracked by any CLI are hand-authored and safe to edit. `.skill-lock.json` itself is CLI-owned — don't hand-edit it. See [`AGENTS.md`](./AGENTS.md).
 
+> **Note — authoring on implicit requests.** When the user **implicitly** asks for functionality that doesn't yet exist — "I wish there were a skill for X", "can you always do Y this way", or any repeated workflow worth capturing — hand-author a new skill directly (`skills/<name>/SKILL.md`); don't wait for an explicit "install a skill" instruction. First confirm no CLI-managed skill already covers it (check `.skill-lock.json` and the `glab` skill); if none does, create the hand-authored skill. It is visible to all three tools the moment the file exists — no `install.conf.yaml` change or dotbot re-run needed.
+
 > **Note.** The OpenCode glob link for `home/.config/opencode/` is intentionally narrowed to `*.{json,jsonc}` so a stray `commands/` subdir under `home/` cannot collide with the explicit `~/.config/opencode/commands → agents/commands` link. Put new slash commands in `agents/commands/`, never under `home/.config/opencode/commands/`.
 
 ## Core rules + extracted skills

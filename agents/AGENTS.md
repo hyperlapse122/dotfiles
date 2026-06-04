@@ -55,6 +55,7 @@ OpenCode-style frontmatter (`name`, `description`) is allowed and ignored by Cod
 - **MUST NOT** put machine-specific paths, secrets, or per-host details in any file here. These files are loaded as global agent context on every machine that runs `install.sh` / `install.ps1`.
 - **MUST NOT** put project-specific rules or commands here. `SHARED_AGENTS.md` itself defers to project-level `AGENTS.md` when they conflict — keep that boundary clean.
 - **MUST NOT** edit `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/commands/*`, or `~/.codex/prompts/*` directly. Those are symlinks; edit the source files in `agents/` here.
+- **SHOULD** hand-author a new skill (`skills/<name>/SKILL.md`) when the user **implicitly** requests functionality that doesn't yet exist — e.g. "I wish there were a skill for X", "can you always do Y this way", or any repeated workflow worth capturing. Don't wait for an explicit "install a skill" instruction. First verify no CLI-managed skill already covers it (check `.skill-lock.json` and the `glab` skill); if none does, create the hand-authored skill directly. It becomes visible to all three tools the moment `skills/<name>/SKILL.md` exists — no `install.conf.yaml` change.
 - **SHOULD** use RFC 2119 keywords for directives, matching the existing style of `SHARED_AGENTS.md`.
 - **MUST** write all tracked text in English (consistent with the rest of the repo).
 
