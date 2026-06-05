@@ -30,7 +30,7 @@ is this directory. It holds the repo's TypeScript/JavaScript library packages.
 |---|---|---|
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`opencode-mxm4-haptic/`](opencode-mxm4-haptic/) | `@h82/opencode-mxm4-haptic` | OpenCode plugin that pulses MX Master 4 haptics on OpenCode events (e.g. `session.idle` → `COMPLETED`). Forwards waveforms to the `mxm4-hapticd` daemon via a bundled `@h82/mxm4-haptic`. |
-| [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-at-<slug-of-cwd>` via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
+| [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the slugified `cwd`) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
 
 ## Conventions
 
@@ -82,14 +82,19 @@ directly). `format` is `cache: false` because it writes. Turbo's caches
 ## Lint + format
 
 ESLint does the **linting**, Prettier does the **formatting** — there is
-intentionally **no Biome**. Configuration is **per member** (no root-level lint
-config):
+intentionally **no Biome**. ESLint configuration is **per member** (no
+root-level ESLint config); Prettier has a shared root base plus per-member
+overrides:
 
 - `eslint.config.mjs` — flat config: `@eslint/js` + `typescript-eslint`
   recommended, `@typescript-eslint/no-unused-vars` tuned to allow `_`-prefixed
   identifiers, and `eslint-config-prettier` appended last so ESLint never fights
   Prettier over style.
-- `.prettierrc.json` — `printWidth: 100`.
+- `.prettierrc.json` — `printWidth: 100`, `semi: true`. The workspace root also
+  carries a [`.prettierrc.json`](.prettierrc.json) with the same settings as a
+  shared base; Prettier resolves the closest config, so the per-member files are
+  authoritative for member source and the root one is the fallback for loose
+  files under `packages/`.
 - `.prettierignore` — excludes `dist/`, `.turbo/`, `node_modules/`, `*.json`,
   `*.md` so Prettier only touches `.ts`/`.mjs` source.
 
@@ -116,7 +121,8 @@ extensions.
    up automatically. Reference sibling packages with the `workspace:*` protocol.
 2. Pin every dependency to an exact, cooldown-valid (≥7 days old) version. Run
    `yarn install` from `packages/` to update the single root `yarn.lock`.
-3. Give the member its own lint/format setup (per-member, no root config): add
+3. Give the member its own lint/format setup (per-member ESLint, per-member
+   Prettier overriding the shared root base): add
    `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-config-prettier`, and
    `prettier` as exact-pinned devDeps, an `eslint.config.mjs`, a
    `.prettierrc.json`, a `.prettierignore`, and `lint`/`format`/`format:check`

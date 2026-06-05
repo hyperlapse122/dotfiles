@@ -62,7 +62,7 @@ The package is ESM-only (`"type": "module"`) and builds with
 
 Linting is ESLint ([`eslint.config.mjs`](eslint.config.mjs):
 `@eslint/js` + `typescript-eslint` recommended) and formatting is Prettier
-([`.prettierrc.json`](.prettierrc.json), `printWidth: 100`), with
+([`.prettierrc.json`](.prettierrc.json), `printWidth: 100`, `semi: true`), with
 `eslint-config-prettier` keeping the two from disagreeing on style. See
 [`../README.md`](../README.md#lint--format) for the workspace-wide convention.
 

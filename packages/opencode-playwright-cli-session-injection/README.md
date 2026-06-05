@@ -18,13 +18,20 @@ The plugin registers a `shell.env` hook. For every shell command OpenCode runs
 with a working directory, it sets:
 
 ```
-PLAYWRIGHT_CLI_SESSION = opencode-at-<slug>
+PLAYWRIGHT_CLI_SESSION = opencode-<hash8>
 ```
 
-where `<slug>` is the command's `cwd` run through
-[`slugify`](https://www.npmjs.com/package/slugify) (`lower: true`,
-`strict: true`, `replacement: "-"`). For example, a command run in
-`/home/h82/dotfiles` yields `opencode-at-home-h82-dotfiles`.
+where `<hash8>` is the first 8 hex characters of the SHA-1 digest of the
+command's `cwd`. The `cwd` is first normalized (path separators replaced with
+`-`) and run through [`slugify`](https://www.npmjs.com/package/slugify)
+(`lower: true`, `strict: true`, `replacement: "-"`), then hashed with
+`node:crypto`'s `createHash("sha1")`. For example, a command run in
+`/home/h82/dotfiles` yields `opencode-32c02c13`.
+
+Hashing keeps the session name short and fixed-length regardless of how deep the
+project path is, while staying deterministic per directory (so the same project
+always maps to the same session) and distinct across directories (so different
+projects stay isolated).
 
 `playwright-cli` reads `PLAYWRIGHT_CLI_SESSION` as the default value of its `-s`
 (session) flag, so every `playwright-cli` command OpenCode launches in a given
@@ -129,4 +136,4 @@ editing `src/` for the change to take effect.
 
 | Export | Type | Notes |
 |---|---|---|
-| `PlaywrightCliSessionInjectionPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns a `shell.env` hook that sets `PLAYWRIGHT_CLI_SESSION = opencode-at-<slug-of-cwd>` on every command that has a `cwd`. |
+| `PlaywrightCliSessionInjectionPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns a `shell.env` hook that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (the first 8 hex chars of the SHA-1 of the slugified `cwd`) on every command that has a `cwd`. |
