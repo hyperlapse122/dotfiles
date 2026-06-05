@@ -72,7 +72,8 @@
 ## JavaScript package managers
 
 - User-global config hardens npm / pnpm / Yarn / Bun via three switches — lifecycle scripts disabled, exact-version pinning, 1-week cooldown. **MUST** preserve all three; **MUST NOT** edit user-global configs to relax any of them.
-- **MUST** pin every dependency to an exact version (no `^` `~` `>=` `latest` `*` `x`); **MUST** correct an existing range when editing a `package.json` for any reason; **MUST NOT** introduce a range or hand-edit a lockfile to dodge the rule.
+- **MUST** pin every `dependencies` / `devDependencies` / `optionalDependencies` entry to an exact version (no `^` `~` `>=` `latest` `*` `x`); **MUST** correct an existing range when editing a `package.json` for any reason; **MUST NOT** introduce a range or hand-edit a lockfile to dodge the rule.
+- `peerDependencies` are the **exception**: they **MUST NOT** be exact-pinned — declare the widest compatible range (`^<major>`, `>=`, `^18 || ^19`, or `*`). **MUST NOT** "correct" a peer range to an exact pin. Internal lockstep/prerelease-versioned peers are the sub-exception and stay exact-pinned; a project `AGENTS.md` may codify this. (Detail → `js-package-managers`.)
 - Cooldown: a version **MUST** be ≥1 week old — pin the most recent that qualifies. **MUST NOT** add a package to a preapproved / exclude list, nor lower the cooldown, without explicit per-package user approval. (Per-manager override mechanics, exceptions → `js-package-managers`.)
 
 ## GitLab CLI (glab)
