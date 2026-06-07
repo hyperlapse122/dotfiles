@@ -53,4 +53,10 @@ if (( $+commands[mxm4-haptic] )); then
   add-zsh-hook precmd _mxm4-haptic-precmd
 fi
 
-[[ -f /opt/adguard-cli/bash-completion.sh ]] && source /opt/adguard-cli/bash-completion.sh
+# Guard with `if` (not `[[ ... ]] && ...`): as the LAST command in .zshrc this
+# determines $? at the first prompt. The `&&` form leaks exit 1 when the file is
+# absent (sorin then paints the prompt as a failure); an `if` with a false test
+# and no else returns 0.
+if [[ -f /opt/adguard-cli/bash-completion.sh ]]; then
+  source /opt/adguard-cli/bash-completion.sh
+fi

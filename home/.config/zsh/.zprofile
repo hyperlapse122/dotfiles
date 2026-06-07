@@ -93,4 +93,6 @@ if [[ "$os" == "Darwin" ]]; then
   eval "$(brew shellenv)"
 fi
 
-[[ -f ~/.orbstack/shell/init.zsh ]] && source ~/.orbstack/shell/init.zsh
+if [[ -f ~/.orbstack/shell/init.zsh ]]; then
+  source ~/.orbstack/shell/init.zsh
+fi
