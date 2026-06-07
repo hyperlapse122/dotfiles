@@ -158,7 +158,7 @@ A commit or PR that adds or removes directories, renames bootstrap entrypoints, 
 | Fresh macOS / Linux | install `mise`, then `./install.sh` (runs mise-managed `uvx dotbot` with shared + OS yaml; shared yaml renders OpenCode prompt appends through mise-managed Node.js; OS yaml also runs `scripts/bootstrap/inject-1password-secrets.sh`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
 | Fresh Windows | `.\install.ps1` (same contract, PowerShell; shared yaml renders OpenCode prompt appends through mise-managed Node.js; OS yaml also runs `scripts/bootstrap/inject-1password-secrets.ps1`, which no-ops when no `*.1password` templates exist and otherwise requires an authenticated `op` CLI session) |
 | Re-link after pulling repo | same `install.sh` / `install.ps1`; dotbot's `relink: true` default makes it idempotent |
-| Fedora package install | `scripts/linux/install-packages.sh` (manual; enables COPRs, RPM Fusion, 1Password, VSCodium, Docker, Tailscale, and Proton VPN repos; installs packages, dotnet tools, and enables services) |
+| Fedora package install | `scripts/linux/install-packages.sh` (manual; enables COPRs, RPM Fusion, 1Password, VSCodium, Docker, Tailscale, and Proton VPN repos; installs packages, the Bottles flatpak from Flathub, dotnet tools, and enables services) |
 
 `install.sh` MUST detect OS via `uname -s` (`Darwin` / `Linux`) and pass the matching `install.<os>.yaml` as the second `-c`. `install.ps1` always uses `install.windows.yaml`.
 

@@ -13,7 +13,7 @@ else
   exit 1
 fi
 
-fedora() {
+install-fedora-packages() {
   # Install repository manager only when missing — dnf would otherwise hit the
   # network just to discover the package is already installed.
   if ! rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
@@ -189,16 +189,41 @@ EOF
   "${SUDO[@]}" dnf install -y "${packages[@]}"
 }
 
-dotnet-tools() {
+install-flathub-packages() {
+  # Flatpak ships with Fedora Workstation, but guard anyway so a minimal spin
+  # without it skips cleanly under set -e instead of erroring.
+  if ! command -v flatpak >/dev/null 2>&1; then
+    printf 'install-packages.sh: flatpak not installed; skipping flathub packages.\n'
+    return 0
+  fi
+
+  # --if-not-exists makes the remote-add idempotent; system-wide (no --user)
+  # so the install below resolves against it.
+  "${SUDO[@]}" flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+
+  # -y accepts the install plus any runtime dependencies without prompting;
+  # re-runs are a no-op once Bottles is present.
+  "${SUDO[@]}" flatpak install -y flathub com.usebottles.bottles
+}
+
+install-dotnet-tools() {
   dotnet tool install -g git-credential-manager
   dotnet tool install -g powershell
 }
 
-akmods() {
-  "${SUDO[@]}" akmods
+build-akmods() {
+  # If vboxdrv loads cleanly the prebuilt akmod already matches the running
+  # kernel, so a plain akmods run suffices. If modprobe fails (stale or
+  # missing module after a kernel bump), force a full rebuild instead.
+  if "${SUDO[@]}" modprobe vboxdrv 2>/dev/null; then
+    "${SUDO[@]}" akmods
+  else
+    "${SUDO[@]}" akmods --force --rebuild
+  fi
 }
 
-virtualbox-extension-pack() {
+install-virtualbox-extension-pack() {
   if ! command -v VBoxManage >/dev/null 2>&1; then
     printf 'install-packages.sh: VBoxManage not installed; skipping extension pack.\n'
     return 0
@@ -265,7 +290,7 @@ virtualbox-extension-pack() {
   fi
 }
 
-systemd() {
+enable-services() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now docker
   "${SUDO[@]}" systemctl enable --now tailscaled
@@ -333,12 +358,12 @@ systemd() {
   fi
 }
 
-timedatectl() {
+configure-time() {
   "${SUDO[@]}" timedatectl set-local-rtc 0
   "${SUDO[@]}" timedatectl set-ntp true
 }
 
-user-groups() {
+configure-user-groups() {
   "${SUDO[@]}" usermod -aG docker,keyd,libvirt,vboxusers "$USER"
 
   # Group changes only take effect on next login. Notify when the current
@@ -350,10 +375,11 @@ user-groups() {
   fi
 }
 
-fedora
-dotnet-tools
-akmods
-virtualbox-extension-pack
-timedatectl
-systemd
-user-groups
+install-fedora-packages
+install-flathub-packages
+install-dotnet-tools
+build-akmods
+install-virtualbox-extension-pack
+configure-time
+enable-services
+configure-user-groups
