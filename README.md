@@ -47,7 +47,7 @@ This enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, 
 ## What you get
 
 - **Shell & tools** — zsh (Prezto-based), a curated [mise](https://mise.jdx.dev/) toolchain (Node, Bun, Go, Python, Ruby, Rust, plus CLIs like `gh`, `glab`, `ast-grep`, `shellcheck`), git, SSH, GnuPG, and Docker credential helpers.
-- **Editors & agents** — VS Code, VSCodium, and Zed settings, plus cross-tool AI agent rules and slash commands linked into OpenCode and Codex from a single source in [`agents/`](./agents/).
+- **Editors & agents** — VS Code, VSCodium, and Zed settings, plus cross-tool AI agent rules and slash commands linked into OpenCode and Codex from a single source in [`agents/`](./agents/). Shared OpenAI Codex settings are merged into `~/.codex/config.toml` from a tracked [`codex-config.managed.toml`](./codex/codex-config.managed.toml) — without clobbering machine-local state like per-project trust (Codex writes that back into the same file, so it can't be a plain symlink).
 - **Fonts** — Pretendard, Pretendard JP, JetBrains Mono, D2Coding, and Nerd Font variants, installed user-wide (no admin) into the platform font directory.
 - **Secrets** — any tracked `*.1password` template is rendered into `~/.secrets/` via [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/) (no-ops when there are none).
 - **Local helpers** — Rust [`crates/`](./crates/) built into `~/.local/bin` and a TypeScript [`packages/`](./packages/) Yarn workspace built in place (e.g. the MX Master 4 haptic stack — Linux + macOS via `hidapi`, autostarted by `systemd --user` / launchd respectively — plus OpenCode plugins auto-linked into `~/.config/opencode/plugins/`, such as the cross-platform `playwright-cli` per-project session injector).
@@ -76,6 +76,7 @@ Install [`mise`](https://mise.jdx.dev/) before bootstrapping — it supplies [`u
 | [`crates/`](./crates/) | Rust crates `cargo install`'d into `~/.local/bin` during bootstrap (e.g. the MX Master 4 haptic daemon + Solaar client — Linux + macOS via `hidapi`, autostarted via `systemd --user`/launchd; the notification bridge is Linux-only) |
 | [`packages/`](./packages/) | Private `@h82/dotfiles` Yarn Berry monorepo of TS/JS libraries — built in place, never installed |
 | [`agents/`](./agents/) | Cross-tool AI agent rules and slash commands linked into OpenCode & Codex |
+| [`codex/`](./codex/) | Tracked shared OpenAI Codex config: `codex-config.managed.toml` merged into `~/.codex/config.toml` by `scripts/bootstrap/configure-codex-config.*`, plus `hooks.json` (MX Master 4 haptic lifecycle hooks) symlinked to `~/.codex/hooks.json` on Linux + macOS |
 | [`.github/`](./.github/) | CI: `packages.yml` (build/typecheck/test) and `lint.yml` (ESLint + Prettier) for the `packages/` workspace, plus an hourly workflow that opens PRs bumping opencode plugins to their latest GitHub release |
 
 [`AGENTS.md`](./AGENTS.md) is the authoritative source for repo conventions — read it before adding files. Every tracked top-level directory carries its own `README.md`.

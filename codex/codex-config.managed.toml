@@ -1,0 +1,50 @@
+# codex/codex-config.managed.toml
+#
+# Tracked, repo-managed OpenAI Codex settings. `configure-codex-config.mjs`
+# merges every active assignment below INTO the machine-local
+# `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`), creating or
+# overwriting only the keys declared here and leaving everything else in that
+# file untouched.
+#
+# WHY a renderer instead of a dotbot symlink:
+#   Codex writes machine-local state back into `~/.codex/config.toml` itself —
+#   most notably per-project trust decisions under `[projects."<path>"]`
+#   (trust_level = "trusted"). A symlink would let Codex mutate this repo on
+#   every "trust this folder?" prompt, and Codex has no `include`/import
+#   directive to merge a separate file in. So this file holds ONLY the shared
+#   keys; the script applies them and PRESERVES the machine-local remainder
+#   (the `[projects]` trust table, and anything else you or Codex added).
+#
+# FORMAT — keep it "simple TOML" (the renderer parses this file, not a full
+# TOML engine):
+#   * One `key = value` assignment per line. Values MUST be single-line
+#     (scalars, inline arrays `[a, b]`, or inline tables `{ x = 1 }`).
+#     No multi-line arrays, no `"""` multi-line strings, no inline `#` comments
+#     after a value.
+#   * Standard `[table]` / `[table.sub]` headers set the table for the
+#     assignments beneath them. Assignments before any header land in the
+#     root table.
+#   * `#` comment lines and blank lines are ignored.
+#   * Do NOT declare a `[projects]` table here — that namespace is machine-local
+#     trust state and the renderer must never overwrite it.
+#
+# Anything you add here is applied on the next bootstrap (`./install.sh` /
+# `.\install.ps1`) or by running `scripts/bootstrap/configure-codex-config.sh`
+# / `.ps1` manually. The renderer is idempotent and never touches keys it does
+# not manage. Editing a value here re-points that key on the next run; deleting
+# a line here does NOT remove the key from `~/.codex/config.toml` (the renderer
+# only adds/updates), so remove unwanted keys from the live file by hand.
+#
+# Everything below is commented out by default, so a fresh run is a no-op until
+# you opt in. Uncomment / add the keys you actually want shared across machines.
+
+# --- Example: top-level (root-table) keys ---------------------------------
+# model = "gpt-5-codex"
+# model_reasoning_effort = "high"
+# approval_policy = "on-request"
+
+# --- Example: a sub-table -------------------------------------------------
+# [tui]
+# theme = "dark"
+
+cli_auth_credentials_store = "keyring"

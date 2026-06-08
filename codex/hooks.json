@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.local/bin/mxm4-haptic\" COMPLETED || true",
+            "timeout": 5,
+            "statusMessage": "mxm4-haptic: COMPLETED"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.local/bin/mxm4-haptic\" RINGING || true",
+            "timeout": 5,
+            "statusMessage": "mxm4-haptic: RINGING"
+          }
+        ]
+      }
+    ]
+  }
+}

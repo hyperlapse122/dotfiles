@@ -84,6 +84,14 @@
       description: Render OpenCode prompt_append config
       stdout: true
       stderr: true
+    # NOT a dotbot symlink on purpose: Codex writes per-project [projects] trust
+    # state back into ~/.codex/config.toml and has no include directive, so this
+    # merges only the keys from the top-level codex/codex-config.managed.toml and
+    # preserves the machine-local rest. No-op when that file has no active keys.
+    - command: mise exec node -- node scripts/bootstrap/configure-codex-config.mjs
+      description: Merge shared Codex settings into ~/.codex/config.toml
+      stdout: true
+      stderr: true
 
 # Build the packages/ Yarn workspace (turbo build). The toolchain (Node +
 # Yarn 4) comes from packages/mise.toml via `mise -C packages exec`: dotbot's
