@@ -33,6 +33,7 @@ marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
+"aqua:wasm-bindgen/wasm-pack" = "latest"
 "npm:vscode-langservers-extracted" = { version = "latest", depends = ["aube"] }
 
 # npm tools run through aube
