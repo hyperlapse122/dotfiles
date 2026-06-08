@@ -19,11 +19,12 @@
 # keeps the rest of the dotbot run going. Re-run the script manually
 # (`bash scripts/linux/install-linux-system-config.sh`) afterwards.
 #
-# Most files install at mode 0644. The one exception is etc/sudoers.d/*,
-# which installs at 0440 (sudo refuses group/world-readable drop-ins) and
-# only on virtual machines, gated on `systemd-detect-virt --vm`. Sudoers
-# drop-ins are also syntax-checked with `visudo -c -f` before install — a
-# broken drop-in can break sudo globally on the host.
+# Most files install at mode 0644. Exceptions: etc/sudoers.d/* installs at
+# 0440 (sudo refuses group/world-readable drop-ins) and only on virtual
+# machines, gated on `systemd-detect-virt --vm`; ThinkPad-specific
+# thinkpad_acpi config installs only when `dmidecode -t system` reports a
+# ThinkPad. Sudoers drop-ins are also syntax-checked with `visudo -c -f`
+# before install — a broken drop-in can break sudo globally on the host.
 #
 # firewalld setup covers three things: (1) IPv4 masquerade on the default
 # zone, required for the Tailscale exit-node and VMware NAT egress paths
@@ -68,6 +69,15 @@ fi
 # platform/host gate — currently only sudoers.d/* qualifies).
 shopt -s globstar nullglob
 
+thinkpad_system=false
+if command -v dmidecode >/dev/null 2>&1; then
+  if "${SUDO[@]}" dmidecode -t system 2>/dev/null | grep -qi 'ThinkPad'; then
+    thinkpad_system=true
+  fi
+else
+  printf '  -- ThinkPad detection: skipped (dmidecode not installed)\n'
+fi
+
 count=0
 skipped=0
 for src in "$SRC_ROOT"/etc/**; do
@@ -79,8 +89,15 @@ for src in "$SRC_ROOT"/etc/**; do
   # Per-path overrides. Defaults: mode 0644, install unconditionally.
   mode=644
   install_this=true
+  skip_reason=
 
   case "$rel" in
+    etc/modprobe.d/thinkpad_acpi.conf|etc/modules-load.d/thinkpad_acpi.conf)
+      if [[ "$thinkpad_system" != true ]]; then
+        install_this=false
+        skip_reason='not a ThinkPad system'
+      fi
+      ;;
     etc/sudoers.d/*)
       # sudoers(5): drop-ins must be mode 0440 (sudo ignores
       # group/world-writable files) and the filename must not contain '.'
@@ -89,6 +106,7 @@ for src in "$SRC_ROOT"/etc/**; do
       mode=440
       if ! systemd-detect-virt --vm --quiet 2>/dev/null; then
         install_this=false
+        skip_reason='not a VM'
       fi
       # Validate syntax unconditionally (even when we won't install on
       # this host) so contributors catch broken drop-ins on bare-metal
@@ -101,7 +119,7 @@ for src in "$SRC_ROOT"/etc/**; do
   esac
 
   if [[ "$install_this" != true ]]; then
-    printf '  -- %s (skipped: not a VM)\n' "$dst"
+    printf '  -- %s (skipped: %s)\n' "$dst" "$skip_reason"
     skipped=$((skipped + 1))
     continue
   fi
@@ -112,6 +130,13 @@ for src in "$SRC_ROOT"/etc/**; do
 done
 
 printf 'install-linux-system-config.sh: %d installed, %d skipped\n' "$count" "$skipped"
+
+if [[ "$thinkpad_system" == true ]]; then
+  printf '  -> modprobe thinkpad_acpi\n'
+  "${SUDO[@]}" modprobe thinkpad_acpi
+else
+  printf '  -- thinkpad_acpi: skipped (not a ThinkPad system)\n'
+fi
 
 # /etc/ paths that this script previously installed but no longer ships
 # in system/linux/etc/. Listed explicitly so every machine — including

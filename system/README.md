@@ -11,13 +11,12 @@ sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 `install -D` is the only correct tool here — it sets mode atomically and creates parent directories. **Don't** use `sudo cp` (no atomic mode/owner) and **don't** try to express these as dotbot `link:` blocks (no sudo support).
 
 Linux system files are discovered recursively under `system/linux/etc/` and
-installed with mode `0644` by default. The one exception is
-`system/linux/etc/sudoers.d/*`, which the installer ships at mode `0440`
-(sudo refuses group/world-readable drop-ins) and only when
-`systemd-detect-virt --vm` reports a virtual machine — never on bare-metal
-hosts. Drop-in contents are syntax-checked with `visudo -c -f` before
-install. Adding files outside `sudoers.d/` should not require editing the
-installer unless they need a different mode or a platform/host gate.
+installed with mode `0644` by default. Exceptions are `system/linux/etc/sudoers.d/*`
+(mode `0440`, VM-only via `systemd-detect-virt --vm`, syntax-checked with
+`visudo -c -f`) and the ThinkPad `thinkpad_acpi` module-load/modprobe drop-ins
+(installed only when `dmidecode -t system` reports a ThinkPad). Adding files
+outside those gated paths should not require editing the installer unless they
+need a different mode or a platform/host gate.
 
 After file install, the installer runs `systemctl daemon-reload`
 when `system/linux/etc/systemd/system/` exists and enables
@@ -54,7 +53,8 @@ further into a monolithic `NetworkManager.conf`.
 | `system/linux/etc/keyd/` | keyd keyboard remapping defaults |
 | `system/linux/etc/libinput/` | local libinput quirks |
 | `system/linux/etc/locale.conf` | system locale |
-| `system/linux/etc/modprobe.d/` | kernel module options, currently `bluetooth-no-autosuspend.conf` (sets `btusb enable_autosuspend=0` so Intel combo Wi-Fi/BT controllers don't suspend mid-session and drop AirPods / Galaxy Buds; applies on next boot or `modprobe -r btusb && modprobe btusb`) |
+| `system/linux/etc/modprobe.d/` | kernel module options, currently Bluetooth autosuspend disablement plus ThinkPad-only `thinkpad_acpi fan_control=1` for manual fan control |
+| `system/linux/etc/modules-load.d/` | kernel modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
 | `system/linux/etc/plymouth/` | Plymouth boot splash config |
 | `system/linux/etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`) |
 | `system/linux/etc/bluetooth/main.conf` | BlueZ daemon config (minimal); sets `Experimental = true` + `KernelExperimental = true` to enable Bluetooth LE Audio (BAP). `KernelExperimental` turns on the kernel ISO sockets BAP needs and has no bluetoothd command-line flag (main.conf only). Applies on the next `systemctl restart bluetooth` or reboot |

@@ -108,7 +108,7 @@
 # `sudo` prefix when already root, so it works inside chroot/container too.
 - shell:
     - command: bash scripts/linux/install-linux-system-config.sh
-      description: Install root-owned config to /etc/ (NetworkManager drop-ins, locale, keyd, libinput, plymouth, udev)
+      description: Install root-owned config to /etc/ (NetworkManager, ThinkPad acpi, locale, keyd, libinput, plymouth, udev)
       stdin: true
       stdout: true
       stderr: true

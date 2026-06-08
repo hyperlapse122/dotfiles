@@ -127,6 +127,9 @@ EOF
     libffi-devel
     libyaml-devel
 
+    # Hardware sensors / fan control
+    lm_sensors
+
     # Logitech device manager
     solaar
     solaar-udev
@@ -183,7 +186,6 @@ EOF
     # Bare-metal-only
     packages+=(
       discord
-      lm_sensors
       steam
     )
   fi
