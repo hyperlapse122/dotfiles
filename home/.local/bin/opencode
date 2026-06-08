@@ -7,33 +7,41 @@
 # ~/.config/mise/config.toml every time upstream publishes a new build, while
 # still pinning the executed version reproducibly within a single invocation.
 #
+# If the manifest fetch fails (offline, GitHub down, `gh` not authenticated),
+# the wrapper degrades gracefully to running `mise exec` against the unpinned
+# `github:anomalyco/opencode` backend instead of aborting — so opencode still
+# launches (mise reuses whatever it last installed) when version resolution
+# is unavailable.
+#
 # POSIX counterpart of opencode.ps1 (Windows). Mirrors the writeShellApplication
 # wrapper from the legacy nix-config (home/modules/dev/opencode/default.nix);
 # see AGENTS.md for the rule that migrated files become the source of truth
 # here.
 #
-# Manifest: https://github.com/anomalyco/opencode/releases/latest/download/latest.json
+# Manifest: the `latest.json` asset attached to anomalyco/opencode's latest
+# release — fetched via the GitHub CLI (`gh release download`), which injects
+# auth itself and follows any redirects/rate-limit handling for us.
 #   { "version": "X.Y.Z", "platforms": { ... } }
 #
-# Dependencies: `mise`, `curl`, `jq` on PATH.
+# Dependencies: `mise`, `gh`, `jq` on PATH.
 
 set -euo pipefail
 
-for cmd in mise curl jq; do
+for cmd in mise gh jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     printf 'opencode: required dependency `%s` not found on PATH\n' "$cmd" >&2
     exit 1
   fi
 done
 
-RESOLVED_VERSION="$(
-  curl -fsSL https://github.com/anomalyco/opencode/releases/latest/download/latest.json |
-    jq -r '.version'
-)"
-
-if [[ -z "$RESOLVED_VERSION" || "$RESOLVED_VERSION" == "null" ]]; then
-  printf 'opencode: failed to resolve latest version from GitHub manifest\n' >&2
-  exit 1
+RESOLVED_VERSION=""
+if manifest="$(gh release download --repo anomalyco/opencode --pattern latest.json --output - 2>/dev/null)"; then
+  RESOLVED_VERSION="$(printf '%s' "$manifest" | jq -r '.version' 2>/dev/null || true)"
 fi
 
-exec mise exec -yq "github:anomalyco/opencode@$RESOLVED_VERSION" -- opencode "$@"
+if [[ -n "$RESOLVED_VERSION" && "$RESOLVED_VERSION" != "null" ]]; then
+  exec mise exec -yq "github:anomalyco/opencode@$RESOLVED_VERSION" -- opencode "$@"
+fi
+
+printf 'opencode: could not resolve latest version from GitHub manifest; falling back to unpinned opencode\n' >&2
+exec mise exec -yq "github:anomalyco/opencode" -- opencode "$@"

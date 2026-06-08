@@ -21,7 +21,7 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.npmrc`, `home/.yarnrc.yml` | Cross-platform package-manager hardening config |
 | `home/.config/pnpm/config.yaml` | Linux package-manager hardening config via the XDG config glob |
 | `home/.bunfig.toml` | Tracked Bun hardening config source; not linked by the current install yaml |
-| `home/.local/bin/docker-credential-*`, `home/.local/bin/opencode*`, `home/.local/bin/code*` | CLI helpers under `~/.local/bin/` for the platforms that use them. `code`/`code.ps1` is the VS Codium shim (runs `codium`) that lets the `code` command keep working in non-interactive shells and editor-launching tools after the VS Code -> VS Codium migration |
+| `home/.local/bin/docker-credential-*`, `home/.local/bin/opencode*`, `home/.local/bin/code*` | CLI helpers under `~/.local/bin/` for the platforms that use them. `opencode`/`opencode.ps1` is a `mise exec` wrapper that resolves the latest anomalyco/opencode release version from its `latest.json` GitHub release asset via the `gh` CLI (`gh release download`, not raw `curl`), pins that version for the invocation, and falls back to the unpinned `github:anomalyco/opencode` backend when the manifest fetch fails (offline / GitHub down / `gh` unauthenticated). Requires `gh` on PATH (POSIX side also uses `jq`). `code`/`code.ps1` is the VS Codium shim (runs `codium`) that lets the `code` command keep working in non-interactive shells and editor-launching tools after the VS Code -> VS Codium migration |
 | `home/.local/share/applications/*.desktop` | Linux desktop entries under `~/.local/share/applications/` |
 | `home/.secrets/*.1password` | Rendered by `scripts/bootstrap/inject-1password-secrets.*` to `~/.secrets/<name>` |
 
