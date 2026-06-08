@@ -1,15 +1,7 @@
 default_profile = ""
 
-[app_state]
-has_acknowledged_agent_hooks = false
-has_seen_custom_instruction_warning = false
-has_seen_welcome = true
-last_seen_version = "1.9.2"
-
-[cockpit]
+[acp]
 default_agent = "aoe-agent"
-default_for_claude = true
-enabled = false
 force_end_turn_threshold_secs = 30
 max_concurrent_resumes = 4
 max_concurrent_workers = 5
@@ -20,6 +12,12 @@ replay_events = 0
 show_tool_durations = true
 silent_orphan_fast_grace_secs = 20
 silent_orphan_grace_secs = 120
+
+[app_state]
+has_acknowledged_agent_hooks = false
+has_seen_custom_instruction_warning = false
+has_seen_welcome = true
+last_seen_version = "1.9.2"
 
 [diff]
 context_lines = 3
