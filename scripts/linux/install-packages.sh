@@ -105,6 +105,7 @@ EOF
     # .zshrc long-command haptic hook — so a finished long command can stay
     # silent when the focused window is the terminal you are already watching.
     kdotool
+    nvtop
     ripgrep
     xxd
     yp-tools
