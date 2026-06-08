@@ -20,6 +20,16 @@ description: >
 > Self-managed hosts (e.g. `git.jpi.app`) are addressed exactly like `gitlab.com`; the
 > examples below use a placeholder host where one is needed.
 
+## Scope guardrail — issue work only, no source edits
+
+Reading, triaging, and creating/updating issues, tasks, and work items is **documentation
+work**, not implementation. While doing it you **MUST NOT** modify any actual repository
+files — no source edits, no config changes, no fixes, no refactors — unless the user has
+**explicitly** asked for that change in the same request. Investigating an issue, writing a
+rich description, or breaking work into tasks is **not** authorization to touch code. If the
+issue clearly implies a fix and the user has not asked you to make it, stop at the
+issue/task and ask before editing files.
+
 ## Reading an issue or work item
 
 - **MUST** use `glab issue view` to read issues and work items. **MUST NOT** hit
