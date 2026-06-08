@@ -4,6 +4,7 @@
     "redhat.vscode-yaml",
     "biomejs.biome",
     "dbaeumer.vscode-eslint",
-    "esbenp.prettier-vscode"
+    "esbenp.prettier-vscode",
+    "tamasfe.even-better-toml"
   ]
 }
