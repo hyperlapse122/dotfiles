@@ -22,16 +22,16 @@ ruby = [
 rust = { version = "latest", components = "rust-analyzer,rust-src" }
 uv = "latest"
 yarn = "latest"
-java = [
-  { version = "zulu-21", os = [
-    "linux",
-    "macos",
-  ] },
-  { version = "zulu-17", os = [
-    "linux",
-    "macos",
-  ] },
-]
+# java = [
+#   { version = "zulu-21", os = [
+#     "linux",
+#     "macos",
+#   ] },
+#   { version = "zulu-17", os = [
+#     "linux",
+#     "macos",
+#   ] },
+# ]
 
 # Standalone CLIs and language tooling
 ast-grep = "latest"
