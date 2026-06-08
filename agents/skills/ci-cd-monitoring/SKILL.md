@@ -3,25 +3,19 @@ name: ci-cd-monitoring
 description: >
   Playbook for monitoring and fixing a CI/CD pipeline (GitHub Actions /
   GitLab CI). Load this BEFORE running ANY pipeline command or touching a
-  run/job — the moment you are about to inspect, watch, or fix CI, load the
-  skill first instead of improvising commands and burning context. Triggers
-  (any of these = load now): running `gh run`/`gh pr checks`/`glab ci`
-  (`status`/`view`/`trace`/`list`); checking, watching, polling, or waiting
-  on a pipeline / build / checks / Actions run / workflow / job after a push
-  or PR/MR; the build is red/failing/broken and you need to read the log,
-  find the failing job, or fix it until green; deciding whether a failing
-  check is pre-existing or your regression; a flaky job, a re-run decision,
-  or "is it done yet". Phrases: "check CI", "watch the pipeline", "why is
-  the build failing", "fix the failing tests in CI", "is the pipeline
-  green", "monitor the run", "the PR checks are red". It covers the
-  terminal-state poll list, the `gh`/`glab` CLI recipes for watching runs
-  and fetching failed-job logs, the fix-red-until-green procedure, the
-  forbidden "fixes" (disable/skip/rerun/`[skip ci]`/force-push), the
-  pre-existing-failure exception, and the auto-merge caveat. Do NOT load it
-  for opening or promoting a PR/MR (use `pr-mr`) or for local-only test runs
-  that never touch a pipeline. The binding one-liners (monitor to terminal
-  state; never bypass red) are in core AGENTS.md and apply regardless of
-  whether this skill is loaded.
+  run/job. Triggers (any = load now): running `gh run`/`gh pr checks`/`glab
+  ci` (`status`/`view`/`trace`/`list`); checking, watching, polling, or
+  waiting on a pipeline/build/checks/run/workflow/job after a push or PR/MR;
+  the build is red/failing and you need the log, the failing job, or to fix
+  it until green; deciding whether a failing check is pre-existing or your
+  regression; a flaky job or re-run decision. Phrases: "check CI", "why is
+  the build failing", "is the pipeline green".
+  Covers the terminal-state poll list, `gh`/`glab` recipes
+  for watching runs and fetching failed-job logs, the fix-red-until-green
+  procedure, the forbidden fixes (disable/skip/rerun/`[skip ci]`/force-push),
+  the pre-existing-failure exception, and the auto-merge caveat. Do NOT load
+  it for opening/promoting a PR/MR (use `pr-mr`) or for local-only test runs
+  that never touch a pipeline.
 ---
 
 # CI/CD pipeline monitoring
