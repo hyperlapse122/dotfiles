@@ -1,7 +1,7 @@
 {
 	"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/assets/oh-my-opencode.schema.json",
-	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-requirements.ts
 	"agents": {
+		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
 		"sisyphus": {
 			"model": "anthropic/claude-opus-4-8",
 			"variant": "max",
@@ -76,6 +76,7 @@
 		}
 	},
 	"categories": {
+		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 		"visual-engineering": {
 			"model": "anthropic/claude-opus-4-8",
 			"variant": "max",
