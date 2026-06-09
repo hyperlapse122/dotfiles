@@ -60,7 +60,7 @@ further into a monolithic `NetworkManager.conf`.
 | `system/linux/etc/bluetooth/main.conf` | BlueZ daemon config (minimal); sets `Experimental = true` + `KernelExperimental = true` to enable Bluetooth LE Audio (BAP). `KernelExperimental` turns on the kernel ISO sockets BAP needs and has no bluetoothd command-line flag (main.conf only). Applies on the next `systemctl restart bluetooth` or reboot |
 | `system/linux/etc/systemd/system/` | system-scope systemd units, currently `docker-prune.service` + `docker-prune.timer` (weekly `docker system prune --force` and `docker volume prune --force`; enabled by the installer when `docker` is present, with `ConditionPathExists=/usr/bin/docker` as runtime safety net) |
 | `system/linux/etc/sysctl.d/` | sysctl drop-ins for forwarding and container network defaults |
-| `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions |
+| `system/linux/etc/udev/rules.d/` | udev rules, currently Logitech receiver permissions and NuPhy Gem80 VIA/WebHID access for Chrome |
 
 There is currently no `system/macos/` or `system/windows/` tree. macOS settings usually belong under `home/` because they live in user-owned `~/Library` paths. Windows system config (registry tweaks, Group Policy, etc.) is **not** managed here — it doesn't fit the "drop a file at an absolute path" model. Add a `scripts/` helper if needed.
 

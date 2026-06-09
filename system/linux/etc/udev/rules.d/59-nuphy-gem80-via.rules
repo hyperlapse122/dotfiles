@@ -1,0 +1,2 @@
+# NuPhy Gem80 VIA/WebHID access for Chrome.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="19f5", ATTRS{idProduct}=="3275", TAG+="uaccess"
