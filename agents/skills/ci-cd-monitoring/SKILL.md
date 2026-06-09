@@ -37,6 +37,24 @@ keep polling. CLI recipes (`gh pr checks --watch`, `gh run view --log-failed`,
 `glab ci status`, `glab ci trace`, the pipelines `jq`) →
 [`references/commands.md`](references/commands.md).
 
+### Use ONE blocking command, NOT repeated one-shot polls
+
+**MUST wait with a single blocking call** — either a native `--watch` command or a shell
+loop that polls internally and only returns at a terminal state. **MUST NOT** fire a
+one-shot status command (`gh run view`, `glab ci status`, the pipelines `jq`) over and over
+as separate tool calls to simulate waiting — that burns turns, spams the session, and races
+the pipeline. One command goes in, blocks until the pipeline is terminal, comes back once.
+
+- **GitHub** — prefer the built-in blockers, which already wait to completion and set a
+  non-zero exit on failure: `gh pr checks <num> --watch --fail-fast`,
+  `gh run watch <run-id> --exit-status`.
+- **GitLab** — `glab ci status` is one-shot; wrap it (or the pipelines API) in a `while`
+  loop with a `sleep` so the **single** invocation blocks until terminal.
+
+Both the GitHub `--watch` recipes and the GitLab shell-loop recipe are in
+[`references/commands.md`](references/commands.md) — copy one, run it as a single command,
+and wait for it to return.
+
 ## If the pipeline fails, fix it until green
 
 A red pipeline is an open defect on the PR/MR — in-scope regardless of whether the failing
