@@ -38,6 +38,32 @@ A ready-to-use template is in
 [`cjpalhdlnbpafiamejdnhcphjbkeiagm.json.example`](cjpalhdlnbpafiamejdnhcphjbkeiagm.json.example)
 (uBlock Origin). Copy it to `cjpalhdlnbpafiamejdnhcphjbkeiagm.json` to enable.
 
+## Migrated from the previous Google Chrome profile
+
+The `<id>.json` files here were migrated from the user-installed Web Store
+extensions found in `~/.config/google-chrome/Default` (filtered to
+`location=internal`, `from_webstore=true`, not default/component-installed).
+Chrome's built-in/default extensions — Docs Offline, Web Store Payments, PDF
+Viewer, Hangouts, Network Speech, etc. — were intentionally excluded; Chromium
+ships its own.
+
+| Extension ID | Name |
+|---|---|
+| `aeblfdkhhhdcdjpifhhbdiojplfjncoa` | 1Password — Password Manager |
+| `cimiefiiaegbelhefglklhhakcgmhkai` | Plasma Integration |
+| `fbohpolgemkbfphodcfgnpjcmedcjhpn` | AdGuard Browser Assistant |
+| `fcoeoabgfenejglbffodgkkbkcdhcgfn` | Claude |
+| `fmkadmapgofadopljbjfkapdkoienihi` | React Developer Tools |
+| `gppongmhjkpfnbhagpmjfkannfbllamg` | Wappalyzer — Technology profiler |
+| `inomeogfingihgjfjlpeplalcfajhgai` | Chrome Remote Desktop |
+| `jjalcfnidlmpjhdfepjhjbhnhkbgleap` | Shodan |
+| `offnedcbhjldheanlbojaefbfbllddna` | JetBrains Toolbox Extension |
+| `ppnbnpeolgkicgegkbkbjmhlideopiji` | Microsoft Single Sign On |
+
+To drop one, delete its `<id>.json`. Chromium installs each on next launch from
+the Web Store; an extension that is Chrome-locked or delisted simply fails to
+install and is logged — it does not block the others.
+
 ## Notes
 
 - Chromium only reads files ending in `.json`. This `README.md` and the
