@@ -180,6 +180,9 @@ EOF
     # Browser
     google-chrome-stable
 
+    # Screen recording / streaming
+    obs-studio
+
     # Mesh networking / VPN
     proton-vpn-gnome-desktop
     tailscale
