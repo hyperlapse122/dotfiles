@@ -13,12 +13,40 @@ else
   exit 1
 fi
 
+configure-kr-mirrorlists() {
+  local chassis_type=''
+  if [[ -r /sys/class/dmi/id/chassis_type ]]; then
+    chassis_type="$(</sys/class/dmi/id/chassis_type)"
+  fi
+
+  case "${chassis_type}" in
+    3|4|5|6|7|13|15|16|35) ;;
+    *)
+      printf 'install-packages.sh: chassis type "%s" is not desktop-class; leaving Fedora mirrorlists unchanged.\n' "${chassis_type:-unknown}"
+      return 0
+      ;;
+  esac
+
+  local -a repo_options=(
+    "fedora.metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-\$releasever&arch=\$basearch&country=KR"
+    'fedora.mirrorlist='
+    "updates.metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f\$releasever&arch=\$basearch&country=KR"
+    'updates.mirrorlist='
+    "updates-testing.metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-testing-f\$releasever&arch=\$basearch&country=KR"
+    'updates-testing.mirrorlist='
+  )
+
+  "${SUDO[@]}" dnf config-manager setopt "${repo_options[@]}"
+}
+
 install-fedora-packages() {
   # Install repository manager only when missing — dnf would otherwise hit the
   # network just to discover the package is already installed.
   if ! rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
     "${SUDO[@]}" dnf install fedora-workstation-repositories -y
   fi
+
+  configure-kr-mirrorlists
 
   # Enable third party repositories
   "${SUDO[@]}" fedora-third-party enable
@@ -192,24 +220,6 @@ EOF
   "${SUDO[@]}" dnf install -y "${packages[@]}"
 }
 
-install-flathub-packages() {
-  # Flatpak ships with Fedora Workstation, but guard anyway so a minimal spin
-  # without it skips cleanly under set -e instead of erroring.
-  if ! command -v flatpak >/dev/null 2>&1; then
-    printf 'install-packages.sh: flatpak not installed; skipping flathub packages.\n'
-    return 0
-  fi
-
-  # --if-not-exists makes the remote-add idempotent; system-wide (no --user)
-  # so the install below resolves against it.
-  "${SUDO[@]}" flatpak remote-add --if-not-exists flathub \
-    https://dl.flathub.org/repo/flathub.flatpakrepo
-
-  # -y accepts the install plus any runtime dependencies without prompting;
-  # re-runs are a no-op once Bottles is present.
-  "${SUDO[@]}" flatpak install -y flathub com.usebottles.bottles
-}
-
 install-dotnet-tools() {
   dotnet tool install -g git-credential-manager
   dotnet tool install -g powershell
@@ -379,7 +389,6 @@ configure-user-groups() {
 }
 
 install-fedora-packages
-install-flathub-packages
 install-dotnet-tools
 build-akmods
 install-virtualbox-extension-pack
