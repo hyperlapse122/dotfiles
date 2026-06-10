@@ -60,6 +60,15 @@
 
 - **MUST** use the `tmux` tool (`mcp_interactive_bash`) for dev servers, watch modes, TUIs, REPLs, build watchers — anything that does not terminate. Regular shell execution blocks the session and is **forbidden** for non-terminating commands.
 
+## Container runtime — rootless Podman (guardrail)
+
+- This host uses **rootless Podman** as its sole container runtime. Docker is not installed.
+- **MUST** use `podman` (or the `docker` CLI shim provided by `podman-docker`) for all container operations — `podman run`, `podman build`, `podman compose`, etc.
+- **MUST NOT** install Docker, reference `docker.io/docker-ce`, or assume the Docker daemon (`dockerd`) is present. The `docker` binary on this host is the `podman-docker` compatibility shim; it forwards to `podman` and does not start a daemon.
+- **MUST NOT** use `sudo podman` unless explicitly required for a root-owned resource. Rootless is the supported mode; all user-space container work runs without `sudo`.
+- The rootless socket is at `$XDG_RUNTIME_DIR/podman/podman.sock`. Docker-API clients that read `DOCKER_HOST` are already pointed there via `~/.config/environment.d/65-containers.conf` — no manual override needed.
+- Registry auth uses `podman login <registry>` (credentials stored in `~/.config/containers/auth.json`). **MUST NOT** write to or rely on `~/.docker/config.json` — that file is not managed on this host.
+
 ## Browser automation (Playwright) — host safety
 
 - This host is Fedora. **MUST NOT** run Playwright browsers directly on a non-Ubuntu-LTS host (`npx playwright test` / `install`, `playwright install-deps`, or a host-installed browser) — unsupported, crashes.
