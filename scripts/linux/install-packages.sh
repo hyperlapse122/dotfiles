@@ -180,7 +180,8 @@ EOF
     # Browser
     google-chrome-stable
 
-    # Screen recording / streaming
+    # Screen recording / streaming / video editing
+    kdenlive
     obs-studio
 
     # Mesh networking / VPN
