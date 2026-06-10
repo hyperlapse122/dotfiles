@@ -32,7 +32,7 @@ The bootstrap deliberately does **not** install system packages — that list is
 ./scripts/linux/install-packages.sh
 ```
 
-This enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, VSCodium, Docker, Chrome, Tailscale, Proton VPN, VirtualBox), installs the package set, the Bottles flatpak from Flathub, and selected dotnet global tools, enables `keyd` / `docker` / `tailscaled` / `libvirtd`, and adds you to the relevant groups.
+On desktop-class chassis, this configures Fedora repo metalinks to request only KR mirrors from MirrorManager. It also enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, VSCodium, Docker, Chrome, Tailscale, Proton VPN, VirtualBox), installs the package set and selected dotnet global tools, enables `keyd` / `docker` / `tailscaled` / `libvirtd`, and adds you to the relevant groups.
 
 ## How it works
 
