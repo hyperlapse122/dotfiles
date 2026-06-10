@@ -92,9 +92,6 @@ gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
 metadata_expire=1h
 EOF
 
-  # Install docker repository
-  "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo --overwrite
-
   # Add Tailscale repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
 
@@ -169,13 +166,15 @@ EOF
     # Editor
     codium
 
-    # Container runtime (Docker CE + plugins)
-    containerd.io
-    docker-buildx-plugin
-    docker-ce
-    docker-ce-cli
-    docker-compose-plugin
+    # Container runtime (rootless Podman + tooling)
     podman
+    podman-docker
+    podman-compose
+    buildah
+    containers-common
+    passt
+    fuse-overlayfs
+    slirp4netns
 
     # Browser
     google-chrome-stable
@@ -309,7 +308,6 @@ install-virtualbox-extension-pack() {
 
 enable-services() {
   "${SUDO[@]}" systemctl enable --now keyd
-  "${SUDO[@]}" systemctl enable --now docker
   "${SUDO[@]}" systemctl enable --now tailscaled
   "${SUDO[@]}" systemctl enable --now libvirtd.service
 
@@ -381,13 +379,20 @@ configure-time() {
 }
 
 configure-user-groups() {
-  "${SUDO[@]}" usermod -aG docker,keyd,libvirt,vboxusers "$USER"
+  "${SUDO[@]}" usermod -aG keyd,libvirt,vboxusers "$USER"
+  if getent group docker >/dev/null 2>&1; then "${SUDO[@]}" gpasswd -d "$USER" docker 2>/dev/null || true; fi
+
+  # Allocate subordinate UID/GID ranges for rootless Podman user namespaces.
+  # usermod --add-subuids fails if a range already exists, so only add when
+  # the user has no entry yet.
+  grep -q "^$USER:" /etc/subuid || "${SUDO[@]}" usermod --add-subuids 100000-165535 "$USER"
+  grep -q "^$USER:" /etc/subgid || "${SUDO[@]}" usermod --add-subgids 100000-165535 "$USER"
 
   # Group changes only take effect on next login. Notify when the current
   # shell is missing either group — silent on re-runs after re-login.
-  if ! id -nG | grep -qw docker || ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt || ! id -nG | grep -qw vboxusers; then
+  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt || ! id -nG | grep -qw vboxusers; then
     printf '\n'
-    printf 'NOTE: Added "%s" to groups: docker, keyd, libvirt, vboxusers\n' "$USER"
+    printf 'NOTE: Added "%s" to groups: keyd, libvirt, vboxusers\n' "$USER"
     printf '      Log out and back in (or reboot) for group membership to take effect.\n'
   fi
 }

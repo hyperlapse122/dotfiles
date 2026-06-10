@@ -1,0 +1,12 @@
+[Unit]
+Description=Podman prune — remove unused containers, images, and anonymous volumes
+# Linux-only systemd user unit (script-parity exception: podman is Linux-only
+# in this dotfiles setup; no .ps1 counterpart required).
+# Driven exclusively by podman-prune.timer; do not add WantedBy here.
+# Conservative prune: --force only, no --all, so named volumes and tagged
+# images are preserved.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman system prune --force
+ExecStart=/usr/bin/podman volume prune --force

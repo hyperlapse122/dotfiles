@@ -44,13 +44,6 @@
       glob: true
       path: home/.config/VSCodium/User/*.json
 
-    # Docker credential helpers (Linux/macOS only - Windows uses PATHEXT and
-    # expects .exe/.bat/.cmd, see header comments in each script). Source
-    # files are tracked at mode 100755; the symlink preserves the exec bit.
-    ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
-    ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
-    ~/.local/bin/docker-credential-dockerhub: home/.local/bin/docker-credential-dockerhub
-
     # opencode mise wrapper (POSIX side; Windows ships opencode.ps1, see
     # install.windows.yaml). Resolves the latest release version from GitHub
     # at invocation time and hands it to `mise exec`.
@@ -168,6 +161,32 @@
 - shell:
     - command: '[ -x "$HOME/.local/bin/mxm4-hapticd" ] && systemctl --user daemon-reload >/dev/null 2>&1 && systemctl --user enable mxm4-hapticd.service mxm4-haptic-notify.service >/dev/null 2>&1 && echo "mxm4-haptic: services enabled" || echo "mxm4-haptic: skipping enable (binaries missing or no user session bus); enable manually, see home/.config/systemd/user/README.md" >&2'
       description: Enable mxm4-hapticd + mxm4-haptic-notify services (skipped when binaries missing or no user session bus)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Enable rootless podman.socket (--now so the socket is immediately active)
+# and podman-prune.timer (no --now: plain enable wires the WantedBy symlink
+# so systemd starts the timer when timers.target is reached). Guarded
+# soft-skip: requires podman on PATH AND a working `systemctl --user`
+# connection, which is absent in agent/CI/chroot runs with no user session
+# bus. In that case it prints a hint and exits 0. Idempotent: re-enable is
+# a no-op. The unit files are installed by the podman package; no dotbot
+# link step is needed.
+- shell:
+    - command: 'command -v podman >/dev/null 2>&1 && systemctl --user daemon-reload >/dev/null 2>&1 && systemctl --user enable --now podman.socket >/dev/null 2>&1 && systemctl --user enable podman-prune.timer >/dev/null 2>&1 && echo "podman: rootless socket + prune timer enabled" || echo "podman: skipping enable (podman missing or no user session bus); enable manually" >&2'
+      description: Enable rootless podman.socket (--now) + podman-prune.timer (skipped when podman missing or no user session bus)
+      stdin: true
+      stdout: true
+      stderr: true
+
+# Remove ~/.docker/config.json so Docker-compatible tools (podman, buildah,
+# skopeo) fall back to their own credential resolution instead of reading a
+# stale Docker Desktop config that may reference credential helpers that are
+# no longer linked. rm -f is a no-op when the file is absent.
+- shell:
+    - command: 'rm -f "$HOME/.docker/config.json" && echo "docker: removed ~/.docker/config.json (credential helper cleanup)"'
+      description: Remove ~/.docker/config.json (stale Docker credential helper config cleanup)
       stdin: true
       stdout: true
       stderr: true

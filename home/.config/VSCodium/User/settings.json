@@ -32,7 +32,6 @@
 	"claudeCode.allowDangerouslySkipPermissions": true,
 	"claudeCode.preferredLocation": "panel",
 	"csharp.experimental.debug.hotReload": true,
-	"docker.extension.enableComposeLanguageServer": false,
 	"editor.accessibilitySupport": "off",
 	"editor.aiStats.enabled": true,
 	"editor.codeActionsOnSave": {

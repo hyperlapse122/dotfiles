@@ -63,7 +63,7 @@
 ## Browser automation (Playwright) — host safety
 
 - This host is Fedora. **MUST NOT** run Playwright browsers directly on a non-Ubuntu-LTS host (`npx playwright test` / `install`, `playwright install-deps`, or a host-installed browser) — unsupported, crashes.
-- **MUST** run inside `mcr.microsoft.com/playwright:v<X.Y.Z>-noble`, tag pinned to the project's **exact** Playwright version. **MUST** run non-root (`--user pwuser`, or `--user "$(id -u):$(id -g)"` for user-owned bind mounts); **MUST** pass `--ipc=host` and **SHOULD** pass `--init`. `podman` is preferred on Fedora. (Test/automation usage → `playwright-cli`.)
+- **MUST** run inside `mcr.microsoft.com/playwright:v<X.Y.Z>-noble`, tag pinned to the project's **exact** Playwright version. **MUST** run non-root (`--user pwuser`, or `--user "$(id -u):$(id -g)"` for user-owned bind mounts); **MUST** pass `--ipc=host` and **SHOULD** pass `--init`. Use rootless `podman` for the container runtime (Docker is not installed on this host). (Test/automation usage → `playwright-cli`.)
 
 ## Scripting runtime
 

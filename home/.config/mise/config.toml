@@ -71,39 +71,6 @@ claude-code = "latest"
   "macos",
 ] }
 
-# Docker credential helpers from docker/docker-credential-helpers. The
-# release ships pass + secretservice + osxkeychain + wincred as four
-# separate raw binaries under one tag. mise's "Multiple Assets from the
-# Same Release" pattern handles this: define one tool_alias per binary
-# pointing at the same github: repo, then configure each alias with its
-# own asset_pattern. Each platform installs only its native helper:
-#   Linux → docker-credential-secretservice (D-Bus Secret Service backend)
-#   macOS → docker-credential-osxkeychain   (Keychain.app backend)
-# The shims expose these on PATH so the cross-platform wrapper
-# home/.local/bin/docker-credential-dockerhub can `exec` whichever one
-# matches `uname -s`. See ~/.docker/config.json (`credsStore: dockerhub`).
-[tool_alias]
-docker-credential-secretservice = "github:docker/docker-credential-helpers"
-docker-credential-osxkeychain = "github:docker/docker-credential-helpers"
-
-[tools.docker-credential-secretservice]
-version = "latest"
-os = ["linux"]
-bin = "docker-credential-secretservice"
-
-[tools.docker-credential-secretservice.platforms]
-linux-x64 = { asset_pattern = "docker-credential-secretservice-v*.linux-amd64" }
-linux-arm64 = { asset_pattern = "docker-credential-secretservice-v*.linux-arm64" }
-
-[tools.docker-credential-osxkeychain]
-version = "latest"
-os = ["macos"]
-bin = "docker-credential-osxkeychain"
-
-[tools.docker-credential-osxkeychain.platforms]
-macos-x64 = { asset_pattern = "docker-credential-osxkeychain-v*.darwin-amd64" }
-macos-arm64 = { asset_pattern = "docker-credential-osxkeychain-v*.darwin-arm64" }
-
 [tools."github:anomalyco/opencode"]
 version = "latest"
 rename_exe = "opencode"

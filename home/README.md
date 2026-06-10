@@ -11,19 +11,22 @@ Files in this directory install into `$HOME` via dotbot links or helper scripts.
 | `home/.config/opencode/prompts/*_prompt_append.md` | Prompt append sources rendered into `home/.config/opencode/oh-my-openagent.jsonc` by `scripts/bootstrap/render-opencode-prompt-append.*` (not symlinked anywhere) |
 | `home/.config/Code/User/*.json` | VS Code user settings/keybindings at the platform-specific Code user path |
 | `home/.config/VSCodium/User/*.json` | VSCodium user settings/keybindings at the platform-specific VSCodium user path (Linux `~/.config/VSCodium/User/`, macOS `~/Library/Application Support/VSCodium/User/`, Windows `~/AppData/Roaming/VSCodium/User/`); only the tracked `*.json` files are linked, not the whole `User/` dir |
-| `home/.config/environment.d/` | `~/.config/environment.d/` |
+| `home/.config/environment.d/` | `~/.config/environment.d/` (glob-linked + pruned by `install.linux.yaml`; includes `65-containers.conf`, which sets `DOCKER_HOST=unix://${XDG_RUNTIME_DIR}/podman/podman.sock` so Docker-API clients route through the rootless user `podman.socket` after the Docker→Podman migration) |
 | `home/.config/fcitx5/`, `home/.config/containers/`, `home/.config/solaar/` | Linux-only XDG config via `install.linux.yaml` |
 | `home/.config/wireplumber/wireplumber.conf.d/*.conf` | Linux-only WirePlumber 0.5 drop-ins via the `install.linux.yaml` XDG config glob, currently `51-disable-bt-autoswitch.conf` (sets `bluetooth.autoswitch-to-headset-profile = false` so Bluetooth headsets stay in stable A2DP and don't collapse into fragile HFP when an app opens the mic; the mic profile stays available, just not auto-selected) |
 | `home/.config/zed/` | `~/.config/zed/` |
 | `home/.gnupg/*.conf` | `~/.gnupg/*.conf` on Linux and macOS |
 | `home/.ssh/config` | `~/.ssh/config` |
-| `home/.docker/config.json` | `~/.docker/config.json` |
 | `home/.npmrc`, `home/.yarnrc.yml` | Cross-platform package-manager hardening config |
 | `home/.config/pnpm/config.yaml` | Linux package-manager hardening config via the XDG config glob |
 | `home/.bunfig.toml` | Tracked Bun hardening config source; not linked by the current install yaml |
-| `home/.local/bin/docker-credential-*`, `home/.local/bin/opencode*`, `home/.local/bin/code*` | CLI helpers under `~/.local/bin/` for the platforms that use them. `opencode`/`opencode.ps1` is a `mise exec` wrapper that resolves the latest anomalyco/opencode release version from its `latest.json` GitHub release asset via the `gh` CLI (`gh release download`, not raw `curl`), pins that version for the invocation, and falls back to the unpinned `github:anomalyco/opencode` backend when the manifest fetch fails (offline / GitHub down / `gh` unauthenticated). Requires `gh` on PATH (POSIX side also uses `jq`). `code`/`code.ps1` is the VS Codium shim (runs `codium`) that lets the `code` command keep working in non-interactive shells and editor-launching tools after the VS Code -> VS Codium migration |
+| `home/.local/bin/opencode*`, `home/.local/bin/code*` | CLI helpers under `~/.local/bin/` for the platforms that use them. `opencode`/`opencode.ps1` is a `mise exec` wrapper that resolves the latest anomalyco/opencode release version from its `latest.json` GitHub release asset via the `gh` CLI (`gh release download`, not raw `curl`), pins that version for the invocation, and falls back to the unpinned `github:anomalyco/opencode` backend when the manifest fetch fails (offline / GitHub down / `gh` unauthenticated). Requires `gh` on PATH (POSIX side also uses `jq`). `code`/`code.ps1` is the VS Codium shim (runs `codium`) that lets the `code` command keep working in non-interactive shells and editor-launching tools after the VS Code -> VS Codium migration |
 | `home/.local/share/applications/*.desktop` | Linux desktop entries under `~/.local/share/applications/` |
 | `home/.secrets/*.1password` | Rendered by `scripts/bootstrap/inject-1password-secrets.*` to `~/.secrets/<name>` |
+
+## Post-migration: container registry auth
+
+After the Docker→Podman migration, registry credentials this repo used to track for `ghcr.io`, `docker.io`, and `registry.jpi.app` no longer exist on disk. Re-establish them manually on each machine with `podman login <registry>`; podman stores the new credentials in `~/.config/containers/auth.json`, which is a machine-local file and is not tracked or managed by this repo.
 
 ## Conventions
 

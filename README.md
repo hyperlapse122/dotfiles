@@ -32,7 +32,7 @@ The bootstrap deliberately does **not** install system packages — that list is
 ./scripts/linux/install-packages.sh
 ```
 
-On desktop-class chassis, this configures Fedora repo metalinks to request only KR mirrors from MirrorManager. It also enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, VSCodium, Docker, Chrome, Tailscale, Proton VPN, VirtualBox), installs the package set and selected dotnet global tools, enables `keyd` / `docker` / `tailscaled` / `libvirtd`, and adds you to the relevant groups.
+On desktop-class chassis, this configures Fedora repo metalinks to request only KR mirrors from MirrorManager. It also enables RPM Fusion, the keyd/mise COPRs, and third-party repos (1Password, VSCodium, Chrome, Tailscale, Proton VPN, VirtualBox), installs the Podman ecosystem and the rest of the package set plus selected dotnet global tools, and sets up rootless Podman (`/etc/subuid` + `/etc/subgid`, `loginctl enable-linger`, and the user `podman.socket`). It also enables `keyd` / `tailscaled` / `libvirtd` and adds you to the relevant groups.
 
 ## How it works
 
@@ -46,7 +46,7 @@ On desktop-class chassis, this configures Fedora repo metalinks to request only 
 
 ## What you get
 
-- **Shell & tools** — zsh (Prezto-based), a curated [mise](https://mise.jdx.dev/) toolchain (Node, Bun, Go, Python, Ruby, Rust, plus CLIs like `gh`, `glab`, `ast-grep`, `shellcheck`), git, SSH, GnuPG, and Docker credential helpers.
+- **Shell & tools** — zsh (Prezto-based), a curated [mise](https://mise.jdx.dev/) toolchain (Node, Bun, Go, Python, Ruby, Rust, plus CLIs like `gh`, `glab`, `ast-grep`, `shellcheck`), git, SSH, and GnuPG. Container registry logins use the native `podman login` flow (creds land in `~/.config/containers/auth.json`).
 - **Editors & agents** — VS Code, VSCodium, and Zed settings, plus cross-tool AI agent rules and slash commands linked into OpenCode and Codex from a single source in [`agents/`](./agents/). Shared OpenAI Codex settings are merged into `~/.codex/config.toml` from a tracked [`codex-config.managed.toml`](./codex/codex-config.managed.toml) — without clobbering machine-local state like per-project trust (Codex writes that back into the same file, so it can't be a plain symlink).
 - **Fonts** — Pretendard, Pretendard JP, JetBrains Mono, D2Coding, and Nerd Font variants, installed user-wide (no admin) into the platform font directory.
 - **Secrets** — any tracked `*.1password` template is rendered into `~/.secrets/` via [`op inject`](https://developer.1password.com/docs/cli/reference/commands/inject/) (no-ops when there are none).

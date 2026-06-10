@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly Podman prune timer
+# Linux-only systemd user unit (script-parity exception: podman is Linux-only
+# in this dotfiles setup; no .ps1 counterpart required).
+
+[Timer]
+OnCalendar=Mon 03:00
+Persistent=true
+RandomizedDelaySec=1h
+Unit=podman-prune.service
+
+[Install]
+WantedBy=timers.target

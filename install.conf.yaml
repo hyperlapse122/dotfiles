@@ -51,9 +51,6 @@
     # mise (dev tool version manager, cross-platform)
     ~/.config/mise/config.toml: home/.config/mise/config.toml
 
-    # Docker CLI (uses %USERPROFILE%/.docker on Windows, same path resolves via ~)
-    ~/.docker/config.json: home/.docker/config.json
-
     # OpenSSH (Windows OpenSSH uses %USERPROFILE%/.ssh, same path)
     ~/.ssh/config: home/.ssh/config
 

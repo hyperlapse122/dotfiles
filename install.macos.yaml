@@ -36,13 +36,6 @@
       glob: true
       path: home/.config/VSCodium/User/*.json
 
-    # Docker credential helpers (Linux/macOS only - Windows uses PATHEXT and
-    # expects .exe/.bat/.cmd, see header comments in each script). Source
-    # files are tracked at mode 100755; the symlink preserves the exec bit.
-    ~/.local/bin/docker-credential-gh: home/.local/bin/docker-credential-gh
-    ~/.local/bin/docker-credential-glab: home/.local/bin/docker-credential-glab
-    ~/.local/bin/docker-credential-dockerhub: home/.local/bin/docker-credential-dockerhub
-
     # opencode mise wrapper (POSIX side; Windows ships opencode.ps1, see
     # install.windows.yaml). Resolves the latest release version from GitHub
     # at invocation time and hands it to `mise exec`.
@@ -66,6 +59,13 @@
     # (built by the cargo install step below) at login and keeps it alive. The
     # notification bridge has no agent: it is Linux-only and exits on macOS.
     ~/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist: home/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
+
+- shell:
+    - command: rm -f ~/.docker/config.json
+      description: Remove stale ~/.docker/config.json on macOS
+      stdin: true
+      stdout: true
+      stderr: true
 
 # Configure glab with script
 - shell:

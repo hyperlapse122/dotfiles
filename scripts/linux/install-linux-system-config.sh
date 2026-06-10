@@ -158,6 +158,8 @@ REMOVED_ETC_PATHS=(
   /etc/NetworkManager/conf.d/92-docker.conf
   /etc/NetworkManager/conf.d/93-veth.conf
   /etc/modprobe.d/audio-hda-no-powersave.conf
+  /etc/systemd/system/docker-prune.service
+  /etc/systemd/system/docker-prune.timer
 )
 
 removed_listed=0
@@ -176,24 +178,22 @@ else
   printf '  -- REMOVED_ETC_PATHS: cleaned %d of %d listed path(s)\n' "$removed_listed" "${#REMOVED_ETC_PATHS[@]}"
 fi
 
-# Reload systemd and enable timers when system/linux/etc/systemd/system/
-# ships any unit files. `daemon-reload` is required so systemd notices the
-# newly-installed units; `enable --now` is idempotent for timers (enables
-# the symlink + starts the timer; no-op if already in that state).
-#
-# docker-prune.timer is gated on `command -v docker` so we don't enable a
-# timer that has no chance of doing useful work on a host that never ran
-# scripts/linux/install-packages.sh. The service unit itself also carries
-# `ConditionPathExists=/usr/bin/docker` as a runtime safety net.
+# Reload systemd when system/linux/etc/systemd/system/ ships any unit
+# files so systemd notices the newly-installed units. Harmless no-op when
+# the directory exists but ships no units.
 if [[ -d "$SRC_ROOT/etc/systemd/system" ]]; then
   "${SUDO[@]}" systemctl daemon-reload
+fi
 
-  if command -v docker >/dev/null 2>&1; then
-    printf '  -> systemctl enable --now docker-prune.timer\n'
-    "${SUDO[@]}" systemctl enable --now docker-prune.timer
-  else
-    printf '  -- docker-prune.timer: skipped (docker not installed)\n'
-  fi
+# Enable lingering for the invoking user so their `systemd --user` units
+# (e.g. rootless podman socket + prune timer) keep running without an
+# active login session and start at boot. Uses the real invoking user, not
+# root, when the script runs under sudo. Guarded so it never aborts the run.
+loginctl enable-linger "${SUDO_USER:-$USER}" 2>/dev/null || true
+
+# Mask the rootful podman API socket — blocks the system-level rootful API only, not sudo podman (which is daemonless)
+if command -v systemctl >/dev/null 2>&1; then
+  "${SUDO[@]}" systemctl mask podman.socket podman.service 2>/dev/null || true
 fi
 
 # Reload udev rules so freshly-installed rules under /etc/udev/rules.d/
