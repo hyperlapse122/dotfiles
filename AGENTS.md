@@ -91,7 +91,7 @@ Every script ships in **both** forms or it is broken:
 
 Adding `foo.sh` without `foo.ps1` is a regression. The two MUST behave equivalently for their target platforms; if a feature is impossible on one side, the script SHOULD exit with a clear error rather than silently no-op.
 
-Exception: scripts that are inherently single-platform MAY skip parity — document the reason in a header comment in the script itself. Current exceptions: `scripts/linux/install-linux-system-config.sh` (writes to `/etc/`, Linux only), `scripts/linux/install-packages.sh` (uses `dnf`, Fedora only), `scripts/linux/config-kde.sh` (configures KDE Plasma 6, Linux only), and `scripts/auth/auth-tailscale.sh` (runs Linux `tailscale up` with `sudo`).
+Exception: scripts that are inherently single-platform MAY skip parity — document the reason in a header comment in the script itself. Current exceptions: `scripts/linux/install-linux-system-config.sh` (writes to `/etc/`, Linux only), `scripts/linux/install-packages.sh` (uses `dnf`, Fedora only), `scripts/linux/config-kde.sh` (configures KDE Plasma 6, Linux only), `scripts/auth/auth-tailscale.sh` (runs Linux `tailscale up` with `sudo`), and `scripts/linux/setup-luks-tpm2-unlock.sh` (LUKS/TPM2/dracut, Linux only).
 
 ### Root-owned config (`/etc/...`)
 
