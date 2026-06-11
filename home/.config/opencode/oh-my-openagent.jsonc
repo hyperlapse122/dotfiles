@@ -127,7 +127,7 @@
 			]
 		},
 		"writing": {
-			"model": "openrouter/moonshotai/kimi-k2.6"
+			"model": "anthropic/claude-sonnet-4-6"
 		}
 	},
 	"disabled_mcps": ["playwright"],
