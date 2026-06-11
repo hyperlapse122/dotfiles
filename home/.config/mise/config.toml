@@ -1,6 +1,5 @@
 [tools]
 # Core runtimes and package managers
-aube = "latest"
 bun = "latest"
 go = "latest"
 node = "latest"
@@ -40,28 +39,26 @@ pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
 "aqua:wasm-bindgen/wasm-pack" = "latest"
-"npm:vscode-langservers-extracted" = { version = "latest", depends = ["aube"] }
-
-# npm tools run through aube
-"npm:@biomejs/biome" = { version = "latest", depends = ["aube"] }
-"npm:@bufbuild/buf" = { version = "latest", depends = ["aube"] }
-"npm:@electron/asar" = { version = "latest", depends = ["aube"] }
-"npm:@playwright/cli" = { version = "latest", depends = ["aube"] }
-"npm:@typescript/native-preview" = { version = "latest", depends = ["aube"] }
-"npm:bash-language-server" = { version = "latest", depends = ["aube"] }
-"npm:node-gyp" = { version = "latest", depends = ["aube"] }
-"npm:npm" = { version = "latest", depends = ["aube"] }
-"npm:portless" = { version = "latest", depends = ["aube"] }
-"npm:shadcn" = { version = "latest", depends = ["aube"] }
-"npm:sharp-cli" = { version = "latest", depends = ["aube"] }
-"npm:tokscale" = { version = "latest", depends = ["aube"] }
-"npm:typescript-language-server" = { version = "latest", depends = ["aube"] }
-"npm:wrangler" = { version = "latest", depends = ["aube"] }
+"npm:vscode-langservers-extracted" = { version = "latest" }
+"npm:@biomejs/biome" = { version = "latest" }
+"npm:@bufbuild/buf" = { version = "latest" }
+"npm:@electron/asar" = { version = "latest" }
+"npm:@playwright/cli" = { version = "latest" }
+"npm:@typescript/native-preview" = { version = "latest" }
+"npm:bash-language-server" = { version = "latest" }
+"npm:node-gyp" = { version = "latest" }
+"npm:npm" = { version = "latest" }
+"npm:portless" = { version = "latest" }
+"npm:shadcn" = { version = "latest" }
+"npm:sharp-cli" = { version = "latest" }
+"npm:tokscale" = { version = "latest" }
+"npm:typescript-language-server" = { version = "latest" }
+"npm:wrangler" = { version = "latest" }
 
 # Agentic AI
 claude-code = "latest"
-"npm:@google/gemini-cli" = { version = "latest", depends = ["aube"] }
-"npm:@openai/codex" = { version = "latest", depends = ["aube"] }
+"npm:@google/gemini-cli" = { version = "latest" }
+"npm:@openai/codex" = { version = "latest" }
 "github:njbrake/agent-of-empires" = { version = "latest", rename_exe = "aoe", os = [
   "linux",
   "macos",
