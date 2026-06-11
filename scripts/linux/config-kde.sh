@@ -253,6 +253,7 @@ configure_fonts() {
 # extend coverage to additional hosts.
 TOUCHPAD_TARGET_NAMES=(
   'SynPS/2 Synaptics TouchPad'
+  'ELAN06E8:00 04F3:332E Touchpad'
 )
 
 configure_touchpad() {
