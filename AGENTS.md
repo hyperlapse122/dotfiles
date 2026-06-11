@@ -14,6 +14,9 @@ User-facing quickstart belongs in `README.md` (top-level). This file (`AGENTS.md
 ├── README.md                        # User quickstart, top-level
 ├── .github/                         # GitHub config; workflows/packages.yml (build/typecheck/test)
 │                                    # and workflows/lint.yml (eslint/prettier) = CI for packages/;
+│                                    # workflows/rust.yml (cargo check/test) = CI for crates/;
+│                                    # workflows/tooling.yml (shellcheck/PSScriptAnalyzer/actionlint/
+│                                    # dotbot-link guard) = CI for scripts + install*.yaml + workflows;
 │                                    # workflows/opencode-plugin-updates.yml + update-opencode-plugin.yml
 │                                    # = hourly opencode plugin release-bump PRs.
 ├── agents/                          # Cross-tool agent rules + shared slash commands + runtime skill tree.

@@ -1,0 +1,59 @@
+name: rust
+
+# CI for the crates/ Rust workspace (currently the mxm4-haptic bin+lib crate).
+# cargo check (--all-targets) + cargo test on every push to main and on PRs that
+# touch crates/**. The Linux build needs libudev headers (the hidapi hidraw
+# backend); rustup is preinstalled on the runner, so no third-party Rust action.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - ".github/workflows/rust.yml"
+
+permissions:
+  contents: read
+
+# One in-flight run per ref; newer pushes cancel older runs.
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-test:
+    name: cargo check · test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # hidapi's Linux hidraw backend builds against libudev headers.
+      - name: Install libudev headers
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      - name: Log toolchain versions
+        run: rustc --version && cargo --version
+
+      # Cache the cargo registry/git clones and the crate's target dir, keyed on
+      # the tracked Cargo.lock.
+      - name: Cache cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/mxm4-haptic/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('crates/mxm4-haptic/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo check (all targets)
+        run: cargo check --manifest-path crates/mxm4-haptic/Cargo.toml --all-targets
+
+      - name: cargo test
+        run: cargo test --manifest-path crates/mxm4-haptic/Cargo.toml

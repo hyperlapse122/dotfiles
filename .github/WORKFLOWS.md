@@ -15,6 +15,8 @@ the repository root.
 |---|---|
 | [`workflows/packages.yml`](workflows/packages.yml) | CI for the [`packages/`](../packages/) Yarn workspace — builds, typechecks, and tests every member on pushes to `main` and on PRs that touch `packages/**`. |
 | [`workflows/lint.yml`](workflows/lint.yml) | CI for the [`packages/`](../packages/) Yarn workspace — ESLint lint + Prettier format-check on every member, on the same triggers. Split from `packages.yml` so a style regression is reported independently of a build/test failure. |
+| [`workflows/rust.yml`](workflows/rust.yml) | CI for the [`crates/`](../crates/) Rust workspace — `cargo check --all-targets` + `cargo test` on pushes to `main` and PRs that touch `crates/**`. |
+| [`workflows/tooling.yml`](workflows/tooling.yml) | CI for everything outside `packages/` and `crates/` — shellcheck (`*.sh`), PSScriptAnalyzer (`*.ps1`), actionlint (the workflows), and a dotbot link-source guard (`install*.yaml`). Four independent jobs. |
 | [`workflows/opencode-plugin-updates.yml`](workflows/opencode-plugin-updates.yml) | Hourly (cron) + manual dispatcher that fans out over a matrix of opencode plugins, calling the reusable `update-opencode-plugin.yml` once per plugin. |
 | [`workflows/update-opencode-plugin.yml`](workflows/update-opencode-plugin.yml) | Reusable (`workflow_call`) workflow that compares one plugin's pinned version in [`home/.config/opencode/opencode.json`](../home/.config/opencode/opencode.json) against the latest GitHub release of its upstream repo and opens a PR bumping it. |
 
@@ -43,6 +45,37 @@ the repository root.
 - **Why a separate workflow.** Lint/format checks are split from build/test so a
   style regression surfaces independently. There is intentionally **no Biome** —
   the workspace uses ESLint for linting and Prettier for formatting.
+
+## `workflows/rust.yml`
+
+- **Scope.** Gates the [`crates/`](../crates/) Rust workspace (currently the
+  `mxm4-haptic` bin+lib crate). Triggers on pushes to `main` and PRs touching
+  `crates/**` (or this workflow).
+- **Toolchain.** rustup is preinstalled on `ubuntu-24.04`, so there is no
+  third-party Rust action — the job just logs `rustc`/`cargo --version`. The
+  Linux build needs libudev headers (the hidapi hidraw backend), installed via
+  `apt-get install -y libudev-dev`.
+- **Caching.** `actions/cache` caches `~/.cargo/registry`, `~/.cargo/git`, and
+  `crates/mxm4-haptic/target`, keyed on `crates/mxm4-haptic/Cargo.lock`.
+- **Steps.** `cargo check --all-targets` then `cargo test` (both via
+  `--manifest-path crates/mxm4-haptic/Cargo.toml`).
+
+## `workflows/tooling.yml`
+
+Gates everything outside the `packages/` and `crates/` workspaces. Triggers on
+pushes to `main` and PRs touching any `*.sh`, `*.ps1`, `install*.yaml`, a
+workflow, or `scripts/ci/**`. Four independent jobs on `ubuntu-24.04`:
+
+- **shellcheck.** Runs `shellcheck` over every tracked `*.sh`
+  (`git ls-files '*.sh' | xargs shellcheck`); installs shellcheck only if the
+  runner lacks it.
+- **psscriptanalyzer.** `Invoke-ScriptAnalyzer -Recurse -Severity Error` under
+  the preinstalled `pwsh`; any Error-severity finding fails the job.
+- **actionlint.** Downloads the pinned actionlint release binary, verifies it
+  against a hardcoded SHA256, then lints the workflows (no third-party action).
+- **dotbot-links.** Runs [`scripts/ci/check-dotbot-links.mjs`](../scripts/ci/check-dotbot-links.mjs),
+  a zero-dependency Node guard that fails if any dotbot `link:` source in the
+  four `install*.yaml` files does not resolve to a real path in the repo.
 
 ## `workflows/opencode-plugin-updates.yml` + `workflows/update-opencode-plugin.yml`
 

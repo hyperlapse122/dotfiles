@@ -1,0 +1,94 @@
+name: tooling
+
+# CI for everything outside the packages/ Yarn workspace: the shell scripts
+# (shellcheck), the PowerShell scripts (PSScriptAnalyzer), the GitHub Actions
+# workflows themselves (actionlint), and the dotbot install*.yaml link sources
+# (a Node guard). Each lane is its own job so a failure in one is reported
+# independently. Triggers on any change to those surfaces.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.sh"
+      - "**/*.ps1"
+      - "install*.yaml"
+      - ".github/workflows/**"
+      - "scripts/ci/**"
+  pull_request:
+    paths:
+      - "**/*.sh"
+      - "**/*.ps1"
+      - "install*.yaml"
+      - ".github/workflows/**"
+      - "scripts/ci/**"
+
+permissions:
+  contents: read
+
+# One in-flight run per ref; newer pushes cancel older runs.
+concurrency:
+  group: tooling-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Ensure shellcheck is installed
+        run: command -v shellcheck >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+
+      - name: Run shellcheck on tracked *.sh
+        run: git ls-files '*.sh' | xargs --no-run-if-empty shellcheck
+
+  psscriptanalyzer:
+    name: psscriptanalyzer
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # pwsh is preinstalled on ubuntu-24.04. Fail on any Error-severity finding.
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
+          $r
+          if ($r) { exit 1 }
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Download the pinned actionlint release binary and verify it against a
+      # hardcoded SHA256 before running it (no third-party action).
+      - name: Download and verify actionlint
+        run: |
+          VERSION=1.7.7
+          SHA256=023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "${SHA256}  actionlint.tar.gz" | sha256sum --check --strict
+          tar -xzf actionlint.tar.gz actionlint
+
+      - name: Run actionlint
+        run: ./actionlint -color
+
+  dotbot-links:
+    name: dotbot-links
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Node is preinstalled on the runner; the guard is zero-dependency.
+      - name: Verify dotbot link sources
+        run: node scripts/ci/check-dotbot-links.mjs
