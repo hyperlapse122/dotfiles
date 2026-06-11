@@ -66,5 +66,5 @@ else {
     $backend = 'github:anomalyco/opencode'
 }
 
-& mise exec -q $backend --command "opencode $($args -join " ")"
+& mise exec -q $backend -- opencode @args
 exit $LASTEXITCODE
