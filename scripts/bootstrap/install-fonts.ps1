@@ -38,12 +38,16 @@ $ErrorActionPreference = 'Stop'
 # this script), so install-fonts.sh and install-fonts.ps1 never drift. To add
 # a font, append one pipe-delimited record there:
 #
-#   name|repo|asset_pattern|marker_glob|src_dirs
+#   name|repo|tag|asset_pattern|sha256|marker_glob|src_dirs
 #
 #   name           Human-readable label used in log lines.
-#   repo           GitHub <owner>/<repo>. Latest release is queried.
+#   repo           GitHub <owner>/<repo>.
+#   tag            Release tag to pin (the asset is downloaded from this exact
+#                  release, never 'latest', so installs are reproducible).
 #   asset_pattern  Glob handed to `gh release download --pattern`. Must match
-#                  exactly one asset in the latest release.
+#                  exactly one asset in the pinned release.
+#   sha256         Expected SHA-256 of the downloaded asset. Verified before
+#                  extraction; a mismatch aborts the install for that font.
 #   marker_glob    Filename or glob (e.g. 'Foo-Ver*.ttf') matching at least one
 #                  file installed by this entry. If any file in the user font
 #                  directory matches, the entry is treated as already installed
@@ -58,13 +62,15 @@ $Fonts = Get-Content -LiteralPath $RegistryFile | Where-Object {
     $_ -and -not $_.StartsWith('#')
 } | ForEach-Object {
     $f = $_ -split '\|'
-    if ($f.Count -ne 5) { throw "fonts.registry: malformed line: $_" }
+    if ($f.Count -ne 7) { throw "fonts.registry: malformed line: $_" }
     @{
         Name         = $f[0]
         Repo         = $f[1]
-        AssetPattern = $f[2]
-        Marker       = $f[3]
-        SourceDirs   = @($f[4] -split ',')
+        Tag          = $f[2]
+        AssetPattern = $f[3]
+        Sha256       = $f[4]
+        Marker       = $f[5]
+        SourceDirs   = @($f[6] -split ',')
     }
 }
 
@@ -170,7 +176,7 @@ function Install-Font {
     New-Item -ItemType Directory -Path $work -Force | Out-Null
 
     Invoke-Gh @(
-        'release', 'download',
+        'release', 'download', $Entry.Tag,
         '--repo', $Entry.Repo,
         '--pattern', $Entry.AssetPattern,
         '--dir', $work,
@@ -181,6 +187,12 @@ function Install-Font {
     if (-not $zip) {
         throw "$($name): no archive downloaded for pattern $($Entry.AssetPattern)"
     }
+
+    $actual = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $Entry.Sha256.ToLowerInvariant()) {
+        throw "$($name): sha256 mismatch for $($zip.Name) (expected $($Entry.Sha256), got $actual) — refusing to install"
+    }
+    Write-Log "$name`: sha256 verified"
 
     Write-Log "$name`: extracting $($zip.Name)"
     $extracted = Join-Path $work 'extracted'

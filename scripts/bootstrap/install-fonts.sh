@@ -18,12 +18,16 @@ set -euo pipefail
 # this script), so install-fonts.sh and install-fonts.ps1 never drift. To add
 # a font, append one pipe-delimited record there:
 #
-#   name|repo|asset_pattern|marker_glob|src_dirs
+#   name|repo|tag|asset_pattern|sha256|marker_glob|src_dirs
 #
 # - name           Human-readable label used in log lines.
-# - repo           GitHub <owner>/<repo>. Latest release is queried.
+# - repo           GitHub <owner>/<repo>.
+# - tag            Release tag to pin (the asset is downloaded from this exact
+#                  release, never "latest", so installs are reproducible).
 # - asset_pattern  Glob handed to `gh release download --pattern`. Must match
-#                  exactly one asset in the latest release.
+#                  exactly one asset in the pinned release.
+# - sha256         Expected SHA-256 of the downloaded asset. Verified before
+#                  extraction; a mismatch aborts the install for that font.
 # - marker_glob    Filename or glob pattern (e.g. `Foo-Ver*.ttf`) that matches
 #                  at least one file installed by this entry. If any file in
 #                  the user font directory matches the glob, the entry is
@@ -60,6 +64,14 @@ EOF
 
 log() { printf 'install-fonts.sh: %s\n' "$*"; }
 err() { printf 'install-fonts.sh: %s\n' "$*" >&2; }
+
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
 
 # Resolve user font directory per OS (XDG-compliant on Linux, ~/Library/Fonts
 # on macOS). Both paths are picked up automatically by the OS font subsystem.
@@ -100,7 +112,7 @@ require_cmd() {
 # Install all .ttf, .otf, and .ttc files from listed src_dirs into
 # USER_FONT_DIR. Skipped when a file matching marker_glob already exists.
 install_font() {
-  local name="$1" repo="$2" pattern="$3" marker="$4" src_dirs="$5"
+  local name="$1" repo="$2" tag="$3" pattern="$4" sha256="$5" marker="$6" src_dirs="$7"
 
   # `find -iname` accepts shell-style globs (and is case-insensitive), so the
   # same code path handles exact-match markers and patterns like `Foo-Ver*.ttf`.
@@ -116,7 +128,7 @@ install_font() {
   local work="$TMP_ROOT/$name"
   mkdir -p "$work"
 
-  "${GH[@]}" release download \
+  "${GH[@]}" release download "$tag" \
     --repo "$repo" \
     --pattern "$pattern" \
     --dir "$work" \
@@ -128,6 +140,14 @@ install_font() {
     err "$name: no archive downloaded for pattern $pattern"
     return 1
   fi
+
+  local actual
+  actual="$(hash_file "$zip")"
+  if [[ "$actual" != "$sha256" ]]; then
+    err "$name: sha256 mismatch for $(basename "$zip") (expected $sha256, got $actual) — refusing to install"
+    return 1
+  fi
+  log "$name: sha256 verified"
 
   log "$name: extracting $(basename "$zip")"
   local extracted="$work/extracted"
@@ -181,8 +201,8 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 mkdir -p "$USER_FONT_DIR"
 
 for entry in "${FONTS[@]}"; do
-  IFS='|' read -r name repo pattern marker src_dirs <<<"$entry"
-  install_font "$name" "$repo" "$pattern" "$marker" "$src_dirs"
+  IFS='|' read -r name repo tag pattern sha256 marker src_dirs <<<"$entry"
+  install_font "$name" "$repo" "$tag" "$pattern" "$sha256" "$marker" "$src_dirs"
 done
 
 # Refresh fontconfig cache on Linux so just-installed fonts become visible
