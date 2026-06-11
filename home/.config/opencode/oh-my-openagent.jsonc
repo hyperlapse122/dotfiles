@@ -22,14 +22,17 @@
 			"variant": "high"
 		},
 		"librarian": {
-			"model": "openai/gpt-5.4-mini-fast"
+			"model": "openai/gpt-5.4-mini-fast",
+			"fallback_models": []
 		},
 		"explore": {
-			"model": "openai/gpt-5.4-mini-fast"
+			"model": "openai/gpt-5.4-mini-fast",
+			"fallback_models": []
 		},
 		"multimodal-looker": {
 			"model": "openai/gpt-5.5",
-			"variant": "medium"
+			"variant": "medium",
+			"fallback_models": []
 		},
 		"prometheus": {
 			"model": "anthropic/claude-opus-4-8",
