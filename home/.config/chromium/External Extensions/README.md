@@ -71,4 +71,7 @@ install and is logged — it does not block the others.
   though dotbot also symlinks them into the live directory.
 - Extensions installed this way can still be disabled or removed by the user,
   unlike the root `ExtensionInstallForcelist` enterprise policy, which pins them.
-- No real extension ships in this repo by default — only the example template.
+- The tracked `<id>.json` files above ARE the maintained extension set —
+  they install automatically on every machine that links this directory. The
+  `*.json.example` template exists for extensions you want documented but not
+  auto-installed (copy to `<id>.json` to enable).
