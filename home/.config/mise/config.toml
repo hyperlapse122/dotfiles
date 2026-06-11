@@ -34,7 +34,6 @@ usage = "latest"
 "npm:@bufbuild/buf" = { version = "latest" }
 "npm:@electron/asar" = { version = "latest" }
 "npm:@playwright/cli" = { version = "latest" }
-"npm:@typescript/native-preview" = { version = "latest" }
 "npm:bash-language-server" = { version = "latest" }
 "npm:node-gyp" = { version = "latest" }
 "npm:npm" = { version = "latest" }
