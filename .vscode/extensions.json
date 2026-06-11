@@ -5,6 +5,7 @@
     "biomejs.biome",
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
-    "tamasfe.even-better-toml"
+    "tamasfe.even-better-toml",
+    "sst-dev.opencode"
   ]
 }

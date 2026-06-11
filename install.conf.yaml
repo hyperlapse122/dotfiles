@@ -77,10 +77,6 @@
       stderr: true
     - command: mise exec glab -- glab skills install -f --path ./agents/skills
       description: Install or update gitlab cli skills
-    - command: mise exec node -- node scripts/bootstrap/render-opencode-prompt-append.mjs
-      description: Render OpenCode prompt_append config
-      stdout: true
-      stderr: true
     # NOT a dotbot symlink on purpose: Codex writes per-project [projects] trust
     # state back into ~/.codex/config.toml and has no include directive, so this
     # merges only the keys from the top-level codex/codex-config.managed.toml and
