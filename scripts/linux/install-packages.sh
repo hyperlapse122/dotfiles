@@ -70,7 +70,7 @@ install-fedora-packages() {
   # rather than shelling out to lspci — pciutils is not guaranteed installed
   # this early, and the sysfs vendor files are always present.
   if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
-    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo
+    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo
     "${SUDO[@]}" dnf -y install cuda-toolkit-13-3 cuda-drivers
   else
     printf 'install-packages.sh: no NVIDIA GPU detected; skipping CUDA repo and drivers.\n'
