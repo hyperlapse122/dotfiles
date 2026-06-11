@@ -65,6 +65,11 @@ install-fedora-packages() {
   fi
   "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
 
+  # Add NVIDIA repository
+  # TODO: Install only there is NVIDIA GPU
+  "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo
+  "${SUDO[@]}" dnf -y install cuda-toolkit-13-3 cuda-drivers
+
   # Install 1Password repository. Quoted heredoc keeps $basearch literal so
   # dnf substitutes it at install time (not at script-eval time).
   "${SUDO[@]}" rpm --import https://downloads.1password.com/linux/keys/1password.asc
