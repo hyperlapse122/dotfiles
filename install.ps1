@@ -33,8 +33,13 @@ if (Test-CommandExists 'mise') {
 #    NOTE: dotbot's `-c` uses argparse `nargs='+'` (NOT `append`), so multiple
 #    config files MUST be passed under a SINGLE `-c` flag. `-c f1 -c f2` would
 #    only use f2 (the last one wins). Don't change this back.
-$DotbotCmd = "uvx dotbot -d . -c install.conf.yaml install.windows.yaml"
-Write-Host "Running dotbot with command: $DotbotCmd"
-& $MiseBin exec uv@latest --command $DotbotCmd
+$DotbotArgs = @(
+    'exec', 'uv@latest', '--',
+    'uvx', 'dotbot',
+    '-d', $RepoRoot,
+    '-c', (Join-Path $RepoRoot 'install.conf.yaml'), (Join-Path $RepoRoot 'install.windows.yaml')
+) + $args
+Write-Host "Running: $MiseBin $($DotbotArgs -join ' ')"
+& $MiseBin @DotbotArgs
 
 exit $LASTEXITCODE
