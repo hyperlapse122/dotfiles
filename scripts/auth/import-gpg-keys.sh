@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 if ! command -v op &> /dev/null || ! command -v gpg &> /dev/null; then
     echo "Error: Required commands 'op' and/or 'gpg' are not available." >&2
     exit 1
