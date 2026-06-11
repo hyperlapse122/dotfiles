@@ -2,9 +2,9 @@ name: tooling
 
 # CI for everything outside the packages/ Yarn workspace: the shell scripts
 # (shellcheck), the PowerShell scripts (PSScriptAnalyzer), the GitHub Actions
-# workflows themselves (actionlint), and the dotbot install*.yaml link sources
-# (a Node guard). Each lane is its own job so a failure in one is reported
-# independently. Triggers on any change to those surfaces.
+# workflows themselves (actionlint), and the chezmoi source tree under home/
+# (a dry-run apply + empty-diff guard). Each lane is its own job so a failure
+# in one is reported independently. Triggers on any change to those surfaces.
 
 on:
   push:
@@ -82,13 +82,19 @@ jobs:
       - name: Run actionlint
         run: ./actionlint -color
 
-  dotbot-links:
-    name: dotbot-links
+  chezmoi-apply:
+    name: chezmoi-apply
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      # Node is preinstalled on the runner; the guard is zero-dependency.
-      - name: Verify dotbot link sources
-        run: node scripts/ci/check-dotbot-links.mjs
+      # mise supplies the pinned chezmoi the guard invokes; no repo mise config
+      # is required since the script calls `mise exec chezmoi@<pin>` directly.
+      - name: Set up mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+
+      # Renders + applies the home/ chezmoi source into a throwaway temp dir
+      # (never the runner's $HOME) and asserts an empty diff.
+      - name: Verify chezmoi source applies cleanly
+        run: bash scripts/ci/check-chezmoi-apply.sh

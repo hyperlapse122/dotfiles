@@ -1,7 +1,7 @@
 # Chromium external extensions (user-scope auto-install)
 
-Files here are symlinked to `~/.config/chromium/External Extensions/` by the
-`home/.config/**/*` glob in [`../../../../install.linux.yaml`](../../../../install.linux.yaml).
+Files here are applied to `~/.config/chromium/External Extensions/` by
+chezmoi from the `home/dot_config/chromium/External Extensions/` source tree.
 On startup Chromium scans that directory for `<extension-id>.json` files and
 auto-installs each referenced extension from its update URL. This is the
 user-scope, no-root equivalent of `code --install-extension`.
@@ -31,7 +31,7 @@ on macOS does support it.
    }
    ```
 
-3. Re-run `./install.sh` (or dotbot) to symlink the new file, then restart
+3. Re-run `./install.sh` (or `mise exec chezmoi@2.70.5 -- chezmoi apply`) to apply the new file, then restart
    Chromium — it installs the extension on next launch.
 
 A ready-to-use template is in
@@ -68,7 +68,7 @@ install and is logged — it does not block the others.
 
 - Chromium only reads files ending in `.json`. This `README.md` and the
   `*.json.example` template are ignored, so they are safe to keep here even
-  though dotbot also symlinks them into the live directory.
+  though chezmoi also applies them into the live directory.
 - Extensions installed this way can still be disabled or removed by the user,
   unlike the root `ExtensionInstallForcelist` enterprise policy, which pins them.
 - The tracked `<id>.json` files above ARE the maintained extension set —

@@ -1,6 +1,6 @@
 # home/ Agent Instructions
 
-This directory mirrors files that dotbot links into `$HOME`. The path under `home/` is the target path under the user's home directory.
+This directory is the chezmoi source root. chezmoi applies files from here into `$HOME` using `mise exec chezmoi@2.70.5 -- chezmoi apply`. The path encoding under `home/` determines the target path under the user's home directory.
 
 > **Note.** The runtime skill tree no longer lives here. It moved to [`../agents/skills`](../agents/skills) (with [`../agents/.skill-lock.json`](../agents/.skill-lock.json)), linked into `~/.agents/skills` and `~/.claude/skills`. There is no `home/.agents/` anymore — see [`../agents/AGENTS.md`](../agents/AGENTS.md) for skill-tree rules.
 
@@ -8,10 +8,10 @@ This directory mirrors files that dotbot links into `$HOME`. The path under `hom
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Change cross-tool global agent rules | `../agents/SHARED_AGENTS.md` | Linked into `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, and `~/.claude/CLAUDE.md` from `../install.conf.yaml`. Do not place a literal `AGENTS.md` inside `home/.config/opencode/`. |
-| Add/change a shared slash command | `../agents/commands/` | Linked into `~/.config/opencode/commands` and `~/.codex/prompts`. Do not place a `commands/` subdir inside `home/.config/opencode/`. |
+| Change cross-tool global agent rules | `../agents/SHARED_AGENTS.md` | Symlinked into `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, and `~/.claude/CLAUDE.md` by `scripts/bootstrap/link-repo-trees.sh`. Do not place a literal `AGENTS.md` inside `home/dot_config/opencode/`. |
+| Add/change a shared slash command | `../agents/commands/` | Symlinked into `~/.config/opencode/commands` and `~/.codex/prompts` by `link-repo-trees.sh`. Do not place a `commands/` subdir inside `home/dot_config/opencode/`. |
 | Add/update/remove a runtime skill | `../agents/skills/` | Hand-author a new skill, or run `npx skills` / `glab skills install`; check the source before editing an existing one. See [`../agents/AGENTS.md`](../agents/AGENTS.md). |
-| Add an OpenCode JSON config file | `home/.config/opencode/*.{json,jsonc}` | Linked via the narrow glob in `../install.conf.yaml`. |
+| Add an OpenCode JSON config file | `home/dot_config/opencode/*.{json,jsonc}` | Applied by chezmoi; top-level JSON config only. |
 
 ## Conventions
 

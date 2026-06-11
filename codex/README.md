@@ -9,9 +9,9 @@ differently:
   bootstrap renderer [`scripts/bootstrap/configure-codex-config.mjs`](../scripts/bootstrap/configure-codex-config.mjs)
   (wrappers: `configure-codex-config.sh` / `.ps1`) — Codex writes machine-local
   state back into `config.toml`, so it can't be a symlink.
-- `hooks.json` is **symlinked** to `~/.codex/hooks.json` by dotbot — Codex never
-  writes back to it, so a plain symlink is safe (and live edits propagate
-  without re-running bootstrap).
+- `hooks.json` is **symlinked** to `~/.codex/hooks.json` by
+  `scripts/bootstrap/link-repo-trees.sh` — Codex never writes back to it, so a
+  plain symlink is safe (and live edits propagate without re-running bootstrap).
 
 ## Contents
 
@@ -20,7 +20,7 @@ differently:
 | `codex-config.managed.toml` | The shared Codex settings, as constrained "simple TOML" (one `key = value` per line under standard `[table]` headers). Edit this to change what every machine gets. Ships all-commented (a no-op) by default. |
 | `hooks.json` | [Codex lifecycle hooks](https://developers.openai.com/codex/hooks) that pulse the MX Master 4 mouse via the `mxm4-haptic` client. Symlinked to `~/.codex/hooks.json` on Linux + macOS. See **Haptic hooks** below. |
 
-## Why a renderer instead of a dotbot symlink
+## Why a renderer instead of a symlink
 
 Codex writes machine-local state back into `~/.codex/config.toml` itself — most
 importantly per-project trust decisions under `[projects."<path>"]` — and has no
@@ -31,9 +31,8 @@ So `codex-config.managed.toml` holds **only** the shared keys, and the renderer
 merges them into `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) with
 targeted, TOML-safe edits, **preserving** every machine-local byte (the
 `[projects]` trust table and anything else you or Codex added). It runs as a
-shared `install.conf.yaml` `shell:` step on every OS, is idempotent, backs up to
-`config.toml.bak` before changing, and aborts rather than corrupt an ambiguous
-multi-line value.
+bootstrap step on every OS, is idempotent, backs up to `config.toml.bak` before
+changing, and aborts rather than corrupt an ambiguous multi-line value.
 
 Run it manually with `scripts/bootstrap/configure-codex-config.sh` (or `.ps1`);
 `--check` / `--print` / `--no-backup` are supported.
@@ -75,10 +74,9 @@ or stalls a Codex turn.
 
 ### Setup
 
-- **Linked on Linux + macOS only.** [`../install.linux.yaml`](../install.linux.yaml)
-  and [`../install.macos.yaml`](../install.macos.yaml) symlink
-  `~/.codex/hooks.json → codex/hooks.json`. Windows is excluded — the
-  `mxm4-haptic` client isn't built there.
+- **Linked on Linux + macOS only.** `scripts/bootstrap/link-repo-trees.sh`
+  creates `~/.codex/hooks.json → codex/hooks.json` on Linux and macOS. Windows
+  is excluded — the `mxm4-haptic` client isn't built there.
 - **Trust it once.** Codex requires reviewing and trusting non-managed command
   hooks before they run. After the first link (or any edit to `hooks.json`), run
   `/hooks` in the Codex CLI and trust the two hooks. Codex records trust against

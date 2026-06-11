@@ -12,8 +12,8 @@
     real script on PATH also covers tools that shell out to `code`, such as
     `git config core.editor` or `$EDITOR` / `$VISUAL`.
 
-    Install path: %USERPROFILE%\.local\bin\code.ps1 (linked from
-    install.windows.yaml). PowerShell resolves `code` as a bare command once
+    Install path: %USERPROFILE%\.local\bin\code.ps1 (linked from the Windows
+    bootstrap config). PowerShell resolves `code` as a bare command once
     %USERPROFILE%\.local\bin is on PATH — that PATH entry is the user's
     responsibility (we don't mutate PATH from bootstrap).
 

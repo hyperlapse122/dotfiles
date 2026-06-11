@@ -90,7 +90,7 @@ Build output is `dist/index.mjs` (ESM) + `dist/index.d.mts`.
 ## Enabling it in OpenCode
 
 **The bootstrap enables it automatically (all OSes).**
-[`install.conf.yaml`](../../install.conf.yaml) symlinks the built file into
+`scripts/bootstrap/link-repo-trees.sh` symlinks the built file into
 OpenCode's auto-load plugin directory:
 
 ```
@@ -105,7 +105,7 @@ deliberately named `playwright-cli-session-injection.js` (not `.mjs`) because
 `dist/index.mjs` output, and the sibling `.js.map` symlink supplies the
 sourcemap.
 
-The link is in the **shared** `install.conf.yaml` (the plugin is
+The link is created on all OSes by `link-repo-trees.sh` (the plugin is
 cross-platform), but only the **Linux** bootstrap runs `yarn build` in place. On
 macOS/Windows the symlink dangles until you build the workspace manually
 (`yarn workspace @h82/opencode-playwright-cli-session-injection build`).

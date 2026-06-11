@@ -17,7 +17,7 @@ The source files in this directory are symlinked into each tool's global paths s
 
 ## Linkage
 
-[`../install.conf.yaml`](../install.conf.yaml) defines explicit symlinks for the shared rules file, the shared commands directory, and the runtime skill tree:
+`scripts/bootstrap/link-repo-trees.sh` creates the live symlinks for the shared rules file, the shared commands directory, and the runtime skill tree:
 
 | Source in repo | Tool | Symlink target |
 |---|---|---|
@@ -30,13 +30,13 @@ The source files in this directory are symlinked into each tool's global paths s
 | `agents/skills/` | Claude Code | `~/.claude/skills` |
 | `agents/.skill-lock.json` | OpenCode | `~/.agents/.skill-lock.json` |
 
-Each target points at a single source. Edit `SHARED_AGENTS.md` or any file under `commands/` once; every linked tool sees the change immediately (symlinks resolve live; no re-run of dotbot needed unless the link itself is missing).
+Each target points at a single source. Edit `SHARED_AGENTS.md` or any file under `commands/` once; every linked tool sees the change immediately (symlinks resolve live; no bootstrap re-run needed unless the link itself is missing).
 
 > **Note — Codex.** Codex scans skills from several scopes, including the **USER** scope `$HOME/.agents/skills`, and [**follows symlinked skill folders**](https://developers.openai.com/codex/skills#where-to-save-skills). Because `~/.agents/skills` is the existing whole-dir symlink to `agents/skills/` (the same one OpenCode reads), Codex discovers **every** skill in this tree automatically — hand-authored and CLI-managed alike — with no per-skill links and no `~/.codex/skills` wiring. (`npx skills` may separately copy CLI-managed skills into `~/.codex/skills`; that path is redundant for discovery and does not affect the hand-authored rule-skills.)
 
 > **Note — editing skills.** You MAY add or edit a skill under `skills/` by hand (create `skills/<name>/SKILL.md`), but **check the source first**: a skill tracked in `.skill-lock.json` (installed via `npx skills`) or the `glab` skill (`glab skills install`) is CLI-managed and a hand edit is overwritten on the next CLI run — prefer the CLI for those. Skills not tracked by any CLI are hand-authored and safe to edit. `.skill-lock.json` itself is CLI-owned — don't hand-edit it. See [`AGENTS.md`](./AGENTS.md).
 
-> **Note — authoring on implicit requests.** When the user **implicitly** asks for functionality that doesn't yet exist — "I wish there were a skill for X", "can you always do Y this way", or any repeated workflow worth capturing — hand-author a new skill directly (`skills/<name>/SKILL.md`); don't wait for an explicit "install a skill" instruction. First confirm no CLI-managed skill already covers it (check `.skill-lock.json` and the `glab` skill); if none does, create the hand-authored skill. It is visible to all three tools the moment the file exists — no `install.conf.yaml` change or dotbot re-run needed.
+> **Note — authoring on implicit requests.** When the user **implicitly** asks for functionality that doesn't yet exist — "I wish there were a skill for X", "can you always do Y this way", or any repeated workflow worth capturing — hand-author a new skill directly (`skills/<name>/SKILL.md`); don't wait for an explicit "install a skill" instruction. First confirm no CLI-managed skill already covers it (check `.skill-lock.json` and the `glab` skill); if none does, create the hand-authored skill. It is visible to all three tools the moment the file exists — no extra wiring needed.
 
 > **Note.** The OpenCode glob link for `home/.config/opencode/` is intentionally narrowed to `*.{json,jsonc}` so a stray `commands/` subdir under `home/` cannot collide with the explicit `~/.config/opencode/commands → agents/commands` link. Put new slash commands in `agents/commands/`, never under `home/.config/opencode/commands/`.
 
@@ -84,19 +84,19 @@ always-loaded core.
 | Rule applies in **every** repo on this machine | `SHARED_AGENTS.md` |
 | Slash command / prompt usable from **every** repo on this machine | `commands/<name>.md` |
 | Rule or command is **specific to one repo** | That repo's project-level `AGENTS.md` or `.opencode/commands/` |
-| Tool-specific override (only OpenCode, only Codex, ...) | A separate file in this directory, linked individually from `../install.conf.yaml` |
+| Tool-specific override (only OpenCode, only Codex, ...) | A separate file in this directory, linked individually by `scripts/bootstrap/link-repo-trees.sh` |
 
 `SHARED_AGENTS.md` itself states: project-level `AGENTS.md` files **override** these rules when they conflict. Project-level commands likewise shadow shared ones with the same name.
 
 ## Adding A New Command
 
 1. Drop `commands/<name>.md` into this directory. The file body is tool-agnostic markdown; OpenCode-style frontmatter (`name`, `description`) is allowed and ignored by Codex.
-2. That's it — `commands/` is already linked into OpenCode and Codex, so no `install.conf.yaml` change and no dotbot re-run are needed.
+2. That's it — `commands/` is already linked into OpenCode and Codex by `link-repo-trees.sh`, so no extra wiring is needed.
 3. The command is exposed as `/<name>` in both OpenCode (`~/.config/opencode/commands/<name>.md`) and Codex (`~/.codex/prompts/<name>.md`).
 
 ## Adding A New Tool
 
-1. Add new explicit `link:` entries in [`../install.conf.yaml`](../install.conf.yaml) pointing the new tool's AGENTS.md path at `agents/SHARED_AGENTS.md` and its command/prompt directory at `agents/commands` (or, if the rules/commands diverge, at new tool-specific files in this directory).
+1. Add new entries in `scripts/bootstrap/link-repo-trees.sh` pointing the new tool's AGENTS.md path at `agents/SHARED_AGENTS.md` and its command/prompt directory at `agents/commands` (or, if the rules/commands diverge, at new tool-specific files in this directory).
 2. Re-run `./install.sh` / `.\install.ps1` to materialize the symlinks.
 3. Document the new mappings in the **Linkage** table above.
 

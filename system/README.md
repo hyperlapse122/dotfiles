@@ -2,13 +2,13 @@
 
 Root-owned config that ships to absolute system paths (`/etc/...`, etc.).
 
-dotbot has no root-aware mode and no sudo handling, so these files are **NOT** installed via `link:`. They are installed by `shell:` steps in the matching `install.<os>.yaml` calling:
+These files are **NOT** managed by chezmoi — chezmoi only handles user-owned `$HOME` content. They are installed by `scripts/linux/install-linux-system-config.sh`, called directly from `install.sh`, using:
 
 ```sh
 sudo install -D -m <mode> system/<os>/<abs/path> /<abs/path>
 ```
 
-`install -D` is the only correct tool here — it sets mode atomically and creates parent directories. **Don't** use `sudo cp` (no atomic mode/owner) and **don't** try to express these as dotbot `link:` blocks (no sudo support).
+`install -D` is the only correct tool here — it sets mode atomically and creates parent directories. **Don't** use `sudo cp` (no atomic mode/owner) and **don't** try to express these as chezmoi-managed files (chezmoi runs as the user and cannot write to `/etc/`).
 
 Linux system files are discovered recursively under `system/linux/etc/` and
 installed with mode `0644` by default. Exceptions are `system/linux/etc/sudoers.d/*`

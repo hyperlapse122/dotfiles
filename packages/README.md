@@ -16,7 +16,7 @@ is this directory. It holds the repo's TypeScript/JavaScript library packages.
 
 - **Built at bootstrap, never installed.** Unlike [`../crates/`](../crates/)
   (whose Rust binaries are `cargo install`'d into `~/.local/bin`), a library
-  here ships nothing to install and dotbot links nothing from `packages/`. The
+  here ships nothing to install and bootstrap links nothing from `packages/`. The
   Linux bootstrap ([`../install.linux.yaml`](../install.linux.yaml)) does run
   `yarn build` (turbo) in place via `mise -C packages exec` (soft-skipping when
   mise is absent), so the workspace is built after a checkout; macOS/Windows

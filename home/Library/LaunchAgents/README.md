@@ -1,7 +1,7 @@
 # home/Library/LaunchAgents/
 
-macOS **launchd** user agents, symlinked into `~/Library/LaunchAgents/` by
-dotbot (an explicit `link:` entry in [`../../../install.macos.yaml`](../../../install.macos.yaml)).
+macOS **launchd** user agents, applied into `~/Library/LaunchAgents/` by
+chezmoi from the `home/Library/LaunchAgents/` source tree.
 This is the macOS counterpart of the Linux
 [`home/.config/systemd/user/`](../../.config/systemd/user/) `systemd --user`
 units — a per-user autostart that needs no root.

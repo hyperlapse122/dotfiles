@@ -11,20 +11,20 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '../..');
-const configPath = path.join(repoRoot, 'home/.config/opencode/oh-my-openagent.jsonc');
+const configPath = path.join(repoRoot, 'home/dot_config/opencode/oh-my-openagent.jsonc');
 
 const promptAppends = [
   {
     agent: 'hephaestus',
-    promptPath: path.join(repoRoot, 'home/.config/opencode/prompts/hephaestus_prompt_append.md'),
+    promptPath: path.join(repoRoot, 'home/dot_config/opencode/prompts/hephaestus_prompt_append.md'),
   },
   {
     agent: 'prometheus',
-    promptPath: path.join(repoRoot, 'home/.config/opencode/prompts/prometheus_prompt_append.md'),
+    promptPath: path.join(repoRoot, 'home/dot_config/opencode/prompts/prometheus_prompt_append.md'),
   },
   {
     agent: 'atlas',
-    promptPath: path.join(repoRoot, 'home/.config/opencode/prompts/atlas_prompt_append.md'),
+    promptPath: path.join(repoRoot, 'home/dot_config/opencode/prompts/atlas_prompt_append.md'),
   },
 ];
 

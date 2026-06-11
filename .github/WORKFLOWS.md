@@ -16,7 +16,7 @@ the repository root.
 | [`workflows/packages.yml`](workflows/packages.yml) | CI for the [`packages/`](../packages/) Yarn workspace — builds, typechecks, and tests every member on pushes to `main` and on PRs that touch `packages/**`. |
 | [`workflows/lint.yml`](workflows/lint.yml) | CI for the [`packages/`](../packages/) Yarn workspace — ESLint lint + Prettier format-check on every member, on the same triggers. Split from `packages.yml` so a style regression is reported independently of a build/test failure. |
 | [`workflows/rust.yml`](workflows/rust.yml) | CI for the [`crates/`](../crates/) Rust workspace — `cargo check --all-targets` + `cargo test` on pushes to `main` and PRs that touch `crates/**`. |
-| [`workflows/tooling.yml`](workflows/tooling.yml) | CI for everything outside `packages/` and `crates/` — shellcheck (`*.sh`), PSScriptAnalyzer (`*.ps1`), actionlint (the workflows), and a dotbot link-source guard (`install*.yaml`). Four independent jobs. |
+| [`workflows/tooling.yml`](workflows/tooling.yml) | CI for everything outside `packages/` and `crates/` — shellcheck (`*.sh`), PSScriptAnalyzer (`*.ps1`), actionlint (the workflows), and a chezmoi apply guard (the `home/` source tree). Four independent jobs. |
 | [`workflows/opencode-plugin-updates.yml`](workflows/opencode-plugin-updates.yml) | Hourly (cron) + manual dispatcher that fans out over a matrix of opencode plugins, calling the reusable `update-opencode-plugin.yml` once per plugin. |
 | [`workflows/update-opencode-plugin.yml`](workflows/update-opencode-plugin.yml) | Reusable (`workflow_call`) workflow that compares one plugin's pinned version in [`home/.config/opencode/opencode.json`](../home/.config/opencode/opencode.json) against the latest GitHub release of its upstream repo and opens a PR bumping it. |
 
@@ -73,9 +73,13 @@ workflow, or `scripts/ci/**`. Four independent jobs on `ubuntu-24.04`:
   the preinstalled `pwsh`; any Error-severity finding fails the job.
 - **actionlint.** Downloads the pinned actionlint release binary, verifies it
   against a hardcoded SHA256, then lints the workflows (no third-party action).
-- **dotbot-links.** Runs [`scripts/ci/check-dotbot-links.mjs`](../scripts/ci/check-dotbot-links.mjs),
-  a zero-dependency Node guard that fails if any dotbot `link:` source in the
-  four `install*.yaml` files does not resolve to a real path in the repo.
+- **chezmoi-apply.** Sets up `mise` (via `jdx/mise-action`), then runs
+  [`scripts/ci/check-chezmoi-apply.sh`](../scripts/ci/check-chezmoi-apply.sh),
+  which `mise exec chezmoi@2.70.5 -- chezmoi apply --dry-run`s the `home/`
+  source tree into a throwaway temp destination (never the runner's `$HOME`),
+  then does a real apply into that temp dir and asserts `chezmoi diff` is empty.
+  This fails if any template or source file does not render, or if the source
+  does not apply idempotently.
 
 ## `workflows/opencode-plugin-updates.yml` + `workflows/update-opencode-plugin.yml`
 
@@ -108,8 +112,8 @@ up to date with their upstream GitHub releases.
   default `GITHUB_TOKEN` to open the PRs. PRs opened by `GITHUB_TOKEN` do not
   trigger further workflow runs.
 
-There is intentionally no bootstrap/dotbot wiring here: workflows are consumed by
-GitHub Actions, not symlinked into `$HOME`.
+There is intentionally no bootstrap wiring here: workflows are consumed by
+GitHub Actions, not applied into `$HOME`.
 
 ## Adding a workflow
 

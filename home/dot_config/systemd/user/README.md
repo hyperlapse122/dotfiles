@@ -1,7 +1,7 @@
 # home/.config/systemd/user/
 
-`systemd --user` unit files, symlinked into `~/.config/systemd/user/` by
-dotbot (the `~/.config/**/*` glob in [`../../../install.linux.yaml`](../../../install.linux.yaml)).
+`systemd --user` unit files, applied into `~/.config/systemd/user/` by
+chezmoi from the `home/dot_config/systemd/user/` source tree.
 
 ## Units
 

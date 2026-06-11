@@ -26,8 +26,8 @@
     auth itself and follows any redirects/rate-limit handling for us.
         { "version": "X.Y.Z", "platforms": { ... } }
 
-    Install path: %USERPROFILE%\.local\bin\opencode.ps1 (linked from
-    install.windows.yaml). PowerShell resolves `opencode` as a bare command
+    Install path: %USERPROFILE%\.local\bin\opencode.ps1 (linked from the
+    Windows bootstrap config). PowerShell resolves `opencode` as a bare command
     once %USERPROFILE%\.local\bin is on PATH — that PATH entry is the user's
     responsibility (we don't mutate PATH from bootstrap).
 

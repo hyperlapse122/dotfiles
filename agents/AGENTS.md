@@ -8,7 +8,7 @@ Files in this directory are **cross-tool agent rule files, shared slash commands
 
 ## Linkage
 
-`../install.conf.yaml` defines explicit symlinks for both the shared rules file and the shared commands directory:
+`scripts/bootstrap/link-repo-trees.sh` creates the live symlinks for both the shared rules file and the shared commands directory:
 
 | Source | Linked to | Loaded by |
 |---|---|---|
@@ -21,9 +21,9 @@ Files in this directory are **cross-tool agent rule files, shared slash commands
 | `agents/skills/` | `~/.claude/skills` | Claude Code (runtime skills) |
 | `agents/.skill-lock.json` | `~/.agents/.skill-lock.json` | `skills` CLI lockfile |
 
-OpenCode and Claude Code take a **whole-dir** symlink (`~/.agents/skills`, `~/.claude/skills` → `agents/skills/`). Codex needs no separate skill link: it scans the **USER** scope `$HOME/.agents/skills` and [follows symlinked skill folders](https://developers.openai.com/codex/skills#where-to-save-skills), so the existing `~/.agents/skills → agents/skills/` symlink already exposes **every** skill in this tree to Codex — hand-authored and CLI-managed alike. (`npx skills` may also copy CLI-managed skills into `~/.codex/skills`; `codex` is in `.skill-lock.json`'s `lastSelectedAgents`. That path is redundant for discovery and does not touch the hand-authored rule-skills.) A new hand-authored skill is therefore visible to all three tools the moment its `skills/<name>/SKILL.md` exists — no `install.conf.yaml` change.
+OpenCode and Claude Code take a **whole-dir** symlink (`~/.agents/skills`, `~/.claude/skills` → `agents/skills/`). Codex needs no separate skill link: it scans the **USER** scope `$HOME/.agents/skills` and [follows symlinked skill folders](https://developers.openai.com/codex/skills#where-to-save-skills), so the existing `~/.agents/skills → agents/skills/` symlink already exposes **every** skill in this tree to Codex — hand-authored and CLI-managed alike. (`npx skills` may also copy CLI-managed skills into `~/.codex/skills`; `codex` is in `.skill-lock.json`'s `lastSelectedAgents`. That path is redundant for discovery and does not touch the hand-authored rule-skills.) A new hand-authored skill is therefore visible to all three tools the moment its `skills/<name>/SKILL.md` exists — no extra wiring needed.
 
-The symlinks resolve live. Edits to `SHARED_AGENTS.md` or any file under `commands/` take effect for every linked tool the next time that tool reads them — no dotbot re-run needed unless the symlink itself is missing.
+The symlinks resolve live. Edits to `SHARED_AGENTS.md` or any file under `commands/` take effect for every linked tool the next time that tool reads them — no bootstrap re-run needed unless the symlink itself is missing.
 
 This file (`agents/AGENTS.md`) is **NOT** linked into any tool's global path. It is loaded only when an agent is editing files in this subdirectory of the repo.
 
@@ -33,8 +33,8 @@ This file (`agents/AGENTS.md`) is **NOT** linked into any tool's global path. It
 |---|---|
 | Add/change cross-tool agent rule | `SHARED_AGENTS.md` |
 | Add/change a shared slash command or prompt | New `<name>.md` file in `commands/` (no wiring needed — the directory is already linked) |
-| Add a tool-specific rule file (only OpenCode, only Codex, ...) | New file in this directory + new explicit `link:` in `../install.conf.yaml` |
-| Add support for a new AI tool | New `link:` entries in `../install.conf.yaml` (rules and/or commands), then update `README.md` linkage table |
+| Add a tool-specific rule file (only OpenCode, only Codex, ...) | New file in this directory + new entry in `scripts/bootstrap/link-repo-trees.sh` |
+| Add support for a new AI tool | New entries in `scripts/bootstrap/link-repo-trees.sh` (rules and/or commands), then update `README.md` linkage table |
 | Add a project-specific rule | The owning repo's `AGENTS.md`, NOT here |
 | Add/update/remove a skill | Hand-author it under `skills/<name>/SKILL.md`, OR run `npx skills` / `glab skills install`. Before editing an existing skill, check its source — CLI-managed ones (in `.skill-lock.json` or the `glab` skill) are overwritten on the next CLI run. Never hand-edit `.skill-lock.json`. |
 
@@ -50,12 +50,12 @@ OpenCode-style frontmatter (`name`, `description`) is allowed and ignored by Cod
 ## Conventions
 
 - **MUST** keep `SHARED_AGENTS.md` and files under `commands/` tool-agnostic. If guidance applies only to OpenCode (or only to Codex), put it in a separate file and link it individually.
-- **MUST** add a matching row to `README.md`'s **Linkage** table whenever a new file or directory in this tree is linked from `../install.conf.yaml`. Linkage and documentation drift in lockstep.
+- **MUST** add a matching row to `README.md`'s **Linkage** table whenever a new file or directory in this tree is linked by `scripts/bootstrap/link-repo-trees.sh`. Linkage and documentation drift in lockstep.
 - **MUST** keep this file, `README.md`, and `SHARED_AGENTS.md` mutually consistent. Per the repo's root `AGENTS.md`, agent workflow rule changes update every relevant `AGENTS.md` in the same commit.
 - **MUST NOT** put machine-specific paths, secrets, or per-host details in any file here. These files are loaded as global agent context on every machine that runs `install.sh` / `install.ps1`.
 - **MUST NOT** put project-specific rules or commands here. `SHARED_AGENTS.md` itself defers to project-level `AGENTS.md` when they conflict — keep that boundary clean.
 - **MUST NOT** edit `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/commands/*`, or `~/.codex/prompts/*` directly. Those are symlinks; edit the source files in `agents/` here.
-- **SHOULD** hand-author a new skill (`skills/<name>/SKILL.md`) when the user **implicitly** requests functionality that doesn't yet exist — e.g. "I wish there were a skill for X", "can you always do Y this way", or any repeated workflow worth capturing. Don't wait for an explicit "install a skill" instruction. First verify no CLI-managed skill already covers it (check `.skill-lock.json` and the `glab` skill); if none does, create the hand-authored skill directly. It becomes visible to all three tools the moment `skills/<name>/SKILL.md` exists — no `install.conf.yaml` change.
+- **SHOULD** hand-author a new skill (`skills/<name>/SKILL.md`) when the user **implicitly** requests functionality that doesn't yet exist — e.g. "I wish there were a skill for X", "can you always do Y this way", or any repeated workflow worth capturing. Don't wait for an explicit "install a skill" instruction. First verify no CLI-managed skill already covers it (check `.skill-lock.json` and the `glab` skill); if none does, create the hand-authored skill directly. It becomes visible to all three tools the moment `skills/<name>/SKILL.md` exists — no extra wiring needed.
 - **SHOULD** use RFC 2119 keywords for directives, matching the existing style of `SHARED_AGENTS.md`.
 - **MUST** write all tracked text in English (consistent with the rest of the repo).
 
@@ -65,8 +65,8 @@ OpenCode-style frontmatter (`name`, `description`) is allowed and ignored by Cod
 |---|---|
 | Machine-specific paths or secrets in `SHARED_AGENTS.md` or `commands/*` | Loaded globally on every machine that links them. |
 | Project-specific rules or commands in this directory | They belong in the owning repo's project-level `AGENTS.md` or `.opencode/commands/`, which already override shared rules/commands on conflict. |
-| New rule file in this directory without a new `link:` in `../install.conf.yaml` | Untracked file with no consumer — clutter. Commands are the exception: `commands/` is already linked as a whole, so new files there need no extra wiring. |
-| New `link:` in `../install.conf.yaml` without updating `README.md`'s **Linkage** table | Documentation drift. |
+| New rule file in this directory without a new entry in `scripts/bootstrap/link-repo-trees.sh` | Untracked file with no consumer — clutter. Commands are the exception: `commands/` is already linked as a whole, so new files there need no extra wiring. |
+| New entry in `link-repo-trees.sh` without updating `README.md`'s **Linkage** table | Documentation drift. |
 | Hand-editing `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/commands/*`, or `~/.codex/prompts/*` | Those are symlinks into `agents/`; the change either fails or silently mutates the source through the link, depending on tool. Edit the source here. |
 | Adding `home/.config/opencode/AGENTS.md` to make global OpenCode rules | `~/.config/opencode/AGENTS.md` is already an explicit symlink to `agents/SHARED_AGENTS.md`. A second source would conflict. Edit the shared file. |
 | Adding `home/.config/opencode/commands/` | `~/.config/opencode/commands` is already an explicit symlink to `agents/commands`. A sibling source would conflict. Put new commands in `agents/commands/`. |

@@ -1,0 +1,86 @@
+# ~/.chezmoiignore — generated from home/.chezmoiignore.tmpl.
+# Patterns match target paths relative to $HOME, not source paths in the repo.
+
+# Live symlink targets owned by the bootstrap/orchestrator, not chezmoi.
+.agents/skills
+.agents/.skill-lock.json
+.claude/skills
+.claude/CLAUDE.md
+.config/opencode/commands
+.config/opencode/AGENTS.md
+.config/opencode/plugins
+.config/opencode/plugins/*
+.codex/prompts
+.codex/AGENTS.md
+.codex/hooks.json
+
+# Secret templates are rendered by the 1Password helper and contain Go-template
+# delimiters that chezmoi must not evaluate.
+.secrets
+.secrets/*
+
+# Repo documentation and agent instructions that must not land in $HOME.
+README.md
+AGENTS.md
+.config/chromium/External Extensions/README.md
+.config/solaar/AGENTS.md
+.config/systemd/user/README.md
+Library/LaunchAgents/README.md
+
+# Tracked sources that the current install yaml files deliberately do not link.
+.bunfig.toml
+.config/opencode/prompts
+.config/opencode/prompts/*
+.local/bin/docker-credential-dockerhub
+.local/bin/docker-credential-gh
+.local/bin/docker-credential-glab
+
+{{ if ne .chezmoi.os "linux" }}
+# linux-only target paths.
+.config/Code
+.config/VSCodium
+.config/fcitx5
+.config/systemd
+.config/solaar
+.config/environment.d
+.config/autostart
+.config/wireplumber
+.config/containers
+.config/agent-of-empires
+.config/chromium
+.config/pnpm
+.config/zed
+.local/share/applications
+.gitconfig.d/linux.gitconfig
+{{ end }}
+
+{{ if ne .chezmoi.os "darwin" }}
+# darwin-only target paths.
+Library/Application Support/Code
+Library/Application Support/VSCodium
+Library/LaunchAgents
+Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
+.gitconfig.d/macos.gitconfig
+{{ end }}
+
+{{ if ne .chezmoi.os "windows" }}
+# windows-only target paths.
+AppData/Roaming/Code
+AppData/Roaming/VSCodium
+.gitconfig.d/windows.gitconfig
+.local/bin/opencode.ps1
+.local/bin/code.ps1
+{{ end }}
+
+{{ if eq .chezmoi.os "windows" }}
+# posix-shell and gnupg paths linked only on linux/darwin.
+.zshenv
+.zshrc
+.zprofile
+.zlogin
+.zlogout
+.zpreztorc
+.gnupg
+.local/bin/opencode
+.local/bin/code
+{{ end }}
