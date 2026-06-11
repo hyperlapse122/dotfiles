@@ -101,6 +101,9 @@ idiomatic_version_file_enable_tools = []
 [settings.ruby]
 compile = false
 
+[settings.python]
+compile = false
+
 [env]
 OPENCODE_DISABLE_CLAUDE_CODE = 1
 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT = 1
