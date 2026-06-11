@@ -22,13 +22,13 @@ last_seen_version = "1.9.2"
 [diff]
 context_lines = 3
 
-[hooks]
-on_create = [
-    "git submodule update --init",
-    "mise trust",
-    "mise install",
-]
-on_destroy = ["git submodule deinit -f --all"]
+# [hooks]
+# on_create = [
+#     "git submodule update --init",
+#     "mise trust",
+#     "mise install",
+# ]
+# on_destroy = ["git submodule deinit -f --all"]
 
 [logging]
 default_level = "info"
@@ -47,12 +47,7 @@ container_runtime = "podman"
 default_image = "ghcr.io/agent-of-empires/aoe-sandbox:latest"
 default_terminal_mode = "host"
 enabled_by_default = false
-environment = [
-    "TERM",
-    "COLORTERM",
-    "FORCE_COLOR",
-    "NO_COLOR",
-]
+environment = ["TERM", "COLORTERM", "FORCE_COLOR", "NO_COLOR"]
 extra_volumes = []
 mount_ssh = false
 volume_ignores = []
@@ -76,7 +71,7 @@ enabled = true
 mode = "random"
 
 [status_hooks]
-enabled = false
+enabled = true
 
 [theme]
 color_mode = "truecolor"
