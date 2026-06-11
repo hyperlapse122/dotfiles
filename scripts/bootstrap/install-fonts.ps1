@@ -12,7 +12,8 @@
     Each file is also registered under HKCU so apps see it without re-login.
     No admin rights required (Windows 10 1803+).
 
-    Add new fonts by appending entries to the $Fonts array near the top.
+    Add new fonts by appending one record to the shared fonts.registry file
+    (next to this script).
 
 .PARAMETER Force
     Reinstall fonts even when the marker file is already present.
@@ -33,65 +34,39 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # ---------------------------------------------------------------------------
-# Font registry. To add a font, append one hashtable entry:
+# Font registry. The data lives in one shared file, fonts.registry (next to
+# this script), so install-fonts.sh and install-fonts.ps1 never drift. To add
+# a font, append one pipe-delimited record there:
 #
-#   Name          Human-readable label used in log lines.
-#   Repo          GitHub <owner>/<repo>. Latest release is queried.
-#   AssetPattern  Glob handed to `gh release download --pattern`. Must match
-#                 exactly one asset in the latest release.
-#   Marker        Filename or glob (e.g. 'Foo-Ver*.ttf') matching at least one
-#                 file installed by this entry. If any file in the user font
-#                 directory matches, the entry is treated as already installed
-#                 (re-run with -Force to override). Pick a marker distinct
-#                 from other registry entries' markers to avoid false matches.
-#   SourceDirs   Directories *inside the unzipped archive* whose .ttf/.otf/
-#                 .ttc files should be installed. Use './' for the archive
-#                 root. Other files are ignored.
+#   name|repo|asset_pattern|marker_glob|src_dirs
+#
+#   name           Human-readable label used in log lines.
+#   repo           GitHub <owner>/<repo>. Latest release is queried.
+#   asset_pattern  Glob handed to `gh release download --pattern`. Must match
+#                  exactly one asset in the latest release.
+#   marker_glob    Filename or glob (e.g. 'Foo-Ver*.ttf') matching at least one
+#                  file installed by this entry. If any file in the user font
+#                  directory matches, the entry is treated as already installed
+#                  (re-run with -Force to override). Pick a marker distinct
+#                  from other registry entries' markers to avoid false matches.
+#   src_dirs       Comma-separated directories *inside the unzipped archive*
+#                  whose .ttf/.otf/.ttc files should be installed. Use '.' for
+#                  the archive root. Other files are ignored.
 # ---------------------------------------------------------------------------
-$Fonts = @(
+$RegistryFile = Join-Path $PSScriptRoot 'fonts.registry'
+$Fonts = Get-Content -LiteralPath $RegistryFile | Where-Object {
+    $_ -and -not $_.StartsWith('#')
+} | ForEach-Object {
+    $f = $_ -split '\|'
+    if ($f.Count -ne 5) { throw "fonts.registry: malformed line: $_" }
     @{
-        Name         = 'Pretendard'
-        Repo         = 'orioncactus/pretendard'
-        AssetPattern = 'Pretendard-*.zip'
-        Marker       = 'PretendardVariable.ttf'
-        SourceDirs   = @('public/variable', 'public/static', 'public/static/alternative')
-    },
-    @{
-        Name         = 'PretendardJP'
-        Repo         = 'orioncactus/pretendard'
-        AssetPattern = 'PretendardJP-*.zip'
-        Marker       = 'PretendardJPVariable.ttf'
-        SourceDirs   = @('public/variable', 'public/static', 'public/static/alternative')
-    },
-    @{
-        Name         = 'D2Coding'
-        Repo         = 'naver/d2codingfont'
-        AssetPattern = 'D2Coding-*.zip'
-        Marker       = 'D2Coding-Ver*.ttf'
-        SourceDirs   = @('D2Coding', 'D2CodingAll', 'D2CodingLigature')
-    },
-    @{
-        Name         = 'JetBrainsMono'
-        Repo         = 'JetBrains/JetBrainsMono'
-        AssetPattern = 'JetBrainsMono-*.zip'
-        Marker       = 'JetBrainsMono-Regular.ttf'
-        SourceDirs   = @('fonts/variable', 'fonts/ttf')
-    },
-    @{
-        Name         = 'D2CodingNerd'
-        Repo         = 'ryanoasis/nerd-fonts'
-        AssetPattern = 'D2Coding.zip'
-        Marker       = 'D2CodingLigatureNerdFont-Regular.ttf'
-        SourceDirs   = @('.')
-    },
-    @{
-        Name         = 'JetBrainsMonoNerd'
-        Repo         = 'ryanoasis/nerd-fonts'
-        AssetPattern = 'JetBrainsMono.zip'
-        Marker       = 'JetBrainsMonoNerdFont-Regular.ttf'
-        SourceDirs   = @('.')
+        Name         = $f[0]
+        Repo         = $f[1]
+        AssetPattern = $f[2]
+        Marker       = $f[3]
+        SourceDirs   = @($f[4] -split ',')
     }
-)
+}
 
 # ---------------------------------------------------------------------------
 # Helpers

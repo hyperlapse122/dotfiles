@@ -2,8 +2,8 @@
 # scripts/bootstrap/install-fonts.sh
 #
 # Installs desktop fonts user-wide (no sudo) on macOS and Linux by downloading
-# release archives from GitHub. Add new fonts by appending entries to the FONTS
-# array near the top of this file.
+# release archives from GitHub. Add new fonts by appending one record to the
+# shared fonts.registry file (next to this script).
 #
 # Defaults: skips a font when its marker file already exists in the user font
 # directory. Pass --force to reinstall everything.
@@ -14,7 +14,9 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Font registry. To add a font, append one pipe-delimited record:
+# Font registry. The data lives in one shared file, fonts.registry (next to
+# this script), so install-fonts.sh and install-fonts.ps1 never drift. To add
+# a font, append one pipe-delimited record there:
 #
 #   name|repo|asset_pattern|marker_glob|src_dirs
 #
@@ -33,14 +35,13 @@ set -euo pipefail
 #                  installed. Use "." for the archive root. Other files are
 #                  ignored.
 # ---------------------------------------------------------------------------
-FONTS=(
-  "Pretendard|orioncactus/pretendard|Pretendard-*.zip|PretendardVariable.ttf|public/variable,public/static,public/static/alternative"
-  "PretendardJP|orioncactus/pretendard|PretendardJP-*.zip|PretendardJPVariable.ttf|public/variable,public/static,public/static/alternative"
-  "D2Coding|naver/d2codingfont|D2Coding-*.zip|D2Coding-Ver*.ttf|D2Coding,D2CodingAll,D2CodingLigature"
-  "JetBrainsMono|JetBrains/JetBrainsMono|JetBrainsMono-*.zip|JetBrainsMono-Regular.ttf|fonts/variable,fonts/ttf"
-  "D2CodingNerd|ryanoasis/nerd-fonts|D2Coding.zip|D2CodingLigatureNerdFont-Regular.ttf|."
-  "JetBrainsMonoNerd|ryanoasis/nerd-fonts|JetBrainsMono.zip|JetBrainsMonoNerdFont-Regular.ttf|."
-)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REGISTRY_FILE="$SCRIPT_DIR/fonts.registry"
+FONTS=()
+while IFS= read -r line; do
+  [[ -z "$line" || "$line" == \#* ]] && continue
+  FONTS+=("$line")
+done < "$REGISTRY_FILE"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +54,7 @@ Usage: install-fonts.sh [--force] [--help]
   -f, --force   Reinstall fonts even when the marker file is already present.
   -h, --help    Show this message and exit.
 
-Add new fonts by editing the FONTS array near the top of this script.
+Add new fonts by editing the shared fonts.registry file (next to this script).
 EOF
 }
 
