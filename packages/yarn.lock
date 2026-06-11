@@ -220,7 +220,6 @@ __metadata:
     eslint: "npm:10.4.0"
     eslint-config-prettier: "npm:10.1.8"
     prettier: "npm:3.8.3"
-    slugify: "npm:1.6.9"
     tsdown: "npm:0.22.0"
     typescript: "npm:6.0.3"
     typescript-eslint: "npm:8.59.4"
@@ -1695,13 +1694,6 @@ __metadata:
   version: 3.0.0
   resolution: "shebang-regex@npm:3.0.0"
   checksum: 10c0/1dbed0726dd0e1152a92696c76c7f06084eb32a90f0528d11acd764043aacf76994b2fb30aa1291a21bd019d6699164d048286309a278855ee7bec06cf6fb690
-  languageName: node
-  linkType: hard
-
-"slugify@npm:1.6.9":
-  version: 1.6.9
-  resolution: "slugify@npm:1.6.9"
-  checksum: 10c0/8473c566ae00c5db26bfbf6182a4a9478ab3c912a9c926e1fdb410736a77228bfca4fdc5c755b46fafa7d2d9900de482fd7a9bd5e5c91128c4743c2c072d88da
   languageName: node
   linkType: hard
 

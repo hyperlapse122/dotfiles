@@ -34,8 +34,5 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
-  },
-  "dependencies": {
-    "slugify": "1.6.9"
   }
 }

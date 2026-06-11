@@ -22,11 +22,8 @@ PLAYWRIGHT_CLI_SESSION = opencode-<hash8>
 ```
 
 where `<hash8>` is the first 8 hex characters of the SHA-1 digest of the
-command's `cwd`. The `cwd` is first normalized (path separators replaced with
-`-`) and run through [`slugify`](https://www.npmjs.com/package/slugify)
-(`lower: true`, `strict: true`, `replacement: "-"`), then hashed with
-`node:crypto`'s `createHash("sha1")`. For example, a command run in
-`/home/h82/dotfiles` yields `opencode-32c02c13`.
+raw `cwd` string, computed with `node:crypto`'s `createHash("sha1")`. For
+example, a command run in `/home/h82/dotfiles` yields `opencode-2e1002b8`.
 
 Hashing keeps the session name short and fixed-length regardless of how deep the
 project path is, while staying deterministic per directory (so the same project
@@ -47,8 +44,8 @@ history, and tabs, this gives you:
 When a command has no `cwd`, the hook does nothing and `playwright-cli` falls
 back to its own default session.
 
-See [`src/index.ts`](src/index.ts) — the env var name and the slug format are
-the only logic.
+See [`src/index.ts`](src/index.ts) — the env var name and the hash are the
+only logic.
 
 ## Status
 
@@ -84,11 +81,9 @@ The package is ESM-only (`"type": "module"`) and builds with
 [`tsdown`](https://tsdown.dev) (Rolldown-based), configured in
 [`tsdown.config.ts`](tsdown.config.ts):
 
-- `slugify` is **bundled** into the output (`alwaysBundle`) so the plugin file
-  is self-contained — no runtime dependency install is needed.
 - `@opencode-ai/plugin` is **never bundled** (`neverBundle`) — it is a
   type-only/host-provided peer supplied by the OpenCode runtime that loads the
-  plugin.
+  plugin. The plugin has no other runtime dependencies.
 
 Build output is `dist/index.mjs` (ESM) + `dist/index.d.mts`.
 
@@ -136,4 +131,4 @@ editing `src/` for the change to take effect.
 
 | Export | Type | Notes |
 |---|---|---|
-| `PlaywrightCliSessionInjectionPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns a `shell.env` hook that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (the first 8 hex chars of the SHA-1 of the slugified `cwd`) on every command that has a `cwd`. |
+| `PlaywrightCliSessionInjectionPlugin` | `Plugin` (from `@opencode-ai/plugin`) | The plugin entry. Returns a `shell.env` hook that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (the first 8 hex chars of the SHA-1 of the raw `cwd` string) on every command that has a `cwd`. |
