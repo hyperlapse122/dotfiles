@@ -37,7 +37,7 @@ on:
       config-path:
         description: Path (repo-relative) to the opencode config file to update.
         required: false
-        default: "home/.config/opencode/opencode.json"
+        default: "home/dot_config/opencode/opencode.json"
         type: string
 
 # Needs write to push the branch and open/close PRs. The caller must grant at

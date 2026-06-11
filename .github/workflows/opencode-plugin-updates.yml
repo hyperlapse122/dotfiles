@@ -1,7 +1,7 @@
 name: opencode-plugin-updates
 
 # Hourly check for new releases of the opencode plugins pinned in
-# home/.config/opencode/opencode.json. Each plugin is handled by the reusable
+# home/dot_config/opencode/opencode.json. Each plugin is handled by the reusable
 # update-opencode-plugin.yml workflow, fanned out over a matrix: one entry per
 # plugin. When an upstream release is newer than the pinned version, the
 # reusable workflow opens a PR bumping it.
