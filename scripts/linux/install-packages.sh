@@ -71,7 +71,7 @@ install-fedora-packages() {
   # (0x10de) rather than shelling out to lspci — pciutils is not guaranteed
   # installed this early, and the sysfs vendor files are always present.
   if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
-    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo
+    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo --overwrite
   else
     printf 'install-packages.sh: no NVIDIA GPU detected; skipping CUDA repo and drivers.\n'
   fi
@@ -205,6 +205,10 @@ EOF
     # Virtualization
     akmod-VirtualBox
     akmods
+    # Dynamic Kernel Module Support — builds/signs out-of-tree modules (e.g.
+    # the NVIDIA dkms driver); its MOK signing key lives at /var/lib/dkms/mok.pub
+    # and is enrolled by enable-services below.
+    dkms
     # refs-fuse (unsound/refsprogs) build deps for read-only ReFS / Windows
     # Dev Drive access on vhdx mounts; autotools come from development-tools.
     fuse3
@@ -351,36 +355,42 @@ enable-services() {
   # Enabling akmods.service ensures kernel modules are automatically signed and loaded
   "${SUDO[@]}" systemctl enable --now akmods.service
 
-  # Import every akmods MOK signing key under /etc/pki/akmods/certs/ for
-  # any out-of-tree kernel modules built by akmods (currently virtualbox).
-  # Skipped entirely unless booted via UEFI with Secure Boot enabled —
-  # otherwise unsigned modules load fine and `mokutil --import` would
-  # queue a pointless MOK Manager prompt on next boot.
+  # Import the MOK signing keys for out-of-tree kernel modules: every akmods
+  # key under /etc/pki/akmods/certs/ (currently virtualbox) plus the dkms key
+  # at /var/lib/dkms/mok.pub (NVIDIA dkms driver). Skipped entirely unless
+  # booted via UEFI with Secure Boot enabled — otherwise unsigned modules load
+  # fine and `mokutil --import` would queue a pointless MOK Manager prompt on
+  # next boot.
   #
   # /etc/pki/akmods/certs/ is mode 0750 root:akmods, so every read of the
   # directory and its contents (listing, existence check, mokutil
   # --test-key, openssl fingerprint) goes through sudo — a normal user
   # cannot see files in there even though only --import strictly needs
-  # root. Per-cert enrollment check uses `mokutil --test-key` (which
-  # confusingly exits 1 when the key IS enrolled, so we grep its stdout
-  # for "is already enrolled") and a pending-enrollment check against
-  # `mokutil --list-new` by SHA1 fingerprint so re-runs between import
-  # and reboot don't re-prompt for the one-time password and replace
-  # the pending request. Approved-to-import certs are batched into a
-  # single `mokutil --import` call so the user enters the one-time
+  # root. The dkms key is read through sudo for the same uniformity. Both are
+  # DER-encoded so a single `openssl x509 -inform DER` covers them. Per-cert
+  # enrollment check uses `mokutil --test-key` (which confusingly exits 1 when
+  # the key IS enrolled, so we grep its stdout for "is already enrolled") and a
+  # pending-enrollment check against `mokutil --list-new` by SHA1 fingerprint so
+  # re-runs between import and reboot don't re-prompt for the one-time password
+  # and replace the pending request. Both key sources are collected into one
+  # array and the approved-to-import keys are batched into a single
+  # `mokutil --import key1 key2 ...` call so the user enters the one-time
   # password once for all of them.
   if [[ ! -d /sys/firmware/efi ]]; then
-    printf 'install-packages.sh: not booted via UEFI; skipping akmods MOK import.\n'
+    printf 'install-packages.sh: not booted via UEFI; skipping MOK import.\n'
   elif ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
-    printf 'install-packages.sh: Secure Boot disabled; skipping akmods MOK import.\n'
-  elif ! "${SUDO[@]}" test -d /etc/pki/akmods/certs; then
-    printf 'install-packages.sh: /etc/pki/akmods/certs missing; skipping akmods MOK import.\n'
+    printf 'install-packages.sh: Secure Boot disabled; skipping MOK import.\n'
   else
     local -a certs=() to_import=()
     local cert fp
-    readarray -t certs < <("${SUDO[@]}" find /etc/pki/akmods/certs -maxdepth 1 -type f -name '*.der' -print | sort)
+    if "${SUDO[@]}" test -d /etc/pki/akmods/certs; then
+      readarray -t certs < <("${SUDO[@]}" find /etc/pki/akmods/certs -maxdepth 1 -type f -name '*.der' -print | sort)
+    fi
+    if "${SUDO[@]}" test -f /var/lib/dkms/mok.pub; then
+      certs+=(/var/lib/dkms/mok.pub)
+    fi
     if [[ ${#certs[@]} -eq 0 ]]; then
-      printf 'install-packages.sh: no .der certs in /etc/pki/akmods/certs; skipping akmods MOK import.\n'
+      printf 'install-packages.sh: no akmods/dkms MOK keys found; skipping MOK import.\n'
     else
       for cert in "${certs[@]}"; do
         if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
@@ -397,7 +407,7 @@ enable-services() {
       if [[ ${#to_import[@]} -gt 0 ]]; then
         "${SUDO[@]}" mokutil --import "${to_import[@]}"
       else
-        printf 'install-packages.sh: all akmods MOK certs already enrolled or queued.\n'
+        printf 'install-packages.sh: all akmods/dkms MOK keys already enrolled or queued.\n'
       fi
     fi
   fi
