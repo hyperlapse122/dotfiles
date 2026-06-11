@@ -27,7 +27,7 @@ keep running without an active login session. It then
 `systemctl mask`s the rootful `podman.socket` and
 `podman.service` to block the system-level rootful podman API
 (sudo `podman` itself is daemonless and unaffected, and the
-user-scope prune timer is enabled separately by `install.linux.yaml`
+user-scope prune timer is enabled separately by `install.sh`
 alongside the rootless `podman.socket`, soft-skipped when no user
 session bus is reachable, same as the `mxm4-haptic*` units). The
 podman-prune pair is **Linux-only**, so the user unit has no

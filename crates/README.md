@@ -6,7 +6,7 @@ Rust crates built and installed during bootstrap.
 
 | Path | Built into | Built by |
 |---|---|---|
-| [`mxm4-haptic/`](mxm4-haptic/) | `~/.local/bin/mxm4-hapticd`, `mxm4-haptic-notify`, `mxm4-haptic` | `cargo install --path crates/mxm4-haptic --root ~/.local --locked --force` invoked from [`../install.linux.yaml`](../install.linux.yaml) (one install builds all three bins) |
+| [`mxm4-haptic/`](mxm4-haptic/) | `~/.local/bin/mxm4-hapticd`, `mxm4-haptic-notify`, `mxm4-haptic` | `cargo install --path crates/mxm4-haptic --root ~/.local --locked --force` invoked from [`../install.sh`](../install.sh) (one install builds all three bins) |
 
 The `mxm4-haptic` crate is a `[lib]` plus three `[[bin]]`s: a haptic **daemon**
 (`mxm4-hapticd`, the sole owner of the Bolt receiver's HID++ session — device
@@ -61,9 +61,9 @@ completion at `~/.config/zsh/completions/_mxm4-haptic` (on `fpath` via
 
 1. `cargo new --bin crates/<name>` from the repo root.
 2. Document the platform constraint and bootstrap entry in `crates/<name>/README.md`.
-3. Add a `shell:` step in the matching `install.<os>.yaml` that runs `cargo install --path crates/<name> --root ~/.local --locked --force --quiet`.
+3. Add a `shell:` step in `install.sh` / `install.ps1` that runs `cargo install --path crates/<name> --root ~/.local --locked --force --quiet`.
 4. Update this `README.md`'s layout table.
-5. If the crate replaces a tracked file under `home/`, delete that file and remove its `link:` entry from `install.<os>.yaml` in the **same commit** that adds the crate.
+5. If the crate replaces a tracked file under `home/`, delete that file and remove its `link:` entry from the matching bootstrap step in `install.sh` / `install.ps1` in the **same commit** that adds the crate.
 
 ## Anti-patterns
 

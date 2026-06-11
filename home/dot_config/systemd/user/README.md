@@ -11,7 +11,7 @@ chezmoi from the `home/dot_config/systemd/user/` source tree.
 | `mxm4-haptic-notify.service` | `~/.local/bin/mxm4-haptic-notify` | Desktop-notification → haptic bridge; eavesdrops `org.freedesktop.Notifications.Notify` via `dbus-monitor` and forwards a waveform to the daemon. |
 
 Both binaries are built from [`../../../crates/mxm4-haptic/`](../../../crates/mxm4-haptic/)
-into `~/.local/bin/` during bootstrap (`install.linux.yaml` `cargo install`
+into `~/.local/bin/` during bootstrap (`install.sh` `cargo install`
 step). The Solaar-spawned one-shot client `mxm4-haptic` from the same crate
 needs no unit — it is launched per button press by the rules in
 [`../../solaar/rules.yaml`](../../solaar/rules.yaml).
@@ -20,7 +20,7 @@ needs no unit — it is launched per button press by the rules in
 
 Both units are enabled automatically during bootstrap by the guarded
 `systemctl --user enable` step in
-[`../../../install.linux.yaml`](../../../install.linux.yaml), right after the
+[`../../../install.sh`](../../../install.sh), right after the
 `cargo install` step builds their binaries. There is no `--now`: plain `enable`
 only wires the `WantedBy` symlinks, so systemd starts each unit when its target
 is reached — `mxm4-hapticd.service` with `default.target`, and

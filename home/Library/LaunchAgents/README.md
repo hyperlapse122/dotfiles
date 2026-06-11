@@ -13,7 +13,7 @@ units — a per-user autostart that needs no root.
 | `dev.h82.mxm4-hapticd.plist` | `~/.local/bin/mxm4-hapticd` | MX Master 4 haptic daemon — sole owner of the Bolt receiver HID++ session; does HID++ device discovery, debounce, queueing and paced playback over `hidapi` (macOS IOKit). Listens on `$TMPDIR/mxm4-haptic.sock`. |
 
 The daemon is built from [`../../../crates/mxm4-haptic/`](../../../crates/mxm4-haptic/)
-into `~/.local/bin/` during bootstrap (`install.macos.yaml` `cargo install`
+into `~/.local/bin/` during bootstrap (`install.sh` `cargo install`
 step, daemon + client only). There is **no** agent for the notification bridge
 (`mxm4-haptic-notify`): it is Linux-only (it eavesdrops the D-Bus session bus)
 and exits immediately on macOS. macOS has no Solaar to spawn the one-shot client
@@ -23,7 +23,7 @@ and exits immediately on macOS. macOS has no Solaar to spawn the one-shot client
 ## Loading
 
 The agent is loaded automatically during bootstrap by the guarded `launchctl
-bootstrap` step in [`../../../install.macos.yaml`](../../../install.macos.yaml),
+bootstrap` step in [`../../../install.sh`](../../../install.sh),
 right after the `cargo install` step builds its binary. `RunAtLoad` starts it
 immediately and at every login; `KeepAlive` restarts it if it exits (the daemon
 exits on a HID read error to force a clean device re-enumeration). The step

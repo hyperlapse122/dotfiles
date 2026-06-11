@@ -113,7 +113,7 @@ Build output is `dist/index.mjs` (ESM) + `dist/index.d.mts`.
 ## Enabling it in OpenCode
 
 **On Linux, the bootstrap enables it automatically.**
-[`install.linux.yaml`](../../install.linux.yaml) symlinks the built file into
+[`install.sh`](../../install.sh) symlinks the built file into
 OpenCode's auto-load plugin directory:
 
 ```

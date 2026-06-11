@@ -21,8 +21,8 @@
 # --unlock-key-file, and never uses the cryptenroll.passphrase /
 # cryptenroll.new-passphrase service credentials. Because it must prompt, it
 # REQUIRES a TTY (except under --dry-run) and is therefore a MANUAL script: it
-# is intentionally NOT wired into install.linux.yaml (dotbot's bootstrap shell
-# steps run non-interactively). Run it by hand after install:
+# is intentionally NOT wired into install.sh (bootstrap runs non-interactively).
+# Run it by hand after install:
 #
 #     bash scripts/linux/setup-luks-tpm2-unlock.sh
 #

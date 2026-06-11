@@ -3,7 +3,7 @@
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
 # `sudo install -D -m <mode>`, then configures firewalld for Tailscale
-# and VMware. Called from a `shell:` step in ../../install.linux.yaml
+# and VMware. Called from install.sh (Linux bootstrap step).
 # (dotbot has no sudo / root mode, see AGENTS.md).
 #
 # Single-platform (Linux only) by design — no .ps1 counterpart per the
