@@ -30,7 +30,7 @@ is this directory. It holds the repo's TypeScript/JavaScript library packages.
 |---|---|---|
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`opencode-mxm4-haptic/`](opencode-mxm4-haptic/) | `@h82/opencode-mxm4-haptic` | OpenCode plugin that pulses MX Master 4 haptics on OpenCode events (e.g. `session.idle` → `COMPLETED`). Forwards waveforms to the `mxm4-hapticd` daemon via a bundled `@h82/mxm4-haptic`. |
-| [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the slugified `cwd`) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
+| [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the raw `cwd` string) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
 
 ## Conventions
 
