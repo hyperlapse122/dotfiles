@@ -65,10 +65,16 @@ install-fedora-packages() {
   fi
   "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
 
-  # Add NVIDIA repository
-  # TODO: Install only there is NVIDIA GPU
-  "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo
-  "${SUDO[@]}" dnf -y install cuda-toolkit-13-3 cuda-drivers
+  # Add NVIDIA CUDA repository + drivers, but only on hosts with an NVIDIA GPU.
+  # Scan /sys/bus/pci/devices/*/vendor for NVIDIA's PCI vendor id (0x10de)
+  # rather than shelling out to lspci — pciutils is not guaranteed installed
+  # this early, and the sysfs vendor files are always present.
+  if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo
+    "${SUDO[@]}" dnf -y install cuda-toolkit-13-3 cuda-drivers
+  else
+    printf 'install-packages.sh: no NVIDIA GPU detected; skipping CUDA repo and drivers.\n'
+  fi
 
   # Install 1Password repository. Quoted heredoc keeps $basearch literal so
   # dnf substitutes it at install time (not at script-eval time).
