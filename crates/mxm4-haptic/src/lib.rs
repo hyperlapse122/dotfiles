@@ -391,3 +391,300 @@ pub fn parse_connection_notification(buf: &[u8]) -> Option<(u8, bool)> {
     }
     Some((buf[1], (buf[4] & 0x40) == 0))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // Step 2: Waveform catalogue
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn waveform_table_has_16_entries() {
+        assert_eq!(WAVEFORMS.len(), 16);
+    }
+
+    #[test]
+    fn waveform_names_unique() {
+        let mut names: Vec<&str> = WAVEFORMS.iter().map(|(n, _)| *n).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 16, "duplicate waveform names detected");
+    }
+
+    #[test]
+    fn waveform_ids_unique() {
+        let mut ids: Vec<u8> = WAVEFORMS.iter().map(|(_, id)| *id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), 16, "duplicate waveform ids detected");
+    }
+
+    #[test]
+    fn waveform_id_exact_set() {
+        // ids 0..=14 plus 27 (WHISPER COLLISION gap in firmware enum)
+        let mut ids: Vec<u8> = WAVEFORMS.iter().map(|(_, id)| *id).collect();
+        ids.sort_unstable();
+        let mut expected: Vec<u8> = (0u8..=14).collect();
+        expected.push(27);
+        assert_eq!(ids, expected);
+    }
+
+    #[test]
+    fn waveform_id_whisper_collision_is_27() {
+        assert_eq!(waveform_id("WHISPER COLLISION"), Some(27));
+    }
+
+    #[test]
+    fn waveform_id_ringing_is_14() {
+        assert_eq!(waveform_id("RINGING"), Some(14));
+    }
+
+    #[test]
+    fn waveform_id_case_insensitive() {
+        assert_eq!(waveform_id("completed"), Some(7));
+        assert_eq!(waveform_id("Sharp Collision"), Some(2));
+    }
+
+    #[test]
+    fn waveform_id_unknown_returns_none() {
+        assert_eq!(waveform_id("NOPE"), None);
+        assert_eq!(waveform_id(""), None);
+    }
+
+    #[test]
+    fn waveform_names_len_matches_table() {
+        assert_eq!(waveform_names().len(), WAVEFORMS.len());
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3: Packet builders
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn build_play_packet_layout() {
+        let pkt = build_play_packet(1, 9, 27);
+        assert_eq!(pkt.len(), 20);
+        assert_eq!(pkt[0], 0x11);
+        assert_eq!(pkt[1], 1);
+        assert_eq!(pkt[2], 9);
+        assert_eq!(pkt[3], 0x40);
+        assert_eq!(pkt[4], 27);
+        // bytes 5..20 must all be zero
+        assert!(pkt[5..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn build_get_feature_layout() {
+        let pkt = build_get_feature(2, 0x19, 0xB0, 0x0E);
+        assert_eq!(pkt, [0x10, 2, 0x00, 0x0E, 0x19, 0xB0, 0x00]);
+    }
+
+    #[test]
+    fn build_get_feature_sw_id_masked() {
+        // sw_id 0xFE → low nibble 0x0E
+        let pkt = build_get_feature(2, 0x19, 0xB0, 0xFE);
+        assert_eq!(pkt[3], 0x0E);
+    }
+
+    #[test]
+    fn build_set_register_matches_constants() {
+        assert_eq!(
+            build_set_register(0x00, 0x00, 0x09, 0x00),
+            ENABLE_NOTIFICATIONS
+        );
+        assert_eq!(
+            build_set_register(0x02, 0x02, 0x00, 0x00),
+            REANNOUNCE_DEVICES
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 4: classify_root_reply
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn classify_root_reply_success_short() {
+        // [0x10, dev, 0x00, sw, idx, 0, 0] → FeatureIndex(idx)
+        let buf = [0x10u8, 0x01, 0x00, 0x0E, 0x05, 0x00, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::FeatureIndex(0x05)
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_success_long() {
+        // 20-byte long report starting [0x11, dev, 0x00, sw, idx, ...]
+        let mut buf = [0u8; 20];
+        buf[0] = 0x11;
+        buf[1] = 0x02;
+        buf[2] = 0x00;
+        buf[3] = 0x0E;
+        buf[4] = 0x07;
+        assert_eq!(
+            classify_root_reply(&buf, 0x02, 0x0E),
+            RootReply::FeatureIndex(0x07)
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_hidpp20_error() {
+        // sub_id 0xFF, buf[3]==0x00, buf[4]==sw, code at buf[5]
+        let buf = [0x10u8, 0x01, 0xFF, 0x00, 0x0E, 0x06, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::Hidpp20Error(0x06)
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_hidpp10_error() {
+        // sub_id 0x8F, buf[3]==0x00, buf[4]==sw, code at buf[5]
+        let buf = [0x10u8, 0x01, 0x8F, 0x00, 0x0E, 0x09, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::Hidpp10Error(0x09)
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_wrong_dev_idx() {
+        let buf = [0x10u8, 0x03, 0x00, 0x0E, 0x05, 0x00, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::NotForUs
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_wrong_sw_id() {
+        // success path but sw_id mismatch
+        let buf = [0x10u8, 0x01, 0x00, 0x0A, 0x05, 0x00, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::NotForUs
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_buf_too_short() {
+        let buf = [0x10u8, 0x01, 0x00, 0x0E, 0x05, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::NotForUs
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_long_report_too_short() {
+        // report id 0x11 but only 7 bytes (< 20)
+        let buf = [0x11u8, 0x01, 0x00, 0x0E, 0x05, 0x00, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::NotForUs
+        );
+    }
+
+    #[test]
+    fn classify_root_reply_unknown_report_id() {
+        let buf = [0x20u8, 0x01, 0x00, 0x0E, 0x05, 0x00, 0x00];
+        assert_eq!(
+            classify_root_reply(&buf, 0x01, 0x0E),
+            RootReply::NotForUs
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 5: parse_connection_notification
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_connection_notification_link_established() {
+        // bit 0x40 clear → link established
+        let buf = [0x10u8, 5, 0x41, 0, 0x00, 0, 0];
+        assert_eq!(parse_connection_notification(&buf), Some((5, true)));
+    }
+
+    #[test]
+    fn parse_connection_notification_link_lost() {
+        // bit 0x40 set → link lost
+        let buf = [0x10u8, 5, 0x41, 0, 0x40, 0, 0];
+        assert_eq!(parse_connection_notification(&buf), Some((5, false)));
+    }
+
+    #[test]
+    fn parse_connection_notification_wrong_sub_id() {
+        let buf = [0x10u8, 5, 0x42, 0, 0x00, 0, 0];
+        assert_eq!(parse_connection_notification(&buf), None);
+    }
+
+    #[test]
+    fn parse_connection_notification_wrong_report_id() {
+        let buf = [0x11u8, 5, 0x41, 0, 0x00, 0, 0];
+        assert_eq!(parse_connection_notification(&buf), None);
+    }
+
+    #[test]
+    fn parse_connection_notification_too_short() {
+        let buf = [0x10u8, 5, 0x41, 0, 0x00, 0];
+        assert_eq!(parse_connection_notification(&buf), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 6: socket_path (unix only, all env assertions in ONE test)
+    // -----------------------------------------------------------------------
+
+    #[cfg(unix)]
+    #[test]
+    fn socket_path_unix_env_resolution() {
+        use std::env;
+
+        // Save originals
+        let orig_xdg = env::var("XDG_RUNTIME_DIR").ok();
+        let orig_tmp = env::var("TMPDIR").ok();
+
+        // Case 1: XDG_RUNTIME_DIR with trailing slash → trimmed
+        unsafe {
+            env::set_var("XDG_RUNTIME_DIR", "/run/user/1000/");
+            env::remove_var("TMPDIR");
+        }
+        assert_eq!(
+            socket_path(),
+            Some("/run/user/1000/mxm4-haptic.sock".to_string())
+        );
+
+        // Case 2: XDG unset, TMPDIR set
+        unsafe {
+            env::remove_var("XDG_RUNTIME_DIR");
+            env::set_var("TMPDIR", "/var/tmpx");
+        }
+        assert_eq!(
+            socket_path(),
+            Some("/var/tmpx/mxm4-haptic.sock".to_string())
+        );
+
+        // Case 3: both unset → /tmp fallback
+        unsafe {
+            env::remove_var("XDG_RUNTIME_DIR");
+            env::remove_var("TMPDIR");
+        }
+        assert_eq!(
+            socket_path(),
+            Some("/tmp/mxm4-haptic.sock".to_string())
+        );
+
+        // Restore originals
+        unsafe {
+            match orig_xdg {
+                Some(v) => env::set_var("XDG_RUNTIME_DIR", v),
+                None => env::remove_var("XDG_RUNTIME_DIR"),
+            }
+            match orig_tmp {
+                Some(v) => env::set_var("TMPDIR", v),
+                None => env::remove_var("TMPDIR"),
+            }
+        }
+    }
+}
