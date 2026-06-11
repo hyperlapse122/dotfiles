@@ -14,10 +14,6 @@ ruby = [
     "linux",
     "macos",
   ] },
-  { version = "3.2", os = [
-    "linux",
-    "macos",
-  ] },
 ]
 rust = { version = "latest", components = "rust-analyzer,rust-src" }
 uv = "latest"
