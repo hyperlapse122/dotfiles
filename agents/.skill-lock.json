@@ -15,9 +15,9 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/microsoft/playwright-cli.git",
       "skillPath": "skills/playwright-cli/SKILL.md",
-      "skillFolderHash": "7f1be9aef5c4435ed99dc74a383ca814d05c82c5",
+      "skillFolderHash": "6bf055ae36a2460e4a8f70eaec772ab7ac7e12e4",
       "installedAt": "2026-04-23T22:53:51.418Z",
-      "updatedAt": "2026-05-08T19:17:11.817Z"
+      "updatedAt": "2026-06-11T00:54:24.289Z"
     },
     "improve": {
       "source": "shadcn/improve",
