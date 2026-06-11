@@ -56,6 +56,18 @@ jobs:
           restore-keys: |
             yarn-berry-${{ runner.os }}-
 
+      # Turbo's local task cache (packages/.turbo/cache). Keyed per-commit so
+      # each run saves a fresh entry; restore-keys give the newest previous
+      # cache, and turbo itself decides per-task validity by input hashing —
+      # a restored cache can only produce hits for genuinely unchanged tasks.
+      - name: Cache Turbo task cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: packages/.turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
       - name: Install dependencies (immutable)
         run: yarn install --immutable
 
