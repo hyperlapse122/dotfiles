@@ -65,13 +65,13 @@ install-fedora-packages() {
   fi
   "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
 
-  # Add NVIDIA CUDA repository + drivers, but only on hosts with an NVIDIA GPU.
-  # Scan /sys/bus/pci/devices/*/vendor for NVIDIA's PCI vendor id (0x10de)
-  # rather than shelling out to lspci — pciutils is not guaranteed installed
-  # this early, and the sysfs vendor files are always present.
+  # Add the NVIDIA CUDA repository only on hosts with an NVIDIA GPU; the driver
+  # packages themselves are installed later via the main packages array (also
+  # GPU-gated). Scan /sys/bus/pci/devices/*/vendor for NVIDIA's PCI vendor id
+  # (0x10de) rather than shelling out to lspci — pciutils is not guaranteed
+  # installed this early, and the sysfs vendor files are always present.
   if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
     "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo
-    "${SUDO[@]}" dnf -y install cuda-toolkit-13-3 cuda-drivers
   else
     printf 'install-packages.sh: no NVIDIA GPU detected; skipping CUDA repo and drivers.\n'
   fi
@@ -117,7 +117,7 @@ EOF
   # Update package metadata before installing anything, since we've added new repos and some of them (e.g. 1Password) are needed to resolve dependencies of packages
   "${SUDO[@]}" dnf makecache
 
-  "${SUDO[@]}" dnf install -y clang21-libs
+  "${SUDO[@]}" dnf install -y clang21-libs kernel kernel-devel kernel-devel-matched kernel-headers
 
   # Install packages, grouped by purpose and alphabetised within each group.
   # steam/discord are bare-metal-only — systemd-detect-virt exits 0 when
@@ -234,6 +234,16 @@ EOF
       steam
     )
   fi
+  # NVIDIA-only — same PCI vendor (0x10de) gate as the CUDA repo above; pulled
+  # from the CUDA repo added earlier in this function.
+  if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+    packages+=(
+      cuda-drivers
+      cuda-toolkit-13-3
+      kmod-nvidia-latest-dkms
+      nvidia-driver
+    )
+  fi
   "${SUDO[@]}" dnf install -y "${packages[@]}"
 }
 
@@ -324,6 +334,12 @@ enable-services() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now tailscaled
   "${SUDO[@]}" systemctl enable --now libvirtd.service
+
+  # Enable the NVIDIA persistence daemon only on NVIDIA hosts, matching the
+  # CUDA driver install gate in install-fedora-packages (PCI vendor 0x10de).
+  if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+    "${SUDO[@]}" systemctl enable nvidia-persistenced
+  fi
 
   # Set up time synchronization
   "${SUDO[@]}" systemctl unmask systemd-timesyncd
