@@ -63,7 +63,7 @@ live_send_leader = "C-b"
 new_session_attach_mode = "tmux"
 default_attach_mode = "tmux"
 click_action = "live_send"
-confirm_before_quit = true
+confirm_before_quit = false
 tie_workdir_to_name = true
 
 [diff]
@@ -71,6 +71,11 @@ context_lines = 3
 split_view = false
 
 [hooks]
+on_create = ["mise trust"]
+on_launch = [
+    "mise trust",
+    "mise install",
+]
 
 [sound]
 enabled = true
@@ -84,9 +89,9 @@ debounce_ms = 100
 has_seen_welcome = true
 has_seen_web_tour = false
 last_seen_version = "1.11.0"
-has_responded_to_telemetry = false
+has_responded_to_telemetry = true
 has_seen_custom_instruction_warning = false
-has_acknowledged_agent_hooks = false
+has_acknowledged_agent_hooks = true
 has_acknowledged_volume_ignores_globs = false
 
 [web]
