@@ -103,6 +103,22 @@ gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
 metadata_expire=1h
 EOF
 
+  # Install Google Chrome repository. Overwrites the disabled google-chrome.repo
+  # that fedora-workstation-repositories ships, pinning Google's own published
+  # definition. baseurl is hardcoded to x86_64 (not $basearch) because Google
+  # publishes no other Linux arch — aarch64/i386 would 404. gpgcheck only, no
+  # repo_gpgcheck: Google's repo metadata is not signed for it (omitting it
+  # matches Google's official definition; adding it would break makecache).
+  "${SUDO[@]}" rpm --import https://dl.google.com/linux/linux_signing_key.pub
+  "${SUDO[@]}" tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'
+[google-chrome]
+name=google-chrome
+baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+EOF
+
   # Add Tailscale repository
   "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
 
@@ -176,6 +192,9 @@ EOF
 
     # Editor
     codium
+
+    # Web browser
+    google-chrome-stable
 
     # Container runtime (rootless Podman + tooling)
     podman
