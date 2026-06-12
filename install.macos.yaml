@@ -45,15 +45,6 @@
     # install.windows.yaml). Runs VS Codium when `code` is invoked.
     ~/.local/bin/code: home/.local/bin/code
 
-    # Codex lifecycle hooks (https://developers.openai.com/codex/hooks): pulse the
-    # MX Master 4 on Stop -> COMPLETED and PermissionRequest -> RINGING via the
-    # mxm4-haptic client, mirroring the @h82/opencode-mxm4-haptic OpenCode plugin.
-    # Codex never writes back to hooks.json (unlike config.toml), so it is a plain
-    # symlink. Linked on Linux + macOS only — the mxm4-haptic client is built
-    # there (not on Windows). Non-managed command hooks must be trusted once via
-    # `/hooks` in the Codex CLI before they run.
-    ~/.codex/hooks.json: codex/hooks.json
-
     # launchd LaunchAgent for the MX Master 4 haptic daemon — the macOS
     # counterpart of the Linux systemd --user unit. Runs ~/.local/bin/mxm4-hapticd
     # (built by the cargo install step below) at login and keeps it alive. The
@@ -63,6 +54,18 @@
 - shell:
     - command: rm -f ~/.docker/config.json
       description: Remove stale ~/.docker/config.json on macOS
+      stdin: true
+      stdout: true
+      stderr: true
+
+# The Codex haptic hooks moved from a symlinked ~/.codex/hooks.json into the
+# managed ~/.codex/config.toml (merged by configure-codex-config). Remove the
+# now-orphaned symlink so Codex doesn't load a dangling hooks.json alongside the
+# inline [hooks]. Only a symlink is removed (a real hooks.json you authored is
+# left alone); no-op when absent. Always exits 0.
+- shell:
+    - command: '[ -L "$HOME/.codex/hooks.json" ] && rm -f "$HOME/.codex/hooks.json" && echo "codex: removed orphaned ~/.codex/hooks.json symlink (hooks now in config.toml)" || true'
+      description: Remove orphaned ~/.codex/hooks.json symlink (hooks merged into config.toml)
       stdin: true
       stdout: true
       stderr: true

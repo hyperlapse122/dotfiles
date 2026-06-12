@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // scripts/bootstrap/configure-codex-config.mjs
 //
 // Merges the repo-tracked, shared OpenAI Codex settings in
@@ -12,13 +12,26 @@
 // is the alternative: it applies ONLY the keys declared in the managed file and
 // preserves every other byte of the live config.
 //
-// It deliberately avoids a full TOML parser (the live file is sensitive — it
-// sits next to auth.json). Instead it performs targeted, TOML-safe edits:
-//   * update a managed key in place when it already exists, or
-//   * insert it (root keys before the first table header; sub-table keys after
-//     the table header; a brand-new table appended at EOF).
-// If updating a key would require touching a multi-line value it cannot safely
-// reason about, it ABORTS without writing rather than risk corrupting the file.
+// RUNS ON BUN (not Node): the managed file is parsed with Bun's built-in
+// `Bun.TOML.parse` — a full TOML parser, so the managed file may use any TOML
+// syntax (array-of-tables like `[[hooks.Stop.hooks]]`, nested tables, inline
+// arrays), not the old hand-rolled "simple TOML" subset. Bun parses TOML but
+// has no serializer, and we deliberately do NOT re-serialize the whole live
+// file (it is sensitive — it sits next to auth.json, and a full rewrite would
+// drop comments and could reshuffle the machine-local `[projects]` table). So
+// the merge stays surgical, with two complementary strategies:
+//   * SCALAR keys (root scalars and scalar keys under plain `[table]` headers):
+//     targeted, TOML-safe edits — update a key in place when it already exists,
+//     or insert it (root keys before the first table header; sub-table keys
+//     after the table header; a brand-new table appended at EOF). If updating a
+//     key would require touching a multi-line value it cannot safely reason
+//     about, it ABORTS without writing rather than risk corrupting the file.
+//   * COMPLEX content (any subtree containing an array-of-tables, e.g. the
+//     `hooks` lifecycle config): serialized to canonical TOML and written as a
+//     single sentinel-delimited block (see BLOCK_BEGIN/BLOCK_END), replaced in
+//     place on re-run or appended at EOF the first time. Array-of-tables are
+//     self-delimiting and valid at EOF after the scalar/`[projects]` content,
+//     which sidesteps TOML's "root keys must precede every table header" rule.
 //
 // Usage: configure-codex-config.mjs [--check] [--print] [--no-backup]
 //   --check       Exit 1 if the live config would change; write nothing.
@@ -40,6 +53,14 @@ const codexHome =
     ? process.env.CODEX_HOME
     : path.join(os.homedir(), '.codex');
 const configPath = path.join(codexHome, 'config.toml');
+
+// Sentinel markers that fence the managed "complex" block (array-of-tables and
+// anything else that can't be expressed as a single `key = value` line) inside
+// the live config. Kept ASCII and stable so the block is found and replaced
+// byte-for-byte on every re-run.
+const BLOCK_BEGIN =
+  '# >>> managed by configure-codex-config (codex/codex-config.managed.toml) - do not edit below >>>';
+const BLOCK_END = '# <<< managed by configure-codex-config <<<';
 
 const args = new Set(process.argv.slice(2));
 
@@ -77,14 +98,17 @@ if (!existsSync(managedPath)) {
   fail(`managed settings file not found: ${managedPath}`);
 }
 
-const assignments = parseManagedToml(readFileSync(managedPath, 'utf8'));
+const { scalars, block } = parseManaged(readFileSync(managedPath, 'utf8'));
 
 const configExisted = existsSync(configPath);
 const original = configExisted ? readFileSync(configPath, 'utf8') : '';
 
 let result = original;
-for (const { table, key, value } of assignments) {
+for (const { table, key, value } of scalars) {
   result = applyAssignment(result, table, key, value);
+}
+if (block !== null) {
+  result = applyManagedBlock(result, block);
 }
 
 if (printOnly) {
@@ -93,7 +117,7 @@ if (printOnly) {
 }
 
 if (result === original) {
-  if (assignments.length === 0) {
+  if (scalars.length === 0 && block === null) {
     log('no managed settings declared; nothing to do.');
   } else {
     log('config already up to date; no changes needed.');
@@ -121,76 +145,294 @@ log(`${configExisted ? 'updated' : 'created'} ${configPath}.`);
 process.exit(0);
 
 // --------------------------------------------------------------------------
-// Managed-file parsing (constrained "simple TOML").
+// Managed-file parsing (full TOML via Bun) + partitioning.
 // --------------------------------------------------------------------------
 
 /**
- * Parse the managed settings file into ordered { table, key, value } records.
- * `table` is '' for the root table. `key` and `value` are the raw left/right
- * text of the first top-level `=` on the line.
+ * @typedef {{ table: string, key: string, value: string }} ScalarAssignment
+ */
+
+/**
+ * Parse the managed settings file with Bun's TOML parser, reject the
+ * machine-local `[projects]` namespace, and split the result into:
+ *   - `scalars`: flat `{ table, key, value }` records for primitives and
+ *     primitive arrays (applied with targeted edits).
+ *   - `block`: canonical TOML text for every top-level subtree that contains an
+ *     array-of-tables (applied as one sentinel-delimited block), or null when
+ *     there is none.
  * @param {string} text
- * @returns {{ table: string, key: string, value: string }[]}
+ * @returns {{ scalars: ScalarAssignment[], block: string | null }}
  */
-function parseManagedToml(text) {
-  /** @type {{ table: string, key: string, value: string }[]} */
-  const out = [];
-  let table = '';
-  const lines = text.split('\n');
-  for (let i = 0; i < lines.length; i += 1) {
-    const raw = lines[i];
-    const line = raw.trim();
-    if (line === '' || line.startsWith('#')) {
-      continue;
-    }
-    if (line.startsWith('[')) {
-      const header = parseTableHeader(line);
-      if (header === null) {
-        fail(`managed file line ${i + 1}: unsupported table header: ${line}`);
-      }
-      if (header === 'projects' || header.startsWith('projects.')) {
-        fail(
-          `managed file line ${i + 1}: refusing to manage the machine-local [projects] table.`,
-        );
-      }
-      table = header;
-      continue;
-    }
-    const eq = line.indexOf('=');
-    if (eq === -1) {
-      fail(`managed file line ${i + 1}: expected 'key = value' or a [table] header: ${line}`);
-    }
-    const key = line.slice(0, eq).trim();
-    const value = line.slice(eq + 1).trim();
-    if (key === '') {
-      fail(`managed file line ${i + 1}: empty key.`);
-    }
-    if (value === '') {
-      fail(`managed file line ${i + 1}: empty value for key '${key}'.`);
-    }
-    if (!isSingleLineValue(value)) {
-      fail(
-        `managed file line ${i + 1}: value for '${key}' is not single-line/balanced; ` +
-          'multi-line values are not supported in the managed file.',
-      );
-    }
-    out.push({ table, key, value });
+function parseManaged(text) {
+  let parsed;
+  try {
+    parsed = Bun.TOML.parse(text);
+  } catch (err) {
+    fail(`could not parse managed settings as TOML: ${err instanceof Error ? err.message : err}`);
   }
-  return out;
+  if (!isPlainObject(parsed)) {
+    fail('managed settings did not parse to a table.');
+  }
+  if (Object.prototype.hasOwnProperty.call(parsed, 'projects')) {
+    fail('refusing to manage the machine-local [projects] table.');
+  }
+
+  /** @type {ScalarAssignment[]} */
+  const scalars = [];
+  /** @type {Record<string, unknown>} */
+  const blockObject = {};
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (containsArrayOfTables(value)) {
+      blockObject[key] = value;
+    } else {
+      flattenScalars(value, [key], scalars);
+    }
+  }
+
+  const block = Object.keys(blockObject).length > 0 ? serializeToml(blockObject) : null;
+  return { scalars, block };
 }
 
 /**
- * Return the inside-bracket name of a standard `[table]` header, or null for
- * anything else (array-of-tables `[[x]]`, malformed, etc.).
- * @param {string} line
- * @returns {string | null}
+ * Flatten a primitive, primitive array, or array-of-tables-free plain object
+ * into `{ table, key, value }` scalar assignments. `pathSegments` is the dotted
+ * path to `value`; its last element is the key and the rest form the table.
+ * @param {unknown} value
+ * @param {string[]} pathSegments
+ * @param {ScalarAssignment[]} out
  */
-function parseTableHeader(line) {
-  const m = /^\[([^[\]]+)\]$/.exec(line);
-  return m ? m[1].trim() : null;
+function flattenScalars(value, pathSegments, out) {
+  if (isScalar(value)) {
+    const key = pathSegments[pathSegments.length - 1];
+    const table = pathSegments.slice(0, -1).join('.');
+    out.push({ table, key, value: serializeValue(value) });
+    return;
+  }
+  if (isPlainObject(value)) {
+    // TOML requires a table's own scalar keys before any nested table header.
+    for (const [k, v] of Object.entries(value)) {
+      if (isScalar(v)) {
+        out.push({ table: pathSegments.join('.'), key: k, value: serializeValue(v) });
+      }
+    }
+    for (const [k, v] of Object.entries(value)) {
+      if (isPlainObject(v)) {
+        flattenScalars(v, [...pathSegments, k], out);
+      }
+    }
+    return;
+  }
+  // Unreachable: array-of-tables subtrees are routed to the block instead.
+  fail(`internal: cannot flatten non-scalar value at ${pathSegments.join('.')}`);
 }
 
 // --------------------------------------------------------------------------
-// Targeted, TOML-safe editing of the live config.
+// Minimal TOML serializer (only what the managed file can contain: scalars,
+// primitive arrays, nested tables, and arrays-of-tables).
+// --------------------------------------------------------------------------
+
+/**
+ * Serialize a plain object to canonical TOML text.
+ * @param {Record<string, unknown>} obj
+ * @returns {string}
+ */
+function serializeToml(obj) {
+  /** @type {string[]} */
+  const lines = [];
+  emitTable(obj, [], lines);
+  // Drop the leading blank line emitted before the first table header.
+  return lines.join('\n').replace(/^\n+/, '').trimEnd();
+}
+
+/**
+ * Emit `obj`'s body — direct scalar keys first, then nested tables, then
+ * arrays-of-tables — appending to `lines`. Intermediate tables with no direct
+ * scalar keys emit no header (e.g. `[hooks]` / `[hooks.Stop]` are elided when
+ * only `[[hooks.Stop.hooks]]` carries data).
+ * @param {Record<string, unknown>} obj
+ * @param {string[]} pathSegments
+ * @param {string[]} lines
+ */
+function emitTable(obj, pathSegments, lines) {
+  const entries = Object.entries(obj);
+
+  for (const [k, v] of entries) {
+    if (isScalar(v)) {
+      lines.push(`${formatKey(k)} = ${serializeValue(v)}`);
+    }
+  }
+  for (const [k, v] of entries) {
+    if (isPlainObject(v)) {
+      const childPath = [...pathSegments, k];
+      if (Object.values(v).some(isScalar)) {
+        lines.push('', `[${formatPath(childPath)}]`);
+      }
+      emitTable(v, childPath, lines);
+    }
+  }
+  for (const [k, v] of entries) {
+    if (isArrayOfTables(v)) {
+      const childPath = [...pathSegments, k];
+      for (const element of v) {
+        lines.push('', `[[${formatPath(childPath)}]]`);
+        emitTable(element, childPath, lines);
+      }
+    }
+  }
+}
+
+/**
+ * Serialize a primitive or primitive array to its single-line TOML form.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function serializeValue(value) {
+  if (typeof value === 'string') {
+    return tomlBasicString(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      fail(`cannot serialize non-finite number: ${value}`);
+    }
+    return String(value);
+  }
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => serializeValue(v)).join(', ')}]`;
+  }
+  fail(`cannot serialize value of type ${typeof value} as a single-line TOML value.`);
+}
+
+/**
+ * Quote a string as a TOML basic string with the required escapes.
+ * @param {string} s
+ * @returns {string}
+ */
+function tomlBasicString(s) {
+  let out = '"';
+  for (const ch of s) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === '\\') out += '\\\\';
+    else if (ch === '"') out += '\\"';
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\t') out += '\\t';
+    else if (ch === '\r') out += '\\r';
+    else if (ch === '\b') out += '\\b';
+    else if (ch === '\f') out += '\\f';
+    else if (code < 0x20 || code === 0x7f) out += `\\u${code.toString(16).padStart(4, '0')}`;
+    else out += ch;
+  }
+  return `${out}"`;
+}
+
+/**
+ * Render one path segment as a bare key when safe, else a quoted key.
+ * @param {string} key
+ * @returns {string}
+ */
+function formatKey(key) {
+  return /^[A-Za-z0-9_-]+$/.test(key) ? key : tomlBasicString(key);
+}
+
+/**
+ * Render a dotted table path, quoting each segment as needed.
+ * @param {string[]} segments
+ * @returns {string}
+ */
+function formatPath(segments) {
+  return segments.map(formatKey).join('.');
+}
+
+// --------------------------------------------------------------------------
+// Value-shape predicates.
+// --------------------------------------------------------------------------
+
+/** @param {unknown} v @returns {boolean} */
+function isPlainObject(v) {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** @param {unknown} v @returns {boolean} */
+function isScalar(v) {
+  if (
+    typeof v === 'string' ||
+    typeof v === 'boolean' ||
+    typeof v === 'number' ||
+    typeof v === 'bigint'
+  ) {
+    return true;
+  }
+  if (Array.isArray(v)) {
+    return v.every(isScalar);
+  }
+  return false;
+}
+
+/** @param {unknown} v @returns {boolean} */
+function isArrayOfTables(v) {
+  return Array.isArray(v) && v.length > 0 && v.every(isPlainObject);
+}
+
+/**
+ * Does `v`, anywhere in its subtree, hold an array-of-tables? Such subtrees
+ * cannot be expressed as single-line assignments and go to the block instead.
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function containsArrayOfTables(v) {
+  if (isArrayOfTables(v)) {
+    return true;
+  }
+  if (Array.isArray(v)) {
+    return v.some(containsArrayOfTables);
+  }
+  if (isPlainObject(v)) {
+    return Object.values(v).some(containsArrayOfTables);
+  }
+  return false;
+}
+
+// --------------------------------------------------------------------------
+// Sentinel-block editing of the live config.
+// --------------------------------------------------------------------------
+
+/**
+ * Replace the managed block in `text` (between BLOCK_BEGIN/BLOCK_END) with
+ * `body`, or append a fresh block at EOF when no markers are present.
+ * @param {string} text
+ * @param {string} body
+ * @returns {string}
+ */
+function applyManagedBlock(text, body) {
+  const fenced = `${BLOCK_BEGIN}\n${body}\n${BLOCK_END}\n`;
+
+  const beginIdx = text.indexOf(BLOCK_BEGIN);
+  if (beginIdx !== -1) {
+    const endIdx = text.indexOf(BLOCK_END, beginIdx);
+    if (endIdx === -1) {
+      fail(`found ${BLOCK_BEGIN} without a matching end marker in ${configPath}; resolve by hand.`);
+    }
+    const nl = text.indexOf('\n', endIdx);
+    const replaceEnd = nl === -1 ? text.length : nl + 1;
+    return `${text.slice(0, beginIdx)}${fenced}${text.slice(replaceEnd)}`;
+  }
+
+  let prefix = text;
+  if (prefix !== '' && !prefix.endsWith('\n')) {
+    prefix += '\n';
+  }
+  const sep = prefix === '' || prefix.endsWith('\n\n') ? '' : '\n';
+  return `${prefix}${sep}${fenced}`;
+}
+
+// --------------------------------------------------------------------------
+// Targeted, TOML-safe editing of the live config (scalar keys).
 // --------------------------------------------------------------------------
 
 /**
@@ -288,6 +530,17 @@ function findHeaderLines(text) {
 }
 
 /**
+ * Return the inside-bracket name of a standard `[table]` header, or null for
+ * anything else (array-of-tables `[[x]]`, malformed, etc.).
+ * @param {string} line
+ * @returns {string | null}
+ */
+function parseTableHeader(line) {
+  const m = /^\[([^[\]]+)\]$/.exec(line);
+  return m ? m[1].trim() : null;
+}
+
+/**
  * Find an assignment for `key` within a region. Returns line/value offsets, or
  * null. Matches the key as the first token before `=` on a non-comment line.
  * @param {string} text
@@ -319,8 +572,8 @@ function findKeyInRegion(text, region, key) {
 
 /**
  * Heuristic: is `value` a complete single-line TOML value (balanced quotes,
- * brackets and braces, not opening a multi-line string)? Used both to validate
- * managed values and to refuse overwriting an ambiguous existing value.
+ * brackets and braces, not opening a multi-line string)? Used to refuse
+ * overwriting an ambiguous existing value in the live config.
  * @param {string} value
  * @returns {boolean}
  */

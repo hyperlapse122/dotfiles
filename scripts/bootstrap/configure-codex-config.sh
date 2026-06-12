@@ -3,7 +3,7 @@
 #
 # POSIX wrapper for configure-codex-config.mjs. Keeps script parity with
 # configure-codex-config.ps1 while the merge logic runs through mise-managed
-# Node.js.
+# Bun (the renderer parses the managed TOML with Bun.TOML.parse).
 
 set -euo pipefail
 
@@ -20,4 +20,4 @@ else
   exit 1
 fi
 
-exec "$MISE_BIN" exec node@latest -- node "$SCRIPT_DIR/configure-codex-config.mjs" "$@"
+exec "$MISE_BIN" exec bun@latest -- bun "$SCRIPT_DIR/configure-codex-config.mjs" "$@"

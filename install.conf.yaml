@@ -81,7 +81,7 @@
     # state back into ~/.codex/config.toml and has no include directive, so this
     # merges only the keys from the top-level codex/codex-config.managed.toml and
     # preserves the machine-local rest. No-op when that file has no active keys.
-    - command: mise exec node -- node scripts/bootstrap/configure-codex-config.mjs
+    - command: mise exec bun -- bun scripts/bootstrap/configure-codex-config.mjs
       description: Merge shared Codex settings into ~/.codex/config.toml
       stdout: true
       stderr: true

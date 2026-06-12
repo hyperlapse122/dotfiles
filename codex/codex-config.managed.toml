@@ -1,50 +1,69 @@
 # codex/codex-config.managed.toml
 #
 # Tracked, repo-managed OpenAI Codex settings. `configure-codex-config.mjs`
-# merges every active assignment below INTO the machine-local
+# (run on Bun) merges every active assignment below INTO the machine-local
 # `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`), creating or
-# overwriting only the keys declared here and leaving everything else in that
-# file untouched.
+# overwriting only the settings declared here and leaving everything else in
+# that file untouched.
 #
 # WHY a renderer instead of a dotbot symlink:
 #   Codex writes machine-local state back into `~/.codex/config.toml` itself —
 #   most notably per-project trust decisions under `[projects."<path>"]`
-#   (trust_level = "trusted"). A symlink would let Codex mutate this repo on
-#   every "trust this folder?" prompt, and Codex has no `include`/import
-#   directive to merge a separate file in. So this file holds ONLY the shared
-#   keys; the script applies them and PRESERVES the machine-local remainder
-#   (the `[projects]` trust table, and anything else you or Codex added).
+#   (trust_level = "trusted") and the plugin/AOE `[[hooks.*]]` entries it
+#   manages. A symlink would let Codex mutate this repo on every "trust this
+#   folder?" prompt, and Codex has no `include`/import directive to merge a
+#   separate file in. So this file holds ONLY the shared keys; the script
+#   applies them and PRESERVES the machine-local remainder (the `[projects]`
+#   trust table, machine-written hooks, and anything else you or Codex added).
 #
-# FORMAT — keep it "simple TOML" (the renderer parses this file, not a full
-# TOML engine):
-#   * One `key = value` assignment per line. Values MUST be single-line
-#     (scalars, inline arrays `[a, b]`, or inline tables `{ x = 1 }`).
-#     No multi-line arrays, no `"""` multi-line strings, no inline `#` comments
-#     after a value.
-#   * Standard `[table]` / `[table.sub]` headers set the table for the
-#     assignments beneath them. Assignments before any header land in the
-#     root table.
-#   * `#` comment lines and blank lines are ignored.
+# FORMAT — this is full TOML, parsed by Bun's `Bun.TOML.parse`:
+#   * Any valid TOML is accepted: scalars, nested `[table]` / `[table.sub]`
+#     headers, inline arrays, and array-of-tables (`[[a.b]]`, as the hooks use
+#     below). The old "one single-line key = value per line" restriction is gone.
+#   * HOW IT MERGES: scalar keys (including scalar keys under plain `[table]`
+#     headers) are merged in place into the live config, key by key. Any subtree
+#     that contains an array-of-tables (the `hooks` block below) is re-serialized
+#     and written as one sentinel-fenced managed block (the renderer emits a
+#     `# >>> managed ... >>>` / `# <<< ... <<<` fence at EOF) that is replaced in
+#     place on every re-run.
 #   * Do NOT declare a `[projects]` table here — that namespace is machine-local
-#     trust state and the renderer must never overwrite it.
+#     trust state and the renderer refuses to manage it.
 #
-# Anything you add here is applied on the next bootstrap (`./install.sh` /
-# `.\install.ps1`) or by running `scripts/bootstrap/configure-codex-config.sh`
-# / `.ps1` manually. The renderer is idempotent and never touches keys it does
-# not manage. Editing a value here re-points that key on the next run; deleting
-# a line here does NOT remove the key from `~/.codex/config.toml` (the renderer
-# only adds/updates), so remove unwanted keys from the live file by hand.
-#
-# Everything below is commented out by default, so a fresh run is a no-op until
-# you opt in. Uncomment / add the keys you actually want shared across machines.
+# Editing a value here re-points that key on the next bootstrap (`./install.sh`
+# / `.\install.ps1`) or by running `scripts/bootstrap/configure-codex-config.sh`
+# / `.ps1` manually. The renderer is idempotent and only ADDS/UPDATES: deleting
+# a scalar line here does NOT remove that key from `~/.codex/config.toml`, and
+# removing the hooks block does NOT delete an already-written managed block —
+# drop unwanted keys/blocks from the live file by hand.
 
-# --- Example: top-level (root-table) keys ---------------------------------
-# model = "gpt-5-codex"
-# model_reasoning_effort = "high"
-# approval_policy = "on-request"
-
-# --- Example: a sub-table -------------------------------------------------
-# [tui]
-# theme = "dark"
-
+# --- Top-level (root-table) keys ------------------------------------------
+# (Examples you could add: model = "gpt-5-codex", approval_policy = "on-request",
+#  or a sub-table such as `[tui]` then `theme = "dark"`.)
 cli_auth_credentials_store = "keyring"
+suppress_unstable_features_warning = true
+
+# --- Codex lifecycle hooks (MX Master 4 haptics) --------------------------
+# Pulse the MX Master 4's built-in haptics on Codex lifecycle events via the
+# `mxm4-haptic` client (~/.local/bin/mxm4-haptic -> the mxm4-hapticd daemon) —
+# the Codex counterpart of the @h82/opencode-mxm4-haptic OpenCode plugin. Each
+# event is an ARRAY of matcher-groups (`[[hooks.Stop]]`), and each group holds a
+# `hooks` array of handlers (`[[hooks.Stop.hooks]]`); `Stop` and
+# `PermissionRequest` ignore the matcher, so each group is unfiltered. The
+# `|| true` guard and 5 s `timeout` keep a missing client or down daemon from
+# ever failing or stalling a Codex turn. Codex requires trusting non-managed
+# command hooks once via `/hooks` in the CLI before they run.
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "\"$HOME/.local/bin/mxm4-haptic\" COMPLETED || true"
+timeout = 5
+statusMessage = "mxm4-haptic: COMPLETED"
+
+[[hooks.PermissionRequest]]
+
+[[hooks.PermissionRequest.hooks]]
+type = "command"
+command = "\"$HOME/.local/bin/mxm4-haptic\" RINGING || true"
+timeout = 5
+statusMessage = "mxm4-haptic: RINGING"

@@ -2,51 +2,62 @@
 
 Tracked, shared **OpenAI Codex** settings for this dotfiles repo.
 
-Two files with **two different delivery mechanisms**, because Codex treats them
-differently:
-
-- `codex-config.managed.toml` is **merged** into `~/.codex/config.toml` by the
-  bootstrap renderer [`scripts/bootstrap/configure-codex-config.mjs`](../scripts/bootstrap/configure-codex-config.mjs)
-  (wrappers: `configure-codex-config.sh` / `.ps1`) — Codex writes machine-local
-  state back into `config.toml`, so it can't be a symlink.
-- `hooks.json` is **symlinked** to `~/.codex/hooks.json` by dotbot — Codex never
-  writes back to it, so a plain symlink is safe (and live edits propagate
-  without re-running bootstrap).
+[`codex-config.managed.toml`](./codex-config.managed.toml) holds the shared
+settings — scalar keys **and** the MX Master 4 haptic lifecycle hooks. The
+bootstrap renderer
+[`scripts/bootstrap/configure-codex-config.mjs`](../scripts/bootstrap/configure-codex-config.mjs)
+(run on **Bun**; wrappers: `configure-codex-config.sh` / `.ps1`) **merges** it
+into `~/.codex/config.toml`. It can't be a dotbot symlink: Codex writes
+machine-local state back into `config.toml` (per-project `[projects]` trust, the
+`[[hooks.*]]` entries it manages for plugins), so the renderer applies only the
+declared settings and preserves everything else.
 
 ## Contents
 
 | File | Purpose |
 |---|---|
-| `codex-config.managed.toml` | The shared Codex settings, as constrained "simple TOML" (one `key = value` per line under standard `[table]` headers). Edit this to change what every machine gets. Ships all-commented (a no-op) by default. |
-| `hooks.json` | [Codex lifecycle hooks](https://developers.openai.com/codex/hooks) that pulse the MX Master 4 mouse via the `mxm4-haptic` client. Symlinked to `~/.codex/hooks.json` on Linux + macOS. See **Haptic hooks** below. |
+| `codex-config.managed.toml` | The shared Codex settings — scalar keys plus the `[[hooks.*]]` MX Master 4 haptic lifecycle hooks. Full TOML, parsed by Bun. Edit this to change what every machine gets. |
 
 ## Why a renderer instead of a dotbot symlink
 
 Codex writes machine-local state back into `~/.codex/config.toml` itself — most
-importantly per-project trust decisions under `[projects."<path>"]` — and has no
-`include`/import directive to merge a separate tracked file in. A symlink would
-let Codex mutate this repo on every "trust this folder?" prompt.
+importantly per-project trust decisions under `[projects."<path>"]`, plus the
+`[[hooks.*]]` entries it manages for installed plugins. A symlink would let Codex
+mutate this repo on every "trust this folder?" prompt, and Codex has no
+`include`/import directive to merge a separate tracked file in.
 
-So `codex-config.managed.toml` holds **only** the shared keys, and the renderer
-merges them into `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) with
-targeted, TOML-safe edits, **preserving** every machine-local byte (the
-`[projects]` trust table and anything else you or Codex added). It runs as a
-shared `install.conf.yaml` `shell:` step on every OS, is idempotent, backs up to
-`config.toml.bak` before changing, and aborts rather than corrupt an ambiguous
-multi-line value.
+So `codex-config.managed.toml` holds **only** the shared settings, and the
+renderer merges them into `$CODEX_HOME/config.toml` (default
+`~/.codex/config.toml`) two ways, **preserving** every machine-local byte:
+
+- **Scalar keys** (root scalars and scalar keys under `[table]` headers) get
+  targeted, TOML-safe edits — updated in place when present, else inserted
+  (root keys before the first table header; sub-table keys inside their table).
+- **Array-of-tables** (the `hooks` block) are re-serialized and written as one
+  sentinel-fenced managed block (`# >>> managed … >>>` / `# <<< … <<<`),
+  appended at EOF and replaced in place on every re-run. Array-of-tables are
+  valid at EOF after the `[projects]` trust table, which sidesteps TOML's
+  "root keys must precede every table header" rule.
+
+It runs as a shared `install.conf.yaml` `shell:` step on every OS through
+mise-managed **Bun** (whose built-in `Bun.TOML.parse` reads the managed file),
+is idempotent, backs up to `config.toml.bak` before changing, and aborts rather
+than corrupt an ambiguous multi-line value.
 
 Run it manually with `scripts/bootstrap/configure-codex-config.sh` (or `.ps1`);
 `--check` / `--print` / `--no-backup` are supported.
 
 ## Editing the managed settings
 
-- Keep it "simple TOML": one single-line `key = value` per line under standard
-  `[table]` / `[table.sub]` headers; `#` comments and blank lines are ignored.
+- It's **full TOML** (parsed by Bun's `Bun.TOML.parse`): scalars, nested
+  `[table]` / `[table.sub]` headers, inline arrays, and array-of-tables
+  (`[[a.b]]`, as the hooks use) are all valid.
 - Do **not** declare a `[projects]` table here — that namespace is machine-local
-  trust state the renderer must never overwrite.
-- The renderer only **adds/updates** keys. Deleting a line here does **not**
-  remove that key from `~/.codex/config.toml`; drop unwanted keys from the live
-  file by hand.
+  trust state the renderer refuses to manage.
+- The renderer only **adds/updates**. Deleting a scalar line here does **not**
+  remove that key from `~/.codex/config.toml`, and removing the hooks block does
+  **not** delete an already-written managed block; drop unwanted keys/blocks from
+  the live file by hand.
 
 See the header of [`codex-config.managed.toml`](./codex-config.managed.toml) for
 the full format notes, and the repo-root [`AGENTS.md`](../AGENTS.md) for the
@@ -54,9 +65,11 @@ rationale in the agent contract.
 
 ## Haptic hooks
 
-[`hooks.json`](./hooks.json) is the Codex counterpart of the
+The `[[hooks.Stop]]` / `[[hooks.PermissionRequest]]` entries in
+[`codex-config.managed.toml`](./codex-config.managed.toml) are the Codex
+counterpart of the
 [`@h82/opencode-mxm4-haptic`](../packages/opencode-mxm4-haptic/) OpenCode plugin:
-it pulses the MX Master 4's built-in haptics on Codex lifecycle events so you can
+they pulse the MX Master 4's built-in haptics on Codex lifecycle events so you can
 *feel* an agent run finish or ask for a decision. Each hook shells out to the
 [`mxm4-haptic`](../crates/mxm4-haptic/) client (`~/.local/bin/mxm4-haptic`), which
 forwards a waveform to the running `mxm4-hapticd` daemon.
@@ -73,16 +86,23 @@ Each command is guarded with `|| true` and a 5 s `timeout`, so a missing client
 (e.g. on a machine where the daemon isn't installed) or a down daemon never fails
 or stalls a Codex turn.
 
+In Codex's hook schema each event is an **array of matcher-groups**
+(`[[hooks.Stop]]`), and each group carries a `hooks` array of handlers
+(`[[hooks.Stop.hooks]]`); `Stop` / `PermissionRequest` ignore the matcher, so each
+group is unfiltered. The renderer appends our group at EOF, so it coexists with
+any `[[hooks.Stop]]` Codex or another plugin already wrote — Codex runs every
+matching group, so both fire.
+
 ### Setup
 
-- **Linked on Linux + macOS only.** [`../install.linux.yaml`](../install.linux.yaml)
-  and [`../install.macos.yaml`](../install.macos.yaml) symlink
-  `~/.codex/hooks.json → codex/hooks.json`. Windows is excluded — the
-  `mxm4-haptic` client isn't built there.
+- **Merged on every OS; active on Linux + macOS.** The shared `install.conf.yaml`
+  step merges the hooks into `~/.codex/config.toml` on all platforms, but the
+  `mxm4-haptic` client is only built on Linux + macOS — on Windows the guarded
+  command is a harmless no-op (the binary isn't there).
 - **Trust it once.** Codex requires reviewing and trusting non-managed command
-  hooks before they run. After the first link (or any edit to `hooks.json`), run
-  `/hooks` in the Codex CLI and trust the two hooks. Codex records trust against
-  the hook's hash, so editing the file marks it for re-review.
+  hooks before they run. After the hooks first land in `config.toml` (or any edit
+  to them), run `/hooks` in the Codex CLI and trust the two hooks. Codex records
+  trust against the hook's hash, so editing them marks them for re-review.
 - **Daemon must be running.** The hooks are no-ops (pulse skipped) unless
   `mxm4-hapticd` is up — `systemctl --user status mxm4-hapticd.service` (Linux)
   or the launchd agent (macOS). See the root [`AGENTS.md`](../AGENTS.md) "Solaar

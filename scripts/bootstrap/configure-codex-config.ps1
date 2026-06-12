@@ -3,7 +3,7 @@
 #
 # PowerShell wrapper for configure-codex-config.mjs. Keeps script parity with
 # configure-codex-config.sh while the merge logic runs through mise-managed
-# Node.js.
+# Bun (the renderer parses the managed TOML with Bun.TOML.parse).
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -23,5 +23,5 @@ if (Test-CommandExists 'mise') {
     exit 1
 }
 
-& $MiseBin exec node@latest -- node (Join-Path $ScriptDir 'configure-codex-config.mjs') @args
+& $MiseBin exec bun@latest -- bun (Join-Path $ScriptDir 'configure-codex-config.mjs') @args
 exit $LASTEXITCODE
