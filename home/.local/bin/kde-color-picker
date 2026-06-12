@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# kde-color-picker — PowerToys-style screen color picker for KDE Plasma (Wayland).
+#
+# Pops KWin's native color-picker crosshair, copies the picked pixel to the
+# clipboard as #RRGGBB, prints it to stdout, and shows a brief notification.
+# Bound to Meta+Shift+C as a GLOBAL shortcut by the sibling desktop entry
+# home/.local/share/applications/kde-color-picker.desktop (its X-KDE-Shortcuts
+# key) — the same mechanism home/.local/share/applications/1password.desktop and
+# Spectacle use.
+#
+# Single-platform by design (no .ps1 mate): it drives KWin's
+# org.kde.kwin.ColorPicker D-Bus interface (Plasma/KWin only) and wl-copy
+# (Wayland). Every dependency ships with a Fedora KDE install: gdbus (glib2),
+# wl-copy (wl-clipboard — already in scripts/linux/install-packages.sh) and
+# notify-send (libnotify), so no extra package is needed.
+#
+# KWin exports /ColorPicker with a pick() method that returns the color as a (u)
+# struct of QColor::rgba() — packed 0xAARRGGBB, so opaque screen pixels come back
+# as 0xFFRRGGBB. pick() is a *delayed* D-Bus reply that blocks until the user
+# clicks (left click / Enter) or cancels (Escape / right click); cancelling
+# returns the D-Bus error org.kde.kwin.ColorPicker.Error.Cancelled, so a non-zero
+# gdbus exit means "cancelled or unavailable" and nothing is copied.
+
+set -euo pipefail
+
+# pick() blocks for as long as the crosshair is up, so use a generous D-Bus
+# timeout (seconds) rather than the 25s default. A non-zero exit is the cancel /
+# unavailable path: swallow it and quit cleanly without touching the clipboard.
+reply=$(gdbus call --session \
+  --dest org.kde.KWin \
+  --object-path /ColorPicker \
+  --method org.kde.kwin.ColorPicker.pick \
+  --timeout 120 2>/dev/null) || exit 0
+
+# reply looks like: "(uint32 4283531600,)" — pull the decimal QRgb out of the
+# struct. Strips up to "uint32 " then keeps the leading run of digits; an
+# unexpected shape leaves rgba empty and we bail.
+rgba=${reply#*uint32 }
+rgba=${rgba%%[!0-9]*}
+[ -n "$rgba" ] || exit 0
+
+# Mask the alpha byte off 0xAARRGGBB to get RRGGBB. 10# forces base-10 so a
+# value is never misread as octal.
+hex=$(printf '#%06X' "$(( (10#$rgba) & 0xFFFFFF ))")
+
+printf '%s' "$hex" | wl-copy          # exact "#RRGGBB", no trailing newline
+notify-send --app-name='Color Picker' --icon=color-picker \
+  --expire-time=2000 'Color copied' "$hex" 2>/dev/null || true
+printf '%s\n' "$hex"                   # echo for CLI use: c=$(kde-color-picker)
