@@ -187,12 +187,6 @@ EOF
     fuse-overlayfs
     slirp4netns
 
-    # Browser. Chromium (Fedora base repo) NOT google-chrome-stable: only the
-    # Chromium build compiles in the per-user external-extensions provider, so
-    # it honors the ~/.config/chromium/External Extensions/ auto-install
-    # mechanism whose maintained extension set lives under home/.config/chromium/.
-    chromium
-
     # Screen recording / streaming / video editing
     kdenlive
     obs-studio
