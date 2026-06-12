@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/linux/config-kde.sh
 #
-# Combined KDE Plasma 6 user-side configuration. Ten independent steps,
+# Combined KDE Plasma 6 user-side configuration. Twelve independent steps,
 # each guarded so a missing prerequisite skips that step alone (returning 0)
 # without taking the whole script down:
 #
@@ -147,6 +147,29 @@
 #                 long-lived process), so kwriteconfig6 creates/edits it
 #                 directly with no file-exists guard. Applies to the next
 #                 Dolphin launch; the write is idempotent.
+#
+#  12. dimscreen - kwriteconfig6 -> ~/.config/powerdevilrc
+#                   [AC][Display]         DimDisplayWhenIdle       = false
+#                                         DimDisplayIdleTimeoutSec = -1
+#                   [Battery][Display]    DimDisplayWhenIdle       = false
+#                                         DimDisplayIdleTimeoutSec = -1
+#                   [LowBattery][Display] DimDisplayWhenIdle       = false
+#                                         DimDisplayIdleTimeoutSec = -1
+#                 Disables PowerDevil's inactivity screen-dimming action in
+#                 every power profile (AC / Battery / LowBattery). Matches the
+#                 "자동으로 어둡게 하기 / Dim screen" dropdown set to "하지 않음
+#                 / Never" on the System Settings "디스플레이와 밝기 / Display &
+#                 Brightness" page. DimDisplayWhenIdle=false is the toggle that
+#                 gates the action; DimDisplayIdleTimeoutSec=-1 mirrors the KCM's
+#                 "never" sentinel so the written state is byte-identical to the
+#                 GUI's. Plasma 6 keeps power settings in powerdevilrc (the
+#                 Plasma 5 powermanagementprofilesrc is migrated to it, recorded
+#                 by its [Migration] MigratedProfilesToPlasma6 marker). Like
+#                 krunnerrc/dolphinrc, powerdevilrc is read - not rewritten - by
+#                 the powerdevil daemon, so kwriteconfig6 writes it directly with
+#                 no file-exists guard; the change applies after re-login or when
+#                 powerdevil reloads its config. The companion "화면 끄기 / Turn
+#                 off screen" (TurnOffDisplay*) action is left untouched.
 #
 # Single-platform (Linux only) by design. KDE Plasma is a Linux desktop
 # environment; macOS uses native font/touchpad APIs and Windows uses the
@@ -881,6 +904,50 @@ configure_dolphin() {
 }
 
 # ===========================================================================
+# Step 12: dimscreen (disable automatic screen dimming on inactivity)
+# ===========================================================================
+#
+# Turns off PowerDevil's idle screen-dimming action for every power profile by
+# setting DimDisplayWhenIdle=false (the gating toggle) plus
+# DimDisplayIdleTimeoutSec=-1 (the KCM's "never" sentinel, so the written state
+# matches the GUI byte-for-byte) under [<profile>][Display] in
+# ~/.config/powerdevilrc, for profiles AC, Battery, and LowBattery. This is the
+# "자동으로 어둡게 하기 / Dim screen" dropdown on the "디스플레이와 밝기 /
+# Display & Brightness" page; disabling it across all profiles stops the
+# display dimming on idle whether on mains or battery. The companion
+# "화면 끄기 / Turn off screen" action (TurnOffDisplay*) is intentionally left
+# alone.
+#
+# Plasma 6 stores power settings in powerdevilrc (the Plasma 5
+# powermanagementprofilesrc is migrated to it, recorded by its [Migration]
+# MigratedProfilesToPlasma6 marker). powerdevilrc is read - not rewritten - by
+# the powerdevil daemon, so like krunnerrc/dolphinrc kwriteconfig6 can
+# create/edit it directly with no file-exists guard. The write is idempotent
+# and applies after re-login or when powerdevil reloads its config. The -1
+# value is passed after `--` so kwriteconfig6 does not parse it as a flag.
+
+configure_dimscreen() {
+  printf 'config-kde.sh: [dimscreen] disabling automatic screen dimming on inactivity...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local profile
+  for profile in AC Battery LowBattery; do
+    kwriteconfig6 --file powerdevilrc \
+      --group "$profile" --group Display \
+      --key DimDisplayWhenIdle --type bool false
+    kwriteconfig6 --file powerdevilrc \
+      --group "$profile" --group Display \
+      --key DimDisplayIdleTimeoutSec --type int -- -1
+    printf '  set [%s][Display] DimDisplayWhenIdle = false, DimDisplayIdleTimeoutSec = -1\n' \
+      "$profile"
+  done
+}
+
+# ===========================================================================
 # Run all steps. Each is independent; set -e propagates any real failure.
 # ===========================================================================
 
@@ -895,5 +962,6 @@ configure_edges
 configure_krunner
 configure_killrunner
 configure_dolphin
+configure_dimscreen
 
-printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes; KRunner and Dolphin pick up their changes on next launch.\n'
+printf 'config-kde.sh: done. Restart plasmashell or re-login to fully apply font, panel, digital clock, and calendar changes; restart KWin (kwin_wayland --replace) or re-login to apply the virtual keyboard and edge changes; KRunner and Dolphin pick up their changes on next launch; the screen-dimming change applies after re-login or when powerdevil reloads its config.\n'
