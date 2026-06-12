@@ -47,7 +47,7 @@ usage = "latest"
 # Agentic AI
 claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest" }
-"npm:@openai/codex" = { version = "latest" }
+"npm:@openai/codex" = "latest"
 "github:njbrake/agent-of-empires" = { version = "latest", rename_exe = "aoe", os = [
   "linux",
   "macos",
