@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+# TODO: Render package list first and skip execution when all packages are installed
+
 # Use sudo only when not already root (matches install-linux-system-config.sh).
 # Throw early if neither root nor sudo is available — dnf/systemctl need it.
 if [[ "${EUID}" -eq 0 ]]; then
