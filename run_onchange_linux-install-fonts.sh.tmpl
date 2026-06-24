@@ -1,0 +1,219 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# scripts/bootstrap/install-fonts.sh
+#
+# Installs desktop fonts user-wide (no sudo) on macOS and Linux by downloading
+# release archives from GitHub. Add new fonts by appending one record to the
+# shared fonts.registry file (next to this script).
+#
+# Defaults: skips a font when its marker file already exists in the user font
+# directory. Pass --force to reinstall everything.
+#
+# Windows counterpart: install-fonts.ps1 (see scripts/README.md). Together they
+# satisfy the script-parity rule in ../AGENTS.md.
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Font registry. The data lives in one shared file, fonts.registry (next to
+# this script), so install-fonts.sh and install-fonts.ps1 never drift. To add
+# a font, append one pipe-delimited record there:
+#
+#   name|repo|tag|asset_pattern|sha256|marker_glob|src_dirs
+#
+# - name           Human-readable label used in log lines.
+# - repo           GitHub <owner>/<repo>.
+# - tag            Release tag to pin (the asset is downloaded from this exact
+#                  release, never "latest", so installs are reproducible).
+# - asset_pattern  Glob handed to `gh release download --pattern`. Must match
+#                  exactly one asset in the pinned release.
+# - sha256         Expected SHA-256 of the downloaded asset. Verified before
+#                  extraction; a mismatch aborts the install for that font.
+# - marker_glob    Filename or glob pattern (e.g. `Foo-Ver*.ttf`) that matches
+#                  at least one file installed by this entry. If any file in
+#                  the user font directory matches the glob, the entry is
+#                  treated as already installed (re-run with --force to
+#                  override). Pick a marker distinct from other registry
+#                  entries' markers to avoid false positives.
+# - src_dirs       Comma-separated list of directories *inside the unzipped
+#                  archive* whose .ttf, .otf, and .ttc files should be
+#                  installed. Use "." for the archive root. Other files are
+#                  ignored.
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FONTS=()
+while IFS= read -r line; do
+  [[ -z "$line" || "$line" == \#* ]] && continue
+  FONTS+=("$line")
+done <<'EOF'
+{{ .fonts.legacyFontsList }}
+EOF
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+usage() {
+  cat <<'EOF'
+Usage: install-fonts.sh [--force] [--help]
+
+  -f, --force   Reinstall fonts even when the marker file is already present.
+  -h, --help    Show this message and exit.
+
+Add new fonts by editing the shared fonts.registry file (next to this script).
+EOF
+}
+
+log() { printf 'install-fonts.sh: %s\n' "$*"; }
+err() { printf 'install-fonts.sh: %s\n' "$*" >&2; }
+
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+# Resolve user font directory per OS (XDG-compliant on Linux, ~/Library/Fonts
+# on macOS). Both paths are picked up automatically by the OS font subsystem.
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) USER_FONT_DIR="$HOME/Library/Fonts" ;;
+    Linux)  USER_FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts" ;;
+    *)
+      err "unsupported OS: $(uname -s); use install-fonts.ps1 on Windows."
+      exit 1
+      ;;
+  esac
+}
+
+# Pick a `gh` invocation, mirroring auth-gh.sh: prefer system gh, fall back to
+# mise-managed `gh@latest`, error otherwise.
+detect_gh() {
+  if command -v gh >/dev/null 2>&1; then
+    GH=(gh)
+  elif command -v mise >/dev/null 2>&1; then
+    GH=(mise exec gh@latest -- gh)
+  else
+    err "gh not found and mise unavailable as fallback."
+    err "install GitHub CLI (https://cli.github.com/) or mise (https://mise.jdx.dev/)."
+    exit 1
+  fi
+}
+
+require_cmd() {
+  for cmd in "$@"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      err "required command not found: $cmd"
+      exit 1
+    fi
+  done
+}
+
+# Install all .ttf, .otf, and .ttc files from listed src_dirs into
+# USER_FONT_DIR. Skipped when a file matching marker_glob already exists.
+install_font() {
+  local name="$1" repo="$2" tag="$3" pattern="$4" sha256="$5" marker="$6" src_dirs="$7"
+
+  # `find -iname` accepts shell-style globs (and is case-insensitive), so the
+  # same code path handles exact-match markers and patterns like `Foo-Ver*.ttf`.
+  local marker_match
+  marker_match="$(find "$USER_FONT_DIR" -maxdepth 1 -type f -iname "$marker" -print -quit 2>/dev/null || true)"
+  if [[ -n "$marker_match" && "$FORCE" -eq 0 ]]; then
+    log "$name: already installed (matched: $(basename "$marker_match")) — use --force to reinstall"
+    return 0
+  fi
+
+  log "$name: downloading from github.com/$repo (pattern: $pattern)"
+
+  local work="$TMP_ROOT/$name"
+  mkdir -p "$work"
+
+  "${GH[@]}" release download "$tag" \
+    --repo "$repo" \
+    --pattern "$pattern" \
+    --dir "$work" \
+    --clobber
+
+  local zip
+  zip="$(find "$work" -maxdepth 1 -name '*.zip' -print -quit)"
+  if [[ -z "$zip" ]]; then
+    err "$name: no archive downloaded for pattern $pattern"
+    return 1
+  fi
+
+  local actual
+  actual="$(hash_file "$zip")"
+  if [[ "$actual" != "$sha256" ]]; then
+    err "$name: sha256 mismatch for $(basename "$zip") (expected $sha256, got $actual) — refusing to install"
+    return 1
+  fi
+  log "$name: sha256 verified"
+
+  log "$name: extracting $(basename "$zip")"
+  local extracted="$work/extracted"
+  mkdir -p "$extracted"
+  unzip -q -o "$zip" -d "$extracted"
+
+  mkdir -p "$USER_FONT_DIR"
+
+  local count=0
+  IFS=',' read -ra dirs <<<"$src_dirs"
+  for dir in "${dirs[@]}"; do
+    local src="$extracted/$dir"
+    [[ -d "$src" ]] || continue
+
+    while IFS= read -r -d '' file; do
+      install -m 644 "$file" "$USER_FONT_DIR/"
+      count=$((count + 1))
+    done < <(find "$src" -maxdepth 1 -type f \( -iname '*.ttf' -o -iname '*.otf' -o -iname '*.ttc' \) -print0)
+  done
+
+  if [[ $count -eq 0 ]]; then
+    err "$name: no .ttf/.otf/.ttc files found under: $src_dirs"
+    return 1
+  fi
+
+  log "$name: installed $count font file(s) to $USER_FONT_DIR"
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+FORCE=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f|--force) FORCE=1 ;;
+    -h|--help)  usage; exit 0 ;;
+    *)          err "unknown argument: $1"; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+detect_os
+detect_gh
+require_cmd unzip find install mktemp
+
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+mkdir -p "$USER_FONT_DIR"
+
+for entry in "${FONTS[@]}"; do
+  IFS='|' read -r name repo tag pattern sha256 marker src_dirs <<<"$entry"
+  install_font "$name" "$repo" "$tag" "$pattern" "$sha256" "$marker" "$src_dirs"
+done
+
+# Refresh fontconfig cache on Linux so just-installed fonts become visible
+# without re-login. macOS picks them up automatically; CoreText scans on demand.
+if [[ "$(uname -s)" == "Linux" ]] && command -v fc-cache >/dev/null 2>&1; then
+  log "refreshing font cache (fc-cache -f)"
+  fc-cache -f "$USER_FONT_DIR" >/dev/null
+fi
+
+log "done"
+
+{{ end -}}

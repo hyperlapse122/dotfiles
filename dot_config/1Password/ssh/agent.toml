@@ -1,0 +1,6 @@
+# Reference: https://developer.1password.com/docs/ssh/agent/config
+[[ssh-keys]]
+item = "cwgsuvmyhwtnwiir3sqcdeaglm"
+
+[[ssh-keys]]
+item = "5rocflo3i7h7yyich4e4k4zqgi"

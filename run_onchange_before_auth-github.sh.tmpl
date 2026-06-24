@@ -1,0 +1,10 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+gh auth login --hostname github.com --git-protocol https --with-token <<EOF
+{{ onepasswordRead "op://Private/GitHub/PAT" }}
+EOF
+
+{{ end -}}

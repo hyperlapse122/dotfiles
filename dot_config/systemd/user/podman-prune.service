@@ -1,0 +1,7 @@
+[Unit]
+Description=Podman prune — remove unused containers, images, and anonymous volumes
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman system prune --force
+ExecStart=/usr/bin/podman volume prune --force

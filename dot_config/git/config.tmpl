@@ -1,0 +1,58 @@
+[commit]
+	gpgsign = true
+
+[core]
+	autocrlf = false
+
+[credential]
+	credentialStore = "secretservice"
+	guiPrompt = "true"
+	helper = "!git-credential-manager"
+
+[credential "https://dev.azure.com"]
+	useHttpPath = true
+
+[filter "lfs"]
+	clean = "git-lfs clean -- %f"
+	process = "git-lfs filter-process"
+	required = true
+	smudge = "git-lfs smudge -- %f"
+
+[init]
+	defaultBranch = "main"
+
+[pull]
+	rebase = true
+
+[push]
+	autoSetupRemote = true
+	recurseSubmodules = "check"
+
+[tag]
+	gpgSign = true
+
+[user]
+	email = {{ .user.email | quote }}
+	name = {{ .user.fullname | quote }}
+	signingkey = {{ .user.gpgPubKey | quote }}
+
+{{ include (joinPath .chezmoi.sourceFile ".." (printf ".config_%s" .chezmoi.os)) }}
+
+[credential "https://gist.github.com"]
+	helper = ""
+	helper = "!gh auth git-credential"
+
+[credential "https://git.jpi.app"]
+	helper = ""
+	helper = "!glab auth git-credential"
+
+[credential "https://github.com"]
+	helper = ""
+	helper = "!gh auth git-credential"
+
+[credential "https://gitlab.com"]
+	helper = ""
+	helper = "!glab auth git-credential"
+
+[trim]
+	bases = main,develop,staging

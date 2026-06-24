@@ -1,0 +1,185 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	"autoupdate": false,
+	"plugin": [
+		"oh-my-openagent@4.13.0",
+		"@ex-machina/opencode-anthropic-auth@1.8.1",
+		"@anthonyhaussman/opencode-agy-auth@1.0.9"
+	],
+	"lsp": {
+		"buf": {
+			"command": [
+				"mise",
+				"exec",
+				"-q",
+				"npm:@bufbuild/buf@latest",
+				"--",
+				"buf",
+				"lsp",
+				"serve"
+			],
+			"extensions": [
+				".proto"
+			]
+		},
+		"eslint": {
+			"command": [
+				"mise",
+				"exec",
+				"npm:vscode-langservers-extracted",
+				"--",
+				"vscode-eslint-language-server",
+				"--stdio"
+			],
+			"extensions": [
+				".js",
+				".jsx",
+				".ts",
+				".tsx",
+				".mjs",
+				".mts",
+				".cjs",
+				".cts",
+				".vue"
+			],
+			"initialization": {
+				"validate": "on",
+				"workingDirectories": [
+					{
+						"mode": "auto"
+					}
+				]
+			}
+		},
+		"marksman": {
+			"command": [
+				"mise",
+				"exec",
+				"-q",
+				"marksman",
+				"--",
+				"marksman"
+			],
+			"extensions": [
+				".md"
+			]
+		}
+	},
+	"mcp": {
+		"context7": {
+			"type": "remote",
+			"enabled": true,
+			"url": "https://mcp.context7.com/mcp",
+			"headers": {
+				"CONTEXT7_API_KEY": "{file:./secrets/context7-api-key}"
+			}
+		},
+		"websearch": {
+			"type": "remote",
+			"enabled": true,
+			"url": "https://mcp.exa.ai/mcp",
+			"headers": {
+				"x-api-key": "{file:./secrets/exa-api-key}"
+			}
+		}
+	},
+	"model": "openai/gpt-5.5",
+	"permission": {
+		"read": {
+			"**": "allow",
+			"~/.secrets/**": "deny",
+			"/home/h82/.secrets/**": "deny",
+			"~/.local/share/opencode/auth*": "deny",
+			"/home/h82/.local/share/opencode/auth*": "deny",
+			"~/.config/glab-cli/config.yml": "deny",
+			"/home/h82/.config/glab-cli/config.yml": "deny",
+			"~/.config/opencode/opencode.json": "deny",
+			"/home/h82/.config/opencode/opencode.json": "deny",
+			"/tmp/**": "deny",
+			"/var/tmp/**": "deny",
+			"/dev/shm/**": "deny"
+		},
+		"edit": {
+			"~/.secrets/**": "deny",
+			"/home/h82/.secrets/**": "deny",
+			"~/.local/share/opencode/auth*": "deny",
+			"/home/h82/.local/share/opencode/auth*": "deny",
+			"~/.config/glab-cli/config.yml": "deny",
+			"/home/h82/.config/glab-cli/config.yml": "deny",
+			"~/.config/opencode/opencode.json": "deny",
+			"/home/h82/.config/opencode/opencode.json": "deny",
+			"/tmp/**": "deny",
+			"/var/tmp/**": "deny",
+			"/dev/shm/**": "deny"
+		},
+		"glob": {
+			"~/.secrets/**": "deny",
+			"/home/h82/.secrets/**": "deny",
+			"~/.local/share/opencode/auth*": "deny",
+			"/home/h82/.local/share/opencode/auth*": "deny",
+			"~/.config/glab-cli/config.yml": "deny",
+			"/home/h82/.config/glab-cli/config.yml": "deny",
+			"~/.config/opencode/opencode.json": "deny",
+			"/home/h82/.config/opencode/opencode.json": "deny",
+			"/tmp/**": "deny",
+			"/var/tmp/**": "deny",
+			"/dev/shm/**": "deny"
+		},
+		"bash": {
+			"*": "allow",
+			"cat ~/.secrets/*": "deny",
+			"cat /home/h82/.secrets/*": "deny",
+			"cat ~/.local/share/opencode/auth*": "deny",
+			"cat /home/h82/.local/share/opencode/auth*": "deny",
+			"cat ~/.config/glab-cli/config.yml": "deny",
+			"cat /home/h82/.config/glab-cli/config.yml": "deny",
+			"cat ~/.config/opencode/opencode.json": "deny",
+			"cat /home/h82/.config/opencode/opencode.json": "deny",
+			"glab auth status -t": "deny",
+			"glab auth status --show-token": "deny"
+		}
+	},
+	"provider": {
+		"opencode": {
+			"options": {
+				"apiKey": "{file:./secrets/opencode-api-key}"
+			}
+		},
+		"openrouter": {
+			"options": {
+				"apiKey": "{file:./secrets/openrouter-api-key}",
+				"headers": {
+					"HTTP-Referer": "https://opencode.ai/",
+					"X-OpenRouter-Title": "OpenCode",
+					"X-OpenRouter-Categories": "cli-agent"
+				}
+			},
+			"models": {
+				"openrouter/free": {
+					"name": "Free Models Router",
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					}
+				}
+			}
+		},
+		"anthropic": {
+			"models": {
+				"claude-sonnet-4-6": {
+					"limit": {
+						"context": 200000,
+						"output": 64000,
+						"input": 200000
+					}
+				}
+			}
+		}
+	},
+	"small_model": "openai/gpt-5.4-mini",
+	"experimental": {
+		"continue_loop_on_deny": true
+	}
+}

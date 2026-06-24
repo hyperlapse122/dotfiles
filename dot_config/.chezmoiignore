@@ -1,0 +1,15 @@
+# Linux-only directories
+{{- if ne .chezmoi.os "linux" }}
+autostart
+containers
+environment.d
+fcitx5
+solaar
+systemd
+wireplumber
+{{- end }}
+
+# zsh cannot be used from Windows
+{{- if eq .chezmoi.os "windows" }}
+zsh
+{{- end }}

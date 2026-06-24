@@ -1,0 +1,11 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+gpg --batch --import <<EOF
+{{ onepasswordRead "op://tjlmijoc5qxj6vypdnvxf6s2sq/gmwqu34rldszc6qtas2i3ejiaq/4v5dbrerpkyiueq2st26sswzna" }}
+EOF
+expect -c 'spawn gpg --edit-key {{ .user.gpgPubKey | quote }} trust quit; send "5\ry\r"; expect eof'
+
+{{ end -}}

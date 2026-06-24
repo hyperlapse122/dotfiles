@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Podman prune timer
+
+[Timer]
+OnCalendar=Mon 03:00
+Persistent=true
+RandomizedDelaySec=1h
+Unit=podman-prune.service
+
+[Install]
+WantedBy=timers.target

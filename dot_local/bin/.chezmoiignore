@@ -1,0 +1,10 @@
+# POSIX-only
+{{- if eq .chezmoi.os "windows" }}
+*
+!*.ps1
+{{- end }}
+
+# Windows only
+{{- if ne .chezmoi.os "windows" }}
+*.ps1
+{{- end }}

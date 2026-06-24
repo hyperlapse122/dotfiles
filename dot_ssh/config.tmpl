@@ -1,0 +1,4 @@
+# non-Windows only
+{{ if ne .chezmoi.os "windows" -}}
+{{ include (joinPath .chezmoi.sourceFile ".." (printf ".config_%s" .chezmoi.os)) }}
+{{- end }}

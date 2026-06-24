@@ -1,0 +1,132 @@
+packages:
+  linux:
+    fedora:
+      coprs:
+        - alternateved/keyd
+        - jdxcode/mise
+      keys:
+        - https://downloads.1password.com/linux/keys/1password.asc
+        - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+        - https://dl.google.com/linux/linux_signing_key.pub
+      repos:
+        - id: 1password
+          content: |
+            [1password]
+            name=1Password Stable Channel
+            baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
+            enabled=1
+            gpgcheck=1
+            repo_gpgcheck=1
+            gpgkey="https://downloads.1password.com/linux/keys/1password.asc"
+        - id: vscodium
+          content: |
+            [gitlab.com_paulcarroty_vscodium_repo]
+            name=gitlab.com_paulcarroty_vscodium_repo
+            baseurl=https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
+            enabled=1
+            gpgcheck=1
+            repo_gpgcheck=1
+            gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+            metadata_expire=1h
+        - id: google-chrome
+          content: |
+            [google-chrome]
+            name=google-chrome
+            baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64
+            enabled=1
+            gpgcheck=1
+            gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+      repofiles:
+        - https://pkgs.tailscale.com/stable/fedora/tailscale.repo
+      packages:
+        # Build tooling
+        - clang
+        - gcc-c++
+        - pkg-config
+        - systemd-devel
+
+        # CLI utilities
+        - btop
+        - fd-find
+        - gh
+        - kdotool
+        - nvtop
+        - ripgrep
+        - xxd
+        - yp-tools
+
+        # Korean input method
+        - fcitx5
+        - fcitx5-hangul
+
+        # Keyboard remapper
+        - keyd
+
+        # Language toolchains + version manager
+        - dotnet-sdk-10.0
+        - dotnet-sdk-8.0
+        - mise
+
+        # Ruby build dependencies (consumed by mise's ruby-build).
+        # The runtime libs libffi/libyaml are pulled in transitively.
+        - libffi-devel
+        - libyaml-devel
+
+        # Hardware sensors / fan control
+        - lm_sensors
+
+        # Logitech device manager
+        - solaar
+        - solaar-udev
+
+        # Password manager
+        - 1password
+        - 1password-cli
+
+        # Editor
+        - codium
+
+        # Web browser
+        - google-chrome-stable
+
+        # Container runtime (rootless Podman + tooling)
+        - podman
+        - podman-docker
+        - podman-compose
+        - buildah
+        - containers-common
+        - passt
+        - fuse-overlayfs
+        - slirp4netns
+
+        # Screen recording / streaming / video editing
+        - kdenlive
+        - obs-studio
+
+        # Mesh networking
+        - tailscale
+        # Wayland clipboard management
+        - wl-clipboard
+
+        # Virtualization
+        - akmod-VirtualBox
+        - akmods
+        - virtualbox
+
+        # Dynamic Kernel Module Support
+        - dkms
+
+        # Tauri development
+        - curl
+        - file
+        - libappindicator-gtk3-devel
+        - librsvg2-devel
+        - libxdo-devel
+        - openssl-devel
+        - webkit2gtk4.1-devel
+        - wget
+
+        - expect
+      bareMetalPackages:
+        - steam
+      

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.h82.mxm4-hapticd</string>
+
+	<!-- launchd does NOT expand ~ or $HOME inside ProgramArguments path
+	     strings, and the home dir is per-machine, so exec the binary through a
+	     shell that expands $HOME at launch (launchd sets HOME + the per-user
+	     TMPDIR for a GUI agent; the daemon resolves its AF_UNIX socket under
+	     $TMPDIR on macOS). -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>exec "$HOME/.local/bin/mxm4-hapticd"</string>
+	</array>
+
+	<!-- Autostart at login and keep it running: the macOS counterpart of the
+	     systemd unit's WantedBy=default.target + Restart=always. The daemon
+	     deliberately exits on a HID read error to force a clean device
+	     re-enumeration; KeepAlive relaunches it. ThrottleInterval mirrors the
+	     unit's RestartSec=2 (and caps crash-loop frequency). -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>2</integer>
+
+	<!-- Background daemon: exempt from App Nap so HID polling keeps running
+	     while no app holds it in the foreground. -->
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

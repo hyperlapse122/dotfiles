@@ -1,0 +1,7 @@
+[credential]
+	credentialStore = keychain
+	helper =
+	helper = manager
+
+[core]
+	autocrlf = false

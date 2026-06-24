@@ -1,0 +1,221 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# scripts/linux/config-solaar.sh
+#
+# Apply per-device Solaar settings to ~/.config/solaar/config.yaml that
+# CANNOT be expressed via the symlinked rules.yaml. Currently:
+#
+#   1. divert-keys: route specific reprogrammable buttons through Solaar's
+#      rule engine (HID++ notifications) instead of the device firmware
+#      default (which sends a stock mouse button).
+#
+# Haptic intensity (`haptic-level`) is intentionally NOT enforced here —
+# leave that to the user's Solaar GUI preference. The mxm4-haptic helper
+# writes raw HID++ haptic-play with no ack wait, so intermittent
+# perceptibility at low intensity (a Bolt-wireless ack-variance artefact
+# of Solaar's own `Set` write path) is no longer a concern.
+#
+# Why not symlink config.yaml itself: the file embeds per-physical-device
+# state (_serial, _unitId, _battery, _absent feature list) alongside the
+# settings we want to manage. Tracking it verbatim would couple the repo
+# to one mouse unit, break on hardware replacement, and produce noisy
+# diffs every time Solaar updates battery readings.
+#
+# Why not `solaar config <setting> <value>`: Solaar 1.1.19 hits
+#   TypeError: Unable to marshal str as an array
+# inside Gio.Application.run when persisting the change. The runtime
+# device state flips (so the rule fires once or the pulse plays once);
+# the on-disk config does not. GUI path persists correctly but isn't
+# automatable.
+#
+# This script edits the file directly with PyYAML and only restarts
+# Solaar if it actually changed something. PyYAML is a Solaar rpm
+# requirement, so importing yaml via /usr/bin/python3 (NOT bare
+# `python3`, which mise may shadow) is guaranteed wherever Solaar is.
+#
+# Soft-skips when:
+#   - solaar not installed (nothing to configure)
+#   - ~/.config/solaar/config.yaml absent (no devices paired yet)
+#   - target device not present in config.yaml (paired on another host only)
+#   - PyYAML unreachable via /usr/bin/python3 (defensive; Solaar rpm pulls it)
+#
+# Idempotent: re-running on an already-correct config writes nothing,
+# touches no backup, does not restart Solaar.
+
+set -euo pipefail
+
+CONFIG="${HOME}/.config/solaar/config.yaml"
+PYTHON=/usr/bin/python3
+SOLAAR_SERVICE=app-solaar@autostart.service
+
+# Per-device targets, one per line: "<model_id>:<setting_path>:<value>:<label>"
+#   model_id     : 12-hex from `solaar show` -> Model ID line.
+#   setting_path : either a scalar setting name (e.g. `haptic-level`) or
+#                  a nested-dict path (e.g. `divert-keys.416`). The script
+#                  splits on the first dot: no dot means scalar, dot means
+#                  the second part is an int key into the named dict.
+#   value        : int. Interpreted per setting (see below).
+#   label        : free-form, only for log output.
+#
+# Setting reference for MX Master 4 (model B04200000000):
+#   divert-keys.<control_id> : 0=Regular, 1=Diverted, 2=Mouse Gestures,
+#                              3=Sliding DPI (per
+#                              logitech_receiver.settings_templates.DivertKeys
+#                              choices_universe).
+#                              Control IDs from `solaar show` reprogrammable
+#                              keys section: 416 = MX Master 4 Haptic thumb
+#                              button; 195 = Mouse Gesture Button (the
+#                              MX Master 3S thumb button; also present on
+#                              the MX Master 4 but left Regular there).
+#
+# For nested-dict settings the path is `<setting>.<int_key>` (e.g.
+# `divert-keys.416`). For scalar settings the path is just the setting
+# name (e.g. `haptic-level` — supported by the parser even though no
+# scalar target is currently enforced; add one here if a future setting
+# needs lockstep cross-machine state).
+TARGETS=(
+  "B04200000000:divert-keys.416:2:MX Master 4 / Haptic -> Mouse Gestures"
+  "B03400000000:divert-keys.195:2:MX Master 3S / Mouse Gesture Button -> Mouse Gestures"
+)
+
+# 0. Skip if Solaar isn't installed: nothing to configure.
+if ! command -v solaar >/dev/null 2>&1; then
+  echo "config-solaar: solaar not installed; skipping" >&2
+  exit 0
+fi
+
+# 1. Skip if config.yaml hasn't been generated yet (no devices paired).
+if [[ ! -f "$CONFIG" ]]; then
+  echo "config-solaar: $CONFIG not present (no devices paired yet); skipping" >&2
+  exit 0
+fi
+
+# 2. Skip if PyYAML isn't reachable via system Python. Should be
+#    impossible when solaar rpm is installed; defensive guard for
+#    non-rpm Solaar installs (pip --user, etc.).
+if ! "$PYTHON" -c "import yaml" 2>/dev/null; then
+  echo "config-solaar: PyYAML not available via $PYTHON; skipping" >&2
+  exit 0
+fi
+
+# 3. Apply targets via inline Python: load, mutate, atomic write, log.
+RESULT=$("$PYTHON" - "$CONFIG" "${TARGETS[@]}" <<'PYEOF'
+import os
+import shutil
+import sys
+
+import yaml
+
+config_path = sys.argv[1]
+targets = []
+for spec in sys.argv[2:]:
+    parts = spec.split(":", 3)
+    if len(parts) < 4:
+        sys.stderr.write(
+            f"config-solaar: malformed target {spec!r}; "
+            f"need model:setting_path:value:label\n"
+        )
+        continue
+    model_id, setting_path, value_str, label = parts
+    try:
+        value = int(value_str)
+    except ValueError:
+        sys.stderr.write(
+            f"config-solaar: non-int value {value_str!r} in {spec!r}; skipping\n"
+        )
+        continue
+    if "." in setting_path:
+        setting_name, key_str = setting_path.split(".", 1)
+        try:
+            key = int(key_str)
+        except ValueError:
+            sys.stderr.write(
+                f"config-solaar: non-int dict key {key_str!r} in {spec!r}; skipping\n"
+            )
+            continue
+    else:
+        setting_name = setting_path
+        key = None
+    targets.append((model_id, setting_name, key, value, label))
+
+with open(config_path) as f:
+    doc = yaml.safe_load(f)
+
+# Solaar's config.yaml is a single document whose top level is a list:
+# the first element is the Solaar version string, the rest are per-device
+# dicts. Bail out cleanly if Solaar changes the schema rather than risk
+# corrupting it.
+if not isinstance(doc, list):
+    print("UNCHANGED:UNEXPECTED_SCHEMA: top-level not a list")
+    sys.exit(0)
+
+changed_labels = []
+skipped_labels = []
+for model_id, setting_name, key, value, label in targets:
+    device = next(
+        (entry for entry in doc
+         if isinstance(entry, dict) and entry.get("_modelId") == model_id),
+        None,
+    )
+    if device is None:
+        skipped_labels.append(f"{label} (model {model_id} not in config)")
+        continue
+    if key is None:
+        # Scalar setting (e.g. haptic-level).
+        if device.get(setting_name) == value:
+            continue
+        device[setting_name] = value
+    else:
+        # Nested-dict setting (e.g. divert-keys.416).
+        existing = device.get(setting_name)
+        if existing is None:
+            existing = {}
+        if not isinstance(existing, dict):
+            skipped_labels.append(
+                f"{label} ({setting_name} not a dict in config)"
+            )
+            continue
+        if existing.get(key) == value:
+            continue
+        existing[key] = value
+        device[setting_name] = existing
+    changed_labels.append(label)
+
+if not changed_labels:
+    if skipped_labels:
+        print("UNCHANGED:SKIPPED:" + "; ".join(skipped_labels))
+    else:
+        print("UNCHANGED")
+    sys.exit(0)
+
+# Atomic write: backup the previous config, write to temp, rename in place.
+shutil.copy2(config_path, config_path + ".bak")
+tmp = config_path + ".new"
+with open(tmp, "w") as f:
+    yaml.safe_dump(doc, f, default_flow_style=None, sort_keys=False,
+                   allow_unicode=True)
+os.replace(tmp, config_path)
+
+msg = "CHANGED:" + "; ".join(changed_labels)
+if skipped_labels:
+    msg += " | SKIPPED:" + "; ".join(skipped_labels)
+print(msg)
+PYEOF
+)
+
+echo "config-solaar: $RESULT"
+
+# 4. Restart Solaar only when we actually wrote something AND a user
+#    systemd manager owns the unit. On a fresh install where Solaar is
+#    not yet running, new state loads at next user-session login.
+if [[ "$RESULT" == CHANGED:* ]]; then
+  if systemctl --user is-active --quiet "$SOLAAR_SERVICE" 2>/dev/null; then
+    systemctl --user restart "$SOLAAR_SERVICE"
+    echo "config-solaar: restarted $SOLAAR_SERVICE"
+  else
+    echo "config-solaar: $SOLAAR_SERVICE not running; new state will load on next Solaar start" >&2
+  fi
+fi
+
+exit 0
+{{ end -}}

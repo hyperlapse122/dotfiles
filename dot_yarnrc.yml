@@ -1,0 +1,6 @@
+enableScripts: false
+enableImmutableInstalls: true
+defaultSemverRangePrefix: ""
+enableTelemetry: false
+preferReuse: true
+npmMinimalAgeGate: 10080

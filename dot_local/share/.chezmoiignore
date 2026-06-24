@@ -1,0 +1,4 @@
+# Linux-only directories
+{{- if ne .chezmoi.os "linux" }}
+applications
+{{- end }}
