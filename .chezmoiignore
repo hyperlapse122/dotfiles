@@ -1,8 +1,9 @@
 # Repository files
 ./opencode.json
+./LICENSE
 
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
-Library
+./Library
 {{- end }}
 
