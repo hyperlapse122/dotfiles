@@ -1,0 +1,106 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_onchange_after_set-default-browser.sh.tmpl
+#
+# Makes Google Chrome (stable) the default web browser for the invoking user.
+# google-chrome-stable is installed from the Google RPM repo in
+# .chezmoidata/packages.yaml; that package ships
+# /usr/share/applications/google-chrome.desktop, the .desktop id targeted here.
+#
+# Two complementary writes, both per-user (never sudo — a default browser is a
+# $HOME/.config setting, not system state):
+#
+#   1. xdg-settings set default-web-browser google-chrome.desktop
+#      The freedesktop entry point for "default browser". On KDE it routes
+#      through the kde backend (kdeglobals [General] BrowserApplication); on a
+#      generic desktop it writes the http/https/text-html associations to
+#      ~/.config/mimeapps.list. This single call is what most environments key
+#      off, so it comes first.
+#
+#   2. xdg-mime default google-chrome.desktop <type> for the three URL/HTML
+#      types a browser owns: x-scheme-handler/http, x-scheme-handler/https,
+#      text/html. xdg-settings' KDE backend historically sets BrowserApplication
+#      but NOT these mimeapps.list associations, yet xdg-open and most apps
+#      consult mimeapps.list directly — so we set them explicitly to guarantee
+#      "click a link / open an .html file" lands in Chrome regardless of which
+#      consumer resolves the default. Writing the canonical id Chrome already
+#      claims is idempotent and matches what the KDE "Default Applications"
+#      KCM persists.
+#
+# Soft-skips (exit 0, never abort the apply) when:
+#   - xdg-settings is missing (no xdg-utils) — nothing to drive the setting.
+#   - google-chrome.desktop is not installed in any XDG applications dir
+#     (Chrome not installed yet, or a non-Fedora host without it). Pointing a
+#     default at a non-existent .desktop id silently creates a broken
+#     association, so we guard rather than write blindly.
+#
+# Idempotent: each setting is probed first and only written when it differs, so
+# re-running (chezmoi re-runs this whenever its rendered content changes) is a
+# no-op once Chrome is the default. Applies to newly launched apps; no daemon
+# restart needed (xdg-open / KDE re-read the associations on demand).
+#
+# Linux-only by design (gated on .chezmoi.os == "linux"): macOS and Windows use
+# their own default-app registries, so there is no xdg equivalent to drive and
+# no .ps1 counterpart per the script-parity exception in ../AGENTS.md.
+
+set -euo pipefail
+
+BROWSER_DESKTOP="google-chrome.desktop"
+
+# 0. Soft-skip when the freedesktop tooling is absent.
+if ! command -v xdg-settings >/dev/null 2>&1; then
+  printf 'set-default-browser: xdg-settings not found (xdg-utils not installed); skipping\n' >&2
+  exit 0
+fi
+
+# 1. Soft-skip when Chrome's .desktop file is not installed. Resolve the same
+#    search path xdg-mime/xdg-settings use: $XDG_DATA_HOME (default
+#    ~/.local/share) first, then every dir in $XDG_DATA_DIRS (default
+#    /usr/local/share:/usr/share), each under applications/.
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+IFS=':' read -r -a data_dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+desktop_found=false
+for dir in "$data_home" "${data_dirs[@]}"; do
+  [[ -n "$dir" ]] || continue
+  if [[ -f "${dir%/}/applications/${BROWSER_DESKTOP}" ]]; then
+    desktop_found=true
+    break
+  fi
+done
+if [[ "$desktop_found" != true ]]; then
+  printf 'set-default-browser: %s not found in any applications dir (google-chrome-stable not installed?); skipping\n' \
+    "$BROWSER_DESKTOP" >&2
+  exit 0
+fi
+
+# 2. Default web browser (the xdg-settings entry point). Probe first for
+#    idempotency; `|| true` keeps a non-zero get (e.g. unset) from tripping
+#    set -e.
+current_browser="$(xdg-settings get default-web-browser 2>/dev/null || true)"
+if [[ "$current_browser" == "$BROWSER_DESKTOP" ]]; then
+  printf 'set-default-browser: default-web-browser already %s\n' "$BROWSER_DESKTOP"
+else
+  xdg-settings set default-web-browser "$BROWSER_DESKTOP"
+  printf 'set-default-browser: set default-web-browser = %s (was %s)\n' \
+    "$BROWSER_DESKTOP" "${current_browser:-unset}"
+fi
+
+# 3. URL scheme + HTML content handlers in mimeapps.list (what xdg-open and
+#    most apps actually consult). Each type probed first for idempotency.
+if command -v xdg-mime >/dev/null 2>&1; then
+  for type in x-scheme-handler/http x-scheme-handler/https text/html; do
+    current_handler="$(xdg-mime query default "$type" 2>/dev/null || true)"
+    if [[ "$current_handler" == "$BROWSER_DESKTOP" ]]; then
+      printf 'set-default-browser: %s already -> %s\n' "$type" "$BROWSER_DESKTOP"
+    else
+      xdg-mime default "$BROWSER_DESKTOP" "$type"
+      printf 'set-default-browser: %s -> %s (was %s)\n' \
+        "$type" "$BROWSER_DESKTOP" "${current_handler:-unset}"
+    fi
+  done
+else
+  printf 'set-default-browser: xdg-mime not found; URL/HTML handlers left unchanged\n' >&2
+fi
+
+exit 0
+{{ end -}}
