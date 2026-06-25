@@ -86,3 +86,5 @@ runs as a `read-source-state` pre-hook to install 1Password first, and
 
 Conventional Commits (per the global rules), scoped by area — history is mostly
 `chore(<area>)`, e.g. `chore(fedora)`, `chore(scripts)`, `chore(tailscale)`.
+Trunk-based on `main`; **always `git push` to `origin/main` immediately after
+committing** (single-maintainer repo, no PR/review gate).
