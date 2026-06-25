@@ -26,7 +26,7 @@ Source filename attributes encode the target:
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
-`.install-1password.sh`) are NOT deployed — chezmoi ignores them except the
+`.install-prerequisites.sh`) are NOT deployed — chezmoi ignores them except the
 `.chezmoi*` specials. Non-dot repo-meta files (`opencode.json`, `LICENSE`,
 `AGENTS.md`) must be listed in the root `.chezmoiignore`, or chezmoi would
 deploy them into `~/`.
@@ -42,8 +42,8 @@ deploy them into `~/`.
 Secrets are pulled at apply time via `onepasswordRead "op://..."` inside `.tmpl`
 files (GPG key, GitHub/GitLab/Tailscale tokens, opencode API keys under
 `dot_config/opencode/private_secrets/`). Never hardcode a secret — add an
-`onepasswordRead` reference. The `op` CLI must be signed in: `.install-1password.sh`
-runs as a `read-source-state` pre-hook to install 1Password first, and
+`onepasswordRead` reference. The `op` CLI must be signed in: `.install-prerequisites.sh`
+runs as a `read-source-state` pre-hook to install 1Password and mise first, and
 `chezmoi diff`/`execute-template` over secret templates fails if `op` isn't authed.
 
 ## Single source of truth — edit the data, not the generated script
