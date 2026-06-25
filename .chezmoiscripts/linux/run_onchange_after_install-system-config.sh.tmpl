@@ -29,6 +29,14 @@
 # content changes — re-run it by hand on an interactive terminal with
 # `chezmoi apply --force`.
 #
+# Server/headless skip: everything here configures a graphical Fedora
+# *Workstation* desktop, so on a headless server install (Ubuntu Server, RHEL
+# server, minimal cloud image, …) the script exits 0 before doing anything.
+# "Server" is detected as: the default systemd target is not graphical.target
+# AND no display-manager is enabled. Override with
+# INSTALL_SYSTEM_CONFIG_FORCE=1 to run on a headless box you do want
+# configured. The same exit-0-skip re-run caveat noted above applies.
+#
 # Most files install at mode 0644. Exceptions: etc/sudoers.d/* installs at
 # 0440 (sudo refuses group/world-readable drop-ins) and only on virtual
 # machines, gated on `systemd-detect-virt --vm`; ThinkPad-specific
@@ -49,6 +57,31 @@
 # not the active backend.
 
 set -euo pipefail
+
+# Skip on headless / server installs (Ubuntu Server, RHEL server, minimal
+# cloud images, …). Everything below configures a graphical Fedora
+# *Workstation* desktop — desktop firewalld zones, zram-swap disable, ThinkPad
+# ACPI, VMware/Tailscale NAT, NetworkManager/resolved reloads — none of which
+# belongs on a headless server. The canonical systemd signal for "graphical
+# workstation vs headless server" is the default boot target: desktops default
+# to graphical.target, server installs to multi-user.target. We treat the host
+# as a server (skip the whole run, exit 0) when its default target is not
+# graphical.target AND no display-manager is enabled —
+# /etc/systemd/system/display-manager.service is the alias symlink systemd
+# creates when a DM (gdm/sddm/plasmalogin/…) is enabled, a reliable positive
+# desktop signal. (`systemctl list-unit-files display-manager.service` is NOT
+# usable here: it exits 0 even when nothing matches.) Hosts without systemd
+# fall through and run as before. Override on a headless box you nonetheless
+# want configured with INSTALL_SYSTEM_CONFIG_FORCE=1.
+if [[ "${INSTALL_SYSTEM_CONFIG_FORCE:-}" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
+  default_target="$(systemctl get-default 2>/dev/null || true)"
+  if [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]; then
+    printf 'install-system-config: skipped (headless/server install: default target=%s, no display-manager).\n' "${default_target:-unknown}"
+    printf '  Force a run on a server you do want configured with:\n'
+    printf '    INSTALL_SYSTEM_CONFIG_FORCE=1 chezmoi apply --force\n'
+    exit 0
+  fi
+fi
 
 # system/linux/etc content fingerprint — chezmoi hashes this rendered script
 # to decide whether to re-run it, so embedding every tracked file's sha256
