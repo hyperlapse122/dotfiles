@@ -1,0 +1,90 @@
+---
+name: daily-report
+description: Analyze today's git commits and produce a concise daily work log in Korean aimed at a non-developer audience. Use on requests like "daily report", "daily log", "what did I do today", "work log", "일일 업무 보고", "일일 업무 로그".
+---
+
+# Daily Log Generator
+
+Analyze today's git commit history and produce a concise daily work log **in Korean** that a non-developer can read.
+
+## Workflow
+
+1. Pull only **the user's own commits** for today. A single person often commits under multiple
+   git identities (e.g. work email vs. personal email), so filtering by `git config user.email`
+   alone silently drops commits. **First collect every registered email via the GitLab CLI**, then
+   pass each one as a separate `--author` filter (multiple `--author` flags act as an OR in `git log`).
+   - **Preferred — aggregate all GitLab-registered emails (Linux / macOS / Git Bash)**
+
+     ```bash
+     # Gather every confirmed email on the authenticated GitLab account.
+     EMAILS=$(glab api user/emails 2>/dev/null | jq -r '.[].email')
+     # Always include the local git identity too, in case it isn't registered on GitLab.
+     EMAILS=$(printf '%s\n%s\n' "$EMAILS" "$(git config user.email)" | sort -u | grep -v '^$')
+     # Build one --author flag per email (git log ORs them together).
+     AUTHOR_ARGS=$(printf '%s\n' "$EMAILS" | sed 's/^/--author=/' | tr '\n' ' ')
+
+     # Linux date arithmetic
+     git log $AUTHOR_ARGS --since="$(date +%Y-%m-%d) 00:00:00" --until="$(date -d '+1 day' +%Y-%m-%d) 00:00:00" --oneline --no-merges
+     # macOS / BSD date arithmetic: replace the --until value with
+     #   "$(date -v+1d +%Y-%m-%d) 00:00:00"
+     ```
+
+   - **Windows PowerShell**
+
+     ```powershell
+     $start = (Get-Date).Date.ToString('yyyy-MM-dd HH:mm:ss')
+     $end = (Get-Date).Date.AddDays(1).ToString('yyyy-MM-dd HH:mm:ss')
+     $emails = (glab api user/emails 2>$null | ConvertFrom-Json).email + (git config user.email) | Sort-Object -Unique | Where-Object { $_ }
+     $authorArgs = $emails | ForEach-Object { "--author=$_" }
+     git log @authorArgs --since="$start" --until="$end" --oneline --no-merges
+     ```
+
+   - **Fallback when `glab` is unavailable or unauthenticated** (`glab api user/emails` errors or returns nothing):
+     use the local git identity only — first `git config user.email`, and if that yields no commits,
+     retry once with `git config user.name` (covers repos where email is unset).
+
+     ```bash
+     git log --author="$(git config user.email)" --since="$(date +%Y-%m-%d) 00:00:00" --until="$(date -d '+1 day' +%Y-%m-%d) 00:00:00" --oneline --no-merges
+     ```
+
+   - **Note**: `glab api user/emails` returns only the **authenticated** account's emails. It does not
+     require admin rights. The local `git config user.email` is still merged in because a commit
+     identity may not be registered on GitLab.
+
+2. Analyze the commit messages and group them from a **business perspective**:
+   - Translate technical jargon into Korean a non-developer can understand
+   - Drop trivial entries (lint fixes, typos, chore, docs, etc.)
+   - Bundle related commits under a single higher-level item
+
+3. Wrap the **entire final report in a single fenced ```plaintext code block** so the user can copy it to another device in one shot. No prose, headings, or commentary outside the fence. The leading two spaces inside the block are mandatory:
+   ````plaintext
+   ```plaintext
+     - 상위 업무 항목
+       - 세부 내용 1
+       - 세부 내용 2
+   ```
+   ````
+
+## Rules
+
+- **Output container**: The final report MUST be a single fenced ```plaintext code block and nothing else. No surrounding prose, no "Here is..." preamble, no closing notes. The block is the entire response.
+- **Language**: Korean only. All output must be written in Korean. Do not include English summaries, headings, or parenthetical translations.
+- **Tone**: 간결하고 사실 중심. 기술 용어 최소화. 장황한 서술형 문장 지양.
+- **Drop**: 자동 lint/format 수정, 문서 업데이트, VS Code 설정, yarn.lock 변경, 테스트 전용 커밋.
+- **Include**: 신규 기능, 화면/UI 작업, 아키텍처 변경, 시스템 교체, 중요한 버그 수정만.
+- **Depth**: 최대 2단계 (상위 항목 → 세부 내용).
+- **Volume**: 총 5~10줄.
+- **Sentence style**: 명사형 또는 짧은 동사구. 보고서가 아닌 메모 스타일.
+- **Good example**:
+  ```plaintext
+    - 레거시 시스템 연동
+      - 기존 .NET 기반 라이선스 모듈을 현재 프로젝트 구조에 통합
+    - 레거시 호환 및 신규 인증이 적용된 라이선스 서비스 구축 (진행 중)
+    - 빌드 시스템 표준화
+      - Docker 이미지 생성 시 산출물 저장 위치 통일로 유지보수성 개선
+  ```
+- **Bad example**:
+  ```plaintext
+    - 인증 흐름 정리
+      - 로그인 후 외부 서비스 승인 절차를 매끄럽게 확장
+  ```
