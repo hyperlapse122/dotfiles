@@ -69,9 +69,9 @@ EOF
 "${SUDO[@]}" dnf config-manager addrepo --from-repofile {{ . | quote }} --overwrite
 {{ end -}}
 
-"${SUDO[@]}" dnf makecache
+"${SUDO[@]}" dnf makecache -y
 
-"${SUDO[@]}" dnf install -y clang21-libs kernel kernel-devel kernel-devel-matched kernel-headers
+"${SUDO[@]}" dnf install clang21-libs kernel kernel-devel kernel-devel-matched kernel-headers -y
 "${SUDO[@]}" dnf group install development-tools virtualization "c-development" -y
 
 packages=(
