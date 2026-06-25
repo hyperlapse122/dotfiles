@@ -49,9 +49,10 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
 ## Single source of truth — edit the data, not the generated script
 
 - **dnf packages / repos / COPRs**: `.chezmoidata/packages.yaml`. The
-  `run_onchange_before_fedora-install-packages.sh.tmpl` renders and installs from
-  it (NVIDIA-GPU and bare-metal sections are auto-gated). Add packages there, not
-  in the script — editing the data re-triggers the `run_onchange` installer.
+  `run_onchange_before_fedora.sh.tmpl` renders and installs from it (NVIDIA-GPU
+  and bare-metal sections are auto-gated, and it also drives flatpaks, dotnet
+  tools, direct-URL RPMs, services, and user groups). Add packages/items there,
+  not in the script — editing the data re-triggers the `run_onchange` installer.
 - **Fonts**: `.chezmoidata/fonts.yaml` `legacyFontsList`, pinned per font by
   release tag + sha256. To bump a font: change the tag, re-download, recompute the
   sha256 (a wrong digest aborts that font's install). The bash installer and its

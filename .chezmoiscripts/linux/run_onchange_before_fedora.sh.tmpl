@@ -1,0 +1,468 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Consolidated Fedora provisioning, migrated from the legacy
+# scripts/linux/install-packages.sh: repositories, dnf/flatpak/dotnet packages,
+# akmod/DKMS module builds, the VirtualBox extension pack, system services + MOK
+# enrollment, RTC/NTP time, the NVIDIA container runtime, and user groups.
+#
+# chezmoi re-runs this run_onchange script on every rendered-content change (e.g.
+# a single packages.yaml edit), so every step is idempotent and guarded:
+# install_fedora_packages short-circuits when all packages are present, and the
+# remaining functions skip cleanly when their prerequisites are absent.
+
+# Host capabilities, probed once and reused everywhere (the legacy script
+# repeated this 0x10de scan in four functions). Scan /sys/.../vendor for NVIDIA's
+# PCI vendor id rather than shelling out to lspci — pciutils is not guaranteed
+# installed this early, and the sysfs vendor files always exist.
+if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+  HAS_NVIDIA=1
+else
+  HAS_NVIDIA=0
+fi
+if systemd-detect-virt --quiet; then
+  IS_VIRT=1
+else
+  IS_VIRT=0
+fi
+
+# Use sudo only when not already root (matches install-linux-system-config.sh).
+# Throw early if neither root nor sudo is available — dnf/systemctl/flatpak need it.
+if [[ "${EUID}" -eq 0 ]]; then
+  SUDO=()
+elif command -v sudo >/dev/null 2>&1; then
+  SUDO=(sudo)
+else
+  printf 'install-fedora.sh: requires root or sudo for system provisioning.\n' >&2
+  exit 1
+fi
+
+# Package sets rendered from .chezmoidata/packages.yaml.
+core_packages=(
+  {{ range .packages.linux.fedora.corePackages -}}
+  {{ . | quote }}
+  {{ end -}}
+)
+dnf_groups=(
+  {{ range .packages.linux.fedora.groups -}}
+  {{ . | quote }}
+  {{ end -}}
+)
+packages=(
+  {{ range .packages.linux.fedora.packages -}}
+  {{ . | quote }}
+  {{ end -}}
+)
+if [[ "${IS_VIRT}" -eq 0 ]]; then
+  packages+=(
+    {{ range .packages.linux.fedora.bareMetalPackages -}}
+    {{ . | quote }}
+    {{ end -}}
+  )
+fi
+if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
+  packages+=(
+    {{ range .packages.linux.fedora.nvidiaPackages -}}
+    {{ . | quote }}
+    {{ end -}}
+  )
+fi
+flatpaks=(
+  {{ range .packages.linux.fedora.flatpaks -}}
+  {{ . | quote }}
+  {{ end -}}
+)
+dotnet_tools=(
+  {{ range .packages.linux.fedora.dotnetTools -}}
+  {{ . | quote }}
+  {{ end -}}
+)
+
+# Point Fedora's base repos at Korea-country metalinks, but only on desktop-class
+# hardware (SMBIOS chassis type). Laptops/servers/VMs keep upstream defaults so a
+# portable machine is not pinned to KR mirrors.
+configure_kr_mirrorlists() {
+  local chassis_type=''
+  if [[ -r /sys/class/dmi/id/chassis_type ]]; then
+    chassis_type="$(</sys/class/dmi/id/chassis_type)"
+  fi
+
+  case "${chassis_type}" in
+    3|4|5|6|7|13|15|16|35) ;;
+    *)
+      printf 'install-fedora.sh: chassis type "%s" is not desktop-class; leaving Fedora mirrorlists unchanged.\n' "${chassis_type:-unknown}"
+      return 0
+      ;;
+  esac
+
+  local -a repo_options=(
+    "fedora.metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-\$releasever&arch=\$basearch&country=KR"
+    'fedora.mirrorlist='
+    "updates.metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f\$releasever&arch=\$basearch&country=KR"
+    'updates.mirrorlist='
+    "updates-testing.metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-testing-f\$releasever&arch=\$basearch&country=KR"
+    'updates-testing.mirrorlist='
+  )
+
+  "${SUDO[@]}" dnf config-manager setopt "${repo_options[@]}"
+}
+
+# Configure repositories, then install the dnf groups + packages. Short-circuits
+# when every named package is already present (rpm -q is a local rpmdb lookup; a
+# missing package only lengthens the list, never wrongly skips an install). The
+# dnf groups are re-ensured only on the install path; an all-present check treats
+# them as satisfied, since their members are not removed in normal use.
+install_fedora_packages() {
+  local -a all_packages=("${core_packages[@]}" "${packages[@]}")
+  local -a missing=()
+  local pkg
+  for pkg in "${all_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    printf 'install-fedora.sh: all %d dnf packages already installed; skipping repo setup and install.\n' \
+      "${#all_packages[@]}"
+    return 0
+  fi
+  printf 'install-fedora.sh: %d of %d dnf packages missing; configuring repositories and installing.\n' \
+    "${#missing[@]}" "${#all_packages[@]}"
+
+  # Install repository manager only when missing — dnf would otherwise hit the
+  # network just to discover the package is already installed.
+  if ! rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install fedora-workstation-repositories -y
+  fi
+
+  configure_kr_mirrorlists
+
+  # Enable third party repositories
+  "${SUDO[@]}" fedora-third-party enable
+
+# Enable COPRs
+{{ range .packages.linux.fedora.coprs -}}
+"${SUDO[@]}" dnf copr enable {{ . | quote }} -y
+{{ end -}}
+
+  # Install RPM Fusion (free + nonfree) — skip the network install when both
+  # release packages are already present. fedora-cisco-openh264 is enabled
+  # unconditionally (setopt is idempotent) so steam deps resolve.
+  if ! rpm -q rpmfusion-free-release rpmfusion-nonfree-release >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install -y \
+      "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+      "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+  fi
+  "${SUDO[@]}" dnf config-manager setopt fedora-cisco-openh264.enabled=1
+
+  # Add the NVIDIA CUDA + container-toolkit repositories only on NVIDIA hosts;
+  # the driver/container packages are appended to the install set under the same
+  # HAS_NVIDIA gate.
+  if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
+    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo --overwrite
+    "${SUDO[@]}" dnf config-manager addrepo --from-repofile https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo --overwrite
+  else
+    printf 'install-fedora.sh: no NVIDIA GPU detected; skipping CUDA repo and drivers.\n'
+  fi
+
+# Import GPG keys
+{{ range .packages.linux.fedora.keys -}}
+"${SUDO[@]}" rpm --import  {{ . | quote }}
+{{ end -}}
+
+
+{{ range .packages.linux.fedora.repos }}
+"${SUDO[@]}" tee /etc/yum.repos.d/{{ .id }}.repo >/dev/null <<'EOF'
+{{ .content -}}
+EOF
+{{ end -}}
+
+
+{{ range .packages.linux.fedora.repofiles -}}
+"${SUDO[@]}" dnf config-manager addrepo --from-repofile {{ . | quote }} --overwrite
+{{ end -}}
+
+  # Refresh metadata now that new repos exist (some, e.g. 1Password, are needed
+  # to resolve dependencies of the packages below).
+  "${SUDO[@]}" dnf makecache -y
+
+  "${SUDO[@]}" dnf install -y "${core_packages[@]}"
+  "${SUDO[@]}" dnf group install -y "${dnf_groups[@]}"
+  "${SUDO[@]}" dnf install -y "${packages[@]}"
+}
+
+# RPMs installed directly from a vendor URL (no repo). For each entry: skip when
+# already installed, import its GPG key(s), then install the URL matching the host
+# architecture. Runs after install_fedora_packages so the repos/metadata needed
+# for dependency resolution already exist.
+install_direct_rpms() {
+  local host_arch
+  host_arch="$(uname -m)"
+{{ range .packages.linux.fedora.directRpms -}}
+  if rpm -q {{ .id | quote }} >/dev/null 2>&1; then
+    printf 'install-fedora.sh: %s already installed; skipping.\n' {{ .id | quote }}
+  else
+{{ range .keys -}}
+    "${SUDO[@]}" rpm --import {{ . | quote }}
+{{ end -}}
+    case "${host_arch}" in
+{{ range $arch, $url := .rpms -}}
+    {{ $arch }}) "${SUDO[@]}" dnf install -y {{ $url | quote }} ;;
+{{ end -}}
+    *) printf 'install-fedora.sh: no %s rpm for host arch %s; skipping.\n' {{ .id | quote }} "${host_arch}" >&2 ;;
+    esac
+  fi
+{{ end -}}
+}
+
+# Flatpak apps from Flathub (system-wide). flatpak install is idempotent, so
+# re-runs are safe.
+install_flatpak_packages() {
+  if [[ "${#flatpaks[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  if ! rpm -q flatpak >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install flatpak -y
+  fi
+
+  # Ensure the Flathub remote exists system-wide (--if-not-exists is a no-op when
+  # already present). Canonical URL per https://flathub.org/setup/Fedora.
+  "${SUDO[@]}" flatpak remote-add --if-not-exists --system flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+
+  "${SUDO[@]}" flatpak install --system -y --noninteractive flathub "${flatpaks[@]}"
+}
+
+# Global dotnet tools. `dotnet tool install` errors when a tool is already present
+# (which would abort under set -e), so install only the ones missing from
+# `dotnet tool list -g` — keeping this idempotent across run_onchange re-runs.
+install_dotnet_tools() {
+  if [[ "${#dotnet_tools[@]}" -eq 0 ]]; then
+    return 0
+  fi
+  if ! command -v dotnet >/dev/null 2>&1; then
+    printf 'install-fedora.sh: dotnet not found; skipping global dotnet tools.\n' >&2
+    return 0
+  fi
+
+  local installed tool
+  installed="$(dotnet tool list -g 2>/dev/null || true)"
+  for tool in "${dotnet_tools[@]}"; do
+    if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
+      continue
+    fi
+    dotnet tool install -g "${tool}"
+  done
+}
+
+# Rebuild the VirtualBox akmod when the prebuilt module does not match the running
+# kernel (e.g. after a kernel bump); a plain `akmods` run suffices when vboxdrv
+# already loads cleanly.
+build_akmods() {
+  if ! command -v akmods >/dev/null 2>&1; then
+    printf 'install-fedora.sh: akmods not installed; skipping module build.\n' >&2
+    return 0
+  fi
+  if "${SUDO[@]}" modprobe vboxdrv 2>/dev/null; then
+    "${SUDO[@]}" akmods
+  else
+    "${SUDO[@]}" akmods --force --rebuild
+  fi
+}
+
+# Install the matching Oracle VirtualBox Extension Pack, verified against upstream
+# SHA256SUMS, when it is missing or out of date.
+install_virtualbox_extension_pack() {
+  if ! command -v VBoxManage >/dev/null 2>&1; then
+    printf 'install-fedora.sh: VBoxManage not installed; skipping extension pack.\n'
+    return 0
+  fi
+
+  # VBoxManage --version emits e.g. "7.2.8_RPMFUSIONr173730" (RPM Fusion build) or
+  # "7.2.8r166737" (upstream). Strip from the first non-version character to
+  # recover "7.2.8", the version download.virtualbox.org publishes the extpack
+  # under.
+  local vbox_version installed_version pack_file base_url
+  vbox_version="$(VBoxManage --version 2>/dev/null | awk -F_ '/^[0-9]+\.[0-9]+\.[0-9]+_/ {print $1}')"
+  if [[ -z "${vbox_version}" ]]; then
+    printf 'install-fedora.sh: could not parse VirtualBox version; skipping extension pack.\n' >&2
+    return 1
+  fi
+
+  # Skip if the installed extpack already matches the running VirtualBox.
+  installed_version="$(VBoxManage list extpacks 2>/dev/null \
+    | awk '/^Pack no\. 0:/{found=1} found && /^Version:/{print $2; exit}')"
+  if [[ "${installed_version}" == "${vbox_version}" ]]; then
+    printf 'install-fedora.sh: VirtualBox Extension Pack %s already installed; skipping.\n' "${vbox_version}"
+    return 0
+  fi
+
+  pack_file="Oracle_VirtualBox_Extension_Pack-${vbox_version}.vbox-extpack"
+  base_url="https://download.virtualbox.org/virtualbox/${vbox_version}"
+
+  # Subshell scopes the EXIT trap so the tmpdir is cleaned up whether the work
+  # succeeds or fails under set -e, without leaking a trap into later functions.
+  (
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "${tmpdir}"' EXIT
+
+    curl -fsSL -o "${tmpdir}/${pack_file}" "${base_url}/${pack_file}"
+    curl -fsSL -o "${tmpdir}/SHA256SUMS"   "${base_url}/SHA256SUMS"
+
+    # SHA256SUMS lines are "<sha256> *<filename>". Pull the line for our exact
+    # filename; refuse to proceed if it is missing (sha256sum -c on empty stdin
+    # exits 0, which would silently skip verification).
+    cd "${tmpdir}"
+    expected="$(awk -v f="*${pack_file}" '$2 == f' SHA256SUMS)"
+    if [[ -z "${expected}" ]]; then
+      printf 'install-fedora.sh: %s missing from upstream SHA256SUMS; aborting.\n' "${pack_file}" >&2
+      exit 1
+    fi
+    printf '%s\n' "${expected}" | sha256sum -c -
+
+    # VBoxManage accepts --accept-license=<sha256 of the bundled
+    # ExtPack-license.txt> for non-interactive install. Compute it from the
+    # verified archive so a future license change is picked up automatically.
+    license_hash="$(tar -xOzf "${pack_file}" ./ExtPack-license.txt | sha256sum | awk '{print $1}')"
+
+    "${SUDO[@]}" VBoxManage extpack install --replace \
+      --accept-license="${license_hash}" "${tmpdir}/${pack_file}"
+  )
+
+  # A user-owned VBoxSVC started before this install caches "no extpacks"
+  # in-process; restart it so the user sees the new pack before next login.
+  # See https://www.virtualbox.org/ticket/17034.
+  local target_user="${SUDO_USER:-$USER}"
+  if [[ -n "${target_user}" && "${target_user}" != "root" ]]; then
+    pkill -u "${target_user}" -x VBoxSVC 2>/dev/null || true
+  fi
+}
+
+# Use the hardware clock as UTC and enable NTP synchronisation.
+configure_time() {
+  "${SUDO[@]}" timedatectl set-local-rtc 0
+  "${SUDO[@]}" timedatectl set-ntp true
+}
+
+# Enable the system services this machine depends on, then enroll the akmods/DKMS
+# MOK signing keys when booted with Secure Boot.
+enable_services() {
+  "${SUDO[@]}" systemctl enable --now keyd
+  "${SUDO[@]}" systemctl enable --now tailscaled
+  "${SUDO[@]}" systemctl enable --now libvirtd.service
+
+  # NVIDIA persistence daemon only on NVIDIA hosts (same HAS_NVIDIA gate as the
+  # driver install).
+  if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
+    "${SUDO[@]}" systemctl enable nvidia-persistenced
+  fi
+
+  # Time synchronization
+  "${SUDO[@]}" systemctl unmask systemd-timesyncd
+  "${SUDO[@]}" systemctl enable --now systemd-timesyncd
+
+  # vboxdrv may not start until the user reboots to load the module, but enable it
+  # so it comes up on next boot.
+  "${SUDO[@]}" systemctl enable vboxdrv
+
+  # akmods.service auto-signs and loads out-of-tree kernel modules.
+  "${SUDO[@]}" systemctl enable --now akmods.service
+
+  # Import the MOK signing keys for out-of-tree modules: every akmods key under
+  # /etc/pki/akmods/certs/ (currently virtualbox) plus the dkms key at
+  # /var/lib/dkms/mok.pub (NVIDIA dkms driver). Skipped unless booted via UEFI
+  # with Secure Boot on — otherwise unsigned modules load fine and
+  # `mokutil --import` would queue a pointless MOK Manager prompt on next boot.
+  #
+  # /etc/pki/akmods/certs/ is mode 0750 root:akmods, so every read goes through
+  # sudo. Both key sources are DER-encoded (one `openssl x509 -inform DER` covers
+  # them). `mokutil --test-key` confusingly exits 1 when the key IS enrolled, so
+  # grep its stdout for "is already enrolled"; a pending request is matched
+  # against `mokutil --list-new` by SHA1 fingerprint so re-runs between import and
+  # reboot don't re-prompt. Approved keys are batched into one `mokutil --import`
+  # so the user enters the one-time password once.
+  if [[ ! -d /sys/firmware/efi ]]; then
+    printf 'install-fedora.sh: not booted via UEFI; skipping MOK import.\n'
+  elif ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    printf 'install-fedora.sh: Secure Boot disabled; skipping MOK import.\n'
+  else
+    local -a certs=() to_import=()
+    local cert fp
+    if "${SUDO[@]}" test -d /etc/pki/akmods/certs; then
+      readarray -t certs < <("${SUDO[@]}" find /etc/pki/akmods/certs -maxdepth 1 -type f -name '*.der' -print | sort)
+    fi
+    if "${SUDO[@]}" test -f /var/lib/dkms/mok.pub; then
+      certs+=(/var/lib/dkms/mok.pub)
+    fi
+    if [[ ${#certs[@]} -eq 0 ]]; then
+      printf 'install-fedora.sh: no akmods/dkms MOK keys found; skipping MOK import.\n'
+    else
+      for cert in "${certs[@]}"; do
+        if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
+          printf 'install-fedora.sh: %s already enrolled; skipping.\n' "${cert}"
+          continue
+        fi
+        fp="$("${SUDO[@]}" openssl x509 -in "${cert}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')"
+        if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
+          printf 'install-fedora.sh: %s already queued for enrollment on next boot; skipping.\n' "${cert}"
+          continue
+        fi
+        to_import+=("${cert}")
+      done
+      if [[ ${#to_import[@]} -gt 0 ]]; then
+        "${SUDO[@]}" mokutil --import "${to_import[@]}"
+      else
+        printf 'install-fedora.sh: all akmods/dkms MOK keys already enrolled or queued.\n'
+      fi
+    fi
+  fi
+}
+
+# Generate the NVIDIA CDI spec and let containers use the GPU devices (NVIDIA
+# hosts only).
+set_up_nvidia_container_toolkit() {
+  if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
+    return 0
+  fi
+  if ! command -v nvidia-ctk >/dev/null 2>&1; then
+    printf 'install-fedora.sh: nvidia-ctk not installed; skipping CDI setup.\n' >&2
+    return 0
+  fi
+  "${SUDO[@]}" nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+  "${SUDO[@]}" setsebool -P container_use_devices on
+}
+
+# Add the user to the device/virtualization groups and allocate rootless-Podman
+# subordinate id ranges. Group changes only take effect on next login.
+configure_user_groups() {
+  "${SUDO[@]}" usermod -aG keyd,libvirt,vboxusers "$USER"
+  if getent group docker >/dev/null 2>&1; then "${SUDO[@]}" gpasswd -d "$USER" docker 2>/dev/null || true; fi
+
+  # Allocate subordinate UID/GID ranges for rootless Podman user namespaces.
+  # usermod --add-subuids fails if a range already exists, so only add when the
+  # user has no entry yet.
+  grep -q "^$USER:" /etc/subuid || "${SUDO[@]}" usermod --add-subuids 100000-165535 "$USER"
+  grep -q "^$USER:" /etc/subgid || "${SUDO[@]}" usermod --add-subgids 100000-165535 "$USER"
+
+  # Notify when the current shell is missing a just-added group; silent on re-runs
+  # after re-login.
+  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt || ! id -nG | grep -qw vboxusers; then
+    printf '\n'
+    printf 'NOTE: Added "%s" to groups: keyd, libvirt, vboxusers\n' "$USER"
+    printf '      Log out and back in (or reboot) for group membership to take effect.\n'
+  fi
+}
+
+install_fedora_packages
+install_direct_rpms
+install_flatpak_packages
+install_dotnet_tools
+build_akmods
+install_virtualbox_extension_pack
+configure_time
+enable_services
+set_up_nvidia_container_toolkit
+configure_user_groups
+
+{{ end -}}

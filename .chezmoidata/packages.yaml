@@ -1,14 +1,18 @@
 packages:
   linux:
     fedora:
+      # COPR (community) repositories enabled via `dnf copr enable`.
       coprs:
-        - alternateved/keyd
-        - jdxcode/mise
+        - alternateved/keyd  # COPR hosting the keyd keyboard remapper
+        - jdxcode/mise  # COPR hosting mise (runtime/tool version manager)
+      # GPG keys imported (rpm --import) to verify third-party repo packages.
       keys:
-        - https://downloads.1password.com/linux/keys/1password.asc
-        - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
-        - https://dl.google.com/linux/linux_signing_key.pub
+        - https://downloads.1password.com/linux/keys/1password.asc  # 1Password package signing key
+        - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
+        - https://dl.google.com/linux/linux_signing_key.pub  # Google Chrome repo signing key
+      # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
       repos:
+        # 1Password desktop app + CLI stable RPM repo
         - id: 1password
           content: |
             [1password]
@@ -18,6 +22,7 @@ packages:
             gpgcheck=1
             repo_gpgcheck=1
             gpgkey="https://downloads.1password.com/linux/keys/1password.asc"
+        # VSCodium (telemetry-free VS Code build) RPM repo
         - id: vscodium
           content: |
             [gitlab.com_paulcarroty_vscodium_repo]
@@ -28,6 +33,7 @@ packages:
             repo_gpgcheck=1
             gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
             metadata_expire=1h
+        # Google Chrome stable RPM repo (x86_64 only; Google ships no other arch)
         - id: google-chrome
           content: |
             [google-chrome]
@@ -36,97 +42,151 @@ packages:
             enabled=1
             gpgcheck=1
             gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+      # Remote .repo files added via `dnf config-manager addrepo`.
       repofiles:
-        - https://pkgs.tailscale.com/stable/fedora/tailscale.repo
+        - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
+      # dnf groups installed via `dnf group install` (own transaction, separate
+      # from the individual packages below).
+      groups:
+        - development-tools  # core build toolchain (gcc, make, autotools, git, ...)
+        - virtualization  # libvirt + qemu virtualization stack
+        - c-development  # C headers/libraries for building against system libs
+      # Foundational packages installed in their own transaction before the main
+      # set, so kernel headers/devel are in place when the akmod/DKMS packages
+      # (akmod-VirtualBox, kmod-nvidia-latest-dkms, dkms) build their modules.
+      corePackages:
+        - clang21-libs  # Clang 21 runtime libraries
+        - kernel  # Linux kernel
+        - kernel-devel  # kernel build headers/Makefiles for out-of-tree modules
+        - kernel-devel-matched  # kernel-devel pinned to the running/latest kernel
+        - kernel-headers  # userspace-facing kernel API headers
       packages:
         # Build tooling
-        - clang
-        - gcc-c++
-        - pkg-config
-        - systemd-devel
+        - clang  # LLVM C/C++/Obj-C compiler
+        - gcc-c++  # GNU C++ compiler
+        - pkg-config  # query compile/link flags for installed libraries
+        - systemd-devel  # libudev/libsystemd headers (libudev.pc for the hidapi backend)
 
         # CLI utilities
-        - btop
-        - fd-find
-        - gh
-        - kdotool
-        - nvtop
-        - ripgrep
-        - xxd
-        - yp-tools
+        - btop  # interactive resource/process monitor
+        - fd-find  # fast, user-friendly find alternative (fd)
+        - gh  # GitHub CLI
+        - kdotool  # Wayland window query/control via KWin scripting (xdotool-like)
+        - nvtop  # GPU process/usage monitor
+        - ripgrep  # fast recursive regex code search (rg)
+        - xxd  # hex dump / reverse utility
+        - yp-tools  # NIS/YP client utilities
 
         # Korean input method
-        - fcitx5
-        - fcitx5-hangul
+        - fcitx5  # input method framework
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
 
         # Keyboard remapper
-        - keyd
+        - keyd  # key remapping daemon (from the keyd COPR)
 
         # Language toolchains + version manager
-        - dotnet-sdk-10.0
-        - dotnet-sdk-8.0
-        - mise
+        - dotnet-sdk-10.0  # .NET SDK 10.0
+        - dotnet-sdk-8.0  # .NET SDK 8.0
+        - mise  # polyglot runtime/tool version manager
 
         # Ruby build dependencies (consumed by mise's ruby-build).
         # The runtime libs libffi/libyaml are pulled in transitively.
-        - libffi-devel
-        - libyaml-devel
+        - libffi-devel  # FFI headers (ruby-build dependency)
+        - libyaml-devel  # YAML headers (ruby-build / psych dependency)
 
         # Hardware sensors / fan control
-        - lm_sensors
+        - lm_sensors  # hardware temperature/voltage/fan sensor readouts
 
         # Logitech device manager
-        - solaar
-        - solaar-udev
+        - solaar  # Logitech HID++ device manager
+        - solaar-udev  # udev rules granting Solaar device access
 
         # Password manager
-        - 1password
-        - 1password-cli
+        - 1password  # 1Password desktop app
+        - 1password-cli  # 1Password CLI (op)
 
         # Editor
-        - codium
+        - codium  # VSCodium (telemetry-free VS Code)
 
         # Web browser
-        - google-chrome-stable
+        - google-chrome-stable  # Google Chrome (stable channel)
 
         # Container runtime (rootless Podman + tooling)
-        - podman
-        - podman-docker
-        - podman-compose
-        - buildah
-        - containers-common
-        - passt
-        - fuse-overlayfs
-        - slirp4netns
+        - podman  # daemonless OCI container engine
+        - podman-docker  # docker CLI shim that forwards to podman
+        - podman-compose  # Compose implementation for podman
+        - buildah  # OCI/Docker image builder
+        - containers-common  # shared container registries/policy config
+        - passt  # user-mode networking (pasta) for rootless containers
+        - fuse-overlayfs  # rootless overlay filesystem driver
+        - slirp4netns  # user-mode networking for rootless network namespaces
 
         # Screen recording / streaming / video editing
-        - kdenlive
-        - obs-studio
+        - kdenlive  # non-linear video editor
+        - obs-studio  # screen recording / live streaming
 
         # Mesh networking
-        - tailscale
-        # Wayland clipboard management
-        - wl-clipboard
+        - tailscale  # WireGuard-based mesh VPN client
 
-        # Virtualization
-        - akmod-VirtualBox
-        - akmods
-        - virtualbox
+        # Wayland clipboard management
+        - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
+
+        # Virtualization (VirtualBox + VM disk-image tooling; fuse3 + ntfs-3g give
+        # read-only ReFS/NTFS access to Windows Dev Drive vhdx mounts)
+        - akmod-VirtualBox  # auto-rebuilding VirtualBox kernel modules (akmod)
+        - akmods  # akmod framework: build + sign out-of-tree kernel modules
+        - fuse3  # FUSE 3 userspace filesystem support
+        - fuse3-devel  # FUSE 3 headers (refs-fuse / refsprogs build dependency)
+        - guestfs-tools  # CLI tools to inspect/modify VM disk images
+        - libguestfs  # library for accessing/editing VM disk images
+        - ntfs-3g  # NTFS read/write driver (FUSE)
+        - qemu-img  # QEMU disk-image create/convert tool (vhdx, qcow2, ...)
+        - systemd-container  # systemd-nspawn / machinectl container tooling
+        - virtualbox  # VirtualBox hypervisor
 
         # Dynamic Kernel Module Support
-        - dkms
+        - dkms  # builds/signs out-of-tree kernel modules (e.g. the NVIDIA dkms driver)
 
         # Tauri development
-        - curl
-        - file
-        - libappindicator-gtk3-devel
-        - librsvg2-devel
-        - libxdo-devel
-        - openssl-devel
-        - webkit2gtk4.1-devel
-        - wget
+        - curl  # HTTP client / file downloader
+        - file  # file-type detection utility
+        - libappindicator-gtk3-devel  # AppIndicator (tray icon) headers for Tauri
+        - librsvg2-devel  # SVG rendering headers (librsvg)
+        - libxdo-devel  # libxdo headers (X automation) for Tauri
+        - openssl-devel  # OpenSSL headers
+        - webkit2gtk4.1-devel  # WebKitGTK headers (Tauri webview)
+        - wget  # HTTP/HTTPS file downloader
 
-        - expect
+        - expect  # automate interactive CLI prompts (TCL expect)
+      # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:
-        - steam
-      
+        - steam  # Steam game client (needs a real GPU; skipped in VMs)
+      # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de),
+      # pulled from the CUDA + nvidia-container repos added during repo setup.
+      nvidiaPackages:
+        - cuda-drivers  # NVIDIA CUDA driver metapackage
+        - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries)
+        - kmod-nvidia-latest-dkms  # NVIDIA kernel module built via DKMS
+        - nvidia-driver  # NVIDIA driver metapackage
+        - nvidia-container-toolkit  # NVIDIA container runtime integration
+        - nvidia-container-toolkit-base  # base components for the container toolkit
+        - libnvidia-container-tools  # CLI tools for the NVIDIA container library
+        - libnvidia-container1  # NVIDIA container runtime library
+      # Flatpak apps installed system-wide from Flathub via `flatpak install`.
+      flatpaks:
+        - com.discordapp.Discord  # Discord voice/text chat client
+      # Global .NET tools installed via `dotnet tool install -g`.
+      dotnetTools:
+        - git-credential-manager  # cross-platform Git credential helper (GCM)
+        - powershell  # PowerShell (pwsh) cross-platform shell
+      # RPMs installed directly from a vendor URL (no repo): import the GPG
+      # key(s), then install the link matching the host arch (skipped when `id`
+      # is already an installed package).
+      directRpms:
+        - id: teamviewer  # remote desktop / remote support client
+          keys:
+            - https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc  # TeamViewer 2017 package signing key
+            - https://linux.teamviewer.com/pubkey/currentkey.asc  # TeamViewer current signing key
+          rpms:
+            x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
+            aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
