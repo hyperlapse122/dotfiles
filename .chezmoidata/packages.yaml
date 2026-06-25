@@ -69,6 +69,7 @@ packages:
 
         # CLI utilities
         - btop  # interactive resource/process monitor
+        - chezmoi  # declarative dotfiles manager (manages this repo)
         - fd-find  # fast, user-friendly find alternative (fd)
         - gh  # GitHub CLI
         - kdotool  # Wayland window query/control via KWin scripting (xdotool-like)
