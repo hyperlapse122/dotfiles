@@ -3,6 +3,11 @@
 ./opencode.json
 ./LICENSE
 
+# Root-owned system config installed to /etc by
+# .chezmoiscripts/linux/run_onchange_after_install-system-config.sh.tmpl,
+# never linked into $HOME.
+./system
+
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
 ./Library
