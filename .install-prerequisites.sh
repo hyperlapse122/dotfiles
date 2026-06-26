@@ -50,8 +50,8 @@ EOF
     "${SUDO[@]}" dnf install 1password 1password-cli -y
   fi
 
-  if ! rpm -q gh zsh >/dev/null 2>&1; then
-    "${SUDO[@]}" dnf install gh zsh -y
+  if ! rpm -q gh zsh git-lfs >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install gh zsh git-lfs -y
   fi
 
   if ! rpm -q mise >/dev/null 2>&1; then
