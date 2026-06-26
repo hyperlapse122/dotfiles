@@ -4,6 +4,5 @@
 type = "git-repo"
 url = "https://github.com/sorin-ionescu/prezto.git"
 clone.args = ["--recursive"]
-pull.args = ["--recursive"]
 
 {{- end }}
