@@ -50,6 +50,10 @@ EOF
     "${SUDO[@]}" dnf install 1password 1password-cli -y
   fi
 
+  if ! rpm -q gh zsh >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf install gh zsh -y
+  fi
+
   if ! rpm -q mise >/dev/null 2>&1; then
     "${SUDO[@]}" dnf copr enable jdxcode/mise -y
     "${SUDO[@]}" dnf install mise -y
