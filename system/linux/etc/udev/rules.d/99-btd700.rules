@@ -1,0 +1,13 @@
+# Source: https://github.com/sobalap/btd700ctl/blob/main/udev/99-btd700.rules
+
+# Sennheiser BTD 600/700 USB Bluetooth Dongle
+# Place this file in /etc/udev/rules.d/
+# Then run: sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# BTD 600
+SUBSYSTEM=="usb", ATTR{idVendor}=="3542", ATTR{idProduct}=="3000", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3542", ATTRS{idProduct}=="3000", MODE="0666"
+
+# BTD 700
+SUBSYSTEM=="usb", ATTR{idVendor}=="3542", ATTR{idProduct}=="3001", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3542", ATTRS{idProduct}=="3001", MODE="0666"
