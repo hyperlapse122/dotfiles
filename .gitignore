@@ -1,2 +1,19 @@
 ### oh-my-openagent ###
 .omo
+
+### Vendored monorepo build artifacts (crates/ + packages/) ###
+# Rust build artifacts
+target/
+
+# packages/ Yarn Berry monorepo (workspace root, node-modules linker).
+# Scoped to packages/ so the rest of the dotfiles repo is unaffected. The
+# single workspace-root packages/yarn.lock is intentionally TRACKED (lockfile
+# convention, like the Rust Cargo.lock); per-member dist/ build output is not.
+packages/node_modules/
+packages/.yarn/*
+!packages/.yarn/releases
+packages/.pnp.*
+packages/*/dist/
+.turbo/
+packages/.turbo/
+packages/*/.turbo/
