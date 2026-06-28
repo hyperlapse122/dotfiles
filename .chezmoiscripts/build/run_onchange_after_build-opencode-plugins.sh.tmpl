@@ -1,0 +1,142 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl
+#
+# Builds the packages/ Yarn Berry (Yarn 4) workspace in place and symlinks the
+# two built OpenCode plugins into ~/.config/opencode/plugins/. This replaces the
+# old dotbot `yarn build` shell step plus the plugin `link:` directives
+# (install.conf.yaml + install.linux.yaml): chezmoi cannot express "build a
+# git-ignored dist/ then symlink it" as a managed file, so it ships as a
+# run_onchange_after_ script.
+#
+# The toolchain (Node + Yarn 4) comes from packages/mise.toml via
+# `mise -C packages exec -- yarn`. chezmoi run scripts execute under a plain
+# non-interactive shell where mise shell-activation is NOT loaded, so a bare
+# `yarn` is not on PATH — every yarn invocation is routed through `mise exec`.
+# mise is the ONLY hard requirement; no ambient yarn is expected.
+#
+# onchange trigger: the fingerprint block below embeds a sha256 of every
+# TARGETED build-input file, so chezmoi re-runs this script whenever a build
+# input is added, removed, or edited. The globs are deliberately narrow — the
+# workspace manifests/lockfile/yarn release, turbo + mise config, and each
+# member's package.json / tsconfig.json / tsdown.config.ts / src/** — and
+# explicitly NOT `packages/**`. A `packages/**` fingerprint would hash the
+# build's own outputs (dist/, node_modules/, .turbo/) and re-trigger this
+# script forever on every run. Comment-only; never executed.
+#
+# Cross-platform (linux + darwin) — the workspace builds on both. Gated on
+# `.chezmoi.os in {linux, darwin}`.
+#
+# Soft-skip (exit 0, mirroring the other bootstrap build steps): when mise is
+# absent, `yarn install --immutable` fails, or `yarn build` fails, the script
+# purges any now-stale plugin symlinks (so a failed build never leaves a
+# dangling link) and exits 0. NOTE: chezmoi records a clean exit-0 as a
+# successful run, so the script will NOT re-run on the next apply until its
+# fingerprint changes — after fixing the cause, rebuild by hand with
+# `mise -C packages exec -- yarn install --immutable && mise -C packages exec -- yarn build`.
+#
+# Symlink convention (matches the dotbot links it replaces): OpenCode auto-scans
+# top-level *.ts / *.js files under ~/.config/opencode/plugins/ — NOT *.mjs — so
+# each link is NAMED `<plugin>.js` but TARGETS the ESM build output
+# `dist/index.mjs`. The sibling `<plugin>.js.map` link points at
+# `dist/index.mjs.map` (ends in .map, so it is not loaded as a plugin) for
+# readable stack traces.
+#
+# Plugin scope:
+#   - playwright-cli-session-injection.js — cross-platform (linux + darwin).
+#   - mxm4-haptic.js — Linux ONLY (it drives the Linux-only MX Master 4 haptic
+#     daemon); never linked on macOS.
+# NOTE: @h82/mxm4-haptic (no `opencode-` prefix) is the LIBRARY that
+# @h82/opencode-mxm4-haptic depends on — it emits dist/index.js and is NOT an
+# OpenCode plugin, so it is deliberately never symlinked here.
+
+set -euo pipefail
+
+# packages/ build-input fingerprint — chezmoi hashes this rendered script to
+# decide whether to re-run, so embedding every targeted input's sha256 here
+# forces a rebuild on any add/remove/edit. TARGETED globs only (never
+# packages/**) so build outputs (dist/, node_modules/, .turbo/) are excluded
+# and the hash stays stable across rebuilds. Comment-only; never executed.
+{{ range $pattern := list "packages/package.json" "packages/yarn.lock" "packages/.yarnrc.yml" "packages/.yarn/releases/*.cjs" "packages/turbo.json" "packages/mise.toml" "packages/*/package.json" "packages/*/src/**" "packages/*/tsconfig.json" "packages/*/tsdown.config.ts" -}}
+{{ range (glob (joinPath $sourceDir $pattern)) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }} {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ end }}
+SRC="{{ $sourceDir }}"
+
+PLUGINS_DIR="$HOME/.config/opencode/plugins"
+DIST_PW="$SRC/packages/opencode-playwright-cli-session-injection/dist/index.mjs"
+DIST_MXM4="$SRC/packages/opencode-mxm4-haptic/dist/index.mjs"
+
+# Remove stale plugin symlinks whose dist build output is absent, so a
+# skipped/failed build never leaves a dangling link behind. Each plugin is
+# cleaned independently against its OWN dist (one can build while the other is
+# absent). The mxm4 link is Linux-only, so its cleanup is Linux-gated too —
+# keeping every mxm4-haptic.js reference inside a `uname == Linux` guard. rm -f
+# is a no-op when the link (or the plugins dir) is absent.
+clean_stale() {
+  if [[ ! -f "$DIST_PW" ]]; then
+    rm -f "$PLUGINS_DIR/playwright-cli-session-injection.js" \
+          "$PLUGINS_DIR/playwright-cli-session-injection.js.map"
+  fi
+  if [[ "$(uname)" == "Linux" && ! -f "$DIST_MXM4" ]]; then
+    rm -f "$PLUGINS_DIR/mxm4-haptic.js" \
+          "$PLUGINS_DIR/mxm4-haptic.js.map"
+  fi
+}
+
+# Soft-skip: purge any stale links, then exit 0.
+skip() {
+  clean_stale
+  exit 0
+}
+
+# (1) mise is the only hard requirement — yarn runs through `mise exec`, no
+# ambient yarn is expected. Absent mise → nothing to build, skip.
+if ! command -v mise >/dev/null 2>&1; then
+  printf 'build-opencode-plugins: skipped (mise not installed); build manually with `mise -C packages exec -- yarn install --immutable && yarn build`.\n' >&2
+  skip
+fi
+
+# (2) Install workspace deps. `--immutable` is the Yarn Berry flag (NOT classic
+# `--frozen-lockfile`) — it honors the tracked packages/yarn.lock and never
+# rewrites it. Failure (offline, lockfile drift, checksum mismatch) → soft-skip.
+if ! mise -C "$SRC/packages" exec -- yarn install --immutable; then
+  printf 'build-opencode-plugins: skipped (yarn install --immutable failed).\n' >&2
+  skip
+fi
+
+# (3) Build every workspace member (root `yarn build` → `turbo run build`).
+# Failure → soft-skip.
+if ! mise -C "$SRC/packages" exec -- yarn build; then
+  printf 'build-opencode-plugins: skipped (yarn build failed).\n' >&2
+  skip
+fi
+
+# (4) Success → (re)create the plugin symlinks. mkdir -p + ln -sf are both
+# idempotent, so re-runs are harmless.
+mkdir -p "$PLUGINS_DIR"
+
+# @h82/opencode-playwright-cli-session-injection — cross-platform (linux +
+# darwin). `.js` link name for OpenCode's auto-scan, `.mjs` target; sibling
+# `.js.map` sourcemap linked only when present (no dangling .map link).
+ln -sf "$DIST_PW" "$PLUGINS_DIR/playwright-cli-session-injection.js"
+if [[ -f "${DIST_PW}.map" ]]; then
+  ln -sf "${DIST_PW}.map" "$PLUGINS_DIR/playwright-cli-session-injection.js.map"
+fi
+printf 'build-opencode-plugins: linked playwright-cli-session-injection.js\n'
+
+# @h82/opencode-mxm4-haptic — Linux ONLY (drives the Linux-only MX Master 4
+# haptic daemon; macOS never links it). Same `.js`-name / `.mjs`-target
+# convention with an optional sibling `.js.map`.
+if [[ "$(uname)" == "Linux" ]]; then
+  ln -sf "$DIST_MXM4" "$PLUGINS_DIR/mxm4-haptic.js"
+  if [[ -f "${DIST_MXM4}.map" ]]; then
+    ln -sf "${DIST_MXM4}.map" "$PLUGINS_DIR/mxm4-haptic.js.map"
+  fi
+  printf 'build-opencode-plugins: linked mxm4-haptic.js (Linux)\n'
+fi
+{{ end -}}
