@@ -54,8 +54,8 @@ only logic.
   Windows).
 - **Runtime**: the OpenCode Node runtime that loads the plugin (`node >= 20`).
 - **Not published.** The `@h82/` scope is a naming namespace, not a registry
-  target; this is a workspace-local plugin built in place. The bootstrap
-  symlinks the built file into OpenCode's plugin directory so it auto-loads (see
+  target; this is a workspace-local plugin built in place. Chezmoi symlinks
+  the built file into OpenCode's plugin directory so it auto-loads (see
   "Enabling it in OpenCode" below).
 
 ## Install / build
@@ -89,8 +89,8 @@ Build output is `dist/index.mjs` (ESM) + `dist/index.d.mts`.
 
 ## Enabling it in OpenCode
 
-**The bootstrap enables it automatically (all OSes).**
-[`install.conf.yaml`](../../install.conf.yaml) symlinks the built file into
+**Chezmoi enables it automatically on Linux and macOS.**
+The `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` script symlinks the built file into
 OpenCode's auto-load plugin directory:
 
 ```
@@ -98,19 +98,18 @@ OpenCode's auto-load plugin directory:
 ```
 
 OpenCode scans top-level `*.ts` / `*.js` files in `~/.config/opencode/plugin/`
-**and** `~/.config/opencode/plugins/` (singular and plural) and loads them at
-startup — no `opencode.json` `plugin` array entry is needed. The symlink is
-deliberately named `playwright-cli-session-injection.js` (not `.mjs`) because
-`.mjs` is **not** part of that auto-scan glob; the `.js` name points at the ESM
+and `~/.config/opencode/plugins/` (singular and plural) and loads them at
+startup. No `opencode.json` `plugin` array entry is needed. We deliberately
+name the symlink `playwright-cli-session-injection.js` (not `.mjs`) because
+`.mjs` is not part of that auto-scan glob. The `.js` name points at the ESM
 `dist/index.mjs` output, and the sibling `.js.map` symlink supplies the
 sourcemap.
 
-The link is in the **shared** `install.conf.yaml` (the plugin is
-cross-platform), but only the **Linux** bootstrap runs `yarn build` in place. On
-macOS/Windows the symlink dangles until you build the workspace manually
-(`yarn workspace @h82/opencode-playwright-cli-session-injection build`).
+This link is created by chezmoi on both Linux and macOS. However, the automated
+Yarn build runs on apply only on Linux. On macOS, the symlink will dangle until
+you build the workspace manually.
 
-**Manual / cross-platform.** Anywhere the bootstrap doesn't link it, add the
+**Manual / cross-platform.** Anywhere chezmoi doesn't link it, add the
 built module to your OpenCode config's `plugin` array so the runtime loads it and
 picks up its exported `PlaywrightCliSessionInjectionPlugin`:
 

@@ -58,9 +58,9 @@ biases toward **still** buzzing rather than dropping the error.
 - **Runtime**: the OpenCode Node runtime that loads the plugin. The bundled
   `@h82/mxm4-haptic` client needs only `node:net` + `$XDG_RUNTIME_DIR`.
 - **Not published.** The `@h82/` scope is a naming namespace, not a registry
-  target; this is a workspace-local plugin built in place. The Linux bootstrap
-  does, however, symlink the built file into OpenCode's plugin directory so it
-  auto-loads (see "Enabling it in OpenCode" below).
+  target; this is a workspace-local plugin built in place. On Linux, chezmoi
+  symlinks the built file into OpenCode's plugin directory so it auto-loads
+  (see "Enabling it in OpenCode" below).
 
 ## Prerequisites
 
@@ -112,8 +112,8 @@ Build output is `dist/index.mjs` (ESM) + `dist/index.d.mts`.
 
 ## Enabling it in OpenCode
 
-**On Linux, the bootstrap enables it automatically.**
-[`install.linux.yaml`](../../install.linux.yaml) symlinks the built file into
+**On Linux, chezmoi enables it automatically.**
+The `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` script symlinks the built file into
 OpenCode's auto-load plugin directory:
 
 ```
@@ -121,15 +121,15 @@ OpenCode's auto-load plugin directory:
 ```
 
 OpenCode scans top-level `*.ts` / `*.js` files in `~/.config/opencode/plugin/`
-**and** `~/.config/opencode/plugins/` (singular and plural) and loads them at
-startup — no `opencode.json` `plugin` array entry is needed. The symlink is
-deliberately named `mxm4-haptic.js` (not `.mjs`) because `.mjs` is **not** part
-of that auto-scan glob; the `.js` name points at the ESM `dist/index.mjs`
+and `~/.config/opencode/plugins/` (singular and plural) and loads them at
+startup. No `opencode.json` `plugin` array entry is needed. We deliberately
+name the symlink `mxm4-haptic.js` (not `.mjs`) because `.mjs` is not part
+of that auto-scan glob. The `.js` name points at the ESM `dist/index.mjs`
 output, and the sibling `mxm4-haptic.js.map` symlink supplies the sourcemap. This
-only happens after the workspace is built, so run the Linux bootstrap (or
+only happens after the workspace is built, so run `chezmoi apply` (or
 `yarn workspace @h82/opencode-mxm4-haptic build`) first.
 
-**Manual / cross-platform.** Anywhere the bootstrap doesn't link it, add the
+**Manual / cross-platform.** Anywhere chezmoi doesn't link it, add the
 built module to your OpenCode config's `plugin` array so the runtime loads it and
 picks up its exported `MXMaster4HapticPlugin`:
 

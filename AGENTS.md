@@ -31,6 +31,10 @@ Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
 `AGENTS.md`) must be listed in the root `.chezmoiignore`, or chezmoi would
 deploy them into `~/`.
 
+The directories `crates/` and `packages/` are source-only trees excluded from deployment to `$HOME` via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/build/` run_onchange scripts:
+- `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
+- `packages/` builds on apply into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS) and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
+
 ### Verify edits (don't eyeball raw `.tmpl`)
 - `chezmoi diff` — preview what apply would change. **Primary check after any edit.**
 - `chezmoi execute-template < file.tmpl` — render one template in isolation (output depends on OS + `.chezmoidata`).
@@ -69,8 +73,8 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
 - **JS package-manager hardening lives here and must stay** — `dot_npmrc`,
   `dot_bunfig.toml`, `dot_yarnrc.yml`, `dot_config/pnpm/config.yaml` all set
   ignore-scripts + exact-pin + 1-week cooldown. Don't relax them.
-- TOML is taplo-formatted; `.taplo.toml` excludes `.chezmoidata/**` and
-  `.chezmoiexternals/**` (templated / non-standard TOML). biome LSP is disabled in
+- TOML is taplo-formatted; `.taplo.toml` excludes `crates/**`, `packages/**`, `.chezmoidata/**`, and
+  `.chezmoiexternals/**` (templated or non-standard TOML). biome LSP is disabled in
   the repo `opencode.json`.
 
 ## OS gating & script parity

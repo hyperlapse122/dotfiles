@@ -14,13 +14,7 @@ is this directory. It holds the repo's TypeScript/JavaScript library packages.
 
 ## What this is NOT
 
-- **Built at bootstrap, never installed.** Unlike [`../crates/`](../crates/)
-  (whose Rust binaries are `cargo install`'d into `~/.local/bin`), a library
-  here ships nothing to install and dotbot links nothing from `packages/`. The
-  Linux bootstrap ([`../install.linux.yaml`](../install.linux.yaml)) does run
-  `yarn build` (turbo) in place via `mise -C packages exec` (soft-skipping when
-  mise is absent), so the workspace is built after a checkout; macOS/Windows
-  bootstrap do not. Nothing is symlinked or copied out.
+- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/build/` run_onchange scripts. The plugins built from `packages/` are symlinked into `~/.config/opencode/plugins/`.
 - **Not published.** Members are `private: true`; the `@h82/` scope is a naming
   namespace, not a registry target.
 
@@ -104,15 +98,7 @@ the build/test workflow.
 
 ### Editor (VS Code)
 
-[`.vscode/`](.vscode/) is scoped to this workspace on purpose — it lives under
-`packages/`, **not** the repo root, so ESLint + Prettier activate only when you
-open `packages/` as the folder and never affect the rest of the dotfiles
-checkout. [`settings.json`](.vscode/settings.json) makes Prettier the on-save
-formatter for TS/JS (respecting each member's `.prettierignore`), enables ESLint
-flat config with `eslint.workingDirectories: [{ "mode": "auto" }]` so per-member
-configs resolve, and applies `source.fixAll.eslint` on save;
-[`extensions.json`](.vscode/extensions.json) recommends the ESLint + Prettier
-extensions.
+The `.vscode/` editor configuration is intentionally not vendored.
 
 ## Adding a new package
 
