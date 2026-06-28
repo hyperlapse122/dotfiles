@@ -1,0 +1,112 @@
+# Solaar reads this file as ~/.config/solaar/rules.yaml.
+# It contains zero or more YAML documents; each document is one Solaar rule.
+#
+# Rules trigger from HID++ notifications, so buttons must first be set to a
+# diverted action in Solaar's Key/Button Diversion setting. Under Wayland,
+# actions that synthesize input use /dev/uinput; the system Logitech module
+# installs Solaar's udev rules through hardware.logitech.wireless.enable.
+#
+# === Thumb-button mouse gestures (MX Master 4 + MX Master 3S) ===
+#
+# Both mice drive the SAME directional gesture scheme from their thumb button.
+# On the MX Master 4 that thumb button is `Haptic` (control 416); on the
+# MX Master 3S it is `Mouse Gesture Button` (control 195). The two buttons sit
+# in the same physical thumb position, so they intentionally share one rule
+# set and behave identically.
+#
+# Each button is set to "Mouse Gestures" divert mode (divert-keys = 2) by
+# scripts/linux/config-solaar.sh. In that mode the button reports the
+# MOUSE_GESTURE feature with directional data while held, instead of a plain
+# key press. The rules below key on the `MouseGesture` condition (a feature
+# match), NOT a key label, so one rule set fires for whichever mouse sent the
+# gesture. No `Device:` guard is needed or wanted here: the goal is for both
+# thumb buttons to act the same. (The MX Master 4 ALSO exposes its own
+# `Mouse Gesture Button` at control 195, but it is left Regular — firmware
+# handled, never reaches the rule engine — so it cannot collide with these.)
+#
+# Gesture map. Verified host: Plasma 6.6.5 Wayland; qdbus-qt6 at
+# /usr/bin/qdbus-qt6; KWin shortcuts "Grid View", "Show Desktop",
+# "Window Quick Tile Left", "Window Quick Tile Right" all present
+# (qdbus-qt6 org.kde.kglobalaccel /component/kwin shortcutNames); krunner
+# method org.kde.krunner.App.toggleDisplay present (qdbus-qt6 org.kde.krunner
+# /App). Solaar 1.1.19.
+#
+#   hold + flick Up    -> Desktop Grid         (Grid View)        + haptic
+#   hold + flick Down  -> Show Desktop / peek   (Show Desktop)     + haptic
+#   hold + flick Left  -> snap window left      (Window Quick Tile Left)  + haptic
+#   hold + flick Right -> snap window right     (Window Quick Tile Right) + haptic
+#   press, no movement -> KRunner launcher      (krunner toggleDisplay)
+#
+# Haptic confirm: each of the four DIRECTIONAL gestures also fires
+# `mxm4-haptic "SUBTLE COLLISION"` — a tactile "your flick registered" tick,
+# Logi-action-ring style. It uses the mxm4-hapticd daemon client, invoked by
+# its ABSOLUTE path ~/.local/bin/mxm4-haptic (the autostart Solaar systemd
+# user service has NO guaranteed ~/.local/bin on PATH, so a bare `mxm4-haptic`
+# would not resolve — the rendered Execute below carries the full path), NOT
+# `Set: [null, haptic-play, ...]`: the daemon does a direct hidraw write with
+# no HID++ ack wait, so the pulse is instant and consistent (see the root
+# AGENTS.md "Solaar haptic playback" alternatives table). The press-with-no-
+# movement KRunner rule is intentionally left silent — KRunner visibly pops up,
+# so it is self-confirming and needs no tick. The Execute list form runs
+# through subprocess.Popen with shell=False (no quoting/injection surface).
+#
+# Wayland caveat (printed by `solaar show`): "rules cannot access modifier
+# keys in Wayland". Every action below uses a DBus Execute instead of a
+# KeyPress so it never depends on modifier state; invokeShortcut on the
+# org.kde.kglobalaccel /component/kwin interface bypasses keymap/layout. The
+# Grid View and Overview effects must stay enabled in System Settings ->
+# Desktop Effects; if disabled, invokeShortcut silently no-ops (re-enable the
+# effect rather than adding a per-press loadEffect call).
+#
+# Diversion setup is owned by scripts/linux/config-solaar.sh (TARGETS array):
+#   B04200000000 divert-keys.416 = 2  (MX Master 4 Haptic -> Mouse Gestures)
+#   B03400000000 divert-keys.195 = 2  (MX Master 3S Gesture Button -> Mouse Gestures)
+# Do NOT divert via `solaar config ... divert-keys` on 1.1.19 (it flips the
+# runtime state but crashes during persistence); config-solaar.sh edits
+# config.yaml directly and restarts Solaar only when something changed.
+---
+- MouseGesture: Mouse Up
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Grid View]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+...
+
+---
+- MouseGesture: Mouse Down
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Show Desktop]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+...
+
+---
+- MouseGesture: Mouse Left
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Left]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+...
+
+---
+- MouseGesture: Mouse Right
+- Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Right]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+...
+
+# Press with no movement (a plain click on the gesture-diverted thumb button)
+# reports a zero-movement MOUSE_GESTURE, matched by an empty MouseGesture list.
+# It cannot collide with the directional rules above: each gesture notification
+# matches exactly one of these five documents (the movement count differs).
+---
+- MouseGesture: []
+- Execute: [qdbus-qt6, org.kde.krunner, /App, org.kde.krunner.App.toggleDisplay]
+...
+
+# Example: map a diverted Back Button press to Alt+Left.
+# ---
+# - Key: [Back Button, pressed]
+# - KeyPress: [Alt_L, Left, click]
+# ...
+#
+# Example: use thumb-wheel notifications for horizontal scrolling.
+# Requires THUMB WHEEL diversion enabled in Solaar.
+# ---
+# - Feature: THUMB WHEEL
+# - Rule: [Test: thumb_wheel_up, MouseScroll: [-1, 0]]
+# - Rule: [Test: thumb_wheel_down, MouseScroll: [1, 0]]
+# ...

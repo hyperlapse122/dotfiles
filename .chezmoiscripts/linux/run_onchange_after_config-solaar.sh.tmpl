@@ -1,4 +1,5 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 # scripts/linux/config-solaar.sh
 #
@@ -39,9 +40,22 @@
 #   - target device not present in config.yaml (paired on another host only)
 #   - PyYAML unreachable via /usr/bin/python3 (defensive; Solaar rpm pulls it)
 #
-# Idempotent: re-running on an already-correct config writes nothing,
-# touches no backup, does not restart Solaar.
-
+# Config edit is idempotent: re-running on an already-correct config writes
+# nothing and touches no backup. The Solaar restart in section 4, however, now
+# fires on every run (when the service is active), so a rules.yaml-only change
+# — which re-runs this script via the rules.yaml.tmpl fingerprint below — is
+# still picked up even when divert-keys was already correct.
+#
+# rules.yaml.tmpl content fingerprint — chezmoi hashes this rendered script to
+# decide whether to re-run it, so embedding the sha256 of the deployed Solaar
+# rules template here forces a re-run whenever rules.yaml.tmpl changes (a
+# gesture remap or a haptic-path edit). That re-run re-applies rules.yaml and
+# triggers the restart below. Comment-only; never executed.
+{{ range (glob (joinPath $sourceDir "dot_config/solaar/rules.yaml.tmpl")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }} {{ include . | sha256sum }}
+{{ end -}}
+{{ end }}
 set -euo pipefail
 
 CONFIG="${HOME}/.config/solaar/config.yaml"
@@ -205,16 +219,23 @@ PYEOF
 
 echo "config-solaar: $RESULT"
 
-# 4. Restart Solaar only when we actually wrote something AND a user
-#    systemd manager owns the unit. On a fresh install where Solaar is
-#    not yet running, new state loads at next user-session login.
-if [[ "$RESULT" == CHANGED:* ]]; then
-  if systemctl --user is-active --quiet "$SOLAAR_SERVICE" 2>/dev/null; then
-    systemctl --user restart "$SOLAAR_SERVICE"
-    echo "config-solaar: restarted $SOLAAR_SERVICE"
-  else
-    echo "config-solaar: $SOLAAR_SERVICE not running; new state will load on next Solaar start" >&2
-  fi
+# 4. Restart Solaar so it reloads its rules + diversion state. This fires on
+#    EVERY run of this script, not only when the divert-keys edit above
+#    reported CHANGED: the script re-runs whenever its rendered content
+#    changes, which includes the rules.yaml.tmpl fingerprint near the top — so
+#    a rules-only edit (new gesture map, haptic path) lands a fresh
+#    ~/.config/solaar/rules.yaml while leaving divert-keys already correct
+#    ($RESULT == UNCHANGED). Solaar only re-reads rules.yaml on (re)start, so we
+#    must restart regardless of $RESULT to pick those up.
+#
+#    Gated on `is-active`: on a fresh install where Solaar is not yet running,
+#    new state loads at next user-session login, so a restart would be pointless
+#    (and could spuriously start it outside a session).
+if systemctl --user is-active --quiet "$SOLAAR_SERVICE" 2>/dev/null; then
+  systemctl --user restart "$SOLAAR_SERVICE"
+  echo "config-solaar: restarted $SOLAAR_SERVICE (config result: $RESULT)"
+else
+  echo "config-solaar: $SOLAAR_SERVICE not running; new state will load on next Solaar start" >&2
 fi
 
 exit 0
