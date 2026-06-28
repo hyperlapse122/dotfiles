@@ -1,0 +1,14 @@
+# Toolchain for the @h82/dotfiles packages/ Yarn workspace.
+#
+# Pins the Node runtime and the Yarn (Berry) package manager so the workspace
+# builds/tests identically in two places:
+#   - locally: mise auto-activates this config when you `cd` into packages/.
+#   - CI: .github/workflows/packages.yml runs jdx/mise-action with
+#     working_directory: packages, so the action reads THIS file.
+#
+# Node 26 matches the dev environment and ships native TypeScript type-stripping,
+# which the node:test suites rely on (tests import `../src/index.ts` directly).
+# Yarn is pinned to the exact version in package.json's `packageManager` field.
+[tools]
+node = "26"
+yarn = "4.16.0"

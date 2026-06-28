@@ -1,0 +1,20 @@
+{
+  "name": "@h82/dotfiles",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "yarn@4.16.0",
+  "workspaces": [
+    "*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "format:check": "turbo run format:check"
+  },
+  "devDependencies": {
+    "turbo": "2.9.16"
+  }
+}
