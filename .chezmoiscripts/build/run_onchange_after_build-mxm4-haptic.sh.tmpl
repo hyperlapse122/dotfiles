@@ -1,0 +1,183 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/build/run_onchange_after_build-mxm4-haptic.sh.tmpl
+#
+# Builds the mxm4-haptic Rust crate (crates/mxm4-haptic/) and `cargo install`s
+# its binaries into ~/.local/bin, then wires up autostart for the daemon:
+# `systemd --user` units on Linux, a launchd user agent on macOS. This is the
+# chezmoi equivalent of the old dotbot `shell:` build+enable steps — chezmoi
+# manages $HOME files but cannot `cargo install` or `systemctl --user enable`,
+# so the build/enable lives in a `run_onchange_after_` script that runs after
+# the crate source, the systemd unit files, and the launchd plist have all
+# been applied (chezmoi applies managed files before any after_ script).
+#
+# Binaries (all from one crate, see crates/mxm4-haptic/Cargo.toml):
+#   mxm4-hapticd        the daemon — sole owner of the Bolt receiver HID++
+#                       session; AF_UNIX server (Linux + macOS).
+#   mxm4-haptic         thin one-shot client spawned by Solaar rules (Linux)
+#                       or driven over the socket by the opencode plugin (macOS).
+#   mxm4-haptic-notify  desktop-notification -> haptic bridge; eavesdrops the
+#                       D-Bus session bus. Linux-only — NOT built on macOS.
+#
+# onchange trigger: the fingerprint block below embeds a sha256 of the crate's
+# tracked sources (Cargo.toml, Cargo.lock, src/**) plus the two systemd units
+# and the launchd plist, so chezmoi re-runs this script whenever any of them
+# changes. The globs are TARGETED (never crates/mxm4-haptic/**) so the build
+# artifacts under the crate's `target` dir — written by this very build —
+# never feed back into the fingerprint and re-trigger the script forever.
+# Comment-only; never executed.
+#
+# Toolchain: prefers mise-managed `rust@latest` (the supported path on this
+# host — chezmoi runs scripts under a non-interactive shell with no mise
+# shell-activation, so we invoke it explicitly), falls back to a system
+# `cargo`, and soft-skips the build (BUILD_OK=0, no abort) when neither is
+# present. `--root "$HOME/.local"` installs alongside the rest of ~/.local/bin
+# (already on PATH); `--locked` honors the tracked Cargo.lock; `--force` makes
+# re-runs idempotent (cargo rebuilds only on a source change).
+#
+# Re-runnable / idempotent on every path:
+#   * cargo install --force rebuilds-or-noops.
+#   * Linux: daemon-reload doubles as the user-bus reachability probe; the
+#     whole systemctl block soft-skips (exit 0) when there is no session bus
+#     (agent/CI/chroot/SSH-without-linger). `enable` (NO --now) only wires the
+#     WantedBy symlinks; a restart fires only for a unit already is-active.
+#   * macOS: `launchctl bootout` runs UNCONDITIONALLY before the binary-exists
+#     guard — the KeepAlive plist crash-loops a stale/now-absent binary, so the
+#     old agent must be torn down first; `bootstrap` runs only when the daemon
+#     binary exists, and soft-skips (exit 0) when there is no GUI session.
+#
+# Exits 0 on every failure path (no toolchain, build failure, no user bus, no
+# GUI session) so a non-interactive `chezmoi apply` never aborts on it.
+
+set -euo pipefail
+
+SRC="{{ $sourceDir }}"
+
+# crate + unit + plist content fingerprint — chezmoi hashes this rendered
+# script to decide whether to re-run, so embedding each tracked source file's
+# sha256 forces a re-run on any add/edit. TARGETED globs only (NOT
+# crates/mxm4-haptic/**) so the `target` build output never re-triggers this
+# script. `include . | sha256sum` hashes file CONTENT (chezmoi's bare
+# `sha256sum .` would hash the path STRING); `(stat .).isDir` skips the
+# directories that `src/**` matches. Comment-only; never executed.
+{{ range (glob (joinPath $sourceDir "crates/mxm4-haptic/Cargo.toml")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range (glob (joinPath $sourceDir "crates/mxm4-haptic/Cargo.lock")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range (glob (joinPath $sourceDir "crates/mxm4-haptic/src/**")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range (glob (joinPath $sourceDir "dot_config/systemd/user/mxm4-hapticd.service")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range (glob (joinPath $sourceDir "dot_config/systemd/user/mxm4-haptic-notify.service")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range (glob (joinPath $sourceDir "Library/LaunchAgents/dev.h82.mxm4-hapticd.plist")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end }}
+
+# Resolve a cargo invocation as an array. mise-managed rust@latest is the
+# supported primary (chezmoi scripts run with no mise shell-activation, so we
+# invoke it explicitly); a system cargo is the fallback; an empty array means
+# no toolchain — the build soft-skips and we continue to the service section.
+if command -v mise >/dev/null 2>&1; then
+  CARGO=(mise exec rust@latest -- cargo)
+elif command -v cargo >/dev/null 2>&1; then
+  CARGO=(cargo)
+else
+  CARGO=()
+fi
+
+BUILD_OK=0
+if [ "${#CARGO[@]}" -eq 0 ]; then
+  echo "mxm4-haptic: no cargo toolchain (mise or system); skipping build, continuing to service setup" >&2
+else
+{{ if eq .chezmoi.os "darwin" -}}
+  # macOS: build the daemon + client only. The notify bridge is Linux-only (it
+  # eavesdrops the D-Bus session bus) and a no-op stub here, so --bin selects
+  # just the two. `cargo install --path <dir>` builds + installs from the
+  # source tree; the crate is built from $SRC (never deployed into $HOME).
+  if "${CARGO[@]}" install --root "$HOME/.local" --locked --force --path "$SRC/crates/mxm4-haptic" --bin mxm4-hapticd --bin mxm4-haptic; then
+    BUILD_OK=1
+    echo "mxm4-haptic: built + installed daemon + client into ~/.local/bin"
+  else
+    echo "mxm4-haptic: cargo install failed; continuing to launchd setup" >&2
+  fi
+{{ else -}}
+  # Linux: build all three binaries (daemon, notify bridge, client). No --bin
+  # filter, so `cargo install --path <dir>` installs every [[bin]] in the
+  # package. The crate is built from $SRC (never deployed into $HOME).
+  if "${CARGO[@]}" install --root "$HOME/.local" --locked --force --path "$SRC/crates/mxm4-haptic"; then
+    BUILD_OK=1
+    echo "mxm4-haptic: built + installed daemon, notify bridge, client into ~/.local/bin"
+  else
+    echo "mxm4-haptic: cargo install failed; continuing to service setup" >&2
+  fi
+{{ end -}}
+fi
+
+{{ if eq .chezmoi.os "darwin" -}}
+# launchd (macOS). bootout runs UNCONDITIONALLY first: the KeepAlive plist
+# relaunches mxm4-hapticd forever, so a stale or now-absent binary would
+# crash-loop — the old agent MUST be torn down before anything else, even on a
+# run that did not rebuild. `2>/dev/null || true` swallows bootout's "not
+# loaded" on a first run (and a missing launchctl). Domain target: gui/$UID.
+launchctl bootout "gui/$UID/dev.h82.mxm4-hapticd" 2>/dev/null || true
+
+# (Re)bootstrap only when the daemon binary actually exists. The gui/$UID
+# domain is absent under SSH/CI/headless (no GUI session), so bootstrap fails
+# there — caught by the inner `if`, so we soft-skip (exit 0) with a hint.
+if [ -x "$HOME/.local/bin/mxm4-hapticd" ]; then
+  if launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist" 2>/dev/null; then
+    echo "mxm4-haptic: launchd agent loaded (gui/$UID/dev.h82.mxm4-hapticd)"
+  else
+    echo "mxm4-haptic: skipping launchd load (no GUI session?); load manually once logged in, see Library/LaunchAgents/README.md" >&2
+  fi
+else
+  echo "mxm4-haptic: skipping launchd bootstrap (daemon binary not built)" >&2
+fi
+{{ else -}}
+# systemd --user (Linux). The whole block is gated on a user-bus reachability
+# probe: `systemctl --user daemon-reload` fails when there is no session bus
+# (agent/CI/chroot/SSH-without-linger), in which case we soft-skip (exit 0)
+# with a hint and the user enables the units by hand once a session exists.
+# daemon-reload also makes systemd notice the freshly-applied unit files.
+if systemctl --user daemon-reload >/dev/null 2>&1; then
+  # NO --now: plain `enable` only wires the WantedBy symlinks, so systemd
+  # starts mxm4-hapticd.service at default.target and mxm4-haptic-notify.service
+  # when graphical-session.target comes up — matching each unit's [Install].
+  systemctl --user enable mxm4-hapticd.service mxm4-haptic-notify.service >/dev/null 2>&1 || true
+  echo "mxm4-haptic: services enabled (mxm4-hapticd, mxm4-haptic-notify)"
+
+  # Restart only a unit that is already running, so a rebuilt binary is picked
+  # up immediately on a live session — without spuriously starting a unit
+  # outside one (a fresh install starts them at the next login/target instead).
+  for unit in mxm4-hapticd.service mxm4-haptic-notify.service; do
+    if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+      systemctl --user restart "$unit" 2>/dev/null || true
+      echo "mxm4-haptic: restarted $unit (picked up rebuilt binary)"
+    fi
+  done
+else
+  echo "mxm4-haptic: skipping enable (no user session bus); enable manually once logged in: systemctl --user enable mxm4-hapticd.service mxm4-haptic-notify.service" >&2
+fi
+{{ end -}}
+
+exit 0
+{{ end -}}
