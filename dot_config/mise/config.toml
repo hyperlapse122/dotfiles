@@ -35,6 +35,7 @@ usage = "latest"
 "npm:@electron/asar" = { version = "latest" }
 "npm:@playwright/cli" = { version = "latest" }
 "npm:bash-language-server" = { version = "latest" }
+"npm:@colbymchenry/codegraph" = { version = "latest" }
 "npm:node-gyp" = { version = "latest" }
 "npm:npm" = { version = "latest" }
 "npm:portless" = { version = "latest" }
