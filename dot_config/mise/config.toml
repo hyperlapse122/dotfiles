@@ -55,6 +55,7 @@ kubectl = "latest"
 claude-code = "latest"
 "npm:@google/gemini-cli" = { version = "latest" }
 "npm:@openai/codex" = "latest"
+"npm:@moonshot-ai/kimi-code" = "latest"
 "github:njbrake/agent-of-empires" = { version = "latest", rename_exe = "aoe", os = [
   "linux",
   "macos",
