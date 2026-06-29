@@ -28,7 +28,7 @@ has_seen_web_tour = false
 has_seen_welcome = true
 home_list_width = 35
 last_seen_version = "1.11.3"
-new_session_with_selection_count = 16
+new_session_with_selection_count = 18
 tips_seen = ["new-from-selection"]
 used_new_from_selection = false
 
@@ -40,11 +40,6 @@ context_lines = 3
 split_view = false
 
 [hooks]
-on_create = ["mise trust"]
-on_launch = [
-    "mise trust",
-    "mise install",
-]
 
 [host_hooks]
 
@@ -99,7 +94,7 @@ snooze_duration_minutes = 30
 strict_hotkeys = false
 tie_workdir_to_name = true
 unread_indicator = true
-yolo_mode_default = false
+yolo_mode_default = true
 
 [sound]
 enabled = true
@@ -115,7 +110,7 @@ enabled = false
 [theme]
 color_mode = "truecolor"
 idle_decay_minutes = 0
-name = ""
+name = "zinc"
 
 [tmux]
 clipboard = "auto"
