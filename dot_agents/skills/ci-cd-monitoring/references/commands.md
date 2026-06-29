@@ -32,8 +32,12 @@ done
 ```
 
 ```bash
-# GitLab — no native --watch on `glab ci status`; block in ONE call with a shell loop.
-# Drives off the latest pipeline for the current branch via the API.
+# GitLab — native-ish blocker for the CURRENT branch's latest pipeline
+# Continuously updates status in the terminal and exits non-zero on failure.
+# NOTE: --live is mutually exclusive with --output json and --compact.
+glab ci status --live
+
+# GitLab — shell-loop fallback for the current branch when --live is not available
 branch=$(git branch --show-current)
 while :; do
   ci_status=$(glab api "projects/:fullpath/pipelines?ref=$branch&per_page=1" \
@@ -49,10 +53,10 @@ while :; do
   esac
 done
 
-# GitLab — block on a SPECIFIC pipeline by ID, e.g. a `.../-/pipelines/2842` URL → id 2842
+# GitLab — block on a SPECIFIC pipeline by ID, e.g. a `.../-/pipelines/3445` URL → id 3445
 # (the equivalent of `gh run watch <run-id>`). `glab ci get` infers project + host from the
 # repo remote inside a checkout; add `-R host/group/sub/project` to target another project.
-pipeline_id=2842
+pipeline_id=3445
 while :; do
   ci_status=$(glab ci get --pipeline-id "$pipeline_id" --output json | jq -r '.status')
   case "$ci_status" in
@@ -81,7 +85,9 @@ gh run list --branch "$(git branch --show-current)" --limit 5
 gh run view <run-id> --log-failed                           # failed-job logs only
 
 # GitLab
-glab ci status                                              # current branch's pipeline summary
+glab ci status                                              # current branch's pipeline summary (one-shot)
+glab ci status --output json | jq -r 'if type == "array" then .[0].pipeline.status else .pipeline.status end'  # pipeline status from one-shot JSON (shape varies by state)
+glab ci status --live                                       # block until the pipeline finishes, exit non-zero on failure
 glab ci view                                                # interactive pipeline view (humans, not agents)
 glab ci trace <job-id>                                      # stream a job's log
 glab ci get --pipeline-id <id> --output json \             # one pipeline by ID — full schema

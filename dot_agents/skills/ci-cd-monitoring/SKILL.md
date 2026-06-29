@@ -48,11 +48,12 @@ the pipeline. One command goes in, blocks until the pipeline is terminal, comes 
 - **GitHub** — prefer the built-in blockers, which already wait to completion and set a
   non-zero exit on failure: `gh pr checks <num> --watch --fail-fast`,
   `gh run watch <run-id> --exit-status`.
-- **GitLab** — `glab ci status` is one-shot; wrap it (or `glab ci get --pipeline-id <id>`,
-  to block on a specific pipeline by ID) in a `while` loop with a `sleep` so the **single**
+- **GitLab** — `glab ci status --live` blocks until the current branch's pipeline
+  reaches a terminal state and exits non-zero on failure. For a specific pipeline ID, wrap
+  `glab ci get --pipeline-id <id>` in a `while` loop with a `sleep` so the **single**
   invocation blocks until terminal.
 
-Both the GitHub `--watch` recipes and the GitLab shell-loop recipe are in
+Both the GitHub `--watch` recipes and the GitLab `--live`/shell-loop recipes are in
 [`references/commands.md`](references/commands.md) — copy one, run it as a single command,
 and wait for it to return.
 
