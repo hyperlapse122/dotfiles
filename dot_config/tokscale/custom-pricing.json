@@ -1,0 +1,10 @@
+{
+  "$schema": "https://tokscale.ai/custom-pricing.schema.json",
+  "models": {
+    "k2p7": {
+      "input_cost_per_million_tokens": 0.95,
+      "output_cost_per_million_tokens": 4.00,
+      "cache_read_input_token_cost_per_million_tokens": 0.19
+    }
+  }
+}

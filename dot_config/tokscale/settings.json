@@ -1,0 +1,16 @@
+{
+  "colorPalette": "ylgnbu",
+  "autoRefreshEnabled": true,
+  "autoRefreshMs": 30000,
+  "includeUnusedModels": false,
+  "nativeTimeoutMs": 300000,
+  "scanner": {
+    "opencodeDbPaths": [],
+    "extraScanPaths": {}
+  },
+  "defaultClients": [],
+  "light": {
+    "writeCache": false
+  },
+  "minutelyTabEnabled": false
+}
