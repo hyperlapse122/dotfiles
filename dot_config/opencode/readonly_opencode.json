@@ -158,6 +158,11 @@
 				"apiKey": "{file:./secrets/opencode-api-key}"
 			}
 		},
+		"kimi-for-coding": {
+			"options": {
+				"apiKey": "{file:./secrets/kimi-for-coding-api-key}"
+			}
+		},
 		"openrouter": {
 			"options": {
 				"apiKey": "{file:./secrets/openrouter-api-key}",

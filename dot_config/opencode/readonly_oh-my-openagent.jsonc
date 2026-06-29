@@ -3,14 +3,7 @@
 	"agents": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
 		"sisyphus": {
-			"model": "anthropic/claude-opus-4-8",
-			"variant": "max",
-			"fallback_models": [
-				{
-					"model": "openai/gpt-5.5-fast",
-					"variant": "medium"
-				}
-			]
+			"model": "kimi-for-coding/k2p7"
 		},
 		"hephaestus": {
 			"model": "openai/gpt-5.5-fast",
@@ -21,43 +14,29 @@
 			"variant": "high"
 		},
 		"librarian": {
-			"model": "openai/gpt-5.4-mini-fast",
-			"fallback_models": []
+			"model": "openai/gpt-5.4-mini-fast"
 		},
 		"explore": {
-			"model": "openai/gpt-5.4-mini-fast",
-			"fallback_models": []
+			"model": "openai/gpt-5.4-mini-fast"
 		},
 		"multimodal-looker": {
 			"model": "openai/gpt-5.5-fast",
-			"variant": "medium",
-			"fallback_models": []
+			"variant": "medium"
 		},
 		"prometheus": {
-			"model": "anthropic/claude-opus-4-8",
-			"variant": "max",
-		  "fallback_models": [
-				{
-					"model": "openai/gpt-5.5-fast",
-					"variant": "high"
-				}
-			]
+			"model": "openai/gpt-5.5-fast",
+			"variant": "high"
 		},
 		"metis": {
-			"model": "anthropic/claude-sonnet-4-6",
-			"fallback_models": [
-				{
-					"model": "openai/gpt-5.5-fast",
-					"variant": "high"
-				}
-			]
+			"model": "openai/gpt-5.5-fast",
+			"variant": "high"
 		},
 		"momus": {
 			"model": "openai/gpt-5.5-fast",
 			"variant": "xhigh"
 		},
 		"atlas": {
-			"model": "anthropic/claude-sonnet-4-6",
+			"model": "kimi-for-coding/k2p7",
 		  "fallback_models": [
 				{
 					"model": "openai/gpt-5.5-fast",
@@ -66,7 +45,7 @@
 			]
 		},
 		"sisyphus-junior": {
-			"model": "anthropic/claude-sonnet-4-6",
+			"model": "kimi-for-coding/k2p7",
 			"fallback_models": [
 				{
 					"model": "openai/gpt-5.5-fast",
@@ -83,6 +62,9 @@
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
+				},
+				{
+					"model": "kimi-for-coding/k2p7"
 				},
 				{
 					"model": "openai/gpt-5.5-fast",
@@ -114,23 +96,12 @@
 			"model": "openai/gpt-5.4-mini-fast"
 		},
 		"unspecified-low": {
-			"model": "anthropic/claude-sonnet-4-6",
-			"fallback_models": [
-				{
-					"model": "openai/gpt-5.3-codex",
-					"variant": "medium"
-				}
-			]
+			"model": "openai/gpt-5.5",
+			"variant": "medium"
 		},
 		"unspecified-high": {
-			"model": "anthropic/claude-opus-4-8",
-			"variant": "max",
-			"fallback_models": [
-				{
-					"model": "openai/gpt-5.5-fast",
-					"variant": "high"
-				}
-			]
+			"model": "openai/gpt-5.5-fast",
+			"variant": "high"
 		},
 		"writing": {
 			"model": "google-agy/gemini-3.5-flash"
