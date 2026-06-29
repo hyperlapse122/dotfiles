@@ -20,6 +20,6 @@ fi
 "${SUDO[@]}" systemctl enable --now tailscaled.service
 {{ end -}}
 
-"${SUDO[@]}" tailscale up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key={{- onepasswordRead "op://Private/Tailscale/Auth Key" | quote -}}
+"${SUDO[@]}" tailscale up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key={{- onepasswordRead "op://Private/Tailscale/Auth Key" | quote -}} || echo "Auth Failed"
 
 {{ end -}}
