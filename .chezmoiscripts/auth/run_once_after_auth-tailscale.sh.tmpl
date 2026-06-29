@@ -5,6 +5,16 @@ set -euo pipefail
 
 {{ if eq .chezmoi.os "darwin" -}}
 SUDO=()
+# The Mac App Store / standalone Tailscale app ships its CLI inside the app
+# bundle and is often not on PATH; prefer PATH, else fall back to the bundle.
+if command -v tailscale >/dev/null 2>&1; then
+  TAILSCALE=(tailscale)
+elif [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]]; then
+  TAILSCALE=(/Applications/Tailscale.app/Contents/MacOS/Tailscale)
+else
+  printf 'auth-tailscale.sh: tailscale CLI not found on PATH or in /Applications/Tailscale.app.\n' >&2
+  exit 1
+fi
 {{ else if eq .chezmoi.os "linux" -}}
 if [[ "${EUID}" -eq 0 ]]; then
   SUDO=()
@@ -14,12 +24,22 @@ else
   printf 'auth-tailscale.sh: requires root or sudo to run tailscale up.\n' >&2
   exit 1
 fi
+TAILSCALE=(tailscale)
 {{ end -}}
 
 {{ if eq .chezmoi.os "linux" -}}
 "${SUDO[@]}" systemctl enable --now tailscaled.service
 {{ end -}}
 
-"${SUDO[@]}" tailscale up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key={{- onepasswordRead "op://Private/Tailscale/Auth Key" | quote -}} || echo "Auth Failed"
+# Skip re-authentication when this node is already logged in to a tailnet:
+# `tailscale up --auth-key` with a single-use key fails on a second apply. Only
+# the NeedsLogin / NoState backend states are unauthenticated, so `up` runs only
+# when the current state is not one of the already-authenticated states below.
+if "${SUDO[@]}" "${TAILSCALE[@]}" status --json 2>/dev/null \
+  | grep -Eq '"BackendState"[[:space:]]*:[[:space:]]*"(Running|Starting|Stopped|NeedsMachineAuth)"'; then
+  printf 'auth-tailscale.sh: already authenticated; skipping tailscale up.\n'
+else
+  "${SUDO[@]}" "${TAILSCALE[@]}" up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key={{- onepasswordRead "op://Private/Tailscale/Auth Key" | quote -}} || echo "Auth Failed"
+fi
 
 {{ end -}}
