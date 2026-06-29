@@ -100,6 +100,9 @@ minimum_release_age_excludes = [
   "github:wakatime/wakatime-cli",
 ]
 
+[settings.github]
+use_git_credentials = true
+
 [settings.ruby]
 compile = false
 
