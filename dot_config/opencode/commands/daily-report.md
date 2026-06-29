@@ -9,24 +9,17 @@ Analyze today's git commit history and produce a concise daily work log **in Kor
 
 ## Workflow
 
-1. Pull only **the user's own commits** for today. A single person often commits under multiple
-   git identities (e.g. work email vs. personal email), so filtering by `git config user.email`
-   alone silently drops commits. **First collect every registered email via the GitLab CLI**, then
-   pass each one as a separate `--author` filter (multiple `--author` flags act as an OR in `git log`).
-   - **Preferred — aggregate all GitLab-registered emails (Linux / macOS / Git Bash)**
+1. Pull today's commits using the date range only (no author filter).
+   - **Linux**
 
      ```bash
-     # Gather every confirmed email on the authenticated GitLab account.
-     EMAILS=$(glab api user/emails 2>/dev/null | jq -r '.[].email')
-     # Always include the local git identity too, in case it isn't registered on GitLab.
-     EMAILS=$(printf '%s\n%s\n' "$EMAILS" "$(git config user.email)" | sort -u | grep -v '^$')
-     # Build one --author flag per email (git log ORs them together).
-     AUTHOR_ARGS=$(printf '%s\n' "$EMAILS" | sed 's/^/--author=/' | tr '\n' ' ')
+     git log --since="$(date +%Y-%m-%d) 00:00:00" --until="$(date -d '+1 day' +%Y-%m-%d) 00:00:00" --oneline --no-merges
+     ```
 
-     # Linux date arithmetic
-     git log $AUTHOR_ARGS --since="$(date +%Y-%m-%d) 00:00:00" --until="$(date -d '+1 day' +%Y-%m-%d) 00:00:00" --oneline --no-merges
-     # macOS / BSD date arithmetic: replace the --until value with
-     #   "$(date -v+1d +%Y-%m-%d) 00:00:00"
+   - **macOS / BSD**
+
+     ```bash
+     git log --since="$(date +%Y-%m-%d) 00:00:00" --until="$(date -v+1d +%Y-%m-%d) 00:00:00" --oneline --no-merges
      ```
 
    - **Windows PowerShell**
@@ -34,22 +27,8 @@ Analyze today's git commit history and produce a concise daily work log **in Kor
      ```powershell
      $start = (Get-Date).Date.ToString('yyyy-MM-dd HH:mm:ss')
      $end = (Get-Date).Date.AddDays(1).ToString('yyyy-MM-dd HH:mm:ss')
-     $emails = (glab api user/emails 2>$null | ConvertFrom-Json).email + (git config user.email) | Sort-Object -Unique | Where-Object { $_ }
-     $authorArgs = $emails | ForEach-Object { "--author=$_" }
-     git log @authorArgs --since="$start" --until="$end" --oneline --no-merges
+     git log --since="$start" --until="$end" --oneline --no-merges
      ```
-
-   - **Fallback when `glab` is unavailable or unauthenticated** (`glab api user/emails` errors or returns nothing):
-     use the local git identity only — first `git config user.email`, and if that yields no commits,
-     retry once with `git config user.name` (covers repos where email is unset).
-
-     ```bash
-     git log --author="$(git config user.email)" --since="$(date +%Y-%m-%d) 00:00:00" --until="$(date -d '+1 day' +%Y-%m-%d) 00:00:00" --oneline --no-merges
-     ```
-
-   - **Note**: `glab api user/emails` returns only the **authenticated** account's emails. It does not
-     require admin rights. The local `git config user.email` is still merged in because a commit
-     identity may not be registered on GitLab.
 
 2. Analyze the commit messages and group them from a **business perspective**:
    - Translate technical jargon into Korean a non-developer can understand
