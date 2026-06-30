@@ -45,6 +45,7 @@ usage = "latest"
 "npm:typescript-language-server" = { version = "latest" }
 "npm:wrangler" = { version = "latest" }
 "npm:yaml-language-server" = "latest"
+"npm:cypress" = { version = "latest", npm_args = "--allow-scripts=cypress --ignore-scripts=false" }
 
 # Local Kubernetes development environment
 helm = "latest"
