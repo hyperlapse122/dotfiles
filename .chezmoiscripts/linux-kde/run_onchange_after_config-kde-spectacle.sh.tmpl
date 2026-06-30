@@ -1,0 +1,37 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux-kde/run_onchange_after_config-kde-spectacle.sh.tmpl
+#
+# Makes Spectacle not re-use the last captured rectangular region, matching
+# Windows Snipping Tool and macOS Screenshot behavior:
+#   [General] rememberSelectionRect = Never
+#
+# Valid values per Spectacle's KConfig schema are Never, UntilQuit, Always.
+# The default is UntilQuit, which remembers the selection while Spectacle is
+# running. Always persists it across sessions. We set Never so each rectangular
+# capture starts fresh.
+#
+# Applies on next Spectacle launch.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-spectacle.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_spectacle() {
+  printf 'config-kde-spectacle.sh: disabling remembered rectangular selection...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file spectaclerc --group General \
+    --key rememberSelectionRect Never
+  printf '  set [General] rememberSelectionRect = Never\n'
+}
+
+configure_spectacle
+{{ end -}}
