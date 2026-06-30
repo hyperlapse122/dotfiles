@@ -28,10 +28,6 @@
 			"variant": "high",
 			"fallback_models": [
 				{
-					"model": "google-agy/gemini-3.1-pro",
-					"variant": "high"
-				},
-				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "high"
 				},
@@ -72,8 +68,7 @@
 					"model": "openai/gpt-5.5-fast",
 					"variant": "high"
 				},
-				"zai-coding-plan/glm-5.2",
-				"google-agy/gemini-3.1-pro"
+				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"metis": {
@@ -104,10 +99,6 @@
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
-				},
-				{
-					"model": "google-agy/gemini-3.1-pro",
-					"variant": "high"
 				},
 				"zai-coding-plan/glm-5.2"
 			]
@@ -147,10 +138,8 @@
 	"categories": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 		"visual-engineering": {
-			"model": "google-agy/gemini-3.1-pro",
-			"variant": "high",
+			"model": "zai-coding-plan/glm-5.2",
 			"fallback_models": [
-				"zai-coding-plan/glm-5.2",
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
@@ -163,10 +152,6 @@
 			"model": "openai/gpt-5.5-fast",
 			"variant": "xhigh",
 			"fallback_models": [
-				{
-					"model": "google-agy/gemini-3.1-pro",
-					"variant": "high"
-				},
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
@@ -182,17 +167,12 @@
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
 				},
-				{
-					"model": "google-agy/gemini-3.1-pro",
-					"variant": "high"
-				},
 				"kimi-for-coding/k2p7",
 				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"artistry": {
-			"model": "google-agy/gemini-3.1-pro",
-			"variant": "high",
+			"model": "zai-coding-plan/glm-5.2",
 			"fallback_models": [
 				{
 					"model": "anthropic/claude-opus-4-8",
@@ -206,8 +186,7 @@
 		"quick": {
 			"model": "openai/gpt-5.4-mini-fast",
 			"fallback_models": [
-				"anthropic/claude-haiku-4-5",
-				"google-agy/gemini-3.5-flash"
+				"anthropic/claude-haiku-4-5"
 			]
 		},
 		"unspecified-low": {
@@ -224,8 +203,7 @@
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
 				},
-				"kimi-for-coding/k2p7",
-				"google-agy/gemini-3.5-flash"
+				"kimi-for-coding/k2p7"
 			]
 		},
 		"unspecified-high": {
@@ -247,9 +225,8 @@
 			]
 		},
 		"writing": {
-			"model": "google-agy/gemini-3.5-flash",
+			"model": "kimi-for-coding/k2p7",
 			"fallback_models": [
-				"kimi-for-coding/k2p7",
 				"anthropic/claude-sonnet-4-6"
 			]
 		}
