@@ -37,25 +37,25 @@ keep polling. CLI recipes (`gh pr checks --watch`, `gh run view --log-failed`,
 `glab ci status`, `glab ci trace`, the pipelines `jq`) →
 [`references/commands.md`](references/commands.md).
 
-### Use ONE blocking command, NOT repeated one-shot polls
+### Use ONE native blocking command, NOT repeated one-shot polls or shell scripts
 
-**MUST wait with a single blocking call** — either a native `--watch` command or a shell
-loop that polls internally and only returns at a terminal state. **MUST NOT** fire a
-one-shot status command (`gh run view`, `glab ci status`, the pipelines `jq`) over and over
-as separate tool calls to simulate waiting — that burns turns, spams the session, and races
-the pipeline. One command goes in, blocks until the pipeline is terminal, comes back once.
+**MUST wait with a single native blocking call** that the CLI itself keeps alive until the
+pipeline reaches a terminal state. **MUST NOT** fire a one-shot status command
+(`gh run view`, `glab ci status`, the pipelines `jq`) over and over as separate tool calls
+to simulate waiting — that burns turns, spams the session, and races the pipeline. **MUST
+NOT** write or run a custom shell loop (`while :; do … sleep … done`) to poll the pipeline:
+shell polling is fragile, easy to get wrong, and unnecessary when the CLI provides a built-in
+blocker. One native command goes in, blocks until the pipeline is terminal, comes back once.
 
-- **GitHub** — prefer the built-in blockers, which already wait to completion and set a
-  non-zero exit on failure: `gh pr checks <num> --watch --fail-fast`,
-  `gh run watch <run-id> --exit-status`.
+- **GitHub** — `gh run watch <run-id> --exit-status` blocks on ONE workflow run until it
+  reaches a terminal state and exits non-zero on failure. To block on ALL checks for a PR,
+  use `gh pr checks <num> --watch --fail-fast`.
 - **GitLab** — `glab ci status --live` blocks until the current branch's pipeline
-  reaches a terminal state and exits non-zero on failure. For a specific pipeline ID, wrap
-  `glab ci get --pipeline-id <id>` in a `while` loop with a `sleep` so the **single**
-  invocation blocks until terminal.
+  reaches a terminal state and exits non-zero on failure. Use this as the default monitor
+  for the current branch.
 
-Both the GitHub `--watch` recipes and the GitLab `--live`/shell-loop recipes are in
-[`references/commands.md`](references/commands.md) — copy one, run it as a single command,
-and wait for it to return.
+The native blocking recipes are in [`references/commands.md`](references/commands.md) —
+copy one, run it as a single command, and wait for it to return.
 
 ## If the pipeline fails, fix it until green
 

@@ -1,81 +1,28 @@
 # CI/CD CLI recipes — reference
 
-## Wait with ONE blocking command (do NOT loop one-shot polls as separate tool calls)
+## Wait with ONE native blocking command (do NOT loop one-shot polls as separate tool calls, do NOT use shell scripts)
 
-Run **a single** command that returns only when the pipeline reaches a terminal state. Use a
-native `--watch` blocker where one exists; otherwise wrap a one-shot status check in a shell
-loop so the **one** invocation blocks internally. Never re-run a one-shot status command as
-repeated tool calls to fake waiting.
-
-> **Shell-variable naming.** The loop variable is `ci_status`, not `status` or `state`. In
-> zsh `status` is a read-only special parameter (an alias for `$?`), so `status=$(…)` aborts
-> with `read-only variable: status` when a recipe is pasted into an interactive zsh — and
-> `state` is avoided alongside it. Keep loop variables prefixed (`ci_status`); don't "simplify"
-> them back to the bare names.
+Run **a single** native CLI command that returns only when the pipeline reaches a terminal
+state. Use the built-in `--watch` / `--live` blocker for the platform. Never re-run a
+one-shot status command as repeated tool calls to fake waiting, and never wrap one-shot
+commands in a shell `while`/`sleep` loop — shell polling is prohibited.
 
 ```bash
 # GitHub — native blockers (already wait to completion; non-zero exit on failure)
-gh pr checks <num> --watch --fail-fast                      # blocks on ALL checks for the PR
+# https://cli.github.com/manual/gh_run_watch
 gh run watch <run-id> --exit-status                         # blocks on ONE run; exit 1 if it fails
+gh pr checks <num> --watch --fail-fast                      # blocks on ALL checks for the PR
 
-# GitHub — shell loop fallback when you only have a run id and want custom handling
-while :; do
-  ci_status=$(gh run view <run-id> --json status,conclusion \
-    | jq -r '.conclusion // .status')                       # conclusion set only when done
-  case "$ci_status" in
-    success) echo "green"; break ;;
-    failure|cancelled|timed_out|action_required)
-      echo "terminal: $ci_status"; gh run view <run-id> --log-failed; exit 1 ;;
-    *) sleep 15 ;;                                           # queued/in_progress → keep waiting
-  esac
-done
-```
-
-```bash
-# GitLab — native-ish blocker for the CURRENT branch's latest pipeline
+# GitLab — native blocker for the CURRENT branch's latest pipeline
 # Continuously updates status in the terminal and exits non-zero on failure.
+# https://gitlab.com/gitlab-org/cli/-/raw/main/docs/source/ci/status.md
 # NOTE: --live is mutually exclusive with --output json and --compact.
 glab ci status --live
-
-# GitLab — shell-loop fallback for the current branch when --live is not available
-branch=$(git branch --show-current)
-while :; do
-  ci_status=$(glab api "projects/:fullpath/pipelines?ref=$branch&per_page=1" \
-    | jq -r '.[0].status')
-  case "$ci_status" in
-    success) echo "green"; break ;;
-    failed|canceled|skipped)
-      echo "terminal: $ci_status"
-      pid=$(glab api "projects/:fullpath/pipelines?ref=$branch&per_page=1" | jq -r '.[0].id')
-      glab ci get --pipeline-id "$pid"                       # show failed jobs; then trace them
-      exit 1 ;;
-    *) sleep 15 ;;                                           # created/pending/running → keep waiting
-  esac
-done
-
-# GitLab — block on a SPECIFIC pipeline by ID, e.g. a `.../-/pipelines/3445` URL → id 3445
-# (the equivalent of `gh run watch <run-id>`). `glab ci get` infers project + host from the
-# repo remote inside a checkout; add `-R host/group/sub/project` to target another project.
-pipeline_id=3445
-while :; do
-  ci_status=$(glab ci get --pipeline-id "$pipeline_id" --output json | jq -r '.status')
-  case "$ci_status" in
-    success) echo "green"; break ;;
-    failed|canceled|skipped)
-      echo "terminal: $ci_status"
-      glab ci get --pipeline-id "$pipeline_id" --output json \
-        | jq -r '.jobs[] | select(.status=="failed") | "\(.id)\t\(.stage)/\(.name)"'  # failed jobs
-      exit 1 ;;
-    *) sleep 15 ;;                                           # created/pending/running → keep waiting
-  esac
-done
 ```
 
-`:fullpath` resolves the slash-separated project path from the repo remote; pass an explicit
-`group/sub/project` (slashes intact, never URL-encoded) when the remote doesn't point at the
-target. GitLab terminal statuses: `success`, `failed`, `canceled`, `skipped` (also `manual`
-/ `scheduled` when a stage is gated); non-terminal: `created`, `waiting_for_resource`,
-`preparing`, `pending`, `running`.
+If you need to monitor a specific pipeline by ID on GitLab and `glab ci status --live` does
+not cover it, use `glab ci get --pipeline-id <id>` only for one-shot inspection after the
+pipeline has reached a terminal state — not for polling.
 
 ## One-shot status / log inspection (for diagnosis, NOT for waiting)
 
