@@ -138,7 +138,7 @@
 	"categories": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 		"visual-engineering": {
-			"model": "zai-coding-plan/glm-5",
+			"model": "zai-coding-plan/glm-5.1",
 			"fallback_models": [
 				{
 					"model": "anthropic/claude-opus-4-8",
