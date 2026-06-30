@@ -1,5 +1,5 @@
 {
-  "colorPalette": "ylgnbu",
+  "colorPalette": "blue",
   "autoRefreshEnabled": true,
   "autoRefreshMs": 30000,
   "includeUnusedModels": false,
