@@ -9,7 +9,7 @@
   },
   "diff_style": "auto",
   "plugin": [
-    "oh-my-openagent@4.14.0/tui",
-    "oh-my-openagent@4.14.0"
+    "oh-my-openagent@4.14.1/tui",
+    "oh-my-openagent@4.14.1"
   ]
 }
