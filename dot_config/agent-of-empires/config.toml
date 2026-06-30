@@ -29,7 +29,8 @@ has_seen_web_tour = false
 has_seen_welcome = true
 home_list_width = 35
 last_seen_version = "1.11.3"
-new_session_with_selection_count = 3
+new_session_with_selection_count = 8
+tips_seen = ["new-from-selection"]
 used_new_from_selection = false
 
 [app_state.web_ui_state]
