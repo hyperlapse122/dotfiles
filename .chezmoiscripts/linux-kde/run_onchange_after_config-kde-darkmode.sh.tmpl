@@ -1,0 +1,42 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-darkmode.sh.tmpl
+#
+# Pins the desktop to the default dark Global Theme ("Breeze Dark") and turns
+# OFF the Plasma 6.5+ automatic day/night theme switching:
+#   [KDE]     AutomaticLookAndFeel = false
+#   [KDE]     LookAndFeelPackage   = org.kde.breezedark.desktop
+#   [General] ColorScheme          = BreezeDark
+#
+# Applies after re-login.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-darkmode.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_darkmode() {
+  printf 'config-kde-darkmode.sh: pinning default dark global theme + disabling auto day/night switching...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file kdeglobals --group KDE \
+    --key AutomaticLookAndFeel --type bool false
+  printf '  set [KDE]     AutomaticLookAndFeel = false\n'
+
+  kwriteconfig6 --file kdeglobals --group KDE \
+    --key LookAndFeelPackage org.kde.breezedark.desktop
+  printf '  set [KDE]     LookAndFeelPackage   = org.kde.breezedark.desktop\n'
+
+  kwriteconfig6 --file kdeglobals --group General \
+    --key ColorScheme BreezeDark
+  printf '  set [General] ColorScheme          = BreezeDark\n'
+}
+
+configure_darkmode
+{{ end -}}

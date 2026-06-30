@@ -1,0 +1,41 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-dimscreen.sh.tmpl
+#
+# Disables PowerDevil's idle screen-dimming action in every power profile:
+#   [<profile>][Display] DimDisplayWhenIdle       = false
+#   [<profile>][Display] DimDisplayIdleTimeoutSec = -1
+# for AC, Battery, and LowBattery.
+#
+# Applies after re-login or when powerdevil reloads its config.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-dimscreen.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_dimscreen() {
+  printf 'config-kde-dimscreen.sh: disabling automatic screen dimming on inactivity...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local profile
+  for profile in AC Battery LowBattery; do
+    kwriteconfig6 --file powerdevilrc \
+      --group "$profile" --group Display \
+      --key DimDisplayWhenIdle --type bool false
+    kwriteconfig6 --file powerdevilrc \
+      --group "$profile" --group Display \
+      --key DimDisplayIdleTimeoutSec --type int -- -1
+    printf '  set [%s][Display] DimDisplayWhenIdle = false, DimDisplayIdleTimeoutSec = -1\n' \
+      "$profile"
+  done
+}
+
+configure_dimscreen
+{{ end -}}

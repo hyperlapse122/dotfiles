@@ -1,0 +1,46 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-virtualkeyboard.sh.tmpl
+#
+# Selects Fcitx 5 Wayland Launcher as the KWin virtual keyboard / input-method
+# launcher:
+#   [Wayland] InputMethod = /usr/share/applications/fcitx5-wayland-launcher.desktop
+#
+# Uses kwriteconfig6 --type path so KConfig writes the canonical
+# InputMethod[$e]=... form. Skips cleanly when the desktop file isn't installed.
+#
+# Applies after restarting KWin (kwin_wayland --replace) or logging out/in.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-virtualkeyboard.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+VIRTUAL_KEYBOARD_DESKTOP_FILE='/usr/share/applications/fcitx5-wayland-launcher.desktop'
+
+configure_virtualkeyboard() {
+  printf 'config-kde-virtualkeyboard.sh: selecting fcitx5 wayland launcher...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  if [[ ! -f "$VIRTUAL_KEYBOARD_DESKTOP_FILE" ]]; then
+    printf '  %s not installed (install fcitx5 first), skipping.\n' \
+      "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
+    return 0
+  fi
+
+  kwriteconfig6 --file kwinrc \
+    --group Wayland \
+    --key InputMethod \
+    --type path \
+    "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
+  printf '  set [Wayland] InputMethod = %s\n' "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
+}
+
+configure_virtualkeyboard
+{{ end -}}

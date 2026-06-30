@@ -1,0 +1,68 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-panel.sh.tmpl
+#
+# Disables task manager grouping by setting groupingStrategy = 0
+# (TasksModel::GroupDisabled, "Do not group") on every panel-level
+# org.kde.plasma.icontasks / org.kde.plasma.taskmanager applet.
+#
+# CAVEAT: ~/.config/plasma-org.kde.plasma.desktop-appletsrc is owned by a
+# running plasmashell. Edits are safest before plasmashell first starts or
+# after restarting it; otherwise the live process may overwrite the change.
+# The write is idempotent so re-running is safe.
+#
+# Applies after restarting plasmashell or logging out/in.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-panel.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_panel() {
+  printf 'config-kde-panel.sh: disabling task manager grouping...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+  if [[ ! -f "$file" ]]; then
+    printf '  %s not found (no Plasma session has ever started?), skipping.\n' "$file"
+    return 0
+  fi
+
+  local count=0
+  local containment applet plugin
+  while IFS=':' read -r containment applet; do
+    plugin="$(kreadconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --key plugin)"
+    case "$plugin" in
+      org.kde.plasma.icontasks|org.kde.plasma.taskmanager) ;;
+      *) continue ;;
+    esac
+    kwriteconfig6 --file "$file" \
+      --group Containments --group "$containment" \
+      --group Applets --group "$applet" \
+      --group Configuration --group General \
+      --key groupingStrategy 0
+    printf '  set [Containments/%s/Applets/%s] (%s) groupingStrategy = 0\n' \
+      "$containment" "$applet" "$plugin"
+    count=$((count + 1))
+  done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$file" \
+            | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
+
+  if [[ "$count" -eq 0 ]]; then
+    printf '  no icontasks/taskmanager applet found in panel config, skipping.\n'
+    return 0
+  fi
+
+  printf '  configured %d task manager applet(s).\n' "$count"
+}
+
+configure_panel
+{{ end -}}

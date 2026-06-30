@@ -1,0 +1,126 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-touchpad.sh.tmpl
+#
+# Configures libinput touchpads via KWin's org.kde.KWin.InputDeviceManager:
+#   naturalScroll          -> true
+#   tapToClick             -> true (if supported)
+#   clickMethodClickfinger -> true
+#   clickMethodAreas       -> false
+#
+# Only touchpads whose libinput name appears in TOUCHPAD_TARGET_NAMES are
+# configured; other touchpads are left untouched. Skips cleanly when busctl is
+# missing or no Plasma session owns org.kde.KWin.
+#
+# Applies live via DBus.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-touchpad.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+TOUCHPAD_TARGET_NAMES=(
+  'SynPS/2 Synaptics TouchPad'
+  'ELAN06E8:00 04F3:332E Touchpad'
+)
+
+configure_touchpad() {
+  printf 'config-kde-touchpad.sh: configuring KDE touchpad(s)...\n'
+
+  if ! command -v busctl >/dev/null 2>&1; then
+    printf '  busctl not found, skipping.\n'
+    return 0
+  fi
+
+  local SERVICE='org.kde.KWin'
+  local MGR_PATH='/org/kde/KWin/InputDevice'
+  local IFACE_MGR='org.kde.KWin.InputDeviceManager'
+  local IFACE_DEV='org.kde.KWin.InputDevice'
+
+  _dbus_get() {
+    local path="$1" prop="$2"
+    busctl --user get-property "$SERVICE" "$path" "$IFACE_DEV" "$prop" 2>/dev/null \
+      | awk '{ $1=""; sub(/^ /, ""); print }'
+  }
+
+  _dbus_set_b() {
+    local path="$1" prop="$2" value="$3"
+    busctl --user set-property "$SERVICE" "$path" "$IFACE_DEV" "$prop" b "$value"
+    printf '    set %-26s = %s\n' "$prop" "$value"
+  }
+
+  local raw
+  if ! raw="$(busctl --user get-property "$SERVICE" "$MGR_PATH" "$IFACE_MGR" devicesSysNames 2>/dev/null)"; then
+    printf '  org.kde.KWin not reachable on session bus (no active Plasma session?), skipping.\n'
+    return 0
+  fi
+
+  local sysnames=()
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && sysnames+=("$name")
+  done < <(printf '%s\n' "$raw" | grep -oE '"[^"]+"' | tr -d '"')
+
+  local count=0
+  local sn path is_touchpad name_quoted matched target
+  for sn in "${sysnames[@]}"; do
+    path="$MGR_PATH/$sn"
+    is_touchpad="$(_dbus_get "$path" touchpad)"
+    [[ "$is_touchpad" == "true" ]] || continue
+
+    name_quoted="$(_dbus_get "$path" name)"
+    name="${name_quoted#\"}"
+    name="${name%\"}"
+
+    matched=0
+    for target in "${TOUCHPAD_TARGET_NAMES[@]}"; do
+      if [[ "$name" == "$target" ]]; then
+        matched=1
+        break
+      fi
+    done
+    if [[ "$matched" -eq 0 ]]; then
+      printf '  skip: %s (%s) — not in TOUCHPAD_TARGET_NAMES\n' "$name" "$sn"
+      continue
+    fi
+
+    printf '  touchpad: %s (%s)\n' "$name" "$sn"
+
+    if [[ "$(_dbus_get "$path" supportsNaturalScroll)" == "true" ]]; then
+      _dbus_set_b "$path" naturalScroll true
+    else
+      printf '    skip naturalScroll: not supported by device\n'
+    fi
+
+    local tap_finger_count
+    tap_finger_count="$(_dbus_get "$path" tapFingerCount)"
+    if [[ -n "$tap_finger_count" && "$tap_finger_count" != "0" ]]; then
+      _dbus_set_b "$path" tapToClick true
+    else
+      printf '    skip tapToClick: not supported by device\n'
+    fi
+
+    if [[ "$(_dbus_get "$path" supportsClickMethodClickfinger)" == "true" ]]; then
+      _dbus_set_b "$path" clickMethodClickfinger true
+      if [[ "$(_dbus_get "$path" supportsClickMethodAreas)" == "true" ]]; then
+        _dbus_set_b "$path" clickMethodAreas false
+      fi
+    else
+      printf '    skip clickMethodClickfinger: not supported by device\n'
+    fi
+
+    count=$((count + 1))
+  done
+
+  if [[ "$count" -eq 0 ]]; then
+    printf '  no touchpad in TOUCHPAD_TARGET_NAMES present on this session, skipping.\n'
+    return 0
+  fi
+
+  printf '  configured %d touchpad(s).\n' "$count"
+}
+
+configure_touchpad
+{{ end -}}

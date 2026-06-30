@@ -1,0 +1,72 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-fonts.sh.tmpl
+#
+# Configures KDE Plasma 6 display fonts:
+#   sans (font, menuFont, toolBarFont, smallestReadableFont,
+#         [WM] activeFont) -> Pretendard
+#   mono (fixed)           -> JetBrainsMono Nerd Font
+#
+# Errors (exit 1) when a requested font isn't installed - run
+# scripts/bootstrap/install-fonts.sh first.
+#
+# Applies after restarting plasmashell or logging out/in.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-fonts.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_fonts() {
+  printf 'config-kde-fonts.sh: configuring KDE display fonts...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+  if ! command -v fc-match >/dev/null 2>&1; then
+    printf '  fc-match not found, cannot verify font availability.\n' >&2
+    return 1
+  fi
+
+  local SANS="Pretendard"
+  local MONO="JetBrainsMono Nerd Font"
+
+  _require_font() {
+    local family="$1"
+    local matched
+    matched="$(fc-match -f '%{family[0]}' "$family")"
+    if [[ "$matched" != "$family" ]]; then
+      printf '  font "%s" not installed (fc-match -> "%s"). Run scripts/bootstrap/install-fonts.sh first.\n' \
+        "$family" "$matched" >&2
+      return 1
+    fi
+  }
+
+  _require_font "$SANS"
+  _require_font "$MONO"
+
+  _font_value() { printf '%s,%d,-1,5,400,0,0,0,0,0,0,0,0,0,0,1' "$1" "$2"; }
+
+  _set_general() {
+    local key="$1" value="$2"
+    kwriteconfig6 --file kdeglobals --group General --key "$key" "$value"
+    printf '  set [General] %-22s = %s\n' "$key" "$value"
+  }
+
+  _set_general font                 "$(_font_value "$SANS" 10)"
+  _set_general menuFont             "$(_font_value "$SANS" 10)"
+  _set_general toolBarFont          "$(_font_value "$SANS" 10)"
+  _set_general fixed                "$(_font_value "$MONO" 10)"
+  _set_general smallestReadableFont "$(_font_value "$SANS"  8)"
+
+  local wm_active
+  wm_active="$(_font_value "$SANS" 10)"
+  kwriteconfig6 --file kdeglobals --group WM --key activeFont "$wm_active"
+  printf '  set [WM]      %-22s = %s\n' "activeFont" "$wm_active"
+}
+
+configure_fonts
+{{ end -}}

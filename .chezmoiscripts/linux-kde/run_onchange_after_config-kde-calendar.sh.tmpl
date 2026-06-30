@@ -1,0 +1,116 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-calendar.sh.tmpl
+#
+# Enables calendar popup features in the Digital Clock:
+#   a) enabledCalendarPlugins = holidaysevents,pimevents on each digitalclock
+#   b) selectedRegions        = kr_ko in plasma_calendar_holiday_regions
+#   c) calendars              = all local Akonadi calendar collection IDs in
+#                                plasmashellrc [PIMEventsPlugin]
+#
+# Sub-step (c) is discovered at runtime by querying Akonadi's local MariaDB.
+# It soft-skips when mariadb is missing, the akonadi socket is absent, or no
+# calendar collections are found.
+#
+# Applies after restarting plasmashell or logging out/in.
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-calendar.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_calendar() {
+  printf 'config-kde-calendar.sh: enabling holidays + pimevents, South Korea, all PIM calendars...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local applet_file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+  if [[ ! -f "$applet_file" ]]; then
+    printf '  %s not found (no Plasma session has ever started?), skipping (a).\n' "$applet_file"
+  else
+    local count=0
+    local containment applet plugin
+    while IFS=':' read -r containment applet; do
+      plugin="$(kreadconfig6 --file "$applet_file" \
+        --group Containments --group "$containment" \
+        --group Applets --group "$applet" \
+        --key plugin)"
+      [[ "$plugin" == "org.kde.plasma.digitalclock" ]] || continue
+      kwriteconfig6 --file "$applet_file" \
+        --group Containments --group "$containment" \
+        --group Applets --group "$applet" \
+        --group Configuration --group Appearance \
+        --key enabledCalendarPlugins "holidaysevents,pimevents"
+      printf '  set [Containments/%s/Applets/%s] (%s) enabledCalendarPlugins = holidaysevents,pimevents\n' \
+        "$containment" "$applet" "$plugin"
+      count=$((count + 1))
+    done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$applet_file" \
+              | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
+
+    if [[ "$count" -eq 0 ]]; then
+      printf '  no digitalclock applet found in panel config, skipping (a).\n'
+    else
+      printf '  (a) configured %d digitalclock applet(s).\n' "$count"
+    fi
+  fi
+
+  kwriteconfig6 --file plasma_calendar_holiday_regions \
+    --group General \
+    --key selectedRegions "kr_ko"
+  printf '  (b) set [General] selectedRegions = kr_ko in plasma_calendar_holiday_regions\n'
+
+  if ! command -v mariadb >/dev/null 2>&1; then
+    printf '  (c) mariadb client not found, skipping (PIM calendars left unchanged).\n'
+    return 0
+  fi
+
+  local akonadi_rc="$HOME/.config/akonadi/akonadiserverrc"
+  local socket=""
+  if [[ -f "$akonadi_rc" ]]; then
+    socket="$(grep -E '^Options=' "$akonadi_rc" \
+      | sed -nE 's/.*UNIX_SOCKET=([^"]+).*/\1/p' | head -n1)"
+  fi
+  [[ -n "$socket" ]] || socket="/run/user/$(id -u)/akonadi/mysql.socket"
+
+  if [[ ! -S "$socket" ]]; then
+    printf '  (c) akonadi socket %s not found (akonadi not running?), skipping.\n' "$socket"
+    return 0
+  fi
+
+  local ids
+  if ! ids="$(mariadb --socket="$socket" -u root akonadi \
+      -B --skip-column-names --silent \
+      -e "SELECT DISTINCT c.id
+            FROM CollectionTable c
+            JOIN CollectionMimeTypeRelation cmr ON cmr.Collection_id = c.id
+            JOIN MimeTypeTable m ON m.id = cmr.MimeType_id
+           WHERE m.name IN ('text/calendar',
+                            'application/x-vnd.akonadi.calendar.event',
+                            'application/x-vnd.akonadi.calendar.todo',
+                            'application/x-vnd.akonadi.calendar.journal')
+           ORDER BY c.id;" 2>/dev/null)"; then
+    printf '  (c) failed to query akonadi MariaDB on %s, skipping.\n' "$socket"
+    return 0
+  fi
+
+  local csv
+  csv="$(printf '%s\n' "$ids" | awk 'NF' | paste -sd, -)"
+
+  if [[ -z "$csv" ]]; then
+    printf '  (c) akonadi returned 0 calendar collections (no PIM resources configured?), skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file plasmashellrc \
+    --group PIMEventsPlugin \
+    --key calendars "$csv"
+  printf '  (c) set [PIMEventsPlugin] calendars = %s in plasmashellrc\n' "$csv"
+}
+
+configure_calendar
+{{ end -}}
