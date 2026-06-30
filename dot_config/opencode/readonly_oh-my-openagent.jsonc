@@ -3,15 +3,20 @@
 	"agents": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
 		"sisyphus": {
+		  // // Primary
+			// "model": "anthropic/claude-opus-4-8",
+			// "variant": "max",
+
+			// Fallback
 			"model": "kimi-for-coding/k2p7",
+
 			"fallback_models": [
+				"kimi-for-coding/k2p7",
 				{
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
 				},
-				{
-					"model": "zai-coding-plan/glm-5.2"
-				}
+				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"hephaestus": {
@@ -27,8 +32,10 @@
 					"variant": "high"
 				},
 				{
-					"model": "zai-coding-plan/glm-5.2"
-				}
+					"model": "anthropic/claude-opus-4-8",
+					"variant": "high"
+				},
+				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"librarian": {
@@ -52,17 +59,40 @@
 			]
 		},
 		"prometheus": {
+		  // // Primary
+			// "model": "anthropic/claude-opus-4-8",
+			// "variant": "max",
+
+			// Fallback
 			"model": "openai/gpt-5.5-fast",
 			"variant": "high",
+
 			"fallback_models": [
+				{
+					"model": "openai/gpt-5.5-fast",
+					"variant": "high"
+				},
 				"zai-coding-plan/glm-5.2",
 				"google-agy/gemini-3.1-pro"
 			]
 		},
 		"metis": {
+		  // // Primary
+			// "model": "anthropic/claude-sonnet-4-6",
+
+			// Fallback
 			"model": "openai/gpt-5.5-fast",
 			"variant": "high",
+			
 			"fallback_models": [
+				{
+					"model": "anthropic/claude-opus-4-8",
+					"variant": "max"
+				},
+				{
+					"model": "openai/gpt-5.5-fast",
+					"variant": "high"
+				},
 				"zai-coding-plan/glm-5.2",
 				"kimi-for-coding/k2p7"
 			]
@@ -71,13 +101,27 @@
 			"model": "openai/gpt-5.5-fast",
 			"variant": "xhigh",
 			"fallback_models": [
-				"google-agy/gemini-3.1-pro",
+				{
+					"model": "anthropic/claude-opus-4-8",
+					"variant": "max"
+				},
+				{
+					"model": "google-agy/gemini-3.1-pro",
+					"variant": "high"
+				},
 				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"atlas": {
+		  // // Primary
+			// "model": "anthropic/claude-sonnet-4-6",
+			// "variant": "max",
+
+			// Fallback
 			"model": "kimi-for-coding/k2p7",
+
 		  "fallback_models": [
+				"kimi-for-coding/k2p7",
 				{
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
@@ -85,8 +129,14 @@
 			]
 		},
 		"sisyphus-junior": {
+		  // // Primary
+			// "model": "anthropic/claude-sonnet-4-6",
+			// "variant": "max",
+
+			// Fallback
 			"model": "kimi-for-coding/k2p7",
 			"fallback_models": [
+				"kimi-for-coding/k2p7",
 				{
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
@@ -98,24 +148,15 @@
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 		"visual-engineering": {
 			"model": "google-agy/gemini-3.1-pro",
+			"variant": "high",
 			"fallback_models": [
-				{
-					"model": "zai-coding-plan/glm-5.2"
-				},
+				"zai-coding-plan/glm-5.2",
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
 				},
-				{
-					"model": "zai-coding-plan/glm-5.1"
-				},
-				{
-					"model": "kimi-for-coding/k2p7"
-				},
-				{
-					"model": "openai/gpt-5.5-fast",
-					"variant": "medium"
-				}
+				"zai-coding-plan/glm-5.1",
+				"kimi-for-coding/k2p7"
 			]
 		},
 		"ultrabrain": {
@@ -127,8 +168,10 @@
 					"variant": "high"
 				},
 				{
-					"model": "zai-coding-plan/glm-5.2"
-				}
+					"model": "anthropic/claude-opus-4-8",
+					"variant": "max"
+				},
+				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"deep": {
@@ -136,71 +179,78 @@
 			"variant": "medium",
 			"fallback_models": [
 				{
+					"model": "anthropic/claude-opus-4-8",
+					"variant": "max"
+				},
+				{
 					"model": "google-agy/gemini-3.1-pro",
 					"variant": "high"
 				},
-				{
-					"model": "kimi-for-coding/k2p7"
-				},
-				{
-					"model": "zai-coding-plan/glm-5.2"
-				}
+				"kimi-for-coding/k2p7",
+				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"artistry": {
 			"model": "google-agy/gemini-3.1-pro",
+			"variant": "high",
 			"fallback_models": [
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
 				},
-				{
-					"model": "openai/gpt-5.5-fast"
-				},
-				{
-					"model": "kimi-for-coding/k2p7"
-				},
-				{
-					"model": "zai-coding-plan/glm-5.2"
-				}
+				"openai/gpt-5.5-fast",
+				"kimi-for-coding/k2p7",
+				"zai-coding-plan/glm-5.2"
 			]
 		},
 		"quick": {
 			"model": "openai/gpt-5.4-mini-fast",
 			"fallback_models": [
-				{
-					"model": "google-agy/gemini-3.5-flash"
-				}
+				"anthropic/claude-haiku-4-5",
+				"google-agy/gemini-3.5-flash"
 			]
 		},
 		"unspecified-low": {
-			"model": "openai/gpt-5.5",
+		  // // Primary
+			// "model": "anthropic/claude-sonnet-4-6",
+			// "variant": "max",
+
+			// Fallback
+			"model": "openai/gpt-5.5-fast",
 			"variant": "medium",
+
 			"fallback_models": [
 				{
-					"model": "kimi-for-coding/k2p7"
+					"model": "openai/gpt-5.5-fast",
+					"variant": "medium"
 				},
-				{
-					"model": "google-agy/gemini-3.5-flash"
-				}
+				"kimi-for-coding/k2p7",
+				"google-agy/gemini-3.5-flash"
 			]
 		},
 		"unspecified-high": {
+		  // // Primary
+			// "model": "anthropic/claude-opus-4-8",
+			// "variant": "max",
+
+			// Fallback
 			"model": "openai/gpt-5.5-fast",
 			"variant": "high",
+			
 			"fallback_models": [
 				{
-					"model": "zai-coding-plan/glm-5.2"
+					"model": "openai/gpt-5.5-fast",
+					"variant": "high"
 				},
-				{
-					"model": "kimi-for-coding/k2p7"
-				}
+				"zai-coding-plan/glm-5.2",
+				"kimi-for-coding/k2p7"
 			]
 		},
 		"writing": {
 			"model": "google-agy/gemini-3.5-flash",
 			"fallback_models": [
-				"kimi-for-coding/k2p7"
+				"kimi-for-coding/k2p7",
+				"anthropic/claude-sonnet-4-6"
 			]
 		}
 	},
