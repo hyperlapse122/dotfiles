@@ -170,3 +170,81 @@ fn main() -> ExitCode {
     // systemd unit's Restart=always brings us back.
     ExitCode::from(1)
 }
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    // A representative dbus-monitor message block for a Notify method call.
+    const NOTIFY_BLOCK: &str = r#"method call time=1700000000.0 sender=:1.100 -> destination=org.freedesktop.Notifications serial=42 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Firefox"
+   uint32 0
+   string "firefox"
+   string "Download complete"
+   string "report.pdf finished downloading"
+   array [
+   ]
+   array [
+      dict entry(
+         string "urgency"
+         variant             byte 2
+      )
+   ]
+   int32 -1"#;
+
+    #[test]
+    fn first_string_returns_app_name() {
+        assert_eq!(first_string(NOTIFY_BLOCK).as_deref(), Some("Firefox"));
+    }
+
+    #[test]
+    fn first_string_none_when_no_string_line() {
+        assert_eq!(first_string("uint32 5\nint32 -1"), None);
+    }
+
+    #[test]
+    fn first_string_keeps_embedded_quotes_via_last_quote() {
+        // rfind('"') is greedy: an app_name containing quotes is returned whole.
+        assert_eq!(
+            first_string("   string \"a \"quoted\" name\"").as_deref(),
+            Some("a \"quoted\" name")
+        );
+    }
+
+    #[test]
+    fn first_uint32_returns_replaces_id() {
+        assert_eq!(first_uint32(NOTIFY_BLOCK), Some(0));
+    }
+
+    #[test]
+    fn first_uint32_first_match_wins() {
+        assert_eq!(first_uint32("uint32 7\nuint32 9"), Some(7));
+    }
+
+    #[test]
+    fn first_uint32_none_when_absent() {
+        assert_eq!(first_uint32("string \"x\"\nint32 -1"), None);
+    }
+
+    #[test]
+    fn urgency_byte_reads_value_after_urgency_entry() {
+        assert_eq!(urgency_byte(NOTIFY_BLOCK), Some(2));
+    }
+
+    #[test]
+    fn urgency_byte_normal_urgency() {
+        let block = "dict entry(\n   string \"urgency\"\n   variant             byte 1\n)";
+        assert_eq!(urgency_byte(block), Some(1));
+    }
+
+    #[test]
+    fn urgency_byte_none_when_no_urgency_hint() {
+        // No urgency entry at all -> None (the caller defaults to normal=1).
+        assert_eq!(urgency_byte("string \"category\"\nvariant byte 3"), None);
+    }
+
+    #[test]
+    fn urgency_byte_none_when_urgency_has_no_following_byte() {
+        assert_eq!(urgency_byte("string \"urgency\""), None);
+    }
+}
