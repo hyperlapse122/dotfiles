@@ -37,19 +37,25 @@ const QUESTION_TOOLS = new Set(["question", "ask_user_question", "askuserquestio
  */
 async function isChildSession(client: Client, sessionID: string): Promise<boolean> {
   try {
-    return match(await client.session.get({ path: { id: sessionID } }))
-      .with({ data: { parentID: P.string } }, () => true)
-      .otherwise(async ({ error }) => {
-        await client.app.log({
-          body: {
-            service: serviceName,
-            level: "warn",
-            message: `Failed to resolve session ${sessionID} to check if it's a child session — assuming it's a root session and buzzing accordingly.`,
-            extra: { error },
-          },
-        });
-        return false;
-      });
+    return (
+      match(await client.session.get({ path: { id: sessionID } }))
+        .with({ data: { parentID: P.string } }, () => true)
+        // Resolved successfully but no parentID → a genuine root session. Return
+        // false WITHOUT logging; the `.otherwise` below is only for a real
+        // resolution failure (an `{ error }` envelope with no `data`).
+        .with({ data: P.nonNullable }, () => false)
+        .otherwise(async ({ error }) => {
+          await client.app.log({
+            body: {
+              service: serviceName,
+              level: "warn",
+              message: `Failed to resolve session ${sessionID} to check if it's a child session — assuming it's a root session and buzzing accordingly.`,
+              extra: { error },
+            },
+          });
+          return false;
+        })
+    );
   } catch {
     return false;
   }

@@ -164,6 +164,20 @@ describe("MXMaster4HapticPlugin", posixOnly, () => {
     }
   });
 
+  test("session.idle on a resolved root session logs NO warning (resolved root is not a failure)", async () => {
+    const server = await startHapticServer();
+    const { client, logs } = fakeClient({ get: async () => ({ data: {} }) });
+    try {
+      const hooks = await plugin(client);
+      await hooks.event!({ event: idleEvent("root-1") } as never);
+      await tick();
+      assert.deepEqual(server.received, ["COMPLETED\n"]);
+      assert.equal(logs.length, 0);
+    } finally {
+      await server.cleanup();
+    }
+  });
+
   test("session.idle on a child session (parentID) stays silent", async () => {
     const server = await startHapticServer();
     const { client } = fakeClient({ get: async () => ({ data: { parentID: "root-1" } }) });
