@@ -34,14 +34,14 @@ the push succeeds.
 **MUST poll until a terminal state**: `success`, `failure`, `cancelled`, `timed_out`,
 `action_required`. `pending` / `queued` / `running` / `in-progress` are **NOT** terminal —
 keep polling. CLI recipes (`gh pr checks --watch`, `gh run view --log-failed`,
-`glab ci status`, `glab ci trace`, the pipelines `jq`) →
+`glab ci status --live`, `glab ci trace`) →
 [`references/commands.md`](references/commands.md).
 
 ### Use ONE native blocking command, NOT repeated one-shot polls or shell scripts
 
 **MUST wait with a single native blocking call** that the CLI itself keeps alive until the
 pipeline reaches a terminal state. **MUST NOT** fire a one-shot status command
-(`gh run view`, `glab ci status`, the pipelines `jq`) over and over as separate tool calls
+(`gh run view`, `glab ci status`, `glab ci get`) over and over as separate tool calls
 to simulate waiting — that burns turns, spams the session, and races the pipeline. **MUST
 NOT** write or run a custom shell loop (`while :; do … sleep … done`) to poll the pipeline:
 shell polling is fragile, easy to get wrong, and unnecessary when the CLI provides a built-in
@@ -50,9 +50,12 @@ blocker. One native command goes in, blocks until the pipeline is terminal, come
 - **GitHub** — `gh run watch <run-id> --exit-status` blocks on ONE workflow run until it
   reaches a terminal state and exits non-zero on failure. To block on ALL checks for a PR,
   use `gh pr checks <num> --watch --fail-fast`.
-- **GitLab** — `glab ci status --live` blocks until the current branch's pipeline
-  reaches a terminal state and exits non-zero on failure. Use this as the default monitor
-  for the current branch.
+- **GitLab** — `glab ci status --live` is the ONLY sanctioned monitor: it blocks until the
+  current branch's pipeline reaches a terminal state and exits non-zero on failure. **MUST**
+  monitor GitLab pipelines with `--live`. **MUST NOT** use the `--jq` flag, pipe glab output
+  through `| jq`, or pass `-F`/`--output json` (`--json`) for GitLab CI monitoring — GitLab's
+  JSON shape varies by pipeline state, so jq/JSON parsing is fragile and forbidden here. Read
+  failing jobs with `glab ci get` / `glab ci trace` in their default text form.
 
 The native blocking recipes are in [`references/commands.md`](references/commands.md) —
 copy one, run it as a single command, and wait for it to return.

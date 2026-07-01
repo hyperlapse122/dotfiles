@@ -13,10 +13,11 @@ commands in a shell `while`/`sleep` loop — shell polling is prohibited.
 gh run watch <run-id> --exit-status                         # blocks on ONE run; exit 1 if it fails
 gh pr checks <num> --watch --fail-fast                      # blocks on ALL checks for the PR
 
-# GitLab — native blocker for the CURRENT branch's latest pipeline
+# GitLab — native blocker for the CURRENT branch's latest pipeline (the ONLY sanctioned monitor)
 # Continuously updates status in the terminal and exits non-zero on failure.
 # https://gitlab.com/gitlab-org/cli/-/raw/main/docs/source/ci/status.md
-# NOTE: --live is mutually exclusive with --output json and --compact.
+# MUST monitor with --live. MUST NOT use the --jq flag, pipe glab through `| jq`,
+# or pass -F/--output json (--json) for GitLab CI — see the prohibition below.
 glab ci status --live
 ```
 
@@ -31,25 +32,20 @@ pipeline has reached a terminal state — not for polling.
 gh run list --branch "$(git branch --show-current)" --limit 5
 gh run view <run-id> --log-failed                           # failed-job logs only
 
-# GitLab
-glab ci status                                              # current branch's pipeline summary (one-shot)
-glab ci status --output json | jq -r 'if type == "array" then .[0].pipeline.status else .pipeline.status end'  # pipeline status from one-shot JSON (shape varies by state)
-glab ci status --live                                       # block until the pipeline finishes, exit non-zero on failure
+# GitLab — text output only; NEVER --jq, NEVER -F/--output json (--json), NEVER pipe through `| jq`
+glab ci status                                              # current branch's pipeline summary (one-shot, text)
+glab ci status --live                                       # PREFERRED: block until the pipeline finishes, exit non-zero on failure
 glab ci view                                                # interactive pipeline view (humans, not agents)
-glab ci trace <job-id>                                      # stream a job's log
-glab ci get --pipeline-id <id> --output json \             # one pipeline by ID — full schema
-  | jq '{id, iid, status, source, ref, web_url, jobs: [.jobs[] | {name, stage, status}]}'
-glab api "projects/$PROJECT/merge_requests/$MR_IID/pipelines" \
-  | jq '.[0] | {id, status, sha, web_url}'
+glab ci get                                                 # current branch's pipeline details (text)
+glab ci get --pipeline-id <id>                              # one pipeline by ID (text)
+glab ci get --merge-request <iid>                           # an MR's head pipeline (text; handles forks/detached)
+glab ci get --merge-request <iid> --status failed --with-job-details  # only the failed jobs, with detail
+glab ci trace <job-id>                                      # stream a single job's log
 ```
 
-Pipeline `status` enum (the `.status` field above): non-terminal `created`,
-`waiting_for_resource`, `preparing`, `pending`, `running`; terminal `success`, `failed`,
-`canceled`, `skipped`, `manual`, `scheduled`. `detailed_status.group` collapses to the same
-buckets and is handy for a coarse pass/fail check.
-
-`$PROJECT` is the slash-separated project path (never URL-encoded); prefer `:fullpath` when
-the repo remote points at the target.
+GitLab pipeline statuses shown in the `glab ci status` / `glab ci get` text output:
+non-terminal `created`, `waiting_for_resource`, `preparing`, `pending`, `running`; terminal
+`success`, `failed`, `canceled`, `skipped`, `manual`, `scheduled`.
 
 ## Terminal vs. non-terminal states
 
