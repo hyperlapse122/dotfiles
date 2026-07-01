@@ -19,3 +19,6 @@
 ./crates
 ./packages
 
+# Advisor improvement plans (repo-meta docs); never linked into $HOME.
+./plans
+
