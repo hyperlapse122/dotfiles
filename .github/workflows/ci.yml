@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ts-workspace:
+    name: TypeScript workspace (packages/)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn build
+      - run: yarn typecheck
+      - run: yarn test
+      - run: yarn lint
+      - run: yarn format:check
+
+  rust-crate:
+    name: Rust crate (crates/mxm4-haptic/)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/mxm4-haptic
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libudev (hidapi linux-static-hidraw backend)
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --all-targets
+      - run: cargo test
+      - run: cargo fmt --check
+
+  shell-lint:
+    name: Shellcheck (plain .sh scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          shellcheck \
+            .install-prerequisites.sh \
+            dot_local/bin/executable_setup-luks-tpm2-unlock.sh \
+            dot_agents/skills/glab/scripts/create-epic-note.sh \
+            dot_agents/skills/glab/scripts/epic-notes.sh

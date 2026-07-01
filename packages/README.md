@@ -92,9 +92,9 @@ overrides:
 - `.prettierignore` — excludes `dist/`, `.turbo/`, `node_modules/`, `*.json`,
   `*.md` so Prettier only touches `.ts`/`.mjs` source.
 
-CI runs `lint` + `format:check` via
-[`../.github/workflows/lint.yml`](../.github/workflows/lint.yml), separate from
-the build/test workflow.
+CI runs the workspace `lint` + `format:check` (plus `build`, `typecheck`, and
+`test`) via [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml),
+alongside the Rust crate build/test and shell linting.
 
 ### Editor (VS Code)
 
