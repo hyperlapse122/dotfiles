@@ -6,6 +6,11 @@
       "output_cost_per_million_tokens": 4.00,
       "cache_read_input_token_cost_per_million_tokens": 0.19
     },
+    "glm-5.1": {
+      "input_cost_per_million_tokens": 1.4,
+      "output_cost_per_million_tokens": 4.4,
+      "cache_read_input_token_cost_per_million_tokens": 0.26
+    },
     "glm-5.2": {
       "input_cost_per_million_tokens": 1.4,
       "output_cost_per_million_tokens": 4.4,
