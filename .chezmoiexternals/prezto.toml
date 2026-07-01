@@ -4,5 +4,11 @@
 type = "git-repo"
 url = "https://github.com/sorin-ionescu/prezto.git"
 clone.args = ["--recursive"]
+# Prezto ships no release tags and chezmoi git-repo cannot pin a commit SHA, so
+# we cannot cryptographically pin here. Instead, freeze auto-updates: chezmoi
+# will NOT pull upstream on every apply. Update deliberately with
+# `chezmoi update --refresh-externals` (or `chezmoi apply --refresh-externals`)
+# after reviewing upstream changes. See plans/004 and its Maintenance notes.
+refreshPeriod = "8760h"
 
 {{- end }}
