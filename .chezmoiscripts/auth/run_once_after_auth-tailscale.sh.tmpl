@@ -39,7 +39,10 @@ if "${SUDO[@]}" "${TAILSCALE[@]}" status --json 2>/dev/null \
   | grep -Eq '"BackendState"[[:space:]]*:[[:space:]]*"(Running|Starting|Stopped|NeedsMachineAuth)"'; then
   printf 'auth-tailscale.sh: already authenticated; skipping tailscale up.\n'
 else
-  "${SUDO[@]}" "${TAILSCALE[@]}" up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key={{- onepasswordRead "op://Private/Tailscale/Auth Key" | quote -}} || echo "Auth Failed"
+  if ! "${SUDO[@]}" "${TAILSCALE[@]}" up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key={{- onepasswordRead "op://Private/Tailscale/Auth Key" | quote -}}; then
+    printf 'auth-tailscale.sh: `tailscale up` failed; node did not join the tailnet. Fix the auth key or connectivity, then re-run `chezmoi apply`.\n' >&2
+    exit 1
+  fi
 fi
 
 {{ end -}}
