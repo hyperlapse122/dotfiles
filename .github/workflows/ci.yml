@@ -15,7 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # NOT 20 (the runtime `engines` floor): the build/test toolchain needs
+          # Node >=23.6 native TS type-stripping (tsdown .ts config + node --test).
+          node-version: "24"
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn build
