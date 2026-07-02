@@ -1,0 +1,41 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+BREEZE=/usr/share/plymouth/themes/breeze/breeze.plymouth
+NAME=/usr/share/plymouth/themes/default.plymouth   # the update-alternatives "name" link
+
+command -v update-alternatives >/dev/null 2>&1 || { echo "no update-alternatives; skip"; exit 0; }
+command -v update-initramfs   >/dev/null 2>&1 || { echo "no update-initramfs; skip"; exit 0; }
+# breeze.plymouth ships in plymouth-theme-breeze (installed by T7); skip if absent.
+[[ -e "$BREEZE" ]] || { echo "breeze plymouth theme absent (comes from installer); skip"; exit 0; }
+
+# SUDO + non-interactive skip (querying/setting the alternatives db needs root)
+if [[ "$EUID" -eq 0 ]]; then SUDO=(); else SUDO=(sudo)
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then echo "no sudo; skip"; exit 0; fi
+fi
+
+# Idempotency: if default.plymouth already resolves to breeze, do NOTHING
+# (crucially, do NOT rebuild the initramfs).
+current="$("${SUDO[@]}" update-alternatives --query default.plymouth 2>/dev/null | awk '/^Value:/{print $2}')"
+[[ "$current" == "$BREEZE" ]] && { echo "plymouth already breeze; no-op"; exit 0; }
+
+# NOTE (Oracle-verified, ubuntu:26.04): plymouth-theme-breeze's postinst does NOT
+# register breeze as a default.plymouth alternative (it only REMOVES stale breeze
+# entries), so the --install below is REQUIRED, not merely defensive, whenever
+# breeze is not yet a candidate. "$NAME" is the alternatives LINK path
+# (/usr/share/plymouth/themes/default.plymouth); the alternative NAME is exactly
+# `default.plymouth`. Register-if-absent, then select.
+# NOTE: Ubuntu selects the plymouth theme via the `default.plymouth` update-alternatives
+# link — NOT Fedora's plymouthd.conf Theme= key (T4 now skips plymouthd.conf on Ubuntu),
+# and NOT via Fedora's plymouth-scripts `set-default-theme` helper (ABSENT on
+# Ubuntu — that Fedora binary is verified absent in ubuntu:26.04).
+if ! "${SUDO[@]}" update-alternatives --list default.plymouth 2>/dev/null | grep -qx "$BREEZE"; then
+  "${SUDO[@]}" update-alternatives --install "$NAME" default.plymouth "$BREEZE" 100
+fi
+"${SUDO[@]}" update-alternatives --set default.plymouth "$BREEZE"
+
+# Rebuild the initramfs so the boot splash actually changes.
+"${SUDO[@]}" update-initramfs -u
+echo "plymouth boot splash reverted to upstream breeze (update-alternatives + initramfs rebuild)"
+{{ end -}}
