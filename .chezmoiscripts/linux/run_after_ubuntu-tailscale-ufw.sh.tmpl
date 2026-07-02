@@ -1,0 +1,89 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+#!/usr/bin/env bash
+set -euo pipefail
+# Tailscale egress-NAT parity for Ubuntu via ufw.
+# Matches the Fedora firewalld masquerade in install-system-config:
+# broad -o $primary_if MASQUERADE (NATs all primary-interface egress, serving
+# both Tailscale exit-node/subnet-router traffic and VMware NAT).
+# IP forwarding is provided by the shared system/linux/etc/sysctl.d/99-tailscale.conf
+# (installs on both distros) — no extra sysctl needed here.
+#
+# NOTE: The broad -o $primary_if masquerade is DELIBERATE parity with Fedora's
+# firewalld default-zone masquerade. For Tailscale-only NAT, add
+# -s 100.64.0.0/10 to the POSTROUTING rule.
+
+# Guard: skip if ufw not installed (matches firewalld --state gate on Fedora).
+command -v ufw >/dev/null 2>&1 || { echo "ufw absent; skip"; exit 0; }
+
+# SUDO + non-interactive skip
+if [[ "$EUID" -eq 0 ]]; then SUDO=(); else SUDO=(sudo)
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then echo "no sudo; skip"; exit 0; fi
+fi
+
+changed=false
+
+# 1) Ensure DEFAULT_FORWARD_POLICY=ACCEPT in /etc/default/ufw (idempotent).
+ufw_defaults=/etc/default/ufw
+if [[ -f "$ufw_defaults" ]] && grep -q '^DEFAULT_FORWARD_POLICY=' "$ufw_defaults"; then
+  current_fwd="$(grep '^DEFAULT_FORWARD_POLICY=' "$ufw_defaults" | cut -d= -f2 | tr -d '"')"
+  if [[ "$current_fwd" != "ACCEPT" ]]; then
+    "${SUDO[@]}" sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' "$ufw_defaults"
+    echo "ufw: set DEFAULT_FORWARD_POLICY=ACCEPT in $ufw_defaults"
+    changed=true
+  fi
+fi
+
+# 2) Insert marker-delimited managed NAT block into /etc/ufw/before.rules.
+#    Remove old block first (idempotency), then insert at the top of before.rules.
+before_rules=/etc/ufw/before.rules
+if [[ -f "$before_rules" ]]; then
+  # Detect the primary outbound interface (same heuristic as Fedora firewalld zone).
+  primary_if="$(ip route show default 2>/dev/null | awk '/default/{print $5; exit}')"
+  if [[ -z "$primary_if" ]]; then
+    echo "ufw: cannot detect primary interface; skip NAT block insertion"
+  else
+    nat_block="# BEGIN chezmoi-tailscale-nat
+*nat
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING -o ${primary_if} -j MASQUERADE
+COMMIT
+# END chezmoi-tailscale-nat"
+
+    # Check if the block is already present and identical (idempotency).
+    if "${SUDO[@]}" grep -q '# BEGIN chezmoi-tailscale-nat' "$before_rules"; then
+      # Extract existing block and compare.
+      existing_block="$("${SUDO[@]}" sed -n '/# BEGIN chezmoi-tailscale-nat/,/# END chezmoi-tailscale-nat/p' "$before_rules")"
+      if [[ "$existing_block" == "$nat_block" ]]; then
+        echo "ufw: chezmoi-tailscale-nat block already current; no-op"
+      else
+        # Block exists but differs (e.g. primary_if changed): remove and re-insert.
+        "${SUDO[@]}" sed -i '/# BEGIN chezmoi-tailscale-nat/,/# END chezmoi-tailscale-nat/d' "$before_rules"
+        printf '%s\n\n' "$nat_block" | "${SUDO[@]}" sponge "$before_rules" || {
+          # sponge not available: use temp file
+          tmp="$(mktemp)"
+          printf '%s\n\n' "$nat_block" > "$tmp"
+          "${SUDO[@]}" bash -c "cat '$tmp' >> '$before_rules'"
+          rm -f "$tmp"
+        }
+        echo "ufw: chezmoi-tailscale-nat block updated (primary_if=$primary_if)"
+        changed=true
+      fi
+    else
+      # No existing block: prepend at top of before.rules (before existing content).
+      "${SUDO[@]}" bash -c "{ printf '%s\n\n' \"$nat_block\"; cat \"$before_rules\"; } > \"${before_rules}.tmp\" && mv \"${before_rules}.tmp\" \"$before_rules\""
+      echo "ufw: inserted chezmoi-tailscale-nat block (primary_if=$primary_if)"
+      changed=true
+    fi
+  fi
+fi
+
+# 3) Reload ufw only if a change was made AND ufw is currently active.
+if [[ "$changed" == true ]]; then
+  if "${SUDO[@]}" ufw status | grep -q '^Status: active'; then
+    "${SUDO[@]}" ufw reload
+    echo "ufw: reloaded"
+  else
+    echo "ufw: not active; skip reload (changes take effect when ufw is enabled)"
+  fi
+fi
+{{ end -}}
