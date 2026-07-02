@@ -1,0 +1,70 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C DEBIAN_FRONTEND=noninteractive
+
+# Kubuntu branding to remove (NOT core Plasma).
+BRANDING_SET=(kubuntu-settings-desktop kubuntu-settings kubuntu-wallpapers \
+              plymouth-theme-kubuntu-logo plymouth-theme-kubuntu-text)
+# Removals we EXPECT + accept: the branding packages + the kubuntu-desktop meta
+# (reverse-depends on kubuntu-settings-desktop; a metapackage — its removal does
+# NOT remove the desktop). ANYTHING outside this set => ABORT.
+ALLOW_REMOVE=("${BRANDING_SET[@]}" kubuntu-desktop)
+# Pin the real desktop closure manual (defense-in-depth; the allowlist is primary).
+KEEP_MANUAL=(plasma-desktop plasma-workspace plasma-workspace-wayland plasma-desktop-data \
+             kwin-wayland kwin-x11 kwin-common sddm sddm-theme-breeze powerdevil \
+             kscreen systemsettings breeze breeze-gtk breeze-cursor-theme)
+
+# --- idempotent no-op guards ---
+command -v apt-get    >/dev/null 2>&1 || { echo "no apt; skip"; exit 0; }
+command -v dpkg-query >/dev/null 2>&1 || { echo "no dpkg; skip"; exit 0; }
+command -v plasmashell >/dev/null 2>&1 || { echo "no KDE (server/non-plasma); skip"; exit 0; }
+
+installed=()
+for p in "${BRANDING_SET[@]}"; do
+  dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^ii' && installed+=("$p")
+done
+[[ ${#installed[@]} -gt 0 ]] || { echo "branding already purged; no-op"; exit 0; }
+
+# --- SUDO + non-interactive skip (pattern from install-system-config) ---
+if [[ "$EUID" -eq 0 ]]; then SUDO=(); else SUDO=(sudo)
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then echo "no sudo; skip"; exit 0; fi
+fi
+
+# 1) pin the real desktop so it can never be auto-removed
+"${SUDO[@]}" apt-mark manual "${KEEP_MANUAL[@]}" >/dev/null 2>&1 || true
+
+# 2) SIMULATE — FAIL CLOSED on any simulation error (never `|| true`)
+# Pass LC_ALL and DEBIAN_FRONTEND through `sudo env` because default Ubuntu sudo
+# strips non-whitelisted exported vars (DEBIAN_FRONTEND is dropped; LC_ALL survives,
+# but `env` makes BOTH robust regardless of sudoers env_reset/env_keep policy).
+if ! sim="$("${SUDO[@]}" env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -s -o APT::Get::AutomaticRemove=false purge -- "${installed[@]}" 2>&1)"; then
+  echo "ABORT: purge simulation failed; changing nothing:" >&2
+  printf '%s\n' "$sim" >&2; exit 1
+fi
+
+# 3) parse the removal set -- BOTH Remv (remove) and Purg (purge) lines, because
+#    "apt-get -s purge" prints the NAMED packages as Purg; parsing only Remv would
+#    miss them and fail open. ABORT unless every such package is on the allowlist.
+mapfile -t would_remove < <(printf '%s\n' "$sim" | awk '/^(Remv|Purg) /{print $2}')
+# FAIL CLOSED on an empty parse: a successful purge of installed packages ALWAYS
+# prints >=1 Purg line, so an empty set means the parse/locale broke -> abort
+# rather than fall through to an unguarded real purge.
+[[ ${#would_remove[@]} -gt 0 ]] || { echo "ABORT: empty simulated removal set (parse/locale failure); changing nothing." >&2; exit 1; }
+# Also require the sim actually plans to remove each package we asked to purge.
+for want in "${installed[@]}"; do
+  printf '%s\n' "${would_remove[@]}" | grep -qx "$want" \
+    || { echo "ABORT: simulation did not plan to remove requested '$want'; changing nothing." >&2; exit 1; }
+done
+in_allow() { local x="$1" a; for a in "${ALLOW_REMOVE[@]}"; do [[ "$x" == "$a" ]] && return 0; done; return 1; }
+for pkg in "${would_remove[@]}"; do
+  if ! in_allow "$pkg"; then
+    echo "ABORT: purge would remove non-allowlisted package '$pkg'; changing nothing." >&2
+    echo "full simulated removal set: ${would_remove[*]}" >&2; exit 1
+  fi
+done
+
+# 4) safe: purge branding ONLY, never autoremove
+"${SUDO[@]}" env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get purge -y -o APT::Get::AutomaticRemove=false -- "${installed[@]}"
+echo "kubuntu branding purged (${installed[*]}); core plasma intact"
+{{ end -}}
