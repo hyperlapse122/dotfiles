@@ -255,38 +255,6 @@
 					}
 				}
 			}
-		},
-		"anthropic": {
-			"models": {
-				"claude-fable-5": {
-					"limit": {
-						"context": 400000,
-						"output": 128000,
-						"input": 200000
-					}
-				},
-				"claude-sonnet-4-6": {
-					"limit": {
-						"context": 400000,
-						"output": 64000,
-						"input": 200000
-					}
-				},
-				"claude-sonnet-5": {
-					"limit": {
-						"context": 400000,
-						"output": 128000,
-						"input": 200000
-					}
-				},
-				"claude-opus-4-8": {
-					"limit": {
-						"context": 400000,
-						"output": 128000,
-						"input": 200000
-					}
-				}
-			}
 		}
 	},
 	"model": "openai/gpt-5.5",
