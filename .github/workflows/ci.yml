@@ -52,5 +52,5 @@ jobs:
           shellcheck \
             .install-prerequisites.sh \
             dot_local/bin/executable_setup-luks-tpm2-unlock.sh \
-            dot_agents/skills/glab/scripts/create-epic-note.sh \
-            dot_agents/skills/glab/scripts/epic-notes.sh
+            exact_dot_agents/skills/glab/scripts/create-epic-note.sh \
+            exact_dot_agents/skills/glab/scripts/epic-notes.sh
