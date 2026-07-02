@@ -39,6 +39,67 @@ op_ready() {
   op user get --me >/dev/null 2>&1
 }
 
+# Human-facing instructions for enabling the 1Password CLI. Printed once before
+# waiting and again on timeout. Mirrors the flow documented in README.md and the
+# container branch above, with a headless service-account escape hatch.
+print_op_auth_guidance() {
+  printf 'install-prerequisites.sh: 1Password CLI is not authenticated yet.\n' >&2
+  printf 'Let chezmoi resolve secrets by enabling the 1Password CLI:\n' >&2
+  printf '  1. Open the 1Password desktop app and sign in.\n' >&2
+  printf '  2. Enable Settings -> Developer -> Integrate with 1Password CLI.\n' >&2
+  printf '  (Headless host? Export a service-account token instead and re-run:\n' >&2
+  printf '     export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help)\n' >&2
+}
+
+# Poll op_ready() until it succeeds or a bounded deadline elapses. Interval and
+# max-wait are env-overridable so the unit test can drive it fast with a stubbed
+# `op` and a no-op `sleep`.
+wait_for_op_auth() {
+  local interval="${OP_AUTH_POLL_INTERVAL_SECS:-5}"
+  local max_wait="${OP_AUTH_MAX_WAIT_SECS:-900}"
+  local waited=0
+  while ! op_ready; do
+    if (( waited >= max_wait )); then
+      printf 'install-prerequisites.sh: timed out after %ss waiting for 1Password CLI auth.\n' "$max_wait" >&2
+      print_op_auth_guidance
+      return 1
+    fi
+    sleep "$interval"
+    waited=$(( waited + interval ))
+    if (( waited % 30 == 0 )); then
+      printf '  .. still waiting for 1Password CLI sign-in (%ss elapsed)\n' "$waited" >&2
+    fi
+  done
+  return 0
+}
+
+# Return 0 once `op` can resolve secrets. Already authed -> return immediately.
+# Otherwise guide the user; fail fast (like the container branch) when stdin is
+# not a TTY so a headless/CI run never hangs; else wait interactively.
+ensure_op_authenticated() {
+  if op_ready; then
+    return 0
+  fi
+  print_op_auth_guidance
+  # `[[ -t 0 ]]` is true only under an interactive chezmoi run; never block a
+  # non-interactive / piped invocation waiting for a sign-in that cannot happen.
+  if [[ ! -t 0 ]]; then
+    printf 'install-prerequisites.sh: non-interactive shell; cannot wait for sign-in.\n' >&2
+    return 1
+  fi
+  if wait_for_op_auth; then
+    printf 'install-prerequisites.sh: 1Password CLI authenticated; continuing.\n' >&2
+    return 0
+  fi
+  return 1
+}
+
+# Unit-test seam: let the harness `source` this file for its functions without
+# running the installer below. No-op in normal execution (variable unset).
+if [[ -n "${_INSTALL_PREREQUISITES_TEST_SOURCE:-}" ]]; then
+  return 0
+fi
+
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.
 if command -v mise >/dev/null 2>&1 && op_ready; then
@@ -200,4 +261,9 @@ case "$(uname -s)" in
     ;;
 esac
 
-# TODO: Make user authenticate 1password and enable CLI access and wait until `op_ready` succeeds
+# Packages are installed now, but on a fresh device `op` still is not signed in
+# (installing the app/CLI does not authenticate it), so chezmoi would fail on the
+# first `onepasswordRead`. Block until the user enables the 1Password CLI
+# (interactive), or fail fast with guidance (non-interactive / headless).
+ensure_op_authenticated || exit 1
+exit 0
