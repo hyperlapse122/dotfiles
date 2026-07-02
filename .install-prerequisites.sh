@@ -8,8 +8,8 @@
 #   * mise — the runtime / CLI version manager the rest of this config relies on.
 #
 # chezmoi runs a hook `command` verbatim and never renders it as a template, so
-# this file MUST NOT be a `.tmpl`. OS divergence is therefore decided at runtime
-# from `uname`, not from Go-template `{{ .chezmoi.os }}` branches.
+# this file MUST NOT be a `.tmpl`. OS divergence is decided at runtime by reading
+# /etc/os-release on Linux, not from Go-template branches.
 
 set -euo pipefail
 
@@ -60,6 +60,60 @@ EOF
   fi
 }
 
+# Ubuntu/Debian: install via apt. Ordered to install transport tools and
+# 1Password keyring before the package installs.
+install_ubuntu() {
+  # Fail fast if no sudo (needed for apt-get and keyring writes).
+  if [[ "${EUID}" -ne 0 ]]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
+      exit 1
+    fi
+    sudo -v || { printf 'install-prerequisites.sh: sudo failed; aborting.\n' >&2; exit 1; }
+  fi
+  local -a SUDO
+  if [[ "${EUID}" -eq 0 ]]; then SUDO=(); else SUDO=(sudo); fi
+
+  export DEBIAN_FRONTEND=noninteractive
+
+  # Bootstrap transport tools needed to add the 1Password repo.
+  "${SUDO[@]}" apt-get update -qq
+  for pkg in ca-certificates curl gnupg lsb-release; do
+    dpkg -s "$pkg" >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y "$pkg"
+  done
+
+  # Add 1Password apt repo + GPG keyring (idempotent).
+  if ! dpkg -s 1password 1password-cli >/dev/null 2>&1; then
+    "${SUDO[@]}" mkdir -p /usr/share/keyrings
+    curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
+      | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/1password.gpg
+    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/1password.gpg] \
+https://downloads.1password.com/linux/apt/debian stable main" \
+      | "${SUDO[@]}" tee /etc/apt/sources.list.d/1password.list >/dev/null
+    "${SUDO[@]}" apt-get update -qq
+    "${SUDO[@]}" apt-get install -y 1password 1password-cli
+  fi
+
+  # GitHub CLI.
+  dpkg -s gh >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y gh
+
+  # git-lfs.
+  dpkg -s git-lfs >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y git-lfs
+
+  # zsh.
+  dpkg -s zsh >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y zsh
+
+  # mise via its official apt repo.
+  if ! command -v mise >/dev/null 2>&1; then
+    curl -fsSL https://mise.jdx.dev/gpg-key.pub \
+      | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/mise.gpg
+    echo "deb [signed-by=/usr/share/keyrings/mise.gpg] https://mise.jdx.dev/deb stable main" \
+      | "${SUDO[@]}" tee /etc/apt/sources.list.d/mise.list >/dev/null
+    "${SUDO[@]}" apt-get update -qq
+    "${SUDO[@]}" apt-get install -y mise
+  fi
+}
+
 # macOS: install via Homebrew, bootstrapping Homebrew itself when it is missing
 # (it is the package manager the macOS side of this config assumes — see the
 # /opt/homebrew PATH wiring in dot_config/zsh/dot_zprofile).
@@ -81,7 +135,21 @@ install_macos() {
 
 case "$(uname -s)" in
   Darwin) install_macos ;;
-  Linux) install_fedora ;;
+  Linux)
+    # Detect distro from /etc/os-release (available on all modern Linux distros).
+    distro_id=""
+    if [[ -r /etc/os-release ]]; then
+      distro_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")"
+    fi
+    case "$distro_id" in
+      fedora) install_fedora ;;
+      ubuntu|debian) install_ubuntu ;;
+      *)
+        printf 'install-prerequisites.sh: unsupported Linux distro: %s.\n' "${distro_id:-unknown}" >&2
+        exit 1
+        ;;
+    esac
+    ;;
   *)
     printf 'install-prerequisites.sh: unsupported OS %s.\n' "$(uname -s)" >&2
     exit 1
