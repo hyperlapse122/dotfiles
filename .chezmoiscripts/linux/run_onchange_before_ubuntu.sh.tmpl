@@ -1,0 +1,214 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Consolidated Ubuntu provisioning, adapted from the Fedora run_onchange installer:
+# APT repositories, dpkg architecture setup for Steam, apt/flatpak/dotnet
+# packages, direct .deb installs, Ubuntu driver autoinstall, system services, and
+# user groups. Every install path is guarded so chezmoi can safely re-run this
+# script when .chezmoidata/packages.yaml changes.
+
+# Host probes (same as Fedora). Scan sysfs for NVIDIA's PCI vendor id so this
+# works before pciutils/lspci are available.
+if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+  HAS_NVIDIA=1
+else
+  HAS_NVIDIA=0
+fi
+if systemd-detect-virt --quiet; then
+  IS_VIRT=1
+else
+  IS_VIRT=0
+fi
+
+# Use sudo only when not already root. APT, dpkg, systemctl, and usermod need it.
+if [[ "${EUID}" -eq 0 ]]; then
+  SUDO=()
+elif command -v sudo >/dev/null 2>&1; then
+  SUDO=(sudo)
+else
+  printf 'run_onchange_before_ubuntu.sh: requires root or sudo.\n' >&2
+  exit 1
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+# Keep apt invocations behind one sudo/env wrapper; the rendered script still
+# performs apt-get update and apt-get install operations through this array.
+APT=("${SUDO[@]}" env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get)
+
+# Package sets rendered from .chezmoidata/packages.yaml.
+core_packages=(
+{{ range .packages.linux.ubuntu.corePackages -}}
+  {{ . | quote }}
+{{ end -}}
+)
+packages=(
+{{ range .packages.linux.ubuntu.packages -}}
+  {{ . | quote }}
+{{ end -}}
+)
+if [[ "${IS_VIRT}" -eq 0 ]]; then
+  packages+=(
+{{ range .packages.linux.ubuntu.bareMetalPackages -}}
+    {{ . | quote }}
+{{ end -}}
+  )
+fi
+nvidia_packages=(
+{{ range .packages.linux.ubuntu.nvidiaPackages -}}
+  {{ . | quote }}
+{{ end -}}
+)
+if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
+  packages+=("${nvidia_packages[@]}")
+fi
+flatpaks=(
+{{ range .packages.linux.ubuntu.flatpaks -}}
+  {{ . | quote }}
+{{ end -}}
+)
+dotnet_tools=(
+{{ range .packages.linux.ubuntu.dotnetTools -}}
+  {{ . | quote }}
+{{ end -}}
+)
+
+setup_apt_repos() {
+{{ range .packages.linux.ubuntu.aptRepos -}}
+{{ $repo := . -}}
+  # {{ $repo.id }}
+  if [[ ! -f /usr/share/keyrings/{{ $repo.id }}.gpg ]]; then
+    curl -fsSL {{ index $repo "keyring-url" | quote }} | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
+  fi
+  if [[ ! -f /etc/apt/sources.list.d/{{ $repo.id }}.list ]]; then
+    printf '%s\n' {{ index $repo "sources-list-line" | quote }} | "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
+  fi
+{{ end -}}
+}
+
+enable_first_apply_apt_features() {
+  # Enable universe, multiverse, and restricted components when the helper exists.
+  # On stripped-down containers add-apt-repository can be absent; package install
+  # smoke tests still exercise apt resolution without failing this script body.
+  if command -v add-apt-repository >/dev/null 2>&1; then
+    "${SUDO[@]}" add-apt-repository -y universe multiverse restricted 2>/dev/null || true
+  fi
+
+  # Enable i386 for Steam and other 32-bit runtime dependencies.
+  "${SUDO[@]}" dpkg --add-architecture i386
+}
+
+install_ubuntu_packages() {
+  local -a pkgs=("$@")
+  local -a to_install=()
+  local pkg
+  for pkg in "${pkgs[@]}"; do
+    dpkg -s "${pkg}" >/dev/null 2>&1 || to_install+=("${pkg}")
+  done
+  [[ ${#to_install[@]} -eq 0 ]] && return 0
+  "${APT[@]}" install -y "${to_install[@]}"
+}
+
+ensure_ubuntu_drivers_common() {
+  dpkg -s ubuntu-drivers-common >/dev/null 2>&1 || install_ubuntu_packages ubuntu-drivers-common
+}
+
+install_direct_debs() {
+  local arch deb_url tmp
+{{ range .packages.linux.ubuntu.directDebs -}}
+  if ! dpkg -s {{ .id | quote }} >/dev/null 2>&1; then
+    arch="$(dpkg --print-architecture)"
+    case "${arch}" in
+      amd64) deb_url={{ index . "debs" "x86_64" | quote }} ;;
+      arm64) deb_url={{ index . "debs" "aarch64" | quote }} ;;
+      *) printf 'run_onchange_before_ubuntu.sh: unsupported arch %s for %s; skipping.\n' "${arch}" {{ .id | quote }} >&2; deb_url='' ;;
+    esac
+    if [[ -n "${deb_url}" ]]; then
+      tmp="$(mktemp --suffix=.deb)"
+      curl -fsSL "${deb_url}" -o "${tmp}"
+      "${SUDO[@]}" dpkg -i "${tmp}" || true
+      rm -f "${tmp}"
+      "${APT[@]}" install -f -y || true
+    fi
+  fi
+{{ end -}}
+}
+
+install_flatpak_packages() {
+  if [[ ${#flatpaks[@]} -eq 0 ]]; then
+    return 0
+  fi
+  if command -v flatpak >/dev/null 2>&1; then
+    "${SUDO[@]}" flatpak remote-add --if-not-exists --system flathub \
+      https://dl.flathub.org/repo/flathub.flatpakrepo || true
+    "${SUDO[@]}" flatpak install --system -y --noninteractive flathub "${flatpaks[@]}" 2>/dev/null || true
+  fi
+}
+
+install_dotnet_tools() {
+  if [[ ${#dotnet_tools[@]} -eq 0 ]]; then
+    return 0
+  fi
+  if command -v dotnet >/dev/null 2>&1; then
+    local installed_tools tool
+    installed_tools="$(dotnet tool list -g 2>/dev/null || true)"
+    for tool in "${dotnet_tools[@]}"; do
+      printf '%s\n' "${installed_tools}" | awk '{print $1}' | grep -ixqF "${tool}" \
+        || dotnet tool install -g "${tool}" || true
+    done
+  fi
+}
+
+install_nvidia_support() {
+  if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
+    return 0
+  fi
+  if command -v ubuntu-drivers >/dev/null 2>&1; then
+    # DELTA: Ubuntu uses ubuntu-drivers autoinstall, NOT akmod/dkms like Fedora.
+    # NOTE: Secure Boot/DKMS MOK enrollment differs from Fedora akmods.
+    "${SUDO[@]}" ubuntu-drivers autoinstall || true
+  fi
+  # NVIDIA container toolkit packages from the rendered Ubuntu package set.
+  install_ubuntu_packages "${nvidia_packages[@]}"
+}
+
+enable_services() {
+  # Enable services only when the unit file exists.
+  local svc
+  for svc in keyd tailscaled; do
+    if systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}"; then
+      "${SUDO[@]}" systemctl enable --now "${svc}" 2>/dev/null || true
+    fi
+  done
+}
+
+configure_user_groups() {
+  local target_user grp
+  target_user="${SUDO_USER:-$USER}"
+
+  # Add user to groups only when they exist.
+  for grp in keyd libvirt kvm vboxusers; do
+    getent group "${grp}" >/dev/null 2>&1 && "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
+  done
+
+  # Subordinate UID/GID ranges for rootless containers.
+  grep -q "^${target_user}:" /etc/subuid 2>/dev/null || "${SUDO[@]}" usermod --add-subuids 100000-165535 "${target_user}" 2>/dev/null || true
+  grep -q "^${target_user}:" /etc/subgid 2>/dev/null || "${SUDO[@]}" usermod --add-subgids 100000-165535 "${target_user}" 2>/dev/null || true
+}
+
+setup_apt_repos
+enable_first_apply_apt_features
+"${APT[@]}" update
+ensure_ubuntu_drivers_common
+install_ubuntu_packages "${core_packages[@]}"
+"${APT[@]}" update
+install_ubuntu_packages "${packages[@]}"
+install_direct_debs
+install_flatpak_packages
+install_dotnet_tools
+enable_services
+configure_user_groups
+install_nvidia_support
+
+{{ end -}}
