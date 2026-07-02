@@ -72,7 +72,7 @@ packages:
         - chezmoi  # declarative dotfiles manager (manages this repo)
         - fd-find  # fast, user-friendly find alternative (fd)
         - gh  # GitHub CLI
-        - kdotool  # Wayland window query/control via KWin scripting (xdotool-like)
+        # kdotool: managed by mise (cargo:kdotool, same as Ubuntu — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
         - xxd  # hex dump / reverse utility
@@ -207,17 +207,23 @@ packages:
           keyring-url: https://dl.google.com/linux/linux_signing_key.pub
           sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
         - id: mise
-          keyring-url: https://mise.jdx.dev/gpg-key.pub
-          sources-list-line: "deb [signed-by=/usr/share/keyrings/mise.gpg] https://mise.jdx.dev/deb stable main"
+          # PPA per https://mise.jdx.dev/installing-mise.html#apt (recommended for Ubuntu 26.04+;
+          # the mise.jdx.dev/deb repo referenced by that page's older revisions is gone)
+          keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52
+          sources-list-line: "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main"
         - id: tailscale
-          keyring-url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
-          sources-list-line: "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu noble main"
+          keyring-url: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
+          sources-list-line: "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu resolute main"
         - id: virtualbox
           keyring-url: https://www.virtualbox.org/download/oracle_vbox_2016.asc
-          sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian noble contrib"
-        - id: microsoft-dotnet
-          keyring-url: https://packages.microsoft.com/keys/microsoft.asc
-          sources-list-line: "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/microsoft-dotnet.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main"
+          sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian resolute contrib"
+        - id: dotnet-backports
+          # ppa:dotnet/backports — Canonical (not Microsoft) now owns .NET packaging on
+          # Ubuntu 22.04+. Ubuntu's own archive only carries the current SDK (10.0), so
+          # older non-default SDKs (8.0, 9.0) come from this PPA instead of Microsoft's
+          # repo. https://launchpad.net/~dotnet/+archive/ubuntu/backports
+          keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
+          sources-list-line: "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
       # Foundational packages installed before the main set (build headers needed
       # for DKMS module builds).
       corePackages:
@@ -237,7 +243,7 @@ packages:
         # chezmoi: managed by mise
         - fd-find  # fast find alternative (binary: fdfind)
         - gh  # GitHub CLI
-        # DELTA: kdotool not in Ubuntu repos — build from source (cargo) or drop
+        # kdotool: managed by mise (cargo:kdotool — no native Ubuntu package)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
         - xxd  # hex dump / reverse utility
@@ -248,11 +254,12 @@ packages:
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
 
         # Keyboard remapper
-        # DELTA: keyd — check availability in 26.04 universe; else build from source/PPA
+        - keyd  # key remapping daemon (native apt package since Ubuntu 25.04 "plucky"; noble/24.04 needs the keyd-team PPA instead)
 
         # Language toolchains + version manager
-        - dotnet-sdk-10.0  # .NET SDK 10.0 (from Microsoft apt repo)
-        - dotnet-sdk-8.0  # .NET SDK 8.0 (from Microsoft apt repo)
+        - dotnet-sdk-10.0  # .NET SDK 10.0 (Ubuntu's own default archive; Canonical owns .NET packaging on 22.04+)
+        - dotnet-sdk-8.0  # .NET SDK 8.0 (from the dotnet-backports PPA; EOL 2026-11-10)
+        - dotnet-sdk-9.0  # .NET SDK 9.0 (from the dotnet-backports PPA; EOL 2026-11-10)
         - mise  # polyglot runtime/tool version manager (from mise apt repo)
 
         # Ruby build dependencies
@@ -296,7 +303,7 @@ packages:
         - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
 
         # Virtualization
-        - virtualbox  # VirtualBox hypervisor (from Oracle apt repo; may not have 26.04 dist yet — guard in T7)
+        - virtualbox  # VirtualBox hypervisor (from Oracle apt repo)
         - fuse3  # FUSE 3 userspace filesystem support
         - libfuse3-dev  # FUSE 3 headers (fuse3-devel equivalent)
         - guestfs-tools  # CLI tools to inspect/modify VM disk images
@@ -328,9 +335,13 @@ packages:
         - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
 
       # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de).
-      # DELTA: No akmod on Ubuntu; use ubuntu-drivers autoinstall + dkms.
+      # Driver comes from `ubuntu-drivers autoinstall` + dkms, not akmod like Fedora;
+      # the CUDA toolkit below is installed from NVIDIA's CUDA apt repo, which
+      # install_nvidia_support() in run_onchange_before_ubuntu.sh.tmpl adds on-demand
+      # (same HAS_NVIDIA-gated pattern as the Fedora installer's cuda-fedora repo).
       # NOTE: Secure Boot/DKMS MOK enrollment differs from Fedora akmods.
       nvidiaPackages:
+        - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries; from NVIDIA's CUDA apt repo)
         - nvidia-container-toolkit  # NVIDIA container runtime integration (from NVIDIA apt repo)
         - nvidia-container-toolkit-base  # base components for the container toolkit
         - libnvidia-container-tools  # CLI tools for the NVIDIA container library

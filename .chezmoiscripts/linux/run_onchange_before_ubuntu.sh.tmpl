@@ -164,12 +164,22 @@ install_nvidia_support() {
   if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
     return 0
   fi
+  # NVIDIA's CUDA apt repo, added only on NVIDIA hosts (same HAS_NVIDIA gate the
+  # Fedora installer uses for its `dnf config-manager addrepo` cuda-fedora call),
+  # so non-NVIDIA machines never carry an unused third-party apt source.
+  if [[ ! -f /usr/share/keyrings/nvidia-cuda.gpg ]]; then
+    curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/60DF8A40.pub | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/nvidia-cuda.gpg
+  fi
+  if [[ ! -f /etc/apt/sources.list.d/nvidia-cuda.list ]]; then
+    printf '%s\n' "deb [signed-by=/usr/share/keyrings/nvidia-cuda.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/ /" | "${SUDO[@]}" tee /etc/apt/sources.list.d/nvidia-cuda.list >/dev/null
+    "${APT[@]}" update
+  fi
   if command -v ubuntu-drivers >/dev/null 2>&1; then
     # DELTA: Ubuntu uses ubuntu-drivers autoinstall, NOT akmod/dkms like Fedora.
     # NOTE: Secure Boot/DKMS MOK enrollment differs from Fedora akmods.
     "${SUDO[@]}" ubuntu-drivers autoinstall || true
   fi
-  # NVIDIA container toolkit packages from the rendered Ubuntu package set.
+  # NVIDIA container toolkit + CUDA toolkit packages from the rendered Ubuntu package set.
   install_ubuntu_packages "${nvidia_packages[@]}"
 }
 
