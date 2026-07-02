@@ -14,6 +14,11 @@
 ./Library
 {{- end }}
 
+# Windows-only
+{{- if ne .chezmoi.os "windows" }}
+./AppData
+{{- end }}
+
 # Vendored source dirs: crates/ + packages/ monorepos are built/used in place,
 # never linked into $HOME (mirrors ./system above).
 ./crates
@@ -21,4 +26,7 @@
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
 ./plans
+
+# internal documentations
+./docs
 
