@@ -58,13 +58,7 @@ COMMIT
       else
         # Block exists but differs (e.g. primary_if changed): remove and re-insert.
         "${SUDO[@]}" sed -i '/# BEGIN chezmoi-tailscale-nat/,/# END chezmoi-tailscale-nat/d' "$before_rules"
-        printf '%s\n\n' "$nat_block" | "${SUDO[@]}" sponge "$before_rules" || {
-          # sponge not available: use temp file
-          tmp="$(mktemp)"
-          printf '%s\n\n' "$nat_block" > "$tmp"
-          "${SUDO[@]}" bash -c "cat '$tmp' >> '$before_rules'"
-          rm -f "$tmp"
-        }
+        "${SUDO[@]}" bash -c "{ printf '%s\\n\\n' \"$nat_block\"; cat \"$before_rules\"; } > \"${before_rules}.tmp\" && mv \"${before_rules}.tmp\" \"$before_rules\""
         echo "ufw: chezmoi-tailscale-nat block updated (primary_if=$primary_if)"
         changed=true
       fi
