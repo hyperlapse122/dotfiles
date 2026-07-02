@@ -139,6 +139,7 @@ case "$(uname -s)" in
     # Detect distro from /etc/os-release (available on all modern Linux distros).
     distro_id=""
     if [[ -r /etc/os-release ]]; then
+      # shellcheck source=/dev/null
       distro_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")"
     fi
     case "$distro_id" in
