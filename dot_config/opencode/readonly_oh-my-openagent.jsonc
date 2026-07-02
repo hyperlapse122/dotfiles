@@ -3,21 +3,12 @@
 	"agents": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
 		"sisyphus": {
-		  // // Primary
+		  // Primary
 			"model": "anthropic/claude-opus-4-8",
-			"variant": "max",
+			"variant": "max"
 
 			// Fallback
-			// "model": "kimi-for-coding/k2p7",
-
-			"fallback_models": [
-				"kimi-for-coding/k2p7",
-				{
-					"model": "openai/gpt-5.5-fast",
-					"variant": "medium"
-				},
-				"zai-coding-plan/glm-5.2"
-			]
+			// "model": "kimi-for-coding/k2p7"
 		},
 		"hephaestus": {
 			"model": "openai/gpt-5.5-fast",
@@ -55,7 +46,7 @@
 			]
 		},
 		"prometheus": {
-		  // // Primary
+		  // Primary
 			"model": "anthropic/claude-opus-4-8",
 			"variant": "max",
 
@@ -72,7 +63,7 @@
 			]
 		},
 		"metis": {
-		  // // Primary
+		  // Primary
 			"model": "anthropic/claude-sonnet-4-6",
 
 			// Fallback
@@ -104,7 +95,7 @@
 			]
 		},
 		"atlas": {
-		  // // Primary
+		  // Primary
 			"model": "anthropic/claude-sonnet-4-6",
 			"variant": "max",
 
@@ -120,11 +111,11 @@
 			]
 		},
 		"sisyphus-junior": {
-		  // // Primary
+		  // Primary
 			"model": "anthropic/claude-sonnet-4-6",
 			"variant": "max",
 
-			// Fallback
+			// // Fallback
 			// "model": "kimi-for-coding/k2p7",
 			"fallback_models": [
 				"kimi-for-coding/k2p7",
@@ -231,10 +222,6 @@
 			]
 		}
 	},
-	"model_fallback": true,
-  "runtime_fallback": {
-    "enabled": true
-  },
 	"disabled_mcps": ["playwright", "lsp"],
 	"disabled_skills": ["playwright"],
 	"disabled_hooks": [
