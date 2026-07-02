@@ -1,6 +1,6 @@
 # AGENTS.md
 
-chezmoi-managed dotfiles. Primary target **Fedora Linux**; macOS (`Library/`,
+chezmoi-managed dotfiles. Primary Linux targets: **Fedora Linux** and **Kubuntu 26.04** (KDE Plasma 6); macOS (`Library/`,
 `darwin` template branches, `dot_default-gems.tmpl`) and Windows (`*.ps1`,
 `windows` branches) are secondary. Remote: `github.com/hyperlapse122/dotfiles` (`main`).
 
@@ -21,6 +21,7 @@ Source filename attributes encode the target:
 | `executable_` | `+x` |
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
+| `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) |
 | `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`) |
 | `.chezmoiexternals/*` | external git/archive fetches (e.g. prezto) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -57,6 +58,7 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
   and bare-metal sections are auto-gated, and it also drives flatpaks, dotnet
   tools, direct-URL RPMs, services, and user groups). Add packages/items there,
   not in the script — editing the data re-triggers the `run_onchange` installer.
+- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA via `ubuntu-drivers autoinstall`, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Add packages/items there; editing the data re-triggers the installer.
 - **Fonts**: `.chezmoidata/fonts.yaml` `legacyFontsList`, pinned per font by
   release tag + sha256. To bump a font: change the tag, re-download, recompute the
   sha256 (a wrong digest aborts that font's install). The bash installer and its
@@ -82,6 +84,17 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
 - Branch on `{{ .chezmoi.os }}` (`linux`/`darwin`/`windows`); exclude whole paths
   per-OS via the nearest `.chezmoiignore` (root, `dot_config/`, `dot_local/bin/`).
   git config splits via `config.tmpl` including `.config_<os>`.
+- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var.
+- **KDE scripts** (`.chezmoiscripts/linux-kde/*.tmpl`) render on both Fedora and Kubuntu: gate `{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}`. The runtime `command -v plasmashell` guard still skips non-KDE hosts.
+- **Shared system-config** (`run_onchange_after_install-system-config.sh.tmpl`) includes Ubuntu runtime branches: skips the Fedora `plymouthd.conf` deploy on Ubuntu (Ubuntu uses `update-alternatives` for plymouth, not `plymouthd.conf`), and masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units).
+- **Ubuntu-specific scripts** (`linux-ubuntu` gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
+  - `run_onchange_before_ubuntu.sh.tmpl` — apt provisioner (mirrors the Fedora installer with apt semantics; idempotent, all service/group steps guarded)
+  - `run_after_ubuntu-debrand-packages.sh.tmpl` — purges Kubuntu branding behind a fail-closed simulate-then-allowlist guard (`LC_ALL=C`, parse `Remv`+`Purg`, abort unless removal set ⊆ allowlist, `AutomaticRemove=false`)
+  - `run_after_ubuntu-debrand-plymouth.sh.tmpl` — reverts the boot splash to upstream Breeze via `update-alternatives --set default.plymouth` + `update-initramfs -u` (Ubuntu mechanism — NOT `plymouth-set-default-theme`, which is absent on Ubuntu)
+  - `run_after_ubuntu-debrand-sddm.sh.tmpl` — writes `/etc/sddm.conf.d/90-breeze.conf` (`[Theme]\nCurrent=breeze`) to override Kubuntu's `20-kubuntu.conf`; idempotent content-compare
+  - `run_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent
+- **Per-user de-brand** (`linux-ubuntu` gate, in `linux-kde/`): `run_after_config-kde-debrand-desktoptheme.sh.tmpl` — resets the Plasma desktop theme to upstream Breeze Dark via `plasma-apply-desktoptheme default` + `plasma-apply-lookandfeel -a org.kde.breezedark.desktop`, gated on a live KDE session (DBus + display + running plasmashell). Targets breezedark to match `config-kde-darkmode`.
+- **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists, RPM Fusion/COPRs, akmods MOK enrollment have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos + `ubuntu-drivers autoinstall` instead.
 - POSIX scripts/wrappers keep a Windows `.ps1` counterpart in sync
   (`executable_code`/`.ps1`, `executable_opencode`/`.ps1`). Files migrated from the
   legacy nix/dotbot config are now the source of truth here — don't defer back to
