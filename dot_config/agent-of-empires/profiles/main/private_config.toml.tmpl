@@ -1,0 +1,18 @@
+[sandbox]
+{{ if eq .chezmoi.os "darwin" -}}
+container_runtime = "apple_container"
+{{- else -}}
+container_runtime = "podman"
+{{- end }}
+
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+selinux_relabel = true
+{{- end }}
+
+[session]
+click_action = "select_only"
+default_tool = "opencode"
+yolo_mode_default = true
+
+[worktree]
+enabled = true
