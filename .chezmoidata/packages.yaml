@@ -191,3 +191,164 @@ packages:
           rpms:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
             aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
+    ubuntu:
+      # APT third-party repos. Each entry: `id` (becomes /etc/apt/sources.list.d/<id>.list),
+      # `keyring-url` (GPG armored key, dearmored to /usr/share/keyrings/<id>.gpg),
+      # and `sources-list-line` (the full one-line `deb [signed-by=...] ...` entry written
+      # verbatim — NOT a deb822 .sources file).
+      aptRepos:
+        - id: 1password
+          keyring-url: https://downloads.1password.com/linux/keys/1password.asc
+          sources-list-line: "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/apt/debian stable main"
+        - id: vscodium
+          keyring-url: https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+          sources-list-line: "deb [signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
+        - id: google-chrome
+          keyring-url: https://dl.google.com/linux/linux_signing_key.pub
+          sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
+        - id: mise
+          keyring-url: https://mise.jdx.dev/gpg-key.pub
+          sources-list-line: "deb [signed-by=/usr/share/keyrings/mise.gpg] https://mise.jdx.dev/deb stable main"
+        - id: tailscale
+          keyring-url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+          sources-list-line: "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu noble main"
+        - id: virtualbox
+          keyring-url: https://www.virtualbox.org/download/oracle_vbox_2016.asc
+          sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian noble contrib"
+        - id: microsoft-dotnet
+          keyring-url: https://packages.microsoft.com/keys/microsoft.asc
+          sources-list-line: "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/microsoft-dotnet.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main"
+      # Foundational packages installed before the main set (build headers needed
+      # for DKMS module builds).
+      corePackages:
+        - linux-headers-generic  # kernel build headers for out-of-tree (DKMS) modules
+      packages:
+        # Build tooling
+        - clang  # LLVM C/C++/Obj-C compiler
+        - g++  # GNU C++ compiler
+        - pkg-config  # query compile/link flags for installed libraries
+        - libsystemd-dev  # libsystemd headers (systemd-devel equivalent)
+        - libudev-dev  # libudev headers
+        - build-essential  # gcc, make, autotools, git (covers development-tools + c-development groups)
+        - libc6-dev  # C library headers
+
+        # CLI utilities
+        - btop  # interactive resource/process monitor
+        # chezmoi: managed by mise
+        - fd-find  # fast find alternative (binary: fdfind)
+        - gh  # GitHub CLI
+        # DELTA: kdotool not in Ubuntu repos — build from source (cargo) or drop
+        - nvtop  # GPU process/usage monitor
+        - ripgrep  # fast recursive regex code search (rg)
+        - xxd  # hex dump / reverse utility
+        - yp-tools  # NIS/YP client utilities
+
+        # Korean input method
+        - fcitx5  # input method framework
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
+
+        # Keyboard remapper
+        # DELTA: keyd — check availability in 26.04 universe; else build from source/PPA
+
+        # Language toolchains + version manager
+        - dotnet-sdk-10.0  # .NET SDK 10.0 (from Microsoft apt repo)
+        - dotnet-sdk-8.0  # .NET SDK 8.0 (from Microsoft apt repo)
+        - mise  # polyglot runtime/tool version manager (from mise apt repo)
+
+        # Ruby build dependencies
+        - libffi-dev  # FFI headers (libffi-devel equivalent)
+        - libyaml-dev  # YAML headers (libyaml-devel equivalent)
+
+        # Hardware sensors / fan control
+        - lm-sensors  # hardware temperature/voltage/fan sensor readouts
+
+        # Logitech device manager
+        - solaar  # Logitech HID++ device manager
+
+        # Password manager
+        - 1password  # 1Password desktop app (from 1password apt repo)
+        - 1password-cli  # 1Password CLI (op) — package name is 1password-cli, binary is op
+
+        # Editor
+        - codium  # VSCodium (telemetry-free VS Code, from vscodium apt repo)
+
+        # Web browser
+        - google-chrome-stable  # Google Chrome (from google-chrome apt repo)
+
+        # Container runtime (rootless Podman + tooling)
+        - podman  # daemonless OCI container engine
+        - podman-docker  # docker CLI shim that forwards to podman
+        - podman-compose  # Compose implementation for podman
+        - buildah  # OCI/Docker image builder
+        - golang-github-containers-common  # shared container registries/policy config
+        - passt  # user-mode networking (pasta) for rootless containers
+        - fuse-overlayfs  # rootless overlay filesystem driver
+        - slirp4netns  # user-mode networking for rootless network namespaces
+
+        # Screen recording / streaming / video editing
+        - kdenlive  # non-linear video editor
+        - obs-studio  # screen recording / live streaming
+
+        # Mesh networking
+        - tailscale  # WireGuard-based mesh VPN client (from tailscale apt repo)
+
+        # Wayland clipboard management
+        - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
+
+        # Virtualization
+        - virtualbox  # VirtualBox hypervisor (from Oracle apt repo; may not have 26.04 dist yet — guard in T7)
+        - fuse3  # FUSE 3 userspace filesystem support
+        - libfuse3-dev  # FUSE 3 headers (fuse3-devel equivalent)
+        - guestfs-tools  # CLI tools to inspect/modify VM disk images
+        - libguestfs-tools  # library tools for accessing/editing VM disk images
+        - ntfs-3g  # NTFS read/write driver (FUSE)
+        - qemu-utils  # QEMU disk-image tools (qemu-img equivalent)
+        - systemd-container  # systemd-nspawn / machinectl container tooling
+        - dkms  # builds/signs out-of-tree kernel modules
+
+        # Tauri development
+        - curl  # HTTP client / file downloader
+        - file  # file-type detection utility
+        - libayatana-appindicator3-dev  # AppIndicator headers (libappindicator-gtk3-devel equivalent)
+        - librsvg2-dev  # SVG rendering headers (librsvg2-devel equivalent)
+        - libxdo-dev  # libxdo headers (libxdo-devel equivalent)
+        - libssl-dev  # OpenSSL headers (openssl-devel equivalent)
+        - libwebkit2gtk-4.1-dev  # WebKitGTK headers (webkit2gtk4.1-devel equivalent)
+        - wget  # HTTP/HTTPS file downloader
+
+        - expect  # automate interactive CLI prompts
+
+        # Virtualization support
+        - qemu-kvm  # QEMU/KVM hypervisor
+        - libvirt-daemon-system  # libvirt daemon + systemd integration
+        - virt-manager  # graphical VM manager
+
+      # Installed only on bare metal (systemd-detect-virt reports no VM).
+      bareMetalPackages:
+        - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
+
+      # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de).
+      # DELTA: No akmod on Ubuntu; use ubuntu-drivers autoinstall + dkms.
+      # NOTE: Secure Boot/DKMS MOK enrollment differs from Fedora akmods.
+      nvidiaPackages:
+        - nvidia-container-toolkit  # NVIDIA container runtime integration (from NVIDIA apt repo)
+        - nvidia-container-toolkit-base  # base components for the container toolkit
+        - libnvidia-container-tools  # CLI tools for the NVIDIA container library
+        - libnvidia-container1  # NVIDIA container runtime library
+
+      # Flatpak apps installed system-wide from Flathub via `flatpak install`.
+      flatpaks:
+        - com.discordapp.Discord  # Discord voice/text chat client
+
+      # Global .NET tools installed via `dotnet tool install -g`.
+      dotnetTools:
+        - git-credential-manager  # cross-platform Git credential helper (GCM)
+        - powershell  # PowerShell (pwsh) cross-platform shell
+
+      # .deb packages installed directly from a vendor URL (no repo): download
+      # the matching arch .deb and install with dpkg -i (skipped when already installed).
+      directDebs:
+        - id: teamviewer  # remote desktop / remote support client
+          debs:
+            x86_64: https://download.teamviewer.com/download/linux/teamviewer_amd64.deb
+            aarch64: https://download.teamviewer.com/download/linux/teamviewer_arm64.deb
