@@ -1,0 +1,72 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux-kde/run_after_config-kde-debrand-desktoptheme.sh.tmpl
+#
+# Resets the per-user Plasma desktop theme to upstream Breeze on Kubuntu.
+# Gated linux-ubuntu ONLY — Fedora is already unbranded (no cross-contamination).
+#
+# Cross-reference: config-kde-darkmode sets LookAndFeelPackage=org.kde.breezedark.desktop
+# and ColorScheme=BreezeDark. This script TARGETS the same breezedark look-and-feel
+# to avoid any conflict. If you prefer light Breeze, change darkmode too (out of scope).
+#
+# Idempotency: reads the current LookAndFeelPackage via kreadconfig6; if already
+# org.kde.breezedark.desktop, exits 0 so a normal apply does not re-theme the live
+# session on every run.
+#
+# Live-session guard: plasma-apply-* only works with a running KDE session
+# (active DBus + display server + plasmashell process). This script exits 0
+# immediately when no live session is detected, making it headless/SSH/TTY/
+# first-boot safe. A run_after prefix (not run_onchange) means it retries on every
+# apply, so it will eventually apply when the user next logs into a live session.
+
+set -euo pipefail
+
+# --- Live KDE session guard ---
+# Require: KDE desktop env + DBus session + display server + running plasmashell.
+# Any absent condition = headless/SSH/no-session: safe exit 0.
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *KDE* ]]; then
+  echo "debrand-desktoptheme: not a KDE session (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset}); skip"
+  exit 0
+fi
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+  echo "debrand-desktoptheme: no DBus session bus; skip"
+  exit 0
+fi
+if [[ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
+  echo "debrand-desktoptheme: no display server (no WAYLAND_DISPLAY or DISPLAY); skip"
+  exit 0
+fi
+if ! pgrep -xu "$USER" plasmashell >/dev/null 2>&1; then
+  echo "debrand-desktoptheme: plasmashell not running for $USER; skip"
+  exit 0
+fi
+
+# --- Idempotency: check current look-and-feel ---
+# config-kde-darkmode already pins LookAndFeelPackage=org.kde.breezedark.desktop.
+# If that's already set, the session is already on breezedark; no-op.
+if command -v kreadconfig6 >/dev/null 2>&1; then
+  current_lnf="$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage 2>/dev/null || true)"
+  if [[ "$current_lnf" == "org.kde.breezedark.desktop" ]]; then
+    echo "debrand-desktoptheme: look-and-feel already org.kde.breezedark.desktop; no-op"
+    exit 0
+  fi
+fi
+
+# --- Apply upstream Breeze desktop theme + look-and-feel ---
+# (a) Reset the Plasma desktop theme to upstream "default" (Breeze).
+if command -v plasma-apply-desktoptheme >/dev/null 2>&1; then
+  plasma-apply-desktoptheme default
+  echo "debrand-desktoptheme: plasma-apply-desktoptheme default -> OK"
+fi
+
+# (b) Apply the Breeze Dark look-and-feel (matches config-kde-darkmode's target).
+#     This reverts any Kubuntu-branded look-and-feel a previously-branded session
+#     may have set. Targets breezedark (not light Breeze) to avoid fighting with
+#     the darkmode script which also owns LookAndFeelPackage.
+if command -v plasma-apply-lookandfeel >/dev/null 2>&1; then
+  plasma-apply-lookandfeel -a org.kde.breezedark.desktop
+  echo "debrand-desktoptheme: plasma-apply-lookandfeel -a org.kde.breezedark.desktop -> OK"
+fi
+
+echo "debrand-desktoptheme: per-user Plasma theme reset to upstream Breeze Dark"
+{{ end -}}
