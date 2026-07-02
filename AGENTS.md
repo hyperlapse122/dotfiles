@@ -100,6 +100,38 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
   legacy nix/dotbot config are now the source of truth here — don't defer back to
   the old repo.
 
+## Containerized / CI environments
+
+Runtime-detected, no prompt: Podman creates `/run/.containerenv`, Docker creates
+`/.dockerenv` (neither exists on a bare-metal host or VM, so a normal host
+`chezmoi apply` is unaffected). Both the root `.chezmoiignore` (via `stat`) and
+`.install-prerequisites.sh` (via `is_container()`) branch on these markers.
+Intended for CI runners and dedicated containers with their own `$HOME`.
+
+**distrobox and toolbox are the explicit opt-out** — both bind-mount the host
+`$HOME` and both create `/run/.toolboxenv` (distrobox `touch`es it for toolbx
+prompt compatibility), so an apply inside one targets the real host `$HOME` and
+must provision fully like the host, not skip. Detection therefore skips only a
+*real* container: a Podman/Docker marker present **without** `/run/.toolboxenv`
+(`is_devbox()` in the hook; a `(not (stat "/run/.toolboxenv"))` guard in
+`.chezmoiignore`). Keep the two detection sites in lockstep — same markers, same
+sense — or the hook and the ignore set will disagree.
+
+- **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
+  block skips every provisioning script — `.chezmoiscripts/{linux,linux-kde,auth,gpg}/*.sh`
+  plus `.chezmoiscripts/build/*mxm4-haptic.sh` (no package installs, `/etc` config,
+  GPG/GitHub/GitLab/Tailscale auth, fonts, KDE settings, Canonical de-branding, or
+  MX Master haptic build). The opencode plugin build (`build-opencode-plugins`) is
+  deliberately KEPT — opencode is a first-class CLI here and it soft-skips when mise
+  is absent. Adjust skips in that one gated block, never by editing the scripts.
+- **No package installs in a container.** `.install-prerequisites.sh` expects `op` +
+  `mise` from the base image; it never runs dnf/apt/brew inside a container and fails
+  fast with guidance when either is missing.
+- **Secrets via a 1Password service account.** Export `OP_SERVICE_ACCOUNT_TOKEN`
+  before applying; `op_ready()` prefers `op whoami` (works for service accounts;
+  `op user get --me` is the human-account fallback), so `onepasswordRead` templates
+  resolve exactly as on a host.
+
 ## Commits
 
 Conventional Commits (per the global rules), scoped by area — history is mostly

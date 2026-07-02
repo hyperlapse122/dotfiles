@@ -13,12 +13,55 @@
 
 set -euo pipefail
 
-# Fast path: nothing to do once both tools are present and `op` is signed in.
+# Container / CI detection: Podman creates /run/.containerenv, Docker creates
+# /.dockerenv. Neither exists on a bare-metal host or VM.
+#
+# distrobox and toolbox are the OPT-OUT: both bind-mount the host $HOME and both
+# create /run/.toolboxenv (distrobox touches it for toolbx compatibility), so an
+# apply inside one targets the real host $HOME and must provision like the host.
+# Treat only a "real" container — a marker WITHOUT /run/.toolboxenv — as one here.
+is_devbox() {
+  [[ -f /run/.toolboxenv ]]
+}
+
+is_container() {
+  [[ -f /run/.containerenv || -f /.dockerenv ]] || return 1
+  ! is_devbox
+}
+
+# `op` can resolve secrets. `op whoami` succeeds for BOTH a desktop-app
+# integration and a service-account token (OP_SERVICE_ACCOUNT_TOKEN) — the
+# latter is how containers/CI authenticate. `op user get --me` is the legacy
+# fallback: it works for a signed-in human account but NOT a service account.
+op_ready() {
+  command -v op >/dev/null 2>&1 || return 1
+  op whoami >/dev/null 2>&1 && return 0
+  op user get --me >/dev/null 2>&1
+}
+
+# Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.
-if command -v op >/dev/null 2>&1 \
-  && command -v mise >/dev/null 2>&1 \
-  && op user get --me >/dev/null 2>&1; then
+if command -v mise >/dev/null 2>&1 && op_ready; then
   exit 0
+fi
+
+# Inside a container we NEVER install packages or the 1Password desktop app —
+# the base image plus mise are expected to provide `op` and `mise`, and secrets
+# come from a service-account token. Fail fast with guidance instead of trying
+# to dnf/apt/brew inside the container.
+if is_container; then
+  missing=()
+  command -v op   >/dev/null 2>&1 || missing+=("op (1Password CLI)")
+  command -v mise >/dev/null 2>&1 || missing+=("mise")
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    printf 'install-prerequisites.sh: container detected, but missing from the base image: %s.\n' "${missing[*]}" >&2
+    printf 'Bake op + mise into the image; this hook never installs packages inside a container.\n' >&2
+    exit 1
+  fi
+  printf 'install-prerequisites.sh: container detected, but op is not authenticated.\n' >&2
+  printf 'Export a 1Password service-account token before applying:\n' >&2
+  printf '  export OP_SERVICE_ACCOUNT_TOKEN=...   # see: op service account create --help\n' >&2
+  exit 1
 fi
 
 # Fedora: install via dnf, mirroring .chezmoidata/packages.yaml (1Password's
@@ -157,4 +200,4 @@ case "$(uname -s)" in
     ;;
 esac
 
-# TODO: Make user authenticate 1password and enable CLI access and wait for `op user get --me` succeeds
+# TODO: Make user authenticate 1password and enable CLI access and wait until `op_ready` succeeds

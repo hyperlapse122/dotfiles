@@ -30,3 +30,24 @@
 # internal documentations
 ./docs
 
+# Containerized / CI environments: Podman creates /run/.containerenv, Docker
+# creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
+# container, deploy the CLI dotfiles only and skip all host provisioning:
+# package installs, /etc system config, GPG/GitHub/GitLab/Tailscale auth, fonts,
+# KDE settings, Canonical de-branding, and the MX Master haptic build. The
+# opencode plugin build is deliberately KEPT (opencode is a first-class CLI
+# here; that script soft-skips when its toolchain is absent).
+#
+# distrobox and toolbox are the OPT-OUT: both bind-mount the host $HOME and both
+# create /run/.toolboxenv (distrobox touches it for toolbx compatibility), so an
+# apply inside one writes to the real host $HOME and must behave like the host —
+# provision fully. Skip only a "real" container: a Podman/Docker marker present
+# WITHOUT /run/.toolboxenv.
+{{- if and (or (stat "/run/.containerenv") (stat "/.dockerenv")) (not (stat "/run/.toolboxenv")) }}
+.chezmoiscripts/linux/*.sh
+.chezmoiscripts/linux-kde/*.sh
+.chezmoiscripts/auth/*.sh
+.chezmoiscripts/gpg/*.sh
+.chezmoiscripts/build/*mxm4-haptic.sh
+{{- end }}
+

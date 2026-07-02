@@ -64,7 +64,36 @@ installs the 1Password app and CLI but cannot yet resolve secrets. So:
    chezmoi apply
    ```
 
-`op user get --me` must succeed for the apply to complete.
+The apply completes once `op` can resolve secrets (`op whoami` succeeds).
+
+## Running in a container / CI
+
+`chezmoi apply` is container-aware. When it detects a container — Podman's
+`/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
+**CLI dotfiles only** and skips all host provisioning: no package installs, no
+`/etc` system config, no GPG / GitHub / GitLab / Tailscale auth, no fonts, no KDE
+settings, and no Canonical de-branding. The OpenCode plugin build still runs (and
+soft-skips if its toolchain is missing). This makes the repo usable as-is on CI
+runners and in dedicated containers that have their own `$HOME`.
+
+**distrobox and toolbox are the exception.** Both bind-mount the host `$HOME` and
+both create `/run/.toolboxenv`, so `chezmoi apply` inside one detects the shared
+home and provisions fully like the host instead of skipping — no opt-in needed.
+
+Because the repo never installs packages inside a container, two things must come
+from the image and environment:
+
+1. **`op` and `mise` baked into the base image.** The
+   [`.install-prerequisites.sh`](.install-prerequisites.sh) hook installs nothing
+   in a container — it fails fast with guidance if either is missing.
+2. **A 1Password service-account token for secrets.** Secret templates still
+   resolve through `onepasswordRead`, so export a service-account token before
+   applying — no interactive desktop sign-in is needed:
+
+   ```sh
+   export OP_SERVICE_ACCOUNT_TOKEN=...   # create one: op service account create --help
+   sh -c "$(curl -fsLS https://get.chezmoi.io)" -- init --apply hyperlapse122
+   ```
 
 ## Day-to-day
 
