@@ -1,0 +1,23 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/agents/run_once_before_teardown-skills-sh.sh.tmpl
+#
+# run_once_before_: one-time migration cleanup keyed by content hash; it reruns
+# only if this template changes, and it runs before file-apply and before the
+# run_after install step.
+# Split guard rationale: find-skills is ALWAYS unmanaged by dotagents, so its
+# residue is removed unconditionally; playwright-cli and improve become
+# dotagents-managed after migration, so they are only removed before dotagents
+# takes over to avoid deleting managed installs.
+
+set -euo pipefail
+
+rm -f "$HOME/.skill-lock.json"
+rm -rf "$HOME/.agents/skills/find-skills"
+
+if [[ ! -e "$HOME/.agents/agents.lock" ]]; then
+  rm -rf "$HOME/.agents/skills/playwright-cli" "$HOME/.agents/skills/improve"
+fi
+
+echo "teardown-skills-sh: cleaned skills.sh residue"
+{{ end -}}

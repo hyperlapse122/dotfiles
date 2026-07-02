@@ -33,9 +33,11 @@ sh -c "$(curl -fsLS https://get.chezmoi.io)" -- init --apply hyperlapse122
    [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
    Kubuntu via apt), fonts, importing the GPG key, authenticating GitHub / GitLab
    / Tailscale, switching the login shell to zsh, and writing KDE / Solaar /
-   system config. On Kubuntu, additionally strips Canonical branding to upstream
-   Breeze (SDDM theme, Plymouth boot splash, per-user desktop theme, branding
-   packages) and enables Tailscale egress-NAT via ufw.
+   system config. It also provisions coding-agent skills via `dotagents` into
+   `~/.agents/skills/` from the pinned set in [`dot_agents/agents.toml`](dot_agents/agents.toml).
+   On Kubuntu, additionally strips Canonical branding to upstream Breeze (SDDM
+   theme, Plymouth boot splash, per-user desktop theme, branding packages) and
+   enables Tailscale egress-NAT via ufw.
 
 ## Prerequisites
 
@@ -72,9 +74,10 @@ The apply completes once `op` can resolve secrets (`op whoami` succeeds).
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
 `/etc` system config, no GPG / GitHub / GitLab / Tailscale auth, no fonts, no KDE
-settings, and no Canonical de-branding. The OpenCode plugin build still runs (and
-soft-skips if its toolchain is missing). This makes the repo usable as-is on CI
-runners and in dedicated containers that have their own `$HOME`.
+settings, and no Canonical de-branding. The OpenCode plugin build and `dotagents`
+skills install still run (and soft-skip if their toolchains are missing). This
+makes the repo usable as-is on CI runners and in dedicated containers that have
+their own `$HOME`.
 
 **distrobox and toolbox are the exception.** Both bind-mount the host `$HOME` and
 both create `/run/.toolboxenv`, so `chezmoi apply` inside one detects the shared

@@ -1,0 +1,101 @@
+name: Update agent skills
+
+on:
+  schedule:
+    - cron: "0 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-agent-skills
+  cancel-in-progress: false
+
+jobs:
+  bump-agent-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Bump pinned skill refs to newest eligible release or commit
+        id: bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          CUTOFF=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          has_updates=false
+          summary=""
+
+          mapfile -t sources < <(yq -p=toml -o=json dot_agents/agents.toml | jq -r '.skills[].source')
+
+          for src in "${sources[@]}"; do
+            case "$src" in
+              https:*|path:*)
+                continue
+                ;;
+            esac
+
+            [[ "$src" == *"@"* ]] || continue
+
+            or="${src%@*}"
+            old_ref="${src#*@}"
+
+            new="$(
+              gh api "repos/$or/releases" --paginate --jq '[.[]|select(.draft==false and .prerelease==false)|{t:.tag_name,d:.published_at}]' \
+                | jq -rs --arg cutoff "$CUTOFF" "add // [] | map(select(.d <= \$cutoff)) | sort_by(.d) | last | .t // empty"
+            )"
+
+            if [ -z "$new" ]; then
+              new="$(
+                gh api "repos/$or/commits?per_page=100" --jq 'map({s:.sha,d:.commit.committer.date})' \
+                  | jq -r --arg cutoff "$CUTOFF" "map(select(.d <= \$cutoff)) | sort_by(.d) | last | .s // empty"
+              )"
+            fi
+
+            if [ -z "$new" ]; then
+              echo "::warning::no eligible ref found for $src"
+              continue
+            fi
+
+            if [ "$new" != "$old_ref" ]; then
+              # shellcheck disable=SC2016 # literal regex metacharacters in the BRE escape pattern
+              old_esc=$(printf '@%s\n' "$old_ref" | sed 's/[[\.*^$()/+?{|]/\\&/g')
+              new_esc=$(printf '@%s\n' "$new" | sed 's/[&|/]/\\&/g')
+              sed -i "s|${old_esc}|${new_esc}|g" dot_agents/agents.toml
+
+              summary+="- ${or}@${old_ref} → ${or}@${new}"$'\n'
+              has_updates=true
+            fi
+          done
+
+          echo "has_updates=${has_updates}" >> "$GITHUB_OUTPUT"
+
+          if [ "$has_updates" = true ]; then
+            {
+              echo "summary<<EOF"
+              echo "Pinned agent skill refs updated in dot_agents/agents.toml."
+              echo ""
+              echo "Updates:"
+              printf '%s' "$summary"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "No updates needed"
+          fi
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: steps.bump.outputs.has_updates == 'true'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: chore/update-agent-skills
+          delete-branch: true
+          sign-commits: true
+          add-paths: dot_agents/agents.toml
+          commit-message: "chore(agents): update pinned skill refs"
+          title: "chore(agents): update pinned skill refs"
+          body: ${{ steps.bump.outputs.summary }}

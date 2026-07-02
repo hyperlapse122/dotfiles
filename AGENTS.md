@@ -36,6 +36,16 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 - `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
 - `packages/` builds on apply into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS) and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
+### Agent skills management
+
+- `dotagents` manages user-scoped agent skills under `~/.agents/`.
+- `dot_agents/agents.toml` is the single source of truth for managed skill pins: it exact-pins the managed skills (each ref is at least 7 days old), sets `agents = ["claude"]`, and uses `minimum_release_age = 10080`.
+- The six custom skills live in `dot_agents/skills/` and are intentionally undeclared in `agents.toml`; `dotagents install` does not prune undeclared skills.
+- Provisioning runs via `.chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl` on every `chezmoi apply`; it soft-skips on missing mise/node/git or install failure, preflights `~/.claude/skills` before writing, and is kept in containers.
+- One-time teardown is handled by `.chezmoiscripts/agents/run_once_before_teardown-skills-sh.tmpl`.
+- `dot_agents/agents.toml` refs are bumped weekly by `.github/workflows/update-agent-skills.yml`.
+- The managed SKILLS observe a 7-day settle (`minimum_release_age = 10080`), while the `dotagents` CLI itself still observes the standard 24h mise cooldown.
+
 ### Verify edits (don't eyeball raw `.tmpl`)
 - `chezmoi diff` — preview what apply would change. **Primary check after any edit.**
 - `chezmoi execute-template < file.tmpl` — render one template in isolation (output depends on OS + `.chezmoidata`).
@@ -72,9 +82,14 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
   `minimum_release_age_excludes`, don't disable the gate.
 - `python3` is mise-shadowed; system scripts needing real system Python must call
   `/usr/bin/python3` (see the solaar config script).
-- **JS package-manager hardening lives here and must stay** — `dot_npmrc`,
-  `dot_bunfig.toml`, `dot_yarnrc.yml`, `dot_config/pnpm/config.yaml` all set
-  ignore-scripts + exact-pin + 1-week cooldown. Don't relax them.
+- **JS package-manager hardening lives here and must stay** — `dot_npmrc` sets
+  `ignore-scripts=true`, `save-exact=true`, and `min-release-age=0` (npm has no
+  cooldown); `dot_bunfig.toml` sets `ignoreScripts=true`, `exact=true`, and
+  `minimumReleaseAge=604800`; `dot_yarnrc.yml` sets `enableScripts: false`,
+  `defaultSemverRangePrefix: ""`, `enableImmutableInstalls: true`,
+  `enableTelemetry: false`, `preferReuse: true`, and `npmMinimalAgeGate: 10080`;
+  `dot_config/pnpm/config.yaml` sets `ignoreScripts: true`, `saveExact: true`,
+  and `minimumReleaseAge: 10080`. Don't relax them.
 - TOML is taplo-formatted; `.taplo.toml` excludes `crates/**`, `packages/**`, `.chezmoidata/**`, and
   `.chezmoiexternals/**` (templated or non-standard TOML). biome LSP is disabled in
   the repo `opencode.json`.
@@ -121,9 +136,11 @@ sense — or the hook and the ignore set will disagree.
   block skips every provisioning script — `.chezmoiscripts/{linux,linux-kde,auth,gpg}/*.sh`
   plus `.chezmoiscripts/build/*mxm4-haptic.sh` (no package installs, `/etc` config,
   GPG/GitHub/GitLab/Tailscale auth, fonts, KDE settings, Canonical de-branding, or
-  MX Master haptic build). The opencode plugin build (`build-opencode-plugins`) is
-  deliberately KEPT — opencode is a first-class CLI here and it soft-skips when mise
-  is absent. Adjust skips in that one gated block, never by editing the scripts.
+  MX Master haptic build). The opencode plugin build (`build-opencode-plugins`) and
+  the dotagents skills install (`run_after_install-dotagents-skills`) are deliberately
+  KEPT — opencode is a first-class CLI here and it soft-skips when mise is absent,
+  while dotagents soft-skips on missing prerequisites and preflights `~/.claude/skills`.
+  Adjust skips in that one gated block, never by editing the scripts.
 - **No package installs in a container.** `.install-prerequisites.sh` expects `op` +
   `mise` from the base image; it never runs dnf/apt/brew inside a container and fails
   fast with guidance when either is missing.

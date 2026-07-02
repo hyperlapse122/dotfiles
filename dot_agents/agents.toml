@@ -1,0 +1,22 @@
+version = 1
+agents = ["claude"]
+# 1 week in minutes — settle window for the managed SKILL refs only. It is
+# independent of the 24h mise gate on the dotagents CLI itself. dotagents
+# throws if a pinned ref is younger than this, so every pin below is >=7d old.
+minimum_release_age = 10080
+
+[trust]
+github_orgs = ["getsentry", "microsoft", "shadcn"]
+git_domains = ["git.jpi.app"]
+
+[[skills]]
+name = "playwright-cli"
+source = "microsoft/playwright-cli@v0.1.14"
+
+[[skills]]
+name = "improve"
+source = "shadcn/improve@03369ee6d7cafbfcecc4346539b05b3dc0a603bb"
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents@1.17.0"

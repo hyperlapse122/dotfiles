@@ -1,0 +1,42 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl
+#
+# run_after_: executes on every `chezmoi apply`, so there is no fingerprint / 
+# onchange gate to maintain.
+# Soft-skip: this script must never fail apply; missing tools, offline fetches,
+# trust rejection, or install errors all exit 0 after a diagnostic message.
+# Container-kept: intentionally not excluded from containers; it soft-skips when
+# mise/node/git are absent instead of bootstrapping anything.
+# ~/.claude/skills preflight: dotagents' claude target can migrate and rm -rf a
+# real directory, so a non-empty real dir is treated as a manual-merge case.
+
+set -euo pipefail
+
+skip() { exit 0; }
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "install-dotagents-skills: skipped (mise not installed)" >&2
+  skip
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "install-dotagents-skills: skipped (git not installed)" >&2
+  skip
+fi
+
+cs="$HOME/.claude/skills"; if [[ -e "$cs" && ! -L "$cs" && -d "$cs" && -n "$(ls -A "$cs" 2>/dev/null)" ]]; then
+  echo "install-dotagents-skills: skipped (~/.claude/skills is a non-empty real dir; resolve manually to avoid data loss)" >&2
+  skip
+fi
+
+set +e
+install_output="$(mise --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
+install_rc=$?
+set -e
+if [[ $install_rc -ne 0 ]]; then
+  reason="${install_output//$'\n'/; }"
+  echo "install-dotagents-skills: skipped (install failed: ${reason})" >&2
+  skip
+fi
+{{ end -}}
