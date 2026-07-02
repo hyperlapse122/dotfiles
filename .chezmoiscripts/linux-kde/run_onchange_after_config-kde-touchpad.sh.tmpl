@@ -1,4 +1,4 @@
-{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/kde/run_onchange_after_config-kde-touchpad.sh.tmpl
 #
