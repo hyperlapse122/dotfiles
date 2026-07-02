@@ -52,7 +52,7 @@ only logic.
 - **Platform**: cross-platform. The plugin only writes an environment variable,
   so it works wherever OpenCode and `playwright-cli` run (Linux, macOS,
   Windows).
-- **Runtime**: the OpenCode Node runtime that loads the plugin (`node >= 20`).
+- **Runtime**: the OpenCode Node runtime that loads the plugin (`node >= 24`).
 - **Not published.** The `@h82/` scope is a naming namespace, not a registry
   target; this is a workspace-local plugin built in place. Chezmoi symlinks
   the built file into OpenCode's plugin directory so it auto-loads (see

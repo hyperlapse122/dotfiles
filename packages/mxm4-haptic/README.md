@@ -20,7 +20,7 @@ replace the daemon — all device I/O, debounce, queueing, and pacing live in
 
 ## Status
 
-- **Runtimes**: tested on **Node ≥20** (developed on Node 26). Works under
+- **Runtimes**: tested on **Node ≥24** (developed on Node 24). Works under
   **Bun** via its `node:net` compatibility layer. **Deno is not supported** /
   not claimed.
 - **Platform**: Linux + macOS + Windows at runtime — wherever the

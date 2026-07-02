@@ -12,11 +12,12 @@ jobs:
       run:
         working-directory: packages
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
-          # NOT 20 (the runtime `engines` floor): the build/test toolchain needs
-          # Node >=23.6 native TS type-stripping (tsdown .ts config + node --test).
+          # Matches the `engines` floor (>=24) and the mise pin; Node 24 (latest
+          # LTS) ships the native TS type-stripping the toolchain needs
+          # (tsdown .ts config + node --test).
           node-version: "24"
       - run: corepack enable
       - run: yarn install --immutable
@@ -33,7 +34,7 @@ jobs:
       run:
         working-directory: crates/mxm4-haptic
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install libudev (hidapi linux-static-hidraw backend)
         run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
@@ -45,7 +46,7 @@ jobs:
     name: Shellcheck (plain .sh scripts)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: shellcheck
         run: |
           shellcheck \
