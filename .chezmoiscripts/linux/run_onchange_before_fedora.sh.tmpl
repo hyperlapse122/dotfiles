@@ -5,8 +5,8 @@ set -euo pipefail
 
 # Consolidated Fedora provisioning, migrated from the legacy
 # scripts/linux/install-packages.sh: repositories, dnf/flatpak/dotnet packages,
-# akmod/DKMS module builds, the VirtualBox extension pack, system services + MOK
-# enrollment, RTC/NTP time, the NVIDIA container runtime, and user groups.
+# DKMS module signing, system services + MOK enrollment, RTC/NTP time, the
+# NVIDIA container runtime, and user groups.
 #
 # chezmoi re-runs this run_onchange script on every rendered-content change (e.g.
 # a single packages.yaml edit), so every step is idempotent and guarded:
@@ -256,97 +256,14 @@ install_dotnet_tools() {
   done
 }
 
-# Rebuild the VirtualBox akmod when the prebuilt module does not match the running
-# kernel (e.g. after a kernel bump); a plain `akmods` run suffices when vboxdrv
-# already loads cleanly.
-build_akmods() {
-  if ! command -v akmods >/dev/null 2>&1; then
-    printf 'install-fedora.sh: akmods not installed; skipping module build.\n' >&2
-    return 0
-  fi
-  if "${SUDO[@]}" modprobe vboxdrv 2>/dev/null; then
-    "${SUDO[@]}" akmods
-  else
-    "${SUDO[@]}" akmods --force --rebuild
-  fi
-}
-
-# Install the matching Oracle VirtualBox Extension Pack, verified against upstream
-# SHA256SUMS, when it is missing or out of date.
-install_virtualbox_extension_pack() {
-  if ! command -v VBoxManage >/dev/null 2>&1; then
-    printf 'install-fedora.sh: VBoxManage not installed; skipping extension pack.\n'
-    return 0
-  fi
-
-  # VBoxManage --version emits e.g. "7.2.8_RPMFUSIONr173730" (RPM Fusion build) or
-  # "7.2.8r166737" (upstream). Strip from the first non-version character to
-  # recover "7.2.8", the version download.virtualbox.org publishes the extpack
-  # under.
-  local vbox_version installed_version pack_file base_url
-  vbox_version="$(VBoxManage --version 2>/dev/null | awk -F_ '/^[0-9]+\.[0-9]+\.[0-9]+_/ {print $1}')"
-  if [[ -z "${vbox_version}" ]]; then
-    printf 'install-fedora.sh: could not parse VirtualBox version; skipping extension pack.\n' >&2
-    return 1
-  fi
-
-  # Skip if the installed extpack already matches the running VirtualBox.
-  installed_version="$(VBoxManage list extpacks 2>/dev/null \
-    | awk '/^Pack no\. 0:/{found=1} found && /^Version:/{print $2; exit}')"
-  if [[ "${installed_version}" == "${vbox_version}" ]]; then
-    printf 'install-fedora.sh: VirtualBox Extension Pack %s already installed; skipping.\n' "${vbox_version}"
-    return 0
-  fi
-
-  pack_file="Oracle_VirtualBox_Extension_Pack-${vbox_version}.vbox-extpack"
-  base_url="https://download.virtualbox.org/virtualbox/${vbox_version}"
-
-  # Subshell scopes the EXIT trap so the tmpdir is cleaned up whether the work
-  # succeeds or fails under set -e, without leaking a trap into later functions.
-  (
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "${tmpdir}"' EXIT
-
-    curl -fsSL -o "${tmpdir}/${pack_file}" "${base_url}/${pack_file}"
-    curl -fsSL -o "${tmpdir}/SHA256SUMS"   "${base_url}/SHA256SUMS"
-
-    # SHA256SUMS lines are "<sha256> *<filename>". Pull the line for our exact
-    # filename; refuse to proceed if it is missing (sha256sum -c on empty stdin
-    # exits 0, which would silently skip verification).
-    cd "${tmpdir}"
-    expected="$(awk -v f="*${pack_file}" '$2 == f' SHA256SUMS)"
-    if [[ -z "${expected}" ]]; then
-      printf 'install-fedora.sh: %s missing from upstream SHA256SUMS; aborting.\n' "${pack_file}" >&2
-      exit 1
-    fi
-    printf '%s\n' "${expected}" | sha256sum -c -
-
-    # VBoxManage accepts --accept-license=<sha256 of the bundled
-    # ExtPack-license.txt> for non-interactive install. Compute it from the
-    # verified archive so a future license change is picked up automatically.
-    license_hash="$(tar -xOzf "${pack_file}" ./ExtPack-license.txt | sha256sum | awk '{print $1}')"
-
-    "${SUDO[@]}" VBoxManage extpack install --replace \
-      --accept-license="${license_hash}" "${tmpdir}/${pack_file}"
-  )
-
-  # A user-owned VBoxSVC started before this install caches "no extpacks"
-  # in-process; restart it so the user sees the new pack before next login.
-  # See https://www.virtualbox.org/ticket/17034.
-  local target_user="${SUDO_USER:-$USER}"
-  if [[ -n "${target_user}" && "${target_user}" != "root" ]]; then
-    pkill -u "${target_user}" -x VBoxSVC 2>/dev/null || true
-  fi
-}
-
 # Use the hardware clock as UTC and enable NTP synchronisation.
 configure_time() {
   "${SUDO[@]}" timedatectl set-local-rtc 0
   "${SUDO[@]}" timedatectl set-ntp true
 }
 
-# Enable the system services this machine depends on, then enroll the akmods/DKMS
-# MOK signing keys when booted with Secure Boot.
+# Enable the system services this machine depends on, then enroll the DKMS MOK
+# signing key when booted with Secure Boot.
 enable_services() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now tailscaled
@@ -362,23 +279,12 @@ enable_services() {
   "${SUDO[@]}" systemctl unmask systemd-timesyncd
   "${SUDO[@]}" systemctl enable --now systemd-timesyncd
 
-  # vboxdrv may not start until the user reboots to load the module, but enable it
-  # so it comes up on next boot.
-  "${SUDO[@]}" systemctl enable vboxdrv
-
-  # akmods.service auto-signs and loads out-of-tree kernel modules.
-  "${SUDO[@]}" systemctl enable --now akmods.service
-
-  # Import the MOK signing keys for out-of-tree modules: every akmods key under
-  # /etc/pki/akmods/certs/ (currently virtualbox) plus the dkms key at
-  # /var/lib/dkms/mok.pub (NVIDIA dkms driver). Skipped unless booted via UEFI
+  # Import the DKMS MOK signing key for the NVIDIA driver at
+  # /var/lib/dkms/mok.pub. Skipped unless booted via UEFI
   # with Secure Boot on — otherwise unsigned modules load fine and
   # `mokutil --import` would queue a pointless MOK Manager prompt on next boot.
-  #
-  # /etc/pki/akmods/certs/ is mode 0750 root:akmods, so every read goes through
-  # sudo. Both key sources are DER-encoded (one `openssl x509 -inform DER` covers
-  # them). `mokutil --test-key` confusingly exits 1 when the key IS enrolled, so
-  # grep its stdout for "is already enrolled"; a pending request is matched
+  # The key is DER-encoded. `mokutil --test-key` confusingly exits 1 when the key
+  # IS enrolled, so grep its stdout for "is already enrolled"; a pending request is matched
   # against `mokutil --list-new` by SHA1 fingerprint so re-runs between import and
   # reboot don't re-prompt. Approved keys are batched into one `mokutil --import`
   # so the user enters the one-time password once.
@@ -389,14 +295,11 @@ enable_services() {
   else
     local -a certs=() to_import=()
     local cert fp
-    if "${SUDO[@]}" test -d /etc/pki/akmods/certs; then
-      readarray -t certs < <("${SUDO[@]}" find /etc/pki/akmods/certs -maxdepth 1 -type f -name '*.der' -print | sort)
-    fi
     if "${SUDO[@]}" test -f /var/lib/dkms/mok.pub; then
       certs+=(/var/lib/dkms/mok.pub)
     fi
     if [[ ${#certs[@]} -eq 0 ]]; then
-      printf 'install-fedora.sh: no akmods/dkms MOK keys found; skipping MOK import.\n'
+      printf 'install-fedora.sh: no DKMS MOK key found; skipping MOK import.\n'
     else
       for cert in "${certs[@]}"; do
         if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
@@ -413,7 +316,7 @@ enable_services() {
       if [[ ${#to_import[@]} -gt 0 ]]; then
         "${SUDO[@]}" mokutil --import "${to_import[@]}"
       else
-        printf 'install-fedora.sh: all akmods/dkms MOK keys already enrolled or queued.\n'
+        printf 'install-fedora.sh: DKMS MOK key already enrolled or queued.\n'
       fi
     fi
   fi
@@ -436,7 +339,7 @@ set_up_nvidia_container_toolkit() {
 # Add the user to the device/virtualization groups and allocate rootless-Podman
 # subordinate id ranges. Group changes only take effect on next login.
 configure_user_groups() {
-  "${SUDO[@]}" usermod -aG keyd,libvirt,vboxusers "$USER"
+  "${SUDO[@]}" usermod -aG keyd,libvirt "$USER"
   if getent group docker >/dev/null 2>&1; then "${SUDO[@]}" gpasswd -d "$USER" docker 2>/dev/null || true; fi
 
   # Allocate subordinate UID/GID ranges for rootless Podman user namespaces.
@@ -447,9 +350,9 @@ configure_user_groups() {
 
   # Notify when the current shell is missing a just-added group; silent on re-runs
   # after re-login.
-  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt || ! id -nG | grep -qw vboxusers; then
+  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt; then
     printf '\n'
-    printf 'NOTE: Added "%s" to groups: keyd, libvirt, vboxusers\n' "$USER"
+    printf 'NOTE: Added "%s" to groups: keyd, libvirt\n' "$USER"
     printf '      Log out and back in (or reboot) for group membership to take effect.\n'
   fi
 }
@@ -458,8 +361,6 @@ install_fedora_packages
 install_direct_rpms
 install_flatpak_packages
 install_dotnet_tools
-build_akmods
-install_virtualbox_extension_pack
 configure_time
 enable_services
 set_up_nvidia_container_toolkit

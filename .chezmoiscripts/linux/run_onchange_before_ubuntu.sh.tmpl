@@ -213,9 +213,8 @@ install_nvidia_support() {
 }
 
 # Enable a systemd unit only when its unit file exists, so a host missing an
-# optional package (libvirt, virtualbox, nvidia) is skipped rather than failing.
-# The second argument selects "now" (enable --now) or "later" (enable only, for a
-# unit whose kernel module only loads after a reboot, e.g. vboxdrv).
+# optional package (libvirt, nvidia) is skipped rather than failing.
+# The second argument selects "now" (enable --now) or "later" (enable only).
 enable_unit() {
   local svc="$1" when="${2:-now}"
   systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}" || return 0
@@ -242,9 +241,6 @@ enable_services() {
   "${SUDO[@]}" systemctl unmask systemd-timesyncd 2>/dev/null || true
   enable_unit systemd-timesyncd
 
-  # vboxdrv only loads after its module is built for the running kernel, which can
-  # require a reboot; enable it so it comes up on the next boot.
-  enable_unit vboxdrv later
 }
 
 # Use the hardware clock as UTC and enable NTP synchronisation. Guarded so a
@@ -255,79 +251,12 @@ configure_time() {
   "${SUDO[@]}" timedatectl set-ntp true 2>/dev/null || true
 }
 
-# Install the matching Oracle VirtualBox Extension Pack, verified against upstream
-# SHA256SUMS, when it is missing or out of date. The `virtualbox` package from
-# Oracle's apt repo reports an upstream version like "7.2.8r166737", so the
-# version is recovered by taking the leading X.Y.Z (there is no build-suffix
-# underscore to split on, unlike Fedora's RPM Fusion build).
-install_virtualbox_extension_pack() {
-  if ! command -v VBoxManage >/dev/null 2>&1; then
-    printf 'run_onchange_before_ubuntu.sh: VBoxManage not installed; skipping extension pack.\n'
-    return 0
-  fi
-
-  local vbox_version installed_version pack_file base_url
-  vbox_version="$(VBoxManage --version 2>/dev/null | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || true)"
-  if [[ -z "${vbox_version}" ]]; then
-    printf 'run_onchange_before_ubuntu.sh: could not parse VirtualBox version; skipping extension pack.\n' >&2
-    return 1
-  fi
-
-  # Skip if the installed extpack already matches the running VirtualBox.
-  installed_version="$(VBoxManage list extpacks 2>/dev/null \
-    | awk '/^Pack no\. 0:/{found=1} found && /^Version:/{print $2; exit}')"
-  if [[ "${installed_version}" == "${vbox_version}" ]]; then
-    printf 'run_onchange_before_ubuntu.sh: VirtualBox Extension Pack %s already installed; skipping.\n' "${vbox_version}"
-    return 0
-  fi
-
-  pack_file="Oracle_VirtualBox_Extension_Pack-${vbox_version}.vbox-extpack"
-  base_url="https://download.virtualbox.org/virtualbox/${vbox_version}"
-
-  # Subshell scopes the EXIT trap so the tmpdir is cleaned up whether the work
-  # succeeds or fails under set -e, without leaking a trap into later functions.
-  (
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "${tmpdir}"' EXIT
-
-    curl -fsSL -o "${tmpdir}/${pack_file}" "${base_url}/${pack_file}"
-    curl -fsSL -o "${tmpdir}/SHA256SUMS"   "${base_url}/SHA256SUMS"
-
-    # SHA256SUMS lines are "<sha256> *<filename>". Pull the line for our exact
-    # filename; refuse to proceed if it is missing (sha256sum -c on empty stdin
-    # exits 0, which would silently skip verification).
-    cd "${tmpdir}"
-    expected="$(awk -v f="*${pack_file}" '$2 == f' SHA256SUMS)"
-    if [[ -z "${expected}" ]]; then
-      printf 'run_onchange_before_ubuntu.sh: %s missing from upstream SHA256SUMS; aborting.\n' "${pack_file}" >&2
-      exit 1
-    fi
-    printf '%s\n' "${expected}" | sha256sum -c -
-
-    # VBoxManage accepts --accept-license=<sha256 of the bundled
-    # ExtPack-license.txt> for non-interactive install. Compute it from the
-    # verified archive so a future license change is picked up automatically.
-    license_hash="$(tar -xOzf "${pack_file}" ./ExtPack-license.txt | sha256sum | awk '{print $1}')"
-
-    "${SUDO[@]}" VBoxManage extpack install --replace \
-      --accept-license="${license_hash}" "${tmpdir}/${pack_file}"
-  )
-
-  # A user-owned VBoxSVC started before this install caches "no extpacks"
-  # in-process; restart it so the user sees the new pack before next login.
-  # See https://www.virtualbox.org/ticket/17034.
-  local target_user="${SUDO_USER:-$USER}"
-  if [[ -n "${target_user}" && "${target_user}" != "root" ]]; then
-    pkill -u "${target_user}" -x VBoxSVC 2>/dev/null || true
-  fi
-}
-
 configure_user_groups() {
   local target_user grp
   target_user="${SUDO_USER:-$USER}"
 
   # Add user to groups only when they exist.
-  for grp in keyd libvirt kvm vboxusers; do
+  for grp in keyd libvirt kvm; do
     getent group "${grp}" >/dev/null 2>&1 && "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
   done
 
@@ -346,7 +275,6 @@ install_nvidia_support
 install_direct_debs
 install_flatpak_packages
 install_dotnet_tools
-install_virtualbox_extension_pack
 configure_time
 enable_services
 configure_user_groups

@@ -52,8 +52,8 @@ packages:
         - virtualization  # libvirt + qemu virtualization stack
         - c-development  # C headers/libraries for building against system libs
       # Foundational packages installed in their own transaction before the main
-      # set, so kernel headers/devel are in place when the akmod/DKMS packages
-      # (akmod-VirtualBox, kmod-nvidia-latest-dkms, dkms) build their modules.
+      # set, so kernel headers/devel are in place when the DKMS packages
+      # (kmod-nvidia-latest-dkms, dkms) build their modules.
       corePackages:
         - clang21-libs  # Clang 21 runtime libraries
         - kernel  # Linux kernel
@@ -132,18 +132,23 @@ packages:
         # Wayland clipboard management
         - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
 
-        # Virtualization (VirtualBox + VM disk-image tooling; fuse3 + ntfs-3g give
+        # Virtualization (KVM/QEMU/libvirt + VM disk-image tooling; fuse3 + ntfs-3g give
         # read-only ReFS/NTFS access to Windows Dev Drive vhdx mounts)
-        - akmod-VirtualBox  # auto-rebuilding VirtualBox kernel modules (akmod)
-        - akmods  # akmod framework: build + sign out-of-tree kernel modules
+        - edk2-ovmf  # UEFI firmware for QEMU guests, including Secure Boot builds
         - fuse3  # FUSE 3 userspace filesystem support
         - fuse3-devel  # FUSE 3 headers (refs-fuse / refsprogs build dependency)
         - guestfs-tools  # CLI tools to inspect/modify VM disk images
         - libguestfs  # library for accessing/editing VM disk images
+        - libvirt-daemon-kvm  # libvirt QEMU/KVM driver and daemon integration
         - ntfs-3g  # NTFS read/write driver (FUSE)
         - qemu-img  # QEMU disk-image create/convert tool (vhdx, qcow2, ...)
+        - qemu-kvm  # QEMU/KVM x86 hypervisor package
+        - swtpm  # TPM 2.0 emulator for Windows 11 guests
+        - swtpm-tools  # TPM setup/local CA helpers used by libvirt managed vTPM
         - systemd-container  # systemd-nspawn / machinectl container tooling
-        - virtualbox  # VirtualBox hypervisor
+        - virt-install  # CLI VM installer (osinfo-aware Windows 11 definitions)
+        - virt-manager  # graphical VM manager
+        - virt-viewer  # SPICE/VNC console viewer for libvirt guests
 
         # Dynamic Kernel Module Support
         - dkms  # builds/signs out-of-tree kernel modules (e.g. the NVIDIA dkms driver)
@@ -224,10 +229,6 @@ packages:
           keyring-url: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
           sources-list-lines:
             - "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu resolute main"
-        - id: virtualbox
-          keyring-url: https://www.virtualbox.org/download/oracle_vbox_2016.asc
-          sources-list-lines:
-            - "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian resolute contrib"
         - id: dotnet-backports
           # ppa:dotnet/backports — Canonical (not Microsoft) now owns .NET packaging on
           # Ubuntu 22.04+. Ubuntu's own archive only carries the current SDK (10.0), so
@@ -320,7 +321,6 @@ packages:
         - libnotify-bin  # notify-send CLI (used by dot_local/bin/kde-color-picker; Fedora bundles it in libnotify)
 
         # Virtualization
-        - virtualbox  # VirtualBox hypervisor (from Oracle apt repo)
         - fuse3  # FUSE 3 userspace filesystem support
         - libfuse3-dev  # FUSE 3 headers (fuse3-devel equivalent)
         - guestfs-tools  # CLI tools to inspect/modify VM disk images
@@ -345,7 +345,12 @@ packages:
         # Virtualization support
         - qemu-system-x86  # QEMU/KVM x86 system emulator (the qemu-kvm metapackage was dropped on Ubuntu 26.04)
         - libvirt-daemon-system  # libvirt daemon + systemd integration
+        - ovmf  # UEFI firmware for QEMU guests, including Secure Boot builds
+        - swtpm  # TPM 2.0 emulator for Windows 11 guests
+        - swtpm-tools  # TPM setup/local CA helpers used by libvirt managed vTPM
+        - virtinst  # virt-install and osinfo-aware VM provisioning helpers
         - virt-manager  # graphical VM manager
+        - virt-viewer  # SPICE/VNC console viewer for libvirt guests
 
       # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:
@@ -353,8 +358,8 @@ packages:
 
       # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de). The
       # driver is nvidia-open (open GPU kernel modules, recommended for Turing+),
-      # built via DKMS and pulled from NVIDIA's CUDA apt repo — not akmod like
-      # Fedora. install_nvidia_support() in run_onchange_before_ubuntu.sh.tmpl adds
+      # built via DKMS and pulled from NVIDIA's CUDA apt repo. install_nvidia_support()
+      # in run_onchange_before_ubuntu.sh.tmpl adds
       # the CUDA repo (via the cuda-keyring package) and the libnvidia-container
       # repo on-demand under the same HAS_NVIDIA gate as the Fedora installer.
       # Under Secure Boot the DKMS modules need a MOK enrolled, so the installer
