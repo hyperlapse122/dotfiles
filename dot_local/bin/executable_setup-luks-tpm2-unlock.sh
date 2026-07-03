@@ -45,9 +45,17 @@
 #
 # Single-platform (Linux only) BY DESIGN — LUKS, systemd-cryptenroll and dracut
 # are Linux-only, so per the script-parity exception in AGENTS.md there is no
-# .ps1 counterpart. It is deployed to ~/.local/bin on every POSIX host but is
-# harmlessly dormant anywhere systemd-cryptenroll/dracut are absent (it aborts
-# at the require_cmd preflight).
+# .ps1 counterpart. It is deployed to ~/.local/bin on every POSIX host.
+#
+# dracut-ONLY BY DESIGN: only dracut (Fedora, RHEL and relatives) wires systemd's
+# `tpm2-device=auto` unlock into the early-boot initramfs. Ubuntu/Kubuntu ships
+# initramfs-tools, whose update-initramfs silently ignores the crypttab
+# tpm2-device option (Launchpad #1980018) — enrolling there would leave a
+# passphrase prompt at boot while appearing to succeed. Ubuntu instead enrolls
+# TPM2 disk unlock from its OS installer, so on a non-dracut host this script
+# cleanly no-ops (exit 0) up front rather than build a broken half-setup. Any
+# OTHER missing prerequisite (systemd-cryptenroll, cryptsetup, …) still aborts at
+# the require_cmd preflight.
 #
 # IDEMPOTENT: a device that already holds a `systemd-tpm2` token is skipped;
 # /etc/crypttab entries are matched by exact device alias (UUID=, PARTUUID=, raw
@@ -332,6 +340,22 @@ main() {
     shift
   done
 
+  # dracut-only gate (see file header): only dracut wires tpm2-device=auto into
+  # the initramfs. On a non-dracut host — notably Ubuntu/Kubuntu, which uses
+  # initramfs-tools and whose installer offers native TPM2 unlock — enrolling a
+  # TPM2 keyslot here would NOT auto-unlock at boot (Launchpad #1980018), so bail
+  # out cleanly BEFORE any TTY/sudo prompt or state change rather than fail
+  # obscurely later. Expected no-op (exit 0), matching the "nothing to do" exits.
+  if ! command -v dracut >/dev/null 2>&1; then
+    log_info "This host does not use dracut, so TPM2 auto-unlock cannot be wired"
+    log_info "into its initramfs here. setup-luks-tpm2-unlock.sh is dracut-only by"
+    log_info "design (Fedora, RHEL and relatives)."
+    log_info "On Ubuntu/Kubuntu, enable TPM2 disk unlock from the OS installer"
+    log_info "instead — its initramfs-tools path ignores crypttab tpm2-device=auto."
+    log_info "Nothing to do on this host; exiting."
+    exit 0
+  fi
+
   # Interactive passphrase entry needs a terminal. Allow --dry-run without one.
   if [[ "$DRY_RUN" != true && ! -t 0 ]]; then
     err "ERROR: this script needs an interactive terminal to prompt for your LUKS"
@@ -358,7 +382,6 @@ main() {
 
   require_cmd systemd-cryptenroll
   require_cmd cryptsetup
-  require_cmd dracut
   require_cmd lsblk
   require_cmd findmnt
   require_cmd readlink
