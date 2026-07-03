@@ -68,7 +68,7 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
   and bare-metal sections are auto-gated, and it also drives flatpaks, dotnet
   tools, direct-URL RPMs, services, and user groups). Add packages/items there,
   not in the script — editing the data re-triggers the `run_onchange` installer.
-- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA via `ubuntu-drivers autoinstall`, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Add packages/items there; editing the data re-triggers the installer.
+- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA packages from CUDA + libnvidia-container repos under the `HAS_NVIDIA` gate, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Add packages/items there; editing the data re-triggers the installer.
 - **Fonts**: `.chezmoidata/fonts.yaml` `legacyFontsList`, pinned per font by
   release tag + sha256. To bump a font: change the tag, re-download, recompute the
   sha256 (a wrong digest aborts that font's install). The bash installer and its
@@ -109,7 +109,7 @@ runs as a `read-source-state` pre-hook to install 1Password and mise first, and
   - `run_after_ubuntu-debrand-sddm.sh.tmpl` — writes `/etc/sddm.conf.d/90-breeze.conf` (`[Theme]\nCurrent=breeze`) to override Kubuntu's `20-kubuntu.conf`; idempotent content-compare
   - `run_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent
 - **Per-user de-brand** (`linux-ubuntu` gate, in `linux-kde/`): `run_after_config-kde-debrand-desktoptheme.sh.tmpl` — resets the Plasma desktop theme to upstream Breeze Dark via `plasma-apply-desktoptheme default` + `plasma-apply-lookandfeel -a org.kde.breezedark.desktop`, gated on a live KDE session (DBus + display + running plasmashell). Targets breezedark to match `config-kde-darkmode`.
-- **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists, RPM Fusion/COPRs, akmods MOK enrollment have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos + `ubuntu-drivers autoinstall` instead.
+- **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists and RPM Fusion/COPRs have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos plus CUDA/libnvidia-container NVIDIA packages under the `HAS_NVIDIA` gate instead.
 - POSIX scripts/wrappers keep a Windows `.ps1` counterpart in sync
   (`executable_code`/`.ps1`, `executable_opencode`/`.ps1`). Files migrated from the
   legacy nix/dotbot config are now the source of truth here — don't defer back to
