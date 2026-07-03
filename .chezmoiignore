@@ -3,6 +3,7 @@
 ./README.md
 ./opencode.json
 ./LICENSE
+./.agent-of-empires
 
 # Root-owned system config installed to /etc by
 # .chezmoiscripts/linux/run_onchange_after_install-system-config.sh.tmpl,

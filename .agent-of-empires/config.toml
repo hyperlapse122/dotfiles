@@ -1,0 +1,3 @@
+[worktree]
+default_base_branch = "main"
+path_template = "~/workspace/{repo-name}/{branch}"
