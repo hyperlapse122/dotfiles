@@ -88,9 +88,7 @@
 
 ## Browser automation (Playwright) — host safety
 
-- **Playwright-supported host (Ubuntu LTS, and other supported platforms such as macOS)** → run Playwright **directly** on the host: `npx playwright install`, `playwright install-deps`, and a host-installed browser are all allowed. No container indirection is needed — prefer the direct path there.
-- **Playwright-unsupported host (e.g. Fedora, if it remains a target)** → **MUST NOT** run Playwright browsers directly (`npx playwright test` / `install`, `playwright install-deps`, or a host-installed browser) — unsupported, crashes. **MUST** fall back to the container:
-  - **MUST** run inside `mcr.microsoft.com/playwright:v<X.Y.Z>-noble`, tag pinned to the project's **exact** Playwright version. **MUST** run non-root (`--user pwuser`, or `--user "$(id -u):$(id -g)"` for user-owned bind mounts); **MUST** pass `--ipc=host` and **SHOULD** pass `--init`. Use rootless `podman` for the container runtime (Docker is not installed on this host). (Test/automation usage → `playwright-cli`.)
+- Run Playwright **directly** on the host — `npx playwright install`, `playwright install-deps`, and a host-installed browser are all allowed. No container indirection is needed. (Test/automation usage → `playwright-cli`.)
 
 ## Scripting runtime
 
