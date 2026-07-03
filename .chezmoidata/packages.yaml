@@ -338,7 +338,7 @@ packages:
         - expect  # automate interactive CLI prompts
 
         # Virtualization support
-        - qemu-kvm  # QEMU/KVM hypervisor
+        - qemu-system-x86  # QEMU/KVM x86 system emulator (the qemu-kvm metapackage was dropped on Ubuntu 26.04)
         - libvirt-daemon-system  # libvirt daemon + systemd integration
         - virt-manager  # graphical VM manager
 
