@@ -346,15 +346,18 @@ packages:
       bareMetalPackages:
         - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
 
-      # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de).
-      # Driver comes from `ubuntu-drivers autoinstall` + dkms, not akmod like Fedora;
-      # the CUDA toolkit below is installed from NVIDIA's CUDA apt repo, which
-      # install_nvidia_support() in run_onchange_before_ubuntu.sh.tmpl adds on-demand
-      # (same HAS_NVIDIA-gated pattern as the Fedora installer's cuda-fedora repo).
-      # NOTE: Secure Boot/DKMS MOK enrollment differs from Fedora akmods.
+      # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de). The
+      # driver is nvidia-open (open GPU kernel modules, recommended for Turing+),
+      # built via DKMS and pulled from NVIDIA's CUDA apt repo — not akmod like
+      # Fedora. install_nvidia_support() in run_onchange_before_ubuntu.sh.tmpl adds
+      # the CUDA repo (via the cuda-keyring package) and the libnvidia-container
+      # repo on-demand under the same HAS_NVIDIA gate as the Fedora installer.
+      # Under Secure Boot the DKMS modules need a MOK enrolled, so the installer
+      # detects Secure Boot and skips the driver rather than half-installing it.
       nvidiaPackages:
+        - nvidia-open  # NVIDIA open GPU kernel modules driver (Turing+; DKMS, from CUDA apt repo)
         - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries; from NVIDIA's CUDA apt repo)
-        - nvidia-container-toolkit  # NVIDIA container runtime integration (from NVIDIA apt repo)
+        - nvidia-container-toolkit  # NVIDIA container runtime integration (from libnvidia-container apt repo)
         - nvidia-container-toolkit-base  # base components for the container toolkit
         - libnvidia-container-tools  # CLI tools for the NVIDIA container library
         - libnvidia-container1  # NVIDIA container runtime library
