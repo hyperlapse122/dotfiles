@@ -258,8 +258,10 @@ packages:
         # kdotool: managed by mise (cargo:kdotool — no native Ubuntu package)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
+        - unzip  # zip extractor (required by the Nerd Fonts installer; Fedora pulls it in transitively)
         - xxd  # hex dump / reverse utility
         - yp-tools  # NIS/YP client utilities
+        - locales  # locale-gen/update-locale tooling — compiles ko_KR.UTF-8 and writes /etc/default/locale on Ubuntu (Fedora glibc ships it prebuilt)
 
         # Korean input method
         - fcitx5  # input method framework
@@ -313,6 +315,9 @@ packages:
 
         # Wayland clipboard management
         - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
+
+        # Desktop notifications
+        - libnotify-bin  # notify-send CLI (used by dot_local/bin/kde-color-picker; Fedora bundles it in libnotify)
 
         # Virtualization
         - virtualbox  # VirtualBox hypervisor (from Oracle apt repo)
