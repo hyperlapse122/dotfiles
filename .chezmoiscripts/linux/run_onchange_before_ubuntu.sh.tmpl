@@ -10,8 +10,11 @@ set -euo pipefail
 # re-run this script when .chezmoidata/packages.yaml changes.
 
 # Host probes (same as Fedora). Scan sysfs for NVIDIA's PCI vendor id so this
-# works before pciutils/lspci are available.
-if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+# works before pciutils/lspci are available. FORCE_NVIDIA=1 overrides the probe
+# to force the NVIDIA driver/CUDA/container-toolkit path on: for a GPU-passthrough
+# VM whose card the sysfs scan misses, and to validate the NVIDIA apt repos and
+# package set in a GPU-less test container.
+if [[ "${FORCE_NVIDIA:-0}" == "1" ]] || grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
   HAS_NVIDIA=1
 else
   HAS_NVIDIA=0
@@ -153,24 +156,12 @@ install_dotnet_tools() {
   fi
 }
 
-install_nvidia_support() {
-  if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
-    return 0
-  fi
-
-  # nvidia-open builds its GPU kernel modules with DKMS; under Secure Boot the
-  # kernel loads them only when signed by an enrolled MOK. That enrollment is an
-  # interactive shim step a noninteractive provisioner cannot complete, so a
-  # Secure Boot host skips the NVIDIA stack entirely (a black screen at boot is
-  # worse than no driver) and asks the user to enroll a MOK or turn Secure Boot
-  # off, then re-run.
-  if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
-    printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled; skipping NVIDIA driver/CUDA install (nvidia-open DKMS modules need a MOK enrolled). Enroll a MOK or disable Secure Boot, then re-run.\n' >&2
-    return 0
-  fi
-
-  # NVIDIA's cuda-keyring package drops the CUDA archive keyring, its sources.list
-  # entry, and an apt pin at priority 600 in one maintained step.
+# NVIDIA's cuda-keyring package drops the CUDA archive keyring, its sources.list
+# entry, and an apt pin at priority 600 in one maintained step; the
+# libnvidia-container apt repo adds the container toolkit. Split out from
+# install_nvidia_support so the harness smoke test (FORCE_NVIDIA=1) can exercise
+# repo registration and NVIDIA package resolution without the DKMS driver build.
+setup_nvidia_repos() {
   if [[ ! -f /usr/share/keyrings/cuda-archive-keyring.gpg ]]; then
     local cuda_keyring
     cuda_keyring="$(mktemp --suffix=.deb)"
@@ -190,6 +181,25 @@ install_nvidia_support() {
       | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
       | "${SUDO[@]}" tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
   fi
+}
+
+install_nvidia_support() {
+  if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
+    return 0
+  fi
+
+  # nvidia-open builds its GPU kernel modules with DKMS; under Secure Boot the
+  # kernel loads them only when signed by an enrolled MOK. That enrollment is an
+  # interactive shim step a noninteractive provisioner cannot complete, so a
+  # Secure Boot host skips the NVIDIA stack entirely (a black screen at boot is
+  # worse than no driver) and asks the user to enroll a MOK or turn Secure Boot
+  # off, then re-run.
+  if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled; skipping NVIDIA driver/CUDA install (nvidia-open DKMS modules need a MOK enrolled). Enroll a MOK or disable Secure Boot, then re-run.\n' >&2
+    return 0
+  fi
+
+  setup_nvidia_repos
 
   "${APT[@]}" update
   install_ubuntu_packages "${nvidia_packages[@]}"
