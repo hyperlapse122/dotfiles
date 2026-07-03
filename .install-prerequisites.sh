@@ -186,13 +186,17 @@ install_ubuntu() {
     dpkg -s "$pkg" >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y "$pkg"
   done
 
-  # Add 1Password apt repo + GPG keyring (idempotent).
+  # Add 1Password apt repo + GPG keyring (idempotent). The apt repo is
+  # arch-partitioned (amd64 at /linux/debian/amd64, arm64 at /linux/debian/arm64),
+  # so each arch gets its own single-arch `deb` line; the old /linux/apt/debian
+  # path 404s. Per https://support.1password.com/install-linux/#debian-or-ubuntu
   if ! dpkg -s 1password 1password-cli >/dev/null 2>&1; then
     "${SUDO[@]}" mkdir -p /usr/share/keyrings
     curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
       | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/1password.gpg
-    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/1password.gpg] \
-https://downloads.1password.com/linux/apt/debian stable main" \
+    printf '%s\n' \
+      "deb [arch=amd64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/amd64 stable main" \
+      "deb [arch=arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/arm64 stable main" \
       | "${SUDO[@]}" tee /etc/apt/sources.list.d/1password.list >/dev/null
     "${SUDO[@]}" apt-get update -qq
     "${SUDO[@]}" apt-get install -y 1password 1password-cli

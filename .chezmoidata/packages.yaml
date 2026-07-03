@@ -194,36 +194,48 @@ packages:
     ubuntu:
       # APT third-party repos. Each entry: `id` (becomes /etc/apt/sources.list.d/<id>.list),
       # `keyring-url` (GPG armored key, dearmored to /usr/share/keyrings/<id>.gpg),
-      # and `sources-list-line` (the full one-line `deb [signed-by=...] ...` entry written
-      # verbatim — NOT a deb822 .sources file).
+      # and `sources-list-lines` (a list of `deb [signed-by=...] ...` entries written
+      # verbatim, one per line — NOT a deb822 .sources file).
       aptRepos:
         - id: 1password
+          # 1Password's Debian/Ubuntu repo is arch-partitioned: amd64 lives at
+          # /linux/debian/amd64 and arm64 at /linux/debian/arm64, each written as
+          # its own single-arch `deb` line. The old multi-arch /linux/apt/debian
+          # path 404s. Per https://support.1password.com/install-linux/#debian-or-ubuntu
           keyring-url: https://downloads.1password.com/linux/keys/1password.asc
-          sources-list-line: "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/apt/debian stable main"
+          sources-list-lines:
+            - "deb [arch=amd64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/amd64 stable main"
+            - "deb [arch=arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/arm64 stable main"
         - id: vscodium
           keyring-url: https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
-          sources-list-line: "deb [signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
+          sources-list-lines:
+            - "deb [signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
         - id: google-chrome
           keyring-url: https://dl.google.com/linux/linux_signing_key.pub
-          sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
+          sources-list-lines:
+            - "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
         - id: mise
           # PPA per https://mise.jdx.dev/installing-mise.html#apt (recommended for Ubuntu 26.04+;
           # the mise.jdx.dev/deb repo referenced by that page's older revisions is gone)
           keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52
-          sources-list-line: "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main"
+          sources-list-lines:
+            - "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main"
         - id: tailscale
           keyring-url: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
-          sources-list-line: "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu resolute main"
+          sources-list-lines:
+            - "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu resolute main"
         - id: virtualbox
           keyring-url: https://www.virtualbox.org/download/oracle_vbox_2016.asc
-          sources-list-line: "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian resolute contrib"
+          sources-list-lines:
+            - "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian resolute contrib"
         - id: dotnet-backports
           # ppa:dotnet/backports — Canonical (not Microsoft) now owns .NET packaging on
           # Ubuntu 22.04+. Ubuntu's own archive only carries the current SDK (10.0), so
           # older non-default SDKs (8.0, 9.0) come from this PPA instead of Microsoft's
           # repo. https://launchpad.net/~dotnet/+archive/ubuntu/backports
           keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
-          sources-list-line: "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
+          sources-list-lines:
+            - "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
       # Foundational packages installed before the main set (build headers needed
       # for DKMS module builds).
       corePackages:

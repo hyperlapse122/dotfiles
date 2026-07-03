@@ -82,7 +82,7 @@ setup_apt_repos() {
     curl -fsSL {{ index $repo "keyring-url" | quote }} | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
   fi
   if [[ ! -f /etc/apt/sources.list.d/{{ $repo.id }}.list ]]; then
-    printf '%s\n' {{ index $repo "sources-list-line" | quote }} | "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
+    printf '%s\n' {{ range index $repo "sources-list-lines" }}{{ . | quote }} {{ end }}| "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
   fi
 {{ end -}}
 }
