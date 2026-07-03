@@ -13,7 +13,12 @@
 # Filename has no '.' on purpose: sudoers(5) silently ignores
 # drop-ins whose names contain '.' or end in '~' (covers stray
 # editor backups and *.rpmnew/*.rpmsave). The 99- prefix is so the
-# NOPASSWD rule sorts after, and therefore overrides, the default
-# `%wheel ALL=(ALL) ALL` rule shipped in /etc/sudoers on Fedora.
+# NOPASSWD rule sorts after, and therefore overrides, the distro default:
+# `%wheel ALL=(ALL) ALL` on Fedora, `%sudo ALL=(ALL:ALL) ALL` on Ubuntu.
+#
+# Both admin-group rules are listed so one drop-in works on either distro.
+# The group that does not exist on a given host (`sudo` on Fedora, `wheel`
+# on Ubuntu) never matches any process, so its rule is simply inert there.
 
 %wheel ALL=(ALL:ALL) NOPASSWD: ALL
+%sudo ALL=(ALL:ALL) NOPASSWD: ALL
