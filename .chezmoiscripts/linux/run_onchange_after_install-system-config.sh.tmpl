@@ -197,6 +197,33 @@ else
   printf '  -- thinkpad_acpi: skipped (not a ThinkPad system)\n'
 fi
 
+# On Ubuntu, the LANG/LC_* values in /etc/locale.conf (installed above, and read
+# by systemd-localed on every distro) only take effect once the referenced locale
+# is compiled: Fedora ships ko_KR.UTF-8 precompiled via glibc-langpack-ko, but
+# Ubuntu generates locales on demand from the `locales` package. Drive locale-gen
+# and update-locale straight from the installed /etc/locale.conf so this stays in
+# lockstep with that single source of truth.
+if [[ "$os_id" == ubuntu && -f /etc/locale.conf ]] \
+  && command -v locale-gen >/dev/null 2>&1 \
+  && command -v update-locale >/dev/null 2>&1; then
+  locale_vars=()
+  while IFS='=' read -r locale_key locale_value; do
+    [[ "$locale_key" =~ ^[A-Z][A-Z_]*$ ]] || continue
+    locale_value="${locale_value%\"}"
+    locale_value="${locale_value#\"}"
+    [[ -n "$locale_value" ]] || continue
+    locale_vars+=("${locale_key}=${locale_value}")
+  done < /etc/locale.conf
+
+  if [[ ${#locale_vars[@]} -gt 0 ]]; then
+    mapfile -t locale_values < <(printf '%s\n' "${locale_vars[@]}" | cut -d= -f2 | sort -u)
+    printf '  -> locale-gen %s\n' "${locale_values[*]}"
+    "${SUDO[@]}" locale-gen "${locale_values[@]}"
+    printf '  -> update-locale %s\n' "${locale_vars[*]}"
+    "${SUDO[@]}" update-locale "${locale_vars[@]}"
+  fi
+fi
+
 # /etc/ paths that this script previously installed but no longer ships
 # in system/linux/etc/. Listed explicitly so every machine — including
 # ones that pull a committed deletion — removes the orphan on the next
