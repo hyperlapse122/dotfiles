@@ -4,15 +4,17 @@ container_runtime = "apple_container"
 {{- else -}}
 container_runtime = "podman"
 {{- end }}
-
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
 selinux_relabel = true
 {{- end }}
 
 [session]
 click_action = "select_only"
+default_attach_mode = "tmux"
 default_tool = "opencode"
+new_session_attach_mode = "tmux"
 yolo_mode_default = true
 
 [worktree]
+delete_branch_on_cleanup = true
 enabled = true
