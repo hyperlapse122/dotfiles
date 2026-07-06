@@ -31,13 +31,18 @@ sh -c "$(curl -fsLS https://get.chezmoi.io)" -- init --apply hyperlapse122
 4. Renders every template and applies it to `$HOME`, then runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
    [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
-   Kubuntu via apt), fonts, importing the GPG key, authenticating GitHub / GitLab
-   / Tailscale, switching the login shell to zsh, and writing KDE / Solaar /
+   Kubuntu via apt), fonts, importing the GPG key, authenticating GitHub /
+   Tailscale, switching the login shell to zsh, and writing KDE / Solaar /
    system config. It also provisions coding-agent skills via `dotagents` into
    `~/.agents/skills/` from the pinned set in [`dot_agents/agents.toml`](dot_agents/agents.toml).
    On Kubuntu, additionally strips Canonical branding to upstream Breeze (SDDM
    theme, Plymouth boot splash, per-user desktop theme, branding packages) and
    enables Tailscale egress-NAT via ufw.
+
+GitLab CLI authentication is intentionally **not** provisioned: run `auth-glab`
+(deployed to `~/.local/bin`) once after the first apply to sign in to
+git.jpi.app and gitlab.com via OAuth — browser flow by default, `--device` for
+headless sessions.
 
 ## Prerequisites
 
@@ -73,7 +78,7 @@ The apply completes once `op` can resolve secrets (`op whoami` succeeds).
 `chezmoi apply` is container-aware. When it detects a container — Podman's
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
-`/etc` system config, no GPG / GitHub / GitLab / Tailscale auth, no fonts, no KDE
+`/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE
 settings, and no Canonical de-branding. The OpenCode plugin build and `dotagents`
 skills install still run (and soft-skip if their toolchains are missing). This
 makes the repo usable as-is on CI runners and in dedicated containers that have

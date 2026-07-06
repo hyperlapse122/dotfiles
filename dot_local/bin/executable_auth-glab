@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+#
+# auth-glab — semi-interactive OAuth login for the GitLab CLI (`glab`).
+#
+# Signs in to every GitLab host this machine uses via glab's OAuth flow
+# (browser or device authorization) instead of provisioning static PATs.
+# Successor to the removed `.chezmoiscripts/auth/` run_onchange script:
+# chezmoi only deploys this command; run it yourself once per machine, and
+# again whenever a host's session is revoked.
+#
+#   auth-glab                 # all hosts; skips ones already authenticated
+#   auth-glab --device        # OAuth device flow (headless; GitLab 17.9+)
+#   auth-glab --web           # browser flow
+#   auth-glab --force         # re-login even when already authenticated
+#   auth-glab gitlab.com      # limit to the given host(s)
+#
+# Default flow: --device when no local display is available to open a browser
+# (e.g. a Linux SSH session), --web otherwise.
+#
+# All glab prompts are suppressed via GLAB_NO_PROMPT=1, forcing glab's
+# non-interactive path. Its interactive mode (keyed off stdout being a TTY +
+# prompts enabled, NOT stdin) force-prompts API/SSH hostname for self-hosted
+# hosts plus a re-authenticate confirm, with no flag to skip them
+# (internal/commands/auth/login/login.go, glab 1.106.0); the OAuth flows
+# themselves never prompt. The only interaction left is the browser / device
+# authorization itself.
+#
+# The `--container-registry-domains` mapping below is what
+# `glab auth docker-helper` (see docker-credential-glab) uses to resolve
+# registries back to these hosts and mint fresh registry tokens.
+#
+# Single-platform exception (AGENTS.md "script parity"): POSIX-only, like
+# docker-credential-glab; the replaced chezmoi script was gated off Windows
+# too. Ship an `auth-glab.ps1` counterpart if Windows support is added later.
+
+set -euo pipefail
+
+# '<hostname> <container registry domains (comma-separated)> [<oauth client_id>]'
+# Self-managed hosts need their instance's OAuth application ID configured
+# before login (glab internal/oauth2 oauthClientID); it is a public PKCE
+# client ID, not a secret. gitlab.com uses glab's built-in default.
+HOSTS=(
+  'git.jpi.app registry.jpi.app c6c350c323dbd7dbd4091b2f3e56a1d6ef31e7104ae6deddfc5d950c7d11d69f'
+  'gitlab.com registry.gitlab.com'
+)
+
+usage() {
+  cat <<'EOF'
+Usage: auth-glab [--web|--device] [--force] [host ...]
+
+Semi-interactive OAuth login to this machine's GitLab hosts via
+`glab auth login` (git.jpi.app, gitlab.com).
+
+  -w, --web      browser OAuth flow (default when a display is available)
+  -d, --device   OAuth device authorization flow for headless sessions
+                 (requires GitLab 17.9+)
+  -f, --force    re-login even when a host is already authenticated
+  -h, --help     show this help
+
+With no host arguments all known hosts are processed; already-authenticated
+hosts are skipped unless --force is given.
+EOF
+}
+
+flow=''
+force=0
+select_hosts=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -w | --web) flow=web ;;
+    -d | --device) flow=device ;;
+    -f | --force) force=1 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -*)
+      printf 'auth-glab: unknown option: %s\n\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *) select_hosts+=("$1") ;;
+  esac
+  shift
+done
+
+# No explicit flow: pick device when there is no display to open a browser in.
+if [[ -z "$flow" ]]; then
+  if [[ "$(uname -s)" == "Linux" && -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    flow=device
+  else
+    flow=web
+  fi
+fi
+
+# Prefer system `glab`; fall back to ephemeral `mise exec glab@latest`. Error
+# if neither is available.
+if command -v glab >/dev/null 2>&1; then
+  GLAB=(glab)
+elif command -v mise >/dev/null 2>&1; then
+  GLAB=(mise --no-config --no-env --no-hooks exec glab@latest -- glab)
+else
+  printf 'auth-glab: glab not found and mise unavailable as fallback.\n' >&2
+  exit 1
+fi
+
+known_host() {
+  local entry host
+  for entry in "${HOSTS[@]}"; do
+    read -r host _ <<<"$entry"
+    [[ "$host" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# `${arr[@]+...}` guards empty-array expansion under `set -u` on bash 3.2 (macOS).
+for h in ${select_hosts[@]+"${select_hosts[@]}"}; do
+  if ! known_host "$h"; then
+    printf 'auth-glab: unknown host: %s (known: git.jpi.app, gitlab.com)\n' "$h" >&2
+    exit 2
+  fi
+done
+
+wanted() {
+  local h
+  [[ ${#select_hosts[@]} -eq 0 ]] && return 0
+  for h in "${select_hosts[@]}"; do
+    [[ "$h" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+status=0
+for entry in "${HOSTS[@]}"; do
+  read -r host registries client_id <<<"$entry"
+  wanted "$host" || continue
+
+  if [[ "$force" -eq 0 ]] && "${GLAB[@]}" auth status --hostname "$host" >/dev/null 2>&1; then
+    printf 'auth-glab: %s: already authenticated — skipping (use --force to re-login).\n' "$host"
+    continue
+  fi
+
+  # glab's OAuth flow reads the self-managed instance's application ID from
+  # the `client_id` host config key; set it before login.
+  if [[ -n "$client_id" ]] && ! "${GLAB[@]}" config set client_id "$client_id" -g --host "$host"; then
+    printf 'auth-glab: %s: failed to configure client_id.\n' "$host" >&2
+    status=1
+    continue
+  fi
+
+  printf 'auth-glab: %s: starting OAuth %s flow...\n' "$host" "$flow"
+  # GLAB_NO_PROMPT forces glab's non-interactive path: no API/SSH hostname
+  # prompts (self-hosted), no re-authenticate confirm. In that path glab
+  # ignores --git-protocol/--api-protocol and resets container_registry_domains
+  # to empty, so those keys are (re)applied with `config set` afterwards.
+  # (`config set` host selection is `-g --host`; `-h` would be `--help`.)
+  if GLAB_NO_PROMPT=1 "${GLAB[@]}" auth login \
+    --hostname "$host" \
+    --api-host "$host" \
+    --api-protocol https \
+    --git-protocol https \
+    --container-registry-domains "$registries" \
+    --use-keyring \
+    "--$flow" \
+    && "${GLAB[@]}" config set git_protocol https -g --host "$host" \
+    && "${GLAB[@]}" config set api_protocol https -g --host "$host" \
+    && "${GLAB[@]}" config set container_registry_domains "$registries" -g --host "$host"; then
+    printf 'auth-glab: %s: authenticated.\n' "$host"
+  else
+    printf 'auth-glab: %s: login failed.\n' "$host" >&2
+    status=1
+  fi
+done
+
+exit "$status"

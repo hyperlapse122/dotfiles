@@ -55,8 +55,10 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 ## Secrets: 1Password only, never in-repo
 
 Secrets are pulled at apply time via `onepasswordRead "op://..."` inside `.tmpl`
-files (GPG key, GitHub/GitLab/Tailscale tokens, opencode API keys under
-`dot_config/opencode/private_secrets/`). Never hardcode a secret — add an
+files (GPG key, GitHub/Tailscale tokens, opencode API keys under
+`dot_config/opencode/private_secrets/`). GitLab CLI auth is not secret-driven:
+`~/.local/bin/auth-glab` performs a semi-interactive `glab auth login` OAuth
+flow (`--web`/`--device`) on demand instead of provisioning PATs. Never hardcode a secret — add an
 `onepasswordRead` reference. The `op` CLI must be signed in: `.install-prerequisites.sh`
 runs as a `read-source-state` pre-hook to install 1Password and mise first, and
 `chezmoi diff`/`execute-template` over secret templates fails if `op` isn't authed.
@@ -135,7 +137,7 @@ sense — or the hook and the ignore set will disagree.
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
   block skips every provisioning script — `.chezmoiscripts/{linux,linux-kde,auth,gpg}/*.sh`
   plus `.chezmoiscripts/build/*mxm4-haptic.sh` (no package installs, `/etc` config,
-  GPG/GitHub/GitLab/Tailscale auth, fonts, KDE settings, Canonical de-branding, or
+  GPG/GitHub/Tailscale auth, fonts, KDE settings, Canonical de-branding, or
   MX Master haptic build). The opencode plugin build (`build-opencode-plugins`) and
   the dotagents skills install (`run_after_install-dotagents-skills`) are deliberately
   KEPT — opencode is a first-class CLI here and it soft-skips when mise is absent,

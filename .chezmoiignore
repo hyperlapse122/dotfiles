@@ -34,7 +34,7 @@
 # Containerized / CI environments: Podman creates /run/.containerenv, Docker
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
 # container, deploy the CLI dotfiles only and skip all host provisioning:
-# package installs, /etc system config, GPG/GitHub/GitLab/Tailscale auth, fonts,
+# package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
 # KDE settings, Canonical de-branding, and the MX Master haptic build. The
 # opencode plugin build is deliberately KEPT (opencode is a first-class CLI
 # here; that script soft-skips when its toolchain is absent).
