@@ -29,6 +29,7 @@ marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
+viteplus = "latest"
 "aqua:wasm-bindgen/wasm-pack" = "latest"
 "npm:vscode-langservers-extracted" = { version = "latest" }
 "npm:@biomejs/biome" = { version = "latest" }
