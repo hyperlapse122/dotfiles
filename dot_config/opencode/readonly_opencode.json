@@ -197,7 +197,13 @@
 		"opencode": {
 			"options": {
 				"apiKey": "{file:./secrets/opencode-api-key}"
-			}
+			},
+			"whitelist": [
+				"deepseek-v4-flash-free",
+				"mimo-v2.5-free",
+				"nemotron-3-ultra-free",
+				"north-mini-code-free"
+			]
 		},
 		"kimi-for-coding": {
 			"options": {
@@ -254,7 +260,13 @@
 						"cache_write": 0
 					}
 				}
-			}
+			},
+			"whitelist": [
+				"openrouter/free"
+			]
+		},
+		"anthropic": {
+			"whitelist": []
 		}
 	},
 	"model": "openai/gpt-5.5",
