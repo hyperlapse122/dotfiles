@@ -1,5 +1,6 @@
 [tools]
 # Core runtimes and package managers
+aube = "latest"
 bun = "latest"
 go = "latest"
 node = "latest"
@@ -31,23 +32,23 @@ shellcheck = "latest"
 usage = "latest"
 viteplus = "latest"
 "aqua:wasm-bindgen/wasm-pack" = "latest"
-"npm:vscode-langservers-extracted" = { version = "latest" }
-"npm:@biomejs/biome" = { version = "latest" }
-"npm:@bufbuild/buf" = { version = "latest" }
-"npm:@electron/asar" = { version = "latest" }
-"npm:@playwright/cli" = { version = "latest" }
-"npm:bash-language-server" = { version = "latest" }
-"npm:@colbymchenry/codegraph" = { version = "latest" }
-"npm:node-gyp" = { version = "latest" }
-"npm:npm" = { version = "latest" }
-"npm:portless" = { version = "latest" }
-"npm:shadcn" = { version = "latest" }
-"npm:sharp-cli" = { version = "latest" }
-"npm:tokscale" = { version = "latest" }
-"npm:typescript-language-server" = { version = "latest" }
-"npm:wrangler" = { version = "latest" }
+"npm:vscode-langservers-extracted" = "latest"
+"npm:@biomejs/biome" = "latest"
+"npm:@bufbuild/buf" = "latest"
+"npm:@electron/asar" = "latest"
+"npm:@playwright/cli" = "latest"
+"npm:bash-language-server" = "latest"
+"npm:@colbymchenry/codegraph" = "latest"
+"npm:node-gyp" = "latest"
+"npm:npm" = "latest"
+"npm:portless" = "latest"
+"npm:shadcn" = "latest"
+"npm:sharp-cli" = "latest"
+"npm:tokscale" = "latest"
+"npm:typescript-language-server" = "latest"
+"npm:wrangler" = "latest"
 "npm:yaml-language-server" = "latest"
-"npm:cypress" = { version = "latest", npm_args = "--allow-scripts=cypress --ignore-scripts=false" }
+"npm:cypress" = { version = "latest", allow_builds = ["cypress"] }
 
 # Local Kubernetes development environment
 helm = "latest"
@@ -56,10 +57,13 @@ kubectl = "latest"
 
 # Agentic AI
 claude-code = "latest"
-"npm:@google/gemini-cli" = { version = "latest" }
-"npm:@sentry/dotagents" = { version = "latest" }
+"npm:@google/gemini-cli" = "latest"
+"npm:@sentry/dotagents" = "latest"
 "npm:@openai/codex" = "latest"
-"npm:@moonshot-ai/kimi-code" = "latest"
+"npm:@moonshot-ai/kimi-code" = { version = "latest", allow_builds = [
+  "@moonshot-ai/kimi-code",
+  "node-pty",
+] }
 "github:njbrake/agent-of-empires" = { version = "latest", rename_exe = "aoe", os = [
   "linux",
   "macos",
@@ -117,6 +121,9 @@ compile = false
 
 [settings.python]
 compile = false
+
+[settings.npm]
+package_manager = "aube"
 
 [env]
 OPENCODE_DISABLE_CLAUDE_CODE = 1
