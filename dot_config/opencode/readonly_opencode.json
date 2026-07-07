@@ -269,7 +269,7 @@
 			"whitelist": []
 		}
 	},
-	"model": "openai/gpt-5.5",
+	"model": "zai-coding-plan/glm-5.2",
 	"small_model": "openrouter/openrouter/free",
 	"experimental": {
 		"continue_loop_on_deny": true
