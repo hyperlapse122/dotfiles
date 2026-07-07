@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { test } from "bun:test";
 
 import { WAVEFORMS } from "../src/index.ts";
 
@@ -8,11 +8,7 @@ const rustSrc = new URL("../../../crates/mxm4-haptic/src/lib.rs", import.meta.ur
 const rustSource = readRustSource(rustSrc);
 
 if (rustSource === undefined) {
-  test(
-    "WAVEFORMS parity with Rust source",
-    { skip: "Rust source not present; package is self-contained" },
-    () => {},
-  );
+  test.skip("WAVEFORMS parity with Rust source", () => {});
 } else {
   test("WAVEFORMS parity with Rust source", () => {
     const rustWaveforms = parseRustWaveforms(rustSource);

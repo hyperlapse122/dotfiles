@@ -49,7 +49,7 @@ Analyze today's git commit history and produce a concise daily work log **in Kor
 - **Output container**: The final report MUST be a single fenced ```plaintext code block and nothing else. No surrounding prose, no "Here is..." preamble, no closing notes. The block is the entire response.
 - **Language**: Korean only. All output must be written in Korean. Do not include English summaries, headings, or parenthetical translations.
 - **Tone**: 간결하고 사실 중심. 기술 용어 최소화. 장황한 서술형 문장 지양.
-- **Drop**: 자동 lint/format 수정, 문서 업데이트, VS Code 설정, yarn.lock 변경, 테스트 전용 커밋.
+- **Drop**: 자동 lint/format 수정, 문서 업데이트, VS Code 설정, bun.lock 변경, 테스트 전용 커밋.
 - **Include**: 신규 기능, 화면/UI 작업, 아키텍처 변경, 시스템 교체, 중요한 버그 수정만.
 - **Depth**: 최대 2단계 (상위 항목 → 세부 내용).
 - **Volume**: 총 5~10줄.

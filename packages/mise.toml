@@ -1,14 +1,10 @@
-# Toolchain for the @h82/dotfiles packages/ Yarn workspace.
+# Toolchain for the @h82/dotfiles packages/ Bun workspace.
 #
-# Pins the Node runtime and the Yarn (Berry) package manager so the workspace
-# builds/tests identically:
+# Pins the Bun runtime/package manager so the workspace builds/tests
+# identically:
 #   - locally: mise auto-activates this config when you `cd` into packages/.
-#   - CI: .github/workflows/ci.yml pins the same Node major via actions/setup-node.
+#   - CI: .github/workflows/ci.yml runs the same Bun package manager version.
 #
-# Node 24 (latest LTS) matches the dev environment and ships native TypeScript
-# type-stripping, which the node:test suites rely on (tests import
-# `../src/index.ts` directly). Yarn is pinned to the exact version in
-# package.json's `packageManager` field.
+# Bun is pinned to the exact version in package.json's `packageManager` field.
 [tools]
-node = "24"
-yarn = "4.16.0"
+bun = "1.3.14"

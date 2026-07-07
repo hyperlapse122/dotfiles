@@ -52,7 +52,7 @@ only logic.
 - **Platform**: cross-platform. The plugin only writes an environment variable,
   so it works wherever OpenCode and `playwright-cli` run (Linux, macOS,
   Windows).
-- **Runtime**: the OpenCode Node runtime that loads the plugin (`node >= 24`).
+- **Runtime**: the OpenCode Bun runtime that loads the plugin.
 - **Not published.** The `@h82/` scope is a naming namespace, not a registry
   target; this is a workspace-local plugin built in place. Chezmoi symlinks
   the built file into OpenCode's plugin directory so it auto-loads (see
@@ -60,21 +60,24 @@ only logic.
 
 ## Install / build
 
-This package is a member of the `@h82/dotfiles` Yarn workspace rooted at
+This package is a member of the `@h82/dotfiles` Bun workspace rooted at
 [`../`](../) (see [`../README.md`](../README.md)). Install once from the
-workspace root; build from the root via a selector or from this directory.
+workspace root; build from the root by changing into the member directory or
+from this directory.
 
 ```sh
 # from the workspace root (packages/)
-yarn install --immutable                                                  # restore deps (single root yarn.lock)
-yarn workspace @h82/opencode-playwright-cli-session-injection build       # tsdown -> dist/index.mjs + dist/index.d.mts
-yarn workspace @h82/opencode-playwright-cli-session-injection typecheck   # tsc --noEmit
-yarn workspace @h82/opencode-playwright-cli-session-injection lint        # eslint .
-yarn workspace @h82/opencode-playwright-cli-session-injection format      # prettier --write .
+cd packages
+bun install --frozen-lockfile                    # restore deps (single root bun.lock)
+cd packages/opencode-playwright-cli-session-injection
+bun run build                                    # tsdown -> dist/index.mjs + dist/index.d.mts
+bun run typecheck                                # tsc --noEmit
+bun run lint                                     # eslint .
+bun run format                                   # prettier --write .
 
 # or from this directory (packages/opencode-playwright-cli-session-injection/)
-yarn build
-yarn lint && yarn format:check
+bun run build
+bun run lint && bun run format:check
 ```
 
 The package is ESM-only (`"type": "module"`) and builds with
@@ -106,7 +109,7 @@ name the symlink `playwright-cli-session-injection.js` (not `.mjs`) because
 sourcemap.
 
 This link is created by chezmoi on both Linux and macOS. However, the automated
-Yarn build runs on apply only on Linux. On macOS, the symlink will dangle until
+Bun build runs on apply only on Linux. On macOS, the symlink will dangle until
 you build the workspace manually.
 
 **Manual / cross-platform.** Anywhere chezmoi doesn't link it, add the
@@ -123,7 +126,7 @@ picks up its exported `PlaywrightCliSessionInjectionPlugin`:
 
 See the OpenCode [plugin docs](https://opencode.ai/docs/plugins/) for the
 supported plugin reference forms (local path vs. package). Rebuild
-(`yarn workspace @h82/opencode-playwright-cli-session-injection build`) after
+(`bun run build` from `packages/opencode-playwright-cli-session-injection/`) after
 editing `src/` for the change to take effect.
 
 ## API surface

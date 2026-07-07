@@ -15,8 +15,9 @@ replace the daemon — all device I/O, debounce, queueing, and pacing live in
 `mxm4-hapticd`. This is purely the "hand a waveform name to the daemon" half.
 
 > The latency-critical Solaar hot path still uses the Rust `mxm4-haptic` client
-> binary. This library is for **Node/Bun** consumers (scripts, tooling, MCP
-> servers, etc.) that want to trigger haptics from a JavaScript runtime.
+> binary. This library is for **Node-compatible hosts** (Node, Bun, etc.) as a
+> consumer (scripts, tooling, MCP servers, etc.) that wants to trigger haptics
+> from a JavaScript runtime.
 
 ## Status
 
@@ -36,23 +37,25 @@ replace the daemon — all device I/O, debounce, queueing, and pacing live in
 
 ## Install / build / test
 
-This package is a member of the `@h82/dotfiles` Yarn workspace rooted at
+This package is a member of the `@h82/dotfiles` Bun workspace rooted at
 [`../`](../) (see [`../README.md`](../README.md)). Install once from the
-workspace root; build/test either from the workspace root via a selector or from
-this directory.
+workspace root; build/test either from the workspace root by changing into the
+member directory or from this directory.
 
 ```sh
 # from the workspace root (packages/)
-yarn install --immutable                 # restore deps (single root yarn.lock)
-yarn workspace @h82/mxm4-haptic build     # tsdown -> dist/index.js (ESM) + dist/index.d.ts
-yarn workspace @h82/mxm4-haptic typecheck # tsc --noEmit
-yarn workspace @h82/mxm4-haptic test      # node --test (also runnable via `bun test`)
-yarn workspace @h82/mxm4-haptic lint      # eslint .
-yarn workspace @h82/mxm4-haptic format    # prettier --write .
+cd packages
+bun install --frozen-lockfile              # restore deps (single root bun.lock)
+cd packages/mxm4-haptic
+bun run build                              # tsdown -> dist/index.js (ESM) + dist/index.d.ts
+bun run typecheck                          # tsc --noEmit
+bun test                                   # bun test
+bun run lint                               # eslint .
+bun run format                             # prettier --write .
 
 # or from this directory (packages/mxm4-haptic/)
-yarn build && yarn test
-yarn lint && yarn format:check
+bun run build && bun test
+bun run lint && bun run format:check
 ```
 
 The package is ESM-only (`"type": "module"`) and builds with
@@ -117,7 +120,7 @@ All thrown/rejected errors extend `HapticError` (which carries a discriminant
 
 The waveform id table is mirrored from the Rust crate. Note the **firmware enum
 gap**: ids are contiguous `0..14` for the first 15 waveforms, then
-`WHISPER COLLISION = 27` (not 15). A `node:test` drift-guard
+`WHISPER COLLISION = 27` (not 15). A Bun drift-guard
 ([`test/drift-guard.test.ts`](test/drift-guard.test.ts)) parses the Rust
 `WAVEFORMS` table and asserts byte-for-byte parity, so the two tables cannot
 silently drift.

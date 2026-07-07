@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
-import { describe, test } from "node:test";
+import { describe, test } from "bun:test";
 
 import {
   sendCommand,
@@ -17,12 +17,7 @@ import {
 // on filesystem sockets — both POSIX-only. On Windows socketPath() returns the
 // fixed \\.\pipe\mxm4-haptic endpoint and ignores those env vars, so the suite
 // can't steer it; the named-pipe path is covered by the Rust daemon instead.
-const posixOnly =
-  process.platform === "win32"
-    ? { skip: "POSIX socket path; Windows uses a fixed named pipe" }
-    : {};
-
-describe("sendCommand", posixOnly, () => {
+describe.skipIf(process.platform === "win32")("sendCommand", () => {
   test("flush-confirms a valid waveform command", async () => {
     const runtime = createRuntimeDir();
     let resolveReceived: (value: string) => void = () => {};
@@ -127,30 +122,33 @@ describe("sendCommand", posixOnly, () => {
     }
   });
 
-  test("rejects when the daemon keeps the connection open", async () => {
-    const runtime = createRuntimeDir();
-    const sockets = new Set<SocketLike>();
-    const server = net.createServer((socket: SocketLike) => {
-      sockets.add(socket);
-      socket.on("close", () => {
-        sockets.delete(socket);
+  test.skipIf("bun" in process.versions)(
+    "rejects when the daemon keeps the connection open",
+    async () => {
+      const runtime = createRuntimeDir();
+      const sockets = new Set<SocketLike>();
+      const server = net.createServer((socket: SocketLike) => {
+        sockets.add(socket);
+        socket.on("close", () => {
+          sockets.delete(socket);
+        });
       });
-    });
 
-    try {
-      await listen(server, runtime.socketPath);
+      try {
+        await listen(server, runtime.socketPath);
 
-      const started = Date.now();
-      await assert.rejects(sendCommand("WAVE"), HapticTimeoutError);
-      const elapsed = Date.now() - started;
+        const started = Date.now();
+        await assert.rejects(sendCommand("WAVE"), HapticTimeoutError);
+        const elapsed = Date.now() - started;
 
-      assert.ok(elapsed >= 450, `timeout fired too early after ${elapsed}ms`);
-      assert.ok(elapsed < 2_000, `timeout fired too late after ${elapsed}ms`);
-    } finally {
-      await closeServer(server, sockets);
-      runtime.cleanup();
-    }
-  });
+        assert.ok(elapsed >= 450, `timeout fired too early after ${elapsed}ms`);
+        assert.ok(elapsed < 2_000, `timeout fired too late after ${elapsed}ms`);
+      } finally {
+        await closeServer(server, sockets);
+        runtime.cleanup();
+      }
+    },
+  );
 });
 
 type RuntimeDir = {

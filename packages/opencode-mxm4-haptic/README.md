@@ -55,8 +55,9 @@ biases toward **still** buzzing rather than dropping the error.
 - **Platform**: Linux only at runtime — it talks to `mxm4-hapticd`, which owns
   Linux `hidraw` for the MX Master 4. On other OSes there is nothing to pulse.
 - **Hardware**: a Logitech **MX Master 4** paired (HID++ feature `0x19B0`).
-- **Runtime**: the OpenCode Node runtime that loads the plugin. The bundled
-  `@h82/mxm4-haptic` client needs only `node:net` + `$XDG_RUNTIME_DIR`.
+- **Runtime**: the OpenCode Bun runtime that loads the plugin. The bundled
+  `@h82/mxm4-haptic` client needs only `node:net` (Bun's Node-compatible `net`
+  module) + `$XDG_RUNTIME_DIR`.
 - **Not published.** The `@h82/` scope is a naming namespace, not a registry
   target; this is a workspace-local plugin built in place. On Linux, chezmoi
   symlinks the built file into OpenCode's plugin directory so it auto-loads
@@ -81,21 +82,24 @@ biases toward **still** buzzing rather than dropping the error.
 
 ## Install / build
 
-This package is a member of the `@h82/dotfiles` Yarn workspace rooted at
+This package is a member of the `@h82/dotfiles` Bun workspace rooted at
 [`../`](../) (see [`../README.md`](../README.md)). Install once from the
-workspace root; build from the root via a selector or from this directory.
+workspace root; build from the root by changing into the member directory or
+from this directory.
 
 ```sh
 # from the workspace root (packages/)
-yarn install --immutable                          # restore deps (single root yarn.lock)
-yarn workspace @h82/opencode-mxm4-haptic build      # tsdown -> dist/index.mjs + dist/index.d.mts
-yarn workspace @h82/opencode-mxm4-haptic typecheck  # tsc --noEmit
-yarn workspace @h82/opencode-mxm4-haptic lint       # eslint .
-yarn workspace @h82/opencode-mxm4-haptic format     # prettier --write .
+cd packages
+bun install --frozen-lockfile                   # restore deps (single root bun.lock)
+cd packages/opencode-mxm4-haptic
+bun run build                                   # tsdown -> dist/index.mjs + dist/index.d.mts
+bun run typecheck                               # tsc --noEmit
+bun run lint                                    # eslint .
+bun run format                                  # prettier --write .
 
 # or from this directory (packages/opencode-mxm4-haptic/)
-yarn build
-yarn lint && yarn format:check
+bun run build
+bun run lint && bun run format:check
 ```
 
 The package is ESM-only (`"type": "module"`) and builds with
@@ -127,7 +131,7 @@ name the symlink `mxm4-haptic.js` (not `.mjs`) because `.mjs` is not part
 of that auto-scan glob. The `.js` name points at the ESM `dist/index.mjs`
 output, and the sibling `mxm4-haptic.js.map` symlink supplies the sourcemap. This
 only happens after the workspace is built, so run `chezmoi apply` (or
-`yarn workspace @h82/opencode-mxm4-haptic build`) first.
+`bun run build` from `packages/opencode-mxm4-haptic/`) first.
 
 **Manual / cross-platform.** Anywhere chezmoi doesn't link it, add the
 built module to your OpenCode config's `plugin` array so the runtime loads it and
@@ -143,7 +147,7 @@ picks up its exported `MXMaster4HapticPlugin`:
 
 See the OpenCode [plugin docs](https://opencode.ai/docs/plugins/) for the
 supported plugin reference forms (local path vs. package). Rebuild
-(`yarn workspace @h82/opencode-mxm4-haptic build`) after editing `src/` for the
+(`bun run build` from `packages/opencode-mxm4-haptic/`) after editing `src/` for the
 change to take effect.
 
 ## API surface

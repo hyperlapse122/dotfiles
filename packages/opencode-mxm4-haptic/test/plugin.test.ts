@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
-import { describe, test } from "node:test";
+import { describe, test } from "bun:test";
 
 import { MXMaster4HapticPlugin } from "../src/index.ts";
 
@@ -12,10 +12,6 @@ import { MXMaster4HapticPlugin } from "../src/index.ts";
 // XDG_RUNTIME_DIR captures exactly what the plugin sent — no module mocking. The
 // resolver and the listening socket are both POSIX-only (Windows uses a fixed
 // named pipe and ignores XDG_RUNTIME_DIR), so the suite skips on win32.
-const posixOnly =
-  process.platform === "win32"
-    ? { skip: "POSIX socket path; Windows uses a fixed named pipe" }
-    : {};
 
 type SocketLike = {
   end: () => void;
@@ -150,7 +146,7 @@ function errorEvent(sessionID?: string) {
   return { type: "session.error", properties: sessionID ? { sessionID } : {} };
 }
 
-describe("MXMaster4HapticPlugin", posixOnly, () => {
+describe.skipIf(process.platform === "win32")("MXMaster4HapticPlugin", () => {
   test("session.idle on a root session with no children buzzes COMPLETED", async () => {
     const server = await startHapticServer();
     const { client } = fakeClient({ get: async () => ({ data: {} }) });

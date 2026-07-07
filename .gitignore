@@ -5,14 +5,12 @@
 # Rust build artifacts
 target/
 
-# packages/ Yarn Berry monorepo (workspace root, node-modules linker).
+# packages/ Bun workspace (workspace root, node-modules layout).
 # Scoped to packages/ so the rest of the dotfiles repo is unaffected. The
-# single workspace-root packages/yarn.lock is intentionally TRACKED (lockfile
+# single workspace-root packages/bun.lock is intentionally TRACKED (lockfile
 # convention, like the Rust Cargo.lock); per-member dist/ build output is not.
 packages/node_modules/
-packages/.yarn/*
-!packages/.yarn/releases
-packages/.pnp.*
+packages/*/node_modules/
 packages/*/dist/
 .turbo/
 packages/.turbo/

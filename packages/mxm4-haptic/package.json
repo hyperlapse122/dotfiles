@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test",
+    "test": "bun test",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
