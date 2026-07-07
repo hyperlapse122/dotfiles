@@ -91,7 +91,7 @@ from this directory.
 # from the workspace root (packages/)
 cd packages
 bun install --frozen-lockfile                   # restore deps (single root bun.lock)
-cd packages/opencode-mxm4-haptic
+cd opencode-mxm4-haptic
 bun run build                                   # tsdown -> dist/index.mjs + dist/index.d.mts
 bun run typecheck                               # tsc --noEmit
 bun run lint                                    # eslint .

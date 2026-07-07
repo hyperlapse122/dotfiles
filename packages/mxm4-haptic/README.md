@@ -46,7 +46,7 @@ member directory or from this directory.
 # from the workspace root (packages/)
 cd packages
 bun install --frozen-lockfile              # restore deps (single root bun.lock)
-cd packages/mxm4-haptic
+cd mxm4-haptic
 bun run build                              # tsdown -> dist/index.js (ESM) + dist/index.d.ts
 bun run typecheck                          # tsc --noEmit
 bun test                                   # bun test

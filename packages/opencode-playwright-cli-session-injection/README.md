@@ -69,7 +69,7 @@ from this directory.
 # from the workspace root (packages/)
 cd packages
 bun install --frozen-lockfile                    # restore deps (single root bun.lock)
-cd packages/opencode-playwright-cli-session-injection
+cd opencode-playwright-cli-session-injection
 bun run build                                    # tsdown -> dist/index.mjs + dist/index.d.mts
 bun run typecheck                                # tsc --noEmit
 bun run lint                                     # eslint .
