@@ -52,6 +52,50 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 - `chezmoi cat ~/target/path` — show the rendered target.
 - `chezmoi apply` — deploy (also runs the scripts). Binary: `/usr/bin/chezmoi`.
 
+#### Non-interactive CI/agent verification without real 1Password
+
+For render-only checks in CI or agent verification, **MUST NOT** touch the real
+`$HOME` or require a real 1Password sign-in. Use an isolated destination, an
+empty scratch config (so the `.chezmoi.toml.tmpl` `read-source-state.pre` hook
+does not run), and a PATH-local dummy `op` command that satisfies
+`onepasswordRead` calls:
+
+```sh
+scratch="$HOME/.cache/agent-scratch/chezmoi-op-stub"
+mkdir -p "$scratch/bin" "$scratch/target"
+: > "$scratch/empty.toml"
+cat > "$scratch/bin/op" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+case "${1-}" in
+  whoami) printf 'dummy@example.invalid\n' ;;
+  read|item) printf 'dummy-secret\n' ;;
+  *) printf 'dummy-secret\n' ;;
+esac
+EOF
+chmod 700 "$scratch/bin/op"
+
+env PATH="$scratch/bin:$PATH" \
+  chezmoi --config "$scratch/empty.toml" \
+  --source "$PWD" \
+  --destination "$scratch/target" \
+  execute-template < .chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl
+
+env PATH="$scratch/bin:$PATH" \
+  chezmoi --config "$scratch/empty.toml" \
+  --source "$PWD" \
+  --destination "$scratch/target" \
+  diff --no-pager
+```
+
+Evidence from 2026-07-08 on this repo: the command sequence above rendered
+`.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` with
+`execute-template exit=0` and ran full `chezmoi diff --no-pager` with
+`diff exit=0` without real `op` authentication. A warning that the config file
+template changed is acceptable in this mode because the empty scratch config is
+intentional; failures from `op`, prompts, writes under real `$HOME`, or hook
+execution are not acceptable.
+
 ## Secrets: 1Password only, never in-repo
 
 Secrets are pulled at apply time via `onepasswordRead "op://..."` inside `.tmpl`
