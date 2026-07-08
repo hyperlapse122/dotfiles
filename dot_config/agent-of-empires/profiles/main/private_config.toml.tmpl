@@ -1,3 +1,8 @@
+[hooks]
+on_create = ["mise trust"]
+on_destroy = ["mise untrust"]
+on_launch = ["mise install --locked -yq"]
+
 [sandbox]
 {{ if eq .chezmoi.os "darwin" -}}
 container_runtime = "apple_container"
