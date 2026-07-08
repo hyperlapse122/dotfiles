@@ -243,9 +243,7 @@
 				"openrouter/fusion"
 			]
 		},
-		"anthropic": {
-			"whitelist": []
-		}
+		"anthropic": {}
 	},
 	"model": "zai-coding-plan/glm-5.2",
 	"small_model": "openrouter/openrouter/free",
