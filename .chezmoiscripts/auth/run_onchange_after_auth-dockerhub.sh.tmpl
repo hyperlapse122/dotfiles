@@ -48,8 +48,15 @@ fi
 # GNOME Keyring on Linux; the login keychain on macOS). On a headless or
 # locked-keyring apply `store` fails — warn and skip instead of aborting the
 # whole `chezmoi apply`; a later interactive apply will populate it.
+{{ $docker := onepassword "Docker" "Private" -}}
+{{- $dockerUser := "" -}}
+{{- $dockerSecret := "" -}}
+{{- range $docker.fields -}}
+{{- if or (eq .id "username") (eq .label "username") -}}{{- $dockerUser = .value -}}{{- end -}}
+{{- if or (eq .id "API") (eq .label "API") -}}{{- $dockerSecret = .value -}}{{- end -}}
+{{- end -}}
 if "$helper" store <<'JSON'
-{{ dict "ServerURL" "docker.io" "Username" (onepasswordRead "op://Private/Docker/username" | trim) "Secret" (onepasswordRead "op://Private/Docker/3ih4nzaqgvprmdcmgugag5agjq/API" | trim) | toJson }}
+{{ dict "ServerURL" "docker.io" "Username" ($dockerUser | trim) "Secret" ($dockerSecret | trim) | toJson }}
 JSON
 then
   printf 'auth-dockerhub: stored Docker Hub credential for docker.io in the native keychain.\n'
