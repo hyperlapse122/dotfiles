@@ -112,6 +112,8 @@ minimum_release_age_excludes = [
   "github:anomalyco/opencode",
   "github:wakatime/wakatime-cli",
 ]
+lockfile = true
+locked = true
 
 [settings.github]
 use_git_credentials = true
