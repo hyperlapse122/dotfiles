@@ -3,12 +3,12 @@
 	"agents": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
 		"sisyphus": {
-		  // // Primary
-			// "model": "anthropic/claude-opus-4-8",
-			// "variant": "max"
+		  // Primary
+			"model": "anthropic/claude-opus-4-8",
+			"variant": "max"
 
-			// Fallback
-			"model": "zai-coding-plan/glm-5.2"
+			// // Fallback
+			// "model": "zai-coding-plan/glm-5.2"
 		},
 		"hephaestus": {
 			"model": "openai/gpt-5.5-fast",
@@ -46,13 +46,13 @@
 			]
 		},
 		"prometheus": {
-		  // // Primary
-			// "model": "anthropic/claude-opus-4-8",
-			// "variant": "max",
+		  // Primary
+			"model": "anthropic/claude-opus-4-8",
+			"variant": "max",
 
-			// Fallback
-			"model": "openai/gpt-5.5-fast",
-			"variant": "high",
+			// // Fallback
+			// "model": "openai/gpt-5.5-fast",
+			// "variant": "high",
 
 			"fallback_models": [
 				{
@@ -63,12 +63,12 @@
 			]
 		},
 		"metis": {
-		  // // Primary
-			// "model": "anthropic/claude-sonnet-5",
+		  // Primary
+			"model": "anthropic/claude-sonnet-5",
 
-			// Fallback
-			"model": "openai/gpt-5.5-fast",
-			"variant": "high",
+			// // Fallback
+			// "model": "openai/gpt-5.5-fast",
+			// "variant": "high",
 			
 			"fallback_models": [
 				{
@@ -95,12 +95,12 @@
 			]
 		},
 		"atlas": {
-		  // // Primary
-			// "model": "anthropic/claude-sonnet-5",
-			// "variant": "max",
+		  // Primary
+			"model": "anthropic/claude-sonnet-5",
+			"variant": "max",
 
-			// Fallback
-			"model": "kimi-for-coding/k2p7",
+			// // Fallback
+			// "model": "kimi-for-coding/k2p7",
 
 		  "fallback_models": [
 				"kimi-for-coding/k2p7",
@@ -111,12 +111,12 @@
 			]
 		},
 		"sisyphus-junior": {
-		  // // Primary
-			// "model": "anthropic/claude-sonnet-5",
-			// "variant": "max",
+		  // Primary
+			"model": "anthropic/claude-sonnet-5",
+			"variant": "max",
 
-			// Fallback
-			"model": "kimi-for-coding/k2p7",
+			// // Fallback
+			// "model": "kimi-for-coding/k2p7",
 			"fallback_models": [
 				"kimi-for-coding/k2p7",
 				{
@@ -129,7 +129,13 @@
 	"categories": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 		"visual-engineering": {
-			"model": "zai-coding-plan/glm-5.1",
+		  // // Primary
+			// "model": "zai-coding-plan/glm-5.1",
+
+			// Fallback
+			"model": "anthropic/claude-opus-4-8",
+			"variant": "max",
+			
 			"fallback_models": [
 				{
 					"model": "anthropic/claude-opus-4-8",
@@ -182,12 +188,12 @@
 		},
 		"unspecified-low": {
 		  // Primary
-			// "model": "anthropic/claude-sonnet-5",
-			// "variant": "max",
+			"model": "anthropic/claude-sonnet-5",
+			"variant": "max",
 
-			// Fallback
-			"model": "openai/gpt-5.5-fast",
-			"variant": "medium",
+			// // Fallback
+			// "model": "openai/gpt-5.5-fast",
+			// "variant": "medium",
 
 			"fallback_models": [
 				{
@@ -198,13 +204,13 @@
 			]
 		},
 		"unspecified-high": {
-		  // // Primary
-			// "model": "anthropic/claude-opus-4-8",
-			// "variant": "max",
+		  // Primary
+			"model": "anthropic/claude-opus-4-8",
+			"variant": "max",
 
 			// // Fallback
-			"model": "openai/gpt-5.5-fast",
-			"variant": "high",
+			// "model": "openai/gpt-5.5-fast",
+			// "variant": "high",
 			
 			"fallback_models": [
 				{
