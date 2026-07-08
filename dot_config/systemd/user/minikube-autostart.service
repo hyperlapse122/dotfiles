@@ -8,8 +8,14 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# The wrapper is in the user's PATH-equivalent location; %h expands to $HOME.
-ExecStart=%h/.local/bin/minikube-autostart
+# Rootless Podman is not a minikube flag (only a config/env toggle), so export it
+# explicitly. The user service does not inherit environment.d variables reliably
+# at boot, so setting it here guarantees the cluster starts rootless.
+Environment=MINIKUBE_ROOTLESS=true
+# mise-managed minikube may live in the mise shims or in a local install; include
+# the common paths so the executable is found before a full shell has set up PATH.
+Environment="PATH=%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=mise exec -- minikube start --driver=podman --container-runtime=containerd --delete-on-failure
 # If the start fails (e.g. network not ready yet at boot), retry once after a
 # short delay so the cluster is not left down after a transient race.
 Restart=on-failure
