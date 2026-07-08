@@ -1,0 +1,25 @@
+{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+
+[".local/bin/kubectl"]
+type = "file"
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl" (toString (gitHubLatestRelease "kubernetes/kubernetes").TagName) .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+[".local/bin/kubectl-convert"]
+type = "file"
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert" (toString (gitHubLatestRelease "kubernetes/kubernetes").TagName) .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+{{- else if eq .chezmoi.os "windows" }}
+
+[".local/bin/kubectl.exe"]
+type = "file"
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl.exe" (toString (gitHubLatestRelease "kubernetes/kubernetes").TagName) .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+[".local/bin/kubectl-convert.exe"]
+type = "file"
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert.exe" (toString (gitHubLatestRelease "kubernetes/kubernetes").TagName) .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+{{- end }}

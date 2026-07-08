@@ -1,0 +1,17 @@
+{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+
+[".local/bin/helm"]
+type = "archive-file"
+url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.tar.gz" (toString (gitHubLatestRelease "helm/helm").TagName) .chezmoi.os .chezmoi.arch }}'
+path = '{{ printf "%s-%s/helm" .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+{{- else if eq .chezmoi.os "windows" }}
+
+[".local/bin/helm.exe"]
+type = "archive-file"
+url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.zip" (toString (gitHubLatestRelease "helm/helm").TagName) .chezmoi.os .chezmoi.arch }}'
+path = '{{ printf "%s-%s/helm.exe" .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+{{- end }}

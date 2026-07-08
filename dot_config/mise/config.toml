@@ -50,11 +50,6 @@ viteplus = "latest"
 "npm:yaml-language-server" = "latest"
 "npm:cypress" = { version = "latest", allow_builds = ["cypress"] }
 
-# Local Kubernetes development environment
-helm = "latest"
-minikube = "latest"
-kubectl = "latest"
-
 # Agentic AI
 claude-code = "latest"
 "npm:@google/gemini-cli" = "latest"

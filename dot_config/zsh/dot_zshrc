@@ -11,3 +11,12 @@ if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
 fi
 
 # Customize to your needs...
+
+# Set up kubectl completions
+source <(kubectl completion zsh)
+
+# Set up minikube completions
+source <(minikube completion zsh)
+
+# Set up helm completions
+source <(helm completion zsh)
