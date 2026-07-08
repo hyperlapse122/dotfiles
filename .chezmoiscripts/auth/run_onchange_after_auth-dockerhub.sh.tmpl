@@ -1,0 +1,60 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+#
+# auth-dockerhub — populate the Docker Hub credential into the OS-native
+# keychain so podman / the podman-docker `docker` shim (and buildah/skopeo)
+# can pull & push docker.io images without an interactive `docker login`.
+#
+# ~/.config/containers/auth.json maps `docker.io` -> the `dockerhub`
+# credHelper, i.e. `docker-credential-dockerhub` (deployed to ~/.local/bin).
+# That helper is a pure passthrough to the platform keychain — Linux:
+# docker-credential-secretservice (D-Bus Secret Service: KWallet / GNOME
+# Keyring), macOS: docker-credential-osxkeychain — it fetches nothing on its
+# own, so the credential must be *stored* into the keychain up front. We do
+# that with the Docker credential-helper `store` protocol: one JSON object
+# {ServerURL,Username,Secret} on stdin.
+#
+# ServerURL MUST be `docker.io`. Podman passes exactly `docker.io` to the
+# credHelper's `get` when resolving docker.io/* refs (it uses the registry
+# domain, not Docker's historical `https://index.docker.io/v1/`), so the
+# stored key has to match or the credential is never found. This host is
+# podman-only via the podman-docker shim (see AGENTS.md), so `docker.io` is
+# the single authoritative key; note podman honors `credHelpers` but ignores
+# the `credsStore` field.
+#
+# run_after: the helper is a chezmoi-deployed file, so it must be applied
+# first. run_onchange: when the token rotates in 1Password the rendered secret
+# changes, so the script re-runs and re-populates (a `store` with the same
+# server+username is an upsert, so re-runs are idempotent).
+
+set -euo pipefail
+
+{{ if eq .chezmoi.os "linux" }}
+helper=docker-credential-secretservice
+{{- else if eq .chezmoi.os "darwin" }}
+helper=docker-credential-osxkeychain
+{{- end }}
+
+if ! command -v "$helper" >/dev/null 2>&1; then
+  if [[ -x "$HOME/.local/bin/$helper" ]]; then
+    helper="$HOME/.local/bin/$helper"
+  else
+    printf 'auth-dockerhub: %s not on PATH or in ~/.local/bin; skipping.\n' "$helper" >&2
+    exit 0
+  fi
+fi
+
+# The keychain backend needs a reachable, unlocked Secret Service (KWallet /
+# GNOME Keyring on Linux; the login keychain on macOS). On a headless or
+# locked-keyring apply `store` fails — warn and skip instead of aborting the
+# whole `chezmoi apply`; a later interactive apply will populate it.
+if "$helper" store <<'JSON'
+{{ dict "ServerURL" "docker.io" "Username" (onepasswordRead "op://Private/Docker/username" | trim) "Secret" (onepasswordRead "op://Private/Docker/3ih4nzaqgvprmdcmgugag5agjq/API" | trim) | toJson }}
+JSON
+then
+  printf 'auth-dockerhub: stored Docker Hub credential for docker.io in the native keychain.\n'
+else
+  printf 'auth-dockerhub: could not store credential (Secret Service unavailable/locked?); skipping. Re-run chezmoi apply in an unlocked desktop session.\n' >&2
+fi
+
+{{ end -}}

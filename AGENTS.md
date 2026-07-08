@@ -103,9 +103,22 @@ files (GPG key, GitHub/Tailscale tokens, opencode API keys under
 `dot_config/opencode/private_secrets/`). GitLab CLI auth is not secret-driven:
 `~/.local/bin/auth-glab` performs a semi-interactive `glab auth login` OAuth
 flow (`--web`/`--device`) on demand instead of provisioning PATs. Never hardcode a secret — add an
-`onepasswordRead` reference. The `op` CLI must be signed in: `.install-prerequisites.sh`
-runs as a `read-source-state` pre-hook to install 1Password and mise first, and
-`chezmoi diff`/`execute-template` over secret templates fails if `op` isn't authed.
+`onepasswordRead` reference. The `op` CLI must be able to resolve secrets:
+`.install-prerequisites.sh` runs as a `read-source-state` pre-hook to install
+1Password and mise first, and `chezmoi diff`/`execute-template` over secret
+templates fails if `op` can't read.
+
+**`op whoami` is NOT a reliable "is op usable?" check on an interactive host.**
+When `op` is wired to the 1Password desktop app (Settings → Developer →
+Integrate with 1Password CLI), the CLI defers authentication to the GUI:
+`op whoami` prints `account is not signed in` and exits non-zero until the app
+authorizes a request — yet `op read` / `onepasswordRead` still succeed because
+the desktop app prompts for biometric unlock on demand. An agent **MUST NOT**
+conclude `op` is unusable (or that it cannot inspect an item) from a failing
+`op whoami`; assume the user can resolve secrets and proceed, letting an actual
+`op read` / `onepasswordRead` be the real test. The container service-account
+path is the exception — there `op whoami` is authoritative (see Containerized /
+CI environments).
 
 ## Single source of truth — edit the data, not the generated script
 
