@@ -1,6 +1,19 @@
+{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+
 [".local/bin/opencode"]
 type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s.%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) (replace "windows" "zip" (replace "darwin" "zip" (replace "linux" "tar.gz" .chezmoi.os)))) }}'
+url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s.%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) (replace "darwin" "zip" (replace "linux" "tar.gz" .chezmoi.os))) }}'
 executable = true
 path = "opencode"
 refreshPeriod = "24h"
+
+{{- else if eq .chezmoi.os "windows" }}
+
+[".local/bin/opencode.exe"]
+type = "archive-file"
+url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s.zip" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) }}'
+executable = true
+path = "opencode"
+refreshPeriod = "24h"
+
+{{- end }}
