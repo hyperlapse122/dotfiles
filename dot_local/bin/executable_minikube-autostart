@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ~/.local/bin/minikube-autostart (deployed by chezmoi)
+#
+# Systemd user service entry point for bringing the minikube cluster up after
+# boot or login. Kept as a separate wrapper (rather than a giant ExecStart= line)
+# so it is easy to run by hand and easy to test.
+#
+# Environment: this wrapper may be invoked by systemd before a full interactive
+# shell has set up PATH, so we construct a PATH that includes the mise shims and
+# the common mise binary locations. Rootless mode is exported explicitly because
+# the user service does not inherit environment.d variables reliably at boot.
+
+set -euo pipefail
+
+export MINIKUBE_ROOTLESS=true
+export PATH="${HOME}/.local/share/mise/shims:${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+exec mise exec -- minikube start --driver=podman --container-runtime=containerd --delete-on-failure

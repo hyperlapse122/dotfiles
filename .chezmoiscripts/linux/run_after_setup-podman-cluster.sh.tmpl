@@ -1,0 +1,195 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_after_setup-podman-cluster.sh.tmpl
+#
+# Finishes wiring up the rootless-Podman container stack and the local minikube
+# Kubernetes dev cluster on the Fedora / Kubuntu desktop targets. Every piece is
+# already INSTALLED elsewhere; this script only performs the runtime
+# *activation* that cannot be expressed as a managed file:
+#   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf/apt)
+#   - minikube / kubectl / helm ....... dot_config/mise/config.toml
+#   - DOCKER_HOST + MINIKUBE_ROOTLESS . dot_config/environment.d/65-containers.conf
+#   - user lingering + rootful
+#     podman.socket mask .............. run_onchange_after_install-system-config
+#   - podman-prune.{service,timer} .... dot_config/systemd/user/
+#
+# It does four things, each independently guarded so a missing prerequisite
+# skips only that step and never aborts the apply:
+#
+#   1. cgroup v2 controller delegation drop-in (needs sudo). Rootless minikube
+#      (and kind, and `podman run` with cpu/io limits) need the cpu, cpuset and
+#      io controllers delegated to the per-user systemd manager. systemd only
+#      delegates memory+pids by default, so we request the full set via
+#      /etc/systemd/system/user@.service.d/delegate.conf.
+#
+#   2. Enable the rootless --user podman.socket — the Docker-API endpoint that
+#      DOCKER_HOST (65-containers.conf) points at. This is the per-user
+#      instance, DISTINCT from the system/rootful podman.socket that
+#      install-system-config deliberately masks.
+#
+#   3. Enable the shipped podman-prune.timer (weekly GC). The unit files are
+#      deployed to ~/.config/systemd/user/ but nothing enables them.
+#
+#   4. Point minikube at the podman driver + containerd runtime, start the
+#      cluster if it is not already running, and enable a systemd user service
+#      that re-starts the cluster after reboot/login. Rootless Podman does not
+#      support minikube's default docker runtime; containerd is the recommended
+#      one. Rootless mode comes from MINIKUBE_ROOTLESS=true (65-containers.conf),
+#      re-exported here so the in-apply start stays rootless even from a shell
+#      that lacks environment.d.
+#
+# run_after_ (not run_onchange_): like the sibling debrand / tailscale-ufw /
+# wifi-import scripts this RETRIES on every apply. The `systemctl --user` steps
+# need a reachable user-manager bus, so a first apply from a bare TTY (no
+# session bus) skips them cleanly and a later apply from the desktop session
+# completes them. Every step is idempotent, so re-running is a no-op once done.
+#
+# Desktop-target gated (fedora|ubuntu) and container-skipped: the root
+# .chezmoiignore drops .chezmoiscripts/linux/*.sh inside a real (non-toolbox)
+# container, where nesting a cluster is neither wanted nor reliable.
+
+set -euo pipefail
+
+# --- sudo detection (non-fatal) -------------------------------------------
+# Only step 1 (the /etc drop-in) needs root. Unlike install-system-config /
+# tailscale-ufw — which abort without sudo because their whole job is root —
+# here a missing sudo skips ONLY the delegation step; the user-level podman
+# socket/timer and the minikube config still run.
+have_sudo=true
+if [[ "${EUID}" -eq 0 ]]; then
+  SUDO=()
+else
+  SUDO=(sudo)
+  # `[[ -t 0 ]]` is true only under an interactive apply (chezmoi wires its own
+  # TTY to stdin); `sudo -n true` succeeds with cached/passwordless creds. When
+  # both fail we cannot prompt, so we degrade to "no sudo" instead of hanging.
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then
+    have_sudo=false
+  fi
+fi
+
+# --- 1) cgroup v2 controller delegation for rootless containers -----------
+# Content-compared for idempotency; a change triggers `systemctl daemon-reload`.
+# Full effect lands after the user manager restarts (next login / reboot) — a
+# daemon-reload alone does not re-delegate to an already-running user@UID.
+delegate_conf=/etc/systemd/system/user@.service.d/delegate.conf
+delegate_desired='# Managed by chezmoi (run_after_setup-podman-cluster.sh.tmpl).
+# Cgroup v2 controller delegation for rootless containers (Podman/minikube/kind).
+[Service]
+Delegate=cpu cpuset io memory pids'
+if [[ "$have_sudo" == true ]]; then
+  if [[ -f "$delegate_conf" && "$(cat "$delegate_conf" 2>/dev/null)" == "$delegate_desired" ]]; then
+    echo "setup-podman-cluster: cgroup delegation already current ($delegate_conf)"
+  else
+    printf '%s\n' "$delegate_desired" | "${SUDO[@]}" install -D -m 0644 /dev/stdin "$delegate_conf"
+    "${SUDO[@]}" systemctl daemon-reload
+    echo "setup-podman-cluster: wrote cgroup delegation drop-in ($delegate_conf); full effect on next login/reboot"
+  fi
+else
+  echo "setup-podman-cluster: no sudo (non-interactive); skipping cgroup delegation drop-in" >&2
+fi
+
+# --- 2+3) enable the rootless user podman units ---------------------------
+# `systemctl --user` needs a reachable user-manager bus. `show-environment` is a
+# cheap probe that fails cleanly on a bare TTY / SSH session without one — in
+# which case we skip and let the next apply (run_after_ retries) pick it up.
+if systemctl --user show-environment >/dev/null 2>&1; then
+  # Pick up podman-prune.{service,timer} freshly deployed to
+  # ~/.config/systemd/user/ this same apply (the user manager does not see new
+  # unit files until it reloads). Harmless for the system-shipped podman.socket.
+  systemctl --user daemon-reload || true
+
+  # (2) Rootless Docker-API socket that DOCKER_HOST points at. This is the
+  #     --user instance, distinct from the masked system/rootful podman.socket.
+  if systemctl --user cat podman.socket >/dev/null 2>&1; then
+    if systemctl --user enable --now podman.socket >/dev/null 2>&1; then
+      echo "setup-podman-cluster: enabled --user podman.socket"
+    else
+      echo "setup-podman-cluster: could not enable --user podman.socket (masked?); skip" >&2
+    fi
+  else
+    echo "setup-podman-cluster: --user podman.socket unit absent (podman not installed?); skip" >&2
+  fi
+
+  # (3) Weekly rootless prune timer (units shipped by dot_config/systemd/user/).
+  if systemctl --user cat podman-prune.timer >/dev/null 2>&1; then
+    if systemctl --user enable --now podman-prune.timer >/dev/null 2>&1; then
+      echo "setup-podman-cluster: enabled --user podman-prune.timer"
+    else
+      echo "setup-podman-cluster: could not enable --user podman-prune.timer; skip" >&2
+    fi
+  else
+    echo "setup-podman-cluster: podman-prune.timer unit not deployed yet; skip" >&2
+  fi
+
+  # (4) Enable the minikube boot/login autostart service. The unit itself is
+  #     shipped by dot_config/systemd/user/; we do NOT start it here (no --now)
+  #     because the foreground first-run start is handled below in step 4, and
+  #     starting both concurrently would race. Enabling the unit makes it run on
+  #     the next boot/login, which is what gives reboot persistence.
+  if systemctl --user cat minikube-autostart.service >/dev/null 2>&1; then
+    if systemctl --user enable minikube-autostart.service >/dev/null 2>&1; then
+      echo "setup-podman-cluster: enabled minikube-autostart.service (reboot persistence)"
+    else
+      echo "setup-podman-cluster: could not enable minikube-autostart.service; skip" >&2
+    fi
+  else
+    echo "setup-podman-cluster: minikube-autostart.service unit not deployed yet; skip" >&2
+  fi
+else
+  echo "setup-podman-cluster: no user-manager bus (headless/TTY apply); skipping user podman units (retries next apply)" >&2
+fi
+
+# --- 4) point minikube at the rootless-podman driver, then bring it up -----
+# minikube/kubectl/helm are mise-managed; chezmoi run scripts execute under a
+# plain shell where mise shell-activation is NOT loaded, so route through
+# `mise exec` (mirrors build-opencode-plugins). `mise which` confirms the tool
+# is actually installed before use — otherwise soft-skip with a hint.
+#
+# MINIKUBE_ROOTLESS is re-exported here to mirror 65-containers.conf: an apply
+# may run from a shell that has not loaded environment.d, and rootless is NOT a
+# `minikube start` flag (only a config/env toggle), so exporting it guarantees
+# the in-apply start uses rootless Podman instead of falling back to sudo.
+export MINIKUBE_ROOTLESS=true
+if command -v mise >/dev/null 2>&1 && mise which minikube >/dev/null 2>&1; then
+  # Persist driver + runtime so a bare `minikube start` by hand matches too.
+  if mise exec -- minikube config set driver podman \
+    && mise exec -- minikube config set container-runtime containerd; then
+    echo "setup-podman-cluster: minikube set to driver=podman, container-runtime=containerd (rootless)"
+  else
+    echo "setup-podman-cluster: minikube config set failed; skip start" >&2
+  fi
+
+  # Bring the cluster up, but only when it is not already running: `minikube
+  # status` exits 0 only when host+kubelet+apiserver are all Running, so a
+  # healthy cluster is a fast no-op and a live one is never disrupted. A
+  # rootless cluster needs functional rootless Podman, so probe it first to
+  # surface a clear skip instead of a multi-minute minikube failure on a
+  # session-less apply. --delete-on-failure keeps automation self-healing (a
+  # broken partial start is torn down, not left behind), and the whole step
+  # soft-skips so a slow/failed start never aborts the apply.
+  #
+  # First run downloads the kicbase + Kubernetes images (~1GB, a few minutes).
+  # NOTE: the cpuset controller added by the step-1 delegation drop-in only
+  # takes effect after the next login/reboot, so a brand-new cluster created on
+  # the very first apply comes up with cpu+memory+pids delegation; on any
+  # failure the step soft-skips and self-heals on a later apply once the full
+  # delegation is live.
+  if ! podman info >/dev/null 2>&1; then
+    echo "setup-podman-cluster: rootless podman not functional in this apply context; skipping 'minikube start' (retries next apply)" >&2
+  elif mise exec -- minikube status >/dev/null 2>&1; then
+    echo "setup-podman-cluster: minikube cluster already running; skip start"
+  else
+    echo "setup-podman-cluster: starting minikube (first run pulls ~1GB, may take a few minutes)..."
+    if mise exec -- minikube start --driver=podman --container-runtime=containerd --delete-on-failure; then
+      echo "setup-podman-cluster: minikube cluster is up"
+    else
+      echo "setup-podman-cluster: 'minikube start' failed; skipping (retries next apply). Try by hand: minikube start" >&2
+    fi
+  fi
+else
+  echo "setup-podman-cluster: minikube not installed via mise; run 'mise install' then re-apply" >&2
+fi
+
+echo "setup-podman-cluster: done ('minikube status' to check, 'minikube stop' to free resources)"
+{{ end -}}
