@@ -1,0 +1,8 @@
+# Prettier formats the package's TypeScript/JS source only. Build output,
+# turbo cache, deps, JSON (tsconfig keeps comments/trailing commas; manifests
+# are managed by Bun), and Markdown are left untouched.
+dist/
+.turbo/
+node_modules/
+*.json
+*.md

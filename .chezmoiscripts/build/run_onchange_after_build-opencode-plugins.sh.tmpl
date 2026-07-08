@@ -4,7 +4,7 @@
 # .chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl
 #
 # Builds the packages/ Bun workspace in place and symlinks the
-# two built OpenCode plugins into ~/.config/opencode/plugins/. This replaces the
+# built OpenCode plugins into ~/.config/opencode/plugins/. This replaces the
 # old dotbot package-build shell step plus the plugin `link:` directives
 # (install.conf.yaml + install.linux.yaml): chezmoi cannot express "build a
 # git-ignored dist/ then symlink it" as a managed file, so it ships as a
@@ -45,6 +45,8 @@
 #
 # Plugin scope:
 #   - playwright-cli-session-injection.js — cross-platform (linux + darwin).
+#   - scratch-guard.js — cross-platform (linux + darwin); enforces the AGENTS.md
+#     temp-file policy ($TMPDIR injection + /tmp,/var/tmp,/dev/shm deny).
 #   - mxm4-haptic.js — Linux ONLY (it drives the Linux-only MX Master 4 haptic
 #     daemon); never linked on macOS.
 # NOTE: @h82/mxm4-haptic (no `opencode-` prefix) is the LIBRARY that
@@ -70,6 +72,7 @@ SRC="{{ $sourceDir }}"
 PLUGINS_DIR="$HOME/.config/opencode/plugins"
 DIST_PW="$SRC/packages/opencode-playwright-cli-session-injection/dist/index.mjs"
 DIST_MXM4="$SRC/packages/opencode-mxm4-haptic/dist/index.mjs"
+DIST_SCRATCH="$SRC/packages/opencode-scratch-guard/dist/index.mjs"
 
 # Remove stale plugin symlinks whose dist build output is absent, so a
 # skipped/failed build never leaves a dangling link behind. Each plugin is
@@ -81,6 +84,10 @@ clean_stale() {
   if [[ ! -f "$DIST_PW" ]]; then
     rm -f "$PLUGINS_DIR/playwright-cli-session-injection.js" \
           "$PLUGINS_DIR/playwright-cli-session-injection.js.map"
+  fi
+  if [[ ! -f "$DIST_SCRATCH" ]]; then
+    rm -f "$PLUGINS_DIR/scratch-guard.js" \
+          "$PLUGINS_DIR/scratch-guard.js.map"
   fi
   if [[ "$(uname)" == "Linux" && ! -f "$DIST_MXM4" ]]; then
     rm -f "$PLUGINS_DIR/mxm4-haptic.js" \
@@ -128,6 +135,15 @@ if [[ -f "${DIST_PW}.map" ]]; then
   ln -sf "${DIST_PW}.map" "$PLUGINS_DIR/playwright-cli-session-injection.js.map"
 fi
 printf 'build-opencode-plugins: linked playwright-cli-session-injection.js\n'
+
+# @h82/opencode-scratch-guard — cross-platform (linux + darwin). Enforces the
+# AGENTS.md temp-file policy (injects $TMPDIR, denies /tmp, /var/tmp, /dev/shm).
+# Same `.js`-name / `.mjs`-target convention with an optional sibling `.js.map`.
+ln -sf "$DIST_SCRATCH" "$PLUGINS_DIR/scratch-guard.js"
+if [[ -f "${DIST_SCRATCH}.map" ]]; then
+  ln -sf "${DIST_SCRATCH}.map" "$PLUGINS_DIR/scratch-guard.js.map"
+fi
+printf 'build-opencode-plugins: linked scratch-guard.js\n'
 
 # @h82/opencode-mxm4-haptic — Linux ONLY (drives the Linux-only MX Master 4
 # haptic daemon; macOS never links it). Same `.js`-name / `.mjs`-target

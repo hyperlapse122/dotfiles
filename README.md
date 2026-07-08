@@ -123,7 +123,7 @@ single-source-of-truth data files, OS gating, secrets, and commit style).
 This repository contains source-only trees that are excluded from deployment to `$HOME` via `.chezmoiignore`, and excluded from taplo formatting via `.taplo.toml`. Instead, they are built on apply by `.chezmoiscripts/build/` run_onchange scripts:
 
 - `crates/mxm4-haptic/`: Built on apply by `.chezmoiscripts/build/run_onchange_after_build-mxm4-haptic.sh.tmpl` into `~/.local/bin/`. Linux builds all three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
-- `packages/`: Built on apply by `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` into `~/.config/opencode/plugins/`. It is built with Bun, producing `@h82/opencode-playwright-cli-session-injection` (symlinked as `playwright-cli-session-injection.js` on Linux and macOS) and `@h82/opencode-mxm4-haptic` (symlinked as `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
+- `packages/`: Built on apply by `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` into `~/.config/opencode/plugins/`. It is built with Bun, producing `@h82/opencode-playwright-cli-session-injection` (symlinked as `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked as `scratch-guard.js` on Linux and macOS), and `@h82/opencode-mxm4-haptic` (symlinked as `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
 ## License
 

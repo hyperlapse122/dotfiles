@@ -57,6 +57,21 @@
         "typescript-eslint": "8.61.0",
       },
     },
+    "opencode-scratch-guard": {
+      "name": "@h82/opencode-scratch-guard",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@eslint/js": "10.0.1",
+        "@opencode-ai/plugin": "1.16.2",
+        "@types/node": "24.13.2",
+        "eslint": "10.4.1",
+        "eslint-config-prettier": "10.1.8",
+        "prettier": "3.8.3",
+        "tsdown": "0.22.2",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.61.0",
+      },
+    },
   },
   "packages": {
     "@babel/generator": ["@babel/generator@8.0.0-rc.6", "", { "dependencies": { "@babel/parser": "^8.0.0-rc.6", "@babel/types": "^8.0.0-rc.6", "@jridgewell/gen-mapping": "^0.3.12", "@jridgewell/trace-mapping": "^0.3.28", "@types/jsesc": "^2.5.0", "jsesc": "^3.0.2" } }, "sha512-6mIzgVK8DgEzvIapoQwhXTMnnkuE4STQmVv9H03i/tZ2ml8oev3TRvZJgTenK2Bsq0YWNtzOrFdTyNzCMFtjJQ=="],
@@ -96,6 +111,8 @@
     "@h82/opencode-mxm4-haptic": ["@h82/opencode-mxm4-haptic@workspace:opencode-mxm4-haptic"],
 
     "@h82/opencode-playwright-cli-session-injection": ["@h82/opencode-playwright-cli-session-injection@workspace:opencode-playwright-cli-session-injection"],
+
+    "@h82/opencode-scratch-guard": ["@h82/opencode-scratch-guard@workspace:opencode-scratch-guard"],
 
     "@humanfs/core": ["@humanfs/core@0.19.2", "", { "dependencies": { "@humanfs/types": "^0.15.0" } }, "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA=="],
 

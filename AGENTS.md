@@ -34,7 +34,7 @@ deploy them into `~/`.
 
 The directories `crates/` and `packages/` are source-only trees excluded from deployment to `$HOME` via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/build/` run_onchange scripts:
 - `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
-- `packages/` is built with Bun on apply into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS) and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
+- `packages/` is built with Bun on apply into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked to `scratch-guard.js` on Linux and macOS; enforces the temp-file policy via `$TMPDIR` injection + `/tmp`,`/var/tmp`,`/dev/shm` deny), and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
 ### Agent skills management
 

@@ -24,6 +24,7 @@ this directory. It holds the repo's TypeScript/JavaScript library packages.
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`opencode-mxm4-haptic/`](opencode-mxm4-haptic/) | `@h82/opencode-mxm4-haptic` | OpenCode plugin that pulses MX Master 4 haptics on OpenCode events (e.g. `session.idle` → `COMPLETED`). Forwards waveforms to the `mxm4-hapticd` daemon via a bundled `@h82/mxm4-haptic`. |
 | [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the raw `cwd` string) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
+| [`opencode-scratch-guard/`](opencode-scratch-guard/) | `@h82/opencode-scratch-guard` | OpenCode plugin that enforces the `AGENTS.md` temp-file policy: injects a per-user scratch dir as `$TMPDIR` via `shell.env`, and denies the shared system temp (`/tmp`, `/var/tmp`, `/dev/shm`) for `bash`/`write`/`edit`/`read` via `tool.execute.before`. Mode via `OPENCODE_SCRATCH_GUARD` (`enforce`/`warn`/`off`). Cross-platform. |
 
 ## Conventions
 
