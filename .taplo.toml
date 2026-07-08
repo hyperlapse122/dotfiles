@@ -1,1 +1,7 @@
-exclude = [".chezmoiexternals/**", ".chezmoidata/**", "crates/**", "packages/**"]
+exclude = [
+  ".chezmoidata/**",
+  "crates/**",
+  "packages/**",
+  ".chezmoiexternals/docker-credential-helpers.toml",
+  ".chezmoiexternals/prezto.toml",
+]
