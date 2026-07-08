@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+for cmd in mise; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    printf 'wakatime-cli: required dependency `%s` not found on PATH\n' "$cmd" >&2
+    exit 1
+  fi
+done
+
+exec mise --no-config --no-env --no-hooks exec -yq "github:wakatime/wakatime-cli" -- wakatime-cli-"$(uname | tr '[:upper:]' '[:lower:]')"-"$(uname -m | sed 's/x86_64/amd64/')" "$@"
