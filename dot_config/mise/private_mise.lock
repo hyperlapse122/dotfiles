@@ -328,53 +328,53 @@ url = "https://github.com/cli/cli/releases/download/v2.96.0/gh_2.96.0_windows_am
 provenance = "github-attestations"
 
 [[tools."github:njbrake/agent-of-empires"]]
-version = "1.12.0"
+version = "1.12.1"
 backend = "github:njbrake/agent-of-empires"
 
 [tools."github:njbrake/agent-of-empires"."platforms.linux-arm64"]
-checksum = "sha256:3305625dadeaad348cc96ba83b1e3a761e38c89c28dad4857253d4434f21ff2c"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180918"
+checksum = "sha256:4b8c60fc2dcc3513d884e4930b528ea0853ae10e1724c10072d0904910d2039c"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200133"
 
 [tools."github:njbrake/agent-of-empires"."platforms.linux-arm64-musl"]
-checksum = "sha256:3305625dadeaad348cc96ba83b1e3a761e38c89c28dad4857253d4434f21ff2c"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180918"
+checksum = "sha256:4b8c60fc2dcc3513d884e4930b528ea0853ae10e1724c10072d0904910d2039c"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200133"
 
 [tools."github:njbrake/agent-of-empires"."platforms.linux-x64"]
-checksum = "sha256:00c1f5ccebca5f4f10a6922f556e6a2717a75dcb45deca031c64fb759d18c2e7"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180910"
+checksum = "sha256:392a4ae1f53ea041edf51b6d10ca2ab4ac619103b82e6d8b7e3a81622ca0ae39"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200138"
 
 [tools."github:njbrake/agent-of-empires"."platforms.linux-x64-baseline"]
-checksum = "sha256:00c1f5ccebca5f4f10a6922f556e6a2717a75dcb45deca031c64fb759d18c2e7"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180910"
+checksum = "sha256:392a4ae1f53ea041edf51b6d10ca2ab4ac619103b82e6d8b7e3a81622ca0ae39"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200138"
 
 [tools."github:njbrake/agent-of-empires"."platforms.linux-x64-musl"]
-checksum = "sha256:00c1f5ccebca5f4f10a6922f556e6a2717a75dcb45deca031c64fb759d18c2e7"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180910"
+checksum = "sha256:392a4ae1f53ea041edf51b6d10ca2ab4ac619103b82e6d8b7e3a81622ca0ae39"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200138"
 
 [tools."github:njbrake/agent-of-empires"."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:00c1f5ccebca5f4f10a6922f556e6a2717a75dcb45deca031c64fb759d18c2e7"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180910"
+checksum = "sha256:392a4ae1f53ea041edf51b6d10ca2ab4ac619103b82e6d8b7e3a81622ca0ae39"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200138"
 
 [tools."github:njbrake/agent-of-empires"."platforms.macos-arm64"]
-checksum = "sha256:a8e532b42425810fe1e83425458719790af3b55b32cae9bf53ad5dc179b43304"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-darwin-arm64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180915"
+checksum = "sha256:ac160fcc2abfe3d1ed3edbcddb31e4fedc22959c756d1f31de463b3c4149fc04"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200132"
 
 [tools."github:njbrake/agent-of-empires"."platforms.macos-x64"]
-checksum = "sha256:4396156b3ce00ba7db85c18726cc7ecd351f2f949914dff6064756e930c13b43"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-darwin-amd64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180912"
+checksum = "sha256:c908feca1b10d02bf2b10820a36a7097af8b6118728546c03b182ee311e2828d"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-darwin-amd64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200134"
 
 [tools."github:njbrake/agent-of-empires"."platforms.macos-x64-baseline"]
-checksum = "sha256:4396156b3ce00ba7db85c18726cc7ecd351f2f949914dff6064756e930c13b43"
-url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.0/aoe-darwin-amd64.tar.gz"
-url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/463180912"
+checksum = "sha256:c908feca1b10d02bf2b10820a36a7097af8b6118728546c03b182ee311e2828d"
+url = "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.12.1/aoe-darwin-amd64.tar.gz"
+url_api = "https://api.github.com/repos/agent-of-empires/agent-of-empires/releases/assets/470200134"
 
 [[tools."github:rust-lang/rust-analyzer"]]
 version = "2026-07-06"
@@ -436,63 +436,63 @@ url = "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-06/r
 url_api = "https://api.github.com/repos/rust-lang/rust-analyzer/releases/assets/467858600"
 
 [[tools.glab]]
-version = "1.106.0"
+version = "1.107.0"
 backend = "gitlab:gitlab-org/cli"
 
 [tools.glab."platforms.linux-arm64"]
-checksum = "sha256:fe16c2c1ead428f7334b565d3723e2264c7070a1b4646781422addafc96364ce"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_linux_arm64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_linux_arm64%2Etar%2Egz"
+checksum = "sha256:8356e442ed42ff6973cbe267dd7371c65f9b810b01e7d70bb557cd284e7b35ba"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_linux_arm64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_linux_arm64%2Etar%2Egz"
 
 [tools.glab."platforms.linux-arm64-musl"]
-checksum = "sha256:fe16c2c1ead428f7334b565d3723e2264c7070a1b4646781422addafc96364ce"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_linux_arm64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_linux_arm64%2Etar%2Egz"
+checksum = "sha256:8356e442ed42ff6973cbe267dd7371c65f9b810b01e7d70bb557cd284e7b35ba"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_linux_arm64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_linux_arm64%2Etar%2Egz"
 
 [tools.glab."platforms.linux-x64"]
-checksum = "sha256:9bd32da785683a884121244c0ffc0f8bfc40ee7d47e5c4f546ee10748dabdbe3"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_linux_amd64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_linux_amd64%2Etar%2Egz"
+checksum = "sha256:eb42f56eb1a789cf4f22aa5960ff0ef60cf1e7fc1295327501f9f59030d5ae2c"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_linux_amd64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_linux_amd64%2Etar%2Egz"
 
 [tools.glab."platforms.linux-x64-baseline"]
-checksum = "sha256:9bd32da785683a884121244c0ffc0f8bfc40ee7d47e5c4f546ee10748dabdbe3"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_linux_amd64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_linux_amd64%2Etar%2Egz"
+checksum = "sha256:eb42f56eb1a789cf4f22aa5960ff0ef60cf1e7fc1295327501f9f59030d5ae2c"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_linux_amd64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_linux_amd64%2Etar%2Egz"
 
 [tools.glab."platforms.linux-x64-musl"]
-checksum = "sha256:9bd32da785683a884121244c0ffc0f8bfc40ee7d47e5c4f546ee10748dabdbe3"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_linux_amd64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_linux_amd64%2Etar%2Egz"
+checksum = "sha256:eb42f56eb1a789cf4f22aa5960ff0ef60cf1e7fc1295327501f9f59030d5ae2c"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_linux_amd64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_linux_amd64%2Etar%2Egz"
 
 [tools.glab."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:9bd32da785683a884121244c0ffc0f8bfc40ee7d47e5c4f546ee10748dabdbe3"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_linux_amd64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_linux_amd64%2Etar%2Egz"
+checksum = "sha256:eb42f56eb1a789cf4f22aa5960ff0ef60cf1e7fc1295327501f9f59030d5ae2c"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_linux_amd64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_linux_amd64%2Etar%2Egz"
 
 [tools.glab."platforms.macos-arm64"]
-checksum = "sha256:0afd8913de55ad4b1d83c8de8247569fb4e7b8d9ae96d92a7d8dd59ec51351a7"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_darwin_arm64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_darwin_arm64%2Etar%2Egz"
+checksum = "sha256:698ed673d00d8d337004efa41cf27fcd2131f0f7b83d7c7ae99e6b122ba11854"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_darwin_arm64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_darwin_arm64%2Etar%2Egz"
 
 [tools.glab."platforms.macos-x64"]
-checksum = "sha256:d82f8ad3cc84ef328621601e3ea12b002a3d52817895580e05bf40e42a413f38"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_darwin_amd64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_darwin_amd64%2Etar%2Egz"
+checksum = "sha256:e26e06c5cd8a929bc88f99cddbdab347d1c8dce36d899dbb8d133520362eefca"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_darwin_amd64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_darwin_amd64%2Etar%2Egz"
 
 [tools.glab."platforms.macos-x64-baseline"]
-checksum = "sha256:d82f8ad3cc84ef328621601e3ea12b002a3d52817895580e05bf40e42a413f38"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_darwin_amd64.tar.gz"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_darwin_amd64%2Etar%2Egz"
+checksum = "sha256:e26e06c5cd8a929bc88f99cddbdab347d1c8dce36d899dbb8d133520362eefca"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_darwin_amd64.tar.gz"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_darwin_amd64%2Etar%2Egz"
 
 [tools.glab."platforms.windows-x64"]
-checksum = "sha256:4ff48e0b45fc5b51ef7dcf0dcb5e90c90baed202f299dd4eae14c2cecf092268"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_windows_amd64.zip"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_windows_amd64%2Ezip"
+checksum = "sha256:b9b916d6b48961247e20f991976fb59cd0a99b4c9eaf2bafed59a1ce6dcba93d"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_windows_amd64.zip"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_windows_amd64%2Ezip"
 
 [tools.glab."platforms.windows-x64-baseline"]
-checksum = "sha256:4ff48e0b45fc5b51ef7dcf0dcb5e90c90baed202f299dd4eae14c2cecf092268"
-url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.106.0/downloads/glab_1.106.0_windows_amd64.zip"
-url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E106%2E0/glab_1%2E106%2E0_windows_amd64%2Ezip"
+checksum = "sha256:b9b916d6b48961247e20f991976fb59cd0a99b4c9eaf2bafed59a1ce6dcba93d"
+url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_windows_amd64.zip"
+url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_windows_amd64%2Ezip"
 
 [[tools.go]]
 version = "1.26.4"
@@ -803,7 +803,7 @@ version = "0.49.0"
 backend = "npm:@google/gemini-cli"
 
 [[tools."npm:@moonshot-ai/kimi-code"]]
-version = "0.23.1"
+version = "0.23.2"
 backend = "npm:@moonshot-ai/kimi-code"
 
 [tools."npm:@moonshot-ai/kimi-code".options]
@@ -1240,7 +1240,7 @@ url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-pc-wi
 provenance = "github-attestations"
 
 [[tools.viteplus]]
-version = "0.2.2"
+version = "0.2.3"
 backend = "npm:vite-plus"
 
 [[tools.yarn]]
