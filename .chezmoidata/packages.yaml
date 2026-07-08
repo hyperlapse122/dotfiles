@@ -121,6 +121,7 @@ packages:
         - passt  # user-mode networking (pasta) for rootless containers
         - fuse-overlayfs  # rootless overlay filesystem driver
         - slirp4netns  # user-mode networking for rootless network namespaces
+        - kubernetes-client
 
         # Screen recording / streaming / video editing
         - kdenlive  # non-linear video editor
