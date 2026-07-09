@@ -178,6 +178,11 @@
 			"glab auth status --show-token": "deny"
 		}
 	},
+	"model": "zai-coding-plan/glm-5.2",
+	"small_model": "openrouter/openrouter/free",
+	"experimental": {
+		"continue_loop_on_deny": true
+	},
 	"provider": {
 		"opencode": {
 			"options": {
@@ -189,16 +194,6 @@
 				"nemotron-3-ultra-free",
 				"north-mini-code-free"
 			]
-		},
-		"kimi-for-coding": {
-			"options": {
-				"apiKey": "{file:./secrets/kimi-for-coding-api-key}"
-			}
-		},
-		"zai-coding-plan": {
-			"options": {
-				"apiKey": "{file:./secrets/zai-coding-plan-api-key}"
-			}
 		},
 		"openrouter": {
 			"options": {
@@ -228,11 +223,400 @@
 				"openrouter/fusion"
 			]
 		},
-		"anthropic": {}
-	},
-	"model": "zai-coding-plan/glm-5.2",
-	"small_model": "openrouter/openrouter/free",
-	"experimental": {
-		"continue_loop_on_deny": true
+		"anthropic": {
+			"options": {
+				"baseURL": "http://127.0.0.1:8317/v1",
+				"apiKey": "local-api-key"
+			}
+		},
+		"zai": {
+			"options": {
+				"baseURL": "http://127.0.0.1:8317/v1",
+				"apiKey": "local-api-key"
+			},
+		},
+		"moonshotai": {
+			"npm": "@ai-sdk/openai-compatible",
+			"options": {
+				"baseURL": "http://127.0.0.1:8317/v1",
+				"apiKey": "local-api-key"
+			},
+		},
+		"openai": {
+			"npm": "@ai-sdk/openai-compatible",
+			"options": {
+				"baseURL": "http://127.0.0.1:8317/v1",
+				"apiKey": "local-api-key"
+			},
+			"models": {
+				"gpt-5.5": {
+					"limit": {
+						"context": 258000,
+						"output": 128000
+					}
+				},
+				"gpt-5.5-fast": {
+					"limit": {
+						"context": 258000,
+						"output": 128000
+					}
+				},
+				"gpt-5.4-mini": {
+					"limit": {
+						"context": 400000,
+						"output": 128000
+					}
+				},
+				"gpt-5.4-mini-fast": {
+					"limit": {
+						"context": 400000,
+						"output": 128000
+					}
+				}
+			}
+		},
+		"google-agy": {
+			"npm": "@ai-sdk/openai-compatible",
+			"options": {
+				"baseURL": "http://127.0.0.1:8317/v1",
+				"apiKey": "local-api-key"
+			},
+			"models": {
+				"gemini-3.5-flash-low": {
+					"name": "Gemini 3.5 Flash (Medium)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65536
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": 4000,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"gemini-3-flash-agent": {
+					"name": "Gemini 3.5 Flash (High)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65536
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": 10000,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"gemini-3-flash": {
+					"name": "Gemini 3.5 Flash",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65536
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": -1,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"gemini-3.5-flash-extra-low": {
+					"name": "Gemini 3.5 Flash (Low)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65536
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": 1000,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"gemini-3.1-pro-low": {
+					"name": "Gemini 3.1 Pro (Low)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65535
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": 1001,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"gemini-pro-agent": {
+					"name": "Gemini 3.1 Pro (High)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65535
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": 10001,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"gemini-2.5-pro": {
+					"name": "Gemini 2.5 Pro",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf",
+							"audio",
+							"video"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 1048576,
+						"output": 65535
+					},
+					"options": {
+						"thinkingConfig": {
+							"thinkingBudget": 1024,
+							"includeThoughts": true
+						}
+					},
+					"headers": {}
+				},
+				"claude-sonnet-4-6": {
+					"name": "Claude Sonnet 4.6 (Thinking)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 250000,
+						"output": 64000
+					},
+					"headers": {}
+				},
+				"claude-opus-4-6-thinking": {
+					"name": "Claude Opus 4.6 (Thinking)",
+					"reasoning": true,
+					"attachment": true,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text",
+							"image",
+							"pdf"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 250000,
+						"output": 64000
+					},
+					"headers": {}
+				},
+				"gpt-oss-120b-medium": {
+					"name": "GPT-OSS 120B (Medium)",
+					"reasoning": true,
+					"attachment": false,
+					"temperature": true,
+					"tool_call": true,
+					"modalities": {
+						"input": [
+							"text"
+						],
+						"output": [
+							"text"
+						]
+					},
+					"cost": {
+						"input": 0,
+						"output": 0,
+						"cache_read": 0,
+						"cache_write": 0
+					},
+					"limit": {
+						"context": 131072,
+						"output": 32768
+					},
+					"headers": {}
+				}
+			}
+		}
 	}
 }

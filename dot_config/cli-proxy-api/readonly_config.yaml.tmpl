@@ -299,6 +299,27 @@ nonstream-keepalive-interval: 0
 #     experimental-cch-signing: false # optional: default is false; when true, sign the final /v1/messages body using the current Claude Code cch algorithm
 #                                     # keep this disabled unless you explicitly need the behavior, so upstream seed changes fall back to legacy proxy behavior
 
+claude-api-key:
+  - api-key: '{{ onepasswordRead "op://Private/Z.ai/API Key" }}'
+    disable-cooling: false
+    base-url: "https://api.z.ai/api/anthropic"
+    proxy-url: "direct"
+    models:
+      - name: "glm-5.2"
+      - name: "glm-5.1"
+      - name: "glm-5"
+      - name: "glm-5-turbo"
+      - name: "glm-5v-turbo"
+      - name: "glm-4.7-flashx"
+      - name: "glm-4.7-flash"
+      - name: "glm-4.7"
+      - name: "glm-4.6v"
+      - name: "glm-4.6"
+      - name: "glm-4.5v"
+      - name: "glm-4.5-flash"
+      - name: "glm-4.5-air"
+      - name: "glm-4.5"
+
 # Default headers for Claude API requests. Update when Claude Code releases new versions.
 # In legacy mode, user-agent/package-version/runtime-version/timeout are used as fallbacks
 # when the client omits them, while OS/arch remain runtime-derived. When
