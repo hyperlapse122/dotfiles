@@ -3,24 +3,25 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl
 #
-# Builds the packages/ Bun workspace in place and symlinks the
+# Builds the packages/ Bun workspace in place with Vite+ (`vp`) and symlinks the
 # built OpenCode plugins into ~/.config/opencode/plugins/. This replaces the
 # old dotbot package-build shell step plus the plugin `link:` directives
 # (install.conf.yaml + install.linux.yaml): chezmoi cannot express "build a
 # git-ignored dist/ then symlink it" as a managed file, so it ships as a
 # run_onchange_after_ script.
 #
-# The Bun toolchain comes from packages/mise.toml via
-# `mise -C packages exec -- bun`. chezmoi run scripts execute under a plain
-# non-interactive shell where mise shell-activation is NOT loaded, so a bare
-# `bun` is not assumed to be on PATH — every Bun invocation is routed through
-# `mise exec`. mise is the ONLY hard requirement; no ambient Bun is expected.
+# The toolchain comes from mise: `bun` (the package manager `vp` delegates to)
+# is pinned in packages/mise.toml, and `vp` itself is the global `viteplus`
+# tool. chezmoi run scripts execute under a plain non-interactive shell where
+# mise shell-activation is NOT loaded, so bare `vp`/`bun` are not assumed to be
+# on PATH — every invocation is routed through `mise exec`. mise is the ONLY
+# hard requirement; no ambient Bun or vp is expected.
 #
 # onchange trigger: the fingerprint block below embeds a sha256 of every
 # TARGETED build-input file, so chezmoi re-runs this script whenever a build
 # input is added, removed, or edited. The globs are deliberately narrow — the
-# workspace manifest/lockfile, turbo + mise config, and each
-# member's package.json / tsconfig.json / tsdown.config.ts / src/** — and
+# workspace manifest/lockfile, bunfig + mise config, the root and per-member
+# vite.config.ts, and each member's package.json / tsconfig.json / src/** — and
 # explicitly NOT `packages/**`. A `packages/**` fingerprint would hash the
 # build's own outputs (dist/, node_modules/, .turbo/) and re-trigger this
 # script forever on every run. Comment-only; never executed.
@@ -29,12 +30,12 @@
 # `.chezmoi.os in {linux, darwin}`.
 #
 # Soft-skip (exit 0, mirroring the other bootstrap build steps): when mise is
-# absent, `bun install --frozen-lockfile` fails, or `bun run build` fails, the script
-# purges any now-stale plugin symlinks (so a failed build never leaves a
+# absent, `vp install --frozen-lockfile` fails, or `vp run -r build` fails, the
+# script purges any now-stale plugin symlinks (so a failed build never leaves a
 # dangling link) and exits 0. NOTE: chezmoi records a clean exit-0 as a
 # successful run, so the script will NOT re-run on the next apply until its
 # fingerprint changes — after fixing the cause, rebuild by hand with
-# `mise -C packages exec -- bun install --frozen-lockfile && mise -C packages exec -- bun run build`.
+# `mise -C packages exec -- vp install --frozen-lockfile && mise -C packages exec -- vp run -r build`.
 #
 # Symlink convention (matches the dotbot links it replaces): OpenCode auto-scans
 # top-level *.ts / *.js files under ~/.config/opencode/plugins/ — NOT *.mjs — so
@@ -60,7 +61,7 @@ set -euo pipefail
 # forces a rebuild on any add/remove/edit. TARGETED globs only (never
 # packages/**) so build outputs (dist/, node_modules/, .turbo/) are excluded
 # and the hash stays stable across rebuilds. Comment-only; never executed.
-{{ range $pattern := list "packages/bun.lock" "packages/package.json" "packages/mise.toml" "packages/turbo.json" "packages/*/package.json" "packages/*/src/**" "packages/*/tsconfig.json" "packages/*/tsdown.config.ts" -}}
+{{ range $pattern := list "packages/bun.lock" "packages/bunfig.toml" "packages/package.json" "packages/mise.toml" "packages/vite.config.ts" "packages/*/package.json" "packages/*/src/**" "packages/*/tsconfig.json" "packages/*/vite.config.ts" -}}
 {{ range (glob (joinPath $sourceDir $pattern)) -}}
 {{ if not (stat .).isDir -}}
 #   {{ . | trimPrefix $sourceDir | trimPrefix "/" }} {{ include . | sha256sum }}
@@ -101,25 +102,26 @@ skip() {
   exit 0
 }
 
-# (1) mise is the only hard requirement — Bun runs through `mise exec`, no
-# ambient Bun is expected. Absent mise → nothing to build, skip.
+# (1) mise is the only hard requirement — vp/bun run through `mise exec`, no
+# ambient toolchain is expected. Absent mise → nothing to build, skip.
 if ! command -v mise >/dev/null 2>&1; then
-  printf 'build-opencode-plugins: skipped (mise not installed); build manually with `mise -C packages exec -- bun install --frozen-lockfile && mise -C packages exec -- bun run build`.\n' >&2
+  printf 'build-opencode-plugins: skipped (mise not installed); build manually with `mise -C packages exec -- vp install --frozen-lockfile && mise -C packages exec -- vp run -r build`.\n' >&2
   skip
 fi
 
-# (2) Install workspace deps. `--frozen-lockfile` honors the tracked
-# packages/bun.lock and never rewrites it. Failure (offline, lockfile drift,
-# checksum mismatch) → soft-skip.
-if ! mise -C "$SRC/packages" exec -- bun install --frozen-lockfile; then
-  printf 'build-opencode-plugins: skipped (bun install --frozen-lockfile failed).\n' >&2
+# (2) Install workspace deps. `vp install` delegates to Bun (the declared
+# package manager); `--frozen-lockfile` honors the tracked packages/bun.lock and
+# never rewrites it. Failure (offline, lockfile drift, checksum mismatch) →
+# soft-skip.
+if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
+  printf 'build-opencode-plugins: skipped (vp install --frozen-lockfile failed).\n' >&2
   skip
 fi
 
-# (3) Build every workspace member (root `bun run build` → `turbo run build`).
-# Failure → soft-skip.
-if ! mise -C "$SRC/packages" exec -- bun run build; then
-  printf 'build-opencode-plugins: skipped (bun run build failed).\n' >&2
+# (3) Build every workspace member (`vp run -r build` → `vp pack` per member,
+# in workspace-dependency order). Failure → soft-skip.
+if ! mise -C "$SRC/packages" exec -- vp run -r build; then
+  printf 'build-opencode-plugins: skipped (vp run -r build failed).\n' >&2
   skip
 fi
 

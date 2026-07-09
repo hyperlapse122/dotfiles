@@ -7,14 +7,25 @@
     "*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "format": "turbo run format",
-    "format:check": "turbo run format:check"
+    "build": "vp run -r build",
+    "typecheck": "vp run -r typecheck",
+    "test": "vp run -r test",
+    "check": "vp check",
+    "lint": "vp lint",
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check ."
   },
   "devDependencies": {
-    "turbo": "2.9.16"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "catalog": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.3",
+    "vite-plus": "0.2.3",
+    "vitest": "4.1.9"
+  },
+  "overrides": {
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

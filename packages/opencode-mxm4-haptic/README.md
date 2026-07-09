@@ -90,21 +90,20 @@ from this directory.
 ```sh
 # from the workspace root (packages/)
 cd packages
-bun install --frozen-lockfile                   # restore deps (single root bun.lock)
-cd opencode-mxm4-haptic
-bun run build                                   # tsdown -> dist/index.mjs + dist/index.d.mts
-bun run typecheck                               # tsc --noEmit
-bun run lint                                    # eslint .
-bun run format                                  # prettier --write .
+vp install --frozen-lockfile                    # restore deps (single root bun.lock)
+vp run -r build                                 # vp pack across all members
+vp run -r typecheck                             # tsc --noEmit
+vp run -r test                                  # Vitest
+vp check                                        # format + lint + type-check (whole workspace)
 
-# or from this directory (packages/opencode-mxm4-haptic/)
-bun run build
-bun run lint && bun run format:check
+# or build just this member (@h82/mxm4-haptic builds first as a dependency):
+cd opencode-mxm4-haptic
+vp pack
 ```
 
-The package is ESM-only (`"type": "module"`) and builds with
-[`tsdown`](https://tsdown.dev) (Rolldown-based), configured in
-[`tsdown.config.ts`](tsdown.config.ts):
+The package is ESM-only (`"type": "module"`) and builds with `vp pack` (tsdown /
+Rolldown under the hood), configured in the `pack` block of
+[`vite.config.ts`](vite.config.ts):
 
 - `@h82/mxm4-haptic` is **bundled** into the output (`alwaysBundle`) so the
   plugin file is self-contained.
@@ -131,7 +130,7 @@ name the symlink `mxm4-haptic.js` (not `.mjs`) because `.mjs` is not part
 of that auto-scan glob. The `.js` name points at the ESM `dist/index.mjs`
 output, and the sibling `mxm4-haptic.js.map` symlink supplies the sourcemap. This
 only happens after the workspace is built, so run `chezmoi apply` (or
-`bun run build` from `packages/opencode-mxm4-haptic/`) first.
+`vp pack` from `packages/opencode-mxm4-haptic/`) first.
 
 **Manual / cross-platform.** Anywhere chezmoi doesn't link it, add the
 built module to your OpenCode config's `plugin` array so the runtime loads it and
@@ -147,7 +146,7 @@ picks up its exported `MXMaster4HapticPlugin`:
 
 See the OpenCode [plugin docs](https://opencode.ai/docs/plugins/) for the
 supported plugin reference forms (local path vs. package). Rebuild
-(`bun run build` from `packages/opencode-mxm4-haptic/`) after editing `src/` for the
+(`vp pack` from `packages/opencode-mxm4-haptic/`) after editing `src/` for the
 change to take effect.
 
 ## API surface

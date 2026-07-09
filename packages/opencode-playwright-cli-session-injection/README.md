@@ -68,21 +68,20 @@ from this directory.
 ```sh
 # from the workspace root (packages/)
 cd packages
-bun install --frozen-lockfile                    # restore deps (single root bun.lock)
-cd opencode-playwright-cli-session-injection
-bun run build                                    # tsdown -> dist/index.mjs + dist/index.d.mts
-bun run typecheck                                # tsc --noEmit
-bun run lint                                     # eslint .
-bun run format                                   # prettier --write .
+vp install --frozen-lockfile                     # restore deps (single root bun.lock)
+vp run -r build                                  # vp pack across all members
+vp run -r typecheck                              # tsc --noEmit
+vp run -r test                                   # Vitest
+vp check                                         # format + lint + type-check (whole workspace)
 
-# or from this directory (packages/opencode-playwright-cli-session-injection/)
-bun run build
-bun run lint && bun run format:check
+# or build just this member:
+cd opencode-playwright-cli-session-injection
+vp pack
 ```
 
-The package is ESM-only (`"type": "module"`) and builds with
-[`tsdown`](https://tsdown.dev) (Rolldown-based), configured in
-[`tsdown.config.ts`](tsdown.config.ts):
+The package is ESM-only (`"type": "module"`) and builds with `vp pack` (tsdown /
+Rolldown under the hood), configured in the `pack` block of
+[`vite.config.ts`](vite.config.ts):
 
 - `@opencode-ai/plugin` is **never bundled** (`neverBundle`) — it is a
   type-only/host-provided peer supplied by the OpenCode runtime that loads the
@@ -109,7 +108,7 @@ name the symlink `playwright-cli-session-injection.js` (not `.mjs`) because
 sourcemap.
 
 This link is created by chezmoi on both Linux and macOS. However, the automated
-Bun build runs on apply only on Linux. On macOS, the symlink will dangle until
+Vite+ build runs on apply only on Linux. On macOS, the symlink will dangle until
 you build the workspace manually.
 
 **Manual / cross-platform.** Anywhere chezmoi doesn't link it, add the
@@ -126,7 +125,7 @@ picks up its exported `PlaywrightCliSessionInjectionPlugin`:
 
 See the OpenCode [plugin docs](https://opencode.ai/docs/plugins/) for the
 supported plugin reference forms (local path vs. package). Rebuild
-(`bun run build` from `packages/opencode-playwright-cli-session-injection/`) after
+(`vp pack` from `packages/opencode-playwright-cli-session-injection/`) after
 editing `src/` for the change to take effect.
 
 ## API surface

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { describe, test } from "bun:test";
+import { describe, test } from "vite-plus/test";
 
 import { PlaywrightCliSessionInjectionPlugin } from "../src/index.ts";
 

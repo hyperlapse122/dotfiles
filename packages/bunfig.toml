@@ -1,0 +1,20 @@
+# Workspace-local Bun config for the @h82/dotfiles packages workspace.
+#
+# It MIRRORS the user-global ~/.bunfig.toml install-time hardening (do NOT
+# relax): a 1-week dependency cooldown, disabled lifecycle scripts, and exact
+# version pinning. See the global file for the rationale.
+#
+# It ADDS `linker = "hoisted"`. Vite+ ships `vitest` transitively and its
+# `vite-plus/test` entry is `export * from "vitest"`. Under Bun's default
+# `isolated` linker the bundled `@vitest/browser*` optional peers split vitest
+# into two peer-hashed copies, so the copy `vite-plus/test` re-exports differs
+# from the one the `vp test` runner initializes — Vitest then fails with
+# "failed to find the current suite". A single hoisted vitest keeps the runner
+# and the test imports on one copy.
+[install]
+linker = "hoisted"
+# 1 week (in seconds). Bun's parser: minimum_release_age_ms = value * ms_per_s.
+minimumReleaseAge = 604800
+ignoreScripts = true
+# Pin exact versions for `bun add` -- no ^ / ~ range prefix.
+exact = true

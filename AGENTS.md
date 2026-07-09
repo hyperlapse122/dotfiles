@@ -34,7 +34,7 @@ deploy them into `~/`.
 
 The directories `crates/` and `packages/` are source-only trees excluded from deployment to `$HOME` via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/build/` run_onchange scripts:
 - `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
-- `packages/` is built with Bun on apply into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked to `scratch-guard.js` on Linux and macOS; enforces the temp-file policy via `$TMPDIR` injection + `/tmp`,`/var/tmp`,`/dev/shm` deny), and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
+- `packages/` is a Bun workspace built on apply with **Vite+** (`vp`) into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked to `scratch-guard.js` on Linux and macOS; enforces the temp-file policy via `$TMPDIR` injection + `/tmp`,`/var/tmp`,`/dev/shm` deny), and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
 ### Agent skills management
 
@@ -135,8 +135,8 @@ CI environments).
 
 ## Toolchain quirks
 
-- **mise** owns every runtime/CLI (node, bun, go, python, ruby, rust, gh, glab,
-  opencode, …) via `dot_config/mise/config.toml`. It enforces a 24h
+- **mise** owns every runtime/CLI (node, bun, viteplus, go, python, ruby, rust,
+  gh, glab, opencode, …) via `dot_config/mise/config.toml`. It enforces a 24h
   `minimum_release_age` cooldown with an excludes list — add fast-moving tools to
   `minimum_release_age_excludes`, don't disable the gate.
 - `python3` is mise-shadowed; system scripts needing real system Python must call
@@ -148,7 +148,9 @@ CI environments).
   `defaultSemverRangePrefix: ""`, `enableImmutableInstalls: true`,
   `enableTelemetry: false`, `preferReuse: true`, and `npmMinimalAgeGate: 10080`;
   `dot_config/pnpm/config.yaml` sets `ignoreScripts: true`, `saveExact: true`,
-  and `minimumReleaseAge: 10080`. Don't relax them.
+  and `minimumReleaseAge: 10080`. Don't relax them. The `packages/` Vite+
+  workspace additionally carries a local `bunfig.toml` that mirrors the Bun
+  hardening and adds `linker = "hoisted"` (a single Vitest copy for `vp test`).
 - TOML is taplo-formatted; `.taplo.toml` excludes `crates/**`, `packages/**`, `.chezmoidata/**`, and
   `.chezmoiexternals/**` (templated or non-standard TOML). biome LSP is disabled in
   the repo `opencode.json`.

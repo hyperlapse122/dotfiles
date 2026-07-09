@@ -2,4 +2,4 @@
 bun = "latest"
 
 [hooks]
-postinstall = "bun install"
+postinstall = "vp install"

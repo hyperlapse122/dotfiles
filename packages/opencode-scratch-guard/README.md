@@ -84,16 +84,19 @@ Member of the `@h82/dotfiles` Bun workspace rooted at [`../`](../) (see
 ```sh
 # from the workspace root (packages/)
 cd packages
-bun install --frozen-lockfile          # restore deps (single root bun.lock)
+vp install --frozen-lockfile           # restore deps (single root bun.lock)
+vp run -r build                        # vp pack across all members
+vp run -r typecheck                    # tsc --noEmit
+vp run -r test                         # Vitest (pure helpers + hook integration)
+vp check                               # format + lint + type-check (whole workspace)
+
+# or build/test just this member:
 cd opencode-scratch-guard
-bun run build                          # tsdown -> dist/index.mjs + dist/index.d.mts
-bun run typecheck                      # tsc --noEmit
-bun test                               # bun test (pure helpers + hook integration)
-bun run lint                           # eslint .
-bun run format:check                   # prettier --check .
+vp pack && vp test
 ```
 
-ESM-only (`"type": "module"`), built with [`tsdown`](https://tsdown.dev):
+ESM-only (`"type": "module"`), built with `vp pack` (tsdown under the hood,
+configured in the `pack` block of [`vite.config.ts`](vite.config.ts)):
 `@opencode-ai/plugin` is `neverBundle` (a type-only, host-provided peer); the
 plugin has no other runtime dependencies (only Node builtins). Output is
 `dist/index.mjs` + `dist/index.d.mts`.

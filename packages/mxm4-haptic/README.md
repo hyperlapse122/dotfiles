@@ -45,29 +45,28 @@ member directory or from this directory.
 ```sh
 # from the workspace root (packages/)
 cd packages
-bun install --frozen-lockfile              # restore deps (single root bun.lock)
-cd mxm4-haptic
-bun run build                              # tsdown -> dist/index.js (ESM) + dist/index.d.ts
-bun run typecheck                          # tsc --noEmit
-bun test                                   # bun test
-bun run lint                               # eslint .
-bun run format                             # prettier --write .
+vp install --frozen-lockfile               # restore deps (single root bun.lock)
+vp run -r build                            # vp pack across all members
+vp run -r typecheck                        # tsc --noEmit
+vp run -r test                             # Vitest
+vp check                                   # format + lint + type-check (whole workspace)
 
-# or from this directory (packages/mxm4-haptic/)
-bun run build && bun test
-bun run lint && bun run format:check
+# or build/test just this member:
+cd mxm4-haptic
+vp pack && vp test
 ```
 
-The package is ESM-only (`"type": "module"`) and builds with
-[`tsdown`](https://tsdown.dev) (Rolldown-based), configured in
-[`tsdown.config.ts`](tsdown.config.ts), emitting `dist/index.js` + bundled
-`dist/index.d.ts`. Type-checking is a separate `tsc --noEmit` pass.
+The package is ESM-only (`"type": "module"`) and builds with `vp pack` (tsdown /
+Rolldown under the hood), configured in the `pack` block of
+[`vite.config.ts`](vite.config.ts), emitting `dist/index.js` + bundled
+`dist/index.d.ts`. Type-checking is a separate `tsc --noEmit` pass (`vp run
+typecheck`).
 
-Linting is ESLint ([`eslint.config.mjs`](eslint.config.mjs):
-`@eslint/js` + `typescript-eslint` recommended) and formatting is Prettier
-([`.prettierrc.json`](.prettierrc.json), `printWidth: 100`, `semi: true`), with
-`eslint-config-prettier` keeping the two from disagreeing on style. See
-[`../README.md`](../README.md#lint--format) for the workspace-wide convention.
+Linting is Oxlint and formatting is Oxfmt (`vp lint` / `vp fmt`, or `vp check`
+for both plus type-checking), configured once in the workspace-root
+[`../vite.config.ts`](../vite.config.ts) `lint` / `fmt` blocks. See
+[`../README.md`](../README.md#lint--format--test) for the workspace-wide
+convention.
 
 ## Usage
 
