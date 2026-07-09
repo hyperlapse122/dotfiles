@@ -1,0 +1,19 @@
+{{- $userFontDir := (replace "linux" ".local/share/fonts" (replace "darwin" "Library/Fonts" (replace "windows" "AppData/Local/Microsoft/Windows/Fonts" .chezmoi.os))) -}}
+
+{{ range $key, $value := .fonts -}}
+{{ if contains "/" $key -}}
+
+{{- $repository := osDir $key -}}
+{{- $assetName := osBase $key -}}
+{{- $release := $value.release -}}
+
+['{{ replace "/" "_" $key }}']
+    type = "archive"
+    url = {{ gitHubReleaseAssetURL $repository $release $assetName | quote }}
+    exact = false
+    stripComponents = 4
+    include = ["**/*.ttf", "**/*.otf"]
+    targetPath = {{ $userFontDir | quote }}
+
+{{ end }}
+{{- end }}
