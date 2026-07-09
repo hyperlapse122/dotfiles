@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{- if eq .chezmoi.os "linux" }}
+
+if ! command -v xdg-open >/dev/null 2>&1; then
+  printf 'cli-proxy-api-open: `xdg-open` not found on PATH\n' >&2
+  exit 127
+fi
+
+exec xdg-open "http://localhost:8317/management.html"
+
+{{- else if eq .chezmoi.os "darwin" }}
+
+if ! command -v open >/dev/null 2>&1; then
+  printf 'cli-proxy-api-open: `open` not found on PATH\n' >&2
+  exit 127
+fi
+
+exec open "http://localhost:8317/management.html"
+
+{{- end }}

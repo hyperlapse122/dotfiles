@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if ! command -v cli-proxy-api >/dev/null 2>&1; then
+  printf 'cli-proxy-api-claude-login: `cli-proxy-api` not found on PATH\n' >&2
+  exit 127
+fi
+
+exec cli-proxy-api --config "$HOME/.config/cli-proxy-api/config.yaml" --claude-login --no-browser "$@"
