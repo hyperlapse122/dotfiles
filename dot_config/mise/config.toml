@@ -26,7 +26,6 @@ ast-grep = "latest"
 glab = { version = "latest", exe = "glab" }
 gh = "latest"
 "github:rust-lang/rust-analyzer" = "latest"
-marksman = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"
 usage = "latest"
@@ -63,6 +62,7 @@ claude-code = "latest"
   "macos",
 ] }
 antigravity-cli = "latest"
+"npm:@z_ai/mcp-server" = "latest"
 
 [settings]
 all_compile = false

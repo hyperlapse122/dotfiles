@@ -1,8 +1,10 @@
+{{- $tag := (gitHubLatestRelease "helm/helm").TagName | toString -}}
+
 {{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
 
 [".local/bin/helm"]
 type = "archive-file"
-url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.tar.gz" (toString (gitHubLatestRelease "helm/helm").TagName) .chezmoi.os .chezmoi.arch }}'
+url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.tar.gz" $tag .chezmoi.os .chezmoi.arch }}'
 path = '{{ printf "%s-%s/helm" .chezmoi.os .chezmoi.arch }}'
 executable = true
 
@@ -10,7 +12,7 @@ executable = true
 
 [".local/bin/helm.exe"]
 type = "archive-file"
-url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.zip" (toString (gitHubLatestRelease "helm/helm").TagName) .chezmoi.os .chezmoi.arch }}'
+url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.zip" $tag .chezmoi.os .chezmoi.arch }}'
 path = '{{ printf "%s-%s/helm.exe" .chezmoi.os .chezmoi.arch }}'
 executable = true
 

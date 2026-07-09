@@ -592,65 +592,6 @@ url = "https://dl.google.com/go/go1.26.5.windows-amd64.zip"
 checksum = "sha256:97e6b2a833b6d89f9ff17d25419ac0a7e3b482a044e9ab18cdef834bd834fd38"
 url = "https://dl.google.com/go/go1.26.5.windows-amd64.zip"
 
-[[tools.marksman]]
-version = "2026-02-08"
-backend = "aqua:artempyanykh/marksman"
-
-[tools.marksman."platforms.linux-arm64"]
-checksum = "sha256:db8e124527f7f8048e3e6c91821b9c52ef173d92c01e47d221bf1337afd962fb"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-linux-arm64"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747912"
-
-[tools.marksman."platforms.linux-arm64-musl"]
-checksum = "sha256:cd3b91b630042cc09b20505583203f875fbb4bf2fdf74dd6d87fddc3238d2798"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-linux-musl-arm64"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747925"
-
-[tools.marksman."platforms.linux-x64"]
-checksum = "sha256:be5098e8213219269c47fc0d916a66fa31ce0602ec967475c722260aabf26087"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-linux-x64"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747902"
-
-[tools.marksman."platforms.linux-x64-baseline"]
-checksum = "sha256:be5098e8213219269c47fc0d916a66fa31ce0602ec967475c722260aabf26087"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-linux-x64"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747902"
-
-[tools.marksman."platforms.linux-x64-musl"]
-checksum = "sha256:d33df4544bb1f9f1b93b862ea78375ca8c04cd467ed2bcee354d605fc483ceee"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-linux-musl-x64"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747928"
-
-[tools.marksman."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:d33df4544bb1f9f1b93b862ea78375ca8c04cd467ed2bcee354d605fc483ceee"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-linux-musl-x64"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747928"
-
-[tools.marksman."platforms.macos-arm64"]
-checksum = "sha256:6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-macos"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747961"
-
-[tools.marksman."platforms.macos-x64"]
-checksum = "sha256:6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-macos"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747961"
-
-[tools.marksman."platforms.macos-x64-baseline"]
-checksum = "sha256:6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-macos"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747961"
-
-[tools.marksman."platforms.windows-x64"]
-checksum = "sha256:a6d05beb08ebe41b0a9f09c98a438540421436fa5531424c22e0bb1d22529705"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman.exe"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747911"
-
-[tools.marksman."platforms.windows-x64-baseline"]
-checksum = "sha256:a6d05beb08ebe41b0a9f09c98a438540421436fa5531424c22e0bb1d22529705"
-url = "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman.exe"
-url_api = "https://api.github.com/repos/artempyanykh/marksman/releases/assets/352747911"
-
 [[tools.node]]
 version = "26.4.0"
 backend = "core:node"
@@ -729,6 +670,10 @@ backend = "npm:@playwright/cli"
 [[tools."npm:@sentry/dotagents"]]
 version = "1.17.0"
 backend = "npm:@sentry/dotagents"
+
+[[tools."npm:@z_ai/mcp-server"]]
+version = "0.1.4"
+backend = "npm:@z_ai/mcp-server"
 
 [[tools."npm:bash-language-server"]]
 version = "5.6.0"

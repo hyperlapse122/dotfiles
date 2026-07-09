@@ -1,0 +1,27 @@
+{{- $tag := (gitHubLatestRelease "artempyanykh/marksman").TagName | toString -}}
+
+{{- if eq .chezmoi.os "linux" }}
+
+[".local/bin/marksman"]
+type = "file"
+url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag (printf "marksman-%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) | quote }}
+executable = true
+refreshPeriod = "672h"
+
+{{- else if eq .chezmoi.os "darwin" }}
+
+[".local/bin/marksman"]
+type = "file"
+url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag "marksman-macos" | quote }}
+executable = true
+refreshPeriod = "672h"
+
+{{- else if eq .chezmoi.os "windows" }}
+
+[".local/bin/marksman.exe"]
+type = "file"
+url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag "marksman.exe" | quote }}
+executable = true
+refreshPeriod = "672h"
+
+{{- end }}

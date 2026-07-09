@@ -55,12 +55,6 @@
 		},
 		"marksman": {
 			"command": [
-				"mise",
-				"--no-config",
-				"exec",
-				"-yq",
-				"marksman",
-				"--",
 				"marksman"
 			],
 			"extensions": [
@@ -98,11 +92,14 @@
 			"command": [
 				"mise",
 				"--no-config",
+				"--no-env",
+				"--no-hooks",
 				"exec",
 				"-yq",
+				"npm:@z_ai/mcp-server",
 				"node",
-				"-c",
-				"npx -y \"@z_ai/mcp-server\""
+				"--",
+				"zai-mcp-server"
 			],
 			"environment": {
 				"Z_AI_API_KEY": "{file:./secrets/zai-coding-plan-api-key}",
