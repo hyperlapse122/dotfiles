@@ -256,7 +256,7 @@ configure_user_groups() {
   target_user="${SUDO_USER:-$USER}"
 
   # Add user to groups only when they exist.
-  for grp in keyd libvirt kvm; do
+  for grp in keyd libvirt kvm audio; do
     getent group "${grp}" >/dev/null 2>&1 && "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
   done
 
