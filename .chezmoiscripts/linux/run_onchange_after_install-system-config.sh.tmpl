@@ -175,6 +175,12 @@ for src in "$SRC_ROOT"/etc/**; do
         skip_reason='ubuntu owns plymouth via default.plymouth alternatives'
       fi
       ;;
+    etc/security/limits.d/95-ubuntustudio-audio.conf)
+      if [[ "$os_id" != ubuntu ]]; then
+        install_this=false
+        skip_reason='ubuntu-only (ubuntu studio realtime audio limits)'
+      fi
+      ;;
   esac
 
   if [[ "$install_this" != true ]]; then
