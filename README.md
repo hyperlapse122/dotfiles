@@ -9,7 +9,7 @@ Windows are supported as secondary targets.
 Run the one-liner below. It downloads chezmoi, clones this repo, and applies it:
 
 ```sh
-sh -c "$(curl -fsLS https://get.chezmoi.io)" -- init --apply hyperlapse122
+sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 ```
 
 `hyperlapse122` is the GitHub username, which chezmoi expands to
