@@ -1,6 +1,6 @@
 # AGENTS.md
 
-chezmoi-managed dotfiles. Primary Linux targets: **Fedora Linux** and **Kubuntu 26.04** (KDE Plasma 6); macOS (`Library/`,
+chezmoi-managed dotfiles. Primary Linux targets: **Fedora Linux** and **Ubuntu Studio 26.04** (KDE Plasma 6); macOS (`Library/`,
 `darwin` template branches, `dot_default-gems.tmpl`) and Windows (`*.ps1`,
 `windows` branches) are secondary. Remote: `github.com/hyperlapse122/dotfiles` (`main`).
 
@@ -160,16 +160,14 @@ CI environments).
 - Branch on `{{ .chezmoi.os }}` (`linux`/`darwin`/`windows`); exclude whole paths
   per-OS via the nearest `.chezmoiignore` (root, `dot_config/`, `dot_local/bin/`).
   git config splits via `config.tmpl` including `.config_<os>`.
-- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var.
-- **KDE scripts** (`.chezmoiscripts/linux-kde/*.tmpl`) render on both Fedora and Kubuntu: gate `{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}`. The runtime `command -v plasmashell` guard still skips non-KDE hosts.
+- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var. Ubuntu Studio reports `ID=ubuntu` like any Ubuntu flavor; the runtime marker if ever needed is the `ubuntustudio-default-settings` package.
+- **KDE scripts** (`.chezmoiscripts/linux-kde/*.tmpl`) render on both Fedora and Ubuntu Studio: gate `{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}`. The runtime `command -v plasmashell` guard still skips non-KDE hosts.
 - **Shared system-config** (`run_onchange_after_install-system-config.sh.tmpl`) includes Ubuntu runtime branches: skips the Fedora `plymouthd.conf` deploy on Ubuntu (Ubuntu uses `update-alternatives` for plymouth, not `plymouthd.conf`), and masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units).
 - **Ubuntu-specific scripts** (`linux-ubuntu` gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
   - `run_onchange_before_ubuntu.sh.tmpl` — apt provisioner (mirrors the Fedora installer with apt semantics; idempotent, all service/group steps guarded)
-  - `run_after_ubuntu-debrand-packages.sh.tmpl` — purges Kubuntu branding behind a fail-closed simulate-then-allowlist guard (`LC_ALL=C`, parse `Remv`+`Purg`, abort unless removal set ⊆ allowlist, `AutomaticRemove=false`)
-  - `run_after_ubuntu-debrand-plymouth.sh.tmpl` — reverts the boot splash to upstream Breeze via `update-alternatives --set default.plymouth` + `update-initramfs -u` (Ubuntu mechanism — NOT `plymouth-set-default-theme`, which is absent on Ubuntu)
-  - `run_after_ubuntu-debrand-sddm.sh.tmpl` — writes `/etc/sddm.conf.d/90-breeze.conf` (`[Theme]\nCurrent=breeze`) to override Kubuntu's `20-kubuntu.conf`; idempotent content-compare
   - `run_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent
-- **Per-user de-brand** (`linux-ubuntu` gate, in `linux-kde/`): `run_after_config-kde-debrand-desktoptheme.sh.tmpl` — resets the Plasma desktop theme to upstream Breeze Dark via `plasma-apply-desktoptheme default` + `plasma-apply-lookandfeel -a org.kde.breezedark.desktop`, gated on a live KDE session (DBus + display + running plasmashell). Targets breezedark to match `config-kde-darkmode`.
+  - Ubuntu Studio pro-audio: `packages.yaml` audio essentials (4 pkgs: `ubuntustudio-audio-core`, `ubuntustudio-pipewire-config`, `ubuntustudio-performance-tweaks`, `ubuntustudio-lowlatency-settings`), the `audio` group added in `configure_user_groups()`, and the ubuntu-gated `system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf` realtime limits drop-in.
+- **Native look kept**: Ubuntu Studio's native branding (Plymouth splash, SDDM greeter, GRUB, wallpaper) is kept — the former branding scripts were deleted, not adapted. `config-kde-darkmode` still writes `LookAndFeelPackage=org.kde.breezedark.desktop` to `kdeglobals` on BOTH Fedora and Ubuntu Studio (cross-distro dark-mode parity), so the Plasma session's icon theme, cursor, splash, and default wallpaper follow Breeze Dark on next login — this cascades beyond just colors.
 - **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists and RPM Fusion/COPRs have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos plus CUDA/libnvidia-container NVIDIA packages under the `HAS_NVIDIA` gate instead.
 - POSIX scripts/wrappers keep a Windows `.ps1` counterpart in sync
   (`executable_code`/`.ps1`, `executable_opencode`/`.ps1`). Files migrated from the
@@ -196,7 +194,7 @@ sense — or the hook and the ignore set will disagree.
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
   block skips every provisioning script — `.chezmoiscripts/{linux,linux-kde,auth,gpg}/*.sh`
   plus `.chezmoiscripts/build/*mxm4-haptic.sh` (no package installs, `/etc` config,
-  GPG/GitHub/Tailscale auth, fonts, KDE settings, Canonical de-branding, or
+  GPG/GitHub/Tailscale auth, fonts, KDE settings, pro-audio realtime provisioning, or
   MX Master haptic build). The opencode plugin build (`build-opencode-plugins`) and
   the dotagents skills install (`run_after_install-dotagents-skills`) are deliberately
   KEPT — opencode is a first-class CLI here and it soft-skips when mise is absent,
