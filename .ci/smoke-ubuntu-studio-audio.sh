@@ -57,6 +57,16 @@ for pkg in "${PRO_AUDIO_PKGS[@]}"; do
   fi
 done
 
+echo "==> confirming each pro-audio package resolves from universe (component proof)"
+for pkg in "${PRO_AUDIO_PKGS[@]}"; do
+  madison_output="$(apt-cache madison "${pkg}" 2>&1 || true)"
+  echo "${madison_output}"
+  if ! grep -q "universe" <<<"${madison_output}"; then
+    echo "SMOKE FAIL: ${pkg} has no universe-component candidate in apt-cache madison output" >&2
+    exit 1
+  fi
+done
+
 echo "==> real noninteractive install proof: ubuntustudio-pipewire-config"
 if ! apt-get install -y ubuntustudio-pipewire-config; then
   echo "SMOKE FAIL: real install of ubuntustudio-pipewire-config failed" >&2
@@ -64,9 +74,9 @@ if ! apt-get install -y ubuntustudio-pipewire-config; then
 fi
 
 dpkg_status="$(dpkg -s ubuntustudio-pipewire-config 2>&1 || true)"
+echo "${dpkg_status}"
 if ! grep -q "^Status: install ok installed$" <<<"${dpkg_status}"; then
   echo "SMOKE FAIL: ubuntustudio-pipewire-config not reported install ok installed" >&2
-  echo "${dpkg_status}" >&2
   exit 1
 fi
 echo "==> ubuntustudio-pipewire-config: install ok installed (postinst warnings, if any, tolerated)"
