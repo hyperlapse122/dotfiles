@@ -22,7 +22,6 @@ yarn = "latest"
 # Standalone CLIs and language tooling
 "cargo:git-trim" = "latest"
 "cargo:kdotool" = { version = "latest", os = ["linux"] }
-glab = { version = "latest", exe = "glab" }
 "github:rust-lang/rust-analyzer" = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"

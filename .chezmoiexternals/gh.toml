@@ -1,0 +1,12 @@
+{{- $tag := (gitHubLatestRelease "cli/cli").TagName | toString -}}
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+
+[".local/bin/gh"]
+type = "archive-file"
+targetPath = '{{ printf ".local/bin/gh%s" $executableExtension }}'
+url = '{{ gitHubReleaseAssetURL "cli/cli" $tag (printf "gh_%s_%s_%s%s" (replace "v" "" $tag) (replace "darwin" "macOS" .chezmoi.os) .chezmoi.arch $archiveExtension) }}'
+path = '{{ printf "bin/gh%s" $executableExtension }}'
+executable = true
+refreshPeriod = "24h"
+stripComponents = {{ replace "linux" "1" (replace "darwin" "1" (replace "windows" "0" .chezmoi.os)) }}
