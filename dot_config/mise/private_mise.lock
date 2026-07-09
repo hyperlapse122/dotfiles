@@ -644,10 +644,6 @@ url = "https://nodejs.org/dist/v26.4.0/node-v26.4.0-win-x64.zip"
 version = "2.5.2"
 backend = "npm:@biomejs/biome"
 
-[[tools."npm:@bufbuild/buf"]]
-version = "1.71.0"
-backend = "npm:@bufbuild/buf"
-
 [[tools."npm:@electron/asar"]]
 version = "4.2.0"
 backend = "npm:@electron/asar"

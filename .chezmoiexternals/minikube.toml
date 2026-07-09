@@ -5,6 +5,7 @@ type = "archive-file"
 url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
 path = '{{ printf "out/minikube-%s-%s" .chezmoi.os .chezmoi.arch }}'
 executable = true
+refreshPeriod = "672h"
 
 {{- else if eq .chezmoi.os "windows" }}
 
@@ -13,5 +14,6 @@ type = "archive-file"
 url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
 path = '{{ printf "out/minikube-%s-%s.exe" .chezmoi.os .chezmoi.arch }}'
 executable = true
+refreshPeriod = "672h"
 
 {{- end }}
