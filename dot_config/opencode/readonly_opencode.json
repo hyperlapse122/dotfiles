@@ -8,12 +8,6 @@
 	"lsp": {
 		"buf": {
 			"command": [
-				"mise",
-				"--no-config",
-				"exec",
-				"-yq",
-				"npm:@bufbuild/buf@latest",
-				"--",
 				"buf",
 				"lsp",
 				"serve"
