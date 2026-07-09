@@ -20,7 +20,6 @@ uv = "latest"
 yarn = "latest"
 
 # Standalone CLIs and language tooling
-ast-grep = "latest"
 "cargo:git-trim" = "latest"
 "cargo:kdotool" = { version = "latest", os = ["linux"] }
 glab = { version = "latest", exe = "glab" }
