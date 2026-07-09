@@ -47,4 +47,16 @@ jobs:
         run: |
           shellcheck \
             .install-prerequisites.sh \
-            dot_local/bin/executable_setup-luks-tpm2-unlock.sh
+            dot_local/bin/executable_setup-luks-tpm2-unlock.sh \
+            .ci/smoke-ubuntu-studio-audio.sh
+
+  ubuntu-studio-smoke:
+    name: Ubuntu Studio pro-audio smoke (ubuntu:26.04)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Smoke-test pro-audio provisioning in ubuntu:26.04
+        run: |
+          # Fallback to ubuntu:rolling if the 26.04 tag is not yet published at run time.
+          podman run --rm -v "$PWD":/repo:ro docker.io/library/ubuntu:26.04 \
+            bash /repo/.ci/smoke-ubuntu-studio-audio.sh
