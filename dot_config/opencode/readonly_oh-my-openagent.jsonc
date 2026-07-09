@@ -5,10 +5,18 @@
 		"sisyphus": {
 		  // Primary
 			"model": "anthropic/claude-opus-4-8",
-			"variant": "max"
+			"variant": "max",
 
 			// // Fallback
-			// "model": "zai/glm-5.2"
+			// "model": "zai/glm-5.2",
+			"fallback_models": [
+				"moonshotai/kimi-k2.7-code",
+				"zai/glm-5.2",
+				"moonshotai/kimi-k2.6",
+				"moonshotai/kimi-k2.5",
+				"openai/gpt-5.5-fast",
+				"zai/glm-5.2"
+			]
 		},
 		"hephaestus": {
 			"model": "openai/gpt-5.5-fast",
@@ -19,8 +27,12 @@
 			"variant": "high",
 			"fallback_models": [
 				{
-					"model": "anthropic/claude-opus-4-8",
+					"model": "google-agy/gemini-pro-agent",
 					"variant": "high"
+				},
+				{
+					"model": "anthropic/claude-opus-4-8",
+					"variant": "max"
 				},
 				"zai/glm-5.2"
 			]
@@ -42,7 +54,9 @@
 			"variant": "medium",
 			"fallback_models": [
 				"moonshotai/kimi-k2.7-code",
-				"zai/glm-5v-turbo"
+				"moonshotai/kimi-k2.6",
+				"zai/glm-5v-turbo",
+				"zai/glm-4.6v"
 			]
 		},
 		"prometheus": {
@@ -59,7 +73,8 @@
 					"model": "openai/gpt-5.5-fast",
 					"variant": "high"
 				},
-				"zai/glm-5.2"
+				"zai/glm-5.2",
+				"google-agy/gemini-pro-agent"
 			]
 		},
 		"metis": {
@@ -80,7 +95,9 @@
 					"variant": "high"
 				},
 				"zai/glm-5.2",
-				"moonshotai/kimi-k2.7-code"
+				"zai/glm-5.1",
+				"moonshotai/kimi-k2.7-code",
+				"moonshotai/kimi-k2.6"
 			]
 		},
 		"momus": {
@@ -91,7 +108,12 @@
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
 				},
-				"zai/glm-5.2"
+				{
+					"model": "google-agy/gemini-pro-agent",
+					"variant": "high"
+				},
+				"zai/glm-5.2",
+				"zai/glm-5.1"
 			]
 		},
 		"atlas": {
@@ -104,6 +126,7 @@
 
 		  "fallback_models": [
 				"moonshotai/kimi-k2.7-code",
+				"moonshotai/kimi-k2.6",
 				{
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
@@ -119,6 +142,7 @@
 			// "model": "moonshotai/kimi-k2.7-code",
 			"fallback_models": [
 				"moonshotai/kimi-k2.7-code",
+				"moonshotai/kimi-k2.6",
 				{
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
@@ -129,26 +153,27 @@
 	"categories": {
 		// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 		"visual-engineering": {
-		  // // Primary
-			// "model": "zai/glm-5.1",
-
-			// Fallback
-			"model": "anthropic/claude-opus-4-8",
-			"variant": "max",
+			"model": "google-agy/gemini-pro-agent",
+			"variant": "high",
 			
 			"fallback_models": [
+				"zai/glm-5",
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
 				},
 				"zai/glm-5.1",
-				"moonshotai/kimi-k2.7-code"
+				"moonshotai/kimi-k2.6"
 			]
 		},
 		"ultrabrain": {
 			"model": "openai/gpt-5.5-fast",
 			"variant": "xhigh",
 			"fallback_models": [
+				{
+					"model": "google-agy/gemini-pro-agent",
+					"variant": "high"
+				},
 				{
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
@@ -164,12 +189,18 @@
 					"model": "anthropic/claude-opus-4-8",
 					"variant": "max"
 				},
+				"zai/glm-5.2",
+				{
+					"model": "google-agy/gemini-pro-agent",
+					"variant": "high"
+				},
 				"moonshotai/kimi-k2.7-code",
-				"zai/glm-5.2"
+				"zai/glm-5.1"
 			]
 		},
 		"artistry": {
-			"model": "zai/glm-5.1",
+			"model": "google-agy/gemini-pro-agent",
+			"variant": "high",
 			"fallback_models": [
 				{
 					"model": "anthropic/claude-opus-4-8",
@@ -183,7 +214,8 @@
 		"quick": {
 			"model": "openai/gpt-5.4-mini-fast",
 			"fallback_models": [
-				"anthropic/claude-haiku-4-5"
+				"anthropic/claude-haiku-4-5",
+				"google-agy/gemini-3.5-flash-low"
 			]
 		},
 		"unspecified-low": {
@@ -200,7 +232,8 @@
 					"model": "openai/gpt-5.5-fast",
 					"variant": "medium"
 				},
-				"moonshotai/kimi-k2.7-code"
+				"moonshotai/kimi-k2.7-code",
+				"google-agy/gemini-3.5-flash-low"
 			]
 		},
 		"unspecified-high": {
@@ -222,8 +255,9 @@
 			]
 		},
 		"writing": {
-			"model": "moonshotai/kimi-k2.7-code",
+			"model": "google-agy/gemini-3.5-flash-low",
 			"fallback_models": [
+				"moonshotai/kimi-k2.7-code",
 				"anthropic/claude-sonnet-5"
 			]
 		}
