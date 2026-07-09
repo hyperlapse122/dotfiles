@@ -28,6 +28,11 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    - **Fedora** installs these with `dnf`; **Ubuntu Studio** (Ubuntu) uses `apt`
      (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
      Homebrew first if needed).
+
+   The same hook then refuses to continue until `op` is authenticated **and** a
+   **GitHub API token** is present in the environment, so a fresh apply stops with
+   clear guidance here rather than stalling on a 1Password prompt or a GitHub rate
+   limit deep in the source-state read (see the two sections below).
 4. Renders every template and applies it to `$HOME`, then runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
    [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
@@ -64,13 +69,38 @@ installs the 1Password app and CLI but cannot yet resolve secrets. So:
 1. Run the one-liner above (installs 1Password, `op`, and mise).
 2. Open the **1Password desktop app**, sign in, then enable
    **Settings → Developer → Integrate with 1Password CLI**.
-3. Re-run to finish applying:
+3. Export a GitHub token so chezmoi does not hit GitHub's anonymous rate limit
+   while reading the source state (see [GitHub API token](#github-api-token-important)
+   below), then re-run to finish applying — all in the same shell:
 
    ```sh
+   export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")
    chezmoi apply
    ```
 
-The apply completes once `op` can resolve secrets (`op whoami` succeeds).
+The apply completes once `op` can resolve secrets (`op whoami` succeeds) and a
+GitHub token is present in the environment.
+
+## GitHub API token (important)
+
+Reading the source state fetches external repos (e.g. prezto) from GitHub, and
+provisioning pulls release assets — fonts and mise-managed tools — from it too.
+Anonymous, those calls share GitHub's 60-requests/hour-per-IP limit, so a fresh
+apply can fail partway with an HTTP 403. Right after `op` is authenticated,
+[`.install-prerequisites.sh`](.install-prerequisites.sh) therefore requires a
+GitHub token in the environment: it uses the first of `CHEZMOI_GITHUB_ACCESS_TOKEN`,
+`GITHUB_ACCESS_TOKEN`, or `GITHUB_TOKEN` (the variables chezmoi itself reads for
+GitHub API calls) and stops with guidance if none is set.
+
+Inject a token from 1Password, then re-run in the same shell:
+
+```sh
+export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")
+chezmoi apply
+```
+
+A token with default read-only scope is enough — it only lifts the anonymous
+rate limit.
 
 ## Running in a container / CI
 

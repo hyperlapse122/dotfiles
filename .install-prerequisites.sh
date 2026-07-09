@@ -94,6 +94,29 @@ ensure_op_authenticated() {
   return 1
 }
 
+# chezmoi calls the GitHub API while reading the source state (it fetches the
+# .chezmoiexternals repos, e.g. prezto) and again during provisioning (release
+# assets such as fonts and mise-managed tools). It authenticates with the first
+# of these tokens it finds — CHEZMOI_GITHUB_ACCESS_TOKEN, then GITHUB_ACCESS_TOKEN,
+# then GITHUB_TOKEN. With none set, those calls fall back to GitHub's anonymous
+# 60-requests/hour-per-IP limit and a fresh apply can fail mid-read with an opaque
+# HTTP 403, so require a token up front and stop here with actionable guidance.
+ensure_github_token() {
+  if [[ -n "${CHEZMOI_GITHUB_ACCESS_TOKEN:-}" \
+     || -n "${GITHUB_ACCESS_TOKEN:-}" \
+     || -n "${GITHUB_TOKEN:-}" ]]; then
+    return 0
+  fi
+  printf 'install-prerequisites.sh: no GitHub API token in the environment.\n' >&2
+  printf 'chezmoi is about to read the source state, which calls the GitHub API;\n' >&2
+  printf 'without a token it shares the anonymous 60-request/hour limit and a fresh\n' >&2
+  printf 'apply can fail. Inject a PAT from 1Password, then re-run in the same shell:\n' >&2
+  # SC2016: the $(op read ...) is literal text for the user to copy, not for us to expand.
+  # shellcheck disable=SC2016
+  printf '  export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")\n' >&2
+  return 1
+}
+
 # Unit-test seam: let the harness `source` this file for its functions without
 # running the installer below. No-op in normal execution (variable unset).
 if [[ -n "${_INSTALL_PREREQUISITES_TEST_SOURCE:-}" ]]; then
@@ -270,4 +293,9 @@ esac
 # first `onepasswordRead`. Block until the user enables the 1Password CLI
 # (interactive), or fail fast with guidance (non-interactive / headless).
 ensure_op_authenticated || exit 1
+
+# With `op` authenticated, chezmoi's very next step is to read the source state
+# over the GitHub API. Require a token now — placed after op auth so the `op read`
+# in the guidance actually works — instead of letting the read hit a rate limit.
+ensure_github_token || exit 1
 exit 0
