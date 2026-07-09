@@ -1,19 +1,10 @@
-{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
 [".local/bin/opencode"]
+targetPath = '{{ printf ".local/bin/opencode%s" $executableExtension }}'
 type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s.%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) (replace "darwin" "zip" (replace "linux" "tar.gz" .chezmoi.os))) }}'
+url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) $archiveExtension) }}'
 executable = true
-path = "opencode"
+path = '{{ printf "opencode%s" $executableExtension }}'
 refreshPeriod = "24h"
-
-{{- else if eq .chezmoi.os "windows" }}
-
-[".local/bin/opencode.exe"]
-type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s.zip" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) }}'
-executable = true
-path = "opencode"
-refreshPeriod = "24h"
-
-{{- end }}

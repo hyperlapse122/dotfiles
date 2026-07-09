@@ -1,19 +1,9 @@
-{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
 [".local/bin/wakatime-cli"]
 type = "archive-file"
+targetPath = '{{ printf ".local/bin/wakatime-cli%s" $executableExtension }}'
 url = '{{ gitHubLatestReleaseAssetURL "wakatime/wakatime-cli" (printf "wakatime-cli-%s-%s.zip" .chezmoi.os .chezmoi.arch) }}'
 executable = true
-path = '{{ printf "wakatime-cli-%s-%s" .chezmoi.os .chezmoi.arch }}'
+path = '{{ printf "wakatime-cli-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
 refreshPeriod = "672h"
-
-{{- else if eq .chezmoi.os "windows" }}
-
-[".local/bin/wakatime-cli.exe"]
-type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "wakatime/wakatime-cli" (printf "wakatime-cli-%s-%s.zip" .chezmoi.os .chezmoi.arch) }}'
-executable = true
-path = '{{ printf "wakatime-cli-%s-%s.exe" .chezmoi.os .chezmoi.arch }}'
-refreshPeriod = "672h"
-
-{{- end }}

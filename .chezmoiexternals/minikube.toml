@@ -1,19 +1,9 @@
-{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
 [".local/bin/minikube"]
 type = "archive-file"
+targetPath = '{{ printf ".local/bin/minikube%s" $executableExtension }}'
 url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
-path = '{{ printf "out/minikube-%s-%s" .chezmoi.os .chezmoi.arch }}'
+path = '{{ printf "out/minikube-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true
 refreshPeriod = "672h"
-
-{{- else if eq .chezmoi.os "windows" }}
-
-[".local/bin/minikube.exe"]
-type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
-path = '{{ printf "out/minikube-%s-%s.exe" .chezmoi.os .chezmoi.arch }}'
-executable = true
-refreshPeriod = "672h"
-
-{{- end }}

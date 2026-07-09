@@ -1,26 +1,14 @@
 {{- $tag := (gitHubLatestRelease "kubernetes/kubernetes").TagName | toString -}}
-{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") }}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
 [".local/bin/kubectl"]
 type = "file"
-url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl" $tag .chezmoi.os .chezmoi.arch }}'
+targetPath = '{{ printf ".local/bin/kubectl%s" $executableExtension }}'
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl%s" $tag .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true
 
 [".local/bin/kubectl-convert"]
 type = "file"
-url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert" $tag .chezmoi.os .chezmoi.arch }}'
+targetPath = '{{ printf ".local/bin/kubectl-convert%s" $executableExtension }}'
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert%s" $tag .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true
-
-{{- else if eq .chezmoi.os "windows" }}
-
-[".local/bin/kubectl.exe"]
-type = "file"
-url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl.exe" $tag .chezmoi.os .chezmoi.arch }}'
-executable = true
-
-[".local/bin/kubectl-convert.exe"]
-type = "file"
-url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert.exe" $tag .chezmoi.os .chezmoi.arch }}'
-executable = true
-
-{{- end }}

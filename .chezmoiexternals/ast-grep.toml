@@ -1,52 +1,20 @@
 {{- $tag := (gitHubLatestRelease "ast-grep/ast-grep").TagName | toString -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 {{- $astGrepArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
-
-{{- if eq .chezmoi.os "linux" -}}
+{{- $astGrepOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "macos" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
 
 [".local/bin/ast-grep"]
 type = "archive-file"
-url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-unknown-linux-gnu.zip" $astGrepArch) | quote }}
+url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-%s.zip" $astGrepArch $astGrepOperatingSystem) | quote }}
 executable = true
-path = "ast-grep"
+targetPath = '{{ printf ".local/bin/ast-grep%s" $executableExtension }}'
+path = '{{ printf "ast-grep%s" $executableExtension }}'
 refreshPeriod = "672h"
 
 [".local/bin/sg"]
 type = "archive-file"
-url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-unknown-linux-gnu.zip" $astGrepArch) | quote }}
+url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-%s.zip" $astGrepArch $astGrepOperatingSystem) | quote }}
 executable = true
-path = "sg"
+targetPath = '{{ printf ".local/bin/sg%s" $executableExtension }}'
+path = '{{ printf "sg%s" $executableExtension }}'
 refreshPeriod = "672h"
-
-{{- else if eq .chezmoi.os "darwin" -}}
-
-[".local/bin/ast-grep"]
-type = "file"
-url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-apple-darwin.zip" $astGrepArch) | quote }}
-executable = true
-path = "ast-grep"
-refreshPeriod = "672h"
-
-[".local/bin/sg"]
-type = "file"
-url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-apple-darwin.zip" $astGrepArch) | quote }}
-executable = true
-path = "sg"
-refreshPeriod = "672h"
-
-{{- else if eq .chezmoi.os "windows" -}}
-
-[".local/bin/ast-grep.exe"]
-type = "file"
-url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-pc-windows-msvc.zip" $astGrepArch) | quote }}
-executable = true
-path = "ast-grep.exe"
-refreshPeriod = "672h"
-
-[".local/bin/sg.exe"]
-type = "file"
-url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-pc-windows-msvc.zip" $astGrepArch) | quote }}
-executable = true
-path = "sg.exe"
-refreshPeriod = "672h"
-
-{{- end }}
