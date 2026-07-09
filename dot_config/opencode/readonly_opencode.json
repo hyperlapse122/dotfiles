@@ -88,13 +88,6 @@
 		"codegraph": {
 			"type": "local",
 			"command": [
-				"mise",
-				"--no-config",
-				"exec",
-				"-yq",
-				"npm:@colbymchenry/codegraph",
-				"node",
-				"--",
 				"codegraph",
 				"serve",
 				"--mcp"

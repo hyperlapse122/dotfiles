@@ -1,0 +1,17 @@
+{{ if eq .chezmoi.os "windows" -}}
+
+# Adds codegraph to user PATH
+# Reference: https://github.com/colbymchenry/codegraph/blob/main/install.ps1
+
+$ErrorActionPreference = 'Stop'
+$installDir = Join-Path $env:LOCALAPPDATA 'codegraph'
+$dest = Join-Path $installDir 'current'
+$binDir = Join-Path $dest 'bin'
+
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if (($userPath -split ';') -notcontains $binDir) {
+  [Environment]::SetEnvironmentVariable('Path', "$binDir;$userPath", 'User')
+  Write-Host "Added $binDir to your PATH (restart your terminal to pick it up)."
+}
+
+{{ end -}}

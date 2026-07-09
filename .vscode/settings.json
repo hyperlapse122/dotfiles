@@ -1,6 +1,7 @@
 {
   "files.associations": {
     "*.tmpl": "plaintext",
-    "*.sh.tmpl": "shellscript"
+    "*.sh.tmpl": "shellscript",
+    "*.ps1.tmpl": "powershell"
   }
 }

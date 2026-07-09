@@ -15,3 +15,6 @@ packages/*/dist/
 .turbo/
 packages/.turbo/
 packages/*/.turbo/
+
+### codegraph ###
+.codegraph

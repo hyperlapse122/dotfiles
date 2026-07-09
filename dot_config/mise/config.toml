@@ -38,7 +38,6 @@ viteplus = "latest"
 "npm:@electron/asar" = "latest"
 "npm:@playwright/cli" = "latest"
 "npm:bash-language-server" = "latest"
-"npm:@colbymchenry/codegraph" = "latest"
 "npm:node-gyp" = "latest"
 "npm:npm" = "latest"
 "npm:portless" = "latest"
@@ -49,6 +48,7 @@ viteplus = "latest"
 "npm:wrangler" = "latest"
 "npm:yaml-language-server" = "latest"
 "npm:cypress" = { version = "latest", allow_builds = ["cypress"] }
+"pipx:mmdc" = "latest"
 
 # Agentic AI
 claude-code = "latest"
@@ -74,8 +74,6 @@ minimum_release_age_excludes = [
   "glab",
   "claude-code",
   "pipx",
-  "npm:@colbymchenry/codegraph",
-  "npm:@google/gemini-cli",
   "npm:@moonshot-ai/kimi-code",
   "npm:@openai/codex",
   "npm:npm",
@@ -85,7 +83,7 @@ minimum_release_age_excludes = [
   "github:wakatime/wakatime-cli",
 ]
 lockfile = true
-locked = true
+locked = false
 
 [settings.github]
 use_git_credentials = true

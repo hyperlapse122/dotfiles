@@ -707,10 +707,6 @@ backend = "npm:@biomejs/biome"
 version = "1.71.0"
 backend = "npm:@bufbuild/buf"
 
-[[tools."npm:@colbymchenry/codegraph"]]
-version = "1.3.0"
-backend = "npm:@colbymchenry/codegraph"
-
 [[tools."npm:@electron/asar"]]
 version = "4.2.0"
 backend = "npm:@electron/asar"
@@ -833,6 +829,10 @@ url_api = "https://api.github.com/repos/pypa/pipx/releases/assets/457122996"
 checksum = "sha256:6b6e1b016bf7df9debee590ca32204a85ff18a87514e6a3b4413d8ad7ff73ed3"
 url = "https://github.com/pypa/pipx/releases/download/1.15.0/pipx.pyz"
 url_api = "https://api.github.com/repos/pypa/pipx/releases/assets/457122996"
+
+[[tools."pipx:mmdc"]]
+version = "0.5.0"
+backend = "pipx:mmdc"
 
 [[tools.python]]
 version = "3.14.6"
