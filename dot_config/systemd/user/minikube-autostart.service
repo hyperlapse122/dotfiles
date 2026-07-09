@@ -12,10 +12,11 @@ RemainAfterExit=yes
 # explicitly. The user service does not inherit environment.d variables reliably
 # at boot, so setting it here guarantees the cluster starts rootless.
 Environment=MINIKUBE_ROOTLESS=true
-# mise-managed minikube may live in the mise shims or in a local install; include
-# the common paths so the executable is found before a full shell has set up PATH.
-Environment="PATH=%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=mise exec -- minikube start --driver=podman --container-runtime=containerd --delete-on-failure
+# minikube is installed by .chezmoiexternals/minikube.toml into ~/.local/bin;
+# set an explicit PATH (podman lives in /usr/bin) so the boot/login start finds
+# both minikube and its podman driver before a full shell has set up PATH.
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/.local/bin/minikube start --driver=podman --container-runtime=containerd --delete-on-failure
 # If the start fails (e.g. network not ready yet at boot), retry once after a
 # short delay so the cluster is not left down after a transient race.
 Restart=on-failure

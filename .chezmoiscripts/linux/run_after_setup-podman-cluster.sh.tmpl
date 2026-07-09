@@ -7,7 +7,7 @@
 # already INSTALLED elsewhere; this script only performs the runtime
 # *activation* that cannot be expressed as a managed file:
 #   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf/apt)
-#   - minikube / kubectl / helm ....... dot_config/mise/config.toml
+#   - minikube ........................ .chezmoiexternals/minikube.toml (~/.local/bin)
 #   - DOCKER_HOST + MINIKUBE_ROOTLESS . dot_config/environment.d/65-containers.conf
 #   - user lingering + rootful
 #     podman.socket mask .............. run_onchange_after_install-system-config
@@ -141,20 +141,19 @@ else
 fi
 
 # --- 4) point minikube at the rootless-podman driver, then bring it up -----
-# minikube/kubectl/helm are mise-managed; chezmoi run scripts execute under a
-# plain shell where mise shell-activation is NOT loaded, so route through
-# `mise exec` (mirrors build-opencode-plugins). `mise which` confirms the tool
-# is actually installed before use — otherwise soft-skip with a hint.
+# minikube is installed by .chezmoiexternals/minikube.toml into ~/.local/bin
+# (which is on PATH), NOT by mise — so it is invoked directly and `command -v
+# minikube` confirms it is present before use, otherwise soft-skip with a hint.
 #
 # MINIKUBE_ROOTLESS is re-exported here to mirror 65-containers.conf: an apply
 # may run from a shell that has not loaded environment.d, and rootless is NOT a
 # `minikube start` flag (only a config/env toggle), so exporting it guarantees
 # the in-apply start uses rootless Podman instead of falling back to sudo.
 export MINIKUBE_ROOTLESS=true
-if command -v mise >/dev/null 2>&1 && mise which minikube >/dev/null 2>&1; then
+if command -v minikube >/dev/null 2>&1; then
   # Persist driver + runtime so a bare `minikube start` by hand matches too.
-  if mise exec -- minikube config set driver podman \
-    && mise exec -- minikube config set container-runtime containerd; then
+  if minikube config set driver podman \
+    && minikube config set container-runtime containerd; then
     echo "setup-podman-cluster: minikube set to driver=podman, container-runtime=containerd (rootless)"
   else
     echo "setup-podman-cluster: minikube config set failed; skip start" >&2
@@ -177,18 +176,18 @@ if command -v mise >/dev/null 2>&1 && mise which minikube >/dev/null 2>&1; then
   # delegation is live.
   if ! podman info >/dev/null 2>&1; then
     echo "setup-podman-cluster: rootless podman not functional in this apply context; skipping 'minikube start' (retries next apply)" >&2
-  elif mise exec -- minikube status >/dev/null 2>&1; then
+  elif minikube status >/dev/null 2>&1; then
     echo "setup-podman-cluster: minikube cluster already running; skip start"
   else
     echo "setup-podman-cluster: starting minikube (first run pulls ~1GB, may take a few minutes)..."
-    if mise exec -- minikube start --driver=podman --container-runtime=containerd --delete-on-failure; then
+    if minikube start --driver=podman --container-runtime=containerd --delete-on-failure; then
       echo "setup-podman-cluster: minikube cluster is up"
     else
       echo "setup-podman-cluster: 'minikube start' failed; skipping (retries next apply). Try by hand: minikube start" >&2
     fi
   fi
 else
-  echo "setup-podman-cluster: minikube not installed via mise; run 'mise install' then re-apply" >&2
+  echo "setup-podman-cluster: minikube not found on PATH; it is fetched by .chezmoiexternals/minikube.toml into ~/.local/bin — run 'chezmoi apply', then re-apply" >&2
 fi
 
 echo "setup-podman-cluster: done ('minikube status' to check, 'minikube stop' to free resources)"
