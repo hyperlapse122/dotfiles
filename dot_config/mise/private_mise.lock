@@ -277,35 +277,35 @@ version = "0.2.3"
 backend = "cargo:kdotool"
 
 [[tools.claude-code]]
-version = "2.1.204"
+version = "2.1.205"
 backend = "aqua:anthropics/claude-code"
 
 [tools.claude-code."platforms.linux-arm64"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/linux-arm64/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/linux-arm64/claude"
 
 [tools.claude-code."platforms.linux-arm64-musl"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/linux-arm64-musl/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/linux-arm64-musl/claude"
 
 [tools.claude-code."platforms.linux-x64"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/linux-x64/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/linux-x64/claude"
 
 [tools.claude-code."platforms.linux-x64-baseline"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/linux-x64/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/linux-x64/claude"
 
 [tools.claude-code."platforms.linux-x64-musl"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/linux-x64-musl/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/linux-x64-musl/claude"
 
 [tools.claude-code."platforms.linux-x64-musl-baseline"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/linux-x64-musl/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/linux-x64-musl/claude"
 
 [tools.claude-code."platforms.macos-arm64"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/darwin-arm64/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/darwin-arm64/claude"
 
 [tools.claude-code."platforms.macos-x64"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/darwin-x64/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/darwin-x64/claude"
 
 [tools.claude-code."platforms.macos-x64-baseline"]
-url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.204/darwin-x64/claude"
+url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.205/darwin-x64/claude"
 
 [[tools.gh]]
 version = "2.96.0"
@@ -545,52 +545,52 @@ url = "https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.10
 url_api = "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/1%2E107%2E0/glab_1%2E107%2E0_windows_amd64%2Ezip"
 
 [[tools.go]]
-version = "1.26.4"
+version = "1.26.5"
 backend = "core:go"
 
 [tools.go."platforms.linux-arm64"]
-checksum = "sha256:ef758ae7c6cf9267c9c0ef080b8965f453d89ab2d25d9eb22de4405925238768"
-url = "https://dl.google.com/go/go1.26.4.linux-arm64.tar.gz"
+checksum = "sha256:fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49"
+url = "https://dl.google.com/go/go1.26.5.linux-arm64.tar.gz"
 
 [tools.go."platforms.linux-arm64-musl"]
-checksum = "sha256:ef758ae7c6cf9267c9c0ef080b8965f453d89ab2d25d9eb22de4405925238768"
-url = "https://dl.google.com/go/go1.26.4.linux-arm64.tar.gz"
+checksum = "sha256:fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49"
+url = "https://dl.google.com/go/go1.26.5.linux-arm64.tar.gz"
 
 [tools.go."platforms.linux-x64"]
-checksum = "sha256:1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f"
-url = "https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz"
+checksum = "sha256:5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
+url = "https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz"
 
 [tools.go."platforms.linux-x64-baseline"]
-checksum = "sha256:1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f"
-url = "https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz"
+checksum = "sha256:5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
+url = "https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz"
 
 [tools.go."platforms.linux-x64-musl"]
-checksum = "sha256:1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f"
-url = "https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz"
+checksum = "sha256:5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
+url = "https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz"
 
 [tools.go."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f"
-url = "https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz"
+checksum = "sha256:5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
+url = "https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz"
 
 [tools.go."platforms.macos-arm64"]
-checksum = "sha256:b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53"
-url = "https://dl.google.com/go/go1.26.4.darwin-arm64.tar.gz"
+checksum = "sha256:efb87ff28af9a188d0536ef5d42e63dd52ba8263cd7344a993cc48dd11dedb6a"
+url = "https://dl.google.com/go/go1.26.5.darwin-arm64.tar.gz"
 
 [tools.go."platforms.macos-x64"]
-checksum = "sha256:05dc9b5f9997744520aaebb3d5deaa7c755371aebbfb7f97c2511a9f3367538d"
-url = "https://dl.google.com/go/go1.26.4.darwin-amd64.tar.gz"
+checksum = "sha256:6231d8d3b8f5552ec6cbf6d685bdd5482e1e703214b120e89b3bf0d7bf1ef725"
+url = "https://dl.google.com/go/go1.26.5.darwin-amd64.tar.gz"
 
 [tools.go."platforms.macos-x64-baseline"]
-checksum = "sha256:05dc9b5f9997744520aaebb3d5deaa7c755371aebbfb7f97c2511a9f3367538d"
-url = "https://dl.google.com/go/go1.26.4.darwin-amd64.tar.gz"
+checksum = "sha256:6231d8d3b8f5552ec6cbf6d685bdd5482e1e703214b120e89b3bf0d7bf1ef725"
+url = "https://dl.google.com/go/go1.26.5.darwin-amd64.tar.gz"
 
 [tools.go."platforms.windows-x64"]
-checksum = "sha256:3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345"
-url = "https://dl.google.com/go/go1.26.4.windows-amd64.zip"
+checksum = "sha256:97e6b2a833b6d89f9ff17d25419ac0a7e3b482a044e9ab18cdef834bd834fd38"
+url = "https://dl.google.com/go/go1.26.5.windows-amd64.zip"
 
 [tools.go."platforms.windows-x64-baseline"]
-checksum = "sha256:3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345"
-url = "https://dl.google.com/go/go1.26.4.windows-amd64.zip"
+checksum = "sha256:97e6b2a833b6d89f9ff17d25419ac0a7e3b482a044e9ab18cdef834bd834fd38"
+url = "https://dl.google.com/go/go1.26.5.windows-amd64.zip"
 
 [[tools.marksman]]
 version = "2026-02-08"
@@ -715,10 +715,6 @@ backend = "npm:@colbymchenry/codegraph"
 version = "4.2.0"
 backend = "npm:@electron/asar"
 
-[[tools."npm:@google/gemini-cli"]]
-version = "0.49.0"
-backend = "npm:@google/gemini-cli"
-
 [[tools."npm:@moonshot-ai/kimi-code"]]
 version = "0.23.3"
 backend = "npm:@moonshot-ai/kimi-code"
@@ -754,7 +750,7 @@ version = "13.0.1"
 backend = "npm:node-gyp"
 
 [[tools."npm:npm"]]
-version = "11.18.0"
+version = "12.0.0"
 backend = "npm:npm"
 
 [[tools."npm:portless"]]
@@ -782,11 +778,11 @@ version = "4.10.0"
 backend = "npm:vscode-langservers-extracted"
 
 [[tools."npm:wrangler"]]
-version = "4.107.0"
+version = "4.107.1"
 backend = "npm:wrangler"
 
 [[tools."npm:yaml-language-server"]]
-version = "1.23.0"
+version = "1.24.0"
 backend = "npm:yaml-language-server"
 
 [[tools.pipx]]
@@ -1153,73 +1149,62 @@ url = "https://github.com/jdx/usage/releases/download/v3.5.4/usage-x86_64-pc-win
 url_api = "https://api.github.com/repos/jdx/usage/releases/assets/468428934"
 
 [[tools.uv]]
-version = "0.11.27"
+version = "0.11.28"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:b0b1909a7e5caf2ec0cbe2649f5171050c26d85efb65d9d4de2cfe754dc14ea3"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472287"
+checksum = "sha256:da10cdfa7d92212b7acb62021a0fd61bcf8580c58c3632ec915d10c3a1a7906b"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-aarch64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-arm64-musl"]
-checksum = "sha256:b0b1909a7e5caf2ec0cbe2649f5171050c26d85efb65d9d4de2cfe754dc14ea3"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472287"
+checksum = "sha256:da10cdfa7d92212b7acb62021a0fd61bcf8580c58c3632ec915d10c3a1a7906b"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-aarch64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:5d5594af1530c7c31e46a8cc0a35ceb4d28f3890049efe2149ac53c9ad121493"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472356"
+checksum = "sha256:f02146b371c35c287d860f003ece7345c86e358a3fd70a9b63700cd141ee7fb4"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64-baseline"]
-checksum = "sha256:5d5594af1530c7c31e46a8cc0a35ceb4d28f3890049efe2149ac53c9ad121493"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472356"
+checksum = "sha256:f02146b371c35c287d860f003ece7345c86e358a3fd70a9b63700cd141ee7fb4"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64-musl"]
-checksum = "sha256:5d5594af1530c7c31e46a8cc0a35ceb4d28f3890049efe2149ac53c9ad121493"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472356"
+checksum = "sha256:f02146b371c35c287d860f003ece7345c86e358a3fd70a9b63700cd141ee7fb4"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:5d5594af1530c7c31e46a8cc0a35ceb4d28f3890049efe2149ac53c9ad121493"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472356"
+checksum = "sha256:f02146b371c35c287d860f003ece7345c86e358a3fd70a9b63700cd141ee7fb4"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:34e63cc0de0aebbc8d424767c588c31b685479f045f9ced9e5ef43ff9e0e8d63"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472272"
+checksum = "sha256:33540eb7c883ab857eff79bd5ac2aa31fe27b595abecb4a9c003a2c998447232"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-aarch64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-x64"]
-checksum = "sha256:9f00047455b2a9e81f282297fca39cdd6cd5761a6b0ce75e2d7698744c59e1af"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472341"
+checksum = "sha256:2ad79983127ffca7d77b77ce6a24278d7e4f7b817a1acf72fea5f8124b4aac5e"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-x64-baseline"]
-checksum = "sha256:9f00047455b2a9e81f282297fca39cdd6cd5761a6b0ce75e2d7698744c59e1af"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472341"
+checksum = "sha256:2ad79983127ffca7d77b77ce6a24278d7e4f7b817a1acf72fea5f8124b4aac5e"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:b7e32288ce0e289dbe94d2cac7adbb008f74f0e038542a2d9969dd50eb7056ee"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472343"
+checksum = "sha256:0a23463216d09c6a72ff80ef5dc5a795f07dc1575cb84d24596c2f124a441b7b"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64-baseline"]
-checksum = "sha256:b7e32288ce0e289dbe94d2cac7adbb008f74f0e038542a2d9969dd50eb7056ee"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.27/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/468472343"
+checksum = "sha256:0a23463216d09c6a72ff80ef5dc5a795f07dc1575cb84d24596c2f124a441b7b"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [[tools.viteplus]]

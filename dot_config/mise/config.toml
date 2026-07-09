@@ -52,7 +52,6 @@ viteplus = "latest"
 
 # Agentic AI
 claude-code = "latest"
-"npm:@google/gemini-cli" = "latest"
 "npm:@sentry/dotagents" = "latest"
 "npm:@openai/codex" = "latest"
 "npm:@moonshot-ai/kimi-code" = { version = "latest", allow_builds = [
