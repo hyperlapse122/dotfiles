@@ -70,6 +70,20 @@ describe("computeScratchDir", () => {
     );
   });
 
+  test("linux falls back to env.HOME when home argument is undefined", () => {
+    assert.equal(
+      computeScratchDir({ HOME: "/home/u" } as NodeJS.ProcessEnv, "linux", undefined),
+      resolve("/home/u", ".cache", "agent-scratch"),
+    );
+  });
+
+  test("linux falls back to process.cwd() when neither home nor env.HOME is available", () => {
+    assert.equal(
+      computeScratchDir({} as NodeJS.ProcessEnv, "linux", undefined),
+      resolve(process.cwd(), ".cache", "agent-scratch"),
+    );
+  });
+
   test("darwin prefers $TMPDIR", () => {
     assert.equal(
       computeScratchDir({ TMPDIR: "/var/folders/x/T/" } as NodeJS.ProcessEnv, "darwin", "/Users/u"),

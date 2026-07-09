@@ -62,7 +62,7 @@ export function deniedRoots(platform: NodeJS.Platform = process.platform): reado
 export function computeScratchDir(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
-  home: string,
+  home: string | undefined,
 ): string {
   const configured =
     platform === "win32"
@@ -70,12 +70,17 @@ export function computeScratchDir(
       : platform === "darwin"
         ? env["TMPDIR"]
         : env["XDG_RUNTIME_DIR"];
+  const envHome = platform === "win32" ? (env["USERPROFILE"] ?? env["HOME"]) : env["HOME"];
+  const effectiveHome =
+    home && home.length > 0 ? home : envHome && envHome.length > 0 ? envHome : undefined;
   const base =
     configured && configured.length > 0
       ? configured
-      : platform === "win32"
-        ? resolve(home, "AppData", "Local", "Temp")
-        : resolve(home, ".cache");
+      : effectiveHome !== undefined
+        ? platform === "win32"
+          ? resolve(effectiveHome, "AppData", "Local", "Temp")
+          : resolve(effectiveHome, ".cache")
+        : resolve(process.cwd(), ".cache");
   return resolve(base, SCRATCH_SUBDIR);
 }
 
@@ -121,7 +126,20 @@ export const ScratchGuardPlugin: Plugin = async ({
 }: PluginInput): Promise<Hooks> => {
   const platform = process.platform;
   const mode = parseMode(process.env[ENV_MODE]);
-  const scratchDir = computeScratchDir(process.env, platform, homedir());
+  const home = homedir();
+  if (home === undefined || home.length === 0) {
+    await client.app
+      .log({
+        body: {
+          service: SERVICE,
+          level: "warn",
+          message:
+            "could not determine user home directory; falling back to process.cwd() for the scratch dir",
+        },
+      })
+      .catch(() => {});
+  }
+  const scratchDir = computeScratchDir(process.env, platform, home);
   const bashDenyRe = makeBashDenyRegex(platform);
   const baseDir = directory && directory.length > 0 ? directory : process.cwd();
 
