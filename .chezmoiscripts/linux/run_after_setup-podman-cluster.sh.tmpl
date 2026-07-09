@@ -3,7 +3,7 @@
 # .chezmoiscripts/linux/run_after_setup-podman-cluster.sh.tmpl
 #
 # Finishes wiring up the rootless-Podman container stack and the local minikube
-# Kubernetes dev cluster on the Fedora / Kubuntu desktop targets. Every piece is
+# Kubernetes dev cluster on the Fedora / Ubuntu Studio desktop targets. Every piece is
 # already INSTALLED elsewhere; this script only performs the runtime
 # *activation* that cannot be expressed as a managed file:
 #   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf/apt)
@@ -38,7 +38,7 @@
 #      re-exported here so the in-apply start stays rootless even from a shell
 #      that lacks environment.d.
 #
-# run_after_ (not run_onchange_): like the sibling debrand / tailscale-ufw /
+# run_after_ (not run_onchange_): like the sibling tailscale-ufw /
 # wifi-import scripts this RETRIES on every apply. The `systemctl --user` steps
 # need a reachable user-manager bus, so a first apply from a bare TTY (no
 # session bus) skips them cleanly and a later apply from the desktop session

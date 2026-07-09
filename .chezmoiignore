@@ -35,7 +35,7 @@
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
 # container, deploy the CLI dotfiles only and skip all host provisioning:
 # package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
-# KDE settings, Canonical de-branding, and the MX Master haptic build. The
+# KDE settings, pro-audio realtime provisioning, and the MX Master haptic build. The
 # opencode plugin build is deliberately KEPT (opencode is a first-class CLI
 # here; that script soft-skips when its toolchain is absent).
 #
@@ -51,4 +51,3 @@
 .chezmoiscripts/gpg/*.sh
 .chezmoiscripts/build/*mxm4-haptic.sh
 {{- end }}
-

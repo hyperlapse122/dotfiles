@@ -48,7 +48,7 @@
 # .ps1 counterpart. It is deployed to ~/.local/bin on every POSIX host.
 #
 # dracut-ONLY BY DESIGN: only dracut (Fedora, RHEL and relatives) wires systemd's
-# `tpm2-device=auto` unlock into the early-boot initramfs. Ubuntu/Kubuntu ships
+# `tpm2-device=auto` unlock into the early-boot initramfs. Ubuntu ships
 # initramfs-tools, whose update-initramfs silently ignores the crypttab
 # tpm2-device option (Launchpad #1980018) — enrolling there would leave a
 # passphrase prompt at boot while appearing to succeed. Ubuntu instead enrolls
@@ -341,7 +341,7 @@ main() {
   done
 
   # dracut-only gate (see file header): only dracut wires tpm2-device=auto into
-  # the initramfs. On a non-dracut host — notably Ubuntu/Kubuntu, which uses
+  # the initramfs. On a non-dracut host — notably Ubuntu, which uses
   # initramfs-tools and whose installer offers native TPM2 unlock — enrolling a
   # TPM2 keyslot here would NOT auto-unlock at boot (Launchpad #1980018), so bail
   # out cleanly BEFORE any TTY/sudo prompt or state change rather than fail
@@ -350,7 +350,7 @@ main() {
     log_info "This host does not use dracut, so TPM2 auto-unlock cannot be wired"
     log_info "into its initramfs here. setup-luks-tpm2-unlock.sh is dracut-only by"
     log_info "design (Fedora, RHEL and relatives)."
-    log_info "On Ubuntu/Kubuntu, enable TPM2 disk unlock from the OS installer"
+    log_info "On Ubuntu, enable TPM2 disk unlock from the OS installer"
     log_info "instead — its initramfs-tools path ignores crypttab tpm2-device=auto."
     log_info "Nothing to do on this host; exiting."
     exit 0
