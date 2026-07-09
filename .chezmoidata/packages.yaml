@@ -312,6 +312,17 @@ packages:
         - kdenlive  # non-linear video editor
         - obs-studio  # screen recording / live streaming
 
+        # Ubuntu Studio pro-audio essentials (all in resolute/universe; universe is enabled by
+        # enable_first_apply_apt_features in run_onchange_before_ubuntu.sh.tmpl). Realtime privileges
+        # come from the @audio group (added below) + the repo-owned limits.d drop-in
+        # (system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf). NOTE: ubuntustudio-installer
+        # (the interactive first-run GUI) and studio-controls are intentionally NOT pinned - the former
+        # contradicts the deterministic-limits approach, the latter does not exist on resolute (jammy/noble only).
+        - ubuntustudio-audio-core          # PipeWire/JACK pro-audio core stack (Depends: ubuntustudio-pipewire-config)
+        - ubuntustudio-pipewire-config     # Ubuntu Studio PipeWire pro-audio configuration (pinned explicitly for clarity; also a dep of audio-core)
+        - ubuntustudio-performance-tweaks  # realtime/perf sysctl + tuning
+        - ubuntustudio-lowlatency-settings # grub.d drop-in preferring a lowlatency kernel as boot default if installed (ships only /etc/default/grub.d/*, installs no kernel; postinst runs update-grub)
+
         # Mesh networking
         - tailscale  # WireGuard-based mesh VPN client (from tailscale apt repo)
 
