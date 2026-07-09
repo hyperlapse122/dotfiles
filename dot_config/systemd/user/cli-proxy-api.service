@@ -1,0 +1,12 @@
+[Unit]
+# TODO: Update description
+Description=cli-proxy-api daemon
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/cli-proxy-api -config %h/.config/cli-proxy-api/config.yaml
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

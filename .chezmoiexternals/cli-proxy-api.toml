@@ -1,0 +1,24 @@
+{{- $tag := (gitHubLatestRelease "router-for-me/CLIProxyAPI").TagName | toString -}}
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+{{- $CLIProxyAPIArch := (replace "arm64" "aarch64" .chezmoi.arch) -}}
+
+{{- $archiveUrl := (gitHubReleaseAssetURL "router-for-me/CLIProxyAPI" $tag (printf "CLIProxyAPI_%s_%s_%s%s" (replace "v" "" $tag) .chezmoi.os $CLIProxyAPIArch $archiveExtension)) -}}
+{{- $configBaseDir := (replace "windows" (joinPath (env "LOCALAPPDATA") "cli-proxy-api") (replace "linux" ".config/cli-proxy-api" (replace "darwin" ".config/cli-proxy-api" .chezmoi.os))) -}}
+
+# TODO: Add User-scope Windows Background Service
+
+[".local/bin/cli-proxy-api"]
+type = "archive-file"
+targetPath = '{{ printf ".local/bin/cli-proxy-api%s" $executableExtension }}'
+url = '{{ $archiveUrl }}'
+path = '{{ printf "cli-proxy-api%s" $executableExtension }}'
+executable = true
+refreshPeriod = "24h"
+
+[".config/cli-proxy-api/config.example.yaml"]
+type = "archive-file"
+targetPath = '{{ joinPath $configBaseDir "config.example.yaml" }}'
+url = '{{ $archiveUrl }}'
+path = 'config.example.yaml'
+refreshPeriod = "24h"
