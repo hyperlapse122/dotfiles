@@ -15,6 +15,36 @@
 linker = "hoisted"
 # 1 week (in seconds). Bun's parser: minimum_release_age_ms = value * ms_per_s.
 minimumReleaseAge = 604800
+# Cooldown exclude — exact names only (case-sensitive; no glob support, verified;
+# a non-array value hard-errors bun's bunfig parser). typescript 7.0 (the Go port)
+# ships 20 platform native binaries as optionalDependencies, and bun cooldown-checks
+# every one at resolve time, so all must be listed alongside the main package. The
+# 7.0 line is pinned deliberately while still <1 week old; this narrow, user-approved
+# exclude lets 7.0.2 install past the gate. Remove the whole block once 7.0.x clears
+# the 1-week window and satisfies minimumReleaseAge on its own.
+minimumReleaseAgeExcludes = [
+  "typescript",
+  "@typescript/typescript-aix-ppc64",
+  "@typescript/typescript-darwin-arm64",
+  "@typescript/typescript-darwin-x64",
+  "@typescript/typescript-freebsd-arm64",
+  "@typescript/typescript-freebsd-x64",
+  "@typescript/typescript-linux-arm",
+  "@typescript/typescript-linux-arm64",
+  "@typescript/typescript-linux-loong64",
+  "@typescript/typescript-linux-mips64el",
+  "@typescript/typescript-linux-ppc64",
+  "@typescript/typescript-linux-riscv64",
+  "@typescript/typescript-linux-s390x",
+  "@typescript/typescript-linux-x64",
+  "@typescript/typescript-netbsd-arm64",
+  "@typescript/typescript-netbsd-x64",
+  "@typescript/typescript-openbsd-arm64",
+  "@typescript/typescript-openbsd-x64",
+  "@typescript/typescript-sunos-x64",
+  "@typescript/typescript-win32-arm64",
+  "@typescript/typescript-win32-x64",
+]
 ignoreScripts = true
 # Pin exact versions for `bun add` -- no ^ / ~ range prefix.
 exact = true
