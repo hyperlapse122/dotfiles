@@ -1,7 +1,7 @@
 # dotfiles
 
 Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Primary Linux targets are
-**Fedora Linux** (KDE/Wayland) and **Kubuntu 26.04** (KDE Plasma 6); macOS and
+**Fedora Linux** (KDE/Wayland) and **Ubuntu Studio 26.04** (KDE Plasma 6); macOS and
 Windows are supported as secondary targets.
 
 ## Set up a new device
@@ -25,19 +25,19 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-    - **Fedora** installs these with `dnf`; **Kubuntu** (Ubuntu) uses `apt`
-      (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
-      Homebrew first if needed).
+   - **Fedora** installs these with `dnf`; **Ubuntu Studio** (Ubuntu) uses `apt`
+     (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
+     Homebrew first if needed).
 4. Renders every template and applies it to `$HOME`, then runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
    [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
-   Kubuntu via apt), fonts, importing the GPG key, authenticating GitHub /
+   Ubuntu Studio via apt), fonts, importing the GPG key, authenticating GitHub /
    Tailscale, switching the login shell to zsh, and writing KDE / Solaar /
    system config. It also provisions coding-agent skills via `dotagents` into
    `~/.agents/skills/` from the pinned set in [`dot_agents/agents.toml`](dot_agents/agents.toml).
-   On Kubuntu, additionally strips Canonical branding to upstream Breeze (SDDM
-   theme, Plymouth boot splash, per-user desktop theme, branding packages) and
-   enables Tailscale egress-NAT via ufw.
+   On Ubuntu Studio, provisioning is apt-based; its native look is kept, and
+   pro-audio essentials (PipeWire config, `@audio` realtime privileges, low-latency
+   boot tuning) are provisioned, and Tailscale egress-NAT via ufw is enabled.
 
 GitLab CLI authentication is intentionally **not** provisioned: run `auth-glab`
 (deployed to `~/.local/bin`) once after the first apply to sign in to
@@ -46,11 +46,10 @@ headless sessions.
 
 ## Prerequisites
 
-- **Fedora Linux** or **Kubuntu 26.04 (KDE)** for the full experience.
+- **Fedora Linux** or **Ubuntu Studio 26.04 (KDE)** for the full experience.
   Detection is implicit — `osRelease.id` (`fedora` or `ubuntu`) + runtime guards;
-  no interactive prompt. On Kubuntu, provisioning is apt-based and additionally
-  strips Canonical's Kubuntu branding back to upstream KDE Breeze reproducibly on
-  every `chezmoi apply`.
+  no interactive prompt. On Ubuntu Studio, provisioning is apt-based, keeps its
+  native look, and provisions pro-audio essentials on every `chezmoi apply`.
 - macOS and Windows get the cross-platform dotfiles only.
 - **`sudo` access** — installing packages and writing `/etc` config needs root.
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
@@ -79,7 +78,7 @@ The apply completes once `op` can resolve secrets (`op whoami` succeeds).
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
 `/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE
-settings, and no Canonical de-branding. The OpenCode plugin build and `dotagents`
+settings, and no pro-audio realtime/system provisioning. The OpenCode plugin build and `dotagents`
 skills install still run (and soft-skip if their toolchains are missing). This
 makes the repo usable as-is on CI runners and in dedicated containers that have
 their own `$HOME`.
