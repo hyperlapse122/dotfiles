@@ -23,7 +23,6 @@ yarn = "latest"
 "cargo:git-trim" = "latest"
 "cargo:kdotool" = { version = "latest", os = ["linux"] }
 glab = { version = "latest", exe = "glab" }
-gh = "latest"
 "github:rust-lang/rust-analyzer" = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
 shellcheck = "latest"

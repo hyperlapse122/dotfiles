@@ -1,0 +1,17 @@
+# Latest release: https://gitlab.com/api/v4/projects/34675721/releases/permalink/latest
+# Sample Direct URL: https://gitlab.com/gitlab-org/cli/-/releases/v1.107.0/downloads/glab_1.107.0_windows_amd64.zip
+
+{{- $latestReleaseUrl := (getRedirectedURL "https://gitlab.com/api/v4/projects/34675721/releases/permalink/latest") -}}
+{{- $latestRelease := output "curl" "-fsSL" $latestReleaseUrl | fromJson -}}
+
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+
+{{- $archiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s%s" $latestRelease.tag_name (replace "v" "" $latestRelease.tag_name) .chezmoi.os .chezmoi.arch $archiveExtension) }}
+
+[".local/bin/glab"]
+targetPath = '{{ printf ".local/bin/glab%s" $executableExtension }}'
+type = "archive-file"
+url = '{{ $archiveUrl }}'
+path = '{{ printf "bin/glab%s" $executableExtension }}'
+refreshPeriod = "168h"
