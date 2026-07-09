@@ -247,6 +247,10 @@ REMOVED_ETC_PATHS=(
   /etc/systemd/system/docker-prune.service
   /etc/systemd/system/docker-prune.timer
   /etc/udev/rules.d/logitech-receiver.rules
+  # EXCEPTION: written by the now-deleted standalone debrand-sddm script, not
+  # by the system/linux/etc mirror; keep it here solely to reap the orphaned
+  # file idempotently on Ubuntu Studio hosts that were once Kubuntu.
+  /etc/sddm.conf.d/90-breeze.conf
 )
 
 removed_listed=0
