@@ -36,13 +36,13 @@
 			]
 		},
 		"librarian": {
-			"model": "openai/gpt-5.6-luna",
+			"model": "openai/gpt-5.6-terra",
 			"fallback_models": [
 				"anthropic/claude-haiku-4-5"
 			]
 		},
 		"explore": {
-			"model": "openai/gpt-5.6-luna",
+			"model": "openai/gpt-5.6-terra",
 			"fallback_models": [
 				"anthropic/claude-haiku-4-5"
 			]
@@ -177,7 +177,7 @@
 			]
 		},
 		"quick": {
-			"model": "openai/gpt-5.6-luna",
+			"model": "openai/gpt-5.6-terra",
 			"fallback_models": [
 				"anthropic/claude-haiku-4-5",
 				"google-agy/gemini-3.5-flash-low"
