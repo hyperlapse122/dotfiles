@@ -169,12 +169,6 @@ for src in "$SRC_ROOT"/etc/**; do
         exit 1
       fi
       ;;
-    etc/plymouth/plymouthd.conf)
-      if [[ "$os_id" == ubuntu ]]; then
-        install_this=false
-        skip_reason='ubuntu owns plymouth via default.plymouth alternatives'
-      fi
-      ;;
     etc/security/limits.d/95-ubuntustudio-audio.conf)
       if [[ "$os_id" != ubuntu ]]; then
         install_this=false
@@ -259,6 +253,7 @@ REMOVED_ETC_PATHS=(
   /etc/NetworkManager/conf.d/92-docker.conf
   /etc/NetworkManager/conf.d/93-veth.conf
   /etc/modprobe.d/audio-hda-no-powersave.conf
+  /etc/plymouth/plymouthd.conf
   /etc/systemd/system/docker-prune.service
   /etc/systemd/system/docker-prune.timer
   /etc/udev/rules.d/logitech-receiver.rules

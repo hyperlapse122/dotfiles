@@ -51,7 +51,6 @@ editing the installer unless it needs a different mode or a host gate.
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
-| `etc/plymouth/plymouthd.conf` | Plymouth boot splash (bgrt theme, 2× device scale) |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
 | `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore |
