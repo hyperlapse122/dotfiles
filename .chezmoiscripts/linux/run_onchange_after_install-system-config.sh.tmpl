@@ -181,6 +181,15 @@ for src in "$SRC_ROOT"/etc/**; do
         skip_reason='ubuntu-only (ubuntu studio realtime audio limits)'
       fi
       ;;
+    etc/sddm.conf.d/90-breeze.conf)
+      # De-brands the login greeter to upstream Breeze on both distros. Forcing
+      # Current=breeze without the theme installed yields a broken login screen,
+      # so skip when the breeze SDDM theme is absent.
+      if [[ ! -f /usr/share/sddm/themes/breeze/theme.conf ]]; then
+        install_this=false
+        skip_reason='breeze sddm theme absent'
+      fi
+      ;;
   esac
 
   if [[ "$install_this" != true ]]; then
@@ -195,6 +204,31 @@ for src in "$SRC_ROOT"/etc/**; do
 done
 
 printf 'install-system-config: %d installed, %d skipped\n' "$count" "$skipped"
+
+# De-brand the Fedora boot splash: bake the Breeze plymouth theme (selected via
+# the /etc/plymouth/plymouthd.conf `Theme=` key installed just above) into the
+# current initramfs. Fedora's dracut plymouth module reads the theme from that
+# file, so a `dracut --force` rebuild is all that's needed once the config is in
+# place. Ubuntu owns plymouth via the `default.plymouth` update-alternatives link
+# instead (see run_after_ubuntu-plymouth-breeze), so this block is Fedora-only.
+# Idempotent: `lsinitrd` is grepped for the target theme first, so a host whose
+# initramfs already carries it is never rebuilt.
+if [[ "$os_id" == fedora ]] \
+  && command -v dracut >/dev/null 2>&1 \
+  && command -v lsinitrd >/dev/null 2>&1 \
+  && [[ -f /etc/plymouth/plymouthd.conf ]]; then
+  want_theme="$(awk -F= '/^[[:space:]]*Theme[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' /etc/plymouth/plymouthd.conf)"
+  if [[ -n "$want_theme" && -d "/usr/share/plymouth/themes/$want_theme" ]]; then
+    if "${SUDO[@]}" lsinitrd 2>/dev/null | grep -q "plymouth/themes/$want_theme/"; then
+      printf '  -- plymouth theme %s already baked into initramfs; no rebuild\n' "$want_theme"
+    else
+      printf '  -> dracut --force (bake plymouth theme %s into initramfs)\n' "$want_theme"
+      "${SUDO[@]}" dracut --force
+    fi
+  else
+    printf '  -- plymouth theme %s unavailable; skipping initramfs rebuild\n' "${want_theme:-unset}"
+  fi
+fi
 
 if [[ "$thinkpad_system" == true ]]; then
   printf '  -> modprobe thinkpad_acpi\n'
@@ -253,11 +287,6 @@ REMOVED_ETC_PATHS=(
   /etc/systemd/system/docker-prune.service
   /etc/systemd/system/docker-prune.timer
   /etc/udev/rules.d/logitech-receiver.rules
-  # EXCEPTION: written by the now-removed standalone SDDM theme-reset script, not
-  # by the system/linux/etc mirror; keep it here solely to reap the orphaned
-  # file idempotently on hosts previously provisioned by this repo's earlier
-  # Ubuntu KDE flavor.
-  /etc/sddm.conf.d/90-breeze.conf
 )
 
 removed_listed=0

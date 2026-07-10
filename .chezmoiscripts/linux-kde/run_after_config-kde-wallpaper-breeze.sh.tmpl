@@ -1,0 +1,65 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux-kde/run_after_config-kde-wallpaper-breeze.sh.tmpl
+#
+# Fedora + Ubuntu Studio. De-brands the desktop wallpaper to Plasma's default
+# ("Next", the upstream Breeze wallpaper) so the branded distro wallpaper seeded
+# into the per-user Plasma config is replaced.
+#
+# ONE-SHOT + user-respecting: the wallpaper is a per-user Plasma setting, so this
+# applies the default exactly once (tracked by a per-user stamp) and then never
+# touches it again -- if the user later picks their own wallpaper, we do NOT keep
+# reverting it on every apply.
+#
+# Live-session only: plasma-apply-wallpaperimage needs a running KDE session
+# (DBus + display server + plasmashell). run_after retries on every apply, so on
+# a headless/TTY/first-boot apply this exits 0 and the wallpaper is applied the
+# next time apply runs inside a live Plasma session.
+
+set -euo pipefail
+
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/wallpaper-debranded"
+
+# Already de-branded once -> respect the user's current choice, do nothing.
+if [[ -f "$STAMP" ]]; then
+  echo "wallpaper-breeze: already applied once ($STAMP); leaving user's wallpaper alone"
+  exit 0
+fi
+
+# --- Live KDE session guard (any absent condition => safe exit 0) ---
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *KDE* ]]; then
+  echo "wallpaper-breeze: not a KDE session (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset}); skip"
+  exit 0
+fi
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+  echo "wallpaper-breeze: no DBus session bus; skip"
+  exit 0
+fi
+if [[ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
+  echo "wallpaper-breeze: no display server; skip"
+  exit 0
+fi
+if ! pgrep -xu "$USER" plasmashell >/dev/null 2>&1; then
+  echo "wallpaper-breeze: plasmashell not running for $USER; skip"
+  exit 0
+fi
+command -v plasma-apply-wallpaperimage >/dev/null 2>&1 \
+  || { echo "wallpaper-breeze: plasma-apply-wallpaperimage absent; skip"; exit 0; }
+
+# Resolve the default Plasma wallpaper ("Next"), preferring the highest-resolution
+# image the package ships. Skip (do NOT stamp) if the wallpaper package is absent,
+# so a later apply retries once it is installed.
+WALL_DIR=/usr/share/wallpapers/Next/contents/images
+img="$(find "$WALL_DIR" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' \) 2>/dev/null | sort -V | tail -n1)"
+if [[ -z "$img" ]]; then
+  echo "wallpaper-breeze: default Breeze wallpaper (Next) not found under $WALL_DIR; skip"
+  exit 0
+fi
+
+plasma-apply-wallpaperimage "$img"
+echo "wallpaper-breeze: desktop wallpaper set to upstream Breeze default ($img)"
+
+# Stamp so we never override the user's later choice.
+mkdir -p "$(dirname "$STAMP")"
+: > "$STAMP"
+{{ end -}}
