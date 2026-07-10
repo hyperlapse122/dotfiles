@@ -555,6 +555,10 @@ jobs:
           $rc = $LASTEXITCODE
           Write-Host "chezmoi apply --init exit code: $rc"
           "- ``chezmoi apply --init`` (windows) exit code: $rc" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          # Non-fatal like the Linux jobs: a tolerated non-zero chezmoi rc (or the
+          # robocopy exit 1 above) must not become this step's exit code. Reset to
+          # 0 explicitly — a real failure already threw above.
+          exit 0
 
       - name: Stage rendered files
         if: always()
@@ -572,6 +576,8 @@ jobs:
           Remove-Item -Recurse -Force (Join-Path $out '.local\share\chezmoi') -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force (Join-Path $out '.config\chezmoi') -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force (Join-Path $out '.cache') -ErrorAction SilentlyContinue
+          # robocopy's exit 1 (success) must not fail the step.
+          exit 0
 
       - name: Upload rendered files
         if: always()
@@ -620,6 +626,9 @@ jobs:
           Write-Host "rendered $total template(s), $failed error(s)"
           "### rendered internals (windows)`n`n- rendered $total template(s), $failed error(s)" |
             Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          # Per-template render failures are captured as *.render-error.txt inside
+          # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
+          exit 0
 
       - name: Upload rendered internals
         if: always()
