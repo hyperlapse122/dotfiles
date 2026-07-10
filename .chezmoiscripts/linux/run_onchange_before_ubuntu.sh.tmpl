@@ -6,10 +6,9 @@ set -euo pipefail
 # Consolidated Ubuntu provisioning, adapted from the Fedora run_onchange installer:
 # APT repositories, dpkg architecture setup for Steam, apt/flatpak/dotnet
 # packages, direct .deb installs, NVIDIA driver + CUDA + container toolkit, the
-# Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), the
-# kisak-mesa Mesa upgrade, system services, and user groups. Every install path
-# is guarded so chezmoi can safely re-run this script when
-# .chezmoidata/packages.yaml changes.
+# Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), system
+# services, and user groups. Every install path is guarded so chezmoi can safely
+# re-run this script when .chezmoidata/packages.yaml changes.
 
 # Host probes (same as Fedora). Scan sysfs for NVIDIA's PCI vendor id so this
 # works before pciutils/lspci are available. FORCE_NVIDIA=1 overrides the probe
@@ -294,20 +293,6 @@ install_intel_support() {
   fi
 }
 
-# ppa:kisak/kisak-mesa ships newer Mesa than the Ubuntu archive. Upgrade only
-# the already-installed packages the PPA supersedes: a dist-upgrade simulation
-# annotates each Inst line with its candidate origin, and the kisak PPA's origin
-# label is LP-PPA-kisak-kisak-mesa, so filtering Inst lines on "kisak" yields
-# exactly the Mesa packages to bump. install --only-upgrade then applies them
-# without pulling in or removing anything else (this provisioner never runs a
-# blanket apt upgrade). No-op until the kisak repo (setup_apt_repos) is in place.
-upgrade_kisak_mesa() {
-  local -a mesa_upgrades=()
-  readarray -t mesa_upgrades < <("${APT[@]}" -s dist-upgrade 2>/dev/null | awk '/^Inst / && /kisak/ {print $2}')
-  [[ ${#mesa_upgrades[@]} -eq 0 ]] && return 0
-  "${APT[@]}" install --only-upgrade -y "${mesa_upgrades[@]}"
-}
-
 # Enable a systemd unit only when its unit file exists, so a host missing an
 # optional package (libvirt, nvidia) is skipped rather than failing.
 # The second argument selects "now" (enable --now) or "later" (enable only).
@@ -369,7 +354,6 @@ enable_first_apply_apt_features
 install_ubuntu_packages "${core_packages[@]}"
 "${APT[@]}" update
 install_ubuntu_packages "${packages[@]}"
-upgrade_kisak_mesa
 install_nvidia_support
 install_intel_support
 install_direct_debs

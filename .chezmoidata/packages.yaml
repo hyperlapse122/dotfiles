@@ -238,16 +238,6 @@ packages:
           keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
           sources-list-lines:
             - "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
-        - id: kisak-mesa
-          # ppa:kisak/kisak-mesa — "Updated Mesa for Ubuntu": the latest Mesa point
-          # release plus select non-invasive backports. Provides newer versions of
-          # the Mesa graphics packages already on the desktop (libgl1-mesa-dri,
-          # mesa-va-drivers, mesa-vulkan-drivers, ...). upgrade_kisak_mesa() in
-          # run_onchange_before_ubuntu.sh.tmpl upgrades the installed packages this
-          # PPA supersedes. Publishes for resolute. https://launchpad.net/~kisak/+archive/ubuntu/kisak-mesa
-          keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0xEB8B81E14DA65431D7504EA8F63F0F2B90935439
-          sources-list-lines:
-            - "deb [signed-by=/usr/share/keyrings/kisak-mesa.gpg] https://ppa.launchpadcontent.net/kisak/kisak-mesa/ubuntu resolute main"
       # Foundational packages installed before the main set (build headers needed
       # for DKMS module builds).
       corePackages:
