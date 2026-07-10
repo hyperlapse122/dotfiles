@@ -1,6 +1,7 @@
-{{- /* Version resolved at apply time from oh-my-openagent's GitHub releases
-       (tags mirror the published npm versions); install is still from npm. */ -}}
-{{- $ohMyOpenagent := (gitHubLatestRelease "code-yeongyu/oh-my-openagent").TagName | trimPrefix "v" -}}
+{{- /* Version resolved at apply time from oh-my-openagent's latest GitHub tag,
+       which is pushed on every npm publish and so mirrors the npm version 1:1
+       (GitHub *Releases* can lag npm). Install is still from npm. */ -}}
+{{- $ohMyOpenagent := (gitHubLatestTag "code-yeongyu/oh-my-openagent").Name | trimPrefix "v" -}}
 {
   "$schema": "https://opencode.ai/tui.json",
   "keybinds": {
