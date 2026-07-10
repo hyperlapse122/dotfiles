@@ -36,15 +36,15 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 - `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
 - `packages/` is a Bun workspace built on apply with **Vite+** (`vp`) into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked to `scratch-guard.js` on Linux and macOS; enforces the temp-file policy via `$TMPDIR` injection + `/tmp`,`/var/tmp`,`/dev/shm` deny), and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
-### Agent skills management
+### Agent skills, MCPs & trust — managed by `dotagents`
 
-- `dotagents` manages user-scoped agent skills under `~/.agents/`.
-- `dot_agents/agents.toml` is the single source of truth for managed skill pins: it exact-pins the managed skills (each ref is at least 7 days old), sets `agents = ["claude"]`, and uses `minimum_release_age = 10080`.
-- The six custom skills live in `dot_agents/skills/` and are intentionally undeclared in `agents.toml`; `dotagents install` does not prune undeclared skills.
-- Provisioning runs via `.chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl` on every `chezmoi apply`; it soft-skips on missing mise/node/git or install failure, preflights `~/.claude/skills` before writing, and is kept in containers.
-- One-time teardown is handled by `.chezmoiscripts/agents/run_once_before_teardown-skills-sh.tmpl`.
-- `dot_agents/agents.toml` refs are bumped weekly by `.github/workflows/update-agent-skills.yml`.
-- The managed SKILLS observe a 7-day settle (`minimum_release_age = 10080`), while the `dotagents` CLI itself still observes the standard 24h mise cooldown.
+- `dotagents` (`getsentry/dotagents`) manages user-scoped agent skills, MCP servers, and a trust allowlist under `~/.agents/`.
+- `dot_agents/private_readonly_agents.toml.tmpl` (private 0600 + readonly 0444, templated) renders to `~/.agents/agents.toml` and is the single source of truth. It sets `agents = ["claude", "codex"]`, `minimum_release_age = 10080`, and a `[trust]` allowlist (`github_orgs = [getsentry, microsoft, shadcn]`, `git_domains = [git.jpi.app]`).
+- It declares three remote skills — `playwright-cli` (`microsoft/playwright-cli`), `improve` (`shadcn/improve`), `dotagents` (`getsentry/dotagents`) — plus the **seven** local skills under `dot_agents/skills/` as `path:skills/<name>` entries: `ci-cd-monitoring`, `git-workflow`, `gitlab-issues`, `glab`, `glab-stack`, `js-package-managers`, `pr-mr`. The same file also registers the MCP servers (`codegraph`, `context7`, Exa `websearch`, and the Z.ai servers), with secrets injected via `onepasswordRead`.
+- Provisioning runs via `.chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl` on every `chezmoi apply` (linux + darwin gate): it runs `dotagents --user install` through `mise exec npm:@sentry/dotagents@latest`, soft-skips on missing mise/git or install failure, and is kept in containers.
+- One-time teardown is handled by `.chezmoiscripts/agents/run_once_before_teardown-skills-sh.sh.tmpl`.
+- `.github/workflows/update-agent-skills.yml` runs weekly (Tue 06:00 UTC) to bump `@`-pinned remote skill refs to the newest release/commit older than a 7-day cutoff and open a PR; it skips `path:` and `https:` sources. The remote skills are currently declared without an explicit `@ref`, so they settle purely via `minimum_release_age`.
+- The managed skill refs observe a 7-day settle (`minimum_release_age = 10080`), while the `dotagents` CLI itself still observes the standard 24h mise cooldown.
 
 ### Verify edits (don't eyeball raw `.tmpl`)
 - `chezmoi diff` — preview what apply would change. **Primary check after any edit.**
