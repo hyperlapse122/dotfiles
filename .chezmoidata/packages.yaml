@@ -364,6 +364,17 @@ packages:
         - virt-manager  # graphical VM manager
         - virt-viewer  # SPICE/VNC console viewer for libvirt guests
 
+        # LUKS TPM2 auto-unlock (dot_local/bin/setup-luks-tpm2-unlock.sh, Ubuntu backend).
+        # Ubuntu's initramfs-tools ignores systemd's crypttab tpm2-device=auto (Launchpad
+        # #1980018), so the Ubuntu path uses clevis instead of systemd-cryptenroll: clevis
+        # luks bind seals a keyslot to the TPM2 and clevis-initramfs unlocks root in early
+        # boot. Fedora needs no equivalent packages (dracut + systemd-cryptenroll ship in base).
+        - clevis  # pluggable automated-decryption framework (clevis luks bind/unlock)
+        - clevis-luks  # clevis LUKS integration (bind/list/unlock against LUKS keyslots)
+        - clevis-tpm2  # clevis TPM2 pin (clevis-encrypt-tpm2; pulls tpm2-tools)
+        - clevis-initramfs  # initramfs-tools hook that clevis-unlocks the root device at boot
+        - tpm2-tools  # TPM2 userspace CLI (tpm2_* utilities used by the clevis tpm2 pin)
+
       # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:
         - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
