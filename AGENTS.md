@@ -83,6 +83,18 @@ confirm what actually rendered before relying on a change. `ci.yml` covers the
 rest on both push and PR (TS workspace, Rust crate, Ubuntu Studio pro-audio
 smoke).
 
+#### Automated Codex code review — wait for it to finish
+
+When `chatgpt-codex-connector` adds an **eyes** (👀) reaction to a PR (or a
+commit/comment on it), an automated Codex code review is **in progress** — do
+not treat the PR as reviewed yet. Wait for the review to complete, which
+resolves one of two ways:
+- **Changes requested** — Codex posts review comment(s) describing items that
+  need to be resolved. Address each one (or, if a comment is wrong or
+  inapplicable, reply explaining why) before proceeding.
+- **LGTM** — Codex replaces the eyes reaction with a **thumbs-up** (👍) and posts
+  no blocking comments, signalling the review passed with nothing to resolve.
+
 #### Non-interactive CI/agent verification without real 1Password
 
 For render-only checks in CI or agent verification, **MUST NOT** touch the real
