@@ -17,12 +17,11 @@
 
 set -euo pipefail
 
-INSTALL_DIR="${codex_INSTALL_DIR:-$HOME/.local/share/codex}"
 BIN_DIR="${codex_BIN_DIR:-$HOME/.local/bin}"
 
 dest="{{ $installationPath }}"
 ln -sfn "$dest" "{{ $releaseDir }}/current"
-ln -sf $(jq -r '.entrypoint' "$dest/codex-package.json") "$dest/codex"
+ln -sf "$(jq -r '.entrypoint' "$dest/codex-package.json")" "$dest/codex"
 ln -sf "{{ $releaseDir }}/current/bin/codex" "$BIN_DIR/codex"
 
 # Prune older versions

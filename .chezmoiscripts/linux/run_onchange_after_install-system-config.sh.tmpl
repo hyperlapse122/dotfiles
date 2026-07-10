@@ -181,6 +181,15 @@ for src in "$SRC_ROOT"/etc/**; do
         skip_reason='ubuntu-only (ubuntu studio realtime audio limits)'
       fi
       ;;
+    etc/sddm.conf.d/90-breeze.conf)
+      # De-brands the login greeter to upstream Breeze on both distros. Forcing
+      # Current=breeze without the theme installed yields a broken login screen,
+      # so skip when the breeze SDDM theme is absent.
+      if [[ ! -f /usr/share/sddm/themes/breeze/theme.conf ]]; then
+        install_this=false
+        skip_reason='breeze sddm theme absent'
+      fi
+      ;;
   esac
 
   if [[ "$install_this" != true ]]; then
@@ -253,11 +262,6 @@ REMOVED_ETC_PATHS=(
   /etc/systemd/system/docker-prune.service
   /etc/systemd/system/docker-prune.timer
   /etc/udev/rules.d/logitech-receiver.rules
-  # EXCEPTION: written by the now-removed standalone SDDM theme-reset script, not
-  # by the system/linux/etc mirror; keep it here solely to reap the orphaned
-  # file idempotently on hosts previously provisioned by this repo's earlier
-  # Ubuntu KDE flavor.
-  /etc/sddm.conf.d/90-breeze.conf
 )
 
 removed_listed=0

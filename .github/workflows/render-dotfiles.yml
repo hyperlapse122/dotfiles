@@ -292,3 +292,75 @@ jobs:
           retention-days: 3
           include-hidden-files: true
           if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Task 3: shellcheck the RENDERED scripts (not the raw *.tmpl, which shellcheck
+  # cannot parse). Runs only after both render jobs so it lints the real Fedora
+  # AND Ubuntu output of every provisioning script — the `.chezmoiscripts/**`
+  # templates that the source-level lint could never reach. OS-gated templates
+  # render to an empty file on the non-matching OS, so the shell-shebang filter
+  # below skips them automatically; templates active on both OSes are linted in
+  # both variants (their rendered bodies can differ per OS). The two repo-meta
+  # scripts that are never deployed/rendered (.install-prerequisites.sh and the
+  # .ci smoke test) are linted from the checkout so their coverage is not lost.
+  # Findings are also uploaded as a `shellcheck-report` artifact for inspection.
+  shellcheck:
+    name: Shellcheck (rendered scripts + repo-meta)
+    needs: [apply, render-internals]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download rendered artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _rendered
+          pattern: rendered-*
+
+      - name: shellcheck
+        run: |
+          set -uo pipefail
+          targets=()
+
+          # Repo-meta scripts that chezmoi never deploys/renders (dot-prefixed /
+          # .ci), so they are absent from the rendered artifacts — lint the source.
+          for s in .install-prerequisites.sh .ci/smoke-ubuntu-studio-audio.sh; do
+            [ -f "$s" ] && targets+=("$s")
+          done
+
+          # Every rendered file carrying a bash/sh shebang. The shebang test skips
+          # empty renders (OS-gated-out templates) and non-shell files alike.
+          while IFS= read -r -d '' f; do
+            if head -n1 "$f" | grep -qE '^#!.*(/(ba)?sh|env[[:space:]]+(ba)?sh)([[:space:]]|$)'; then
+              targets+=("$f")
+            fi
+          done < <(find _rendered -type f -print0)
+
+          if [ "${#targets[@]}" -eq 0 ]; then
+            echo "no shell scripts found to lint" >&2
+            exit 1
+          fi
+
+          printf 'shellcheck targets (%d):\n' "${#targets[@]}"
+          printf '  %s\n' "${targets[@]}"
+
+          # tee the human-readable report into an artifact; preserve shellcheck's
+          # own exit code (PIPESTATUS[0]) so findings fail the job.
+          shellcheck --format=tty --external-sources "${targets[@]}" \
+            | tee shellcheck-report.txt
+          rc=${PIPESTATUS[0]}
+          {
+            echo "### shellcheck (rendered scripts + repo-meta)"
+            echo ""
+            echo "- linted ${#targets[@]} script(s); shellcheck exit code: ${rc}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${rc}"
+
+      - name: Upload shellcheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shellcheck-report
+          path: shellcheck-report.txt
+          retention-days: 3
+          if-no-files-found: ignore

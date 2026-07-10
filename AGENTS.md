@@ -52,6 +52,37 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 - `chezmoi cat ~/target/path` — show the rendered target.
 - `chezmoi apply` — deploy (also runs the scripts). Binary: `/usr/bin/chezmoi`.
 
+#### When local verification is impossible, verify via the PR's CI + artifacts
+
+If the working environment can't run the checks above (no `chezmoi`, no live KDE
+session, no root, no target-distro container — e.g. a sandboxed agent), **do not
+claim a change is verified**. State the local limitation plainly, open the PR,
+and drive verification from the CI run and its artifacts instead. The
+`.github/workflows/render-dotfiles.yml` workflow (PR-triggered) is built for
+exactly this:
+- **`apply --init (fedora|ubuntu)`** runs a real `chezmoi apply --init` in
+  `fedora:latest` / `ubuntu:latest` containers → **`rendered-files-<os>`**
+  artifact (managed files rendered into an isolated `$HOME`; scripts/externals
+  excluded). Catches template errors in deployed files, and asserts the opencode
+  plugin versions rendered from GitHub.
+- **`render internals (fedora|ubuntu)`** renders every `.chezmoiscripts/**` and
+  `.chezmoiexternals/**` template via `chezmoi execute-template` →
+  **`rendered-internals-<os>`** artifact. Per-OS gated scripts render to an empty
+  file on the non-matching OS; a `*.render-error.txt` beside an entry flags a
+  render failure to inspect.
+- **`shellcheck (rendered scripts + repo-meta)`** — `needs: [apply,
+  render-internals]`, so it lints the REAL rendered Fedora + Ubuntu output of the
+  provisioning scripts (the `.tmpl` files shellcheck can't parse directly) plus
+  the non-deployed repo-meta scripts (`.install-prerequisites.sh`, the `.ci`
+  smoke test). Findings also land in the **`shellcheck-report`** artifact. This is
+  the sole shellcheck gate (it replaced the old source-only `shell-lint` job in
+  `ci.yml`), so it is **PR-only** — a direct push to `main` is not shell-linted.
+
+Read the job logs and download the artifacts (they carry `retention-days: 3`) to
+confirm what actually rendered before relying on a change. `ci.yml` covers the
+rest on both push and PR (TS workspace, Rust crate, Ubuntu Studio pro-audio
+smoke).
+
 #### Non-interactive CI/agent verification without real 1Password
 
 For render-only checks in CI or agent verification, **MUST NOT** touch the real
@@ -166,8 +197,13 @@ CI environments).
 - **Ubuntu-specific scripts** (`linux-ubuntu` gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
   - `run_onchange_before_ubuntu.sh.tmpl` — apt provisioner (mirrors the Fedora installer with apt semantics; idempotent, all service/group steps guarded)
   - `run_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent
+  - `run_after_ubuntu-plymouth-bgrt.sh.tmpl` — points the `default.plymouth` update-alternatives link at the neutral `bgrt` theme (firmware/OEM logo, same theme Fedora defaults to) + `update-initramfs -u`; idempotent (no-op when already bgrt), config-override only. Fedora already ships `Theme=bgrt`, so it has no counterpart script.
   - Ubuntu Studio pro-audio: `packages.yaml` audio essentials (4 pkgs: `ubuntustudio-audio-core`, `ubuntustudio-pipewire-config`, `ubuntustudio-performance-tweaks`, `ubuntustudio-lowlatency-settings`), the `audio` group added in `configure_user_groups()`, and the ubuntu-gated `system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf` realtime limits drop-in.
-- **Native look kept**: Ubuntu Studio's native branding (Plymouth splash, SDDM greeter, GRUB, wallpaper) is kept — the former branding scripts were deleted, not adapted. `config-kde-darkmode` still writes `LookAndFeelPackage=org.kde.breezedark.desktop` to `kdeglobals` on BOTH Fedora and Ubuntu Studio (cross-distro dark-mode parity), so the Plasma session's icon theme, cursor, splash, and default wallpaper follow Breeze Dark on next login — this cascades beyond just colors.
+- **De-branded** (both Fedora and Ubuntu Studio; GRUB is left native by choice): each distro's shipped desktop branding is reverted to stock across four surfaces — the desktop to Plasma/Breeze, the boot splash to the neutral `bgrt` (firmware-logo) theme — **config-override only, no branding package is purged (and none is added)**:
+  - **Global Theme**: one cross-distro script, `config-kde-autotheme` (Fedora + Ubuntu Studio, `(or fedora ubuntu)` gate), puts Plasma's default Breeze Global Theme on automatic day/night switching: `AutomaticLookAndFeel=true` + `DefaultLightLookAndFeel=org.kde.breeze.desktop` / `DefaultDarkLookAndFeel=org.kde.breezedark.desktop` + an initial `LookAndFeelPackage=org.kde.breezedark.desktop` pin (automatic Breeze Dark ⇄ Light, timed off the Night Light schedule). On Plasma < 6.5 the auto-switch keys are silently ignored, so it degrades to the `LookAndFeelPackage` Breeze Dark pin. The Plasma session's icon theme, cursor, and splash follow the active Breeze variant on next login. (The former `config-kde-darkmode` Breeze-Dark-pin script was removed in favour of this.)
+  - **Boot splash (Plymouth) → `bgrt`**: the `bgrt` theme renders the firmware/OEM boot logo instead of a distro splash. Fedora already ships `Theme=bgrt` in `system/linux/etc/plymouth/plymouthd.conf` (its native default), so there is no Fedora action — no theme swap, no initramfs rebuild. Ubuntu owns plymouth via the `default.plymouth` update-alternatives link, so `run_after_ubuntu-plymouth-bgrt.sh.tmpl` (`linux-ubuntu` gate) points it at `bgrt` + `update-initramfs -u`, idempotent on the alternative's current value and skipped when the `bgrt` theme (from `plymouth-theme-ubuntu-logo`) is absent. `breeze` plymouth was deliberately NOT used: it is not guaranteed installed on either KDE base, so pointing at it risked a broken splash.
+  - **Login greeter (SDDM)**: `system/linux/etc/sddm.conf.d/90-breeze.conf` (`[Theme] Current=breeze`) deploys to both distros via the system tree; the `90-` prefix outranks vendor drop-ins. `install-system-config` skips deploying it when `/usr/share/sddm/themes/breeze/theme.conf` is absent (forcing a missing theme breaks the login screen). This path was previously an orphan in `REMOVED_ETC_PATHS`; that entry is dropped now that the file is shipped again.
+  - **Wallpaper**: `run_after_config-kde-wallpaper-breeze.sh.tmpl` (`(or fedora ubuntu)` KDE gate) applies Plasma's default "Next" wallpaper via `plasma-apply-wallpaperimage`, live-session-guarded, **exactly once** (per-user stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a wallpaper the user later picks is never reverted.
 - **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists and RPM Fusion/COPRs have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos plus CUDA/libnvidia-container NVIDIA packages under the `HAS_NVIDIA` gate instead.
 - POSIX scripts/wrappers keep a Windows `.ps1` counterpart in sync
   (`executable_code`/`.ps1`, `executable_opencode`/`.ps1`). Files migrated from the

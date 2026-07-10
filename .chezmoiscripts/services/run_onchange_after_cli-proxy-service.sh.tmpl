@@ -1,10 +1,7 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
-{{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
-
-SRC="{{ $sourceDir }}"
 
 {{ if eq .chezmoi.os "darwin" -}}
 launchctl bootout "gui/$UID/dev.h82.cli-proxy-api" 2>/dev/null || true
