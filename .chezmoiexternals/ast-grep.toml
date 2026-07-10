@@ -1,16 +1,16 @@
 {{- $tag := (gitHubLatestRelease "ast-grep/ast-grep").TagName | toString -}}
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 {{- $astGrepArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
-{{- $astGrepOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "macos" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+{{- $astGrepOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
 
-[".local/bin/ast-grep"]
+[ast-grep]
 type = "archive-file"
 url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-%s.zip" $astGrepArch $astGrepOperatingSystem) | quote }}
 executable = true
 targetPath = '{{ printf ".local/bin/ast-grep%s" $executableExtension }}'
 path = '{{ printf "ast-grep%s" $executableExtension }}'
 
-[".local/bin/sg"]
+[sg]
 type = "archive-file"
 url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-%s.zip" $astGrepArch $astGrepOperatingSystem) | quote }}
 executable = true

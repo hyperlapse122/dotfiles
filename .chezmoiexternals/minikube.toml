@@ -1,6 +1,6 @@
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
-[".local/bin/minikube"]
+[minikube]
 type = "archive-file"
 targetPath = '{{ printf ".local/bin/minikube%s" $executableExtension }}'
 url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'

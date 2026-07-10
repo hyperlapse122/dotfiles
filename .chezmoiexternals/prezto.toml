@@ -1,7 +1,8 @@
 {{- if ne .chezmoi.os "windows" }}
 
-[".config/zsh/.zprezto"]
+[prezto]
 type = "git-repo"
+targetPath = ".config/zsh/.zprezto"
 url = "https://github.com/sorin-ionescu/prezto.git"
 clone.args = ["--recursive"]
 refreshPeriod = "8760h"

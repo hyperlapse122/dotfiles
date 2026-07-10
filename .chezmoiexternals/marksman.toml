@@ -2,22 +2,25 @@
 
 {{- if eq .chezmoi.os "linux" }}
 
-[".local/bin/marksman"]
+[marksman]
 type = "file"
+targetPath = '.local/bin/marksman'
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag (printf "marksman-%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) | quote }}
 executable = true
 
 {{- else if eq .chezmoi.os "darwin" }}
 
-[".local/bin/marksman"]
+[marksman]
 type = "file"
+targetPath = '.local/bin/marksman'
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag "marksman-macos" | quote }}
 executable = true
 
 {{- else if eq .chezmoi.os "windows" }}
 
-[".local/bin/marksman.exe"]
+[marksman]
 type = "file"
+targetPath = '.local/bin/marksman.exe'
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag "marksman.exe" | quote }}
 executable = true
 

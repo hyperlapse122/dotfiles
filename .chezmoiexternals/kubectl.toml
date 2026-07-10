@@ -1,13 +1,13 @@
 {{- $tag := (gitHubLatestRelease "kubernetes/kubernetes").TagName | toString -}}
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
-[".local/bin/kubectl"]
+[kubectl]
 type = "file"
 targetPath = '{{ printf ".local/bin/kubectl%s" $executableExtension }}'
 url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl%s" $tag .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true
 
-[".local/bin/kubectl-convert"]
+[kubectl-convert]
 type = "file"
 targetPath = '{{ printf ".local/bin/kubectl-convert%s" $executableExtension }}'
 url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert%s" $tag .chezmoi.os .chezmoi.arch $executableExtension }}'

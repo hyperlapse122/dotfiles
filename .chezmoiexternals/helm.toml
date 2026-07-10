@@ -3,7 +3,7 @@
 
 {{- $tag := (gitHubLatestRelease "helm/helm").TagName | toString -}}
 
-[".local/bin/helm"]
+[helm]
 targetPath = '{{ printf ".local/bin/helm%s" $executableExtension }}'
 type = "archive-file"
 url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s%s" $tag .chezmoi.os .chezmoi.arch $archiveExtension }}'

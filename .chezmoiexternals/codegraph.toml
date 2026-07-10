@@ -1,6 +1,6 @@
 {{- $tag := (gitHubLatestRelease "colbymchenry/codegraph").TagName | toString -}}
 
-[".codegraph/versions/current"]
+[codegraph]
 {{ if ne .chezmoi.os "windows" }}
 targetPath = '{{ printf ".codegraph/versions/%s" $tag }}'
 {{ else }}

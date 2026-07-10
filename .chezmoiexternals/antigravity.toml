@@ -1,0 +1,25 @@
+{{- $antigravityManifestBase := "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests" -}}
+{{- $antigravityPlatform := (printf "%s_%s" .chezmoi.os .chezmoi.arch) -}}
+{{- $antigravityManifest := output "curl" "-fsSL" (printf "%s/%s.json" $antigravityManifestBase $antigravityPlatform) | toString | fromJson -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+
+{{- if eq .chezmoi.os "windows" }}
+[agy]
+type = "file"
+targetPath = '{{ printf ".local/bin/agy%s" $executableExtension }}'
+url = '{{ $antigravityManifest.url }}'
+executable = true
+
+[agy.checksum]
+sha512 = '{{ $antigravityManifest.sha512 }}'
+{{- else }}
+[agy]
+type = "archive-file"
+targetPath = '.local/bin/agy'
+url = '{{ $antigravityManifest.url }}'
+path = 'antigravity'
+executable = true
+
+[agy.checksum]
+sha512 = '{{ $antigravityManifest.sha512 }}'
+{{- end }}

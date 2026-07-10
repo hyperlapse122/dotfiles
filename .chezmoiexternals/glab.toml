@@ -8,17 +8,20 @@
 {{- $glabSkillUrl := (printf "https://gitlab.com/gitlab-org/cli/-/raw/%s/internal/commands/skills/bundled/assets/glab/SKILL.md?ref_type=tags" $latestRelease.tag_name) -}}
 {{- $glabStackSkillUrl := (printf "https://gitlab.com/gitlab-org/cli/-/raw/%s/internal/commands/skills/bundled/assets/glab-stack/SKILL.md?ref_type=tags" $latestRelease.tag_name) -}}
 
-[".local/bin/glab"]
+[glab]
 targetPath = '{{ printf ".local/bin/glab%s" $executableExtension }}'
 type = "archive-file"
 url = '{{ $archiveUrl }}'
 path = '{{ printf "bin/glab%s" $executableExtension }}'
+executable = true
 
-[".agents/skills/glab/SKILL.md"]
+[glab-skill]
 type = "file"
+targetPath = '.agents/skills/glab/SKILL.md'
 url = '{{ $glabSkillUrl }}'
 
-[".agents/skills/glab-stack/SKILL.md"]
+[glab-stack-skill]
 type = "file"
+targetPath = '.agents/skills/glab-stack/SKILL.md'
 url = '{{ $glabStackSkillUrl }}'
 
