@@ -236,39 +236,6 @@
 				"apiKey": "local-api-key"
 			},
 		},
-		"openai": {
-			"npm": "@ai-sdk/openai-compatible",
-			"options": {
-				"baseURL": "http://127.0.0.1:8317/v1",
-				"apiKey": "local-api-key"
-			},
-			"models": {
-				"gpt-5.5": {
-					"limit": {
-						"context": 258000,
-						"output": 128000
-					}
-				},
-				"gpt-5.5-fast": {
-					"limit": {
-						"context": 258000,
-						"output": 128000
-					}
-				},
-				"gpt-5.4-mini": {
-					"limit": {
-						"context": 400000,
-						"output": 128000
-					}
-				},
-				"gpt-5.4-mini-fast": {
-					"limit": {
-						"context": 400000,
-						"output": 128000
-					}
-				}
-			}
-		},
 		"google-agy": {
 			"npm": "@ai-sdk/openai-compatible",
 			"options": {
