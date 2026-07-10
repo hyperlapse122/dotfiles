@@ -253,11 +253,18 @@ REMOVED_ETC_PATHS=(
   /etc/NetworkManager/conf.d/92-docker.conf
   /etc/NetworkManager/conf.d/93-veth.conf
   /etc/modprobe.d/audio-hda-no-powersave.conf
-  /etc/plymouth/plymouthd.conf
   /etc/systemd/system/docker-prune.service
   /etc/systemd/system/docker-prune.timer
   /etc/udev/rules.d/logitech-receiver.rules
 )
+
+# Fedora-only cleanup: the removed plymouthd.conf was only ever DEPLOYED on
+# Fedora (Ubuntu owns plymouth via the default.plymouth update-alternatives link
+# and never received this file), so reclaim it there only — never delete a native
+# or user-created /etc/plymouth/plymouthd.conf on an Ubuntu host.
+if [[ "$os_id" == fedora ]]; then
+  REMOVED_ETC_PATHS+=(/etc/plymouth/plymouthd.conf)
+fi
 
 removed_listed=0
 for dst in "${REMOVED_ETC_PATHS[@]}"; do
