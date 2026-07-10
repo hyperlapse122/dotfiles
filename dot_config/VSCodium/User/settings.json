@@ -51,7 +51,7 @@
 	"explorer.autoReveal": false,
 	"explorer.incrementalNaming": "smart",
 	"extensions.autoCheckUpdates": false,
-	"extensions.autoUpdate": false,
+	"extensions.autoUpdate": "off",
 	"files.associations": {
 		"*.json": "json",
 		"*.tmpl": "plaintext"
