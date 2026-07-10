@@ -8,8 +8,6 @@
 # trust rejection, or install errors all exit 0 after a diagnostic message.
 # Container-kept: intentionally not excluded from containers; it soft-skips when
 # mise/node/git are absent instead of bootstrapping anything.
-# ~/.claude/skills preflight: dotagents' claude target can migrate and rm -rf a
-# real directory, so a non-empty real dir is treated as a manual-merge case.
 
 set -euo pipefail
 
@@ -22,11 +20,6 @@ fi
 
 if ! command -v git >/dev/null 2>&1; then
   echo "install-dotagents-skills: skipped (git not installed)" >&2
-  skip
-fi
-
-cs="$HOME/.claude/skills"; if [[ -e "$cs" && ! -L "$cs" && -d "$cs" && -n "$(ls -A "$cs" 2>/dev/null)" ]]; then
-  echo "install-dotagents-skills: skipped (~/.claude/skills is a non-empty real dir; resolve manually to avoid data loss)" >&2
   skip
 fi
 

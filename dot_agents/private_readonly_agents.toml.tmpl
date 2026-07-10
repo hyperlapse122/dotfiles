@@ -1,0 +1,111 @@
+version = 1
+agents = ["claude", "codex"]
+# 1 week in minutes — settle window for the managed SKILL refs only. It is
+# independent of the 24h mise gate on the dotagents CLI itself. dotagents
+# throws if a pinned ref is younger than this, so every pin below is >=7d old.
+minimum_release_age = 10080
+
+[trust]
+github_orgs = ["getsentry", "microsoft", "shadcn"]
+git_domains = ["git.jpi.app"]
+
+[[skills]]
+name = "playwright-cli"
+source = "microsoft/playwright-cli"
+
+[[skills]]
+name = "improve"
+source = "shadcn/improve"
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents"
+
+[[skills]]
+name = "ci-cd-monitoring"
+source = "path:skills/ci-cd-monitoring"
+
+[[skills]]
+name = "git-workflow"
+source = "path:skills/git-workflow"
+
+[[skills]]
+name = "gitlab-issues"
+source = "path:skills/gitlab-issues"
+
+[[skills]]
+name = "glab"
+source = "path:skills/glab"
+
+[[skills]]
+name = "glab-stack"
+source = "path:skills/glab-stack"
+
+[[skills]]
+name = "js-package-managers"
+source = "path:skills/js-package-managers"
+
+[[skills]]
+name = "pr-mr"
+source = "path:skills/pr-mr"
+
+[[mcp]]
+name = "codegraph"
+command = "codegraph"
+args = ["serve", "--mcp"]
+
+[[mcp]]
+name = "context7"
+url = "https://mcp.context7.com/mcp"
+
+[mcp.headers]
+CONTEXT7_API_KEY = '{{ onepasswordRead "op://Private/Context7/API Key" }}'
+
+[[mcp]]
+name = "websearch"
+url = "https://mcp.exa.ai/mcp"
+
+[mcp.headers]
+x-api-key = '{{ onepasswordRead "op://Private/Exa/API Key" }}'
+
+# Z.ai MCP servers
+{{ $zaiApiKey := (onepasswordRead "op://Private/Z.ai/API Key") -}}
+[[mcp]]
+name = "zai-mcp-server"
+command = "mise"
+args = [
+  "--no-config",
+  "--no-env",
+  "--no-hooks",
+  "exec",
+  "-yq",
+  "npm:@z_ai/mcp-server",
+  "node",
+  "--",
+  "zai-mcp-server",
+]
+env = [
+  "Z_AI_API_KEY={{ $zaiApiKey }}",
+  "Z_AI_MODE=ZAI",
+]
+
+[[mcp]]
+name = "web-search-prime"
+url = "https://api.z.ai/api/mcp/web_search_prime/mcp"
+
+[mcp.headers]
+Authorization = 'Bearer {{ $zaiApiKey }}'
+
+[[mcp]]
+name = "web-reader"
+url = "https://api.z.ai/api/mcp/web_reader/mcp"
+
+[mcp.headers]
+Authorization = 'Bearer {{ $zaiApiKey }}'
+
+[[mcp]]
+name = "zread"
+url = "https://api.z.ai/api/mcp/zread/mcp"
+
+[mcp.headers]
+Authorization = 'Bearer {{ $zaiApiKey }}'

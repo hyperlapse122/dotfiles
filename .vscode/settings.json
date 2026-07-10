@@ -3,6 +3,8 @@
     "*.tmpl": "plaintext",
     "*.sh.tmpl": "shellscript",
     "*.ps1.tmpl": "powershell",
-    "*.yaml.tmpl": "yaml"
+    "*.yaml.tmpl": "yaml",
+    "*.json": "json",
+    "*.toml.tmpl": "toml"
   }
 }
