@@ -1,9 +1,16 @@
 name: Render dotfiles
 
-# On every pull request, actually run `chezmoi apply --init` inside slim Fedora
-# and Ubuntu container images and capture what chezmoi renders, so a reviewer
-# can eyeball the real output of any template change (e.g. the opencode plugin
-# versions now resolved from GitHub at apply time) without a local checkout.
+# On every pull request, actually run `chezmoi apply --init` on all four target
+# platforms and capture what chezmoi renders, so a reviewer can eyeball the real
+# output of any template change (e.g. the opencode plugin versions now resolved
+# from GitHub at apply time) without a local checkout:
+#   * Fedora + Ubuntu — slim container images (`apply` / `render-internals`).
+#   * macOS           — a native `macos-latest` runner (`apply-macos`); a
+#                       container cannot provide a `darwin` chezmoi, and darwin-only
+#                       templates (e.g. the mxm4-haptic build) render only here.
+#   * Windows         — a native `windows-latest` runner (`apply-windows`); needed
+#                       so `.chezmoi.os == "windows"` and the `.ps1` read-source
+#                       hook path exercise, and to feed the PowerShell lint.
 #
 # Two independent artifacts are produced per OS:
 #   1. rendered-files-<os>     — the dotfiles `chezmoi apply --init` writes into
@@ -12,6 +19,10 @@ name: Render dotfiles
 #                                templates rendered via `chezmoi execute-template`
 #                                (these are never linked into $HOME, so they have
 #                                to be rendered explicitly to be inspected).
+#
+# The rendered scripts then flow into two lint gates: `shellcheck` lints every
+# rendered bash/sh script across Fedora, Ubuntu AND macOS, and `lint-powershell`
+# runs PSScriptAnalyzer over the Windows `.ps1` files.
 #
 # No real 1Password or GitHub PAT is used: a PATH-local dummy `op` satisfies
 # `onepasswordRead` / `onepassword`, a dummy `mise` satisfies the container
@@ -294,19 +305,347 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Task 3: shellcheck the RENDERED scripts (not the raw *.tmpl, which shellcheck
-  # cannot parse). Runs only after both render jobs so it lints the real Fedora
-  # AND Ubuntu output of every provisioning script — the `.chezmoiscripts/**`
-  # templates that the source-level lint could never reach. OS-gated templates
-  # render to an empty file on the non-matching OS, so the shell-shebang filter
-  # below skips them automatically; templates active on both OSes are linted in
-  # both variants (their rendered bodies can differ per OS). The two repo-meta
-  # scripts that are never deployed/rendered (.install-prerequisites.sh and the
-  # .ci smoke test) are linted from the checkout so their coverage is not lost.
-  # Findings are also uploaded as a `shellcheck-report` artifact for inspection.
+  # Task 3: macOS — real `chezmoi apply --init` + internals render on a native
+  # runner. A container image can't carry a darwin chezmoi, and the darwin
+  # `.chezmoiignore` branch (keep `./Library`, drop `./system`) plus every
+  # darwin-only template (e.g. the mxm4-haptic build) only render here. Produces
+  # the same rendered-files-macos / rendered-internals-macos pair as the Linux
+  # matrix so the shellcheck job also lints the darwin variant of each script.
+  #
+  # No real 1Password: a PATH-local dummy `op` (identical behaviour to the Linux
+  # stub) satisfies op_ready() and onepassword*; a dummy `mise` on PATH makes the
+  # .install-prerequisites.sh read-source hook take its `mise present && op_ready`
+  # fast path (exit 0) instead of trying to brew-install anything.
+  # ---------------------------------------------------------------------------
+  apply-macos:
+    name: apply --init + internals (macos)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install chezmoi + dummy op/mise
+        run: |
+          set -euxo pipefail
+          # Install into a throwaway bindir on PATH — avoids sudo writes to
+          # /usr/local/bin on Apple-silicon runners. GITHUB_PATH persists it to
+          # every later step (so chezmoi's own hook run sees the dummy op/mise).
+          bindir="${RUNNER_TEMP}/bin"
+          mkdir -p "${bindir}"
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "${bindir}"
+          "${bindir}/chezmoi" --version
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'set -eu'
+            printf '%s\n' 'case "${1-}" in'
+            printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
+            printf '%s\n' '  --version) printf "2.0.0\n" ;;'
+            printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
+            printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
+            printf '%s\n' 'esac'
+          } > "${bindir}/op"
+          chmod 0755 "${bindir}/op"
+
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${bindir}/mise"
+          chmod 0755 "${bindir}/mise"
+
+          echo "${bindir}" >> "${GITHUB_PATH}"
+
+      - name: chezmoi apply --init into an isolated HOME
+        run: |
+          set -euxo pipefail
+          export HOME="${RUNNER_TEMP}/fakehome"
+          SRC="${HOME}/.local/share/chezmoi"
+          mkdir -p "${SRC}"
+          cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
+          rm -rf "${SRC}/.git" "${SRC}/.chezmoiexternals"
+          cd "${HOME}"
+
+          set +e
+          chezmoi apply --init \
+            --exclude=scripts,externals \
+            --keep-going \
+            --verbose
+          rc=$?
+          set -e
+          echo "chezmoi apply --init exit code: ${rc}"
+          echo "- \`chezmoi apply --init\` (macos) exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Stage rendered files
+        if: always()
+        run: |
+          set -euxo pipefail
+          src="${RUNNER_TEMP}/fakehome"
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
+          mkdir -p "${out}"
+          [ -d "${src}" ] || exit 0
+          cp -a "${src}/." "${out}/"
+          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+
+      - name: Upload rendered files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-files-macos
+          path: _artifacts/rendered-files
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Assert opencode plugin versions rendered from GitHub
+        run: |
+          set -euxo pipefail
+          cfg="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.config/opencode"
+          for f in opencode.json tui.json; do
+            test -f "${cfg}/${f}"
+            jq empty "${cfg}/${f}"
+            if grep -q '{{' "${cfg}/${f}"; then
+              echo "::error::${f} still contains an unrendered template" >&2
+              exit 1
+            fi
+            jq -e '.plugin | all(test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$"))' \
+              "${cfg}/${f}" >/dev/null
+          done
+          {
+            echo "### opencode plugins (macos)"
+            echo '```json'
+            jq -c '.plugin' "${cfg}/opencode.json"
+            jq -c '.plugin' "${cfg}/tui.json"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Render .chezmoiscripts and .chezmoiexternals
+        run: |
+          set -euo pipefail
+          scratch="${RUNNER_TEMP}/scratch"
+          mkdir -p "${scratch}/target"
+          : > "${scratch}/empty.toml"
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          mkdir -p "${out}"
+
+          render_one() {
+            chezmoi --config "${scratch}/empty.toml" \
+              --source "${GITHUB_WORKSPACE}" \
+              --destination "${scratch}/target" \
+              execute-template
+          }
+
+          total=0; failed=0
+          while IFS= read -r -d '' f; do
+            rel="${f#./}"
+            dest="${out}/${rel%.tmpl}"
+            mkdir -p "$(dirname "${dest}")"
+            total=$((total + 1))
+            if render_one < "${f}" > "${dest}" 2> "${dest}.stderr"; then
+              rm -f "${dest}.stderr"
+            else
+              mv "${dest}.stderr" "${dest}.render-error.txt"
+              failed=$((failed + 1))
+              echo "::warning file=${rel}::failed to render ${rel}"
+            fi
+          done < <(find .chezmoiscripts .chezmoiexternals -type f -print0)
+
+          echo "rendered ${total} template(s), ${failed} error(s)"
+          {
+            echo "### rendered internals (macos)"
+            echo ""
+            echo "- rendered ${total} template(s), ${failed} error(s)"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload rendered internals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-internals-macos
+          path: _artifacts/rendered-internals
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Task 4: Windows — real `chezmoi apply --init` + internals render on a native
+  # runner. Only here does `.chezmoi.os == "windows"` hold, so the Windows
+  # `.chezmoiignore` branch (keep `./AppData`, deploy `dot_local/bin/*.ps1` only)
+  # and the `.ps1` read-source-state.pre hook path in `.chezmoi.toml.tmpl` are
+  # actually exercised. The rendered Windows `.ps1` output feeds the
+  # `lint-powershell` gate below.
+  #
+  # A dummy `op.cmd` / `mise.cmd` on PATH makes the `.install-prerequisites.ps1`
+  # hook take its `mise present && Test-OpReady` fast path (exit 0) — no winget,
+  # no real 1Password. The apply itself is non-fatal (mirrors the Linux jobs);
+  # PSScriptAnalyzer is the authoritative Windows gate.
+  # ---------------------------------------------------------------------------
+  apply-windows:
+    name: apply --init + internals (windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install chezmoi + dummy op/mise
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bindir = Join-Path $env:RUNNER_TEMP 'bin'
+          New-Item -ItemType Directory -Force -Path $bindir | Out-Null
+
+          # Latest chezmoi straight from its GitHub release (the .chezmoiexternals
+          # templates rendered below use recent template functions an older pinned
+          # build would not define). browser_download_url is public, so no auth.
+          $hdr = @{ 'User-Agent' = 'gh-actions' }
+          if ($env:GITHUB_TOKEN) { $hdr['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+          $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/twpayne/chezmoi/releases/latest' -Headers $hdr
+          $asset = $rel.assets | Where-Object { $_.name -match 'windows_amd64\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw 'no chezmoi windows_amd64 release asset found' }
+          $zip = Join-Path $env:RUNNER_TEMP 'chezmoi.zip'
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers @{ 'User-Agent' = 'gh-actions' }
+          Expand-Archive -Path $zip -DestinationPath $bindir -Force
+          & (Join-Path $bindir 'chezmoi.exe') --version
+
+          # Dummy `op.cmd`: `whoami` exits 0 (Test-OpReady), `read op://...` and any
+          # other verb print a placeholder secret so onepasswordRead resolves. A
+          # .cmd is resolved by both Get-Command (PATHEXT) and chezmoi's exec.
+          # (An array joined by CRLF, not a here-string — a here-string's closing
+          # "@ must sit in column 1, which would break this YAML block scalar.)
+          $op = @(
+            '@echo off',
+            'if /I "%~1"=="whoami" (echo dummy@example.invalid & exit /b 0)',
+            'if /I "%~1"=="--version" (echo 2.0.0 & exit /b 0)',
+            'echo dummy-secret',
+            'exit /b 0'
+          ) -join "`r`n"
+          Set-Content -Path (Join-Path $bindir 'op.cmd') -Value $op -Encoding Ascii
+
+          # Dummy `mise.cmd`: only needs to exist on PATH for the hook fast path.
+          $mise = @('@echo off', 'exit /b 0') -join "`r`n"
+          Set-Content -Path (Join-Path $bindir 'mise.cmd') -Value $mise -Encoding Ascii
+
+          Add-Content -Path $env:GITHUB_PATH -Value $bindir
+
+      - name: chezmoi apply --init into an isolated HOME
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # robocopy exits 1 on a *successful* copy and chezmoi --keep-going may
+          # exit non-zero by design; without this, pwsh 7.4+ turns any native
+          # non-zero exit into a throw (killing the step before the rc checks).
+          $PSNativeCommandUseErrorActionPreference = $false
+          $fakehome = Join-Path $env:RUNNER_TEMP 'fakehome'
+          $src = Join-Path $fakehome '.local\share\chezmoi'
+          New-Item -ItemType Directory -Force -Path $src | Out-Null
+
+          # robocopy (not Copy-Item */-Recurse, which skips dot-prefixed dirs like
+          # .chezmoidata/.chezmoiscripts) mirrors the checkout, hidden files and
+          # all. Exit codes 0-7 are success; >=8 is a real failure.
+          $null = robocopy $env:GITHUB_WORKSPACE $src /E /NFL /NDL /NJH /NJS /NC /NS /NP
+          if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
+          Remove-Item -Recurse -Force (Join-Path $src '.git') -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force (Join-Path $src '.chezmoiexternals') -ErrorAction SilentlyContinue
+
+          # chezmoi derives the home (and thus the default source dir + the
+          # home-relative hook path) from USERPROFILE on Windows; point both it and
+          # HOME at the throwaway profile and run from there.
+          $env:USERPROFILE = $fakehome
+          $env:HOME = $fakehome
+          Set-Location $fakehome
+
+          chezmoi apply --init --exclude=scripts,externals --keep-going --verbose
+          $rc = $LASTEXITCODE
+          Write-Host "chezmoi apply --init exit code: $rc"
+          "- ``chezmoi apply --init`` (windows) exit code: $rc" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Stage rendered files
+        if: always()
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # robocopy exits 1 on a successful copy — keep that from throwing.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $src = Join-Path $env:RUNNER_TEMP 'fakehome'
+          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-files'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          if (-not (Test-Path $src)) { exit 0 }
+          $null = robocopy $src $out /E /NFL /NDL /NJH /NJS /NC /NS /NP
+          if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
+          # Drop the source copy + chezmoi's own state so only rendered targets remain.
+          Remove-Item -Recurse -Force (Join-Path $out '.local\share\chezmoi') -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force (Join-Path $out '.config\chezmoi') -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force (Join-Path $out '.cache') -ErrorAction SilentlyContinue
+
+      - name: Upload rendered files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-files-windows
+          path: _artifacts/rendered-files
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Render .chezmoiscripts and .chezmoiexternals
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A template that fails to render must set $LASTEXITCODE, not throw.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $scratch = Join-Path $env:RUNNER_TEMP 'scratch'
+          New-Item -ItemType Directory -Force -Path (Join-Path $scratch 'target') | Out-Null
+          $empty = Join-Path $scratch 'empty.toml'
+          New-Item -ItemType File -Force -Path $empty | Out-Null
+          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          $roots = @('.chezmoiscripts', '.chezmoiexternals') |
+            ForEach-Object { Join-Path $env:GITHUB_WORKSPACE $_ } |
+            Where-Object { Test-Path $_ }
+          $files = Get-ChildItem -Path $roots -Recurse -File -Force
+          $prefix = $env:GITHUB_WORKSPACE.TrimEnd('\') + '\'
+          $total = 0; $failed = 0
+          foreach ($f in $files) {
+            $rel = $f.FullName.Substring($prefix.Length)
+            $dest = Join-Path $out ($rel -replace '\.tmpl$', '')
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+            $total++
+            $err = "$dest.render-error.txt"
+            Get-Content -Raw -LiteralPath $f.FullName |
+              & chezmoi --config $empty --source $env:GITHUB_WORKSPACE --destination (Join-Path $scratch 'target') execute-template `
+              1> $dest 2> $err
+            if ($LASTEXITCODE -eq 0) {
+              Remove-Item -Force $err -ErrorAction SilentlyContinue
+            } else {
+              $failed++
+              Write-Host "::warning file=$rel::failed to render $rel"
+            }
+          }
+          Write-Host "rendered $total template(s), $failed error(s)"
+          "### rendered internals (windows)`n`n- rendered $total template(s), $failed error(s)" |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload rendered internals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-internals-windows
+          path: _artifacts/rendered-internals
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Task 5: shellcheck the RENDERED scripts (not the raw *.tmpl, which shellcheck
+  # cannot parse). Runs only after the Fedora, Ubuntu AND macOS render jobs so it
+  # lints the real output of every provisioning script on every POSIX target —
+  # the `.chezmoiscripts/**` templates that the source-level lint could never
+  # reach, including darwin-only scripts that render on macOS alone. OS-gated
+  # templates render to an empty file on the non-matching OS, so the shell-shebang
+  # filter below skips them automatically; templates active on several OSes are
+  # linted in each variant (their rendered bodies can differ per OS). The two
+  # repo-meta scripts that are never deployed/rendered (.install-prerequisites.sh
+  # and the .ci smoke test) are linted from the checkout so their coverage is not
+  # lost. Findings are also uploaded as a `shellcheck-report` artifact.
   shellcheck:
     name: Shellcheck (rendered scripts + repo-meta)
-    needs: [apply, render-internals]
+    needs: [apply, render-internals, apply-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -362,5 +701,100 @@ jobs:
         with:
           name: shellcheck-report
           path: shellcheck-report.txt
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Task 6: PSScriptAnalyzer over the Windows PowerShell scripts — the `.ps1`
+  # analogue of the shellcheck gate. Runs after apply-windows so it lints the
+  # REAL rendered `.ps1` output chezmoi wrote into $HOME (today only
+  # dot_local/bin/executable_code.ps1 -> code.ps1, which is a verbatim copy, but
+  # a future templated `.ps1` would be caught here in its rendered form). The
+  # repo-meta `.install-prerequisites.ps1` hook is never deployed/rendered, so it
+  # is linted from the checkout — mirroring how shellcheck lints
+  # .install-prerequisites.sh. PSScriptAnalyzer is cross-platform (pwsh ships on
+  # the ubuntu runner), so this needs no Windows runner.
+  #
+  # The gate FAILS on Error-severity findings (parse errors, genuine defects) and
+  # REPORTS Warning-severity ones without failing: PSSA's default rule set flags
+  # stylistic conventions this repo's scripts deliberately don't follow (e.g.
+  # PSUseSingularNouns on `Install-Prerequisites`, PSUseShouldProcessForStateChanging
+  # Functions on the internal `Update-SessionPath`/`Install-*` helpers), and those
+  # should not block a PR. Every Warning + Error is still captured in the
+  # `psscriptanalyzer-report` artifact and the step summary for review.
+  lint-powershell:
+    name: PSScriptAnalyzer (rendered .ps1 + repo-meta)
+    needs: [apply-windows]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download rendered Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _rendered
+          pattern: rendered-*-windows
+
+      - name: Install PSScriptAnalyzer
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
+
+      - name: Invoke-ScriptAnalyzer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = [System.Collections.Generic.List[string]]::new()
+
+          # Repo-meta hook that chezmoi never deploys/renders — lint the source.
+          if (Test-Path '.install-prerequisites.ps1') {
+            $targets.Add((Resolve-Path '.install-prerequisites.ps1').Path)
+          }
+
+          # Every rendered .ps1 from the Windows apply/internals artifacts.
+          if (Test-Path '_rendered') {
+            Get-ChildItem -Path '_rendered' -Recurse -File -Filter '*.ps1' |
+              ForEach-Object { $targets.Add($_.FullName) }
+          }
+
+          if ($targets.Count -eq 0) {
+            Write-Error 'no PowerShell scripts found to lint'
+            exit 1
+          }
+
+          Write-Host "PSScriptAnalyzer targets ($($targets.Count)):"
+          $targets | ForEach-Object { Write-Host "  $_" }
+
+          # Collect Warning + Error findings for reporting; only Error fails the job.
+          $results = foreach ($t in $targets) {
+            Invoke-ScriptAnalyzer -Path $t -Severity @('Warning', 'Error')
+          }
+
+          if ($results) {
+            $results | Format-Table -AutoSize RuleName, Severity, ScriptName, Line, Message |
+              Out-String -Width 200 | Tee-Object -FilePath psscriptanalyzer-report.txt
+          } else {
+            'PSScriptAnalyzer: no Warning/Error findings.' |
+              Tee-Object -FilePath psscriptanalyzer-report.txt
+          }
+
+          $errors   = @($results | Where-Object { $_.Severity -eq 'Error' }).Count
+          $warnings = @($results | Where-Object { $_.Severity -eq 'Warning' }).Count
+          "### PSScriptAnalyzer (rendered .ps1 + repo-meta)`n`n- linted $($targets.Count) script(s); $errors error(s), $warnings warning(s) (errors fail the job; warnings are advisory)" |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+          if ($errors -gt 0) {
+            Write-Error "PSScriptAnalyzer found $errors error-severity finding(s)."
+            exit 1
+          }
+
+      - name: Upload PSScriptAnalyzer report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: psscriptanalyzer-report
+          path: psscriptanalyzer-report.txt
           retention-days: 3
           if-no-files-found: ignore
