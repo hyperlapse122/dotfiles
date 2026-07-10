@@ -1,0 +1,47 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_after_ubuntu-plymouth-bgrt.sh.tmpl
+#
+# Points the Ubuntu (Studio) boot splash at the neutral `bgrt` plymouth theme
+# (the same theme Fedora uses by default), which renders the firmware/OEM boot
+# logo instead of a distro-branded splash. Ubuntu selects the plymouth theme via
+# the `default.plymouth` update-alternatives link -- NOT Fedora's plymouthd.conf
+# `Theme=` key (install-system-config skips plymouthd.conf on Ubuntu) -- so this
+# script owns the Ubuntu side. Fedora already ships `Theme=bgrt` in plymouthd.conf
+# and needs no action.
+#
+# Config-override only: nothing is purged; we just point the alternative at the
+# bgrt theme (which ships in plymouth-theme-ubuntu-logo, part of the Ubuntu base)
+# and rebuild the initramfs. run_after re-runs every apply, but every step is
+# guarded and idempotent, so a host already on bgrt is a cheap no-op.
+
+set -euo pipefail
+export LC_ALL=C
+BGRT=/usr/share/plymouth/themes/bgrt/bgrt.plymouth
+NAME=/usr/share/plymouth/themes/default.plymouth   # update-alternatives "name" link
+
+command -v update-alternatives >/dev/null 2>&1 || { echo "plymouth-bgrt: no update-alternatives; skip"; exit 0; }
+command -v update-initramfs   >/dev/null 2>&1 || { echo "plymouth-bgrt: no update-initramfs; skip"; exit 0; }
+# bgrt.plymouth ships in plymouth-theme-ubuntu-logo (Ubuntu base); skip if absent.
+[[ -e "$BGRT" ]] || { echo "plymouth-bgrt: bgrt plymouth theme absent; skip"; exit 0; }
+
+# SUDO + non-interactive skip (querying/setting the alternatives db needs root).
+if [[ "$EUID" -eq 0 ]]; then SUDO=(); else SUDO=(sudo)
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then echo "plymouth-bgrt: no sudo; skip"; exit 0; fi
+fi
+
+# Idempotency: if default.plymouth already resolves to bgrt, do NOTHING
+# (crucially, do NOT rebuild the initramfs).
+current="$("${SUDO[@]}" update-alternatives --query default.plymouth 2>/dev/null | awk '/^Value:/{print $2}')"
+[[ "$current" == "$BGRT" ]] && { echo "plymouth-bgrt: already bgrt; no-op"; exit 0; }
+
+# Register-if-absent, then select bgrt.
+if ! "${SUDO[@]}" update-alternatives --list default.plymouth 2>/dev/null | grep -qx "$BGRT"; then
+  "${SUDO[@]}" update-alternatives --install "$NAME" default.plymouth "$BGRT" 100
+fi
+"${SUDO[@]}" update-alternatives --set default.plymouth "$BGRT"
+
+# Rebuild the initramfs so the boot splash actually changes.
+"${SUDO[@]}" update-initramfs -u
+echo "plymouth-bgrt: boot splash set to bgrt (update-alternatives + initramfs rebuild)"
+{{ end -}}
