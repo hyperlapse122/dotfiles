@@ -1,10 +1,19 @@
+{{- /* Plugin versions are resolved at apply time from each plugin's GitHub
+       tags, so no version is pinned in source. A tag is pushed on every npm
+       publish, so tags mirror the published npm versions 1:1 — whereas GitHub
+       *Releases* can lag npm (e.g. a version published to npm before its
+       Release is cut), which would silently downgrade an npm-installed plugin.
+       Install still happens from npm via "<name>@<version>". */ -}}
+{{- $ohMyOpenagent := (gitHubLatestTag "code-yeongyu/oh-my-openagent").Name | trimPrefix "v" -}}
+{{- $anthropicAuth := (gitHubLatestTag "ex-machina-co/opencode-anthropic-auth").Name | trimPrefix "v" -}}
+{{- $wakatime := (gitHubLatestTag "angristan/opencode-wakatime").Name | trimPrefix "v" -}}
 {
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": "notify",
   "plugin": [
-    "oh-my-openagent@4.16.2",
-    "@ex-machina/opencode-anthropic-auth@1.8.1",
-    "opencode-wakatime@1.3.8"
+    "oh-my-openagent@{{ $ohMyOpenagent }}",
+    "@ex-machina/opencode-anthropic-auth@{{ $anthropicAuth }}",
+    "opencode-wakatime@{{ $wakatime }}"
   ],
   "lsp": {
     "buf": {

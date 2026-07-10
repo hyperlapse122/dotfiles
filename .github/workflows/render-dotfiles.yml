@@ -1,0 +1,294 @@
+name: Render dotfiles
+
+# On every pull request, actually run `chezmoi apply --init` inside slim Fedora
+# and Ubuntu container images and capture what chezmoi renders, so a reviewer
+# can eyeball the real output of any template change (e.g. the opencode plugin
+# versions now resolved from GitHub at apply time) without a local checkout.
+#
+# Two independent artifacts are produced per OS:
+#   1. rendered-files-<os>     — the dotfiles `chezmoi apply --init` writes into
+#                                an isolated $HOME (scripts + externals excluded).
+#   2. rendered-internals-<os> — the `.chezmoiscripts/**` and `.chezmoiexternals/**`
+#                                templates rendered via `chezmoi execute-template`
+#                                (these are never linked into $HOME, so they have
+#                                to be rendered explicitly to be inspected).
+#
+# No real 1Password or GitHub PAT is used: a PATH-local dummy `op` satisfies
+# `onepasswordRead` / `onepassword`, a dummy `mise` satisfies the container
+# fast-path in .install-prerequisites.sh, and GitHub API calls (gitHubLatestTag
+# and the .chezmoiexternals release lookups) authenticate with the workflow's
+# built-in GITHUB_TOKEN. Artifacts are short-lived (retention-days: 3) — a
+# review aid, not a release artifact.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-dotfiles-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # chezmoi reads CHEZMOI_GITHUB_ACCESS_TOKEN / GITHUB_ACCESS_TOKEN / GITHUB_TOKEN
+  # (in that order) for GitHub API calls. The built-in token lifts the anonymous
+  # 60 req/h limit so gitHubLatestTag and the .chezmoiexternals release lookups
+  # do not flake. chezmoi is installed at its latest release — the externals use
+  # recent template functions (gitHubReleaseAssetURL, getRedirectedURL) that an
+  # older pinned chezmoi would not define.
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Task 1: real `chezmoi apply --init` -> rendered dotfiles artifact.
+  # ---------------------------------------------------------------------------
+  apply:
+    name: apply --init (${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: fedora, image: "fedora:latest" }
+          - { os: ubuntu, image: "ubuntu:latest" }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install base tooling (${{ matrix.os }})
+        run: |
+          set -euxo pipefail
+          if command -v dnf >/dev/null 2>&1; then
+            dnf install -y --setopt=install_weak_deps=False git jq tar gzip >/dev/null
+          else
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip >/dev/null
+          fi
+
+      - uses: actions/checkout@v7
+
+      - name: Install chezmoi + dummy op/mise
+        run: |
+          set -euxo pipefail
+          # Latest chezmoi via the README bootstrap URL (externals rely on recent
+          # template functions like gitHubReleaseAssetURL / getRedirectedURL).
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
+          chezmoi --version
+
+          # Dummy `op`: satisfies op_ready() (`op whoami`), onepasswordRead
+          # (`op read`) and onepassword (`op item get --format json`) with
+          # placeholders — no real 1Password is contacted. printf (not a heredoc)
+          # keeps YAML block indentation out of the shebang line.
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'set -eu'
+            printf '%s\n' 'case "${1-}" in'
+            printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
+            printf '%s\n' '  --version) printf "2.0.0\n" ;;'
+            printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
+            printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
+            printf '%s\n' 'esac'
+          } > /usr/local/bin/op
+          chmod 0755 /usr/local/bin/op
+
+          # Dummy `mise`: only needs to exist on PATH so the container fast-path in
+          # .install-prerequisites.sh (`command -v mise && op_ready`) exits 0. It is
+          # never executed for real here — scripts are excluded from the apply.
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > /usr/local/bin/mise
+          chmod 0755 /usr/local/bin/mise
+
+      - name: chezmoi apply --init into an isolated HOME
+        run: |
+          set -euxo pipefail
+          # Reproduce chezmoi's canonical layout in a throwaway HOME: the source
+          # tree lives at ~/.local/share/chezmoi so the read-source-state.pre hook
+          # path (.local/share/chezmoi/.install-prerequisites.sh) resolves exactly
+          # as it does on a real host.
+          export HOME="${RUNNER_TEMP}/fakehome"
+          SRC="${HOME}/.local/share/chezmoi"
+          mkdir -p "${SRC}"
+          cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
+          rm -rf "${SRC}/.git"
+          # This task renders managed FILES only; the .chezmoiexternals fetches
+          # (git clones + release downloads) are rendered separately by the
+          # render-internals job. Dropping them keeps this apply hermetic.
+          rm -rf "${SRC}/.chezmoiexternals"
+          cd "${HOME}"
+
+          # Non-fatal: --keep-going renders everything it can and reports a
+          # non-zero rc if ANY managed file errors. We surface that rc but do not
+          # fail the job here — the "Assert opencode plugin versions" step is the
+          # authoritative gate (it fails the job if the templates this PR touches
+          # did not render). This keeps an unrelated secret-file quirk from
+          # reddening the render check.
+          set +e
+          chezmoi apply --init \
+            --exclude=scripts,externals \
+            --keep-going \
+            --verbose
+          rc=$?
+          set -e
+          echo "chezmoi apply --init exit code: ${rc}"
+          echo "- \`chezmoi apply --init\` exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Stage rendered files
+        if: always()
+        run: |
+          set -euxo pipefail
+          src="${RUNNER_TEMP}/fakehome"
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
+          mkdir -p "${out}"
+          [ -d "${src}" ] || exit 0
+          cp -a "${src}/." "${out}/"
+          # Drop the source copy and chezmoi's own state/cache — keep only the
+          # files chezmoi rendered into the target.
+          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+
+      - name: Upload rendered files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-files-${{ matrix.os }}
+          path: _artifacts/rendered-files
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Assert opencode plugin versions rendered from GitHub
+        run: |
+          set -euxo pipefail
+          cfg="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.config/opencode"
+          for f in opencode.json tui.json; do
+            test -f "${cfg}/${f}"
+            jq empty "${cfg}/${f}"                       # valid JSON
+            if grep -q '{{' "${cfg}/${f}"; then
+              echo "::error::${f} still contains an unrendered template" >&2
+              exit 1
+            fi
+            # Every plugin entry must be "<name>@<semver>" (optionally .../tui),
+            # proving gitHubLatestTag resolved to a concrete version.
+            jq -e '.plugin | all(test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$"))' \
+              "${cfg}/${f}" >/dev/null
+          done
+          {
+            echo "### opencode plugins (${{ matrix.os }})"
+            echo '```json'
+            jq -c '.plugin' "${cfg}/opencode.json"
+            jq -c '.plugin' "${cfg}/tui.json"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # ---------------------------------------------------------------------------
+  # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
+  # ---------------------------------------------------------------------------
+  render-internals:
+    name: render internals (${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: fedora, image: "fedora:latest" }
+          - { os: ubuntu, image: "ubuntu:latest" }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install base tooling (${{ matrix.os }})
+        run: |
+          set -euxo pipefail
+          if command -v dnf >/dev/null 2>&1; then
+            dnf install -y --setopt=install_weak_deps=False git tar gzip >/dev/null
+          else
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends ca-certificates curl git tar gzip >/dev/null
+          fi
+
+      - uses: actions/checkout@v7
+
+      - name: Install chezmoi + dummy op
+        run: |
+          set -euxo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
+          chezmoi --version
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'set -eu'
+            printf '%s\n' 'case "${1-}" in'
+            printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
+            printf '%s\n' '  --version) printf "2.0.0\n" ;;'
+            printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
+            printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
+            printf '%s\n' 'esac'
+          } > /usr/local/bin/op
+          chmod 0755 /usr/local/bin/op
+
+      - name: Render .chezmoiscripts and .chezmoiexternals
+        run: |
+          set -euo pipefail
+          # Isolated, empty scratch config so chezmoi does NOT read
+          # .chezmoi.toml.tmpl (and therefore never runs the read-source-state.pre
+          # hook). execute-template renders one template in isolation using the
+          # container's OS + .chezmoidata; the dummy `op` on PATH covers the
+          # onepassword* calls, and GITHUB_TOKEN covers gitHubLatest* / release
+          # asset lookups.
+          scratch="${RUNNER_TEMP}/scratch"
+          mkdir -p "${scratch}/target"
+          : > "${scratch}/empty.toml"
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          mkdir -p "${out}"
+
+          render_one() {
+            chezmoi --config "${scratch}/empty.toml" \
+              --source "${GITHUB_WORKSPACE}" \
+              --destination "${scratch}/target" \
+              execute-template
+          }
+
+          total=0; failed=0
+          # Both trees hold only template files: every .chezmoiscripts file is a
+          # *.tmpl, and every .chezmoiexternals file is an implicit template.
+          while IFS= read -r -d '' f; do
+            rel="${f#./}"
+            dest="${out}/${rel%.tmpl}"   # foo.sh.tmpl -> foo.sh; externals keep .toml
+            mkdir -p "$(dirname "${dest}")"
+            total=$((total + 1))
+            if render_one < "${f}" > "${dest}" 2> "${dest}.stderr"; then
+              rm -f "${dest}.stderr"
+            else
+              mv "${dest}.stderr" "${dest}.render-error.txt"
+              failed=$((failed + 1))
+              echo "::warning file=${rel}::failed to render ${rel}"
+            fi
+          done < <(find .chezmoiscripts .chezmoiexternals -type f -print0)
+
+          echo "rendered ${total} template(s), ${failed} error(s)"
+          {
+            echo "### rendered internals (${{ matrix.os }})"
+            echo ""
+            echo "- rendered ${total} template(s), ${failed} error(s)"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          # Never hard-fail on a single template: a cross-arch external asset
+          # lookup can legitimately return nothing on the runner's arch. Failures
+          # are kept as *.render-error.txt inside the artifact for inspection.
+
+      - name: Upload rendered internals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-internals-${{ matrix.os }}
+          path: _artifacts/rendered-internals
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
