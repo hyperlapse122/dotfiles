@@ -79,7 +79,7 @@ pprof:
 #       mode: "safe" # enum example: safe, fast
 
 # When true, disable high-overhead request logging and HTTP middleware features to reduce per-request memory usage under high concurrency.
-commercial-mode: true
+commercial-mode: false
 
 # When true, write application logs to rotating files instead of stdout
 logging-to-file: true
@@ -171,7 +171,7 @@ routing:
   # X-Session-ID, Session_id (Codex), X-Client-Request-Id (PI), conversation_id,
   # or first few messages hash.
   # Automatic failover is always enabled when bound auth becomes unavailable.
-  session-affinity: false # default: false
+  session-affinity: true # default: false
   # How long session-to-auth bindings are retained. Default: 1h
   session-affinity-ttl: "1h"
 
@@ -196,12 +196,12 @@ nonstream-keepalive-interval: 0
 # Signature cache validation for thinking blocks (Antigravity/Claude).
 # When true (default), cached signatures are preferred and validated.
 # When false, client signatures are used directly after normalization (bypass mode for testing).
-# antigravity-signature-cache-enabled: true
+antigravity-signature-cache-enabled: true
 
 # Bypass mode signature validation strictness (only applies when signature cache is disabled).
 # When true, validates full Claude protobuf tree (Field 2 -> Field 1 structure).
 # When false (default), only checks R/E prefix + base64 + first byte 0x12.
-# antigravity-signature-bypass-strict: false
+antigravity-signature-bypass-strict: false
 
 # Gemini API keys
 # gemini-api-key:
