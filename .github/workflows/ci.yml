@@ -38,17 +38,10 @@ jobs:
       - run: cargo test
       - run: cargo fmt --check
 
-  shell-lint:
-    name: Shellcheck (plain .sh scripts)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: shellcheck
-        run: |
-          shellcheck \
-            .install-prerequisites.sh \
-            dot_local/bin/executable_setup-luks-tpm2-unlock.sh \
-            .ci/smoke-ubuntu-studio-audio.sh
+  # NOTE: shellcheck moved to the `render-dotfiles` workflow's `shellcheck` job,
+  # which runs after the Fedora/Ubuntu render so it can lint the REAL rendered
+  # scripts (including the `.chezmoiscripts/**` templates shellcheck cannot parse
+  # in `.tmpl` form) plus the repo-meta scripts. It is therefore PR-only.
 
   ubuntu-studio-smoke:
     name: Ubuntu Studio pro-audio smoke (ubuntu:26.04)

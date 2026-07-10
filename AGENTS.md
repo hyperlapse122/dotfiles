@@ -52,6 +52,37 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 - `chezmoi cat ~/target/path` — show the rendered target.
 - `chezmoi apply` — deploy (also runs the scripts). Binary: `/usr/bin/chezmoi`.
 
+#### When local verification is impossible, verify via the PR's CI + artifacts
+
+If the working environment can't run the checks above (no `chezmoi`, no live KDE
+session, no root, no target-distro container — e.g. a sandboxed agent), **do not
+claim a change is verified**. State the local limitation plainly, open the PR,
+and drive verification from the CI run and its artifacts instead. The
+`.github/workflows/render-dotfiles.yml` workflow (PR-triggered) is built for
+exactly this:
+- **`apply --init (fedora|ubuntu)`** runs a real `chezmoi apply --init` in
+  `fedora:latest` / `ubuntu:latest` containers → **`rendered-files-<os>`**
+  artifact (managed files rendered into an isolated `$HOME`; scripts/externals
+  excluded). Catches template errors in deployed files, and asserts the opencode
+  plugin versions rendered from GitHub.
+- **`render internals (fedora|ubuntu)`** renders every `.chezmoiscripts/**` and
+  `.chezmoiexternals/**` template via `chezmoi execute-template` →
+  **`rendered-internals-<os>`** artifact. Per-OS gated scripts render to an empty
+  file on the non-matching OS; a `*.render-error.txt` beside an entry flags a
+  render failure to inspect.
+- **`shellcheck (rendered scripts + repo-meta)`** — `needs: [apply,
+  render-internals]`, so it lints the REAL rendered Fedora + Ubuntu output of the
+  provisioning scripts (the `.tmpl` files shellcheck can't parse directly) plus
+  the non-deployed repo-meta scripts (`.install-prerequisites.sh`, the `.ci`
+  smoke test). Findings also land in the **`shellcheck-report`** artifact. This is
+  the sole shellcheck gate (it replaced the old source-only `shell-lint` job in
+  `ci.yml`), so it is **PR-only** — a direct push to `main` is not shell-linted.
+
+Read the job logs and download the artifacts (they carry `retention-days: 3`) to
+confirm what actually rendered before relying on a change. `ci.yml` covers the
+rest on both push and PR (TS workspace, Rust crate, Ubuntu Studio pro-audio
+smoke).
+
 #### Non-interactive CI/agent verification without real 1Password
 
 For render-only checks in CI or agent verification, **MUST NOT** touch the real
