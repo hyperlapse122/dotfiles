@@ -1,0 +1,18 @@
+{{- /* Version resolved at apply time from oh-my-openagent's GitHub releases
+       (tags mirror the published npm versions); install is still from npm. */ -}}
+{{- $ohMyOpenagent := (gitHubLatestRelease "code-yeongyu/oh-my-openagent").TagName | trimPrefix "v" -}}
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "keybinds": {
+    "app_exit": "none"
+  },
+  "scroll_speed": 3,
+  "scroll_acceleration": {
+    "enabled": true
+  },
+  "diff_style": "auto",
+  "plugin": [
+    "oh-my-openagent@{{ $ohMyOpenagent }}/tui",
+    "oh-my-openagent@{{ $ohMyOpenagent }}"
+  ]
+}
