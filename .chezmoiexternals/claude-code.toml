@@ -1,0 +1,26 @@
+{{- $claudeCodeBaseUrl := "https://downloads.claude.ai/claude-code-releases" -}}
+{{- $latestReleaseId := output "curl" "-fsSL" (printf "%s/latest" $claudeCodeBaseUrl) | toString -}}
+{{- $latestReleaseManifest := output "curl" "-fsSL" (printf "%s/%s/manifest.json" $claudeCodeBaseUrl $latestReleaseId) | toString | fromJson -}}
+
+{{- $latestReleaseVersion := $latestReleaseManifest.version -}}
+
+{{- $claudeCodePlatformId := (printf "%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) -}}
+{{- if eq .chezmoi.os "linux" -}}
+  {{- $libcOut := output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim -}}
+  {{- if eq $libcOut "0" -}}
+    {{- $claudeCodePlatformId = (printf "%s-musl" $claudeCodePlatformId) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $claudeCodePlatform := index $latestReleaseManifest.platforms $claudeCodePlatformId -}}
+{{- $claudeCodeBinary := $claudeCodePlatform.binary -}}
+
+[claude]
+type = "file"
+targetPath = '{{ printf ".local/bin/%s" $claudeCodeBinary }}'
+url = '{{ printf "%s/%s/%s/%s" $claudeCodeBaseUrl $latestReleaseId $claudeCodePlatformId $claudeCodeBinary }}'
+executable = true
+
+[claude.checksum]
+sha256 = '{{ $claudeCodePlatform.checksum }}'
+size = {{ $claudeCodePlatform.size }}

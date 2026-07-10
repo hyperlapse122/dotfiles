@@ -46,7 +46,6 @@ viteplus = "latest"
 "pipx:mmdc" = "latest"
 
 # Agentic AI
-claude-code = "latest"
 "npm:@sentry/dotagents" = "latest"
 "npm:@openai/codex" = "latest"
 "npm:@moonshot-ai/kimi-code" = { version = "latest", allow_builds = [
@@ -68,12 +67,13 @@ minimum_release_age = "24h"
 minimum_release_age_excludes = [
   "gh",
   "glab",
-  "claude-code",
   "pipx",
+  "npm:@sentry/dotagents",
   "npm:@moonshot-ai/kimi-code",
   "npm:@openai/codex",
   "npm:npm",
   "npm:tokscale",
+  "viteplus",
   "github:njbrake/agent-of-empires",
   "github:anomalyco/opencode",
   "github:wakatime/wakatime-cli",
