@@ -6,4 +6,3 @@ targetPath = '{{ printf ".local/bin/minikube%s" $executableExtension }}'
 url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
 path = '{{ printf "out/minikube-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true
-refreshPeriod = "672h"

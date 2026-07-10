@@ -6,7 +6,6 @@
 type = "file"
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag (printf "marksman-%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) | quote }}
 executable = true
-refreshPeriod = "672h"
 
 {{- else if eq .chezmoi.os "darwin" }}
 
@@ -14,7 +13,6 @@ refreshPeriod = "672h"
 type = "file"
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag "marksman-macos" | quote }}
 executable = true
-refreshPeriod = "672h"
 
 {{- else if eq .chezmoi.os "windows" }}
 
@@ -22,6 +20,5 @@ refreshPeriod = "672h"
 type = "file"
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $tag "marksman.exe" | quote }}
 executable = true
-refreshPeriod = "672h"
 
 {{- end }}

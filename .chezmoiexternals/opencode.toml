@@ -7,4 +7,3 @@ type = "archive-file"
 url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) $archiveExtension) }}'
 executable = true
 path = '{{ printf "opencode%s" $executableExtension }}'
-refreshPeriod = "1h"

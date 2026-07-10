@@ -9,4 +9,3 @@ targetPath = '{{ joinPath (env "LOCALAPPDATA") "codegraph" "current" }}'
 type = "archive"
 url = '{{ gitHubReleaseAssetURL "colbymchenry/codegraph" $tag (printf "codegraph-%s-%s.tar.gz" (replace "windows" "win32" .chezmoi.os) (replace "amd64" "x64" .chezmoi.arch)) }}'
 stripComponents = 1
-refreshPeriod = "672h"

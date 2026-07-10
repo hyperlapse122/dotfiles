@@ -9,7 +9,6 @@ url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-%s.zip" 
 executable = true
 targetPath = '{{ printf ".local/bin/ast-grep%s" $executableExtension }}'
 path = '{{ printf "ast-grep%s" $executableExtension }}'
-refreshPeriod = "672h"
 
 [".local/bin/sg"]
 type = "archive-file"
@@ -17,4 +16,3 @@ url = {{ gitHubReleaseAssetURL "ast-grep/ast-grep" $tag (printf "app-%s-%s.zip" 
 executable = true
 targetPath = '{{ printf ".local/bin/sg%s" $executableExtension }}'
 path = '{{ printf "sg%s" $executableExtension }}'
-refreshPeriod = "672h"
