@@ -5,7 +5,8 @@ set -euo pipefail
 
 # Consolidated Ubuntu provisioning, adapted from the Fedora run_onchange installer:
 # APT repositories, dpkg architecture setup for Steam, apt/flatpak/dotnet
-# packages, direct .deb installs, NVIDIA driver + CUDA + container toolkit, system
+# packages, direct .deb installs, NVIDIA driver + CUDA + container toolkit, the
+# Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), system
 # services, and user groups. Every install path is guarded so chezmoi can safely
 # re-run this script when .chezmoidata/packages.yaml changes.
 
@@ -23,6 +24,26 @@ if systemd-detect-virt --quiet; then
   IS_VIRT=1
 else
   IS_VIRT=0
+fi
+
+# Intel GPU probe for the kobuk-team intel-graphics stack. 0x8086 is Intel's
+# vendor id for every Intel device (NIC, chipset, ...), so also require a
+# display-controller PCI class (0x03xxxx) to avoid tripping the gate on a
+# non-GPU Intel part. FORCE_INTEL=1 overrides the probe: for a GPU-passthrough
+# VM whose card the sysfs scan misses, and to validate the kobuk repo + Intel
+# package set in a GPU-less test container.
+if [[ "${FORCE_INTEL:-0}" == "1" ]]; then
+  HAS_INTEL_GPU=1
+else
+  HAS_INTEL_GPU=0
+  for _intel_vendor in /sys/bus/pci/devices/*/vendor; do
+    [[ -r "${_intel_vendor}" ]] || continue
+    [[ "$(cat "${_intel_vendor}")" == "0x8086" ]] || continue
+    _intel_class="${_intel_vendor%/vendor}/class"
+    [[ -r "${_intel_class}" && "$(cat "${_intel_class}")" == 0x03* ]] || continue
+    HAS_INTEL_GPU=1
+    break
+  done
 fi
 
 # Use sudo only when not already root. APT, dpkg, systemctl, and usermod need it.
@@ -63,6 +84,12 @@ nvidia_packages=(
   {{ . | quote }}
 {{ end -}}
 )
+intel_packages=(
+{{ range .packages.linux.ubuntu.intelPackages -}}
+  {{ . | quote }}
+{{ end -}}
+)
+intel_hwe_kernel={{ .packages.linux.ubuntu.intelHweKernel | quote }}
 flatpaks=(
 {{ range .packages.linux.ubuntu.flatpaks -}}
   {{ . | quote }}
@@ -212,6 +239,60 @@ install_nvidia_support() {
   fi
 }
 
+# kobuk-team/intel-graphics PPA (Canonical's intel-graphics-preview stack).
+# Split out from install_intel_support so the harness smoke test (FORCE_INTEL=1)
+# can exercise repo registration and Intel package resolution on a GPU-less box.
+# Signing key 0C0E6AF955CE463C03FC51574D098D70AFBE5E1F; the launchpad PPA
+# publishes for resolute (26.04), matching the other PPA sources lines above.
+setup_intel_repos() {
+  if [[ ! -f /usr/share/keyrings/kobuk-intel-graphics.gpg ]]; then
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x0C0E6AF955CE463C03FC51574D098D70AFBE5E1F" \
+      | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/kobuk-intel-graphics.gpg
+  fi
+  if [[ ! -f /etc/apt/sources.list.d/kobuk-intel-graphics.list ]]; then
+    printf '%s\n' 'deb [signed-by=/usr/share/keyrings/kobuk-intel-graphics.gpg] https://ppa.launchpadcontent.net/kobuk-team/intel-graphics/ubuntu resolute main' \
+      | "${SUDO[@]}" tee /etc/apt/sources.list.d/kobuk-intel-graphics.list >/dev/null
+  fi
+}
+
+install_intel_support() {
+  if [[ "${HAS_INTEL_GPU}" -ne 1 ]]; then
+    return 0
+  fi
+
+  setup_intel_repos
+  "${APT[@]}" update
+
+  # Make the generic (HWE) kernel the default boot entry, ahead of the lowlatency
+  # flavour ubuntustudio-lowlatency-settings prefers. Written BEFORE the kernel
+  # install so its postinst update-grub already emits the HWE entry as default;
+  # the 99- prefix outranks the ubuntustudio grub.d drop-in.
+  if [[ -d /etc/default/grub.d ]]; then
+    printf '%s\n' \
+      '# Managed by chezmoi - Intel graphics enablement.' \
+      '# Boot the generic (HWE) kernel by default, ahead of the lowlatency flavour' \
+      '# ubuntustudio-lowlatency-settings prefers. The 99- prefix outranks it.' \
+      'GRUB_FLAVOUR_ORDER="generic"' \
+      | "${SUDO[@]}" tee /etc/default/grub.d/99-hwe-generic-default.cfg >/dev/null
+  fi
+
+  # Intel graphics stack. Ubuntu installs Recommends by default (as Canonical's
+  # setup-intel-graphics.sh relies on), so the idempotent helper suffices here.
+  install_ubuntu_packages "${intel_packages[@]}"
+
+  # HWE kernel. --install-recommends pulls the full stack (modules-extra, etc.)
+  # per the recipe; its postinst runs update-grub, honouring the drop-in above.
+  if ! dpkg -s "${intel_hwe_kernel}" >/dev/null 2>&1; then
+    "${APT[@]}" install -y --install-recommends "${intel_hwe_kernel}"
+  fi
+
+  # Reflect the default-kernel change even on a re-run where the kernel was
+  # already present (no postinst fired to regenerate the GRUB menu).
+  if command -v update-grub >/dev/null 2>&1; then
+    "${SUDO[@]}" update-grub || true
+  fi
+}
+
 # Enable a systemd unit only when its unit file exists, so a host missing an
 # optional package (libvirt, nvidia) is skipped rather than failing.
 # The second argument selects "now" (enable --now) or "later" (enable only).
@@ -274,6 +355,7 @@ install_ubuntu_packages "${core_packages[@]}"
 "${APT[@]}" update
 install_ubuntu_packages "${packages[@]}"
 install_nvidia_support
+install_intel_support
 install_direct_debs
 install_flatpak_packages
 install_dotnet_tools

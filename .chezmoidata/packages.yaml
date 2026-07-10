@@ -395,6 +395,35 @@ packages:
         - libnvidia-container-tools  # CLI tools for the NVIDIA container library
         - libnvidia-container1  # NVIDIA container runtime library
 
+      # Installed only on hosts with an Intel GPU (PCI vendor 0x8086 + display
+      # controller class 0x03). Canonical's intel-graphics-preview stack for early
+      # enablement of newer Intel GPUs (Arc / Xe / Battlemage / Lunar Lake). The
+      # kobuk-team/intel-graphics PPA (resolute) is added on-demand by
+      # setup_intel_repos() in run_onchange_before_ubuntu.sh.tmpl under the same
+      # HAS_INTEL_GPU gate; this list mirrors Canonical's setup-intel-graphics.sh.
+      intelPackages:
+        - intel-gsc                       # Intel Graphics System Controller firmware interface
+        - libigdgmm12                     # Intel Graphics Memory Management library
+        - libigc2                         # Intel Graphics Compiler runtime
+        - libze-intel-gpu-raytracing      # Level Zero Intel GPU raytracing support
+        - intel-media-va-driver-non-free  # VA-API media driver (full, non-free features)
+        - libze1                          # oneAPI Level Zero loader
+        - vainfo                          # VA-API capability probe (verifies HW video accel)
+        - libvpl2                         # oneVPL dispatcher runtime (video processing library)
+        - libvpl-tools                    # oneVPL command-line tools
+        - intel-metrics-discovery         # GPU metrics discovery library
+        - intel-metrics-library           # GPU performance metrics library
+        - libmfx-gen1                     # Media SDK / oneVPL GPU runtime
+        - xpu-smi                         # Intel XPU system management interface (GPU telemetry)
+        - intel-opencl-icd                # Intel OpenCL runtime (compute)
+        - libze-intel-gpu1                # Level Zero Intel GPU driver
+      # Hardware-enablement (HWE) kernel installed alongside the Intel graphics
+      # stack (--install-recommends) and made the default boot entry via a
+      # GRUB_FLAVOUR_ORDER=generic drop-in (see install_intel_support). resolute
+      # (26.04) is LTS, so linux-generic-hwe-26.04 tracks the rolling HWE generic
+      # kernel; the flavour-order drop-in wins over ubuntustudio-lowlatency-settings.
+      intelHweKernel: linux-generic-hwe-26.04
+
       # Flatpak apps installed system-wide from Flathub via `flatpak install`.
       flatpaks:
         - com.discordapp.Discord  # Discord voice/text chat client
