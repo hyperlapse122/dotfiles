@@ -50,6 +50,16 @@
 
 set -euo pipefail
 
+# minikube comes from .chezmoiexternals/minikube.toml (~/.local/bin). Fall back
+# to that dir when it is not already on PATH (this run_after can execute under a
+# bare TTY / non-login shell) so the `command -v minikube` check below resolves
+# the external binary instead of soft-skipping the whole cluster step.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$PATH:$HOME/.local/bin" ;;
+esac
+export PATH
+
 # --- sudo detection (non-fatal) -------------------------------------------
 # Only step 1 (the /etc drop-in) needs root. Unlike install-system-config /
 # tailscale-ufw — which abort without sudo because their whole job is root —

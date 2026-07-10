@@ -35,6 +35,15 @@
 
 set -euo pipefail
 
+# `glab` may be a mise shim or the .chezmoiexternals/glab.toml binary in
+# ~/.local/bin. Fall back to ~/.local/bin when it is not already on PATH so the
+# system `glab` below is found before the ephemeral `mise exec` fallback.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$PATH:$HOME/.local/bin" ;;
+esac
+export PATH
+
 # '<hostname> <container registry domains (comma-separated)> [<oauth client_id>]'
 # Self-managed hosts need their instance's OAuth application ID configured
 # before login (glab internal/oauth2 oauthClientID); it is a public PKCE
