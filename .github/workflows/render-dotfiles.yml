@@ -14,10 +14,11 @@ name: Render dotfiles
 #                                to be rendered explicitly to be inspected).
 #
 # No real 1Password or GitHub PAT is used: a PATH-local dummy `op` satisfies
-# `onepasswordRead`, a dummy `mise` satisfies the container fast-path in
-# .install-prerequisites.sh, and GitHub API calls (gitHubLatestTag / external
-# release lookups) authenticate with the workflow's built-in GITHUB_TOKEN.
-# Artifacts are short-lived (retention-days: 3) — a review aid, not a release.
+# `onepasswordRead` / `onepassword`, a dummy `mise` satisfies the container
+# fast-path in .install-prerequisites.sh, and GitHub API calls (gitHubLatestTag
+# and the .chezmoiexternals release lookups) authenticate with the workflow's
+# built-in GITHUB_TOKEN. Artifacts are short-lived (retention-days: 3) — a
+# review aid, not a release artifact.
 
 on:
   pull_request:
@@ -39,9 +40,10 @@ env:
   # chezmoi reads CHEZMOI_GITHUB_ACCESS_TOKEN / GITHUB_ACCESS_TOKEN / GITHUB_TOKEN
   # (in that order) for GitHub API calls. The built-in token lifts the anonymous
   # 60 req/h limit so gitHubLatestTag and the .chezmoiexternals release lookups
-  # do not flake.
+  # do not flake. chezmoi is installed at its latest release — the externals use
+  # recent template functions (gitHubReleaseAssetURL, getRedirectedURL) that an
+  # older pinned chezmoi would not define.
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  CHEZMOI_VERSION: v2.52.0
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -75,14 +77,15 @@ jobs:
       - name: Install chezmoi + dummy op/mise
         run: |
           set -euxo pipefail
-          # chezmoi binary, pinned for reproducibility.
-          sh -c "$(curl -fsSL get.chezmoi.io)" -- -b /usr/local/bin -t "${CHEZMOI_VERSION}"
+          # Latest chezmoi via the README bootstrap URL (externals rely on recent
+          # template functions like gitHubReleaseAssetURL / getRedirectedURL).
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
           chezmoi --version
 
-          # Dummy `op`: satisfies op_ready() (`op whoami`) and every onepasswordRead
-          # ("op read ...") with a placeholder — no real 1Password is contacted.
-          # Built with printf (not a heredoc) so YAML block indentation cannot creep
-          # into the shebang line.
+          # Dummy `op`: satisfies op_ready() (`op whoami`), onepasswordRead
+          # (`op read`) and onepassword (`op item get --format json`) with
+          # placeholders — no real 1Password is contacted. printf (not a heredoc)
+          # keeps YAML block indentation out of the shebang line.
           {
             printf '%s\n' '#!/usr/bin/env bash'
             printf '%s\n' 'set -eu'
@@ -90,6 +93,8 @@ jobs:
             printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
             printf '%s\n' '  --version) printf "2.0.0\n" ;;'
             printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
             printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
             printf '%s\n' 'esac'
           } > /usr/local/bin/op
@@ -113,19 +118,55 @@ jobs:
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
           rm -rf "${SRC}/.git"
+          # This task renders managed FILES only; the .chezmoiexternals fetches
+          # (git clones + release downloads) are rendered separately by the
+          # render-internals job. Dropping them keeps this apply hermetic.
+          rm -rf "${SRC}/.chezmoiexternals"
           cd "${HOME}"
 
-          # --exclude=scripts,externals: this task only renders managed FILES; the
-          # scripts and externals are rendered by the render-internals job.
+          # Non-fatal: --keep-going renders everything it can and reports a
+          # non-zero rc if ANY managed file errors. We surface that rc but do not
+          # fail the job here — the "Assert opencode plugin versions" step is the
+          # authoritative gate (it fails the job if the templates this PR touches
+          # did not render). This keeps an unrelated secret-file quirk from
+          # reddening the render check.
+          set +e
           chezmoi apply --init \
             --exclude=scripts,externals \
             --keep-going \
             --verbose
+          rc=$?
+          set -e
+          echo "chezmoi apply --init exit code: ${rc}"
+          echo "- \`chezmoi apply --init\` exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Stage rendered files
+        if: always()
+        run: |
+          set -euxo pipefail
+          src="${RUNNER_TEMP}/fakehome"
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
+          mkdir -p "${out}"
+          [ -d "${src}" ] || exit 0
+          cp -a "${src}/." "${out}/"
+          # Drop the source copy and chezmoi's own state/cache — keep only the
+          # files chezmoi rendered into the target.
+          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+
+      - name: Upload rendered files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-files-${{ matrix.os }}
+          path: _artifacts/rendered-files
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Assert opencode plugin versions rendered from GitHub
         run: |
           set -euxo pipefail
-          cfg="${RUNNER_TEMP}/fakehome/.config/opencode"
+          cfg="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.config/opencode"
           for f in opencode.json tui.json; do
             test -f "${cfg}/${f}"
             jq empty "${cfg}/${f}"                       # valid JSON
@@ -145,25 +186,6 @@ jobs:
             jq -c '.plugin' "${cfg}/tui.json"
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Stage rendered files
-        run: |
-          set -euxo pipefail
-          src="${RUNNER_TEMP}/fakehome"
-          out="${RUNNER_TEMP}/rendered-files"
-          mkdir -p "${out}"
-          cp -a "${src}/." "${out}/"
-          # Drop the source copy and chezmoi's own state/cache — keep only the
-          # files chezmoi rendered into the target.
-          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
-
-      - name: Upload rendered files
-        uses: actions/upload-artifact@v4
-        with:
-          name: rendered-files-${{ matrix.os }}
-          path: ${{ runner.temp }}/rendered-files
-          retention-days: 3
-          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
@@ -196,7 +218,7 @@ jobs:
       - name: Install chezmoi + dummy op
         run: |
           set -euxo pipefail
-          sh -c "$(curl -fsSL get.chezmoi.io)" -- -b /usr/local/bin -t "${CHEZMOI_VERSION}"
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
           chezmoi --version
           {
             printf '%s\n' '#!/usr/bin/env bash'
@@ -205,6 +227,8 @@ jobs:
             printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
             printf '%s\n' '  --version) printf "2.0.0\n" ;;'
             printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
             printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
             printf '%s\n' 'esac'
           } > /usr/local/bin/op
@@ -216,12 +240,13 @@ jobs:
           # Isolated, empty scratch config so chezmoi does NOT read
           # .chezmoi.toml.tmpl (and therefore never runs the read-source-state.pre
           # hook). execute-template renders one template in isolation using the
-          # container's OS + .chezmoidata; the dummy `op` on PATH covers the two
-          # scripts that call onepasswordRead, and GITHUB_TOKEN covers gitHubLatest*.
+          # container's OS + .chezmoidata; the dummy `op` on PATH covers the
+          # onepassword* calls, and GITHUB_TOKEN covers gitHubLatest* / release
+          # asset lookups.
           scratch="${RUNNER_TEMP}/scratch"
           mkdir -p "${scratch}/target"
           : > "${scratch}/empty.toml"
-          out="${RUNNER_TEMP}/rendered-internals"
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           mkdir -p "${out}"
 
           render_one() {
@@ -254,14 +279,16 @@ jobs:
             echo ""
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
-          # Never hard-fail on a single template: cross-arch external asset lookups
-          # can legitimately return nothing on the runner's arch. Failures are kept
-          # as *.render-error.txt inside the artifact for inspection.
+          # Never hard-fail on a single template: a cross-arch external asset
+          # lookup can legitimately return nothing on the runner's arch. Failures
+          # are kept as *.render-error.txt inside the artifact for inspection.
 
       - name: Upload rendered internals
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rendered-internals-${{ matrix.os }}
-          path: ${{ runner.temp }}/rendered-internals
+          path: _artifacts/rendered-internals
           retention-days: 3
+          include-hidden-files: true
           if-no-files-found: error
