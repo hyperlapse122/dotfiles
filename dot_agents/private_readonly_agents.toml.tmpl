@@ -82,11 +82,10 @@ args = [
   "npm:@z_ai/mcp-server",
   "node",
   "--",
-  "zai-mcp-server",
-]
-env = [
+  "env",
   "Z_AI_API_KEY={{ $zaiApiKey }}",
   "Z_AI_MODE=ZAI",
+  "zai-mcp-server",
 ]
 
 [[mcp]]
