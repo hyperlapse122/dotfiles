@@ -1,0 +1,34 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/tools/run_once_before_mise-trust.sh.tmpl
+#
+# run_once_before_: runs a single time (ever), before the rest of the target
+# state is applied. Trusts this repo's mise config so mise never prompts (or
+# fails in a non-interactive apply) when a later build/tool script invokes it.
+# Soft-skip: this script must never fail apply; a missing mise or a trust
+# failure exits 0 after a diagnostic message.
+
+set -euo pipefail
+
+skip() { exit 0; }
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "mise-trust: skipped (mise not installed)" >&2
+  skip
+fi
+
+# The chezmoi source repo's mise.toml carries [hooks] that execute code, so it
+# requires trust (the deployed global ~/.config/mise/config.toml is loaded as
+# the global config and needs none).
+config="{{ .chezmoi.sourceDir }}/mise.toml"
+
+if [ ! -f "$config" ]; then
+  echo "mise-trust: skipped ($config not found)" >&2
+  skip
+fi
+
+if ! mise trust --quiet "$config"; then
+  echo "mise-trust: skipped (mise trust failed for $config)" >&2
+  skip
+fi
+{{ end -}}
