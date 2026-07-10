@@ -1,19 +1,34 @@
 {{- $userFontDir := (replace "linux" ".local/share/fonts" (replace "darwin" "Library/Fonts" (replace "windows" "AppData/Local/Microsoft/Windows/Fonts" .chezmoi.os))) -}}
 
+{{/*
+  Each release archive is extracted into its OWN subdirectory of the user font
+  directory (targetPath must be unique per external — two externals sharing a
+  targetPath silently fail to register). The archives have heterogeneous and
+  even mixed-depth layouts (Pretendard ships public/variable AND
+  public/static/alternative), so we do NOT flatten with stripComponents —
+  fontconfig scans the font directory recursively and finds the font files
+  wherever they land under each subdir.
+
+  We use `exclude`, not `include`: an include filter of font-file globs matches
+  only the file members, dropping the archive's directory entries, so chezmoi
+  has no parent directory to extract nested files into and fails with
+  "no such file or directory". Excluding by extension keeps every directory
+  entry (and thus the tree) while dropping web-font and doc cruft.
+*/ -}}
 {{ range $key, $value := .fonts -}}
 {{ if contains "/" $key -}}
 
 {{- $repository := osDir $key -}}
 {{- $assetName := osBase $key -}}
 {{- $release := $value.release -}}
+{{- $subdir := trimSuffix ".zip" $assetName -}}
 
 ['{{ replace "/" "_" $key }}']
     type = "archive"
     url = {{ gitHubReleaseAssetURL $repository $release $assetName | quote }}
     exact = false
-    stripComponents = 4
-    include = ["**/*.ttf", "**/*.otf"]
-    targetPath = {{ $userFontDir | quote }}
+    exclude = ["**/*.woff", "**/*.woff2", "**/*.eot", "**/*.css", "**/*.scss", "**/*.svg", "**/*.json", "**/*.md", "**/*.txt", "**/LICENSE*", "**/OFL*"]
+    targetPath = {{ printf "%s/%s" $userFontDir $subdir | quote }}
 
 {{ end }}
 {{- end }}

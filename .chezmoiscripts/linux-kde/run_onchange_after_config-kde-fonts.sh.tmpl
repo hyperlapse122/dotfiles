@@ -1,54 +1,76 @@
 {{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/kde/run_onchange_after_config-kde-fonts.sh.tmpl
+# .chezmoiscripts/linux-kde/run_onchange_after_config-kde-fonts.sh.tmpl
 #
-# Configures KDE Plasma 6 display fonts:
-#   sans (font, menuFont, toolBarFont, smallestReadableFont,
-#         [WM] activeFont) -> Pretendard
-#   mono (fixed)           -> JetBrainsMono Nerd Font
+# 1. Refreshes the fontconfig cache so fonts installed via chezmoi externals
+#    (.chezmoiexternals/fonts.toml -> ~/.local/share/fonts/<archive>/**) become
+#    visible to fc-match and to the running session without a re-login.
+# 2. Configures KDE Plasma 6 display fonts:
+#      sans (font, menuFont, toolBarFont, smallestReadableFont,
+#            [WM] activeFont) -> Pretendard
+#      mono (fixed)           -> JetBrainsMono Nerd Font
 #
-# Errors (exit 1) when a requested font isn't installed - run
-# scripts/bootstrap/install-fonts.sh first.
+# This is a run_onchange script: the managed-font marker below embeds the font
+# set from .chezmoidata/fonts.yaml, so adding/removing a font re-triggers this
+# script (re-caching and re-asserting the KDE config). Missing fonts only warn
+# (they are provisioned by the externals during the same `chezmoi apply`); the
+# KDE keys are still written so the config is correct once the fonts land.
 #
-# Applies after restarting plasmashell or logging out/in.
+# KDE changes apply after restarting plasmashell or logging out/in.
+#
+# managed fonts: {{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}
 
 set -euo pipefail
 
-if ! command -v plasmashell >/dev/null 2>&1; then
-  printf 'config-kde-fonts.sh: plasmashell not found (non-KDE system), skipping.\n'
-  exit 0
-fi
+SANS="Pretendard"
+MONO="JetBrainsMono Nerd Font"
 
-configure_fonts() {
-  printf 'config-kde-fonts.sh: configuring KDE display fonts...\n'
+FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 
+# --- 1. Register externally-installed fonts --------------------------------
+refresh_font_cache() {
+  if ! command -v fc-cache >/dev/null 2>&1; then
+    printf 'config-kde-fonts.sh: fc-cache not found, skipping cache refresh.\n' >&2
+    return 0
+  fi
+  printf 'config-kde-fonts.sh: refreshing fontconfig cache (%s)...\n' "$FONT_DIR"
+  # -f: force a rescan even if dir mtimes look unchanged. Never fail the apply
+  # over a cache refresh.
+  fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || \
+    printf '  fc-cache reported a non-fatal error, continuing.\n' >&2
+}
+
+# --- 2. KDE Plasma display-font configuration ------------------------------
+_require_font() {
+  local family="$1" matched
+  matched="$(fc-match -f '%{family[0]}' "$family" 2>/dev/null || true)"
+  if [[ "$matched" != "$family" ]]; then
+    printf '  font "%s" not installed (fc-match -> "%s"); writing config anyway.\n' \
+      "$family" "$matched" >&2
+    return 1
+  fi
+  printf '  font "%s" available.\n' "$family"
+}
+
+_font_value() { printf '%s,%d,-1,5,400,0,0,0,0,0,0,0,0,0,0,1' "$1" "$2"; }
+
+configure_kde_fonts() {
+  if ! command -v plasmashell >/dev/null 2>&1; then
+    printf 'config-kde-fonts.sh: plasmashell not found (non-KDE system), skipping KDE config.\n'
+    return 0
+  fi
   if ! command -v kwriteconfig6 >/dev/null 2>&1; then
-    printf '  kwriteconfig6 not found, skipping.\n'
+    printf 'config-kde-fonts.sh: kwriteconfig6 not found, skipping KDE config.\n' >&2
     return 0
   fi
   if ! command -v fc-match >/dev/null 2>&1; then
-    printf '  fc-match not found, cannot verify font availability.\n' >&2
-    return 1
+    printf 'config-kde-fonts.sh: fc-match not found, cannot verify fonts.\n' >&2
+  else
+    _require_font "$SANS" || true
+    _require_font "$MONO" || true
   fi
 
-  local SANS="Pretendard"
-  local MONO="JetBrainsMono Nerd Font"
-
-  _require_font() {
-    local family="$1"
-    local matched
-    matched="$(fc-match -f '%{family[0]}' "$family")"
-    if [[ "$matched" != "$family" ]]; then
-      printf '  font "%s" not installed (fc-match -> "%s"). Run scripts/bootstrap/install-fonts.sh first.\n' \
-        "$family" "$matched" >&2
-      return 1
-    fi
-  }
-
-  _require_font "$SANS"
-  _require_font "$MONO"
-
-  _font_value() { printf '%s,%d,-1,5,400,0,0,0,0,0,0,0,0,0,0,1' "$1" "$2"; }
+  printf 'config-kde-fonts.sh: configuring KDE display fonts...\n'
 
   _set_general() {
     local key="$1" value="$2"
@@ -68,5 +90,6 @@ configure_fonts() {
   printf '  set [WM]      %-22s = %s\n' "activeFont" "$wm_active"
 }
 
-configure_fonts
+refresh_font_cache
+configure_kde_fonts
 {{ end -}}
