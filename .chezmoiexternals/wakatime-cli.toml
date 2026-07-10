@@ -6,4 +6,3 @@ targetPath = '{{ printf ".local/bin/wakatime-cli%s" $executableExtension }}'
 url = '{{ gitHubLatestReleaseAssetURL "wakatime/wakatime-cli" (printf "wakatime-cli-%s-%s.zip" .chezmoi.os .chezmoi.arch) }}'
 executable = true
 path = '{{ printf "wakatime-cli-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
-refreshPeriod = "672h"
