@@ -5,68 +5,62 @@
 # on the currently-running system (the device backing / included). For each
 # crypto_LUKS device it:
 #
-#   1. enrolls a TPM2 token via `systemd-cryptenroll --tpm2-device=auto
-#      --tpm2-pcrs=7` (PCR 7 = the UEFI Secure Boot policy state), prompting
-#      INTERACTIVELY for an existing LUKS passphrase to authorize the change;
-#   2. ensures /etc/crypttab carries `tpm2-device=auto` (plus `x-initrd.attach`
-#      for the root-backing device, or `nofail` for non-root devices so a
-#      device that is absent at boot cannot hang the boot) so systemd-cryptsetup
-#      unlocks it from the TPM at boot;
-#   3. drops a dracut `tpm2-tss` module config and rebuilds the initramfs so the
-#      TPM2 token plugin is present early at boot.
+#   1. seals a LUKS keyslot to the TPM2 (bound to PCR 7 = the UEFI Secure Boot
+#      policy state), prompting INTERACTIVELY for an existing LUKS passphrase to
+#      authorize the change;
+#   2. wires the device's crypttab entry / boot config so the initramfs unlocks
+#      it from the TPM at boot;
+#   3. rebuilds the initramfs so the TPM2 unlock path is present early at boot.
+#
+# CROSS-DISTRO via a chezmoi-included backend: the mechanism differs per distro,
+# so the distro-specific "backend" is factored into a separate fragment that
+# chezmoi inlines here at apply time with `{{ "{{ include }}" }}` — the same
+# "diverging fragment" pattern dot_config/git/config.tmpl uses to pull in
+# .config_<os>. On Fedora the backend is dracut + systemd-cryptenroll (the only
+# initramfs generator that wires systemd's `tpm2-device=auto` crypttab unlock);
+# on Ubuntu it is clevis + initramfs-tools (Ubuntu's cryptroot scripts ignore
+# `tpm2-device=auto`, Launchpad #1980018, so clevis is the native path). Each
+# backend defines four hooks the shared core below calls: backend_preflight,
+# backend_enroll, backend_crypttab_opts and backend_finalize. On any other host
+# (macOS, a non-Fedora/Ubuntu Linux) a no-op backend exits cleanly up front.
 #
 # INTERACTIVE-ONLY PASSPHRASE (hard requirement): the existing passphrase is
-# only ever typed at systemd-cryptenroll's own prompt. This script never reads
-# it from argv/env/file — it does NOT set $PASSWORD / $NEWPASSWORD, never passes
-# --unlock-key-file, and never uses the cryptenroll.passphrase /
-# cryptenroll.new-passphrase service credentials. Because it must prompt, it
-# REQUIRES a TTY (except under --dry-run) and is therefore a MANUAL script: it
-# is deliberately NOT a chezmoi run_once_/run_onchange_ script — chezmoi runs
-# those non-interactively during `chezmoi apply` and could neither answer the
-# passphrase prompt nor be trusted to enroll a TPM2 keyslot unattended. chezmoi
-# instead deploys it (via the executable_ source-name prefix) to ~/.local/bin,
-# which is on $PATH; run it by hand after a fresh install:
+# only ever typed at the enrollment tool's own prompt. This script never reads
+# it from argv/env/file. Because it must prompt, it REQUIRES a TTY (except under
+# --dry-run) and is therefore a MANUAL script: it is deliberately NOT a chezmoi
+# run_once_/run_onchange_ script — chezmoi runs those non-interactively during
+# `chezmoi apply` and could neither answer the passphrase prompt nor be trusted
+# to enroll a TPM2 keyslot unattended. chezmoi instead deploys it (via the
+# executable_ source-name prefix) to ~/.local/bin, which is on $PATH; run it by
+# hand after a fresh install:
 #
 #     setup-luks-tpm2-unlock.sh
 #
-# SAFETY: `systemd-cryptenroll` ADDS a TPM2 keyslot/token; it does NOT remove
-# the existing passphrase keyslot. The current passphrase therefore stays valid
-# as a fallback if the TPM is later cleared or the firmware/Secure-Boot state
-# changes. `--recovery-key` additionally enrolls a printed recovery key. To
-# re-enroll a device that already holds a (possibly stale) systemd-tpm2 token,
-# first wipe it with `systemd-cryptenroll --wipe-slot=tpm2 <device>` — this
-# script skips any device that already has such a token.
+# SAFETY: enrollment ADDS a TPM2-sealed keyslot; it does NOT remove the existing
+# passphrase keyslot. The current passphrase therefore stays valid as a fallback
+# if the TPM is later cleared or the firmware/Secure-Boot state changes. On the
+# Fedora backend `--recovery-key` additionally enrolls a printed recovery key.
+# Each backend skips a device that already carries its own TPM2 enrollment.
 #
 # PCR CHOICE: this runs from the INSTALLED system, so PCR 7 measured here equals
-# PCR 7 at the next real boot (same Secure Boot policy) — binding is safe. Note:
-# on systemd v258+ the default --tpm2-pcrs is EMPTY (no binding), so PCR 7 is
-# passed EXPLICITLY rather than relying on the default. Override with
-# --tpm2-pcrs (e.g. `7+0`, or `` for no binding) if you know what you want.
+# PCR 7 at the next real boot (same Secure Boot policy) — binding is safe.
+# Override with --tpm2-pcrs (e.g. `7+0`, or `` for no binding) if you know what
+# you want. The value is passed through to the active backend (systemd `+` form;
+# clevis maps `+` to its comma-separated pcr_ids).
 #
-# Single-platform (Linux only) BY DESIGN — LUKS, systemd-cryptenroll and dracut
-# are Linux-only, so per the script-parity exception in AGENTS.md there is no
-# .ps1 counterpart. It is deployed to ~/.local/bin on every POSIX host.
+# Single-platform (Linux only) BY DESIGN — LUKS, TPM2 enrollment and initramfs
+# regeneration are Linux-only, so per the script-parity exception in AGENTS.md
+# there is no .ps1 counterpart.
 #
-# dracut-ONLY BY DESIGN: only dracut (Fedora, RHEL and relatives) wires systemd's
-# `tpm2-device=auto` unlock into the early-boot initramfs. Ubuntu ships
-# initramfs-tools, whose update-initramfs silently ignores the crypttab
-# tpm2-device option (Launchpad #1980018) — enrolling there would leave a
-# passphrase prompt at boot while appearing to succeed. Ubuntu instead enrolls
-# TPM2 disk unlock from its OS installer, so on a non-dracut host this script
-# cleanly no-ops (exit 0) up front rather than build a broken half-setup. Any
-# OTHER missing prerequisite (systemd-cryptenroll, cryptsetup, …) still aborts at
-# the require_cmd preflight.
+# IDEMPOTENT: a device already enrolled is skipped; /etc/crypttab entries are
+# matched by exact device alias (UUID=, PARTUUID=, raw path, or any /dev/disk/*
+# symlink) so options are merged into the existing entry and never duplicated;
+# initramfs config is only written when missing; the initramfs is rebuilt only
+# when something actually changed. /etc/crypttab is backed up before the first
+# edit and written atomically (temp file in /etc + rename) so an interrupted run
+# cannot truncate this boot-critical file.
 #
-# IDEMPOTENT: a device that already holds a `systemd-tpm2` token is skipped;
-# /etc/crypttab entries are matched by exact device alias (UUID=, PARTUUID=, raw
-# path, or any /dev/disk/* symlink) so options are merged into the existing
-# entry and never duplicated; the dracut drop-in is only written when missing;
-# the initramfs is rebuilt only when something actually changed. /etc/crypttab
-# is backed up before the first edit and written atomically (temp file in /etc +
-# rename) so an interrupted run cannot truncate this boot-critical file.
-#
-# --dry-run prints every intended action and mutates NOTHING (no enrollment, no
-# crypttab write, no dracut config, no initramfs rebuild).
+# --dry-run prints every intended action and mutates NOTHING.
 
 set -euo pipefail
 
@@ -147,12 +141,6 @@ render_crypttab() {
   fi
 }
 
-# luksdump_has_tpm2_token : reads `cryptsetup luksDump` text on stdin, exits 0
-# if a systemd-tpm2 token is already enrolled, 1 otherwise.
-luksdump_has_tpm2_token() {
-  grep -q 'systemd-tpm2'
-}
-
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -166,23 +154,25 @@ usage() {
 Usage: setup-luks-tpm2-unlock.sh [OPTIONS]
 
 TPM2-enroll every LUKS device on this running system for automated unlock at
-boot. Prompts interactively for each device's existing passphrase.
+boot. Prompts interactively for each device's existing passphrase. The
+distro-specific mechanism (Fedora: dracut + systemd-cryptenroll; Ubuntu: clevis
++ initramfs-tools) is selected at chezmoi apply time.
 
 Options:
   --dry-run            Print intended actions; change nothing.
-  --recovery-key       Also enroll a printed recovery key as an extra fallback.
+  --recovery-key       Also enroll a printed recovery key (Fedora backend only).
   --tpm2-pcrs SPEC     PCR binding spec (default: 7). Examples: 7, 7+0, ''(none).
   -h, --help           Show this help and exit.
 
 Notes:
   * Requires a terminal (it must prompt for your passphrase) unless --dry-run.
   * Adds a TPM2 keyslot; your existing passphrase keeps working as a fallback.
-  * Idempotent: devices already holding a systemd-tpm2 token are skipped.
+  * Idempotent: devices already enrolled for TPM2 unlock are skipped.
 EOF
 }
 
 # ---------------------------------------------------------------------------
-# Side-effecting flow
+# Shared side-effecting state
 # ---------------------------------------------------------------------------
 
 DRY_RUN=false
@@ -228,32 +218,10 @@ device_aliases() {
   done
 }
 
-enroll_device() {
-  local dev="$1" name="$2" dump
-  # Capture luksDump then test via herestring (NOT a pipe): under `set -o
-  # pipefail`, `luksDump | grep -q` returns non-zero when grep matches early and
-  # luksDump then dies with SIGPIPE — a false negative that would re-enroll an
-  # already-enrolled device.
-  dump="$("${SUDO[@]}" cryptsetup luksDump "$dev" 2>/dev/null || true)"
-  if luksdump_has_tpm2_token <<<"$dump"; then
-    log_skip "$dev ($name): already has a systemd-tpm2 token; skipping enrollment"
-    return 0
-  fi
-  CHANGED=$((CHANGED + 1))
-  if [[ "$DRY_RUN" == true ]]; then
-    log_act "$dev ($name): would run systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=$TPM2_PCRS"
-    [[ "$WITH_RECOVERY_KEY" == true ]] && log_act "$dev ($name): would enroll a recovery key"
-    return 0
-  fi
-  log_act "$dev ($name): enrolling TPM2 (PCR $TPM2_PCRS) — enter an existing passphrase when prompted"
-  "${SUDO[@]}" systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs="$TPM2_PCRS" "$dev"
-  if [[ "$WITH_RECOVERY_KEY" == true ]]; then
-    log_act "$dev ($name): enrolling recovery key — record the printed key safely"
-    "${SUDO[@]}" systemd-cryptenroll --recovery-key "$dev"
-  fi
-}
-
 # update_crypttab <name> <canonical-src> <want-opts> [alias...]
+# Merge <want-opts> into the device's /etc/crypttab entry (or append a canonical
+# entry). A backend that needs no crypttab change passes empty <want-opts>, in
+# which case the caller skips this entirely.
 update_crypttab() {
   local name="$1" canonical="$2" want="$3"
   shift 3
@@ -298,34 +266,32 @@ update_crypttab() {
   log_act "updated /etc/crypttab for $name"
 }
 
-ensure_dracut_tpm2() {
-  local conf=/etc/dracut.conf.d/tpm2-tss.conf
-  local want='add_dracutmodules+=" tpm2-tss "'
-  if "${SUDO[@]}" test -f "$conf" 2>/dev/null && "${SUDO[@]}" grep -qF 'tpm2-tss' "$conf" 2>/dev/null; then
-    log_skip "dracut tpm2-tss module already configured ($conf)"
-    return 0
-  fi
-  CHANGED=$((CHANGED + 1))
-  if [[ "$DRY_RUN" == true ]]; then
-    log_act "would write $conf: $want"
-    return 0
-  fi
-  printf '%s\n' "$want" | "${SUDO[@]}" tee "$conf" >/dev/null
-  log_act "wrote $conf"
+# ---------------------------------------------------------------------------
+# Distro backend — inlined at chezmoi apply time (see the file header). Each
+# backend defines: backend_preflight, backend_enroll <dev> <name> [is_root],
+# backend_crypttab_opts <is_root>, backend_finalize. A backend may use any shared
+# helper/state above (SUDO, DRY_RUN, CHANGED, TPM2_PCRS, WITH_RECOVERY_KEY,
+# log_*, err, require_cmd, update_crypttab, ...).
+# ---------------------------------------------------------------------------
+{{ if or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{ include (joinPath .chezmoi.sourceFile ".." (printf ".setup-luks-tpm2-unlock_%s.sh" .chezmoi.osRelease.id)) -}}
+{{ else -}}
+# No supported backend on this host (not Fedora/Ubuntu). Define no-op hooks so
+# the shared flow exits cleanly at backend_preflight before any TTY/sudo prompt.
+BACKEND_LABEL="unsupported host"
+backend_preflight() {
+  log_info "setup-luks-tpm2-unlock.sh has no TPM2 auto-unlock backend for this host"
+  log_info "(only Fedora and Ubuntu are supported). Nothing to do; exiting."
+  exit 0
 }
+backend_enroll()        { :; }
+backend_crypttab_opts() { :; }
+backend_finalize()      { :; }
+{{ end -}}
 
-rebuild_initramfs() {
-  if [[ "$CHANGED" -eq 0 ]]; then
-    log_skip "nothing changed; skipping initramfs rebuild"
-    return 0
-  fi
-  if [[ "$DRY_RUN" == true ]]; then
-    log_act "would rebuild initramfs: dracut -f --regenerate-all"
-    return 0
-  fi
-  log_act "rebuilding initramfs (dracut -f --regenerate-all)"
-  "${SUDO[@]}" dracut -f --regenerate-all
-}
+# ---------------------------------------------------------------------------
+# Shared orchestration
+# ---------------------------------------------------------------------------
 
 main() {
   while [[ $# -gt 0 ]]; do
@@ -340,21 +306,10 @@ main() {
     shift
   done
 
-  # dracut-only gate (see file header): only dracut wires tpm2-device=auto into
-  # the initramfs. On a non-dracut host — notably Ubuntu, which uses
-  # initramfs-tools and whose installer offers native TPM2 unlock — enrolling a
-  # TPM2 keyslot here would NOT auto-unlock at boot (Launchpad #1980018), so bail
-  # out cleanly BEFORE any TTY/sudo prompt or state change rather than fail
-  # obscurely later. Expected no-op (exit 0), matching the "nothing to do" exits.
-  if ! command -v dracut >/dev/null 2>&1; then
-    log_info "This host does not use dracut, so TPM2 auto-unlock cannot be wired"
-    log_info "into its initramfs here. setup-luks-tpm2-unlock.sh is dracut-only by"
-    log_info "design (Fedora, RHEL and relatives)."
-    log_info "On Ubuntu, enable TPM2 disk unlock from the OS installer"
-    log_info "instead — its initramfs-tools path ignores crypttab tpm2-device=auto."
-    log_info "Nothing to do on this host; exiting."
-    exit 0
-  fi
+  # Backend gate + prerequisite check FIRST — before any TTY/sudo prompt or state
+  # change. It uses no sudo (only tool/module/hook availability) and exits cleanly
+  # (0) on an unsupported host or aborts (non-zero) if the backend is unusable.
+  backend_preflight
 
   # Interactive passphrase entry needs a terminal. Allow --dry-run without one.
   if [[ "$DRY_RUN" != true && ! -t 0 ]]; then
@@ -364,8 +319,8 @@ main() {
   fi
 
   # dry-run uses `sudo -n` so its read-only probes never prompt/hang; a real run
-  # primes the credential cache once so the only later prompts are
-  # systemd-cryptenroll's per-device passphrase prompts.
+  # primes the credential cache once so the only later prompts are the backend's
+  # per-device passphrase prompts.
   if [[ "${EUID}" -eq 0 ]]; then
     SUDO=()
   elif ! command -v sudo >/dev/null 2>&1; then
@@ -380,29 +335,15 @@ main() {
     "${SUDO[@]}" -v || { err "ERROR: sudo authentication failed"; exit 1; }
   fi
 
-  require_cmd systemd-cryptenroll
   require_cmd cryptsetup
   require_cmd lsblk
   require_cmd findmnt
   require_cmd readlink
 
-  # TPM2 presence: a kernel TPM2 device node or a systemd-detected device.
-  if [[ ! -e /sys/class/tpm/tpm0 ]] && ! systemd-cryptenroll --tpm2-device=list >/dev/null 2>&1; then
-    err "ERROR: no TPM2 device found (no /sys/class/tpm/tpm0 and systemd-cryptenroll"
-    err "       --tpm2-device=list reports none). TPM2 auto-unlock is not possible here."
-    exit 1
-  fi
-
-  # Preflight the dracut tpm2-tss module BEFORE any irreversible enrollment or
-  # crypttab edit — without it the rebuilt initramfs can't unlock via TPM2 and
-  # we would have changed state for nothing. Capture-then-match (not a pipe into
-  # grep -q): pipefail + grep's early exit would SIGPIPE dracut → false negative.
-  local dracut_modules
-  dracut_modules="$(dracut --list-modules 2>/dev/null || true)"
-  if ! grep -qx 'tpm2-tss' <<<"$dracut_modules"; then
-    err "ERROR: dracut 'tpm2-tss' module is not available; the initramfs could not"
-    err "       unlock via TPM2. Install/repair dracut (Fedora ships this module)"
-    err "       and retry. Aborting before making any change."
+  # TPM2 presence: a kernel TPM2 device node (backend-neutral).
+  if [[ ! -e /sys/class/tpm/tpm0 && ! -e /dev/tpmrm0 ]]; then
+    err "ERROR: no TPM2 device found (no /sys/class/tpm/tpm0 and no /dev/tpmrm0)."
+    err "       TPM2 auto-unlock is not possible here."
     exit 1
   fi
 
@@ -421,10 +362,11 @@ main() {
   root_src="${root_src%%[*}"
   ROOT_KNAME="$(lsblk -no KNAME "$root_src" 2>/dev/null | head -n1 || true)"
 
+  log_info "Backend: ${BACKEND_LABEL}"
   log_info "Found ${#devices[@]} crypto_LUKS device(s)."
   [[ "$DRY_RUN" == true ]] && log_info "(dry-run: no changes will be made)"
 
-  local dev uuid name is_root want canonical
+  local dev uuid name is_root canonical opts
   local -a aliases
   for dev in "${devices[@]}"; do
     # -d (--nodeps) is REQUIRED: without it lsblk recurses into the opened
@@ -440,23 +382,25 @@ main() {
 
     if device_is_root "$dev"; then
       is_root=true
-      want="tpm2-device=auto,x-initrd.attach"
     else
       is_root=false
-      want="tpm2-device=auto,nofail"
     fi
     canonical="UUID=$uuid"
     mapfile -t aliases < <(device_aliases "$dev" "$uuid")
 
     log_info ""
     log_info "Device $dev (name=$name, uuid=$uuid, root=$is_root)"
-    enroll_device "$dev" "$name"
-    update_crypttab "$name" "$canonical" "$want" "${aliases[@]}"
+    backend_enroll "$dev" "$name" "$is_root"
+    opts="$(backend_crypttab_opts "$is_root")"
+    if [[ -n "$opts" ]]; then
+      update_crypttab "$name" "$canonical" "$opts" "${aliases[@]}"
+    else
+      log_skip "$name: backend needs no /etc/crypttab change"
+    fi
   done
 
   log_info ""
-  ensure_dracut_tpm2
-  rebuild_initramfs
+  backend_finalize
 
   log_info ""
   if [[ "$DRY_RUN" == true ]]; then
