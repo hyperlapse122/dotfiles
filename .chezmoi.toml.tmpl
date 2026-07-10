@@ -1,6 +1,14 @@
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 {{- $scriptExtension := (replace "linux" ".sh" (replace "darwin" ".sh" (replace "windows" ".ps1" .chezmoi.os))) -}}
 
+{{ if ne .chezmoi.os "windows" -}}
+# Non-interactive pager for `chezmoi diff` / `apply --verbose`: `less` quits when the
+# diff fits one screen (--quit-if-one-screen) and skips the alternate screen
+# (--no-init), so short output prints inline instead of trapping in interactive less;
+# --RAW-CONTROL-CHARS preserves chezmoi's colored diff. Root keys must precede [edit].
+pager = "less"
+pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
+{{ end }}
 [edit]
     command = '{{ printf "codium%s" $executableExtension }}'
     args = ["--wait"]
