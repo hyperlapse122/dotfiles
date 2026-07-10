@@ -8,14 +8,14 @@
 
 # TODO: Add User-scope Windows Background Service
 
-[".local/bin/cli-proxy-api"]
+[cli-proxy-api]
 type = "archive-file"
 targetPath = '{{ printf ".local/bin/cli-proxy-api%s" $executableExtension }}'
 url = '{{ $archiveUrl }}'
 path = '{{ printf "cli-proxy-api%s" $executableExtension }}'
 executable = true
 
-[".config/cli-proxy-api/config.example.yaml"]
+[cli-proxy-api-config]
 type = "archive-file"
 targetPath = '{{ joinPath $configBaseDir "config.example.yaml" }}'
 url = '{{ $archiveUrl }}'

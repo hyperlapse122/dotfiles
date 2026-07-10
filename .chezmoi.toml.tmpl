@@ -1,4 +1,15 @@
-{{ if ne .chezmoi.os "windows" -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+{{- $scriptExtension := (replace "linux" ".sh" (replace "darwin" ".sh" (replace "windows" ".ps1" .chezmoi.os))) -}}
+
+[edit]
+    command = '{{ printf "codium%s" $executableExtension }}'
+    args = ["--wait"]
+
 [hooks.read-source-state.pre]
-    command = ".local/share/chezmoi/.install-prerequisites.sh"
-{{ end -}}
+    # `script` (not `command`): chezmoi applies the per-extension interpreter to a
+    # hook `script`, so a Windows `.ps1` runs via `pwsh`/`powershell -NoLogo -File`
+    # (a bare `command` would exec the .ps1 directly, which Windows cannot do). On
+    # Linux/macOS the `.sh` has no chezmoi interpreter, so it still execs directly
+    # via its shebang + executable bit — identical to the previous `command` form.
+    script = '{{ printf ".local/share/chezmoi/.install-prerequisites%s" $scriptExtension }}'
+

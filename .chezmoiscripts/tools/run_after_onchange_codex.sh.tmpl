@@ -1,0 +1,44 @@
+{{ if ne .chezmoi.os "windows" -}}
+
+{{- $arch := (replace "amd64" "x86_64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
+
+{{- $tag := ((gitHubLatestRelease "openai/codex").TagName | toString) -}}
+{{- $release := (replace "rust-v" "" $tag) -}}
+{{- $target := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+
+{{- $releasePath := (printf "%s-%s-%s" $release $arch $target) -}}
+{{- $asset := (printf "codex-package-%s-%s.tar.zst" $arch $target) -}}
+
+{{- $releaseDir := (joinPath (env "HOME") ".codex" "packages" "standalone" "releases") -}}
+{{- $installationPath := (joinPath $releaseDir $releasePath) -}}
+
+#!/usr/bin/env bash
+# Links latest codex to ~/.local/bin
+
+set -euo pipefail
+
+INSTALL_DIR="${codex_INSTALL_DIR:-$HOME/.local/share/codex}"
+BIN_DIR="${codex_BIN_DIR:-$HOME/.local/bin}"
+
+dest="{{ $installationPath }}"
+ln -sfn "$dest" "{{ $releaseDir }}/current"
+ln -sf $(jq -r '.entrypoint' "$dest/codex-package.json") "$dest/codex"
+ln -sf "{{ $releaseDir }}/current/bin/codex" "$BIN_DIR/codex"
+
+# Prune older versions
+pruned=0
+if [ -d "{{ $releaseDir }}" ]; then
+  for d in "{{ $releaseDir }}"/*; do
+    [ -d "$d" ] || continue
+    if [ "$d" != "$dest" ]; then
+      if rm -rf "$d"; then
+        pruned=$((pruned + 1))
+      fi
+    fi
+  done
+fi
+# if [ "$pruned" -gt 0 ]; then
+#   echo "Removed    $pruned older version(s)"
+# fi
+
+{{ end -}}
