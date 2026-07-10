@@ -257,7 +257,9 @@ configure_user_groups() {
 
   # Add user to groups only when they exist.
   for grp in keyd libvirt kvm audio; do
-    getent group "${grp}" >/dev/null 2>&1 && "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
+    if getent group "${grp}" >/dev/null 2>&1; then
+      "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
+    fi
   done
 
   # Subordinate UID/GID ranges for rootless containers.

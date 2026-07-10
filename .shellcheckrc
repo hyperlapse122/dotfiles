@@ -1,0 +1,14 @@
+# ShellCheck configuration for this repo.
+#
+# Consumed by the render-dotfiles `shellcheck` CI job (ShellCheck walks up from
+# each linted file to this repo-root file) and by any local `shellcheck` run.
+# `.shellcheckrc` begins with a dot, so chezmoi never deploys it — repo-meta only.
+#
+# SC2016 "Expressions don't expand in single quotes": this repo deliberately
+# wraps command / flag names in literal backticks inside single-quoted
+# printf/echo diagnostics, e.g.
+#     printf 'cli-proxy-api-open: `xdg-open` not found on PATH\n' >&2
+# The backticks are intentional message formatting, never command substitution,
+# and this style is used across many CLI wrappers and provisioning scripts, so
+# the check is disabled repo-wide rather than suppressed line-by-line.
+disable=SC2016

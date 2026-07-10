@@ -31,7 +31,7 @@
 # Toolchain: prefers mise-managed `rust@latest` (the supported path on this
 # host — chezmoi runs scripts under a non-interactive shell with no mise
 # shell-activation, so we invoke it explicitly), falls back to a system
-# `cargo`, and soft-skips the build (BUILD_OK=0, no abort) when neither is
+# `cargo`, and soft-skips the build (no abort) when neither is
 # present. `--root "$HOME/.local"` installs alongside the rest of ~/.local/bin
 # (already on PATH); `--locked` honors the tracked Cargo.lock; `--force` makes
 # re-runs idempotent (cargo rebuilds only on a source change).
@@ -104,7 +104,6 @@ else
   CARGO=()
 fi
 
-BUILD_OK=0
 if [ "${#CARGO[@]}" -eq 0 ]; then
   echo "mxm4-haptic: no cargo toolchain (mise or system); skipping build, continuing to service setup" >&2
 else
@@ -114,7 +113,6 @@ else
   # just the two. `cargo install --path <dir>` builds + installs from the
   # source tree; the crate is built from $SRC (never deployed into $HOME).
   if "${CARGO[@]}" install --root "$HOME/.local" --locked --force --path "$SRC/crates/mxm4-haptic" --bin mxm4-hapticd --bin mxm4-haptic; then
-    BUILD_OK=1
     echo "mxm4-haptic: built + installed daemon + client into ~/.local/bin"
   else
     echo "mxm4-haptic: cargo install failed; continuing to launchd setup" >&2
@@ -124,7 +122,6 @@ else
   # filter, so `cargo install --path <dir>` installs every [[bin]] in the
   # package. The crate is built from $SRC (never deployed into $HOME).
   if "${CARGO[@]}" install --root "$HOME/.local" --locked --force --path "$SRC/crates/mxm4-haptic"; then
-    BUILD_OK=1
     echo "mxm4-haptic: built + installed daemon, notify bridge, client into ~/.local/bin"
   else
     echo "mxm4-haptic: cargo install failed; continuing to service setup" >&2
