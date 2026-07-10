@@ -1,9 +1,15 @@
 # Repository files
 ./AGENTS.md
+./agents.toml
+./agents.lock
+./CLAUDE.md
+./mise.toml
+./mise.lock
 ./README.md
 ./opencode.json
 ./LICENSE
 ./.agent-of-empires
+./package.json
 
 # Root-owned system config installed to /etc by
 # .chezmoiscripts/linux/run_onchange_after_install-system-config.sh.tmpl,

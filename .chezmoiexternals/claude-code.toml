@@ -1,6 +1,7 @@
 {{- $claudeCodeBaseUrl := "https://downloads.claude.ai/claude-code-releases" -}}
 {{- $latestReleaseId := output "curl" "-fsSL" (printf "%s/latest" $claudeCodeBaseUrl) | toString -}}
 {{- $latestReleaseManifest := output "curl" "-fsSL" (printf "%s/%s/manifest.json" $claudeCodeBaseUrl $latestReleaseId) | toString | fromJson -}}
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
 {{- $latestReleaseVersion := $latestReleaseManifest.version -}}
 
@@ -17,7 +18,7 @@
 
 [claude]
 type = "file"
-targetPath = '{{ printf ".local/bin/%s" $claudeCodeBinary }}'
+targetPath = '{{ printf ".local/share/claude/versions/%s%s" $latestReleaseVersion $executableExtension }}'
 url = '{{ printf "%s/%s/%s/%s" $claudeCodeBaseUrl $latestReleaseId $claudeCodePlatformId $claudeCodeBinary }}'
 executable = true
 

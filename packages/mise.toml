@@ -1,5 +1,0 @@
-[tools]
-bun = "latest"
-
-[hooks]
-postinstall = "vp install"

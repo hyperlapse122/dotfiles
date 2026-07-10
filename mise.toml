@@ -1,0 +1,10 @@
+[tools]
+bun = "latest"
+rust = { version = "latest", components = "rust-analyzer,rust-src" }
+
+[hooks]
+postinstall = [
+  { run = "cd packages; vp install" },
+  { run = "cd crates/mxm4-haptic; cargo fetch" },
+  { run = "bunx @sentry/dotagents install" }
+]
