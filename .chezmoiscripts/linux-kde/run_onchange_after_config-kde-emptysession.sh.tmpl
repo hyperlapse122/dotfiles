@@ -1,0 +1,31 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/kde/run_onchange_after_config-kde-emptysession.sh.tmpl
+#
+# Always start with an empty desktop session (never restore the previous one):
+#   [General] loginMode = emptySession
+#
+# Applies on next login (ksmserver reads this at session start).
+
+set -euo pipefail
+
+if ! command -v plasmashell >/dev/null 2>&1; then
+  printf 'config-kde-emptysession.sh: plasmashell not found (non-KDE system), skipping.\n'
+  exit 0
+fi
+
+configure_emptysession() {
+  printf 'config-kde-emptysession.sh: forcing empty session on login...\n'
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  kwriteconfig6 --file ksmserverrc --group General \
+    --key loginMode emptySession
+  printf '  set [General] loginMode = emptySession\n'
+}
+
+configure_emptysession
+{{ end -}}
