@@ -1,5 +1,5 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
-{{-   $luksPassphrase := promptString "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" -}}
+{{-   $luksPassphrase := .luksPassphrase -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/linux/run_after_ubuntu-luks-tpm2.sh.tmpl
 #

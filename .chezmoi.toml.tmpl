@@ -13,6 +13,11 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
     command = '{{ printf "codium%s" $executableExtension }}'
     args = ["--wait"]
 
+[data]
+{{ if and (eq .chezmoi.os "linux") (eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu") -}}
+    luksPassphrase = {{ promptStringOnce . "luksPassphrase" "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" | quote }}
+{{ end }}
+
 [hooks.read-source-state.pre]
     # `script` (not `command`): chezmoi applies the per-extension interpreter to a
     # hook `script`, so a Windows `.ps1` runs via `pwsh`/`powershell -NoLogo -File`
