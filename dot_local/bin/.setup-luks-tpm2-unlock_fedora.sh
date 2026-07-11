@@ -50,11 +50,30 @@ backend_enroll() {
     [[ "$WITH_RECOVERY_KEY" == true ]] && log_act "$dev ($name): would enroll a recovery key"
     return 0
   fi
-  log_act "$dev ($name): enrolling TPM2 (PCR $TPM2_PCRS) — enter an existing passphrase when prompted"
-  "${SUDO[@]}" systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs="$TPM2_PCRS" "$dev"
-  if [[ "$WITH_RECOVERY_KEY" == true ]]; then
-    log_act "$dev ($name): enrolling recovery key — record the printed key safely"
-    "${SUDO[@]}" systemd-cryptenroll --recovery-key "$dev"
+  if [[ "$PASSPHRASE_FROM_ENV" == true ]]; then
+    # Non-interactive: hand the existing passphrase to systemd-cryptenroll via a
+    # transient, 0600, root-owned key file (--unlock-key-file) instead of the
+    # ask-password prompt. Removed as soon as enrollment finishes.
+    local kf
+    kf="$("${SUDO[@]}" mktemp /root/.luks-unlock.XXXXXX)"
+    printf '%s' "$PASSPHRASE" | "${SUDO[@]}" tee "$kf" >/dev/null
+    "${SUDO[@]}" chmod 0600 "$kf"
+    log_act "$dev ($name): enrolling TPM2 (PCR $TPM2_PCRS) using the supplied passphrase"
+    "${SUDO[@]}" systemd-cryptenroll --unlock-key-file="$kf" --tpm2-device=auto --tpm2-pcrs="$TPM2_PCRS" "$dev" \
+      || { "${SUDO[@]}" rm -f "$kf"; return 1; }
+    if [[ "$WITH_RECOVERY_KEY" == true ]]; then
+      log_act "$dev ($name): enrolling recovery key — record the printed key safely"
+      "${SUDO[@]}" systemd-cryptenroll --unlock-key-file="$kf" --recovery-key "$dev" \
+        || { "${SUDO[@]}" rm -f "$kf"; return 1; }
+    fi
+    "${SUDO[@]}" rm -f "$kf"
+  else
+    log_act "$dev ($name): enrolling TPM2 (PCR $TPM2_PCRS) — enter an existing passphrase when prompted"
+    "${SUDO[@]}" systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs="$TPM2_PCRS" "$dev"
+    if [[ "$WITH_RECOVERY_KEY" == true ]]; then
+      log_act "$dev ($name): enrolling recovery key — record the printed key safely"
+      "${SUDO[@]}" systemd-cryptenroll --recovery-key "$dev"
+    fi
   fi
 }
 

@@ -42,8 +42,9 @@ backend_preflight() {
 
 # backend_enroll <dev> <name> [is_root]: seal a LUKS keyslot to the TPM2 via
 # `clevis luks bind`. Idempotent — a device already carrying a clevis tpm2 binding
-# is skipped. clevis prompts for an existing passphrase itself (interactive-only,
-# same guarantee as the Fedora path).
+# is skipped. By default clevis prompts for an existing passphrase itself; when a
+# passphrase was supplied via the environment (PASSPHRASE_FROM_ENV, see the
+# shared core), it is fed on stdin instead so enrollment runs unattended.
 backend_enroll() {
   local dev="$1" name="$2" listing cfg pcr_ids
   # `clevis luks list` reads the LUKS2 header tokens (needs root); capture then
@@ -66,8 +67,15 @@ backend_enroll() {
     log_act "$dev ($name): would run clevis luks bind -d $dev tpm2 '$cfg'"
     return 0
   fi
-  log_act "$dev ($name): binding clevis TPM2 (config $cfg) — enter an existing passphrase when prompted"
-  "${SUDO[@]}" clevis luks bind -d "$dev" tpm2 "$cfg"
+  if [[ "$PASSPHRASE_FROM_ENV" == true ]]; then
+    # Non-interactive: feed the supplied passphrase on stdin (-k -) and
+    # auto-confirm (-y) so no prompt blocks an unattended enrollment.
+    log_act "$dev ($name): binding clevis TPM2 (config $cfg) using the supplied passphrase"
+    printf '%s' "$PASSPHRASE" | "${SUDO[@]}" clevis luks bind -y -k - -d "$dev" tpm2 "$cfg"
+  else
+    log_act "$dev ($name): binding clevis TPM2 (config $cfg) — enter an existing passphrase when prompted"
+    "${SUDO[@]}" clevis luks bind -d "$dev" tpm2 "$cfg"
+  fi
 }
 
 # backend_crypttab_opts <is_root>: clevis needs NO crypttab change for the root
