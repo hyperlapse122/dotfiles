@@ -144,6 +144,6 @@ The `.vscode/` editor configuration is intentionally not vendored.
    lint/format config is needed.
 4. Document the package in its own `README.md` and add a row to the members
    table above.
-5. Update the root [`AGENTS.md`](../AGENTS.md) Layout block and
-   [`README.md`](../README.md) repo-structure table in the **same commit** (the
-   repo's hard documentation-sync rule).
+5. Update the root [`AGENTS.md`](../AGENTS.md) `packages/` bullet and the root
+   [`README.md`](../README.md) "Repository structure" list in the **same
+   commit** (the repo's hard documentation-sync rule).

@@ -51,13 +51,15 @@ editing the installer unless it needs a different mode or a host gate.
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
+| `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); skipped when the Breeze theme is not installed |
+| `etc/security/limits.d/95-ubuntustudio-audio.conf` | `@audio` group realtime privileges (rtprio/memlock) — Ubuntu Studio only |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, VM-only via `systemd-detect-virt --vm`, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
-| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore |
+| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
 
 ## Gated paths (installer special-cases)
 
-Two paths are not installed unconditionally:
+Four paths are not installed unconditionally:
 
 - **`etc/sudoers.d/*`** — installed at mode `0440` (sudo refuses
   group/world-readable drop-ins) and only on virtual machines
@@ -66,17 +68,32 @@ Two paths are not installed unconditionally:
 - **`etc/modprobe.d/thinkpad_acpi.conf`** and
   **`etc/modules-load.d/thinkpad_acpi.conf`** — installed only when
   `dmidecode -t system` reports a ThinkPad.
+- **`etc/sddm.conf.d/90-breeze.conf`** — installed only when
+  `/usr/share/sddm/themes/breeze/theme.conf` exists (forcing a missing theme
+  would break the login screen).
+- **`etc/security/limits.d/95-ubuntustudio-audio.conf`** — installed only on
+  Ubuntu Studio (an Ubuntu host with the `ubuntustudio-default-settings`
+  marker package).
 
 ## Beyond file installation
 
 After installing files, the script also performs host-level setup, each step
 guarded so a missing prerequisite is skipped cleanly: removes orphaned `/etc`
-paths listed in `REMOVED_ETC_PATHS`, reloads systemd/udev/sysctl, enables user
-lingering, masks the rootful podman socket, disables zram swap, configures
-firewalld (IPv4 masquerade, `tailscale0` → trusted zone, WireGuard/STUN ports),
-points `/etc/resolv.conf` at systemd-resolved, and restarts
-systemd-resolved/NetworkManager/tailscaled. See the script header for the full
-rationale.
+paths listed in `REMOVED_ETC_PATHS`, drives `locale-gen` on Ubuntu (Fedora
+ships `ko_KR.UTF-8` precompiled), reloads systemd/udev/sysctl, enables user
+lingering, masks the rootful podman socket, disables zram swap (Fedora's
+`systemd-zram-setup@` template and Ubuntu's `zramswap.service`, masked in
+separate distro-guarded blocks), configures firewalld (IPv4 masquerade,
+`tailscale0` → trusted zone, WireGuard/STUN ports), points `/etc/resolv.conf`
+at systemd-resolved, and restarts systemd-resolved/NetworkManager/tailscaled.
+See the script header for the full rationale.
+
+The whole run skips (`exit 0`) on headless/server installs — default boot
+target not `graphical.target` and no display-manager enabled — and when sudo
+credentials can't be obtained non-interactively. Override the headless skip
+with `INSTALL_SYSTEM_CONFIG_FORCE=1`; note chezmoi records a clean skip as a
+successful run, so re-run by hand with `chezmoi apply --force` on an
+interactive terminal.
 
 There is no `system/macos/` or `system/windows/` tree. macOS settings usually
 belong under `home/`/`Library/` (user-owned `~/Library` paths); Windows system
