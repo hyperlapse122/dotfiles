@@ -1,0 +1,125 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux-gnome/run_after_config-gnome-fonts.sh.tmpl
+#
+# GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Brings GNOME's display
+# fonts to PARITY with the KDE target (run_onchange_after_config-kde-fonts):
+#
+#   sans (interface / document / window-title) -> Pretendard 10
+#   mono (monospace)                            -> JetBrainsMono Nerd Font 10
+#
+# KDE keys                          -> GNOME gsettings keys
+#   [General] font                     org.gnome.desktop.interface font-name
+#   [General] fixed                    org.gnome.desktop.interface monospace-font-name
+#   [WM]      activeFont               org.gnome.desktop.wm.preferences titlebar-font
+#   (document body, no KDE analog)     org.gnome.desktop.interface document-font-name
+# KDE's smallestReadableFont / menuFont / toolBarFont have no GNOME analog
+# (GNOME has a single interface font), so they are folded into font-name.
+#
+# GNOME normally stays on stock defaults here; matching the KDE font choice is a
+# deliberate, user-requested exception (font parity across desktops), scoped to
+# the four font keys only — no other theming.
+#
+# SESSION-DEPENDENT + user-respecting (same spirit as config-gnome-inputmethod):
+# gsettings writes go through dconf-service on the session D-Bus, so this is a
+# run_after (retries every apply) rather than run_onchange — on a headless / TTY
+# / first-boot apply it exits 0 WITHOUT stamping and applies the next time apply
+# runs inside a live GNOME session. The stamp records the exact font SIGNATURE
+# it last applied: an unchanged signature means "already ensured" and we leave
+# the user's current fonts alone (a user who repicks fonts is not fought), while
+# bumping the SANS/MONO constants below changes the signature and re-asserts the
+# new choice — mirroring how the KDE run_onchange re-triggers on a font change.
+#
+# managed fonts: {{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}
+
+set -euo pipefail
+
+SANS="Pretendard"
+MONO="JetBrainsMono Nerd Font"
+SANS_SIZE=10
+MONO_SIZE=10
+
+FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-fonts"
+
+# The managed font archive set (same expression as the marker above). A font
+# BUMP in .chezmoidata/fonts.yaml lands a new archive filename even when the
+# Pretendard/JetBrains family names are unchanged, so folding it into the
+# signature makes such a bump fall through the stamp guard below and reach the
+# cache refresh -- the parity the KDE run_onchange marker path gets for free.
+FONTS="{{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}"
+
+# Signature of the exact fonts this script wants applied. Bumping any constant
+# above OR any managed font archive changes it, so the stamp no longer matches
+# and the cache refresh + font choice are re-asserted; while it matches, the
+# user's later manual font edits are left be.
+SIG="sans=${SANS}/${SANS_SIZE} mono=${MONO}/${MONO_SIZE} fonts=${FONTS}"
+
+if ! command -v gnome-shell >/dev/null 2>&1; then
+  echo "config-gnome-fonts: gnome-shell not found (non-GNOME system), skipping."
+  exit 0
+fi
+
+# Already applied this exact signature once -> respect the user's current fonts.
+# Because $SIG embeds the managed font archive set, a font bump falls through
+# here and reaches the cache refresh below (parity with the KDE run_onchange).
+if [[ -f "$STAMP" ]] && [[ "$(cat "$STAMP" 2>/dev/null || true)" == "$SIG" ]]; then
+  echo "config-gnome-fonts: fonts already ensured ($SIG); leaving current fonts alone"
+  exit 0
+fi
+
+# --- Register externally-installed fonts (same as the KDE script) -----------
+# Fonts land via .chezmoiexternals/fonts.toml -> ~/.local/share/fonts/**; refresh
+# the fontconfig cache so fc-match and the running session see them. This runs
+# BEFORE the live-session guards below (fc-cache needs no session), so a font
+# bump makes the new files visible even on a headless/TTY apply where the
+# gsettings step defers. Never fail the apply over a cache refresh.
+if command -v fc-cache >/dev/null 2>&1; then
+  echo "config-gnome-fonts: refreshing fontconfig cache ($FONT_DIR)..."
+  fc-cache -f "$FONT_DIR" >/dev/null 2>&1 \
+    || echo "config-gnome-fonts: fc-cache reported a non-fatal error, continuing." >&2
+fi
+
+# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+  echo "config-gnome-fonts: no D-Bus session bus; skip (retries next apply)"
+  exit 0
+fi
+command -v gsettings >/dev/null 2>&1 \
+  || { echo "config-gnome-fonts: gsettings absent; skip"; exit 0; }
+
+# Warn (don't fail) if a family is not installed yet: the externals provision it
+# during this same apply, and gsettings still records the correct name so the
+# font takes effect once it lands.
+_warn_missing_font() {
+  local family="$1" matched
+  command -v fc-match >/dev/null 2>&1 || return 0
+  matched="$(fc-match -f '%{family[0]}' "$family" 2>/dev/null || true)"
+  if [[ "$matched" != "$family" ]]; then
+    echo "config-gnome-fonts: font \"$family\" not installed yet (fc-match -> \"$matched\"); setting anyway." >&2
+  else
+    echo "config-gnome-fonts: font \"$family\" available."
+  fi
+}
+_warn_missing_font "$SANS"
+_warn_missing_font "$MONO"
+
+# --- Apply the GNOME display fonts -----------------------------------------
+_set() {
+  local schema="$1" key="$2" value="$3"
+  gsettings set "$schema" "$key" "$value"
+  printf 'config-gnome-fonts:   %s %-18s = %s\n' "$schema" "$key" "$value"
+}
+
+echo "config-gnome-fonts: configuring GNOME display fonts..."
+_set org.gnome.desktop.interface      font-name          "$SANS $SANS_SIZE"
+_set org.gnome.desktop.interface      document-font-name "$SANS $SANS_SIZE"
+_set org.gnome.desktop.interface      monospace-font-name "$MONO $MONO_SIZE"
+_set org.gnome.desktop.wm.preferences titlebar-font      "$SANS $SANS_SIZE"
+
+# Stamp only after the desired state is confirmed reached, so any skip path
+# above retries on a later apply.
+mkdir -p "$(dirname "$STAMP")"
+printf '%s' "$SIG" > "$STAMP"
+exit 0
+{{ end -}}
