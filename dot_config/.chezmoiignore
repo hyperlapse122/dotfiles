@@ -9,6 +9,19 @@ systemd
 wireplumber
 {{- end }}
 
+# fcitx5 is the input method on the KDE targets only (Fedora KDE Spin, Ubuntu
+# Studio); GNOME hosts (Fedora Workstation, Ubuntu Desktop) stay on GNOME's
+# default ibus stack, so neither the fcitx5 config nor the fcitx XMODIFIERS
+# environment drop-in may deploy there — a stray XMODIFIERS=@im=fcitx would
+# point XWayland apps at an input method that isn't running. Detection mirrors
+# the solaar rules template: GNOME-only means gnome-shell on PATH without
+# plasmashell; with neither desktop (headless, container, CI) the files keep
+# deploying as before.
+{{- if and (eq .chezmoi.os "linux") (lookPath "gnome-shell") (not (lookPath "plasmashell")) }}
+environment.d/50-input-method.conf
+fcitx5
+{{- end }}
+
 # zsh cannot be used from Windows
 {{- if eq .chezmoi.os "windows" }}
 zsh

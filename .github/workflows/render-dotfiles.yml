@@ -228,6 +228,54 @@ jobs:
           echo "- LUKS TPM2 tool (${{ matrix.os }}) rendered the shared dracut + systemd-cryptenroll backend" \
             >> "${GITHUB_STEP_SUMMARY}"
 
+      - name: Assert solaar gesture rules render per-desktop
+        run: |
+          set -euxo pipefail
+          # dot_config/solaar/rules.yaml.tmpl selects its gesture ACTIONS via
+          # lookPath at render time: plasmashell on PATH -> KWin global-shortcut
+          # actions (also the no-desktop default, which the artifact apply above
+          # already covers); gnome-shell WITHOUT plasmashell -> GNOME Shell
+          # D-Bus actions. The containers ship neither binary, so exercise both
+          # branches explicitly with stub binaries on PATH and assert each
+          # variant carries its desktop's D-Bus calls — and none of the other's.
+          scratch="${RUNNER_TEMP}/de-render"
+          mkdir -p "${scratch}/target" "${scratch}/kde-bin" "${scratch}/gnome-bin"
+          : > "${scratch}/empty.toml"
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${scratch}/kde-bin/plasmashell"
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${scratch}/gnome-bin/gnome-shell"
+          chmod 0755 "${scratch}/kde-bin/plasmashell" "${scratch}/gnome-bin/gnome-shell"
+
+          # KDE host (plasmashell on PATH). The rendered file's comment header
+          # documents BOTH desktop maps, so every check below anchors on rule
+          # lines (^- Execute) — a bare grep would match the comments.
+          env PATH="${scratch}/kde-bin:${PATH}" \
+            chezmoi --config "${scratch}/empty.toml" \
+              --source "${GITHUB_WORKSPACE}" \
+              --destination "${scratch}/target" \
+              execute-template < "${GITHUB_WORKSPACE}/dot_config/solaar/rules.yaml.tmpl" \
+              > "${scratch}/rules-kde.yaml"
+          grep -q '^- Execute: \[qdbus-qt6, org.kde.kglobalaccel' "${scratch}/rules-kde.yaml"
+          grep -q '^- Execute: \[qdbus-qt6, org.kde.krunner' "${scratch}/rules-kde.yaml"
+          ! grep -q '^- Execute: \[gdbus' "${scratch}/rules-kde.yaml"
+
+          # GNOME-only host (gnome-shell on PATH, no plasmashell).
+          env PATH="${scratch}/gnome-bin:${PATH}" \
+            chezmoi --config "${scratch}/empty.toml" \
+              --source "${GITHUB_WORKSPACE}" \
+              --destination "${scratch}/target" \
+              execute-template < "${GITHUB_WORKSPACE}/dot_config/solaar/rules.yaml.tmpl" \
+              > "${scratch}/rules-gnome.yaml"
+          grep -q 'OverviewActive, "<true>"\]$' "${scratch}/rules-gnome.yaml"
+          grep -q 'OverviewActive, "<false>"\]$' "${scratch}/rules-gnome.yaml"
+          grep -q '^- Execute: \[gdbus, .*org.gnome.Shell.FocusSearch\]$' "${scratch}/rules-gnome.yaml"
+          ! grep -q '^- Execute: \[qdbus-qt6' "${scratch}/rules-gnome.yaml"
+          # The desktop-agnostic haptic confirm must survive in both variants.
+          grep -q '^- Execute: \[".*/mxm4-haptic", "SUBTLE COLLISION"\]$' "${scratch}/rules-kde.yaml"
+          grep -q '^- Execute: \[".*/mxm4-haptic", "SUBTLE COLLISION"\]$' "${scratch}/rules-gnome.yaml"
+
+          echo "- solaar gesture rules (${{ matrix.os }}) rendered both per-desktop variants" \
+            >> "${GITHUB_STEP_SUMMARY}"
+
   # ---------------------------------------------------------------------------
   # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
   # ---------------------------------------------------------------------------

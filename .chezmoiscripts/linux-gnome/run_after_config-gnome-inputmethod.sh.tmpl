@@ -1,0 +1,117 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux-gnome/run_after_config-gnome-inputmethod.sh.tmpl
+#
+# GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Korean input on GNOME
+# uses the desktop's NATIVE ibus stack — not fcitx5, which is the KDE-target
+# input method here — so the only per-user wiring needed is registering the
+# Hangul engine as an input source:
+#
+#   org.gnome.desktop.input-sources sources += ('ibus', 'hangul')
+#
+# Everything else stays on GNOME defaults by design (no IM environment
+# variables, no im-chooser/imsettings switch): GNOME starts ibus itself and
+# manages GTK_IM_MODULE/QT_IM_MODULE/XMODIFIERS for the session. The engine
+# package (ibus-hangul) is installed by the distro installer's gnomePackages
+# set; this script only ADDS the source, preserving whatever sources the user
+# already has, and GNOME picks up the gsettings change live (switch engines
+# with Super+Space).
+#
+# ONE-SHOT + user-respecting (same pattern as config-kde-wallpaper-breeze):
+# input sources are a per-user setting, so this applies exactly once (tracked
+# by a per-user stamp) and never again — if the user later removes or reorders
+# the Hangul source, we do NOT keep re-adding it on every apply.
+#
+# Live-session only: gsettings writes go through dconf-service on the session
+# D-Bus. run_after retries on every apply, so on a headless/TTY/first-boot
+# apply this exits 0 (WITHOUT stamping) and the source is added the next time
+# apply runs inside a live GNOME session.
+
+set -euo pipefail
+
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-inputsources-hangul"
+
+if ! command -v gnome-shell >/dev/null 2>&1; then
+  echo "config-gnome-inputmethod: gnome-shell not found (non-GNOME system), skipping."
+  exit 0
+fi
+
+# Already ensured once -> respect the user's current source list, do nothing.
+if [[ -f "$STAMP" ]]; then
+  echo "config-gnome-inputmethod: already applied once ($STAMP); leaving input sources alone"
+  exit 0
+fi
+
+# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+  echo "config-gnome-inputmethod: no D-Bus session bus; skip (retries next apply)"
+  exit 0
+fi
+command -v gsettings >/dev/null 2>&1 \
+  || { echo "config-gnome-inputmethod: gsettings absent; skip"; exit 0; }
+# /usr/bin/python3, NOT bare python3 (mise may shadow it): GVariant text for
+# a(ss) is valid Python literal syntax, so the merge below parses with
+# ast.literal_eval instead of hand-rolled string munging.
+[[ -x /usr/bin/python3 ]] \
+  || { echo "config-gnome-inputmethod: /usr/bin/python3 absent; skip"; exit 0; }
+# The engine definition ships in ibus-hangul (gnomePackages); registering a
+# source for an engine that does not exist would leave a dead entry in the
+# switcher, so wait for the package instead.
+if [[ ! -f /usr/share/ibus/component/hangul.xml ]]; then
+  echo "config-gnome-inputmethod: ibus-hangul not installed; skip (retries next apply)"
+  exit 0
+fi
+
+if ! current="$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)"; then
+  echo "config-gnome-inputmethod: cannot read org.gnome.desktop.input-sources sources; skip"
+  exit 0
+fi
+
+# Merge ('ibus', 'hangul') into the existing list. Output protocol: PRESENT
+# (already there), PARSE_ERROR (unexpected GVariant text — leave untouched),
+# or the new list in GVariant text form (Python's repr of a list of str
+# 2-tuples is valid GVariant a(ss) text).
+merged="$(/usr/bin/python3 - "$current" <<'PYEOF'
+import ast
+import sys
+
+raw = sys.argv[1].strip()
+# An empty typed array prints as "@a(ss) []"; strip the type annotation so
+# ast.literal_eval handles both the empty and populated forms.
+if raw.startswith("@a(ss)"):
+    raw = raw[len("@a(ss)"):].strip()
+try:
+    sources = [tuple(item) for item in ast.literal_eval(raw)]
+except (SyntaxError, ValueError):
+    print("PARSE_ERROR")
+    sys.exit(0)
+
+if ("ibus", "hangul") in sources:
+    print("PRESENT")
+else:
+    sources.append(("ibus", "hangul"))
+    print(repr(sources))
+PYEOF
+)"
+
+case "$merged" in
+  PARSE_ERROR)
+    echo "config-gnome-inputmethod: unexpected sources format (${current}); leaving untouched" >&2
+    exit 0
+    ;;
+  PRESENT)
+    echo "config-gnome-inputmethod: ('ibus', 'hangul') already in input sources"
+    ;;
+  *)
+    gsettings set org.gnome.desktop.input-sources sources "$merged"
+    echo "config-gnome-inputmethod: added ('ibus', 'hangul') -> ${merged}"
+    echo "config-gnome-inputmethod: switch input sources with Super+Space"
+    ;;
+esac
+
+# Stamp only after the desired state is confirmed reached, so any skip path
+# above retries on a later apply.
+mkdir -p "$(dirname "$STAMP")"
+touch "$STAMP"
+exit 0
+{{ end -}}

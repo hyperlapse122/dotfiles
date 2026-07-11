@@ -7,8 +7,13 @@ set -euo pipefail
 # APT repositories, dpkg architecture setup for Steam, apt/flatpak/dotnet
 # packages, direct .deb installs, NVIDIA driver + CUDA + container toolkit, the
 # Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), system
-# services, and user groups. Every install path is guarded so chezmoi can safely
-# re-run this script when .chezmoidata/packages.yaml changes.
+# services, and user groups. Serves both Ubuntu flavors — Ubuntu Desktop 26.04
+# (GNOME) and Ubuntu Studio 26.04 (KDE Plasma) — with the per-desktop package
+# sets (kdePackages/gnomePackages) gated at runtime on which shell binary the
+# ISO shipped, and the Studio pro-audio stack (studioPackages, @audio group)
+# gated on the ubuntustudio-default-settings marker package. Every install path
+# is guarded so chezmoi can safely re-run this script when
+# .chezmoidata/packages.yaml changes.
 
 # Host probes (same as Fedora). Scan sysfs for NVIDIA's PCI vendor id so this
 # works before pciutils/lspci are available. FORCE_NVIDIA=1 overrides the probe
@@ -46,6 +51,34 @@ else
   done
 fi
 
+# Desktop-environment probes: Ubuntu Desktop ships gnome-shell, Ubuntu Studio
+# ships plasmashell — both from the ISO, so the probe is stable from first boot
+# onward (neither binary comes from this package list). Gates the per-desktop
+# package sets below; a host with neither (server, container) installs neither set.
+if command -v plasmashell >/dev/null 2>&1; then
+  HAS_KDE=1
+else
+  HAS_KDE=0
+fi
+if command -v gnome-shell >/dev/null 2>&1; then
+  HAS_GNOME=1
+else
+  HAS_GNOME=0
+fi
+
+# Ubuntu Studio marker. Every Ubuntu flavor reports ID=ubuntu in /etc/os-release,
+# so the flavor is detected by its seed package: ubuntustudio-default-settings is
+# preinstalled by the Studio ISO and absent on Ubuntu Desktop. Gates the Studio
+# pro-audio stack (studioPackages) and the @audio group so a plain Desktop
+# install never grows realtime-audio provisioning. FORCE_UBUNTU_STUDIO=1
+# overrides the probe (mirrors FORCE_NVIDIA/FORCE_INTEL) to validate the Studio
+# package set in a test container.
+if [[ "${FORCE_UBUNTU_STUDIO:-0}" == "1" ]] || dpkg -s ubuntustudio-default-settings >/dev/null 2>&1; then
+  IS_UBUNTU_STUDIO=1
+else
+  IS_UBUNTU_STUDIO=0
+fi
+
 # Use sudo only when not already root. APT, dpkg, systemctl, and usermod need it.
 if [[ "${EUID}" -eq 0 ]]; then
   SUDO=()
@@ -75,6 +108,27 @@ packages=(
 if [[ "${IS_VIRT}" -eq 0 ]]; then
   packages+=(
 {{ range .packages.linux.ubuntu.bareMetalPackages -}}
+    {{ . | quote }}
+{{ end -}}
+  )
+fi
+if [[ "${HAS_KDE}" -eq 1 ]]; then
+  packages+=(
+{{ range .packages.linux.ubuntu.kdePackages -}}
+    {{ . | quote }}
+{{ end -}}
+  )
+fi
+if [[ "${HAS_GNOME}" -eq 1 ]]; then
+  packages+=(
+{{ range .packages.linux.ubuntu.gnomePackages -}}
+    {{ . | quote }}
+{{ end -}}
+  )
+fi
+if [[ "${IS_UBUNTU_STUDIO}" -eq 1 ]]; then
+  packages+=(
+{{ range .packages.linux.ubuntu.studioPackages -}}
     {{ . | quote }}
 {{ end -}}
   )
@@ -335,9 +389,18 @@ configure_time() {
 configure_user_groups() {
   local target_user grp
   target_user="${SUDO_USER:-$USER}"
+  local -a groups=(keyd libvirt kvm)
+
+  # @audio grants the realtime privileges from the Studio limits.d drop-in
+  # (95-ubuntustudio-audio.conf) — Studio-only, like the drop-in itself. The
+  # audio group exists on every Ubuntu, so membership (direct device access)
+  # is deliberately NOT granted on a plain Desktop install.
+  if [[ "${IS_UBUNTU_STUDIO}" -eq 1 ]]; then
+    groups+=(audio)
+  fi
 
   # Add user to groups only when they exist.
-  for grp in keyd libvirt kvm audio; do
+  for grp in "${groups[@]}"; do
     if getent group "${grp}" >/dev/null 2>&1; then
       "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
     fi

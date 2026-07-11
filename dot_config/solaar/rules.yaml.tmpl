@@ -24,7 +24,18 @@
 # `Mouse Gesture Button` at control 195, but it is left Regular — firmware
 # handled, never reaches the rule engine — so it cannot collide with these.)
 #
-# Gesture map. Verified host: Plasma 6.6.5 Wayland; qdbus-qt6 at
+# === Per-desktop actions, selected at chezmoi apply time ===
+#
+# The gesture ACTIONS are desktop-specific D-Bus calls, so this template
+# renders one of two variants via lookPath: a KDE host (plasmashell on PATH —
+# Fedora KDE Spin, Ubuntu Studio) gets KWin global-shortcut actions; a
+# GNOME-only host (gnome-shell without plasmashell — Fedora Workstation,
+# Ubuntu Desktop) gets GNOME Shell D-Bus actions. When NEITHER desktop is on
+# PATH (headless host, container, CI render) the KDE variant is rendered —
+# inert without a desktop, and it keeps CI artifacts deterministic. The haptic
+# confirm path is desktop-agnostic and identical in both variants.
+#
+# KDE map. Verified host: Plasma 6.6.5 Wayland; qdbus-qt6 at
 # /usr/bin/qdbus-qt6; KWin shortcuts "Grid View", "Show Desktop",
 # "Window Quick Tile Left", "Window Quick Tile Right" all present
 # (qdbus-qt6 org.kde.kglobalaccel /component/kwin shortcutNames); krunner
@@ -37,6 +48,24 @@
 #   hold + flick Right -> snap window right     (Window Quick Tile Right) + haptic
 #   press, no movement -> KRunner launcher      (krunner toggleDisplay)
 #
+# GNOME map (Fedora Workstation / Ubuntu Desktop). Only GNOME Shell's STABLE
+# D-Bus surface is used — the org.gnome.Shell OverviewActive property and
+# FocusSearch method (js/ui/shellDBus.js); org.gnome.Shell.Eval is disabled
+# outside unsafe mode and is deliberately not used:
+#
+#   hold + flick Up    -> Activities overview   (OverviewActive=true)   + haptic
+#   hold + flick Down  -> leave the overview    (OverviewActive=false)  + haptic
+#   hold + flick Left  -> haptic tick only (see below)
+#   hold + flick Right -> haptic tick only (see below)
+#   press, no movement -> overview search       (FocusSearch — the KRunner analog)
+#
+# GNOME exposes no stable D-Bus method for window tiling or workspace
+# switching (the KDE Left/Right actions), and simulating GNOME's default
+# <Super>Left / <Super>Right keybindings via Solaar's KeyPress would need
+# /dev/uinput write access that stock hosts don't grant. Left/Right therefore
+# keep only the haptic confirm — the flick still registers tactilely — until a
+# stable action exists to wire here. gdbus ships with GLib on every GNOME host.
+#
 # Haptic confirm: each of the four DIRECTIONAL gestures also fires
 # `mxm4-haptic "SUBTLE COLLISION"` — a tactile "your flick registered" tick,
 # Logi-action-ring style. It uses the mxm4-hapticd daemon client, invoked by
@@ -46,9 +75,10 @@
 # `Set: [null, haptic-play, ...]`: the daemon does a direct hidraw write with
 # no HID++ ack wait, so the pulse is instant and consistent (see the root
 # AGENTS.md "Solaar haptic playback" alternatives table). The press-with-no-
-# movement KRunner rule is intentionally left silent — KRunner visibly pops up,
-# so it is self-confirming and needs no tick. The Execute list form runs
-# through subprocess.Popen with shell=False (no quoting/injection surface).
+# movement launcher rule is intentionally left silent — KRunner / the GNOME
+# overview visibly pops up, so it is self-confirming and needs no tick. The
+# Execute list form runs through subprocess.Popen with shell=False (no
+# quoting/injection surface).
 #
 # Wayland caveat (printed by `solaar show`): "rules cannot access modifier
 # keys in Wayland". Every action below uses a DBus Execute instead of a
@@ -64,27 +94,40 @@
 # Do NOT divert via `solaar config ... divert-keys` on 1.1.19 (it flips the
 # runtime state but crashes during persistence); config-solaar.sh edits
 # config.yaml directly and restarts Solaar only when something changed.
+{{- $gnomeRules := and (lookPath "gnome-shell") (not (lookPath "plasmashell")) }}
 ---
 - MouseGesture: Mouse Up
+{{ if $gnomeRules -}}
+- Execute: [gdbus, call, --session, --dest, org.gnome.Shell, --object-path, /org/gnome/Shell, --method, org.freedesktop.DBus.Properties.Set, org.gnome.Shell, OverviewActive, "<true>"]
+{{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Grid View]
+{{ end -}}
 - Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
 ...
 
 ---
 - MouseGesture: Mouse Down
+{{ if $gnomeRules -}}
+- Execute: [gdbus, call, --session, --dest, org.gnome.Shell, --object-path, /org/gnome/Shell, --method, org.freedesktop.DBus.Properties.Set, org.gnome.Shell, OverviewActive, "<false>"]
+{{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Show Desktop]
+{{ end -}}
 - Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
 ...
 
 ---
 - MouseGesture: Mouse Left
+{{ if not $gnomeRules -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Left]
+{{ end -}}
 - Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
 ...
 
 ---
 - MouseGesture: Mouse Right
+{{ if not $gnomeRules -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Right]
+{{ end -}}
 - Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
 ...
 
@@ -94,7 +137,11 @@
 # matches exactly one of these five documents (the movement count differs).
 ---
 - MouseGesture: []
+{{ if $gnomeRules -}}
+- Execute: [gdbus, call, --session, --dest, org.gnome.Shell, --object-path, /org/gnome/Shell, --method, org.gnome.Shell.FocusSearch]
+{{ else -}}
 - Execute: [qdbus-qt6, org.kde.krunner, /App, org.kde.krunner.App.toggleDisplay]
+{{ end -}}
 ...
 
 # Example: map a diverted Back Button press to Alt+Left.
