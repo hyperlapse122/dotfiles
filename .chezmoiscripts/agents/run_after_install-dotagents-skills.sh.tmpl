@@ -23,6 +23,17 @@ if ! command -v git >/dev/null 2>&1; then
   skip
 fi
 
+# First-apply fix: `dotagents --user install` iterates agents.toml's
+# `agents = ["claude", "codex"]` and drops a `skills` symlink into each agent's
+# config dir (~/.claude/skills, ~/.codex/skills) via ensureSkillsSymlink, which
+# does NOT create the parent. On a fresh machine ~/.codex is provided by the
+# codex external, but nothing creates ~/.claude until Claude Code is first run —
+# so the symlink fails with ENOENT and the whole install exits non-zero, which
+# the soft-skip below then swallows, leaving skills/MCPs unconfigured on the very
+# first apply. Pre-create the agent config dirs so the initial apply provisions
+# fully; mkdir -p is idempotent and harmless if the dirs already exist.
+mkdir -p "$HOME/.claude" "$HOME/.codex" || true
+
 set +e
 install_output="$(mise --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
 install_rc=$?
