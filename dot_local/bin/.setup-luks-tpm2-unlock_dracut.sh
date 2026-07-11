@@ -1,4 +1,13 @@
-# Fedora backend for setup-luks-tpm2-unlock.sh — dracut + systemd-cryptenroll.
+# Shared dracut backend for setup-luks-tpm2-unlock.sh — dracut + systemd-cryptenroll.
+#
+# Used on BOTH Fedora and Ubuntu. dracut builds a systemd-based initramfs whose
+# systemd-cryptsetup honours the `tpm2-device=auto` crypttab option, so enrollment
+# is `systemd-cryptenroll` and the crypttab carries `tpm2-device=auto` on either
+# distro — one mechanism, no per-distro divergence. (Ubuntu 26.04 switched its
+# initramfs generator from initramfs-tools to dracut; on the old initramfs-tools
+# stack systemd-cryptsetup was absent and `tpm2-device=auto` was silently ignored,
+# Launchpad #1980018, which is why earlier revisions used clevis on Ubuntu. With
+# dracut that workaround is unnecessary and Ubuntu uses the Fedora path verbatim.)
 #
 # This fragment is NOT deployed on its own (its source name is dot-prefixed, so
 # chezmoi ignores it). It is inlined into the deployed script at apply time by
@@ -8,11 +17,9 @@
 # It provides the four backend hooks the shared core calls (backend_preflight,
 # backend_enroll, backend_crypttab_opts, backend_finalize) and may use any shared
 # helper/state (SUDO, DRY_RUN, CHANGED, TPM2_PCRS, WITH_RECOVERY_KEY, log_*, err,
-# require_cmd). On Fedora/RHEL, dracut is the only initramfs generator that wires
-# systemd's `tpm2-device=auto` crypttab unlock into early boot, so enrollment is
-# `systemd-cryptenroll` and the crypttab carries `tpm2-device=auto`.
+# require_cmd).
 
-BACKEND_LABEL="dracut + systemd-cryptenroll (Fedora)"
+BACKEND_LABEL="dracut + systemd-cryptenroll"
 
 # backend_preflight: verify the dracut TPM2 path is usable BEFORE any irreversible
 # enrollment or crypttab edit. No sudo/TTY here — only tool + module availability.

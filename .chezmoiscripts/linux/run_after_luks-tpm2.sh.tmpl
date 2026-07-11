@@ -1,18 +1,20 @@
-{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
-{{-   $luksPassphrase := .luksPassphrase -}}
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+{{-   $luksPassphrase := "" -}}
+{{-   if hasKey . "luksPassphrase" }}{{ $luksPassphrase = .luksPassphrase }}{{ end -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_after_ubuntu-luks-tpm2.sh.tmpl
+# .chezmoiscripts/linux/run_after_luks-tpm2.sh.tmpl
 #
-# Unconditional (run_after) Ubuntu wrapper that enrolls this host's LUKS devices
-# for TPM2 auto-unlock on `chezmoi apply`, by driving the deployed
-# ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively.
+# Unconditional (run_after) wrapper — Fedora + Ubuntu — that enrolls this host's
+# LUKS devices for TPM2 auto-unlock on `chezmoi apply`, by driving the deployed
+# ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively. Both distros use the
+# same dracut + systemd-cryptenroll backend, so this wrapper is backend-neutral.
 #
 # PASSPHRASE via chezmoi's promptString: chezmoi asks for the existing LUKS
 # passphrase at apply time and it reaches the enrollment tool through the
 # SETUP_LUKS_TPM2_PASSPHRASE environment variable (the tool reads it from env
 # ONLY, never argv, and clears it immediately). Leave the prompt blank to skip
 # enrollment for this apply — e.g. once the disk is already enrolled. Enrollment
-# is also idempotent: a device that already carries a clevis TPM2 binding is
+# is also idempotent: a device that already carries a systemd-tpm2 token is
 # skipped even when a passphrase is given.
 #
 # run_after (deliberately NOT run_once/run_onchange): reruns on every apply, so a

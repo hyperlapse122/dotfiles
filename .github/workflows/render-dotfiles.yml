@@ -141,10 +141,17 @@ jobs:
           # authoritative gate (it fails the job if the templates this PR touches
           # did not render). This keeps an unrelated secret-file quirk from
           # reddening the render check.
+          #
+          # Feed blank lines on stdin with --no-tty: the Fedora/Ubuntu config template
+          # calls promptStringOnce for the LUKS passphrase, and newer chezmoi ERRORS
+          # trying to open /dev/tty in a non-interactive container instead of using the
+          # default — a blank line answers it (empty = skip enrollment). Extra lines are
+          # harmless; there is only the one prompt on a fresh HOME.
           set +e
-          chezmoi apply --init \
+          printf '\n\n\n' | chezmoi apply --init \
             --exclude=scripts,externals \
             --keep-going \
+            --no-tty \
             --verbose
           rc=$?
           set -e
@@ -197,6 +204,29 @@ jobs:
             jq -c '.plugin' "${cfg}/tui.json"
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Assert LUKS TPM2 tool renders the shared dracut backend
+        run: |
+          set -euxo pipefail
+          # The deployed tool (dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl)
+          # inlines the enrollment backend at apply time via {{ include }}. Fedora and
+          # Ubuntu now share ONE dracut + systemd-cryptenroll backend; assert the rendered
+          # tool actually carries it so a regression in the include/backend is caught here
+          # rather than at a reboot on a real host.
+          tool="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.local/bin/setup-luks-tpm2-unlock.sh"
+          test -f "${tool}"
+          # NB: the tool's header comments legitimately mention `{{ include }}` (escaped in
+          # the source), so a blanket unrendered-template check would false-positive here.
+          # The specific backend markers below + `bash -n` prove the include actually
+          # resolved: an unresolved `{{ include ... }}` directive yields neither BACKEND_LABEL
+          # nor valid bash.
+          grep -q 'BACKEND_LABEL="dracut + systemd-cryptenroll"' "${tool}"  # shared backend inlined
+          grep -q 'systemd-cryptenroll'                          "${tool}"  # TPM2 enrollment tool
+          grep -q 'tpm2-device=auto'                             "${tool}"  # crypttab unlock option
+          grep -q 'dracut -f --regenerate-all'                   "${tool}"  # initramfs rebuild
+          bash -n "${tool}"                                                  # rendered result is valid bash
+          echo "- LUKS TPM2 tool (${{ matrix.os }}) rendered the shared dracut + systemd-cryptenroll backend" \
+            >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
   # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
