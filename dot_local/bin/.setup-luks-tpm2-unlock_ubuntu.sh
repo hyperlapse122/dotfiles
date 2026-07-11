@@ -14,6 +14,13 @@
 # the root device in early boot without any crypttab change. The existing
 # passphrase keyslot is untouched, so it remains the fallback.
 #
+# For that early-boot unlock to actually work, the initramfs must be able to reach
+# the TPM: backend_finalize pins BOTH the `tss` user (ensure_tss_initramfs_hook)
+# and the TPM kernel driver (ensure_tpm_initramfs_modules) into the initramfs.
+# Without the driver, /dev/tpmrm0 is absent at early boot and the unlock fails even
+# though it succeeded on the running system, dropping boot to an initramfs shell
+# with "/dev/mapper/... does not exist" (clevis issue #136).
+#
 # It provides the four backend hooks the shared core calls (backend_preflight,
 # backend_enroll, backend_crypttab_opts, backend_finalize) and may use any shared
 # helper/state (SUDO, DRY_RUN, CHANGED, TPM2_PCRS, WITH_RECOVERY_KEY, log_*, err,
@@ -128,10 +135,69 @@ HOOK
   log_act "wrote $hook"
 }
 
-# backend_finalize: ensure the tss-user initramfs hook exists, then rebuild the
-# initramfs (only when something actually changed).
+# ensure_tpm_initramfs_modules: clevis's early-boot TPM2 unlock needs a TPM
+# character device (/dev/tpmrm0) present in the initramfs, which only exists once
+# the kernel's TPM interface driver (tpm_crb / tpm_tis, on top of the tpm core) is
+# loaded. Ubuntu's default MODULES=dep initramfs frequently OMITS that driver, so
+# `clevis luks bind`/`unlock` succeed on the RUNNING system (driver already loaded)
+# yet the SAME unlock fails at early boot: the TPM device is absent, clevis cannot
+# retrieve the key, the root LUKS device is never opened and boot drops to an
+# initramfs shell with "/dev/mapper/... does not exist" (clevis issue #136 — the
+# Ubuntu-specific "works at enrollment, fails at boot" failure). Pin the TPM
+# driver(s) into the initramfs via /etc/initramfs-tools/modules so the device is
+# available when clevis runs.
+#
+# Prefer the tpm* driver(s) actually loaded now — enrollment on this host proves
+# they back its TPM — then fall back to the common core + CRB/TIS interface set.
+# Only modules the running kernel actually ships are written (filtered via
+# modinfo), so update-initramfs never chokes on an unknown module name; a TPM
+# driver built into the kernel (no module) cleanly yields nothing to add.
+# Idempotent via a managed marker; counts as a change so the initramfs is rebuilt.
+ensure_tpm_initramfs_modules() {
+  local modfile=/etc/initramfs-tools/modules
+  local marker='# clevis TPM2 early-boot access (managed by setup-luks-tpm2-unlock.sh)'
+  if "${SUDO[@]}" grep -qF "$marker" "$modfile" 2>/dev/null; then
+    log_skip "initramfs TPM modules already configured ($modfile)"
+    return 0
+  fi
+  # Candidates: TPM drivers loaded now (best signal) + the usual core/CRB/TIS set.
+  local -a candidates=() resolved=()
+  local m seen=" "
+  while IFS= read -r m; do
+    [[ -n "$m" ]] && candidates+=("$m")
+  done < <(lsmod 2>/dev/null | awk 'NR>1 && $1 ~ /^tpm/ {print $1}')
+  candidates+=(tpm tpm_crb tpm_tis)
+  # Keep only modules the running kernel actually provides, de-duplicated, so a
+  # name that does not apply here can never make update-initramfs fail.
+  for m in "${candidates[@]}"; do
+    case "$seen" in *" $m "*) continue ;; esac
+    if modinfo "$m" >/dev/null 2>&1; then
+      resolved+=("$m")
+      seen+="$m "
+    fi
+  done
+  if [[ "${#resolved[@]}" -eq 0 ]]; then
+    log_skip "no loadable TPM kernel module found (built-in or absent); no $modfile entry needed"
+    return 0
+  fi
+  CHANGED=$((CHANGED + 1))
+  if [[ "$DRY_RUN" == true ]]; then
+    log_act "would add TPM module(s) to $modfile: ${resolved[*]}"
+    return 0
+  fi
+  {
+    printf '%s\n' "$marker"
+    printf '%s\n' "${resolved[@]}"
+  } | "${SUDO[@]}" tee -a "$modfile" >/dev/null
+  log_act "added TPM module(s) to $modfile: ${resolved[*]}"
+}
+
+# backend_finalize: ensure the initramfs can reach the TPM at early boot (the tss
+# user + the TPM kernel driver), then rebuild the initramfs (only when something
+# actually changed).
 backend_finalize() {
   ensure_tss_initramfs_hook
+  ensure_tpm_initramfs_modules
 
   if [[ "$CHANGED" -eq 0 ]]; then
     log_skip "nothing changed; skipping initramfs rebuild"
