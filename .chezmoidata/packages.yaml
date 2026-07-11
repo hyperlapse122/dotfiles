@@ -364,16 +364,15 @@ packages:
         - virt-manager  # graphical VM manager
         - virt-viewer  # SPICE/VNC console viewer for libvirt guests
 
-        # LUKS TPM2 auto-unlock (dot_local/bin/setup-luks-tpm2-unlock.sh, Ubuntu backend).
-        # Ubuntu's initramfs-tools ignores systemd's crypttab tpm2-device=auto (Launchpad
-        # #1980018), so the Ubuntu path uses clevis instead of systemd-cryptenroll: clevis
-        # luks bind seals a keyslot to the TPM2 and clevis-initramfs unlocks root in early
-        # boot. Fedora needs no equivalent packages (dracut + systemd-cryptenroll ship in base).
-        - clevis  # pluggable automated-decryption framework (clevis luks bind/unlock)
-        - clevis-luks  # clevis LUKS integration (bind/list/unlock against LUKS keyslots)
-        - clevis-tpm2  # clevis TPM2 pin (clevis-encrypt-tpm2; pulls tpm2-tools)
-        - clevis-initramfs  # initramfs-tools hook that clevis-unlocks the root device at boot
-        - tpm2-tools  # TPM2 userspace CLI (tpm2_* utilities used by the clevis tpm2 pin)
+        # NOTE: the LUKS TPM2 auto-unlock stack (clevis, clevis-luks, clevis-tpm2,
+        # clevis-initramfs, tpm2-tools) is deliberately NOT installed here. Installing
+        # clevis-initramfs injects an early-boot initramfs hook and rebuilds the
+        # initramfs; on a passphrase-only LUKS host with no clevis binding that hook
+        # hijacks the unlock flow and the normal passphrase prompt never appears,
+        # leaving the host unbootable after a plain `chezmoi apply`. So the stack is
+        # installed ON DEMAND by dot_local/bin/setup-luks-tpm2-unlock.sh (Ubuntu backend
+        # ensure_clevis_packages) only when the user opts into TPM2 unlock — install,
+        # enroll and initramfs rebuild then happen together with no reboot in between.
 
       # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:

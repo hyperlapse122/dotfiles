@@ -21,9 +21,45 @@
 
 BACKEND_LABEL="clevis + initramfs-tools (Ubuntu)"
 
-# backend_preflight: verify the clevis TPM2 path is usable BEFORE any irreversible
-# bind or crypttab edit. No sudo/TTY here — only tool + hook availability.
+# CLEVIS_PACKAGES: the TPM2-unlock stack. It is intentionally NOT part of the base
+# `chezmoi apply` package set — installing clevis-initramfs injects an early-boot
+# initramfs hook and rebuilds the initramfs, which on a passphrase-only LUKS host
+# with no clevis binding hijacks the unlock flow so the passphrase prompt never
+# appears (an unbootable host after a plain apply). Installing it HERE, as part of
+# enrollment, means install -> bind -> initramfs rebuild all happen in one run with
+# no reboot in between, so the "installed but unbound" broken-boot window never
+# reaches a boot.
+CLEVIS_PACKAGES=(clevis clevis-luks clevis-tpm2 clevis-initramfs tpm2-tools)
+
+# ensure_clevis_packages: install any missing package from CLEVIS_PACKAGES on
+# demand. Runs before the shared sudo-priming, so it uses its own sudo (the script
+# already requires a TTY for the real run); --dry-run only reports.
+ensure_clevis_packages() {
+  local -a missing=()
+  local p
+  for p in "${CLEVIS_PACKAGES[@]}"; do
+    dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q 'install ok installed' || missing+=("$p")
+  done
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    log_skip "clevis TPM2 stack already installed"
+    return 0
+  fi
+  if [[ "$DRY_RUN" == true ]]; then
+    log_act "would install missing packages: ${missing[*]}"
+    return 0
+  fi
+  require_cmd apt-get
+  local -a apt=()
+  [[ "$EUID" -ne 0 ]] && apt=(sudo)
+  log_act "installing clevis TPM2 stack: ${missing[*]}"
+  "${apt[@]}" apt-get update
+  "${apt[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+}
+
+# backend_preflight: install the clevis stack on demand, then verify the TPM2 path
+# is usable BEFORE any irreversible bind or crypttab edit.
 backend_preflight() {
+  ensure_clevis_packages
   require_cmd clevis
   require_cmd clevis-encrypt-tpm2   # from clevis-tpm2 (pulls tpm2-tools)
   require_cmd update-initramfs      # initramfs-tools
