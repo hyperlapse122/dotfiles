@@ -1,0 +1,67 @@
+{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+{{-   $luksPassphrase := promptString "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_after_ubuntu-luks-tpm2.sh.tmpl
+#
+# Unconditional (run_after) Ubuntu wrapper that enrolls this host's LUKS devices
+# for TPM2 auto-unlock on `chezmoi apply`, by driving the deployed
+# ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively.
+#
+# PASSPHRASE via chezmoi's promptString: chezmoi asks for the existing LUKS
+# passphrase at apply time and it reaches the enrollment tool through the
+# SETUP_LUKS_TPM2_PASSPHRASE environment variable (the tool reads it from env
+# ONLY, never argv, and clears it immediately). Leave the prompt blank to skip
+# enrollment for this apply — e.g. once the disk is already enrolled. Enrollment
+# is also idempotent: a device that already carries a clevis TPM2 binding is
+# skipped even when a passphrase is given.
+#
+# run_after (deliberately NOT run_once/run_onchange): reruns on every apply, so a
+# run skipped for a blank passphrase, a not-yet-deployed tool, an absent TPM, or
+# missing sudo is retried on a later apply instead of being cached as "done". It
+# is a cheap idempotent no-op once every device is enrolled.
+#
+# SECURITY NOTES (inherent to the chezmoi-prompt approach, chosen deliberately):
+#   * promptString does NOT mask input, so the passphrase is echoed on screen as
+#     you type it during an interactive `chezmoi apply`.
+#   * When a passphrase is entered it is rendered (base64-wrapped only for shell
+#     safety, NOT secrecy) into this script's transient run-script file, which
+#     chezmoi writes mode-0700 and deletes after execution. Avoid
+#     `chezmoi apply --verbose` / `--dry-run` with a real passphrase, as those
+#     print rendered script contents.
+#   * Non-interactive applies (CI, agents, piped) get promptString's empty
+#     default and take the skip path below — no passphrase is ever rendered.
+set -euo pipefail
+export LC_ALL=C
+
+{{ if $luksPassphrase -}}
+tool="${HOME}/.local/bin/setup-luks-tpm2-unlock.sh"
+
+# Soft-skip (exit 0) on any unmet precondition; run_after retries next apply.
+[[ -x "$tool" ]] || { echo "luks-tpm2: $tool not deployed yet; will retry next apply"; exit 0; }
+
+# TPM2 present? (kernel device node — backend-neutral)
+if [[ ! -e /sys/class/tpm/tpm0 && ! -e /dev/tpmrm0 ]]; then
+  echo "luks-tpm2: no TPM2 device on this host; skipping"; exit 0
+fi
+
+# Any crypto_LUKS block device to enroll?
+if ! lsblk -rno FSTYPE 2>/dev/null | grep -qx 'crypto_LUKS'; then
+  echo "luks-tpm2: no LUKS devices; skipping"; exit 0
+fi
+
+# Enrollment needs root. A non-empty passphrase only ever comes from an
+# interactive promptString, so a terminal is present and the tool can prompt for
+# sudo itself — we only need sudo to exist here.
+if [[ "$EUID" -ne 0 ]] && ! command -v sudo >/dev/null 2>&1; then
+  echo "luks-tpm2: not root and sudo unavailable; will retry next apply"; exit 0
+fi
+
+# Hand the prompted passphrase to the tool via env (never argv). base64 keeps any
+# shell-special characters in the passphrase from breaking the assignment; the
+# tool reads $SETUP_LUKS_TPM2_PASSPHRASE, clears it, and enrolls every
+# not-yet-enrolled LUKS device for TPM2 unlock.
+SETUP_LUKS_TPM2_PASSPHRASE="$(printf '%s' {{ $luksPassphrase | b64enc | quote }} | base64 -d)" "$tool"
+{{ else -}}
+echo "luks-tpm2: no passphrase entered; skipping TPM2 enrollment this apply."
+{{ end -}}
+{{ end -}}

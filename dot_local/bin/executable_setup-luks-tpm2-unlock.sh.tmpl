@@ -24,17 +24,28 @@
 # backend_enroll, backend_crypttab_opts and backend_finalize. On any other host
 # (macOS, a non-Fedora/Ubuntu Linux) a no-op backend exits cleanly up front.
 #
-# INTERACTIVE-ONLY PASSPHRASE (hard requirement): the existing passphrase is
-# only ever typed at the enrollment tool's own prompt. This script never reads
-# it from argv/env/file. Because it must prompt, it REQUIRES a TTY (except under
-# --dry-run) and is therefore a MANUAL script: it is deliberately NOT a chezmoi
-# run_once_/run_onchange_ script — chezmoi runs those non-interactively during
-# `chezmoi apply` and could neither answer the passphrase prompt nor be trusted
-# to enroll a TPM2 keyslot unattended. chezmoi instead deploys it (via the
-# executable_ source-name prefix) to ~/.local/bin, which is on $PATH; run it by
-# hand after a fresh install:
+# PASSPHRASE HANDLING (two modes):
 #
-#     setup-luks-tpm2-unlock.sh
+#   1. INTERACTIVE (default): the existing passphrase is only ever typed at the
+#      enrollment tool's own prompt — this script never reads it from argv/file.
+#      It therefore REQUIRES a TTY (except under --dry-run), so run it by hand
+#      after a fresh install (deployed via the executable_ prefix to ~/.local/bin,
+#      which is on $PATH):
+#
+#          setup-luks-tpm2-unlock.sh
+#
+#      In this mode it is deliberately unsuited to a run_once_/run_onchange_
+#      chezmoi script — chezmoi runs those non-interactively and could not answer
+#      the prompt.
+#
+#   2. NON-INTERACTIVE (opt-in via env): when SETUP_LUKS_TPM2_PASSPHRASE is set,
+#      the existing passphrase is read from it (env ONLY, never argv — argv is
+#      world-visible via ps), the TTY requirement is dropped, and each backend
+#      feeds it to the enrollment tool instead of prompting. The value is cleared
+#      from the environment immediately so child processes never inherit it. The
+#      Ubuntu run_after wrapper (.chezmoiscripts/linux/run_after_ubuntu-luks-tpm2)
+#      uses exactly this, sourcing the passphrase from chezmoi's promptString so a
+#      host can enroll on `chezmoi apply`.
 #
 # SAFETY: enrollment ADDS a TPM2-sealed keyslot; it does NOT remove the existing
 # passphrase keyslot. The current passphrase therefore stays valid as a fallback
@@ -165,7 +176,9 @@ Options:
   -h, --help           Show this help and exit.
 
 Notes:
-  * Requires a terminal (it must prompt for your passphrase) unless --dry-run.
+  * Requires a terminal (it must prompt for your passphrase) unless --dry-run,
+    or unless the passphrase is supplied via SETUP_LUKS_TPM2_PASSPHRASE (env
+    only, never argv), in which case it enrolls non-interactively.
   * Adds a TPM2 keyslot; your existing passphrase keeps working as a fallback.
   * Idempotent: devices already enrolled for TPM2 unlock are skipped.
 EOF
@@ -182,6 +195,9 @@ SUDO=()
 CHANGED=0
 CRYPTTAB_BACKED_UP=false
 ROOT_KNAME=""
+# Non-interactive passphrase (opt-in via SETUP_LUKS_TPM2_PASSPHRASE); see header.
+PASSPHRASE=""
+PASSPHRASE_FROM_ENV=false
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { err "ERROR: required command not found: $1"; exit 1; }
@@ -311,10 +327,22 @@ main() {
   # (0) on an unsupported host or aborts (non-zero) if the backend is unusable.
   backend_preflight
 
-  # Interactive passphrase entry needs a terminal. Allow --dry-run without one.
-  if [[ "$DRY_RUN" != true && ! -t 0 ]]; then
+  # Non-interactive passphrase escape hatch (see header): read the existing
+  # passphrase from the environment ONLY (never argv), then clear it from the
+  # environment so no child process inherits it. When present, we neither prompt
+  # nor need a TTY — the backends unlock with this passphrase instead.
+  if [[ -n "${SETUP_LUKS_TPM2_PASSPHRASE:-}" ]]; then
+    PASSPHRASE="$SETUP_LUKS_TPM2_PASSPHRASE"
+    PASSPHRASE_FROM_ENV=true
+  fi
+  unset SETUP_LUKS_TPM2_PASSPHRASE
+
+  # Interactive passphrase entry needs a terminal. Allow --dry-run without one,
+  # and skip the requirement entirely when a passphrase was supplied via env.
+  if [[ "$DRY_RUN" != true && "$PASSPHRASE_FROM_ENV" != true && ! -t 0 ]]; then
     err "ERROR: this script needs an interactive terminal to prompt for your LUKS"
-    err "       passphrase. Run it directly in a terminal, or use --dry-run to preview."
+    err "       passphrase. Run it directly in a terminal, pass it via the"
+    err "       SETUP_LUKS_TPM2_PASSPHRASE environment variable, or use --dry-run."
     exit 1
   fi
 
