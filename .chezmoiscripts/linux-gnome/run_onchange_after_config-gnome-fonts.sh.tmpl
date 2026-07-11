@@ -1,6 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux-gnome/run_after_config-gnome-fonts.sh.tmpl
+# .chezmoiscripts/linux-gnome/run_onchange_after_config-gnome-fonts.sh.tmpl
 #
 # GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Brings GNOME's display
 # fonts to PARITY with the KDE target (run_onchange_after_config-kde-fonts):
@@ -20,20 +21,37 @@
 # deliberate, user-requested exception (font parity across desktops), scoped to
 # the four font keys only — no other theming.
 #
+# onchange trigger: the fingerprint block below embeds a sha256 of the managed
+# font data (.chezmoidata/fonts.yaml); combined with the SANS/MONO constants in
+# this script's own text (and the `.fonts` signature below), chezmoi re-runs
+# whenever a font is bumped or the font choice changes. Comment-only; never
+# executed.
+#
 # SESSION-DEPENDENT + user-respecting (same spirit as config-gnome-inputmethod):
-# gsettings writes go through dconf-service on the session D-Bus, so this is a
-# run_after (retries every apply) rather than run_onchange — on a headless / TTY
-# / first-boot apply it exits 0 WITHOUT stamping and applies the next time apply
-# runs inside a live GNOME session. The stamp records the exact font SIGNATURE
-# it last applied: an unchanged signature means "already ensured" and we leave
-# the user's current fonts alone (a user who repicks fonts is not fought), while
-# bumping the SANS/MONO constants below changes the signature and re-asserts the
-# new choice — mirroring how the KDE run_onchange re-triggers on a font change.
+# gsettings writes go through dconf-service on the session D-Bus — on a headless
+# / TTY / first-boot apply this exits 0 WITHOUT stamping. NOTE the behavior
+# change from the former run_after: onchange records that skipped run as done and
+# will NOT re-run on the next apply just because a live GNOME session appeared —
+# the fonts land on the next fingerprint change (a font bump / edit to this
+# script) or a manual `chezmoi apply --force`. The stamp still records the exact
+# font SIGNATURE it last applied: an unchanged signature means "already ensured"
+# and we leave the user's current fonts alone (a user who repicks fonts is not
+# fought), while bumping the SANS/MONO constants below changes the signature and
+# re-asserts the new choice — mirroring how the KDE run_onchange behaves.
 #
 # managed fonts: {{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}
 
 set -euo pipefail
 
+# managed font data content fingerprint — chezmoi hashes this rendered script to
+# decide whether to re-run; embedding fonts.yaml's sha256 forces a re-run on any
+# font bump. `include . | sha256sum` hashes file CONTENT; `(stat .).isDir` skips
+# directories. Comment-only; never executed.
+{{ range (glob (joinPath $sourceDir ".chezmoidata/fonts.yaml")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end }}
 SANS="Pretendard"
 MONO="JetBrainsMono Nerd Font"
 SANS_SIZE=10

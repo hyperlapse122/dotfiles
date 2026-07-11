@@ -1,5 +1,15 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
 #!/usr/bin/env bash
+# .chezmoiscripts/linux/run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl
+#
+# onchange, no external dependency: this script derives its NAT rule from runtime
+# state (the primary interface) and has no dependency file to fingerprint, so its
+# onchange trigger is its own rendered content — chezmoi re-runs it only when
+# this script changes. NOTE the behavior change from the former run_after: a run
+# skipped for missing sudo is now recorded as "done" and is NOT retried on the
+# next apply unless this script changes; complete a skipped host with
+# `chezmoi apply --force`. Every mutation below is idempotent and guarded, so
+# re-runs are safe.
 set -euo pipefail
 # Tailscale egress-NAT parity for Ubuntu via ufw.
 # Matches the Fedora firewalld masquerade in install-system-config:

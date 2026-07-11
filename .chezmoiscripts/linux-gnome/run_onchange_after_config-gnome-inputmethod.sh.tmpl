@@ -1,6 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux-gnome/run_after_config-gnome-inputmethod.sh.tmpl
+# .chezmoiscripts/linux-gnome/run_onchange_after_config-gnome-inputmethod.sh.tmpl
 #
 # GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Korean input on GNOME
 # uses the desktop's NATIVE ibus stack — not fcitx5, which is the KDE-target
@@ -22,10 +22,15 @@
 # by a per-user stamp) and never again — if the user later removes or reorders
 # the Hangul source, we do NOT keep re-adding it on every apply.
 #
-# Live-session only: gsettings writes go through dconf-service on the session
-# D-Bus. run_after retries on every apply, so on a headless/TTY/first-boot
-# apply this exits 0 (WITHOUT stamping) and the source is added the next time
-# apply runs inside a live GNOME session.
+# onchange, no external dependency: this script wires a fixed input source and
+# has no dependency file to fingerprint, so its onchange trigger is its own
+# rendered content — chezmoi re-runs it only when this script changes. Live-
+# session only: gsettings writes go through dconf-service on the session D-Bus,
+# so on a headless/TTY/first-boot apply this exits 0 WITHOUT stamping. NOTE the
+# behavior change from the former run_after: onchange records that skipped run as
+# done and will NOT re-run on the next apply just because a live GNOME session
+# appeared — the source is added on the next content change or a manual
+# `chezmoi apply --force`. Once the stamp exists the script is a no-op regardless.
 
 set -euo pipefail
 

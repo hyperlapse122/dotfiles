@@ -1,6 +1,6 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_after_ubuntu-plymouth-teardown.sh.tmpl
+# .chezmoiscripts/linux/run_onchange_after_ubuntu-plymouth-teardown.sh.tmpl
 #
 # TEARDOWN that undoes the former `run_after_ubuntu-plymouth-bgrt` script, which
 # `--set` the `default.plymouth` update-alternatives link to the `bgrt` theme
@@ -11,10 +11,15 @@
 # selection and rebuilds every kernel's initramfs, restoring the stock splash and
 # its working LUKS prompt.
 #
-# run_after (deliberately NOT run_once): reruns on every apply, so a run skipped
-# for lack of sudo is retried on a later apply instead of being cached as "done"
-# — a run_once skip would strand a still-broken host on bgrt forever. It is a
-# cheap no-op once reverted.
+# onchange, no external dependency: this teardown has no dependency file to
+# fingerprint, so its onchange trigger is its own rendered content — chezmoi
+# re-runs it only when this script changes. NOTE the behavior change from the
+# former run_after: a run skipped for lack of sudo is now recorded as "done" and
+# is NOT retried on the next apply unless this script's content changes — on a
+# host where the revert was skipped for missing sudo, complete it with
+# `chezmoi apply --force` (or run the update-alternatives revert by hand). It is
+# a cheap no-op once reverted. (It remains NOT run_once — a run_once skip could
+# never re-fire at all, even on a content change.)
 #
 # SCOPE — only ever undoes OUR change, never native/user state:
 #   * acts only when `bgrt` is the CURRENTLY SELECTED theme in MANUAL mode (the

@@ -1,11 +1,12 @@
 {{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
 {{-   $luksPassphrase := "" -}}
 {{-   if hasKey . "luksPassphrase" }}{{ $luksPassphrase = .luksPassphrase }}{{ end -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_after_luks-tpm2.sh.tmpl
+# .chezmoiscripts/linux/run_onchange_after_luks-tpm2.sh.tmpl
 #
-# Unconditional (run_after) wrapper — Fedora + Ubuntu — that enrolls this host's
-# LUKS devices for TPM2 auto-unlock on `chezmoi apply`, by driving the deployed
+# Wrapper — Fedora + Ubuntu — that enrolls this host's LUKS devices for TPM2
+# auto-unlock on `chezmoi apply`, by driving the deployed
 # ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively. Both distros use the
 # same dracut + systemd-cryptenroll backend, so this wrapper is backend-neutral.
 #
@@ -17,10 +18,19 @@
 # is also idempotent: a device that already carries a systemd-tpm2 token is
 # skipped even when a passphrase is given.
 #
-# run_after (deliberately NOT run_once/run_onchange): reruns on every apply, so a
-# run skipped for a blank passphrase, a not-yet-deployed tool, an absent TPM, or
-# missing sudo is retried on a later apply instead of being cached as "done". It
-# is a cheap idempotent no-op once every device is enrolled.
+# onchange trigger: the fingerprint block below embeds a sha256 of the deployed
+# enrollment tool (executable_setup-luks-tpm2-unlock.sh.tmpl and its inlined
+# .setup-luks-tpm2-unlock_dracut.sh backend), so chezmoi re-runs this wrapper
+# whenever the enrollment logic changes. The prompted LUKS passphrase is NOT part
+# of the fingerprint — only the tool's source is hashed; note that entering a
+# passphrase does render it into this script's body (base64), which itself
+# changes the onchange hash, so the first apply that supplies a passphrase does
+# fire enrollment. NOTE the behavior change from the former run_after: a run
+# skipped for a blank passphrase, a not-yet-deployed tool, an absent TPM, or
+# missing sudo is now recorded as "done" and is NOT retried on the next apply
+# unless the fingerprint changes — re-run enrollment with `chezmoi apply --force`
+# (entering the passphrase) or by invoking the tool directly. Enrollment stays a
+# cheap idempotent no-op once every device is enrolled.
 #
 # SECURITY NOTES (inherent to the chezmoi-prompt approach, chosen deliberately):
 #   * promptString does NOT mask input, so the passphrase is echoed on screen as
@@ -35,6 +45,21 @@
 set -euo pipefail
 export LC_ALL=C
 
+# enrollment tool content fingerprint — chezmoi hashes this rendered script to
+# decide whether to re-run; embedding the tool's (and its dracut backend's)
+# sha256 forces a re-run when the enrollment logic changes. The prompted
+# passphrase is never part of this block. `include . | sha256sum` hashes file
+# CONTENT; `(stat .).isDir` skips directories. Comment-only; never executed.
+{{ range (glob (joinPath $sourceDir "dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range (glob (joinPath $sourceDir "dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh")) -}}
+{{ if not (stat .).isDir -}}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{ end -}}
+{{ end }}
 {{ if $luksPassphrase -}}
 tool="${HOME}/.local/bin/setup-luks-tpm2-unlock.sh"
 
