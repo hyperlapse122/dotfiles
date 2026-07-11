@@ -19,7 +19,9 @@
 # .config_<os>. On Fedora the backend is dracut + systemd-cryptenroll (the only
 # initramfs generator that wires systemd's `tpm2-device=auto` crypttab unlock);
 # on Ubuntu it is clevis + initramfs-tools (Ubuntu's cryptroot scripts ignore
-# `tpm2-device=auto`, Launchpad #1980018, so clevis is the native path). Each
+# `tpm2-device=auto`, Launchpad #1980018, so clevis is the native path) and the
+# Ubuntu backend additionally forces cryptsetup into the initramfs (CRYPTSETUP=y)
+# so the root device can actually be opened at boot. Each
 # backend defines four hooks the shared core below calls: backend_preflight,
 # backend_enroll, backend_crypttab_opts and backend_finalize. On any other host
 # (macOS, a non-Fedora/Ubuntu Linux) a no-op backend exits cleanly up front.

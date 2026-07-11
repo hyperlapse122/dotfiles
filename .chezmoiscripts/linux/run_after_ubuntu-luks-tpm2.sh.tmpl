@@ -1,5 +1,6 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
-{{-   $luksPassphrase := .luksPassphrase -}}
+{{-   $luksPassphrase := "" -}}
+{{-   if hasKey . "luksPassphrase" }}{{ $luksPassphrase = .luksPassphrase }}{{ end -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/linux/run_after_ubuntu-luks-tpm2.sh.tmpl
 #

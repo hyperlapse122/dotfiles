@@ -373,6 +373,12 @@ packages:
         - clevis-luks  # clevis LUKS integration (bind/list/unlock against LUKS keyslots)
         - clevis-tpm2  # clevis TPM2 pin (clevis-encrypt-tpm2; pulls tpm2-tools)
         - clevis-initramfs  # initramfs-tools hook that clevis-unlocks the root device at boot
+        # cryptsetup-initramfs ships the `cryptsetup` binary + cryptroot scripts INTO the
+        # initramfs (clevis-initramfs only Recommends it, so pin it explicitly). Without it
+        # the initramfs has no `crypt*` executable, the root LUKS device is never opened,
+        # and boot drops to an (initramfs) shell with "/dev/mapper/... does not exist" — the
+        # backend additionally forces CRYPTSETUP=y so it is bundled unconditionally.
+        - cryptsetup-initramfs  # cryptsetup binary + cryptroot scripts in the initramfs (opens root LUKS at boot)
         - tpm2-tools  # TPM2 userspace CLI (tpm2_* utilities used by the clevis tpm2 pin)
 
       # Installed only on bare metal (systemd-detect-virt reports no VM).

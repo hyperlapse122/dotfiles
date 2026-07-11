@@ -198,6 +198,32 @@ jobs:
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      - name: Assert LUKS TPM2 tool renders the boot-critical Ubuntu backend
+        if: matrix.os == 'ubuntu'
+        run: |
+          set -euxo pipefail
+          # The deployed tool (dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl)
+          # inlines the per-distro backend at apply time via {{ include }}. On Ubuntu it
+          # MUST carry the clevis backend AND the initramfs fixes that keep the machine
+          # bootable — without a cryptsetup binary in the initramfs the root LUKS device
+          # is never opened and boot drops to an (initramfs) shell. Assert the rendered
+          # tool actually contains that logic so a regression in the include/backend is
+          # caught here rather than at a reboot on a real host.
+          tool="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.local/bin/setup-luks-tpm2-unlock.sh"
+          test -f "${tool}"
+          # NB: the tool's header comments legitimately mention `{{ include }}` (escaped in
+          # the source), so a blanket unrendered-template check would false-positive here.
+          # The specific backend markers below + `bash -n` prove the include actually
+          # resolved: an unresolved `{{ include ... }}` directive yields neither BACKEND_LABEL
+          # nor valid bash.
+          grep -q 'BACKEND_LABEL="clevis + initramfs-tools (Ubuntu)"' "${tool}"  # ubuntu backend inlined
+          grep -q 'ensure_cryptsetup_in_initramfs'                    "${tool}"  # forces cryptsetup into initramfs
+          grep -q 'CRYPTSETUP=y'                                      "${tool}"  # ...via conf-hook
+          grep -q 'hooks/cryptsetup'                                  "${tool}"  # preflights cryptsetup-initramfs
+          bash -n "${tool}"                                                      # rendered result is valid bash
+          echo "- LUKS TPM2 tool rendered the Ubuntu clevis backend with the cryptsetup-initramfs fix" \
+            >> "${GITHUB_STEP_SUMMARY}"
+
   # ---------------------------------------------------------------------------
   # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
   # ---------------------------------------------------------------------------

@@ -14,12 +14,19 @@
 # the root device in early boot without any crypttab change. The existing
 # passphrase keyslot is untouched, so it remains the fallback.
 #
-# For that early-boot unlock to actually work, the initramfs must be able to reach
-# the TPM: backend_finalize pins BOTH the `tss` user (ensure_tss_initramfs_hook)
-# and the TPM kernel driver (ensure_tpm_initramfs_modules) into the initramfs.
-# Without the driver, /dev/tpmrm0 is absent at early boot and the unlock fails even
-# though it succeeded on the running system, dropping boot to an initramfs shell
-# with "/dev/mapper/... does not exist" (clevis issue #136).
+# For that early-boot unlock to actually work, the initramfs must contain the
+# `cryptsetup` binary AND be able to reach the TPM. backend_finalize therefore:
+#   * forces cryptsetup + cryptroot into the initramfs (ensure_cryptsetup_in_initramfs,
+#     CRYPTSETUP=y) — without it there is no `crypt*` executable in the initramfs, the
+#     root device is never opened, and boot drops to an (initramfs) shell with
+#     "/dev/mapper/... does not exist"; and
+#   * pins BOTH the `tss` user (ensure_tss_initramfs_hook) and the TPM kernel driver
+#     (ensure_tpm_initramfs_modules) into the initramfs. Without the driver,
+#     /dev/tpmrm0 is absent at early boot and the unlock fails even though it
+#     succeeded on the running system, the same drop-to-initramfs-shell symptom
+#     (clevis issue #136).
+# The root device must also be present in /etc/crypttab (backend_crypttab_opts) so
+# cryptroot/clevis know which device to open — the installer normally wrote it.
 #
 # It provides the four backend hooks the shared core calls (backend_preflight,
 # backend_enroll, backend_crypttab_opts, backend_finalize) and may use any shared
@@ -40,6 +47,19 @@ backend_preflight() {
     err "ERROR: clevis-initramfs is not installed, so the root device would not"
     err "       auto-unlock at boot. Install it (apt install clevis-initramfs)"
     err "       and retry. Aborting before making any change."
+    exit 1
+  fi
+  # cryptsetup-initramfs ships the `cryptsetup` binary + cryptroot scripts into
+  # the initramfs. clevis-initramfs only *Recommends* it, so on a recommends-off
+  # install it can be missing — and then the initramfs has no `crypt*` executable
+  # at all, the root LUKS device is never opened, and boot drops to an (initramfs)
+  # shell with "/dev/mapper/... does not exist". Refuse to proceed without it
+  # rather than rebuild an initramfs that cannot unlock the disk.
+  if [[ ! -e /usr/share/initramfs-tools/hooks/cryptsetup ]]; then
+    err "ERROR: cryptsetup-initramfs is not installed, so the initramfs would ship"
+    err "       without the cryptsetup binary and could not open the root LUKS"
+    err "       device at boot. Install it (apt install cryptsetup-initramfs) and"
+    err "       retry. Aborting before making any change."
     exit 1
   fi
   if [[ "$WITH_RECOVERY_KEY" == true ]]; then
@@ -85,16 +105,20 @@ backend_enroll() {
   fi
 }
 
-# backend_crypttab_opts <is_root>: clevis needs NO crypttab change for the root
-# device — clevis-initramfs unlocks it in early boot. A non-root device is marked
-# _netdev so clevis's systemd askpass path unlocks it after boot instead of
-# blocking it. Root => empty (leave crypttab untouched).
+# backend_crypttab_opts <is_root>: the root device MUST have an /etc/crypttab
+# entry — both cryptsetup-initramfs (which reads crypttab to decide the initramfs
+# needs cryptsetup) and clevis-initramfs (whose early-boot hook iterates crypttab
+# entries and clevis-unlocks each) key off it. On a normal encrypted install the
+# installer already wrote this entry, so `luks` merges in as a no-op; we return it
+# (not empty) so a MISSING root entry is repaired instead of silently leaving a
+# disk the initramfs never tries to open. A non-root device is marked _netdev so
+# clevis's systemd askpass path unlocks it after boot instead of blocking it.
 backend_crypttab_opts() {
   local is_root="$1"
   if [[ "$is_root" == true ]]; then
-    printf ''
+    printf 'luks'
   else
-    printf '_netdev'
+    printf 'luks,_netdev'
   fi
 }
 
@@ -192,10 +216,43 @@ ensure_tpm_initramfs_modules() {
   log_act "added TPM module(s) to $modfile: ${resolved[*]}"
 }
 
-# backend_finalize: ensure the initramfs can reach the TPM at early boot (the tss
-# user + the TPM kernel driver), then rebuild the initramfs (only when something
-# actually changed).
+# ensure_cryptsetup_in_initramfs: force the `cryptsetup` binary + cryptroot scripts
+# into the initramfs. cryptsetup-initramfs's hook otherwise only bundles them when
+# its heuristic decides a LUKS device is needed at boot (it parses /etc/crypttab and
+# /etc/fstab); when that detection misfires it prints "cryptsetup: WARNING: could not
+# determine root device" and ships an initramfs with NO `crypt*` executable — so the
+# root device is never opened and boot drops to an (initramfs) shell. Setting
+# CRYPTSETUP=y in /etc/cryptsetup-initramfs/conf-hook makes the hook include cryptsetup
+# UNCONDITIONALLY, which is the robust fix for the "no cryptsetup in the initramfs"
+# failure. Idempotent (skips when already forced on); counts as a change so the
+# initramfs is rebuilt. The file is sourced by the hook, so a later CRYPTSETUP=y wins
+# over any earlier CRYPTSETUP=n the distro/user may have set.
+ensure_cryptsetup_in_initramfs() {
+  local conf=/etc/cryptsetup-initramfs/conf-hook
+  if "${SUDO[@]}" grep -Eq '^[[:space:]]*CRYPTSETUP=y([[:space:]]|$)' "$conf" 2>/dev/null; then
+    log_skip "initramfs already forces cryptsetup inclusion ($conf)"
+    return 0
+  fi
+  CHANGED=$((CHANGED + 1))
+  if [[ "$DRY_RUN" == true ]]; then
+    log_act "would set CRYPTSETUP=y in $conf (force cryptsetup into the initramfs)"
+    return 0
+  fi
+  "${SUDO[@]}" mkdir -p "$(dirname "$conf")"
+  {
+    printf '%s\n' '# Force cryptsetup + cryptroot into the initramfs so the root LUKS device can be'
+    printf '%s\n' '# opened at early boot (managed by setup-luks-tpm2-unlock.sh).'
+    printf '%s\n' 'CRYPTSETUP=y'
+  } | "${SUDO[@]}" tee -a "$conf" >/dev/null
+  log_act "set CRYPTSETUP=y in $conf"
+}
+
+# backend_finalize: make the initramfs able to open the root LUKS device at early
+# boot — bundle the cryptsetup binary (ensure_cryptsetup_in_initramfs) and let it
+# reach the TPM (the tss user + the TPM kernel driver) — then rebuild the initramfs
+# (only when something actually changed).
 backend_finalize() {
+  ensure_cryptsetup_in_initramfs
   ensure_tss_initramfs_hook
   ensure_tpm_initramfs_modules
 
