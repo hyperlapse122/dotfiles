@@ -1,6 +1,5 @@
 [Unit]
-# TODO: Update description
-Description=cli-proxy-api daemon
+Description=CLIProxyAPI — local proxy router for CLI AI providers
 
 [Service]
 Type=simple
