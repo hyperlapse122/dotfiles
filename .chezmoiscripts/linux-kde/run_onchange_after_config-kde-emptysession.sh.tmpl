@@ -9,10 +9,7 @@
 
 set -euo pipefail
 
-if ! command -v plasmashell >/dev/null 2>&1; then
-  printf 'config-kde-emptysession.sh: plasmashell not found (non-KDE system), skipping.\n'
-  exit 0
-fi
+{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-emptysession.sh" -}}
 
 configure_emptysession() {
   printf 'config-kde-emptysession.sh: forcing empty session on login...\n'

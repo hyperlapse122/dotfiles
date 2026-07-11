@@ -13,7 +13,13 @@
 {{- $installationPath := (joinPath $releaseDir $releasePath) -}}
 
 #!/usr/bin/env bash
-# Links latest codex to ~/.local/bin
+# .chezmoiscripts/tools/run_onchange_after_codex.sh.tmpl
+#
+# Links latest codex to ~/.local/bin and prunes older versions.
+#
+# onchange trigger: the latest release path is rendered into the script body
+# below, so a new upstream release changes the rendered content and re-runs
+# the re-link + prune.
 
 set -euo pipefail
 

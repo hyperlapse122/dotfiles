@@ -172,11 +172,15 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 
 - [`.chezmoidata/`](.chezmoidata) — template data, the single source of truth
   for packages ([`packages.yaml`](.chezmoidata/packages.yaml): dnf + apt,
-  flatpaks, services, groups), fonts (`fonts.yaml`), and user identity
-  (`user.yaml`).
+  flatpaks, services, groups), fonts (`fonts.yaml`), the root-owned `/etc`
+  install manifest ([`system.yaml`](.chezmoidata/system.yaml): per-path
+  modes/gates + removed-path cleanup), and user identity (`user.yaml`).
 - [`.chezmoiscripts/`](.chezmoiscripts) — provisioning scripts run on apply,
-  grouped by area: `linux/`, `linux-kde/`, `linux-gnome/`, `auth/`, `gpg/`,
-  `agents/`, `build/`, `services/`, `tools/`.
+  grouped by area: `linux/`, `linux-fedora/`, `linux-ubuntu/`, `linux-kde/`,
+  `linux-gnome/`, `auth/`, `gpg/`, `agents/`, `build/`, `services/`, `tools/`.
+- [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
+  into scripts via `includeTemplate`: the `run_onchange_` dependency
+  fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches: prezto,
   plus standalone CLI binaries into `~/.local/bin` (claude-code, codex,
   codegraph, cli-proxy-api, gh, glab, kubectl, helm, …).

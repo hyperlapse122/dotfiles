@@ -1,0 +1,247 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_onchange_after_system-config-10-files.sh.tmpl
+#
+# Installs root-owned config from system/linux/etc/**/* into /etc/* using
+# `sudo install -D -m <mode>`, removes orphaned /etc paths this repo used to
+# ship, and reloads exactly what it installed (systemd units, udev rules,
+# sysctl drop-ins, Ubuntu locale generation). chezmoi manages $HOME and
+# cannot own root-owned /etc targets, so this ships as a script rather than
+# managed files.
+#
+# MANIFEST-DRIVEN: per-path install modes, host gates, source checks, and the
+# removed-path list all live in .chezmoidata/system.yaml (single source of
+# truth, like packages.yaml) — edit the data, not this script. The manifest
+# is rendered into the bash arrays below, so a manifest edit re-triggers this
+# run_onchange_ script automatically.
+#
+# This is part 1/3 of the split system-config set (10-files → 20-host →
+# 30-network, ordered by filename). Splitting keeps re-run scope tight: a
+# tracked /etc file edit re-runs THIS script only — it no longer restarts
+# NetworkManager/tailscaled (30-network) or re-masks services (20-host) the
+# way the old monolithic install-system-config did.
+#
+# onchange trigger: the fingerprint block below embeds a sha256 of every
+# tracked system/linux/etc file (the rendered manifest covers itself), so
+# chezmoi re-runs this script whenever any of them is added, removed, or
+# modified. Re-running is cheap and idempotent regardless.
+#
+# Skip behaviour: soft-skips (exit 0) on headless/server installs and when
+# sudo would have to prompt but can't — see the shared guards inlined below
+# (.chezmoitemplates/headless-guard.sh.tmpl, sudo-skip-guard.sh.tmpl).
+
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" "system-config-files" }}
+# system/linux/etc content fingerprint — chezmoi hashes this rendered script
+# to decide whether to re-run it, so embedding every tracked file's sha256
+# here forces a re-run on any add/remove/edit. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/**")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "system-config-files" }}
+# Detect distro at runtime for the distro-scoped branches below.
+os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
+
+# Discover files at runtime so adding system/linux/etc/... config does not
+# require editing this script; a non-default mode or a host gate is a
+# .chezmoidata/system.yaml overrides entry.
+shopt -s globstar nullglob
+
+thinkpad_system=false
+if command -v dmidecode >/dev/null 2>&1; then
+  if "${SUDO[@]}" dmidecode -t system 2>/dev/null | grep -qi 'ThinkPad'; then
+    thinkpad_system=true
+  fi
+else
+  printf '  -- ThinkPad detection: skipped (dmidecode not installed)\n'
+fi
+
+# --- Manifest (rendered from .chezmoidata/system.yaml) ----------------------
+# Parallel arrays: a file's path relative to system/linux/ is glob-matched
+# against override_patterns (first match wins); unmatched files install at
+# mode 0644, ungated.
+override_patterns=()
+override_modes=()
+override_gates=()
+override_checks=()
+{{ range .system.linux.overrides -}}
+override_patterns+=({{ .path | quote }})
+override_modes+=({{ get . "mode" | default "644" | quote }})
+override_gates+=({{ get . "gate" | default "" | quote }})
+override_checks+=({{ get . "check" | default "" | quote }})
+{{ end }}
+# Fail loud on a manifest typo before touching anything.
+for gate in "${override_gates[@]}"; do
+  case "$gate" in
+    ''|thinkpad|vm|ubuntu-studio|sddm-breeze) ;;
+    *) printf 'system-config-files: unknown gate "%s" in .chezmoidata/system.yaml; aborting.\n' "$gate" >&2; exit 1 ;;
+  esac
+done
+for check in "${override_checks[@]}"; do
+  case "$check" in
+    ''|visudo) ;;
+    *) printf 'system-config-files: unknown check "%s" in .chezmoidata/system.yaml; aborting.\n' "$check" >&2; exit 1 ;;
+  esac
+done
+
+# Named runtime probes the manifest's `gate:` entries refer to.
+gate_ok() {
+  case "$1" in
+    '') return 0 ;;
+    thinkpad) [[ "$thinkpad_system" == true ]] ;;
+    vm) systemd-detect-virt --vm --quiet 2>/dev/null ;;
+    ubuntu-studio) [[ "$os_id" == ubuntu ]] && dpkg -s ubuntustudio-default-settings >/dev/null 2>&1 ;;
+    sddm-breeze) [[ -f /usr/share/sddm/themes/breeze/theme.conf ]] ;;
+  esac
+}
+gate_reason() {
+  case "$1" in
+    thinkpad) printf 'not a ThinkPad system' ;;
+    vm) printf 'not a VM' ;;
+    ubuntu-studio) printf 'ubuntu-studio-only (realtime audio limits)' ;;
+    sddm-breeze) printf 'breeze sddm theme absent' ;;
+    *) printf 'gate %s failed' "$1" ;;
+  esac
+}
+
+# --- Install system/linux/etc/** into /etc/** -------------------------------
+count=0
+skipped=0
+for src in "$SRC_ROOT"/etc/**; do
+  [[ -f "$src" ]] || continue
+
+  rel="${src#"$SRC_ROOT"/}"
+  dst="/$rel"
+
+  mode=644
+  gate=
+  check=
+  for i in "${!override_patterns[@]}"; do
+    # shellcheck disable=SC2254 # manifest entries are deliberate glob patterns
+    case "$rel" in
+      ${override_patterns[$i]})
+        mode="${override_modes[$i]}"
+        gate="${override_gates[$i]}"
+        check="${override_checks[$i]}"
+        break
+        ;;
+    esac
+  done
+
+  # Source checks run on EVERY host, even when the gate skips the install,
+  # so contributors catch broken files on machines that never deploy them
+  # (a broken sudoers drop-in can break sudo globally on the host).
+  if [[ "$check" == visudo ]]; then
+    if ! visudo -c -f "$src" >/dev/null; then
+      printf '  !! %s: visudo syntax check failed; aborting\n' "$dst" >&2
+      exit 1
+    fi
+  fi
+
+  if ! gate_ok "$gate"; then
+    printf '  -- %s (skipped: %s)\n' "$dst" "$(gate_reason "$gate")"
+    skipped=$((skipped + 1))
+    continue
+  fi
+
+  printf '  -> %s (mode %s)\n' "$dst" "$mode"
+  "${SUDO[@]}" install -D -m "$mode" "$src" "$dst"
+  count=$((count + 1))
+done
+
+printf 'system-config-files: %d installed, %d skipped\n' "$count" "$skipped"
+
+if [[ "$thinkpad_system" == true ]]; then
+  printf '  -> modprobe thinkpad_acpi\n'
+  "${SUDO[@]}" modprobe thinkpad_acpi
+else
+  printf '  -- thinkpad_acpi: skipped (not a ThinkPad system)\n'
+fi
+
+# On Ubuntu, the LANG/LC_* values in /etc/locale.conf (installed above, and read
+# by systemd-localed on every distro) only take effect once the referenced locale
+# is compiled: Fedora ships ko_KR.UTF-8 precompiled via glibc-langpack-ko, but
+# Ubuntu generates locales on demand from the `locales` package. Drive locale-gen
+# and update-locale straight from the installed /etc/locale.conf so this stays in
+# lockstep with that single source of truth.
+if [[ "$os_id" == ubuntu && -f /etc/locale.conf ]] \
+  && command -v locale-gen >/dev/null 2>&1 \
+  && command -v update-locale >/dev/null 2>&1; then
+  locale_vars=()
+  while IFS='=' read -r locale_key locale_value; do
+    [[ "$locale_key" =~ ^[A-Z][A-Z_]*$ ]] || continue
+    locale_value="${locale_value%\"}"
+    locale_value="${locale_value#\"}"
+    [[ -n "$locale_value" ]] || continue
+    locale_vars+=("${locale_key}=${locale_value}")
+  done < /etc/locale.conf
+
+  if [[ ${#locale_vars[@]} -gt 0 ]]; then
+    mapfile -t locale_values < <(printf '%s\n' "${locale_vars[@]}" | cut -d= -f2 | sort -u)
+    printf '  -> locale-gen %s\n' "${locale_values[*]}"
+    "${SUDO[@]}" locale-gen "${locale_values[@]}"
+    printf '  -> update-locale %s\n' "${locale_vars[*]}"
+    "${SUDO[@]}" update-locale "${locale_vars[@]}"
+  fi
+fi
+
+# --- Remove orphaned /etc paths (rendered from system.yaml `removed`) -------
+REMOVED_ETC_PATHS=()
+REMOVED_ETC_DISTROS=()
+{{ range .system.linux.removed -}}
+REMOVED_ETC_PATHS+=({{ .path | quote }})
+REMOVED_ETC_DISTROS+=({{ get . "distro" | default "" | quote }})
+{{ end }}
+removed_eligible=0
+removed_cleaned=0
+for i in "${!REMOVED_ETC_PATHS[@]}"; do
+  dst="${REMOVED_ETC_PATHS[$i]}"
+  distro="${REMOVED_ETC_DISTROS[$i]}"
+  # A distro-scoped entry was only ever deployed on that distro: never delete
+  # a native or user-created file at the same path elsewhere.
+  [[ -z "$distro" || "$distro" == "$os_id" ]] || continue
+  removed_eligible=$((removed_eligible + 1))
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    printf '  -> removing %s (listed in system.yaml removed)\n' "$dst"
+    "${SUDO[@]}" rm -f "$dst"
+    removed_cleaned=$((removed_cleaned + 1))
+  fi
+done
+if [[ "$removed_eligible" -eq 0 ]]; then
+  printf '  -- removed paths: none listed (nothing to clean)\n'
+elif [[ "$removed_cleaned" -eq 0 ]]; then
+  printf '  -- removed paths: %d entries, all already absent\n' "$removed_eligible"
+else
+  printf '  -- removed paths: cleaned %d of %d listed path(s)\n' "$removed_cleaned" "$removed_eligible"
+fi
+
+# --- Reload what was installed above ----------------------------------------
+# Reload systemd when system/linux/etc/systemd/system/ ships any unit files so
+# systemd notices the newly-installed units. Harmless no-op when the directory
+# exists but ships no units.
+if [[ -d "$SRC_ROOT/etc/systemd/system" ]]; then
+  "${SUDO[@]}" systemctl daemon-reload
+fi
+
+# Reload udev rules so freshly-installed rules under /etc/udev/rules.d/ take
+# effect without a reboot. `udevadm control --reload` re-reads the rules
+# database; it does not retrigger events for existing devices (`udevadm
+# trigger` would, and is intentionally omitted to avoid disrupting connected
+# hardware on every run).
+if [[ -d "$SRC_ROOT/etc/udev/rules.d" ]]; then
+  printf '  -> udevadm control --reload\n'
+  "${SUDO[@]}" udevadm control --reload
+fi
+
+# Apply sysctl settings so freshly-installed drop-ins under /etc/sysctl.d/
+# (e.g. 99-tailscale.conf) take effect without a reboot. `sysctl --system`
+# re-reads /etc/sysctl.conf and every conf.d/ drop-in in the documented load
+# order (see sysctl.d(5)), which is the same path systemd-sysctl.service runs
+# at boot — so runtime state matches what a reboot would produce.
+if [[ -d "$SRC_ROOT/etc/sysctl.d" ]]; then
+  printf '  -> sysctl --system\n'
+  "${SUDO[@]}" sysctl --system >/dev/null
+fi
+{{ end -}}

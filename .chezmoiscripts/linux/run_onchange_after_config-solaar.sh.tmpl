@@ -51,11 +51,7 @@
 # rules template here forces a re-run whenever rules.yaml.tmpl changes (a
 # gesture remap or a haptic-path edit). That re-run re-applies rules.yaml and
 # triggers the restart below. Comment-only; never executed.
-{{ range (glob (joinPath $sourceDir "dot_config/solaar/rules.yaml.tmpl")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }} {{ include . | sha256sum }}
-{{ end -}}
-{{ end }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/solaar/rules.yaml.tmpl")) }}
 set -euo pipefail
 
 CONFIG="${HOME}/.config/solaar/config.yaml"

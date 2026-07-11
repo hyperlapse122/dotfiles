@@ -61,36 +61,7 @@ SRC="{{ $sourceDir }}"
 # script. `include . | sha256sum` hashes file CONTENT (chezmoi's bare
 # `sha256sum .` would hash the path STRING); `(stat .).isDir` skips the
 # directories that `src/**` matches. Comment-only; never executed.
-{{ range (glob (joinPath $sourceDir "crates/mxm4-haptic/Cargo.toml")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ range (glob (joinPath $sourceDir "crates/mxm4-haptic/Cargo.lock")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ range (glob (joinPath $sourceDir "crates/mxm4-haptic/src/**")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ range (glob (joinPath $sourceDir "dot_config/systemd/user/mxm4-hapticd.service")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ range (glob (joinPath $sourceDir "dot_config/systemd/user/mxm4-haptic-notify.service")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ range (glob (joinPath $sourceDir "Library/LaunchAgents/dev.h82.mxm4-hapticd.plist")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "crates/mxm4-haptic/Cargo.toml" "crates/mxm4-haptic/Cargo.lock" "crates/mxm4-haptic/src/**" "dot_config/systemd/user/mxm4-hapticd.service" "dot_config/systemd/user/mxm4-haptic-notify.service" "Library/LaunchAgents/dev.h82.mxm4-hapticd.plist")) }}
 
 # Resolve a cargo invocation as an array. mise-managed rust@latest is the
 # supported primary (chezmoi scripts run with no mise shell-activation, so we

@@ -1,0 +1,20 @@
+{{- /*
+sudo-require-guard.sh.tmpl — SUDO array, HARD-failing when unavailable.
+
+For provisioning scripts that make no sense without root (package
+installers): sets SUDO=() when already root, SUDO=(sudo) when sudo exists,
+and exits 1 otherwise. Contrast with sudo-skip-guard.sh.tmpl, which
+soft-skips (exit 0) for scripts that are optional host tuning.
+
+Usage: {{ includeTemplate "sudo-require-guard.sh.tmpl" "my-script-name" }}
+*/ -}}
+# Use sudo only when not already root. Throw early if neither root nor sudo
+# is available — system provisioning needs it.
+if [[ "${EUID}" -eq 0 ]]; then
+  SUDO=()
+elif command -v sudo >/dev/null 2>&1; then
+  SUDO=(sudo)
+else
+  printf '%s: requires root or sudo for system provisioning.\n' '{{ . }}' >&2
+  exit 1
+fi

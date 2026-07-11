@@ -15,10 +15,7 @@
 
 set -euo pipefail
 
-if ! command -v plasmashell >/dev/null 2>&1; then
-  printf 'config-kde-panel.sh: plasmashell not found (non-KDE system), skipping.\n'
-  exit 0
-fi
+{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-panel.sh" -}}
 
 configure_panel() {
   printf 'config-kde-panel.sh: disabling task manager grouping...\n'

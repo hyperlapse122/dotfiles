@@ -47,11 +47,7 @@ set -euo pipefail
 # decide whether to re-run; embedding fonts.yaml's sha256 forces a re-run on any
 # font bump. `include . | sha256sum` hashes file CONTENT; `(stat .).isDir` skips
 # directories. Comment-only; never executed.
-{{ range (glob (joinPath $sourceDir ".chezmoidata/fonts.yaml")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoidata/fonts.yaml")) }}
 SANS="Pretendard"
 MONO="JetBrainsMono Nerd Font"
 SANS_SIZE=10
@@ -73,10 +69,7 @@ FONTS="{{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ en
 # user's later manual font edits are left be.
 SIG="sans=${SANS}/${SANS_SIZE} mono=${MONO}/${MONO_SIZE} fonts=${FONTS}"
 
-if ! command -v gnome-shell >/dev/null 2>&1; then
-  echo "config-gnome-fonts: gnome-shell not found (non-GNOME system), skipping."
-  exit 0
-fi
+{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-fonts" -}}
 
 # Already applied this exact signature once -> respect the user's current fonts.
 # Because $SIG embeds the managed font archive set, a font bump falls through

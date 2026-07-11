@@ -24,5 +24,5 @@ RestartSec=30
 
 [Install]
 # Start when the user manager reaches default.target, which happens at user login
-# and — because install-system-config enables lingering — also at boot.
+# and — because system-config-20-host enables lingering — also at boot.
 WantedBy=default.target

@@ -1,0 +1,32 @@
+{{- /*
+headless-guard.sh.tmpl — skip the whole script on headless/server installs.
+
+Everything gated behind this configures a graphical desktop (desktop
+firewalld zones, zram-swap disable, ThinkPad ACPI, DNS/NetworkManager
+reloads, …), none of which belongs on a headless server (Ubuntu Server,
+RHEL server, minimal cloud image, …). The canonical systemd signal for
+"graphical workstation vs headless server" is the default boot target:
+desktops default to graphical.target, server installs to multi-user.target.
+The host is treated as a server (skip, exit 0) when its default target is
+not graphical.target AND no display-manager is enabled —
+/etc/systemd/system/display-manager.service is the alias symlink systemd
+creates when a DM (gdm/sddm/plasmalogin/…) is enabled, a reliable positive
+desktop signal. (`systemctl list-unit-files display-manager.service` is NOT
+usable here: it exits 0 even when nothing matches.) Hosts without systemd
+fall through and run. Override on a headless box you nonetheless want
+configured with INSTALL_SYSTEM_CONFIG_FORCE=1; note chezmoi records a clean
+exit-0 skip as a successful run, so re-run with `chezmoi apply --force`.
+
+Usage: {{ includeTemplate "headless-guard.sh.tmpl" "my-script-name" }}
+*/ -}}
+# Skip on headless / server installs; see .chezmoitemplates/headless-guard.sh.tmpl
+# for the full rationale. Override with INSTALL_SYSTEM_CONFIG_FORCE=1.
+if [[ "${INSTALL_SYSTEM_CONFIG_FORCE:-}" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
+  default_target="$(systemctl get-default 2>/dev/null || true)"
+  if [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]; then
+    printf '%s: skipped (headless/server install: default target=%s, no display-manager).\n' '{{ . }}' "${default_target:-unknown}"
+    printf '  Force a run on a server you do want configured with:\n'
+    printf '    INSTALL_SYSTEM_CONFIG_FORCE=1 chezmoi apply --force\n'
+    exit 0
+  fi
+fi

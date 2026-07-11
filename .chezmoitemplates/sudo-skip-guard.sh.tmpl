@@ -1,0 +1,34 @@
+{{- /*
+sudo-skip-guard.sh.tmpl — SUDO array + non-interactive soft-skip.
+
+Sets SUDO=() when already root (e.g. inside a chroot/container), else
+SUDO=(sudo). When the script would have to prompt for a sudo password but
+cannot (non-interactive stdin AND no cached credentials), it exits 0 so a
+CI/agent `chezmoi apply` never hangs on an uncached sudo prompt. NOTE:
+chezmoi records that clean exit-0 skip as a successful run, so a
+run_onchange_ script will NOT re-run on the next apply until its content
+changes — re-run by hand on an interactive terminal with
+`chezmoi apply --force`.
+
+Usage: {{ includeTemplate "sudo-skip-guard.sh.tmpl" "my-script-name" }}
+*/ -}}
+# Use sudo only when not already root (e.g. when invoked inside chroot/container).
+if [[ "${EUID}" -eq 0 ]]; then
+  SUDO=()
+else
+  SUDO=(sudo)
+
+  # Skip cleanly when we would have to prompt for a password but can't.
+  # `[[ -t 0 ]]` is true only when stdin is a TTY; chezmoi connects stdin to
+  # its own when run interactively, so this is true under an interactive
+  # `chezmoi apply` but false under agent/CI runs. `sudo -n true` succeeds
+  # when sudo has cached credentials or when the user has password-less sudo
+  # configured — in either case we can proceed without prompting. Only when
+  # both fail do we give up.
+  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then
+    printf '%s: skipped (non-interactive shell, no cached sudo credentials).\n' '{{ . }}'
+    printf '  Re-run on an interactive terminal with sudo available:\n'
+    printf '    chezmoi apply --force\n'
+    exit 0
+  fi
+fi

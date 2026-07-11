@@ -61,22 +61,7 @@ if ! command -v chsh >/dev/null 2>&1; then
 fi
 
 # 4. Privilege: prefix privileged calls with sudo unless we are already root.
-if [[ "${EUID}" -eq 0 ]]; then
-  SUDO=()
-else
-  SUDO=(sudo)
-
-  # Skip cleanly when we would have to prompt for a password but can't.
-  # `[[ -t 0 ]]` is true only when stdin is a TTY (interactive `chezmoi apply`);
-  # `sudo -n true` succeeds with cached or password-less sudo. Only when both
-  # fail do we give up — otherwise a non-interactive apply would hang/fail.
-  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then
-    printf 'chsh-zsh: skipped (non-interactive shell, no cached sudo credentials).\n'
-    printf '  Re-run on an interactive terminal with sudo available:\n'
-    printf '    chezmoi apply --force\n'
-    exit 0
-  fi
-fi
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "chsh-zsh" -}}
 
 # 5. chsh only accepts a shell listed in /etc/shells for non-root callers, and
 #    a login shell belongs there regardless. Register the resolved zsh path if

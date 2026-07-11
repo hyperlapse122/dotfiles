@@ -388,7 +388,7 @@ packages:
       # Realtime privileges come from the @audio group (Studio-gated in
       # configure_user_groups) + the repo-owned limits.d drop-in
       # (system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf, same
-      # Studio gate in install-system-config). NOTE: ubuntustudio-installer
+      # Studio gate in .chezmoidata/system.yaml). NOTE: ubuntustudio-installer
       # (the interactive first-run GUI) and studio-controls are intentionally NOT pinned - the former
       # contradicts the deterministic-limits approach, the latter does not exist on resolute (jammy/noble only).
       studioPackages:

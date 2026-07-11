@@ -1,0 +1,81 @@
+# Manifest for the root-owned /etc installer
+# (.chezmoiscripts/linux/run_onchange_after_system-config-10-files.sh.tmpl).
+# See system/README.md for the full model.
+#
+# Single source of truth (like packages.yaml): add/gate a system/linux/etc
+# file or list a removed /etc path HERE, not in the installer script. The
+# manifest is rendered into the installer, so any edit here re-triggers the
+# run_onchange_ installer automatically — no separate fingerprint needed.
+system:
+  linux:
+    # Per-path overrides for files under system/linux/etc/. Defaults when a
+    # file matches no entry: mode 0644, installed unconditionally. `path` is a
+    # bash glob matched against the path relative to system/linux/ (first
+    # match wins, so keep specific entries before broad globs).
+    #
+    #   mode:  install(1) mode (string, e.g. "440")
+    #   gate:  named runtime probe the installer implements; the file is
+    #          skipped when the probe fails. Known gates: thinkpad (dmidecode
+    #          reports a ThinkPad), vm (systemd-detect-virt --vm),
+    #          ubuntu-studio (ID=ubuntu + ubuntustudio-default-settings
+    #          marker package), sddm-breeze (breeze SDDM theme installed).
+    #          The installer aborts on an unknown gate name — typos fail loud.
+    #   check: named validator run on the SOURCE file on every host, even
+    #          when the gate skips the install (so contributors catch broken
+    #          files on machines that never deploy them). Known: visudo.
+    overrides:
+      # thinkpad_acpi module config/load only makes sense on a ThinkPad.
+      - path: etc/modprobe.d/thinkpad_acpi.conf
+        gate: thinkpad
+      - path: etc/modules-load.d/thinkpad_acpi.conf
+        gate: thinkpad
+      # sudoers(5): drop-ins must be mode 0440 (sudo ignores
+      # group/world-writable files) and the filename must not contain '.'
+      # or end in '~'. VM-only so password-less sudo never lands on bare
+      # metal; visudo-checked everywhere because a broken drop-in can break
+      # sudo globally on the host.
+      - path: "etc/sudoers.d/*"
+        mode: "440"
+        gate: vm
+        check: visudo
+      # Studio-only: every Ubuntu flavor reports ID=ubuntu, so the flavor is
+      # detected by its seed package (ubuntustudio-default-settings,
+      # preinstalled by the Studio ISO). A plain Ubuntu Desktop install must
+      # not grant @audio realtime privileges it has no pro-audio stack for.
+      # Same gate as studioPackages/@audio in run_onchange_before_ubuntu.
+      - path: etc/security/limits.d/95-ubuntustudio-audio.conf
+        gate: ubuntu-studio
+      # De-brands the login greeter to upstream Breeze on both distros.
+      # Forcing Current=breeze without the theme installed yields a broken
+      # login screen, so skip when the breeze SDDM theme is absent.
+      - path: etc/sddm.conf.d/90-breeze.conf
+        gate: sddm-breeze
+
+    # Absolute /etc paths that the installer previously shipped but that no
+    # longer exist in system/linux/etc/. Listed explicitly so every machine —
+    # including ones that pull a committed deletion — removes the orphan on
+    # the next run. `rm -f` is idempotent, so leaving entries here for a
+    # release cycle or two after the deletion is safe (no-op once gone).
+    #
+    # When deleting a tracked file from system/linux/etc/, add its absolute
+    # /etc path HERE in the same commit. Optional `distro` restricts removal
+    # to one distro (matched against /etc/os-release ID at runtime) — for
+    # paths only ever deployed there, so a native/user file elsewhere is
+    # never deleted.
+    removed:
+      - path: /etc/NetworkManager/conf.d/80-lo.conf
+      - path: /etc/NetworkManager/conf.d/90-unmanaged-vmware.conf
+      - path: /etc/NetworkManager/conf.d/91-tailscale.conf
+      - path: /etc/NetworkManager/conf.d/92-docker.conf
+      - path: /etc/NetworkManager/conf.d/93-veth.conf
+      - path: /etc/modprobe.d/audio-hda-no-powersave.conf
+      - path: /etc/systemd/system/docker-prune.service
+      - path: /etc/systemd/system/docker-prune.timer
+      - path: /etc/udev/rules.d/logitech-receiver.rules
+      # Fedora-only: the removed plymouthd.conf was only ever DEPLOYED on
+      # Fedora (Ubuntu owns plymouth via the default.plymouth
+      # update-alternatives link and never received this file), so reclaim it
+      # there only — never delete a native or user-created
+      # /etc/plymouth/plymouthd.conf on an Ubuntu host.
+      - path: /etc/plymouth/plymouthd.conf
+        distro: fedora

@@ -17,10 +17,7 @@
 
 set -euo pipefail
 
-if ! command -v plasmashell >/dev/null 2>&1; then
-  printf 'config-kde-kickoff.sh: plasmashell not found (non-KDE system), skipping.\n'
-  exit 0
-fi
+{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-kickoff.sh" -}}
 
 configure_kickoff() {
   printf 'config-kde-kickoff.sh: showing favorites and applications as list...\n'
