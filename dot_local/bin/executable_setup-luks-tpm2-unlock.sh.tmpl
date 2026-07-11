@@ -44,9 +44,9 @@
 #      world-visible via ps), the TTY requirement is dropped, and each backend
 #      feeds it to the enrollment tool instead of prompting. The value is cleared
 #      from the environment immediately so child processes never inherit it. The
-#      run_after wrapper (.chezmoiscripts/linux/run_after_luks-tpm2) uses exactly
-#      this, sourcing the passphrase from chezmoi's promptString so a host can
-#      enroll on `chezmoi apply`.
+#      run_onchange wrapper (.chezmoiscripts/linux/run_onchange_after_luks-tpm2)
+#      uses exactly this, sourcing the passphrase from chezmoi's promptString so a
+#      host can enroll on `chezmoi apply`.
 #
 # SAFETY: enrollment ADDS a TPM2-sealed keyslot; it does NOT remove the existing
 # passphrase keyslot. The current passphrase therefore stays valid as a fallback
