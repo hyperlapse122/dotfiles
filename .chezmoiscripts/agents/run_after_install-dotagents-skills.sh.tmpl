@@ -1,0 +1,98 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl
+#
+# run_after_: executes on every `chezmoi apply`. That prefix is deliberate,
+# because every skip path below exits 0 — a run_onchange_ content gate would
+# cache a soft-skipped or failed FIRST apply (mise/git/network absent) as "done"
+# and never provision skills/MCPs until an unrelated agents.toml edit. Running
+# every apply keeps the install retryable.
+#
+# To avoid paying for the (slow) `dotagents --user install` on every apply, an
+# internal fingerprint + stamp guard short-circuits the heavy step. Install runs
+# only when:
+#   - the RENDERED ~/.agents/agents.toml changed since the last SUCCESSFUL
+#     install — hashing the deployed file (not the .tmpl source) means a rotated
+#     1Password MCP-header secret re-provisions even though the source template
+#     is byte-identical;
+#   - no successful install has been recorded yet (fresh machine); or
+#   - the last success is older than the refresh window below, so the UNPINNED
+#     remote skills advance past their `minimum_release_age` settle window
+#     without needing an agents.toml edit.
+# The stamp is written ONLY on a zero-exit install, so any soft-skip or failure
+# retries on the next apply.
+#
+# Soft-skip: this script must never fail apply; missing tools, offline fetches,
+# trust rejection, or install errors all exit 0 after a diagnostic message.
+# Container-kept: intentionally not excluded from containers; it soft-skips when
+# mise/node/git are absent instead of bootstrapping anything.
+
+set -euo pipefail
+
+skip() { exit 0; }
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "install-dotagents-skills: skipped (mise not installed)" >&2
+  skip
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "install-dotagents-skills: skipped (git not installed)" >&2
+  skip
+fi
+
+# --- Skip guard: only run the heavy install when it can change something. ---
+# Fingerprint the DEPLOYED agents config, which run_after_ guarantees is already
+# written this apply (run_after_ scripts run after all file targets). Hashing
+# the rendered file — not the source template — means a rotated onepasswordRead
+# secret in an MCP header re-triggers install even though the .tmpl is unchanged.
+CONFIG="$HOME/.agents/agents.toml"
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/install-dotagents-skills"
+# Refresh cadence for the unpinned remote skills when nothing else changed. Bounds
+# their pickup latency to ~1 day past the 7-day settle while removing the
+# per-apply install cost. `find -mmin` avoids `-mtime`'s day-rounding ambiguity.
+REFRESH_MINUTES=1440
+
+if [[ -r "$CONFIG" ]]; then
+  cur="$(sha256sum "$CONFIG" | cut -d' ' -f1)"
+else
+  cur="no-config"
+fi
+
+# Skip only when the config is unchanged since the last SUCCESSFUL install AND
+# that success is recent; a stamp older than REFRESH_MINUTES falls through so the
+# unpinned remote skills get re-fetched. Short-circuit `&&` means `find` runs
+# only when the stamp exists.
+if [[ -f "$STAMP" && "$(cat "$STAMP" 2>/dev/null || true)" == "$cur" \
+      && -z "$(find "$STAMP" -mmin +"$REFRESH_MINUTES" 2>/dev/null)" ]]; then
+  echo "install-dotagents-skills: up to date (agents.toml unchanged, refreshed recently); skipping install" >&2
+  skip
+fi
+
+# First-apply fix: `dotagents --user install` iterates agents.toml's
+# `agents = ["claude", "codex"]` and drops a `skills` symlink into each agent's
+# config dir (~/.claude/skills, ~/.codex/skills) via ensureSkillsSymlink, which
+# does NOT create the parent. On a fresh machine ~/.codex is provided by the
+# codex external, but nothing creates ~/.claude until Claude Code is first run —
+# so the symlink fails with ENOENT and the whole install exits non-zero, which
+# the soft-skip below then swallows, leaving skills/MCPs unconfigured on the very
+# first apply. Pre-create the agent config dirs so the initial apply provisions
+# fully; mkdir -p is idempotent and harmless if the dirs already exist.
+mkdir -p "$HOME/.claude" "$HOME/.codex" || true
+
+set +e
+install_output="$(mise --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
+install_rc=$?
+set -e
+if [[ $install_rc -ne 0 ]]; then
+  reason="${install_output//$'\n'/; }"
+  echo "install-dotagents-skills: skipped (install failed: ${reason})" >&2
+  skip
+fi
+
+# Record success: stamp the config fingerprint and reset the refresh clock via
+# the file mtime. Written only after a zero-exit install, so a soft-skip or
+# failure above leaves no (or a stale) stamp and retries on the next apply.
+mkdir -p "$(dirname "$STAMP")"
+printf '%s\n' "$cur" > "$STAMP"
+{{ end -}}
