@@ -1,4 +1,4 @@
-{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+{{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/linux-kde/run_onchange_after_config-kde-fonts.sh.tmpl
 #
