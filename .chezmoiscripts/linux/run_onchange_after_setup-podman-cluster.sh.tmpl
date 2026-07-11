@@ -10,7 +10,7 @@
 #   - minikube ........................ .chezmoiexternals/minikube.toml (~/.local/bin)
 #   - DOCKER_HOST + MINIKUBE_ROOTLESS . dot_config/environment.d/65-containers.conf
 #   - user lingering + rootful
-#     podman.socket mask .............. run_onchange_after_system-config-20-host
+#     podman.socket mask .............. run_onchange_after_install-system-20-host
 #   - podman-prune.{service,timer} .... dot_config/systemd/user/
 #
 # It does four things, each independently guarded so a missing prerequisite
@@ -25,7 +25,7 @@
 #   2. Enable the rootless --user podman.socket — the Docker-API endpoint that
 #      DOCKER_HOST (65-containers.conf) points at. This is the per-user
 #      instance, DISTINCT from the system/rootful podman.socket that
-#      system-config-20-host deliberately masks.
+#      install-system-20-host deliberately masks.
 #
 #   3. Enable the shipped podman-prune.timer (weekly GC). The unit files are
 #      deployed to ~/.config/systemd/user/ but nothing enables them.
@@ -61,7 +61,7 @@ esac
 export PATH
 
 # --- sudo detection (non-fatal) -------------------------------------------
-# Only step 1 (the /etc drop-in) needs root. Unlike system-config-10-files /
+# Only step 1 (the /etc drop-in) needs root. Unlike install-system-10-files /
 # tailscale-ufw — which abort without sudo because their whole job is root —
 # here a missing sudo skips ONLY the delegation step; the user-level podman
 # socket/timer and the minikube config still run.

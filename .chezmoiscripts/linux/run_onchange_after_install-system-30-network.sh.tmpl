@@ -1,10 +1,10 @@
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_onchange_after_system-config-30-network.sh.tmpl
+# .chezmoiscripts/linux/run_onchange_after_install-system-30-network.sh.tmpl
 #
 # Network-path configuration: firewalld for Tailscale/VMware, resolv.conf →
 # systemd-resolved, DNS-path service restarts, and NetworkManager drop-in
-# hygiene + reload. Part 3/3 of the split system-config set (10-files →
+# hygiene + reload. Part 3/3 of the split install-system set (10-files →
 # 20-host → 30-network); splitting keeps re-run scope tight — a tracked /etc
 # file edit re-runs 10-files only, so it no longer restarts
 # systemd-resolved/NetworkManager/tailscaled the way the old monolithic
@@ -35,8 +35,8 @@
 
 set -euo pipefail
 
-{{ includeTemplate "headless-guard.sh.tmpl" "system-config-network" }}
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "system-config-network" }}
+{{ includeTemplate "headless-guard.sh.tmpl" "install-system-network" }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-network" }}
 # Configure firewalld for Tailscale and VMware (see header for the three
 # changes and their rationale).
 #

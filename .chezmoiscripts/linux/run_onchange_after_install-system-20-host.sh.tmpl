@@ -1,10 +1,10 @@
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_onchange_after_system-config-20-host.sh.tmpl
+# .chezmoiscripts/linux/run_onchange_after_install-system-20-host.sh.tmpl
 #
 # Host-level service tuning that is independent of the /etc file set: enables
 # user lingering, masks the rootful podman API socket, and disables zram swap
-# on both distros. Part 2/3 of the split system-config set (10-files →
+# on both distros. Part 2/3 of the split install-system set (10-files →
 # 20-host → 30-network); splitting keeps re-run scope tight — a tracked /etc
 # file edit re-runs 10-files only, not these host mutations.
 #
@@ -22,8 +22,8 @@
 
 set -euo pipefail
 
-{{ includeTemplate "headless-guard.sh.tmpl" "system-config-host" }}
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "system-config-host" }}
+{{ includeTemplate "headless-guard.sh.tmpl" "install-system-host" }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-host" }}
 # Detect distro at runtime for the Ubuntu-specific zram branch below.
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
 

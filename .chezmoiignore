@@ -12,7 +12,7 @@
 ./package.json
 
 # Root-owned system config installed to /etc by
-# .chezmoiscripts/linux/run_onchange_after_system-config-10-files.sh.tmpl
+# .chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl
 # (manifest: .chezmoidata/system.yaml), never linked into $HOME.
 ./system
 

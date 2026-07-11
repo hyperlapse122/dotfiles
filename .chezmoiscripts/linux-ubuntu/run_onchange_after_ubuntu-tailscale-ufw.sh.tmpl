@@ -12,7 +12,7 @@
 # re-runs are safe.
 set -euo pipefail
 # Tailscale egress-NAT parity for Ubuntu via ufw.
-# Matches the Fedora firewalld masquerade in system-config-30-network:
+# Matches the Fedora firewalld masquerade in install-system-30-network:
 # broad -o $primary_if MASQUERADE (NATs all primary-interface egress, serving
 # both Tailscale exit-node/subnet-router traffic and VMware NAT).
 # IP forwarding is provided by the shared system/linux/etc/sysctl.d/99-tailscale.conf

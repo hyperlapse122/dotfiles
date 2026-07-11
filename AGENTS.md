@@ -64,7 +64,7 @@ the top and pass the tracked sources (single files or globs):
 
 Inside the partial, `include . | sha256sum` hashes file CONTENT (a bare
 `sha256sum .` would hash the path STRING); a `(stat .).isDir` guard skips the
-directories a `**` glob matches. See `run_onchange_after_system-config-10-files`,
+directories a `**` glob matches. See `run_onchange_after_install-system-10-files`,
 `run_onchange_after_build-mxm4-haptic`, and
 `run_onchange_after_build-opencode-plugins` for the canonical form. Rules:
 
@@ -103,7 +103,7 @@ Instead, when you remove a customization, remove it cleanly at the source:
 - **Managed `$HOME` files** — just delete the source entry; chezmoi removes the
   deployed target on the next apply (or add a `.chezmoiremove` entry).
 - **Root-owned `/etc` state** — add the path to the `removed:` list in
-  `.chezmoidata/system.yaml` (consumed by `system-config-10-files`), which is
+  `.chezmoidata/system.yaml` (consumed by `install-system-10-files`), which is
   idempotent and self-documenting; an optional `distro:` key scopes the
   removal to one distro.
 - **Deployed system state chezmoi cannot own** (an `update-alternatives`
@@ -123,7 +123,7 @@ Instead, when you remove a customization, remove it cleanly at the source:
 | `auth/` | GitHub token preflight, Docker Hub login, one-time `tailscale up` |
 | `build/` | build `crates/` + `packages/` on apply (see above) |
 | `gpg/` | one-time GPG key import from 1Password |
-| `linux/` | cross-distro Linux provisioning: the `system-config-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
+| `linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `linux-fedora/`, `linux-ubuntu/` | per-distro package installers (`run_onchange_before_fedora`/`_ubuntu` driven by `.chezmoidata/packages.yaml`), plus Ubuntu-only extras (`ubuntu-tailscale-ufw`) — dir name mirrors the `linux-kde/`/`linux-gnome/` convention |
 | `linux-kde/`, `linux-gnome/` | per-desktop config scripts (runtime `plasmashell`/`gnome-shell` guards; see OS gating & script parity) |
 | `services/` | enable the `cli-proxy-api` user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
@@ -151,18 +151,18 @@ with genuinely different guard semantics stay hand-rolled on purpose
 ### The `system/` tree — root-owned `/etc` config, manifest-driven
 
 `system/linux/etc/**` mirrors absolute `/etc` paths and is installed by the
-three-script `system-config` set in `.chezmoiscripts/linux/`, split by concern
+three-script `install-system` set in `.chezmoiscripts/linux/`, split by concern
 so each carries its own `run_onchange_` trigger (filename `10-`/`20-`/`30-`
 prefixes order execution):
 
-- **`system-config-10-files`** — installs the tree per the manifest
+- **`install-system-10-files`** — installs the tree per the manifest
   (`.chezmoidata/system.yaml`: per-path `mode`/`gate`/`check` overrides +
   `removed:` orphan cleanup), then reloads what it installed (systemd units,
   udev rules, sysctl, Ubuntu locale-gen, ThinkPad modprobe). Fingerprinted on
   `system/linux/etc/**`; the rendered manifest covers itself.
-- **`system-config-20-host`** — user lingering, rootful podman socket mask,
+- **`install-system-20-host`** — user lingering, rootful podman socket mask,
   zram-swap disable. Own-content trigger.
-- **`system-config-30-network`** — firewalld (masquerade, tailscale0→trusted,
+- **`install-system-30-network`** — firewalld (masquerade, tailscale0→trusted,
   WireGuard/STUN ports), resolv.conf→systemd-resolved + DNS-path service
   restarts, NetworkManager conf.d hygiene/reload. Own-content trigger, so an
   /etc file edit no longer restarts network services (the old monolithic
@@ -367,7 +367,7 @@ CI environments).
 - Branch on `{{ .chezmoi.os }}` (`linux`/`darwin`/`windows`); exclude whole paths
   per-OS via the nearest `.chezmoiignore` (root, `dot_config/`, `dot_local/bin/`).
   git config splits via `config.tmpl` including `.config_<os>`.
-- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var. Ubuntu Studio reports `ID=ubuntu` like any Ubuntu flavor; the flavor marker is the `ubuntustudio-default-settings` package (preinstalled by the Studio ISO), probed at runtime as `IS_UBUNTU_STUDIO` in the apt installer (`FORCE_UBUNTU_STUDIO=1` overrides, mirroring `FORCE_NVIDIA`) and re-checked by `system-config-10-files` (the `ubuntu-studio` gate in `.chezmoidata/system.yaml`) for the realtime limits drop-in.
+- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var. Ubuntu Studio reports `ID=ubuntu` like any Ubuntu flavor; the flavor marker is the `ubuntustudio-default-settings` package (preinstalled by the Studio ISO), probed at runtime as `IS_UBUNTU_STUDIO` in the apt installer (`FORCE_UBUNTU_STUDIO=1` overrides, mirroring `FORCE_NVIDIA`) and re-checked by `install-system-10-files` (the `ubuntu-studio` gate in `.chezmoidata/system.yaml`) for the realtime limits drop-in.
 - **Desktop detection** (KDE Plasma vs GNOME) has two mechanisms, both keyed on the shell binary the ISO shipped (`plasmashell` / `gnome-shell`, stable from first boot):
   - **Scripts** gate at RUNTIME: `command -v plasmashell` / `command -v gnome-shell` bash guards (`HAS_KDE`/`HAS_GNOME` in the installers, per-script guards in `linux-kde`/`linux-gnome`).
   - **File content** (which can't branch at runtime) gates at RENDER time via `lookPath`: `dot_config/solaar/rules.yaml.tmpl` picks its gesture actions this way, and `dot_config/.chezmoiignore` drops the fcitx5 config + `environment.d/50-input-method.conf` on a GNOME-only host (`gnome-shell` on PATH without `plasmashell`). With NEITHER desktop on PATH (headless, container, CI) the KDE variant renders and the fcitx files keep deploying — deterministic CI artifacts, inert without a desktop.
@@ -376,7 +376,7 @@ CI environments).
   - `run_onchange_after_config-gnome-inputmethod.sh.tmpl`: Korean input on GNOME uses the desktop's native **ibus** stack (NOT fcitx5, which is KDE-target-only), so it adds `('ibus', 'hangul')` to `org.gnome.desktop.input-sources sources` — additive (preserves existing sources), live-session-guarded, **exactly once** per user (wallpaper-style stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a user's later source edits are never fought. `run_onchange` with no external dependency to fingerprint (its trigger is its own content); on a headless/first-boot apply it exits 0 without stamping, but note onchange records that skip as done — the source lands on the next content change or `chezmoi apply --force`, not merely because a live session later appears.
   - `run_onchange_after_config-gnome-fonts.sh.tmpl`: mirrors the KDE `config-kde-fonts` choice onto GNOME's `gsettings` font keys — sans (`interface font-name` / `document-font-name` / `wm.preferences titlebar-font`) → **Pretendard 10**, mono (`interface monospace-font-name`) → **JetBrainsMono Nerd Font 10** (KDE's `smallestReadableFont`/`menuFont`/`toolBarFont` have no GNOME analog and fold into `font-name`). Refreshes the fontconfig cache first (like the KDE script) and warns-not-fails on a not-yet-installed family. `run_onchange` fingerprinted on `.chezmoidata/fonts.yaml` (plus the SANS/MONO constants in the script text), so a font bump or choice change re-triggers it — parity with the KDE `run_onchange`. It also keeps a **font-signature stamp** (the SANS/MONO families+sizes): an unchanged signature means "already ensured" and the user's current fonts are left alone. A headless/TTY apply exits 0 without stamping; note onchange records that skip as done, so the fonts land on the next fingerprint change or `chezmoi apply --force` rather than merely because a live session later appears.
 - **Input method per desktop**: KDE targets run fcitx5 (`kdePackages`, `dot_config/fcitx5/`, `environment.d/50-input-method.conf` XMODIFIERS, KWin virtual-keyboard script); GNOME targets run ibus (`gnomePackages` installs `ibus-hangul`, GNOME manages the IM environment itself — no fcitx files deploy there, per the `.chezmoiignore` gate above).
-- **Shared system-config** (the `.chezmoiscripts/linux/` `system-config-10-files`/`20-host`/`30-network` set — see The `system/` tree section) includes Ubuntu runtime branches: `20-host` masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units), and `10-files` drives `locale-gen` on Ubuntu.
+- **Shared system-config** (the `.chezmoiscripts/linux/` `install-system-10-files`/`20-host`/`30-network` set — see The `system/` tree section) includes Ubuntu runtime branches: `20-host` masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units), and `10-files` drives `locale-gen` on Ubuntu.
 - **Ubuntu-specific scripts** (`.chezmoiscripts/linux-ubuntu/`, gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
   - `run_onchange_before_ubuntu.sh.tmpl` — apt provisioner (mirrors the Fedora installer with apt semantics; idempotent, all service/group steps guarded)
   - `run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent. `run_onchange` with no external dependency (the NAT rule derives from runtime `primary_if` detection), so the trigger is its own content; a run skipped for missing sudo is recorded as done and completes on the next content change or `chezmoi apply --force`

@@ -7,7 +7,7 @@ are **not** chezmoi-managed targets. The whole `system/` tree is listed in the
 repo-root [`.chezmoiignore`](../.chezmoiignore) so it is never linked into
 `$HOME`. Instead it is installed to `/etc/` by a `run_onchange_after_` script:
 
-[`.chezmoiscripts/linux/run_onchange_after_system-config-10-files.sh.tmpl`](../.chezmoiscripts/linux/run_onchange_after_system-config-10-files.sh.tmpl)
+[`.chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl`](../.chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl)
 
 which runs:
 
@@ -80,7 +80,7 @@ system/linux/etc/locale.conf
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
 | `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
 
-## The system-config script set (10-files → 20-host → 30-network)
+## The install-system script set (10-files → 20-host → 30-network)
 
 File installation is part 1 of a three-script set under
 `.chezmoiscripts/linux/`, split by concern so each carries its own
@@ -90,9 +90,9 @@ the old monolithic `install-system-config` script did:
 
 | Script | Does | Re-runs when |
 |---|---|---|
-| `run_onchange_after_system-config-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, Ubuntu `locale-gen`, reload systemd/udev/sysctl for what it installed | any tracked file or manifest entry changes |
-| `run_onchange_after_system-config-20-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable (Fedora `systemd-zram-setup@` + Ubuntu `zramswap.service`, separate distro-guarded blocks) | its own content changes |
-| `run_onchange_after_system-config-30-network.sh.tmpl` | firewalld (masquerade, `tailscale0` → trusted zone, WireGuard/STUN ports), `/etc/resolv.conf` → systemd-resolved, systemd-resolved/NetworkManager/tailscaled restarts, NetworkManager conf.d hygiene + reload | its own content changes |
+| `run_onchange_after_install-system-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, Ubuntu `locale-gen`, reload systemd/udev/sysctl for what it installed | any tracked file or manifest entry changes |
+| `run_onchange_after_install-system-20-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable (Fedora `systemd-zram-setup@` + Ubuntu `zramswap.service`, separate distro-guarded blocks) | its own content changes |
+| `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld (masquerade, `tailscale0` → trusted zone, WireGuard/STUN ports), `/etc/resolv.conf` → systemd-resolved, systemd-resolved/NetworkManager/tailscaled restarts, NetworkManager conf.d hygiene + reload | its own content changes |
 
 The `10-`/`20-`/`30-` filename prefixes order execution (chezmoi runs scripts
 alphabetically), so files land before anything that might depend on them.

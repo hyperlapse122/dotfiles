@@ -1,7 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_onchange_after_system-config-10-files.sh.tmpl
+# .chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
 # `sudo install -D -m <mode>`, removes orphaned /etc paths this repo used to
@@ -16,7 +16,7 @@
 # is rendered into the bash arrays below, so a manifest edit re-triggers this
 # run_onchange_ script automatically.
 #
-# This is part 1/3 of the split system-config set (10-files → 20-host →
+# This is part 1/3 of the split install-system set (10-files → 20-host →
 # 30-network, ordered by filename). Splitting keeps re-run scope tight: a
 # tracked /etc file edit re-runs THIS script only — it no longer restarts
 # NetworkManager/tailscaled (30-network) or re-masks services (20-host) the
@@ -33,14 +33,14 @@
 
 set -euo pipefail
 
-{{ includeTemplate "headless-guard.sh.tmpl" "system-config-files" }}
+{{ includeTemplate "headless-guard.sh.tmpl" "install-system-files" }}
 # system/linux/etc content fingerprint — chezmoi hashes this rendered script
 # to decide whether to re-run it, so embedding every tracked file's sha256
 # here forces a re-run on any add/remove/edit. Comment-only; never executed.
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/**")) }}
 SRC_ROOT="{{ $sourceDir }}/system/linux"
 
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "system-config-files" }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-files" }}
 # Detect distro at runtime for the distro-scoped branches below.
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
 
@@ -76,13 +76,13 @@ override_checks+=({{ get . "check" | default "" | quote }})
 for gate in "${override_gates[@]}"; do
   case "$gate" in
     ''|thinkpad|vm|ubuntu-studio|sddm-breeze) ;;
-    *) printf 'system-config-files: unknown gate "%s" in .chezmoidata/system.yaml; aborting.\n' "$gate" >&2; exit 1 ;;
+    *) printf 'install-system-files: unknown gate "%s" in .chezmoidata/system.yaml; aborting.\n' "$gate" >&2; exit 1 ;;
   esac
 done
 for check in "${override_checks[@]}"; do
   case "$check" in
     ''|visudo) ;;
-    *) printf 'system-config-files: unknown check "%s" in .chezmoidata/system.yaml; aborting.\n' "$check" >&2; exit 1 ;;
+    *) printf 'install-system-files: unknown check "%s" in .chezmoidata/system.yaml; aborting.\n' "$check" >&2; exit 1 ;;
   esac
 done
 
@@ -151,7 +151,7 @@ for src in "$SRC_ROOT"/etc/**; do
   count=$((count + 1))
 done
 
-printf 'system-config-files: %d installed, %d skipped\n' "$count" "$skipped"
+printf 'install-system-files: %d installed, %d skipped\n' "$count" "$skipped"
 
 if [[ "$thinkpad_system" == true ]]; then
   printf '  -> modprobe thinkpad_acpi\n'
