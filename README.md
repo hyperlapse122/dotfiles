@@ -40,9 +40,12 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
    Ubuntu via apt), fonts, importing the GPG key, authenticating GitHub /
    Tailscale, switching the login shell to zsh, and writing desktop (KDE or
-   GNOME) / Solaar / system config. It also provisions coding-agent skills via
-   `dotagents` into `~/.agents/skills/` from the pinned set in
-   [`dot_agents/agents.toml`](dot_agents/agents.toml).
+   GNOME) / Solaar / system config. It also fetches pinned standalone CLI
+   binaries into `~/.local/bin` (via [`.chezmoiexternals/`](.chezmoiexternals)),
+   and provisions coding-agent skills and MCP servers via `dotagents` into
+   `~/.agents/` from the pinned set in
+   [`dot_agents/private_readonly_agents.toml.tmpl`](dot_agents/private_readonly_agents.toml.tmpl)
+   (rendered to `~/.agents/agents.toml`).
    The desktop is detected at apply time (`plasmashell` vs `gnome-shell`):
    KDE hosts get fcitx5 Korean input plus the Breeze de-branding scripts, while
    GNOME hosts stay on GNOME defaults — the only GNOME change is Korean input
@@ -162,10 +165,44 @@ single-source-of-truth data files, OS gating, secrets, and commit style).
 
 ## Repository structure
 
-This repository contains source-only trees that are excluded from deployment to `$HOME` via `.chezmoiignore`, and excluded from taplo formatting via `.taplo.toml`. Instead, they are built on apply by `.chezmoiscripts/build/` run_onchange scripts:
+Everything at the top level is chezmoi source state rendered into `$HOME` (see
+the attribute table in [`AGENTS.md`](AGENTS.md)), except the source-only trees
+below — excluded from deployment via `.chezmoiignore` — and the repo-meta files
+(`AGENTS.md`, `LICENSE`, `mise.toml`, `agents.toml`, …).
 
-- `crates/mxm4-haptic/`: Built on apply by `.chezmoiscripts/build/run_onchange_after_build-mxm4-haptic.sh.tmpl` into `~/.local/bin/`. Linux builds all three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
-- `packages/`: Built on apply by `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` into `~/.config/opencode/plugins/`. It is a Bun workspace built with **Vite+** (`vp`), producing `@h82/opencode-playwright-cli-session-injection` (symlinked as `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked as `scratch-guard.js` on Linux and macOS), and `@h82/opencode-mxm4-haptic` (symlinked as `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
+- [`.chezmoidata/`](.chezmoidata) — template data, the single source of truth
+  for packages ([`packages.yaml`](.chezmoidata/packages.yaml): dnf + apt,
+  flatpaks, services, groups), fonts (`fonts.yaml`), and user identity
+  (`user.yaml`).
+- [`.chezmoiscripts/`](.chezmoiscripts) — provisioning scripts run on apply,
+  grouped by area: `linux/`, `linux-kde/`, `linux-gnome/`, `auth/`, `gpg/`,
+  `agents/`, `build/`, `services/`, `tools/`.
+- [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches: prezto,
+  plus standalone CLI binaries into `~/.local/bin` (claude-code, codex,
+  codegraph, cli-proxy-api, gh, glab, kubectl, helm, …).
+- [`system/`](system) — root-owned `/etc` config, installed by a script rather
+  than linked into `$HOME`. See [`system/README.md`](system/README.md).
+- [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust sources, built on apply by
+  `.chezmoiscripts/build/run_onchange_after_build-mxm4-haptic.sh.tmpl` into
+  `~/.local/bin/`. Linux builds all three binaries: `mxm4-hapticd`,
+  `mxm4-haptic-notify`, and `mxm4-haptic`; macOS builds only the daemon and
+  client.
+- [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`)
+  by `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl`
+  into `~/.config/opencode/plugins/`, producing
+  `@h82/opencode-playwright-cli-session-injection` (symlinked as
+  `playwright-cli-session-injection.js` on Linux and macOS),
+  `@h82/opencode-scratch-guard` (symlinked as `scratch-guard.js` on Linux and
+  macOS), and `@h82/opencode-mxm4-haptic` (symlinked as `mxm4-haptic.js` on
+  Linux). `@h82/mxm4-haptic` is a library, not a plugin. See
+  [`packages/README.md`](packages/README.md).
+- [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
+  template plus the local agent skills under `dot_agents/skills/`.
+- [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgents for
+  `cli-proxy-api` and `mxm4-hapticd`).
+
+The source-only trees are also excluded from taplo formatting via
+[`.taplo.toml`](.taplo.toml).
 
 ## License
 

@@ -26,7 +26,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) |
 | `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`) |
-| `.chezmoiexternals/*` | external git/archive fetches (e.g. prezto) |
+| `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, cli-proxy-api, ast-grep, buf, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
@@ -39,11 +39,23 @@ The directories `crates/` and `packages/` are source-only trees excluded from de
 - `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
 - `packages/` is a Bun workspace built on apply with **Vite+** (`vp`) into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked to `scratch-guard.js` on Linux and macOS; enforces the temp-file policy via `$TMPDIR` injection + `/tmp`,`/var/tmp`,`/dev/shm` deny), and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
+### Script tree — `.chezmoiscripts/` grouped by area
+
+| Dir | Purpose |
+|---|---|
+| `agents/` | dotagents skills/MCP provisioning + one-time teardown (see next section) |
+| `auth/` | GitHub token preflight, Docker Hub login, one-time `tailscale up` |
+| `build/` | build `crates/` + `packages/` on apply (see above) |
+| `gpg/` | one-time GPG key import from 1Password |
+| `linux/`, `linux-kde/`, `linux-gnome/` | distro/desktop provisioning (see OS gating & script parity) |
+| `services/` | enable the `cli-proxy-api` user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
+| `tools/` | re-point `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `codegraph`) at the latest release and prune older versions, plus `run_once_before_mise-trust.sh.tmpl` (trusts the repo-root `mise.toml`) |
+
 ### Agent skills, MCPs & trust — managed by `dotagents`
 
 - `dotagents` (`getsentry/dotagents`) manages user-scoped agent skills, MCP servers, and a trust allowlist under `~/.agents/`.
 - `dot_agents/private_readonly_agents.toml.tmpl` (private 0600 + readonly 0444, templated) renders to `~/.agents/agents.toml` and is the single source of truth. It sets `agents = ["claude", "codex"]`, `minimum_release_age = 10080`, and a `[trust]` allowlist (`github_orgs = [getsentry, microsoft, shadcn]`, `git_domains = [git.jpi.app]`).
-- It declares three remote skills — `playwright-cli` (`microsoft/playwright-cli`), `improve` (`shadcn/improve`), `dotagents` (`getsentry/dotagents`) — plus the **seven** local skills under `dot_agents/skills/` as `path:skills/<name>` entries: `ci-cd-monitoring`, `git-workflow`, `gitlab-issues`, `glab`, `glab-stack`, `js-package-managers`, `pr-mr`. The same file also registers the MCP servers (`codegraph`, `context7`, Exa `websearch`, and the Z.ai servers), with secrets injected via `onepasswordRead`.
+- It declares three remote skills — `playwright-cli` (`microsoft/playwright-cli`), `improve` (`shadcn/improve`), `dotagents` (`getsentry/dotagents`) — plus the **seven** local skills under `dot_agents/skills/` as `path:skills/<name>` entries: `ci-cd-monitoring`, `git-workflow`, `gitlab-issues`, `glab`, `glab-stack`, `js-package-managers`, `pr-mr` (`glab` and `glab-stack` are currently empty placeholders — a `.gitkeep` only, no `SKILL.md` yet). The same file also registers the MCP servers (`codegraph`, `context7`, Exa `websearch`, and the Z.ai servers), with secrets injected via `onepasswordRead`.
 - Provisioning runs via `.chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl` on every `chezmoi apply` (linux + darwin gate): it `mkdir -p`s the agent config dirs (`~/.claude`, `~/.codex`) first, then runs `dotagents --user install` through `mise exec npm:@sentry/dotagents@latest`, soft-skips on missing mise/git or install failure, and is kept in containers. The pre-`mkdir` is the **first-apply fix**: `dotagents install` symlinks `skills` into each agent's config dir (`ensureSkillsSymlink`) without creating the parent, and on a fresh machine `~/.codex` exists (codex external) but `~/.claude` does not until Claude Code is first run — so the symlink `ENOENT`s, the whole install exits non-zero, and the soft-skip silently swallows it, leaving skills/MCPs unconfigured until a later apply. Pre-creating the dirs makes the initial apply provision fully.
 - One-time teardown is handled by `.chezmoiscripts/agents/run_once_before_teardown-skills-sh.sh.tmpl`.
 - `.github/workflows/update-agent-skills.yml` runs weekly (Tue 06:00 UTC) to bump `@`-pinned remote skill refs to the newest release/commit older than a 7-day cutoff and open a PR; it skips `path:` and `https:` sources. The remote skills are currently declared without an explicit `@ref`, so they settle purely via `minimum_release_age`.
@@ -191,6 +203,26 @@ CI environments).
   `minimum_release_age_excludes`, don't disable the gate.
 - `python3` is mise-shadowed; system scripts needing real system Python must call
   `/usr/bin/python3` (see the solaar config script).
+- **Standalone CLIs outside mise** come from `.chezmoiexternals/` (pinned to the
+  latest GitHub release / vendor manifest at apply time). For the version-dir
+  installs (`claude`, `codex`, `codegraph`) the `.chezmoiscripts/tools/`
+  `run_after_onchange_*` scripts re-point the `~/.local/bin` symlink at the
+  freshly fetched version and prune older ones.
+- **cli-proxy-api** is a user-level service: binary via `.chezmoiexternals/`
+  (`~/.local/bin/cli-proxy-api`), config at
+  `dot_config/cli-proxy-api/readonly_config.yaml.tmpl`, unit at
+  `dot_config/systemd/user/cli-proxy-api.service` (macOS:
+  `Library/LaunchAgents/dev.h82.cli-proxy-api.plist`), enabled by
+  `.chezmoiscripts/services/run_onchange_after_cli-proxy-service.sh.tmpl`.
+  Provider logins are on-demand via the `~/.local/bin/cli-proxy-api-*-login`
+  helpers (agy, claude, codex, kimi), not provisioned.
+- **Repo-root `mise.toml`** is the dev toolchain for working on this repo itself
+  (bun + rust, with `postinstall` hooks running `vp install`, `cargo fetch`, and
+  `dotagents install`); it is chezmoiignored and trusted once via
+  `.chezmoiscripts/tools/run_once_before_mise-trust.sh.tmpl`. The repo-root
+  `agents.toml` is likewise the repo-scoped dotagents config for agents working
+  in this checkout — distinct from the deployed user-scoped
+  `dot_agents/private_readonly_agents.toml.tmpl`.
 - **JS package-manager hardening lives here and must stay** — `dot_npmrc` sets
   `ignore-scripts=true`, `save-exact=true`, and `min-release-age=0` (npm has no
   cooldown); `dot_bunfig.toml` sets `ignoreScripts=true`, `exact=true`, and
@@ -256,11 +288,14 @@ sense — or the hook and the ignore set will disagree.
   block skips every provisioning script — `.chezmoiscripts/{linux,linux-kde,linux-gnome,auth,gpg}/*.sh`
   plus `.chezmoiscripts/build/*mxm4-haptic.sh` (no package installs, `/etc` config,
   GPG/GitHub/Tailscale auth, fonts, KDE/GNOME settings, pro-audio realtime provisioning, or
-  MX Master haptic build). The opencode plugin build (`build-opencode-plugins`) and
-  the dotagents skills install (`run_after_install-dotagents-skills`) are deliberately
-  KEPT — opencode is a first-class CLI here and it soft-skips when mise is absent,
-  while dotagents soft-skips on missing prerequisites and preflights `~/.claude/skills`.
-  Adjust skips in that one gated block, never by editing the scripts.
+  MX Master haptic build). Deliberately KEPT: the opencode plugin build
+  (`build-opencode-plugins`; opencode is a first-class CLI here and it soft-skips
+  when mise is absent), the dotagents skills install
+  (`run_after_install-dotagents-skills`; soft-skips on missing prerequisites and
+  preflights `~/.claude`/`~/.codex`), and the `tools/` + `services/` scripts (CLI
+  symlinks are wanted in a container; the cli-proxy-api enable soft-skips without
+  a user session bus). Adjust skips in that one gated block, never by editing the
+  scripts.
 - **No package installs in a container.** `.install-prerequisites.sh` expects `op` +
   `mise` from the base image; it never runs dnf/apt/brew inside a container and fails
   fast with guidance when either is missing.
