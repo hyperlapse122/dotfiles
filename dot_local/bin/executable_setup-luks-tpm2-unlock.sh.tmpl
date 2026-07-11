@@ -12,17 +12,16 @@
 #      it from the TPM at boot;
 #   3. rebuilds the initramfs so the TPM2 unlock path is present early at boot.
 #
-# CROSS-DISTRO via a chezmoi-included backend: the mechanism differs per distro,
-# so the distro-specific "backend" is factored into a separate fragment that
-# chezmoi inlines here at apply time with `{{ "{{ include }}" }}` — the same
-# "diverging fragment" pattern dot_config/git/config.tmpl uses to pull in
-# .config_<os>. On Fedora the backend is dracut + systemd-cryptenroll (the only
-# initramfs generator that wires systemd's `tpm2-device=auto` crypttab unlock);
-# on Ubuntu it is clevis + initramfs-tools (Ubuntu's cryptroot scripts ignore
-# `tpm2-device=auto`, Launchpad #1980018, so clevis is the native path) and the
-# Ubuntu backend additionally forces cryptsetup into the initramfs (CRYPTSETUP=y)
-# so the root device can actually be opened at boot. Each
-# backend defines four hooks the shared core below calls: backend_preflight,
+# CROSS-DISTRO via a chezmoi-included backend: the enrollment "backend" is factored
+# into a separate fragment that chezmoi inlines here at apply time with
+# `{{ "{{ include }}" }}` — the same "diverging fragment" pattern
+# dot_config/git/config.tmpl uses to pull in .config_<os>. Fedora and Ubuntu now
+# share ONE backend: dracut + systemd-cryptenroll. dracut builds a systemd-based
+# initramfs whose systemd-cryptsetup honours the `tpm2-device=auto` crypttab option,
+# so a single mechanism works on both (Ubuntu 26.04 switched its initramfs generator
+# to dracut; the old initramfs-tools stack ignored `tpm2-device=auto`, Launchpad
+# #1980018, which is why earlier revisions used clevis on Ubuntu — no longer needed).
+# The backend defines four hooks the shared core below calls: backend_preflight,
 # backend_enroll, backend_crypttab_opts and backend_finalize. On any other host
 # (macOS, a non-Fedora/Ubuntu Linux) a no-op backend exits cleanly up front.
 #
@@ -45,21 +44,20 @@
 #      world-visible via ps), the TTY requirement is dropped, and each backend
 #      feeds it to the enrollment tool instead of prompting. The value is cleared
 #      from the environment immediately so child processes never inherit it. The
-#      Ubuntu run_after wrapper (.chezmoiscripts/linux/run_after_ubuntu-luks-tpm2)
-#      uses exactly this, sourcing the passphrase from chezmoi's promptString so a
-#      host can enroll on `chezmoi apply`.
+#      run_after wrapper (.chezmoiscripts/linux/run_after_luks-tpm2) uses exactly
+#      this, sourcing the passphrase from chezmoi's promptString so a host can
+#      enroll on `chezmoi apply`.
 #
 # SAFETY: enrollment ADDS a TPM2-sealed keyslot; it does NOT remove the existing
 # passphrase keyslot. The current passphrase therefore stays valid as a fallback
-# if the TPM is later cleared or the firmware/Secure-Boot state changes. On the
-# Fedora backend `--recovery-key` additionally enrolls a printed recovery key.
-# Each backend skips a device that already carries its own TPM2 enrollment.
+# if the TPM is later cleared or the firmware/Secure-Boot state changes.
+# `--recovery-key` additionally enrolls a printed recovery key. The backend skips
+# a device that already carries a TPM2 enrollment.
 #
 # PCR CHOICE: this runs from the INSTALLED system, so PCR 7 measured here equals
 # PCR 7 at the next real boot (same Secure Boot policy) — binding is safe.
 # Override with --tpm2-pcrs (e.g. `7+0`, or `` for no binding) if you know what
-# you want. The value is passed through to the active backend (systemd `+` form;
-# clevis maps `+` to its comma-separated pcr_ids).
+# you want. The value is passed through to systemd-cryptenroll (`+`-separated form).
 #
 # Single-platform (Linux only) BY DESIGN — LUKS, TPM2 enrollment and initramfs
 # regeneration are Linux-only, so per the script-parity exception in AGENTS.md
@@ -167,13 +165,13 @@ usage() {
 Usage: setup-luks-tpm2-unlock.sh [OPTIONS]
 
 TPM2-enroll every LUKS device on this running system for automated unlock at
-boot. Prompts interactively for each device's existing passphrase. The
-distro-specific mechanism (Fedora: dracut + systemd-cryptenroll; Ubuntu: clevis
-+ initramfs-tools) is selected at chezmoi apply time.
+boot. Prompts interactively for each device's existing passphrase. Fedora and
+Ubuntu share one mechanism (dracut + systemd-cryptenroll), inlined at chezmoi
+apply time.
 
 Options:
   --dry-run            Print intended actions; change nothing.
-  --recovery-key       Also enroll a printed recovery key (Fedora backend only).
+  --recovery-key       Also enroll a printed recovery key.
   --tpm2-pcrs SPEC     PCR binding spec (default: 7). Examples: 7, 7+0, ''(none).
   -h, --help           Show this help and exit.
 
@@ -292,7 +290,7 @@ update_crypttab() {
 # log_*, err, require_cmd, update_crypttab, ...).
 # ---------------------------------------------------------------------------
 {{ if or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu") -}}
-{{ include (joinPath .chezmoi.sourceFile ".." (printf ".setup-luks-tpm2-unlock_%s.sh" .chezmoi.osRelease.id)) -}}
+{{ include (joinPath .chezmoi.sourceFile ".." ".setup-luks-tpm2-unlock_dracut.sh") -}}
 {{ else -}}
 # No supported backend on this host (not Fedora/Ubuntu). Define no-op hooks so
 # the shared flow exits cleanly at backend_preflight before any TTY/sudo prompt.
@@ -326,10 +324,10 @@ main() {
 
   # Non-interactive passphrase escape hatch (see header): read the existing
   # passphrase from the environment ONLY (never argv) and clear it from the
-  # environment IMMEDIATELY — this MUST run before backend_preflight, which on
-  # Fedora spawns `dracut --list-modules`, so that no child process ever inherits
-  # the passphrase. When present, we neither prompt nor need a TTY; the backends
-  # unlock with this passphrase instead.
+  # environment IMMEDIATELY — this MUST run before backend_preflight, which spawns
+  # `dracut --list-modules`, so that no child process ever inherits the passphrase.
+  # When present, we neither prompt nor need a TTY; the backend unlocks with this
+  # passphrase instead.
   if [[ -n "${SETUP_LUKS_TPM2_PASSPHRASE:-}" ]]; then
     PASSPHRASE="$SETUP_LUKS_TPM2_PASSPHRASE"
     PASSPHRASE_FROM_ENV=true
