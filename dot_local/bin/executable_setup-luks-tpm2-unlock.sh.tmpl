@@ -322,20 +322,22 @@ main() {
     shift
   done
 
-  # Backend gate + prerequisite check FIRST — before any TTY/sudo prompt or state
-  # change. It uses no sudo (only tool/module/hook availability) and exits cleanly
-  # (0) on an unsupported host or aborts (non-zero) if the backend is unusable.
-  backend_preflight
-
   # Non-interactive passphrase escape hatch (see header): read the existing
-  # passphrase from the environment ONLY (never argv), then clear it from the
-  # environment so no child process inherits it. When present, we neither prompt
-  # nor need a TTY — the backends unlock with this passphrase instead.
+  # passphrase from the environment ONLY (never argv) and clear it from the
+  # environment IMMEDIATELY — this MUST run before backend_preflight, which on
+  # Fedora spawns `dracut --list-modules`, so that no child process ever inherits
+  # the passphrase. When present, we neither prompt nor need a TTY; the backends
+  # unlock with this passphrase instead.
   if [[ -n "${SETUP_LUKS_TPM2_PASSPHRASE:-}" ]]; then
     PASSPHRASE="$SETUP_LUKS_TPM2_PASSPHRASE"
     PASSPHRASE_FROM_ENV=true
   fi
   unset SETUP_LUKS_TPM2_PASSPHRASE
+
+  # Backend gate + prerequisite check FIRST — before any TTY/sudo prompt or state
+  # change. It uses no sudo (only tool/module/hook availability) and exits cleanly
+  # (0) on an unsupported host or aborts (non-zero) if the backend is unusable.
+  backend_preflight
 
   # Interactive passphrase entry needs a terminal. Allow --dry-run without one,
   # and skip the requirement entirely when a passphrase was supplied via env.
