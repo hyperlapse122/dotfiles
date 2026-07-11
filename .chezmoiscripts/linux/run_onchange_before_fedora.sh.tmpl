@@ -6,7 +6,10 @@ set -euo pipefail
 # Consolidated Fedora provisioning, migrated from the legacy
 # scripts/linux/install-packages.sh: repositories, dnf/flatpak/dotnet packages,
 # DKMS module signing, system services + MOK enrollment, RTC/NTP time, the
-# NVIDIA container runtime, and user groups.
+# NVIDIA container runtime, and user groups. Serves both Fedora editions —
+# Workstation (GNOME) and the KDE Plasma Spin — with the per-desktop package
+# sets (kdePackages/gnomePackages) gated at runtime on which shell binary the
+# ISO shipped.
 #
 # chezmoi re-runs this run_onchange script on every rendered-content change (e.g.
 # a single packages.yaml edit), so every step is idempotent and guarded:
@@ -26,6 +29,22 @@ if systemd-detect-virt --quiet; then
   IS_VIRT=1
 else
   IS_VIRT=0
+fi
+
+# Desktop-environment probes: Fedora Workstation ships gnome-shell, the KDE
+# Spin ships plasmashell — both from the ISO, so the probe is stable from
+# first boot onward (neither binary comes from this package list). Gates the
+# per-desktop package sets below; a host with neither (server, container)
+# installs neither set.
+if command -v plasmashell >/dev/null 2>&1; then
+  HAS_KDE=1
+else
+  HAS_KDE=0
+fi
+if command -v gnome-shell >/dev/null 2>&1; then
+  HAS_GNOME=1
+else
+  HAS_GNOME=0
 fi
 
 # Use sudo only when not already root (matches install-linux-system-config.sh).
@@ -65,6 +84,20 @@ fi
 if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
   packages+=(
     {{ range .packages.linux.fedora.nvidiaPackages -}}
+    {{ . | quote }}
+    {{ end -}}
+  )
+fi
+if [[ "${HAS_KDE}" -eq 1 ]]; then
+  packages+=(
+    {{ range .packages.linux.fedora.kdePackages -}}
+    {{ . | quote }}
+    {{ end -}}
+  )
+fi
+if [[ "${HAS_GNOME}" -eq 1 ]]; then
+  packages+=(
+    {{ range .packages.linux.fedora.gnomePackages -}}
     {{ . | quote }}
     {{ end -}}
   )

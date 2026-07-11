@@ -170,9 +170,14 @@ for src in "$SRC_ROOT"/etc/**; do
       fi
       ;;
     etc/security/limits.d/95-ubuntustudio-audio.conf)
-      if [[ "$os_id" != ubuntu ]]; then
+      # Studio-only: every Ubuntu flavor reports ID=ubuntu, so the flavor is
+      # detected by its seed package (ubuntustudio-default-settings, preinstalled
+      # by the Studio ISO). A plain Ubuntu Desktop install must not grant @audio
+      # realtime privileges it has no pro-audio stack for. Same gate as
+      # studioPackages/@audio in run_onchange_before_ubuntu.sh.tmpl.
+      if [[ "$os_id" != ubuntu ]] || ! dpkg -s ubuntustudio-default-settings >/dev/null 2>&1; then
         install_this=false
-        skip_reason='ubuntu-only (ubuntu studio realtime audio limits)'
+        skip_reason='ubuntu-studio-only (realtime audio limits)'
       fi
       ;;
     etc/sddm.conf.d/90-breeze.conf)

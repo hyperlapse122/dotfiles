@@ -1,8 +1,10 @@
 # dotfiles
 
-Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Primary Linux targets are
-**Fedora Linux** (KDE/Wayland) and **Ubuntu Studio 26.04** (KDE Plasma 6); macOS and
-Windows are supported as secondary targets.
+Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Four Linux targets are
+supported across two distros and two desktops — **Ubuntu 26.04 LTS** (GNOME,
+primary), **Ubuntu Studio 26.04 LTS** (KDE Plasma 6), **Fedora 44 Workstation**
+(GNOME), and **Fedora 44 KDE Spin** (KDE Plasma 6); macOS and Windows are
+supported as secondary targets.
 
 ## Set up a new device
 
@@ -25,7 +27,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs these with `dnf`; **Ubuntu Studio** (Ubuntu) uses `apt`
+   - **Fedora** installs these with `dnf`; **Ubuntu / Ubuntu Studio** uses `apt`
      (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
      Homebrew first if needed).
 
@@ -36,13 +38,20 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 4. Renders every template and applies it to `$HOME`, then runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
    [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
-   Ubuntu Studio via apt), fonts, importing the GPG key, authenticating GitHub /
-   Tailscale, switching the login shell to zsh, and writing KDE / Solaar /
-   system config. It also provisions coding-agent skills via `dotagents` into
-   `~/.agents/skills/` from the pinned set in [`dot_agents/agents.toml`](dot_agents/agents.toml).
-   On Ubuntu Studio, provisioning is apt-based; its native look is kept, and
-   pro-audio essentials (PipeWire config, `@audio` realtime privileges, low-latency
-   boot tuning) are provisioned, and Tailscale egress-NAT via ufw is enabled.
+   Ubuntu via apt), fonts, importing the GPG key, authenticating GitHub /
+   Tailscale, switching the login shell to zsh, and writing desktop (KDE or
+   GNOME) / Solaar / system config. It also provisions coding-agent skills via
+   `dotagents` into `~/.agents/skills/` from the pinned set in
+   [`dot_agents/agents.toml`](dot_agents/agents.toml).
+   The desktop is detected at apply time (`plasmashell` vs `gnome-shell`):
+   KDE hosts get fcitx5 Korean input plus the Breeze de-branding scripts, while
+   GNOME hosts stay on GNOME defaults — the only GNOME change is Korean input
+   via the desktop's native ibus (`ibus-hangul` + a one-time
+   `('ibus', 'hangul')` input source). On Ubuntu, Tailscale egress-NAT via ufw
+   is enabled; on Ubuntu Studio specifically (detected by its
+   `ubuntustudio-default-settings` package), pro-audio essentials (PipeWire
+   config, `@audio` realtime privileges, low-latency boot tuning) are also
+   provisioned.
 
 GitLab CLI authentication is intentionally **not** provisioned: run `auth-glab`
 (deployed to `~/.local/bin`) once after the first apply to sign in to
@@ -51,10 +60,14 @@ headless sessions.
 
 ## Prerequisites
 
-- **Fedora Linux** or **Ubuntu Studio 26.04 (KDE)** for the full experience.
-  Detection is implicit — `osRelease.id` (`fedora` or `ubuntu`) + runtime guards;
-  no interactive prompt. On Ubuntu Studio, provisioning is apt-based, keeps its
-  native look, and provisions pro-audio essentials on every `chezmoi apply`.
+- **Ubuntu 26.04 LTS**, **Ubuntu Studio 26.04 LTS**, **Fedora 44 Workstation**,
+  or **Fedora 44 KDE Spin** for the full experience. Detection is implicit —
+  `osRelease.id` (`fedora` or `ubuntu`) plus runtime guards for the desktop
+  (`plasmashell` vs `gnome-shell`) and for the Ubuntu Studio flavor
+  (`ubuntustudio-default-settings`); no interactive prompt. GNOME hosts keep
+  GNOME defaults (input method: ibus); KDE hosts get fcitx5 and the Breeze
+  de-branding. Ubuntu Studio additionally gets pro-audio essentials on every
+  `chezmoi apply`.
 - macOS and Windows get the cross-platform dotfiles only.
 - **`sudo` access** — installing packages and writing `/etc` config needs root.
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
@@ -107,7 +120,7 @@ rate limit.
 `chezmoi apply` is container-aware. When it detects a container — Podman's
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
-`/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE
+`/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE/GNOME
 settings, and no pro-audio realtime/system provisioning. The OpenCode plugin build and `dotagents`
 skills install still run (and soft-skip if their toolchains are missing). This
 makes the repo usable as-is on CI runners and in dedicated containers that have

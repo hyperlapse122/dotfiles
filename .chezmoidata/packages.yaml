@@ -78,10 +78,6 @@ packages:
         - xxd  # hex dump / reverse utility
         - yp-tools  # NIS/YP client utilities
 
-        # Korean input method
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
-
         # Keyboard remapper
         - keyd  # key remapping daemon (from the keyd COPR)
 
@@ -165,6 +161,18 @@ packages:
         - wget  # HTTP/HTTPS file downloader
 
         - expect  # automate interactive CLI prompts (TCL expect)
+      # Installed only when KDE Plasma is the desktop (runtime `command -v
+      # plasmashell` gate in run_onchange_before_fedora.sh.tmpl) — Fedora KDE
+      # Spin. fcitx5 is the input method on the KDE targets; GNOME hosts use
+      # the native ibus stack instead (see gnomePackages).
+      kdePackages:
+        - fcitx5  # input method framework (KDE targets)
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
+      # Installed only when GNOME is the desktop (runtime `command -v
+      # gnome-shell` gate) — Fedora Workstation. GNOME stays on its default
+      # ibus input framework; only the Korean engine is added.
+      gnomePackages:
+        - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
       # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:
         - steam  # Steam game client (needs a real GPU; skipped in VMs)
@@ -265,10 +273,6 @@ packages:
         - yp-tools  # NIS/YP client utilities
         - locales  # locale-gen/update-locale tooling — compiles ko_KR.UTF-8 and writes /etc/default/locale on Ubuntu (Fedora glibc ships it prebuilt)
 
-        # Korean input method
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
-
         # Keyboard remapper
         - keyd  # key remapping daemon (native apt package since Ubuntu 25.04 "plucky"; noble/24.04 needs the keyd-team PPA instead)
 
@@ -311,17 +315,6 @@ packages:
         # Screen recording / streaming / video editing
         - kdenlive  # non-linear video editor
         - obs-studio  # screen recording / live streaming
-
-        # Ubuntu Studio pro-audio essentials (all in resolute/universe; universe is enabled by
-        # enable_first_apply_apt_features in run_onchange_before_ubuntu.sh.tmpl). Realtime privileges
-        # come from the @audio group (added below) + the repo-owned limits.d drop-in
-        # (system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf). NOTE: ubuntustudio-installer
-        # (the interactive first-run GUI) and studio-controls are intentionally NOT pinned - the former
-        # contradicts the deterministic-limits approach, the latter does not exist on resolute (jammy/noble only).
-        - ubuntustudio-audio-core          # PipeWire/JACK pro-audio core stack (Depends: ubuntustudio-pipewire-config)
-        - ubuntustudio-pipewire-config     # Ubuntu Studio PipeWire pro-audio configuration (pinned explicitly for clarity; also a dep of audio-core)
-        - ubuntustudio-performance-tweaks  # realtime/perf sysctl + tuning
-        - ubuntustudio-lowlatency-settings # grub.d drop-in preferring a lowlatency kernel as boot default if installed (ships only /etc/default/grub.d/*, installs no kernel; postinst runs update-grub)
 
         # Mesh networking
         - tailscale  # WireGuard-based mesh VPN client (from tailscale apt repo)
@@ -372,6 +365,37 @@ packages:
         # base); on Ubuntu install dracut + the tpm2 userspace the dracut tpm2-tss module needs.
         - dracut  # initramfs generator (Ubuntu 26.04 default); its systemd-cryptsetup wires tpm2-device=auto at early boot
         - tpm2-tools  # TPM2 userspace + libtss2 the dracut tpm2-tss module bundles (systemd-cryptenroll TPM2 unlock)
+
+      # Installed only when KDE Plasma is the desktop (runtime `command -v
+      # plasmashell` gate in run_onchange_before_ubuntu.sh.tmpl) — Ubuntu
+      # Studio. fcitx5 is the input method on the KDE targets; GNOME hosts use
+      # the native ibus stack instead (see gnomePackages).
+      kdePackages:
+        - fcitx5  # input method framework (KDE targets)
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
+      # Installed only when GNOME is the desktop (runtime `command -v
+      # gnome-shell` gate) — Ubuntu Desktop 26.04. GNOME stays on its default
+      # ibus input framework; only the Korean engine is added.
+      gnomePackages:
+        - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
+
+      # Ubuntu Studio pro-audio essentials, installed only when the host IS
+      # Ubuntu Studio — runtime `dpkg -s ubuntustudio-default-settings` marker
+      # (preinstalled by the Studio ISO; FORCE_UBUNTU_STUDIO=1 overrides for
+      # smoke tests) in run_onchange_before_ubuntu.sh.tmpl, so a plain Ubuntu
+      # Desktop install never grows the Studio audio stack. All in
+      # resolute/universe; universe is enabled by enable_first_apply_apt_features.
+      # Realtime privileges come from the @audio group (Studio-gated in
+      # configure_user_groups) + the repo-owned limits.d drop-in
+      # (system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf, same
+      # Studio gate in install-system-config). NOTE: ubuntustudio-installer
+      # (the interactive first-run GUI) and studio-controls are intentionally NOT pinned - the former
+      # contradicts the deterministic-limits approach, the latter does not exist on resolute (jammy/noble only).
+      studioPackages:
+        - ubuntustudio-audio-core          # PipeWire/JACK pro-audio core stack (Depends: ubuntustudio-pipewire-config)
+        - ubuntustudio-pipewire-config     # Ubuntu Studio PipeWire pro-audio configuration (pinned explicitly for clarity; also a dep of audio-core)
+        - ubuntustudio-performance-tweaks  # realtime/perf sysctl + tuning
+        - ubuntustudio-lowlatency-settings # grub.d drop-in preferring a lowlatency kernel as boot default if installed (ships only /etc/default/grub.d/*, installs no kernel; postinst runs update-grub)
 
       # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:

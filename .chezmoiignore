@@ -41,7 +41,7 @@
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
 # container, deploy the CLI dotfiles only and skip all host provisioning:
 # package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
-# KDE settings, pro-audio realtime provisioning, and the MX Master haptic build. The
+# KDE/GNOME settings, pro-audio realtime provisioning, and the MX Master haptic build. The
 # opencode plugin build is deliberately KEPT (opencode is a first-class CLI
 # here; that script soft-skips when its toolchain is absent).
 #
@@ -53,6 +53,7 @@
 {{- if and (or (stat "/run/.containerenv") (stat "/.dockerenv")) (not (stat "/run/.toolboxenv")) }}
 .chezmoiscripts/linux/*.sh
 .chezmoiscripts/linux-kde/*.sh
+.chezmoiscripts/linux-gnome/*.sh
 .chezmoiscripts/auth/*.sh
 .chezmoiscripts/gpg/*.sh
 .chezmoiscripts/build/*mxm4-haptic.sh
