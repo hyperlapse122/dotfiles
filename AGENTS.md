@@ -36,7 +36,7 @@ Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
 `AGENTS.md`) must be listed in the root `.chezmoiignore`, or chezmoi would
 deploy them into `~/`.
 
-The directories `crates/` and `packages/` are source-only trees excluded from deployment to `$HOME` via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/build/` run_onchange scripts:
+The directories `crates/` and `packages/` are source-only trees excluded from deployment to `$HOME` via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/60-build/` run_onchange scripts:
 - `crates/mxm4-haptic/` builds on apply into `~/.local/bin/`. Linux builds three binaries: `mxm4-hapticd`, `mxm4-haptic-notify`, and `mxm4-haptic`. macOS builds only the daemon and client.
 - `packages/` is a Bun workspace built on apply with **Vite+** (`vp`) into `~/.config/opencode/plugins/`. This builds `@h82/opencode-playwright-cli-session-injection` (symlinked to `playwright-cli-session-injection.js` on Linux and macOS), `@h82/opencode-scratch-guard` (symlinked to `scratch-guard.js` on Linux and macOS; enforces the temp-file policy via `$TMPDIR` injection + `/tmp`,`/var/tmp`,`/dev/shm` deny), and `@h82/opencode-mxm4-haptic` (symlinked to `mxm4-haptic.js` on Linux). `@h82/mxm4-haptic` is a library, not a plugin.
 
@@ -115,19 +115,37 @@ Instead, when you remove a customization, remove it cleanly at the source:
 (This rule is why the former `ubuntu-plymouth-teardown` and
 `agents/teardown-skills-sh` scripts were deleted rather than converted.)
 
-### Script tree — `.chezmoiscripts/` grouped by area
+### Script tree — `.chezmoiscripts/` grouped by area, ordered by numeric prefix
+
+chezmoi runs each phase's scripts (`run_before_` all before file updates,
+`run_after_` all after) in alphabetical order of their target path, which
+INCLUDES the `.chezmoiscripts/` subdirectory name. The directories therefore
+carry a systemd-drop-in-style numeric prefix (`NN-`, gaps of 10) so
+cross-group execution order is explicit intent, not an alphabetical accident —
+adding a new directory can no longer silently reshuffle load-bearing order
+(e.g. `30-linux` firewalld config before the `40-linux-ubuntu` ufw script).
+The two phases sort independently, so one directory number positions its
+`before_` scripts among the befores and its `after_` scripts among the afters
+(that's why the mutually-exclusive-per-host installers and per-desktop dirs can
+share effective slots). Order WITHIN a directory, where it matters, stays on
+filename prefixes (the `install-system-10/20/30` convention). **Renaming a
+`run_onchange_` script re-runs it once per host** — chezmoi keys its state on
+the script's target path (only `run_once_` state is content-hashed and
+rename-safe) — so don't rename/renumber directories casually; every script here
+is idempotent, but a renumber costs one heavy apply on every host.
 
 | Dir | Purpose |
 |---|---|
-| `agents/` | dotagents skills/MCP provisioning (see next section) |
-| `auth/` | GitHub token preflight, Docker Hub login, one-time `tailscale up` |
-| `build/` | build `crates/` + `packages/` on apply (see above) |
-| `gpg/` | one-time GPG key import from 1Password |
-| `linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
-| `linux-fedora/`, `linux-ubuntu/` | per-distro package installers (`run_onchange_before_fedora`/`_ubuntu` driven by `.chezmoidata/packages.yaml`), plus Ubuntu-only extras (`ubuntu-tailscale-ufw`) — dir name mirrors the `linux-kde/`/`linux-gnome/` convention |
-| `linux-kde/`, `linux-gnome/` | per-desktop config scripts (runtime `plasmashell`/`gnome-shell` guards; see OS gating & script parity) |
-| `services/` | enable the `cli-proxy-api` user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
-| `tools/` | re-point `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `codegraph`) at the latest release and prune older versions, plus `run_once_before_mise-trust.sh.tmpl` (trusts the repo-root `mise.toml`) |
+| `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also re-points `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `codegraph`) at the latest release and prunes older versions |
+| `10-auth/` | GitHub token preflight (before the installers), Docker Hub login, one-time `tailscale up` |
+| `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
+| `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
+| `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
+| `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (runtime `plasmashell`/`gnome-shell` guards; see OS gating & script parity); mutually exclusive at runtime, so they share a number |
+| `60-build/` | build `crates/` + `packages/` on apply (see above) |
+| `70-agents/` | dotagents skills/MCP provisioning, late so it lands on a fully provisioned host (see next section) |
+| `80-gpg/` | one-time GPG key import from 1Password (`run_once_`, position irrelevant) |
+| `90-services/` | enable the `cli-proxy-api` user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
 
 ### Shared script partials — `.chezmoitemplates/`
 
@@ -140,7 +158,7 @@ Recurring script boilerplate lives in `.chezmoitemplates/` and is inlined with
 | `sudo-skip-guard.sh.tmpl` | `SUDO` array + soft-skip (exit 0) when sudo would have to prompt but can't — for optional host tuning |
 | `sudo-require-guard.sh.tmpl` | `SUDO` array, exit 1 without root/sudo — for the package installers |
 | `headless-guard.sh.tmpl` | skip on headless/server installs (default target + display-manager probe; `INSTALL_SYSTEM_CONFIG_FORCE=1` overrides) |
-| `kde-guard.sh.tmpl` / `gnome-guard.sh.tmpl` | runtime `plasmashell`/`gnome-shell` desktop guards; every `linux-kde/`/`linux-gnome/` script starts with one |
+| `kde-guard.sh.tmpl` / `gnome-guard.sh.tmpl` | runtime `plasmashell`/`gnome-shell` desktop guards; every `50-linux-kde/`/`50-linux-gnome/` script starts with one |
 
 The guard partials take the script's display name as their argument, e.g.
 `{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-krunner.sh" -}}`. Scripts
@@ -151,7 +169,7 @@ with genuinely different guard semantics stay hand-rolled on purpose
 ### The `system/` tree — root-owned `/etc` config, manifest-driven
 
 `system/linux/etc/**` mirrors absolute `/etc` paths and is installed by the
-three-script `install-system` set in `.chezmoiscripts/linux/`, split by concern
+three-script `install-system` set in `.chezmoiscripts/30-linux/`, split by concern
 so each carries its own `run_onchange_` trigger (filename `10-`/`20-`/`30-`
 prefixes order execution):
 
@@ -178,7 +196,7 @@ system files in `system.yaml` + the tree. Full model: `system/README.md`.
 - `dotagents` (`getsentry/dotagents`) manages user-scoped agent skills, MCP servers, and a trust allowlist under `~/.agents/`.
 - `dot_agents/private_readonly_agents.toml.tmpl` (private 0600 + readonly 0444, templated) renders to `~/.agents/agents.toml` and is the single source of truth. It sets `agents = ["claude", "codex"]`, `minimum_release_age = 10080`, and a `[trust]` allowlist (`github_orgs = [getsentry, microsoft, shadcn]`, `git_domains = [git.jpi.app]`).
 - It declares three remote skills — `playwright-cli` (`microsoft/playwright-cli`), `improve` (`shadcn/improve`), `dotagents` (`getsentry/dotagents`) — plus the **seven** local skills under `dot_agents/skills/` as `path:skills/<name>` entries: `ci-cd-monitoring`, `git-workflow`, `gitlab-issues`, `glab`, `glab-stack`, `js-package-managers`, `pr-mr` (`glab` and `glab-stack` are currently empty placeholders — a `.gitkeep` only, no `SKILL.md` yet). The same file also registers the MCP servers (`codegraph`, `context7`, Exa `websearch`, and the Z.ai servers), with secrets injected via `onepasswordRead`.
-- Provisioning runs via `.chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl` (linux + darwin gate): it `mkdir -p`s the agent config dirs (`~/.claude`, `~/.codex`) first, then runs `dotagents --user install` through `mise exec npm:@sentry/dotagents@latest`, soft-skips on missing mise/git or install failure, and is kept in containers. It is `run_after_` (runs every apply) **on purpose** — every skip path exits 0, so a `run_onchange_` content gate would cache a soft-skipped/failed first apply (mise/git/network absent) as "done" and never provision until an unrelated agents.toml edit; running every apply keeps the install retryable. (This is the canonical example of the "reserve bare `run_after_` for scripts that must retry" exception in the script-prefix policy above — the retry requirement is met with `run_after_` + an internal stamp guard rather than a render-time fingerprint.) To avoid paying for the slow `dotagents install` on every apply, an **internal fingerprint + stamp guard** (`${XDG_STATE_HOME:-~/.local/state}/chezmoi/install-dotagents-skills`) short-circuits the heavy step: install runs only when the **rendered** `~/.agents/agents.toml` changed since the last SUCCESSFUL install (hashing the deployed file — not the `.tmpl` source — so a rotated 1Password MCP-header secret still re-provisions), when no success is recorded yet (fresh machine), or when the last success is older than the refresh window (`REFRESH_MINUTES`, ~1 day) so the unpinned remote skills advance past their `minimum_release_age` settle without an agents.toml edit. The stamp is written ONLY on a zero-exit install, so any soft-skip or failure retries next apply. The pre-`mkdir` is the **first-apply fix**: `dotagents install` symlinks `skills` into each agent's config dir (`ensureSkillsSymlink`) without creating the parent, and on a fresh machine `~/.codex` exists (codex external) but `~/.claude` does not until Claude Code is first run — so the symlink `ENOENT`s, the whole install exits non-zero, and the soft-skip silently swallows it, leaving skills/MCPs unconfigured until a later apply. Pre-creating the dirs makes the initial apply provision fully.
+- Provisioning runs via `.chezmoiscripts/70-agents/run_after_install-dotagents-skills.sh.tmpl` (linux + darwin gate): it `mkdir -p`s the agent config dirs (`~/.claude`, `~/.codex`) first, then runs `dotagents --user install` through `mise exec npm:@sentry/dotagents@latest`, soft-skips on missing mise/git or install failure, and is kept in containers. It is `run_after_` (runs every apply) **on purpose** — every skip path exits 0, so a `run_onchange_` content gate would cache a soft-skipped/failed first apply (mise/git/network absent) as "done" and never provision until an unrelated agents.toml edit; running every apply keeps the install retryable. (This is the canonical example of the "reserve bare `run_after_` for scripts that must retry" exception in the script-prefix policy above — the retry requirement is met with `run_after_` + an internal stamp guard rather than a render-time fingerprint.) To avoid paying for the slow `dotagents install` on every apply, an **internal fingerprint + stamp guard** (`${XDG_STATE_HOME:-~/.local/state}/chezmoi/install-dotagents-skills`) short-circuits the heavy step: install runs only when the **rendered** `~/.agents/agents.toml` changed since the last SUCCESSFUL install (hashing the deployed file — not the `.tmpl` source — so a rotated 1Password MCP-header secret still re-provisions), when no success is recorded yet (fresh machine), or when the last success is older than the refresh window (`REFRESH_MINUTES`, ~1 day) so the unpinned remote skills advance past their `minimum_release_age` settle without an agents.toml edit. The stamp is written ONLY on a zero-exit install, so any soft-skip or failure retries next apply. The pre-`mkdir` is the **first-apply fix**: `dotagents install` symlinks `skills` into each agent's config dir (`ensureSkillsSymlink`) without creating the parent, and on a fresh machine `~/.codex` exists (codex external) but `~/.claude` does not until Claude Code is first run — so the symlink `ENOENT`s, the whole install exits non-zero, and the soft-skip silently swallows it, leaving skills/MCPs unconfigured until a later apply. Pre-creating the dirs makes the initial apply provision fully.
 - `.github/workflows/update-agent-skills.yml` runs weekly (Tue 06:00 UTC) to bump `@`-pinned remote skill refs to the newest release/commit older than a 7-day cutoff and open a PR; it skips `path:` and `https:` sources. The remote skills are currently declared without an explicit `@ref`, so they settle purely via `minimum_release_age`.
 - The managed skill refs observe a 7-day settle (`minimum_release_age = 10080`), while the `dotagents` CLI itself still observes the standard 24h mise cooldown.
 
@@ -260,7 +278,7 @@ env PATH="$scratch/bin:$PATH" \
   chezmoi --config "$scratch/empty.toml" \
   --source "$PWD" \
   --destination "$scratch/target" \
-  execute-template < .chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl
+  execute-template < .chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl
 
 env PATH="$scratch/bin:$PATH" \
   chezmoi --config "$scratch/empty.toml" \
@@ -270,7 +288,7 @@ env PATH="$scratch/bin:$PATH" \
 ```
 
 Evidence from 2026-07-08 on this repo: the command sequence above rendered
-`.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` with
+`.chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl` with
 `execute-template exit=0` and ran full `chezmoi diff --no-pager` with
 `diff exit=0` without real `op` authentication. A warning that the config file
 template changed is acceptable in this mode because the empty scratch config is
@@ -326,7 +344,7 @@ CI environments).
   `/usr/bin/python3` (see the solaar config script).
 - **Standalone CLIs outside mise** come from `.chezmoiexternals/` (pinned to the
   latest GitHub release / vendor manifest at apply time). For the version-dir
-  installs (`claude`, `codex`, `codegraph`) the `.chezmoiscripts/tools/`
+  installs (`claude`, `codex`, `codegraph`) the `.chezmoiscripts/00-tools/`
   `run_onchange_after_*` scripts re-point the `~/.local/bin` symlink at the
   freshly fetched version and prune older ones — the latest release id is
   rendered into each script body, so a new upstream release re-triggers the
@@ -338,13 +356,13 @@ CI environments).
   `dot_config/cli-proxy-api/readonly_config.yaml.tmpl`, unit at
   `dot_config/systemd/user/cli-proxy-api.service` (macOS:
   `Library/LaunchAgents/dev.h82.cli-proxy-api.plist`), enabled by
-  `.chezmoiscripts/services/run_onchange_after_cli-proxy-service.sh.tmpl`.
+  `.chezmoiscripts/90-services/run_onchange_after_cli-proxy-service.sh.tmpl`.
   Provider logins are on-demand via the `~/.local/bin/cli-proxy-api-*-login`
   helpers (agy, claude, codex, kimi), not provisioned.
 - **Repo-root `mise.toml`** is the dev toolchain for working on this repo itself
   (bun + rust, with `postinstall` hooks running `vp install`, `cargo fetch`, and
   `dotagents install`); it is chezmoiignored and trusted once via
-  `.chezmoiscripts/tools/run_once_before_mise-trust.sh.tmpl`. The repo-root
+  `.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl`. The repo-root
   `agents.toml` is likewise the repo-scoped dotagents config for agents working
   in this checkout — distinct from the deployed user-scoped
   `dot_agents/private_readonly_agents.toml.tmpl`.
@@ -369,21 +387,21 @@ CI environments).
   git config splits via `config.tmpl` including `.config_<os>`.
 - **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var. Ubuntu Studio reports `ID=ubuntu` like any Ubuntu flavor; the flavor marker is the `ubuntustudio-default-settings` package (preinstalled by the Studio ISO), probed at runtime as `IS_UBUNTU_STUDIO` in the apt installer (`FORCE_UBUNTU_STUDIO=1` overrides, mirroring `FORCE_NVIDIA`) and re-checked by `install-system-10-files` (the `ubuntu-studio` gate in `.chezmoidata/system.yaml`) for the realtime limits drop-in.
 - **Desktop detection** (KDE Plasma vs GNOME) has two mechanisms, both keyed on the shell binary the ISO shipped (`plasmashell` / `gnome-shell`, stable from first boot):
-  - **Scripts** gate at RUNTIME: `command -v plasmashell` / `command -v gnome-shell` bash guards (`HAS_KDE`/`HAS_GNOME` in the installers, per-script guards in `linux-kde`/`linux-gnome`).
+  - **Scripts** gate at RUNTIME: `command -v plasmashell` / `command -v gnome-shell` bash guards (`HAS_KDE`/`HAS_GNOME` in the installers, per-script guards in `50-linux-kde`/`50-linux-gnome`).
   - **File content** (which can't branch at runtime) gates at RENDER time via `lookPath`: `dot_config/solaar/rules.yaml.tmpl` picks its gesture actions this way, and `dot_config/.chezmoiignore` drops the fcitx5 config + `environment.d/50-input-method.conf` on a GNOME-only host (`gnome-shell` on PATH without `plasmashell`). With NEITHER desktop on PATH (headless, container, CI) the KDE variant renders and the fcitx files keep deploying — deterministic CI artifacts, inert without a desktop.
-- **KDE scripts** (`.chezmoiscripts/linux-kde/*.tmpl`) are distro-agnostic: they gate only on the OS with `{{ if eq .chezmoi.os "linux" -}}` (no `.chezmoi.osRelease.id` fedora/ubuntu check) and defer entirely to runtime guards — each script skips unless `command -v plasmashell` and its required KDE config tool (`kwriteconfig6`/`kreadconfig6`, etc.) are present. This runs them on any KDE Plasma host, not just Fedora/Ubuntu Studio.
-- **GNOME scripts** (`.chezmoiscripts/linux-gnome/*.tmpl`, same `{{ if eq .chezmoi.os "linux" -}}` gate + runtime `command -v gnome-shell` guard). GNOME deliberately stays on its DEFAULTS — no theming, wallpaper, panel, or shortcut scripts (the KDE config surface has no GNOME mirror here; settings will be added incrementally later), with **fonts the one deliberate, user-requested exception** (font parity with KDE). Two scripts:
+- **KDE scripts** (`.chezmoiscripts/50-linux-kde/*.tmpl`) are distro-agnostic: they gate only on the OS with `{{ if eq .chezmoi.os "linux" -}}` (no `.chezmoi.osRelease.id` fedora/ubuntu check) and defer entirely to runtime guards — each script skips unless `command -v plasmashell` and its required KDE config tool (`kwriteconfig6`/`kreadconfig6`, etc.) are present. This runs them on any KDE Plasma host, not just Fedora/Ubuntu Studio.
+- **GNOME scripts** (`.chezmoiscripts/50-linux-gnome/*.tmpl`, same `{{ if eq .chezmoi.os "linux" -}}` gate + runtime `command -v gnome-shell` guard). GNOME deliberately stays on its DEFAULTS — no theming, wallpaper, panel, or shortcut scripts (the KDE config surface has no GNOME mirror here; settings will be added incrementally later), with **fonts the one deliberate, user-requested exception** (font parity with KDE). Two scripts:
   - `run_onchange_after_config-gnome-inputmethod.sh.tmpl`: Korean input on GNOME uses the desktop's native **ibus** stack (NOT fcitx5, which is KDE-target-only), so it adds `('ibus', 'hangul')` to `org.gnome.desktop.input-sources sources` — additive (preserves existing sources), live-session-guarded, **exactly once** per user (wallpaper-style stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a user's later source edits are never fought. `run_onchange` with no external dependency to fingerprint (its trigger is its own content); on a headless/first-boot apply it exits 0 without stamping, but note onchange records that skip as done — the source lands on the next content change or `chezmoi apply --force`, not merely because a live session later appears.
   - `run_onchange_after_config-gnome-fonts.sh.tmpl`: mirrors the KDE `config-kde-fonts` choice onto GNOME's `gsettings` font keys — sans (`interface font-name` / `document-font-name` / `wm.preferences titlebar-font`) → **Pretendard 10**, mono (`interface monospace-font-name`) → **JetBrainsMono Nerd Font 10** (KDE's `smallestReadableFont`/`menuFont`/`toolBarFont` have no GNOME analog and fold into `font-name`). Refreshes the fontconfig cache first (like the KDE script) and warns-not-fails on a not-yet-installed family. `run_onchange` fingerprinted on `.chezmoidata/fonts.yaml` (plus the SANS/MONO constants in the script text), so a font bump or choice change re-triggers it — parity with the KDE `run_onchange`. It also keeps a **font-signature stamp** (the SANS/MONO families+sizes): an unchanged signature means "already ensured" and the user's current fonts are left alone. A headless/TTY apply exits 0 without stamping; note onchange records that skip as done, so the fonts land on the next fingerprint change or `chezmoi apply --force` rather than merely because a live session later appears.
 - **Input method per desktop**: KDE targets run fcitx5 (`kdePackages`, `dot_config/fcitx5/`, `environment.d/50-input-method.conf` XMODIFIERS, KWin virtual-keyboard script); GNOME targets run ibus (`gnomePackages` installs `ibus-hangul`, GNOME manages the IM environment itself — no fcitx files deploy there, per the `.chezmoiignore` gate above).
-- **Shared system-config** (the `.chezmoiscripts/linux/` `install-system-10-files`/`20-host`/`30-network` set — see The `system/` tree section) includes Ubuntu runtime branches: `20-host` masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units), and `10-files` drives `locale-gen` on Ubuntu.
-- **Ubuntu-specific scripts** (`.chezmoiscripts/linux-ubuntu/`, gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
+- **Shared system-config** (the `.chezmoiscripts/30-linux/` `install-system-10-files`/`20-host`/`30-network` set — see The `system/` tree section) includes Ubuntu runtime branches: `20-host` masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units), and `10-files` drives `locale-gen` on Ubuntu.
+- **Ubuntu-specific scripts** (`.chezmoiscripts/40-linux-ubuntu/`, gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
   - `run_onchange_before_ubuntu.sh.tmpl` — apt provisioner (mirrors the Fedora installer with apt semantics; idempotent, all service/group steps guarded)
   - `run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent. `run_onchange` with no external dependency (the NAT rule derives from runtime `primary_if` detection), so the trigger is its own content; a run skipped for missing sudo is recorded as done and completes on the next content change or `chezmoi apply --force`
   - `run_onchange_after_luks-tpm2.sh.tmpl` (**Fedora + Ubuntu**, `(or fedora ubuntu)` gate) — prompts (chezmoi `promptStringOnce` in `.chezmoi.toml.tmpl`, blank = skip) for the existing LUKS passphrase and drives the deployed `~/.local/bin/setup-luks-tpm2-unlock.sh` **non-interactively** (passphrase handed over via the `SETUP_LUKS_TPM2_PASSPHRASE` env var, base64-wrapped in the transient run-script for shell-safety only) to enroll every LUKS device for TPM2 auto-unlock. **Both distros share ONE backend: dracut + systemd-cryptenroll** (`dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh`, inlined by the tool's `{{ include }}`). dracut builds a systemd-based initramfs whose systemd-cryptsetup honours the crypttab `tpm2-device=auto` option, so `systemd-cryptenroll` seals a TPM2 keyslot and the crypttab carries `tpm2-device=auto,x-initrd.attach` (root) / `tpm2-device=auto,nofail` (non-root); `backend_finalize` writes the `tpm2-tss` dracut module drop-in (`/etc/dracut.conf.d/tpm2-tss.conf`) and rebuilds with `dracut -f --regenerate-all`. Ubuntu 26.04 switched its initramfs generator from initramfs-tools to dracut, so the old clevis/initramfs-tools workaround (needed because initramfs-tools ignored `tpm2-device=auto`, Launchpad #1980018) is gone — Ubuntu now uses the Fedora path verbatim (only `dracut` + `tpm2-tools` are pinned in `packages.yaml`; Fedora needs no extra packages). `run_onchange` fingerprinted on the enrollment tool source (`dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl` + its inlined `.setup-luks-tpm2-unlock_dracut.sh` backend), so a change to the enrollment logic re-triggers it; the prompted passphrase is never part of the fingerprint. Because entering a passphrase renders it (base64) into the script body, the first apply that supplies one also changes the hash and fires enrollment. Note the onchange trade-off vs the former `run_after`: a run skipped for a blank passphrase / absent TPM / missing sudo is recorded as done and is NOT retried on the next apply unless the fingerprint changes — re-enroll with `chezmoi apply --force` (entering the passphrase) or by invoking the tool directly; every precondition still soft-skips `exit 0`, and enrollment stays idempotent once every device carries a systemd-tpm2 token. A blank passphrase — always returned by non-interactive/CI `promptString` — renders no passphrase and takes the skip path (the template guards `.luksPassphrase` with `hasKey` so the render-dotfiles empty-config internals render doesn't error). The tool's default interactive path is unchanged; the env-passphrase mode is opt-in (see its header). The `render-dotfiles` Linux `apply` job answers the `promptStringOnce` non-interactively (`printf '\n' | chezmoi apply --init --no-tty`, since newer chezmoi errors on `/dev/tty` in a container instead of defaulting) and asserts the rendered tool carries the shared dracut backend.
   - Ubuntu Studio pro-audio — **Studio-only, all three pieces gated on the `ubuntustudio-default-settings` marker** so a plain Ubuntu Desktop install never grows them: `packages.yaml` `studioPackages` (4 pkgs: `ubuntustudio-audio-core`, `ubuntustudio-pipewire-config`, `ubuntustudio-performance-tweaks`, `ubuntustudio-lowlatency-settings`), the `audio` group added in `configure_user_groups()`, and the `system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf` realtime limits drop-in (the `ubuntu-studio` gate in `.chezmoidata/system.yaml` re-checks the marker).
 - **De-branded** (the KDE targets — Fedora KDE Spin and Ubuntu Studio; GRUB and Plymouth are left native by choice; the GNOME targets keep their stock look entirely, per the GNOME-defaults policy above): each distro's shipped desktop branding is reverted to stock across three surfaces — the desktop to Plasma/Breeze — **config-override only, no branding package is purged (and none is added)**:
-  - **Global Theme**: one cross-distro script, `config-kde-autotheme` (linux gate + runtime plasmashell guard, like every `linux-kde` script), puts Plasma's default Breeze Global Theme on automatic day/night switching: `AutomaticLookAndFeel=true` + `DefaultLightLookAndFeel=org.kde.breeze.desktop` / `DefaultDarkLookAndFeel=org.kde.breezedark.desktop` + an initial `LookAndFeelPackage=org.kde.breezedark.desktop` pin (automatic Breeze Dark ⇄ Light, timed off the Night Light schedule). On Plasma < 6.5 the auto-switch keys are silently ignored, so it degrades to the `LookAndFeelPackage` Breeze Dark pin. The Plasma session's icon theme, cursor, and splash follow the active Breeze variant on next login. (The former `config-kde-darkmode` Breeze-Dark-pin script was removed in favour of this.)
+  - **Global Theme**: one cross-distro script, `config-kde-autotheme` (linux gate + runtime plasmashell guard, like every `50-linux-kde` script), puts Plasma's default Breeze Global Theme on automatic day/night switching: `AutomaticLookAndFeel=true` + `DefaultLightLookAndFeel=org.kde.breeze.desktop` / `DefaultDarkLookAndFeel=org.kde.breezedark.desktop` + an initial `LookAndFeelPackage=org.kde.breezedark.desktop` pin (automatic Breeze Dark ⇄ Light, timed off the Night Light schedule). On Plasma < 6.5 the auto-switch keys are silently ignored, so it degrades to the `LookAndFeelPackage` Breeze Dark pin. The Plasma session's icon theme, cursor, and splash follow the active Breeze variant on next login. (The former `config-kde-darkmode` Breeze-Dark-pin script was removed in favour of this.)
   - **Boot splash (Plymouth) → left native**: Plymouth is no longer customized on either distro. The former Fedora `plymouthd.conf` (bgrt + `DeviceScale=2`) and the Ubuntu bgrt `update-alternatives` swap were removed — a `bgrt`/spinner splash could swallow the early-boot LUKS passphrase prompt on Ubuntu (Launchpad #1864586). Fedora's removed `/etc/plymouth/plymouthd.conf` is cleaned up via a `distro: fedora`-scoped `removed:` entry in `.chezmoidata/system.yaml` (never touching a native/user file at that path on Ubuntu). Per the no-teardown-scripts rule above, Ubuntu's `default.plymouth` alternative is **not** reverted by a shipped script: a host still carrying the old manual `bgrt` pick reverts to the distro default by hand — `sudo update-alternatives --auto default.plymouth && sudo update-initramfs -u -k all`. Each distro keeps whatever Plymouth theme it ships.
   - **Login greeter (SDDM)**: `system/linux/etc/sddm.conf.d/90-breeze.conf` (`[Theme] Current=breeze`) deploys to both distros via the system tree; the `90-` prefix outranks vendor drop-ins. The `sddm-breeze` gate in `.chezmoidata/system.yaml` skips deploying it when `/usr/share/sddm/themes/breeze/theme.conf` is absent (forcing a missing theme breaks the login screen). This path was previously an orphan in the removed-path list; that entry is dropped now that the file is shipped again.
   - **Wallpaper**: `run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl` (linux gate + live-KDE-session guard) applies Plasma's default "Next" wallpaper via `plasma-apply-wallpaperimage`, **exactly once** (per-user stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a wallpaper the user later picks is never reverted. `run_onchange` with no external dependency (its trigger is its own content); on a headless/first-boot apply it exits 0, and onchange records that skip as done, so the wallpaper is applied on the next content change or `chezmoi apply --force` rather than merely because a live Plasma session later appears.
@@ -411,14 +429,14 @@ must provision fully like the host, not skip. Detection therefore skips only a
 sense — or the hook and the ignore set will disagree.
 
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
-  block skips every provisioning script — `.chezmoiscripts/{linux,linux-fedora,linux-ubuntu,linux-kde,linux-gnome,auth,gpg}/*.sh`
-  plus `.chezmoiscripts/build/*mxm4-haptic.sh` (no package installs, `/etc` config,
+  block skips every provisioning script — `.chezmoiscripts/{30-linux,20-linux-fedora,40-linux-ubuntu,50-linux-kde,50-linux-gnome,10-auth,80-gpg}/*.sh`
+  plus `.chezmoiscripts/60-build/*mxm4-haptic.sh` (no package installs, `/etc` config,
   GPG/GitHub/Tailscale auth, fonts, KDE/GNOME settings, pro-audio realtime provisioning, or
   MX Master haptic build). Deliberately KEPT: the opencode plugin build
   (`build-opencode-plugins`; opencode is a first-class CLI here and it soft-skips
   when mise is absent), the dotagents skills install
   (`run_after_install-dotagents-skills`; soft-skips on missing prerequisites and
-  preflights `~/.claude`/`~/.codex`), and the `tools/` + `services/` scripts (CLI
+  preflights `~/.claude`/`~/.codex`), and the `00-tools/` + `90-services/` scripts (CLI
   symlinks are wanted in a container; the cli-proxy-api enable soft-skips without
   a user session bus). Adjust skips in that one gated block, never by editing the
   scripts.

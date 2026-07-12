@@ -1,6 +1,6 @@
 {{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_after_setup-podman-cluster.sh.tmpl
+# .chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl
 #
 # Finishes wiring up the rootless-Podman container stack and the local minikube
 # Kubernetes dev cluster on the Fedora / Ubuntu Studio desktop targets. Every piece is
@@ -45,7 +45,7 @@
 # completes them. Every step is idempotent, so re-running is a no-op once done.
 #
 # Desktop-target gated (fedora|ubuntu) and container-skipped: the root
-# .chezmoiignore drops .chezmoiscripts/linux/*.sh inside a real (non-toolbox)
+# .chezmoiignore drops .chezmoiscripts/30-linux/*.sh inside a real (non-toolbox)
 # container, where nesting a cluster is neither wanted nor reliable.
 
 set -euo pipefail

@@ -1,6 +1,6 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux-ubuntu/run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl
+# .chezmoiscripts/40-linux-ubuntu/run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl
 #
 # onchange, no external dependency: this script derives its NAT rule from runtime
 # state (the primary interface) and has no dependency file to fingerprint, so its

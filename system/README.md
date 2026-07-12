@@ -7,7 +7,7 @@ are **not** chezmoi-managed targets. The whole `system/` tree is listed in the
 repo-root [`.chezmoiignore`](../.chezmoiignore) so it is never linked into
 `$HOME`. Instead it is installed to `/etc/` by a `run_onchange_after_` script:
 
-[`.chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl`](../.chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl)
+[`.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl`](../.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl)
 
 which runs:
 
@@ -83,7 +83,7 @@ system/linux/etc/locale.conf
 ## The install-system script set (10-files → 20-host → 30-network)
 
 File installation is part 1 of a three-script set under
-`.chezmoiscripts/linux/`, split by concern so each carries its own
+`.chezmoiscripts/30-linux/`, split by concern so each carries its own
 `run_onchange_` trigger and re-run scope stays tight — editing a udev rule
 re-runs the file installer only, without restarting network services the way
 the old monolithic `install-system-config` script did:

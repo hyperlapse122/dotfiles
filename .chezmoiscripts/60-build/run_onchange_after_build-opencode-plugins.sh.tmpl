@@ -1,7 +1,7 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl
+# .chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl
 #
 # Builds the packages/ Bun workspace in place with Vite+ (`vp`) and symlinks the
 # built OpenCode plugins into ~/.config/opencode/plugins/. This replaces the

@@ -1,6 +1,6 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/agents/run_after_install-dotagents-skills.sh.tmpl
+# .chezmoiscripts/70-agents/run_after_install-dotagents-skills.sh.tmpl
 #
 # run_after_: executes on every `chezmoi apply`. That prefix is deliberate,
 # because every skip path below exits 0 — a run_onchange_ content gate would

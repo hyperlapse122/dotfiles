@@ -1,7 +1,7 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/build/run_onchange_after_build-mxm4-haptic.sh.tmpl
+# .chezmoiscripts/60-build/run_onchange_after_build-mxm4-haptic.sh.tmpl
 #
 # Builds the mxm4-haptic Rust crate (crates/mxm4-haptic/) and `cargo install`s
 # its binaries into ~/.local/bin, then wires up autostart for the daemon:
