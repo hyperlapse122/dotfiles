@@ -1,0 +1,75 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/70-agents/run_onchange_after_install-dotagents-skills.sh.tmpl
+#
+# Provisions user-scoped agent skills + MCP servers with `dotagents --user
+# install`, driven by the deployed ~/.agents/agents.toml (source:
+# dot_agents/private_readonly_agents.toml.tmpl).
+#
+# onchange trigger: the fingerprint block below embeds a sha256 of the RAW
+# agents.toml source template, so the install re-runs exactly when the config
+# actually changes — a skill/MCP added or removed, or a remote skill's `@` pin
+# bumped by the update-agent-skills workflow. Hashing the raw template (not the
+# rendered target) keeps onepasswordRead secrets out of the fingerprint, per
+# the script-prefix policy. This replaces the former `run_after_` + internal
+# stamp-guard design, whose every-apply execution existed to (a) refresh the
+# then-UNPINNED remote skills past their `minimum_release_age` settle and
+# (b) retry soft-skipped first applies; (a) is obsolete now that every remote
+# skill is `@`-pinned (the weekly workflow bumps pins, which edits the
+# fingerprinted source and re-triggers this script), and (b) is accepted as the
+# standard onchange trade-off:
+#   - chezmoi records a clean exit-0 run as done, so a soft-skipped or failed
+#     install (mise/git absent, network down) is NOT retried on the next apply
+#     until the fingerprint changes — after fixing the cause, re-run by hand
+#     (the mise exec command below) or with `chezmoi apply --force`;
+#   - a rotated 1Password MCP-header secret no longer re-triggers the install
+#     by itself (the raw source is byte-identical) — re-provision the same way.
+#
+# Soft-skip: this script must never fail apply; missing tools and install
+# errors all exit 0 after a diagnostic message. Container-kept: intentionally
+# not excluded from containers; it soft-skips when mise/git are absent instead
+# of bootstrapping anything.
+
+set -euo pipefail
+
+# agents.toml source fingerprint — chezmoi hashes this rendered script to
+# decide whether to re-run, so embedding the raw template's sha256 re-triggers
+# the install on any config edit (including workflow pin bumps). Comment-only;
+# never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl")) }}
+
+skip() { exit 0; }
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "install-dotagents-skills: skipped (mise not installed)" >&2
+  skip
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "install-dotagents-skills: skipped (git not installed)" >&2
+  skip
+fi
+
+# First-apply fix: `dotagents --user install` iterates agents.toml's
+# `agents = ["claude", "codex"]` and drops a `skills` symlink into each agent's
+# config dir (~/.claude/skills, ~/.codex/skills) via ensureSkillsSymlink, which
+# does NOT create the parent. On a fresh machine ~/.codex is provided by the
+# codex external, but nothing creates ~/.claude until Claude Code is first run —
+# so the symlink fails with ENOENT and the whole install exits non-zero, which
+# the soft-skip below then swallows, leaving skills/MCPs unconfigured on the
+# very first apply. Pre-create the agent config dirs so the initial apply
+# provisions fully; mkdir -p is idempotent and harmless if the dirs already
+# exist.
+mkdir -p "$HOME/.claude" "$HOME/.codex" || true
+
+set +e
+install_output="$(mise --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
+install_rc=$?
+set -e
+if [[ $install_rc -ne 0 ]]; then
+  reason="${install_output//$'\n'/; }"
+  echo "install-dotagents-skills: skipped (install failed: ${reason})" >&2
+  skip
+fi
+{{ end -}}
