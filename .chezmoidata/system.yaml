@@ -18,7 +18,8 @@ system:
     #          skipped when the probe fails. Known gates: thinkpad (dmidecode
     #          reports a ThinkPad), vm (systemd-detect-virt --vm),
     #          ubuntu-studio (ID=ubuntu + ubuntustudio-default-settings
-    #          marker package), sddm-breeze (breeze SDDM theme installed).
+    #          marker package), sddm-breeze (breeze SDDM theme installed),
+    #          gdm (GDM greeter installed — its compiled defaults db exists).
     #          The installer aborts on an unknown gate name — typos fail loud.
     #   check: named validator run on the SOURCE file on every host, even
     #          when the gate skips the install (so contributors catch broken
@@ -50,6 +51,20 @@ system:
       # login screen, so skip when the breeze SDDM theme is absent.
       - path: etc/sddm.conf.d/90-breeze.conf
         gate: sddm-breeze
+      # GNOME targets: force password-only auth at the GDM greeter so
+      # pam_gnome_keyring always unlocks the login keyring (a fingerprint
+      # login proves identity but hands PAM no secret, leaving the keyring
+      # locked — gnome-keyring#1). The in-session lock screen reads the same
+      # key from the USER's dconf, so fingerprint unlock there is unaffected.
+      # The profile override in /etc/dconf/profile/ outranks the vendor
+      # profile in /usr/share/dconf/profile/ and adds system-db:gdm (upstream
+      # ships only user-db + file-db); the greeter always launches with
+      # DCONF_PROFILE=gdm (fixed upstream constant, both distros). Skipped on
+      # KDE hosts (no GDM).
+      - path: etc/dconf/profile/gdm
+        gate: gdm
+      - path: "etc/dconf/db/gdm.d/*"
+        gate: gdm
 
     # Absolute /etc paths that the installer previously shipped but that no
     # longer exist in system/linux/etc/. Listed explicitly so every machine —

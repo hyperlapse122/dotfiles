@@ -6,9 +6,9 @@
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
 # `sudo install -D -m <mode>`, removes orphaned /etc paths this repo used to
 # ship, and reloads exactly what it installed (systemd units, udev rules,
-# sysctl drop-ins, Ubuntu locale generation). chezmoi manages $HOME and
-# cannot own root-owned /etc targets, so this ships as a script rather than
-# managed files.
+# sysctl drop-ins, Ubuntu locale generation, the gdm dconf db). chezmoi
+# manages $HOME and cannot own root-owned /etc targets, so this ships as a
+# script rather than managed files.
 #
 # MANIFEST-DRIVEN: per-path install modes, host gates, source checks, and the
 # removed-path list all live in .chezmoidata/system.yaml (single source of
@@ -75,7 +75,7 @@ override_checks+=({{ get . "check" | default "" | quote }})
 # Fail loud on a manifest typo before touching anything.
 for gate in "${override_gates[@]}"; do
   case "$gate" in
-    ''|thinkpad|vm|ubuntu-studio|sddm-breeze) ;;
+    ''|thinkpad|vm|ubuntu-studio|sddm-breeze|gdm) ;;
     *) printf 'install-system-files: unknown gate "%s" in .chezmoidata/system.yaml; aborting.\n' "$gate" >&2; exit 1 ;;
   esac
 done
@@ -94,6 +94,7 @@ gate_ok() {
     vm) systemd-detect-virt --vm --quiet 2>/dev/null ;;
     ubuntu-studio) [[ "$os_id" == ubuntu ]] && dpkg -s ubuntustudio-default-settings >/dev/null 2>&1 ;;
     sddm-breeze) [[ -f /usr/share/sddm/themes/breeze/theme.conf ]] ;;
+    gdm) [[ -r /usr/share/gdm/greeter-dconf-defaults ]] ;;
   esac
 }
 gate_reason() {
@@ -102,6 +103,7 @@ gate_reason() {
     vm) printf 'not a VM' ;;
     ubuntu-studio) printf 'ubuntu-studio-only (realtime audio limits)' ;;
     sddm-breeze) printf 'breeze sddm theme absent' ;;
+    gdm) printf 'gdm not installed' ;;
     *) printf 'gate %s failed' "$1" ;;
   esac
 }
@@ -243,5 +245,16 @@ fi
 if [[ -d "$SRC_ROOT/etc/sysctl.d" ]]; then
   printf '  -> sysctl --system\n'
   "${SUDO[@]}" sysctl --system >/dev/null
+fi
+
+# Compile /etc/dconf/db/gdm.d into the binary db the GDM greeter reads
+# (system-db:gdm in the /etc/dconf/profile/gdm override installed above).
+# `dconf update` only rewrites databases whose source dir changed, so this is
+# a cheap no-op on re-runs. Re-check the gdm gate: on KDE hosts the gdm.d
+# files were skipped above, so there is nothing to compile.
+if [[ -d "$SRC_ROOT/etc/dconf/db/gdm.d" ]] && gate_ok gdm \
+  && command -v dconf >/dev/null 2>&1; then
+  printf '  -> dconf update\n'
+  "${SUDO[@]}" dconf update
 fi
 {{ end -}}

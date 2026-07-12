@@ -40,7 +40,7 @@ script**:
   file elsewhere).
 
 Gates are *named runtime probes* implemented by the engine (`thinkpad`, `vm`,
-`ubuntu-studio`, `sddm-breeze`); an unknown gate name in the manifest aborts
+`ubuntu-studio`, `sddm-breeze`, `gdm`); an unknown gate name in the manifest aborts
 the run, so typos fail loud. `check: visudo` validates a sudoers drop-in's
 syntax on **every** host, even where the gate skips the install, so a broken
 drop-in is caught on machines that never deploy it.
@@ -69,6 +69,7 @@ system/linux/etc/locale.conf
 | Path | Used for |
 |---|---|
 | `etc/bluetooth/main.conf` | BlueZ daemon config: `Experimental`/`KernelExperimental = false`, `ControllerMode = dual` (Classic A2DP for stereo on Samsung Galaxy Buds, which only do mono over LE Audio on current BlueZ) |
+| `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
 | `etc/keyd/default.conf` | keyd keyboard remapping (CapsLock → Hangeul, meta layer) |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
@@ -90,7 +91,7 @@ the old monolithic `install-system-config` script did:
 
 | Script | Does | Re-runs when |
 |---|---|---|
-| `run_onchange_after_install-system-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, Ubuntu `locale-gen`, reload systemd/udev/sysctl for what it installed | any tracked file or manifest entry changes |
+| `run_onchange_after_install-system-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, Ubuntu `locale-gen`, reload systemd/udev/sysctl/gdm-dconf for what it installed | any tracked file or manifest entry changes |
 | `run_onchange_after_install-system-20-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable (Fedora `systemd-zram-setup@` + Ubuntu `zramswap.service`, separate distro-guarded blocks) | its own content changes |
 | `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld (masquerade, `tailscale0` → trusted zone, WireGuard/STUN ports), `/etc/resolv.conf` → systemd-resolved, systemd-resolved/NetworkManager/tailscaled restarts, NetworkManager conf.d hygiene + reload | its own content changes |
 
