@@ -203,6 +203,19 @@ install_ubuntu() {
 
   export DEBIAN_FRONTEND=noninteractive
 
+  # Self-heal before the FIRST apt invocation, mirroring setup_apt_repos in
+  # .chezmoiscripts/40-linux-ubuntu/run_onchange_before_ubuntu.sh.tmpl (keep the
+  # two sites in lockstep): a retired aptRepos revision left an active legacy
+  # /etc/apt/sources.list.d/1password.list whose signed-by= disagrees with the
+  # package-managed 1password.sources, and apt rejects the entire source list on
+  # that conflict — which would abort this hook right here on `apt-get update`.
+  # The run_onchange cleanup alone can't cover this path: it runs only after the
+  # hook, and the hook only reaches this function when its mise+op fast path
+  # misses.
+  if [[ -f /etc/apt/sources.list.d/1password.sources && -f /etc/apt/sources.list.d/1password.list ]]; then
+    "${SUDO[@]}" rm -f /etc/apt/sources.list.d/1password.list /usr/share/keyrings/1password.gpg
+  fi
+
   # Bootstrap transport tools needed to add the 1Password repo.
   "${SUDO[@]}" apt-get update -qq
   for pkg in ca-certificates curl gnupg lsb-release; do
