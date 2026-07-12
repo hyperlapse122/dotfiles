@@ -5,6 +5,8 @@
     "*.ps1.tmpl": "powershell",
     "*.yaml.tmpl": "yaml",
     "*.json": "json",
-    "*.toml.tmpl": "toml"
+    "*.toml.tmpl": "toml",
+    "*.conf": "properties",
+    "*.conf.tmpl": "properties"
   }
 }
