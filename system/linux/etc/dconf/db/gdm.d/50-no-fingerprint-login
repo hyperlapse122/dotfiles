@@ -1,0 +1,9 @@
+# Force password authentication at the GDM greeter. Fingerprint (fprintd)
+# proves identity but hands PAM no secret, so a fingerprint login leaves the
+# gnome-keyring login keyring locked (gnome-keyring#1); a password login lets
+# pam_gnome_keyring unlock it. This key is read from the gdm dconf profile
+# (/etc/dconf/profile/gdm) by the GREETER only — the in-session lock screen
+# reads the same schema from the logged-in user's own dconf, so fingerprint
+# unlock there (plus sudo/polkit) keeps working.
+[org/gnome/login-screen]
+enable-fingerprint-authentication=false
