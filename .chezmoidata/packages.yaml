@@ -266,8 +266,11 @@ packages:
           sources-list-lines:
             - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop.gpg] https://downloads.claude.ai/claude-desktop/apt/stable stable main"
         - id: mise
-          # PPA per https://mise.jdx.dev/installing-mise.html#apt (recommended for Ubuntu 26.04+;
-          # the mise.jdx.dev/deb repo referenced by that page's older revisions is gone)
+          # PPA per https://mise.jdx.dev/installing-mise.html#apt — the docs' recommended
+          # source for Ubuntu 26.04+, but effectively amd64-only (its arm64/i386/... indexes
+          # are published empty). .install-prerequisites.sh bootstraps mise from the
+          # distro-agnostic multi-arch mise.jdx.dev/deb repo instead; on Ubuntu,
+          # setup_apt_repos then converges mise.list (and its keyring) to this PPA.
           keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52
           sources-list-lines:
             - "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main"

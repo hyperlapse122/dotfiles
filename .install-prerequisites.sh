@@ -234,14 +234,19 @@ install_ubuntu() {
   # zsh.
   dpkg -s zsh >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y zsh
 
-  # mise via the jdxcode/mise Launchpad PPA — keyring URL and sources line in
-  # lockstep with the mise aptRepos entry in .chezmoidata/packages.yaml (the
-  # old mise.jdx.dev/deb repo is retired, and lacks an i386 index anyway,
-  # which made every `apt update` warn once Steam's foreign arch is enabled).
+  # mise via its distro-agnostic apt repo: mise.jdx.dev/deb serves real
+  # amd64 AND arm64 indexes and works on debian too (this function handles
+  # ubuntu|debian), whereas the jdxcode Launchpad PPA that
+  # .chezmoidata/packages.yaml uses publishes mise only for Ubuntu 26.04
+  # amd64 (its other arch indexes are empty) — on Ubuntu, setup_apt_repos in
+  # the chezmoi installer later converges mise.list + keyring to that PPA.
+  # arch pinned so apt never asks this repo for an i386 index once the
+  # installer enables i386 as a foreign arch for Steam (the repo publishes
+  # none, and an unpinned line made every `apt update` warn).
   if ! command -v mise >/dev/null 2>&1; then
-    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52" \
+    curl -fsSL https://mise.jdx.dev/gpg-key.pub \
       | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/mise.gpg
-    echo "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main" \
+    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mise.gpg] https://mise.jdx.dev/deb stable main" \
       | "${SUDO[@]}" tee /etc/apt/sources.list.d/mise.list >/dev/null
     "${SUDO[@]}" apt-get update -qq
     "${SUDO[@]}" apt-get install -y mise
