@@ -14,6 +14,8 @@
 # some Microsoft-marketplace-only extensions do not exist there.
 vscodium:
   extensions:
-    - anthropic.claude-code  # Claude Code IDE integration (claudeCode.* keys in User/settings.json)
-    - biomejs.biome  # Biome formatter/linter (default formatter in User/settings.json)
-    - tamasfe.even-better-toml  # TOML LSP (taplo; repo-wide .taplo.toml formatting)
+    - anthropic.claude-code
+    - biomejs.biome
+    - tamasfe.even-better-toml
+    - void-zero.vite-plus-extension-pack
+    - openai.chatgpt
