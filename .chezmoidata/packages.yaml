@@ -230,6 +230,16 @@ packages:
           keyring-url: https://dl.google.com/linux/linux_signing_key.pub
           sources-list-lines:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
+        - id: claude-desktop
+          # Claude desktop app (Linux beta — Debian-based only; Anthropic ships no RPM,
+          # so there is no Fedora counterpart). Per
+          # https://code.claude.com/docs/en/desktop-linux — the docs keep the armored key at
+          # /usr/share/keyrings/claude-desktop-archive-keyring.asc, but the generic aptRepos
+          # loop dearmors every key to /usr/share/keyrings/<id>.gpg, which apt accepts
+          # identically. Key fingerprint: 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE.
+          keyring-url: https://downloads.claude.ai/claude-desktop/key.asc
+          sources-list-lines:
+            - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop.gpg] https://downloads.claude.ai/claude-desktop/apt/stable stable main"
         - id: mise
           # PPA per https://mise.jdx.dev/installing-mise.html#apt (recommended for Ubuntu 26.04+;
           # the mise.jdx.dev/deb repo referenced by that page's older revisions is gone)
@@ -300,6 +310,10 @@ packages:
 
         # Editor
         - codium  # VSCodium (telemetry-free VS Code, from vscodium apt repo)
+
+        # AI desktop app (Linux beta: Chat/Cowork/Code tabs; no self-update — updates
+        # arrive via apt. Binary: claude-desktop. Ubuntu-only; Anthropic ships no RPM.)
+        - claude-desktop  # Claude desktop app (from claude-desktop apt repo)
 
         # Web browser
         - google-chrome-stable  # Google Chrome (from google-chrome apt repo)
