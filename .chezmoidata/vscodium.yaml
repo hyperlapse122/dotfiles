@@ -19,3 +19,4 @@ vscodium:
     - tamasfe.even-better-toml
     - void-zero.vite-plus-extension-pack
     - openai.chatgpt
+    - sst-dev.opencode
