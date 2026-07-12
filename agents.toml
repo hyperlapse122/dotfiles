@@ -6,4 +6,4 @@ allow_all = true
 
 [[skills]]
 name = "dotagents"
-source = "getsentry/dotagents"
+source = "getsentry/dotagents@1.17.0"

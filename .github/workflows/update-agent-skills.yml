@@ -30,46 +30,53 @@ jobs:
           has_updates=false
           summary=""
 
-          mapfile -t sources < <(yq -p=toml -o=json dot_agents/agents.toml | jq -r '.skills[].source')
+          # The user-scoped source template plus the repo-scoped config. The
+          # template is NOT valid TOML (Go-template lines around the MCP
+          # secrets), so sources are extracted textually instead of via yq.
+          files=(dot_agents/private_readonly_agents.toml.tmpl agents.toml)
 
-          for src in "${sources[@]}"; do
-            case "$src" in
-              https:*|path:*)
-                continue
-                ;;
-            esac
+          for file in "${files[@]}"; do
+            mapfile -t sources < <(grep -oP '^source\s*=\s*"\K[^"]+' "$file")
 
-            [[ "$src" == *"@"* ]] || continue
+            for src in "${sources[@]}"; do
+              case "$src" in
+                https:*|path:*)
+                  continue
+                  ;;
+              esac
 
-            or="${src%@*}"
-            old_ref="${src#*@}"
+              [[ "$src" == *"@"* ]] || continue
 
-            new="$(
-              gh api "repos/$or/releases" --paginate --jq '[.[]|select(.draft==false and .prerelease==false)|{t:.tag_name,d:.published_at}]' \
-                | jq -rs --arg cutoff "$CUTOFF" "add // [] | map(select(.d <= \$cutoff)) | sort_by(.d) | last | .t // empty"
-            )"
+              or="${src%@*}"
+              old_ref="${src#*@}"
 
-            if [ -z "$new" ]; then
               new="$(
-                gh api "repos/$or/commits?per_page=100" --jq 'map({s:.sha,d:.commit.committer.date})' \
-                  | jq -r --arg cutoff "$CUTOFF" "map(select(.d <= \$cutoff)) | sort_by(.d) | last | .s // empty"
+                gh api "repos/$or/releases" --paginate --jq '[.[]|select(.draft==false and .prerelease==false)|{t:.tag_name,d:.published_at}]' \
+                  | jq -rs --arg cutoff "$CUTOFF" "add // [] | map(select(.d <= \$cutoff)) | sort_by(.d) | last | .t // empty"
               )"
-            fi
 
-            if [ -z "$new" ]; then
-              echo "::warning::no eligible ref found for $src"
-              continue
-            fi
+              if [ -z "$new" ]; then
+                new="$(
+                  gh api "repos/$or/commits?per_page=100" --jq 'map({s:.sha,d:.commit.committer.date})' \
+                    | jq -r --arg cutoff "$CUTOFF" "map(select(.d <= \$cutoff)) | sort_by(.d) | last | .s // empty"
+                )"
+              fi
 
-            if [ "$new" != "$old_ref" ]; then
-              # shellcheck disable=SC2016 # literal regex metacharacters in the BRE escape pattern
-              old_esc=$(printf '@%s\n' "$old_ref" | sed 's/[[\.*^$()/+?{|]/\\&/g')
-              new_esc=$(printf '@%s\n' "$new" | sed 's/[&|/]/\\&/g')
-              sed -i "s|${old_esc}|${new_esc}|g" dot_agents/agents.toml
+              if [ -z "$new" ]; then
+                echo "::warning::no eligible ref found for $src"
+                continue
+              fi
 
-              summary+="- ${or}@${old_ref} → ${or}@${new}"$'\n'
-              has_updates=true
-            fi
+              if [ "$new" != "$old_ref" ]; then
+                # shellcheck disable=SC2016 # literal regex metacharacters in the BRE escape pattern
+                old_esc=$(printf '@%s\n' "$old_ref" | sed 's/[[\.*^$()/+?{|]/\\&/g')
+                new_esc=$(printf '@%s\n' "$new" | sed 's/[&|/]/\\&/g')
+                sed -i "s|${old_esc}|${new_esc}|g" "$file"
+
+                summary+="- ${file}: ${or}@${old_ref} → ${or}@${new}"$'\n'
+                has_updates=true
+              fi
+            done
           done
 
           echo "has_updates=${has_updates}" >> "$GITHUB_OUTPUT"
@@ -77,7 +84,7 @@ jobs:
           if [ "$has_updates" = true ]; then
             {
               echo "summary<<EOF"
-              echo "Pinned agent skill refs updated in dot_agents/agents.toml."
+              echo "Pinned agent skill refs updated in dot_agents/private_readonly_agents.toml.tmpl and agents.toml."
               echo ""
               echo "Updates:"
               printf '%s' "$summary"
@@ -95,7 +102,9 @@ jobs:
           branch: chore/update-agent-skills
           delete-branch: true
           sign-commits: true
-          add-paths: dot_agents/agents.toml
+          add-paths: |
+            dot_agents/private_readonly_agents.toml.tmpl
+            agents.toml
           commit-message: "chore(agents): update pinned skill refs"
           title: "chore(agents): update pinned skill refs"
           body: ${{ steps.bump.outputs.summary }}
