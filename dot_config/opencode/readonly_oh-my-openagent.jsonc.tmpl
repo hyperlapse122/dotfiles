@@ -1,0 +1,34 @@
+{{- /* The agent/category model mappings are data-driven: edit
+       .chezmoidata/models.yaml (.models.ohMyOpenagent), not this file.
+       toPrettyJson emits them tab-indented with keys sorted alphabetically;
+       the replace shifts the block one tab to sit inside the object. */ -}}
+{
+	"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/assets/oh-my-opencode.schema.json",
+	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
+	"agents": {{ toPrettyJson "\t" .models.ohMyOpenagent.agents | trim | replace "\n" "\n\t" }},
+	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
+	"categories": {{ toPrettyJson "\t" .models.ohMyOpenagent.categories | trim | replace "\n" "\n\t" }},
+	"disabled_mcps": ["playwright", "lsp"],
+	"disabled_skills": ["playwright"],
+	"disabled_hooks": [
+		"session-notification",
+		"no-sisyphus-gpt",
+		"claude-code-hooks",
+		"no-hephaestus-non-gpt"
+	],
+	"model_fallback": true,
+	"runtime_fallback": {
+		"enabled": true,
+		// "retry_on_errors": [429],
+		"max_fallback_attempts": 3,
+		"cooldown_seconds": 60,
+		"notify_on_fallback": true
+	},
+	"browser_automation_engine": { "provider": "playwright-cli" },
+	"git_master": {
+		"commit_footer": false,
+		"include_co_authored_by": false,
+		"git_env_prefix": "GIT_MASTER=1"
+	},
+	"notification": { "force_enable": true }
+}
