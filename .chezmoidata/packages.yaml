@@ -226,15 +226,16 @@ packages:
       # and `sources-list-lines` (a list of `deb [signed-by=...] ...` entries written
       # verbatim, one per line — NOT a deb822 .sources file).
       aptRepos:
-        - id: 1password
-          # 1Password's Debian/Ubuntu repo is arch-partitioned: amd64 lives at
-          # /linux/debian/amd64 and arm64 at /linux/debian/arm64, each written as
-          # its own single-arch `deb` line. The old multi-arch /linux/apt/debian
-          # path 404s. Per https://support.1password.com/install-linux/#debian-or-ubuntu
-          keyring-url: https://downloads.1password.com/linux/keys/1password.asc
-          sources-list-lines:
-            - "deb [arch=amd64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/amd64 stable main"
-            - "deb [arch=arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/arm64 stable main"
+        # The 1password repo is deliberately NOT managed here: the 1password deb's
+        # postinst owns the repo definition — it writes the deb822
+        # /etc/apt/sources.list.d/1password.sources (Signed-By
+        # /usr/share/keyrings/1password-archive-keyring.gpg) and comments out any
+        # 1password.list it finds. A managed .list here gets resurrected by
+        # setup_apt_repos with a different signed-by=, and apt then rejects the
+        # ENTIRE source list ("Conflicting values set for option Signed-By"),
+        # breaking every apt operation. .install-prerequisites.sh bootstraps the
+        # repo before the first install; the Ubuntu installer only cleans up the
+        # legacy .list left behind by earlier revisions of this entry.
         - id: vscodium
           # arch pinned: the repo publishes no i386 index, and the installer
           # enables i386 as a foreign arch (Steam), so an unpinned line makes
