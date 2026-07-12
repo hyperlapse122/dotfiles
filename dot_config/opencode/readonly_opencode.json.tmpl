@@ -179,8 +179,8 @@
       "glab auth status --show-token": "deny"
     }
   },
-  "model": "zai-coding-plan/glm-5.2",
-  "small_model": "openrouter/openrouter/free",
+  "model": {{ .models.opencode.model | toJson }},
+  "small_model": {{ .models.opencode.smallModel | toJson }},
   "experimental": {
     "continue_loop_on_deny": true
   },

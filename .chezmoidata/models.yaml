@@ -1,0 +1,160 @@
+# Single source of truth for AI model selection (like packages.yaml for
+# packages): which models opencode and oh-my-openagent use. Rendered into
+#   - dot_config/opencode/readonly_opencode.json.tmpl        (model/small_model)
+#   - dot_config/opencode/readonly_oh-my-openagent.jsonc.tmpl (agents/categories)
+# Edit models HERE, not in the rendered configs. Each mapping entry is either
+# a plain "provider/model" string or an object with model/variant keys; the
+# structure is emitted into the target JSON as-is (keys render alphabetically).
+models:
+  opencode:
+    # Top-level opencode model + small_model (opencode.json).
+    model: zai-coding-plan/glm-5.2
+    smallModel: openrouter/openrouter/free
+  ohMyOpenagent:
+    # Per-agent mappings (oh-my-openagent.jsonc "agents").
+    # Model Mapping Reference:
+    # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
+    agents:
+      sisyphus:
+        model: anthropic/claude-opus-4-8
+        variant: max
+        fallback_models:
+          - moonshotai/kimi-k2.7-code
+          - zai/glm-5.2
+          - moonshotai/kimi-k2.6
+          - moonshotai/kimi-k2.5
+          - openai/gpt-5.6-terra
+          - zai/glm-5.2
+      hephaestus:
+        model: openai/gpt-5.5
+      oracle:
+        model: openai/gpt-5.6-sol
+        fallback_models:
+          - model: google-agy/gemini-pro-agent
+            variant: high
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - zai/glm-5.2
+      librarian:
+        model: openai/gpt-5.6-terra
+        fallback_models:
+          - anthropic/claude-haiku-4-5
+      explore:
+        model: openai/gpt-5.6-terra
+        fallback_models:
+          - anthropic/claude-haiku-4-5
+      multimodal-looker:
+        model: openai/gpt-5.6-terra
+        fallback_models:
+          - moonshotai/kimi-k2.7-code
+          - moonshotai/kimi-k2.6
+          - zai/glm-5v-turbo
+          - zai/glm-4.6v
+      prometheus:
+        model: anthropic/claude-opus-4-8
+        variant: max
+        fallback_models:
+          - model: openai/gpt-5.6-sol
+            variant: high
+          - zai/glm-5.2
+          - google-agy/gemini-pro-agent
+      metis:
+        model: anthropic/claude-sonnet-5
+        fallback_models:
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - openai/gpt-5.6-sol
+          - zai/glm-5.2
+          - zai/glm-5.1
+          - moonshotai/kimi-k2.7-code
+          - moonshotai/kimi-k2.6
+      momus:
+        model: openai/gpt-5.6-sol
+        variant: xhigh
+        fallback_models:
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - model: google-agy/gemini-pro-agent
+            variant: high
+          - zai/glm-5.2
+          - zai/glm-5.1
+      atlas:
+        model: anthropic/claude-sonnet-5
+        variant: max
+        fallback_models:
+          - moonshotai/kimi-k2.7-code
+          - moonshotai/kimi-k2.6
+          - openai/gpt-5.6-terra
+      sisyphus-junior:
+        model: anthropic/claude-sonnet-5
+        variant: max
+        fallback_models:
+          - moonshotai/kimi-k2.7-code
+          - moonshotai/kimi-k2.6
+          - openai/gpt-5.6-terra
+    # Per-category mappings (oh-my-openagent.jsonc "categories").
+    # Model Mapping Reference:
+    # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
+    categories:
+      visual-engineering:
+        model: google-agy/gemini-pro-agent
+        variant: high
+        fallback_models:
+          - zai/glm-5
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - zai/glm-5.1
+          - moonshotai/kimi-k2.6
+      ultrabrain:
+        model: openai/gpt-5.6-sol
+        variant: xhigh
+        fallback_models:
+          - model: google-agy/gemini-pro-agent
+            variant: high
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - zai/glm-5.2
+      deep:
+        model: openai/gpt-5.6-terra
+        fallback_models:
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - zai/glm-5.2
+          - model: google-agy/gemini-pro-agent
+            variant: high
+          - moonshotai/kimi-k2.7-code
+          - zai/glm-5.1
+      artistry:
+        model: google-agy/gemini-pro-agent
+        variant: high
+        fallback_models:
+          - model: anthropic/claude-opus-4-8
+            variant: max
+          - openai/gpt-5.6-sol
+          - moonshotai/kimi-k2.7-code
+          - zai/glm-5.2
+      quick:
+        model: openai/gpt-5.6-terra
+        fallback_models:
+          - anthropic/claude-haiku-4-5
+          - google-agy/gemini-3.5-flash-low
+      unspecified-low:
+        model: anthropic/claude-sonnet-5
+        variant: max
+        fallback_models:
+          - openai/gpt-5.6-terra
+          - moonshotai/kimi-k2.7-code
+          - google-agy/gemini-3.5-flash-low
+      unspecified-high:
+        model: anthropic/claude-opus-4-8
+        variant: max
+        fallback_models:
+          - model: openai/gpt-5.6-sol
+            variant: high
+          - zai/glm-5.2
+          - moonshotai/kimi-k2.7-code
+      writing:
+        model: google-agy/gemini-3.5-flash-low
+        fallback_models:
+          - moonshotai/kimi-k2.7-code
+          - anthropic/claude-sonnet-5

@@ -25,7 +25,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`) |
+| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, cli-proxy-api, ast-grep, buf, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -315,6 +315,15 @@ CI environments).
   release tag + sha256. To bump a font: change the tag, re-download, recompute the
   sha256 (a wrong digest aborts that font's install). The bash installer and its
   `.ps1` counterpart both read this list.
+- **AI model selection (opencode + oh-my-openagent)**: `.chezmoidata/models.yaml`.
+  `models.opencode` (`model`/`smallModel`) renders into
+  `dot_config/opencode/readonly_opencode.json.tmpl` (top-level
+  `model`/`small_model`); `models.ohMyOpenagent` (`agents`/`categories`
+  mappings, each entry a `provider/model` string or a `{model, variant}`
+  object with optional `fallback_models`) renders verbatim into
+  `dot_config/opencode/readonly_oh-my-openagent.jsonc.tmpl` via
+  `toPrettyJson` (keys come out alphabetically sorted). Change a model HERE,
+  not in the rendered configs.
 
 ## Toolchain quirks
 
