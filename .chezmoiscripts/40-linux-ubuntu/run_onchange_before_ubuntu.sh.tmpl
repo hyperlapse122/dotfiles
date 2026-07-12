@@ -148,14 +148,20 @@ dotnet_tools=(
 )
 
 setup_apt_repos() {
+  # Converge each repo's .list to the rendered lines instead of only creating
+  # it when missing: a stale definition from an earlier revision (the retired
+  # mise.jdx.dev/deb repo written by .install-prerequisites.sh, a line missing
+  # its arch= pin) would otherwise survive forever. The keyring is refetched
+  # alongside a changed .list, since a repo move can also mean a different
+  # signing key (mise.jdx.dev/deb -> the jdxcode PPA did exactly that).
+  local repo_lines
 {{ range .packages.linux.ubuntu.aptRepos -}}
 {{ $repo := . -}}
   # {{ $repo.id }}
-  if [[ ! -f /usr/share/keyrings/{{ $repo.id }}.gpg ]]; then
-    curl -fsSL {{ index $repo "keyring-url" | quote }} | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
-  fi
-  if [[ ! -f /etc/apt/sources.list.d/{{ $repo.id }}.list ]]; then
-    printf '%s\n' {{ range index $repo "sources-list-lines" }}{{ . | quote }} {{ end }}| "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
+  repo_lines="$(printf '%s\n' {{ range index $repo "sources-list-lines" }}{{ . | quote }} {{ end }})"
+  if [[ ! -f /usr/share/keyrings/{{ $repo.id }}.gpg || "$(cat /etc/apt/sources.list.d/{{ $repo.id }}.list 2>/dev/null)" != "${repo_lines}" ]]; then
+    curl -fsSL {{ index $repo "keyring-url" | quote }} | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
+    printf '%s\n' "${repo_lines}" | "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
   fi
 {{ end -}}
 }
