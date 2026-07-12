@@ -1,0 +1,19 @@
+# .chezmoidata/vscodium.yaml — single source of truth for VSCodium extensions.
+#
+# Declare gallery extension IDs (publisher.name) here; the
+# .chezmoiscripts/30-linux/run_onchange_after_install-vscodium-extensions
+# script installs missing ones and force-updates the declared ones. The list
+# is rendered into the script body, so editing it re-triggers the
+# run_onchange — add/bump extensions HERE, not in the script.
+#
+# Additive only: extensions installed by hand are never uninstalled, and
+# removing an entry here merely stops managing it — uninstall by hand
+# (`codium --uninstall-extension <id>`).
+#
+# VSCodium resolves IDs against its configured gallery (Open VSX by default);
+# some Microsoft-marketplace-only extensions do not exist there.
+vscodium:
+  extensions:
+    - anthropic.claude-code  # Claude Code IDE integration (claudeCode.* keys in User/settings.json)
+    - biomejs.biome  # Biome formatter/linter (default formatter in User/settings.json)
+    - tamasfe.even-better-toml  # TOML LSP (taplo; repo-wide .taplo.toml formatting)

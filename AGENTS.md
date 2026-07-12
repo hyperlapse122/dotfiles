@@ -25,7 +25,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`) |
+| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, cli-proxy-api, ast-grep, buf, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -333,6 +333,15 @@ CI environments).
   release tag + sha256. To bump a font: change the tag, re-download, recompute the
   sha256 (a wrong digest aborts that font's install). The bash installer and its
   `.ps1` counterpart both read this list.
+- **VSCodium extensions**: `.chezmoidata/vscodium.yaml` (`vscodium.extensions`,
+  gallery IDs — Open VSX by default). The list renders into
+  `.chezmoiscripts/30-linux/run_onchange_after_install-vscodium-extensions.sh.tmpl`,
+  which runs `codium --install-extension --force` per entry (installs missing,
+  updates present; additive — hand-installed extensions are never removed).
+  Editing the list re-triggers the script; no fingerprint block, the rendered
+  array IS the trigger. Soft-skips without `codium` on PATH (recorded as done —
+  onchange trade-off); a gallery/network failure exits non-zero so it retries
+  on the next apply.
 - **AI model selection (opencode + oh-my-openagent)**: `.chezmoidata/models.yaml`.
   `models.opencode` (`model`/`smallModel`) renders into
   `dot_config/opencode/readonly_opencode.json.tmpl` (top-level

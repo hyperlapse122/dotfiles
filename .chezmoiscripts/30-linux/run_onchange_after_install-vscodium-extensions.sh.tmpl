@@ -1,0 +1,71 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# install-vscodium-extensions.sh
+#
+# Install/update the VSCodium extensions declared in
+# .chezmoidata/vscodium.yaml (vscodium.extensions). Every declared extension
+# gets `codium --install-extension --force`: a missing one is installed, an
+# already-installed one is updated to the newest version its gallery offers
+# (a no-op when already current). Additive only — extensions the user
+# installed by hand are never touched or removed; drop an entry from the data
+# file to stop managing it and uninstall by hand.
+#
+# run_onchange trigger: the EXTENSIONS array below is RENDERED from
+# .chezmoidata/vscodium.yaml, so editing the data changes this script's
+# rendered content and re-triggers it — no separate fingerprint block needed.
+# Day-to-day extension updates remain VSCodium's own job
+# (extensions.autoUpdate); this script guarantees presence + freshness on
+# first provision and whenever the declared list changes.
+#
+# Soft-skips (exit 0) when `codium` is not on PATH (VSCodium not installed
+# yet — e.g. a first apply before the package installers have run, or a
+# minimal host without it). Note the onchange trade-off: that skip is
+# recorded as a successful run, so after installing VSCodium later, re-run
+# with `chezmoi apply --force` (or edit the extension list) to pick the
+# extensions up. A FAILED install (gallery/network error) exits non-zero on
+# purpose: chezmoi records no success, so the script retries on the next
+# apply instead of stranding a partial install.
+
+set -euo pipefail
+
+EXTENSIONS=(
+{{- range .vscodium.extensions }}
+  {{ . | quote }}
+{{- end }}
+)
+
+if ! command -v codium >/dev/null 2>&1; then
+  echo "install-vscodium-extensions: codium not on PATH; skipping" >&2
+  exit 0
+fi
+
+if [[ ${#EXTENSIONS[@]} -eq 0 ]]; then
+  echo "install-vscodium-extensions: no extensions declared; nothing to do"
+  exit 0
+fi
+
+# Extension IDs are case-insensitive; --list-extensions prints the publisher's
+# canonical casing, so compare lowercased to report install vs update right.
+installed="$(codium --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]')" || installed=""
+
+failures=0
+for ext in "${EXTENSIONS[@]}"; do
+  lower="$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')"
+  if printf '%s\n' "$installed" | grep -qxF -- "$lower"; then
+    action="update"
+  else
+    action="install"
+  fi
+  if codium --install-extension "$ext" --force; then
+    echo "install-vscodium-extensions: $action ok: $ext"
+  else
+    echo "install-vscodium-extensions: $action FAILED: $ext" >&2
+    failures=$((failures + 1))
+  fi
+done
+
+if ((failures > 0)); then
+  echo "install-vscodium-extensions: $failures extension(s) failed; will retry on next apply" >&2
+  exit 1
+fi
+{{ end -}}
