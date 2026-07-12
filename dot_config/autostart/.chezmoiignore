@@ -1,0 +1,17 @@
+# Ubuntu only
+{{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+private_claude-desktop.desktop
+{{ end }}
+
+# Fedora only?
+{{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora")) -}}
+discord.desktop
+{{ end }}
+
+# kleopatra is the KDE/GnuPG certificate manager; only autostart it on the KDE
+# targets. Detection mirrors the fcitx5/solaar templates: GNOME-only means
+# gnome-shell on PATH without plasmashell; with neither desktop (headless,
+# container, CI) the KDE variant renders and it keeps deploying.
+{{ if and (eq .chezmoi.os "linux") (lookPath "gnome-shell") (not (lookPath "plasmashell")) -}}
+kleopatra.desktop
+{{ end }}
