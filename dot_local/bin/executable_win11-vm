@@ -74,6 +74,12 @@ usage: win11-vm ISO_PATH [options] [-- extra virt-install args]
                      the nearest 2GiB, floor 4GiB — e.g. 32GiB host → 8192,
                      64GiB host → 16384)
   --vcpus N          virtual CPUs                  (default: 4)
+  --share[=PATH]     host folder shared into the guest over virtiofs
+                     (default: $HOME; --share=DIR shares DIR instead).
+                     In the guest, install the VirtIO-FS driver + WinFSP from
+                     the virtio-win ISO and start the VirtioFsSvc service; the
+                     folder then appears as a drive (usually Z:).
+  --no-share         do not share any host folder
   --dry-run          print the virt-install/virt-manager commands instead of running them
   -h, --help         this help
 EOF
@@ -88,6 +94,7 @@ memory_mib=
 vcpus=4
 iso=
 virtio_iso=
+share_dir=$HOME   # home folder shared by default; --no-share disables
 dry_run=false
 extra_args=()
 
@@ -99,6 +106,9 @@ while [ $# -gt 0 ]; do
     --disk) disk_gib=$2; shift 2 ;;
     --memory) memory_mib=$2; shift 2 ;;
     --vcpus) vcpus=$2; shift 2 ;;
+    --share) share_dir=$HOME; shift ;;
+    --share=*) share_dir=${1#--share=}; [ -n "$share_dir" ] || share_dir=$HOME; shift ;;
+    --no-share) share_dir=; shift ;;
     --dry-run) dry_run=true; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; extra_args=("$@"); break ;;
@@ -175,6 +185,12 @@ fi
 # QEMU runs as this user (so it reads the ISO out of $HOME with the user's own
 # rights), and user-mode networking needs no libvirt `default` network.
 
+# --- optional virtiofs host-folder share ----------------------------------
+if [ -n "$share_dir" ]; then
+  share_dir=$(realpath -- "$share_dir") || { err "share path not found: $share_dir"; exit 1; }
+  [ -d "$share_dir" ] || { err "share path is not a directory: $share_dir"; exit 1; }
+fi
+
 # --- assemble virt-install ------------------------------------------------
 if [ -n "$virtio_iso" ]; then
   disk_bus=virtio nic_model=virtio
@@ -202,10 +218,17 @@ cmd=(
 )
 [ -n "$title" ] && cmd+=(--metadata "title=${title}")
 [ -n "$virtio_iso" ] && cmd+=(--disk "device=cdrom,path=${virtio_iso}")
+# virtiofs share: needs shared-memory backing (memfd + access.mode=shared) or
+# the domain refuses to start. `home` is the mount tag the guest driver keys on.
+if [ -n "$share_dir" ]; then
+  cmd+=(--filesystem "${share_dir},home,driver.type=virtiofs")
+  cmd+=(--memorybacking "access.mode=shared,source.type=memfd")
+fi
 [ ${#extra_args[@]} -gt 0 ] && cmd+=("${extra_args[@]}")
 
 printf 'win11-vm: windows ISO : %s\n' "$iso"
 printf 'win11-vm: virtio-win  : %s\n' "${virtio_iso:-(none — SATA/e1000e fallback)}"
+[ -n "$share_dir" ] && printf 'win11-vm: shared folder: %s  (guest: install VirtIO-FS + WinFSP, start VirtioFsSvc → drive Z:)\n' "$share_dir"
 
 # virt-manager forks into the background by default (no --no-fork), so running
 # it in the foreground here still returns promptly.
