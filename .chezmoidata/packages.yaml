@@ -286,6 +286,26 @@ packages:
           keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
           sources-list-lines:
             - "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
+        - id: microsoft-prod
+          # Microsoft PMC prod repo for Ubuntu 26.04 — carries intune-portal (+ deps).
+          # Layout per Microsoft's Intune installer (shell-intune-samples): suite is the
+          # release CODENAME (resolute), component is main. Ubuntu 26.04+ PMC repos are
+          # signed with the NEWER microsoft-2025 key, not the legacy microsoft.asc one.
+          # arch pinned: the repo publishes no i386 index and the installer enables i386
+          # as a foreign arch (Steam), so an unpinned line would warn on every apt update.
+          keyring-url: https://packages.microsoft.com/keys/microsoft-2025.asc
+          sources-list-lines:
+            - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/26.04/prod resolute main"
+        - id: microsoft-edge
+          # Microsoft Edge repo — intune-portal needs Edge for Entra ID sign-in /
+          # conditional access. Unlike the 26.04 PMC repo above, the Edge repo is still
+          # signed with the LEGACY microsoft.asc key on every release (per the upstream
+          # installer's 2026-05-06 fix — do not point this at microsoft-2025). Only the
+          # amd64 index has packages (arm64/armhf are published empty; Edge ships no
+          # Linux arm64 build), so pin amd64 like google-chrome above.
+          keyring-url: https://packages.microsoft.com/keys/microsoft.asc
+          sources-list-lines:
+            - "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-edge.gpg] https://packages.microsoft.com/repos/edge stable main"
       # Foundational packages installed before the main set (build headers needed
       # for DKMS module builds).
       corePackages:
@@ -345,6 +365,13 @@ packages:
 
         # Web browser
         - google-chrome-stable  # Google Chrome (from google-chrome apt repo)
+
+        # Device management (Microsoft Intune, Ubuntu-only — the upstream installer
+        # supports only Ubuntu and RHEL/AlmaLinux, so there is no Fedora counterpart).
+        # Edge is a hard prerequisite: intune-portal uses it for Entra ID sign-in and
+        # conditional-access compliance checks.
+        - microsoft-edge-stable  # Microsoft Edge (from microsoft-edge apt repo)
+        - intune-portal  # Microsoft Intune company portal (from microsoft-prod apt repo)
 
         # Music player (Apple Music client; requires a purchased license)
         - cider  # Cider Apple Music client (from the Cider apt repo)
