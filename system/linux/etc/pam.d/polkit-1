@@ -1,0 +1,23 @@
+#%PAM-1.0
+#
+# Fingerprint auth for polkit prompts (the GNOME Shell / KDE polkit dialog and
+# pkexec). Overrides the vendor stack at /usr/lib/pam.d/polkit-1 — PAM reads
+# /etc/pam.d first and only falls back to the vendor dir — and is a verbatim
+# copy of that stack plus the pam_fprintd line.
+#
+# Deliberately NOT enabled via `pam-auth-update`/common-auth: that stacks
+# pam_fprintd into gdm-password as well, so the GDM greeter would authenticate
+# by fingerprint and hand PAM no secret, leaving the login keyring locked — the
+# exact failure etc/dconf/db/gdm.d/50-no-fingerprint-login exists to prevent.
+#
+# `sufficient` returns success as soon as a finger matches; every other result
+# (no reader, nothing enrolled, timeout, bad read) is ignored and the stack
+# falls through to common-auth, so the password entry keeps working.
+
+auth      sufficient pam_fprintd.so max-tries=1 timeout=10
+
+@include common-auth
+@include common-account
+@include common-password
+session       required   pam_env.so readenv=1 user_readenv=0
+@include common-session-noninteractive

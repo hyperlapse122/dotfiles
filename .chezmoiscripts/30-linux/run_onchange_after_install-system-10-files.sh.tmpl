@@ -75,7 +75,7 @@ override_checks+=({{ get . "check" | default "" | quote }})
 # Fail loud on a manifest typo before touching anything.
 for gate in "${override_gates[@]}"; do
   case "$gate" in
-    ''|thinkpad|vm|ubuntu-studio|sddm-breeze|gdm) ;;
+    ''|thinkpad|vm|ubuntu-studio|sddm-breeze|gdm|fprintd-pam) ;;
     *) printf 'install-system-files: unknown gate "%s" in .chezmoidata/system.yaml; aborting.\n' "$gate" >&2; exit 1 ;;
   esac
 done
@@ -86,6 +86,16 @@ for check in "${override_checks[@]}"; do
   esac
 done
 
+# pam_fprintd.so ships in the multiarch security dir, whose name varies by
+# architecture; nullglob (set above) collapses a miss to an empty expansion.
+has_pam_fprintd() {
+  local module
+  for module in /usr/lib/*/security/pam_fprintd.so /lib/*/security/pam_fprintd.so; do
+    if [[ -f "$module" ]]; then return 0; fi
+  done
+  return 1
+}
+
 # Named runtime probes the manifest's `gate:` entries refer to.
 gate_ok() {
   case "$1" in
@@ -95,6 +105,9 @@ gate_ok() {
     ubuntu-studio) [[ "$os_id" == ubuntu ]] && dpkg -s ubuntustudio-default-settings >/dev/null 2>&1 ;;
     sddm-breeze) [[ -f /usr/share/sddm/themes/breeze/theme.conf ]] ;;
     gdm) [[ -r /usr/share/gdm/greeter-dconf-defaults ]] ;;
+    # The polkit-1 stack this gates @includes common-auth, so it only fits a
+    # Debian-style PAM tree — Fedora's rpm-owned polkit-1 includes system-auth.
+    fprintd-pam) [[ -f /etc/pam.d/common-auth ]] && has_pam_fprintd ;;
   esac
 }
 gate_reason() {
@@ -104,6 +117,7 @@ gate_reason() {
     ubuntu-studio) printf 'ubuntu-studio-only (realtime audio limits)' ;;
     sddm-breeze) printf 'breeze sddm theme absent' ;;
     gdm) printf 'gdm not installed' ;;
+    fprintd-pam) printf 'no pam_fprintd module or non-Debian PAM stack' ;;
     *) printf 'gate %s failed' "$1" ;;
   esac
 }

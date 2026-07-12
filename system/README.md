@@ -40,7 +40,7 @@ script**:
   file elsewhere).
 
 Gates are *named runtime probes* implemented by the engine (`thinkpad`, `vm`,
-`ubuntu-studio`, `sddm-breeze`, `gdm`); an unknown gate name in the manifest aborts
+`ubuntu-studio`, `sddm-breeze`, `gdm`, `fprintd-pam`); an unknown gate name in the manifest aborts
 the run, so typos fail loud. `check: visudo` validates a sudoers drop-in's
 syntax on **every** host, even where the gate skips the install, so a broken
 drop-in is caught on machines that never deploy it.
@@ -75,6 +75,7 @@ system/linux/etc/locale.conf
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
+| `etc/pam.d/polkit-1` | fingerprint at polkit prompts (`fprintd-pam` gate): overrides the vendor `/usr/lib/pam.d/polkit-1` with the same stack plus a `sufficient pam_fprintd` line, so a polkit dialog takes a finger and still falls back to the password entry. Scoped to polkit on purpose — putting fprintd in `common-auth` would give the GDM greeter fingerprint auth back and re-lock the login keyring |
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddm-breeze` gate skips it when the theme is not installed |
 | `etc/security/limits.d/95-ubuntustudio-audio.conf` | `@audio` group realtime privileges (rtprio/memlock) — `ubuntu-studio` gate |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
