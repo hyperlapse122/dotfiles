@@ -176,8 +176,11 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   install manifest ([`system.yaml`](.chezmoidata/system.yaml): per-path
   modes/gates + removed-path cleanup), and user identity (`user.yaml`).
 - [`.chezmoiscripts/`](.chezmoiscripts) — provisioning scripts run on apply,
-  grouped by area: `linux/`, `linux-fedora/`, `linux-ubuntu/`, `linux-kde/`,
-  `linux-gnome/`, `auth/`, `gpg/`, `agents/`, `build/`, `services/`, `tools/`.
+  grouped by area with numeric prefixes fixing cross-group execution order
+  (chezmoi runs each phase's scripts alphabetically by target path):
+  `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `40-linux-ubuntu/`,
+  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-gpg/`,
+  `90-services/`.
 - [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
   into scripts via `includeTemplate`: the `run_onchange_` dependency
   fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
@@ -187,12 +190,12 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust sources, built on apply by
-  `.chezmoiscripts/build/run_onchange_after_build-mxm4-haptic.sh.tmpl` into
+  `.chezmoiscripts/60-build/run_onchange_after_build-mxm4-haptic.sh.tmpl` into
   `~/.local/bin/`. Linux builds all three binaries: `mxm4-hapticd`,
   `mxm4-haptic-notify`, and `mxm4-haptic`; macOS builds only the daemon and
   client.
 - [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`)
-  by `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl`
+  by `.chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl`
   into `~/.config/opencode/plugins/`, producing
   `@h82/opencode-playwright-cli-session-injection` (symlinked as
   `playwright-cli-session-injection.js` on Linux and macOS),

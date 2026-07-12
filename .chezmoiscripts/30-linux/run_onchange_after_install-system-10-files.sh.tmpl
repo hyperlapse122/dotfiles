@@ -1,7 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl
+# .chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
 # `sudo install -D -m <mode>`, removes orphaned /etc paths this repo used to

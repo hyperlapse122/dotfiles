@@ -1,5 +1,5 @@
 # Manifest for the root-owned /etc installer
-# (.chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl).
+# (.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl).
 # See system/README.md for the full model.
 #
 # Single source of truth (like packages.yaml): add/gate a system/linux/etc

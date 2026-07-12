@@ -4,7 +4,7 @@
 {{- $latestReleaseId := output "curl" "-fsSL" (printf "%s/latest" $claudeCodeBaseUrl) | toString -}}
 
 #!/usr/bin/env bash
-# .chezmoiscripts/tools/run_onchange_after_claude.sh.tmpl
+# .chezmoiscripts/00-tools/run_onchange_after_claude.sh.tmpl
 #
 # Links latest claude to ~/.local/bin and prunes older versions.
 #

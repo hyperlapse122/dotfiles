@@ -12,7 +12,7 @@
 ./package.json
 
 # Root-owned system config installed to /etc by
-# .chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl
+# .chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl
 # (manifest: .chezmoidata/system.yaml), never linked into $HOME.
 ./system
 
@@ -51,12 +51,12 @@
 # provision fully. Skip only a "real" container: a Podman/Docker marker present
 # WITHOUT /run/.toolboxenv.
 {{- if and (or (stat "/run/.containerenv") (stat "/.dockerenv")) (not (stat "/run/.toolboxenv")) }}
-.chezmoiscripts/linux/*.sh
-.chezmoiscripts/linux-fedora/*.sh
-.chezmoiscripts/linux-ubuntu/*.sh
-.chezmoiscripts/linux-kde/*.sh
-.chezmoiscripts/linux-gnome/*.sh
-.chezmoiscripts/auth/*.sh
-.chezmoiscripts/gpg/*.sh
-.chezmoiscripts/build/*mxm4-haptic.sh
+.chezmoiscripts/30-linux/*.sh
+.chezmoiscripts/20-linux-fedora/*.sh
+.chezmoiscripts/40-linux-ubuntu/*.sh
+.chezmoiscripts/50-linux-kde/*.sh
+.chezmoiscripts/50-linux-gnome/*.sh
+.chezmoiscripts/10-auth/*.sh
+.chezmoiscripts/80-gpg/*.sh
+.chezmoiscripts/60-build/*mxm4-haptic.sh
 {{- end }}

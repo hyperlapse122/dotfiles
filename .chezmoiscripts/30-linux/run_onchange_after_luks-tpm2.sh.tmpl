@@ -3,7 +3,7 @@
 {{-   if hasKey . "luksPassphrase" }}{{ $luksPassphrase = .luksPassphrase }}{{ end -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_onchange_after_luks-tpm2.sh.tmpl
+# .chezmoiscripts/30-linux/run_onchange_after_luks-tpm2.sh.tmpl
 #
 # Wrapper — Fedora + Ubuntu — that enrolls this host's LUKS devices for TPM2
 # auto-unlock on `chezmoi apply`, by driving the deployed

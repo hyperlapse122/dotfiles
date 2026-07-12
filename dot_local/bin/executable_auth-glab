@@ -4,7 +4,7 @@
 #
 # Signs in to every GitLab host this machine uses via glab's OAuth flow
 # (browser or device authorization) instead of provisioning static PATs.
-# Successor to the removed `.chezmoiscripts/auth/` run_onchange script:
+# Successor to the removed `.chezmoiscripts/10-auth/` run_onchange script:
 # chezmoi only deploys this command; run it yourself once per machine, and
 # again whenever a host's session is revoked.
 #

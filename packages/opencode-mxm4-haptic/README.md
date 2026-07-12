@@ -116,7 +116,7 @@ Build output is `dist/index.mjs` (ESM) + `dist/index.d.mts`.
 ## Enabling it in OpenCode
 
 **On Linux, chezmoi enables it automatically.**
-The `.chezmoiscripts/build/run_onchange_after_build-opencode-plugins.sh.tmpl` script symlinks the built file into
+The `.chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl` script symlinks the built file into
 OpenCode's auto-load plugin directory:
 
 ```

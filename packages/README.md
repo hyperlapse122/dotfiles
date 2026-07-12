@@ -15,7 +15,7 @@ the repo's TypeScript/JavaScript library packages.
 
 ## What this is NOT
 
-- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/build/` run_onchange scripts. The plugins built from `packages/` are symlinked into `~/.config/opencode/plugins/`.
+- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/60-build/` run_onchange scripts. The plugins built from `packages/` are symlinked into `~/.config/opencode/plugins/`.
 - **Not published.** Members are `private: true`; the `@h82/` scope is a naming
   namespace, not a registry target.
 
