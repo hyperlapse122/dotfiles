@@ -4,7 +4,15 @@
 {{- $latestReleaseId := output "curl" "-fsSL" (printf "%s/latest" $claudeCodeBaseUrl) | toString -}}
 
 #!/usr/bin/env bash
-# Links latest claude to ~/.local/bin
+# .chezmoiscripts/tools/run_onchange_after_claude.sh.tmpl
+#
+# Links latest claude to ~/.local/bin and prunes older versions.
+#
+# onchange trigger: the latest release id is rendered into the script body
+# below, so a new upstream release changes the rendered content and re-runs
+# the re-link + prune. (The former run_after_onchange_* name was parsed by
+# chezmoi as a plain run_after_ — every apply — because the attribute order
+# is run_[once_|onchange_][before_|after_].)
 
 set -euo pipefail
 

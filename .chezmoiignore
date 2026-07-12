@@ -12,8 +12,8 @@
 ./package.json
 
 # Root-owned system config installed to /etc by
-# .chezmoiscripts/linux/run_onchange_after_install-system-config.sh.tmpl,
-# never linked into $HOME.
+# .chezmoiscripts/linux/run_onchange_after_install-system-10-files.sh.tmpl
+# (manifest: .chezmoidata/system.yaml), never linked into $HOME.
 ./system
 
 # macOS-only
@@ -52,6 +52,8 @@
 # WITHOUT /run/.toolboxenv.
 {{- if and (or (stat "/run/.containerenv") (stat "/.dockerenv")) (not (stat "/run/.toolboxenv")) }}
 .chezmoiscripts/linux/*.sh
+.chezmoiscripts/linux-fedora/*.sh
+.chezmoiscripts/linux-ubuntu/*.sh
 .chezmoiscripts/linux-kde/*.sh
 .chezmoiscripts/linux-gnome/*.sh
 .chezmoiscripts/auth/*.sh

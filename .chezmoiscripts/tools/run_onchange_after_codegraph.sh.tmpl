@@ -3,8 +3,14 @@
 {{- $tag := (gitHubLatestRelease "colbymchenry/codegraph").TagName | toString -}}
 
 #!/usr/bin/env bash
-# Links codegraph to ~/.local/bin with libraries
+# .chezmoiscripts/tools/run_onchange_after_codegraph.sh.tmpl
+#
+# Links codegraph to ~/.local/bin with libraries and prunes older versions.
 # Reference: https://github.com/colbymchenry/codegraph/blob/main/install.sh
+#
+# onchange trigger: the latest release tag is rendered into the script body
+# below, so a new upstream release changes the rendered content and re-runs
+# the re-link + prune.
 
 set -euo pipefail
 

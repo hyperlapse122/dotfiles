@@ -16,10 +16,7 @@
 
 set -euo pipefail
 
-if ! command -v plasmashell >/dev/null 2>&1; then
-  printf 'config-kde-calendar.sh: plasmashell not found (non-KDE system), skipping.\n'
-  exit 0
-fi
+{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-calendar.sh" -}}
 
 configure_calendar() {
   printf 'config-kde-calendar.sh: enabling holidays + pimevents, South Korea, all PIM calendars...\n'

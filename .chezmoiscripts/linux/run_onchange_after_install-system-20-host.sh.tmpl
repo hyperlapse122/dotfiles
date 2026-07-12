@@ -1,0 +1,70 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_onchange_after_install-system-20-host.sh.tmpl
+#
+# Host-level service tuning that is independent of the /etc file set: enables
+# user lingering, masks the rootful podman API socket, and disables zram swap
+# on both distros. Part 2/3 of the split install-system set (10-files →
+# 20-host → 30-network); splitting keeps re-run scope tight — a tracked /etc
+# file edit re-runs 10-files only, not these host mutations.
+#
+# onchange, no external dependency: every action here asserts a fixed host
+# state derived from nothing in the source tree, so there is nothing to
+# fingerprint — the trigger is this script's own rendered content. Each step
+# is best-effort and idempotent, so a re-run is always safe.
+#
+# Skip behaviour: soft-skips (exit 0) on headless/server installs and when
+# sudo would have to prompt but can't — see the shared guards inlined below
+# (.chezmoitemplates/headless-guard.sh.tmpl, sudo-skip-guard.sh.tmpl). NOTE:
+# chezmoi records a clean skip as a successful run, so it will NOT re-run on
+# the next apply until this content changes — re-run by hand with
+# `chezmoi apply --force`.
+
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" "install-system-host" }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-host" }}
+# Detect distro at runtime for the Ubuntu-specific zram branch below.
+os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
+
+# Enable lingering for the invoking user so their `systemd --user` units
+# (e.g. rootless podman socket + prune timer) keep running without an
+# active login session and start at boot. Uses the real invoking user, not
+# root, when the script runs under sudo. Guarded so it never aborts the run.
+loginctl enable-linger "${SUDO_USER:-$USER}" 2>/dev/null || true
+
+# Mask the rootful podman API socket — blocks the system-level rootful API
+# only, not sudo podman (which is daemonless).
+if command -v systemctl >/dev/null 2>&1; then
+  "${SUDO[@]}" systemctl mask podman.socket podman.service 2>/dev/null || true
+fi
+
+# Disable zram swap. Fedora's zram-generator-defaults instantiates the
+# systemd-zram-setup@.service template to create a zram-backed swap device
+# (zram0) at boot. Masking the template disables every instance, so the
+# generator's swap setup never runs again. Also turn off any currently-active
+# /dev/zram* swap (swapoff, then `zramctl --reset` to free the device) so the
+# running system matches the next boot. Every step is best-effort and guarded:
+# hosts without zram-generator, without an active zram device, or where swapoff
+# can't free pages under memory pressure must not abort the run.
+if command -v systemctl >/dev/null 2>&1; then
+  printf '  -> masking systemd-zram-setup@.service (disable zram swap)\n'
+  "${SUDO[@]}" systemctl mask systemd-zram-setup@.service 2>/dev/null || true
+fi
+# Disable zram swap on Ubuntu (zram-tools' unit name differs from Fedora's).
+# Must be a SEPARATE block — never appended to the Fedora mask line above,
+# because `systemctl mask` writes a /dev/null symlink even for units that do
+# NOT exist, creating bogus state on Fedora if zramswap.service were masked there.
+if [[ "$os_id" == ubuntu ]] && command -v systemctl >/dev/null 2>&1; then
+  printf '  -> masking zramswap.service (ubuntu: disable zram-tools swap)\n'
+  "${SUDO[@]}" systemctl mask zramswap.service 2>/dev/null || true
+fi
+for zdev in /dev/zram*; do
+  [[ -b "$zdev" ]] || continue
+  printf '  -> swapoff %s\n' "$zdev"
+  "${SUDO[@]}" swapoff "$zdev" 2>/dev/null || true
+  if command -v zramctl >/dev/null 2>&1; then
+    "${SUDO[@]}" zramctl --reset "$zdev" 2>/dev/null || true
+  fi
+done
+{{ end -}}

@@ -1,0 +1,13 @@
+{{- /*
+gnome-guard.sh.tmpl — runtime GNOME host guard.
+
+Desktop detection is keyed on the shell binary the ISO shipped
+(gnome-shell, stable from first boot): exits 0 on a non-GNOME host so the
+same script deploys everywhere and self-selects at runtime.
+
+Usage: {{ includeTemplate "gnome-guard.sh.tmpl" "my-script-name" }}
+*/ -}}
+if ! command -v gnome-shell >/dev/null 2>&1; then
+  printf '%s: gnome-shell not found (non-GNOME system), skipping.\n' '{{ . }}'
+  exit 0
+fi

@@ -47,16 +47,7 @@ else
   HAS_GNOME=0
 fi
 
-# Use sudo only when not already root (matches install-linux-system-config.sh).
-# Throw early if neither root nor sudo is available — dnf/systemctl/flatpak need it.
-if [[ "${EUID}" -eq 0 ]]; then
-  SUDO=()
-elif command -v sudo >/dev/null 2>&1; then
-  SUDO=(sudo)
-else
-  printf 'install-fedora.sh: requires root or sudo for system provisioning.\n' >&2
-  exit 1
-fi
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-fedora.sh" -}}
 
 # Package sets rendered from .chezmoidata/packages.yaml.
 core_packages=(

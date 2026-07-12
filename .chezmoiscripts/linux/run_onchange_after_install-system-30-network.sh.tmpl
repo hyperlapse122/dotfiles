@@ -1,0 +1,150 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/linux/run_onchange_after_install-system-30-network.sh.tmpl
+#
+# Network-path configuration: firewalld for Tailscale/VMware, resolv.conf →
+# systemd-resolved, DNS-path service restarts, and NetworkManager drop-in
+# hygiene + reload. Part 3/3 of the split install-system set (10-files →
+# 20-host → 30-network); splitting keeps re-run scope tight — a tracked /etc
+# file edit re-runs 10-files only, so it no longer restarts
+# systemd-resolved/NetworkManager/tailscaled the way the old monolithic
+# install-system-config did. Those restarts now happen only when THIS
+# script's content changes (or `chezmoi apply --force`).
+#
+# onchange, no external dependency: everything here asserts fixed
+# firewalld/DNS state derived from nothing in the source tree, so the trigger
+# is this script's own rendered content. (The IPv4/IPv6 forwarding sysctl the
+# masquerade path rides on is installed and applied by 10-files.)
+#
+# firewalld setup covers three things: (1) IPv4 masquerade on the default
+# zone, required for the Tailscale exit-node and VMware NAT egress paths to
+# source-NAT traffic out the host's primary interface (which lives in the
+# default zone on Fedora Workstation); (2) binding tailscale0 to the
+# `trusted` zone, per Tailscale's recommendation for firewalld hosts; and
+# (3) opening UDP 41641 (WireGuard) + UDP 3478 (STUN) on the `public` zone
+# so direct peer connections work behind a host firewall. The whole
+# firewalld block is a no-op on hosts where firewalld is not the active
+# backend (Ubuntu's ufw path is linux-ubuntu/run_onchange_after_ubuntu-tailscale-ufw).
+#
+# Skip behaviour: soft-skips (exit 0) on headless/server installs and when
+# sudo would have to prompt but can't — see the shared guards inlined below
+# (.chezmoitemplates/headless-guard.sh.tmpl, sudo-skip-guard.sh.tmpl). NOTE:
+# chezmoi records a clean skip as a successful run, so it will NOT re-run on
+# the next apply until this content changes — re-run by hand with
+# `chezmoi apply --force`.
+
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" "install-system-network" }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-network" }}
+# Configure firewalld for Tailscale and VMware (see header for the three
+# changes and their rationale).
+#
+# Gate: `firewall-cmd --state` is firewalld's own liveness probe
+# (https://firewalld.org/documentation/howto/get-firewalld-state.html).
+# It returns 0 when the daemon is running and non-zero when firewalld is
+# masked, missing, or replaced by a different backend (raw nftables,
+# iptables-services). In every non-running case all firewalld steps are
+# skipped — we don't program a backend that isn't there.
+#
+# Idempotency: every change is gated on a `--query-*` probe so we only
+# mutate when something would change. A single `--reload` at the end
+# applies all permanent changes to the runtime without restarting
+# firewalld (https://firewalld.org/documentation/configuration/runtime-versus-permanent.html).
+if "${SUDO[@]}" firewall-cmd --state >/dev/null 2>&1; then
+  fw_changed=0
+
+  if "${SUDO[@]}" firewall-cmd --permanent --query-masquerade >/dev/null 2>&1; then
+    printf '  -- firewalld masquerade: already enabled (default zone)\n'
+  else
+    printf '  -> firewalld masquerade: enabling on default zone\n'
+    "${SUDO[@]}" firewall-cmd --permanent --add-masquerade >/dev/null
+    fw_changed=1
+  fi
+
+  # Tailscale's own recommendation for hosts running firewalld: the trusted
+  # zone accepts all traffic, which is what we want for the mesh interface
+  # (peer ACLs are enforced at the Tailscale layer, not the host firewall).
+  # https://tailscale.com/kb/1077/secure-server-linux/
+  if "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --query-interface=tailscale0 >/dev/null 2>&1; then
+    printf '  -- firewalld: tailscale0 already bound to trusted zone\n'
+  else
+    printf '  -> firewalld: binding tailscale0 to trusted zone\n'
+    "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 >/dev/null
+    fw_changed=1
+  fi
+
+  # UDP 41641 (Tailscale's WireGuard listener) + UDP 3478 (STUN, NAT
+  # traversal) so direct peer connections work behind a host firewall.
+  # https://tailscale.com/kb/1082/firewall-ports/
+  for port in 41641/udp 3478/udp; do
+    if "${SUDO[@]}" firewall-cmd --permanent --zone=public --query-port="$port" >/dev/null 2>&1; then
+      printf '  -- firewalld: public/%s already open\n' "$port"
+    else
+      printf '  -> firewalld: opening public/%s\n' "$port"
+      "${SUDO[@]}" firewall-cmd --permanent --zone=public --add-port="$port" >/dev/null
+      fw_changed=1
+    fi
+  done
+
+  if [[ "$fw_changed" -eq 1 ]]; then
+    printf '  -> firewall-cmd --reload\n'
+    "${SUDO[@]}" firewall-cmd --reload >/dev/null
+  fi
+else
+  printf '  -- firewalld: skipped (firewalld not running)\n'
+fi
+
+# Reference: https://tailscale.com/docs/reference/linux-dns
+# Point resolv.conf at systemd-resolved's stub, then restart each DNS-path
+# service that is currently running so the switch takes effect.
+"${SUDO[@]}" ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+for svc in systemd-resolved NetworkManager tailscaled; do
+  if systemctl is-active --quiet "$svc" 2>/dev/null; then
+    printf '  -> systemctl restart %s\n' "$svc"
+    "${SUDO[@]}" systemctl restart "$svc"
+  else
+    printf '  -- %s reload: skipped (service not running)\n' "$svc"
+  fi
+done
+
+# Remove dangling symlinks under /etc/NetworkManager/conf.d/. A drop-in
+# installed by another tool as a symlink into a store/cache path becomes a
+# broken link once that target is removed; NetworkManager then logs
+# warnings on every reload and `ls -l` flags it red. We only delete
+# symlinks whose targets are missing — regular files and live symlinks are
+# left untouched, so this can't accidentally remove a drop-in placed by
+# another tool.
+if [[ -d /etc/NetworkManager/conf.d ]]; then
+  stale=0
+  for link in /etc/NetworkManager/conf.d/*; do
+    [[ -L "$link" && ! -e "$link" ]] || continue
+    printf '  -> removing stale symlink: %s\n' "$link"
+    "${SUDO[@]}" rm -f "$link"
+    stale=$((stale + 1))
+  done
+  if [[ "$stale" -eq 0 ]]; then
+    printf '  -- NetworkManager conf.d: no stale symlinks\n'
+  else
+    printf '  -- NetworkManager conf.d: removed %d stale symlink(s)\n' "$stale"
+  fi
+fi
+
+# Reload NetworkManager so any freshly-installed drop-ins under
+# /etc/NetworkManager/conf.d/ take effect without a reboot.
+# `systemctl reload` triggers NetworkManager's SIGHUP handler, which
+# re-reads NetworkManager.conf and every conf.d/ drop-in without
+# disrupting active connections (unlike `restart`, which would).
+#
+# Gate: `systemctl is-active --quiet NetworkManager` returns 0 only when
+# the unit exists and is currently running, covering both "service
+# present" and "service running" in a single check. Hosts without
+# NetworkManager (systemd-networkd, netctl, no network stack at all)
+# skip cleanly.
+if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+  printf '  -> systemctl reload NetworkManager\n'
+  "${SUDO[@]}" systemctl reload NetworkManager
+else
+  printf '  -- NetworkManager reload: skipped (service not running)\n'
+fi
+{{ end -}}

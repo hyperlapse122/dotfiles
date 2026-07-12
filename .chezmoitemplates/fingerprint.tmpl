@@ -1,0 +1,28 @@
+{{- /*
+fingerprint.tmpl — comment-only dependency fingerprint block for run_onchange_
+scripts (the canonical form of the script-prefix policy in AGENTS.md).
+
+Emits one `#   <path>  <sha256>` line per file matched by each glob pattern.
+chezmoi hashes the whole rendered script to decide whether to re-run it, so a
+changed dependency changes the rendered content and re-triggers the script.
+
+`include . | sha256sum` hashes file CONTENT (a bare `sha256sum .` would hash
+the path STRING); the `(stat .).isDir` guard skips the directories a `**`
+glob matches. For a `.tmpl` dependency this hashes the raw template text
+(its onepasswordRead refs, not resolved secrets), so no secret ever enters
+the fingerprint.
+
+Usage (from any script template):
+
+  {{ includeTemplate "fingerprint.tmpl" (dict
+       "sourceDir" .chezmoi.sourceDir
+       "globs" (list "system/linux/etc/**" ".chezmoidata/fonts.yaml")) }}
+*/ -}}
+{{- $sourceDir := .sourceDir -}}
+{{- range $pattern := .globs -}}
+{{- range glob (joinPath $sourceDir $pattern) -}}
+{{- if not (stat .).isDir }}
+#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
+{{- end -}}
+{{- end -}}
+{{- end }}

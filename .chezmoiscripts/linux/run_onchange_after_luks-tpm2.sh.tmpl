@@ -50,16 +50,7 @@ export LC_ALL=C
 # sha256 forces a re-run when the enrollment logic changes. The prompted
 # passphrase is never part of this block. `include . | sha256sum` hashes file
 # CONTENT; `(stat .).isDir` skips directories. Comment-only; never executed.
-{{ range (glob (joinPath $sourceDir "dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ range (glob (joinPath $sourceDir "dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh")) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
-{{ end -}}
-{{ end }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl" "dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh")) }}
 {{ if $luksPassphrase -}}
 tool="${HOME}/.local/bin/setup-luks-tpm2-unlock.sh"
 

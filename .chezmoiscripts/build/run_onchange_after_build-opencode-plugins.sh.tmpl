@@ -61,13 +61,7 @@ set -euo pipefail
 # forces a rebuild on any add/remove/edit. TARGETED globs only (never
 # packages/**) so build outputs (dist/, node_modules/, .turbo/) are excluded
 # and the hash stays stable across rebuilds. Comment-only; never executed.
-{{ range $pattern := list "packages/bun.lock" "packages/bunfig.toml" "packages/package.json" "packages/mise.toml" "packages/vite.config.ts" "packages/*/package.json" "packages/*/src/**" "packages/*/tsconfig.json" "packages/*/vite.config.ts" -}}
-{{ range (glob (joinPath $sourceDir $pattern)) -}}
-{{ if not (stat .).isDir -}}
-#   {{ . | trimPrefix $sourceDir | trimPrefix "/" }} {{ include . | sha256sum }}
-{{ end -}}
-{{ end -}}
-{{ end }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "packages/bun.lock" "packages/bunfig.toml" "packages/package.json" "packages/mise.toml" "packages/vite.config.ts" "packages/*/package.json" "packages/*/src/**" "packages/*/tsconfig.json" "packages/*/vite.config.ts")) }}
 SRC="{{ $sourceDir }}"
 
 PLUGINS_DIR="$HOME/.config/opencode/plugins"

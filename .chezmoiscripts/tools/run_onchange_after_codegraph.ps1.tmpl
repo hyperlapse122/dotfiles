@@ -1,7 +1,12 @@
 {{ if eq .chezmoi.os "windows" -}}
 
-# Adds codegraph to user PATH
+# .chezmoiscripts/tools/run_onchange_after_codegraph.ps1.tmpl
+#
+# Adds codegraph to user PATH (idempotent; effectively one-shot).
 # Reference: https://github.com/colbymchenry/codegraph/blob/main/install.ps1
+#
+# onchange, no external dependency: the PATH entry is version-independent
+# (…\codegraph\current\bin), so the trigger is this script's own content.
 
 $ErrorActionPreference = 'Stop'
 $installDir = Join-Path $env:LOCALAPPDATA 'codegraph'

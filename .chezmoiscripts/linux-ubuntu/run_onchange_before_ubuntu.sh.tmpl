@@ -79,15 +79,7 @@ else
   IS_UBUNTU_STUDIO=0
 fi
 
-# Use sudo only when not already root. APT, dpkg, systemctl, and usermod need it.
-if [[ "${EUID}" -eq 0 ]]; then
-  SUDO=()
-elif command -v sudo >/dev/null 2>&1; then
-  SUDO=(sudo)
-else
-  printf 'run_onchange_before_ubuntu.sh: requires root or sudo.\n' >&2
-  exit 1
-fi
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "run_onchange_before_ubuntu.sh" -}}
 
 export DEBIAN_FRONTEND=noninteractive
 # Keep apt invocations behind one sudo/env wrapper; the rendered script still

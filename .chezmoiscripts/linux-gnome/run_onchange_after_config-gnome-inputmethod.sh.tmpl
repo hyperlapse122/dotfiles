@@ -36,10 +36,7 @@ set -euo pipefail
 
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-inputsources-hangul"
 
-if ! command -v gnome-shell >/dev/null 2>&1; then
-  echo "config-gnome-inputmethod: gnome-shell not found (non-GNOME system), skipping."
-  exit 0
-fi
+{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-inputmethod" -}}
 
 # Already ensured once -> respect the user's current source list, do nothing.
 if [[ -f "$STAMP" ]]; then

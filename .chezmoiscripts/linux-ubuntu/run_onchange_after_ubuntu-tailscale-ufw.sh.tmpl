@@ -1,6 +1,6 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/linux/run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl
+# .chezmoiscripts/linux-ubuntu/run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl
 #
 # onchange, no external dependency: this script derives its NAT rule from runtime
 # state (the primary interface) and has no dependency file to fingerprint, so its
@@ -12,7 +12,7 @@
 # re-runs are safe.
 set -euo pipefail
 # Tailscale egress-NAT parity for Ubuntu via ufw.
-# Matches the Fedora firewalld masquerade in install-system-config:
+# Matches the Fedora firewalld masquerade in install-system-30-network:
 # broad -o $primary_if MASQUERADE (NATs all primary-interface egress, serving
 # both Tailscale exit-node/subnet-router traffic and VMware NAT).
 # IP forwarding is provided by the shared system/linux/etc/sysctl.d/99-tailscale.conf
@@ -25,10 +25,7 @@ set -euo pipefail
 # Guard: skip if ufw not installed (matches firewalld --state gate on Fedora).
 command -v ufw >/dev/null 2>&1 || { echo "ufw absent; skip"; exit 0; }
 
-# SUDO + non-interactive skip
-if [[ "$EUID" -eq 0 ]]; then SUDO=(); else SUDO=(sudo)
-  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then echo "no sudo; skip"; exit 0; fi
-fi
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "ubuntu-tailscale-ufw" -}}
 
 changed=false
 
