@@ -1,0 +1,11 @@
+# PINENTRY_KDE_USE_WALLET lets pinentry-qt offer "remember in KWallet" — KDE
+# targets only. A GNOME-only host (gnome-shell on PATH without plasmashell,
+# mirroring the solaar/fcitx5 render-time detection) uses pinentry-gnome3
+# (see private_dot_gnupg/.gpg-agent.linux.conf), which caches through
+# gnome-keyring on its own, so the KWallet knob must not deploy there. With
+# neither desktop on PATH (headless, container, CI) the KDE variant renders,
+# as elsewhere — deterministic artifacts, inert without a desktop.
+{{ if not (and (lookPath "gnome-shell") (not (lookPath "plasmashell"))) -}}
+PINENTRY_KDE_USE_WALLET=1
+{{ end -}}
+ELECTRON_OZONE_PLATFORM_HINT=auto

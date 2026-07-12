@@ -168,11 +168,13 @@ packages:
       kdePackages:
         - fcitx5  # input method framework (KDE targets)
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
+        - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
       # Installed only when GNOME is the desktop (runtime `command -v
       # gnome-shell` gate) — Fedora Workstation. GNOME stays on its default
       # ibus input framework; only the Korean engine is added.
       gnomePackages:
         - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
+        - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
       # Installed only on bare metal (systemd-detect-virt reports no VM).
       bareMetalPackages:
         - steam  # Steam game client (needs a real GPU; skipped in VMs)
@@ -373,11 +375,13 @@ packages:
       kdePackages:
         - fcitx5  # input method framework (KDE targets)
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
+        - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
       # Installed only when GNOME is the desktop (runtime `command -v
       # gnome-shell` gate) — Ubuntu Desktop 26.04. GNOME stays on its default
       # ibus input framework; only the Korean engine is added.
       gnomePackages:
         - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
+        - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
 
       # Ubuntu Studio pro-audio essentials, installed only when the host IS
       # Ubuntu Studio — runtime `dpkg -s ubuntustudio-default-settings` marker
