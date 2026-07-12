@@ -236,9 +236,12 @@ packages:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/amd64 stable main"
             - "deb [arch=arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/arm64 stable main"
         - id: vscodium
+          # arch pinned: the repo publishes no i386 index, and the installer
+          # enables i386 as a foreign arch (Steam), so an unpinned line makes
+          # every `apt update` warn "doesn't support architecture 'i386'".
           keyring-url: https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
           sources-list-lines:
-            - "deb [signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
+            - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
         - id: google-chrome
           keyring-url: https://dl.google.com/linux/linux_signing_key.pub
           sources-list-lines:

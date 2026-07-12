@@ -234,11 +234,14 @@ install_ubuntu() {
   # zsh.
   dpkg -s zsh >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y zsh
 
-  # mise via its official apt repo.
+  # mise via the jdxcode/mise Launchpad PPA — keyring URL and sources line in
+  # lockstep with the mise aptRepos entry in .chezmoidata/packages.yaml (the
+  # old mise.jdx.dev/deb repo is retired, and lacks an i386 index anyway,
+  # which made every `apt update` warn once Steam's foreign arch is enabled).
   if ! command -v mise >/dev/null 2>&1; then
-    curl -fsSL https://mise.jdx.dev/gpg-key.pub \
-      | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/mise.gpg
-    echo "deb [signed-by=/usr/share/keyrings/mise.gpg] https://mise.jdx.dev/deb stable main" \
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52" \
+      | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/mise.gpg
+    echo "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main" \
       | "${SUDO[@]}" tee /etc/apt/sources.list.d/mise.list >/dev/null
     "${SUDO[@]}" apt-get update -qq
     "${SUDO[@]}" apt-get install -y mise
