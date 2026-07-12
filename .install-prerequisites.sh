@@ -209,17 +209,25 @@ install_ubuntu() {
     dpkg -s "$pkg" >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y "$pkg"
   done
 
-  # Add 1Password apt repo + GPG keyring (idempotent). The apt repo is
+  # Add 1Password apt repo + GPG keyring (idempotent), per
+  # https://support.1password.com/install-linux/#debian-or-ubuntu — the repo is
   # arch-partitioned (amd64 at /linux/debian/amd64, arm64 at /linux/debian/arm64),
-  # so each arch gets its own single-arch `deb` line; the old /linux/apt/debian
-  # path 404s. Per https://support.1password.com/install-linux/#debian-or-ubuntu
+  # so the `deb` line pins the native arch; the old /linux/apt/debian path 404s.
+  # This bootstrap .list only has to survive until the install below: the
+  # 1password deb's postinst takes over the repo definition — it writes the
+  # deb822 /etc/apt/sources.list.d/1password.sources signed by the SAME
+  # /usr/share/keyrings/1password-archive-keyring.gpg and comments out this
+  # .list — so nothing else may manage this repo (apt rejects the entire source
+  # list when one source carries two different Signed-By values; the chezmoi
+  # Ubuntu installer only cleans the neutralized .list up).
   if ! dpkg -s 1password 1password-cli >/dev/null 2>&1; then
+    local arch
+    arch="$(dpkg --print-architecture)"
     "${SUDO[@]}" mkdir -p /usr/share/keyrings
     curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
-      | "${SUDO[@]}" gpg --dearmor -o /usr/share/keyrings/1password.gpg
+      | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
     printf '%s\n' \
-      "deb [arch=amd64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/amd64 stable main" \
-      "deb [arch=arm64 signed-by=/usr/share/keyrings/1password.gpg] https://downloads.1password.com/linux/debian/arm64 stable main" \
+      "deb [arch=${arch} signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/${arch} stable main" \
       | "${SUDO[@]}" tee /etc/apt/sources.list.d/1password.list >/dev/null
     "${SUDO[@]}" apt-get update -qq
     "${SUDO[@]}" apt-get install -y 1password 1password-cli

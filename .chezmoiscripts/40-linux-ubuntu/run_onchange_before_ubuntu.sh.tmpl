@@ -148,6 +148,20 @@ dotnet_tools=(
 )
 
 setup_apt_repos() {
+  # The 1password repo is package-managed, not aptRepos-managed: the 1password
+  # deb's postinst writes the deb822 /etc/apt/sources.list.d/1password.sources
+  # (Signed-By /usr/share/keyrings/1password-archive-keyring.gpg) and comments
+  # out any 1password.list. An earlier revision managed 1password.list here
+  # anyway, so the converge loop below kept resurrecting its `deb ` lines with a
+  # different signed-by= — two live definitions of one source, which apt rejects
+  # wholesale ("Conflicting values set for option Signed-By"), breaking every
+  # apt operation on the host. Drop that legacy .list (and its keyring) once the
+  # package-managed .sources exists; keep this cleanup ahead of the loop so a
+  # broken host heals before the first apt invocation.
+  if [[ -f /etc/apt/sources.list.d/1password.sources && -f /etc/apt/sources.list.d/1password.list ]]; then
+    "${SUDO[@]}" rm -f /etc/apt/sources.list.d/1password.list /usr/share/keyrings/1password.gpg
+  fi
+
   # Converge each repo's .list to the rendered lines instead of only creating
   # it when missing: a stale definition from an earlier revision (the retired
   # mise.jdx.dev/deb repo written by .install-prerequisites.sh, a line missing
