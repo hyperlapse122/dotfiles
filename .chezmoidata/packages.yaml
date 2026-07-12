@@ -10,6 +10,7 @@ packages:
         - https://downloads.1password.com/linux/keys/1password.asc  # 1Password package signing key
         - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
         - https://dl.google.com/linux/linux_signing_key.pub  # Google Chrome repo signing key
+        - https://repo.cider.sh/RPM-GPG-KEY  # Cider Collective repo signing key
       # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
       repos:
         # 1Password desktop app + CLI stable RPM repo
@@ -42,6 +43,15 @@ packages:
             enabled=1
             gpgcheck=1
             gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+        # Cider (Apple Music client) RPM repo (x86_64 only; Cider ships no other arch)
+        - id: cider
+          content: |
+            [cidercollective]
+            name=Cider Collective Repository
+            baseurl=https://repo.cider.sh/rpm/RPMS
+            enabled=1
+            gpgcheck=1
+            gpgkey=https://repo.cider.sh/RPM-GPG-KEY
       # Remote .repo files added via `dnf config-manager addrepo`.
       repofiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
@@ -107,6 +117,9 @@ packages:
 
         # Web browser
         - google-chrome-stable  # Google Chrome (stable channel)
+
+        # Music player (Apple Music client; requires a purchased license)
+        - Cider  # Cider Apple Music client (from the Cider Collective repo)
 
         # Container runtime (rootless Podman + tooling)
         - podman  # daemonless OCI container engine
@@ -230,6 +243,15 @@ packages:
           keyring-url: https://dl.google.com/linux/linux_signing_key.pub
           sources-list-lines:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
+        - id: cider
+          # Cider (Apple Music client). Per https://repo.cider.sh the docs dearmor the key to
+          # /usr/share/keyrings/cider-archive-keyring.gpg, but the generic aptRepos loop dearmors
+          # every key to /usr/share/keyrings/<id>.gpg, which apt accepts identically. arch=amd64
+          # pinned: the repo ships only linux-x64 debs (binary-arm64/armhf/i386 indexes are empty),
+          # so an unpinned line would fail to resolve on non-amd64 hosts.
+          keyring-url: https://repo.cider.sh/APT-GPG-KEY
+          sources-list-lines:
+            - "deb [arch=amd64 signed-by=/usr/share/keyrings/cider.gpg] https://repo.cider.sh/apt stable main"
         - id: claude-desktop
           # Claude desktop app (Linux beta — Debian-based only; Anthropic ships no RPM,
           # so there is no Fedora counterpart). Per
@@ -317,6 +339,9 @@ packages:
 
         # Web browser
         - google-chrome-stable  # Google Chrome (from google-chrome apt repo)
+
+        # Music player (Apple Music client; requires a purchased license)
+        - cider  # Cider Apple Music client (from the Cider apt repo)
 
         # Container runtime (rootless Podman + tooling)
         - podman  # daemonless OCI container engine
