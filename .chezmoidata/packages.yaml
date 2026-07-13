@@ -479,15 +479,24 @@ packages:
         - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
 
       # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de). The
-      # driver is nvidia-open (open GPU kernel modules, recommended for Turing+),
-      # built via DKMS and pulled from NVIDIA's CUDA apt repo. install_nvidia_support()
-      # in run_onchange_before_ubuntu.sh.tmpl adds
-      # the CUDA repo (via the cuda-keyring package) and the libnvidia-container
-      # repo on-demand under the same HAS_NVIDIA gate as the Fedora installer.
-      # Under Secure Boot the DKMS modules need a MOK enrolled, so the installer
-      # detects Secure Boot and skips the driver rather than half-installing it.
+      # driver is cuda-drivers (the proprietary-module metapackage from the
+      # NVIDIA driver installation guide's Ubuntu network-repo procedure —
+      # matching the Fedora installer's choice), built via DKMS and pulled from
+      # NVIDIA's CUDA apt repo (repo path ubuntu2604). install_nvidia_support()
+      # in run_onchange_before_ubuntu.sh.tmpl installs the running kernel's
+      # headers first (the guide's prerequisite) and adds the CUDA repo (via
+      # the cuda-keyring package) and the libnvidia-container repo on-demand
+      # under the same HAS_NVIDIA gate as the Fedora installer. Under Secure
+      # Boot the DKMS modules need a MOK enrolled: with the shim-signed MOK
+      # already enrolled the install just proceeds (dkms signs every build with
+      # it); otherwise the installer preseeds shim-signed's debconf questions
+      # with the mokPassword prompted at `chezmoi init` (8-16 chars per
+      # update-secureboot-policy; cleared again via an EXIT trap) and queues
+      # the enrollment for the next boot's MokManager. Secure Boot on with
+      # neither an enrolled MOK nor a password skips the NVIDIA stack entirely
+      # rather than half-installing an unloadable driver.
       nvidiaPackages:
-        - nvidia-open  # NVIDIA open GPU kernel modules driver (Turing+; DKMS, from CUDA apt repo)
+        - cuda-drivers  # NVIDIA proprietary driver metapackage (DKMS, from CUDA apt repo)
         - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries; from NVIDIA's CUDA apt repo)
         - nvidia-container-toolkit  # NVIDIA container runtime integration (from libnvidia-container apt repo)
         - nvidia-container-toolkit-base  # base components for the container toolkit

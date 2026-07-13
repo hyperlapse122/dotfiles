@@ -143,10 +143,10 @@ jobs:
           # reddening the render check.
           #
           # Feed blank lines on stdin with --no-tty: the Fedora/Ubuntu config template
-          # calls promptStringOnce for the LUKS passphrase, and newer chezmoi ERRORS
-          # trying to open /dev/tty in a non-interactive container instead of using the
-          # default — a blank line answers it (empty = skip enrollment). Extra lines are
-          # harmless; there is only the one prompt on a fresh HOME.
+          # calls promptStringOnce for the LUKS passphrase (and, on Ubuntu, for the
+          # Secure Boot MOK enrollment password), and newer chezmoi ERRORS trying to
+          # open /dev/tty in a non-interactive container instead of using the default —
+          # blank lines answer them (empty = skip). Extra lines are harmless.
           set +e
           printf '\n\n\n' | chezmoi apply --init \
             --exclude=scripts,externals \
