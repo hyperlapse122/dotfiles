@@ -1,0 +1,152 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-terminal-palette.sh.tmpl
+#
+# GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Sets the color palette
+# of Ptyxis — the GNOME terminal both targets ship as their default — on its
+# DEFAULT profile:
+#
+#   org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/<uuid>/ palette = '<name>'
+#
+# The palette is DATA, not script: .chezmoidata/gnome.yaml
+# `gnome.terminal.palette` is the single source of truth (see its header for the
+# value reference) — edit the yaml, not this file. The value renders into this
+# script's body, so a data edit re-triggers this run_onchange_ script
+# automatically.
+#
+# WHY gnome (the shipped value): Ptyxis's upstream schema default IS `gnome`,
+# but Ubuntu overrides it distro-wide in
+# /usr/share/glib-2.0/schemas/10_ptyxis.gschema.override with
+# `[org.gnome.Ptyxis.Profile] palette='Ubuntu'` — which is why an Ubuntu host's
+# terminal comes up purple while a Fedora host comes up stock. A schema override
+# can only be beaten at USER scope (GLib reads overrides from the system data
+# dirs only, and a dconf system-db default cannot target the per-host random
+# profile UUID path), so this script writes the palette through gsettings. On
+# Fedora it is a harmless no-op that re-asserts the upstream default; net effect
+# is that all four targets look the same.
+#
+# ONLY `palette` is touched, and only on the DEFAULT profile: font, opacity and
+# every other Ptyxis key stay on defaults, and any extra profile the user
+# created deliberately is left alone.
+#
+# GNOME normally stays on stock defaults here; this is a deliberate,
+# user-approved exception to that policy (alongside fonts, the GDM password-only
+# greeter, and the mouse accel profile).
+#
+# FRESH HOST (Ptyxis never launched): `profile-uuids` is empty, so there is no
+# profile to write to yet. The script then SEEDS one exactly as Ptyxis itself
+# would on first launch — a 32-hex-char guid (g_dbus_generate_guid() shape),
+# registered in `profile-uuids` and set as `default-profile-uuid` — so the very
+# first terminal window already opens with the right palette. If
+# `default-profile-uuid` is set but empty while `profile-uuids` is not, the
+# FIRST entry of `profile-uuids` is used (that is the profile Ptyxis falls back
+# to).
+#
+# VALUE-SIGNATURE stamp + user-respecting (same pattern as config-gnome-mouse):
+# the per-user stamp records the exact palette value this script last applied.
+# While the stamp matches, the script is a no-op — a user who later picks a
+# different palette in Ptyxis's preferences is never fought on subsequent
+# applies. Changing gnome.yaml changes the signature, so the new value is
+# re-asserted exactly once.
+#
+# onchange, no external fingerprint block needed: the rendered palette value IS
+# part of this script's content, so a gnome.yaml edit re-triggers it. Live-
+# session only: gsettings writes go through dconf-service on the session D-Bus,
+# so on a headless/TTY/first-boot apply this exits 0 WITHOUT stamping; note that
+# onchange records that skipped run as done and will NOT re-run on the next
+# apply just because a live GNOME session appeared — the palette lands on the
+# next content change or a manual `chezmoi apply --force`. Once the stamp
+# matches the signature the script is a no-op regardless.
+
+set -euo pipefail
+
+PALETTE="{{ .gnome.terminal.palette }}"
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-terminal-palette"
+
+# Signature of the exact palette this script wants applied. While the stamp
+# holds it, the user's later manual palette picks are left be; a gnome.yaml edit
+# changes it, so the new value is re-asserted exactly once.
+SIG="palette=${PALETTE}"
+
+{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-terminal-palette" -}}
+
+# Already applied this exact palette once -> respect the user's current one.
+if [[ -f "$STAMP" ]] && [[ "$(cat "$STAMP" 2>/dev/null || true)" == "$SIG" ]]; then
+  echo "config-gnome-terminal-palette: already ensured ($SIG); leaving palette alone"
+  exit 0
+fi
+
+# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+  echo "config-gnome-terminal-palette: no D-Bus session bus; skip"
+  exit 0
+fi
+command -v gsettings >/dev/null 2>&1 \
+  || { echo "config-gnome-terminal-palette: gsettings absent; skip"; exit 0; }
+
+# Ptyxis not installed => its schema is absent, and gsettings ABORTS (not just
+# fails) when asked to read/write an unknown schema. Skip instead.
+if ! gsettings list-schemas | grep -qx 'org.gnome.Ptyxis'; then
+  echo "config-gnome-terminal-palette: org.gnome.Ptyxis schema absent (Ptyxis not installed); skip"
+  exit 0
+fi
+
+# gsettings prints strings quoted ('abc') and string arrays as ['a', 'b'] (or
+# the empty array as `@as []`). Unwrap both with plain shell — no python.
+unquote() {
+  local v="$1"
+  v="${v#\'}"
+  v="${v%\'}"
+  printf '%s' "$v"
+}
+
+default_uuid="$(unquote "$(gsettings get org.gnome.Ptyxis default-profile-uuid)")"
+
+profile_uuids=()
+uuid_list="$(gsettings get org.gnome.Ptyxis profile-uuids)"
+uuid_list="${uuid_list#@as }" # empty-array type annotation
+uuid_list="${uuid_list#\[}"
+uuid_list="${uuid_list%\]}"
+while IFS= read -r entry; do
+  if [[ -n "$entry" ]]; then
+    profile_uuids+=("$entry")
+  fi
+# The trailing \n is load-bearing: without it the last (usually only) entry
+# reaches `read` unterminated, which assigns it but returns EOF -> the loop body
+# never runs, the array comes back empty, and the seed path below would clobber
+# the user's existing profile.
+done < <(printf '%s\n' "$uuid_list" | tr ',' '\n' | sed -e "s/^[[:space:]]*'//" -e "s/'[[:space:]]*$//" -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+if [[ ${#profile_uuids[@]} -eq 0 ]]; then
+  # Fresh host: Ptyxis has never run, so no profile exists. Seed the one it
+  # would have created itself (32 lowercase hex chars, g_dbus_generate_guid()
+  # shape) — uuidgen is not guaranteed to be installed, the kernel source is.
+  if [[ ! -r /proc/sys/kernel/random/uuid ]]; then
+    echo "config-gnome-terminal-palette: no profile and no /proc/sys/kernel/random/uuid to seed one; skip"
+    exit 0
+  fi
+  new_uuid="$(tr -d - < /proc/sys/kernel/random/uuid)"
+  gsettings set org.gnome.Ptyxis profile-uuids "['${new_uuid}']"
+  gsettings set org.gnome.Ptyxis default-profile-uuid "'${new_uuid}'"
+  profile_uuids=("$new_uuid")
+  default_uuid="$new_uuid"
+  echo "config-gnome-terminal-palette: seeded default Ptyxis profile ${new_uuid}"
+fi
+
+# A profile exists but no default is recorded -> Ptyxis falls back to the first
+# entry of profile-uuids; follow it rather than inventing a new profile.
+if [[ -z "$default_uuid" ]]; then
+  default_uuid="${profile_uuids[0]}"
+  echo "config-gnome-terminal-palette: default-profile-uuid empty; using first profile ${default_uuid}"
+fi
+
+gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/${default_uuid}/" \
+  palette "'${PALETTE}'"
+echo "config-gnome-terminal-palette: Ptyxis profile ${default_uuid} palette = '${PALETTE}'"
+
+# Stamp only after the desired state is confirmed reached, so any skip path
+# above retries on a later apply.
+mkdir -p "$(dirname "$STAMP")"
+printf '%s' "$SIG" > "$STAMP"
+exit 0
+{{ end -}}

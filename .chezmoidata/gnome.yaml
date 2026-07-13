@@ -19,6 +19,32 @@
 #                  (value-signature, like config-gnome-fonts): editing this
 #                  re-asserts the new value exactly once, while a user's later
 #                  manual Settings change is never fought.
+#
+# gnome.terminal:
+#   palette      : the per-profile `palette` name of Ptyxis (the GNOME terminal
+#                  on both GNOME targets — Ubuntu 26.04 and Fedora 44 ship it as
+#                  the default terminal), applied by
+#                  run_onchange_after_config-gnome-terminal-palette.sh.tmpl to
+#                  the DEFAULT Ptyxis profile
+#                  (org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/<uuid>/
+#                  key `palette`). Valid values are the palette names Ptyxis
+#                  lists in Preferences → Appearance: `gnome`, `gnome-legacy`,
+#                  `gogh`, `solarized`, … (whatever palettes the installed
+#                  Ptyxis ships).
+#                  WHY `gnome` (the shipped value): Ptyxis's own schema default
+#                  IS `gnome`, but Ubuntu overrides it distro-wide in
+#                  /usr/share/glib-2.0/schemas/10_ptyxis.gschema.override with
+#                  `[org.gnome.Ptyxis.Profile] palette='Ubuntu'`, so Ubuntu
+#                  hosts come up purple while Fedora hosts come up stock.
+#                  Writing `gnome` at user scope restores the stock GNOME
+#                  palette, so all four targets look the same (on Fedora it is a
+#                  harmless no-op — it just re-asserts the upstream default).
+#                  The script stamps the exact value it applied
+#                  (value-signature, like config-gnome-mouse): editing this
+#                  re-asserts the new value exactly once, while a user's later
+#                  manual palette pick in Ptyxis is never fought.
 gnome:
   mouse:
     accelProfile: flat
+  terminal:
+    palette: gnome

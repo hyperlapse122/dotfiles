@@ -401,13 +401,23 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `solaar.yaml` — a rules-tunable edit only changes the deployed rules.yaml
   (not the raw template text), so the data hash is what makes it restart
   Solaar to load the new value.
-- **GNOME desktop tunables**: `.chezmoidata/gnome.yaml`. Currently
-  `gnome.mouse.accelProfile` (`flat`), rendered into
-  `.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-mouse.sh.tmpl` —
-  the rendered value IS the onchange trigger, no fingerprint block. The script
-  keeps a **value-signature stamp** (like `config-gnome-fonts`): a data edit
-  re-asserts the new profile exactly once, while a user's later manual
-  Settings change is never fought. Tune the value HERE, not in the script.
+- **GNOME desktop tunables**: `.chezmoidata/gnome.yaml`. Two keys, each rendered
+  into its own `50-linux-gnome` script — the rendered value IS the onchange
+  trigger, no fingerprint block — and each keeping a **value-signature stamp**
+  (like `config-gnome-fonts`): a data edit re-asserts the new value exactly
+  once, while a user's later manual change is never fought. Tune the values
+  HERE, not in the scripts.
+  - `gnome.mouse.accelProfile` (`flat`) →
+    `run_onchange_after_config-gnome-mouse.sh.tmpl`.
+  - `gnome.terminal.palette` (`gnome`) →
+    `run_onchange_after_config-gnome-terminal-palette.sh.tmpl`: the `palette`
+    key of the DEFAULT Ptyxis profile (the GNOME terminal on both targets),
+    written at user scope because Ubuntu forces `palette='Ubuntu'` distro-wide
+    via `/usr/share/glib-2.0/schemas/10_ptyxis.gschema.override` (Fedora already
+    defaults to `gnome`, so there it is a no-op). Skips when the
+    `org.gnome.Ptyxis` schema is absent; on a fresh host where Ptyxis has never
+    run it seeds the profile UUID Ptyxis would have created, so the first
+    terminal window already comes up stock.
 - **mxm4-haptic env knobs**: `.chezmoidata/haptic.yaml`.
   `haptic.daemon.{pacingMs,debounceMs,pollMs}` and
   `haptic.notify.{minGapMs,skipReplaces,denyApps,battery}` render as explicit
