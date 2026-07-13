@@ -181,7 +181,8 @@ fi
 # is compiled: Fedora ships ko_KR.UTF-8 precompiled via glibc-langpack-ko, but
 # Ubuntu generates locales on demand from the `locales` package. Drive locale-gen
 # and update-locale straight from the installed /etc/locale.conf so this stays in
-# lockstep with that single source of truth.
+# lockstep with that single source of truth, plus the extra_locales baseline
+# below — generated but never selected as a LANG/LC_* default.
 if [[ "$os_id" == ubuntu && -f /etc/locale.conf ]] \
   && command -v locale-gen >/dev/null 2>&1 \
   && command -v update-locale >/dev/null 2>&1; then
@@ -194,8 +195,19 @@ if [[ "$os_id" == ubuntu && -f /etc/locale.conf ]] \
     locale_vars+=("${locale_key}=${locale_value}")
   done < /etc/locale.conf
 
+  # Extra locales to GENERATE beyond the locale.conf selection (never handed to
+  # update-locale, so LANG/LC_* stay whatever locale.conf picks): en_US.UTF-8 is
+  # the baseline many tools assume exists. Fedora needs no counterpart —
+  # glibc-langpack-en is effectively always installed there.
+  extra_locales=(en_US.UTF-8)
+
   if [[ ${#locale_vars[@]} -gt 0 ]]; then
-    mapfile -t locale_values < <(printf '%s\n' "${locale_vars[@]}" | cut -d= -f2 | sort -u)
+    mapfile -t locale_values < <(
+      {
+        printf '%s\n' "${locale_vars[@]}" | cut -d= -f2
+        printf '%s\n' "${extra_locales[@]}"
+      } | sort -u
+    )
     printf '  -> locale-gen %s\n' "${locale_values[*]}"
     "${SUDO[@]}" locale-gen "${locale_values[@]}"
     printf '  -> update-locale %s\n' "${locale_vars[*]}"
