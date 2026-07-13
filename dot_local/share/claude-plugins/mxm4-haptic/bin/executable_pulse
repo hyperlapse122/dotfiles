@@ -1,0 +1,40 @@
+#!/usr/bin/env sh
+# pulse <WAVEFORM> — fire-and-forget MX Master 4 haptic buzz.
+#
+# Invoked by the sibling hooks/hooks.json (generated from .chezmoidata/haptic.yaml
+# -> haptic.claude) on Claude Code lifecycle events. It hands the waveform name to
+# the mxm4-hapticd user daemon through the one-shot `mxm4-haptic` client; all
+# device I/O, discovery, debounce and pacing live in the daemon.
+#
+# CONTRACT: this script ALWAYS exits 0 and always prints nothing.
+# A Claude Code hook that exits non-zero surfaces an error to the user, and exit
+# 2 BLOCKS the event outright. A buzz that cannot be delivered — daemon stopped,
+# mouse asleep or unpaired, binary not built yet, waveform typo'd — must do
+# neither. Every failure path here is a silent no-op. Do not "improve" this by
+# letting an error escape.
+#
+# Linux-only: mxm4-hapticd owns Linux hidraw for the MX Master 4 (HID++ 0x19B0),
+# so there is nothing to pulse anywhere else. The plugin only deploys on Linux
+# (root .chezmoiignore), but the guard keeps the script honest on its own.
+
+[ "$(uname -s)" = "Linux" ] || exit 0
+
+waveform="${1-}"
+[ -n "$waveform" ] || exit 0
+
+# Prefer the absolute path. ~/.local/bin IS on a hook's PATH today (Claude Code
+# inherits the session env), but that rests on shell-profile seeding rather than
+# an explicit environment.d export, so it is an implicit dependency — don't lean
+# on it. Fall back to PATH only if the well-known location is missing.
+haptic="${HOME}/.local/bin/mxm4-haptic"
+if [ ! -x "$haptic" ]; then
+  haptic="$(command -v mxm4-haptic 2>/dev/null)" || exit 0
+  [ -n "$haptic" ] || exit 0
+fi
+
+# The client is non-blocking (~1 ms; a 500 ms socket write timeout bounds the
+# worst case) and silent on success. Exit 1 = daemon unreachable, 2 = unknown
+# waveform. Swallow both: the buzz is a nicety, never a failure mode.
+"$haptic" "$waveform" >/dev/null 2>&1
+
+exit 0

@@ -44,6 +44,34 @@
 #                  WarningLevel watcher (mouse-battery-low pulses). Rendered
 #                  as 1/0: the binary treats "0" or "false" as off, any other
 #                  value as on.
+#
+# haptic.claude — Claude Code hook event -> waveform, for the mxm4-haptic
+# Claude Code PLUGIN. Unlike the knobs above (which are env vars), these render
+# into the plugin's hook manifest:
+#   dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl
+# and the plugin is installed by
+#   .chezmoiscripts/70-agents/run_onchange_after_install-claude-plugins.sh.tmpl
+# Tune a waveform HERE, not in the manifest (same rule as solaar.rules
+# .gestureConfirmWaveform). Each value MUST be one of the 16 waveform names in
+# crates/mxm4-haptic/src/lib.rs (WAVEFORMS) — the plugin's hook command passes
+# it through verbatim, and an unknown name makes mxm4-haptic exit 2 (a silent
+# no-op, since the hook wrapper always exits 0).
+#
+# The map mirrors the OpenCode plugin's (packages/opencode-mxm4-haptic/
+# src/index.ts), so both agents buzz identically:
+#
+#   stop        <- session.idle       : the agent finished its turn.
+#   stopFailure <- session.error      : the turn ended on an API error.
+#   notification<- permission.updated : the agent is waiting on YOU to decide.
+#   question    <- the Question tool  : the agent asked you to pick an option
+#                                       (Claude Code's AskUserQuestion tool).
+#
+# NOTE the sub-agent gating comes free here. The OpenCode plugin must inspect
+# each session's parentID to avoid buzzing once per sub-agent during a fan-out;
+# Claude Code fires Stop/StopFailure for the ROOT agent ONLY (a sub-agent fires
+# SubagentStop, which this plugin deliberately leaves unhooked), so there is no
+# gating logic to write. Hooking SubagentStop would buzz once per sub-agent —
+# don't.
 haptic:
   daemon:
     pacingMs: 180
@@ -54,3 +82,8 @@ haptic:
     skipReplaces: true
     denyApps: []
     battery: true
+  claude:
+    stop: COMPLETED
+    stopFailure: MAD
+    notification: RINGING
+    question: RINGING

@@ -1,0 +1,80 @@
+{{- /*
+  Claude Code hook manifest for the mxm4-haptic plugin.
+
+  GENERATED from .chezmoidata/haptic.yaml (haptic.claude) — tune a waveform
+  THERE, never here. The structure (which event, which matcher) is code and
+  lives in this template; the WAVEFORM per event is the data knob.
+
+  Every hook shells out to the plugin-local bin/pulse wrapper, which is
+  fire-and-forget: it always exits 0, so a missing binary, a stopped daemon, or
+  an unplugged mouse can never block, fail, or slow a turn.
+
+  Sub-agent gating is free: Stop / StopFailure fire for the ROOT agent only
+  (a sub-agent fires SubagentStop, deliberately NOT hooked here — hooking it
+  would buzz once per sub-agent during a fan-out).
+*/ -}}
+{{- $waveforms := list
+  "SHARP STATE CHANGE" "DAMP STATE CHANGE" "SHARP COLLISION" "DAMP COLLISION"
+  "SUBTLE COLLISION" "HAPPY ALERT" "ANGRY ALERT" "COMPLETED" "SQUARE" "WAVE"
+  "FIREWORK" "MAD" "KNOCK" "JINGLE" "RINGING" "WHISPER COLLISION" -}}
+{{- /* Fail the apply loudly on a typo'd waveform rather than silently never
+       buzzing — the same "unknown name aborts" rule the system.yaml gates use.
+       The 16 names mirror crates/mxm4-haptic/src/lib.rs (WAVEFORMS). */ -}}
+{{- range $event, $waveform := .haptic.claude -}}
+{{- if not (has $waveform $waveforms) -}}
+{{- fail (printf "haptic.claude.%s = %q is not a known mxm4-haptic waveform; valid names (crates/mxm4-haptic/src/lib.rs WAVEFORMS): %s" $event $waveform (join ", " $waveforms)) -}}
+{{- end -}}
+{{- end -}}
+{{- /* `pulse` takes the waveform as a single argument. Names contain spaces
+       ("HAPPY ALERT"), so single-quote it for the sh -c the hook runs in. */ -}}
+{{- $cmd := "${CLAUDE_PLUGIN_ROOT}/bin/pulse '%s'" -}}
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf $cmd .haptic.claude.stop | quote }},
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf $cmd .haptic.claude.stopFailure | quote }},
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|elicitation_dialog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf $cmd .haptic.claude.notification | quote }},
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf $cmd .haptic.claude.question | quote }},
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

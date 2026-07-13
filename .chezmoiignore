@@ -38,6 +38,15 @@ src/garden.yaml
 ./crates
 ./packages
 
+# The mxm4-haptic Claude Code plugin drives the Linux-only mxm4-hapticd daemon
+# (it owns Linux hidraw for the MX Master 4), so there is nothing to pulse on
+# macOS/Windows — mirrors the Linux-only mxm4-haptic.js OpenCode plugin symlink
+# in .chezmoiscripts/60-build/. Skipping the deployed tree also strands nothing:
+# the installer script below is gated on linux too.
+{{- if ne .chezmoi.os "linux" }}
+.local/share/claude-plugins
+{{- end }}
+
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
 ./plans
 
@@ -66,6 +75,12 @@ src/garden.yaml
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
+# No MX Master 4 in a container, and the haptic build is skipped just above, so
+# the Claude Code haptic plugin has nothing to pulse — skip both the deployed
+# plugin tree and the `claude plugin install` script. (The dotagents skills
+# install in the same 70-agents dir is deliberately KEPT — see below.)
+.local/share/claude-plugins
+.chezmoiscripts/70-agents/*claude-plugins.sh
 # The 80-keys age-identity import is skipped above, so the encrypted ~/src
 # project registry cannot be decrypted in a container — skip it too (the
 # ~/src layout is a host concept anyway).

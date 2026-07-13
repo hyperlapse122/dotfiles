@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dotfiles",
+  "description": "Local Claude Code plugins deployed by this chezmoi repo (github.com/hyperlapse122/dotfiles).",
+  "owner": {
+    "name": "Joosung Park",
+    "email": "iam@h82.dev"
+  },
+  "plugins": [
+    {
+      "name": "mxm4-haptic",
+      "description": "Pulses the MX Master 4's built-in haptics on Claude Code lifecycle events via the mxm4-hapticd daemon.",
+      "source": "./mxm4-haptic"
+    }
+  ]
+}
