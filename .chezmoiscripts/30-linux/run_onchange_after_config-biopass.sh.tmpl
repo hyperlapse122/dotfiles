@@ -4,7 +4,18 @@
 #
 # Converge Biopass's enabled authentication methods (methods.<name>.enable in
 # ~/.config/com.ticklab.biopass/config.yaml) to the policy in
-# .chezmoidata/biopass.yaml — face-only for now, on every Linux target.
+# .chezmoidata/biopass.yaml — face-only for now, on every Linux target — and,
+# when the host carries a KNOWN RGB+IR camera pair (biopass.cameraPairs,
+# matched by v4l device name), pin methods.face.camera and
+# methods.face.anti_spoofing.ir_camera to those devices. The stable
+# /dev/v4l/by-id (then by-path) udev symlink is written in preference to raw
+# /dev/videoN, which can renumber across boots: Biopass stat()s the configured
+# path and matches the underlying device number (findCameraByPath compares
+# st_rdev in auth/face/common/camera_capture.cc), so symlinks resolve
+# correctly. A pair applies only when BOTH its names are present; a host
+# matching no pair keeps its camera keys untouched (a manual GUI pick on
+# unlisted hardware is never fought). Semantics and the name-discovery how-to
+# live in the data file's header.
 #
 # Config ABSENT → skip WITHOUT writing one: Biopass's built-in defaults are
 # already face-only (methods.face.enable=true, methods.fingerprint.enable=
@@ -15,10 +26,11 @@
 # from the app's schema for zero behavioural gain.
 #
 # run_onchange with no external dependency to fingerprint: the rendered
-# METHODS array below IS the trigger, so a .chezmoidata/biopass.yaml edit
-# re-runs this exactly once per host, and a user's later GUI toggles are
-# never fought in between (ensure-once, like the gnome value-stamp scripts —
-# no stamp needed since this only re-runs on a policy change).
+# METHODS array and camera-pair list below ARE the trigger, so a
+# .chezmoidata/biopass.yaml edit re-runs this exactly once per host, and a
+# user's later GUI toggles are never fought in between (ensure-once, like the
+# gnome value-stamp scripts — no stamp needed since this only re-runs on a
+# policy change).
 #
 # Edits with PyYAML via /usr/bin/python3 (NOT bare `python3`, which mise may
 # shadow), config-solaar-style. The config is machine-written by the app
@@ -59,11 +71,13 @@ if ! "$PYTHON" -c "import yaml" 2>/dev/null; then
   exit 0
 fi
 
-# Load, mutate only methods.<name>.enable, atomic same-directory replace
-# preserving the file mode. An unknown shape (no mapping / no methods key) is
-# left untouched: Biopass treats what it cannot parse as defaults, which are
-# face-only anyway, and clobbering an unknown future schema would be worse.
+# Load, mutate only methods.<name>.enable plus (on a known-pair host) the two
+# camera paths, atomic same-directory replace preserving the file mode. An
+# unknown shape (no mapping / no methods key) is left untouched: Biopass
+# treats what it cannot parse as defaults, which are face-only anyway, and
+# clobbering an unknown future schema would be worse.
 RESULT=$("$PYTHON" - "$CONFIG" "${METHODS[@]}" <<'PYEOF'
+import json
 import os
 import sys
 import tempfile
@@ -71,6 +85,56 @@ import tempfile
 import yaml
 
 config_path = sys.argv[1]
+
+# Known RGB+IR pairs rendered from .chezmoidata/biopass.yaml (see its header
+# for matching semantics) — [{"label": ..., "rgbName": ..., "irName": ...}].
+PAIRS = json.loads({{ .biopass.cameraPairs | toJson | quote }})
+
+# Overridable for fixture-based verification ONLY; production applies use
+# the real defaults. To smoke-test the rendered script without real
+# hardware: point CONFIG_BIOPASS_SYS_V4L at a directory of videoN/ subdirs
+# each holding `name` and `index` files, and CONFIG_BIOPASS_DEV_ROOT at a
+# directory with matching videoN files plus optional v4l/by-id|by-path
+# symlinks, then run with HOME set to a home carrying a config.yaml and a
+# stub `biopass` on PATH.
+SYS_V4L = os.environ.get("CONFIG_BIOPASS_SYS_V4L", "/sys/class/video4linux")
+DEV_ROOT = os.environ.get("CONFIG_BIOPASS_DEV_ROOT", "/dev")
+
+
+def video_nodes():
+    """Map v4l device name -> [(index, /dev/videoN)] for present nodes."""
+    nodes = {}
+    if not os.path.isdir(SYS_V4L):
+        return nodes
+    for entry in sorted(os.listdir(SYS_V4L)):
+        if not entry.startswith("video"):
+            continue
+        try:
+            with open(os.path.join(SYS_V4L, entry, "name"), encoding="utf-8") as fh:
+                name = fh.read().strip()
+            with open(os.path.join(SYS_V4L, entry, "index"), encoding="utf-8") as fh:
+                index = int(fh.read().strip())
+        except (OSError, ValueError):
+            continue
+        dev = os.path.join(DEV_ROOT, entry)
+        if os.path.exists(dev):
+            nodes.setdefault(name, []).append((index, dev))
+    return nodes
+
+
+def stable_path(dev):
+    """Prefer a persistent udev symlink (by-id, then by-path) over /dev/videoN."""
+    real = os.path.realpath(dev)
+    for subdir in ("v4l/by-id", "v4l/by-path"):
+        link_dir = os.path.join(DEV_ROOT, subdir)
+        if not os.path.isdir(link_dir):
+            continue
+        for link in sorted(os.listdir(link_dir)):
+            link_path = os.path.join(link_dir, link)
+            if os.path.realpath(link_path) == real:
+                return link_path
+    return dev
+
 
 with open(config_path, encoding="utf-8") as fh:
     config = yaml.safe_load(fh)
@@ -93,6 +157,40 @@ for spec in sys.argv[2:]:
     if method.get("enable") != want:
         method["enable"] = want
         changed.append(f"{name}={value_str}")
+
+# Known camera pair: the first pair with BOTH names present pins the RGB and
+# IR devices; per name, the lowest index is the capture node (higher indexes
+# are metadata nodes of the same interface). No match -> no camera edits.
+face = methods.get("face")
+if PAIRS and isinstance(face, dict):
+    nodes = video_nodes()
+    for pair in PAIRS:
+        rgb_name, ir_name = pair.get("rgbName"), pair.get("irName")
+        if not rgb_name or not ir_name:
+            sys.stderr.write(
+                f"config-biopass: camera pair {pair.get('label', '?')!r} lacks "
+                f"rgbName/irName; skipping it\n"
+            )
+            continue
+        rgb_nodes, ir_nodes = nodes.get(rgb_name), nodes.get(ir_name)
+        if not rgb_nodes or not ir_nodes:
+            continue
+        rgb = stable_path(min(rgb_nodes)[1])
+        ir = stable_path(min(ir_nodes)[1])
+        if face.get("camera") != rgb:
+            face["camera"] = rgb
+            changed.append(f"face.camera={rgb}")
+        anti = face.get("anti_spoofing")
+        if isinstance(anti, dict):
+            if anti.get("ir_camera") != ir:
+                anti["ir_camera"] = ir
+                changed.append(f"face.anti_spoofing.ir_camera={ir}")
+        else:
+            sys.stderr.write(
+                "config-biopass: no methods.face.anti_spoofing mapping; "
+                "skipping ir_camera\n"
+            )
+        break
 
 if not changed:
     print("already converged")
