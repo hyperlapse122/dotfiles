@@ -1,6 +1,17 @@
 ---
 name: git-branch-cleanup
-description: Prune stale remote-tracking branches and optionally delete local branches whose upstream was removed. Runs across all configured remotes by default. Triggers on "clean up dangling branches", "prune stale remotes", "remove deleted branches", "git branch cleanup", "gone branches".
+description: >
+  Playbook for pruning stale remote-tracking branches and optionally deleting
+  local branches whose upstream was removed, across all configured remotes by
+  default. Load this BEFORE running any prune/cleanup of branches. Triggers:
+  "clean up dangling branches", "prune stale remotes", "remove deleted
+  branches", "git branch cleanup", "gone branches". It covers the repo/remote
+  enumeration, the mandatory `--dry-run` preview, the `git fetch --all
+  --prune` execution (and the single-remote override), the `: gone]` local
+  branch cleanup with safe delete, the safety rules, the report format, and
+  the common scenarios. Do NOT load it for naming/renaming a branch, writing a
+  commit, or resolving a rebase (use `git-workflow`), or for PR/MR work (use
+  `pr-mr`).
 ---
 
 # Git Branch Cleanup

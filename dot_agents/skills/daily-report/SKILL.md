@@ -1,6 +1,17 @@
 ---
 name: daily-report
-description: Analyze today's git commits and produce a concise daily work log in Korean aimed at a non-developer audience. Use on requests like "daily report", "daily log", "what did I do today", "work log", "일일 업무 보고", "일일 업무 로그".
+description: >
+  Daily work-log generator — analyze today's git commits and produce a
+  concise daily work log in Korean aimed at a non-developer audience. Load
+  this BEFORE writing any daily/work log or status summary from git history.
+  Triggers: "daily report", "daily log", "what did I do today", "work log",
+  "일일 업무 보고", "일일 업무 로그". It covers the per-OS `git log` date-range
+  commands (Linux / macOS-BSD / Windows PowerShell), the business-perspective
+  grouping rules (what to drop, what to include), the mandatory
+  single-```plaintext-fence output container, and the Korean tone/depth/volume
+  rules with good and bad examples. Do NOT load it for commit-message writing
+  or branch hygiene (use `git-workflow`), or for PR/MR summaries (use
+  `pr-mr`).
 ---
 
 # Daily Log Generator

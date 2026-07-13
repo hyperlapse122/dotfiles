@@ -13,6 +13,9 @@
 | monitor or fix a CI/CD pipeline                                                            | `ci-cd-monitoring`    | poll states, CLI recipes, fix-red procedure, pre-existing-failure exception                         |
 | name/rename a branch, write a commit, or resolve a rebase                                  | `git-workflow`        | forbidden-shape table, rename recipes, commit-type table, rebase intent resolution                  |
 | edit `package.json` deps, lifecycle-script overrides, or cooldown handling                 | `js-package-managers` | per-manager override mechanics, exact-pin correction, cooldown handling                             |
+| take a single issue/PR/MR URL end-to-end (triage → fix → one PR/MR → green pipeline)       | `ship-issue`          | URL parsing, from-scratch triage + parent/sibling lookup, one-PR-per-issue, CI self-heal loop        |
+| prune stale remote-tracking branches / delete local branches whose upstream is gone        | `git-branch-cleanup`  | remote enumeration, mandatory dry-run preview, `fetch --all --prune`, safe local `: gone]` cleanup   |
+| write a daily work log / 일일 업무 보고 from today's git commits                            | `daily-report`        | per-OS date-range `git log`, business-perspective grouping, Korean plaintext-fence output contract   |
 | drive a browser / run Playwright tests                                                     | `playwright-cli`      | usage (host-safety rule is in core below)                                                           |
 
 ## Project instruction files — `CLAUDE.md` mirrors `AGENTS.md` (guardrail)

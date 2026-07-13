@@ -1,6 +1,21 @@
 ---
 name: ship-issue
-description: End-to-end issue automation — triage (or re-triage) a GitHub/GitLab issue, work item, or MR; implement the fix; create exactly one PR/MR per issue regardless of size; then monitor GitHub Actions / GitLab CI/CD and self-heal until the pipeline goes green. Triggers on phrases like "check <issue/MR/work-item URL> and create PR/MR for fix", "ship this issue", "triage and fix <URL>", "monitor pipeline and fix until green", or any single URL pointing at a GitHub issue/PR or GitLab issue/work_item/merge_request.
+description: >
+  End-to-end issue automation — triage (or re-triage) a GitHub/GitLab issue,
+  work item, or MR; implement the fix; create exactly one PR/MR per issue
+  regardless of size; then monitor GitHub Actions / GitLab CI/CD and self-heal
+  until the pipeline goes green. Load this BEFORE acting on a single
+  issue/PR/MR URL end-to-end. Triggers: "check <issue/MR/work-item URL> and
+  create PR/MR for fix", "ship this issue", "triage and fix <URL>", "monitor
+  pipeline and fix until green", or any single URL pointing at a GitHub
+  issue/PR or GitLab issue/work_item/merge_request. It covers URL parsing,
+  repo location, from-scratch triage (including the mandatory parent/sibling
+  lookup), branch + implement + commit, opening and verifying exactly one
+  PR/MR, the pipeline self-heal loop with a failure budget, the completion
+  contract (no deferred follow-ups), and the stop conditions. Do NOT load it
+  for a plain PR/MR create with no issue to triage (use `pr-mr`), for reading
+  or writing a GitLab issue on its own (use `gitlab-issues`), or for watching a
+  pipeline that is already open (use `ci-cd-monitoring`).
 ---
 
 # ship-issue
@@ -13,13 +28,13 @@ The user prompt usually looks like:
 
 or any subset thereof. Treat a bare URL as the same intent. For issue/work-item URLs, **MUST** create exactly one PR/MR for exactly one issue, regardless of implementation size. Large issues get one branch, one PR/MR, and as many commits as needed; **MUST NOT** split one issue across multiple PRs/MRs unless the user explicitly changes the issue scope first.
 
-**Load skills first.** Before doing host operations:
+**Load skills first.** Before doing host operations, load the skills this run will need:
 
-- GitHub URL → load `gh-cli` via the `skill` tool.
-- GitLab URL → load `glab` via the `skill` tool.
-- Both also use `git-master` for branch/commit/rebase hygiene — load it.
+- **Every URL** — `pr-mr` (PR/MR lifecycle: draft ordering, source-branch substitution trap, issue linking, assignment) and `git-workflow` (branch naming, commit messages, rebase hygiene). Phase 5 depends on `ci-cd-monitoring` (pipeline poll states, log fetching, fix-red procedure) — load it before touching a pipeline.
+- **GitLab URL** — additionally load `glab` (GitLab CLI) and, for issue/work-item reads, `gitlab-issues` (issue vs task, work-item URL gotcha, notes).
+- **GitHub URL** — there is no `gh-cli` skill; `pr-mr` + `git-workflow` + `ci-cd-monitoring` cover the `gh` flows used here.
 
-**Always read `~/.config/opencode/AGENTS.md`** (or in-context if already injected) before opening a PR/MR. The branch-naming, source-branch substitution trap, and assignment rules in that file are mandatory and override anything below if they conflict.
+**Always read `~/.agents/AGENTS.md`** (or in-context if already injected) before opening a PR/MR. The branch-naming, source-branch substitution trap, and assignment rules in that file are mandatory and override anything below if they conflict.
 
 ## Phase 0 — Parse the URL
 
@@ -173,9 +188,9 @@ If the `parent` endpoint returns `404`, the issue has no parent — proceed with
 
 Now triage from scratch. In parallel, fan out **before** writing any fix:
 
-- `explore` agent — find the modules/files implicated by the issue title, error messages, stack traces, or screenshots referenced.
-- `librarian` agent — only if an external library is named or an unfamiliar framework feature is involved.
-- Read the implicated files directly once `explore` has narrowed scope.
+- **Codebase search** — dispatch a read-only search subagent (whatever the host agent calls it) to find the modules/files implicated by the issue title, error messages, stack traces, or screenshots referenced. Its job is to narrow scope, not to write the fix.
+- **Library/framework docs** — only if an external library is named or an unfamiliar framework feature is involved. Consult the docs through the available documentation tool (e.g. the `context7` MCP) rather than guessing at an API.
+- Read the implicated files directly once the search has narrowed scope.
 
 If the issue has linked Figma URLs, **MUST** use the Figma MCP to fetch the latest design (re-fetch every time per the user's global agent rules). Do not skip this step.
 
@@ -244,7 +259,7 @@ Do this **before** the first commit. Renaming after pushing leaks the bad name i
 
 - Match the codebase's existing style (sample 2–3 similar files first).
 - Smallest correct change wins. Bug fix ≠ refactor.
-- Run the project's lint / typecheck / test / build commands locally before committing. The pre-PR gate in `~/.config/opencode/AGENTS.md` is non-negotiable.
+- Run the project's lint / typecheck / test / build commands locally before committing. The pre-PR gate in `~/.agents/AGENTS.md` is non-negotiable.
 
 ### 3c. Commit
 
@@ -287,7 +302,7 @@ git status                                          # MUST be clean
 git log @{u}..                                      # MUST be empty
 ```
 
-Then create the PR/MR. **MUST** pin the source branch explicitly. **MUST NOT** pass `--related-issue` (glab) or `--issue` (gh) — both trigger the source-branch substitution trap documented in `~/.config/opencode/AGENTS.md`. Link the issue **only** via a closing keyword inside the body.
+Then create the PR/MR. **MUST** pin the source branch explicitly. **MUST NOT** pass `--related-issue` (glab) or `--issue` (gh) — both trigger the source-branch substitution trap documented in `~/.agents/AGENTS.md`. Link the issue **only** via a closing keyword inside the body.
 
 **GitHub:**
 
