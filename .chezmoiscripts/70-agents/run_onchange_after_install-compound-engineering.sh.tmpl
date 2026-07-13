@@ -1,0 +1,119 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $ceRef := includeTemplate "compound-engineering-ref.tmpl" . -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering.sh.tmpl
+#
+# Installs everyinc/compound-engineering-plugin (the ce-* + lfg workflow skills)
+# into Claude Code and Codex through each agent's OWN plugin mechanism.
+#
+# WHY a plugin, and not dotagents skills: upstream ships a first-class plugin for
+# every agent this repo runs, so each agent loads the skill set natively —
+# versioned, listable (`claude plugin list` / `codex plugin list`), and removable
+# with one command — instead of being vendored in as 29 loose skill directories
+# under ~/.agents/skills. The former `[[skills]] name = "*"` wildcard entry in
+# dot_agents/private_readonly_agents.toml.tmpl is therefore gone; dotagents still
+# owns every OTHER skill and all the MCP servers. The third agent, OpenCode, has
+# no plugin CLI — its plugins are declared in config, so it picks the same
+# release up from the `plugin` array of
+# dot_config/opencode/readonly_opencode.json.tmpl (file phase, no script needed).
+#
+# Pinning, per agent — all three resolve the SAME tag via
+# .chezmoitemplates/compound-engineering-ref.tmpl, so they can never drift:
+#   - Codex    — `marketplace add --ref <tag>`, an exact pin.
+#   - OpenCode — a `git+https://…#<tag>` dependency spec, an exact pin.
+#   - Claude   — NO pin available: `claude plugin marketplace add` takes no --ref
+#     and tracks the repo's DEFAULT BRANCH. The `marketplace update` below
+#     refreshes that clone, so Claude lands on main rather than on the tag. This
+#     is an upstream CLI limitation, not a choice; the resolved tag still serves
+#     as this script's onchange trigger for Claude.
+#
+# onchange trigger: the rendered CE_REF below IS the trigger — it moves on every
+# upstream compound-engineering-* release, changing this script's content and
+# re-running the install that fetches it. There is no external file to
+# fingerprint (per the script-prefix policy in AGENTS.md).
+#
+# Idempotent: every command below no-ops and exits 0 when the marketplace is
+# already added at this ref and the plugin is already installed. The one
+# exception is a ref BUMP: `codex plugin marketplace add` refuses to move a
+# configured pin in place ("already added from a different source", exit 1), so
+# the codex path drops the marketplace and re-adds it at the new tag.
+#
+# Both CLIs write only their plugin registries — `claude plugin install` touches
+# just `enabledPlugins` + `extraKnownMarketplaces` in ~/.claude/settings.json and
+# never its `hooks` key, so aoe's session hooks and the mxm4-haptic plugin's
+# hooks are left untouched (same contract as install-claude-plugins).
+#
+# Soft-skip: this script must never fail an apply — a missing CLI or a failed
+# install warns and exits 0, and one agent failing never blocks the other. NOTE
+# the standard onchange trade-off: chezmoi records that clean exit-0 as a
+# successful run, so a skipped install is NOT retried on the next apply until the
+# fingerprint changes — after fixing the cause, re-run the commands by hand or
+# `chezmoi apply --force`.
+#
+# Container-kept (like the sibling dotagents skills install, and unlike
+# install-claude-plugins): these are agent skills, wanted in a devbox too, and
+# the script soft-skips when the CLIs are absent.
+
+set -euo pipefail
+
+MARKETPLACE_SOURCE="EveryInc/compound-engineering-plugin"
+MARKETPLACE_NAME="compound-engineering-plugin"
+PLUGIN="compound-engineering"
+CE_REF="{{ $ceRef }}"
+
+warn() { echo "install-compound-engineering: $*" >&2; }
+
+# `claude plugin install` records the plugin in ~/.claude/settings.json and codex
+# writes ~/.codex/config.toml; on a fresh machine neither dir need exist yet
+# (the same first-apply hazard install-dotagents-skills guards against).
+mkdir -p "$HOME/.claude" "$HOME/.codex" || true
+
+install_claude() {
+  if ! command -v claude >/dev/null 2>&1; then
+    warn "claude: skipped (not on PATH)"
+    return 0
+  fi
+
+  if ! claude plugin marketplace add "$MARKETPLACE_SOURCE" --scope user; then
+    warn "claude: skipped (marketplace add failed)"
+    return 0
+  fi
+
+  # Claude cannot pin a ref (see the header), so refresh its default-branch clone
+  # instead — otherwise the cached marketplace goes stale. Non-fatal: a stale
+  # cache still installs.
+  if ! claude plugin marketplace update "$MARKETPLACE_NAME"; then
+    warn "claude: marketplace refresh failed (installing from the cached clone)"
+  fi
+
+  if ! claude plugin install "${PLUGIN}@${MARKETPLACE_NAME}" --scope user; then
+    warn "claude: skipped (plugin install failed)"
+    return 0
+  fi
+}
+
+install_codex() {
+  if ! command -v codex >/dev/null 2>&1; then
+    warn "codex: skipped (not on PATH)"
+    return 0
+  fi
+
+  if ! codex plugin marketplace add "$MARKETPLACE_SOURCE" --ref "$CE_REF"; then
+    # Already configured at a DIFFERENT ref — an earlier release. Codex will not
+    # move a pin in place, so drop the marketplace and re-add it at the new tag.
+    if ! codex plugin marketplace remove "$MARKETPLACE_NAME" ||
+      ! codex plugin marketplace add "$MARKETPLACE_SOURCE" --ref "$CE_REF"; then
+      warn "codex: skipped (could not re-pin marketplace to ${CE_REF})"
+      return 0
+    fi
+  fi
+
+  if ! codex plugin add "${PLUGIN}@${MARKETPLACE_NAME}"; then
+    warn "codex: skipped (plugin add failed)"
+    return 0
+  fi
+}
+
+install_claude
+install_codex
+{{ end -}}

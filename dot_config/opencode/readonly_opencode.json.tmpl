@@ -3,17 +3,30 @@
        publish, so tags mirror the published npm versions 1:1 — whereas GitHub
        *Releases* can lag npm (e.g. a version published to npm before its
        Release is cut), which would silently downgrade an npm-installed plugin.
-       Install still happens from npm via "<name>@<version>". */ -}}
+       Install still happens from npm via "<name>@<version>".
+
+       compound-engineering is the exception: it is NOT published to npm, so it
+       installs straight from git ("<name>@git+<url>#<tag>", the pinned form
+       upstream documents in .opencode/INSTALL.md). It is the OpenCode half of
+       the same plugin .chezmoiscripts/70-agents/install-compound-engineering
+       installs into Claude Code and Codex — all three resolve the SAME release
+       tag through .chezmoitemplates/compound-engineering-ref.tmpl, so they can
+       never drift. It used to arrive as dotagents skills (the `[[skills]]` "*"
+       wildcard entry, now gone from dot_agents/private_readonly_agents.toml.tmpl).
+       Its release train is compound-engineering-*, NOT the repo's other tag
+       trains — hence the shared lookup rather than a plain gitHubLatestTag. */ -}}
 {{- $ohMyOpenagent := (gitHubLatestTag "code-yeongyu/oh-my-openagent").Name | trimPrefix "v" -}}
 {{- $anthropicAuth := (gitHubLatestTag "ex-machina-co/opencode-anthropic-auth").Name | trimPrefix "v" -}}
 {{- $wakatime := (gitHubLatestTag "angristan/opencode-wakatime").Name | trimPrefix "v" -}}
+{{- $compoundEngineering := includeTemplate "compound-engineering-ref.tmpl" . -}}
 {
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": "notify",
   "plugin": [
     "oh-my-openagent@{{ $ohMyOpenagent }}",
     "@ex-machina/opencode-anthropic-auth@{{ $anthropicAuth }}",
-    "opencode-wakatime@{{ $wakatime }}"
+    "opencode-wakatime@{{ $wakatime }}",
+    "compound-engineering@git+https://github.com/EveryInc/compound-engineering-plugin.git#{{ $compoundEngineering }}"
   ],
   "lsp": {
     "buf": {

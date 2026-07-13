@@ -55,7 +55,11 @@ set -euo pipefail
 # template. Comment-only; never executed.
 #   microsoft/playwright-cli@{{ (gitHubLatestRelease "microsoft/playwright-cli").TagName }}
 #   getsentry/dotagents@{{ (gitHubLatestRelease "getsentry/dotagents").TagName }}
-#   everyinc/compound-engineering-plugin@{{ includeTemplate "compound-engineering-ref.tmpl" . }}
+#
+# NOT provisioned here: everyinc/compound-engineering-plugin. It is installed
+# through each agent's native plugin mechanism instead — see the sibling
+# install-compound-engineering script (Claude Code + Codex) and the opencode.json
+# `plugin` array (OpenCode).
 
 skip() { exit 0; }
 

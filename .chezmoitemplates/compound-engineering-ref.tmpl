@@ -4,10 +4,14 @@
        cli-*), so `gitHubLatestRelease` would eventually resolve to the wrong one —
        take the newest release whose tag carries the compound-engineering- prefix.
 
-       Shared so the ref rendered into ~/.agents/agents.toml and the copy embedded
-       in the install script's onchange fingerprint can never drift apart:
-         - dot_agents/private_readonly_agents.toml.tmpl (the [[skills]] "*" entry)
-         - .chezmoiscripts/70-agents/run_onchange_after_install-dotagents-skills.sh.tmpl
+       Shared so the three agents that install this plugin can never land on
+       different releases:
+         - .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering.sh.tmpl
+           (Codex pins the marketplace snapshot to this tag; Claude Code cannot
+           pin — its CLI takes no ref — so there the tag is only the onchange
+           trigger, and it tracks the default branch)
+         - dot_config/opencode/readonly_opencode.json.tmpl (the `plugin` array's
+           git+https://…#<tag> dependency spec)
     */ -}}
 {{- range (gitHubReleases "everyinc/compound-engineering-plugin") -}}
 {{-   if hasPrefix "compound-engineering-" .TagName -}}

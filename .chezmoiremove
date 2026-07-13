@@ -1,1 +1,17 @@
 .config/opencode/commands
+
+# Orphaned compound-engineering skills. They used to be fetched into
+# ~/.agents/skills/ by the dotagents `[[skills]] name = "*"` wildcard entry;
+# that entry is gone, because the plugin is now installed natively per agent
+# (see the compound-engineering section in AGENTS.md). dotagents does NOT prune
+# skill directories it no longer declares — its lock file drops them but the
+# dirs stay, and its `sync` cannot run here at all (the chezmoi-managed
+# ~/.agents/agents.toml is 0400, so sync's rewrite of it EACCESes). Left behind,
+# every ce-* skill would load TWICE: once as a stale directory here and once
+# from the plugin.
+#
+# Safe: none of the eleven chezmoi-managed local skills under dot_agents/skills/
+# match these patterns (`ci-cd-monitoring` does not match `ce-*`), and dotagents
+# will never re-create them now that the wildcard entry is gone.
+.agents/skills/ce-*
+.agents/skills/lfg

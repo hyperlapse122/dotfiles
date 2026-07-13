@@ -5,8 +5,14 @@
 
        install-dotagents-skills embeds these same refs in its onchange
        fingerprint, so a new upstream release re-triggers the install that
-       actually fetches it — keep the two in sync (the compound-engineering
-       lookup is shared via .chezmoitemplates/compound-engineering-ref.tmpl).
+       actually fetches it — keep the two in sync.
+
+       NOT here: everyinc/compound-engineering-plugin. It ships a first-class
+       plugin for every agent this repo runs, so it is installed through each
+       agent's own plugin mechanism instead of being vendored in as dotagents
+       skills — see .chezmoiscripts/70-agents/install-compound-engineering
+       (Claude Code + Codex) and the `plugin` array of
+       dot_config/opencode/readonly_opencode.json.tmpl (OpenCode).
 
        These are GitHub API calls: run chezmoi through the zsh wrapper (or
        `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is injected. */ -}}
@@ -14,7 +20,7 @@ version = 1
 agents = ["claude", "codex"]
 
 [trust]
-github_orgs = ["getsentry", "microsoft", "shadcn", "everyinc"]
+github_orgs = ["getsentry", "microsoft", "shadcn"]
 git_domains = ["git.jpi.app"]
 
 [[skills]]
@@ -33,12 +39,6 @@ ref = "main"
 name = "dotagents"
 source = "getsentry/dotagents"
 ref = {{ (gitHubLatestRelease "getsentry/dotagents").TagName | quote }}
-
-# The whole compound-engineering skill set (ce-*, lfg).
-[[skills]]
-name = "*"
-source = "everyinc/compound-engineering-plugin"
-ref = {{ includeTemplate "compound-engineering-ref.tmpl" . | quote }}
 
 [[skills]]
 name = "ci-cd-monitoring"
