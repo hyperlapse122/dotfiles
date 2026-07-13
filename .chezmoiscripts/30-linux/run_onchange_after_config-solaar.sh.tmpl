@@ -54,16 +54,23 @@
 #
 # Config edit is idempotent: re-running on an already-correct config writes
 # nothing and touches no backup. The Solaar restart in section 4, however, now
-# fires on every run (when the service is active), so a rules.yaml-only change
-# — which re-runs this script via the rules.yaml.tmpl fingerprint below — is
-# still picked up even when divert-keys was already correct.
+# fires on every run (when the service is active), so a rules-only change —
+# an edit to rules.yaml.tmpl or to the solaar.rules tunables in solaar.yaml,
+# either of which re-runs this script via the fingerprint below — is still
+# picked up even when divert-keys was already correct.
 #
-# rules.yaml.tmpl content fingerprint — chezmoi hashes this rendered script to
-# decide whether to re-run it, so embedding the sha256 of the deployed Solaar
-# rules template here forces a re-run whenever rules.yaml.tmpl changes (a
-# gesture remap or a haptic-path edit). That re-run re-applies rules.yaml and
-# triggers the restart below. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/solaar/rules.yaml.tmpl")) }}
+# Rules dependency fingerprint — chezmoi hashes this rendered script to decide
+# whether to re-run it, so embedding the sha256 of the deployed Solaar rules
+# template AND of .chezmoidata/solaar.yaml forces a re-run whenever either
+# changes. The template hash catches a gesture remap / haptic-path edit; the
+# data hash catches a rules-tunable edit (solaar.rules.thumbWheelMultiplier /
+# gestureConfirmWaveform), which changes the DEPLOYED rules.yaml without
+# changing the raw template text this fingerprint would otherwise see — the
+# device entries below already re-trigger via the rendered TARGETS array, but
+# the rules tunables render only into rules.yaml. Either way the re-run
+# re-applies rules.yaml and reaches the restart below, so Solaar reloads.
+# Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/solaar/rules.yaml.tmpl" ".chezmoidata/solaar.yaml")) }}
 set -euo pipefail
 
 CONFIG="${HOME}/.config/solaar/config.yaml"
@@ -230,8 +237,9 @@ echo "config-solaar: $RESULT"
 # 4. Restart Solaar so it reloads its rules + diversion state. This fires on
 #    EVERY run of this script, not only when the divert-keys edit above
 #    reported CHANGED: the script re-runs whenever its rendered content
-#    changes, which includes the rules.yaml.tmpl fingerprint near the top — so
-#    a rules-only edit (new gesture map, haptic path) lands a fresh
+#    changes, which includes the rules fingerprint near the top (rules.yaml.tmpl
+#    + .chezmoidata/solaar.yaml) — so a rules-only edit (new gesture map,
+#    haptic path, scroll multiplier, confirm waveform) lands a fresh
 #    ~/.config/solaar/rules.yaml while leaving divert-keys already correct
 #    ($RESULT == UNCHANGED). Solaar only re-reads rules.yaml on (re)start, so we
 #    must restart regardless of $RESULT to pick those up.

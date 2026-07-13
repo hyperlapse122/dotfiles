@@ -1,0 +1,25 @@
+[Unit]
+Description=MX Master 4 haptic daemon (owns the Bolt receiver HID++ session)
+# Sole owner of the hidraw device: does HID++ discovery, debounce, queueing
+# and paced playback. The thin client (mxm4-haptic, spawned by Solaar rules)
+# and the notification bridge (mxm4-haptic-notify) talk to it over the
+# AF_UNIX socket at $XDG_RUNTIME_DIR/mxm4-haptic.sock.
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/mxm4-hapticd
+Restart=always
+RestartSec=2
+# Pacing/debounce/poll knobs rendered from .chezmoidata/haptic.yaml
+# (haptic.daemon.*) — EDIT THE DATA, not this file; a data edit re-runs the
+# build script (fingerprint), which daemon-reloads and restarts this unit.
+# Every knob is rendered explicitly (even at its default) so the effective
+# value is always visible in `systemctl --user show`; the Rust source defaults
+# (crates/mxm4-haptic/src/bin/mxm4-hapticd.rs) apply only when the binary runs
+# OUTSIDE this unit (by hand; the macOS launchd plist renders no env).
+Environment=MXM4D_PACING_MS={{ .haptic.daemon.pacingMs }}
+Environment=MXM4D_DEBOUNCE_MS={{ .haptic.daemon.debounceMs }}
+Environment=MXM4D_POLL_MS={{ .haptic.daemon.pollMs }}
+
+[Install]
+WantedBy=default.target

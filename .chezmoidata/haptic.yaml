@@ -1,0 +1,56 @@
+# mxm4-haptic runtime tunables, rendered as Environment= lines into the Linux
+# systemd user unit templates:
+#   dot_config/systemd/user/mxm4-hapticd.service.tmpl        (haptic.daemon.*)
+#   dot_config/systemd/user/mxm4-haptic-notify.service.tmpl  (haptic.notify.*)
+#
+# Single source of truth (like packages.yaml): tune a knob HERE, not in the
+# unit files. The build script
+# (.chezmoiscripts/60-build/run_onchange_after_build-mxm4-haptic.sh.tmpl)
+# fingerprints this file alongside the unit templates, so a knob edit re-runs
+# it — `systemctl --user daemon-reload` + a restart of the active units — and
+# the new values take effect on the same apply.
+#
+# Every knob mirrors an env var read by the Rust binaries
+# (crates/mxm4-haptic/src/bin/). The values below ARE the Rust source
+# defaults, kept in lockstep; the units render every knob explicitly (even at
+# its default) so the effective value is always visible in the unit, and the
+# source defaults are only the fallback for a binary running OUTSIDE the units
+# (invoked by hand, or the macOS launchd plist, which renders no env).
+#
+# haptic.daemon — mxm4-hapticd (src/bin/mxm4-hapticd.rs):
+#   pacingMs   : MXM4D_PACING_MS. Minimum gap held AFTER a pulse so the motor
+#                finishes the waveform before the next fires (the firmware
+#                exposes no "playback done" event; this is a duration
+#                estimate).
+#   debounceMs : MXM4D_DEBOUNCE_MS. Pulses arriving within this of the last
+#                one are dropped.
+#   pollMs     : MXM4D_POLL_MS. hidraw read poll quantum; also bounds how late
+#                a queued play command is noticed — keep small (8 ms is
+#                imperceptible vs the pacing) so button-hold haptics feel
+#                immediate.
+#
+# haptic.notify — mxm4-haptic-notify (src/bin/mxm4-haptic-notify.rs):
+#   minGapMs     : MXM4_NOTIFY_MIN_GAP_MS. Min ms between forwarded pulses
+#                  (the daemon debounces too; this just avoids hammering it on
+#                  notification storms).
+#   skipReplaces : MXM4_NOTIFY_SKIP_REPLACES. true skips notification
+#                  *updates* (replaces_id != 0 — progress bars, now-playing);
+#                  false also pulses on them. Rendered as 1/0: the binary
+#                  treats "0" as false, any other value as true.
+#   denyApps     : MXM4_NOTIFY_DENY. List of notification app_name values to
+#                  ignore (e.g. [Spotify, discord]); rendered comma-joined,
+#                  [] renders an empty value = deny nothing.
+#   battery      : MXM4_NOTIFY_BATTERY. false disables the UPower battery
+#                  WarningLevel watcher (mouse-battery-low pulses). Rendered
+#                  as 1/0: the binary treats "0" or "false" as off, any other
+#                  value as on.
+haptic:
+  daemon:
+    pacingMs: 180
+    debounceMs: 120
+    pollMs: 8
+  notify:
+    minGapMs: 800
+    skipReplaces: true
+    denyApps: []
+    battery: true

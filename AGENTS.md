@@ -25,7 +25,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`, `.solaar`) |
+| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`, `.solaar`, `.gnome`, `.haptic`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, cli-proxy-api, ast-grep, buf, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -373,15 +373,41 @@ keyring entry can no longer decrypt the stored ciphertexts.
   array IS the trigger. Soft-skips without `codium` on PATH (recorded as done —
   onchange trade-off); a gallery/network failure exits non-zero so it retries
   on the next apply.
-- **Solaar per-device mouse settings**: `.chezmoidata/solaar.yaml`
-  (`solaar.devices` — one entry per mouse: model ID, name, and
+- **Solaar per-device mouse settings + rule tunables**: `.chezmoidata/solaar.yaml`.
+  `solaar.devices` (one entry per mouse: model ID, name, and
   `path`/`value`/`label` setting specs; the yaml header carries the
-  per-setting reference). Renders into the TARGETS array of
+  per-setting reference) renders into the TARGETS array of
   `.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl`, which
-  edits `~/.config/solaar/config.yaml` directly and restarts Solaar. Add/tune
-  a device setting HERE, not in the script; editing the data re-triggers the
-  script (the rendered array is part of the trigger, alongside the script's
-  rules.yaml.tmpl fingerprint).
+  edits `~/.config/solaar/config.yaml` directly and restarts Solaar.
+  `solaar.rules` renders into the deployed `dot_config/solaar/rules.yaml.tmpl`:
+  `thumbWheelMultiplier` (the thumb-wheel horizontal scroll-speed multiplier,
+  rendered as `MouseScroll: [-N, 0]`/`[N, 0]`) and `gestureConfirmWaveform`
+  (the haptic confirm tick the four directional gestures play — one of the 16
+  names in `crates/mxm4-haptic/src/lib.rs` WAVEFORMS). Add/tune HERE, not in
+  the script/template; a device edit re-triggers the script via the rendered
+  array, and the script's fingerprint hashes BOTH `rules.yaml.tmpl` AND
+  `solaar.yaml` — a rules-tunable edit only changes the deployed rules.yaml
+  (not the raw template text), so the data hash is what makes it restart
+  Solaar to load the new value.
+- **GNOME desktop tunables**: `.chezmoidata/gnome.yaml`. Currently
+  `gnome.mouse.accelProfile` (`flat`), rendered into
+  `.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-mouse.sh.tmpl` —
+  the rendered value IS the onchange trigger, no fingerprint block. The script
+  keeps a **value-signature stamp** (like `config-gnome-fonts`): a data edit
+  re-asserts the new profile exactly once, while a user's later manual
+  Settings change is never fought. Tune the value HERE, not in the script.
+- **mxm4-haptic env knobs**: `.chezmoidata/haptic.yaml`.
+  `haptic.daemon.{pacingMs,debounceMs,pollMs}` and
+  `haptic.notify.{minGapMs,skipReplaces,denyApps,battery}` render as explicit
+  `Environment=` lines into the Linux unit templates
+  (`dot_config/systemd/user/mxm4-hapticd.service.tmpl`,
+  `mxm4-haptic-notify.service.tmpl`; booleans as the 1/0 tokens the Rust
+  parsing expects, `denyApps` comma-joined). The shipped values match the Rust
+  source defaults (`crates/mxm4-haptic/src/bin/`), which remain the fallback
+  only outside the units (manual runs; the macOS launchd plist renders no
+  env). The `build-mxm4-haptic` fingerprint hashes this file plus the unit
+  templates, so a knob edit re-runs the build script — daemon-reload + restart
+  of the active units — on the same apply. Tune a knob HERE, not in the units.
 - **AI model selection (opencode + oh-my-openagent)**: `.chezmoidata/models.yaml`.
   `models.opencode` (`model`/`smallModel`) renders into
   `dot_config/opencode/readonly_opencode.json.tmpl` (top-level

@@ -1,0 +1,24 @@
+# GNOME desktop tunables, rendered into the .chezmoiscripts/50-linux-gnome/
+# config scripts (GNOME otherwise stays on stock defaults — every key here is
+# one of the deliberate, user-approved policy exceptions documented in
+# AGENTS.md).
+#
+# Single source of truth (like packages.yaml): tune a value HERE, not in the
+# script — each value renders into the consuming script's body, so a data edit
+# re-triggers that run_onchange_ script automatically (no separate fingerprint
+# needed).
+#
+# gnome.mouse:
+#   accelProfile : org.gnome.desktop.peripherals.mouse accel-profile, applied
+#                  by run_onchange_after_config-gnome-mouse.sh.tmpl. One of
+#                  libinput's profiles: `flat` (constant 1:1 mapping, no
+#                  speed-dependent curve — the standard choice for high-DPI
+#                  mice; pointer speed then comes from hardware DPI, see
+#                  solaar.yaml `dpi`), `adaptive` (the GNOME default curve),
+#                  or `custom`. The script stamps the exact value it applied
+#                  (value-signature, like config-gnome-fonts): editing this
+#                  re-asserts the new value exactly once, while a user's later
+#                  manual Settings change is never fought.
+gnome:
+  mouse:
+    accelProfile: flat

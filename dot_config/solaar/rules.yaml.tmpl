@@ -73,8 +73,11 @@
 # with GLib on every GNOME host.
 #
 # Haptic confirm: each of the four DIRECTIONAL gestures also fires
-# `mxm4-haptic "SUBTLE COLLISION"` — a tactile "your flick registered" tick,
-# Logi-action-ring style. It uses the mxm4-hapticd daemon client, invoked by
+# `mxm4-haptic "<waveform>"` — a tactile "your flick registered" tick,
+# Logi-action-ring style. The waveform is DATA, not template:
+# .chezmoidata/solaar.yaml `solaar.rules.gestureConfirmWaveform` (must be one
+# of the 16 names in crates/mxm4-haptic/src/lib.rs WAVEFORMS) — edit it there,
+# not here. It uses the mxm4-hapticd daemon client, invoked by
 # its ABSOLUTE path ~/.local/bin/mxm4-haptic (the autostart Solaar systemd
 # user service has NO guaranteed ~/.local/bin on PATH, so a bare `mxm4-haptic`
 # would not resolve — the rendered Execute below carries the full path), NOT
@@ -117,7 +120,7 @@
 {{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Grid View]
 {{ end -}}
-- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "{{ .solaar.rules.gestureConfirmWaveform }}"]
 ...
 
 ---
@@ -127,7 +130,7 @@
 {{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Show Desktop]
 {{ end -}}
-- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "{{ .solaar.rules.gestureConfirmWaveform }}"]
 ...
 
 ---
@@ -137,7 +140,7 @@
 {{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Left]
 {{ end -}}
-- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "{{ .solaar.rules.gestureConfirmWaveform }}"]
 ...
 
 ---
@@ -147,7 +150,7 @@
 {{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Right]
 {{ end -}}
-- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
+- Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "{{ .solaar.rules.gestureConfirmWaveform }}"]
 ...
 
 # Press with no movement (a plain click on the gesture-diverted thumb button)
@@ -163,7 +166,7 @@
 {{ end -}}
 ...
 
-# === Thumb-wheel horizontal scroll, 2x (desktop-agnostic) ===
+# === Thumb-wheel horizontal scroll, multiplied (desktop-agnostic) ===
 #
 # Both thumb wheels (MX Master 4 + MX Master 3S) are DIVERTED by
 # config-solaar.sh (`thumb-scroll-mode: true` for both models in
@@ -172,15 +175,17 @@
 # horizontal scroll — this rule REPLACES that native H-scroll with a
 # rule-driven one. `Test: thumb_wheel_up/down` (diversion.py TESTS) yields
 # the signed wheel displacement, and MouseScroll MULTIPLIES its [x, y]
-# amounts by that number — the 2 below is the scroll-speed multiplier, tune
-# it here (upstream's documented example uses 1). The sign convention (up ->
-# negative x) matches that upstream example. MouseScroll synthesizes through
-# /dev/uinput under Wayland, granted by the same 70-uinput-solaar.rules udev
-# rule as KeyPress above.
+# amounts by that number — the rendered value below is the scroll-speed
+# multiplier, DATA not template: .chezmoidata/solaar.yaml
+# `solaar.rules.thumbWheelMultiplier` (upstream's documented example uses 1) —
+# tune it there, not here. The sign convention (up -> negative x) matches
+# that upstream example. MouseScroll synthesizes through /dev/uinput under
+# Wayland, granted by the same 70-uinput-solaar.rules udev rule as KeyPress
+# above.
 ---
 - Feature: THUMB WHEEL
-- Rule: [Test: thumb_wheel_up, MouseScroll: [-2, 0]]
-- Rule: [Test: thumb_wheel_down, MouseScroll: [2, 0]]
+- Rule: [Test: thumb_wheel_up, MouseScroll: [-{{ .solaar.rules.thumbWheelMultiplier }}, 0]]
+- Rule: [Test: thumb_wheel_down, MouseScroll: [{{ .solaar.rules.thumbWheelMultiplier }}, 0]]
 ...
 
 # Example: map a diverted Back Button press to Alt+Left.

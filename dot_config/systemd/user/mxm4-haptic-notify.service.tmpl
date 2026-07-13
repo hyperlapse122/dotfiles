@@ -1,0 +1,30 @@
+[Unit]
+Description=Desktop-notification to MX Master 4 haptic bridge
+# Eavesdrops the session bus for org.freedesktop.Notifications.Notify (any
+# freedesktop-notifications desktop: KDE, GNOME) and watches the system bus
+# for UPower battery WarningLevel drops, forwarding a waveform to
+# mxm4-hapticd. Needs the session bus, hence the graphical-session binding;
+# needs the daemon, hence the ordering + Wants.
+After=mxm4-hapticd.service graphical-session.target
+Wants=mxm4-hapticd.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/mxm4-haptic-notify
+Restart=always
+RestartSec=2
+# Filtering knobs rendered from .chezmoidata/haptic.yaml (haptic.notify.*) —
+# EDIT THE DATA, not this file; a data edit re-runs the build script
+# (fingerprint), which daemon-reloads and restarts this unit. Every knob is
+# rendered explicitly (even at its default): booleans as the 1/0 tokens the
+# binary parses (mxm4-haptic-notify.rs treats "0" as off), denyApps
+# comma-joined (empty = deny nothing; quoted because app names may contain
+# spaces). The Rust source defaults apply only outside this unit.
+Environment=MXM4_NOTIFY_MIN_GAP_MS={{ .haptic.notify.minGapMs }}
+Environment=MXM4_NOTIFY_SKIP_REPLACES={{ if .haptic.notify.skipReplaces }}1{{ else }}0{{ end }}
+Environment="MXM4_NOTIFY_DENY={{ .haptic.notify.denyApps | join "," }}"
+Environment=MXM4_NOTIFY_BATTERY={{ if .haptic.notify.battery }}1{{ else }}0{{ end }}
+
+[Install]
+WantedBy=graphical-session.target

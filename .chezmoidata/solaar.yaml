@@ -1,11 +1,34 @@
-# Manifest of per-device Solaar settings, applied to
-# ~/.config/solaar/config.yaml by
-# .chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl.
+# Manifest of Solaar mouse configuration:
+#   solaar.devices — per-device settings, applied to
+#     ~/.config/solaar/config.yaml by
+#     .chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl.
+#   solaar.rules   — rule tunables, rendered into the deployed
+#     ~/.config/solaar/rules.yaml by dot_config/solaar/rules.yaml.tmpl.
 #
-# Single source of truth (like packages.yaml): add/tune a device setting HERE,
-# not in the script. Each entry renders into the script's TARGETS array, so any
-# edit here re-triggers the run_onchange_ script automatically — no separate
-# fingerprint needed.
+# Single source of truth (like packages.yaml): add/tune a device setting or a
+# rule tunable HERE, not in the script/template. Device entries render into
+# the script's TARGETS array (so a device edit re-triggers the run_onchange_
+# script by itself); rule tunables render into the DEPLOYED rules.yaml, whose
+# raw template text would NOT change on a data-only edit — which is why the
+# config-solaar script's fingerprint block also hashes THIS file: any edit
+# here re-runs it, and its restart step makes Solaar load the new state.
+#
+# Rule tunables reference (solaar.rules, consumed by
+# dot_config/solaar/rules.yaml.tmpl — semantics detailed in that template's
+# header):
+#   thumbWheelMultiplier   : horizontal scroll-speed multiplier for the
+#                            diverted thumb wheels. MouseScroll MULTIPLIES its
+#                            [x, y] amounts by the signed wheel displacement
+#                            from `Test: thumb_wheel_up/down`, so this renders
+#                            as `MouseScroll: [-N, 0]` (wheel up) /
+#                            `MouseScroll: [N, 0]` (wheel down). Positive
+#                            integer; upstream's documented example uses 1.
+#   gestureConfirmWaveform : haptic waveform the four directional thumb-button
+#                            gestures play as their "flick registered" confirm
+#                            tick (via ~/.local/bin/mxm4-haptic). Must be one
+#                            of the 16 names in crates/mxm4-haptic/src/lib.rs
+#                            WAVEFORMS (e.g. SHARP STATE CHANGE, SHARP
+#                            COLLISION, SUBTLE COLLISION, HAPPY ALERT, KNOCK).
 #
 # Shape — solaar.devices is a list, one entry per mouse:
 #   modelId:  12-hex from `solaar show` -> Model ID line.
@@ -49,11 +72,14 @@
 #                              mode causes in many apps.
 #   thumb-scroll-mode        : true DIVERTS the thumb wheel: its movement is
 #                              reported as THUMB WHEEL HID++ notifications
-#                              (consumed by the rules.yaml 2x H-scroll rule)
-#                              instead of firmware-native horizontal scroll.
+#                              (consumed by the rules.yaml H-scroll rule,
+#                              speed set by `rules.thumbWheelMultiplier`
+#                              above) instead of firmware-native horizontal
+#                              scroll.
 #   dpi                      : pointer resolution, raised from the 1000
 #                              default to compensate for the GNOME flat accel
-#                              profile (config-gnome-mouse) — with no adaptive
+#                              profile (config-gnome-mouse, per
+#                              .chezmoidata/gnome.yaml) — with no adaptive
 #                              accel curve, pointer speed comes from hardware
 #                              DPI; tune the value here.
 #
@@ -61,6 +87,9 @@
 # `haptic-level` stays user-owned (Solaar GUI preference, see the script
 # header) and is intentionally NOT listed here.
 solaar:
+  rules:
+    thumbWheelMultiplier: 2
+    gestureConfirmWaveform: SUBTLE COLLISION
   devices:
     - modelId: B04200000000
       name: MX Master 4
@@ -70,7 +99,7 @@ solaar:
         - { path: scroll-ratchet-torque, value: 75, label: "ratchet torque -> 75" }
         - { path: hires-smooth-resolution, value: false, label: "hi-res wheel resolution -> off" }
         - { path: thumb-scroll-mode, value: true, label: "thumb wheel -> diverted (rules H-scroll)" }
-        - { path: dpi, value: 2800, label: "DPI -> 2800" }
+        - { path: dpi, value: 2400, label: "DPI -> 2400" }
     # No scroll-ratchet-torque here: the force-sensing ratchet is MX Master 4
     # hardware, absent on the 3S.
     - modelId: B03400000000
@@ -80,4 +109,4 @@ solaar:
         - { path: smart-shift, value: 12, label: "SmartShift threshold -> 12" }
         - { path: hires-smooth-resolution, value: false, label: "hi-res wheel resolution -> off" }
         - { path: thumb-scroll-mode, value: true, label: "thumb wheel -> diverted (rules H-scroll)" }
-        - { path: dpi, value: 2800, label: "DPI -> 2800" }
+        - { path: dpi, value: 2400, label: "DPI -> 2400" }
