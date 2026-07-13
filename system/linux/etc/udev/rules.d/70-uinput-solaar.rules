@@ -1,0 +1,26 @@
+# /etc/udev/rules.d/70-uinput-solaar.rules — installed by chezmoi
+# (system/linux/etc/**, .chezmoiscripts/30-linux/install-system-10-files).
+#
+# Grant the ACTIVE SEAT USER write access to /dev/uinput so Solaar's rule
+# engine can synthesize input under Wayland: the MX Master gesture rules in
+# ~/.config/solaar/rules.yaml use KeyPress (Super+Left/Right window tiling on
+# GNOME) and MouseScroll (thumb-wheel horizontal scroll), and under Wayland
+# both write through evdev uinput — "For uinput to work the user must have
+# write access for /dev/uinput" (logitech_receiver/diversion.py). Stock
+# Ubuntu/Fedora grant no user access to the node. TAG+="uaccess" has
+# systemd-logind maintain a per-session ACL for the active seat user —
+# granted on login, revoked on seat change — instead of a permanent
+# group/mode widening.
+#
+# ORDERING: the filename number MUST stay < 73 — the uaccess tag is
+# processed by systemd's /usr/lib/udev/rules.d/73-seat-late.rules, and a tag
+# added by a later-sorting rule is never seen. OPTIONS+="static_node=uinput"
+# makes udevd apply this rule to the static /dev/uinput node at daemon
+# startup, before any device event / module load.
+#
+# NOTE: the installer only reloads the rules database (`udevadm control
+# --reload`, deliberately no `udevadm trigger`), so on the FIRST install the
+# ACL lands at next boot. To grant it to the current session immediately:
+#   sudo setfacl -m "u:${USER}:rw" /dev/uinput
+# (the same command diversion.py's own header documents).
+KERNEL=="uinput", SUBSYSTEM=="misc", OPTIONS+="static_node=uinput", TAG+="uaccess"

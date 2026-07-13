@@ -9,6 +9,11 @@
 #   1. divert-keys: route specific reprogrammable buttons through Solaar's
 #      rule engine (HID++ notifications) instead of the device firmware
 #      default (which sends a stock mouse button).
+#   2. thumb-scroll-mode: divert the MX Master 4 thumb wheel so THUMB WHEEL
+#      notifications reach the rules.yaml horizontal-scroll rule.
+#   3. scroll/feel ergonomics (smart-shift, scroll-ratchet-torque,
+#      hires-smooth-resolution): tuned values enforced declaratively so
+#      every machine the mouse pairs with feels identical.
 #
 # Haptic intensity (`haptic-level`) is intentionally NOT enforced here —
 # leave that to the user's Solaar GUI preference. The mxm4-haptic helper
@@ -64,7 +69,11 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 #                  a nested-dict path (e.g. `divert-keys.416`). The script
 #                  splits on the first dot: no dot means scalar, dot means
 #                  the second part is an int key into the named dict.
-#   value        : int. Interpreted per setting (see below).
+#   value        : int, or the literal token `true`/`false` for boolean
+#                  settings — parsed to a real Python bool so it round-trips
+#                  as a YAML boolean (Solaar stores e.g.
+#                  `hires-smooth-resolution: false`, not 0). Interpreted per
+#                  setting (see below).
 #   label        : free-form, only for log output.
 #
 # Setting reference for MX Master 4 (model B04200000000):
@@ -77,6 +86,27 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 #                              button; 195 = Mouse Gesture Button (the
 #                              MX Master 3S thumb button; also present on
 #                              the MX Master 4 but left Regular there).
+#   smart-shift              : SmartShift ratchet->freespin threshold (wheel
+#                              speed at which the ratchet releases). 12 is
+#                              the tuned value from the primary host, made
+#                              cross-machine declarative.
+#   scroll-ratchet-torque    : MX Master 4 ratchet detent force (percent).
+#                              75 = firm-but-flickable, tuned like above.
+#   hires-smooth-resolution  : false keeps the wheel at LOW hi-res
+#                              resolution — the standard fix for the
+#                              "jumpy/too-fast scroll" the high-resolution
+#                              mode causes in many apps.
+#   thumb-scroll-mode        : true DIVERTS the thumb wheel: its movement is
+#                              reported as THUMB WHEEL HID++ notifications
+#                              (consumed by the rules.yaml 2x H-scroll rule)
+#                              instead of firmware-native horizontal scroll.
+#
+# All four are deliberate cross-machine ergonomics; by contrast
+# `haptic-level` stays user-owned (GUI preference, see the header note
+# above) and is intentionally NOT listed here.
+#
+# Keys verified against the live host's ~/.config/solaar/config.yaml as
+# written by Solaar 1.1.19.
 #
 # For nested-dict settings the path is `<setting>.<int_key>` (e.g.
 # `divert-keys.416`). For scalar settings the path is just the setting
@@ -85,6 +115,10 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 # needs lockstep cross-machine state).
 TARGETS=(
   "B04200000000:divert-keys.416:2:MX Master 4 / Haptic -> Mouse Gestures"
+  "B04200000000:smart-shift:12:MX Master 4 / SmartShift threshold -> 12"
+  "B04200000000:scroll-ratchet-torque:75:MX Master 4 / ratchet torque -> 75"
+  "B04200000000:hires-smooth-resolution:false:MX Master 4 / hi-res wheel resolution -> off"
+  "B04200000000:thumb-scroll-mode:true:MX Master 4 / thumb wheel -> diverted (rules H-scroll)"
   "B03400000000:divert-keys.195:2:MX Master 3S / Mouse Gesture Button -> Mouse Gestures"
 )
 
@@ -127,13 +161,20 @@ for spec in sys.argv[2:]:
         )
         continue
     model_id, setting_path, value_str, label = parts
-    try:
-        value = int(value_str)
-    except ValueError:
-        sys.stderr.write(
-            f"config-solaar: non-int value {value_str!r} in {spec!r}; skipping\n"
-        )
-        continue
+    if value_str in ("true", "false"):
+        # Boolean settings (hires-smooth-resolution, thumb-scroll-mode)
+        # must land as real bools so PyYAML serializes them back as the
+        # YAML booleans Solaar wrote (`false`, not `0`).
+        value = value_str == "true"
+    else:
+        try:
+            value = int(value_str)
+        except ValueError:
+            sys.stderr.write(
+                f"config-solaar: value {value_str!r} in {spec!r} is neither "
+                f"an int nor true/false; skipping\n"
+            )
+            continue
     if "." in setting_path:
         setting_name, key_str = setting_path.split(".", 1)
         try:

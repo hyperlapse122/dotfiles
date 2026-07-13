@@ -3,8 +3,9 @@
 #
 # Rules trigger from HID++ notifications, so buttons must first be set to a
 # diverted action in Solaar's Key/Button Diversion setting. Under Wayland,
-# actions that synthesize input use /dev/uinput; the system Logitech module
-# installs Solaar's udev rules through hardware.logitech.wireless.enable.
+# actions that synthesize input (KeyPress, MouseScroll) write /dev/uinput;
+# the shipped udev rule system/linux/etc/udev/rules.d/70-uinput-solaar.rules
+# (TAG+="uaccess") grants the active seat user that access.
 #
 # === Thumb-button mouse gestures (MX Master 4 + MX Master 3S) ===
 #
@@ -55,16 +56,20 @@
 #
 #   hold + flick Up    -> Activities overview   (OverviewActive=true)   + haptic
 #   hold + flick Down  -> leave the overview    (OverviewActive=false)  + haptic
-#   hold + flick Left  -> haptic tick only (see below)
-#   hold + flick Right -> haptic tick only (see below)
+#   hold + flick Left  -> tile window left      (KeyPress Super+Left)   + haptic
+#   hold + flick Right -> tile window right     (KeyPress Super+Right)  + haptic
 #   press, no movement -> overview search       (FocusSearch — the KRunner analog)
 #
-# GNOME exposes no stable D-Bus method for window tiling or workspace
-# switching (the KDE Left/Right actions), and simulating GNOME's default
-# <Super>Left / <Super>Right keybindings via Solaar's KeyPress would need
-# /dev/uinput write access that stock hosts don't grant. Left/Right therefore
-# keep only the haptic confirm — the flick still registers tactilely — until a
-# stable action exists to wire here. gdbus ships with GLib on every GNOME host.
+# GNOME exposes no stable D-Bus method for window tiling (the KDE Left/Right
+# actions), so Left/Right instead synthesize mutter's NATIVE edge-tiling
+# keybindings <Super>Left / <Super>Right via Solaar's KeyPress. KeyPress
+# writes /dev/uinput under Wayland — access stock hosts don't grant, and that
+# the shipped 70-uinput-solaar.rules udev rule (see the header above) now
+# does. KeyPress arguments are X keysym names resolved through Solaar's
+# XK_KEYS map (Super_L, Left, Right all present in 1.1.19's
+# keysyms/keysymdef.py); the [[keys], click] form below is the exact shape
+# 1.1.19's regularize_args parses and its data() re-serializes. gdbus ships
+# with GLib on every GNOME host.
 #
 # Haptic confirm: each of the four DIRECTIONAL gestures also fires
 # `mxm4-haptic "SUBTLE COLLISION"` — a tactile "your flick registered" tick,
@@ -81,16 +86,24 @@
 # quoting/injection surface).
 #
 # Wayland caveat (printed by `solaar show`): "rules cannot access modifier
-# keys in Wayland". Every action below uses a DBus Execute instead of a
-# KeyPress so it never depends on modifier state; invokeShortcut on the
-# org.kde.kglobalaccel /component/kwin interface bypasses keymap/layout. The
-# Grid View and Overview effects must stay enabled in System Settings ->
-# Desktop Effects; if disabled, invokeShortcut silently no-ops (re-enable the
-# effect rather than adding a per-press loadEffect call).
+# keys in Wayland". That caveat is about READING the live modifier state (a
+# rule cannot condition on, or reliably merge with, modifiers the user is
+# already holding) — SYNTHESIZING input is unaffected: KeyPress/MouseScroll
+# write through /dev/uinput, granted by the 70-uinput-solaar.rules udev rule.
+# The desktop-toggle actions still prefer a DBus Execute wherever a stable
+# method exists (never keymap/modifier-dependent; invokeShortcut on the
+# org.kde.kglobalaccel /component/kwin interface bypasses keymap/layout);
+# only the GNOME tiling gestures and the thumb-wheel scroll rule below
+# synthesize input. The Grid View and Overview effects must stay enabled in
+# System Settings -> Desktop Effects; if disabled, invokeShortcut silently
+# no-ops (re-enable the effect rather than adding a per-press loadEffect
+# call).
 #
 # Diversion setup is owned by scripts/linux/config-solaar.sh (TARGETS array):
-#   B04200000000 divert-keys.416 = 2  (MX Master 4 Haptic -> Mouse Gestures)
-#   B03400000000 divert-keys.195 = 2  (MX Master 3S Gesture Button -> Mouse Gestures)
+#   B04200000000 divert-keys.416 = 2     (MX Master 4 Haptic -> Mouse Gestures)
+#   B04200000000 thumb-scroll-mode = true (MX Master 4 thumb wheel -> diverted;
+#                                          feeds the THUMB WHEEL rule below)
+#   B03400000000 divert-keys.195 = 2     (MX Master 3S Gesture Button -> Mouse Gestures)
 # Do NOT divert via `solaar config ... divert-keys` on 1.1.19 (it flips the
 # runtime state but crashes during persistence); config-solaar.sh edits
 # config.yaml directly and restarts Solaar only when something changed.
@@ -117,7 +130,9 @@
 
 ---
 - MouseGesture: Mouse Left
-{{ if not $gnomeRules -}}
+{{ if $gnomeRules -}}
+- KeyPress: [[Super_L, Left], click]
+{{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Left]
 {{ end -}}
 - Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
@@ -125,7 +140,9 @@
 
 ---
 - MouseGesture: Mouse Right
-{{ if not $gnomeRules -}}
+{{ if $gnomeRules -}}
+- KeyPress: [[Super_L, Right], click]
+{{ else -}}
 - Execute: [qdbus-qt6, org.kde.kglobalaccel, /component/kwin, invokeShortcut, Window Quick Tile Right]
 {{ end -}}
 - Execute: ["{{ .chezmoi.homeDir }}/.local/bin/mxm4-haptic", "SUBTLE COLLISION"]
@@ -144,16 +161,29 @@
 {{ end -}}
 ...
 
+# === Thumb-wheel horizontal scroll, 2x (desktop-agnostic) ===
+#
+# The MX Master 4 thumb wheel is DIVERTED by config-solaar.sh
+# (`thumb-scroll-mode: true` in its TARGETS array), so wheel movement arrives
+# here as THUMB WHEEL notifications instead of the firmware's native
+# horizontal scroll — this rule REPLACES that native H-scroll with a
+# rule-driven one. `Test: thumb_wheel_up/down` (diversion.py TESTS) yields
+# the signed wheel displacement, and MouseScroll MULTIPLIES its [x, y]
+# amounts by that number — the 2 below is the scroll-speed multiplier, tune
+# it here (upstream's documented example uses 1). The sign convention (up ->
+# negative x) matches that upstream example. MouseScroll synthesizes through
+# /dev/uinput under Wayland, granted by the same 70-uinput-solaar.rules udev
+# rule as KeyPress above.
+---
+- Feature: THUMB WHEEL
+- Rule: [Test: thumb_wheel_up, MouseScroll: [-2, 0]]
+- Rule: [Test: thumb_wheel_down, MouseScroll: [2, 0]]
+...
+
 # Example: map a diverted Back Button press to Alt+Left.
+# (KeyPress takes a flat key-name list, or [[keys], action] as here — a flat
+# 3-element [Alt_L, Left, click] would be read as three KEY NAMES on 1.1.19.)
 # ---
 # - Key: [Back Button, pressed]
-# - KeyPress: [Alt_L, Left, click]
-# ...
-#
-# Example: use thumb-wheel notifications for horizontal scrolling.
-# Requires THUMB WHEEL diversion enabled in Solaar.
-# ---
-# - Feature: THUMB WHEEL
-# - Rule: [Test: thumb_wheel_up, MouseScroll: [-1, 0]]
-# - Rule: [Test: thumb_wheel_down, MouseScroll: [1, 0]]
+# - KeyPress: [[Alt_L, Left], click]
 # ...
