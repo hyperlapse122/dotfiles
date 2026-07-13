@@ -59,10 +59,11 @@
   git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
   git fetch origin
   # default-branch worktree + session; -w takes the EXISTING branch (no -b)
-  aoe add "$proj" -t "[<group-slug>-]<project-name>" -g "<group-slug>" -w <default-branch>
+  aoe add "$proj" -t <default-branch> -g "[<group-slug>/]<project-name>" -w <default-branch>
   ```
 
-- The default-branch session's `aoe` title **MUST** be `[<group-slug>-]<project-name>` and its group `<group-slug>` — `examvue-365-flow/shadcn-registry` → `-t examvue-365-flow-shadcn-registry -g examvue-365-flow`; a project with no group segment drops both (`examvue-apps` → `-t examvue-apps`). The worktree **directory** name is not free — `aoe`'s `worktree.bare_repo_path_template = "./{branch}"` derives it from the branch, so the default-branch worktree is always `./main`. Session title and worktree directory are decoupled by `session.tie_workdir_to_name = false`; **MUST NOT** turn that on — with the tie on, `aoe session rename` MOVES the worktree directory to match the new title.
+- An `aoe` session's **title** is its worktree name (`main` for the default branch), and its **group** is the project's path under `~/src/<host>/` — `[<group-slug>/]<project-name>`, a slash-nested group path (`examvue-365-flow/shadcn-registry`; a project with no group segment is just `examvue-apps`).
+- Project identity lives in the **group**, never in the title. `session.tie_workdir_to_name` (aoe's default, on) makes the worktree directory leaf follow the title's slug — it bypasses `worktree.bare_repo_path_template` — so a project-named title would rename the directory too, and a later `aoe session rename` would MOVE it. **MUST NOT** put the project or group name in a session title, and **MUST NOT** disable the tie to work around that.
 - Exception: the chezmoi source dir (`~/.local/share/chezmoi`) is chezmoi-owned and stays a plain checkout outside `~/src`.
 
 ## Branch naming — gate before first commit
