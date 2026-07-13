@@ -8,7 +8,7 @@ on_launch = ["mise install --locked -yq"]
 container_runtime = "apple_container"
 {{- else -}}
 container_runtime = "podman"
-{{- end }}
+{{- end -}}
 {{ if and (eq "linux" .chezmoi.os) (eq "fedora" .chezmoi.osRelease.id) -}}
 selinux_relabel = true
 {{- end }}
@@ -19,6 +19,7 @@ default_attach_mode = "tmux"
 default_tool = "claude"
 new_session_attach_mode = "tmux"
 yolo_mode_default = false
+auto_resume_on_restart = false
 
 [worktree]
 delete_branch_on_cleanup = true
