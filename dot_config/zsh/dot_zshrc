@@ -20,3 +20,22 @@ source <(minikube completion zsh)
 
 # Set up helm completions
 source <(helm completion zsh)
+
+# Run chezmoi with a GitHub token: its gitHub* template functions (e.g.
+# gitHubLatestRelease in .chezmoiexternals/) read GITHUB_TOKEN-family env vars,
+# not `gh auth`, and anonymous API calls hit 403 rate limits. Token comes from
+# 1Password; if `op` is missing or the read fails/returns empty, warn and run
+# chezmoi without a token instead of blocking.
+chezmoi() {
+  if [[ -n "${GITHUB_TOKEN-}" || -n "${GITHUB_ACCESS_TOKEN-}" || -n "${CHEZMOI_GITHUB_ACCESS_TOKEN-}" ]]; then
+    command chezmoi "$@"
+    return
+  fi
+  local token
+  if command -v op >/dev/null 2>&1 && token="$(op read 'op://Private/GitHub/PAT' 2>/dev/null)" && [[ -n "$token" ]]; then
+    GITHUB_TOKEN="$token" command chezmoi "$@"
+    return
+  fi
+  print -u2 'chezmoi: no GitHub token from op; running unauthenticated (GitHub API rate limits may apply)'
+  command chezmoi "$@"
+}
