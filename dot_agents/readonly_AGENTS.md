@@ -15,6 +15,12 @@
 | edit `package.json` deps, lifecycle-script overrides, or cooldown handling                 | `js-package-managers` | per-manager override mechanics, exact-pin correction, cooldown handling                             |
 | drive a browser / run Playwright tests                                                     | `playwright-cli`      | usage (host-safety rule is in core below)                                                           |
 
+## Project instruction files — `CLAUDE.md` mirrors `AGENTS.md` (guardrail)
+
+- `AGENTS.md` is the **only** place project instructions are written. Every directory that contains an `AGENTS.md` **MUST** also contain a sibling `CLAUDE.md` whose entire content is the single import line `@AGENTS.md` — nothing else, no heading, no copied prose.
+- **MUST** create that sibling `CLAUDE.md` in the same turn you create an `AGENTS.md`, and **MUST** repair it whenever you find an `AGENTS.md` without one (or with a `CLAUDE.md` that carries its own content instead of the import).
+- Applies at **every** level — repo root and any nested directory. Never let the two files drift into divergent copies: edit `AGENTS.md`, leave `CLAUDE.md` as the one-line pointer.
+
 ## Secrets (guardrail)
 
 - **MUST NOT** commit secrets, even briefly or in a squash-fixup: `.env` / `.env.*` (except `*.example` / `*.sample` templates), private keys (`*.pem`, `id_*` without `.pub`, `*.age`, GPG/SSH keys), API tokens, OAuth client / webhook / deploy secrets, cloud creds (`~/.aws/credentials`, token-bearing kubeconfigs, service-account JSON), DB connection strings with passwords.
