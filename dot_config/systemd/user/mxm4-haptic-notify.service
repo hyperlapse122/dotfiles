@@ -1,8 +1,10 @@
 [Unit]
 Description=Desktop-notification to MX Master 4 haptic bridge
-# Eavesdrops the session bus for org.freedesktop.Notifications.Notify and
-# forwards a waveform to mxm4-hapticd. Needs the session bus, hence the
-# graphical-session binding; needs the daemon, hence the ordering + Wants.
+# Eavesdrops the session bus for org.freedesktop.Notifications.Notify (any
+# freedesktop-notifications desktop: KDE, GNOME) and watches the system bus
+# for UPower battery WarningLevel drops, forwarding a waveform to
+# mxm4-hapticd. Needs the session bus, hence the graphical-session binding;
+# needs the daemon, hence the ordering + Wants.
 After=mxm4-hapticd.service graphical-session.target
 Wants=mxm4-hapticd.service
 PartOf=graphical-session.target
@@ -16,6 +18,7 @@ RestartSec=2
 # Environment=MXM4_NOTIFY_MIN_GAP_MS=800
 # Environment=MXM4_NOTIFY_SKIP_REPLACES=1
 # Environment=MXM4_NOTIFY_DENY=Spotify,discord
+# Environment=MXM4_NOTIFY_BATTERY=0
 
 [Install]
 WantedBy=graphical-session.target
