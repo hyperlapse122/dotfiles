@@ -1,4 +1,6 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
+{{- $mokPassword := "" -}}
+{{- if hasKey . "mokPassword" }}{{ $mokPassword = .mokPassword }}{{ end -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -85,6 +87,15 @@ export DEBIAN_FRONTEND=noninteractive
 # Keep apt invocations behind one sudo/env wrapper; the rendered script still
 # performs apt-get update and apt-get install operations through this array.
 APT=("${SUDO[@]}" env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get)
+
+# Secure Boot MOK enrollment password, prompted once by chezmoi at `chezmoi
+# init` (`.chezmoi.toml.tmpl` promptStringOnce — same mechanism and trade-offs
+# as the LUKS passphrase: unmasked input, rendered into this script's transient
+# run-script, so avoid `--verbose`/`--dry-run` applies with a real password;
+# base64 wraps it for shell safety only, NOT secrecy). Blank = skip the NVIDIA
+# stack on a Secure Boot host without an enrolled MOK. Used only by
+# install_nvidia_support() below.
+MOK_PASSWORD="$(printf '%s' {{ $mokPassword | b64enc | quote }} | base64 -d)"
 
 # Package sets rendered from .chezmoidata/packages.yaml.
 core_packages=(
@@ -276,26 +287,94 @@ setup_nvidia_repos() {
   fi
 }
 
+# Ubuntu signs DKMS builds with the shim-signed MOK keypair
+# (/var/lib/shim-signed/mok/MOK.priv + MOK.der); the kernel loads them under
+# Secure Boot only once that certificate is enrolled through shim. Prepare the
+# enrollment BEFORE the driver install so neither the dkms build nor the
+# package postinst has to stop and ask:
+#   * generate the keypair if missing (update-secureboot-policy --new-key), so
+#     dkms signs the NVIDIA modules with it during the package install;
+#   * preseed shim-signed's debconf password questions with the chezmoi-prompted
+#     MOK password — the dkms postinst runs `update-secureboot-policy
+#     --enroll-key`, whose interactive whiptail dialog ("configuring secure
+#     boot") would otherwise pose exactly that question mid-install.
+prepare_mok_enrollment() {
+  local mok_der="$1"
+  install_ubuntu_packages mokutil shim-signed
+  if [[ ! -f "${mok_der}" ]]; then
+    "${SUDO[@]}" update-secureboot-policy --new-key
+  fi
+  printf '%s\n' \
+    "shim-signed shim/secureboot_key password ${MOK_PASSWORD}" \
+    "shim-signed shim/secureboot_key_again password ${MOK_PASSWORD}" \
+    | "${SUDO[@]}" debconf-set-selections
+}
+
+# After the driver install, make sure the MOK certificate actually reached
+# shim's enrollment queue: the debconf-preseeded postinst path normally queues
+# it, but if it did not (e.g. the postinst enrollment was skipped), import it
+# directly with mokutil, feeding the prompted password on stdin (mokutil asks
+# for it twice). Idempotent — an already-pending request is matched by SHA1
+# certificate fingerprint and left alone. Finally drop the password from the
+# debconf database again; it has served its purpose.
+finish_mok_enrollment() {
+  local mok_der="$1" fingerprint
+  if ! "${SUDO[@]}" mokutil --test-key "${mok_der}" 2>/dev/null | grep -q 'is already enrolled'; then
+    fingerprint="$("${SUDO[@]}" openssl x509 -inform der -in "${mok_der}" -noout -fingerprint -sha1 | cut -d= -f2)"
+    if ! "${SUDO[@]}" mokutil --list-new 2>/dev/null | grep -qiF "${fingerprint}"; then
+      printf '%s\n%s\n' "${MOK_PASSWORD}" "${MOK_PASSWORD}" | "${SUDO[@]}" mokutil --import "${mok_der}"
+    fi
+    printf 'run_onchange_before_ubuntu.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the prompted MOK password; the NVIDIA modules stay unloadable until then.\n' >&2
+  fi
+  printf '%s\n' \
+    'shim-signed shim/secureboot_key password ' \
+    'shim-signed shim/secureboot_key_again password ' \
+    | "${SUDO[@]}" debconf-set-selections
+}
+
 install_nvidia_support() {
   if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
     return 0
   fi
 
-  # nvidia-open builds its GPU kernel modules with DKMS; under Secure Boot the
-  # kernel loads them only when signed by an enrolled MOK. That enrollment is an
-  # interactive shim step a noninteractive provisioner cannot complete, so a
-  # Secure Boot host skips the NVIDIA stack entirely (a black screen at boot is
-  # worse than no driver) and asks the user to enroll a MOK or turn Secure Boot
-  # off, then re-run.
+  # cuda-drivers builds its GPU kernel modules with DKMS; under Secure Boot the
+  # kernel loads them only when signed by an enrolled MOK. With the shim-signed
+  # MOK already enrolled the install just proceeds (dkms signs every build with
+  # it). Otherwise a chezmoi-prompted MOK password (see MOK_PASSWORD above)
+  # drives the enrollment non-interactively; without one, a Secure Boot host
+  # skips the NVIDIA stack entirely (a black screen at boot is worse than no
+  # driver) — re-run `chezmoi init` to enter the password, then
+  # `chezmoi apply --force`.
+  local mok_der=/var/lib/shim-signed/mok/MOK.der
+  local mok_enroll=0
   if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
-    printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled; skipping NVIDIA driver/CUDA install (nvidia-open DKMS modules need a MOK enrolled). Enroll a MOK or disable Secure Boot, then re-run.\n' >&2
-    return 0
+    if [[ -f "${mok_der}" ]] && "${SUDO[@]}" mokutil --test-key "${mok_der}" 2>/dev/null | grep -q 'is already enrolled'; then
+      : # signing key already trusted by shim; nothing to enroll
+    elif [[ -n "${MOK_PASSWORD}" && "${#MOK_PASSWORD}" -ge 8 ]]; then
+      mok_enroll=1
+      prepare_mok_enrollment "${mok_der}"
+    elif [[ -n "${MOK_PASSWORD}" ]]; then
+      printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled but the MOK password is shorter than the 8 characters mokutil requires; skipping NVIDIA driver/CUDA install. Re-run `chezmoi init` with a longer password, then `chezmoi apply --force`.\n' >&2
+      return 0
+    else
+      printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled and no MOK is enrolled; skipping NVIDIA driver/CUDA install (the DKMS modules would not load). Re-run `chezmoi init` to enter a MOK enrollment password (or enroll a MOK / disable Secure Boot), then `chezmoi apply --force`.\n' >&2
+      return 0
+    fi
   fi
 
   setup_nvidia_repos
 
   "${APT[@]}" update
+
+  # Kernel headers for the running kernel — the DKMS build prerequisite the
+  # NVIDIA driver installation guide lists first.
+  install_ubuntu_packages "linux-headers-$(uname -r)"
+
   install_ubuntu_packages "${nvidia_packages[@]}"
+
+  if [[ "${mok_enroll}" -eq 1 ]]; then
+    finish_mok_enrollment "${mok_der}"
+  fi
 
   # Emit the CDI spec so podman can inject the GPU. Enumerating the live GPU can
   # fail before the freshly built driver is loaded on first boot, so a failure
