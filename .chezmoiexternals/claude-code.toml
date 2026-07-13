@@ -21,6 +21,10 @@ type = "file"
 targetPath = '{{ printf ".local/share/claude/versions/%s%s" $latestReleaseVersion $executableExtension }}'
 url = '{{ printf "%s/%s/%s/%s" $claudeCodeBaseUrl $latestReleaseId $claudeCodePlatformId $claudeCodeBinary }}'
 executable = true
+# 0500: the binary is not rewritable in place, only replaceable by a chezmoi apply
+# that fetches a new version dir.
+private = true
+readonly = true
 
 [claude.checksum]
 sha256 = '{{ $claudeCodePlatform.checksum }}'
