@@ -85,6 +85,7 @@ packages:
         # kdotool: managed by mise (cargo:kdotool, same as Ubuntu — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
+        - tmux  # terminal multiplexer
         - xxd  # hex dump / reverse utility
         - yp-tools  # NIS/YP client utilities
 
@@ -329,6 +330,7 @@ packages:
         # kdotool: managed by mise (cargo:kdotool — no native Ubuntu package)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
+        - tmux  # terminal multiplexer
         - unzip  # zip extractor (required by the Nerd Fonts installer; Fedora pulls it in transitively)
         - xxd  # hex dump / reverse utility
         - yp-tools  # NIS/YP client utilities
