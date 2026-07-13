@@ -1,0 +1,65 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-mouse.sh.tmpl
+#
+# GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Sets the pointer
+# acceleration profile to flat:
+#
+#   org.gnome.desktop.peripherals.mouse accel-profile = 'flat'
+#
+# WHY flat: the MX Master mice used here are high-DPI; libinput's default
+# adaptive profile layers a speed-dependent software acceleration curve on
+# top, which makes pointer travel unpredictable and hard to build muscle
+# memory against. The flat profile is a constant 1:1 mapping (sensitivity
+# comes from the mouse's own DPI, no curve surprises) — the common
+# recommendation for high-DPI mice. ONLY accel-profile is touched: speed and
+# every other pointer key stay on GNOME defaults.
+#
+# GNOME normally stays on stock defaults here; this is a deliberate,
+# user-approved THIRD exception to that policy (after fonts and the GDM
+# password-only greeter).
+#
+# ONE-SHOT + user-respecting (same pattern as config-gnome-inputmethod): the
+# accel profile is a per-user setting, so this applies exactly once (tracked
+# by a per-user stamp) and never again — a user who later switches the profile
+# back in Settings is not fought on every apply.
+#
+# onchange, no external dependency: this sets one fixed gsettings key and has
+# no dependency file to fingerprint, so its onchange trigger is its own
+# rendered content — chezmoi re-runs it only when this script changes. Live-
+# session only: gsettings writes go through dconf-service on the session
+# D-Bus, so on a headless/TTY/first-boot apply this exits 0 WITHOUT stamping;
+# note that onchange records that skipped run as done and will NOT re-run on
+# the next apply just because a live GNOME session appeared — the profile
+# lands on the next content change or a manual `chezmoi apply --force`. Once
+# the stamp exists the script is a no-op regardless.
+
+set -euo pipefail
+
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-mouse-accel-profile"
+
+{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-mouse" -}}
+
+# Already ensured once -> respect the user's current profile, do nothing.
+if [[ -f "$STAMP" ]]; then
+  echo "config-gnome-mouse: already applied once ($STAMP); leaving accel-profile alone"
+  exit 0
+fi
+
+# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+  echo "config-gnome-mouse: no D-Bus session bus; skip"
+  exit 0
+fi
+command -v gsettings >/dev/null 2>&1 \
+  || { echo "config-gnome-mouse: gsettings absent; skip"; exit 0; }
+
+gsettings set org.gnome.desktop.peripherals.mouse accel-profile "'flat'"
+echo "config-gnome-mouse: org.gnome.desktop.peripherals.mouse accel-profile = 'flat'"
+
+# Stamp only after the desired state is confirmed reached, so any skip path
+# above retries on a later apply.
+mkdir -p "$(dirname "$STAMP")"
+touch "$STAMP"
+exit 0
+{{ end -}}
