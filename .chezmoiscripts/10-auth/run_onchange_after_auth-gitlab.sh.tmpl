@@ -32,12 +32,26 @@
 # phase (the package installers) needs glab, so there is no ordering cost —
 # unlike `gh`, whose token preflight must precede the installers.
 #
-# Post-login config re-assert: glab's non-interactive / token path ignores
-# --git-protocol and --api-protocol and resets container_registry_domains to
-# empty (see the auth-glab header), and `docker-credential-glab` cannot resolve
-# a registry back to its host without that mapping. So the three host config
-# keys are re-applied with `config set` after each login. (`config set` host
-# selection is `-g --host`; `-h` would be `--help`.)
+# Post-login config re-assert: the --stdin / --token branch of `glab auth login`
+# SHORT-CIRCUITS (internal/commands/auth/login/login.go, glab 1.107.0: `if
+# opts.Token != "" { ... return cfg.Write() }`). That branch calls
+# authutils.ClearAuthFields (which CLEARS the host's `user` key), writes the
+# token plus api_host / api_protocol / git_protocol from the flags, and returns
+# — so it never reaches the common tail that looks the account up via the API
+# (`Users.CurrentUser` → `cfg.Set(hostname, "user", …)`) and never applies
+# --container-registry-domains. The protocol flags DO land, so only the two keys
+# the short-circuit drops are re-asserted afterwards with `config set`:
+#
+#   * `user` — dot_config/git/config.tmpl routes https://git.jpi.app and
+#     https://gitlab.com to `!glab auth git-credential`, and the helper emits the
+#     host's `user` key as the HTTP Basic username. Empty ⇒ git sends `username=`
+#     with the token as the password and GitLab rejects it: "remote: HTTP Basic:
+#     Access denied" on every https clone / fetch / push. The username is looked
+#     up from the API per host — never hardcoded.
+#   * `container_registry_domains` — `docker-credential-glab` cannot resolve a
+#     registry back to its host without that mapping.
+#
+# (`config set` host selection is `-g --host`; `-h` would be `--help`.)
 
 set -euo pipefail
 
@@ -70,7 +84,7 @@ export GLAB_NO_PROMPT=1
 # Reads the PAT from stdin (heredoc at the call site) so the token never appears
 # in an argv / process listing.
 login_host() {
-  local host="$1" registries="$2"
+  local host="$1" registries="$2" user_json='' username=''
 
   if ! "${GLAB[@]}" auth login \
     --hostname "$host" \
@@ -84,14 +98,32 @@ login_host() {
     return 1
   fi
 
-  if ! "${GLAB[@]}" config set git_protocol https -g --host "$host" \
-    || ! "${GLAB[@]}" config set api_protocol https -g --host "$host" \
-    || ! "${GLAB[@]}" config set container_registry_domains "$registries" -g --host "$host"; then
-    printf 'auth-gitlab: %s: failed to re-assert host config (git/api protocol, container registry domains).\n' "$host" >&2
+  # The `user` key the token path cleared: look the account up through the API
+  # with the token we just stored. `glab api` prints compact single-line JSON and
+  # has no --jq flag, and `jq` is not a provisioned package here (not in
+  # .chezmoidata/packages.yaml), so the username is extracted with sed. The API
+  # call is captured in an `if !` condition — a bare `username=$(...)` assignment
+  # takes the command substitution's exit status, so under `set -e` a failed
+  # lookup would abort the script instead of reaching the explicit check below
+  # (and both hosts are meant to be attempted). The extraction itself is a lone
+  # sed over a here-string: no pipeline, hence nothing for `pipefail` to trip on.
+  if ! user_json=$("${GLAB[@]}" api user --hostname "$host"); then
+    user_json=''
+  fi
+  username=$(sed -n 's/.*"username":[[:space:]]*"\([^"]*\)".*/\1/p' <<<"$user_json")
+
+  if [[ -z "$username" ]]; then
+    printf 'auth-gitlab: %s: could not read the authenticated username from `glab api user` — refusing to leave the host config with an empty `user` key, which would make `glab auth git-credential` emit an empty HTTP Basic username and fail every https git clone/fetch/push against %s with "HTTP Basic: Access denied".\n' "$host" "$host" >&2
     return 1
   fi
 
-  printf 'auth-gitlab: %s: authenticated from the 1Password PAT (registries: %s).\n' "$host" "$registries"
+  if ! "${GLAB[@]}" config set user "$username" -g --host "$host" \
+    || ! "${GLAB[@]}" config set container_registry_domains "$registries" -g --host "$host"; then
+    printf 'auth-gitlab: %s: failed to re-assert host config (user, container registry domains).\n' "$host" >&2
+    return 1
+  fi
+
+  printf 'auth-gitlab: %s: authenticated as %s from the 1Password PAT (registries: %s).\n' "$host" "$username" "$registries"
 }
 
 # A login/config failure is NOT swallowed: exit non-zero so chezmoi records the

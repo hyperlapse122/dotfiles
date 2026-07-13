@@ -303,8 +303,13 @@ files (GPG key, GitHub/Tailscale tokens, opencode API keys under
 `dot_config/opencode/private_secrets/`). GitLab CLI auth IS secret-driven:
 `.chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.sh.tmpl` provisions the
 `git.jpi.app` + `gitlab.com` PATs from 1Password at apply time (`glab auth login
---stdin --use-keyring`, then re-asserting the `git_protocol`/`api_protocol`/
-`container_registry_domains` host keys glab's token path drops). The rendered PAT
+--stdin --use-keyring`, then re-asserting the `user` + `container_registry_domains`
+host keys glab's token path drops — it short-circuits before the API
+`CurrentUser` lookup that sets `user` and before the registry-domain mapping is
+applied; `user` is what `glab auth git-credential` hands git as the HTTP Basic
+username, and an empty one makes every https clone/fetch/push fail with
+"HTTP Basic: Access denied", so the script looks it up per host via
+`glab api user` and fails loudly rather than leaving it blank). The rendered PAT
 IS the onchange trigger, so a rotation in 1Password re-runs the login; it is
 `after_` because `glab` itself arrives from `.chezmoiexternals/glab.toml` during
 the file phase. `~/.local/bin/auth-glab` remains the on-demand OAuth
