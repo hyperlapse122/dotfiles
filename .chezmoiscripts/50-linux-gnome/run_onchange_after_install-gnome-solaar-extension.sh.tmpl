@@ -26,11 +26,18 @@
 # (same failed-vs-not-installed distinction as install-vscodium-extensions).
 #
 # Idempotent: an already-installed extension (`gnome-extensions info`) skips
-# the download entirely; `gnome-extensions enable` is idempotent (extensions-
-# tool adds the uuid to the org.gnome.shell enabled-extensions GSettings list,
-# a no-op when already present, and works even before the shell has loaded the
-# extension). A FRESHLY installed extension only loads once the GNOME session
-# restarts — the script prints a relogin note.
+# the download entirely. Enabling is a direct GSettings append to the
+# org.gnome.shell enabled-extensions list, NOT `gnome-extensions enable`: that
+# command drives the running shell's org.gnome.Shell.Extensions D-Bus API,
+# which REJECTS a uuid the shell hasn't scanned yet — and a freshly installed
+# extension stays unknown until the session restarts, so the enable would fail
+# exactly on the first install. The GSettings append works either way and makes
+# the extension auto-enable at next login; an already-listed uuid is left alone
+# (no write). A FRESHLY installed extension only loads once the GNOME session
+# restarts — the script prints a relogin note. Enabling is best-effort: a
+# genuine gsettings failure (missing schema, no dconf) warns and exits 0, since
+# the install itself succeeded and must not abort the apply; only network/API/
+# download failures exit 1 to retry on the next apply.
 #
 # onchange, no external dependency: nothing to fingerprint (the download is
 # resolved from live upstream state at run time), so its onchange trigger is
@@ -56,7 +63,7 @@ command -v curl >/dev/null 2>&1 \
 # stdlib json module — jq is not guaranteed on these hosts.
 [[ -x /usr/bin/python3 ]] \
   || { echo "install-gnome-solaar-extension: /usr/bin/python3 absent; skip"; exit 0; }
-# `gnome-extensions enable` writes the enabled-extensions GSettings key through
+# The `gsettings set` of the enabled-extensions key writes through
 # dconf-service on the session D-Bus, so a headless/TTY apply cannot finish.
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
   echo "install-gnome-solaar-extension: no D-Bus session bus; skip"
@@ -130,14 +137,62 @@ PYEOF
   echo "install-gnome-solaar-extension: installed $UUID (build for GNOME Shell ${shell_major})"
 fi
 
-# Idempotent whether freshly installed or long-present; a disabled extension is
-# re-enabled only when this script's content changes (onchange), so a user who
-# deliberately disables it is not fought on every apply.
-if ! gnome-extensions enable "$UUID"; then
-  echo "install-gnome-solaar-extension: enable FAILED for $UUID; will retry on next apply" >&2
-  exit 1
+# Enable = append the uuid to org.gnome.shell enabled-extensions directly.
+# `gnome-extensions enable` would fail here on a fresh install (the running
+# shell's D-Bus API rejects a uuid it hasn't scanned yet — see header); the
+# GSettings append works regardless and auto-enables at next login. Idempotent
+# whether freshly installed or long-present (already-listed uuid => no write);
+# a deliberately disabled extension is re-added only when this script's content
+# changes (onchange), so a user who disables it is not fought on every apply.
+# Best-effort: any gsettings failure warns and exits 0 — the install succeeded
+# and must not abort the apply.
+if current="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null)"; then
+  # The value is GVariant text — `['a@b', 'c@d']`, or `@as []` when empty —
+  # which ast.literal_eval parses once the `@as` type annotation is stripped;
+  # a python list repr of strings is valid GVariant text to write back.
+  new_value="$(/usr/bin/python3 - "$current" "$UUID" <<'PYEOF'
+import ast
+import sys
+
+raw, uuid = sys.argv[1], sys.argv[2]
+value = raw.strip()
+if value.startswith("@as"):
+    value = value[len("@as"):].strip()
+try:
+    exts = ast.literal_eval(value) if value else []
+except (ValueError, SyntaxError):
+    print("PARSE_ERROR")
+    sys.exit(0)
+if not isinstance(exts, (list, tuple)):
+    print("PARSE_ERROR")
+    sys.exit(0)
+exts = list(exts)
+if uuid in exts:
+    print("ALREADY_PRESENT")
+    sys.exit(0)
+exts.append(uuid)
+print(repr(exts))
+PYEOF
+)" || new_value="PARSE_ERROR"
+
+  case "$new_value" in
+    ALREADY_PRESENT)
+      echo "install-gnome-solaar-extension: $UUID already in enabled-extensions; nothing to write"
+      ;;
+    PARSE_ERROR)
+      echo "install-gnome-solaar-extension: WARNING: unexpected enabled-extensions value (${current}); enable $UUID manually" >&2
+      ;;
+    *)
+      if gsettings set org.gnome.shell enabled-extensions "$new_value"; then
+        echo "install-gnome-solaar-extension: added $UUID to enabled-extensions"
+      else
+        echo "install-gnome-solaar-extension: WARNING: gsettings write failed; enable $UUID manually" >&2
+      fi
+      ;;
+  esac
+else
+  echo "install-gnome-solaar-extension: WARNING: cannot read org.gnome.shell enabled-extensions (gsettings/schema/dconf unavailable); enable $UUID manually" >&2
 fi
-echo "install-gnome-solaar-extension: $UUID enabled"
 
 if ((freshly_installed)); then
   echo "install-gnome-solaar-extension: NOTE: a freshly installed extension only loads after the GNOME session restarts — log out and back in before Solaar Process/MouseProcess rules can work."
