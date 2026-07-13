@@ -216,19 +216,23 @@ EOF
 }
 
 # RPMs installed directly from a vendor URL (no repo). For each entry: skip when
-# already installed, import its GPG key(s), then install the URL matching the host
-# architecture. Runs after install_fedora_packages so the repos/metadata needed
-# for dependency resolution already exist.
+# already installed — or, for an entry pinning a `version` in the data, when the
+# installed rpm VERSION already matches the pin, so bumping the pin re-runs
+# `dnf install` as an in-place upgrade (mirrors the Ubuntu installer's
+# install_direct_debs). Then import its GPG key(s) and install the URL matching
+# the host architecture. Runs after install_fedora_packages so the
+# repos/metadata needed for dependency resolution already exist.
 install_direct_rpms() {
   local host_arch
   host_arch="$(uname -m)"
 {{ range .packages.linux.fedora.directRpms -}}
-  if rpm -q {{ .id | quote }} >/dev/null 2>&1; then
-    printf 'install-fedora.sh: %s already installed; skipping.\n' {{ .id | quote }}
+{{- $pin := get . "version" }}
+  if {{ if $pin }}[[ "$(rpm -q --qf '%{VERSION}' {{ .id | quote }} 2>/dev/null || true)" == {{ $pin | quote }} ]]{{ else }}rpm -q {{ .id | quote }} >/dev/null 2>&1{{ end }}; then
+    printf 'install-fedora.sh: %s already {{ if $pin }}at pinned version {{ $pin }}{{ else }}installed{{ end }}; skipping.\n' {{ .id | quote }}
   else
-{{ range .keys -}}
+{{ if hasKey . "keys" }}{{ range .keys -}}
     "${SUDO[@]}" rpm --import {{ . | quote }}
-{{ end -}}
+{{ end }}{{ end -}}
     case "${host_arch}" in
 {{ range $arch, $url := .rpms -}}
     {{ $arch }}) "${SUDO[@]}" dnf install -y {{ $url | quote }} ;;

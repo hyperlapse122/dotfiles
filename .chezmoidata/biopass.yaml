@@ -1,0 +1,19 @@
+# Biopass (TickLabVN/Biopass) authentication-method policy, converged into
+# each user's ~/.config/com.ticklab.biopass/config.yaml
+# (methods.<name>.enable) by
+# .chezmoiscripts/30-linux/run_onchange_after_config-biopass.sh.tmpl on every
+# Linux target. Toggle a method HERE, not in the script — the rendered values
+# are the script's onchange trigger, so a data edit re-runs it exactly once
+# per host. The package itself is version-pinned per distro in packages.yaml
+# (Ubuntu directDebs / Fedora directRpms).
+biopass:
+  methods:
+    face: true
+    # Face-only for now: Biopass's own fingerprint support stays off so
+    # fprintd keeps sole ownership of fingerprint auth (the polkit
+    # pam_fprintd wiring in system/ and GDM's gdm-fingerprint service). This
+    # matches Biopass's shipped default. When flipping to true, also revisit
+    # upstream docs/PAM.md: the pam-auth-update "Fingerprint authentication"
+    # profile should then be disabled to avoid two stacked fingerprint
+    # prompts.
+    fingerprint: false

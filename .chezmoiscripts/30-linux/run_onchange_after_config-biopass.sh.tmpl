@@ -1,0 +1,117 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# scripts/linux/config-biopass.sh
+#
+# Converge Biopass's enabled authentication methods (methods.<name>.enable in
+# ~/.config/com.ticklab.biopass/config.yaml) to the policy in
+# .chezmoidata/biopass.yaml — face-only for now, on every Linux target.
+#
+# Config ABSENT → skip WITHOUT writing one: Biopass's built-in defaults are
+# already face-only (methods.face.enable=true, methods.fingerprint.enable=
+# false — app/src-tauri/src/config.rs get_default_config, mirrored in
+# auth/core/auth_config.h), an unparseable or schema-mismatched config falls
+# back to those same defaults, and the GUI writes the file on first launch.
+# Hand-rolling a config here would pin a schema_version and silently drift
+# from the app's schema for zero behavioural gain.
+#
+# run_onchange with no external dependency to fingerprint: the rendered
+# METHODS array below IS the trigger, so a .chezmoidata/biopass.yaml edit
+# re-runs this exactly once per host, and a user's later GUI toggles are
+# never fought in between (ensure-once, like the gnome value-stamp scripts —
+# no stamp needed since this only re-runs on a policy change).
+#
+# Edits with PyYAML via /usr/bin/python3 (NOT bare `python3`, which mise may
+# shadow), config-solaar-style. The config is machine-written by the app
+# (serde_yaml, no comments), so a load-mutate-dump round-trip is lossless.
+# PyYAML is effectively always present on the targets (Ubuntu: netplan.io
+# depends on python3-yaml; Fedora: python3-pyyaml in the Workstation/KDE
+# base), with a defensive soft-skip when it isn't.
+set -euo pipefail
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/com.ticklab.biopass/config.yaml"
+PYTHON=/usr/bin/python3
+
+# methods.<name>.enable policy rendered from .chezmoidata/biopass.yaml —
+# EDIT THE DATA, not this array. "<method>:<true|false>"
+METHODS=(
+{{- range $name, $enabled := .biopass.methods }}
+  "{{ $name }}:{{ $enabled }}"
+{{- end }}
+)
+
+# Skip when Biopass isn't installed: nothing to configure. The GUI binary and
+# the PAM helper land together from the same package; check both so a partial
+# or repackaged install still counts.
+if ! command -v biopass >/dev/null 2>&1 && [[ ! -x /usr/bin/biopass-helper ]]; then
+  echo "config-biopass: biopass not installed; skipping" >&2
+  exit 0
+fi
+
+# Skip when the app has never been launched: no config file, and Biopass's
+# own defaults already match the face-only policy (see header).
+if [[ ! -f "$CONFIG" ]]; then
+  echo "config-biopass: $CONFIG not present (defaults are already face-only); skipping" >&2
+  exit 0
+fi
+
+if ! "$PYTHON" -c "import yaml" 2>/dev/null; then
+  echo "config-biopass: PyYAML not available via $PYTHON; skipping" >&2
+  exit 0
+fi
+
+# Load, mutate only methods.<name>.enable, atomic same-directory replace
+# preserving the file mode. An unknown shape (no mapping / no methods key) is
+# left untouched: Biopass treats what it cannot parse as defaults, which are
+# face-only anyway, and clobbering an unknown future schema would be worse.
+RESULT=$("$PYTHON" - "$CONFIG" "${METHODS[@]}" <<'PYEOF'
+import os
+import sys
+import tempfile
+
+import yaml
+
+config_path = sys.argv[1]
+
+with open(config_path, encoding="utf-8") as fh:
+    config = yaml.safe_load(fh)
+
+if not isinstance(config, dict) or not isinstance(config.get("methods"), dict):
+    print("unknown schema; left untouched")
+    sys.exit(0)
+
+methods = config["methods"]
+changed = []
+for spec in sys.argv[2:]:
+    name, _, value_str = spec.partition(":")
+    want = value_str == "true"
+    method = methods.get(name)
+    if not isinstance(method, dict):
+        sys.stderr.write(
+            f"config-biopass: no methods.{name} mapping in config; skipping it\n"
+        )
+        continue
+    if method.get("enable") != want:
+        method["enable"] = want
+        changed.append(f"{name}={value_str}")
+
+if not changed:
+    print("already converged")
+    sys.exit(0)
+
+fd, tmp_path = tempfile.mkstemp(
+    dir=os.path.dirname(config_path), suffix=".config.yaml.tmp"
+)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(config, fh, sort_keys=False)
+    os.chmod(tmp_path, os.stat(config_path).st_mode & 0o777)
+    os.replace(tmp_path, config_path)
+except BaseException:
+    os.unlink(tmp_path)
+    raise
+print("set " + ", ".join(changed))
+PYEOF
+)
+
+echo "config-biopass: ${RESULT}"
+{{ end -}}
