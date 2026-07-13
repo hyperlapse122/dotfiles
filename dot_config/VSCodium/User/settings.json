@@ -158,5 +158,8 @@
 	"update.mode": "none",
 	"vscode-edge-devtools.webhintInstallNotification": true,
 	"window.restoreWindows": "none",
-	"workbench.welcomePage.walkthroughs.openOnInstall": false
+	"workbench.welcomePage.walkthroughs.openOnInstall": false,
+	"claudeCode.disableLoginPrompt": true,
+	"claudeCode.useTerminal": true,
+	"claudeCode.hideOnboarding": true
 }
