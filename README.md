@@ -183,7 +183,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   grouped by area with numeric prefixes fixing cross-group execution order
   (chezmoi runs each phase's scripts alphabetically by target path):
   `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `40-linux-ubuntu/`,
-  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-gpg/`,
+  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`,
   `90-services/`.
 - [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
   into scripts via `includeTemplate`: the `run_onchange_` dependency

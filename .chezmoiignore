@@ -26,6 +26,13 @@
 ./AppData
 {{- end }}
 
+# The age identity is provisioned only on POSIX hosts (.chezmoiscripts/80-keys/
+# is a bash script with no .ps1 counterpart), so Windows can never decrypt the
+# encrypted ~/src project registry — skip it there.
+{{- if eq .chezmoi.os "windows" }}
+src/garden.yaml
+{{- end }}
+
 # Vendored source dirs: crates/ + packages/ monorepos are built/used in place,
 # never linked into $HOME (mirrors ./system above).
 ./crates
@@ -57,6 +64,10 @@
 .chezmoiscripts/50-linux-kde/*.sh
 .chezmoiscripts/50-linux-gnome/*.sh
 .chezmoiscripts/10-auth/*.sh
-.chezmoiscripts/80-gpg/*.sh
+.chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
+# The 80-keys age-identity import is skipped above, so the encrypted ~/src
+# project registry cannot be decrypted in a container — skip it too (the
+# ~/src layout is a host concept anyway).
+src/garden.yaml
 {{- end }}

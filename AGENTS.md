@@ -22,6 +22,7 @@ Source filename attributes encode the target:
 | `private_` | mode 0600 |
 | `readonly_` | mode 0444 |
 | `executable_` | `+x` |
+| `encrypted_*.age` | age-encrypted source, decrypted at apply time (identity from 1Password via `80-keys/`; recipient pinned in `.chezmoi.toml.tmpl` — see Secrets) |
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
@@ -144,7 +145,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (runtime `plasmashell`/`gnome-shell` guards; see OS gating & script parity); mutually exclusive at runtime, so they share a number |
 | `60-build/` | build `crates/` + `packages/` on apply (see above) |
 | `70-agents/` | dotagents skills/MCP provisioning, late so it lands on a fully provisioned host (see next section) |
-| `80-gpg/` | one-time GPG key import from 1Password (`run_once_`, position irrelevant) |
+| `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
 | `90-services/` | enable the `cli-proxy-api` user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
 
 ### Shared script partials — `.chezmoitemplates/`
@@ -300,7 +301,22 @@ execution are not acceptable.
 
 Secrets are pulled at apply time via `onepasswordRead "op://..."` inside `.tmpl`
 files (GPG key, GitHub/Tailscale tokens, opencode API keys under
-`dot_config/opencode/private_secrets/`). GitLab CLI auth IS secret-driven:
+`dot_config/opencode/private_secrets/`).
+
+**age-encrypted source files are the one sanctioned in-repo ciphertext.**
+`encryption = "age"` in `.chezmoi.toml.tmpl` covers `encrypted_*.age` sources
+(currently only the ~/src garden project registry — private data in a public
+repo, not a credential). The trust root is still 1Password: the identity is a
+1Password document ("chezmoi age key", Private vault) that
+`.chezmoiscripts/80-keys/run_once_before_import-age-key.sh.tmpl` writes to
+`~/.config/chezmoi/key.txt` (0600) in the before phase, and the recipient (the
+public half, safe to commit) is pinned in the config template. Edit encrypted
+files with `chezmoi edit <target>` or `chezmoi decrypt`/`chezmoi encrypt`;
+plaintext scratch copies go in the per-user temp dir and are removed
+immediately — the plaintext itself is NEVER committed, and real credentials
+still belong in 1Password references, never in an encrypted file. Losing the
+key only costs re-encrypting the registry with a fresh one (1Password holds
+the original). GitLab CLI auth IS secret-driven:
 `.chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.sh.tmpl` provisions the
 `git.jpi.app` + `gitlab.com` PATs from 1Password at apply time (`glab auth login
 --stdin --use-keyring`, then re-asserting the `user` + `container_registry_domains`
@@ -443,14 +459,20 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `include`s (a genuinely agent-specific delta, should one ever exist, goes
   below the `include` in that agent's wrapper and states why), and never edit
   the deployed 0444 targets.
-- **~/src project registry (garden)**: `src/readonly_garden.yaml` →
+- **~/src project registry (garden)**: `src/encrypted_readonly_garden.yaml.age` →
   `~/src/garden.yaml` (0444; the non-dot top-level `src/` source dir DOES
   deploy — only `.`-prefixed source paths are chezmoi-internal) declares every
   project checkout of the
   `~/src/<host>/[<group>/]<project>/<worktree>` layout as a garden tree
   (`path: …/.bare`, `bare: true`, explicit fetch refspec — `git clone --bare`
   alone would not track remote branches) and carries the `setup-gitdir` custom
-  command that writes the `gitdir: ./.bare` pointer file. The `garden` CLI
+  command that writes the `gitdir: ./.bare` pointer file. The source is
+  **age-encrypted** — this repo is public and the trees list (internal project
+  names/URLs) is not: edit with `chezmoi edit ~/src/garden.yaml`, or
+  non-interactively `chezmoi decrypt`/`chezmoi encrypt` on the `.age` source
+  (per-user scratch only — see the age bullet in Secrets); NEVER commit the
+  plaintext. The deploy skips Windows (no age identity there) and containers
+  (both via `.chezmoiignore`). The `garden` CLI
   itself is a `.chezmoiexternals/garden.toml` pinned-release binary
   (`~/.local/bin/garden`), and `dot_local/bin/executable_src-audit` is the
   read-only drift report (missing / broken-pointer / unmanaged; exit 1 on
@@ -567,10 +589,14 @@ must provision fully like the host, not skip. Detection therefore skips only a
 sense — or the hook and the ignore set will disagree.
 
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
-  block skips every provisioning script — `.chezmoiscripts/{30-linux,20-linux-fedora,40-linux-ubuntu,50-linux-kde,50-linux-gnome,10-auth,80-gpg}/*.sh`
+  block skips every provisioning script — `.chezmoiscripts/{30-linux,20-linux-fedora,40-linux-ubuntu,50-linux-kde,50-linux-gnome,10-auth,80-keys}/*.sh`
   plus `.chezmoiscripts/60-build/*mxm4-haptic.sh` (no package installs, `/etc` config,
   GPG/GitHub/Tailscale auth, fonts, KDE/GNOME settings, pro-audio realtime provisioning, or
-  MX Master haptic build). Deliberately KEPT: the opencode plugin build
+  MX Master haptic build) — and, because the 80-keys age-identity import is
+  among the skips, also `src/garden.yaml` (an encrypted target with no
+  identity present would otherwise abort the apply; this is also what keeps
+  the render-dotfiles CI `apply --init` jobs green, since they run in
+  containers with a dummy `op`). Deliberately KEPT: the opencode plugin build
   (`build-opencode-plugins`; opencode is a first-class CLI here and it soft-skips
   when mise is absent), the dotagents skills install
   (`run_onchange_after_install-dotagents-skills`; soft-skips on missing prerequisites and

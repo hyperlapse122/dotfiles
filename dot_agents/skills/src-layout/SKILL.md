@@ -22,7 +22,7 @@ Division of labor — four tools, no overlap:
 
 | Concern | Owner |
 |---|---|
-| Declared registry of every project (path + url) | `~/src/garden.yaml` — chezmoi-managed 0444; SOURCE is `src/readonly_garden.yaml` in the chezmoi repo |
+| Declared registry of every project (path + url) | `~/src/garden.yaml` — chezmoi-managed 0444; SOURCE is `src/encrypted_readonly_garden.yaml.age` in the chezmoi repo (age-encrypted: the dotfiles repo is public, the project list is not) |
 | Bare clone into `<project>/.bare` + fetch refspec | `garden --chdir ~/src grow <name>` |
 | `.git` → `gitdir: ./.bare` pointer file | `garden --chdir ~/src setup-gitdir <name>` (custom command declared in the manifest) |
 | Worktrees + sessions (create, lock, remove) | `aoe` ONLY — never `git worktree`, never garden `worktree:` trees |
@@ -40,10 +40,21 @@ Division of labor — four tools, no overlap:
      (GitLab `products/examvue-duo/examvue-apps` → `git.jpi.app/examvue-apps`).
    - MUST mirror an existing sibling directory when one exists; MUST ask the
      user when there is none to copy.
-3. **Edit the SOURCE manifest** — `src/readonly_garden.yaml` in the chezmoi
-   source dir (`chezmoi source-path`); the deployed `~/src/garden.yaml` is 0444
-   and must never be edited in place. Add under `trees:` (replace a bare
-   `trees: {}` if present):
+3. **Edit the SOURCE manifest** — it is age-encrypted
+   (`src/encrypted_readonly_garden.yaml.age`); the deployed `~/src/garden.yaml`
+   is 0444 and must never be edited in place, and the plaintext must never be
+   committed. Interactively: `chezmoi edit ~/src/garden.yaml` (transparent
+   decrypt/re-encrypt). Non-interactively (agents):
+
+   ```sh
+   cd "$(chezmoi source-path)"
+   chezmoi decrypt src/encrypted_readonly_garden.yaml.age > "$XDG_RUNTIME_DIR/garden.yaml"
+   # edit the scratch copy, then:
+   chezmoi encrypt "$XDG_RUNTIME_DIR/garden.yaml" > src/encrypted_readonly_garden.yaml.age
+   rm "$XDG_RUNTIME_DIR/garden.yaml"
+   ```
+
+   Add under `trees:` (replace a bare `trees: {}` if present):
 
    ```yaml
    trees:

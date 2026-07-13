@@ -9,6 +9,18 @@
 pager = "less"
 pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
 {{ end }}
+# Age encryption for `encrypted_` source files (the ~/src garden project
+# registry — kept ciphertext-only in this public repo). The recipient below is
+# the PUBLIC half (safe to commit); the identity is provisioned from 1Password
+# into ~/.config/chezmoi/key.txt by
+# .chezmoiscripts/80-keys/run_once_before_import-age-key.sh.tmpl, which runs in
+# the before phase so the key exists before the file phase decrypts. Windows
+# and containers never decrypt: src/garden.yaml is chezmoiignored there.
+encryption = "age"
+[age]
+    identity = "{{ .chezmoi.homeDir }}/.config/chezmoi/key.txt"
+    recipient = "age1e98kgx82xu88458clnypmd35jph37feq5gy0u62xw0pad53d2fws4ls6xa"
+
 [edit]
     command = '{{ printf "codium%s" $executableExtension }}'
     args = ["--wait"]
