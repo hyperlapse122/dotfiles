@@ -140,7 +140,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also re-points `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `codegraph`) at the latest release and prunes older versions |
 | `10-auth/` | GitHub token preflight (before the installers), GitLab PAT login (after the file phase, so the externals-fetched `glab` exists), Docker Hub login, one-time `tailscale up` |
 | `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
-| `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
+| `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, biopass method policy, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (runtime `plasmashell`/`gnome-shell` guards; see OS gating & script parity); mutually exclusive at runtime, so they share a number |
 | `60-build/` | build `crates/` + `packages/` on apply (see above) |
@@ -459,6 +459,32 @@ keyring entry can no longer decrypt the stored ciphertexts.
   env). The `build-mxm4-haptic` fingerprint hashes this file plus the unit
   templates, so a knob edit re-runs the build script — daemon-reload + restart
   of the active units — on the same apply. Tune a knob HERE, not in the units.
+- **Biopass auth-method policy**: `.chezmoidata/biopass.yaml`.
+  `biopass.methods` (per-method enable flags — face-only for now, so fprintd
+  keeps sole ownership of fingerprint auth) renders into
+  `.chezmoiscripts/30-linux/run_onchange_after_config-biopass.sh.tmpl`, which
+  converges `methods.<name>.enable` in each user's
+  `~/.config/com.ticklab.biopass/config.yaml` (PyYAML via `/usr/bin/python3`,
+  config-solaar-style; the rendered values ARE the onchange trigger, no
+  fingerprint block). `biopass.cameraPairs` (same file) lists known RGB+IR
+  camera pairs, each side a stable `/dev/v4l/by-id` path (`rgbPath`/`irPath`,
+  used verbatim) or a v4l device name (`rgbName`/`irName`, resolved
+  lowest-index node → persistent symlink): when a host has BOTH sides of a
+  pair, the script also pins `methods.face.camera` + `methods.face.
+  anti_spoofing.ir_camera` to them, preferring persistent symlinks over
+  renumbering-prone `/dev/videoN` (Biopass stat()s the path and matches
+  st_rdev, so symlinks work); no matching pair means the camera keys are
+  left alone. It soft-skips when biopass isn't installed or the config
+  doesn't exist yet — Biopass's shipped defaults are already face-only, so an
+  absent config needs no write, and hand-rolling one would pin a schema_version
+  that could drift from the app. Toggle a method HERE, not in the script. The
+  package itself is a version-pinned direct install from GitHub releases (no
+  apt/dnf repo): `directDebs` (Ubuntu) / `directRpms` (Fedora) in
+  `packages.yaml`, where a pinned `version` converges the installed package to
+  that exact version — to upgrade, bump the pin AND the asset URLs together in
+  both entries. PAM enablement stays a deliberate manual `pam-auth-update`
+  step (see the packages.yaml comments; auto-enabling would re-lock the login
+  keyring at the GDM greeter).
 - **Shared agent instructions (Claude Code / Codex / opencode)**:
   `dot_agents/readonly_AGENTS.md` (→ `~/.agents/AGENTS.md`) is the single
   source of the common agent-instruction core (the RFC-2119 guardrails +

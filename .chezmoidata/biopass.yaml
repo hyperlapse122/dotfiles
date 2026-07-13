@@ -1,0 +1,81 @@
+# Biopass (TickLabVN/Biopass) authentication-method policy, converged into
+# each user's ~/.config/com.ticklab.biopass/config.yaml
+# (methods.<name>.enable) by
+# .chezmoiscripts/30-linux/run_onchange_after_config-biopass.sh.tmpl on every
+# Linux target. Toggle a method HERE, not in the script — the rendered values
+# are the script's onchange trigger, so a data edit re-runs it exactly once
+# per host. The package itself is version-pinned per distro in packages.yaml
+# (Ubuntu directDebs / Fedora directRpms).
+biopass:
+  methods:
+    face: true
+    # Face-only for now: Biopass's own fingerprint support stays off so
+    # fprintd keeps sole ownership of fingerprint auth (the polkit
+    # pam_fprintd wiring in system/ and GDM's gdm-fingerprint service). This
+    # matches Biopass's shipped default. When flipping to true, also revisit
+    # upstream docs/PAM.md: the pam-auth-update "Fingerprint authentication"
+    # profile should then be disabled to avoid two stacked fingerprint
+    # prompts.
+    fingerprint: false
+  # Known RGB+IR camera pairs, probed at apply time. Each side of a pair is
+  # identified by EITHER:
+  #   * <side>Path — a STABLE /dev path (/dev/v4l/by-id/... preferred, or
+  #     by-path); used verbatim after an existence check. by-id encodes the
+  #     USB vendor/product/serial strings, so it is the same on every boot
+  #     and every host carrying that hardware.
+  #   * <side>Name — the v4l node name (`cat /sys/class/video4linux/*/name`
+  #     or `v4l2-ctl --list-devices`), for hardware whose two sensors are
+  #     only distinguished by name (a Windows Hello-style composite camera
+  #     exposes RGB and IR as two nodes of the SAME USB device). Per name the
+  #     lowest-index node is used (index 0 is the capture node; higher
+  #     indexes are metadata), then resolved to the persistent /dev/v4l/by-id
+  #     (or by-path) symlink in preference to raw /dev/videoN, which can
+  #     renumber across boots.
+  # Either way the configured value may be a symlink: Biopass stat()s the
+  # path and matches the underlying device (findCameraByPath compares
+  # st_rdev), so symlinks resolve correctly. When a host has BOTH sides of a
+  # pair, config-biopass writes them into methods.face.camera /
+  # methods.face.anti_spoofing.ir_camera (which is what arms the IR presence
+  # check). The FIRST pair with both sides present wins. A host matching NO
+  # pair is left untouched, so a manual GUI camera pick on unlisted hardware
+  # is never fought.
+  #
+  # Name-form example:
+  #   cameraPairs:
+  #     - label: ThinkPad X1 Windows Hello set
+  #       rgbName: "Integrated Camera: Integrated C"
+  #       irName: "Integrated Camera: Integrated I"
+  #
+  # FINDING the two devices on a new host:
+  #   1. `ls -l /dev/v4l/by-id/` — the stable per-device symlinks (preferred
+  #      as <side>Path); or `cat /sys/class/video4linux/*/name` /
+  #      `v4l2-ctl --list-devices` (v4l-utils) for the name form. Use names
+  #      EXACTLY as printed.
+  #   2. Unsure which node is the IR sensor? The IR node advertises a
+  #      GREY/8-bit pixel format and usually lower resolutions:
+  #      `v4l2-ctl -d <path> --list-formats-ext`. Biopass also bundles
+  #      debug tooling (`camera_capture_test --list-devices`, or `cam -l`
+  #      from libcamera-tools) that lists what libcamera actually sees.
+  #
+  # TESTING after `chezmoi apply` (the script logs everything it set):
+  #   1. `grep -E '^\s*(camera|ir_camera):' ~/.config/com.ticklab.biopass/config.yaml`
+  #      — both keys should now carry /dev/v4l/by-id or by-path symlinks.
+  #   2. Enroll or re-test a face in the Biopass GUI: capture must open the
+  #      expected camera. The IR presence check is armed purely by ir_camera
+  #      being set; AI-model anti-spoofing stays on independently.
+  #   3. IR frames all black? The hardware emitter is not driven by Biopass —
+  #      set up linux-enable-ir-emitter per upstream docs/IR camera.md.
+  #   4. PAM end-to-end (only after the deliberate manual opt-in via
+  #      `sudo pam-auth-update`): keep a root shell open elsewhere, then in a
+  #      NEW terminal run `sudo -k && sudo true` — it should authenticate by
+  #      face, and fall through to the password prompt when the face check
+  #      fails or times out.
+  cameraPairs:
+    # "Integrated Camera" 0001 laptop set, identified via
+    # `v4l2-ctl --list-formats-ext`: the by-id index0 node exposes ONLY
+    # GREY 640x360 (8-bit greyscale @15/30fps) — the IR sensor — while
+    # index1 is the regular RGB capture node. Hosts without these by-id
+    # links skip this pair untouched.
+    - label: Integrated Camera 0001 (IR at index0, RGB at index1)
+      rgbPath: /dev/v4l/by-id/usb-_Integrated_Camera_0001-video-index1
+      irPath: /dev/v4l/by-id/usb-_Integrated_Camera_0001-video-index0

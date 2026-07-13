@@ -212,7 +212,9 @@ packages:
         - powershell  # PowerShell (pwsh) cross-platform shell
       # RPMs installed directly from a vendor URL (no repo): import the GPG
       # key(s), then install the link matching the host arch (skipped when `id`
-      # is already an installed package).
+      # is already an installed package). An entry with a pinned `version` is
+      # instead converged to that exact rpm VERSION (bumping the pin re-runs
+      # `dnf install` as an in-place upgrade).
       directRpms:
         - id: teamviewer  # remote desktop / remote support client
           keys:
@@ -221,6 +223,19 @@ packages:
           rpms:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
             aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
+        # Biopass — same package as the Ubuntu directDebs entry (see its comment
+        # for the full rationale: Howdy replacement, self-contained Tauri
+        # bundle, install stays package-only / PAM enablement stays manual; the
+        # broken-since-Fedora-43 principis/howdy COPR is why Howdy was dropped
+        # here too). GitHub releases only; the release rpms are unsigned, so no
+        # `keys` (dnf's default localpkg_gpgcheck=0 accepts a URL/local rpm).
+        # Face-only method policy: .chezmoidata/biopass.yaml. To upgrade, bump
+        # `version` AND both URLs together, matching the deb entry.
+        - id: biopass  # face + fingerprint biometric login (Howdy alternative)
+          version: "1.4.1"
+          rpms:
+            x86_64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass-1.4.1-1.x86_64.rpm
+            aarch64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass-1.4.1-1.aarch64.rpm
     ubuntu:
       # APT third-party repos. Each entry: `id` (becomes /etc/apt/sources.list.d/<id>.list),
       # `keyring-url` (GPG armored key, dearmored to /usr/share/keyrings/<id>.gpg),
@@ -546,9 +561,35 @@ packages:
         - powershell  # PowerShell (pwsh) cross-platform shell
 
       # .deb packages installed directly from a vendor URL (no repo): download
-      # the matching arch .deb and install with dpkg -i (skipped when already installed).
+      # the matching arch .deb and install with dpkg -i. An entry with a pinned
+      # `version` is converged to that exact version (bumping the pin re-runs
+      # dpkg -i as an upgrade); an entry without one installs only when absent —
+      # right for self-updating packages whose postinst registers its own repo.
       directDebs:
         - id: teamviewer  # remote desktop / remote support client
           debs:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer_amd64.deb
             aarch64: https://download.teamviewer.com/download/linux/teamviewer_arm64.deb
+        # Biopass (TickLabVN/Biopass) — Windows Hello-style face + fingerprint
+        # PAM auth with a management GUI. Replaces the originally considered
+        # Howdy: Howdy's beta PPA publishes no resolute (26.04) dist and its
+        # focal deb's postinst builds a 2018 dlib that no longer compiles on a
+        # modern Python (verified broken in a container), while Biopass ships a
+        # self-contained Tauri deb (bundled onnxruntime/libcamera; deps curl,
+        # fprintd, libwebkit2gtk-4.1-0, libturbojpeg0 all resolve from the
+        # Ubuntu archives) whose postinst only runs ldconfig plus a non-fatal
+        # per-user ONNX model download. GitHub releases only (no apt repo),
+        # asset names carry the tag — to upgrade, bump `version` AND both URLs
+        # together. Install is package-only by design: the shipped PAM profile
+        # (/usr/share/pam-configs/biopass) is `Default: no`, and enabling it
+        # via `sudo pam-auth-update` stays a deliberate manual step (see
+        # upstream docs/PAM.md) — auto-enabling would stack face auth into
+        # gdm-password and re-lock the login keyring at the greeter, the exact
+        # failure the GDM password-only-greeter setup exists to prevent.
+        # Enabled-method policy (face-only for now): .chezmoidata/biopass.yaml.
+        # Fedora installs the same release via directRpms below.
+        - id: biopass  # face + fingerprint biometric login (Howdy alternative)
+          version: "1.4.1"
+          debs:
+            x86_64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass_1.4.1_amd64.deb
+            aarch64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass_1.4.1_arm64.deb

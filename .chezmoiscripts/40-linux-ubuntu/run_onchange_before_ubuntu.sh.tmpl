@@ -220,10 +220,15 @@ install_ubuntu_packages() {
   "${APT[@]}" install -y "${to_install[@]}"
 }
 
+# An entry pinning a `version` in the data converges to that exact version —
+# bumping the pin re-runs dpkg -i as an in-place upgrade. An unpinned entry
+# installs only when the package is absent (right for self-updating packages
+# like teamviewer, whose postinst registers its own apt repo).
 install_direct_debs() {
   local arch deb_url tmp
 {{ range .packages.linux.ubuntu.directDebs -}}
-  if ! dpkg -s {{ .id | quote }} >/dev/null 2>&1; then
+{{- $pin := get . "version" }}
+  if {{ if $pin }}[[ "$(dpkg-query -W -f '${Version}' {{ .id | quote }} 2>/dev/null || true)" != {{ $pin | quote }} ]]{{ else }}! dpkg -s {{ .id | quote }} >/dev/null 2>&1{{ end }}; then
     arch="$(dpkg --print-architecture)"
     case "${arch}" in
       amd64) deb_url={{ index . "debs" "x86_64" | quote }} ;;
