@@ -9,7 +9,7 @@ container_runtime = "apple_container"
 {{- else -}}
 container_runtime = "podman"
 {{- end }}
-{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+{{ if and (eq "linux" .chezmoi.os) (eq "fedora" .chezmoi.osRelease.id) -}}
 selinux_relabel = true
 {{- end }}
 
