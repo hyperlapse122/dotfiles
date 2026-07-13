@@ -504,8 +504,12 @@ keyring entry can no longer decrypt the stored ciphertexts.
   project checkout of the
   `~/src/<host>/[<group>/]<project>/<worktree>` layout as a garden tree
   (`path: …/.bare`, `bare: true`, explicit fetch refspec — `git clone --bare`
-  alone would not track remote branches) and carries the `setup-gitdir` custom
-  command that writes the `gitdir: ./.bare` pointer file. The source is
+  alone would not track remote branches) and carries the two custom commands
+  that bootstrap a grown tree: `setup-gitdir` (writes the `gitdir: ./.bare`
+  pointer file) and `aoe-session` (derives title / group / default branch from
+  the tree path + bare HEAD and shells out to `aoe add`, skipping a worktree
+  that already has a session — `aoe` still creates and locks the worktree, and
+  the garden manifest still declares no `worktree:` tree). The source is
   **age-encrypted** — this repo is public and the trees list (internal project
   names/URLs) is not: edit with `chezmoi edit ~/src/garden.yaml`, or
   non-interactively `chezmoi decrypt`/`chezmoi encrypt` on the `.age` source
@@ -516,7 +520,9 @@ keyring entry can no longer decrypt the stored ciphertexts.
   (`~/.local/bin/garden`), and `dot_local/bin/executable_src-audit` is the
   read-only drift report (missing / broken-pointer / unmanaged; exit 1 on
   drift). Register/edit projects HERE (the source manifest), then
-  `chezmoi apply` + `garden --chdir ~/src grow <name>` — never edit the
+  `chezmoi apply` + `garden --chdir ~/src grow <name>` +
+  `garden --chdir ~/src cmd <name> setup-gitdir aoe-session` (both commands are
+  idempotent, so `'*'` bootstraps every declared project on a new host) — never edit the
   deployed file, never `garden plant` (would rewrite it with non-`.bare`
   paths), never `garden prune --rm`/`--no-prompt`, and never declare garden
   `worktree:` trees (worktrees are created and locked by aoe only; the

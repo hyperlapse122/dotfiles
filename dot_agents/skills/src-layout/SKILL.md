@@ -25,7 +25,7 @@ Division of labor — four tools, no overlap:
 | Declared registry of every project (path + url) | `~/src/garden.yaml` — chezmoi-managed 0444; SOURCE is `src/encrypted_readonly_garden.yaml.age` in the chezmoi repo (age-encrypted: the dotfiles repo is public, the project list is not) |
 | Bare clone into `<project>/.bare` + fetch refspec | `garden --chdir ~/src grow <name>` |
 | `.git` → `gitdir: ./.bare` pointer file | `garden --chdir ~/src setup-gitdir <name>` (custom command declared in the manifest) |
-| Worktrees + sessions (create, lock, remove) | `aoe` ONLY — never `git worktree`, never garden `worktree:` trees |
+| Worktrees + sessions (create, lock, remove) | `aoe` ONLY — never `git worktree`, never garden `worktree:` trees. The manifest's `aoe-session` custom command only DERIVES the arguments and shells out to `aoe add`; aoe still creates and locks the worktree |
 | Drift audit (read-only) | `src-audit` |
 
 ## Register + clone a new project
@@ -76,20 +76,31 @@ Division of labor — four tools, no overlap:
 
    Then `chezmoi apply` to deploy the manifest (commit the source change per
    the repo's commit rules).
-4. **Bootstrap**:
+4. **Bootstrap** — grow, then run the manifest's two custom commands. Both are
+   idempotent, so re-running is safe:
 
    ```sh
-   garden --chdir ~/src grow <name>          # bare clone + refspec (idempotent)
-   garden --chdir ~/src setup-gitdir <name>  # one-line .git pointer file
+   garden --chdir ~/src grow <name>                          # bare clone + refspec
+   garden --chdir ~/src cmd <name> setup-gitdir aoe-session  # .git pointer, then aoe add
    ```
-5. **Hand off to aoe** — default-branch worktree + session. `-w` takes the
-   EXISTING branch (no `-b`); the title stays the worktree name (`main` for the
-   default branch) and project identity goes in the group, never the title:
+
+   `aoe-session` derives the `aoe add` arguments from the tree path and the
+   bare repo's HEAD — title = worktree name = default branch, group = the
+   project's path under `<host>` (`examvue-duo/examvue-apps`), `-w` on the
+   EXISTING branch (no `-b`) — and skips the tree when a session already points
+   at that worktree. aoe still creates and locks the worktree; nothing here
+   uses `git worktree`.
+
+   New host, every declared project in one pass:
 
    ```sh
-   aoe add ~/src/<host>/[<group>/]<project> -t <default-branch> -g "[<group-slug>/]<project>" -w <default-branch>
+   garden --chdir ~/src grow '*' && garden --chdir ~/src cmd '*' setup-gitdir aoe-session
    ```
-6. **Verify**: `git -C ~/src/<host>/[<group>/]<project> log --oneline -1`
+
+   Run `aoe add` by hand only for a NON-default-branch worktree (a second
+   session on the same project), which `aoe-session` deliberately does not
+   create.
+5. **Verify**: `git -C ~/src/<host>/[<group>/]<project> log --oneline -1`
    resolves via the pointer; `git -C .../.bare rev-parse --is-bare-repository`
    prints `true`; the default-branch worktree directory exists.
 

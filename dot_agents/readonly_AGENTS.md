@@ -54,11 +54,14 @@
 
   ```sh
   # after adding the tree entry to the source garden.yaml + chezmoi apply:
-  garden --chdir ~/src grow <name>          # bare clone into <project>/.bare + fetch refspec
-  garden --chdir ~/src setup-gitdir <name>  # writes the one-line "gitdir: ./.bare" pointer
-  # default-branch worktree + session; -w takes the EXISTING branch (no -b)
-  aoe add ~/src/<host>/[<group>/]<project> -t <default-branch> -g "[<group-slug>/]<project-name>" -w <default-branch>
+  garden --chdir ~/src grow <name>                          # bare clone into <project>/.bare + fetch refspec
+  # setup-gitdir writes the one-line "gitdir: ./.bare" pointer; aoe-session derives
+  # title/group/default-branch from the tree and shells out to `aoe add` (aoe still
+  # creates + locks the worktree). Both idempotent — '*' bootstraps a new host.
+  garden --chdir ~/src cmd <name> setup-gitdir aoe-session
   ```
+
+  Hand-run `aoe add ~/src/<host>/<group>/<project> -t <title> -g "<group-slug>/<project-name>" -w <branch>` only for a NON-default-branch worktree; `-w` takes the EXISTING branch (no `-b`).
 
 - garden touches ONLY the bare repos. **MUST NOT** run `garden prune --rm` / `prune --no-prompt` / `garden plant`, and **MUST NOT** declare garden `worktree:` trees — worktrees stay aoe-owned. Audit drift read-only with `src-audit` (missing = grow on demand; broken pointer = re-run `setup-gitdir`; unmanaged = surface to the user, never delete).
 
