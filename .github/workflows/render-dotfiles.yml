@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload rendered files
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-files-${{ matrix.os }}
           path: _artifacts/rendered-files
@@ -377,7 +377,7 @@ jobs:
 
       - name: Upload rendered internals
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-internals-${{ matrix.os }}
           path: _artifacts/rendered-internals
@@ -467,7 +467,7 @@ jobs:
 
       - name: Upload rendered files
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-files-macos
           path: _artifacts/rendered-files
@@ -537,7 +537,7 @@ jobs:
 
       - name: Upload rendered internals
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-internals-macos
           path: _artifacts/rendered-internals
@@ -662,7 +662,7 @@ jobs:
 
       - name: Upload rendered files
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-files-windows
           path: _artifacts/rendered-files
@@ -713,7 +713,7 @@ jobs:
 
       - name: Upload rendered internals
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-internals-windows
           path: _artifacts/rendered-internals
@@ -741,7 +741,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Download rendered artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: _rendered
           pattern: rendered-*
@@ -787,7 +787,7 @@ jobs:
 
       - name: Upload shellcheck report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shellcheck-report
           path: shellcheck-report.txt
@@ -823,7 +823,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Download rendered Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: _rendered
           pattern: rendered-*-windows
@@ -882,7 +882,7 @@ jobs:
 
       - name: Upload PSScriptAnalyzer report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: psscriptanalyzer-report
           path: psscriptanalyzer-report.txt
