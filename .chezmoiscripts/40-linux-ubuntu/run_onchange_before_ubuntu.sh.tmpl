@@ -1,6 +1,9 @@
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
 {{- $mokPassword := "" -}}
-{{- if hasKey . "mokPassword" }}{{ $mokPassword = .mokPassword }}{{ end -}}
+{{- if and (hasKey . "mokPasswordCipher") (ne .mokPasswordCipher "") -}}
+{{-   $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
+{{-   if ne $secretsKey "" }}{{ $mokPassword = decryptAES $secretsKey .mokPasswordCipher }}{{ end -}}
+{{- end -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -89,12 +92,15 @@ export DEBIAN_FRONTEND=noninteractive
 APT=("${SUDO[@]}" env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get)
 
 # Secure Boot MOK enrollment password, prompted once by chezmoi at `chezmoi
-# init` (`.chezmoi.toml.tmpl` promptStringOnce — same mechanism and trade-offs
-# as the LUKS passphrase: unmasked input, rendered into this script's transient
-# run-script, so avoid `--verbose`/`--dry-run` applies with a real password;
-# base64 wraps it for shell safety only, NOT secrecy). Blank = skip the NVIDIA
-# stack on a Secure Boot host without an enrolled MOK. Used only by
-# install_nvidia_support() below.
+# init` and stored AES-ENCRYPTED in the config (mokPasswordCipher in
+# `.chezmoi.toml.tmpl`, keyed from the user keyring via
+# .chezmoitemplates/config-secrets-key.tmpl), decrypted here at render time —
+# same mechanism and trade-offs as the LUKS passphrase: unmasked input at init,
+# decrypted into this script's transient run-script, so avoid
+# `--verbose`/`--dry-run` applies with a real password stored; base64 wraps it
+# for shell safety only, NOT secrecy. Blank at init (or an unreachable keyring
+# at render time) = skip the NVIDIA stack on a Secure Boot host without an
+# enrolled MOK. Used only by install_nvidia_support() below.
 MOK_PASSWORD="$(printf '%s' {{ $mokPassword | b64enc | quote }} | base64 -d)"
 
 # Package sets rendered from .chezmoidata/packages.yaml.
