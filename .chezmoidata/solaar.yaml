@@ -1,0 +1,83 @@
+# Manifest of per-device Solaar settings, applied to
+# ~/.config/solaar/config.yaml by
+# .chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl.
+#
+# Single source of truth (like packages.yaml): add/tune a device setting HERE,
+# not in the script. Each entry renders into the script's TARGETS array, so any
+# edit here re-triggers the run_onchange_ script automatically — no separate
+# fingerprint needed.
+#
+# Shape — solaar.devices is a list, one entry per mouse:
+#   modelId:  12-hex from `solaar show` -> Model ID line.
+#   name:     display name, prefixes every log label.
+#   settings: list of {path, value, label}:
+#     path:   either a scalar setting name (e.g. `smart-shift`) or a
+#             nested-dict path `<setting>.<int_key>` (e.g. `divert-keys.416`).
+#             The script splits on the first dot: no dot means scalar, dot
+#             means the second part is an int key into the named dict.
+#     value:  an int, or the bare YAML booleans true/false for boolean
+#             settings — the script parses the rendered `true`/`false` tokens
+#             to real Python bools so they round-trip as YAML booleans in
+#             Solaar's config.yaml (e.g. `hires-smooth-resolution: false`,
+#             not 0). No other value types.
+#     label:  free-form, log output only. Must not contain a colon (the
+#             rendered spec is colon-delimited).
+#
+# Setting reference (names as written by Solaar 1.1.19, verified against the
+# live primary host's ~/.config/solaar/config.yaml; the MX Master 3S is not
+# paired on that host, so its entries reuse the same standard settings from
+# Solaar's logitech_receiver.settings_templates):
+#   divert-keys.<control_id> : 0=Regular, 1=Diverted, 2=Mouse Gestures,
+#                              3=Sliding DPI (per settings_templates.DivertKeys
+#                              choices_universe). Control IDs from the
+#                              `solaar show` reprogrammable keys section:
+#                              416 = MX Master 4 Haptic thumb button;
+#                              195 = Mouse Gesture Button (the MX Master 3S
+#                              thumb button; also present on the MX Master 4
+#                              but left Regular there).
+#   smart-shift              : SmartShift ratchet->freespin threshold (wheel
+#                              speed at which the ratchet releases). 12 is the
+#                              tuned value from the primary host, made
+#                              cross-machine declarative.
+#   scroll-ratchet-torque    : MX Master 4 ratchet detent force (percent) —
+#                              the force-sensing ratchet is MX Master 4 only,
+#                              absent on the 3S. 75 = firm-but-flickable,
+#                              tuned like above.
+#   hires-smooth-resolution  : false keeps the wheel at LOW hi-res
+#                              resolution — the standard fix for the
+#                              "jumpy/too-fast scroll" the high-resolution
+#                              mode causes in many apps.
+#   thumb-scroll-mode        : true DIVERTS the thumb wheel: its movement is
+#                              reported as THUMB WHEEL HID++ notifications
+#                              (consumed by the rules.yaml 2x H-scroll rule)
+#                              instead of firmware-native horizontal scroll.
+#   dpi                      : pointer resolution, raised from the 1000
+#                              default to compensate for the GNOME flat accel
+#                              profile (config-gnome-mouse) — with no adaptive
+#                              accel curve, pointer speed comes from hardware
+#                              DPI; tune the value here.
+#
+# All of these are deliberate cross-machine ergonomics; by contrast
+# `haptic-level` stays user-owned (Solaar GUI preference, see the script
+# header) and is intentionally NOT listed here.
+solaar:
+  devices:
+    - modelId: B04200000000
+      name: MX Master 4
+      settings:
+        - { path: divert-keys.416, value: 2, label: "Haptic -> Mouse Gestures" }
+        - { path: smart-shift, value: 12, label: "SmartShift threshold -> 12" }
+        - { path: scroll-ratchet-torque, value: 75, label: "ratchet torque -> 75" }
+        - { path: hires-smooth-resolution, value: false, label: "hi-res wheel resolution -> off" }
+        - { path: thumb-scroll-mode, value: true, label: "thumb wheel -> diverted (rules H-scroll)" }
+        - { path: dpi, value: 2400, label: "DPI -> 2400" }
+    # No scroll-ratchet-torque here: the force-sensing ratchet is MX Master 4
+    # hardware, absent on the 3S.
+    - modelId: B03400000000
+      name: MX Master 3S
+      settings:
+        - { path: divert-keys.195, value: 2, label: "Mouse Gesture Button -> Mouse Gestures" }
+        - { path: smart-shift, value: 12, label: "SmartShift threshold -> 12" }
+        - { path: hires-smooth-resolution, value: false, label: "hi-res wheel resolution -> off" }
+        - { path: thumb-scroll-mode, value: true, label: "thumb wheel -> diverted (rules H-scroll)" }
+        - { path: dpi, value: 2400, label: "DPI -> 2400" }

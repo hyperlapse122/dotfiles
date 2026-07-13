@@ -9,11 +9,18 @@
 #   1. divert-keys: route specific reprogrammable buttons through Solaar's
 #      rule engine (HID++ notifications) instead of the device firmware
 #      default (which sends a stock mouse button).
-#   2. thumb-scroll-mode: divert the MX Master 4 thumb wheel so THUMB WHEEL
-#      notifications reach the rules.yaml horizontal-scroll rule.
-#   3. scroll/feel ergonomics (smart-shift, scroll-ratchet-torque,
-#      hires-smooth-resolution): tuned values enforced declaratively so
+#   2. thumb-scroll-mode: divert the thumb wheel (MX Master 4 + MX Master 3S)
+#      so THUMB WHEEL notifications reach the rules.yaml horizontal-scroll
+#      rule.
+#   3. scroll/feel/pointer ergonomics (smart-shift, scroll-ratchet-torque,
+#      hires-smooth-resolution, dpi): tuned values enforced declaratively so
 #      every machine the mouse pairs with feels identical.
+#
+# The settings themselves are DATA, not script: .chezmoidata/solaar.yaml is
+# the single source of truth (device model IDs, setting paths/values, and the
+# per-setting reference documentation). Edit the yaml, not the TARGETS array
+# below — the data renders into this script, so a yaml edit re-triggers this
+# run_onchange_ script automatically.
 #
 # Haptic intensity (`haptic-level`) is intentionally NOT enforced here —
 # leave that to the user's Solaar GUI preference. The mxm4-haptic helper
@@ -63,67 +70,27 @@ CONFIG="${HOME}/.config/solaar/config.yaml"
 PYTHON=/usr/bin/python3
 SOLAAR_SERVICE=app-solaar@autostart.service
 
-# Per-device targets, one per line: "<model_id>:<setting_path>:<value>:<label>"
+# Per-device targets rendered from .chezmoidata/solaar.yaml — EDIT THE DATA,
+# not this array (the setting reference lives in the yaml header too). One
+# entry per setting: "<model_id>:<setting_path>:<value>:<label>"
 #   model_id     : 12-hex from `solaar show` -> Model ID line.
-#   setting_path : either a scalar setting name (e.g. `haptic-level`) or
-#                  a nested-dict path (e.g. `divert-keys.416`). The script
-#                  splits on the first dot: no dot means scalar, dot means
-#                  the second part is an int key into the named dict.
+#   setting_path : either a scalar setting name (e.g. `smart-shift`) or
+#                  a nested-dict path (e.g. `divert-keys.416`). The inline
+#                  python splits on the first dot: no dot means scalar, dot
+#                  means the second part is an int key into the named dict.
 #   value        : int, or the literal token `true`/`false` for boolean
 #                  settings — parsed to a real Python bool so it round-trips
 #                  as a YAML boolean (Solaar stores e.g.
-#                  `hires-smooth-resolution: false`, not 0). Interpreted per
-#                  setting (see below).
-#   label        : free-form, only for log output.
-#
-# Setting reference for MX Master 4 (model B04200000000):
-#   divert-keys.<control_id> : 0=Regular, 1=Diverted, 2=Mouse Gestures,
-#                              3=Sliding DPI (per
-#                              logitech_receiver.settings_templates.DivertKeys
-#                              choices_universe).
-#                              Control IDs from `solaar show` reprogrammable
-#                              keys section: 416 = MX Master 4 Haptic thumb
-#                              button; 195 = Mouse Gesture Button (the
-#                              MX Master 3S thumb button; also present on
-#                              the MX Master 4 but left Regular there).
-#   smart-shift              : SmartShift ratchet->freespin threshold (wheel
-#                              speed at which the ratchet releases). 12 is
-#                              the tuned value from the primary host, made
-#                              cross-machine declarative.
-#   scroll-ratchet-torque    : MX Master 4 ratchet detent force (percent).
-#                              75 = firm-but-flickable, tuned like above.
-#   hires-smooth-resolution  : false keeps the wheel at LOW hi-res
-#                              resolution — the standard fix for the
-#                              "jumpy/too-fast scroll" the high-resolution
-#                              mode causes in many apps.
-#   thumb-scroll-mode        : true DIVERTS the thumb wheel: its movement is
-#                              reported as THUMB WHEEL HID++ notifications
-#                              (consumed by the rules.yaml 2x H-scroll rule)
-#                              instead of firmware-native horizontal scroll.
-#   dpi                      : pointer resolution, raised from the 1000
-#                              default to compensate for the GNOME flat accel
-#                              profile (config-gnome-mouse) — with no adaptive
-#                              accel curve, pointer speed comes from hardware
-#                              DPI; tune the value here.
-#
-# All five are deliberate cross-machine ergonomics; by contrast
-# `haptic-level` stays user-owned (GUI preference, see the header note
-# above) and is intentionally NOT listed here.
-#
-# Keys verified against the live host's ~/.config/solaar/config.yaml as
-# written by Solaar 1.1.19.
-#
-# For nested-dict settings the path is `<setting>.<int_key>` (e.g.
-# `divert-keys.416`). For scalar settings the path is just the setting
-# name (e.g. `smart-shift`, `dpi`).
+#                  `hires-smooth-resolution: false`, not 0). Go-template
+#                  renders the yaml's native ints/bools as exactly these
+#                  tokens.
+#   label        : free-form, only for log output ("<device name> / <label>").
 TARGETS=(
-  "B04200000000:divert-keys.416:2:MX Master 4 / Haptic -> Mouse Gestures"
-  "B04200000000:smart-shift:12:MX Master 4 / SmartShift threshold -> 12"
-  "B04200000000:scroll-ratchet-torque:75:MX Master 4 / ratchet torque -> 75"
-  "B04200000000:hires-smooth-resolution:false:MX Master 4 / hi-res wheel resolution -> off"
-  "B04200000000:thumb-scroll-mode:true:MX Master 4 / thumb wheel -> diverted (rules H-scroll)"
-  "B04200000000:dpi:1600:MX Master 4 / DPI -> 1600"
-  "B03400000000:divert-keys.195:2:MX Master 3S / Mouse Gesture Button -> Mouse Gestures"
+{{- range $dev := .solaar.devices }}
+{{- range $s := $dev.settings }}
+  "{{ $dev.modelId }}:{{ $s.path }}:{{ $s.value }}:{{ $dev.name }} / {{ $s.label }}"
+{{- end }}
+{{- end }}
 )
 
 # 0. Skip if Solaar isn't installed: nothing to configure.

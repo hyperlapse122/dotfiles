@@ -25,7 +25,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`) |
+| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`, `.solaar`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, cli-proxy-api, ast-grep, buf, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -373,6 +373,15 @@ keyring entry can no longer decrypt the stored ciphertexts.
   array IS the trigger. Soft-skips without `codium` on PATH (recorded as done —
   onchange trade-off); a gallery/network failure exits non-zero so it retries
   on the next apply.
+- **Solaar per-device mouse settings**: `.chezmoidata/solaar.yaml`
+  (`solaar.devices` — one entry per mouse: model ID, name, and
+  `path`/`value`/`label` setting specs; the yaml header carries the
+  per-setting reference). Renders into the TARGETS array of
+  `.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl`, which
+  edits `~/.config/solaar/config.yaml` directly and restarts Solaar. Add/tune
+  a device setting HERE, not in the script; editing the data re-triggers the
+  script (the rendered array is part of the trigger, alongside the script's
+  rules.yaml.tmpl fingerprint).
 - **AI model selection (opencode + oh-my-openagent)**: `.chezmoidata/models.yaml`.
   `models.opencode` (`model`/`smallModel`) renders into
   `dot_config/opencode/readonly_opencode.json.tmpl` (top-level

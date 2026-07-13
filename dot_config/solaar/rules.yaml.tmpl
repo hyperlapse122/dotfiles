@@ -16,7 +16,8 @@
 # set and behave identically.
 #
 # Each button is set to "Mouse Gestures" divert mode (divert-keys = 2) by
-# scripts/linux/config-solaar.sh. In that mode the button reports the
+# scripts/linux/config-solaar.sh, per .chezmoidata/solaar.yaml. In that mode
+# the button reports the
 # MOUSE_GESTURE feature with directional data while held, instead of a plain
 # key press. The rules below key on the `MouseGesture` condition (a feature
 # match), NOT a key label, so one rule set fires for whichever mouse sent the
@@ -99,11 +100,12 @@
 # no-ops (re-enable the effect rather than adding a per-press loadEffect
 # call).
 #
-# Diversion setup is owned by scripts/linux/config-solaar.sh (TARGETS array):
+# Diversion setup is owned by .chezmoidata/solaar.yaml (rendered into
+# scripts/linux/config-solaar.sh — edit the data, not the script):
 #   B04200000000 divert-keys.416 = 2     (MX Master 4 Haptic -> Mouse Gestures)
-#   B04200000000 thumb-scroll-mode = true (MX Master 4 thumb wheel -> diverted;
-#                                          feeds the THUMB WHEEL rule below)
 #   B03400000000 divert-keys.195 = 2     (MX Master 3S Gesture Button -> Mouse Gestures)
+#   both models  thumb-scroll-mode = true (thumb wheels -> diverted; feed the
+#                                          THUMB WHEEL rule below)
 # Do NOT divert via `solaar config ... divert-keys` on 1.1.19 (it flips the
 # runtime state but crashes during persistence); config-solaar.sh edits
 # config.yaml directly and restarts Solaar only when something changed.
@@ -163,8 +165,9 @@
 
 # === Thumb-wheel horizontal scroll, 2x (desktop-agnostic) ===
 #
-# The MX Master 4 thumb wheel is DIVERTED by config-solaar.sh
-# (`thumb-scroll-mode: true` in its TARGETS array), so wheel movement arrives
+# Both thumb wheels (MX Master 4 + MX Master 3S) are DIVERTED by
+# config-solaar.sh (`thumb-scroll-mode: true` for both models in
+# .chezmoidata/solaar.yaml), so wheel movement arrives
 # here as THUMB WHEEL notifications instead of the firmware's native
 # horizontal scroll — this rule REPLACES that native H-scroll with a
 # rule-driven one. `Test: thumb_wheel_up/down` (diversion.py TESTS) yields
