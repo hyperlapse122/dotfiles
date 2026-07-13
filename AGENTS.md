@@ -326,11 +326,18 @@ keyring-encrypted, never plaintext.** The two host-specific values
 the Ubuntu Secure Boot MOK password, per-host state with no 1Password item —
 are stored in `~/.config/chezmoi/chezmoi.toml` as `luksPassphraseCipher` /
 `mokPasswordCipher`: AES ciphertext (`encryptAES`) under a random 256-bit key
-that lives ONLY in the user keyring (Secret Service on Linux, Keychain on
-macOS, Credential Manager on Windows; `service=chezmoi-config-secrets`).
-`.install-prerequisites.{sh,ps1}` generates the key (before the hook's fast
-path, so it also lands on already-provisioned hosts) ahead of chezmoi's first
-config-template render; templates read it back through
+that lives ONLY in the user keyring (Secret Service;
+`service=chezmoi-config-secrets`). Key generation and read-back are
+**Linux-only** — macOS is deliberately skipped because go-keyring's Keychain
+backend (`/usr/bin/security`) can escalate to a blocking SecurityAgent dialog
+on a locked keychain and wedge a headless apply (it hung the render-dotfiles
+macos CI job), and no darwin template consumes the key; the `.ps1` hook keeps
+a Windows Credential Manager mirror for parity (headless-safe, no consumer
+yet). All keyring calls are `timeout`-wrapped so an unanswered Secret Service
+prompter degrades to a skip, never a hang. `.install-prerequisites.{sh,ps1}`
+generates the key (before the hook's fast path, so it also lands on
+already-provisioned hosts) ahead of chezmoi's first config-template render;
+templates read it back through
 `.chezmoitemplates/config-secrets-key.tmpl` (fail-soft, see the partials
 table), and the two consumer scripts (`run_onchange_after_luks-tpm2`,
 `run_onchange_before_ubuntu`) `decryptAES` at apply-render time. Semantics:
