@@ -490,10 +490,11 @@ packages:
       # Boot the DKMS modules need a MOK enrolled: with the shim-signed MOK
       # already enrolled the install just proceeds (dkms signs every build with
       # it); otherwise the installer preseeds shim-signed's debconf questions
-      # with the mokPassword prompted at `chezmoi init` and queues the
-      # enrollment for the next boot's MokManager. Secure Boot on with neither
-      # an enrolled MOK nor a password skips the NVIDIA stack entirely rather
-      # than half-installing an unloadable driver.
+      # with the mokPassword prompted at `chezmoi init` (8-16 chars per
+      # update-secureboot-policy; cleared again via an EXIT trap) and queues
+      # the enrollment for the next boot's MokManager. Secure Boot on with
+      # neither an enrolled MOK nor a password skips the NVIDIA stack entirely
+      # rather than half-installing an unloadable driver.
       nvidiaPackages:
         - cuda-drivers  # NVIDIA proprietary driver metapackage (DKMS, from CUDA apt repo)
         - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries; from NVIDIA's CUDA apt repo)

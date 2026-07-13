@@ -18,7 +18,7 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
     luksPassphrase = {{ promptStringOnce . "luksPassphrase" "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" | quote }}
 {{ end -}}
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "ubuntu") -}}
-    mokPassword = {{ promptStringOnce . "mokPassword" "MOK enrollment password for Secure Boot NVIDIA DKMS module signing (8-256 chars; leave blank to skip)" "" | quote }}
+    mokPassword = {{ promptStringOnce . "mokPassword" "MOK enrollment password for Secure Boot NVIDIA DKMS module signing (8-16 chars; leave blank to skip)" "" | quote }}
 {{ end }}
 
 [hooks.read-source-state.pre]

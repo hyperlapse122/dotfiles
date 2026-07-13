@@ -304,10 +304,23 @@ prepare_mok_enrollment() {
   if [[ ! -f "${mok_der}" ]]; then
     "${SUDO[@]}" update-secureboot-policy --new-key
   fi
+  # Blank the questions again on ANY script exit — also when a later install
+  # step fails under set -e before finish_mok_enrollment runs — so the one-time
+  # secret never outlives this script in debconf's database.
+  trap clear_mok_debconf EXIT
   printf '%s\n' \
     "shim-signed shim/secureboot_key password ${MOK_PASSWORD}" \
     "shim-signed shim/secureboot_key_again password ${MOK_PASSWORD}" \
     | "${SUDO[@]}" debconf-set-selections
+}
+
+# EXIT-trap counterpart to prepare_mok_enrollment's preseed (|| true keeps the
+# trap from rewriting the script's real exit code).
+clear_mok_debconf() {
+  printf '%s\n' \
+    'shim-signed shim/secureboot_key password ' \
+    'shim-signed shim/secureboot_key_again password ' \
+    | "${SUDO[@]}" debconf-set-selections || true
 }
 
 # After the driver install, make sure the MOK certificate actually reached
@@ -315,8 +328,8 @@ prepare_mok_enrollment() {
 # it, but if it did not (e.g. the postinst enrollment was skipped), import it
 # directly with mokutil, feeding the prompted password on stdin (mokutil asks
 # for it twice). Idempotent — an already-pending request is matched by SHA1
-# certificate fingerprint and left alone. Finally drop the password from the
-# debconf database again; it has served its purpose.
+# certificate fingerprint and left alone. The preseeded debconf password is
+# cleared by the EXIT trap prepare_mok_enrollment installed.
 finish_mok_enrollment() {
   local mok_der="$1" fingerprint
   if ! "${SUDO[@]}" mokutil --test-key "${mok_der}" 2>/dev/null | grep -q 'is already enrolled'; then
@@ -326,10 +339,6 @@ finish_mok_enrollment() {
     fi
     printf 'run_onchange_before_ubuntu.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the prompted MOK password; the NVIDIA modules stay unloadable until then.\n' >&2
   fi
-  printf '%s\n' \
-    'shim-signed shim/secureboot_key password ' \
-    'shim-signed shim/secureboot_key_again password ' \
-    | "${SUDO[@]}" debconf-set-selections
 }
 
 install_nvidia_support() {
@@ -350,11 +359,11 @@ install_nvidia_support() {
   if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
     if [[ -f "${mok_der}" ]] && "${SUDO[@]}" mokutil --test-key "${mok_der}" 2>/dev/null | grep -q 'is already enrolled'; then
       : # signing key already trusted by shim; nothing to enroll
-    elif [[ -n "${MOK_PASSWORD}" && "${#MOK_PASSWORD}" -ge 8 ]]; then
+    elif [[ -n "${MOK_PASSWORD}" && "${#MOK_PASSWORD}" -ge 8 && "${#MOK_PASSWORD}" -le 16 ]]; then
       mok_enroll=1
       prepare_mok_enrollment "${mok_der}"
     elif [[ -n "${MOK_PASSWORD}" ]]; then
-      printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled but the MOK password is shorter than the 8 characters mokutil requires; skipping NVIDIA driver/CUDA install. Re-run `chezmoi init` with a longer password, then `chezmoi apply --force`.\n' >&2
+      printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled but the MOK password is outside the 8-16 characters shim-signed'\''s update-secureboot-policy accepts; skipping NVIDIA driver/CUDA install. Re-run `chezmoi init` with a password in that range, then `chezmoi apply --force`.\n' >&2
       return 0
     else
       printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled and no MOK is enrolled; skipping NVIDIA driver/CUDA install (the DKMS modules would not load). Re-run `chezmoi init` to enter a MOK enrollment password (or enroll a MOK / disable Secure Boot), then `chezmoi apply --force`.\n' >&2
