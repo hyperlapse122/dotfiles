@@ -31,13 +31,16 @@ Division of labor — four tools, no overlap:
 ## Register + clone a new project
 
 1. **Host segment** — the remote host verbatim: `github.com`, `git.jpi.app`.
-2. **Group segment (human judgment — never algorithmic)**:
+2. **Group segment (REQUIRED; naming is human judgment — never algorithmic)**:
    - List existing candidates to mirror: `ls ~/src/<host>/ 2>/dev/null` AND the
      declared `path:` values in `~/src/garden.yaml`.
    - The group is the GitHub org / GitLab bottom-most subgroup, kebab-cased
      with its product-family prefix (`365flow` → `examvue-365-flow`).
-   - **Omit** the segment when the project name already carries the group
-     (GitLab `products/examvue-duo/examvue-apps` → `git.jpi.app/examvue-apps`).
+   - Include the segment even when the project name already carries or repeats
+     the group (GitLab `products/examvue-duo/examvue-apps` →
+     `git.jpi.app/examvue-duo/examvue-apps`, never `git.jpi.app/examvue-apps`).
+   - Omit it ONLY when the remote genuinely has no group/org namespace at all —
+     a rare edge case; when in doubt, it has one.
    - MUST mirror an existing sibling directory when one exists; MUST ask the
      user when there is none to copy.
 3. **Edit the SOURCE manifest** — it is age-encrypted

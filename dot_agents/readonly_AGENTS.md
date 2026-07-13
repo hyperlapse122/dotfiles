@@ -42,7 +42,7 @@
 ## Project layout — `~/src/<host>/[<group>/]<project>/<worktree>`
 
 - Every checkout lives under **`~/src/<git-hostname>/[<group>/]<project>/`**, where `<git-hostname>` is the remote's host verbatim (`github.com`, `git.jpi.app`). **MUST NOT** clone anywhere else under `$HOME`; when the user names a project, resolve it here rather than searching `$HOME`.
-- `<group>` is the GitHub **organization** or the GitLab **bottom-most subgroup**, normalized to kebab-case with its product-family prefix (`365flow` → `examvue-365-flow`). **Omit the segment entirely when the project name already carries the group** — GitLab `products/examvue-duo/examvue-apps` → `~/src/git.jpi.app/examvue-apps/`. The prefix is a human judgment call, not an algorithm: **MUST** mirror an existing sibling directory, and **MUST** ask the user when there is none to copy.
+- `<group>` is the GitHub **organization** or the GitLab **bottom-most subgroup**, normalized to kebab-case with its product-family prefix (`365flow` → `examvue-365-flow`). The segment is **REQUIRED**: **MUST** include it even when the project name already carries or repeats the group — GitLab `products/examvue-duo/examvue-apps` → `~/src/git.jpi.app/examvue-duo/examvue-apps/`, never `~/src/git.jpi.app/examvue-apps/`. The ONLY sanctioned omission is a remote with genuinely **no** group/org namespace at all (a rare edge case — when in doubt, it has one). The prefix is a human judgment call, not an algorithm: **MUST** mirror an existing sibling directory, and **MUST** ask the user when there is none to copy.
 - A project directory is **not a working tree** — it is a bare repo plus its worktrees:
   - `.bare/` — the bare repository (the only real git dir)
   - `.git` — a one-line file, `gitdir: ./.bare`
@@ -62,7 +62,7 @@
 
 - garden touches ONLY the bare repos. **MUST NOT** run `garden prune --rm` / `prune --no-prompt` / `garden plant`, and **MUST NOT** declare garden `worktree:` trees — worktrees stay aoe-owned. Audit drift read-only with `src-audit` (missing = grow on demand; broken pointer = re-run `setup-gitdir`; unmanaged = surface to the user, never delete).
 
-- An `aoe` session's **title** is its worktree name (`main` for the default branch), and its **group** is the project's path under `~/src/<host>/` — `[<group-slug>/]<project-name>`, a slash-nested group path (`examvue-365-flow/shadcn-registry`; a project with no group segment is just `examvue-apps`).
+- An `aoe` session's **title** is its worktree name (`main` for the default branch), and its **group** is the project's path under `~/src/<host>/` — `[<group-slug>/]<project-name>`, a slash-nested group path (`examvue-365-flow/shadcn-registry`, `examvue-duo/examvue-apps`; only a genuinely group-less project is a bare `<project-name>`).
 - Project identity lives in the **group**, never in the title. `session.tie_workdir_to_name` (aoe's default, on) makes the worktree directory leaf follow the title's slug — it bypasses `worktree.bare_repo_path_template` — so a project-named title would rename the directory too, and a later `aoe session rename` would MOVE it. **MUST NOT** put the project or group name in a session title, and **MUST NOT** disable the tie to work around that.
 - Exception: the chezmoi source dir (`~/.local/share/chezmoi`) is chezmoi-owned and stays a plain checkout outside `~/src`.
 
