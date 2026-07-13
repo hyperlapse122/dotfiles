@@ -438,12 +438,14 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `~/.config/com.ticklab.biopass/config.yaml` (PyYAML via `/usr/bin/python3`,
   config-solaar-style; the rendered values ARE the onchange trigger, no
   fingerprint block). `biopass.cameraPairs` (same file) lists known RGB+IR
-  camera pairs by v4l device name: when a host has BOTH nodes of a pair, the
-  script also pins `methods.face.camera` + `methods.face.anti_spoofing.
-  ir_camera` to them, preferring the persistent `/dev/v4l/by-id`/`by-path`
-  symlink over renumbering-prone `/dev/videoN` (Biopass stat()s the path and
-  matches st_rdev, so symlinks work); no matching pair means the camera keys
-  are left alone. It soft-skips when biopass isn't installed or the config
+  camera pairs, each side a stable `/dev/v4l/by-id` path (`rgbPath`/`irPath`,
+  used verbatim) or a v4l device name (`rgbName`/`irName`, resolved
+  lowest-index node → persistent symlink): when a host has BOTH sides of a
+  pair, the script also pins `methods.face.camera` + `methods.face.
+  anti_spoofing.ir_camera` to them, preferring persistent symlinks over
+  renumbering-prone `/dev/videoN` (Biopass stat()s the path and matches
+  st_rdev, so symlinks work); no matching pair means the camera keys are
+  left alone. It soft-skips when biopass isn't installed or the config
   doesn't exist yet — Biopass's shipped defaults are already face-only, so an
   absent config needs no write, and hand-rolling one would pin a schema_version
   that could drift from the app. Toggle a method HERE, not in the script. The

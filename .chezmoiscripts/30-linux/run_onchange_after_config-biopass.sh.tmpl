@@ -6,7 +6,8 @@
 # ~/.config/com.ticklab.biopass/config.yaml) to the policy in
 # .chezmoidata/biopass.yaml — face-only for now, on every Linux target — and,
 # when the host carries a KNOWN RGB+IR camera pair (biopass.cameraPairs,
-# matched by v4l device name), pin methods.face.camera and
+# each side matched by stable /dev path or by v4l device name), pin
+# methods.face.camera and
 # methods.face.anti_spoofing.ir_camera to those devices. The stable
 # /dev/v4l/by-id (then by-path) udev symlink is written in preference to raw
 # /dev/videoN, which can renumber across boots: Biopass stat()s the configured
@@ -158,25 +159,35 @@ for spec in sys.argv[2:]:
         method["enable"] = want
         changed.append(f"{name}={value_str}")
 
-# Known camera pair: the first pair with BOTH names present pins the RGB and
-# IR devices; per name, the lowest index is the capture node (higher indexes
-# are metadata nodes of the same interface). No match -> no camera edits.
+# Known camera pair: the first pair with BOTH sides present pins the RGB and
+# IR devices. A side is either a <side>Path (stable /dev path, used verbatim
+# when it exists) or a <side>Name (v4l node name; the lowest index per name
+# is the capture node — higher indexes are metadata nodes of the same
+# interface — then resolved to a stable symlink). No match -> no camera edits.
 face = methods.get("face")
 if PAIRS and isinstance(face, dict):
     nodes = video_nodes()
+
+    def resolve_side(pair, side):
+        path = pair.get(side + "Path")
+        if path:
+            return path if os.path.exists(path) else None
+        name_nodes = nodes.get(pair.get(side + "Name") or "")
+        return stable_path(min(name_nodes)[1]) if name_nodes else None
+
     for pair in PAIRS:
-        rgb_name, ir_name = pair.get("rgbName"), pair.get("irName")
-        if not rgb_name or not ir_name:
+        if not (pair.get("rgbPath") or pair.get("rgbName")) or not (
+            pair.get("irPath") or pair.get("irName")
+        ):
             sys.stderr.write(
                 f"config-biopass: camera pair {pair.get('label', '?')!r} lacks "
-                f"rgbName/irName; skipping it\n"
+                f"an rgb/ir Path-or-Name; skipping it\n"
             )
             continue
-        rgb_nodes, ir_nodes = nodes.get(rgb_name), nodes.get(ir_name)
-        if not rgb_nodes or not ir_nodes:
+        rgb = resolve_side(pair, "rgb")
+        ir = resolve_side(pair, "ir")
+        if not rgb or not ir:
             continue
-        rgb = stable_path(min(rgb_nodes)[1])
-        ir = stable_path(min(ir_nodes)[1])
         if face.get("camera") != rgb:
             face["camera"] = rgb
             changed.append(f"face.camera={rgb}")
