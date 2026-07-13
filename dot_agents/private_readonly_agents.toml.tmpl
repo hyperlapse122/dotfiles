@@ -1,26 +1,44 @@
+{{- /* Every remote skill tracks its newest upstream release, resolved HERE at
+       render time — there is no hand-maintained pin and no settle window
+       (`minimum_release_age` is deliberately absent: it would reject a
+       just-published release and fail the whole apply).
+
+       install-dotagents-skills embeds these same refs in its onchange
+       fingerprint, so a new upstream release re-triggers the install that
+       actually fetches it — keep the two in sync (the compound-engineering
+       lookup is shared via .chezmoitemplates/compound-engineering-ref.tmpl).
+
+       These are GitHub API calls: run chezmoi through the zsh wrapper (or
+       `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is injected. */ -}}
 version = 1
 agents = ["claude", "codex"]
-# 1 week in minutes — settle window for the managed SKILL refs only. It is
-# independent of the 24h mise gate on the dotagents CLI itself. dotagents
-# throws if a pinned ref is younger than this, so every pin below is >=7d old.
-minimum_release_age = 10080
 
 [trust]
-github_orgs = ["getsentry", "microsoft", "shadcn"]
+github_orgs = ["getsentry", "microsoft", "shadcn", "everyinc"]
 git_domains = ["git.jpi.app"]
 
 [[skills]]
 name = "playwright-cli"
-source = "microsoft/playwright-cli@v0.1.15"
+source = "microsoft/playwright-cli"
+ref = {{ (gitHubLatestRelease "microsoft/playwright-cli").TagName | quote }}
 
 [[skills]]
 name = "improve"
-# shadcn/improve publishes no releases/tags, so the pin is a commit sha.
-source = "shadcn/improve@03369ee6d7cafbfcecc4346539b05b3dc0a603bb"
+# shadcn/improve publishes NO releases and NO tags, so its default branch is the
+# only "newest" there is — track the branch head rather than a frozen sha.
+source = "shadcn/improve"
+ref = "main"
 
 [[skills]]
 name = "dotagents"
-source = "getsentry/dotagents@1.17.0"
+source = "getsentry/dotagents"
+ref = {{ (gitHubLatestRelease "getsentry/dotagents").TagName | quote }}
+
+# The whole compound-engineering skill set (ce-*, lfg).
+[[skills]]
+name = "*"
+source = "everyinc/compound-engineering-plugin"
+ref = {{ includeTemplate "compound-engineering-ref.tmpl" . | quote }}
 
 [[skills]]
 name = "ci-cd-monitoring"

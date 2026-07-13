@@ -4,6 +4,11 @@ agents = ["claude", "codex", "opencode"]
 [trust]
 allow_all = true
 
+# Unpinned on purpose: this repo-scoped config is plain TOML, not a chezmoi
+# template, so it cannot resolve the newest release at render time the way
+# dot_agents/private_readonly_agents.toml.tmpl does. Omitting the ref makes
+# dotagents track the default branch instead of freezing on a pin that nothing
+# bumps (the weekly pin-bump workflow is gone).
 [[skills]]
 name = "dotagents"
-source = "getsentry/dotagents@1.17.0"
+source = "getsentry/dotagents"

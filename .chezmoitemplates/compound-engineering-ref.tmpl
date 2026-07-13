@@ -1,0 +1,17 @@
+{{- /* Newest compound-engineering-plugin release tag.
+
+       The repo interleaves several tag trains (marketplace-*, cursor-marketplace-*,
+       cli-*), so `gitHubLatestRelease` would eventually resolve to the wrong one —
+       take the newest release whose tag carries the compound-engineering- prefix.
+
+       Shared so the ref rendered into ~/.agents/agents.toml and the copy embedded
+       in the install script's onchange fingerprint can never drift apart:
+         - dot_agents/private_readonly_agents.toml.tmpl (the [[skills]] "*" entry)
+         - .chezmoiscripts/70-agents/run_onchange_after_install-dotagents-skills.sh.tmpl
+    */ -}}
+{{- range (gitHubReleases "everyinc/compound-engineering-plugin") -}}
+{{-   if hasPrefix "compound-engineering-" .TagName -}}
+{{-     .TagName -}}
+{{-     break -}}
+{{-   end -}}
+{{- end -}}

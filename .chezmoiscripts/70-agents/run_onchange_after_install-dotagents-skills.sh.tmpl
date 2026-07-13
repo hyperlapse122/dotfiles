@@ -7,17 +7,28 @@
 # install`, driven by the deployed ~/.agents/agents.toml (source:
 # dot_agents/private_readonly_agents.toml.tmpl).
 #
-# onchange trigger: the fingerprint block below embeds a sha256 of the RAW
-# agents.toml source template, so the install re-runs exactly when the config
-# actually changes — a skill/MCP added or removed, or a remote skill's `@` pin
-# bumped by the update-agent-skills workflow. Hashing the raw template (not the
-# rendered target) keeps onepasswordRead secrets out of the fingerprint, per
-# the script-prefix policy. This replaces the former `run_after_` + internal
-# stamp-guard design, whose every-apply execution existed to (a) refresh the
-# then-UNPINNED remote skills past their `minimum_release_age` settle and
-# (b) retry soft-skipped first applies; (a) is obsolete now that every remote
-# skill is `@`-pinned (the weekly workflow bumps pins, which edits the
-# fingerprinted source and re-triggers this script), and (b) is accepted as the
+# onchange trigger: TWO things, because the remote skills track upstream
+# releases instead of hand-maintained pins.
+#   1. The fingerprint block below embeds a sha256 of the RAW agents.toml source
+#      template, catching config edits — a skill/MCP added or removed. Hashing
+#      the raw template (not the rendered target) keeps onepasswordRead secrets
+#      out of the fingerprint, per the script-prefix policy.
+#   2. That raw text is byte-identical across an upstream release (the refs are
+#      template lookups, not literals), so the resolved refs are ALSO rendered
+#      in below. Without them a new release would land in the rendered
+#      ~/.agents/agents.toml while this script — the thing that actually fetches
+#      the skill — never re-ran. Refs are tags, not secrets, so embedding them
+#      is safe.
+# Caveat: shadcn/improve pins a BRANCH (it publishes no releases/tags), and a
+# branch head cannot be resolved by a chezmoi template function — new commits
+# there do not re-trigger this script. They are picked up whenever the install
+# does run (a config edit, another skill's release, or `chezmoi apply --force`).
+#
+# This replaces the former `run_after_` + internal stamp-guard design, whose
+# every-apply execution existed to (a) refresh the then-UNPINNED remote skills
+# past their `minimum_release_age` settle and (b) retry soft-skipped first
+# applies; (a) is obsolete — the settle window is gone and the rendered refs
+# above re-trigger this script on their own — and (b) is accepted as the
 # standard onchange trade-off:
 #   - chezmoi records a clean exit-0 run as done, so a soft-skipped or failed
 #     install (mise/git absent, network down) is NOT retried on the next apply
@@ -35,9 +46,16 @@ set -euo pipefail
 
 # agents.toml source fingerprint — chezmoi hashes this rendered script to
 # decide whether to re-run, so embedding the raw template's sha256 re-triggers
-# the install on any config edit (including workflow pin bumps). Comment-only;
-# never executed.
+# the install on any config edit. Comment-only; never executed.
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl")) }}
+#
+# Resolved remote skill refs (see header note 2) — these move on an upstream
+# release, changing this script's content and re-triggering the install that
+# fetches them. Keep in lockstep with the [[skills]] entries in the agents.toml
+# template. Comment-only; never executed.
+#   microsoft/playwright-cli@{{ (gitHubLatestRelease "microsoft/playwright-cli").TagName }}
+#   getsentry/dotagents@{{ (gitHubLatestRelease "getsentry/dotagents").TagName }}
+#   everyinc/compound-engineering-plugin@{{ includeTemplate "compound-engineering-ref.tmpl" . }}
 
 skip() { exit 0; }
 
