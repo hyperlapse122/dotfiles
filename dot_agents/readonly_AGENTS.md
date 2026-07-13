@@ -38,6 +38,33 @@
 
 - **MUST NOT** modify any git configuration at any scope (`--system` / `--global` / `--worktree` / `--local`), edit any gitconfig file, or set identity / signing / any key. **MUST NOT** override identity via `GIT_AUTHOR_*` / `GIT_COMMITTER_*`, `git commit --author`, or `-c user.email=…`. A config-driven failure → **STOP** and ask the user. No exceptions; if told to "fix the git setup," confirm the exact `git config` command first and run only that.
 
+## Project layout — `~/src/<host>/[<group>/]<project>/<worktree>`
+
+- Every checkout lives under **`~/src/<git-hostname>/[<group>/]<project>/`**, where `<git-hostname>` is the remote's host verbatim (`github.com`, `git.jpi.app`). **MUST NOT** clone anywhere else under `$HOME`; when the user names a project, resolve it here rather than searching `$HOME`.
+- `<group>` is the GitHub **organization** or the GitLab **bottom-most subgroup**, normalized to kebab-case with its product-family prefix (`365flow` → `examvue-365-flow`). **Omit the segment entirely when the project name already carries the group** — GitLab `products/examvue-duo/examvue-apps` → `~/src/git.jpi.app/examvue-apps/`. The prefix is a human judgment call, not an algorithm: **MUST** mirror an existing sibling directory, and **MUST** ask the user when there is none to copy.
+- A project directory is **not a working tree** — it is a bare repo plus its worktrees:
+  - `.bare/` — the bare repository (the only real git dir)
+  - `.git` — a one-line file, `gitdir: ./.bare`
+  - one directory per **worktree**, plus `.aoe-trash/` (agent-of-empires' deleted-worktree holding area — leave it alone)
+- **MUST** `cd` into a worktree before doing any work: the project root has no checkout (`git status` there fails with "this operation must be run in a work tree") and `.bare/` is not one either. `main` is the default-branch worktree.
+- A worktree directory is named after its **agent-of-empires session**, which is **not** its branch — `examvue-apps/wu` sits on `chore/add-claude-md-agents-imports`. The Git Flow gate below applies to the **branch**, never to the directory name; **MUST NOT** rename a worktree dir to match its branch, or a branch to match its dir.
+- Worktrees are created and **locked** by `aoe` (agent-of-empires). **MUST NOT** hand-remove or unlock one (`git worktree remove` / `--force`) — delete through `aoe`, or ask the user.
+- Clone a new project INTO the layout, never as a flat checkout. The default-branch worktree is created by **`aoe`**, not `git worktree add` — `aoe` owns and locks every worktree:
+
+  ```sh
+  proj=~/src/<host>/[<group>/]<project>
+  git clone --bare <url> "$proj/.bare"
+  cd "$proj"
+  echo "gitdir: ./.bare" > .git
+  git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+  git fetch origin
+  # default-branch worktree + session; -w takes the EXISTING branch (no -b)
+  aoe add "$proj" -t "[<group-slug>-]<project-name>" -g "<group-slug>" -w <default-branch>
+  ```
+
+- The default-branch session's `aoe` title **MUST** be `[<group-slug>-]<project-name>` and its group `<group-slug>` — `examvue-365-flow/shadcn-registry` → `-t examvue-365-flow-shadcn-registry -g examvue-365-flow`; a project with no group segment drops both (`examvue-apps` → `-t examvue-apps`). The worktree **directory** name is not free — `aoe`'s `worktree.bare_repo_path_template = "./{branch}"` derives it from the branch, so the default-branch worktree is always `./main`. Session title and worktree directory are decoupled by `session.tie_workdir_to_name = false`; **MUST NOT** turn that on — with the tie on, `aoe session rename` MOVES the worktree directory to match the new title.
+- Exception: the chezmoi source dir (`~/.local/share/chezmoi`) is chezmoi-owned and stays a plain checkout outside `~/src`.
+
 ## Branch naming — gate before first commit
 
 - Every branch name **MUST** start with a Git Flow prefix: `feature/` `bugfix/` `hotfix/` `refactor/` `docs/` `chore/` `release/` (or the project's documented equivalent set).
