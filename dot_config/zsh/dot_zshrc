@@ -23,19 +23,26 @@ source <(helm completion zsh)
 
 # Run chezmoi with a GitHub token: its gitHub* template functions (e.g.
 # gitHubLatestRelease in .chezmoiexternals/) read GITHUB_TOKEN-family env vars,
-# not `gh auth`, and anonymous API calls hit 403 rate limits. Token comes from
-# 1Password; if `op` is missing or the read fails/returns empty, warn and run
-# chezmoi without a token instead of blocking.
+# not `gh auth`, and anonymous API calls hit 403 rate limits. Token resolution:
+# `gh auth token` first — the auth-github preflight logs `gh` in with the same
+# PAT, so it's usually available, instant, and prompt-free (no 1Password
+# biometric popup) — then fall back to 1Password (`op read`) when `gh` is
+# missing, not logged in, or returns empty. If both fail, warn and run chezmoi
+# without a token instead of blocking.
 chezmoi() {
   if [[ -n "${GITHUB_TOKEN-}" || -n "${GITHUB_ACCESS_TOKEN-}" || -n "${CHEZMOI_GITHUB_ACCESS_TOKEN-}" ]]; then
     command chezmoi "$@"
     return
   fi
   local token
+  if command -v gh >/dev/null 2>&1 && token="$(gh auth token 2>/dev/null)" && [[ -n "$token" ]]; then
+    GITHUB_TOKEN="$token" command chezmoi "$@"
+    return
+  fi
   if command -v op >/dev/null 2>&1 && token="$(op read 'op://Private/GitHub/PAT' 2>/dev/null)" && [[ -n "$token" ]]; then
     GITHUB_TOKEN="$token" command chezmoi "$@"
     return
   fi
-  print -u2 'chezmoi: no GitHub token from op; running unauthenticated (GitHub API rate limits may apply)'
+  print -u2 'chezmoi: no GitHub token from gh or op; running unauthenticated (GitHub API rate limits may apply)'
   command chezmoi "$@"
 }
