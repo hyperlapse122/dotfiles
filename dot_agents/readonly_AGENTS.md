@@ -61,6 +61,8 @@
   garden --chdir ~/src cmd <name> setup-gitdir aoe-session
   ```
 
+  `garden cmd` takes **exactly ONE query**, then the command names: `garden cmd <QUERY> <COMMANDS>...`. Extra tree names silently become COMMAND names — `garden cmd a b setup-gitdir aoe-session` runs against tree `a` only, and `b` is read as a command. **MUST NOT** list several trees there; select many with a glob query (`'*'`, `'telerad-*'`) — both commands are idempotent, so a broad query is safe. `garden grow` is the opposite (`grow <QUERIES>...`) and does take a tree list.
+
   Hand-run `aoe add ~/src/<host>/<group>/<project> -t <title> -g "<group-slug>/<project-name>" -w <branch>` only for a NON-default-branch worktree; `-w` takes the EXISTING branch (no `-b`).
 
 - garden touches ONLY the bare repos. **MUST NOT** run `garden prune --rm` / `prune --no-prompt` / `garden plant`, and **MUST NOT** declare garden `worktree:` trees — worktrees stay aoe-owned. Audit drift read-only with `src-audit` (missing = grow on demand; broken pointer = re-run `setup-gitdir`; unmanaged = surface to the user, never delete).

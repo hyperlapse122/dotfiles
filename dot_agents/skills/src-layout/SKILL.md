@@ -91,6 +91,15 @@ Division of labor — four tools, no overlap:
    at that worktree. aoe still creates and locks the worktree; nothing here
    uses `git worktree`.
 
+   `garden cmd` takes **exactly ONE query**, then the command names —
+   `garden cmd <QUERY> <COMMANDS>...`. A second tree name is silently parsed as
+   a COMMAND, so `garden cmd telerad-openapi telerad-frontend setup-gitdir
+   aoe-session` bootstraps `telerad-openapi` ONLY. Never list trees there:
+   select many with a glob QUERY instead (`'*'`, `'telerad-*'`). Both commands
+   are idempotent — an already-bootstrapped tree just prints a skip — so a
+   broad query is always safe. (`garden grow <QUERIES>...` is the opposite: it
+   DOES take a list of trees.)
+
    New host, every declared project in one pass:
 
    ```sh
@@ -120,7 +129,8 @@ fresh bare clone, recreate worktrees via `aoe add`, then port uncommitted work
 with `git diff`/`git format-patch` from the old checkout; removing the old
 checkout is the user's call.
 
-New host / grow everything at once: `garden --chdir ~/src grow '*'`.
+New host / bootstrap everything at once (step 4's glob form):
+`garden --chdir ~/src grow '*' && garden --chdir ~/src cmd '*' setup-gitdir aoe-session`.
 
 ## Forbidden
 
