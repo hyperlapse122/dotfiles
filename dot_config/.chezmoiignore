@@ -22,7 +22,8 @@ environment.d/50-input-method.conf
 fcitx5
 {{- end }}
 
-# zsh cannot be used from Windows
+# tmux and zsh cannot be used from Windows
 {{- if eq .chezmoi.os "windows" }}
+tmux
 zsh
 {{- end }}
