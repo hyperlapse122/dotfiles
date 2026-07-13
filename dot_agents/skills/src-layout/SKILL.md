@@ -54,6 +54,11 @@ Division of labor — four tools, no overlap:
    rm "$XDG_RUNTIME_DIR/garden.yaml"
    ```
 
+   Run every `chezmoi` command through the zsh wrapper — from a non-zsh shell,
+   `zsh -ic 'chezmoi <args>'` — so `GITHUB_TOKEN` is injected (the dotfiles
+   zshrc defines the wrapper; bare `chezmoi` renders `.chezmoiexternals/`
+   against the anonymous GitHub API rate limit and 403s after a few runs).
+
    Add under `trees:` (replace a bare `trees: {}` if present):
 
    ```yaml

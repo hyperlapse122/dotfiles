@@ -207,6 +207,19 @@ system files in `system.yaml` + the tree. Full model: `system/README.md`.
 - `chezmoi execute-template < file.tmpl` — render one template in isolation (output depends on OS + `.chezmoidata`).
 - `chezmoi cat ~/target/path` — show the rendered target.
 - `chezmoi apply` — deploy (also runs the scripts). Binary: `/usr/bin/chezmoi`.
+- **Invoke chezmoi through the zsh wrapper, not the bare binary.**
+  `dot_config/zsh/dot_zshrc` defines a `chezmoi()` function that injects
+  `GITHUB_TOKEN` (from `gh auth token`, falling back to
+  `op read 'op://Private/GitHub/PAT'`) because chezmoi's `gitHub*` template
+  functions ignore `gh auth`, and anonymous GitHub API calls 403 at
+  60 req/h/IP — a couple of full source-state reads (each renders every
+  `.chezmoiexternals/` template) exhaust that. In an interactive zsh the
+  wrapper applies automatically; from a non-zsh context (agents, scripts,
+  Makefiles) run `zsh -ic 'chezmoi <args>'` instead of bare `chezmoi`. The
+  isolated dummy-`op` recipe below is the one exception — it must control
+  PATH itself, so when its GitHub-API renders rate-limit, inject the token
+  the same way the wrapper does (`GITHUB_TOKEN="$(gh auth token)" chezmoi …`)
+  rather than waiting out the reset.
 
 #### When local verification is impossible, verify via the PR's CI + artifacts
 
