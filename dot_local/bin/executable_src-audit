@@ -1,0 +1,86 @@
+#!/bin/sh
+# src-audit — read-only drift report for the ~/src project layout
+# (~/src/<host>/[<group>/]<project>/<worktree>; registry: ~/src/garden.yaml).
+#
+# Reports three kinds of drift:
+#   missing    declared in garden.yaml but not grown on this host. Informational
+#              (exit 0) — the manifest is the union across hosts; grow on demand
+#              with `garden --chdir ~/src grow <name>`.
+#   broken     grown, but the project root's .git pointer file is absent or not
+#              exactly "gitdir: ./.bare". Exit 1.
+#   unmanaged  git repository under ~/src that no declared project accounts for
+#              (flat checkout, misplaced clone, unregistered project). Exit 1.
+#
+# Never deletes or modifies anything; deletion decisions stay with the user,
+# and worktree removal stays with aoe. Procedure reference: the src-layout skill.
+set -eu
+
+src="$HOME/src"
+[ -d "$src" ] || { echo "src-audit: $src does not exist — nothing to audit"; exit 0; }
+command -v garden >/dev/null 2>&1 || { echo "src-audit: garden not on PATH (installed to ~/.local/bin by chezmoi apply — .chezmoiexternals/garden.toml)" >&2; exit 2; }
+[ -f "$src/garden.yaml" ] || { echo "src-audit: $src/garden.yaml missing (chezmoi apply?)" >&2; exit 2; }
+
+tmproot="${XDG_RUNTIME_DIR:-$HOME/.cache}"
+mkdir -p "$tmproot"
+scratch="$(mktemp -d "$tmproot/src-audit.XXXXXX")"
+trap 'rm -rf "$scratch"' EXIT
+
+garden_ls() {
+  # garden ls prints grown-tree lines ("# <name> [branch]") to stderr and
+  # missing-tree lines ("#- <name>") to stdout — merge both for parsing.
+  garden --chdir "$src" ls --all --no-commands --no-remotes --no-gardens --no-groups 2>&1
+}
+
+# "# <name> [branch]" = grown on disk, "#- <name>" = declared but missing.
+# A bare "." is garden's synthesized default tree for the config dir (shown
+# when no declared tree matches, e.g. an empty manifest) — not a project.
+garden_ls | sed -n 's/^# //p' | sed 's/ .*//' | grep -v '^$' | grep -v '^\.$' >"$scratch/grown" || true
+garden_ls | sed -n 's/^#- //p' | sed 's/ .*//' | grep -v '^$' | grep -v '^\.$' >"$scratch/missing" || true
+
+rc=0
+
+echo "## missing (declared, not grown on this host — informational)"
+if [ -s "$scratch/missing" ]; then cat "$scratch/missing"; else echo "(none)"; fi
+
+echo
+echo "## broken (grown, but the .git pointer file is absent or wrong)"
+: >"$scratch/roots"
+broken=0
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  root="$(dirname "$(garden --chdir "$src" eval '${TREE_PATH}' "$name" 2>/dev/null)")"
+  printf '%s\n' "$root" >>"$scratch/roots"
+  if [ ! -f "$root/.git" ] || [ "$(cat "$root/.git")" != "gitdir: ./.bare" ]; then
+    printf '%s (fix: garden --chdir ~/src setup-gitdir %s)\n' "$root" "$name"
+    broken=1
+  fi
+done <"$scratch/grown"
+if [ "$broken" -eq 1 ]; then rc=1; else echo "(none)"; fi
+
+echo
+echo "## unmanaged (repository on disk that no declared project accounts for)"
+# `garden prune` without --rm is a safe-mode report, but it flags every
+# properly-shaped project root (the declared tree path is <project>/.bare, so
+# the root's .git pointer reads as an unreferenced repo) — filter out declared
+# roots and anything below them (worktrees are aoe's domain).
+yes n | garden --chdir "$src" prune 2>/dev/null | sed -n 's/^# //p' | sort -u >"$scratch/pruned" || true
+unmanaged=0
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  skip=0
+  while IFS= read -r root; do
+    case "$path" in
+      "$root" | "$root"/*)
+        skip=1
+        break
+        ;;
+    esac
+  done <"$scratch/roots"
+  if [ "$skip" -eq 0 ]; then
+    printf '%s\n' "$path"
+    unmanaged=1
+  fi
+done <"$scratch/pruned"
+if [ "$unmanaged" -eq 1 ]; then rc=1; else echo "(none)"; fi
+
+exit "$rc"

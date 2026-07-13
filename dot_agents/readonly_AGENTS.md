@@ -16,6 +16,7 @@
 | take a single issue/PR/MR URL end-to-end (triage → fix → one PR/MR → green pipeline)       | `ship-issue`          | URL parsing, from-scratch triage + parent/sibling lookup, one-PR-per-issue, CI self-heal loop        |
 | prune stale remote-tracking branches / delete local branches whose upstream is gone        | `git-branch-cleanup`  | remote enumeration, mandatory dry-run preview, `fetch --all --prune`, safe local `: gone]` cleanup   |
 | write a daily work log / 일일 업무 보고 from today's git commits                            | `daily-report`        | per-OS date-range `git log`, business-perspective grouping, Korean plaintext-fence output contract   |
+| clone a repository, register a new project under `~/src`, or audit the layout             | `src-layout`          | group-name judgment (mirror-or-ask), garden manifest entry + grow/setup-gitdir bootstrap, aoe add handoff, src-audit drift flow |
 | drive a browser / run Playwright tests                                                     | `playwright-cli`      | usage (host-safety rule is in core below)                                                           |
 
 ## Project instruction files — `CLAUDE.md` mirrors `AGENTS.md` (guardrail)
@@ -49,18 +50,17 @@
 - **MUST** `cd` into a worktree before doing any work: the project root has no checkout (`git status` there fails with "this operation must be run in a work tree") and `.bare/` is not one either. `main` is the default-branch worktree.
 - A worktree directory is named after its **agent-of-empires session**, which is **not** its branch — `examvue-apps/wu` sits on `chore/add-claude-md-agents-imports`. The Git Flow gate below applies to the **branch**, never to the directory name; **MUST NOT** rename a worktree dir to match its branch, or a branch to match its dir.
 - Worktrees are created and **locked** by `aoe` (agent-of-empires). **MUST NOT** hand-remove or unlock one (`git worktree remove` / `--force`) — delete through `aoe`, or ask the user.
-- Clone a new project INTO the layout, never as a flat checkout. The default-branch worktree is created by **`aoe`**, not `git worktree add` — `aoe` owns and locks every worktree:
+- Clone a new project INTO the layout, never as a flat checkout — and never by a hand-rolled `git clone`: every project is **declared in the garden registry** (`~/src/garden.yaml`, chezmoi-managed 0444 — edit the SOURCE `src/readonly_garden.yaml` in the chezmoi repo, then `chezmoi apply`). `garden grow` performs the bare clone; the default-branch worktree is created by **`aoe`**, not `git worktree add` — `aoe` owns and locks every worktree. (Tree-entry format + group-judgment procedure → `src-layout`.)
 
   ```sh
-  proj=~/src/<host>/[<group>/]<project>
-  git clone --bare <url> "$proj/.bare"
-  cd "$proj"
-  echo "gitdir: ./.bare" > .git
-  git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-  git fetch origin
+  # after adding the tree entry to the source garden.yaml + chezmoi apply:
+  garden --chdir ~/src grow <name>          # bare clone into <project>/.bare + fetch refspec
+  garden --chdir ~/src setup-gitdir <name>  # writes the one-line "gitdir: ./.bare" pointer
   # default-branch worktree + session; -w takes the EXISTING branch (no -b)
-  aoe add "$proj" -t <default-branch> -g "[<group-slug>/]<project-name>" -w <default-branch>
+  aoe add ~/src/<host>/[<group>/]<project> -t <default-branch> -g "[<group-slug>/]<project-name>" -w <default-branch>
   ```
+
+- garden touches ONLY the bare repos. **MUST NOT** run `garden prune --rm` / `prune --no-prompt` / `garden plant`, and **MUST NOT** declare garden `worktree:` trees — worktrees stay aoe-owned. Audit drift read-only with `src-audit` (missing = grow on demand; broken pointer = re-run `setup-gitdir`; unmanaged = surface to the user, never delete).
 
 - An `aoe` session's **title** is its worktree name (`main` for the default branch), and its **group** is the project's path under `~/src/<host>/` — `[<group-slug>/]<project-name>`, a slash-nested group path (`examvue-365-flow/shadcn-registry`; a project with no group segment is just `examvue-apps`).
 - Project identity lives in the **group**, never in the title. `session.tie_workdir_to_name` (aoe's default, on) makes the worktree directory leaf follow the title's slug — it bypasses `worktree.bare_repo_path_template` — so a project-named title would rename the directory too, and a later `aoe session rename` would MOVE it. **MUST NOT** put the project or group name in a session title, and **MUST NOT** disable the tie to work around that.

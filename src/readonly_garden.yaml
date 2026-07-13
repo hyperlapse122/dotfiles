@@ -1,0 +1,39 @@
+# ~/src project registry — chezmoi-managed, read-only (source:
+# src/readonly_garden.yaml). Declared source of truth for the
+# ~/src/<host>/[<group>/]<project>/<worktree> layout (rules: ~/.agents/AGENTS.md
+# "Project layout"; full procedure: the src-layout skill).
+#
+# Add a project: edit the SOURCE file in the chezmoi repo, `chezmoi apply`, then
+#   garden --chdir ~/src grow <name>
+#   garden --chdir ~/src setup-gitdir <name>
+#   aoe add ~/src/<host>/[<group>/]<project> -t <default-branch> -g "[<group-slug>/]<project>" -w <default-branch>
+#
+# Every tree follows this shape — the path ALWAYS ends in /.bare with
+# `bare: true`, and the fetch refspec is explicit because `git clone --bare`
+# alone would not track remote branches:
+#
+#   trees:
+#     <project>:                       # tree name = project leaf; "<group>-<project>" on collision
+#       path: <host>/[<group>/]<project>/.bare
+#       url: git@<host>:<remote-namespace>/<project>.git
+#       bare: true
+#       gitconfig:
+#         remote.origin.fetch: "+refs/heads/*:refs/remotes/origin/*"
+#
+# The manifest is the union across all hosts: a tree not grown on this host is
+# NOT an error — grow on demand (`garden --chdir ~/src grow '*'` grows all).
+# Audit drift read-only with `src-audit`.
+# FORBIDDEN: `garden prune --rm` / `--no-prompt`, `garden plant`, and garden
+# `worktree:` trees — worktrees are created and locked by aoe only.
+
+garden:
+  root: ${GARDEN_CONFIG_DIR}
+
+trees: {}
+
+commands:
+  # Writes the one-line .git file that points the project root at .bare/,
+  # making the project root resolvable by git (log/fetch) without a checkout.
+  setup-gitdir: |
+    proj="$(dirname "${TREE_PATH}")"
+    printf 'gitdir: ./.bare\n' > "$proj/.git"
