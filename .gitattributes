@@ -1,0 +1,3 @@
+# age-encrypted chezmoi sources (encrypted_*.age) are ciphertext, not text:
+# `binary` turns off textual diffs, merges, and eol normalization for them.
+*.age binary

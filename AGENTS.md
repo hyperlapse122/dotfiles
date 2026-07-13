@@ -327,7 +327,9 @@ public half, safe to commit) is pinned in the config template. Edit encrypted
 files with `chezmoi edit <target>` or `chezmoi decrypt`/`chezmoi encrypt`;
 plaintext scratch copies go in the per-user temp dir and are removed
 immediately — the plaintext itself is NEVER committed, and real credentials
-still belong in 1Password references, never in an encrypted file. Losing the
+still belong in 1Password references, never in an encrypted file. The root
+`.gitattributes` marks `*.age binary`, so git never attempts a textual
+diff/merge or eol normalization on the ciphertext. Losing the
 key only costs re-encrypting the registry with a fresh one (1Password holds
 the original). GitLab CLI auth IS secret-driven:
 `.chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.sh.tmpl` provisions the
