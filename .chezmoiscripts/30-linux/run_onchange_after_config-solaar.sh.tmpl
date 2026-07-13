@@ -100,8 +100,13 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 #                              reported as THUMB WHEEL HID++ notifications
 #                              (consumed by the rules.yaml 2x H-scroll rule)
 #                              instead of firmware-native horizontal scroll.
+#   dpi                      : pointer resolution, raised from the 1000
+#                              default to compensate for the GNOME flat accel
+#                              profile (config-gnome-mouse) — with no adaptive
+#                              accel curve, pointer speed comes from hardware
+#                              DPI; tune the value here.
 #
-# All four are deliberate cross-machine ergonomics; by contrast
+# All five are deliberate cross-machine ergonomics; by contrast
 # `haptic-level` stays user-owned (GUI preference, see the header note
 # above) and is intentionally NOT listed here.
 #
@@ -110,15 +115,14 @@ SOLAAR_SERVICE=app-solaar@autostart.service
 #
 # For nested-dict settings the path is `<setting>.<int_key>` (e.g.
 # `divert-keys.416`). For scalar settings the path is just the setting
-# name (e.g. `haptic-level` — supported by the parser even though no
-# scalar target is currently enforced; add one here if a future setting
-# needs lockstep cross-machine state).
+# name (e.g. `smart-shift`, `dpi`).
 TARGETS=(
   "B04200000000:divert-keys.416:2:MX Master 4 / Haptic -> Mouse Gestures"
   "B04200000000:smart-shift:12:MX Master 4 / SmartShift threshold -> 12"
   "B04200000000:scroll-ratchet-torque:75:MX Master 4 / ratchet torque -> 75"
   "B04200000000:hires-smooth-resolution:false:MX Master 4 / hi-res wheel resolution -> off"
   "B04200000000:thumb-scroll-mode:true:MX Master 4 / thumb wheel -> diverted (rules H-scroll)"
+  "B04200000000:dpi:1600:MX Master 4 / DPI -> 1600"
   "B03400000000:divert-keys.195:2:MX Master 3S / Mouse Gesture Button -> Mouse Gestures"
 )
 
