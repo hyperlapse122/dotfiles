@@ -14,11 +14,45 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
     args = ["--wait"]
 
 [data]
+{{- /* Prompted secrets are stored AES-encrypted (encryptAES + the user-keyring
+   key from .chezmoitemplates/config-secrets-key.tmpl), never plaintext — the
+   rendered chezmoi.toml carries only ciphertext. The hasKey guard replicates
+   promptStringOnce (re-init keeps the stored value) WITHOUT re-encrypting an
+   already-encrypted value. A non-blank answer with no keyring key available
+   fails loudly instead of silently discarding what was typed; a blank answer
+   (also what non-interactive/CI init gets) stores "" and keeps the skip path.
+   Consumers decrypt at apply-render time with the same partial. */}}
 {{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
-    luksPassphrase = {{ promptStringOnce . "luksPassphrase" "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" | quote }}
+{{-   $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
+{{-   $luksPassphraseCipher := "" -}}
+{{-   if hasKey . "luksPassphraseCipher" -}}
+{{-     $luksPassphraseCipher = .luksPassphraseCipher -}}
+{{-   else -}}
+{{-     $plain := promptString "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" -}}
+{{-     if ne $plain "" -}}
+{{-       if eq $secretsKey "" -}}
+{{-         fail "config-secrets key unavailable (user keyring locked or unreachable); re-run `chezmoi init` from a desktop session, or leave the prompt blank to skip" -}}
+{{-       end -}}
+{{-       $luksPassphraseCipher = encryptAES $secretsKey $plain -}}
+{{-     end -}}
+{{-   end -}}
+    luksPassphraseCipher = {{ $luksPassphraseCipher | quote }}
 {{ end -}}
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "ubuntu") -}}
-    mokPassword = {{ promptStringOnce . "mokPassword" "MOK enrollment password for Secure Boot NVIDIA DKMS module signing (8-16 chars; leave blank to skip)" "" | quote }}
+{{-   $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
+{{-   $mokPasswordCipher := "" -}}
+{{-   if hasKey . "mokPasswordCipher" -}}
+{{-     $mokPasswordCipher = .mokPasswordCipher -}}
+{{-   else -}}
+{{-     $plain := promptString "MOK enrollment password for Secure Boot NVIDIA DKMS module signing (8-16 chars; leave blank to skip)" "" -}}
+{{-     if ne $plain "" -}}
+{{-       if eq $secretsKey "" -}}
+{{-         fail "config-secrets key unavailable (user keyring locked or unreachable); re-run `chezmoi init` from a desktop session, or leave the prompt blank to skip" -}}
+{{-       end -}}
+{{-       $mokPasswordCipher = encryptAES $secretsKey $plain -}}
+{{-     end -}}
+{{-   end -}}
+    mokPasswordCipher = {{ $mokPasswordCipher | quote }}
 {{ end }}
 
 [hooks.read-source-state.pre]

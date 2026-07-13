@@ -94,6 +94,31 @@ ensure_op_authenticated() {
   return 1
 }
 
+# config-secrets key: the chezmoi config template (.chezmoi.toml.tmpl) stores
+# its prompted secrets (LUKS passphrase, MOK password) AES-encrypted in
+# ~/.config/chezmoi/chezmoi.toml instead of plaintext. The AES key lives ONLY
+# in the user keyring (Secret Service on Linux, Keychain on macOS) under
+# service=chezmoi-config-secrets / user=<username>; templates read it back
+# fail-soft via `chezmoi secret keyring get`
+# (.chezmoitemplates/config-secrets-key.tmpl). Generate it here — this hook
+# runs before chezmoi renders the config template on `init` — once per
+# user+host, and NEVER fail the hook over it: with no reachable keyring
+# (headless/TTY/container) the templates behave as if no secret was entered.
+# Keep in sync with Confirm-ConfigSecretsKey in .install-prerequisites.ps1
+# (Windows Credential Manager works headless, same service/user names).
+ensure_config_secrets_key() {
+  command -v chezmoi >/dev/null 2>&1 || return 0
+  local user existing key
+  user="${USER:-$(id -un)}"
+  existing="$(chezmoi secret keyring get --service=chezmoi-config-secrets --user="$user" 2>/dev/null || true)"
+  [[ -n "$existing" ]] && return 0
+  key="$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
+  if ! chezmoi secret keyring set --service=chezmoi-config-secrets --user="$user" --value="$key" 2>/dev/null; then
+    printf 'install-prerequisites.sh: user keyring unreachable; config-template secrets cannot be stored this run.\n' >&2
+  fi
+  return 0
+}
+
 # chezmoi calls the GitHub API while reading the source state (it fetches the
 # .chezmoiexternals repos, e.g. prezto) and again during provisioning (release
 # assets such as fonts and mise-managed tools). It authenticates with the first
@@ -121,6 +146,15 @@ ensure_github_token() {
 # running the installer below. No-op in normal execution (variable unset).
 if [[ -n "${_INSTALL_PREREQUISITES_TEST_SOURCE:-}" ]]; then
   return 0
+fi
+
+# The config-secrets key must exist before chezmoi renders .chezmoi.toml.tmpl
+# (`init` encrypts its prompted secrets with it), so ensure it BEFORE the fast
+# path — a fully provisioned host still needs it on its next `init`. One
+# keyring read per hook run; soft-skips real containers (no keyring there, and
+# the container CLI-only profile deploys no secret consumers anyway).
+if ! is_container; then
+  ensure_config_secrets_key
 fi
 
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.

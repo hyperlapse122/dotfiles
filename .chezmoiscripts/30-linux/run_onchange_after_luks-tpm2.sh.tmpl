@@ -1,6 +1,9 @@
 {{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
 {{-   $luksPassphrase := "" -}}
-{{-   if hasKey . "luksPassphrase" }}{{ $luksPassphrase = .luksPassphrase }}{{ end -}}
+{{-   if and (hasKey . "luksPassphraseCipher") (ne .luksPassphraseCipher "") -}}
+{{-     $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
+{{-     if ne $secretsKey "" }}{{ $luksPassphrase = decryptAES $secretsKey .luksPassphraseCipher }}{{ end -}}
+{{-   end -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/30-linux/run_onchange_after_luks-tpm2.sh.tmpl
@@ -10,22 +13,28 @@
 # ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively. Both distros use the
 # same dracut + systemd-cryptenroll backend, so this wrapper is backend-neutral.
 #
-# PASSPHRASE via chezmoi's promptString: chezmoi asks for the existing LUKS
-# passphrase at apply time and it reaches the enrollment tool through the
+# PASSPHRASE from the chezmoi config: `chezmoi init` prompts once for the
+# existing LUKS passphrase and stores it AES-ENCRYPTED (luksPassphraseCipher in
+# ~/.config/chezmoi/chezmoi.toml — see .chezmoi.toml.tmpl) with the
+# user-keyring key from .chezmoitemplates/config-secrets-key.tmpl. This wrapper
+# decrypts it at render time and hands it to the enrollment tool through the
 # SETUP_LUKS_TPM2_PASSPHRASE environment variable (the tool reads it from env
-# ONLY, never argv, and clears it immediately). Leave the prompt blank to skip
-# enrollment for this apply — e.g. once the disk is already enrolled. Enrollment
-# is also idempotent: a device that already carries a systemd-tpm2 token is
+# ONLY, never argv, and clears it immediately). A blank prompt (or an
+# unreachable/locked keyring at render time, which leaves the key empty) takes
+# the skip path below — e.g. once the disk is already enrolled. Enrollment is
+# also idempotent: a device that already carries a systemd-tpm2 token is
 # skipped even when a passphrase is given.
 #
 # onchange trigger: the fingerprint block below embeds a sha256 of the deployed
 # enrollment tool (executable_setup-luks-tpm2-unlock.sh.tmpl and its inlined
 # .setup-luks-tpm2-unlock_dracut.sh backend), so chezmoi re-runs this wrapper
 # whenever the enrollment logic changes. The prompted LUKS passphrase is NOT part
-# of the fingerprint — only the tool's source is hashed; note that entering a
-# passphrase does render it into this script's body (base64), which itself
-# changes the onchange hash, so the first apply that supplies a passphrase does
-# fire enrollment. NOTE the behavior change from the former run_after: a run
+# of the fingerprint — only the tool's source is hashed; note that a stored
+# passphrase does decrypt into this script's body (base64), which itself
+# changes the onchange hash, so the first apply after init stores one does
+# fire enrollment (and an apply where the keyring is temporarily unreachable
+# renders the skip branch instead — a harmless hash flip that re-fires the
+# idempotent enrollment on the next reachable apply). NOTE the behavior change from the former run_after: a run
 # skipped for a blank passphrase, a not-yet-deployed tool, an absent TPM, or
 # missing sudo is now recorded as "done" and is NOT retried on the next apply
 # unless the fingerprint changes — re-run enrollment with `chezmoi apply --force`
@@ -34,14 +43,16 @@
 #
 # SECURITY NOTES (inherent to the chezmoi-prompt approach, chosen deliberately):
 #   * promptString does NOT mask input, so the passphrase is echoed on screen as
-#     you type it during an interactive `chezmoi apply`.
-#   * When a passphrase is entered it is rendered (base64-wrapped only for shell
-#     safety, NOT secrecy) into this script's transient run-script file, which
-#     chezmoi writes mode-0700 and deletes after execution. Avoid
-#     `chezmoi apply --verbose` / `--dry-run` with a real passphrase, as those
-#     print rendered script contents.
-#   * Non-interactive applies (CI, agents, piped) get promptString's empty
-#     default and take the skip path below — no passphrase is ever rendered.
+#     you type it during an interactive `chezmoi init`.
+#   * At rest the config carries only the AES ciphertext; the key never leaves
+#     the user keyring. But when a passphrase decrypts, it is rendered
+#     (base64-wrapped only for shell safety, NOT secrecy) into this script's
+#     transient run-script file, which chezmoi writes mode-0700 and deletes
+#     after execution. Avoid `chezmoi apply --verbose` / `--dry-run` with a real
+#     passphrase stored, as those print rendered script contents.
+#   * Non-interactive inits (CI, agents, piped) get promptString's empty
+#     default, so no ciphertext is stored and applies take the skip path below —
+#     no passphrase is ever rendered.
 set -euo pipefail
 export LC_ALL=C
 
@@ -80,6 +91,6 @@ fi
 # not-yet-enrolled LUKS device for TPM2 unlock.
 SETUP_LUKS_TPM2_PASSPHRASE="$(printf '%s' {{ $luksPassphrase | b64enc | quote }} | base64 -d)" "$tool"
 {{ else -}}
-echo "luks-tpm2: no passphrase entered; skipping TPM2 enrollment this apply."
+echo "luks-tpm2: no stored passphrase (blank at init, or user keyring unavailable); skipping TPM2 enrollment this apply."
 {{ end -}}
 {{ end -}}

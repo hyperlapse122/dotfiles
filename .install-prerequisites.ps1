@@ -131,6 +131,37 @@ function Confirm-OpAuthenticated {
     return $false
 }
 
+# config-secrets key: mirrors ensure_config_secrets_key in
+# .install-prerequisites.sh (keep the two in sync). The chezmoi config template
+# stores its prompted secrets AES-encrypted with a key that lives ONLY in the
+# user credential store — Windows Credential Manager here, which works even in
+# headless sessions — under service=chezmoi-config-secrets / user=<username>.
+# No Windows-targeted template consumes it today (both encrypted secrets are
+# Linux-only), but the key infrastructure stays in lockstep with the POSIX
+# hook. Never fails the hook: a credential-store error only means the config
+# template treats its secrets as absent.
+function Confirm-ConfigSecretsKey {
+    if (-not (Get-Command chezmoi -ErrorAction SilentlyContinue)) { return }
+    $service = 'chezmoi-config-secrets'
+    $user = $env:UserName
+    if (-not $user) { return }
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $existing = & chezmoi secret keyring get --service $service --user $user 2> $null
+        if ($LASTEXITCODE -eq 0 -and $existing) { return }
+        $bytes = [byte[]]::new(32)
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $key = [Convert]::ToBase64String($bytes)
+        & chezmoi secret keyring set --service $service --user $user --value $key 2> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Stderr 'install-prerequisites.ps1: credential store unreachable; config-template secrets cannot be stored this run.'
+        }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
 # chezmoi calls the GitHub API while reading the source state (fetching the
 # .chezmoiexternals repos) and again during provisioning (release assets). It
 # authenticates with the first of these tokens it finds — CHEZMOI_GITHUB_ACCESS_TOKEN,
@@ -198,6 +229,12 @@ function Install-Prerequisites {
 # running the installer below (mirrors the shell script). No-op in normal
 # execution (variable unset).
 if ($env:_INSTALL_PREREQUISITES_TEST_SOURCE) { return }
+
+# The config-secrets key must exist before chezmoi renders .chezmoi.toml.tmpl
+# (`init` encrypts its prompted secrets with it), so ensure it BEFORE the fast
+# path — a fully provisioned host still needs it on its next `init` (mirrors
+# the POSIX hook; no container branch, Windows has none).
+Confirm-ConfigSecretsKey
 
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every init / apply.
