@@ -3,10 +3,14 @@
 # auth-glab — semi-interactive OAuth login for the GitLab CLI (`glab`).
 #
 # Signs in to every GitLab host this machine uses via glab's OAuth flow
-# (browser or device authorization) instead of provisioning static PATs.
-# Successor to the removed `.chezmoiscripts/10-auth/` run_onchange script:
-# chezmoi only deploys this command; run it yourself once per machine, and
-# again whenever a host's session is revoked.
+# (browser or device authorization).
+#
+# This is the FALLBACK auth path, not the primary one. The primary path is the
+# apply-time script `.chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.sh.tmpl`,
+# which provisions each host's 1Password PAT into the keyring on every
+# `chezmoi apply` (and re-runs whenever a token is rotated). Reach for this
+# command when there is no PAT available for a host, when a session/token is
+# revoked, or when you deliberately want a host on OAuth instead of a PAT.
 #
 #   auth-glab                 # all hosts; skips ones already authenticated
 #   auth-glab --device        # OAuth device flow (headless; GitLab 17.9+)

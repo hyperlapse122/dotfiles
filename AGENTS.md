@@ -137,7 +137,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | Dir | Purpose |
 |---|---|
 | `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also re-points `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `codegraph`) at the latest release and prunes older versions |
-| `10-auth/` | GitHub token preflight (before the installers), Docker Hub login, one-time `tailscale up` |
+| `10-auth/` | GitHub token preflight (before the installers), GitLab PAT login (after the file phase, so the externals-fetched `glab` exists), Docker Hub login, one-time `tailscale up` |
 | `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
 | `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
@@ -300,9 +300,16 @@ execution are not acceptable.
 
 Secrets are pulled at apply time via `onepasswordRead "op://..."` inside `.tmpl`
 files (GPG key, GitHub/Tailscale tokens, opencode API keys under
-`dot_config/opencode/private_secrets/`). GitLab CLI auth is not secret-driven:
-`~/.local/bin/auth-glab` performs a semi-interactive `glab auth login` OAuth
-flow (`--web`/`--device`) on demand instead of provisioning PATs. Never hardcode a secret — add an
+`dot_config/opencode/private_secrets/`). GitLab CLI auth IS secret-driven:
+`.chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.sh.tmpl` provisions the
+`git.jpi.app` + `gitlab.com` PATs from 1Password at apply time (`glab auth login
+--stdin --use-keyring`, then re-asserting the `git_protocol`/`api_protocol`/
+`container_registry_domains` host keys glab's token path drops). The rendered PAT
+IS the onchange trigger, so a rotation in 1Password re-runs the login; it is
+`after_` because `glab` itself arrives from `.chezmoiexternals/glab.toml` during
+the file phase. `~/.local/bin/auth-glab` remains the on-demand OAuth
+(`--web`/`--device`) FALLBACK — for a host with no PAT, a revoked session, or a
+host deliberately kept on OAuth. Never hardcode a secret — add an
 `onepasswordRead` reference. The `op` CLI must be able to resolve secrets:
 `.install-prerequisites.sh` runs as a `read-source-state` pre-hook to install
 1Password and mise first, and `chezmoi diff`/`execute-template` over secret

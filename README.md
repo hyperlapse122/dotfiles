@@ -56,10 +56,14 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    config, `@audio` realtime privileges, low-latency boot tuning) are also
    provisioned.
 
-GitLab CLI authentication is intentionally **not** provisioned: run `auth-glab`
-(deployed to `~/.local/bin`) once after the first apply to sign in to
-git.jpi.app and gitlab.com via OAuth — browser flow by default, `--device` for
-headless sessions.
+GitLab CLI authentication **is** provisioned on apply: personal access tokens for
+git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
+via `glab auth login --use-keyring`, along with the registry→host mapping
+`docker-credential-glab` needs. Rotating a token in 1Password re-runs the login
+on the next apply. `auth-glab` (deployed to `~/.local/bin`) remains as the
+on-demand OAuth **fallback** — for a host without a PAT, a revoked session, or a
+host you want on OAuth: browser flow by default, `--device` for headless
+sessions.
 
 ## Prerequisites
 

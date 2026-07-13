@@ -1,0 +1,117 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+#
+# auth-gitlab — provision the GitLab CLI (`glab`) credentials for every GitLab
+# host this machine uses, from the PATs stored in 1Password.
+#
+# The 1Password PAT is the PRIMARY auth source: it is rendered into this script
+# at apply time and handed to `glab auth login --stdin`, which stores it in the
+# OS keyring (`--use-keyring`: KWallet / GNOME Keyring on Linux, the login
+# keychain on macOS). `~/.local/bin/auth-glab` — the semi-interactive OAuth
+# (`--web` / `--device`) command — is KEPT as the on-demand FALLBACK: use it
+# when no PAT is available for a host, when a session/token is revoked, or when
+# a host should deliberately run on OAuth instead.
+#
+# We deliberately do NOT skip a host that is already authenticated. The whole
+# point of provisioning from 1Password is that the PAT takes precedence, so a
+# rotated PAT must overwrite whatever token (OAuth session or a stale PAT) the
+# keyring currently holds.
+#
+# run_onchange: the rendered PAT IS the trigger. When a token is rotated in
+# 1Password the rendered script content changes, so its hash changes and chezmoi
+# re-runs the login on the next apply (`glab auth login` for a host already
+# present in the config is an upsert, so re-runs are idempotent).
+#
+# run_after (NOT before, unlike the auth-github sibling): `glab` is fetched by
+# .chezmoiexternals/glab.toml into ~/.local/bin during chezmoi's FILE phase, so
+# on a first apply a before_ script would not find it yet and would take the
+# soft-skip path — and per AGENTS.md a run_onchange exit-0 skip is recorded as a
+# SUCCESSFUL run and is never retried, leaving the host unauthenticated until
+# the fingerprint changes or `chezmoi apply --force`. Running in the after phase
+# guarantees the externals-fetched binary is on disk. Nothing in the before
+# phase (the package installers) needs glab, so there is no ordering cost —
+# unlike `gh`, whose token preflight must precede the installers.
+#
+# Post-login config re-assert: glab's non-interactive / token path ignores
+# --git-protocol and --api-protocol and resets container_registry_domains to
+# empty (see the auth-glab header), and `docker-credential-glab` cannot resolve
+# a registry back to its host without that mapping. So the three host config
+# keys are re-applied with `config set` after each login. (`config set` host
+# selection is `-g --host`; `-h` would be `--help`.)
+
+set -euo pipefail
+
+# `glab` may be a mise shim or the .chezmoiexternals/glab.toml binary in
+# ~/.local/bin. This script can run under a non-login shell, so fall back to
+# ~/.local/bin when it is not already on PATH instead of missing the binary.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$PATH:$HOME/.local/bin" ;;
+esac
+export PATH
+
+# Prefer a `glab` on PATH; fall back to an ephemeral `mise exec glab@latest`.
+# With neither available there is nothing to authenticate against — warn and
+# soft-skip (exit 0), matching auth-github's behaviour when `gh` is absent.
+if command -v glab >/dev/null 2>&1; then
+  GLAB=(glab)
+elif command -v mise >/dev/null 2>&1; then
+  GLAB=(mise --no-config --no-env --no-hooks exec glab@latest -- glab)
+else
+  printf 'auth-gitlab: `glab` not on PATH or in ~/.local/bin and mise unavailable as fallback; skipping token login.\n' >&2
+  exit 0
+fi
+
+# Force glab's non-interactive path: no API/SSH hostname prompts for
+# self-managed hosts, no re-authenticate confirm (glab keys interactivity off
+# stdout being a TTY, not stdin, so `--stdin` alone is not enough).
+export GLAB_NO_PROMPT=1
+
+# Reads the PAT from stdin (heredoc at the call site) so the token never appears
+# in an argv / process listing.
+login_host() {
+  local host="$1" registries="$2"
+
+  if ! "${GLAB[@]}" auth login \
+    --hostname "$host" \
+    --api-host "$host" \
+    --api-protocol https \
+    --git-protocol https \
+    --container-registry-domains "$registries" \
+    --use-keyring \
+    --stdin; then
+    printf 'auth-gitlab: %s: `glab auth login` failed (locked/absent Secret Service keyring? invalid token?).\n' "$host" >&2
+    return 1
+  fi
+
+  if ! "${GLAB[@]}" config set git_protocol https -g --host "$host" \
+    || ! "${GLAB[@]}" config set api_protocol https -g --host "$host" \
+    || ! "${GLAB[@]}" config set container_registry_domains "$registries" -g --host "$host"; then
+    printf 'auth-gitlab: %s: failed to re-assert host config (git/api protocol, container registry domains).\n' "$host" >&2
+    return 1
+  fi
+
+  printf 'auth-gitlab: %s: authenticated from the 1Password PAT (registries: %s).\n' "$host" "$registries"
+}
+
+# A login/config failure is NOT swallowed: exit non-zero so chezmoi records the
+# failure and retries on the next apply (a locked or unreachable Secret Service
+# keyring is the realistic transient cause). Both hosts are attempted first so
+# one bad host does not hide the other.
+status=0
+
+login_host git.jpi.app registry.jpi.app <<EOF || status=1
+{{ onepasswordRead "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/PAT" }}
+EOF
+
+login_host gitlab.com registry.gitlab.com <<EOF || status=1
+{{ onepasswordRead "op://Private/GitLab/PAT" }}
+EOF
+
+if [[ "$status" -ne 0 ]]; then
+  printf 'auth-gitlab: at least one host failed to authenticate; run `chezmoi apply` again in an unlocked desktop session, or use `auth-glab` for an on-demand OAuth login.\n' >&2
+fi
+
+exit "$status"
+
+{{ end -}}
