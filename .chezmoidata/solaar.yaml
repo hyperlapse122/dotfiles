@@ -70,7 +70,7 @@ solaar:
         - { path: scroll-ratchet-torque, value: 75, label: "ratchet torque -> 75" }
         - { path: hires-smooth-resolution, value: false, label: "hi-res wheel resolution -> off" }
         - { path: thumb-scroll-mode, value: true, label: "thumb wheel -> diverted (rules H-scroll)" }
-        - { path: dpi, value: 2400, label: "DPI -> 2400" }
+        - { path: dpi, value: 2800, label: "DPI -> 2800" }
     # No scroll-ratchet-torque here: the force-sensing ratchet is MX Master 4
     # hardware, absent on the 3S.
     - modelId: B03400000000
@@ -80,4 +80,4 @@ solaar:
         - { path: smart-shift, value: 12, label: "SmartShift threshold -> 12" }
         - { path: hires-smooth-resolution, value: false, label: "hi-res wheel resolution -> off" }
         - { path: thumb-scroll-mode, value: true, label: "thumb wheel -> diverted (rules H-scroll)" }
-        - { path: dpi, value: 2400, label: "DPI -> 2400" }
+        - { path: dpi, value: 2800, label: "DPI -> 2800" }
