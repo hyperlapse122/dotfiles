@@ -15,7 +15,7 @@
 | edit `package.json` deps, lifecycle-script overrides, or cooldown handling                 | `js-package-managers` | per-manager override mechanics, exact-pin correction, cooldown handling                             |
 | take a single issue/PR/MR URL end-to-end (triage → fix → one PR/MR → green pipeline)       | `ship-issue`          | URL parsing, from-scratch triage + parent/sibling lookup, one-PR-per-issue, CI self-heal loop        |
 | prune stale remote-tracking branches / delete local branches whose upstream is gone        | `git-branch-cleanup`  | remote enumeration, mandatory dry-run preview, `fetch --all --prune`, safe local `: gone]` cleanup   |
-| write a daily work log / 일일 업무 보고 from today's git commits                            | `daily-report`        | per-OS date-range `git log`, business-perspective grouping, Korean plaintext-fence output contract   |
+| write a daily work log / 일일 업무 보고 from today's git commits                            | `daily-report`        | `~/src`-wide bare-repo sweep, per-OS date-range `git log`, group → repo grouping, Korean plaintext-fence output |
 | clone a repository, register a new project under `~/src`, or audit the layout             | `src-layout`          | group-name judgment (mirror-or-ask), garden manifest entry + grow/setup-gitdir bootstrap, aoe add handoff, src-audit drift flow |
 | drive a browser / run Playwright tests                                                     | `playwright-cli`      | usage (host-safety rule is in core below)                                                           |
 
