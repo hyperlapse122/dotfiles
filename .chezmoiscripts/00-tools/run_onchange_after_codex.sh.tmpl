@@ -34,7 +34,11 @@ ln -sf "{{ $releaseDir }}/current/bin/codex" "$BIN_DIR/codex"
 pruned=0
 if [ -d "{{ $releaseDir }}" ]; then
   for d in "{{ $releaseDir }}"/*; do
-    [ -d "$d" ] || continue
+    # 'current' is a symlink living in this same dir — never prune it
+    # (test -d follows symlinks, so it would otherwise match).
+    if [ -L "$d" ] || [ ! -d "$d" ]; then
+      continue
+    fi
     if [ "$d" != "$dest" ]; then
       if rm -rf "$d"; then
         pruned=$((pruned + 1))
