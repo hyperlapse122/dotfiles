@@ -28,7 +28,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
 | `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`, `.solaar`, `.gnome`, `.haptic`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
-| `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, cli-proxy-api, ast-grep, buf, garden, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
+| `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, aoe, cli-proxy-api, ast-grep, buf, garden, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
