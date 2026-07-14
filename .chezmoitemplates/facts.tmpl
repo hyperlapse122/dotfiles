@@ -55,9 +55,12 @@ Three rules hold this file together:
    so sourcing chezmoi from INSIDE that worktree is legitimate: its own data dir
    is the top-level match and only a worktree nested below it would fail. */ -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- $topDataDir := joinPath $sourceDir ".chezmoidata" -}}
+{{- /* glob returns slash-separated paths on Windows while joinPath uses native
+   separators. Normalize only for comparison so the source's own top-level
+   .chezmoidata is not misclassified as a nested worktree there. */ -}}
+{{- $topDataDir := replace "\\" "/" (joinPath $sourceDir ".chezmoidata") -}}
 {{- range $dataDir := glob (joinPath $sourceDir "**/.chezmoidata") -}}
-{{-   if ne $dataDir $topDataDir -}}
+{{-   if ne (replace "\\" "/" $dataDir) $topDataDir -}}
 {{-     fail (printf "nested chezmoi data directory %q would be merged into source %q; remove the nested agent worktree or pass `--source <your own worktree>` so its .chezmoidata is top-level" $dataDir $sourceDir) -}}
 {{-   end -}}
 {{- end -}}
