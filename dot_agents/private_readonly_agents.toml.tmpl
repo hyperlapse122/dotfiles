@@ -1,11 +1,13 @@
-{{- /* Every remote skill tracks its newest upstream release, resolved HERE at
-       render time — there is no hand-maintained pin and no settle window
-       (`minimum_release_age` is deliberately absent: it would reject a
-       just-published release and fail the whole apply).
+{{- /* Remote skills + MCP servers are data-driven from .chezmoidata/agents.yaml
+       (range over .agents.skills.remote and .agents.mcp.servers). The twelve
+       local path skills below stay literal here — single consumer, pending
+       future removal. Add or remove a remote skill or MCP server in the DATA
+       file, not here.
 
-       install-dotagents-skills embeds these same refs in its onchange
-       fingerprint, so a new upstream release re-triggers the install that
-       actually fetches it — keep the two in sync.
+       Remote skill `ref`: absent -> newest release via gitHubLatestRelease
+       (release-tracking); present -> literal (improve's "main", which publishes
+       no tags). These are GitHub API calls: run chezmoi through the zsh wrapper
+       (or `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is injected.
 
        NOT here: everyinc/compound-engineering-plugin. It ships a first-class
        plugin for every agent this repo runs, so it is installed through each
@@ -14,8 +16,9 @@
        (Claude Code + Codex) and the `plugin` array of
        dot_config/opencode/readonly_opencode.json.tmpl (OpenCode).
 
-       These are GitHub API calls: run chezmoi through the zsh wrapper (or
-       `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is injected. */ -}}
+       install-dotagents-skills embeds these same refs in its onchange
+       fingerprint, so a new upstream release re-triggers the install that
+       actually fetches it — keep the two in sync. */ -}}
 version = 1
 agents = ["claude", "codex"]
 
@@ -23,22 +26,16 @@ agents = ["claude", "codex"]
 github_orgs = ["getsentry", "microsoft", "shadcn"]
 git_domains = ["git.jpi.app"]
 
+{{- range .agents.skills.remote }}
 [[skills]]
-name = "playwright-cli"
-source = "microsoft/playwright-cli"
-ref = {{ (gitHubLatestRelease "microsoft/playwright-cli").TagName | quote }}
-
-[[skills]]
-name = "improve"
-# shadcn/improve publishes NO releases and NO tags, so its default branch is the
-# only "newest" there is — track the branch head rather than a frozen sha.
-source = "shadcn/improve"
-ref = "main"
-
-[[skills]]
-name = "dotagents"
-source = "getsentry/dotagents"
-ref = {{ (gitHubLatestRelease "getsentry/dotagents").TagName | quote }}
+name = {{ .name | quote }}
+source = {{ .source | quote }}
+{{- if hasKey . "ref" }}
+ref = {{ .ref | quote }}
+{{- else }}
+ref = {{ (gitHubLatestRelease .source).TagName | quote }}
+{{- end }}
+{{- end }}
 
 [[skills]]
 name = "ci-cd-monitoring"
@@ -88,21 +85,18 @@ source = "path:skills/ship-issue"
 name = "src-layout"
 source = "path:skills/src-layout"
 
+{{- range .agents.mcp.servers }}
 [[mcp]]
-name = "codegraph"
-command = "codegraph"
-args = ["serve", "--mcp"]
-
-[[mcp]]
-name = "context7"
-url = "https://mcp.context7.com/mcp"
+name = {{ .name | quote }}
+{{- if eq .transport "stdio" }}
+command = {{ .command | quote }}
+args = {{ .args | toJson }}
+{{- else }}
+url = {{ .url | quote }}
 
 [mcp.headers]
-CONTEXT7_API_KEY = '{{ onepasswordRead "op://Private/Context7/API Key" }}'
-
-[[mcp]]
-name = "websearch"
-url = "https://mcp.exa.ai/mcp"
-
-[mcp.headers]
-x-api-key = '{{ onepasswordRead "op://Private/Exa/API Key" }}'
+{{- range $k, $v := .headers }}
+{{ $k }} = '{{ onepasswordRead $v }}'
+{{- end }}
+{{- end }}
+{{- end }}

@@ -44,17 +44,27 @@
 
 set -euo pipefail
 
-# agents.toml source fingerprint — chezmoi hashes this rendered script to
-# decide whether to re-run, so embedding the raw template's sha256 re-triggers
-# the install on any config edit. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl")) }}
+# agents.toml + agents.yaml source fingerprint — chezmoi hashes this rendered
+# script to decide whether to re-run, so embedding the raw template's sha256
+# re-triggers the install on any config edit. The data file is included too:
+# once MCP servers and remote skills moved into .chezmoidata/agents.yaml, a data
+# edit no longer changes the raw agents.toml.tmpl text, so without hashing the
+# data file a server/skill added there would never re-trigger the install (the
+# config-solaar dual-hash pattern). Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl" ".chezmoidata/agents.yaml")) }}
 #
 # Resolved remote skill refs (see header note 2) — these move on an upstream
 # release, changing this script's content and re-triggering the install that
-# fetches them. Keep in lockstep with the [[skills]] entries in the agents.toml
-# template. Comment-only; never executed.
-#   microsoft/playwright-cli@{{ (gitHubLatestRelease "microsoft/playwright-cli").TagName }}
-#   getsentry/dotagents@{{ (gitHubLatestRelease "getsentry/dotagents").TagName }}
+# fetches them. Ranged from .chezmoidata/agents.yaml (skills.remote); keep the
+# data and this block in lockstep. A literal `ref` (e.g. improve's branch head)
+# prints verbatim. Comment-only; never executed.
+{{- range .agents.skills.remote }}
+{{- if hasKey . "ref" }}
+#   {{ .source }}@{{ .ref }}
+{{- else }}
+#   {{ .source }}@{{ (gitHubLatestRelease .source).TagName }}
+{{- end }}
+{{- end }}
 #
 # NOT provisioned here: everyinc/compound-engineering-plugin. It is installed
 # through each agent's native plugin mechanism instead — see the sibling

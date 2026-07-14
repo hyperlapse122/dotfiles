@@ -79,32 +79,24 @@
       ]
     }
   },
-  "mcp": {
-    "context7": {
-      "type": "remote",
-      "enabled": true,
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "CONTEXT7_API_KEY": "{file:./secrets/context7-api-key}"
-      }
-    },
-    "websearch": {
-      "type": "remote",
-      "enabled": true,
-      "url": "https://mcp.exa.ai/mcp",
-      "headers": {
-        "x-api-key": "{file:./secrets/exa-api-key}"
-      }
-    },
-    "codegraph": {
-      "type": "local",
-      "command": [
-        "codegraph",
-        "serve",
-        "--mcp"
-      ]
-    }
-  },
+{{- /* MCP servers are data-driven from .chezmoidata/agents.yaml
+       (.agents.mcp.servers). Header values are onepasswordRead-resolved at
+       render from the op:// refs in the data file; the toPrettyJson|replace
+       pattern mirrors oh-my-openagent.jsonc.tmpl (shift the block one indent
+       level to nest inside this 2-space object). */ -}}
+{{- $mcp := dict -}}
+{{- range .agents.mcp.servers -}}
+{{- if eq .transport "stdio" -}}
+{{- $mcp = set $mcp .name (dict "type" "local" "command" (concat (list .command) .args)) -}}
+{{- else -}}
+{{- $h := dict -}}
+{{- range $k, $v := .headers -}}
+{{- $h = set $h $k (onepasswordRead $v) -}}
+{{- end -}}
+{{- $mcp = set $mcp .name (dict "type" "remote" "enabled" true "url" .url "headers" $h) -}}
+{{- end -}}
+{{- end -}}
+  "mcp": {{ toPrettyJson "  " $mcp | trim | replace "\n" "\n  " }},
   "permission": {
     "read": {
       "**": "allow",
@@ -160,7 +152,7 @@
   "provider": {
     "opencode": {
       "options": {
-        "apiKey": "{file:./secrets/opencode-api-key}"
+        "apiKey": "{{ onepasswordRead "op://Private/Opencode/API Key" }}"
       },
       "whitelist": [
         "deepseek-v4-flash-free",
@@ -171,7 +163,7 @@
     },
     "openrouter": {
       "options": {
-        "apiKey": "{file:./secrets/openrouter-api-key}",
+        "apiKey": "{{ onepasswordRead "op://Private/OpenRouter/API Key" }}",
         "headers": {
           "HTTP-Referer": "https://opencode.ai/",
           "X-OpenRouter-Title": "OpenCode",

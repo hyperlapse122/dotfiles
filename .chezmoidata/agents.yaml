@@ -1,0 +1,69 @@
+# .chezmoidata/agents.yaml — single source of truth for agent MCP servers
+# and dotagents remote skills.
+#
+# Three templates range over this file to render per-agent MCP config:
+#   - dot_agents/private_readonly_agents.toml.tmpl   (Claude Code + Codex, via dotagents)
+#   - dot_pi/agent/private_readonly_mcp.json.tmpl    (pi)
+#   - dot_config/opencode/readonly_opencode.json.tmpl (opencode)
+# Add or remove a server HERE and all three pick it up on the next apply — the
+# old "add an MCP server to both or pi silently falls behind" multi-file edit is
+# gone. The per-agent FORMAT (pi's lifecycle: "eager", opencode's type names,
+# dotagents TOML shape) stays in each consuming template; this file is
+# transport-neutral.
+#
+# Secrets: header values are 1Password item-REFERENCE strings (op://...), NOT
+# resolved values — .chezmoidata/*.yaml is static data, not a template, so
+# onepasswordRead cannot run here. Each consumer template wraps the reference in
+# onepasswordRead at render, keeping secrets out of the onchange fingerprint and
+# chezmoi diff/state (same property the former inline refs had).
+#
+# install-dotagents-skills fingerprints this file alongside agents.toml.tmpl
+# (the config-solaar dual-hash pattern), so a server/skill added here re-triggers
+# the dotagents install even though the raw template text is unchanged.
+
+agents:
+  # MCP servers consumed by all three templates. `transport` is the discriminator:
+  #   stdio -> command + args
+  #   http  -> url + headers  (header-name -> op:// item reference; resolved by the template)
+  mcp:
+    servers:
+      - name: codegraph
+        transport: stdio
+        command: codegraph
+        args: [serve, --mcp]
+
+      - name: glab
+        transport: stdio
+        command: glab
+        args: [mcp, serve]
+
+      - name: context7
+        transport: http
+        url: https://mcp.context7.com/mcp
+        headers:
+          CONTEXT7_API_KEY: 'op://Private/Context7/API Key'
+
+      - name: websearch
+        transport: http
+        url: https://mcp.exa.ai/mcp
+        headers:
+          x-api-key: 'op://Private/Exa/API Key'
+
+  # dotagents remote skills (Claude Code + Codex). `ref` rule:
+  #   absent  -> the template resolves the newest release tag via gitHubLatestRelease
+  #   present -> literal (a branch head, e.g. improve's "main", which publishes no tags)
+  # Local path skills stay in agents.toml.tmpl (pending future removal): single
+  # consumer, so data-ifying them yields no dedup.
+  skills:
+    remote:
+      - name: playwright-cli
+        source: microsoft/playwright-cli
+        # ref absent -> newest release via gitHubLatestRelease
+
+      - name: improve
+        source: shadcn/improve
+        ref: main   # publishes no releases/tags; track the default branch head
+
+      - name: dotagents
+        source: getsentry/dotagents
+        # ref absent -> newest release via gitHubLatestRelease
