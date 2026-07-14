@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-# `gh` may come from dnf/apt or from .chezmoiexternals/gh.toml (~/.local/bin).
+# `gh` may come from dnf/apt or from .chezmoiexternals/vcs.toml (~/.local/bin).
 # Fall back to ~/.local/bin when it is not already on PATH (this pre-hook can run
 # under a non-login shell) so the login resolves instead of aborting the apply.
 case ":$PATH:" in

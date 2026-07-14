@@ -1,0 +1,150 @@
+{{- /* AI coding agents & the local model proxy: claude, codex, agy, opencode, codegraph, cli-proxy-api, aoe. */ -}}
+
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+
+{{- /* ---------- claude-code (anthropic downloads manifest, not a GitHub release) ---------- */ -}}
+
+{{- $claudeCodeBaseUrl := "https://downloads.claude.ai/claude-code-releases" -}}
+{{- $latestReleaseId := output "curl" "-fsSL" (printf "%s/latest" $claudeCodeBaseUrl) | toString -}}
+{{- $latestReleaseManifest := output "curl" "-fsSL" (printf "%s/%s/manifest.json" $claudeCodeBaseUrl $latestReleaseId) | toString | fromJson -}}
+
+{{- $latestReleaseVersion := $latestReleaseManifest.version -}}
+
+{{- $claudeCodePlatformId := (printf "%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) -}}
+{{- if eq .chezmoi.os "linux" -}}
+  {{- $libcOut := output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim -}}
+  {{- if eq $libcOut "0" -}}
+    {{- $claudeCodePlatformId = (printf "%s-musl" $claudeCodePlatformId) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $claudeCodePlatform := index $latestReleaseManifest.platforms $claudeCodePlatformId -}}
+{{- $claudeCodeBinary := $claudeCodePlatform.binary -}}
+
+[claude]
+type = "file"
+targetPath = '{{ printf ".local/share/claude/versions/%s%s" $latestReleaseVersion $executableExtension }}'
+url = '{{ printf "%s/%s/%s/%s" $claudeCodeBaseUrl $latestReleaseId $claudeCodePlatformId $claudeCodeBinary }}'
+executable = true
+# 0500: the binary is not rewritable in place, only replaceable by a chezmoi apply
+# that fetches a new version dir.
+private = true
+readonly = true
+
+[claude.checksum]
+sha256 = '{{ $claudeCodePlatform.checksum }}'
+size = {{ $claudeCodePlatform.size }}
+
+{{- /* ---------- codex ---------- */ -}}
+
+{{- $codexArch := (replace "amd64" "x86_64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
+
+{{- $codexTag := ((gitHubLatestRelease "openai/codex").TagName | toString) -}}
+{{- $codexRelease := (replace "rust-v" "" $codexTag) -}}
+{{- $codexTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+
+{{- $codexReleasePath := (printf "%s-%s-%s" $codexRelease $codexArch $codexTarget) -}}
+{{- $codexAsset := (printf "codex-package-%s-%s.tar.zst" $codexArch $codexTarget) -}}
+
+{{- $codexInstallationPath := (joinPath ".codex" "packages" "standalone" "releases" $codexReleasePath) }}
+
+[codex]
+type = "archive"
+url = '{{ gitHubReleaseAssetURL "openai/codex" $codexTag $codexAsset }}'
+stripComponents = 0
+targetPath = '{{ $codexInstallationPath }}'
+
+{{- /* ---------- antigravity (agy) — vendor auto-updater manifest, not a GitHub release ---------- */ -}}
+
+{{- $antigravityManifestBase := "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests" -}}
+{{- $antigravityPlatform := (printf "%s_%s" .chezmoi.os .chezmoi.arch) -}}
+{{- $antigravityManifest := output "curl" "-fsSL" (printf "%s/%s.json" $antigravityManifestBase $antigravityPlatform) | toString | fromJson -}}
+
+{{- if eq .chezmoi.os "windows" }}
+[agy]
+type = "file"
+targetPath = '{{ printf ".local/bin/agy%s" $executableExtension }}'
+url = '{{ $antigravityManifest.url }}'
+executable = true
+
+[agy.checksum]
+sha512 = '{{ $antigravityManifest.sha512 }}'
+{{- else }}
+[agy]
+type = "archive-file"
+targetPath = '.local/bin/agy'
+url = '{{ $antigravityManifest.url }}'
+path = 'antigravity'
+executable = true
+
+[agy.checksum]
+sha512 = '{{ $antigravityManifest.sha512 }}'
+{{- end }}
+
+{{- /* ---------- opencode (darwin ships a .zip, unlike the tar.gz users below) ---------- */ -}}
+
+{{- $opencodeArchiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".zip" (replace "windows" ".zip" .chezmoi.os))) }}
+
+[opencode]
+targetPath = '{{ printf ".local/bin/opencode%s" $executableExtension }}'
+type = "archive-file"
+url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) $opencodeArchiveExtension) }}'
+executable = true
+path = '{{ printf "opencode%s" $executableExtension }}'
+
+{{- /* ---------- codegraph ---------- */ -}}
+
+{{- $codegraphTag := (gitHubLatestRelease "colbymchenry/codegraph").TagName | toString }}
+
+[codegraph]
+{{ if ne .chezmoi.os "windows" }}
+targetPath = '{{ printf ".codegraph/versions/%s" $codegraphTag }}'
+{{ else }}
+targetPath = '{{ joinPath (env "LOCALAPPDATA") "codegraph" "current" }}'
+{{ end }}
+type = "archive"
+url = '{{ gitHubReleaseAssetURL "colbymchenry/codegraph" $codegraphTag (printf "codegraph-%s-%s.tar.gz" (replace "windows" "win32" .chezmoi.os) (replace "amd64" "x64" .chezmoi.arch)) }}'
+stripComponents = 1
+
+{{- /* ---------- cli-proxy-api ---------- */ -}}
+
+{{- $cliProxyApiTag := (gitHubLatestRelease "router-for-me/CLIProxyAPI").TagName | toString -}}
+{{- $cliProxyApiArchiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $cliProxyApiArch := (replace "arm64" "aarch64" .chezmoi.arch) -}}
+
+{{- $cliProxyApiArchiveUrl := (gitHubReleaseAssetURL "router-for-me/CLIProxyAPI" $cliProxyApiTag (printf "CLIProxyAPI_%s_%s_%s%s" (replace "v" "" $cliProxyApiTag) .chezmoi.os $cliProxyApiArch $cliProxyApiArchiveExtension)) -}}
+{{- $cliProxyApiConfigBaseDir := (replace "windows" (joinPath (env "LOCALAPPDATA") "cli-proxy-api") (replace "linux" ".config/cli-proxy-api" (replace "darwin" ".config/cli-proxy-api" .chezmoi.os))) }}
+
+# TODO: Add User-scope Windows Background Service
+
+[cli-proxy-api]
+type = "archive-file"
+targetPath = '{{ printf ".local/bin/cli-proxy-api%s" $executableExtension }}'
+url = '{{ $cliProxyApiArchiveUrl }}'
+path = '{{ printf "cli-proxy-api%s" $executableExtension }}'
+executable = true
+
+[cli-proxy-api-config]
+type = "archive-file"
+targetPath = '{{ joinPath $cliProxyApiConfigBaseDir "config.example.yaml" }}'
+url = '{{ $cliProxyApiArchiveUrl }}'
+path = 'config.example.yaml'
+
+{{- /* ---------- agent-of-empires (aoe) — the worktree/session orchestrator; no windows build ---------- */ -}}
+
+{{- if ne "windows" .chezmoi.os }}
+
+{{- $aoeTag := (gitHubLatestRelease "agent-of-empires/agent-of-empires").TagName | toString }}
+
+[aoe]
+type = "archive-file"
+url = {{ gitHubReleaseAssetURL "agent-of-empires/agent-of-empires" $aoeTag (printf "aoe-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) | quote }}
+executable = true
+targetPath = ".local/bin/aoe"
+path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
+
+[aoe.checksum]
+# The sidecar is sha256sum output ("<hash>  <file>"), so take the first field.
+sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agent-of-empires" $aoeTag (printf "aoe-%s-%s.tar.gz.sha256" .chezmoi.os .chezmoi.arch)) | toString | trim | splitList " " | first }}'
+
+{{- end }}

@@ -17,7 +17,7 @@ set -eu
 
 src="$HOME/src"
 [ -d "$src" ] || { echo "src-audit: $src does not exist — nothing to audit"; exit 0; }
-command -v garden >/dev/null 2>&1 || { echo "src-audit: garden not on PATH (installed to ~/.local/bin by chezmoi apply — .chezmoiexternals/garden.toml)" >&2; exit 2; }
+command -v garden >/dev/null 2>&1 || { echo "src-audit: garden not on PATH (installed to ~/.local/bin by chezmoi apply — .chezmoiexternals/vcs.toml)" >&2; exit 2; }
 [ -f "$src/garden.yaml" ] || { echo "src-audit: $src/garden.yaml missing (chezmoi apply?)" >&2; exit 2; }
 
 tmproot="${XDG_RUNTIME_DIR:-$HOME/.cache}"

@@ -1,3 +1,10 @@
+# Division of labour: mise owns the language runtimes, the registry backends
+# ("npm:" / "cargo:" / "pipx:"), and its own internals (aube = the
+# [settings.npm] package_manager below; usage = mise's completions; pipx =
+# python-dependent and backs the "pipx:mmdc" backend). Standalone
+# GitHub-release CLI binaries are NOT mise's job — they come from
+# .chezmoiexternals/ (grouped by domain: ai-agents / dev-tools / vcs / k8s /
+# system / fonts). Add a new standalone CLI there, not here.
 [tools]
 # Core runtimes and package managers
 aube = "latest"
@@ -15,19 +22,18 @@ ruby = [
     "macos",
   ] },
 ]
+# rustup ships a rust-analyzer inside the toolchain via `components`; the
+# newer standalone release train lives in .chezmoiexternals/dev-tools.toml and
+# is what PATH resolves. Both on purpose — do not "dedupe" them.
 rust = { version = "latest", components = "rust-analyzer,rust-src" }
-uv = "latest"
 yarn = "latest"
 
-# Standalone CLIs and language tooling
+# Registry-backend tools and mise internals
 "cargo:git-trim" = "latest"
 "cargo:kdotool" = { version = "latest", os = ["linux"] }
-"github:rust-lang/rust-analyzer" = "latest"
 pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
-shellcheck = "latest"
 usage = "latest"
 viteplus = "latest"
-"aqua:wasm-bindgen/wasm-pack" = "latest"
 "npm:vscode-langservers-extracted" = "latest"
 "npm:@biomejs/biome" = "latest"
 "npm:@electron/asar" = "latest"
@@ -46,17 +52,13 @@ viteplus = "latest"
 "pipx:mmdc" = "latest"
 
 # Agentic AI
+# codex is NOT here: .chezmoiexternals/ai-agents.toml fetches the standalone
+# release and 00-tools/run_onchange_after_codex.sh links it into ~/.local/bin.
 "npm:@sentry/dotagents" = "latest"
-"npm:@openai/codex" = "latest"
 "npm:@moonshot-ai/kimi-code" = { version = "latest", allow_builds = [
   "@moonshot-ai/kimi-code",
   "node-pty",
 ] }
-"github:njbrake/agent-of-empires" = { version = "latest", rename_exe = "aoe", os = [
-  "linux",
-  "macos",
-] }
-antigravity-cli = "latest"
 "npm:@z_ai/mcp-server" = "latest"
 
 [settings]
@@ -65,18 +67,12 @@ experimental = true
 idiomatic_version_file_enable_tools = []
 minimum_release_age = "24h"
 minimum_release_age_excludes = [
-  "gh",
-  "glab",
   "pipx",
   "npm:@sentry/dotagents",
   "npm:@moonshot-ai/kimi-code",
-  "npm:@openai/codex",
   "npm:npm",
   "npm:tokscale",
   "viteplus",
-  "github:njbrake/agent-of-empires",
-  "github:anomalyco/opencode",
-  "github:wakatime/wakatime-cli",
 ]
 lockfile = true
 locked = false

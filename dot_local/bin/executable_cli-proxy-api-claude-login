@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # This wrapper and cli-proxy-api both live in ~/.local/bin (the latter from
-# .chezmoiexternals/cli-proxy-api.toml). Fall back to that dir when it is not
+# .chezmoiexternals/ai-agents.toml). Fall back to that dir when it is not
 # already on PATH so the sibling binary resolves even under a restricted PATH.
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;

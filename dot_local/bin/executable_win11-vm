@@ -10,7 +10,7 @@
 # the first argument — this tool never fetches or guesses install media.
 #
 # The virtio-win DRIVER ISO, by contrast, is pre-fetched by chezmoi at apply
-# time (.chezmoiexternals/virtio-win.toml → ~/.local/share/virtio-win/
+# time (.chezmoiexternals/system.toml → ~/.local/share/virtio-win/
 # virtio-win.iso). When present it is attached as a second CD-ROM and the guest
 # uses virtio disk + NIC (load the storage driver from that CD at the "Where do
 # you want to install Windows?" screen). If it is missing (apply not run yet,
@@ -197,7 +197,7 @@ if [ -n "$virtio_iso" ]; then
 else
   disk_bus=sata nic_model=e1000e
   err "note: virtio-win ISO not found at $default_virtio_iso — using SATA disk + e1000e NIC so Windows setup needs no extra drivers."
-  err 'run `chezmoi apply` to let .chezmoiexternals/virtio-win.toml fetch it, then re-run for virtio performance.'
+  err 'run `chezmoi apply` to let .chezmoiexternals/system.toml fetch it, then re-run for virtio performance.'
 fi
 
 cmd=(

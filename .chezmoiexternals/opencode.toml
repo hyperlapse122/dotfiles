@@ -1,9 +1,0 @@
-{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".zip" (replace "windows" ".zip" .chezmoi.os))) -}}
-{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
-
-[opencode]
-targetPath = '{{ printf ".local/bin/opencode%s" $executableExtension }}'
-type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) $archiveExtension) }}'
-executable = true
-path = '{{ printf "opencode%s" $executableExtension }}'

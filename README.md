@@ -188,9 +188,11 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
   into scripts via `includeTemplate`: the `run_onchange_` dependency
   fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
-- [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches: prezto,
-  plus standalone CLI binaries into `~/.local/bin` (claude-code, codex,
-  codegraph, cli-proxy-api, gh, glab, kubectl, helm, …).
+- [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
+  domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
+  `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
+  `~/.local/bin` (claude-code, codex, codegraph, cli-proxy-api, gh, glab,
+  kubectl, helm, shellcheck, uv, …), plus prezto and the fonts.
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust sources, built on apply by

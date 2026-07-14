@@ -1,0 +1,40 @@
+{{- /* Kubernetes CLIs: kubectl (+ kubectl-convert), helm, minikube. */ -}}
+
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+
+{{- /* ---------- kubectl (versioned by the kubernetes/kubernetes tag, served from dl.k8s.io) ---------- */ -}}
+
+{{- $kubectlTag := (gitHubLatestRelease "kubernetes/kubernetes").TagName | toString }}
+
+[kubectl]
+type = "file"
+targetPath = '{{ printf ".local/bin/kubectl%s" $executableExtension }}'
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl%s" $kubectlTag .chezmoi.os .chezmoi.arch $executableExtension }}'
+executable = true
+
+[kubectl-convert]
+type = "file"
+targetPath = '{{ printf ".local/bin/kubectl-convert%s" $executableExtension }}'
+url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert%s" $kubectlTag .chezmoi.os .chezmoi.arch $executableExtension }}'
+executable = true
+
+{{- /* ---------- helm (tag from GitHub, archive from get.helm.sh) ---------- */ -}}
+
+{{- $helmTag := (gitHubLatestRelease "helm/helm").TagName | toString }}
+
+[helm]
+targetPath = '{{ printf ".local/bin/helm%s" $executableExtension }}'
+type = "archive-file"
+url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s%s" $helmTag .chezmoi.os .chezmoi.arch $archiveExtension }}'
+path = '{{ printf "%s-%s/helm" .chezmoi.os .chezmoi.arch }}'
+executable = true
+
+{{- /* ---------- minikube ---------- */}}
+
+[minikube]
+type = "archive-file"
+targetPath = '{{ printf ".local/bin/minikube%s" $executableExtension }}'
+url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
+path = '{{ printf "out/minikube-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
+executable = true

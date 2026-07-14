@@ -1,0 +1,207 @@
+{{- /*
+  Developer CLIs & language servers: ast-grep, buf, marksman, shellcheck,
+  wasm-pack, rust-analyzer, uv/uvx.
+*/ -}}
+
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+{{- /* tar.gz on unix, zip on windows — buf, shellcheck and uv all agree on this. */ -}}
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- /* Rust-style triple components, shared by the rust-toolchain-built CLIs below. */ -}}
+{{- $rustArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
+{{- $rustTarget := (replace "linux" "unknown-linux-gnu" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+{{- /* Same, but for the projects that only publish a static musl linux build. */ -}}
+{{- $muslTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+
+{{- /* ---------- ast-grep (ships the `sg` alias from the same archive) ---------- */ -}}
+
+{{- $astGrepTag := (gitHubLatestRelease "ast-grep/ast-grep").TagName | toString -}}
+{{- $astGrepArchiveUrl := (gitHubReleaseAssetURL "ast-grep/ast-grep" $astGrepTag (printf "app-%s-%s.zip" $rustArch $rustTarget)) }}
+
+[ast-grep]
+type = "archive-file"
+url = '{{ $astGrepArchiveUrl }}'
+executable = true
+targetPath = '{{ printf ".local/bin/ast-grep%s" $executableExtension }}'
+path = '{{ printf "ast-grep%s" $executableExtension }}'
+
+[sg]
+type = "archive-file"
+url = '{{ $astGrepArchiveUrl }}'
+executable = true
+targetPath = '{{ printf ".local/bin/sg%s" $executableExtension }}'
+path = '{{ printf "sg%s" $executableExtension }}'
+
+{{- /* ---------- buf (+ its protoc plugins, zsh completion and man pages) ---------- */ -}}
+
+{{- $capitalizedOperatingSystemName := (replace "linux" "Linux" (replace "darwin" "Darwin" (replace "windows" "Windows" .chezmoi.os))) -}}
+{{- /* buf keeps arm64 as-is; only amd64 is renamed. NOT the same map as $rustArch. */ -}}
+{{- $bufArch := (replace "amd64" "x86_64" .chezmoi.arch) -}}
+{{- $bufTag := (gitHubLatestRelease "bufbuild/buf").TagName | toString -}}
+{{- $bufArchiveUrl := (gitHubReleaseAssetURL "bufbuild/buf" $bufTag (printf "buf-%s-%s%s" $capitalizedOperatingSystemName $bufArch $archiveExtension)) }}
+
+[buf]
+type = "archive-file"
+url = '{{ $bufArchiveUrl }}'
+path = '{{ printf "buf/bin/buf%s" $executableExtension }}'
+executable = true
+targetPath = '{{ printf ".local/bin/buf%s" $executableExtension }}'
+
+[protoc-gen-buf-breaking]
+type = "archive-file"
+url = '{{ $bufArchiveUrl }}'
+path = '{{ printf "buf/bin/protoc-gen-buf-breaking%s" $executableExtension }}'
+executable = true
+targetPath = '{{ printf ".local/bin/protoc-gen-buf-breaking%s" $executableExtension }}'
+
+[protoc-gen-buf-lint]
+type = "archive-file"
+url = '{{ $bufArchiveUrl }}'
+path = '{{ printf "buf/bin/protoc-gen-buf-lint%s" $executableExtension }}'
+executable = true
+targetPath = '{{ printf ".local/bin/protoc-gen-buf-lint%s" $executableExtension }}'
+
+{{ if ne .chezmoi.os "windows" -}}
+
+[buf-zsh-completion]
+type = "archive-file"
+targetPath = '.local/share/zsh/site-functions/_buf'
+url = '{{ $bufArchiveUrl }}'
+path = 'buf/share/zsh/site-functions/_buf'
+executable = false
+
+[buf-man]
+type = "archive"
+targetPath = '.local/share/man/man1'
+url = '{{ $bufArchiveUrl }}'
+include = ["**/*.1"]
+stripComponents = 4
+executable = false
+
+{{- end }}
+
+{{- /* ---------- marksman (bare binaries; asset naming differs per OS) ---------- */ -}}
+
+{{- $marksmanTag := (gitHubLatestRelease "artempyanykh/marksman").TagName | toString -}}
+
+{{- if eq .chezmoi.os "linux" }}
+
+[marksman]
+type = "file"
+targetPath = '.local/bin/marksman'
+url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $marksmanTag (printf "marksman-%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) | quote }}
+executable = true
+
+{{- else if eq .chezmoi.os "darwin" }}
+
+[marksman]
+type = "file"
+targetPath = '.local/bin/marksman'
+url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $marksmanTag "marksman-macos" | quote }}
+executable = true
+
+{{- else if eq .chezmoi.os "windows" }}
+
+[marksman]
+type = "file"
+targetPath = '.local/bin/marksman.exe'
+url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $marksmanTag "marksman.exe" | quote }}
+executable = true
+
+{{- end }}
+
+{{- /* ---------- shellcheck ---------- */ -}}
+{{- /*
+  Unix assets are per-arch (shellcheck-<tag>.<os>.<arch>.tar.gz) and nest the
+  binary under a shellcheck-<tag>/ directory; the Windows asset is a single
+  arch-less shellcheck-<tag>.zip with the .exe at the archive root.
+*/ -}}
+
+{{- $shellcheckTag := (gitHubLatestRelease "koalaman/shellcheck").TagName | toString -}}
+{{- $shellcheckAsset := (printf "shellcheck-%s.%s.%s%s" $shellcheckTag .chezmoi.os $rustArch $archiveExtension) -}}
+{{- $shellcheckPath := (printf "shellcheck-%s/shellcheck" $shellcheckTag) -}}
+{{- if eq .chezmoi.os "windows" -}}
+  {{- $shellcheckAsset = (printf "shellcheck-%s%s" $shellcheckTag $archiveExtension) -}}
+  {{- $shellcheckPath = (printf "shellcheck%s" $executableExtension) -}}
+{{- end }}
+
+[shellcheck]
+type = "archive-file"
+url = {{ gitHubReleaseAssetURL "koalaman/shellcheck" $shellcheckTag $shellcheckAsset | quote }}
+executable = true
+targetPath = '{{ printf ".local/bin/shellcheck%s" $executableExtension }}'
+path = '{{ $shellcheckPath }}'
+
+{{- /* ---------- wasm-pack ---------- */ -}}
+{{- /*
+  Every platform (Windows included) ships a .tar.gz, so this does NOT use the
+  shared $archiveExtension. Linux is published only as a static musl build,
+  which runs fine on glibc.
+*/ -}}
+
+{{- $wasmPackTag := (gitHubLatestRelease "wasm-bindgen/wasm-pack").TagName | toString -}}
+{{- $wasmPackStem := (printf "wasm-pack-%s-%s-%s" $wasmPackTag $rustArch $muslTarget) }}
+
+[wasm-pack]
+type = "archive-file"
+url = {{ gitHubReleaseAssetURL "wasm-bindgen/wasm-pack" $wasmPackTag (printf "%s.tar.gz" $wasmPackStem) | quote }}
+executable = true
+targetPath = '{{ printf ".local/bin/wasm-pack%s" $executableExtension }}'
+path = '{{ printf "%s/wasm-pack%s" $wasmPackStem $executableExtension }}'
+
+{{- /* ---------- rust-analyzer ---------- */ -}}
+{{- /*
+  The tag is a bare date (e.g. 2026-07-13) with NO leading "v" — do not trim one.
+  On unix the asset is a raw gzipped BINARY, not a tarball, so it is a
+  type = "file" external with decompress = "gzip"; only Windows ships a real
+  (zip) archive.
+*/ -}}
+
+{{- $rustAnalyzerTag := (gitHubLatestRelease "rust-lang/rust-analyzer").TagName | toString -}}
+
+{{- if eq .chezmoi.os "windows" }}
+
+[rust-analyzer]
+type = "archive-file"
+url = {{ gitHubReleaseAssetURL "rust-lang/rust-analyzer" $rustAnalyzerTag (printf "rust-analyzer-%s-%s.zip" $rustArch $rustTarget) | quote }}
+executable = true
+targetPath = '.local/bin/rust-analyzer.exe'
+path = 'rust-analyzer.exe'
+
+{{- else }}
+
+[rust-analyzer]
+type = "file"
+url = {{ gitHubReleaseAssetURL "rust-lang/rust-analyzer" $rustAnalyzerTag (printf "rust-analyzer-%s-%s.gz" $rustArch $rustTarget) | quote }}
+decompress = "gzip"
+executable = true
+targetPath = '.local/bin/rust-analyzer'
+
+{{- end }}
+
+{{- /* ---------- uv (+ uvx, from the same archive) ---------- */ -}}
+{{- /*
+  The tag carries NO leading "v" (e.g. 0.11.28). Unix archives nest both
+  binaries under uv-<arch>-<target>/; the Windows zip has them at the root.
+*/ -}}
+
+{{- $uvTag := (gitHubLatestRelease "astral-sh/uv").TagName | toString -}}
+{{- $uvStem := (printf "uv-%s-%s" $rustArch $muslTarget) -}}
+{{- $uvArchiveUrl := (gitHubReleaseAssetURL "astral-sh/uv" $uvTag (printf "%s%s" $uvStem $archiveExtension)) -}}
+{{- $uvPathPrefix := (printf "%s/" $uvStem) -}}
+{{- if eq .chezmoi.os "windows" -}}
+  {{- $uvPathPrefix = "" -}}
+{{- end }}
+
+[uv]
+type = "archive-file"
+url = '{{ $uvArchiveUrl }}'
+executable = true
+targetPath = '{{ printf ".local/bin/uv%s" $executableExtension }}'
+path = '{{ printf "%suv%s" $uvPathPrefix $executableExtension }}'
+
+[uvx]
+type = "archive-file"
+url = '{{ $uvArchiveUrl }}'
+executable = true
+targetPath = '{{ printf ".local/bin/uvx%s" $executableExtension }}'
+path = '{{ printf "%suvx%s" $uvPathPrefix $executableExtension }}'

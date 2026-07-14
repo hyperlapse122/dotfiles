@@ -7,7 +7,7 @@
 # already INSTALLED elsewhere; this script only performs the runtime
 # *activation* that cannot be expressed as a managed file:
 #   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf/apt)
-#   - minikube ........................ .chezmoiexternals/minikube.toml (~/.local/bin)
+#   - minikube ........................ .chezmoiexternals/k8s.toml (~/.local/bin)
 #   - DOCKER_HOST + MINIKUBE_ROOTLESS . dot_config/environment.d/65-containers.conf
 #   - user lingering + rootful
 #     podman.socket mask .............. run_onchange_after_install-system-20-host
@@ -50,7 +50,7 @@
 
 set -euo pipefail
 
-# minikube comes from .chezmoiexternals/minikube.toml (~/.local/bin). Fall back
+# minikube comes from .chezmoiexternals/k8s.toml (~/.local/bin). Fall back
 # to that dir when it is not already on PATH (this run_after can execute under a
 # bare TTY / non-login shell) so the `command -v minikube` check below resolves
 # the external binary instead of soft-skipping the whole cluster step.
@@ -151,7 +151,7 @@ else
 fi
 
 # --- 4) point minikube at the rootless-podman driver, then bring it up -----
-# minikube is installed by .chezmoiexternals/minikube.toml into ~/.local/bin
+# minikube is installed by .chezmoiexternals/k8s.toml into ~/.local/bin
 # (which is on PATH), NOT by mise — so it is invoked directly and `command -v
 # minikube` confirms it is present before use, otherwise soft-skip with a hint.
 #
@@ -197,7 +197,7 @@ if command -v minikube >/dev/null 2>&1; then
     fi
   fi
 else
-  echo "setup-podman-cluster: minikube not found on PATH; it is fetched by .chezmoiexternals/minikube.toml into ~/.local/bin — run 'chezmoi apply', then re-apply" >&2
+  echo "setup-podman-cluster: minikube not found on PATH; it is fetched by .chezmoiexternals/k8s.toml into ~/.local/bin — run 'chezmoi apply', then re-apply" >&2
 fi
 
 echo "setup-podman-cluster: done ('minikube status' to check, 'minikube stop' to free resources)"

@@ -39,7 +39,7 @@
 
 set -euo pipefail
 
-# `glab` may be a mise shim or the .chezmoiexternals/glab.toml binary in
+# `glab` may be a mise shim or the .chezmoiexternals/vcs.toml binary in
 # ~/.local/bin. Fall back to ~/.local/bin when it is not already on PATH so the
 # system `glab` below is found before the ephemeral `mise exec` fallback.
 case ":$PATH:" in

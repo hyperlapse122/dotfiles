@@ -23,7 +23,7 @@
 # present in the config is an upsert, so re-runs are idempotent).
 #
 # run_after (NOT before, unlike the auth-github sibling): `glab` is fetched by
-# .chezmoiexternals/glab.toml into ~/.local/bin during chezmoi's FILE phase, so
+# .chezmoiexternals/vcs.toml into ~/.local/bin during chezmoi's FILE phase, so
 # on a first apply a before_ script would not find it yet and would take the
 # soft-skip path — and per AGENTS.md a run_onchange exit-0 skip is recorded as a
 # SUCCESSFUL run and is never retried, leaving the host unauthenticated until
@@ -55,7 +55,7 @@
 
 set -euo pipefail
 
-# `glab` may be a mise shim or the .chezmoiexternals/glab.toml binary in
+# `glab` may be a mise shim or the .chezmoiexternals/vcs.toml binary in
 # ~/.local/bin. This script can run under a non-login shell, so fall back to
 # ~/.local/bin when it is not already on PATH instead of missing the binary.
 case ":$PATH:" in

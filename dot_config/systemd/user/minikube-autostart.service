@@ -12,7 +12,7 @@ RemainAfterExit=yes
 # explicitly. The user service does not inherit environment.d variables reliably
 # at boot, so setting it here guarantees the cluster starts rootless.
 Environment=MINIKUBE_ROOTLESS=true
-# minikube is installed by .chezmoiexternals/minikube.toml into ~/.local/bin;
+# minikube is installed by .chezmoiexternals/k8s.toml into ~/.local/bin;
 # set an explicit PATH (podman lives in /usr/bin) so the boot/login start finds
 # both minikube and its podman driver before a full shell has set up PATH.
 Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"

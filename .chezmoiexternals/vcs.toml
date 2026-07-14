@@ -1,0 +1,59 @@
+{{- /* Version-control & repo-orchestration CLIs: gh, glab (+ its bundled skills), garden. */ -}}
+
+{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+{{- /* tar.gz on unix, zip on windows — glab and garden agree; gh does NOT (see $ghArchiveExtension). */ -}}
+{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+
+{{- /* ---------- gh (darwin ships a .zip, hence its own extension var) ---------- */ -}}
+
+{{- $ghTag := (gitHubLatestRelease "cli/cli").TagName | toString -}}
+{{- $ghArchiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".zip" (replace "windows" ".zip" .chezmoi.os))) }}
+
+[gh]
+type = "archive-file"
+targetPath = '{{ printf ".local/bin/gh%s" $executableExtension }}'
+url = '{{ gitHubReleaseAssetURL "cli/cli" $ghTag (printf "gh_%s_%s_%s%s" (replace "v" "" $ghTag) (replace "darwin" "macOS" .chezmoi.os) .chezmoi.arch $ghArchiveExtension) }}'
+path = '{{ printf "bin/gh%s" $executableExtension }}'
+executable = true
+stripComponents = {{ replace "linux" "1" (replace "darwin" "1" (replace "windows" "0" .chezmoi.os)) }}
+
+{{- /* ---------- glab (GitLab-hosted release, not GitHub) ---------- */ -}}
+
+{{- $glabLatestReleaseUrl := (getRedirectedURL "https://gitlab.com/api/v4/projects/34675721/releases/permalink/latest") -}}
+{{- $glabLatestRelease := output "curl" "-fsSL" $glabLatestReleaseUrl | fromJson -}}
+
+{{- $glabArchiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s%s" $glabLatestRelease.tag_name (replace "v" "" $glabLatestRelease.tag_name) .chezmoi.os .chezmoi.arch $archiveExtension) -}}
+{{- $glabSkillUrl := (printf "https://gitlab.com/gitlab-org/cli/-/raw/%s/internal/commands/skills/bundled/assets/glab/SKILL.md?ref_type=tags" $glabLatestRelease.tag_name) -}}
+{{- $glabStackSkillUrl := (printf "https://gitlab.com/gitlab-org/cli/-/raw/%s/internal/commands/skills/bundled/assets/glab-stack/SKILL.md?ref_type=tags" $glabLatestRelease.tag_name) }}
+
+[glab]
+targetPath = '{{ printf ".local/bin/glab%s" $executableExtension }}'
+type = "archive-file"
+url = '{{ $glabArchiveUrl }}'
+path = '{{ printf "bin/glab%s" $executableExtension }}'
+executable = true
+
+[glab-skill]
+type = "file"
+targetPath = '.agents/skills/glab/SKILL.md'
+url = '{{ $glabSkillUrl }}'
+
+[glab-stack-skill]
+type = "file"
+targetPath = '.agents/skills/glab-stack/SKILL.md'
+url = '{{ $glabStackSkillUrl }}'
+
+{{- /* ---------- garden ---------- */ -}}
+
+{{- $gardenTag := (gitHubLatestRelease "garden-rs/garden").TagName | toString -}}
+{{- $gardenVersion := trimPrefix "v" $gardenTag -}}
+{{- $gardenArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
+{{- $gardenOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+{{- $gardenStem := (printf "garden-%s-%s-%s" $gardenVersion $gardenArch $gardenOperatingSystem) }}
+
+[garden]
+type = "archive-file"
+url = {{ gitHubReleaseAssetURL "garden-rs/garden" $gardenTag (printf "%s%s" $gardenStem $archiveExtension) | quote }}
+executable = true
+targetPath = '{{ printf ".local/bin/garden%s" $executableExtension }}'
+path = '{{ printf "%s/garden%s" $gardenStem $executableExtension }}'

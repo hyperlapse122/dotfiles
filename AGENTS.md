@@ -28,7 +28,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
 | `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`, `.solaar`, `.gnome`, `.haptic`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
-| `.chezmoiexternals/*` | external fetches: prezto, plus pinned standalone CLI binaries into `~/.local/bin` (claude-code, codex, codegraph, agy, aoe, cli-proxy-api, ast-grep, buf, garden, gh, glab, helm, kubectl, minikube, marksman, wakatime-cli, docker credential helpers) |
+| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, codegraph, cli-proxy-api, aoe), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, virtio-win, prezto), `fonts.toml`. Everything but prezto/fonts is a pinned standalone CLI binary into `~/.local/bin`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
@@ -396,7 +396,7 @@ username, and an empty one makes every https clone/fetch/push fail with
 "HTTP Basic: Access denied", so the script looks it up per host via
 `glab api user` and fails loudly rather than leaving it blank). The rendered PAT
 IS the onchange trigger, so a rotation in 1Password re-runs the login; it is
-`after_` because `glab` itself arrives from `.chezmoiexternals/glab.toml` during
+`after_` because `glab` itself arrives from `.chezmoiexternals/vcs.toml` during
 the file phase. `~/.local/bin/auth-glab` remains the on-demand OAuth
 (`--web`/`--device`) FALLBACK — for a host with no PAT, a revoked session, or a
 host deliberately kept on OAuth. Never hardcode a secret — add an
@@ -590,7 +590,7 @@ keyring entry can no longer decrypt the stored ciphertexts.
   (per-user scratch only — see the age bullet in Secrets); NEVER commit the
   plaintext. The deploy skips Windows (no age identity there) and containers
   (both via `.chezmoiignore`). The `garden` CLI
-  itself is a `.chezmoiexternals/garden.toml` pinned-release binary
+  itself is a `.chezmoiexternals/vcs.toml` pinned-release binary
   (`~/.local/bin/garden`), and `dot_local/bin/executable_src-audit` is the
   read-only drift report (missing / broken-pointer / unmanaged; exit 1 on
   drift). Register/edit projects HERE (the source manifest), then
@@ -613,14 +613,37 @@ keyring entry can no longer decrypt the stored ciphertexts.
 
 ## Toolchain quirks
 
-- **mise** owns every runtime/CLI (node, bun, viteplus, go, python, ruby, rust,
-  gh, glab, opencode, …) via `dot_config/mise/config.toml`. It enforces a 24h
-  `minimum_release_age` cooldown with an excludes list — add fast-moving tools to
-  `minimum_release_age_excludes`, don't disable the gate.
+- **mise vs `.chezmoiexternals/` — the division of labour, and the rule for where
+  a new tool goes.** `dot_config/mise/config.toml` (+ its lockfile,
+  `dot_config/mise/private_mise.lock` → `~/.config/mise/mise.lock`) owns exactly
+  three things: the **language runtimes** (node, bun, go, python, ruby, rust,
+  yarn — per-project version switching is the whole point, even though several of
+  them happen to download from github.com), the **registry backends** (`npm:*`,
+  `cargo:*`, `pipx:*` — plus `viteplus`), and mise's **own internals** (`aube`,
+  which is `[settings.npm] package_manager`; `usage`, which drives mise's
+  completions; `pipx`, python-dependent and the backend behind `pipx:mmdc`).
+  Everything else — a **standalone CLI binary from a GitHub release / vendor
+  manifest** — belongs in `.chezmoiexternals/`, NOT here. That is why `gh`,
+  `glab`, `opencode`, `aoe`, `wakatime-cli`, `agy`, `shellcheck`, `wasm-pack`,
+  `rust-analyzer`, and `uv` are all externals. mise still enforces a 24h
+  `minimum_release_age` cooldown with an excludes list — add a fast-moving
+  *registry* package to `minimum_release_age_excludes`, don't disable the gate
+  (and don't leave an exclude behind for a tool that has since moved to an
+  external — it's dead weight).
+- **The `rust` toolchain's `rust-analyzer` is deliberately redundant.** `rust`
+  still declares `components = "rust-analyzer,rust-src"`, so rustup ships a
+  rust-analyzer *inside* the toolchain; `.chezmoiexternals/dev-tools.toml` also
+  installs the standalone `rust-analyzer` release into `~/.local/bin`, which is
+  the newer release train and is what PATH resolves. Both on purpose — don't
+  "fix" this by dropping either one.
 - `python3` is mise-shadowed; system scripts needing real system Python must call
   `/usr/bin/python3` (see the solaar config script).
-- **Standalone CLIs outside mise** come from `.chezmoiexternals/` (pinned to the
-  latest GitHub release / vendor manifest at apply time). For the version-dir
+- **Standalone CLIs outside mise** come from `.chezmoiexternals/`, pinned to the
+  latest GitHub release / vendor manifest at apply time and grouped by domain
+  into six files (`ai-agents` / `dev-tools` / `vcs` / `k8s` / `system` /
+  `fonts` — see the source-attribute table; a new tool joins the matching file
+  rather than getting one of its own, and anything referencing an external by
+  path must name the *group* file). For the version-dir
   installs (`claude`, `codex`, `codegraph`) the `.chezmoiscripts/00-tools/`
   `run_onchange_after_*` scripts re-point the `~/.local/bin` symlink at the
   freshly fetched version and prune older ones — the latest release id is
