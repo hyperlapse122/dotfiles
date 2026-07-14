@@ -69,7 +69,13 @@ src/garden.yaml
 # apply inside one writes to the real host $HOME and must behave like the host —
 # provision fully. Skip only a "real" container: a Podman/Docker marker present
 # WITHOUT /run/.toolboxenv.
-{{- if and (or (stat "/run/.containerenv") (stat "/.dockerenv")) (not (stat "/run/.toolboxenv")) }}
+#
+# That whole predicate is the `container` fact — declared in .chezmoidata/facts.yaml
+# and resolved once in .chezmoitemplates/facts.tmpl, which is also what the guard
+# partials and the installers read. The markers are no longer stat'd here: one
+# machine, one answer.
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
+{{- if $f.container }}
 .chezmoiscripts/30-linux/*.sh
 .chezmoiscripts/20-linux-fedora/*.sh
 .chezmoiscripts/40-linux-ubuntu/*.sh
