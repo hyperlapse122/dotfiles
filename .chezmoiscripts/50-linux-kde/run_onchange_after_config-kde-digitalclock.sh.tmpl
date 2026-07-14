@@ -2,13 +2,21 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/kde/run_onchange_after_config-kde-digitalclock.sh.tmpl
 #
-# Sets the Digital Clock date format to longDate on every panel-level
-# org.kde.plasma.digitalclock applet.
+# Sets the Digital Clock date format to kde.digitalClock.dateFormat on every
+# panel-level org.kde.plasma.digitalclock applet.
+#
+# The format is DATA, not script: .chezmoidata/kde.yaml `kde.digitalClock` is the
+# single source of truth (see its header) — edit the yaml, not this file. The
+# applet-discovery loop and the plugin id it matches on are structure and stay.
 #
 # CAVEAT: ~/.config/plasma-org.kde.plasma.desktop-appletsrc is owned by a
 # running plasmashell. Edits are safest before plasmashell first starts or
 # after restarting it; otherwise the live process may overwrite the change.
 # The write is idempotent so re-running is safe.
+#
+# onchange, no fingerprint block needed: the rendered DATE_FORMAT below is part
+# of this script's content, so a kde.yaml edit re-triggers it (the same reason
+# config-gnome-mouse carries none).
 #
 # Applies after restarting plasmashell or logging out/in.
 
@@ -16,8 +24,10 @@ set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-digitalclock.sh") -}}
 
+DATE_FORMAT="{{ .kde.digitalClock.dateFormat }}"
+
 configure_digitalclock() {
-  printf 'config-kde-digitalclock.sh: setting date format to long...\n'
+  printf 'config-kde-digitalclock.sh: setting date format to %s...\n' "$DATE_FORMAT"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
     printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
@@ -42,9 +52,9 @@ configure_digitalclock() {
       --group Containments --group "$containment" \
       --group Applets --group "$applet" \
       --group Configuration --group Appearance \
-      --key dateFormat longDate
-    printf '  set [Containments/%s/Applets/%s] (%s) dateFormat = longDate\n' \
-      "$containment" "$applet" "$plugin"
+      --key dateFormat "$DATE_FORMAT"
+    printf '  set [Containments/%s/Applets/%s] (%s) dateFormat = %s\n' \
+      "$containment" "$applet" "$plugin" "$DATE_FORMAT"
     count=$((count + 1))
   done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$file" \
             | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')

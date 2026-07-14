@@ -2,12 +2,21 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/kde/run_onchange_after_config-kde-virtualkeyboard.sh.tmpl
 #
-# Selects Fcitx 5 Wayland Launcher as the KWin virtual keyboard / input-method
-# launcher:
-#   [Wayland] InputMethod = /usr/share/applications/fcitx5-wayland-launcher.desktop
+# Selects the KWin virtual keyboard / input-method launcher:
+#   [Wayland] InputMethod = kde.virtualKeyboard.desktopFile
+# (the Fcitx 5 Wayland Launcher — fcitx5 is the KDE targets' input method).
+#
+# The .desktop file is DATA, not script: .chezmoidata/kde.yaml
+# `kde.virtualKeyboard` is the single source of truth (see its header) — edit the
+# yaml, not this file. The file-existence PRECONDITION below stays here; it is
+# why this script is not collapsible into the settings manifest.
 #
 # Uses kwriteconfig6 --type path so KConfig writes the canonical
 # InputMethod[$e]=... form. Skips cleanly when the desktop file isn't installed.
+#
+# onchange, no fingerprint block needed: the rendered path below is part of this
+# script's content, so a kde.yaml edit re-triggers it (the same reason
+# config-gnome-mouse carries none).
 #
 # Applies after restarting KWin (kwin_wayland --replace) or logging out/in.
 
@@ -15,10 +24,11 @@ set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-virtualkeyboard.sh") -}}
 
-VIRTUAL_KEYBOARD_DESKTOP_FILE='/usr/share/applications/fcitx5-wayland-launcher.desktop'
+VIRTUAL_KEYBOARD_DESKTOP_FILE={{ .kde.virtualKeyboard.desktopFile | quote }}
 
 configure_virtualkeyboard() {
-  printf 'config-kde-virtualkeyboard.sh: selecting fcitx5 wayland launcher...\n'
+  printf 'config-kde-virtualkeyboard.sh: selecting %s...\n' \
+    "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1; then
     printf '  kwriteconfig6 not found, skipping.\n'

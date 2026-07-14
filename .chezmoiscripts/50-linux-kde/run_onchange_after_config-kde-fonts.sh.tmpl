@@ -1,4 +1,5 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-fonts.sh.tmpl
 #
@@ -7,14 +8,24 @@
 #    visible to fc-match and to the running session without a re-login.
 # 2. Configures KDE Plasma 6 display fonts:
 #      sans (font, menuFont, toolBarFont, smallestReadableFont,
-#            [WM] activeFont) -> Pretendard
-#      mono (fixed)           -> JetBrainsMono Nerd Font
+#            [WM] activeFont) -> fonts.families.sans
+#      mono (fixed)           -> fonts.families.mono
 #
-# This is a run_onchange script: the managed-font marker below embeds the font
-# set from .chezmoidata/fonts.yaml, so adding/removing a font re-triggers this
-# script (re-caching and re-asserting the KDE config). Missing fonts only warn
-# (they are provisioned by the externals during the same `chezmoi apply`); the
-# KDE keys are still written so the config is correct once the fonts land.
+# The families and sizes are DATA, not script: .chezmoidata/fonts.yaml
+# (`fonts.families` / `fonts.sizes`) is the single source of truth for every file
+# that renders a font — this script, its GNOME twin (config-gnome-fonts), the
+# fcitx5 classicui config, and the VSCodium settings. Edit the yaml, not this
+# file. The KEYS stay here (which kdeglobals group/key gets the sans face and
+# which gets the mono one is KDE structure, not a knob); only the values move.
+#
+# This is a run_onchange script and it re-triggers on any fonts.yaml change,
+# through BOTH halves of that file: the rendered SANS/MONO/size values below are
+# part of this script's content (a family or size edit changes it), and the
+# fingerprint block hashes fonts.yaml itself (so a pure `release:` bump — which
+# leaves the archive FILENAMES, and therefore the managed-font marker, unchanged
+# — still re-caches and re-asserts). Missing fonts only warn (they are
+# provisioned by the externals during the same `chezmoi apply`); the KDE keys are
+# still written so the config is correct once the fonts land.
 #
 # KDE changes apply after restarting plasmashell or logging out/in.
 #
@@ -31,10 +42,21 @@
 
 set -euo pipefail
 
+# managed font data content fingerprint — chezmoi hashes this rendered script to
+# decide whether to re-run; embedding fonts.yaml's sha256 forces a re-run on any
+# font bump, including one that only moves a `release:` tag. `include . |
+# sha256sum` hashes file CONTENT; `(stat .).isDir` skips directories.
+# Comment-only; never executed. (Parity with the GNOME twin, which has carried
+# this block since it was written.)
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoidata/fonts.yaml")) }}
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-fonts.sh") -}}
 
-SANS="Pretendard"
-MONO="JetBrainsMono Nerd Font"
+SANS="{{ .fonts.families.sans }}"
+MONO="{{ .fonts.families.mono }}"
+SANS_SIZE={{ .fonts.sizes.sans }}
+MONO_SIZE={{ .fonts.sizes.mono }}
+# smallestReadableFont is the one KDE key with its own size; GNOME has no analog.
+SMALL_SIZE={{ .fonts.sizes.small }}
 
 FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 
@@ -89,14 +111,14 @@ configure_kde_fonts() {
     printf '  set [General] %-22s = %s\n' "$key" "$value"
   }
 
-  _set_general font                 "$(_font_value "$SANS" 10)"
-  _set_general menuFont             "$(_font_value "$SANS" 10)"
-  _set_general toolBarFont          "$(_font_value "$SANS" 10)"
-  _set_general fixed                "$(_font_value "$MONO" 10)"
-  _set_general smallestReadableFont "$(_font_value "$SANS"  8)"
+  _set_general font                 "$(_font_value "$SANS" "$SANS_SIZE")"
+  _set_general menuFont             "$(_font_value "$SANS" "$SANS_SIZE")"
+  _set_general toolBarFont          "$(_font_value "$SANS" "$SANS_SIZE")"
+  _set_general fixed                "$(_font_value "$MONO" "$MONO_SIZE")"
+  _set_general smallestReadableFont "$(_font_value "$SANS" "$SMALL_SIZE")"
 
   local wm_active
-  wm_active="$(_font_value "$SANS" 10)"
+  wm_active="$(_font_value "$SANS" "$SANS_SIZE")"
   kwriteconfig6 --file kdeglobals --group WM --key activeFont "$wm_active"
   printf '  set [WM]      %-22s = %s\n' "activeFont" "$wm_active"
 }

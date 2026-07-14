@@ -3,14 +3,24 @@
 # .chezmoiscripts/kde/run_onchange_after_config-kde-touchpad.sh.tmpl
 #
 # Configures libinput touchpads via KWin's org.kde.KWin.InputDeviceManager:
-#   naturalScroll          -> true
-#   tapToClick             -> true (if supported)
-#   clickMethodClickfinger -> true
-#   clickMethodAreas       -> false
+#   naturalScroll          -> kde.touchpad.settings.naturalScroll
+#   tapToClick             -> kde.touchpad.settings.tapToClick (if supported)
+#   clickMethodClickfinger -> kde.touchpad.settings.clickMethodClickfinger
+#   clickMethodAreas       -> kde.touchpad.settings.clickMethodAreas
+#
+# The device allowlist and the four values are DATA, not script:
+# .chezmoidata/kde.yaml `kde.touchpad` is the single source of truth (see its
+# header) — edit the yaml, not this file. The D-Bus walk and every per-device
+# supports* CAPABILITY PROBE stay here: a device that cannot do clickfinger is
+# still skipped rather than forced, whatever the data says.
 #
 # Only touchpads whose libinput name appears in TOUCHPAD_TARGET_NAMES are
 # configured; other touchpads are left untouched. Skips cleanly when busctl is
 # missing or no Plasma session owns org.kde.KWin.
+#
+# onchange, no fingerprint block needed: the rendered device names and values
+# below are part of this script's content, so a kde.yaml edit re-triggers it (the
+# same reason config-gnome-mouse carries none).
 #
 # Applies live via DBus.
 
@@ -19,9 +29,15 @@ set -euo pipefail
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-touchpad.sh") -}}
 
 TOUCHPAD_TARGET_NAMES=(
-  'SynPS/2 Synaptics TouchPad'
-  'ELAN06E8:00 04F3:332E Touchpad'
+{{ range .kde.touchpad.devices }}  {{ . | quote }}
+{{ end -}}
 )
+
+# busctl's `b` (boolean) property type takes the literal true/false tokens.
+NATURAL_SCROLL={{ .kde.touchpad.settings.naturalScroll | ternary "true" "false" }}
+TAP_TO_CLICK={{ .kde.touchpad.settings.tapToClick | ternary "true" "false" }}
+CLICK_METHOD_CLICKFINGER={{ .kde.touchpad.settings.clickMethodClickfinger | ternary "true" "false" }}
+CLICK_METHOD_AREAS={{ .kde.touchpad.settings.clickMethodAreas | ternary "true" "false" }}
 
 configure_touchpad() {
   printf 'config-kde-touchpad.sh: configuring KDE touchpad(s)...\n'
@@ -86,7 +102,7 @@ configure_touchpad() {
     printf '  touchpad: %s (%s)\n' "$name" "$sn"
 
     if [[ "$(_dbus_get "$path" supportsNaturalScroll)" == "true" ]]; then
-      _dbus_set_b "$path" naturalScroll true
+      _dbus_set_b "$path" naturalScroll "$NATURAL_SCROLL"
     else
       printf '    skip naturalScroll: not supported by device\n'
     fi
@@ -94,15 +110,15 @@ configure_touchpad() {
     local tap_finger_count
     tap_finger_count="$(_dbus_get "$path" tapFingerCount)"
     if [[ -n "$tap_finger_count" && "$tap_finger_count" != "0" ]]; then
-      _dbus_set_b "$path" tapToClick true
+      _dbus_set_b "$path" tapToClick "$TAP_TO_CLICK"
     else
       printf '    skip tapToClick: not supported by device\n'
     fi
 
     if [[ "$(_dbus_get "$path" supportsClickMethodClickfinger)" == "true" ]]; then
-      _dbus_set_b "$path" clickMethodClickfinger true
+      _dbus_set_b "$path" clickMethodClickfinger "$CLICK_METHOD_CLICKFINGER"
       if [[ "$(_dbus_get "$path" supportsClickMethodAreas)" == "true" ]]; then
-        _dbus_set_b "$path" clickMethodAreas false
+        _dbus_set_b "$path" clickMethodAreas "$CLICK_METHOD_AREAS"
       fi
     else
       printf '    skip clickMethodClickfinger: not supported by device\n'

@@ -1,0 +1,281 @@
+# Manifest of KDE Plasma settings written with kwriteconfig6.
+#
+#   kde.settings — one row per setting, applied to the user's Plasma rc files by
+#     .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl.
+#
+# Single source of truth (like packages.yaml and solaar.yaml): add or retune a
+# setting HERE, not in the script. The rows render into that script's SETTINGS
+# array, so a data edit changes the rendered script content and re-triggers the
+# run_onchange_ script by itself — there is no fingerprint block, the rendered
+# array IS the trigger (same mechanism as the VSCodium extension list).
+#
+# WHY THIS FILE EXISTS. Eight KDE scripts used to be nothing but a desktop guard,
+# a `command -v kwriteconfig6` skip, and a flat list of kwriteconfig6 calls — the
+# same 30 lines of ceremony eight times over, with the actual configuration (a
+# file, a group path, a key, a type, a value) buried in it. Those eight collapsed
+# into this manifest plus one generic runner. Their per-setting rationale — which
+# is this repo's design record, and the main thing a collapse like this can lose —
+# is preserved verbatim below, grouped by the script it came from.
+#
+# WHAT DOES **NOT** BELONG HERE. A row is a pure (file, group-path, key, type,
+# value) tuple and nothing else. The row shape gains no conditional field, no
+# precondition, and no `if` — ever. A KDE script that needs one stays a script:
+# that is exactly why `config-kde-virtualkeyboard` was NOT collapsed (it carries a
+# file-existence precondition), and why the applet-discovery scripts (`calendar`,
+# `digitalclock`, `kickoff`, `panel`), `fonts`, `touchpad`, and
+# `wallpaper-breeze` keep their own structure. Datafying their logic would turn
+# this manifest into a DSL and cost the comments that carry the design record.
+#
+# ---------------------------------------------------------------------------
+# ROW SHAPE — rendered into the script as "<file>:<group>[/<subgroup>…]:<key>:<type>:<value>"
+#
+#   file  : the Plasma rc file, as passed to `kwriteconfig6 --file` (kdeglobals,
+#           kwinrc, …). No path, no extension beyond what kwriteconfig6 takes.
+#   group : the group PATH, `/`-separated. The runner splits it and emits one
+#           `--group` argument per segment. The path — not a single group name —
+#           is required, because two of the collapsed scripts nest:
+#             powerdevilrc  AC/Display          -> --group AC --group Display
+#             krunnerrc     Runners/krunner_kill -> --group Runners --group krunner_kill
+#   key   : the setting key, verbatim (case-sensitive — Plasma reads it as written).
+#   type  : one of `bool`, `int`, `string`.
+#             bool / int -> the runner emits `--type <type>`.
+#             string     -> the runner emits NO `--type` flag, which is what a
+#                           plain `kwriteconfig6 --key K V` does (KConfig's
+#                           writeEntry fallback). Declared explicitly so that
+#                           "no type" is a stated choice in the data rather than
+#                           an omission in a script.
+#   value : the value. Validated at RENDER time against `type` (an unparseable
+#           value, an unknown type, an empty field, a colon, or a shell
+#           metacharacter fails the apply loudly, naming the row) — the same
+#           "bad data aborts, never silently misbehaves" rule the haptic waveform
+#           table and the system.yaml gates follow.
+#
+#           The runner always emits `--` before the value, so a negative int
+#           (`DimDisplayIdleTimeoutSec: -1`) is not parsed as a flag.
+#
+#           `@homeDir@` is the one placeholder: the runner substitutes
+#           `.chezmoi.homeDir` at render time. It exists so `HomeUrl` can be the
+#           real home directory without the manifest holding a `$HOME` shell
+#           expansion. An unrecognized `@…@` token fails the render.
+#
+# ---------------------------------------------------------------------------
+# PER-SETTING RATIONALE (carried over verbatim from the eight collapsed scripts)
+#
+# kdeglobals [KDE] — Global Theme  (was config-kde-autotheme.sh)
+#   Fedora + Ubuntu Studio. Puts the desktop on Plasma's default Breeze Global
+#   Theme with automatic day/night switching (Plasma 6.5+):
+#     LookAndFeelPackage      = org.kde.breezedark.desktop  (initial theme)
+#     DefaultLightLookAndFeel = org.kde.breeze.desktop       (daytime theme)
+#     DefaultDarkLookAndFeel  = org.kde.breezedark.desktop   (night theme)
+#     AutomaticLookAndFeel    = true
+#   On Ubuntu Studio this also moves the session off its shipped custom Global
+#   Theme onto Breeze.
+#   Priority-1 behaviour is automatic Breeze Dark + Breeze Light switching, timed
+#   off the Night Light schedule. On Plasma < 6.5 the auto-switch keys are unknown
+#   and silently ignored, so the LookAndFeelPackage pin alone leaves the desktop on
+#   Breeze Dark -- the priority-2 fallback -- without any extra handling here.
+#   Applies after re-login.
+#
+# powerdevilrc [<profile>][Display] — idle screen dimming  (was config-kde-dimscreen.sh)
+#   Disables PowerDevil's idle screen-dimming action in every power profile:
+#     DimDisplayWhenIdle       = false
+#     DimDisplayIdleTimeoutSec = -1
+#   for AC, Battery, and LowBattery — hence the three profile rows per key. The
+#   timeout is a NEGATIVE int, which is why the runner must emit `--` before the
+#   value: `kwriteconfig6 --type int -1` would parse -1 as a flag.
+#   Applies after re-login or when powerdevil reloads its config.
+#
+# dolphinrc [General] — startup folder  (was config-kde-dolphin.sh)
+#   Makes Dolphin open the home folder on startup instead of restoring tabs:
+#     RememberOpenedTabs = false
+#     HomeUrl            = $HOME   (here: the @homeDir@ placeholder, see above)
+#   Applies on next Dolphin launch.
+#
+# kwinrc [ElectricBorders] / [EdgeBarrier] — screen edges  (was config-kde-edges.sh)
+#   Disables every screen edge/corner action and the Plasma 6 multi-monitor
+#   pointer barrier:
+#     [ElectricBorders] Top/TopRight/Right/BottomRight/Bottom/BottomLeft/Left/TopLeft = None
+#     [EdgeBarrier] CornerBarrier = false
+#     [EdgeBarrier] EdgeBarrier   = 0
+#   The eight corners were a bash `for` loop over the edge names; as data they are
+#   eight rows. The loop WAS the data — that is the point of the collapse.
+#   Applies after restarting KWin or logging out/in.
+#
+# ksmserverrc [General] — session restore  (was config-kde-emptysession.sh)
+#   Always start with an empty desktop session (never restore the previous one):
+#     loginMode = emptySession
+#   Applies on next login (ksmserver reads this at session start).
+#
+# krunnerrc [Runners][krunner_kill] — Terminate Applications runner  (was config-kde-killrunner.sh)
+#   Configures the "Terminate Applications" runner:
+#     useTriggerWord = true
+#     triggerWord    = kill
+#     sorting        = 1    (CPU usage)
+#   NOTE `sorting` is type `string`, not `int`, and that is deliberate fidelity:
+#   the collapsed script wrote it as a bare `--key sorting 1` with no `--type`, so
+#   it lands via KConfig's writeEntry fallback. The stored ini value is `1` either
+#   way; keeping the declared type at `string` preserves the write path
+#   byte-for-byte rather than quietly "correcting" it. Change it to `int` only
+#   deliberately.
+#   Applies on next KRunner launch.
+#
+# krunnerrc [General] — Spotlight-like KRunner  (was config-kde-krunner.sh)
+#   Makes KRunner behave like macOS Spotlight:
+#     FreeFloating    = true
+#     historyBehavior = ImmediateCompletion
+#   Applies on next KRunner launch (kquitapp6 krunner to reload a running instance).
+#
+# spectaclerc [General] — screenshot selection  (was config-kde-spectacle.sh)
+#   Makes Spectacle not re-use the last captured rectangular region, matching
+#   Windows Snipping Tool and macOS Screenshot behavior:
+#     rememberSelectionRect = Never
+#   Valid values per Spectacle's KConfig schema are Never, UntilQuit, Always.
+#   The default is UntilQuit, which remembers the selection while Spectacle is
+#   running. Always persists it across sessions. We set Never so each rectangular
+#   capture starts fresh.
+#   Applies on next Spectacle launch.
+kde:
+  settings:
+    # --- kdeglobals: Breeze Global Theme, automatic day/night (ex-autotheme) ---
+    - { file: kdeglobals, group: KDE, key: LookAndFeelPackage, type: string, value: org.kde.breezedark.desktop }
+    - { file: kdeglobals, group: KDE, key: DefaultLightLookAndFeel, type: string, value: org.kde.breeze.desktop }
+    - { file: kdeglobals, group: KDE, key: DefaultDarkLookAndFeel, type: string, value: org.kde.breezedark.desktop }
+    - { file: kdeglobals, group: KDE, key: AutomaticLookAndFeel, type: bool, value: true }
+
+    # --- powerdevilrc: no idle screen dimming, in all three profiles (ex-dimscreen) ---
+    - { file: powerdevilrc, group: AC/Display, key: DimDisplayWhenIdle, type: bool, value: false }
+    - { file: powerdevilrc, group: AC/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
+    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
+    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
+    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
+    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
+
+    # --- dolphinrc: open home folder on startup, don't restore tabs (ex-dolphin) ---
+    - { file: dolphinrc, group: General, key: RememberOpenedTabs, type: bool, value: false }
+    - { file: dolphinrc, group: General, key: HomeUrl, type: string, value: "@homeDir@" }
+
+    # --- kwinrc: every screen edge action off + pointer barrier off (ex-edges) ---
+    - { file: kwinrc, group: ElectricBorders, key: Top, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: TopRight, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: Right, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: BottomRight, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: Bottom, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: BottomLeft, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: Left, type: string, value: None }
+    - { file: kwinrc, group: ElectricBorders, key: TopLeft, type: string, value: None }
+    - { file: kwinrc, group: EdgeBarrier, key: CornerBarrier, type: bool, value: false }
+    - { file: kwinrc, group: EdgeBarrier, key: EdgeBarrier, type: int, value: 0 }
+
+    # --- ksmserverrc: always start an empty session (ex-emptysession) ---
+    - { file: ksmserverrc, group: General, key: loginMode, type: string, value: emptySession }
+
+    # --- krunnerrc: Terminate Applications runner (ex-killrunner) ---
+    #     `sorting` is type string on purpose — see the rationale block above.
+    - { file: krunnerrc, group: Runners/krunner_kill, key: useTriggerWord, type: bool, value: true }
+    - { file: krunnerrc, group: Runners/krunner_kill, key: triggerWord, type: string, value: kill }
+    - { file: krunnerrc, group: Runners/krunner_kill, key: sorting, type: string, value: "1" }
+
+    # --- krunnerrc: Spotlight-like search box (ex-krunner) ---
+    - { file: krunnerrc, group: General, key: FreeFloating, type: bool, value: true }
+    - { file: krunnerrc, group: General, key: historyBehavior, type: string, value: ImmediateCompletion }
+
+    # --- spectaclerc: never remember the last rectangular selection (ex-spectacle) ---
+    - { file: spectaclerc, group: General, key: rememberSelectionRect, type: string, value: Never }
+
+# KDE Plasma 6 desktop tunables, rendered into the .chezmoiscripts/50-linux-kde/
+# config scripts (the KDE targets: Fedora KDE Spin, Ubuntu Studio).
+#
+# Single source of truth (like gnome.yaml / solaar.yaml): tune a value HERE, not
+# in the script. Every value below renders into the consuming script's body, so a
+# data edit changes that script's rendered content and re-triggers its
+# run_onchange_ automatically — no fingerprint block needed (the same reason
+# config-gnome-mouse carries none).
+#
+# WHAT LIVES HERE AND WHAT DOES NOT. Only the LEAF VALUES are data. Each script
+# keeps its own structure — the applet-discovery loop over
+# plasma-org.kde.plasma.desktop-appletsrc, the D-Bus device walk, the
+# capability probes, the once-only stamp — because collapsing those into manifest
+# fields would turn this file into a DSL and cost the comments that carry the
+# design record. The applet PLUGIN IDs (org.kde.plasma.digitalclock, …), the
+# kwriteconfig6 file/group/key paths, and the D-Bus interface names are that
+# structure: they say WHICH knob, not WHAT to set it to.
+#
+# kde.calendar (run_onchange_after_config-kde-calendar.sh.tmpl):
+#   plugins        : [Configuration][Appearance] enabledCalendarPlugins on every
+#                    digitalclock applet — the calendar popup's event sources.
+#                    `holidaysevents` draws public holidays, `pimevents` draws
+#                    Akonadi/PIM calendar events. Rendered comma-joined, which is
+#                    the form KConfig stores.
+#   holidayRegions : [General] selectedRegions in plasma_calendar_holiday_regions
+#                    — which holiday sets the holidaysevents plugin shows.
+#                    `kr_ko` is South Korea (Korean). Rendered comma-joined.
+#                    (The PIM calendar COLLECTION IDs are NOT data: the script
+#                    discovers them at runtime from Akonadi's MariaDB, because
+#                    they are per-host database row ids.)
+#
+# kde.digitalClock (run_onchange_after_config-kde-digitalclock.sh.tmpl):
+#   dateFormat     : [Configuration][Appearance] dateFormat on every digitalclock
+#                    applet. One of the applet's own values — `longDate`,
+#                    `shortDate`, `isoDate`, `custom` (with customDateFormat).
+#
+# kde.kickoff (run_onchange_after_config-kde-kickoff.sh.tmpl):
+#   favoritesDisplay / applicationsDisplay
+#                  : [Configuration][General] on every kickoff applet.
+#                    1 = "In a list", 0 = in a grid.
+#
+# kde.panel (run_onchange_after_config-kde-panel.sh.tmpl):
+#   groupingStrategy : [Configuration][General] on every icontasks/taskmanager
+#                    applet. TasksModel::GroupDisabled = 0 ("Do not group"),
+#                    GroupApplications = 1.
+#
+# kde.touchpad (run_onchange_after_config-kde-touchpad.sh.tmpl):
+#   devices        : the libinput device NAMES this script is allowed to touch.
+#                    Every other touchpad on the session is left alone — an
+#                    allowlist, so a docked/borrowed device is never reconfigured.
+#                    Match the `name` property KWin's
+#                    org.kde.KWin.InputDevice exposes (`libinput list-devices`).
+#   settings       : the four libinput properties written over D-Bus, each still
+#                    gated by the script on the device's own supports* capability
+#                    probe (a device that cannot do clickfinger is skipped, not
+#                    forced). clickMethodClickfinger and clickMethodAreas are
+#                    mutually exclusive in libinput — set them as a pair.
+#
+# kde.virtualKeyboard (run_onchange_after_config-kde-virtualkeyboard.sh.tmpl):
+#   desktopFile    : kwinrc [Wayland] InputMethod — the .desktop file KWin
+#                    launches as the Wayland input method. fcitx5 is the KDE
+#                    targets' input method (GNOME hosts use ibus instead, see
+#                    gnome.yaml). The script writes it with `--type path` and
+#                    skips cleanly when the file is not installed yet.
+#
+# kde.wallpaper (run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl):
+#   theme          : the wallpaper package under /usr/share/wallpapers/<theme>/
+#                    applied ONCE to de-brand the distro's seeded wallpaper.
+#                    `Next` is Plasma's upstream Breeze default. The script picks
+#                    the highest-resolution image the package ships and never
+#                    reverts a wallpaper the user later picks (stamp).
+  calendar:
+    plugins:
+      - holidaysevents
+      - pimevents
+    holidayRegions:
+      - kr_ko
+  digitalClock:
+    dateFormat: longDate
+  kickoff:
+    favoritesDisplay: 1
+    applicationsDisplay: 1
+  panel:
+    groupingStrategy: 0
+  touchpad:
+    devices:
+      - SynPS/2 Synaptics TouchPad
+      - ELAN06E8:00 04F3:332E Touchpad
+    settings:
+      naturalScroll: true
+      tapToClick: true
+      clickMethodClickfinger: true
+      clickMethodAreas: false
+  virtualKeyboard:
+    desktopFile: /usr/share/applications/fcitx5-wayland-launcher.desktop
+  wallpaper:
+    theme: Next
