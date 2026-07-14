@@ -175,9 +175,9 @@ setup_apt_repos() {
 {{ range .packages.linux.ubuntu.aptRepos -}}
 {{ $repo := . -}}
   # {{ $repo.id }}
-  repo_lines="$(printf '%s\n' {{ range index $repo "sources-list-lines" }}{{ . | quote }} {{ end }})"
+  repo_lines="$(printf '%s\n' {{ range $repo.sourcesListLines }}{{ . | quote }} {{ end }})"
   if [[ ! -f /usr/share/keyrings/{{ $repo.id }}.gpg || "$(cat /etc/apt/sources.list.d/{{ $repo.id }}.list 2>/dev/null)" != "${repo_lines}" ]]; then
-    curl -fsSL {{ index $repo "keyring-url" | quote }} | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
+    curl -fsSL {{ $repo.keyringUrl | quote }} | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
     printf '%s\n' "${repo_lines}" | "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
   fi
 {{ end -}}

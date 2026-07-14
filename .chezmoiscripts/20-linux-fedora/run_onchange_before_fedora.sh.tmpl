@@ -207,7 +207,7 @@ install_fedora_packages() {
 {{ end -}}
 
 
-{{ range .packages.linux.fedora.repos }}
+{{ range .packages.linux.fedora.dnfRepos }}
 "${SUDO[@]}" tee /etc/yum.repos.d/{{ .id }}.repo >/dev/null <<'EOF'
 {{ .content -}}
 EOF

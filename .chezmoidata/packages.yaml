@@ -6,6 +6,12 @@
 # dotnet tool HERE, not in the installer. Every list is rendered into the
 # installer, so an edit re-triggers the run_onchange_ script automatically.
 #
+# NAMING — every key this repo owns is camelCase, across all of .chezmoidata.
+# The ONE exception here is the arch keys of a directRpms/directDebs entry's
+# `rpms:`/`debs:` map (`x86_64`, `aarch64`): those are kernel arch identifiers,
+# matched verbatim against `uname -m` output by the installer. They are upstream
+# spellings, not schema keys — camelCasing them would simply break the lookup.
+#
 # ---------------------------------------------------------------------------
 # `gates:` — which named host fact decides each CONDITIONAL package group.
 #
@@ -64,18 +70,30 @@ packages:
         kdePackages: desktop.kde  # Fedora KDE Spin (plasmashell shipped by the ISO)
         gnomePackages: desktop.gnome  # Fedora Workstation (gnome-shell shipped by the ISO)
         bareMetalPackages: "!virt"  # neither a VM nor a container
-      # COPR (community) repositories enabled via `dnf copr enable`.
+      # COPR (community) repositories enabled via `dnf copr enable`. Fedora-only
+      # mechanism: `copr enable <owner/project>` resolves the whole repo from one
+      # token. Ubuntu's nearest equivalent, a PPA, is an ordinary `deb ` source
+      # line, so PPAs live as plain `aptRepos` entries (mise, dotnet-backports) and
+      # need no key of their own.
       coprs:
         - alternateved/keyd  # COPR hosting the keyd keyboard remapper
         - jdxcode/mise  # COPR hosting mise (runtime/tool version manager)
       # GPG keys imported (rpm --import) to verify third-party repo packages.
+      # Fedora-only mechanism: rpm has ONE global keyring, so a key is declared once
+      # and stands apart from the repos that use it. apt has no global keyring — every
+      # source line names its own `signed-by=` — so on ubuntu the key is a FIELD of an
+      # aptRepos entry (`keyringUrl`) and never a standalone list.
       keys:
         - https://downloads.1password.com/linux/keys/1password.asc  # 1Password package signing key
         - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
         - https://dl.google.com/linux/linux_signing_key.pub  # Google Chrome repo signing key
         - https://repo.cider.sh/RPM-GPG-KEY  # Cider Collective repo signing key
       # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
-      repos:
+      # Counterpart of ubuntu's `aptRepos` — named for the artifact, like
+      # directRpms/directDebs, because the entry SHAPE is the mechanism: dnf reads a
+      # whole .repo ini (so the entry is one `content` blob, gpgkey and all), while
+      # apt reads a one-line `deb ` source plus a separate keyring.
+      dnfRepos:
         # 1Password desktop app + CLI stable RPM repo
         - id: 1password
           content: |
@@ -115,11 +133,16 @@ packages:
             enabled=1
             gpgcheck=1
             gpgkey=https://repo.cider.sh/RPM-GPG-KEY
-      # Remote .repo files added via `dnf config-manager addrepo`.
+      # Remote .repo files added via `dnf config-manager addrepo`. Fedora-only
+      # mechanism: dnf can fetch a vendor-authored .repo file whole and adopt it.
+      # apt has no "download the vendor's source list" verb — you transcribe the
+      # `deb ` line yourself — so on ubuntu tailscale is a hand-written aptRepos entry.
       repofiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
       # dnf groups installed via `dnf group install` (own transaction, separate
-      # from the individual packages below).
+      # from the individual packages below). Fedora-only mechanism: dnf comps groups
+      # are first-class install targets. apt has no group verb (its task metapackages
+      # are just packages), so the ubuntu equivalents sit in `packages` unwrapped.
       groups:
         - development-tools  # core build toolchain (gcc, make, autotools, git, ...)
         - virtualization  # libvirt + qemu virtualization stack
@@ -287,7 +310,11 @@ packages:
       # key(s), then install the link matching the host arch (skipped when `id`
       # is already an installed package). An entry with a pinned `version` is
       # instead converged to that exact rpm VERSION (bumping the pin re-runs
-      # `dnf install` as an in-place upgrade).
+      # `dnf install` as an in-place upgrade). Counterpart of ubuntu's `directDebs`;
+      # the pair is named for the artifact because the artifact IS the difference.
+      # The `rpms:` map is keyed by `uname -m` output (x86_64, aarch64) — those are
+      # kernel arch identifiers matched verbatim by the installer, not schema keys,
+      # so they keep their upstream spelling (see the exceptions note in the header).
       directRpms:
         - id: teamviewer  # remote desktop / remote support client
           keys:
@@ -327,10 +354,14 @@ packages:
         gnomePackages: desktop.gnome  # Ubuntu Desktop (gnome-shell shipped by the ISO)
         studioPackages: ubuntuStudio  # the ubuntustudio-default-settings seed package is installed; FORCE_UBUNTU_STUDIO=1 overrides
         bareMetalPackages: "!virt"  # neither a VM nor a container
-      # APT third-party repos. Each entry: `id` (becomes /etc/apt/sources.list.d/<id>.list),
-      # `keyring-url` (GPG armored key, dearmored to /usr/share/keyrings/<id>.gpg),
-      # and `sources-list-lines` (a list of `deb [signed-by=...] ...` entries written
-      # verbatim, one per line — NOT a deb822 .sources file).
+      # Counterpart of fedora's `dnfRepos` — same job (declare a third-party repo
+      # inline), different shape, because apt reads a one-line `deb ` source plus a
+      # per-source keyring where dnf reads one .repo ini. Each entry: `id` (becomes
+      # /etc/apt/sources.list.d/<id>.list), `keyringUrl` (GPG armored key, dearmored
+      # to /usr/share/keyrings/<id>.gpg), and `sourcesListLines` (a list of
+      # `deb [signed-by=...] ...` entries written verbatim, one per line — NOT a
+      # deb822 .sources file). The key is a FIELD here, not fedora's standalone
+      # `keys:` list, because apt has no global keyring to import into.
       aptRepos:
         # The 1password repo is deliberately NOT managed here: the 1password deb's
         # postinst owns the repo definition — it writes the deb822
@@ -346,12 +377,12 @@ packages:
           # arch pinned: the repo publishes no i386 index, and the installer
           # enables i386 as a foreign arch (Steam), so an unpinned line makes
           # every `apt update` warn "doesn't support architecture 'i386'".
-          keyring-url: https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
-          sources-list-lines:
+          keyringUrl: https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+          sourcesListLines:
             - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
         - id: google-chrome
-          keyring-url: https://dl.google.com/linux/linux_signing_key.pub
-          sources-list-lines:
+          keyringUrl: https://dl.google.com/linux/linux_signing_key.pub
+          sourcesListLines:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
         - id: cider
           # Cider (Apple Music client). Per https://repo.cider.sh the docs dearmor the key to
@@ -359,8 +390,8 @@ packages:
           # every key to /usr/share/keyrings/<id>.gpg, which apt accepts identically. arch=amd64
           # pinned: the repo ships only linux-x64 debs (binary-arm64/armhf/i386 indexes are empty),
           # so an unpinned line would fail to resolve on non-amd64 hosts.
-          keyring-url: https://repo.cider.sh/APT-GPG-KEY
-          sources-list-lines:
+          keyringUrl: https://repo.cider.sh/APT-GPG-KEY
+          sourcesListLines:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/cider.gpg] https://repo.cider.sh/apt stable main"
         - id: claude-desktop
           # Claude desktop app (Linux beta — Debian-based only; Anthropic ships no RPM,
@@ -369,8 +400,8 @@ packages:
           # /usr/share/keyrings/claude-desktop-archive-keyring.asc, but the generic aptRepos
           # loop dearmors every key to /usr/share/keyrings/<id>.gpg, which apt accepts
           # identically. Key fingerprint: 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE.
-          keyring-url: https://downloads.claude.ai/claude-desktop/key.asc
-          sources-list-lines:
+          keyringUrl: https://downloads.claude.ai/claude-desktop/key.asc
+          sourcesListLines:
             - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop.gpg] https://downloads.claude.ai/claude-desktop/apt/stable stable main"
         - id: mise
           # PPA per https://mise.jdx.dev/installing-mise.html#apt — the docs' recommended
@@ -378,20 +409,20 @@ packages:
           # are published empty). .install-prerequisites.sh bootstraps mise from the
           # distro-agnostic multi-arch mise.jdx.dev/deb repo instead; on Ubuntu,
           # setup_apt_repos then converges mise.list (and its keyring) to this PPA.
-          keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52
-          sources-list-lines:
+          keyringUrl: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52
+          sourcesListLines:
             - "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main"
         - id: tailscale
-          keyring-url: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
-          sources-list-lines:
+          keyringUrl: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
+          sourcesListLines:
             - "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu resolute main"
         - id: dotnet-backports
           # ppa:dotnet/backports — Canonical (not Microsoft) now owns .NET packaging on
           # Ubuntu 22.04+. Ubuntu's own archive only carries the current SDK (10.0), so
           # older non-default SDKs (8.0, 9.0) come from this PPA instead of Microsoft's
           # repo. https://launchpad.net/~dotnet/+archive/ubuntu/backports
-          keyring-url: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
-          sources-list-lines:
+          keyringUrl: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
+          sourcesListLines:
             - "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
         - id: microsoft-prod
           # Microsoft PMC prod repo for Ubuntu 26.04 — carries intune-portal (+ deps).
@@ -400,8 +431,8 @@ packages:
           # signed with the NEWER microsoft-2025 key, not the legacy microsoft.asc one.
           # arch pinned: the repo publishes no i386 index and the installer enables i386
           # as a foreign arch (Steam), so an unpinned line would warn on every apt update.
-          keyring-url: https://packages.microsoft.com/keys/microsoft-2025.asc
-          sources-list-lines:
+          keyringUrl: https://packages.microsoft.com/keys/microsoft-2025.asc
+          sourcesListLines:
             - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/26.04/prod resolute main"
         - id: microsoft-edge
           # Microsoft Edge repo — intune-portal needs Edge for Entra ID sign-in /
@@ -410,8 +441,8 @@ packages:
           # installer's 2026-05-06 fix — do not point this at microsoft-2025). Only the
           # amd64 index has packages (arm64/armhf are published empty; Edge ships no
           # Linux arm64 build), so pin amd64 like google-chrome above.
-          keyring-url: https://packages.microsoft.com/keys/microsoft.asc
-          sources-list-lines:
+          keyringUrl: https://packages.microsoft.com/keys/microsoft.asc
+          sourcesListLines:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-edge.gpg] https://packages.microsoft.com/repos/edge stable main"
       # Foundational packages installed before the main set (build headers needed
       # for DKMS module builds).
@@ -571,7 +602,12 @@ packages:
         - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
 
-      # Ubuntu Studio pro-audio essentials. Gate `ubuntuStudio` — the
+      # Ubuntu Studio pro-audio essentials. No fedora counterpart, and not an
+      # oversight: Ubuntu Studio is an Ubuntu FLAVOR sharing ID=ubuntu, so it needs a
+      # fact of its own to be distinguishable at all — whereas Fedora's KDE Spin vs
+      # Workstation split is already carried by the `desktop` fact, and Fedora ships
+      # no pro-audio flavor to gate on.
+      # Gate `ubuntuStudio` — the
       # ubuntustudio-default-settings seed package the Studio ISO preinstalls
       # (every Ubuntu flavor reports ID=ubuntu, so the package IS the flavor;
       # FORCE_UBUNTU_STUDIO=1 overrides in the installer for smoke tests), so a
@@ -623,7 +659,12 @@ packages:
         - libnvidia-container1  # NVIDIA container runtime library
 
       # Gate `intelGpu` — an Intel GPU is present (PCI vendor 0x8086 + display
-      # controller class 0x03). Canonical's intel-graphics-preview stack for early
+      # controller class 0x03). No fedora counterpart, and not an oversight: this is
+      # Canonical's out-of-archive early-enablement PPA, a distro mechanism Fedora
+      # has no analogue for — Fedora ships the Intel stack (mesa, intel-media-driver)
+      # in-distro on a fast release cadence, so those packages need no gate and no
+      # key of their own.
+      # Canonical's intel-graphics-preview stack for early
       # enablement of newer Intel GPUs (Arc / Xe / Battlemage / Lunar Lake). The
       # kobuk-team/intel-graphics PPA (resolute) is added on-demand by
       # setup_intel_repos() in run_onchange_before_ubuntu.sh.tmpl under the same
@@ -645,7 +686,9 @@ packages:
         - intel-opencl-icd                # Intel OpenCL runtime (compute)
         - libze-intel-gpu1                # Level Zero Intel GPU driver
       # Gate `intelGpu` (same as intelPackages — a scalar, not a list, but still
-      # a conditional key; see the gates map above).
+      # a conditional key; see the gates map above). No fedora counterpart: the HWE
+      # kernel train is an LTS-only Ubuntu mechanism (a stable release carrying a
+      # newer kernel), and Fedora's whole release model makes it meaningless.
       # Hardware-enablement (HWE) kernel installed alongside the Intel graphics
       # stack (--install-recommends) and made the default boot entry via a
       # GRUB_FLAVOUR_ORDER=generic drop-in (see install_intel_support). resolute
@@ -667,6 +710,8 @@ packages:
       # `version` is converged to that exact version (bumping the pin re-runs
       # dpkg -i as an upgrade); an entry without one installs only when absent —
       # right for self-updating packages whose postinst registers its own repo.
+      # Counterpart of fedora's `directRpms`; the `debs:` map is likewise keyed by
+      # `uname -m` output (x86_64, aarch64), not by schema keys.
       directDebs:
         - id: teamviewer  # remote desktop / remote support client
           debs:
