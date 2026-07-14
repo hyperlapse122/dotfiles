@@ -505,7 +505,7 @@ claude plugin install mxm4-haptic@dotfiles --scope user
 A real `chezmoi apply` against the live `$HOME` is a **deploy**, not a verification technique — it writes dotfiles and runs the provisioning scripts. Reach for it only when the user asked for the change to actually land on this host, and say plainly that you did.
 
 - `chezmoi execute-template < file.tmpl` — render one template in isolation (output depends on OS + `.chezmoidata`). **First check after any edit**: it is the one that surfaces a template error.
-- `chezmoi archive --output <tar>` — write the ENTIRE rendered target state to a tar. **This is the "did anything change?" gate**: archive `main`, archive the branch, `diff` the two tars — byte-identical is the pass condition for a refactor that is supposed to change nothing. Compare like with like: the entry count is **desktop-dependent** (172 entries on this host's natural GNOME render, 179 with a `plasmashell` stub on PATH — the `desktop` fact flips and the KDE-only files, fcitx5 config included, start deploying), so stub the same desktop, or none, on **both** sides.
+- `chezmoi archive --exclude=encrypted,externals,scripts --output <tar>` — write the ENTIRE rendered target state to a tar. **This is the "did anything change?" gate**: archive `main`, archive the branch, `diff` the two tars — byte-identical is the pass condition for a refactor that is supposed to change nothing. Compare like with like: the entry count is **desktop-dependent** (172 entries on this host's natural GNOME render, 179 with a `plasmashell` stub on PATH — the `desktop` fact flips and the KDE-only files, fcitx5 config included, start deploying), so stub the same desktop, or none, on **both** sides.
 - `chezmoi ignored` — list what `.chezmoiignore` excludes, without an apply. The way to test an ignore-set change (stub each desktop on PATH in turn to exercise both branches).
 - `chezmoi diff` — preview what apply would change **against a real destination**. It is **NOT a no-change gate under the recipe below**: the throwaway `--destination` is empty, so every managed file reads as an addition and the diff is the whole target state (168,101 lines here). Use `archive` + tar-diff for that, and keep `diff` for eyeballing one file against the live `$HOME`.
 - `chezmoi cat ~/target/path` — show the rendered target.
@@ -618,14 +618,40 @@ env PATH="$scratch/bin:$PATH" \
   --destination "$scratch/target" \
   diff --no-pager
 
-# The no-change gate: archive both sides, diff the tars (NOT `diff`, which emits
-# the whole target state as additions against the empty destination above).
-env PATH="$scratch/bin:$PATH" \
-  chezmoi --config "$scratch/empty.toml" \
-  --source "$PWD" \
-  --destination "$scratch/target" \
-  archive --output "$scratch/branch.tar"
+# The no-change gate: archive BOTH sides, extract, and diff the trees (NOT `diff`,
+# which emits the whole target state as additions against the empty destination
+# above). --exclude is MANDATORY, not tuning: the empty scratch config has no age
+# recipient, so `archive` hard-fails on src/garden.yaml.age ("encryption not
+# configured") and writes NO TAR AT ALL without it. externals need the network;
+# scripts are not file targets and never appear in a tar anyway (see below).
+archive_side() {   # $1 = source tree, $2 = output tar
+  env PATH="$scratch/bin:$PATH" GITHUB_TOKEN="$(gh auth token)" \
+    chezmoi --config "$scratch/empty.toml" \
+    --source "$1" --destination "$scratch/target" \
+    archive --exclude=encrypted,externals,scripts --output "$2"
+}
+base=$(mktemp -d); git archive "$(git merge-base HEAD origin/main)" | tar x -C "$base"
+archive_side "$base" "$scratch/base.tar"
+archive_side "$PWD"  "$scratch/branch.tar"
+# Compare CONTENT, not tar bytes — tar carries mtimes, so `cmp` on the tars is
+# noise. Extract both and `diff -r`; run it under LC_ALL=C or diff's own output is
+# unparseable under a non-English locale.
+mkdir -p "$scratch/x-base" "$scratch/x-branch"
+tar xf "$scratch/base.tar"   -C "$scratch/x-base"
+tar xf "$scratch/branch.tar" -C "$scratch/x-branch"
+LC_ALL=C diff -r "$scratch/x-base" "$scratch/x-branch"
 ```
+
+**The archive gate sees TARGETS, not SCRIPTS — know its blind spot.** `.chezmoiscripts/**`
+are never file targets, so a byte-identical archive says NOTHING about a change to a
+provisioning script. That gap is real, not theoretical: the fact-registry refactor rewrote
+24 `run_onchange_` scripts while its archive comparison reported "nothing changed", and one
+of them (`install-system-30-network`) restarts `systemd-resolved`, `NetworkManager` and
+`tailscaled` on the next apply. To cover scripts, diff the RENDERED script text between the
+two sides — `chezmoi execute-template < <script>.tmpl` per side, or the
+`rendered-internals-<os>` artifacts CI already produces — and say plainly in the PR when a
+change re-triggers `run_onchange_` scripts with side effects. **A first apply that re-runs
+`install-system-30-network` should be done from a local console, not over SSH or Tailscale.**
 
 `--source "$PWD"` is load-bearing for an agent: point it at YOUR worktree, never
 let it default to a source dir that contains someone else's — see the worktree
