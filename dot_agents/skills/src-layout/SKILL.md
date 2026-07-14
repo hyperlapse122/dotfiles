@@ -25,6 +25,7 @@ Division of labor — four tools, no overlap:
 | Declared registry of every project (path + url) | `~/src/garden.yaml` — chezmoi-managed 0444; SOURCE is `src/encrypted_readonly_garden.yaml.age` in the chezmoi repo (age-encrypted: the dotfiles repo is public, the project list is not) |
 | Bare clone into `<project>/.bare` + fetch refspec | `garden --chdir ~/src grow <name>` |
 | `.git` → `gitdir: ./.bare` pointer file | `garden --chdir ~/src setup-gitdir <name>` (custom command declared in the manifest) |
+| Remote-tracking refs (`refs/remotes/origin/*`) + per-branch upstream | `garden --chdir ~/src cmd <name> setup-upstream` (custom command declared in the manifest) — `grow` applies the refspec but never fetches |
 | Worktrees + sessions (create, lock, remove) | `aoe` ONLY — never `git worktree`, never garden `worktree:` trees. The manifest's `aoe-session` custom command only DERIVES the arguments and shells out to `aoe add`; aoe still creates and locks the worktree |
 | Drift audit (read-only) | `src-audit` |
 
@@ -76,13 +77,32 @@ Division of labor — four tools, no overlap:
 
    Then `chezmoi apply` to deploy the manifest (commit the source change per
    the repo's commit rules).
-4. **Bootstrap** — grow, then run the manifest's two custom commands. Both are
+4. **Bootstrap** — grow, then run the manifest's three custom commands. All are
    idempotent, so re-running is safe:
 
    ```sh
-   garden --chdir ~/src grow <name>                          # bare clone + refspec
-   garden --chdir ~/src cmd <name> setup-gitdir aoe-session  # .git pointer, then aoe add
+   garden --chdir ~/src grow <name>                                          # bare clone + refspec
+   garden --chdir ~/src cmd <name> setup-gitdir setup-upstream aoe-session   # .git pointer, upstreams, then aoe add
    ```
+
+   `setup-upstream` fixes the tracking information `grow` does not create.
+   `garden grow` runs `git clone --bare`, which writes `refs/heads/*` with no
+   `branch.<name>.remote` / `branch.<name>.merge` — and although the tree's
+   `gitconfig` declares the fetch refspec, grow never FETCHES, so the bare repo
+   comes up with an empty `refs/remotes`. The default-branch worktree
+   (`main` / `develop` / `dev`) therefore has no upstream, and `git pull` there
+   fails with "there is no tracking information for the current branch"
+   ("현재 브랜치에 추적 정보가 없습니다"). The command runs
+   `git fetch --prune origin` in the bare repo — which populates
+   `refs/remotes/origin/*` via the declared refspec — then, for every local
+   branch that has a matching `refs/remotes/origin/<branch>` and does NOT
+   already have an upstream, sets `branch.<branch>.remote=origin` +
+   `branch.<branch>.merge=refs/heads/<branch>`. It is idempotent (a second run
+   is a clean no-op), it never overrides an upstream that is already set, and it
+   skips a purely local branch with no `origin/<branch>` counterpart. It fixes
+   every origin-mirrored branch, not just the default one — though the default
+   branch is the one that was always broken, since a branch you push with
+   `git push -u` already has an upstream.
 
    `aoe-session` derives the `aoe add` arguments from the tree path and the
    bare repo's HEAD — title = worktree name = default branch, group = the
@@ -94,16 +114,16 @@ Division of labor — four tools, no overlap:
    `garden cmd` takes **exactly ONE query**, then the command names —
    `garden cmd <QUERY> <COMMANDS>...`. A second tree name is silently parsed as
    a COMMAND, so `garden cmd telerad-openapi telerad-frontend setup-gitdir
-   aoe-session` bootstraps `telerad-openapi` ONLY. Never list trees there:
-   select many with a glob QUERY instead (`'*'`, `'telerad-*'`). Both commands
-   are idempotent — an already-bootstrapped tree just prints a skip — so a
-   broad query is always safe. (`garden grow <QUERIES>...` is the opposite: it
-   DOES take a list of trees.)
+   setup-upstream aoe-session` bootstraps `telerad-openapi` ONLY. Never list
+   trees there: select many with a glob QUERY instead (`'*'`, `'telerad-*'`).
+   All three commands are idempotent — an already-bootstrapped tree just prints
+   a skip — so a broad query is always safe. (`garden grow <QUERIES>...` is the
+   opposite: it DOES take a list of trees.)
 
    New host, every declared project in one pass:
 
    ```sh
-   garden --chdir ~/src grow '*' && garden --chdir ~/src cmd '*' setup-gitdir aoe-session
+   garden --chdir ~/src grow '*' && garden --chdir ~/src cmd '*' setup-gitdir setup-upstream aoe-session
    ```
 
    Run `aoe add` by hand only for a NON-default-branch worktree (a second
@@ -124,13 +144,20 @@ setup problem):
 | broken | Grown, but the project root's `.git` pointer is absent/wrong | `garden --chdir ~/src setup-gitdir <name>` |
 | unmanaged | Repo on disk under ~/src that no declared project accounts for | Layout violation: either register it (tree entry + migrate to the bare shape) or relocate/delete — but surface that decision to the user; never delete a repository or worktree yourself. |
 
+`src-audit` does NOT check upstreams — a missing one is symptom-driven, not a
+finding: a worktree whose branch mirrors `origin` but has no tracking
+information (`git pull` fails with "there is no tracking information for the
+current branch") is a tree that was grown without `setup-upstream`. Fix it with
+`garden --chdir ~/src cmd <name> setup-upstream` (idempotent; it never touches a
+branch that already has an upstream).
+
 Migrating a flat checkout INTO the layout: add the tree entry, `garden grow` a
 fresh bare clone, recreate worktrees via `aoe add`, then port uncommitted work
 with `git diff`/`git format-patch` from the old checkout; removing the old
 checkout is the user's call.
 
 New host / bootstrap everything at once (step 4's glob form):
-`garden --chdir ~/src grow '*' && garden --chdir ~/src cmd '*' setup-gitdir aoe-session`.
+`garden --chdir ~/src grow '*' && garden --chdir ~/src cmd '*' setup-gitdir setup-upstream aoe-session`.
 
 ## Forbidden
 

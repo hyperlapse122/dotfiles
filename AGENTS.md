@@ -578,9 +578,17 @@ keyring entry can no longer decrypt the stored ciphertexts.
   project checkout of the
   `~/src/<host>/[<group>/]<project>/<worktree>` layout as a garden tree
   (`path: …/.bare`, `bare: true`, explicit fetch refspec — `git clone --bare`
-  alone would not track remote branches) and carries the two custom commands
+  alone would not track remote branches) and carries the three custom commands
   that bootstrap a grown tree: `setup-gitdir` (writes the `gitdir: ./.bare`
-  pointer file) and `aoe-session` (derives title / group / default branch from
+  pointer file), `setup-upstream` (`git fetch --prune origin` in the bare repo,
+  then sets `branch.<b>.remote=origin` + `branch.<b>.merge` for every local
+  branch that has a matching `refs/remotes/origin/<b>` and no upstream yet —
+  `garden grow` applies the refspec but never fetches, so a freshly grown bare
+  clone has NO `refs/remotes/origin/*` and no tracking info at all, and `git
+  pull` in the default-branch worktree fails with "there is no tracking
+  information for the current branch"; it never overrides an upstream that is
+  already set and skips a branch with no `origin/` counterpart), and
+  `aoe-session` (derives title / group / default branch from
   the tree path + bare HEAD and shells out to `aoe add`, skipping a worktree
   that already has a session — `aoe` still creates and locks the worktree, and
   the garden manifest still declares no `worktree:` tree). The source is
@@ -595,8 +603,9 @@ keyring entry can no longer decrypt the stored ciphertexts.
   read-only drift report (missing / broken-pointer / unmanaged; exit 1 on
   drift). Register/edit projects HERE (the source manifest), then
   `chezmoi apply` + `garden --chdir ~/src grow <name>` +
-  `garden --chdir ~/src cmd <name> setup-gitdir aoe-session` (both commands are
-  idempotent, so `'*'` bootstraps every declared project on a new host) — never edit the
+  `garden --chdir ~/src cmd <name> setup-gitdir setup-upstream aoe-session`
+  (all three commands are idempotent, so `'*'` bootstraps every declared project
+  on a new host) — never edit the
   deployed file, never `garden plant` (would rewrite it with non-`.bare`
   paths), never `garden prune --rm`/`--no-prompt`, and never declare garden
   `worktree:` trees (worktrees are created and locked by aoe only; the

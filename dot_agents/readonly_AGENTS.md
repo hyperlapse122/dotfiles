@@ -55,17 +55,20 @@
   ```sh
   # after adding the tree entry to the source garden.yaml + chezmoi apply:
   garden --chdir ~/src grow <name>                          # bare clone into <project>/.bare + fetch refspec
-  # setup-gitdir writes the one-line "gitdir: ./.bare" pointer; aoe-session derives
-  # title/group/default-branch from the tree and shells out to `aoe add` (aoe still
-  # creates + locks the worktree). Both idempotent — '*' bootstraps a new host.
-  garden --chdir ~/src cmd <name> setup-gitdir aoe-session
+  # setup-gitdir writes the one-line "gitdir: ./.bare" pointer; setup-upstream fetches
+  # origin and sets the upstream of every origin-mirrored branch (grow never fetches, so
+  # a bare clone has no remote-tracking refs and no tracking info — `git pull` in the
+  # default-branch worktree fails); aoe-session derives title/group/default-branch from
+  # the tree and shells out to `aoe add` (aoe still creates + locks the worktree).
+  # All idempotent — '*' bootstraps a new host.
+  garden --chdir ~/src cmd <name> setup-gitdir setup-upstream aoe-session
   ```
 
-  `garden cmd` takes **exactly ONE query**, then the command names: `garden cmd <QUERY> <COMMANDS>...`. Extra tree names silently become COMMAND names — `garden cmd a b setup-gitdir aoe-session` runs against tree `a` only, and `b` is read as a command. **MUST NOT** list several trees there; select many with a glob query (`'*'`, `'telerad-*'`) — both commands are idempotent, so a broad query is safe. `garden grow` is the opposite (`grow <QUERIES>...`) and does take a tree list.
+  `garden cmd` takes **exactly ONE query**, then the command names: `garden cmd <QUERY> <COMMANDS>...`. Extra tree names silently become COMMAND names — `garden cmd a b setup-gitdir setup-upstream aoe-session` runs against tree `a` only, and `b` is read as a command. **MUST NOT** list several trees there; select many with a glob query (`'*'`, `'telerad-*'`) — all three commands are idempotent, so a broad query is safe. `garden grow` is the opposite (`grow <QUERIES>...`) and does take a tree list.
 
   Hand-run `aoe add ~/src/<host>/<group>/<project> -t <title> -g "<group-slug>/<project-name>" -w <branch>` only for a NON-default-branch worktree; `-w` takes the EXISTING branch (no `-b`).
 
-- garden touches ONLY the bare repos. **MUST NOT** run `garden prune --rm` / `prune --no-prompt` / `garden plant`, and **MUST NOT** declare garden `worktree:` trees — worktrees stay aoe-owned. Audit drift read-only with `src-audit` (missing = grow on demand; broken pointer = re-run `setup-gitdir`; unmanaged = surface to the user, never delete).
+- garden touches ONLY the bare repos. **MUST NOT** run `garden prune --rm` / `prune --no-prompt` / `garden plant`, and **MUST NOT** declare garden `worktree:` trees — worktrees stay aoe-owned. Audit drift read-only with `src-audit` (missing = grow on demand; broken pointer = re-run `setup-gitdir`; unmanaged = surface to the user, never delete); a branch whose `git pull` reports no tracking information = re-run `setup-upstream` (`src-audit` does not check upstreams).
 
 - An `aoe` session's **title** is its worktree name (`main` for the default branch), and its **group** is the project's path under `~/src/<host>/` — `[<group-slug>/]<project-name>`, a slash-nested group path (`examvue-365-flow/shadcn-registry`, `examvue-duo/examvue-apps`; only a genuinely group-less project is a bare `<project-name>`).
 - Project identity lives in the **group**, never in the title. `session.tie_workdir_to_name` (aoe's default, on) makes the worktree directory leaf follow the title's slug — it bypasses `worktree.bare_repo_path_template` — so a project-named title would rename the directory too, and a later `aoe session rename` would MOVE it. **MUST NOT** put the project or group name in a session title, and **MUST NOT** disable the tie to work around that.
