@@ -56,6 +56,13 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    config, `@audio` realtime privileges, low-latency boot tuning) are also
    provisioned.
 
+Meridian is installed from the exact NPM package version named by its latest
+GitHub Release, linked through `~/.local/share/meridian/current`, and started as
+a user service on Linux/macOS. It stays loopback-only at `127.0.0.1:3456` and
+routes OpenCode plus Pi Anthropic requests through the repo-managed Claude
+binary. Meridian owns and live-writes its profiles, OAuth, settings, and
+telemetry under `~/.config/meridian/`; those files are intentionally unmanaged.
+
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
 via `glab auth login --use-keyring`, along with the registry→host mapping
@@ -191,8 +198,8 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (claude-code, codex, codegraph, cli-proxy-api, gh, glab,
-  kubectl, helm, shellcheck, uv, …), plus prezto and the fonts.
+  `~/.local/bin` (claude-code, codex, codegraph, Meridian, gh, glab, kubectl,
+  helm, shellcheck, uv, …), plus prezto and the fonts.
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust sources, built on apply by
@@ -212,7 +219,31 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
   template plus the local agent skills under `dot_agents/skills/`.
 - [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgents for
-  `cli-proxy-api` and `mxm4-hapticd`).
+  Meridian and `mxm4-hapticd`).
+
+### One-time migration from the legacy proxy
+
+Run the matching command **before the first apply that removes the old managed
+service file**. The repository deliberately does not ship a teardown script:
+
+```sh
+# Linux
+legacy_proxy='cli-proxy''-api'
+systemctl --user disable --now "${legacy_proxy}.service"
+
+# macOS
+legacy_proxy='cli-proxy''-api'
+legacy_label="dev.h82.${legacy_proxy}"
+launchctl bootout "gui/$UID/${legacy_label}"
+
+# Show (but do not delete) the unmanaged credential state left for review.
+legacy_state="$HOME/.${legacy_proxy}"
+printf 'Legacy credential state remains at %s\n' "$legacy_state"
+```
+
+The legacy proxy's unmanaged credential directory and its 1Password item are
+not deleted. After Meridian is verified, remove that credential state manually
+only if it is no longer needed.
 
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).

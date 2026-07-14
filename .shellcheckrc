@@ -6,9 +6,9 @@
 #
 # SC2016 "Expressions don't expand in single quotes": this repo deliberately
 # wraps command / flag names in literal backticks inside single-quoted
-# printf/echo diagnostics, e.g.
-#     printf 'cli-proxy-api-open: `xdg-open` not found on PATH\n' >&2
-# The backticks are intentional message formatting, never command substitution,
-# and this style is used across many CLI wrappers and provisioning scripts, so
-# the check is disabled repo-wide rather than suppressed line-by-line.
+# printf/echo diagnostics, e.g. a wrapper reporting that its required `jq`
+# command is not on PATH. The backticks are intentional message formatting,
+# never command substitution, and this style is used across many CLI wrappers
+# and provisioning scripts, so the check is disabled repo-wide rather than
+# suppressed line-by-line.
 disable=SC2016

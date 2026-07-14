@@ -47,15 +47,14 @@ src/garden.yaml
 .local/share/claude-plugins
 {{- end }}
 
-# The pi mxm4-haptic extension (dot_pi/agent/extensions/mxm4-haptic.ts.tmpl)
-# shells out to the `mxm4-haptic` CLIENT, which is built + run on BOTH linux and
-# darwin — the daemon has a macOS IOKit HID backend + a launchd plist, and the
-# client is socket-only (it never touches hidraw). So unlike the Claude/OpenCode
-# haptic plugins above (Linux-only), it deploys on macOS too. Skipped only on
-# Windows, where pi itself is not provisioned here. (No installer to strand:
-# pi auto-discovers the extension.)
+# Pi is provisioned only on POSIX. Its mxm4-haptic extension shells out to the
+# cross-platform Linux/macOS client, and models.json routes built-in Anthropic
+# models through the POSIX-only Meridian service. Skip both on Windows, where
+# neither pi nor Meridian is installed. (No installer is stranded: pi
+# auto-discovers the extension and reads models.json directly.)
 {{- if eq .chezmoi.os "windows" }}
 .pi/agent/extensions/mxm4-haptic.ts
+.pi/agent/models.json
 {{- end }}
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.

@@ -1,4 +1,4 @@
-{{- /* AI coding agents & the local model proxy: claude, codex, agy, opencode, pi, codegraph, cli-proxy-api, aoe. */ -}}
+{{- /* AI coding agents & the local Claude Max proxy: claude, codex, agy, opencode, pi, meridian, codegraph, aoe. */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -125,6 +125,47 @@ sha256 = '{{ $piSha }}'
 
 {{- end }}
 
+{{- /* ---------- meridian — GitHub Release chooses the exact NPM package version.
+       GitHub publishes no install asset; the package payload comes from the exact
+       @rynfar/meridian version in the NPM registry. POSIX only: the version linker
+       and user-service provisioning are bash/systemd/launchd implementations. ---------- */ -}}
+
+{{- if ne .chezmoi.os "windows" -}}
+
+{{- $meridianTag := (gitHubLatestRelease "rynfar/meridian").TagName | toString -}}
+{{- if not (regexMatch "^meridian-v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" $meridianTag) -}}
+  {{- fail (printf "meridian: latest GitHub release tag %q is not meridian-v<semver>" $meridianTag) -}}
+{{- end -}}
+{{- $meridianVersion := trimPrefix "meridian-v" $meridianTag -}}
+{{- $meridianMetadataURL := printf "https://registry.npmjs.org/@rynfar%%2Fmeridian/%s" $meridianVersion -}}
+{{- $meridianMetadata := output "curl" "-fsSL" $meridianMetadataURL | toString | fromJson -}}
+{{- if ne ($meridianMetadata.version | toString) $meridianVersion -}}
+  {{- fail (printf "meridian: GitHub release %s resolves to %s but NPM metadata reports %v" $meridianTag $meridianVersion $meridianMetadata.version) -}}
+{{- end -}}
+{{- $meridianDist := $meridianMetadata.dist -}}
+{{- if or (not $meridianDist) (not $meridianDist.tarball) -}}
+  {{- fail (printf "meridian: NPM metadata for %s has no dist.tarball" $meridianVersion) -}}
+{{- end -}}
+{{- $meridianIntegrity := $meridianDist.integrity | default "" | toString -}}
+{{- if not (hasPrefix "sha512-" $meridianIntegrity) -}}
+  {{- fail (printf "meridian: NPM metadata for %s has no sha512 dist.integrity" $meridianVersion) -}}
+{{- end -}}
+{{- $meridianSha512 := trimPrefix "sha512-" $meridianIntegrity | b64dec | printf "%x" -}}
+{{- if not (regexMatch "^[0-9a-f]{128}$" $meridianSha512) -}}
+  {{- fail (printf "meridian: decoded sha512 integrity for %s is not 128 lowercase hex characters" $meridianVersion) -}}
+{{- end }}
+
+[meridian]
+type = "archive"
+targetPath = '{{ printf ".local/share/meridian/versions/%s" $meridianVersion }}'
+url = '{{ $meridianDist.tarball }}'
+stripComponents = 1
+
+[meridian.checksum]
+sha512 = '{{ $meridianSha512 }}'
+
+{{- end }}
+
 {{- /* ---------- codegraph ---------- */ -}}
 
 {{- $codegraphTag := (gitHubLatestRelease "colbymchenry/codegraph").TagName | toString }}
@@ -138,30 +179,6 @@ targetPath = '{{ joinPath (env "LOCALAPPDATA") "codegraph" "current" }}'
 type = "archive"
 url = '{{ gitHubReleaseAssetURL "colbymchenry/codegraph" $codegraphTag (printf "codegraph-%s-%s.tar.gz" (replace "windows" "win32" .chezmoi.os) (replace "amd64" "x64" .chezmoi.arch)) }}'
 stripComponents = 1
-
-{{- /* ---------- cli-proxy-api ---------- */ -}}
-
-{{- $cliProxyApiTag := (gitHubLatestRelease "router-for-me/CLIProxyAPI").TagName | toString -}}
-{{- $cliProxyApiArchiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
-{{- $cliProxyApiArch := (replace "arm64" "aarch64" .chezmoi.arch) -}}
-
-{{- $cliProxyApiArchiveUrl := (gitHubReleaseAssetURL "router-for-me/CLIProxyAPI" $cliProxyApiTag (printf "CLIProxyAPI_%s_%s_%s%s" (replace "v" "" $cliProxyApiTag) .chezmoi.os $cliProxyApiArch $cliProxyApiArchiveExtension)) -}}
-{{- $cliProxyApiConfigBaseDir := (replace "windows" (joinPath (env "LOCALAPPDATA") "cli-proxy-api") (replace "linux" ".config/cli-proxy-api" (replace "darwin" ".config/cli-proxy-api" .chezmoi.os))) }}
-
-# TODO: Add User-scope Windows Background Service
-
-[cli-proxy-api]
-type = "archive-file"
-targetPath = '{{ printf ".local/bin/cli-proxy-api%s" $executableExtension }}'
-url = '{{ $cliProxyApiArchiveUrl }}'
-path = '{{ printf "cli-proxy-api%s" $executableExtension }}'
-executable = true
-
-[cli-proxy-api-config]
-type = "archive-file"
-targetPath = '{{ joinPath $cliProxyApiConfigBaseDir "config.example.yaml" }}'
-url = '{{ $cliProxyApiArchiveUrl }}'
-path = 'config.example.yaml'
 
 {{- /* ---------- agent-of-empires (aoe) — the worktree/session orchestrator; no windows build ---------- */ -}}
 

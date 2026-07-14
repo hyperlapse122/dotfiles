@@ -6,7 +6,7 @@ called out as verified were run against the live CLI.
 | | |
 |---|---|
 | Source | `anomalyco/opencode`, GitHub release archive → `~/.local/bin/opencode` |
-| Auth / config | Repo-managed **readonly** `~/.config/opencode/opencode.json` (from `dot_config/opencode/readonly_opencode.json.tmpl`); provider keys under `dot_config/opencode/private_secrets/` via 1Password |
+| Auth / config | Repo-managed **readonly** `~/.config/opencode/opencode.json` (from `dot_config/opencode/readonly_opencode.json.tmpl`); Anthropic routes through the local Meridian service, while remaining provider keys resolve inline from 1Password |
 | Canonical | `opencode run --agent <Agent> --dir <worktree> "<brief>"` |
 | Strength | The **agent roster** — plan → execute → critique as distinct agents |
 
@@ -65,11 +65,12 @@ opencode run --format json --agent oracle --dir "$wt" "<brief>" \
 
 ## Gotchas
 
-- **`cli-proxy-api` dependency.** The `zai`, `moonshotai`, and `google-agy`
-  providers in `~/.config/opencode/opencode.json` route through the **local**
-  `cli-proxy-api` user service on `http://127.0.0.1:8317/v1`. Those model ids
-  resolve only while it is up — a delegation to one can **hang or return empty**
-  if it is down. Check: `systemctl --user status cli-proxy-api`.
+- **Meridian-backed Anthropic.** `anthropic/*` requests route through the local
+  Meridian service at `http://127.0.0.1:3456`; its stable OpenCode plugin path is
+  `~/.local/share/meridian/current/plugin/meridian.ts`. A delegation can hang or
+  return empty when the proxy or Claude authentication is unavailable. Check
+  `curl -fsS http://127.0.0.1:3456/health` and, on Linux,
+  `systemctl --user status meridian.service`.
 - `--auto` is **rarely needed**: permissions are already configured in the
   repo-managed readonly `opencode.json` (bash `*` allowed; edits allowed except
   denied credential paths and `/tmp`, `/var/tmp`, `/dev/shm`), and the

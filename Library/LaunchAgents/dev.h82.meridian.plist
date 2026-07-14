@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.h82.meridian</string>
+
+	<!-- launchd does not expand $HOME in ProgramArguments or environment
+	     values. A shell expands the per-user paths, then execs mise directly so
+	     neither Node nor Meridian depends on launchd's restricted PATH. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>if [ -x /opt/homebrew/bin/mise ]; then mise=/opt/homebrew/bin/mise; elif [ -x /usr/local/bin/mise ]; then mise=/usr/local/bin/mise; elif [ -x "$HOME/.local/bin/mise" ]; then mise="$HOME/.local/bin/mise"; else exit 127; fi; export MERIDIAN_CLAUDE_PATH="$HOME/.local/bin/claude"; exec "$mise" --no-config exec node@latest -- "$HOME/.local/bin/meridian"</string>
+	</array>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>MERIDIAN_HOST</key>
+		<string>127.0.0.1</string>
+		<key>MERIDIAN_PORT</key>
+		<string>3456</string>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<true/>
+	<!-- Relaunch crashes only. A clean exit means the user stopped Meridian on
+	     purpose and must not be undone by launchd. -->
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

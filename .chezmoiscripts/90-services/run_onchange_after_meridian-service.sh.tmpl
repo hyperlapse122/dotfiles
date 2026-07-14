@@ -1,0 +1,83 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $tag := (gitHubLatestRelease "rynfar/meridian").TagName | toString -}}
+{{- if not (regexMatch "^meridian-v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" $tag) -}}
+  {{- fail (printf "meridian: latest GitHub release tag %q is not meridian-v<semver>" $tag) -}}
+{{- end -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/90-services/run_onchange_after_meridian-service.sh.tmpl
+#
+# Enables Meridian after the file phase has applied its user service and after
+# 00-tools has installed dependencies and selected the exact release. The
+# rendered remote tag below re-runs this script on upgrades; the OS-specific
+# fingerprint re-runs it when this host's service definition changes.
+#
+# meridian release: {{ $tag }}
+
+set -euo pipefail
+
+{{- if eq .chezmoi.os "darwin" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "Library/LaunchAgents/dev.h82.meridian.plist")) }}
+{{- else }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/systemd/user/meridian.service")) }}
+{{- end }}
+
+MERIDIAN="$HOME/.local/bin/meridian"
+
+{{ if eq .chezmoi.os "darwin" -}}
+# Keep this candidate order byte-for-byte aligned with the LaunchAgent command.
+# Preflight both replacement executables BEFORE bootout so an incomplete apply
+# cannot stop a working agent and then record a successful soft-skip.
+MISE=""
+for candidate in /opt/homebrew/bin/mise /usr/local/bin/mise "$HOME/.local/bin/mise"; do
+  if [ -x "$candidate" ]; then
+    MISE="$candidate"
+    break
+  fi
+done
+if [ ! -x "$MERIDIAN" ] || [ -z "$MISE" ]; then
+  printf 'meridian: keeping the current launchd agent (replacement meridian or plist-compatible mise is unavailable); bootstrap manually after install: launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/dev.h82.meridian.plist"\n' >&2
+  exit 0
+fi
+
+launchctl bootout "gui/$UID/dev.h82.meridian" 2>/dev/null || true
+
+if launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/dev.h82.meridian.plist" 2>/dev/null; then
+  printf 'meridian: launchd agent loaded (gui/%s/dev.h82.meridian)\n' "$UID"
+else
+  printf 'meridian: skipping launchd load (no GUI session?); load manually once logged in: launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/dev.h82.meridian.plist"\n' >&2
+fi
+{{ else -}}
+MISE=/usr/bin/mise
+if [ ! -x "$MERIDIAN" ] || [ ! -x "$MISE" ]; then
+  printf 'meridian: skipping enable (replacement meridian or /usr/bin/mise is unavailable); enable manually after install: systemctl --user enable --now meridian.service\n' >&2
+  exit 0
+fi
+
+if ! systemctl --user daemon-reload >/dev/null 2>&1; then
+  printf 'meridian: skipping enable (no user session bus); enable manually once logged in: systemctl --user enable --now meridian.service\n' >&2
+  exit 0
+fi
+
+was_active=0
+if systemctl --user is-active --quiet meridian.service 2>/dev/null; then
+  was_active=1
+fi
+
+if ! systemctl --user enable --now meridian.service >/dev/null 2>&1; then
+  printf 'meridian: enable/start failed; retry manually: systemctl --user enable --now meridian.service\n' >&2
+  exit 0
+fi
+printf 'meridian: service enabled and started\n'
+
+if [ "$was_active" -eq 1 ]; then
+  if systemctl --user restart meridian.service >/dev/null 2>&1; then
+    printf 'meridian: restarted active service to pick up the new release/configuration\n'
+  else
+    printf 'meridian: active-service restart failed; retry manually: systemctl --user restart meridian.service\n' >&2
+  fi
+fi
+{{ end -}}
+
+exit 0
+{{ end -}}
