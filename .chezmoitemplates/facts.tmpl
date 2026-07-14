@@ -1,0 +1,167 @@
+{{- /*
+facts.tmpl — THE merged entry point for the named host-fact registry.
+
+Emits a YAML map of every fact declared in .chezmoidata/facts.yaml
+(factRegistry), which is where the names, types, probe layers, and fail-safe
+directions are documented. Read it before touching this file.
+
+  Consumers:
+    templates / .chezmoiignore / deployed file content
+      {{ $f := includeTemplate "facts.tmpl" . | fromYaml }}
+      {{ if $f.nvidia }}…{{ end }}   {{ if eq $f.desktop "kde" }}…{{ end }}
+    scripts                → .chezmoitemplates/facts-sh.tmpl  (FACT_* bash vars)
+    gate-naming data files → .chezmoitemplates/facts-validate.tmpl
+
+The map is assembled from two layers, and the split is by WHERE the probe can
+run, not by cost — everything here is live:
+
+  1. The CACHE — ${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml, written by
+     write_facts_cache in .install-prerequisites.sh, which chezmoi runs as its
+     read-source-state.pre hook: once per chezmoi command, BEFORE the source
+     state is read. Six facts live there because the template functions cannot
+     express them — `output` turns a non-zero exit into a render-aborting
+     template error (systemd-detect-virt --vm exits 1 on bare metal), and `glob`
+     does not traverse symlinks, which /sys/bus/pci/devices/* is made of.
+     NEVER probe a host fact with `output`.
+
+  2. IN-PROCESS probes — a `stat`, a stat-guarded `include`, a `glob`, or a
+     chezmoi builtin. No subprocess, so they cost nothing per render.
+
+Two rules hold this file together:
+
+  * EVERY absolute-path `include` is stat-guarded. `include` HARD-ERRORS on a
+    missing file (`stat` merely returns nil), so an unguarded read of the cache
+    or of /sys/class/dmi/ takes down every render on a host that lacks it —
+    macOS and Windows in CI included.
+
+  * A MISSING CACHE IS NOT AN ERROR. Every cached fact then resolves false,
+    which is the conservative direction for all six (skip NVIDIA, skip Intel,
+    skip the bare-metal set, skip ThinkPad/Studio, treat the host as a desktop).
+    This is what makes the empty---config renders — the AGENTS.md stub-`op`
+    recipe and the CI render-internals job, where the hook does not run at all —
+    correct rather than merely non-fatal: the cache file persists on the host
+    from the last REAL chezmoi command, and an absolute-path `include` reads it
+    regardless of which config chezmoi was pointed at.
+*/ -}}
+
+{{- /* ---- Layer 1: the pre-hook cache ---------------------------------------
+   Keep this path byte-identical to write_facts_cache's in the hook (and to
+   Write-FactsCache in the .ps1). `env` reads the same XDG_CACHE_HOME the hook
+   read, and .chezmoi.homeDir is the same $HOME — no `output` call needed. */ -}}
+{{- $cacheHome := env "XDG_CACHE_HOME" -}}
+{{- if eq $cacheHome "" -}}
+{{-   $cacheHome = joinPath .chezmoi.homeDir ".cache" -}}
+{{- end -}}
+{{- $cachePath := joinPath $cacheHome "chezmoi" "facts.yaml" -}}
+{{- $cached := dict -}}
+{{- if stat $cachePath -}}
+{{-   $parsed := include $cachePath | fromYaml -}}
+{{-   if kindIs "map" $parsed -}}
+{{-     $cached = $parsed -}}
+{{-   end -}}
+{{- end -}}
+
+{{- /* Cached facts are booleans. Coerce defensively: a missing key (no cache
+   yet) and a non-boolean value (a truncated or hand-edited cache) both resolve
+   false rather than leaking a string into a consumer's `if`. The next real
+   chezmoi command rewrites the file before the render, so a damaged cache
+   self-heals — no reason to fail the apply over it. */ -}}
+{{- $facts := dict -}}
+{{- range $name := (list "headless" "intelGpu" "nvidia" "ubuntuStudio" "virt" "vm") -}}
+{{-   $value := index $cached $name -}}
+{{-   $_ := set $facts $name (and (kindIs "bool" $value) $value) -}}
+{{- end -}}
+
+{{- /* ---- Layer 2a: chezmoi builtins ---------------------------------------- */ -}}
+{{- $_ := set $facts "os" .chezmoi.os -}}
+{{- $distro := "" -}}
+{{- if and .chezmoi.osRelease (hasKey .chezmoi.osRelease "id") -}}
+{{-   $distro = .chezmoi.osRelease.id -}}
+{{- end -}}
+{{- $_ := set $facts "distro" $distro -}}
+
+{{- /* desktop — keyed on the shell binary the ISO shipped (stable from first
+   boot; neither comes from this repo's package lists). KDE WINS when both are
+   on PATH: that is today's precedence, since dot_config/.chezmoiignore drops the
+   fcitx5 config only on a host with gnome-shell AND NOT plasmashell. With
+   NEITHER (headless, container, CI) the value is `none`, and the file-content
+   consumers fall back to their KDE variant — which is what keeps the CI
+   artifacts deterministic and inert. */ -}}
+{{- $desktop := "none" -}}
+{{- if lookPath "plasmashell" -}}
+{{-   $desktop = "kde" -}}
+{{- else if lookPath "gnome-shell" -}}
+{{-   $desktop = "gnome" -}}
+{{- end -}}
+{{- $_ := set $facts "desktop" $desktop -}}
+
+{{- /* ---- Layer 2b: in-process file probes ---------------------------------- */ -}}
+
+{{- /* thinkpad — the MODEL fields, not the vendor field. sys_vendor holds the
+   manufacturer (LENOVO on every Lenovo consumer laptop, "Micro-Star
+   International Co., Ltd." here) and never the string ThinkPad. product_version
+   and product_family are the two fields the old `sudo dmidecode -t system` grep
+   actually matched; reading them from /sys/class/dmi/id/ drops the sudo call. */ -}}
+{{- $thinkpad := false -}}
+{{- range $dmi := (list "/sys/class/dmi/id/product_version" "/sys/class/dmi/id/product_family") -}}
+{{-   if stat $dmi -}}
+{{-     if contains "thinkpad" (include $dmi | lower) -}}
+{{-       $thinkpad = true -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "thinkpad" $thinkpad -}}
+
+{{- /* `stat` returns a MAP or nil, so it is used as a truthiness test and never
+   compared with eq/ne — text/template's eq/ne reject a map operand outright
+   ("incompatible types for comparison"), which would abort the render. */ -}}
+
+{{- /* sddmBreeze — forcing Current=breeze without the theme installed yields a
+   broken login screen, so the file that sets it ships only where this holds. */ -}}
+{{- $sddmBreeze := false -}}
+{{- if stat "/usr/share/sddm/themes/breeze/theme.conf" -}}
+{{-   $sddmBreeze = true -}}
+{{- end -}}
+{{- $_ := set $facts "sddmBreeze" $sddmBreeze -}}
+
+{{- /* gdm — probe the exact file-db the shipped /etc/dconf/profile/gdm
+   references, not "is GNOME installed". */ -}}
+{{- $gdm := false -}}
+{{- if stat "/usr/share/gdm/greeter-dconf-defaults" -}}
+{{-   $gdm = true -}}
+{{- end -}}
+{{- $_ := set $facts "gdm" $gdm -}}
+
+{{- /* fprintdPam — pam_fprintd.so present AND a Debian-shaped common-auth. THE
+   CONJUNCTION IS LOAD-BEARING: the second half is what keeps this repo's
+   Debian-shaped /etc/pam.d/polkit-1 off Fedora, whose rpm-owned polkit-1
+   @includes system-auth. Drop it and a Fedora apply overwrites that file with a
+   stack referencing a file Fedora does not have — breaking every polkit prompt.
+   Both multiarch security dirs are globbed, mirroring has_pam_fprintd() in
+   install-system-10-files. */ -}}
+{{- $fprintdPam := false -}}
+{{- if stat "/etc/pam.d/common-auth" -}}
+{{-   range $pattern := (list "/usr/lib/*/security/pam_fprintd.so" "/lib/*/security/pam_fprintd.so") -}}
+{{-     if glob $pattern -}}
+{{-       $fprintdPam = true -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "fprintdPam" $fprintdPam -}}
+
+{{- /* container — a Podman/Docker marker WITHOUT the toolbox marker. distrobox
+   and toolbox both bind-mount the host $HOME and both create /run/.toolboxenv, so
+   an apply inside one targets the REAL $HOME and must provision like a host. Keep
+   this predicate byte-identical to the root .chezmoiignore's, or the ignore set
+   and the fact will disagree about the same machine. */ -}}
+{{- $container := false -}}
+{{- if or (stat "/run/.containerenv") (stat "/.dockerenv") -}}
+{{-   if not (stat "/run/.toolboxenv") -}}
+{{-     $container = true -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "container" $container -}}
+
+{{- /* toYaml sorts the keys, so the emitted map is deterministic — which is what
+   lets facts-sh.tmpl and the CI artifacts be diffed. */ -}}
+{{ $facts | toYaml }}
