@@ -8,3 +8,12 @@
 {{- if ne .chezmoi.os "windows" }}
 *.ps1
 {{- end }}
+
+# Linux only. host-facts reports the host-fact registry (.chezmoidata/facts.yaml),
+# and every probe behind it reads /sys, systemd, dpkg, or a Linux path — so off
+# Linux the report is a page of `false` about a host it cannot describe. Deploying
+# it there also renders a body shellcheck proves unreachable (SC2317), which is how
+# this was caught: the CI job lints the RENDERED macOS output.
+{{- if ne .chezmoi.os "linux" }}
+host-facts
+{{- end }}
