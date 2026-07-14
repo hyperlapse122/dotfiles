@@ -2,12 +2,15 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/70-agents/run_onchange_after_install-pi-packages.sh.tmpl
 #
-# Installs the pi packages this repo declares — currently just
-# `pi-mcp-extension` (npm), which is what gives pi an MCP client at all. pi
-# ships no MCP support of its own: without the extension the servers declared
-# in ~/.pi/agent/mcp.json (source: dot_pi/agent/private_readonly_mcp.json.tmpl)
-# are inert, and without that config the extension has nothing to connect to —
-# the two halves are useless apart, so they land together.
+# Installs the pi packages declared in .chezmoidata/pi.yaml (pi.packages) —
+# `pi install <source>` per entry. The set today: pi-mcp-extension (the MCP
+# client — pi ships no MCP support of its own, so without it the servers in
+# ~/.pi/agent/mcp.json, source dot_pi/agent/private_readonly_mcp.json.tmpl, are
+# inert, and without that config the extension has nothing to connect to; the
+# two halves are useless apart), the compound-engineering plugin (ce-* + lfg
+# skills, the native pi counterpart of the Claude/Codex/opencode installs),
+# pi-subagents, and pi-ask-user. Add/remove packages in the DATA FILE, not
+# here — the list renders into the PACKAGES array below.
 #
 # WHY a script, and not a chezmoi-managed target: pi records its installed
 # packages in ~/.pi/agent/settings.json, which pi LIVE-WRITES (`theme`,
@@ -23,15 +26,16 @@
 # ~/.pi/agent/npm/, so this repo's ~/.npmrc hardening applies there too —
 # `save-exact=true` means it lands exactly pinned in that tree.
 #
-# The package itself is UNPINNED here (`npm:pi-mcp-extension` tracks npm
-# latest), the same trade-off the dotagents remote skills make by tracking their
-# newest upstream release: unsettled by design — a bad upstream publish reaches
-# the host on the next install.
+# Packages are UNPINNED by design (npm: tracks npm latest, git: tracks the
+# repo's default branch) — the same unsettled trade-off the dotagents remote
+# skills make by tracking their newest upstream release: a bad upstream publish
+# reaches the host on the next install.
 #
-# onchange trigger: the PACKAGES array below IS the trigger. There is no
-# source-dir dependency to hash, so there is deliberately NO fingerprint block
-# — editing the array changes this script's rendered content and re-runs it
-# (the same shape as install-vscodium-extensions).
+# onchange trigger: the PACKAGES array below is RENDERED from .chezmoidata/
+# pi.yaml (pi.packages), so it IS the trigger. There is no other source-dir
+# dependency to hash, so there is deliberately NO fingerprint block — editing
+# the data changes this script's rendered content and re-runs it (the same
+# shape as install-vscodium-extensions).
 #
 # Soft-skip: this script must never fail an apply — a missing `pi` binary exits
 # 0 after a diagnostic. NOTE the standard onchange trade-off: chezmoi records
@@ -48,7 +52,11 @@
 
 set -euo pipefail
 
-PACKAGES=("npm:pi-mcp-extension")
+PACKAGES=(
+{{- range .pi.packages }}
+  {{ . | quote }}
+{{- end }}
+)
 
 skip() { exit 0; }
 
