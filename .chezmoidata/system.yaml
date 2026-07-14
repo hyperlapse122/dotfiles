@@ -14,18 +14,31 @@ system:
     # match wins, so keep specific entries before broad globs).
     #
     #   mode:  install(1) mode (string, e.g. "440")
-    #   gate:  named runtime probe the installer implements; the file is
-    #          skipped when the probe fails. Known gates: thinkpad (dmidecode
-    #          reports a ThinkPad), vm (systemd-detect-virt --vm),
-    #          ubuntu-studio (ID=ubuntu + ubuntustudio-default-settings
-    #          marker package), sddm-breeze (breeze SDDM theme installed),
-    #          gdm (GDM greeter installed — its compiled defaults db exists),
-    #          fprintd-pam (pam_fprintd.so installed + a Debian-style
-    #          /etc/pam.d/common-auth to @include).
-    #          The installer aborts on an unknown gate name — typos fail loud.
+    #   gate:  named host FACT from the registry (.chezmoidata/facts.yaml,
+    #          factRegistry) — the file is skipped when the fact is false. The
+    #          installer no longer probes the host itself: it reads the FACT_*
+    #          variables the registry renders into it, so one probe answers here,
+    #          in the package installers, and in every template alike. Gates used
+    #          below, with the fail-safe direction each one protects:
+    #            thinkpad     DMI product_version/product_family says ThinkPad.
+    #            vm           systemd-detect-virt --vm — VMs ONLY. Deliberately
+    #                         not the registry's `virt` fact (which is true for a
+    #                         container too): this gate grants password-less sudo.
+    #            ubuntuStudio the Studio ISO's seed package is installed (every
+    #                         Ubuntu flavor reports ID=ubuntu, so the package IS
+    #                         the flavor).
+    #            sddmBreeze   the breeze SDDM theme is installed.
+    #            gdm          the GDM greeter's compiled defaults db exists.
+    #            fprintdPam   pam_fprintd.so installed AND a Debian-style
+    #                         /etc/pam.d/common-auth to @include.
+    #          Every name here is validated against the registry at RENDER time
+    #          (.chezmoitemplates/facts-validate.tmpl), so an unknown gate aborts
+    #          the whole chezmoi command naming the valid facts — typos fail loud,
+    #          and a gate never silently evaluates false.
     #   check: named validator run on the SOURCE file on every host, even
     #          when the gate skips the install (so contributors catch broken
-    #          files on machines that never deploy them). Known: visudo.
+    #          files on machines that never deploy them). Known: visudo. Unlike
+    #          `gate:` this is NOT a fact — it validates the file, not the host.
     overrides:
       # thinkpad_acpi module config/load only makes sense on a ThinkPad.
       - path: etc/modprobe.d/thinkpad_acpi.conf
@@ -46,13 +59,16 @@ system:
       # preinstalled by the Studio ISO). A plain Ubuntu Desktop install must
       # not grant @audio realtime privileges it has no pro-audio stack for.
       # Same gate as studioPackages/@audio in run_onchange_before_ubuntu.
+      # FORCE_UBUNTU_STUDIO=1 is an INSTALLER-only override and deliberately
+      # does not reach this file: it would grant @audio realtime privileges on
+      # a plain Ubuntu Desktop.
       - path: etc/security/limits.d/95-ubuntustudio-audio.conf
-        gate: ubuntu-studio
+        gate: ubuntuStudio
       # De-brands the login greeter to upstream Breeze on both distros.
       # Forcing Current=breeze without the theme installed yields a broken
       # login screen, so skip when the breeze SDDM theme is absent.
       - path: etc/sddm.conf.d/90-breeze.conf
-        gate: sddm-breeze
+        gate: sddmBreeze
       # GNOME targets: force password-only auth at the GDM greeter so
       # pam_gnome_keyring always unlocks the login keyring (a fingerprint
       # login proves identity but hands PAM no secret, leaving the keyring
@@ -77,7 +93,7 @@ system:
       # (@include common-auth), which is what the gate checks: Fedora's
       # rpm-owned polkit-1 includes system-auth and must not be overwritten.
       - path: etc/pam.d/polkit-1
-        gate: fprintd-pam
+        gate: fprintdPam
 
     # Absolute /etc paths that the installer previously shipped but that no
     # longer exist in system/linux/etc/. Listed explicitly so every machine —
