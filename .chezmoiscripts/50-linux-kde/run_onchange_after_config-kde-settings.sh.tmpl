@@ -1,0 +1,198 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{- /*
+run_onchange_after_config-kde-settings.sh.tmpl — the generic kwriteconfig6 runner.
+
+The settings are DATA: .chezmoidata/kde.yaml is the single source of truth (the
+per-setting rationale lives in its header). Edit the yaml, not the SETTINGS array
+below — the rows render into this script, so a data edit changes this script's
+content and re-triggers it. No fingerprint block: the rendered array IS the
+trigger, like the VSCodium extension list.
+
+This replaces eight scripts (autotheme, dimscreen, dolphin, edges, emptysession,
+killrunner, krunner, spectacle) that were each nothing but a guard, a
+`command -v kwriteconfig6` skip, and a flat list of kwriteconfig6 calls.
+
+------------------------------------------------------------------------------
+RENDER-TIME VALIDATION (R14) — a bad row aborts the apply, it never misbehaves.
+
+Every row is checked here, before a single byte of bash is emitted, exactly the
+way the haptic waveform table and the system.yaml gate names are: an unknown
+type, an empty field, a value that does not parse for its declared type, a colon
+(the rows are colon-delimited), or a character outside the allowed set (the rows
+are interpolated into bash) each `fail` with a message naming the offending row.
+
+The value allowlist is the injection guard. The rows land inside double quotes in
+a bash array and every field is re-quoted when it becomes a kwriteconfig6
+argument, so a metacharacter would very likely be inert anyway — but "very likely
+inert" is not a security property, and a data file is not a place to reason about
+shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
+*/ -}}
+{{- $home := .chezmoi.homeDir -}}
+{{- $types := list "bool" "int" "string" -}}
+{{- /* Field allowlist for file/group-segment/key: bare identifiers, no colon (it
+   would corrupt the row's own delimiter) and no slash (it is the group-path
+   separator). */ -}}
+{{- $fieldRe := "^[A-Za-z0-9_.-]+$" -}}
+{{- /* Value allowlist: as above plus space and `/` (HomeUrl is a path) and `+`.
+   Deliberately excludes `@`, so an unsubstituted placeholder cannot slip through
+   as a literal value. */ -}}
+{{- $valueRe := "^[A-Za-z0-9 _./+-]+$" -}}
+{{- $rows := list -}}
+{{- range $i, $s := .kde.settings -}}
+{{-   $where := printf "row %d (%v)" $i $s -}}
+
+{{- /* --- file --- */ -}}
+{{-   if not (hasKey $s "file") -}}
+{{-     fail (printf "config-kde-settings: %s is missing the `file` field; a row is exactly (file, group, key, type, value)" $where) -}}
+{{-   end -}}
+{{-   $file := printf "%v" (index $s "file") -}}
+{{-   if eq $file "" -}}
+{{-     fail (printf "config-kde-settings: %s has an empty `file`; every row needs the kwriteconfig6 --file target (kdeglobals, kwinrc, …)" $where) -}}
+{{-   end -}}
+{{-   if not (regexMatch $fieldRe $file) -}}
+{{-     fail (printf "config-kde-settings: %s has file %q, which is not a bare name (allowed: A-Za-z0-9_.-). A colon would corrupt the colon-delimited row; a slash is the group-path separator" $where $file) -}}
+{{-   end -}}
+
+{{- /* --- group path: `/`-separated, one --group argument per segment --- */ -}}
+{{-   if not (hasKey $s "group") -}}
+{{-     fail (printf "config-kde-settings: %s is missing the `group` field; a row is exactly (file, group, key, type, value)" $where) -}}
+{{-   end -}}
+{{-   $group := printf "%v" (index $s "group") -}}
+{{-   if eq $group "" -}}
+{{-     fail (printf "config-kde-settings: %s has an empty `group`; every row needs at least one group (nest with `/`, e.g. AC/Display or Runners/krunner_kill)" $where) -}}
+{{-   end -}}
+{{-   range $seg := splitList "/" $group -}}
+{{-     if eq $seg "" -}}
+{{-       fail (printf "config-kde-settings: %s has an empty segment in group path %q; `/` separates group names, it does not pad them" $where $group) -}}
+{{-     end -}}
+{{-     if not (regexMatch $fieldRe $seg) -}}
+{{-       fail (printf "config-kde-settings: %s has group segment %q in path %q, which is not a bare name (allowed: A-Za-z0-9_.-)" $where $seg $group) -}}
+{{-     end -}}
+{{-   end -}}
+
+{{- /* --- key --- */ -}}
+{{-   if not (hasKey $s "key") -}}
+{{-     fail (printf "config-kde-settings: %s is missing the `key` field; a row is exactly (file, group, key, type, value)" $where) -}}
+{{-   end -}}
+{{-   $key := printf "%v" (index $s "key") -}}
+{{-   if eq $key "" -}}
+{{-     fail (printf "config-kde-settings: %s has an empty `key`" $where) -}}
+{{-   end -}}
+{{-   if not (regexMatch $fieldRe $key) -}}
+{{-     fail (printf "config-kde-settings: %s has key %q, which is not a bare name (allowed: A-Za-z0-9_.-)" $where $key) -}}
+{{-   end -}}
+
+{{- /* --- type --- */ -}}
+{{-   if not (hasKey $s "type") -}}
+{{-     fail (printf "config-kde-settings: %s is missing the `type` field; a row is exactly (file, group, key, type, value)" $where) -}}
+{{-   end -}}
+{{-   $type := printf "%v" (index $s "type") -}}
+{{-   if not (has $type $types) -}}
+{{-     fail (printf "config-kde-settings: %s declares type %q; valid types are bool, int, string. (`string` emits NO --type flag — KConfig's writeEntry fallback, which is what a bare `kwriteconfig6 --key K V` does.)" $where $type) -}}
+{{-   end -}}
+
+{{- /* --- value: substitute the render-time placeholders, then validate --- */ -}}
+{{-   if not (hasKey $s "value") -}}
+{{-     fail (printf "config-kde-settings: %s is missing the `value` field; a row is exactly (file, group, key, type, value)" $where) -}}
+{{-   end -}}
+{{-   $value := printf "%v" (index $s "value") -}}
+{{-   if eq $value "" -}}
+{{-     fail (printf "config-kde-settings: %s has an empty `value`" $where) -}}
+{{-   end -}}
+{{-   $value = replace "@homeDir@" $home $value -}}
+{{-   if contains "@" $value -}}
+{{-     fail (printf "config-kde-settings: %s has value %q with an unresolved @…@ placeholder; the only one this runner substitutes is @homeDir@ (-> .chezmoi.homeDir)" $where $value) -}}
+{{-   end -}}
+{{-   if contains ":" $value -}}
+{{-     fail (printf "config-kde-settings: %s has value %q containing a colon; the rendered rows are colon-delimited (<file>:<group>:<key>:<type>:<value>) and a colon in the value would corrupt the row" $where $value) -}}
+{{-   end -}}
+{{-   if not (regexMatch $valueRe $value) -}}
+{{-     fail (printf "config-kde-settings: %s has value %q containing a shell metacharacter or a character outside the allowed set (A-Za-z0-9, space, and _./+-); the rows are interpolated into bash" $where $value) -}}
+{{-   end -}}
+{{-   if eq $type "bool" -}}
+{{-     if not (regexMatch "^(true|false)$" $value) -}}
+{{-       fail (printf "config-kde-settings: %s declares type=bool but its value %q is not `true` or `false`" $where $value) -}}
+{{-     end -}}
+{{-   else if eq $type "int" -}}
+{{-     if not (regexMatch "^-?[0-9]+$" $value) -}}
+{{-       fail (printf "config-kde-settings: %s declares type=int but its value %q does not parse as an integer" $where $value) -}}
+{{-     end -}}
+{{-   end -}}
+
+{{-   $rows = append $rows (printf "  \"%s:%s:%s:%s:%s\"" $file $group $key $type $value) -}}
+{{- end -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl
+#
+# The generic KDE settings runner: applies every row of .chezmoidata/kde.yaml
+# with kwriteconfig6. EDIT THE YAML, not the SETTINGS array below — the rows
+# render into this script, so a data edit re-triggers this run_onchange_ script
+# by itself (the rendered array IS the trigger; there is no fingerprint block).
+#
+# The per-setting rationale — why each of these values, and what re-reads it —
+# lives in the .chezmoidata/kde.yaml header, carried over from the eight scripts
+# this one replaced (autotheme, dimscreen, dolphin, edges, emptysession,
+# killrunner, krunner, spectacle).
+#
+# Each row is "<file>:<group>[/<subgroup>…]:<key>:<type>:<value>":
+#   - the group PATH is split on `/` into repeated --group arguments, because
+#     powerdevilrc nests (AC/Display) and so does krunnerrc (Runners/krunner_kill);
+#   - `--` is ALWAYS emitted before the value, so a negative int (-1) is not
+#     parsed as a flag;
+#   - type `string` emits no --type flag at all, which is what a plain
+#     `kwriteconfig6 --key K V` does.
+# Every row was validated at RENDER time (unknown type, empty field, unparseable
+# value, colon, shell metacharacter -> the apply aborts naming the row), so this
+# script can trust its own array.
+#
+# A setting that needs a precondition does NOT belong in the manifest — it stays
+# its own script. config-kde-virtualkeyboard is the standing example.
+#
+# Applies per setting: see the yaml header (re-login, next app launch, or a KWin
+# restart).
+
+set -euo pipefail
+
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-settings.sh") -}}
+
+# Rendered from .chezmoidata/kde.yaml — DO NOT EDIT HERE.
+SETTINGS=(
+{{ join "\n" $rows }}
+)
+
+configure_kde_settings() {
+  printf 'config-kde-settings.sh: applying %d KDE settings from .chezmoidata/kde.yaml...\n' \
+    "${#SETTINGS[@]}"
+
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+    printf '  kwriteconfig6 not found, skipping.\n'
+    return 0
+  fi
+
+  local spec file group_path key type value
+  local -a groups args
+  for spec in "${SETTINGS[@]}"; do
+    IFS=':' read -r file group_path key type value <<<"$spec"
+    IFS='/' read -r -a groups <<<"$group_path"
+
+    args=(--file "$file")
+    local group
+    for group in "${groups[@]}"; do
+      args+=(--group "$group")
+    done
+    args+=(--key "$key")
+    # `string` means no --type: KConfig's writeEntry fallback, which is exactly
+    # what the collapsed scripts did when they passed the value bare.
+    if [[ "$type" != string ]]; then
+      args+=(--type "$type")
+    fi
+    # `--` terminates option parsing so a negative int is a value, not a flag.
+    args+=(-- "$value")
+
+    kwriteconfig6 "${args[@]}"
+    printf '  set %s [%s] %s = %s\n' "$file" "${group_path//\//][}" "$key" "$value"
+  done
+}
+
+configure_kde_settings
+{{ end -}}

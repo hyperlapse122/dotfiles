@@ -53,7 +53,7 @@ STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-mouse-accel-profile"
 # edit changes it, so the new value is re-asserted exactly once.
 SIG="accel-profile=${ACCEL_PROFILE}"
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-mouse" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-mouse") -}}
 
 # Already applied this exact profile once -> respect the user's current one.
 if [[ -f "$STAMP" ]] && [[ "$(cat "$STAMP" 2>/dev/null || true)" == "$SIG" ]]; then

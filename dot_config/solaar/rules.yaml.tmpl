@@ -28,14 +28,17 @@
 #
 # === Per-desktop actions, selected at chezmoi apply time ===
 #
-# The gesture ACTIONS are desktop-specific D-Bus calls, so this template
-# renders one of two variants via lookPath: a KDE host (plasmashell on PATH —
-# Fedora KDE Spin, Ubuntu Studio) gets KWin global-shortcut actions; a
-# GNOME-only host (gnome-shell without plasmashell — Fedora Workstation,
-# Ubuntu Desktop) gets GNOME Shell D-Bus actions. When NEITHER desktop is on
-# PATH (headless host, container, CI render) the KDE variant is rendered —
-# inert without a desktop, and it keeps CI artifacts deterministic. The haptic
-# confirm path is desktop-agnostic and identical in both variants.
+# The gesture ACTIONS are desktop-specific D-Bus calls, and file content cannot
+# branch at runtime — so the desktop is resolved at RENDER time and this template
+# emits one of two variants. It reads the `desktop` fact (.chezmoidata/facts.yaml,
+# resolved in .chezmoitemplates/facts.tmpl) rather than probing PATH itself: a KDE
+# host (plasmashell — Fedora KDE Spin, Ubuntu Studio) gets KWin global-shortcut
+# actions; a GNOME host (gnome-shell WITHOUT plasmashell — Fedora Workstation,
+# Ubuntu Desktop; KDE wins when both are present) gets GNOME Shell D-Bus actions.
+# When NEITHER desktop is on PATH (headless host, container, CI render) the fact is
+# `none` and the KDE variant renders — inert without a desktop, and it keeps CI
+# artifacts deterministic. The haptic confirm path is desktop-agnostic and
+# identical in both variants.
 #
 # KDE map. Verified host: Plasma 6.6.5 Wayland; qdbus-qt6 at
 # /usr/bin/qdbus-qt6; KWin shortcuts "Grid View", "Show Desktop",
@@ -112,7 +115,8 @@
 # Do NOT divert via `solaar config ... divert-keys` on 1.1.19 (it flips the
 # runtime state but crashes during persistence); config-solaar.sh edits
 # config.yaml directly and restarts Solaar only when something changed.
-{{- $gnomeRules := and (lookPath "gnome-shell") (not (lookPath "plasmashell")) }}
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
+{{- $gnomeRules := eq $f.desktop "gnome" }}
 ---
 - MouseGesture: Mouse Up
 {{ if $gnomeRules -}}

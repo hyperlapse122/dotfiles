@@ -2,25 +2,36 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/kde/run_onchange_after_config-kde-kickoff.sh.tmpl
 #
-# Shows favorites and other applications as a list (not grid) on every
-# panel-level org.kde.plasma.kickoff applet:
-#   favoritesDisplay    = 1
-#   applicationsDisplay = 1
-# (1 = "In a list"; 0 = grid.)
+# Sets the favorites / applications display mode on every panel-level
+# org.kde.plasma.kickoff applet:
+#   favoritesDisplay    = kde.kickoff.favoritesDisplay
+#   applicationsDisplay = kde.kickoff.applicationsDisplay
+# (1 = "In a list"; 0 = grid. Shipped as 1/1 — list.)
+#
+# Both values are DATA, not script: .chezmoidata/kde.yaml `kde.kickoff` is the
+# single source of truth (see its header) — edit the yaml, not this file. The
+# applet-discovery loop and the plugin id it matches on are structure and stay.
 #
 # CAVEAT: ~/.config/plasma-org.kde.plasma.desktop-appletsrc is owned by a
 # running plasmashell. Edits are safest before plasmashell first starts or
 # after restarting it; otherwise the live process may overwrite the change.
 # The write is idempotent so re-running is safe.
 #
+# onchange, no fingerprint block needed: the rendered values below are part of
+# this script's content, so a kde.yaml edit re-triggers it (the same reason
+# config-gnome-mouse carries none).
+#
 # Applies after restarting plasmashell or logging out/in.
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-kickoff.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-kickoff.sh") -}}
+
+FAVORITES_DISPLAY={{ .kde.kickoff.favoritesDisplay }}
+APPLICATIONS_DISPLAY={{ .kde.kickoff.applicationsDisplay }}
 
 configure_kickoff() {
-  printf 'config-kde-kickoff.sh: showing favorites and applications as list...\n'
+  printf 'config-kde-kickoff.sh: setting kickoff display modes...\n'
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
     printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
@@ -45,14 +56,14 @@ configure_kickoff() {
       --group Containments --group "$containment" \
       --group Applets --group "$applet" \
       --group Configuration --group General \
-      --key favoritesDisplay 1
+      --key favoritesDisplay "$FAVORITES_DISPLAY"
     kwriteconfig6 --file "$file" \
       --group Containments --group "$containment" \
       --group Applets --group "$applet" \
       --group Configuration --group General \
-      --key applicationsDisplay 1
-    printf '  set [Containments/%s/Applets/%s] (%s) favoritesDisplay=1 applicationsDisplay=1\n' \
-      "$containment" "$applet" "$plugin"
+      --key applicationsDisplay "$APPLICATIONS_DISPLAY"
+    printf '  set [Containments/%s/Applets/%s] (%s) favoritesDisplay=%s applicationsDisplay=%s\n' \
+      "$containment" "$applet" "$plugin" "$FAVORITES_DISPLAY" "$APPLICATIONS_DISPLAY"
     count=$((count + 1))
   done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$file" \
             | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')

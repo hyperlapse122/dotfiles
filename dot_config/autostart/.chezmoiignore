@@ -9,9 +9,12 @@ discord.desktop
 {{ end }}
 
 # kleopatra is the KDE/GnuPG certificate manager; only autostart it on the KDE
-# targets. Detection mirrors the fcitx5/solaar templates: GNOME-only means
-# gnome-shell on PATH without plasmashell; with neither desktop (headless,
-# container, CI) the KDE variant renders and it keeps deploying.
-{{ if and (eq .chezmoi.os "linux") (lookPath "gnome-shell") (not (lookPath "plasmashell")) -}}
+# targets. The desktop is the `desktop` fact (.chezmoidata/facts.yaml, resolved in
+# .chezmoitemplates/facts.tmpl): `gnome` means gnome-shell on PATH WITHOUT
+# plasmashell (KDE wins when both are present), and with neither desktop
+# (headless, container, CI) the fact is `none` — the KDE variant — so it keeps
+# deploying.
+{{ $f := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if and (eq .chezmoi.os "linux") (eq $f.desktop "gnome") -}}
 kleopatra.desktop
 {{ end }}

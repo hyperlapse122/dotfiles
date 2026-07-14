@@ -129,6 +129,180 @@ ensure_config_secrets_key() {
   return 0
 }
 
+# --- Host-fact cache — layer 1 of the named-fact registry -------------------
+#
+# The registry's SHELL layer (names declared in .chezmoidata/facts.yaml; merged
+# entry point .chezmoitemplates/facts.tmpl). These six facts live here — and not
+# in a template — because the template functions cannot express them:
+#
+#   * `output` propagates a non-zero exit as a template error that ABORTS the
+#     render. `systemd-detect-virt --vm` exits 1 on a bare-metal host, so a
+#     template-side probe would hard-fail every chezmoi command on this machine.
+#   * `glob` does not traverse symlinks, and /sys/bus/pci/devices/* is nothing
+#     BUT symlinks — a template-side PCI walk misses a GPU behind a PCIe bridge
+#     and reports nvidia=false on a host that has one (this host).
+#
+# chezmoi runs this file as its `read-source-state.pre` hook, i.e. ONCE per
+# chezmoi command and BEFORE the source state is read, so the cache written here
+# is fresh for the render that immediately follows. facts.tmpl reads it back with
+# a stat-guarded absolute-path `include` (which works even under the empty
+# --config of the AGENTS.md stub-`op` recipe and the CI render-internals job,
+# where this hook does not run at all — the file simply persists from the last
+# real command) and merges it with the in-process probes (DMI reads, `stat`,
+# `lookPath`) into the one fact map every consumer imports.
+#
+# Three rules govern this block:
+#
+#   1. Every probe ALWAYS exits 0 and prints a bare `true` / `false`. A host
+#      that lacks the probe's mechanism (no systemd-detect-virt, no /sys, no
+#      dpkg — macOS, a minimal container) prints `false`, which is the
+#      conservative direction for all six: skip NVIDIA, skip Intel, skip the
+#      bare-metal package set, skip ThinkPad ACPI, skip the Studio realtime
+#      limits, treat the host as a desktop rather than a server.
+#   2. It NEVER fails the hook. A read-only or full $HOME must not take down
+#      `chezmoi diff`; a warning plus a missing cache degrades to exactly the
+#      all-false that facts.tmpl already renders when the file is absent.
+#   3. It runs on EVERY host — containers included, and BEFORE the mise/op fast
+#      path below, for the same reason ensure_config_secrets_key does: a fully
+#      provisioned host short-circuits there, and it still has to refresh its
+#      facts on every command.
+#
+# `set -e` safety: each fact_* helper is called from a command substitution and
+# always returns 0 (the printf is the last command), so nothing here can abort
+# the hook.
+
+# Print `true` if the command succeeds, `false` otherwise. Wraps every probe so
+# a failing/absent mechanism is a value, never an error.
+fact_bool() {
+  if "$@" >/dev/null 2>&1; then printf 'true'; else printf 'false'; fi
+}
+
+# NVIDIA GPU: PCI vendor id 0x10de anywhere on the bus. Verbatim the probe both
+# package installers already run — sysfs, not lspci, because pciutils is not
+# guaranteed installed this early and the vendor files always exist. A missing
+# /sys (macOS) leaves the glob unexpanded; grep then fails on a nonexistent path
+# and the fact is false.
+fact_nvidia() {
+  grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null
+}
+
+# Intel GPU: vendor 0x8086 AND PCI class 0x03xxxx (display controller). The
+# class check is load-bearing — 0x8086 is Intel's vendor id for every Intel
+# part, so vendor alone trips on an Intel NIC or chipset. Mirrors the Ubuntu
+# installer's loop (install_intel_support / HAS_INTEL_GPU).
+#
+# Narrow with ONE grep over the whole glob (as fact_nvidia does), then read only
+# the matched devices' class files with the `read` builtin. The obvious shape —
+# looping every PCI device and `$(cat)`-ing its vendor — forks a subprocess per
+# device: measured ~85ms against ~4ms here, and this runs on EVERY chezmoi
+# command, `chezmoi diff` included. Keep it fork-free.
+fact_intel_gpu() {
+  local vendor class value
+  while IFS= read -r vendor; do
+    class="${vendor%/vendor}/class"
+    [[ -r "$class" ]] || continue
+    read -r value < "$class" || continue
+    [[ "$value" == 0x03* ]] && return 0
+  done < <(grep -lx '0x8086' /sys/bus/pci/devices/*/vendor 2>/dev/null)
+  return 1
+}
+
+# Headless / server install. Mirrors .chezmoitemplates/headless-guard.sh.tmpl
+# EXACTLY (keep the two in lockstep): a host is headless when its systemd default
+# target is not graphical.target AND no display-manager alias symlink exists.
+# A host without systemd falls through as NOT headless — the same direction the
+# guard takes when `systemctl` is missing (it runs the script).
+fact_headless() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  local default_target
+  default_target="$(systemctl get-default 2>/dev/null || true)"
+  [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]
+}
+
+# Ubuntu Studio. Every Ubuntu flavor reports ID=ubuntu, so the flavor is its
+# seed package: ubuntustudio-default-settings, preinstalled by the Studio ISO.
+# Probed as a `stat` on the dpkg .md5sums marker rather than `dpkg -s` (which the
+# installers use): `dpkg -s` exits 0 for a REMOVED-but-not-purged package (state
+# `config-files`), which would grant @audio realtime limits on a host that no
+# longer has the pro-audio stack. `.md5sums` is deleted on remove; `.list` is
+# not, so it is the wrong marker too. The package is Architecture: all, so its
+# dpkg info files carry no :arch qualifier.
+fact_ubuntu_studio() {
+  [[ -e /var/lib/dpkg/info/ubuntustudio-default-settings.md5sums ]]
+}
+
+# vm and virt are TWO facts on purpose — the repo already treats them as two
+# conditions and collapsing them would flip a consumer:
+#   vm   = `systemd-detect-virt --vm`  (VMs only) — system.yaml's `vm` gate, the
+#          one fact gating a PRIVILEGE GRANT (etc/sudoers.d/*, %wheel NOPASSWD).
+#   virt = bare `systemd-detect-virt`  (containers too) — both installers'
+#          IS_VIRT, which gates bareMetalPackages.
+# One fact would either install bare-metal packages inside a distrobox or drop a
+# password-less sudo file where it does not land today.
+# A cache we could not refresh must not be read. Every early-return below used to
+# leave the PREVIOUS cache in place while warning that facts "will render false"
+# — so a host whose cache went unwritable silently kept resolving LAST BOOT's
+# hardware identity, and the fail-safe defaults in facts.tmpl never engaged. Two
+# reviewers found the same hole independently. Delete it instead; if even that
+# fails, say so honestly rather than promising a fallback that will not happen.
+invalidate_facts_cache() {
+  local cache_file="$1"
+  [[ -e "$cache_file" ]] || {
+    printf 'install-prerequisites.sh: cannot write %s; host facts take their fail-safe defaults this run.\n' "$cache_file" >&2
+    return 0
+  }
+  if rm -f "$cache_file" 2>/dev/null; then
+    printf 'install-prerequisites.sh: cannot refresh %s; removed it, so host facts take their fail-safe defaults this run.\n' "$cache_file" >&2
+  else
+    printf 'install-prerequisites.sh: cannot refresh OR remove %s; host facts may be STALE this run.\n' "$cache_file" >&2
+  fi
+}
+
+write_facts_cache() {
+  local cache_dir cache_file tmp_file
+  cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi"
+  cache_file="$cache_dir/facts.yaml"
+
+  mkdir -p "$cache_dir" 2>/dev/null || {
+    invalidate_facts_cache "$cache_file"
+    return 0
+  }
+
+  tmp_file="$(mktemp "$cache_file.XXXXXX" 2>/dev/null)" || {
+    invalidate_facts_cache "$cache_file"
+    return 0
+  }
+
+  {
+    printf '# Generated by .install-prerequisites.sh (chezmoi read-source-state.pre hook).\n'
+    printf '# Rewritten once per chezmoi command; read by .chezmoitemplates/facts.tmpl.\n'
+    printf '# Do NOT edit — every value here is a probe result, not a setting.\n'
+    printf 'headless: %s\n'     "$(fact_bool fact_headless)"
+    printf 'intelGpu: %s\n'     "$(fact_bool fact_intel_gpu)"
+    printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
+    printf 'ubuntuStudio: %s\n' "$(fact_bool fact_ubuntu_studio)"
+    printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
+    printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
+  } >"$tmp_file" || {
+    # THE WRITE NEEDS THE SAME GUARD AS ITS NEIGHBOURS. This file runs under
+    # `set -euo pipefail` AS CHEZMOI'S read-source-state.pre HOOK, so an
+    # unguarded write error — a full disk, an exceeded quota, EIO — trips
+    # errexit, the hook exits non-zero, and EVERY chezmoi command aborts:
+    # diff, apply, execute-template, the lot. A cache the user cannot write
+    # must degrade to no cache, never to a bricked dotfiles tool.
+    rm -f "$tmp_file" 2>/dev/null || true
+    invalidate_facts_cache "$cache_file"
+    return 0
+  }
+
+  # Atomic swap: a template mid-render must never see a half-written cache.
+  mv -f "$tmp_file" "$cache_file" 2>/dev/null || {
+    rm -f "$tmp_file"
+    invalidate_facts_cache "$cache_file"
+  }
+  return 0
+}
+
 # chezmoi calls the GitHub API while reading the source state (it fetches the
 # .chezmoiexternals repos, e.g. prezto) and again during provisioning (release
 # assets such as fonts and mise-managed tools). It authenticates with the first
@@ -166,6 +340,12 @@ fi
 if ! is_container; then
   ensure_config_secrets_key
 fi
+
+# Refresh the host-fact cache the templates read (see the block above). Must
+# precede the fast path — a provisioned host exits there, and every chezmoi
+# command still needs current facts — and must run in containers too, where the
+# probes simply resolve to container-appropriate values.
+write_facts_cache
 
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.

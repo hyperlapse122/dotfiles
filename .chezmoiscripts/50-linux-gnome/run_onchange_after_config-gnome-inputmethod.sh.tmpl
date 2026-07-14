@@ -7,7 +7,12 @@
 # input method here — so the only per-user wiring needed is registering the
 # Hangul engine as an input source:
 #
-#   org.gnome.desktop.input-sources sources += ('ibus', 'hangul')
+#   org.gnome.desktop.input-sources sources += ('<type>', '<id>')
+#
+# The pair is DATA, not script: .chezmoidata/gnome.yaml `gnome.inputSource`
+# (`type: ibus`, `id: hangul`) is the single source of truth (see its header) —
+# edit the yaml, not this file. The MERGE (below) is the structure and stays:
+# it is what makes this additive instead of a clobbering `gsettings set`.
 #
 # Everything else stays on GNOME defaults by design (no IM environment
 # variables, no im-chooser/imsettings switch): GNOME starts ibus itself and
@@ -22,9 +27,13 @@
 # by a per-user stamp) and never again — if the user later removes or reorders
 # the Hangul source, we do NOT keep re-adding it on every apply.
 #
-# onchange, no external dependency: this script wires a fixed input source and
-# has no dependency file to fingerprint, so its onchange trigger is its own
-# rendered content — chezmoi re-runs it only when this script changes. Live-
+# onchange, no fingerprint block needed: the input source RENDERS INTO
+# SOURCE_TYPE/SOURCE_ID below, so a gnome.yaml edit changes this script's own
+# content and re-triggers it (the same reason config-gnome-mouse carries no
+# fingerprint — a data hash would only add re-runs on comment-only yaml edits).
+# Note the stamp still wins on an already-provisioned host: swapping the engine
+# in gnome.yaml re-runs this script, but the stamp makes it a no-op, so an
+# existing host keeps its sources. Live-
 # session only: gsettings writes go through dconf-service on the session D-Bus,
 # so on a headless/TTY/first-boot apply this exits 0 WITHOUT stamping. NOTE the
 # behavior change from the former run_after: onchange records that skipped run as
@@ -34,9 +43,12 @@
 
 set -euo pipefail
 
+SOURCE_TYPE="{{ .gnome.inputSource.type }}"
+SOURCE_ID="{{ .gnome.inputSource.id }}"
+
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-inputsources-hangul"
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-inputmethod" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-inputmethod") -}}
 
 # Already ensured once -> respect the user's current source list, do nothing.
 if [[ -f "$STAMP" ]]; then
@@ -56,11 +68,14 @@ command -v gsettings >/dev/null 2>&1 \
 # ast.literal_eval instead of hand-rolled string munging.
 [[ -x /usr/bin/python3 ]] \
   || { echo "config-gnome-inputmethod: /usr/bin/python3 absent; skip"; exit 0; }
-# The engine definition ships in ibus-hangul (gnomePackages); registering a
-# source for an engine that does not exist would leave a dead entry in the
-# switcher, so wait for the package instead.
-if [[ ! -f /usr/share/ibus/component/hangul.xml ]]; then
-  echo "config-gnome-inputmethod: ibus-hangul not installed; skip (retries next apply)"
+# The engine definition ships in ibus-<id> (ibus-hangul, from gnomePackages);
+# registering a source for an engine that does not exist would leave a dead entry
+# in the switcher, so wait for the package instead. An ibus engine declares itself
+# in a component file named after it — /usr/share/ibus/component/<id>.xml — so the
+# probe is derived from $SOURCE_ID rather than repeating `hangul` as a literal.
+COMPONENT="/usr/share/ibus/component/${SOURCE_ID}.xml"
+if [[ ! -f "$COMPONENT" ]]; then
+  echo "config-gnome-inputmethod: ${SOURCE_TYPE}-${SOURCE_ID} not installed ($COMPONENT absent); skip (retries next apply)"
   exit 0
 fi
 
@@ -69,15 +84,17 @@ if ! current="$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/nul
   exit 0
 fi
 
-# Merge ('ibus', 'hangul') into the existing list. Output protocol: PRESENT
-# (already there), PARSE_ERROR (unexpected GVariant text — leave untouched),
-# or the new list in GVariant text form (Python's repr of a list of str
-# 2-tuples is valid GVariant a(ss) text).
-merged="$(/usr/bin/python3 - "$current" <<'PYEOF'
+# Merge ($SOURCE_TYPE, $SOURCE_ID) into the existing list. The pair arrives as
+# argv, not baked into the heredoc, so the data value has exactly one home.
+# Output protocol: PRESENT (already there), PARSE_ERROR (unexpected GVariant
+# text — leave untouched), or the new list in GVariant text form (Python's repr
+# of a list of str 2-tuples is valid GVariant a(ss) text).
+merged="$(/usr/bin/python3 - "$current" "$SOURCE_TYPE" "$SOURCE_ID" <<'PYEOF'
 import ast
 import sys
 
 raw = sys.argv[1].strip()
+source = (sys.argv[2], sys.argv[3])
 # An empty typed array prints as "@a(ss) []"; strip the type annotation so
 # ast.literal_eval handles both the empty and populated forms.
 if raw.startswith("@a(ss)"):
@@ -88,10 +105,10 @@ except (SyntaxError, ValueError):
     print("PARSE_ERROR")
     sys.exit(0)
 
-if ("ibus", "hangul") in sources:
+if source in sources:
     print("PRESENT")
 else:
-    sources.append(("ibus", "hangul"))
+    sources.append(source)
     print(repr(sources))
 PYEOF
 )"
@@ -102,11 +119,11 @@ case "$merged" in
     exit 0
     ;;
   PRESENT)
-    echo "config-gnome-inputmethod: ('ibus', 'hangul') already in input sources"
+    echo "config-gnome-inputmethod: ('$SOURCE_TYPE', '$SOURCE_ID') already in input sources"
     ;;
   *)
     gsettings set org.gnome.desktop.input-sources sources "$merged"
-    echo "config-gnome-inputmethod: added ('ibus', 'hangul') -> ${merged}"
+    echo "config-gnome-inputmethod: added ('$SOURCE_TYPE', '$SOURCE_ID') -> ${merged}"
     echo "config-gnome-inputmethod: switch input sources with Super+Space"
     ;;
 esac

@@ -1,3 +1,13 @@
+{{- /* Validate this distro's `gates:` map against the fact registry. Emits
+   nothing, and deliberately sits OUTSIDE the OS gate below: a typo in
+   packages.yaml's ubuntu gates must abort the apply on EVERY host, not only on
+   the one distro whose installer body renders. `values` hands the partial the
+   gate expressions; the keys are the package-group names, which it has no
+   opinion about. */ -}}
+{{- includeTemplate "facts-validate.tmpl" (dict
+      "ctx"    .
+      "source" ".chezmoidata/packages.yaml (packages.linux.ubuntu.gates)"
+      "gates"  (values .packages.linux.ubuntu.gates)) -}}
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}
 {{- $mokPassword := "" -}}
 {{- if and (hasKey . "mokPasswordCipher") (ne .mokPasswordCipher "") -}}
@@ -14,75 +24,63 @@ set -euo pipefail
 # Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), system
 # services, and user groups. Serves both Ubuntu flavors — Ubuntu Desktop 26.04
 # (GNOME) and Ubuntu Studio 26.04 (KDE Plasma) — with the per-desktop package
-# sets (kdePackages/gnomePackages) gated at runtime on which shell binary the
-# ISO shipped, and the Studio pro-audio stack (studioPackages, @audio group)
-# gated on the ubuntustudio-default-settings marker package. Every install path
-# is guarded so chezmoi can safely re-run this script when
-# .chezmoidata/packages.yaml changes.
+# sets (kdePackages/gnomePackages) and the Studio pro-audio stack
+# (studioPackages, @audio group) gated on named host facts; packages.yaml's
+# `gates:` map says which fact gates which group. Every install path is guarded
+# so chezmoi can safely re-run this script when .chezmoidata/packages.yaml
+# changes.
+#
+# The gates are resolved at RENDER time, not at runtime: the fact values are
+# baked into this script by facts-sh.tmpl below. That is the point — one probe
+# per chezmoi command, one answer everywhere — and it means a host that becomes
+# a different host (a GPU added, a desktop swapped) changes this script's
+# rendered content, which is exactly what makes run_onchange re-run it.
 
-# Host probes (same as Fedora). Scan sysfs for NVIDIA's PCI vendor id so this
-# works before pciutils/lspci are available. FORCE_NVIDIA=1 overrides the probe
-# to force the NVIDIA driver/CUDA/container-toolkit path on: for a GPU-passthrough
-# VM whose card the sysfs scan misses, and to validate the NVIDIA apt repos and
-# package set in a GPU-less test container.
-if [[ "${FORCE_NVIDIA:-0}" == "1" ]] || grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
-  HAS_NVIDIA=1
-else
-  HAS_NVIDIA=0
-fi
-if systemd-detect-virt --quiet; then
-  IS_VIRT=1
-else
-  IS_VIRT=0
-fi
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+{{- $gates := .packages.linux.ubuntu.gates }}
 
-# Intel GPU probe for the kobuk-team intel-graphics stack. 0x8086 is Intel's
-# vendor id for every Intel device (NIC, chipset, ...), so also require a
-# display-controller PCI class (0x03xxxx) to avoid tripping the gate on a
-# non-GPU Intel part. FORCE_INTEL=1 overrides the probe: for a GPU-passthrough
-# VM whose card the sysfs scan misses, and to validate the kobuk repo + Intel
-# package set in a GPU-less test container.
-if [[ "${FORCE_INTEL:-0}" == "1" ]]; then
-  HAS_INTEL_GPU=1
-else
-  HAS_INTEL_GPU=0
-  for _intel_vendor in /sys/bus/pci/devices/*/vendor; do
-    [[ -r "${_intel_vendor}" ]] || continue
-    [[ "$(cat "${_intel_vendor}")" == "0x8086" ]] || continue
-    _intel_class="${_intel_vendor%/vendor}/class"
-    [[ -r "${_intel_class}" && "$(cat "${_intel_class}")" == 0x03* ]] || continue
-    HAS_INTEL_GPU=1
-    break
-  done
-fi
+# Host capabilities — SEEDED FROM packages.yaml's `gates:` map via the shared
+# fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), not hand-wired
+# to a FACT_* variable here. This script used to carry its own probes (a sysfs
+# 0x10de scan for the NVIDIA GPU, a vendor+class sysfs walk for the Intel GPU,
+# systemd-detect-virt, a `dpkg -s` Studio marker check, and a pair of
+# `command -v` desktop checks), then — once those became registry facts — a
+# stage that still hand-picked which FACT_* answered each flag, bypassing
+# whatever the map itself said. Now the map drives the flag directly: change
+# `gates.kdePackages` from `desktop.kde` to something else and this flag
+# follows it, no script edit required. See the file header in
+# .chezmoidata/packages.yaml. HAS_INTEL_GPU is seeded from intelPackages' gate
+# (intelHweKernel declares the identical `intelGpu` gate in the map, purely so
+# the map stays a complete index of every conditional key — it drives no flag
+# of its own).
+#
+# The FORCE_* env vars are NOT facts and layer on top of the map-seeded flag
+# HERE, in the installer, never in the shared partial — see the closing note
+# in facts.yaml. Each forces its stack on for a GPU-passthrough VM whose card
+# the sysfs scan misses, and to exercise the repos + package sets in a
+# GPU-less test container.
+HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
+[[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
+HAS_INTEL_GPU=0; fact_gate {{ index $gates "intelPackages" | quote }} && HAS_INTEL_GPU=1
+[[ "${FORCE_INTEL:-0}" == 1 ]] && HAS_INTEL_GPU=1
+IS_UBUNTU_STUDIO=0; fact_gate {{ index $gates "studioPackages" | quote }} && IS_UBUNTU_STUDIO=1
+[[ "${FORCE_UBUNTU_STUDIO:-0}" == 1 ]] && IS_UBUNTU_STUDIO=1
 
-# Desktop-environment probes: Ubuntu Desktop ships gnome-shell, Ubuntu Studio
-# ships plasmashell — both from the ISO, so the probe is stable from first boot
-# onward (neither binary comes from this package list). Gates the per-desktop
-# package sets below; a host with neither (server, container) installs neither set.
-if command -v plasmashell >/dev/null 2>&1; then
-  HAS_KDE=1
-else
-  HAS_KDE=0
-fi
-if command -v gnome-shell >/dev/null 2>&1; then
-  HAS_GNOME=1
-else
-  HAS_GNOME=0
-fi
+# HAS_BARE_METAL is seeded from bareMetalPackages' `!virt` gate — the BARE
+# systemd-detect-virt, true for a container as well as a VM. That is
+# deliberately not the manifest's `vm` fact (systemd-detect-virt --vm), which
+# gates password-less sudo and must stay false in a container. No FORCE_
+# counterpart.
+HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
 
-# Ubuntu Studio marker. Every Ubuntu flavor reports ID=ubuntu in /etc/os-release,
-# so the flavor is detected by its seed package: ubuntustudio-default-settings is
-# preinstalled by the Studio ISO and absent on Ubuntu Desktop. Gates the Studio
-# pro-audio stack (studioPackages) and the @audio group so a plain Desktop
-# install never grows realtime-audio provisioning. FORCE_UBUNTU_STUDIO=1
-# overrides the probe (mirrors FORCE_NVIDIA/FORCE_INTEL) to validate the Studio
-# package set in a test container.
-if [[ "${FORCE_UBUNTU_STUDIO:-0}" == "1" ]] || dpkg -s ubuntustudio-default-settings >/dev/null 2>&1; then
-  IS_UBUNTU_STUDIO=1
-else
-  IS_UBUNTU_STUDIO=0
-fi
+# The desktop is ONE fact with ONE value (kde | gnome | none), so the two flags
+# are mutually exclusive by construction — where the old pair of independent
+# `command -v` probes would have set both on a host that happened to carry both
+# shells. KDE wins that tie (the precedence facts.yaml declares); `none` (a
+# server, a container) installs neither set, as before.
+HAS_KDE=0; fact_gate {{ index $gates "kdePackages" | quote }} && HAS_KDE=1
+HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "run_onchange_before_ubuntu.sh" -}}
 
@@ -114,7 +112,7 @@ packages=(
   {{ . | quote }}
 {{ end -}}
 )
-if [[ "${IS_VIRT}" -eq 0 ]]; then
+if [[ "${HAS_BARE_METAL}" -eq 1 ]]; then
   packages+=(
 {{ range .packages.linux.ubuntu.bareMetalPackages -}}
     {{ . | quote }}
@@ -189,9 +187,9 @@ setup_apt_repos() {
 {{ range .packages.linux.ubuntu.aptRepos -}}
 {{ $repo := . -}}
   # {{ $repo.id }}
-  repo_lines="$(printf '%s\n' {{ range index $repo "sources-list-lines" }}{{ . | quote }} {{ end }})"
+  repo_lines="$(printf '%s\n' {{ range $repo.sourcesListLines }}{{ . | quote }} {{ end }})"
   if [[ ! -f /usr/share/keyrings/{{ $repo.id }}.gpg || "$(cat /etc/apt/sources.list.d/{{ $repo.id }}.list 2>/dev/null)" != "${repo_lines}" ]]; then
-    curl -fsSL {{ index $repo "keyring-url" | quote }} | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
+    curl -fsSL {{ $repo.keyringUrl | quote }} | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/{{ $repo.id }}.gpg
     printf '%s\n' "${repo_lines}" | "${SUDO[@]}" tee /etc/apt/sources.list.d/{{ $repo.id }}.list >/dev/null
   fi
 {{ end -}}

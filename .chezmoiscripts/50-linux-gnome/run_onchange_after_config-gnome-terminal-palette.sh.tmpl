@@ -68,7 +68,7 @@ STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-terminal-palette"
 # changes it, so the new value is re-asserted exactly once.
 SIG="palette=${PALETTE}"
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-terminal-palette" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-terminal-palette") -}}
 
 # Already applied this exact palette once -> respect the user's current one.
 if [[ -f "$STAMP" ]] && [[ "$(cat "$STAMP" 2>/dev/null || true)" == "$SIG" ]]; then

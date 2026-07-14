@@ -2,23 +2,36 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/kde/run_onchange_after_config-kde-panel.sh.tmpl
 #
-# Disables task manager grouping by setting groupingStrategy = 0
-# (TasksModel::GroupDisabled, "Do not group") on every panel-level
-# org.kde.plasma.icontasks / org.kde.plasma.taskmanager applet.
+# Sets the task manager grouping strategy on every panel-level
+# org.kde.plasma.icontasks / org.kde.plasma.taskmanager applet:
+#   groupingStrategy = kde.panel.groupingStrategy
+# (TasksModel::GroupDisabled = 0, "Do not group" — the shipped value.)
+#
+# The strategy is DATA, not script: .chezmoidata/kde.yaml `kde.panel` is the
+# single source of truth (see its header) — edit the yaml, not this file. The
+# applet-discovery loop and the two plugin ids it matches on are structure and
+# stay.
 #
 # CAVEAT: ~/.config/plasma-org.kde.plasma.desktop-appletsrc is owned by a
 # running plasmashell. Edits are safest before plasmashell first starts or
 # after restarting it; otherwise the live process may overwrite the change.
 # The write is idempotent so re-running is safe.
 #
+# onchange, no fingerprint block needed: the rendered GROUPING_STRATEGY below is
+# part of this script's content, so a kde.yaml edit re-triggers it (the same
+# reason config-gnome-mouse carries none).
+#
 # Applies after restarting plasmashell or logging out/in.
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-panel.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-panel.sh") -}}
+
+GROUPING_STRATEGY={{ .kde.panel.groupingStrategy }}
 
 configure_panel() {
-  printf 'config-kde-panel.sh: disabling task manager grouping...\n'
+  printf 'config-kde-panel.sh: setting task manager groupingStrategy=%s...\n' \
+    "$GROUPING_STRATEGY"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
     printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
@@ -46,9 +59,9 @@ configure_panel() {
       --group Containments --group "$containment" \
       --group Applets --group "$applet" \
       --group Configuration --group General \
-      --key groupingStrategy 0
-    printf '  set [Containments/%s/Applets/%s] (%s) groupingStrategy = 0\n' \
-      "$containment" "$applet" "$plugin"
+      --key groupingStrategy "$GROUPING_STRATEGY"
+    printf '  set [Containments/%s/Applets/%s] (%s) groupingStrategy = %s\n' \
+      "$containment" "$applet" "$plugin" "$GROUPING_STRATEGY"
     count=$((count + 1))
   done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$file" \
             | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')

@@ -5,6 +5,17 @@
 # Edit models HERE, not in the rendered configs. Each mapping entry is either
 # a plain "provider/model" string or an object with model/variant keys; the
 # structure is emitted into the target JSON as-is (keys render alphabetically).
+#
+# NAMING — the keys this repo owns are camelCase, like the rest of .chezmoidata
+# (`ohMyOpenagent`, `smallModel`). Everything BELOW `agents:` / `categories:` is
+# the exception, and deliberately so: those keys are OH-MY-OPENAGENT's own
+# identifiers, not ours. The agent/category names (`multimodal-looker`,
+# `sisyphus-junior`, `visual-engineering`, `unspecified-low`, `unspecified-high`)
+# and the entry field `fallback_models` are emitted VERBATIM into
+# ~/.config/opencode/oh-my-openagent.jsonc, where oh-my-openagent reads them by
+# that exact spelling. Renaming one to camelCase would not "fix" the schema — it
+# would produce a config key the tool does not know, and the mapping would
+# silently stop applying. Match upstream; never normalize these.
 models:
   opencode:
     # Top-level opencode model + small_model (opencode.json).

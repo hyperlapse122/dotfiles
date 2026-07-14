@@ -1,0 +1,87 @@
+{{- /*
+facts-sh.tmpl — the SCRIPT face of the named host-fact registry.
+
+Renders the merged fact map (.chezmoitemplates/facts.tmpl, names declared in
+.chezmoidata/facts.yaml) into bash variables, so a provisioning script reads the
+same fact a template does instead of re-probing the host:
+
+  boolean fact  →  FACT_<SNAKECASE_UPPER>=1 | 0     FACT_NVIDIA=1, FACT_INTEL_GPU=0
+  string fact   →  FACT_<SNAKECASE_UPPER>=<value>   FACT_DESKTOP=kde|gnome|none
+                                                    FACT_OS=linux, FACT_DISTRO=ubuntu
+
+Usage (anywhere in a script template, before the first consumer):
+
+  {{ includeTemplate "facts-sh.tmpl" . }}
+
+  if [[ "$FACT_NVIDIA" -eq 1 ]]; then …
+  case "$FACT_DESKTOP" in kde) … ;; gnome) … ;; esac
+
+Two things to know before editing:
+
+  * THE VALUES ARE BAKED AT RENDER TIME, not probed at run time. That is the
+    point — one probe per chezmoi command, one answer everywhere — and it makes
+    a fact flip (a GPU added, a desktop swapped) change the rendered content of
+    every consuming run_onchange_ script, which re-runs it. That is correct
+    behaviour, not churn: the host became a different host.
+
+  * NO FORCE_* LOGIC LIVES HERE, EVER. FORCE_NVIDIA / FORCE_INTEL /
+    FORCE_UBUNTU_STUDIO layer on top of a fact in the two package installers
+    ONLY:
+
+        HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
+
+    install-system-10-files shares this same partial, so a FORCE_* honoured here
+    would let FORCE_UBUNTU_STUDIO=1 install the realtime-limits drop-in (@audio
+    rtprio 95, memlock unlimited) on a plain Ubuntu Desktop — a privilege
+    escalation that today's split deliberately blocks.
+*/ -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $registry := .factRegistry -}}
+{{- /* Accumulate the assignments and `join` them at the end. Emitting each line
+   from inside the range instead would need the loop body's own newline to
+   survive, and every trim marker the surrounding actions need eats it — the
+   whole block collapses onto one line (FACT_GDM=1FACT_HEADLESS=0…). */ -}}
+{{- $lines := list -}}
+{{- range $name := (keys $facts | sortAlpha) -}}
+{{-   if not (hasKey $registry $name) -}}
+{{-     fail (printf "facts-sh.tmpl: fact %q is emitted by facts.tmpl but not declared in .chezmoidata/facts.yaml (factRegistry); declare it there — the registry is the single source of truth for fact names" $name) -}}
+{{-   end -}}
+{{-   $spec := index $registry $name -}}
+{{-   $var := printf "FACT_%s" ($name | snakecase | upper) -}}
+{{-   $value := index $facts $name -}}
+{{-   if eq $spec.type "bool" -}}
+{{-     if not (kindIs "bool" $value) -}}
+{{-       fail (printf "facts-sh.tmpl: fact %q is declared type=bool in .chezmoidata/facts.yaml but facts.tmpl emitted a %s (%v)" $name (kindOf $value) $value) -}}
+{{-     end -}}
+{{-     $lines = append $lines (printf "  %s=%s" $var (ternary "1" "0" $value)) -}}
+{{-   else if eq $spec.type "string" -}}
+{{- /* A string fact is interpolated into bash unquoted, so it must be a bare word.
+   Every one of them is (an OS name, an os-release ID, an enum), but fail loudly
+   rather than emit a line that could word-split or glob if a future fact ever
+   carries a space or a metacharacter. (A Go template comment is only lexed as one
+   when `/*` immediately follows `{{- ` — indent it and the parser reads the body
+   as an action and dies on the `/`.) */ -}}
+{{-     $text := printf "%v" $value -}}
+{{-     if not (regexMatch "^[A-Za-z0-9._-]*$" $text) -}}
+{{-       fail (printf "facts-sh.tmpl: string fact %s = %q is not a bare word (allowed: A-Za-z0-9._-); a value that word-splits or globs cannot be rendered into bash unquoted" $name $text) -}}
+{{-     end -}}
+{{-     $lines = append $lines (printf "  %s=%s" $var $text) -}}
+{{-   else -}}
+{{-     fail (printf "facts-sh.tmpl: fact %q declares an unknown type %q in .chezmoidata/facts.yaml (factRegistry); valid types: bool, string" $name $spec.type) -}}
+{{-   end -}}
+{{- end -}}
+# Host facts — GENERATED from .chezmoidata/facts.yaml via
+# .chezmoitemplates/facts-sh.tmpl. Probed once per chezmoi command (the
+# read-source-state.pre hook + in-process template probes), never here.
+# Do not add a probe to this script: declare the fact in the registry instead.
+#
+# The brace group carries the SC2034 suppression: every consumer gets the WHOLE
+# fact set and uses a subset of it, so shellcheck would flag the rest as unused —
+# and the CI shellcheck job (which lints the RENDERED output, the only way these
+# .tmpl files get linted at all) fails on findings. One directive on the group
+# beats a disable comment per line, and the assignments still land in the calling
+# shell: a brace group is not a subshell.
+# shellcheck disable=SC2034
+{
+{{ join "\n" $lines }}
+}

@@ -1,3 +1,26 @@
+# Font data — TWO halves under one `fonts:` key, told apart by whether the key
+# contains a "/":
+#
+#   1. The ARCHIVE entries (`<owner>/<repo>/<asset>.zip: {release: <tag>}`) —
+#      what gets DOWNLOADED. .chezmoiexternals/fonts.toml ranges over them and
+#      builds one archive external per entry (osDir -> repo, osBase -> asset,
+#      release -> tag); the two font scripts range over the same keys to build
+#      their managed-font marker / signature. Every consumer guards the range
+#      with `if contains "/" $key`, which is exactly what lets the non-archive
+#      keys below share this map. To bump a font: change its `release` tag.
+#
+#   2. The FAMILIES + SIZES below — what gets CONFIGURED. Single source of truth
+#      for every file that renders a font family or a font size (R13): the KDE
+#      and GNOME font scripts, the fcitx5 classicui config, and the VSCodium
+#      settings. NO deployed file carries a family as a literal any more — edit
+#      it HERE and all four follow (that is the whole point; it used to be a
+#      four-file edit, two of them not even scripts).
+#
+# The families must MATCH what the archives above actually install (fc-match
+# names, not file names): Pretendard ships the `Pretendard` family, the Nerd
+# Fonts JetBrainsMono archive ships `JetBrainsMono Nerd Font`. Renaming a family
+# here without a matching archive only makes the font scripts warn ("not
+# installed") and write the config anyway — they never fail the apply.
 fonts:
   'orioncactus/pretendard/Pretendard-1.3.9.zip':
     release: v1.3.9
@@ -11,3 +34,31 @@ fonts:
     release: v3.4.0
   'ryanoasis/nerd-fonts/JetBrainsMono.zip':
     release: v3.4.0
+
+  # The two managed families. `sans` is the UI/document face, `mono` the fixed
+  # face — the same pair on both desktops (config-kde-fonts / config-gnome-fonts
+  # are deliberate parity scripts) and in fcitx5 (sans) and VSCodium (mono).
+  families:
+    sans: Pretendard
+    mono: JetBrainsMono Nerd Font
+
+  # VSCodium's `editor.fontFamily` is a CSS-style fallback STACK, not one family:
+  # families.mono is rendered first, then these, then a bare `monospace` keyword
+  # the template appends (a quoted 'monospace' family and the unquoted generic
+  # are both in the shipped value — keep both). D2Coding is the Korean-capable
+  # fallback; the archives above install both it and the JetBrains faces.
+  monoFallbacks:
+    - JetBrains Mono
+    - D2Coding Nerd Font
+    - D2Coding
+    - Droid Sans Mono
+    - monospace
+
+  # Point sizes. `sans`/`mono` are the interface + fixed sizes both desktops
+  # write (and fcitx5's candidate-window fonts); `small` is KDE's
+  # smallestReadableFont, which has no GNOME analog (GNOME has a single
+  # interface font, so its script folds that key away — see its header).
+  sizes:
+    sans: 10
+    mono: 10
+    small: 8

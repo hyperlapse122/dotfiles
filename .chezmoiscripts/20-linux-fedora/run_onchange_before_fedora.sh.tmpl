@@ -1,3 +1,14 @@
+{{- /* Validate this distro's `gates:` map against the fact registry. Emits
+   nothing, and deliberately sits OUTSIDE the OS gate below: a typo in
+   packages.yaml's fedora gates must abort the apply on EVERY host, not only on
+   the one distro whose installer body renders — otherwise a bad gate name would
+   sit unnoticed on the maintainer's Ubuntu machine until CI rendered the Fedora
+   container. `values` hands the partial the gate expressions; the keys are the
+   package-group names, which it has no opinion about. */ -}}
+{{- includeTemplate "facts-validate.tmpl" (dict
+      "ctx"    .
+      "source" ".chezmoidata/packages.yaml (packages.linux.fedora.gates)"
+      "gates"  (values .packages.linux.fedora.gates)) -}}
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
 #!/usr/bin/env bash
 
@@ -8,44 +19,49 @@ set -euo pipefail
 # DKMS module signing, system services + MOK enrollment, RTC/NTP time, the
 # NVIDIA container runtime, and user groups. Serves both Fedora editions —
 # Workstation (GNOME) and the KDE Plasma Spin — with the per-desktop package
-# sets (kdePackages/gnomePackages) gated at runtime on which shell binary the
-# ISO shipped.
+# sets (kdePackages/gnomePackages) gated on the named `desktop` host fact;
+# packages.yaml's `gates:` map says which fact gates which group.
+#
+# The gates are resolved at RENDER time, not at runtime: the fact values are
+# baked into this script by facts-sh.tmpl below. That is the point — one probe
+# per chezmoi command, one answer everywhere — and it means a host that becomes
+# a different host (a GPU added, a desktop swapped) changes this script's
+# rendered content, which is exactly what makes run_onchange re-run it.
 #
 # chezmoi re-runs this run_onchange script on every rendered-content change (e.g.
 # a single packages.yaml edit), so every step is idempotent and guarded:
 # install_fedora_packages short-circuits when all packages are present, and the
 # remaining functions skip cleanly when their prerequisites are absent.
 
-# Host capabilities, probed once and reused everywhere (the legacy script
-# repeated this 0x10de scan in four functions). Scan /sys/.../vendor for NVIDIA's
-# PCI vendor id rather than shelling out to lspci — pciutils is not guaranteed
-# installed this early, and the sysfs vendor files always exist.
-if grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
-  HAS_NVIDIA=1
-else
-  HAS_NVIDIA=0
-fi
-if systemd-detect-virt --quiet; then
-  IS_VIRT=1
-else
-  IS_VIRT=0
-fi
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+{{- $gates := .packages.linux.fedora.gates }}
 
-# Desktop-environment probes: Fedora Workstation ships gnome-shell, the KDE
-# Spin ships plasmashell — both from the ISO, so the probe is stable from
-# first boot onward (neither binary comes from this package list). Gates the
-# per-desktop package sets below; a host with neither (server, container)
-# installs neither set.
-if command -v plasmashell >/dev/null 2>&1; then
-  HAS_KDE=1
-else
-  HAS_KDE=0
-fi
-if command -v gnome-shell >/dev/null 2>&1; then
-  HAS_GNOME=1
-else
-  HAS_GNOME=0
-fi
+# Host capabilities — SEEDED FROM packages.yaml's `gates:` map via the shared
+# fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), not hand-wired
+# to a FACT_* variable here. This script used to carry its own probes (a sysfs
+# 0x10de scan for the NVIDIA GPU, systemd-detect-virt, and a pair of
+# `command -v` desktop checks), then — once those became registry facts — a
+# stage that still hand-picked which FACT_* answered each flag, bypassing
+# whatever the map itself said. Now the map drives the flag directly: change
+# `gates.kdePackages` from `desktop.kde` to something else and this flag
+# follows it, no script edit required. See the file header in
+# .chezmoidata/packages.yaml.
+#
+# HAS_BARE_METAL is seeded from bareMetalPackages' `!virt` gate — the BARE
+# systemd-detect-virt, true for a container as well as a VM. That is
+# deliberately not the manifest's `vm` fact (systemd-detect-virt --vm), which
+# gates password-less sudo and must stay false in a container.
+HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
+HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
+
+# The desktop is ONE fact with ONE value (kde | gnome | none), so the two flags
+# are mutually exclusive by construction — where the old pair of independent
+# `command -v` probes would have set both on a host that happened to carry both
+# shells. KDE wins that tie (the precedence facts.yaml declares); `none` (a
+# server, a container) installs neither set, as before.
+HAS_KDE=0; fact_gate {{ index $gates "kdePackages" | quote }} && HAS_KDE=1
+HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "install-fedora.sh" -}}
 
@@ -65,7 +81,7 @@ packages=(
   {{ . | quote }}
   {{ end -}}
 )
-if [[ "${IS_VIRT}" -eq 0 ]]; then
+if [[ "${HAS_BARE_METAL}" -eq 1 ]]; then
   packages+=(
     {{ range .packages.linux.fedora.bareMetalPackages -}}
     {{ . | quote }}
@@ -195,14 +211,14 @@ install_fedora_packages() {
 {{ end -}}
 
 
-{{ range .packages.linux.fedora.repos }}
+{{ range .packages.linux.fedora.dnfRepos }}
 "${SUDO[@]}" tee /etc/yum.repos.d/{{ .id }}.repo >/dev/null <<'EOF'
 {{ .content -}}
 EOF
 {{ end -}}
 
 
-{{ range .packages.linux.fedora.repofiles -}}
+{{ range .packages.linux.fedora.repoFiles -}}
 "${SUDO[@]}" dnf config-manager addrepo --from-repofile {{ . | quote }} --overwrite
 {{ end -}}
 

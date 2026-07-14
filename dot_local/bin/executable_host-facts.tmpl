@@ -1,0 +1,365 @@
+#!/usr/bin/env bash
+# host-facts — what this host IS, and what it therefore GETS or SKIPS.
+#
+# The tracing half of the fact registry. `.chezmoidata/facts.yaml` ended the
+# "look everywhere to CHANGE one thing" problem; this command ends the "look
+# everywhere to CHECK one thing" one. Facts alone do not answer it — knowing
+# `nvidia: true` does not tell you the NVIDIA package group is what turns on —
+# so this prints the facts TOGETHER WITH every gate declaration that reads them,
+# and the verdict each one produces on this host.
+#
+# Read-only report. It probes nothing, writes nothing, and always exits 0: a
+# host is never "wrong", so there is no failure to report. (Contrast src-audit,
+# which exits 1 on drift because a broken .git pointer IS wrong.)
+#
+# ---------------------------------------------------------------------------
+# WHAT IS BAKED, AND WHEN IT WENT STALE
+#
+# Every fact value below was resolved when chezmoi RENDERED this script (the
+# last `chezmoi apply`), not when you ran it — the same values the installers
+# and the /etc manifest were rendered with, which is exactly what makes this
+# report authoritative about what they did. The three probe layers age
+# differently, which is why each fact is printed with the layer that owns it:
+#
+#   hook      read from ${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml, which
+#             .install-prerequisites.sh (chezmoi's read-source-state.pre hook)
+#             refreshes once per chezmoi command. A STALE CACHE CAN ONLY AFFECT
+#             THESE — and only until the next chezmoi command rewrites it.
+#   template  probed in-process at render time (a stat / glob / DMI read).
+#   builtin   chezmoi's own template data (.chezmoi.os, .osRelease.id, lookPath).
+#
+# Swapped a GPU, installed a desktop, moved into a VM? Run `chezmoi apply` (or
+# any chezmoi command, then re-apply): the hook re-probes, this script
+# re-renders, and every consuming run_onchange_ script re-runs because its own
+# rendered content changed. The host became a different host — that churn is the
+# feature.
+#
+# ---------------------------------------------------------------------------
+# NEVER RENDER THE TEMPLATE CONTEXT INTO THIS FILE.
+#
+# A `{{ "{{ toJson . }}" }}`-style dump is the obvious way to print "the facts", and it would
+# copy the chezmoi config's [data] table into a world-readable script in
+# ~/.local/bin — including the two host secrets ~/.config/chezmoi/chezmoi.toml
+# stores AES-encrypted under a keyring-held key: the LUKS disk passphrase and the
+# Secure Boot MOK password. This template touches ONLY the merged fact map
+# (facts.tmpl), the fact registry, and the gate declarations in packages.yaml /
+# system.yaml. Keep it that way — and keep the two config key names out of this
+# file entirely, so grepping ~/.local/bin for them stays a leak test that cannot
+# false-positive on a comment.
+#
+# ---------------------------------------------------------------------------
+# SURFACES COVERED — and the two that are not, yet.
+#
+#   packages.yaml `gates:`      the conditional package groups (per distro)
+#   system.yaml `gate:`         the root-owned /etc paths
+#
+# NOT yet enumerated: the guard-gated scripts (kde-guard / gnome-guard /
+# headless-guard) and the .chezmoiignore skip blocks. Both read the registry
+# already, so both are enumerable — the follow-up is listed in the report body
+# rather than silently omitted, because a partial audit that says what it does
+# not cover beats a complete one that never ships.
+set -uo pipefail
+# Deliberately NO `set -e`: a report must print every section it can, not abort
+# halfway through because one lookup came up empty.
+
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $registry := .factRegistry -}}
+{{- $distro := $facts.distro -}}
+
+{{- /* Validate every gate expression this report reads, from both distro maps and
+   from the /etc manifest — not just the running host's. facts-validate.tmpl
+   `fail`s the whole chezmoi command on an unknown fact name, on a boolean
+   compared to a value, or on a `desktop.<typo>`, so a gate that would silently
+   mean nothing takes the apply down here too, on every host, not only on the one
+   distro that reads it. Emits nothing on success. */ -}}
+{{- /* `$.` — inside a range, `.` is the loop element, not the root context. */ -}}
+{{- $pkgGates := list -}}
+{{- range $d := (list "fedora" "ubuntu") -}}
+{{-   $spec := index $.packages.linux $d -}}
+{{-   if hasKey $spec "gates" -}}
+{{-     range $gate := (values $spec.gates) -}}
+{{-       $pkgGates = append $pkgGates $gate -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/packages.yaml (gates:)" "gates" $pkgGates) -}}
+{{- $etcGates := list -}}
+{{- range .system.linux.overrides -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $etcGates = append $etcGates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (gate:)" "gates" $etcGates) -}}
+
+# --- The resolved facts (rendered from .chezmoidata/facts.yaml + facts.tmpl) --
+# Row: <name>:<type>:<probe layer>:<value>. Booleans are the literal tokens
+# `true`/`false`; string facts are bare words (facts-sh.tmpl enforces that, so
+# there is nothing here that can word-split). This array is what the report
+# PRINTS (section 1 below) and what gate_why() looks up for its display
+# wording — it is NOT what a gate is resolved against any more. That is now the
+# shared fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl, inlined
+# below), which reads the FACT_* variables facts-sh.tmpl assigns — the
+# installers' `1`/`0` convention, not this array's `true`/`false` one. Same
+# underlying facts, rendered twice in two conventions for two different jobs;
+# see the comment above gate_eval() below for why.
+FACTS=(
+{{- range $name := (keys $facts | sortAlpha) }}
+{{- $spec := index $registry $name }}
+  "{{ $name }}:{{ $spec.type }}:{{ $spec.probe }}:{{ index $facts $name }}"
+{{- end }}
+)
+
+fact_value() {
+  local want="$1" row name value
+  for row in "${FACTS[@]}"; do
+    name="${row%%:*}"
+    value="${row##*:}"
+    if [[ "$name" == "$want" ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Gate grammar (.chezmoidata/facts.yaml, KTD6) — the same three forms the
+# installers and the /etc manifest use:
+#
+#   <fact>          boolean fact is true       nvidia, thinkpad, gdm
+#   !<fact>         boolean fact is false      !virt   (bareMetalPackages)
+#   <fact>.<value>  string fact equals value   desktop.kde
+#
+# An empty expression means ungated → always true. An unknown fact name cannot
+# reach here: facts-validate.tmpl aborted the render above.
+#
+# Evaluation itself is NOT reimplemented here. This report used to carry its
+# own private copy of this exact grammar, resolved against the FACTS array
+# above (`true`/`false`); that was a second reading of the registry that could
+# quietly drift from what the installers actually branch on. gate_eval() is now
+# a thin wrapper over the ONE shared dispatcher, fact_gate()
+# (.chezmoitemplates/facts-gate.sh.tmpl), which reads the FACT_* variables
+# facts-sh.tmpl assigns (the installers' `1`/`0` convention) — so this report
+# evaluates a gate exactly the way `run_onchange_before_fedora`/`_ubuntu` and
+# install-system-10-files do, not a parallel implementation of the same idea.
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+gate_eval() {
+  fact_gate "$1"
+}
+
+# "why" line for a verdict: the fact that decided it, and what it resolved to.
+# Report-only: it reads THIS script's own FACTS array (via fact_value(),
+# `true`/`false` wording) purely because that is the wording the rest of the
+# report already uses — the verdict itself always comes from gate_eval() above,
+# never from this function.
+gate_why() {
+  local expr="$1" name
+  [[ -z "$expr" ]] && { printf 'ungated'; return; }
+  name="${expr#!}"
+  name="${name%%.*}"
+  printf '%s=%s (gate: %s)' "$name" "$(fact_value "$name")" "$expr"
+}
+
+printf 'host-facts — what this host is, and what it therefore gets or skips.\n'
+printf 'Values were resolved when chezmoi last rendered this script, not just now.\n'
+printf '\n'
+
+# --- 1. The facts -----------------------------------------------------------
+printf '## facts  (.chezmoidata/facts.yaml → .chezmoitemplates/facts.tmpl)\n\n'
+for row in "${FACTS[@]}"; do
+  IFS=: read -r name _type probe value <<<"$row"
+  printf '  %-13s %-7s [%s]\n' "$name" "$value" "$probe"
+done
+printf '\n'
+printf '  probe layers — which facts a stale cache can affect:\n'
+printf '    hook      probed by .install-prerequisites.sh (chezmoi'\''s read-source-state.pre\n'
+printf '              hook) into %s/chezmoi/facts.yaml,\n' "${XDG_CACHE_HOME:-$HOME/.cache}"
+printf '              refreshed once per chezmoi command. ONLY these can go stale, and\n'
+printf '              only until the next chezmoi command runs.\n'
+printf '    template  probed in-process at render time (stat / glob / DMI read).\n'
+printf '    builtin   chezmoi'\''s own template data (os, osRelease.id, lookPath).\n'
+printf '\n'
+
+# --- 2. Package groups ------------------------------------------------------
+# Rendered from THIS host's distro map only. The `gates:` maps are per-distro
+# (Fedora has no Intel-graphics stack and no Studio flavor), and the two
+# installers are mutually exclusive at runtime — printing the other distro's map
+# would be noise that never runs here.
+printf '## package groups  (.chezmoidata/packages.yaml, gates:)\n\n'
+{{- $pkgSpec := dict -}}
+{{- if and (eq $facts.os "linux") (or (eq $distro "fedora") (eq $distro "ubuntu")) -}}
+{{-   $pkgSpec = index .packages.linux $distro -}}
+{{- end -}}
+{{- if hasKey $pkgSpec "gates" }}
+printf '  distro: {{ $distro }} → .chezmoiscripts/{{ if eq $distro "fedora" }}20-linux-fedora/run_onchange_before_fedora{{ else }}40-linux-ubuntu/run_onchange_before_ubuntu{{ end }}.sh.tmpl\n'
+printf '  Every other package key in that map installs unconditionally.\n\n'
+# Row: <package key>:<gate expression>:<FORCE_* var that can override it, if any>
+#
+# The FORCE_* column is EMPTY on Fedora even for nvidiaPackages: only the Ubuntu
+# installer honours the escape hatches today (`HAS_NVIDIA="$FACT_NVIDIA";
+# [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1`) — the Fedora installer seeds
+# its flags straight from the facts with no override line at all. Reporting a
+# FORCE_* here that the Fedora installer would ignore would be a lie about what
+# the host does.
+PKG_GATES=(
+{{- $forceVars := dict "nvidia" "FORCE_NVIDIA" "intelGpu" "FORCE_INTEL" "ubuntuStudio" "FORCE_UBUNTU_STUDIO" -}}
+{{- range $key := (keys $pkgSpec.gates | sortAlpha) }}
+{{- $gate := index $pkgSpec.gates $key }}
+{{- /* The gate's FACT half — strip the `!` of a negation and the `.<value>` of a
+   string comparison, the same way facts-validate.tmpl parses the grammar. */ -}}
+{{- $factName := $gate | trimPrefix "!" }}
+{{- if contains "." $factName }}
+{{-   $factName = (splitn "." 2 $factName)._0 }}
+{{- end }}
+{{- $force := "" }}
+{{- if eq $distro "ubuntu" }}
+{{-   if hasKey $forceVars $factName }}
+{{-     $force = index $forceVars $factName }}
+{{-   end }}
+{{- end }}
+  "{{ $key }}:{{ $gate }}:{{ $force }}"
+{{- end }}
+)
+
+for row in "${PKG_GATES[@]}"; do
+  IFS=: read -r key gate force <<<"$row"
+  forced=0
+  if [[ -n "$force" && "${!force:-0}" == 1 ]]; then
+    forced=1
+  fi
+  if gate_eval "$gate"; then
+    if [[ "$forced" -eq 1 ]]; then
+      # The override is redundant here — the fact already said yes. Say so, so a
+      # maintainer does not read the group's presence as an artifact of the flag.
+      printf '  RECEIVED  %-18s %s  [%s=1 set, redundant]\n' "$key" "$(gate_why "$gate")" "$force"
+    else
+      printf '  RECEIVED  %-18s %s\n' "$key" "$(gate_why "$gate")"
+    fi
+  elif [[ "$forced" -eq 1 ]]; then
+    # The whole reason the FORCE_* hatches exist: a GPU-less container can still
+    # exercise the driver and Studio package sets. BY OVERRIDE, not by fact — a
+    # fact alone cannot explain a host that took the NVIDIA path without a GPU.
+    printf '  RECEIVED  %-18s BY OVERRIDE %s=1 — %s\n' "$key" "$force" "$(gate_why "$gate")"
+  else
+    printf '  SKIPPED   %-18s %s\n' "$key" "$(gate_why "$gate")"
+  fi
+done
+{{- else }}
+printf '  (none — the package installers are Linux + fedora/ubuntu only; this host is\n'
+printf '  os={{ $facts.os }}, distro={{ if eq $distro "" }}<none>{{ else }}{{ $distro }}{{ end }})\n'
+{{- end }}
+printf '\n'
+
+# --- 3. Root-owned /etc files ----------------------------------------------
+{{- if eq $facts.os "linux" }}
+printf '## /etc files  (.chezmoidata/system.yaml, overrides: → gate:)\n\n'
+printf '  installer: .chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl\n'
+printf '  A file matching no override entry installs unconditionally (mode 0644).\n\n'
+
+# The source tree is walked at RUNTIME, exactly as the installer walks it (same
+# `**` glob, same first-match-wins `case` against the manifest patterns), so this
+# report tracks a file added to system/linux/etc/ even before the next apply
+# re-renders the installer. The patterns are bash globs and `case` lets `*` cross
+# a `/` — which is how `etc/dconf/db/gdm.d/*` covers the locks/ subdirectory too.
+SRC_ROOT="{{ .chezmoi.sourceDir }}/system/linux"
+override_patterns=()
+override_gates=()
+{{- range .system.linux.overrides }}
+override_patterns+=({{ .path | quote }})
+override_gates+=({{ get . "gate" | default "" | quote }})
+{{- end }}
+
+if [[ ! -d "$SRC_ROOT/etc" ]]; then
+  printf '  (chezmoi source tree not found at %s — nothing to enumerate)\n\n' "$SRC_ROOT"
+else
+  shopt -s globstar nullglob
+  installed=0
+  skipped=0
+  for src in "$SRC_ROOT"/etc/**; do
+    [[ -f "$src" ]] || continue
+    rel="${src#"$SRC_ROOT"/}"
+    gate=
+    for i in "${!override_patterns[@]}"; do
+      # shellcheck disable=SC2254 # manifest entries are deliberate glob patterns
+      case "$rel" in
+        ${override_patterns[$i]})
+          gate="${override_gates[$i]}"
+          break
+          ;;
+      esac
+    done
+    # The %-49s column fits the longest path in the tree today
+    # (etc/security/limits.d/95-ubuntustudio-audio.conf); a longer one just
+    # pushes its own reason right, it does not break the report.
+    if gate_eval "$gate"; then
+      printf '  INSTALLED /%-49s %s\n' "$rel" "$(gate_why "$gate")"
+      installed=$((installed + 1))
+    else
+      printf '  SKIPPED   /%-49s %s\n' "$rel" "$(gate_why "$gate")"
+      skipped=$((skipped + 1))
+    fi
+  done
+  printf '\n  %d installed, %d skipped.\n' "$installed" "$skipped"
+  # The gates decide WHICH files; two guards decide whether the installer runs at
+  # all. Both are facts/probes outside the manifest, so name them rather than let
+  # this section imply the files land unconditionally.
+  if [[ "$(fact_value headless)" == true ]]; then
+    printf '  NOTE: headless=true — install-system-10-files soft-skips ENTIRELY on this\n'
+    printf '        host (headless-guard.sh.tmpl); none of the above is installed.\n'
+    printf '        INSTALL_SYSTEM_CONFIG_FORCE=1 overrides that guard.\n'
+  fi
+  printf '  NOTE: the installer also soft-skips without sudo (sudo-skip-guard.sh.tmpl).\n'
+  printf '\n'
+fi
+{{- else }}
+printf '## /etc files  (.chezmoidata/system.yaml, overrides: → gate:)\n\n'
+printf '  (none — the /etc installer is Linux-only; this host is os={{ $facts.os }})\n\n'
+{{- end }}
+
+# --- 4. FORCE_* overrides ---------------------------------------------------
+# NOT facts, and never in the registry: they layer on top of a fact inside the
+# package installers so a GPU-less test container can still exercise the driver
+# and Studio package sets. Reported here even when they change nothing on this
+# host, because an override that is silently ignored is exactly the kind of
+# surprise this command exists to prevent.
+printf '## FORCE_* overrides in this environment\n\n'
+any_force=0
+for force in FORCE_NVIDIA FORCE_INTEL FORCE_UBUNTU_STUDIO; do
+  if [[ "${!force:-0}" == 1 ]]; then
+    printf '  %s=1\n' "$force"
+    any_force=1
+  fi
+done
+if [[ "$any_force" -eq 0 ]]; then
+  printf '  (none set)\n'
+fi
+printf '\n'
+printf '  Honoured by the UBUNTU installer only. The Fedora installer has no FORCE_*\n'
+printf '  path at all — it seeds its flags straight from the facts — so a FORCE_* set\n'
+printf '  on a Fedora host changes nothing.\n'
+printf '  They never reach the /etc manifest either, and that asymmetry is deliberate:\n'
+printf '  FORCE_UBUNTU_STUDIO=1 must not install the realtime-limits drop-in (@audio\n'
+printf '  rtprio 95, memlock unlimited) on a plain Ubuntu Desktop. Package sets are\n'
+printf '  testable; a privilege grant is not.\n'
+printf '\n'
+
+# --- 5. Surfaces not yet enumerated ----------------------------------------
+# Stated, not omitted. Both surfaces already READ the registry (U2 and U3
+# landed), so both are enumerable from it — this command simply has not grown the
+# two sections yet.
+printf '## not yet enumerated by this command\n\n'
+printf '  guard-gated scripts   the 50-linux-kde / 50-linux-gnome scripts and the /etc\n'
+printf '                        + host-tuning set, gated by kde-guard / gnome-guard /\n'
+printf '                        headless-guard. They read the desktop and headless facts\n'
+printf '                        above, so this host runs the ones matching\n'
+printf '                        desktop=%s, headless=%s.\n' "$(fact_value desktop)" "$(fact_value headless)"
+printf '  .chezmoiignore        the container skip block (root) and the GNOME-only\n'
+printf '                        fcitx5 / kleopatra blocks (dot_config/), decided by\n'
+printf '                        container (=%s) and desktop (=%s).\n' "$(fact_value container)" "$(fact_value desktop)"
+printf '\n'
+printf '  Follow-up: enumerate them per script / per ignored path, the way the two\n'
+printf '  sections above enumerate their manifests. "chezmoi ignored" already lists the\n'
+printf '  ignore-set half exactly.\n'
+
+exit 0

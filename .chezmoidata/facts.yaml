@@ -1,0 +1,310 @@
+# Named host-fact registry — the NAMES, their types, and what each one gates.
+#
+# Single source of truth for host IDENTITY: what a host *is* (its OS, distro,
+# desktop, hardware, virtualization, and the platform features the /etc manifest
+# gates on). It is NOT what happens to be installed at the moment a script runs —
+# `command -v kwriteconfig6`, `command -v codium`, a live D-Bus session, a `sudo -n`
+# credential cache: those describe the moment, not the machine, and they stay as
+# plain runtime probes in bash. Datafying them would fold this repo's own install
+# order into the fact set.
+#
+# ---------------------------------------------------------------------------
+# The model: gate ASSIGNMENT is data, gate RESOLUTION is code.
+#
+# This file declares the NAME of every fact and nothing else — the probe
+# expressions live in code, exactly the way .chezmoidata/system.yaml declares a
+# gate NAME per /etc path while the installer owns `gate_ok()`. A shell probe
+# spelled as a YAML value would be code hiding in data.
+#
+# Three layers, and which one owns a fact is decided by WHERE its probe can run
+# (see `probe:` below):
+#
+#   probe: hook      .install-prerequisites.sh (write_facts_cache) — chezmoi's
+#                    read-source-state.pre hook, so it runs ONCE per chezmoi
+#                    command, before the source state is read. It writes
+#                    ${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml. A fact lands
+#                    here when it needs a subprocess or a symlink walk, because
+#                    the template functions cannot do that job: `output`
+#                    propagates a non-zero exit as a template error that ABORTS
+#                    the render (systemd-detect-virt --vm exits 1 on bare metal),
+#                    and `glob` does not traverse symlinks — /sys/bus/pci/devices/*
+#                    is nothing but symlinks, so a template-side PCI walk misses a
+#                    GPU behind a PCIe bridge and reports nvidia=false on a host
+#                    that has one.
+#   probe: template  .chezmoitemplates/facts.tmpl — an in-process `stat`, a
+#                    stat-guarded `include`, or a `glob`. No subprocess, so it
+#                    costs nothing per render.
+#   probe: builtin   .chezmoitemplates/facts.tmpl, straight from chezmoi's own
+#                    template data (.chezmoi.os, .chezmoi.osRelease.id, lookPath).
+#
+# facts.tmpl merges all three into ONE map. Consumers never read this file or the
+# cache directly:
+#
+#   templates / .chezmoiignore / deployed file content
+#       {{ $f := includeTemplate "facts.tmpl" . | fromYaml }} … {{ if $f.nvidia }}
+#   scripts
+#       {{ includeTemplate "facts-sh.tmpl" . }}   → FACT_NVIDIA=1, FACT_DESKTOP=gnome, …
+#   data files that name a gate (system.yaml `gate:`, packages.yaml `gates:`)
+#       {{ includeTemplate "facts-validate.tmpl" (dict "ctx" . "gates" (list …)) }}
+#
+# ---------------------------------------------------------------------------
+# Gate-expression grammar (what a `gate:` / `gates:` value may say):
+#
+#   <fact>          boolean fact is true          nvidia, thinkpad, gdm
+#   !<fact>         boolean fact is false         !virt   (bareMetalPackages)
+#   <fact>.<value>  string fact equals value      desktop.kde, distro.ubuntu
+#
+# facts-validate.tmpl checks the fact half of every expression against this
+# registry and FAILS THE APPLY on an unknown name, listing the valid ones — the
+# same loud abort the /etc installer already does for an unknown `gate:`. It also
+# fails when a name declared here has no probe behind it, and when a probe emits
+# a name that is not declared here: a fact never silently evaluates false because
+# someone typo'd it.
+#
+# ---------------------------------------------------------------------------
+# Adding a fact:
+#
+#   1. Declare it here (name, type, probe layer, gates, whenFalse; hook facts also
+#      declare their fail-safe `absentDefault`).
+#   2. Implement the probe in the layer you named — write_facts_cache in
+#      .install-prerequisites.sh (AND the all-false line in the .ps1), or
+#      facts.tmpl. Skipping this step aborts the apply; it does not silently
+#      resolve false.
+#   3. Pick the layer by whether the probe needs a subprocess/symlink walk (hook)
+#      or is a plain file test (template). When in doubt, template — it is free.
+#
+# `whenFalse:` is not decoration. Every fact here is FAIL-SAFE, but the safe value
+# is PER FACT, not a uniform false. Every `probe: hook` entry declares that value
+# once as `absentDefault`; facts.tmpl discovers the hook set from the registry and
+# reads it. The rule: the value a fact takes when the cache is missing must SKIP
+# the thing it gates, never grant it.
+#
+# For most facts that is `false`, because the gate reads `<fact>` and false means
+# skip. `vm` is the one gating a PRIVILEGE GRANT (etc/sudoers.d/* → %wheel NOPASSWD),
+# so its false direction — no password-less sudo — is the only safe one.
+#
+# TWO facts are INVERTED, and a uniform false was a FAIL-OPEN for both (caught in
+# review, not in testing):
+#   virt      `bareMetalPackages` gates on `!virt`, so false INSTALLS the bare-metal
+#             set. Its safe absent-value is TRUE.
+#   headless  headless-guard SKIPS when the fact is 1, so false lets a headless
+#             server run the desktop/system provisioning that guard exists to keep
+#             off it. Its safe absent-value is TRUE.
+#
+# A new hook fact whose gate reads `!<fact>`, or whose guard skips on true, declares
+# `absentDefault: true` and says why in `whenFalse:`. A fact that cannot be written
+# so that ONE of its two values is harmless does not belong in this registry.
+factRegistry:
+  # --- OS / distro / desktop (chezmoi builtins) ------------------------------
+  os:
+    type: string
+    probe: builtin
+    values: [linux, darwin, windows]
+    source: .chezmoi.os
+    gates: >-
+      Everything OS-specific: the .chezmoiignore per-OS blocks, every script's
+      {{ if eq .chezmoi.os "linux" }} gate, the .ps1/.sh wrapper pairs.
+    whenFalse: n/a — always resolves to exactly one value.
+  distro:
+    type: string
+    probe: builtin
+    values: [fedora, ubuntu, ""]
+    source: .chezmoi.osRelease.id (empty on darwin/windows — no /etc/os-release)
+    gates: >-
+      The two package installers (20-linux-fedora vs 40-linux-ubuntu), the
+      Ubuntu-only locale-gen / MOK / ufw paths, and system.yaml's per-distro
+      `removed:` entries. Ubuntu Studio also reports ID=ubuntu — see ubuntuStudio.
+    whenFalse: >-
+      Empty (non-Linux): every distro-gated script renders to nothing on that OS.
+  desktop:
+    type: string
+    probe: builtin
+    values: [kde, gnome, none]
+    source: >-
+      lookPath "plasmashell" → kde, else lookPath "gnome-shell" → gnome, else none.
+      Keyed on the shell binary the ISO shipped, so it is stable from first boot
+      (neither binary comes from this repo's package lists). KDE wins when both are
+      present — that is today's precedence in dot_config/.chezmoiignore, which drops
+      the fcitx5 config only on a host with gnome-shell AND NOT plasmashell.
+    gates: >-
+      kdePackages / gnomePackages in packages.yaml; the 50-linux-kde and
+      50-linux-gnome script guards; the fcitx5-vs-ibus input-method split; the
+      pinentry choice; the solaar gesture D-Bus actions.
+    whenFalse: >-
+      `none` (headless, container, CI — neither shell binary on PATH): neither
+      per-desktop package set installs, and the KDE variant renders for the
+      file-content consumers, which is what keeps CI artifacts deterministic and
+      inert. See .chezmoitemplates/facts.tmpl.
+
+  # --- Hardware (shell probes; the cache is why they are correct) ------------
+  nvidia:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: PCI vendor 0x10de anywhere under /sys/bus/pci/devices/*/vendor.
+    gates: >-
+      nvidiaPackages (both distros — the CUDA/libnvidia-container repos on Ubuntu,
+      RPM Fusion's akmod on Fedora), the nvidia-persistenced service, and the
+      Ubuntu Secure Boot MOK enrollment path that exists only to sign the DKMS
+      module. FORCE_NVIDIA=1 overrides it IN THE INSTALLERS ONLY (see the
+      FORCE_* note at the bottom).
+    whenFalse: >-
+      No driver, no CUDA repo, no container toolkit, no MOK enrollment. This is
+      the fact the plan's AE5 turns on: a template-only PCI probe reports false on
+      this host, whose GPU sits behind a PCIe bridge — the hook's grep does not.
+  intelGpu:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      PCI vendor 0x8086 AND class 0x03xxxx (display controller). The class half is
+      load-bearing: 0x8086 is Intel's vendor id for every Intel part, so vendor
+      alone trips on an Intel NIC or chipset.
+    gates: >-
+      Ubuntu only: intelPackages + intelHweKernel from the kobuk-team/intel-graphics
+      PPA, and the GRUB_FLAVOUR_ORDER=generic drop-in that makes the HWE kernel the
+      default boot entry. No Fedora counterpart. FORCE_INTEL=1 overrides in the
+      installer only.
+    whenFalse: No kobuk PPA, no Intel graphics stack, no HWE kernel pin.
+  thinkpad:
+    type: bool
+    probe: template
+    source: >-
+      /sys/class/dmi/id/product_version or /sys/class/dmi/id/product_family contains
+      "ThinkPad" (case-insensitive), read with a stat-guarded `include`. NOT
+      sys_vendor: that field holds the MANUFACTURER (LENOVO on every Lenovo consumer
+      laptop, "Micro-Star International Co., Ltd." on this host) and never the model
+      string. This replaces a `sudo dmidecode -t system` grep, which matched the same
+      two DMI fields — at the cost of a sudo call in a file-install loop.
+    gates: etc/modprobe.d/thinkpad_acpi.conf, etc/modules-load.d/thinkpad_acpi.conf.
+    whenFalse: The ThinkPad ACPI module is neither configured nor force-loaded.
+
+  # --- Virtualization — TWO facts, deliberately ------------------------------
+  vm:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: systemd-detect-virt --vm --quiet (VMs only; a container is NOT a vm).
+    gates: >-
+      etc/sudoers.d/* — password-less sudo (%wheel NOPASSWD). THE ONLY FACT IN THIS
+      REGISTRY THAT GATES A PRIVILEGE GRANT: a throwaway VM gets the convenience, a
+      bare-metal workstation never does.
+    whenFalse: >-
+      No password-less-sudo drop-in. This is the safe direction, and it is why the
+      fact must never be merged with `virt` (a container is virt-true but vm-false,
+      and NOPASSWD must not follow it into a distrobox that bind-mounts $HOME).
+  virt:
+    type: bool
+    probe: hook
+    absentDefault: true
+    source: >-
+      systemd-detect-virt --quiet, bare — true for a VM AND for a container. Not the
+      same probe as `vm`, and not a superset by accident: both installers' IS_VIRT
+      has always been the bare form.
+    gates: bareMetalPackages (both distros) — inverted, so the gate expression is `!virt`.
+    whenFalse: >-
+      Inverted gate: virt=false is what INSTALLS the bare-metal set (firmware tools,
+      power management, hardware daemons). virt=true skips it — the direction that
+      keeps host-hardware packages out of a VM/container.
+
+  # --- Distro flavor / platform features -------------------------------------
+  ubuntuStudio:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      stat /var/lib/dpkg/info/ubuntustudio-default-settings.md5sums — the Studio ISO's
+      seed package (every Ubuntu flavor reports ID=ubuntu, so the package IS the
+      flavor). The .md5sums marker, NOT `dpkg -s` (exits 0 for a removed-but-not-purged
+      package, state `config-files`) and NOT the .list file (which survives a remove).
+      The package is Architecture: all, so its dpkg info files carry no :arch suffix.
+    gates: >-
+      studioPackages, the @audio user group, and
+      etc/security/limits.d/95-ubuntustudio-audio.conf (@audio rtprio 95, memlock
+      unlimited). FORCE_UBUNTU_STUDIO=1 overrides in the INSTALLER only — never for
+      the /etc file, see the FORCE_* note below.
+    whenFalse: >-
+      A plain Ubuntu Desktop grows no pro-audio stack and no realtime scheduling
+      limits it has nothing to use them for.
+  sddmBreeze:
+    type: bool
+    probe: template
+    source: stat /usr/share/sddm/themes/breeze/theme.conf
+    gates: etc/sddm.conf.d/90-breeze.conf (de-brands the login greeter to Breeze).
+    whenFalse: >-
+      The drop-in is not installed. Forcing Current=breeze without the theme present
+      yields a BROKEN login screen, so absent-theme must skip, never install.
+  gdm:
+    type: bool
+    probe: template
+    source: >-
+      stat /usr/share/gdm/greeter-dconf-defaults — the exact file-db the shipped
+      /etc/dconf/profile/gdm references, so the probe tests the thing that has to
+      exist rather than "is GNOME installed".
+    gates: >-
+      etc/dconf/profile/gdm and etc/dconf/db/gdm.d/* — the password-only GDM greeter
+      (a fingerprint login hands PAM no secret and leaves the login keyring locked).
+    whenFalse: >-
+      No gdm dconf override (a KDE/SDDM host), and install-system-10-files skips its
+      `dconf update`.
+  fprintdPam:
+    type: bool
+    probe: template
+    source: >-
+      glob /usr/lib/*/security/pam_fprintd.so (or /lib/*/…) non-empty AND stat
+      /etc/pam.d/common-auth. THE CONJUNCTION IS LOAD-BEARING — the common-auth half
+      is what keeps this repo's Debian-shaped PAM stack off Fedora, whose rpm-owned
+      polkit-1 includes system-auth instead. Drop it and a Fedora apply overwrites
+      /etc/pam.d/polkit-1 with a stack that @includes a file Fedora does not have,
+      breaking every polkit prompt on the host.
+    gates: etc/pam.d/polkit-1 (fingerprint auth at polkit prompts).
+    whenFalse: polkit prompts stay password-only — the distro default.
+
+  # --- Host shape -------------------------------------------------------------
+  headless:
+    type: bool
+    probe: hook
+    absentDefault: true
+    source: >-
+      systemd default target != graphical.target AND no
+      /etc/systemd/system/display-manager.service alias symlink (the symlink systemd
+      creates when a DM is enabled — a reliable positive desktop signal;
+      `systemctl list-unit-files display-manager.service` is not usable, it exits 0
+      even when nothing matches). A host with no systemd resolves FALSE (treated as a
+      desktop and configured), matching what headless-guard.sh.tmpl does today.
+    gates: >-
+      Every script behind headless-guard.sh.tmpl — the /etc install set and the
+      desktop-shaped host tuning. INSTALL_SYSTEM_CONFIG_FORCE=1 overrides it in the
+      guard, not here.
+    whenFalse: >-
+      Inverted: headless=false is the DESKTOP host, which is the one that gets
+      configured. A server (headless=true) is skipped.
+  container:
+    type: bool
+    probe: template
+    source: >-
+      (stat /run/.containerenv OR stat /.dockerenv) AND NOT stat /run/.toolboxenv.
+      The toolbox/distrobox exclusion is the whole subtlety: both bind-mount the host
+      $HOME and both create /run/.toolboxenv, so an apply inside one targets the REAL
+      $HOME and must provision like a host, not skip. Only a "real" container — a
+      Podman/Docker marker WITHOUT the toolbox marker — is one.
+    gates: >-
+      The root .chezmoiignore container block: every provisioning script, the
+      mxm4-haptic and LibrePods builds, the Claude Code plugin tree, and
+      src/garden.yaml (whose age identity the skipped 80-keys import would have
+      provided).
+    whenFalse: A normal host — everything deploys.
+
+# ---------------------------------------------------------------------------
+# FORCE_* overrides are NOT facts and never enter this registry.
+#
+# FORCE_NVIDIA / FORCE_INTEL / FORCE_UBUNTU_STUDIO exist so a GPU-less test
+# container can still exercise the driver and Studio package sets. They layer on
+# TOP of a fact, in the package installers ONLY:
+#
+#   HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
+#
+# They must never move into facts-sh.tmpl, because install-system-10-files shares
+# that partial: FORCE_UBUNTU_STUDIO=1 would then install the realtime-limits
+# drop-in (@audio rtprio 95, memlock unlimited) on a plain Ubuntu Desktop — a
+# privilege escalation today's split deliberately blocks.

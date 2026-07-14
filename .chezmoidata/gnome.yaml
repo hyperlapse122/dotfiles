@@ -43,8 +43,74 @@
 #                  (value-signature, like config-gnome-mouse): editing this
 #                  re-asserts the new value exactly once, while a user's later
 #                  manual palette pick in Ptyxis is never fought.
+#
+# gnome.inputSource:
+#   type / id     : the ibus engine registered as a GNOME input source by
+#                   run_onchange_after_config-gnome-inputmethod.sh.tmpl —
+#                   org.gnome.desktop.input-sources `sources` gains the
+#                   ('<type>', '<id>') pair. GNOME's NATIVE stack is ibus (fcitx5
+#                   is the KDE-target input method here), so `type` is `ibus` and
+#                   `id` is the engine name (`hangul` ← the ibus-hangul package
+#                   in gnomePackages). The script MERGES the pair into whatever
+#                   sources the user already has and applies exactly once (stamp),
+#                   so editing this after the first apply does NOT swap the
+#                   engine on an existing host — it only changes what a fresh
+#                   host gets (and what `chezmoi apply --force` would add).
+#
+# gnome.appGrid:
+#   sortAlphabetically : the app-grid ORDER INTENT, applied by
+#                   run_onchange_after_config-gnome-app-grid-order.sh.tmpl.
+#                   `true` = clear org.gnome.shell `app-picker-layout` (an EMPTY
+#                   layout is what makes GNOME Shell sort the grid itself, by
+#                   locale collation — 가나다순 under a Korean locale); `false` =
+#                   leave the launcher on whatever order the host came with. The
+#                   value is a RESET intent, not a value to write: there is no
+#                   "sort" key in GNOME to set, which is why this stays a script.
+#                   Applied exactly once (stamp), so a grid the user later
+#                   re-arranges by hand is never wiped back.
+#
+# gnome.shortcuts:
+#   onePassword   : the 1Password Quick Access global shortcut, registered as a
+#                   GNOME custom keybinding by
+#                   run_onchange_after_config-gnome-1password-shortcut.sh.tmpl
+#                   (GNOME ignores the X-KDE-Shortcuts desktop-action key the KDE
+#                   targets get this from, so it has to be a custom keybinding).
+#                   The triple is exactly what the
+#                   org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
+#                   schema takes: `name` (shown in Settings → Keyboard), `command`
+#                   (g_spawn'd directly — no %U desktop-entry field code) and
+#                   `binding` (GTK accelerator syntax: `<Control><Shift>space`).
+#                   The dconf PATH the keybinding lives at is script structure,
+#                   not data — it is an identity, not a setting. Editing `command`
+#                   or `binding` changes the script's value-signature, so the new
+#                   chord is re-asserted exactly once; a chord the user later
+#                   re-binds in Settings is never fought.
+#
+# gnome.shellExtensions:
+#   solaar        : the GNOME Shell extension installed by
+#                   run_onchange_after_install-gnome-solaar-extension.sh.tmpl —
+#                   `uuid` is upstream's fixed extension id (sanity-checked
+#                   against the extensions.gnome.org response) and `egoId` is its
+#                   numeric extensions.gnome.org primary key, the `pk=` of the
+#                   extension-info API query that resolves a build for the RUNNING
+#                   shell version. Both identify WHICH extension; the script keeps
+#                   every bit of the download/compat/enable logic (see its header).
 gnome:
   mouse:
     accelProfile: flat
   terminal:
     palette: gnome
+  inputSource:
+    type: ibus
+    id: hangul
+  appGrid:
+    sortAlphabetically: true
+  shortcuts:
+    onePassword:
+      name: 1Password Quick Access
+      command: /usr/bin/1password --quick-access
+      binding: <Control><Shift>space
+  shellExtensions:
+    solaar:
+      uuid: solaar-extension@sidevesh
+      egoId: 6162

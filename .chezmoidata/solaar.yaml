@@ -13,6 +13,15 @@
 # config-solaar script's fingerprint block also hashes THIS file: any edit
 # here re-runs it, and its restart step makes Solaar load the new state.
 #
+# NAMING — every key this file owns is camelCase, like the rest of .chezmoidata
+# (modelId, thumbWheelMultiplier, gestureConfirmWaveform). The kebab-case tokens
+# below are NOT keys and are NOT ours: a setting's `path` VALUE (`smart-shift`,
+# `hires-smooth-resolution`, `divert-keys`) is the upstream SOLAAR setting name,
+# written verbatim into ~/.config/solaar/config.yaml, where Solaar looks it up by
+# that exact spelling. Camel-casing one would silently stop applying the setting.
+# Leave them alone; the same rule holds for the waveform VALUES, which must match
+# crates/mxm4-haptic/src/lib.rs WAVEFORMS verbatim.
+#
 # Rule tunables reference (solaar.rules, consumed by
 # dot_config/solaar/rules.yaml.tmpl — semantics detailed in that template's
 # header):

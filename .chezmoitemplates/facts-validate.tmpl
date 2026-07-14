@@ -1,0 +1,130 @@
+{{- /*
+facts-validate.tmpl — fail the apply LOUDLY on a bad fact reference.
+
+Two independent checks, both of which abort the whole chezmoi command (`fail`)
+rather than let a fact silently evaluate false — the same rule the /etc
+installer's unknown-`gate:` abort has always enforced, and the same shape as the
+unknown-waveform guard in the mxm4-haptic hooks manifest:
+
+  1. REGISTRY <-> PROBE PARITY (runs on every call, no arguments needed).
+     Every name in .chezmoidata/facts.yaml (factRegistry) must be emitted by
+     .chezmoitemplates/facts.tmpl, and vice versa. A name declared with no probe
+     behind it would otherwise read as a perfectly valid gate that is false on
+     every host forever; a probe with no declaration would put a fact outside the
+     registry, which is the exact "look everywhere" problem the registry exists
+     to end.
+
+  2. GATE EXPRESSIONS (the `gates` argument — the caller passes them).
+     Grammar:
+         <fact>          boolean fact is true       nvidia, thinkpad, gdm
+         !<fact>         boolean fact is false      !virt
+         <fact>.<value>  string fact equals value   desktop.kde, distro.ubuntu
+     The fact half of a negated or dotted expression is validated against the
+     registry, the form is checked against the fact's declared type, and a dotted
+     value is checked against the fact's declared `values:` list when it has one.
+
+The contract is CALLER PASSES THE NAMES, PARTIAL CHECKS MEMBERSHIP. It does not
+go looking for gate references itself, because the two data files spell them
+differently — system.yaml carries a per-path `gate:` scalar, packages.yaml a
+`gates:` map — and one partial has to serve both.
+
+Usage:
+
+  {{ includeTemplate "facts-validate.tmpl" (dict
+       "ctx"    .
+       "source" ".chezmoidata/packages.yaml (gates:)"
+       "gates"  (list "nvidia" "intelGpu" "desktop.kde" "!virt")) }}
+
+  "ctx"    (required) the root template context — the partial needs .factRegistry
+           and has to render facts.tmpl.
+  "gates"  (optional) the gate expressions to validate. Omit to run check 1 only.
+  "source" (optional) where the gates came from; quoted back in the error so the
+           maintainer is pointed at the file to fix, not at this partial.
+
+Emits NOTHING on success, so it is safe to inline anywhere — inside a YAML
+document, a bash script, or a JSON file.
+*/ -}}
+{{- /* chezmoi renders with missingkey=error, so an ABSENT optional key is a hard
+   template error — `.gates | default (list)` never even gets to run its default.
+   Guard every optional argument with hasKey. */ -}}
+{{- if not (hasKey . "ctx") -}}
+{{-   fail "facts-validate.tmpl: missing required argument \"ctx\" — call it as `includeTemplate \"facts-validate.tmpl\" (dict \"ctx\" . \"gates\" (list …))`; the partial needs the root context to read .factRegistry and render facts.tmpl" -}}
+{{- end -}}
+{{- $ctx := .ctx -}}
+{{- $gates := list -}}
+{{- if hasKey . "gates" -}}
+{{-   $gates = .gates -}}
+{{- end -}}
+{{- $source := "the calling template" -}}
+{{- if hasKey . "source" -}}
+{{-   $source = .source -}}
+{{- end -}}
+{{- $registry := $ctx.factRegistry -}}
+{{- $declared := keys $registry | sortAlpha -}}
+{{- $probed := keys (includeTemplate "facts.tmpl" $ctx | fromYaml) | sortAlpha -}}
+
+{{- /* --- Check 1: registry <-> probe parity -------------------------------- */ -}}
+{{- range $name := $declared -}}
+{{-   if not (has $name $probed) -}}
+{{-     fail (printf "fact %q is declared in .chezmoidata/facts.yaml (factRegistry) but NO PROBE implements it — .chezmoitemplates/facts.tmpl emits: %s. Implement it in the layer its `probe:` names (hook = write_facts_cache in .install-prerequisites.sh + the .ps1 counterpart; template = facts.tmpl), or remove the declaration. A declared fact never silently resolves false." $name (join ", " $probed)) -}}
+{{-   end -}}
+{{- end -}}
+{{- range $name := $probed -}}
+{{-   if not (has $name $declared) -}}
+{{-     fail (printf "fact %q is emitted by .chezmoitemplates/facts.tmpl but is NOT DECLARED in .chezmoidata/facts.yaml (factRegistry), which declares: %s. Every fact name lives in the registry — declare it (name, type, probe layer, gates, whenFalse)." $name (join ", " $declared)) -}}
+{{-   end -}}
+{{- end -}}
+
+{{- /* --- Check 2: the caller's gate expressions ----------------------------- */ -}}
+{{- range $gate := $gates -}}
+{{-   $expr := $gate | toString | trim -}}
+{{-   if eq $expr "" -}}
+{{-     fail (printf "empty gate expression in %s; a gate is one of `<fact>`, `!<fact>`, or `<fact>.<value>` (valid facts: %s)" $source (join ", " $declared)) -}}
+{{-   end -}}
+{{-   $negated := false -}}
+{{-   if hasPrefix "!" $expr -}}
+{{-     $negated = true -}}
+{{-     $expr = $expr | trimPrefix "!" | trim -}}
+{{-   end -}}
+{{-   $name := $expr -}}
+{{-   $value := "" -}}
+{{-   $dotted := false -}}
+{{-   if contains "." $expr -}}
+{{-     $parts := splitn "." 2 $expr -}}
+{{-     $name = $parts._0 -}}
+{{-     $value = $parts._1 -}}
+{{-     $dotted = true -}}
+{{-   end -}}
+{{- /* The unknown-name abort — the whole point of the registry. */ -}}
+{{-   if not (has $name $declared) -}}
+{{-     fail (printf "gate %q in %s names the unknown fact %q; valid facts: %s. Declare it in .chezmoidata/facts.yaml (factRegistry) and implement its probe, or fix the typo — a gate NEVER silently evaluates false." $gate $source $name (join ", " $declared)) -}}
+{{-   end -}}
+{{-   $spec := index $registry $name -}}
+{{- /* Form must match the fact's declared type: a boolean cannot be compared to a
+   value, and a string fact has nothing to negate. */ -}}
+{{-   if and $negated $dotted -}}
+{{-     fail (printf "gate %q in %s negates a value comparison, which the grammar does not allow; write `%s.%s` and invert the consumer, or gate on a boolean fact" $gate $source $name $value) -}}
+{{-   end -}}
+{{-   if eq $spec.type "bool" -}}
+{{-     if $dotted -}}
+{{-       fail (printf "gate %q in %s compares the BOOLEAN fact %q to a value; write `%s` (true) or `!%s` (false)" $gate $source $name $name $name) -}}
+{{-     end -}}
+{{-   else if eq $spec.type "string" -}}
+{{-     if not $dotted -}}
+{{-       fail (printf "gate %q in %s uses the STRING fact %q as a boolean; write `%s.<value>` (declared values: %s)" $gate $source $name $name (join ", " ($spec.values | default (list "<none declared>")))) -}}
+{{-     end -}}
+{{-     if eq $value "" -}}
+{{-       fail (printf "gate %q in %s compares the string fact %q to an empty value; write `%s.<value>` (declared values: %s)" $gate $source $name $name (join ", " ($spec.values | default (list "<none declared>")))) -}}
+{{-     end -}}
+{{- /* `values:` is optional in the registry, but when a fact declares one the
+   comparison value must be in it — a `desktop.kdee` typo is as dead as an unknown
+   fact name and must fail just as loudly. */ -}}
+{{-     if hasKey $spec "values" -}}
+{{-       if not (has $value $spec.values) -}}
+{{-         fail (printf "gate %q in %s compares the string fact %q to %q, which is not one of its declared values: %s (.chezmoidata/facts.yaml)" $gate $source $name $value (join ", " $spec.values)) -}}
+{{-       end -}}
+{{-     end -}}
+{{-   else -}}
+{{-     fail (printf "fact %q declares an unknown type %q in .chezmoidata/facts.yaml (factRegistry); valid types: bool, string" $name $spec.type) -}}
+{{-   end -}}
+{{- end -}}

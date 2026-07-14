@@ -3,27 +3,48 @@
 # .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl
 #
 # Fedora + Ubuntu Studio. De-brands the desktop wallpaper to Plasma's default
-# ("Next", the upstream Breeze wallpaper) so the branded distro wallpaper seeded
-# into the per-user Plasma config is replaced.
+# (kde.wallpaper.theme — `Next`, the upstream Breeze wallpaper) so the branded
+# distro wallpaper seeded into the per-user Plasma config is replaced.
+#
+# The theme is DATA, not script: .chezmoidata/kde.yaml `kde.wallpaper` is the
+# single source of truth (see its header) — edit the yaml, not this file. The
+# highest-resolution-image pick and the once-only stamp stay here.
+#
+# TWO KINDS OF GATE, and the difference is the whole point of the fact registry:
+#
+#   * WHICH HOST IS THIS — the kde-guard include below (the `desktop` fact,
+#     .chezmoidata/facts.yaml). This replaced a bespoke
+#     `XDG_CURRENT_DESKTOP != *KDE*` test, the last host-desktop probe outside
+#     the registry: XDG_CURRENT_DESKTOP is a SESSION variable, so on a KDE host
+#     it also answered "is a Plasma session running", conflating the two. The
+#     fact answers only the first, exactly as every other 50-linux-kde script.
+#   * IS A SESSION RUNNING RIGHT NOW — the D-Bus / display-server /
+#     `pgrep plasmashell` checks below. These stay bash: they are runtime state,
+#     not host identity, and plasma-apply-wallpaperimage genuinely needs all
+#     three. Losing them by "simplifying into the guard" would make this script
+#     try to talk to a Plasma that is not there.
 #
 # ONE-SHOT + user-respecting: the wallpaper is a per-user Plasma setting, so this
 # applies the default exactly once (tracked by a per-user stamp) and then never
 # touches it again -- if the user later picks their own wallpaper, we do NOT keep
 # reverting it on every apply.
 #
-# onchange, no external dependency: this script applies a fixed default wallpaper
-# and has no dependency file to fingerprint, so its onchange trigger is its own
-# rendered content — chezmoi re-runs it only when this script changes. Live-
-# session only: plasma-apply-wallpaperimage needs a running KDE session (DBus +
-# display server + plasmashell), so on a headless/TTY/first-boot apply this exits
-# 0. NOTE the behavior change from the former run_after: onchange records that
-# skipped run as done and will NOT re-run on the next apply just because a live
-# Plasma session appeared — the wallpaper is applied on the next content change
-# or a manual `chezmoi apply --force`. Once the stamp exists the script is a no-op.
+# onchange, no fingerprint block needed: the rendered theme below is part of this
+# script's content, so a kde.yaml edit re-triggers it (the same reason
+# config-gnome-mouse carries none). Live-session only:
+# plasma-apply-wallpaperimage needs a running KDE session (DBus + display server
+# + plasmashell), so on a headless/TTY/first-boot apply this exits 0. NOTE the
+# behavior change from the former run_after: onchange records that skipped run as
+# done and will NOT re-run on the next apply just because a live Plasma session
+# appeared — the wallpaper is applied on the next content change or a manual
+# `chezmoi apply --force`. Once the stamp exists the script is a no-op.
 
 set -euo pipefail
 
+WALLPAPER_THEME={{ .kde.wallpaper.theme | quote }}
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/wallpaper-debranded"
+
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-wallpaper-breeze.sh") -}}
 
 # Already de-branded once -> respect the user's current choice, do nothing.
 if [[ -f "$STAMP" ]]; then
@@ -31,11 +52,9 @@ if [[ -f "$STAMP" ]]; then
   exit 0
 fi
 
-# --- Live KDE session guard (any absent condition => safe exit 0) ---
-if [[ "${XDG_CURRENT_DESKTOP:-}" != *KDE* ]]; then
-  echo "wallpaper-breeze: not a KDE session (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset}); skip"
-  exit 0
-fi
+# --- Live KDE session guards (any absent condition => safe exit 0) ---
+# Runtime state only — the host-is-KDE question is already answered by the
+# kde-guard above.
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
   echo "wallpaper-breeze: no DBus session bus; skip"
   exit 0
@@ -51,18 +70,18 @@ fi
 command -v plasma-apply-wallpaperimage >/dev/null 2>&1 \
   || { echo "wallpaper-breeze: plasma-apply-wallpaperimage absent; skip"; exit 0; }
 
-# Resolve the default Plasma wallpaper ("Next"), preferring the highest-resolution
-# image the package ships. Skip (do NOT stamp) if the wallpaper package is absent,
-# so a later apply retries once it is installed.
-WALL_DIR=/usr/share/wallpapers/Next/contents/images
+# Resolve the wallpaper package's image, preferring the highest-resolution one it
+# ships. Skip (do NOT stamp) if the package is absent, so a later apply retries
+# once it is installed.
+WALL_DIR="/usr/share/wallpapers/${WALLPAPER_THEME}/contents/images"
 img="$(find "$WALL_DIR" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' \) 2>/dev/null | sort -V | tail -n1)"
 if [[ -z "$img" ]]; then
-  echo "wallpaper-breeze: default Breeze wallpaper (Next) not found under $WALL_DIR; skip"
+  echo "wallpaper-breeze: wallpaper $WALLPAPER_THEME not found under $WALL_DIR; skip"
   exit 0
 fi
 
 plasma-apply-wallpaperimage "$img"
-echo "wallpaper-breeze: desktop wallpaper set to upstream Breeze default ($img)"
+echo "wallpaper-breeze: desktop wallpaper set to $WALLPAPER_THEME ($img)"
 
 # Stamp so we never override the user's later choice.
 mkdir -p "$(dirname "$STAMP")"

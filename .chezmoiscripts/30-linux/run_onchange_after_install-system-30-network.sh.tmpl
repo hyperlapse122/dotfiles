@@ -35,7 +35,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "headless-guard.sh.tmpl" "install-system-network" }}
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-network") }}
 {{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-network" }}
 # Configure firewalld for Tailscale and VMware (see header for the three
 # changes and their rationale).

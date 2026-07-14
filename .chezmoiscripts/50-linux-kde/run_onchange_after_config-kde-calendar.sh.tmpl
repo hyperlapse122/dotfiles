@@ -3,23 +3,40 @@
 # .chezmoiscripts/kde/run_onchange_after_config-kde-calendar.sh.tmpl
 #
 # Enables calendar popup features in the Digital Clock:
-#   a) enabledCalendarPlugins = holidaysevents,pimevents on each digitalclock
-#   b) selectedRegions        = kr_ko in plasma_calendar_holiday_regions
+#   a) enabledCalendarPlugins = kde.calendar.plugins on each digitalclock
+#   b) selectedRegions        = kde.calendar.holidayRegions in
+#                                plasma_calendar_holiday_regions
 #   c) calendars              = all local Akonadi calendar collection IDs in
 #                                plasmashellrc [PIMEventsPlugin]
+#
+# The (a) and (b) values are DATA, not script: .chezmoidata/kde.yaml
+# `kde.calendar` is the single source of truth (see its header) — edit the yaml,
+# not this file. The applet-discovery loop, the plugin id it matches on, and the
+# Akonadi query stay here: they are structure, and (c)'s collection IDs are
+# per-host database rows that can only be discovered at runtime.
 #
 # Sub-step (c) is discovered at runtime by querying Akonadi's local MariaDB.
 # It soft-skips when mariadb is missing, the akonadi socket is absent, or no
 # calendar collections are found.
 #
+# onchange, no fingerprint block needed: the rendered PLUGINS/HOLIDAY_REGIONS
+# values below are part of this script's content, so a kde.yaml edit re-triggers
+# it (the same reason config-gnome-mouse carries none).
+#
 # Applies after restarting plasmashell or logging out/in.
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-calendar.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-calendar.sh") -}}
+
+# KConfig stores both keys as a comma-separated list, so the yaml sequences are
+# rendered joined — the list shape lives in the data, the delimiter here.
+PLUGINS="{{ join "," .kde.calendar.plugins }}"
+HOLIDAY_REGIONS="{{ join "," .kde.calendar.holidayRegions }}"
 
 configure_calendar() {
-  printf 'config-kde-calendar.sh: enabling holidays + pimevents, South Korea, all PIM calendars...\n'
+  printf 'config-kde-calendar.sh: enabling %s, regions %s, all PIM calendars...\n' \
+    "$PLUGINS" "$HOLIDAY_REGIONS"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
     printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
@@ -42,9 +59,9 @@ configure_calendar() {
         --group Containments --group "$containment" \
         --group Applets --group "$applet" \
         --group Configuration --group Appearance \
-        --key enabledCalendarPlugins "holidaysevents,pimevents"
-      printf '  set [Containments/%s/Applets/%s] (%s) enabledCalendarPlugins = holidaysevents,pimevents\n' \
-        "$containment" "$applet" "$plugin"
+        --key enabledCalendarPlugins "$PLUGINS"
+      printf '  set [Containments/%s/Applets/%s] (%s) enabledCalendarPlugins = %s\n' \
+        "$containment" "$applet" "$plugin" "$PLUGINS"
       count=$((count + 1))
     done < <(grep -oE '^\[Containments\]\[[0-9]+\]\[Applets\]\[[0-9]+\]$' "$applet_file" \
               | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
@@ -58,8 +75,9 @@ configure_calendar() {
 
   kwriteconfig6 --file plasma_calendar_holiday_regions \
     --group General \
-    --key selectedRegions "kr_ko"
-  printf '  (b) set [General] selectedRegions = kr_ko in plasma_calendar_holiday_regions\n'
+    --key selectedRegions "$HOLIDAY_REGIONS"
+  printf '  (b) set [General] selectedRegions = %s in plasma_calendar_holiday_regions\n' \
+    "$HOLIDAY_REGIONS"
 
   if ! command -v mariadb >/dev/null 2>&1; then
     printf '  (c) mariadb client not found, skipping (PIM calendars left unchanged).\n'

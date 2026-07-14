@@ -16,6 +16,23 @@
 # is rendered into the bash arrays below, so a manifest edit re-triggers this
 # run_onchange_ script automatically.
 #
+# FACT-DRIVEN GATES: a manifest `gate:` names a host fact from the registry
+# (.chezmoidata/facts.yaml), and gate_ok() is a pure lookup into the FACT_*
+# variables (via the shared fact_gate() dispatcher,
+# .chezmoitemplates/facts-gate.sh.tmpl — see its own header for why one
+# implementation now serves this script, host-facts, and the two package
+# installers) — this script probes the host for NOTHING any more. That is what
+# retired the `sudo dmidecode -t system` grep (the thinkpad fact reads the same
+# two DMI fields from world-readable /sys/class/dmi/id/, no elevation) and the
+# `dpkg -s ubuntustudio-default-settings` test (which exits 0 for a
+# removed-but-not-purged package; the fact stats the dpkg .md5sums marker).
+# Every gate name is validated against the registry at render time below, so an
+# unknown one aborts the whole chezmoi command instead of silently resolving
+# false. The PER-FACT "why" (vm vs. the registry's broader virt; fprintdPam's
+# common-auth conjunction that keeps this file off Fedora) lives in
+# .chezmoidata/facts.yaml now, not in a case arm here — gate_ok() no longer has
+# per-fact arms to hang the rationale on.
+#
 # This is part 1/3 of the split install-system set (10-files → 20-host →
 # 30-network, ordered by filename). Splitting keeps re-run scope tight: a
 # tracked /etc file edit re-runs THIS script only — it no longer restarts
@@ -33,7 +50,13 @@
 
 set -euo pipefail
 
-{{ includeTemplate "headless-guard.sh.tmpl" "install-system-files" }}
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-files") }}
+# The FACT_* variables gate_ok() reads below are assigned by the headless guard
+# just above: it inlines .chezmoitemplates/facts-sh.tmpl (the guard needs the
+# headless fact itself, and every script that guards on it therefore gets the
+# whole set). Do NOT add a second `includeTemplate "facts-sh.tmpl"` here — the
+# assignment block would render twice.
+
 # system/linux/etc content fingerprint — chezmoi hashes this rendered script
 # to decide whether to re-run it, so embedding every tracked file's sha256
 # here forces a re-run on any add/remove/edit. Comment-only; never executed.
@@ -49,15 +72,6 @@ os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
 # .chezmoidata/system.yaml overrides entry.
 shopt -s globstar nullglob
 
-thinkpad_system=false
-if command -v dmidecode >/dev/null 2>&1; then
-  if "${SUDO[@]}" dmidecode -t system 2>/dev/null | grep -qi 'ThinkPad'; then
-    thinkpad_system=true
-  fi
-else
-  printf '  -- ThinkPad detection: skipped (dmidecode not installed)\n'
-fi
-
 # --- Manifest (rendered from .chezmoidata/system.yaml) ----------------------
 # Parallel arrays: a file's path relative to system/linux/ is glob-matched
 # against override_patterns (first match wins); unmatched files install at
@@ -72,13 +86,24 @@ override_modes+=({{ get . "mode" | default "644" | quote }})
 override_gates+=({{ get . "gate" | default "" | quote }})
 override_checks+=({{ get . "check" | default "" | quote }})
 {{ end }}
-# Fail loud on a manifest typo before touching anything.
-for gate in "${override_gates[@]}"; do
-  case "$gate" in
-    ''|thinkpad|vm|ubuntu-studio|sddm-breeze|gdm|fprintd-pam) ;;
-    *) printf 'install-system-files: unknown gate "%s" in .chezmoidata/system.yaml; aborting.\n' "$gate" >&2; exit 1 ;;
-  esac
-done
+{{- /* The unknown-gate abort — at RENDER time now, not at runtime. Every `gate:`
+   in the manifest names a fact, and facts-validate.tmpl fails the whole chezmoi
+   command on a name the registry does not declare (listing the valid ones), on a
+   registry name with no probe behind it, and on a form that does not match the
+   fact's type. Its contract is CALLER PASSES THE NAMES, so collect them from the
+   same manifest the arrays above render from. It emits nothing on success, which
+   is why it can sit in the middle of a bash script. */ -}}
+{{- $gates := list -}}
+{{- range .system.linux.overrides -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (gate:)" "gates" $gates) -}}
+# Fail loud on a manifest typo before touching anything. Gate names are checked
+# at render time (facts-validate.tmpl, above); `check:` is not a fact, so its
+# small closed set stays a runtime case.
 for check in "${override_checks[@]}"; do
   case "$check" in
     ''|visudo) ;;
@@ -86,38 +111,24 @@ for check in "${override_checks[@]}"; do
   esac
 done
 
-# pam_fprintd.so ships in the multiarch security dir, whose name varies by
-# architecture; nullglob (set above) collapses a miss to an empty expansion.
-has_pam_fprintd() {
-  local module
-  for module in /usr/lib/*/security/pam_fprintd.so /lib/*/security/pam_fprintd.so; do
-    if [[ -f "$module" ]]; then return 0; fi
-  done
-  return 1
-}
-
-# Named runtime probes the manifest's `gate:` entries refer to.
+# Gate resolution is no longer implemented here — it is the ONE shared
+# fact_gate() dispatcher every gate consumer uses
+# (.chezmoitemplates/facts-gate.sh.tmpl), inlined below. gate_ok() stays as a
+# thin, same-named wrapper so the call sites below (and the vocabulary in this
+# file's comments) do not have to change. Nothing in fact_gate() may touch the
+# host either: put a new condition in the registry, never here.
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
 gate_ok() {
-  case "$1" in
-    '') return 0 ;;
-    thinkpad) [[ "$thinkpad_system" == true ]] ;;
-    vm) systemd-detect-virt --vm --quiet 2>/dev/null ;;
-    ubuntu-studio) [[ "$os_id" == ubuntu ]] && dpkg -s ubuntustudio-default-settings >/dev/null 2>&1 ;;
-    sddm-breeze) [[ -f /usr/share/sddm/themes/breeze/theme.conf ]] ;;
-    gdm) [[ -r /usr/share/gdm/greeter-dconf-defaults ]] ;;
-    # The polkit-1 stack this gates @includes common-auth, so it only fits a
-    # Debian-style PAM tree — Fedora's rpm-owned polkit-1 includes system-auth.
-    fprintd-pam) [[ -f /etc/pam.d/common-auth ]] && has_pam_fprintd ;;
-  esac
+  fact_gate "$1"
 }
 gate_reason() {
   case "$1" in
     thinkpad) printf 'not a ThinkPad system' ;;
     vm) printf 'not a VM' ;;
-    ubuntu-studio) printf 'ubuntu-studio-only (realtime audio limits)' ;;
-    sddm-breeze) printf 'breeze sddm theme absent' ;;
+    ubuntuStudio) printf 'ubuntu-studio-only (realtime audio limits)' ;;
+    sddmBreeze) printf 'breeze sddm theme absent' ;;
     gdm) printf 'gdm not installed' ;;
-    fprintd-pam) printf 'no pam_fprintd module or non-Debian PAM stack' ;;
+    fprintdPam) printf 'no pam_fprintd module or non-Debian PAM stack' ;;
     *) printf 'gate %s failed' "$1" ;;
   esac
 }
@@ -182,7 +193,9 @@ done
 
 printf 'install-system-files: %d installed, %d skipped\n' "$count" "$skipped"
 
-if [[ "$thinkpad_system" == true ]]; then
+# Same fact as the thinkpad `gate:` above, so the module is force-loaded exactly
+# on the hosts that just received its modprobe.d/modules-load.d config.
+if [[ "$FACT_THINKPAD" == 1 ]]; then
   printf '  -> modprobe thinkpad_acpi\n'
   "${SUDO[@]}" modprobe thinkpad_acpi
 else
