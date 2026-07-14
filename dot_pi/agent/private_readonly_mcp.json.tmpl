@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "transport": "stdio",
+      "command": "codegraph",
+      "args": ["serve", "--mcp"],
+      "lifecycle": "eager"
+    },
+    "context7": {
+      "transport": "streamable-http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "{{ onepasswordRead "op://Private/Context7/API Key" }}"
+      },
+      "lifecycle": "eager"
+    },
+    "websearch": {
+      "transport": "streamable-http",
+      "url": "https://mcp.exa.ai/mcp",
+      "headers": {
+        "x-api-key": "{{ onepasswordRead "op://Private/Exa/API Key" }}"
+      },
+      "lifecycle": "eager"
+    }
+  }
+}

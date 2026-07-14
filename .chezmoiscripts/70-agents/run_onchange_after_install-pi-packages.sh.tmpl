@@ -1,0 +1,70 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/70-agents/run_onchange_after_install-pi-packages.sh.tmpl
+#
+# Installs the pi packages this repo declares — currently just
+# `pi-mcp-extension` (npm), which is what gives pi an MCP client at all. pi
+# ships no MCP support of its own: without the extension the servers declared
+# in ~/.pi/agent/mcp.json (source: dot_pi/agent/private_readonly_mcp.json.tmpl)
+# are inert, and without that config the extension has nothing to connect to —
+# the two halves are useless apart, so they land together.
+#
+# WHY a script, and not a chezmoi-managed target: pi records its installed
+# packages in ~/.pi/agent/settings.json, which pi LIVE-WRITES (`theme`,
+# `lastChangelogVersion`, …). A chezmoi-managed file there — let alone a
+# `readonly_` 0444 one — would fight the agent for the same file on every
+# session, exactly the way a managed ~/.claude/settings.json would fight Claude
+# Code and aoe (see install-claude-plugins). `pi install` is therefore the ONLY
+# correct mechanism: it owns settings.json, we only ask it to converge.
+#
+# `pi install <source>` is IDEMPOTENT: re-running it on an already-installed
+# package exits 0 and does NOT duplicate the entry in the packages array, so
+# this script is free to re-run. pi installs the package with npm under
+# ~/.pi/agent/npm/, so this repo's ~/.npmrc hardening applies there too —
+# `save-exact=true` means it lands exactly pinned in that tree.
+#
+# The package itself is UNPINNED here (`npm:pi-mcp-extension` tracks npm
+# latest), the same trade-off the dotagents remote skills make by tracking their
+# newest upstream release: unsettled by design — a bad upstream publish reaches
+# the host on the next install.
+#
+# onchange trigger: the PACKAGES array below IS the trigger. There is no
+# source-dir dependency to hash, so there is deliberately NO fingerprint block
+# — editing the array changes this script's rendered content and re-runs it
+# (the same shape as install-vscodium-extensions).
+#
+# Soft-skip: this script must never fail an apply — a missing `pi` binary exits
+# 0 after a diagnostic. NOTE the standard onchange trade-off: chezmoi records
+# that clean exit-0 as a successful run, so a skipped install is NOT retried on
+# the next apply until the rendered content changes — after fixing the cause,
+# re-run `pi install` by hand or `chezmoi apply --force`.
+#
+# POSIX-only (`ne windows`): pi is fetched per-version by .chezmoiexternals/
+# ai-agents.toml, whose pi block skips Windows — the release does ship windows
+# .zip assets, but the ~/.local/bin symlinker (00-tools/run_onchange_after_pi)
+# has no .ps1 counterpart. Deliberately KEPT in containers, like the dotagents
+# and compound-engineering installs in this directory: pi is a first-class CLI
+# here and is wanted in a devbox.
+
+set -euo pipefail
+
+PACKAGES=("npm:pi-mcp-extension")
+
+skip() { exit 0; }
+
+# `pi` is fetched by .chezmoiexternals/ai-agents.toml during the file phase and
+# symlinked into ~/.local/bin by .chezmoiscripts/00-tools/run_onchange_after_pi,
+# so it exists by this after-phase script on a normal apply. Absent (first
+# bootstrap, fetch failed) → nothing to install.
+if ! command -v pi >/dev/null 2>&1; then
+  echo "install-pi-packages: skipped (pi not on PATH)" >&2
+  skip
+fi
+
+for pkg in "${PACKAGES[@]}"; do
+  if ! pi install "$pkg"; then
+    echo "install-pi-packages: skipped (install of ${pkg} failed)" >&2
+    skip
+  fi
+done
+{{ end -}}
