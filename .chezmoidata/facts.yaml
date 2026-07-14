@@ -64,7 +64,8 @@
 # ---------------------------------------------------------------------------
 # Adding a fact:
 #
-#   1. Declare it here (name, type, probe layer, gates, whenFalse).
+#   1. Declare it here (name, type, probe layer, gates, whenFalse; hook facts also
+#      declare their fail-safe `absentDefault`).
 #   2. Implement the probe in the layer you named — write_facts_cache in
 #      .install-prerequisites.sh (AND the all-false line in the .ps1), or
 #      facts.tmpl. Skipping this step aborts the apply; it does not silently
@@ -73,9 +74,10 @@
 #      or is a plain file test (template). When in doubt, template — it is free.
 #
 # `whenFalse:` is not decoration. Every fact here is FAIL-SAFE, but the safe value
-# is PER FACT, not a uniform false — and the absent-cache default in
-# .chezmoitemplates/facts.tmpl is where that is spelled out. The rule: the value a
-# fact takes when the cache is missing must SKIP the thing it gates, never grant it.
+# is PER FACT, not a uniform false. Every `probe: hook` entry declares that value
+# once as `absentDefault`; facts.tmpl discovers the hook set from the registry and
+# reads it. The rule: the value a fact takes when the cache is missing must SKIP
+# the thing it gates, never grant it.
 #
 # For most facts that is `false`, because the gate reads `<fact>` and false means
 # skip. `vm` is the one gating a PRIVILEGE GRANT (etc/sudoers.d/* → %wheel NOPASSWD),
@@ -89,10 +91,9 @@
 #             server run the desktop/system provisioning that guard exists to keep
 #             off it. Its safe absent-value is TRUE.
 #
-# A new fact whose gate reads `!<fact>`, or whose guard skips on true, belongs in
-# that inverted group — say so in its `whenFalse:` here AND add it to the `true`
-# side of `$absentDefault` in facts.tmpl. A fact that cannot be written so that ONE
-# of its two values is the harmless one does not belong in this registry.
+# A new hook fact whose gate reads `!<fact>`, or whose guard skips on true, declares
+# `absentDefault: true` and says why in `whenFalse:`. A fact that cannot be written
+# so that ONE of its two values is harmless does not belong in this registry.
 factRegistry:
   # --- OS / distro / desktop (chezmoi builtins) ------------------------------
   os:
@@ -139,6 +140,7 @@ factRegistry:
   nvidia:
     type: bool
     probe: hook
+    absentDefault: false
     source: PCI vendor 0x10de anywhere under /sys/bus/pci/devices/*/vendor.
     gates: >-
       nvidiaPackages (both distros — the CUDA/libnvidia-container repos on Ubuntu,
@@ -153,6 +155,7 @@ factRegistry:
   intelGpu:
     type: bool
     probe: hook
+    absentDefault: false
     source: >-
       PCI vendor 0x8086 AND class 0x03xxxx (display controller). The class half is
       load-bearing: 0x8086 is Intel's vendor id for every Intel part, so vendor
@@ -180,6 +183,7 @@ factRegistry:
   vm:
     type: bool
     probe: hook
+    absentDefault: false
     source: systemd-detect-virt --vm --quiet (VMs only; a container is NOT a vm).
     gates: >-
       etc/sudoers.d/* — password-less sudo (%wheel NOPASSWD). THE ONLY FACT IN THIS
@@ -192,6 +196,7 @@ factRegistry:
   virt:
     type: bool
     probe: hook
+    absentDefault: true
     source: >-
       systemd-detect-virt --quiet, bare — true for a VM AND for a container. Not the
       same probe as `vm`, and not a superset by accident: both installers' IS_VIRT
@@ -206,6 +211,7 @@ factRegistry:
   ubuntuStudio:
     type: bool
     probe: hook
+    absentDefault: false
     source: >-
       stat /var/lib/dpkg/info/ubuntustudio-default-settings.md5sums — the Studio ISO's
       seed package (every Ubuntu flavor reports ID=ubuntu, so the package IS the
@@ -258,6 +264,7 @@ factRegistry:
   headless:
     type: bool
     probe: hook
+    absentDefault: true
     source: >-
       systemd default target != graphical.target AND no
       /etc/systemd/system/display-manager.service alias symlink (the symlink systemd

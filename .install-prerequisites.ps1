@@ -168,11 +168,13 @@ function Confirm-ConfigSecretsKey {
 #
 # Every one of the six cached facts is Linux-specific (a PCI vendor scan under
 # /sys, systemd-detect-virt, a dpkg marker, a systemd default target), so on
-# Windows they are all FALSE — which is also the conservative direction for each.
+# Windows their actual probe results are all FALSE. These are platform results,
+# distinct from the fail-safe defaults used when no cache exists at all.
 # The file is still WRITTEN rather than skipped, because .chezmoitemplates/
 # facts.tmpl must have something to read: its `include` is stat-guarded and would
-# degrade to the same all-false anyway, but an actually-present cache keeps the
-# Windows render on the same code path as every other host instead of a fallback.
+# degrade to the registry's per-fact absent defaults, but an actually-present
+# cache keeps the Windows render on the same code path as every other host and
+# preserves the real all-false Windows probe results.
 function Write-FactsCache {
     $cacheHome = if ($env:XDG_CACHE_HOME) { $env:XDG_CACHE_HOME } else { Join-Path $HOME '.cache' }
     $cacheDir = Join-Path $cacheHome 'chezmoi'
@@ -195,9 +197,18 @@ function Write-FactsCache {
             'virt: false'
             'vm: false'
         )
-        Set-Content -Path $cacheFile -Value $lines -Encoding utf8 -ErrorAction Stop
+        # PowerShell 5.1's `Set-Content -Encoding utf8` prepends a BOM. facts.tmpl
+        # shape-checks from byte zero before parsing, so that BOM would discard the
+        # otherwise-valid cache forever. Write one newline-terminated UTF-8 string
+        # explicitly with the BOM-less encoder; LF is accepted alongside CRLF.
+        $text = ($lines -join "`n") + "`n"
+        [System.IO.File]::WriteAllText(
+            $cacheFile,
+            $text,
+            (New-Object System.Text.UTF8Encoding $false)
+        )
     } catch {
-        Write-Stderr "install-prerequisites.ps1: cannot write $cacheFile; host facts will render false this run."
+        Write-Stderr "install-prerequisites.ps1: cannot write $cacheFile; hook facts will use their registry fail-safe defaults this run."
     } finally {
         $ErrorActionPreference = $previous
     }

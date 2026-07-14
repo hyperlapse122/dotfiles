@@ -149,7 +149,7 @@ packages:
       # mechanism: dnf can fetch a vendor-authored .repo file whole and adopt it.
       # apt has no "download the vendor's source list" verb — you transcribe the
       # `deb ` line yourself — so on ubuntu tailscale is a hand-written aptRepos entry.
-      repofiles:
+      repoFiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
       # dnf groups installed via `dnf group install` (own transaction, separate
       # from the individual packages below). Fedora-only mechanism: dnf comps groups

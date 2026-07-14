@@ -535,17 +535,11 @@ A real `chezmoi apply` against the live `$HOME` is a **deploy**, not a verificat
   the same way the wrapper does (`GITHUB_TOKEN="$(gh auth token)" chezmoi …`)
   rather than waiting out the reset.
 
-**An agent worktree inside the source dir POISONS every render — `--source` your
-own tree.** chezmoi reads `.chezmoidata/` **recursively** through the source
-tree, and an agent worktree under `.claude/worktrees/<name>/` is a full copy of
-the repo: *its* `.chezmoidata/` is merged into the source state of a render
-launched from the repo root, at whatever commit that worktree happens to sit on.
-This is not theoretical — it bit the fact-registry refactor, where a render from
-the root reported a gate name that had already been renamed on the branch. So:
-every chezmoi command an agent runs MUST pass `--source <its own worktree>` (the
-stub-`op` recipe below already does), and a verification run from the repo root
-MUST happen with no worktrees present. When a render disagrees with the file you
-are looking at, suspect this first.
+**A nested agent worktree now fails loud — `--source` your own tree.** chezmoi
+reads `.chezmoidata/` recursively, so `.chezmoitemplates/facts.tmpl` aborts when
+it finds any nested copy and names the offending path. Remove that worktree or
+pass `--source <its own worktree>`, where its `.chezmoidata` is legitimately the
+top-level one. The stub-`op` recipe below already passes `--source "$PWD"`.
 
 #### When local verification is impossible, verify via the PR's CI + artifacts
 
@@ -569,12 +563,16 @@ exactly this:
   file on the non-matching OS; a `*.render-error.txt` beside an entry flags a
   render failure to inspect.
 - **`shellcheck (rendered scripts + repo-meta)`** — `needs: [apply,
-  render-internals]`, so it lints the REAL rendered Fedora + Ubuntu output of the
+  render-internals, apply-macos]`, so it lints the REAL rendered Fedora + Ubuntu +
+  macOS output of the
   provisioning scripts (the `.tmpl` files shellcheck can't parse directly) plus
   the non-deployed repo-meta scripts (`.install-prerequisites.sh`, the `.ci`
   smoke test). Findings also land in the **`shellcheck-report`** artifact. This is
   the sole shellcheck gate (it replaced the old source-only `shell-lint` job in
   `ci.yml`), so it is **PR-only** — a direct push to `main` is not shell-linted.
+  A gate behind `needs:` is SKIPPED when an upstream fails; skipped is red, not
+  passed, because the required lint never ran. The workflow's final `gate` job
+  enforces that every job, including both lint gates, actually reached success.
 
 Read the job logs and download the artifacts (they carry `retention-days: 3`) to
 confirm what actually rendered before relying on a change. `ci.yml` covers the
@@ -1123,7 +1121,7 @@ keyring entry can no longer decrypt the stored ciphertexts.
   - **Global Theme**: four `kdeglobals [KDE]` rows in `.chezmoidata/kde.yaml`, applied by the generic `config-kde-settings` runner (they were the `config-kde-autotheme` script until it collapsed into the manifest): Plasma's default Breeze Global Theme on automatic day/night switching — `AutomaticLookAndFeel=true` + `DefaultLightLookAndFeel=org.kde.breeze.desktop` / `DefaultDarkLookAndFeel=org.kde.breezedark.desktop` + an initial `LookAndFeelPackage=org.kde.breezedark.desktop` pin (automatic Breeze Dark ⇄ Light, timed off the Night Light schedule). On Plasma < 6.5 the auto-switch keys are silently ignored, so it degrades to the `LookAndFeelPackage` Breeze Dark pin. The Plasma session's icon theme, cursor, and splash follow the active Breeze variant on next login. (The former `config-kde-darkmode` Breeze-Dark-pin script was removed in favour of this.)
   - **Boot splash (Plymouth) → left native**: Plymouth is no longer customized on either distro. The former Fedora `plymouthd.conf` (bgrt + `DeviceScale=2`) and the Ubuntu bgrt `update-alternatives` swap were removed — a `bgrt`/spinner splash could swallow the early-boot LUKS passphrase prompt on Ubuntu (Launchpad #1864586). Fedora's removed `/etc/plymouth/plymouthd.conf` is cleaned up via a `distro: fedora`-scoped `removed:` entry in `.chezmoidata/system.yaml` (never touching a native/user file at that path on Ubuntu). Per the no-teardown-scripts rule above, Ubuntu's `default.plymouth` alternative is **not** reverted by a shipped script: a host still carrying the old manual `bgrt` pick reverts to the distro default by hand — `sudo update-alternatives --auto default.plymouth && sudo update-initramfs -u -k all`. Each distro keeps whatever Plymouth theme it ships.
   - **Login greeter (SDDM)**: `system/linux/etc/sddm.conf.d/90-breeze.conf` (`[Theme] Current=breeze`) deploys to both distros via the system tree; the `90-` prefix outranks vendor drop-ins. The `sddmBreeze` gate in `.chezmoidata/system.yaml` skips deploying it when `/usr/share/sddm/themes/breeze/theme.conf` is absent (forcing a missing theme breaks the login screen). This path was previously an orphan in the removed-path list; that entry is dropped now that the file is shipped again.
-  - **Wallpaper**: `run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl` (linux gate + the `desktop` fact via `kde-guard`, then a live-session probe) applies the wallpaper package named by `kde.wallpaper.theme` (`Next`, Plasma's upstream Breeze default) via `plasma-apply-wallpaperimage`, **exactly once** (per-user stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a wallpaper the user later picks is never reverted. Its `XDG_CURRENT_DESKTOP` test is the one host-desktop probe left outside the registry, and deliberately so: that is a SESSION variable — empty in a TTY apply on a KDE host — so it answers "is a Plasma session live *right now*", which is a question about the moment, not about the machine. `run_onchange` with no external dependency (its trigger is its own content); on a headless/first-boot apply it exits 0, and onchange records that skip as done, so the wallpaper is applied on the next content change or `chezmoi apply --force` rather than merely because a live Plasma session later appears.
+  - **Wallpaper**: `run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl` (linux gate + the `desktop` fact via `kde-guard`, then live-session checks) applies the wallpaper package named by `kde.wallpaper.theme` (`Next`, Plasma's upstream Breeze default) via `plasma-apply-wallpaperimage`, **exactly once** (per-user stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a wallpaper the user later picks is never reverted. The host-desktop decision is registry-owned; the remaining D-Bus, display-server, and `pgrep plasmashell` checks answer only whether a Plasma session is live *right now*. `run_onchange` with no external dependency (its trigger is its own content); on a headless/first-boot apply it exits 0, and onchange records that skip as done, so the wallpaper is applied on the next content change or `chezmoi apply --force` rather than merely because a live Plasma session later appears.
 - **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists and RPM Fusion/COPRs have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos plus CUDA/libnvidia-container NVIDIA packages instead — both distros gate that group on the same `nvidia` fact.
 - POSIX scripts/wrappers keep a Windows `.ps1` counterpart in sync
   (`executable_code`/`.ps1`, `executable_opencode`/`.ps1`). Files migrated from the

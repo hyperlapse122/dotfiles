@@ -218,7 +218,7 @@ EOF
 {{ end -}}
 
 
-{{ range .packages.linux.fedora.repofiles -}}
+{{ range .packages.linux.fedora.repoFiles -}}
 "${SUDO[@]}" dnf config-manager addrepo --from-repofile {{ . | quote }} --overwrite
 {{ end -}}
 

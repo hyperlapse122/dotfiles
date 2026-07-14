@@ -32,8 +32,10 @@ the push succeeds.
 ## Poll until a terminal state
 
 **MUST poll until a terminal state**: `success`, `failure`, `cancelled`, `timed_out`,
-`action_required`. `pending` / `queued` / `running` / `in-progress` are **NOT** terminal —
-keep polling. CLI recipes (`gh pr checks --watch`, `gh run view --log-failed`,
+`action_required`, `skipped`. A **skipped required job is not a pass**: it usually means
+an upstream job in its `needs:` chain failed and the required gate never ran. Treat that
+as red and inspect the upstream failure. `pending` / `queued` / `running` /
+`in-progress` are **NOT** terminal — keep polling. CLI recipes (`gh pr checks --watch`, `gh run view --log-failed`,
 `glab ci status --live`, `glab ci trace`) →
 [`references/commands.md`](references/commands.md).
 

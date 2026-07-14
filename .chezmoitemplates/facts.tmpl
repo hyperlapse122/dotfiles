@@ -18,8 +18,8 @@ run, not by cost — everything here is live:
   1. The CACHE — ${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml, written by
      write_facts_cache in .install-prerequisites.sh, which chezmoi runs as its
      read-source-state.pre hook: once per chezmoi command, BEFORE the source
-     state is read. Six facts live there because the template functions cannot
-     express them — `output` turns a non-zero exit into a render-aborting
+     state is read. Hook-probed facts live there because the template functions
+     cannot express them — `output` turns a non-zero exit into a render-aborting
      template error (systemd-detect-virt --vm exits 1 on bare metal), and `glob`
      does not traverse symlinks, which /sys/bus/pci/devices/* is made of.
      NEVER probe a host fact with `output`.
@@ -27,22 +27,40 @@ run, not by cost — everything here is live:
   2. IN-PROCESS probes — a `stat`, a stat-guarded `include`, a `glob`, or a
      chezmoi builtin. No subprocess, so they cost nothing per render.
 
-Two rules hold this file together:
+Three rules hold this file together:
+
+  * A NESTED .chezmoidata ABORTS THE RENDER. chezmoi discovers data directories
+    recursively, so a harness worktree below the source root would otherwise
+    merge a stale registry into this one. The source root's own .chezmoidata is
+    the only legitimate match.
 
   * EVERY absolute-path `include` is stat-guarded. `include` HARD-ERRORS on a
     missing file (`stat` merely returns nil), so an unguarded read of the cache
     or of /sys/class/dmi/ takes down every render on a host that lacks it —
     macOS and Windows in CI included.
 
-  * A MISSING CACHE IS NOT AN ERROR. Every cached fact then resolves false,
-    which is the conservative direction for all six (skip NVIDIA, skip Intel,
-    skip the bare-metal set, skip ThinkPad/Studio, treat the host as a desktop).
+  * A MISSING CACHE IS NOT AN ERROR. Every hook fact then resolves to its
+    registry-declared `absentDefault`, the per-fact value that skips the gated
+    action. In particular, `virt` and `headless` resolve true because their gates
+    are inverted; driver, Studio, and privilege-grant facts resolve false.
     This is what makes the empty---config renders — the AGENTS.md stub-`op`
     recipe and the CI render-internals job, where the hook does not run at all —
     correct rather than merely non-fatal: the cache file persists on the host
     from the last REAL chezmoi command, and an absolute-path `include` reads it
     regardless of which config chezmoi was pointed at.
 */ -}}
+
+{{- /* Fail before consuming any merged data when a harness has put a full repo
+   worktree below this source root. This guard is relative to .chezmoi.sourceDir,
+   so sourcing chezmoi from INSIDE that worktree is legitimate: its own data dir
+   is the top-level match and only a worktree nested below it would fail. */ -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $topDataDir := joinPath $sourceDir ".chezmoidata" -}}
+{{- range $dataDir := glob (joinPath $sourceDir "**/.chezmoidata") -}}
+{{-   if ne $dataDir $topDataDir -}}
+{{-     fail (printf "nested chezmoi data directory %q would be merged into source %q; remove the nested agent worktree or pass `--source <your own worktree>` so its .chezmoidata is top-level" $dataDir $sourceDir) -}}
+{{-   end -}}
+{{- end -}}
 
 {{- /* ---- Layer 1: the pre-hook cache ---------------------------------------
    Keep this path byte-identical to write_facts_cache's in the hook (and to
@@ -77,14 +95,10 @@ Two rules hold this file together:
 {{-   end -}}
 {{- end -}}
 
-{{- /* Cached facts are booleans. Coerce defensively: a missing key (no cache
-   yet) and a non-boolean value (a truncated or hand-edited cache) both resolve
-   false rather than leaking a string into a consumer's `if`. The next real
-   chezmoi command rewrites the file before the render, so a damaged cache
-   self-heals — no reason to fail the apply over it. */ -}}
 {{- /* THE ABSENT-CACHE DEFAULT IS PER FACT, NOT A UNIFORM false — and getting that
-   wrong is a fail-OPEN, which is why it is spelled out here rather than folded into
-   one `default false`.
+   wrong is a fail-OPEN. Each hook fact therefore declares `absentDefault` beside
+   its probe metadata in .chezmoidata/facts.yaml; this loop discovers the hook set
+   and reads that decision instead of maintaining either fact-name list here.
 
    The rule is: the value a fact takes when we DO NOT KNOW must be the one that
    SKIPS the thing it gates. For four of the six that is `false`, because the gate
@@ -107,27 +121,29 @@ Two rules hold this file together:
                guard exists to keep off it.
 
    Both were caught in review as fail-open defaults. A future fact whose gate reads
-   `!<fact>`, or whose guard skips on true, belongs in the `true` group — say so in
-   its `whenFalse:` entry in .chezmoidata/facts.yaml.
+   `!<fact>`, or whose guard skips on true, declares `absentDefault: true` and
+   explains the inversion in its `whenFalse:` entry.
 
    A non-boolean value (a truncated or hand-edited cache) takes the same safe
    default rather than leaking a string into a consumer's `if`; the next real
    chezmoi command rewrites the file before the render, so a damaged cache
    self-heals and there is no reason to fail the apply over it. */ -}}
-{{- $absentDefault := dict
-      "nvidia"       false
-      "intelGpu"     false
-      "ubuntuStudio" false
-      "vm"           false
-      "virt"         true
-      "headless"     true -}}
 {{- $facts := dict -}}
-{{- range $name, $fallback := $absentDefault -}}
-{{-   $value := index $cached $name -}}
-{{-   if kindIs "bool" $value -}}
-{{-     $_ := set $facts $name $value -}}
-{{-   else -}}
-{{-     $_ := set $facts $name $fallback -}}
+{{- range $name, $spec := .factRegistry -}}
+{{-   if eq $spec.probe "hook" -}}
+{{-     if not (hasKey $spec "absentDefault") -}}
+{{-       fail (printf "hook fact %q has no absentDefault in .chezmoidata/facts.yaml; declare its fail-safe value explicitly" $name) -}}
+{{-     end -}}
+{{-     $fallback := $spec.absentDefault -}}
+{{-     if not (kindIs "bool" $fallback) -}}
+{{-       fail (printf "hook fact %q has non-boolean absentDefault %v in .chezmoidata/facts.yaml" $name $fallback) -}}
+{{-     end -}}
+{{-     $value := index $cached $name -}}
+{{-     if kindIs "bool" $value -}}
+{{-       $_ := set $facts $name $value -}}
+{{-     else -}}
+{{-       $_ := set $facts $name $fallback -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
 
