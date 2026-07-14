@@ -1,0 +1,31 @@
+[Unit]
+Description=LibrePods — AirPods control for Linux (tray app)
+# The Linux LibrePods app (upstream `linux/rust` branch, built from source by
+# .chezmoiscripts/60-build/run_onchange_after_build-librepods.sh.tmpl): an iced
+# GUI that talks to the AirPods over BlueZ/D-Bus and lives in the system tray as
+# a StatusNotifierItem (ksni) — ear detection, ANC mode, battery, conversational
+# awareness.
+#
+# It is a tray GUI, so it is bound to graphical-session.target, not
+# default.target: it needs the session bus, a running BlueZ session, and a
+# StatusNotifier HOST to draw the tray icon into. KDE Plasma hosts one natively;
+# on GNOME that host is the "Ubuntu AppIndicators" extension (shipped and enabled
+# on this repo's Ubuntu GNOME target), without which the app still runs but has
+# no visible tray icon.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# --start-minimized: come up straight into the tray instead of popping the main
+# window on every single login (the app's clap flags are --debug, --no-tray and
+# --start-minimized).
+ExecStart=%h/.local/bin/librepods --start-minimized
+# on-failure, NOT always: a clean exit means the user quit the tray app on
+# purpose, and systemd must not resurrect it. A crash (bluetooth stack hiccup,
+# tray host restart) does get retried, backed off enough not to spin.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

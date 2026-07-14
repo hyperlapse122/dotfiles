@@ -125,6 +125,10 @@ gate_reason() {
 # --- Install system/linux/etc/** into /etc/** -------------------------------
 count=0
 skipped=0
+# Set below when a file under etc/bluetooth/ is actually about to change on this
+# host; consumed by the bluetoothd restart in the reload section. See the long
+# comment there for why this is change-gated instead of dir-gated like the rest.
+bluetooth_changed=false
 for src in "$SRC_ROOT"/etc/**; do
   [[ -f "$src" ]] || continue
 
@@ -160,6 +164,15 @@ for src in "$SRC_ROOT"/etc/**; do
     printf '  -- %s (skipped: %s)\n' "$dst" "$(gate_reason "$gate")"
     skipped=$((skipped + 1))
     continue
+  fi
+
+  # Note whether THIS install actually changes a /etc/bluetooth/ file, so the
+  # reload section can restart bluetoothd only when it has to. `cmp -s` against
+  # the deployed copy is the whole test: a missing $dst is "changed" (cmp exits
+  # non-zero), an identical $dst is not. Checked before the install, since after
+  # it the two files are identical by construction.
+  if [[ "$rel" == etc/bluetooth/* ]] && ! cmp -s "$src" "$dst"; then
+    bluetooth_changed=true
   fi
 
   printf '  -> %s (mode %s)\n' "$dst" "$mode"
@@ -282,5 +295,27 @@ if [[ -d "$SRC_ROOT/etc/dconf/db/gdm.d" ]] && gate_ok gdm \
   && command -v dconf >/dev/null 2>&1; then
   printf '  -> dconf update\n'
   "${SUDO[@]}" dconf update
+fi
+
+# Restart bluetoothd so a changed /etc/bluetooth/main.conf takes effect — it is
+# read ONCE at startup and has no reload path (no SIGHUP handler, no drop-in
+# dir), so an edited DeviceID/ControllerMode is otherwise inert until reboot.
+#
+# CHANGE-gated, deliberately NOT dir-gated like every reload above. The others
+# (`daemon-reload`, `udevadm control --reload`, `sysctl --system`) are cheap and
+# side-effect-free, so gating them on "does this source dir exist" is fine even
+# though that fires them on EVERY run of this script — i.e. whenever ANY tracked
+# /etc file changes. A bluetoothd restart is not cheap: it drops every live
+# Bluetooth connection (mouse, keyboard, headphones) mid-session. So it fires
+# only when the install loop above saw an etc/bluetooth/ file genuinely differ
+# from what was already deployed.
+#
+# AirPods must be RE-PAIRED after a DeviceID change: they cache the host's DID
+# from pairing, so a restart alone will not surface the spoofed-vendor features.
+if [[ "$bluetooth_changed" == true ]] \
+  && command -v systemctl >/dev/null 2>&1 \
+  && systemctl cat bluetooth.service >/dev/null 2>&1; then
+  printf '  -> systemctl restart bluetooth (etc/bluetooth changed; re-pair AirPods after a DeviceID change)\n'
+  "${SUDO[@]}" systemctl restart bluetooth
 fi
 {{ end -}}

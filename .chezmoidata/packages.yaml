@@ -109,6 +109,14 @@ packages:
         - solaar  # Logitech HID++ device manager
         - solaar-udev  # udev rules granting Solaar device access
 
+        # LibrePods (AirPods control) build deps — the linux-rust crate is compiled
+        # from upstream source by .chezmoiscripts/60-build/run_onchange_after_build-librepods.sh.tmpl,
+        # so the headers must be present before that script runs. pkg-config is
+        # already in the "Build tooling" group above (Fedora satisfies it from
+        # pkgconf-pkg-config), so only the two libraries are listed here.
+        - dbus-devel  # libdbus-1 headers (the app drives BlueZ over D-Bus)
+        - pulseaudio-libs-devel  # libpulse headers (audio routing / ear detection)
+
         # Password manager
         - 1password  # 1Password desktop app
         - 1password-cli  # 1Password CLI (op)
@@ -369,6 +377,14 @@ packages:
 
         # Logitech device manager
         - solaar  # Logitech HID++ device manager
+
+        # LibrePods (AirPods control) build deps — the linux-rust crate is compiled
+        # from upstream source by .chezmoiscripts/60-build/run_onchange_after_build-librepods.sh.tmpl,
+        # so the headers must be present before that script runs. pkg-config is
+        # already in the "Build tooling" group above, so only the two libraries
+        # are listed here.
+        - libdbus-1-dev  # libdbus-1 headers (the app drives BlueZ over D-Bus; dbus-devel equivalent)
+        - libpulse-dev  # libpulse headers (audio routing / ear detection; pulseaudio-libs-devel equivalent)
 
         # Password manager
         - 1password  # 1Password desktop app (from 1password apt repo)
