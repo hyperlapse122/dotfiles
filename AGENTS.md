@@ -509,6 +509,18 @@ claude plugin install mxm4-haptic@dotfiles --scope user
 - **Sub-agent gating is free.** The OpenCode plugin must inspect each session's `parentID` and poll child status, because `session.idle` fires for *every* sub-agent. Claude Code fires `Stop`/`StopFailure` for the **root** agent only — a sub-agent fires `SubagentStop`, which the plugin deliberately leaves **unhooked**. Hooking `SubagentStop` would reintroduce exactly the once-per-sub-agent buzzing the OpenCode plugin works to suppress.
 - **Every hook runs `bin/pulse`, which always exits 0 and prints nothing.** A Claude Code hook that exits non-zero surfaces an error to the user, and exit 2 *blocks* the event — so an undeliverable buzz (daemon down, mouse asleep, binary not built, waveform typo) must be a silent no-op. Do not let an error escape that script.
 
+### pi extension — managed `.ts` under `dot_pi/agent/extensions/`
+
+`~/.pi/agent/extensions/mxm4-haptic.ts` is the pi counterpart of the OpenCode plugin and the Claude Code plugin above — the third agent that buzzes identically. Unlike the other two it needs **no build and no install script**: pi auto-discovers `~/.pi/agent/extensions/*.ts` via [jiti](https://github.com/unjs/jiti) (TypeScript works without compilation), so the file phase alone lands a working extension, and a `chezmoi apply` that re-renders it takes effect on the next pi session (or `/reload`) with nothing to register. That is why, unlike the Claude Code plugin's `claude plugin marketplace add` + `plugin install` script, there is **no sibling `.chezmoiscripts/70-agents/` entry** — and why, unlike the OpenCode plugin's Vite+ workspace package, it is **not** under `packages/`. It is a single managed template: `dot_pi/agent/extensions/mxm4-haptic.ts.tmpl`.
+
+It shells out to the `mxm4-haptic` client binary (like the Claude Code plugin's `bin/pulse`) rather than importing the `@h82/mxm4-haptic` workspace library: a raw `.ts` file loaded by jiti has no bundler to pull a workspace dependency in, so the CLI is the robust path. `pulse()` awaits `pi.exec` (the client is non-blocking, ~1 ms) but swallows every failure — the same fire-and-forget, never-block contract as `bin/pulse`. Because it talks to the **client** (socket-only, never touches hidraw) rather than the device directly, it works on **both linux and darwin** — the client and daemon are built + run on macOS (IOKit HID backend + launchd plist), so this is the one haptic agent plugin that deploys on macOS, unlike the Claude/OpenCode ones which stay Linux-only.
+
+The event→waveform map is GENERATED from `.chezmoidata/haptic.yaml` (`haptic.pi` — see the haptic event-map bullet below), baked into the `.ts` as consts at render time. Three things are worth knowing before editing it:
+
+- **Sub-agent gating is free, and for a *third* reason.** The OpenCode plugin inspects `parentID`; the Claude Code plugin relies on `Stop` firing for the root only. pi-subagents spawns each child as a **separate `pi` process in `--mode json -p`** (headless, `ctx.hasUI === false`), so gating every handler on `ctx.hasUI` excludes children — no `parentID` inspection, no child-status polling. The same gate also silences `pi -p` / script runs (no human watching in real time); only the root interactive (`tui`/`rpc`) session has a human to buzz.
+- **There is no dedicated "turn failed" event in pi.** `agent_settled` fires whether the run succeeded or died, so the extension tracks the last `after_provider_response` status and switches the waveform to `failed` when that status is `>= 400`. This catches HTTP-level API errors (the common `StopFailure`/`session.error` case the other two target); a network error with no HTTP response leaves the status unset and is treated as a normal completion — an acceptable miss, biased toward the common (successful) path.
+- **`question` collapses two Claude Code events into one.** pi has no separate permission/elicitation event, so the one `tool_call` hook on the `ask_user` tool (from `pi-ask-user`) covers both Claude's `Notification` (elicitation) and `PreToolUse` (`AskUserQuestion`). Gated **linux + darwin** (root `.chezmoiignore`), NOT Linux-only like the Claude/OpenCode haptic plugins: it shells out to the `mxm4-haptic` **client**, which is built + run on macOS too (the daemon has a macOS IOKit HID backend + a launchd plist, and the client is socket-only). Skipped only on Windows (pi is not provisioned there) and in containers (no MX Master 4 / no daemon).
+
 ### pi — packages installed by script, MCP servers configured by file
 
 `pi` (earendil-works, fetched per-version by `.chezmoiexternals/ai-agents.toml`) is provisioned by two sources that are useless apart.
@@ -933,24 +945,32 @@ keyring entry can no longer decrypt the stored ciphertexts.
   env). The `build-mxm4-haptic` fingerprint hashes this file plus the unit
   templates, so a knob edit re-runs the build script — daemon-reload + restart
   of the active units — on the same apply. Tune a knob HERE, not in the units.
-- **Claude Code haptic event map**: `.chezmoidata/haptic.yaml` (same file, second
-  consumer). `haptic.claude.{stop,stopFailure,notification,question}` maps a
-  Claude Code hook event to one of the 16 waveform names in
+- **Claude Code + pi haptic event maps**: `.chezmoidata/haptic.yaml` (same file,
+  two more consumers). `haptic.claude.{stop,stopFailure,notification,question}`
+  maps a Claude Code hook event to one of the 16 waveform names in
   `crates/mxm4-haptic/src/lib.rs` (`WAVEFORMS`), and renders into the hook
   manifest of the `mxm4-haptic` Claude Code plugin
   (`dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl`; see
-  Claude Code plugins above). Retune a waveform HERE, not in the manifest — the
-  same rule as `solaar.rules.gestureConfirmWaveform`. The *structure* (which
-  event, which matcher: `Notification` →
-  `permission_prompt|elicitation_dialog`, `PreToolUse` → `AskUserQuestion`)
-  stays in the template; only the waveform is data. A name that isn't in the
-  table **fails the apply loudly** (a `fail` guard in the template listing the
-  valid names) rather than silently never buzzing — the same "unknown name
-  aborts" rule the `system.yaml` gates use. The `install-claude-plugins`
-  fingerprint hashes BOTH the plugin source tree AND this file, because the
-  manifest is a *template* whose raw text is byte-identical when only a waveform
-  value changes — hashing the tree alone would miss a retune (exactly why
-  `config-solaar` also fingerprints `solaar.yaml` alongside `rules.yaml.tmpl`).
+  Claude Code plugins above). `haptic.pi.{settled,failed,question}` does the
+  same for the pi extension (`dot_pi/agent/extensions/mxm4-haptic.ts.tmpl`; see
+  pi extension above) — baked into the `.ts` as consts rather than a JSON
+  manifest, since pi has no hook manifest. The three maps mirror each other and
+  the OpenCode plugin's hardcoded values so all three agents buzz identically.
+  Retune a waveform HERE, not in the manifest/template — the same rule as
+  `solaar.rules.gestureConfirmWaveform`. The *structure* (which event, which
+  matcher: Claude `Notification` → `permission_prompt|elicitation_dialog`,
+  `PreToolUse` → `AskUserQuestion`; pi `agent_settled` / `tool_call` on
+  `ask_user`) stays in the template; only the waveform is data. A name that
+  isn't in the table **fails the apply loudly** (a `fail` guard in BOTH
+  templates listing the valid names) rather than silently never buzzing — the
+  same "unknown name aborts" rule the `system.yaml` gates use. The
+  `install-claude-plugins` fingerprint hashes BOTH the plugin source tree AND
+  this file, because the manifest is a *template* whose raw text is
+  byte-identical when only a waveform value changes — hashing the tree alone
+  would miss a retune (exactly why `config-solaar` also fingerprints
+  `solaar.yaml` alongside `rules.yaml.tmpl`). The pi extension needs no such
+  fingerprint: it is a managed target with no onchange script, so a re-rendered
+  `.ts` is simply reloaded by pi on the next session.
 - **Biopass auth-method policy**: `.chezmoidata/biopass.yaml`.
   `biopass.methods` (per-method enable flags — face-only for now, so fprintd
   keeps sole ownership of fingerprint auth) renders into

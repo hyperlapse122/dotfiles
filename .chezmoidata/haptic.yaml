@@ -72,6 +72,42 @@
 # SubagentStop, which this plugin deliberately leaves unhooked), so there is no
 # gating logic to write. Hooking SubagentStop would buzz once per sub-agent —
 # don't.
+#
+# haptic.pi — pi extension event -> waveform, for the mxm4-haptic pi EXTENSION
+# (dot_pi/agent/extensions/mxm4-haptic.ts.tmpl, auto-discovered by pi from
+# ~/.pi/agent/extensions/ — no build, loaded via jiti). Same rule as
+# haptic.claude: each value MUST be one of the 16 waveform names in
+# crates/mxm4-haptic/src/lib.rs (WAVEFORMS); the template's fail guard aborts
+# the apply on a typo'd name. pi has no shell hooks and no hook manifest, so
+# unlike Claude Code the waveforms render directly into the extension's .ts as
+# baked-in consts (not a JSON manifest).
+#
+# The map mirrors haptic.claude / the OpenCode plugin so all THREE agents buzz
+# identically:
+#
+#   settled  <- agent_settled         : the agent finished its turn and is idle
+#                                       waiting for you (pi's equivalent of
+#                                       Claude Stop / OpenCode session.idle).
+#   failed   <- agent_settled after   : the run died on an API error (the last
+#               an error response       provider response >= 400) — pi's best
+#                                       equivalent of Claude StopFailure /
+#                                       OpenCode session.error. There is no
+#                                       dedicated "turn failed" event in pi,
+#                                       so the extension tracks the last
+#                                       after_provider_response status and
+#                                       switches the waveform on settle.
+#   question <- the ask_user tool     : the agent wants you to pick an option /
+#                                       answer (pi-ask-user). pi has no
+#                                       separate permission/elicitation event,
+#                                       so this one hook collapses Claude's
+#                                       Notification(elicitation) +
+#                                       PreToolUse(AskUserQuestion).
+#
+# Sub-agent gating is free here too, and for a different reason than the other
+# two: pi-subagents spawns each child as a SEPARATE pi process in --mode json -p
+# (headless, ctx.hasUI === false), so gating every handler on ctx.hasUI excludes
+# children — no parentID inspection, no child-status polling. The same gate also
+# silences `pi -p` / script runs (no human watching in real time).
 haptic:
   daemon:
     pacingMs: 180
@@ -86,4 +122,8 @@ haptic:
     stop: COMPLETED
     stopFailure: MAD
     notification: RINGING
+    question: RINGING
+  pi:
+    settled: COMPLETED
+    failed: MAD
     question: RINGING

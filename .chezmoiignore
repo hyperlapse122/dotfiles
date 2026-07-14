@@ -10,6 +10,7 @@
 ./LICENSE
 ./.agent-of-empires
 ./package.json
+./docs
 
 # Root-owned system config installed to /etc by
 # .chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl
@@ -41,10 +42,21 @@ src/garden.yaml
 # The mxm4-haptic Claude Code plugin drives the Linux-only mxm4-hapticd daemon
 # (it owns Linux hidraw for the MX Master 4), so there is nothing to pulse on
 # macOS/Windows — mirrors the Linux-only mxm4-haptic.js OpenCode plugin symlink
-# in .chezmoiscripts/60-build/. Skipping the deployed tree also strands nothing:
-# the installer script below is gated on linux too.
+# in .chezmoiscripts/60-build/. Skipping the deployed tree also strands
+# nothing: the Claude installer script below is gated on linux too.
 {{- if ne .chezmoi.os "linux" }}
 .local/share/claude-plugins
+{{- end }}
+
+# The pi mxm4-haptic extension (dot_pi/agent/extensions/mxm4-haptic.ts.tmpl)
+# shells out to the `mxm4-haptic` CLIENT, which is built + run on BOTH linux and
+# darwin — the daemon has a macOS IOKit HID backend + a launchd plist, and the
+# client is socket-only (it never touches hidraw). So unlike the Claude/OpenCode
+# haptic plugins above (Linux-only), it deploys on macOS too. Skipped only on
+# Windows, where pi itself is not provisioned here. (No installer to strand:
+# pi auto-discovers the extension.)
+{{- if eq .chezmoi.os "windows" }}
+.pi/agent/extensions/mxm4-haptic.ts
 {{- end }}
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
@@ -86,11 +98,13 @@ src/garden.yaml
 .chezmoiscripts/60-build/*mxm4-haptic.sh
 .chezmoiscripts/60-build/*librepods.sh
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
-# the Claude Code haptic plugin has nothing to pulse — skip both the deployed
-# plugin tree and the `claude plugin install` script. (The dotagents skills
-# install in the same 70-agents dir is deliberately KEPT — see below.)
+# the Claude Code haptic plugin and the pi haptic extension have nothing to
+# pulse — skip the deployed plugin tree, the `claude plugin install` script, and
+# the pi extension. (The dotagents skills install in the same 70-agents dir is
+# deliberately KEPT — see below.)
 .local/share/claude-plugins
 .chezmoiscripts/70-agents/*claude-plugins.sh
+.pi/agent/extensions/mxm4-haptic.ts
 # The 80-keys age-identity import is skipped above, so the encrypted ~/src
 # project registry cannot be decrypted in a container — skip it too (the
 # ~/src layout is a host concept anyway).

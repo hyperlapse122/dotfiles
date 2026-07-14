@@ -1,0 +1,145 @@
+{{- /*
+  pi extension — pulse the MX Master 4's built-in haptics on pi lifecycle events
+  via the mxm4-hapticd daemon. This is the pi counterpart of:
+    - packages/opencode-mxm4-haptic/   (the OpenCode plugin)
+    - dot_local/share/claude-plugins/mxm4-haptic/   (the Claude Code plugin)
+  so all three agents buzz identically.
+
+  GENERATED from .chezmoidata/haptic.yaml (haptic.pi) — tune a waveform THERE,
+  never here. The waveform per event is the data knob; the *structure* (which pi
+  event is hooked, the binary-resolution + fire-and-forget pulse logic) is code
+  and lives in this template. A typo'd waveform name fails the apply LOUDLY (the
+  fail guard below) rather than silently never buzzing — the same "unknown name
+  aborts" rule the Claude Code plugin's hooks.json.tmpl and the system.yaml
+  gates use.
+
+  Unlike the other two, this needs NO build and NO install script: pi
+  auto-discovers ~/.pi/agent/extensions/*.ts via jiti (TypeScript works without
+  compilation), so the file phase alone lands a working extension — a chezmoi
+  apply that re-renders this file takes effect on the next pi session (or
+  /reload), with nothing to register. That is why there is no sibling
+  .chezmoiscripts/70-agents entry, unlike the Claude Code plugin's
+  `claude plugin install`.
+
+  It shells out to the `mxm4-haptic` client (like the Claude Code plugin's
+  bin/pulse) rather than importing @h82/mxm4-haptic: a raw .ts file loaded by
+  jiti has no bundler to pull a workspace dependency in, so the CLI is the
+  robust path. pulse() ALWAYS exits cleanly — a buzz that cannot be delivered
+  (daemon stopped, mouse asleep, binary not built, headless run) is a silent
+  no-op that never blocks, fails, or slows a turn.
+*/ -}}
+{{- $waveforms := list
+  "SHARP STATE CHANGE" "DAMP STATE CHANGE" "SHARP COLLISION" "DAMP COLLISION"
+  "SUBTLE COLLISION" "HAPPY ALERT" "ANGRY ALERT" "COMPLETED" "SQUARE" "WAVE"
+  "FIREWORK" "MAD" "KNOCK" "JINGLE" "RINGING" "WHISPER COLLISION" -}}
+{{- /* Fail the apply loudly on a typo'd waveform — same 16 names as
+       crates/mxm4-haptic/src/lib.rs (WAVEFORMS) and the Claude/OpenCode maps. */ -}}
+{{- range $event, $waveform := .haptic.pi -}}
+{{- if not (has $waveform $waveforms) -}}
+{{- fail (printf "haptic.pi.%s = %q is not a known mxm4-haptic waveform; valid names (crates/mxm4-haptic/src/lib.rs WAVEFORMS): %s" $event $waveform (join ", " $waveforms)) -}}
+{{- end -}}
+{{- end -}}
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+/**
+ * Waveform per pi event. Baked in from .chezmoidata/haptic.yaml (haptic.pi) at
+ * apply time; retune THERE, not here.
+ *
+ *   SETTLED  — agent_settled: the agent finished its turn and is idle.
+ *   FAILED   — agent_settled after the run died on an API error (last provider
+ *              response >= 400). pi has no dedicated "turn failed" event, so the
+ *              extension infers it from the tracked after_provider_response
+ *              status — see the handler below.
+ *   QUESTION — the ask_user tool (pi-ask-user): the agent wants you to pick an
+ *              option / answer. Collapses Claude Code's Notification(elicitation)
+ *              + PreToolUse(AskUserQuestion): pi has no separate
+ *              permission/elicitation event.
+ */
+const WAVEFORM_SETTLED = {{ .haptic.pi.settled | quote }};
+const WAVEFORM_FAILED = {{ .haptic.pi.failed | quote }};
+const WAVEFORM_QUESTION = {{ .haptic.pi.question | quote }};
+
+// The ask_user tool registered by the pi-ask-user package — the one tool in this
+// setup that blocks waiting for the human's decision. Compared case-insensitively.
+const QUESTION_TOOL = "ask_user";
+
+/**
+ * Resolve the mxm4-haptic client binary. The client is built + installed to
+ * ~/.local/bin on BOTH linux and darwin (the daemon has a macOS IOKit HID
+ * backend + a launchd plist, and the client is socket-only — it never touches
+ * hidraw), so unlike the Claude/OpenCode haptic plugins this extension works on
+ * macOS too. Prefer the absolute ~/.local/bin path (do not lean on PATH, which
+ * rests on shell-profile seeding rather than an explicit export — same
+ * reasoning as the Claude Code plugin's bin/pulse); fall back to the bare name
+ * and let pi.exec resolve it via PATH. If the binary is not built yet, pi.exec
+ * fails and pulse() swallows it — a silent no-op. (The file is .chezmoiignore'd
+ * off Windows, where pi is not provisioned here.)
+ */
+function resolveHapticBinary(): string | undefined {
+  const abs = join(homedir(), ".local", "bin", "mxm4-haptic");
+  return existsSync(abs) ? abs : "mxm4-haptic";
+}
+
+export default function (pi: ExtensionAPI): void {
+  // Last provider HTTP status seen during the current run, so agent_settled can
+  // tell a clean finish from one that died on an API error. Reset on each
+  // agent_start (a retry is a new low-level run); updated on every
+  // after_provider_response. A run that settles without a provider call leaves
+  // this undefined and is treated as a normal completion.
+  let lastProviderStatus: number | undefined;
+
+  /**
+   * Fire one haptic pulse. Fire-and-forget in spirit: it awaits pi.exec (the
+   * client is non-blocking, ~1 ms, bounded by a 500 ms socket timeout) but
+   * swallows EVERY failure — the buzz is a nicety, never a failure mode. Never
+   * throws, never blocks the event. Mirrors the Claude Code plugin's bin/pulse
+   * contract (always exit 0, never print).
+   */
+  async function pulse(waveform: string): Promise<void> {
+    const binary = resolveHapticBinary();
+    if (!binary) return;
+    try {
+      await pi.exec(binary, [waveform], { timeout: 5000 });
+    } catch {
+      // Daemon stopped, mouse asleep/unpaired, binary not built, write timeout,
+      // unknown waveform (mxm4-haptic exits 2) — all silent no-ops.
+    }
+  }
+
+  pi.on("agent_start", () => {
+    lastProviderStatus = undefined;
+  });
+
+  pi.on("after_provider_response", (event) => {
+    if (typeof event.status === "number") lastProviderStatus = event.status;
+  });
+
+  pi.on("agent_settled", async (_event, ctx) => {
+    // ctx.hasUI is true only for tui + rpc (a human-in-the-loop session). It is
+    // false for subagent children — pi-subagents spawns each child as a separate
+    // pi process in --mode json -p — and for `pi -p` / script runs. So this one
+    // gate is the sub-agent gating: a fan-out of N children never buzzes N times
+    // because no child has a UI. (The other two plugins gate differently: the
+    // OpenCode plugin inspects parentID; the Claude Code plugin relies on Stop
+    // firing for the root agent only. Here it is free, because pi's children are
+    // headless subprocesses.) Only the root interactive session has a human to
+    // buzz.
+    if (!ctx.hasUI) return;
+    const failed = typeof lastProviderStatus === "number" && lastProviderStatus >= 400;
+    await pulse(failed ? WAVEFORM_FAILED : WAVEFORM_SETTLED);
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    // Same hasUI gate: ask_user only ever runs in an interactive session anyway
+    // (it renders a TUI dialog), but the gate keeps it honest and silences any
+    // headless tool_call. Buzz the moment the question dialog is about to appear
+    // — tool_call fires before the tool executes.
+    if (!ctx.hasUI) return;
+    if (typeof event.toolName === "string" && event.toolName.toLowerCase() === QUESTION_TOOL) {
+      await pulse(WAVEFORM_QUESTION);
+    }
+  });
+}
