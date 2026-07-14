@@ -18,14 +18,20 @@
 #
 # FACT-DRIVEN GATES: a manifest `gate:` names a host fact from the registry
 # (.chezmoidata/facts.yaml), and gate_ok() is a pure lookup into the FACT_*
-# variables — this script probes the host for NOTHING any more. That is what
+# variables (via the shared fact_gate() dispatcher,
+# .chezmoitemplates/facts-gate.sh.tmpl — see its own header for why one
+# implementation now serves this script, host-facts, and the two package
+# installers) — this script probes the host for NOTHING any more. That is what
 # retired the `sudo dmidecode -t system` grep (the thinkpad fact reads the same
 # two DMI fields from world-readable /sys/class/dmi/id/, no elevation) and the
 # `dpkg -s ubuntustudio-default-settings` test (which exits 0 for a
 # removed-but-not-purged package; the fact stats the dpkg .md5sums marker).
 # Every gate name is validated against the registry at render time below, so an
 # unknown one aborts the whole chezmoi command instead of silently resolving
-# false.
+# false. The PER-FACT "why" (vm vs. the registry's broader virt; fprintdPam's
+# common-auth conjunction that keeps this file off Fedora) lives in
+# .chezmoidata/facts.yaml now, not in a case arm here — gate_ok() no longer has
+# per-fact arms to hang the rationale on.
 #
 # This is part 1/3 of the split install-system set (10-files → 20-host →
 # 30-network, ordered by filename). Splitting keeps re-run scope tight: a
@@ -105,37 +111,15 @@ for check in "${override_checks[@]}"; do
   esac
 done
 
-# Gate resolution — a pure LOOKUP into the FACT_* variables, not a probe. Every
-# `gate:` in the manifest is a fact name (.chezmoidata/facts.yaml), the values
-# were resolved once for this chezmoi command, and facts-validate.tmpl proved at
-# render time that each name is declared. Nothing in this function may touch the
-# host: put a new condition in the registry, never here.
+# Gate resolution is no longer implemented here — it is the ONE shared
+# fact_gate() dispatcher every gate consumer uses
+# (.chezmoitemplates/facts-gate.sh.tmpl), inlined below. gate_ok() stays as a
+# thin, same-named wrapper so the call sites below (and the vocabulary in this
+# file's comments) do not have to change. Nothing in fact_gate() may touch the
+# host either: put a new condition in the registry, never here.
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
 gate_ok() {
-  case "$1" in
-    '') return 0 ;;
-    thinkpad) [[ "$FACT_THINKPAD" == 1 ]] ;;
-    # VMs only. Deliberately NOT the registry's `virt` fact, which is true for a
-    # container as well: this gate grants password-less sudo (etc/sudoers.d/*),
-    # and NOPASSWD must not follow a $HOME-bind-mounting distrobox. Never swap
-    # the two facts here.
-    vm) [[ "$FACT_VM" == 1 ]] ;;
-    # No FORCE_UBUNTU_STUDIO here, and none in facts-sh.tmpl either — the
-    # override is installer-only. Honouring it would install the realtime-limits
-    # drop-in (@audio rtprio 95, memlock unlimited) on a plain Ubuntu Desktop.
-    ubuntuStudio) [[ "$FACT_UBUNTU_STUDIO" == 1 ]] ;;
-    sddmBreeze) [[ "$FACT_SDDM_BREEZE" == 1 ]] ;;
-    gdm) [[ "$FACT_GDM" == 1 ]] ;;
-    # The polkit-1 stack this gates @includes common-auth, so it only fits a
-    # Debian-style PAM tree — Fedora's rpm-owned polkit-1 includes system-auth.
-    # The fact carries BOTH halves (pam_fprintd.so present AND common-auth
-    # present); a module-presence test alone would overwrite Fedora's file with a
-    # stack referencing a file it does not have, breaking every polkit prompt.
-    fprintdPam) [[ "$FACT_FPRINTD_PAM" == 1 ]] ;;
-    # Unreachable — facts-validate.tmpl aborts the render on an unknown gate. Kept
-    # because an unmatched bash `case` returns 0, i.e. it would silently GRANT the
-    # install: the one direction no gate here may ever fail in.
-    *) printf 'install-system-files: unknown gate "%s" reached gate_ok; aborting.\n' "$1" >&2; exit 1 ;;
-  esac
+  fact_gate "$1"
 }
 gate_reason() {
   case "$1" in

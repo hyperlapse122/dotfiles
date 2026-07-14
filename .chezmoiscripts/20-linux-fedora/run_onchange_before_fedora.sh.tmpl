@@ -34,30 +34,34 @@ set -euo pipefail
 # remaining functions skip cleanly when their prerequisites are absent.
 
 {{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+{{- $gates := .packages.linux.fedora.gates }}
 
-# Host capabilities — read from the named fact registry above, never probed
-# here. This script used to carry its own probes (a sysfs 0x10de scan for the
-# NVIDIA GPU, systemd-detect-virt, and a pair of `command -v` desktop checks);
-# they are now facts declared in .chezmoidata/facts.yaml, resolved once per
-# chezmoi command and shared with every other consumer — so this installer and
-# the /etc manifest can no longer answer the same question two different ways.
-# WHICH fact gates WHICH package group is declared in packages.yaml's `gates:`
-# map, validated at render time (an unknown fact name aborts the apply).
+# Host capabilities — SEEDED FROM packages.yaml's `gates:` map via the shared
+# fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), not hand-wired
+# to a FACT_* variable here. This script used to carry its own probes (a sysfs
+# 0x10de scan for the NVIDIA GPU, systemd-detect-virt, and a pair of
+# `command -v` desktop checks), then — once those became registry facts — a
+# stage that still hand-picked which FACT_* answered each flag, bypassing
+# whatever the map itself said. Now the map drives the flag directly: change
+# `gates.kdePackages` from `desktop.kde` to something else and this flag
+# follows it, no script edit required. See the file header in
+# .chezmoidata/packages.yaml.
 #
-# IS_VIRT is FACT_VIRT: the BARE systemd-detect-virt, true for a container as
-# well as a VM — exactly what this script has always probed. It is deliberately
-# not the manifest's `vm` fact (systemd-detect-virt --vm), which gates
-# password-less sudo and must stay false in a container.
-HAS_NVIDIA="$FACT_NVIDIA"
-IS_VIRT="$FACT_VIRT"
+# HAS_BARE_METAL is seeded from bareMetalPackages' `!virt` gate — the BARE
+# systemd-detect-virt, true for a container as well as a VM. That is
+# deliberately not the manifest's `vm` fact (systemd-detect-virt --vm), which
+# gates password-less sudo and must stay false in a container.
+HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
+HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
 
 # The desktop is ONE fact with ONE value (kde | gnome | none), so the two flags
 # are mutually exclusive by construction — where the old pair of independent
 # `command -v` probes would have set both on a host that happened to carry both
 # shells. KDE wins that tie (the precedence facts.yaml declares); `none` (a
 # server, a container) installs neither set, as before.
-HAS_KDE=0; [[ "$FACT_DESKTOP" == kde ]] && HAS_KDE=1
-HAS_GNOME=0; [[ "$FACT_DESKTOP" == gnome ]] && HAS_GNOME=1
+HAS_KDE=0; fact_gate {{ index $gates "kdePackages" | quote }} && HAS_KDE=1
+HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "install-fedora.sh" -}}
 
@@ -77,7 +81,7 @@ packages=(
   {{ . | quote }}
   {{ end -}}
 )
-if [[ "${IS_VIRT}" -eq 0 ]]; then
+if [[ "${HAS_BARE_METAL}" -eq 1 ]]; then
   packages+=(
     {{ range .packages.linux.fedora.bareMetalPackages -}}
     {{ . | quote }}

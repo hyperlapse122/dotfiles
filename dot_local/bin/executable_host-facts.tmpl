@@ -95,9 +95,14 @@ set -uo pipefail
 # --- The resolved facts (rendered from .chezmoidata/facts.yaml + facts.tmpl) --
 # Row: <name>:<type>:<probe layer>:<value>. Booleans are the literal tokens
 # `true`/`false`; string facts are bare words (facts-sh.tmpl enforces that, so
-# there is nothing here that can word-split). This one array is both what the
-# report prints and what gate_eval() resolves gates against — the script holds no
-# second copy of a fact and no probe of its own.
+# there is nothing here that can word-split). This array is what the report
+# PRINTS (section 1 below) and what gate_why() looks up for its display
+# wording — it is NOT what a gate is resolved against any more. That is now the
+# shared fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl, inlined
+# below), which reads the FACT_* variables facts-sh.tmpl assigns — the
+# installers' `1`/`0` convention, not this array's `true`/`false` one. Same
+# underlying facts, rendered twice in two conventions for two different jobs;
+# see the comment above gate_eval() below for why.
 FACTS=(
 {{- range $name := (keys $facts | sortAlpha) }}
 {{- $spec := index $registry $name }}
@@ -127,28 +132,27 @@ fact_value() {
 #
 # An empty expression means ungated → always true. An unknown fact name cannot
 # reach here: facts-validate.tmpl aborted the render above.
+#
+# Evaluation itself is NOT reimplemented here. This report used to carry its
+# own private copy of this exact grammar, resolved against the FACTS array
+# above (`true`/`false`); that was a second reading of the registry that could
+# quietly drift from what the installers actually branch on. gate_eval() is now
+# a thin wrapper over the ONE shared dispatcher, fact_gate()
+# (.chezmoitemplates/facts-gate.sh.tmpl), which reads the FACT_* variables
+# facts-sh.tmpl assigns (the installers' `1`/`0` convention) — so this report
+# evaluates a gate exactly the way `run_onchange_before_fedora`/`_ubuntu` and
+# install-system-10-files do, not a parallel implementation of the same idea.
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
 gate_eval() {
-  local expr="$1" negate=0 name want value
-  [[ -z "$expr" ]] && return 0
-  if [[ "$expr" == '!'* ]]; then
-    negate=1
-    expr="${expr#!}"
-  fi
-  if [[ "$expr" == *.* ]]; then
-    name="${expr%%.*}"
-    want="${expr#*.}"
-  else
-    name="$expr"
-    want=true
-  fi
-  value="$(fact_value "$name")"
-  if [[ "$value" == "$want" ]]; then
-    return "$negate"
-  fi
-  return $((1 - negate))
+  fact_gate "$1"
 }
 
 # "why" line for a verdict: the fact that decided it, and what it resolved to.
+# Report-only: it reads THIS script's own FACTS array (via fact_value(),
+# `true`/`false` wording) purely because that is the wording the rest of the
+# report already uses — the verdict itself always comes from gate_eval() above,
+# never from this function.
 gate_why() {
   local expr="$1" name
   [[ -z "$expr" ]] && { printf 'ungated'; return; }

@@ -185,7 +185,12 @@ consumer ever reads — never the cache file, never the yaml:
 - **scripts** — `{{ includeTemplate "facts-sh.tmpl" . }}`, which renders the same
   map as bash (`FACT_NVIDIA=1`, `FACT_DESKTOP=gnome`, `FACT_DISTRO=ubuntu`). The
   three guard partials already inline it, so a guarded script gets the whole
-  `FACT_*` set for free — do NOT inline it a second time alongside a guard.
+  `FACT_*` set for free — do NOT inline it a second time alongside a guard. A
+  script that needs to RESOLVE a gate EXPRESSION (not just read one fact) also
+  inlines `{{ includeTemplate "facts-gate.sh.tmpl" . }}` right after, which
+  provides `fact_gate()` — the one shared implementation of the KTD6 grammar
+  the two package installers, `install-system-10-files`, and `host-facts` all
+  call, instead of each hand-rolling its own copy.
 - **data files that name a gate** (`system.yaml`'s `gate:`, `packages.yaml`'s
   `gates:`) — `{{ includeTemplate "facts-validate.tmpl" (dict "ctx" . "gates" (list …)) }}`.
 
@@ -221,10 +226,15 @@ has never run chezmoi gets.) `vm` is the single fact gating a privilege grant (t
 not belong in the registry.
 
 **`FORCE_NVIDIA` / `FORCE_INTEL` / `FORCE_UBUNTU_STUDIO` are not facts** and never
-enter the registry or `facts-sh.tmpl`. They layer on TOP of a fact, in the package
-installers only — `HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1`
-(in practice the Ubuntu one; the Fedora installer has no FORCE path at all and
-seeds its flags straight from the facts).
+enter the registry, `facts-sh.tmpl`, or the shared `fact_gate()` dispatcher
+(`facts-gate.sh.tmpl`). They layer on TOP of a gate's RESULT, in the package
+installers only — `HAS_NVIDIA=0; fact_gate "nvidia" && HAS_NVIDIA=1; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1`
+(in practice the Ubuntu one; the Fedora installer has no FORCE path at all).
+Each `HAS_*`/`IS_*` flag is seeded from packages.yaml's OWN `gates:` value for
+that key (`HAS_NVIDIA` from `gates.nvidiaPackages`, not straight from
+`FACT_NVIDIA`), so editing a `gates:` value now changes what the flag resolves
+to — see the packages.yaml file header and `facts-gate.sh.tmpl`'s own header
+for why that used to not be true.
 `install-system-10-files` shares the same partial, so a FORCE honoured *inside* it
 would let `FORCE_UBUNTU_STUDIO=1` install the realtime-limits drop-in (`@audio
 rtprio 95`, `memlock unlimited`) on a plain Ubuntu Desktop. Same shape for
@@ -278,6 +288,7 @@ Recurring script boilerplate lives in `.chezmoitemplates/` and is inlined with
 | `facts.tmpl` | THE merged host-fact map (see Host facts above) — the only entry point; `includeTemplate "facts.tmpl" . \| fromYaml` |
 | `facts-sh.tmpl` | the same map as bash (`FACT_DESKTOP=kde`, `FACT_NVIDIA=1`, …), baked at render time; inlined by the three guards below |
 | `facts-validate.tmpl` | the loud abort behind every `gate:` / `gates:` name; takes `(dict "ctx" . "source" … "gates" (list …))` |
+| `facts-gate.sh.tmpl` | THE bash `fact_gate()` dispatcher that RESOLVES a gate expression against `FACT_*` at runtime (KTD6: `<fact>` \| `!<fact>` \| `<fact>.<value>`) — the one implementation shared by both package installers and `install-system-10-files`/`host-facts`; takes the root context, same as `facts-sh.tmpl` (call it right after) |
 | `fingerprint.tmpl` | the comment-only sha256 dependency block (see the script-prefix policy above); takes `(dict "sourceDir" … "globs" (list …))` |
 | `compound-engineering-ref.tmpl` | newest `compound-engineering-*` release tag (the plugin repo interleaves other tag trains, so plain `gitHubLatestRelease` is wrong); shared by the three agents that install that plugin — `install-compound-engineering` (Codex's `--ref` pin + the script's own onchange trigger) and the opencode.json `plugin` array's git spec — so they cannot land on different releases |
 | `config-secrets-key.tmpl` | the machine-local AES key that encrypts the `.chezmoi.toml.tmpl` prompted secrets (see the Secrets section): reads the user keyring FAIL-SOFT via `chezmoi secret keyring get` in a subshell — the built-in `keyring` template function hard-errors when no keyring daemon is reachable, which would break every headless/CI render; an empty result means "keyring unreachable" and callers take their secret-absent skip path |
@@ -776,9 +787,13 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `run_onchange` installer. The conditional groups declare their gate in the
   per-distro `gates:` map (`nvidiaPackages: nvidia`, `kdePackages: desktop.kde`,
   `bareMetalPackages: "!virt"` — the fact registry's grammar), instead of hiding
-  it in the key NAME and re-probing it in each installer; the installer seeds
-  `HAS_NVIDIA` / `HAS_KDE` / `IS_VIRT` straight from the `FACT_*` set.
-- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA packages — `cuda-drivers` per the NVIDIA driver installation guide's network-repo procedure, with the running kernel's headers installed first — from CUDA + libnvidia-container repos, the Intel graphics stack + `intelHweKernel` from the kobuk-team/intel-graphics PPA, per-desktop `kdePackages`/`gnomePackages`, the Studio pro-audio `studioPackages`, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Which fact gates each of those groups is declared in the same `gates:` map as Fedora's (`intelPackages: intelGpu`, `studioPackages: ubuntuStudio`, …); the installer seeds `HAS_NVIDIA` / `HAS_INTEL_GPU` / `IS_UBUNTU_STUDIO` / `HAS_KDE` / `HAS_GNOME` / `IS_VIRT` from the `FACT_*` set, with `FORCE_NVIDIA` / `FORCE_INTEL` / `FORCE_UBUNTU_STUDIO` layered on top (Ubuntu only — Fedora has no FORCE path). Add packages/items there; editing the data re-triggers the installer.
+  it in the key NAME and re-probing it in each installer; the map is
+  LOAD-BEARING — the installer seeds `HAS_NVIDIA` / `HAS_KDE` / `HAS_BARE_METAL`
+  by running EACH KEY'S OWN gate value through the shared `fact_gate()`
+  dispatcher (`.chezmoitemplates/facts-gate.sh.tmpl`), not by reading a
+  hand-picked `FACT_*` variable — editing a `gates:` value now changes what its
+  flag resolves to on the next apply.
+- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA packages — `cuda-drivers` per the NVIDIA driver installation guide's network-repo procedure, with the running kernel's headers installed first — from CUDA + libnvidia-container repos, the Intel graphics stack + `intelHweKernel` from the kobuk-team/intel-graphics PPA, per-desktop `kdePackages`/`gnomePackages`, the Studio pro-audio `studioPackages`, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Which fact gates each of those groups is declared in the same `gates:` map as Fedora's (`intelPackages: intelGpu`, `studioPackages: ubuntuStudio`, …); the installer seeds `HAS_NVIDIA` / `HAS_INTEL_GPU` / `IS_UBUNTU_STUDIO` / `HAS_KDE` / `HAS_GNOME` / `HAS_BARE_METAL` from that map via the same `fact_gate()` dispatcher, with `FORCE_NVIDIA` / `FORCE_INTEL` / `FORCE_UBUNTU_STUDIO` layered on top of the result (Ubuntu only — Fedora has no FORCE path). Add packages/items there; editing the data re-triggers the installer.
   - **Intel graphics (`intelPackages` + `intelHweKernel`)**: Canonical's intel-graphics-preview stack for newer Intel GPUs. `install_intel_support()` runs when the `intelGpu` fact is true (an Intel *display-controller* PCI device — vendor `0x8086` **and** class `0x03xxxx`, since the vendor half alone trips on an Intel NIC; probed in the pre-hook, `FORCE_INTEL=1` overrides in the installer, mirroring `FORCE_NVIDIA`), adds the `kobuk-team/intel-graphics` PPA on-demand via `setup_intel_repos()` (key `0C0E…5E1F`, resolute), installs the graphics packages, then installs `linux-generic-hwe-26.04` with `--install-recommends`. It also writes `/etc/default/grub.d/99-hwe-generic-default.cfg` (`GRUB_FLAVOUR_ORDER="generic"`) so the generic HWE kernel is the default boot entry — the `99-` prefix outranks the lowlatency preference from `ubuntustudio-lowlatency-settings` — and runs `update-grub`. No Fedora counterpart.
 - **Fonts — the archives AND the families**: `.chezmoidata/fonts.yaml`, two halves
   under one `fonts:` key, told apart by whether the key contains a `/`.

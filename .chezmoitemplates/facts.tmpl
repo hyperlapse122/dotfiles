@@ -65,7 +65,11 @@ Two rules hold this file together:
 {{- $cached := dict -}}
 {{- if stat $cachePath -}}
 {{-   $raw := include $cachePath -}}
-{{-   if regexMatch "^(#[^\n]*\n|[A-Za-z][A-Za-z0-9]*: (true|false)\n)+$" $raw -}}
+{{- /* `\r?` is load-bearing: the .ps1 half of the hook writes the cache through
+   PowerShell, which line-ends with CRLF. `fromYaml` parses that fine — but a
+   LF-only shape check silently rejects it, and every hook fact on Windows would
+   fall back to its default forever. */ -}}
+{{-   if regexMatch "^(#[^\r\n]*\r?\n|[A-Za-z][A-Za-z0-9]*: (true|false)\r?\n)+$" $raw -}}
 {{-     $parsed := $raw | fromYaml -}}
 {{-     if kindIs "map" $parsed -}}
 {{-       $cached = $parsed -}}

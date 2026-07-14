@@ -33,18 +33,30 @@
 #                                              a bare `!` opens a YAML tag
 #   <fact>.<value>  string fact equals value   desktop.kde, desktop.gnome
 #
-# THE MAP IS A DECLARATION, NOT A SWITCH — read this before editing one.
+# THE MAP IS NOW LOAD-BEARING — it drives the flag, not just names it.
 # Each installer renders the whole fact set into bash (FACT_* via
-# .chezmoitemplates/facts-sh.tmpl), seeds its HAS_* / IS_* flags from those
-# facts, and keeps its own `if` around each package array. The arrays stay
+# .chezmoitemplates/facts-sh.tmpl), then seeds its HAS_* / IS_* flags by
+# running EACH KEY'S OWN VALUE from this map through the shared fact_gate()
+# dispatcher (.chezmoitemplates/facts-gate.sh.tmpl):
+#
+#   HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
+#
+# and keeps its own `if` around each package array, unchanged. The arrays stay
 # rendered UNCONDITIONALLY on purpose: the CI shellcheck job lints only the
 # RENDERED script, so a template-gated array would quietly drop out of that
-# coverage on every host that does not match the gate. Changing a value here
-# therefore does not by itself re-gate a group — change the flag the installer
-# seeds too. What the map buys is the thing that was missing: one place that
-# says which fact each group answers to, verified at render time
-# (facts-validate.tmpl `fail`s on an unknown fact, a boolean compared to a
-# value, or a `desktop.<typo>`), so a gate name can never quietly mean nothing.
+# coverage on every host that does not match the gate. Editing a value HERE —
+# `kdePackages: desktop.kde` to `desktop.gnome`, say — now changes what the
+# installer's HAS_KDE flag resolves to on the very next apply, because the
+# installer reads THIS key's value to seed it; it no longer merely gets
+# validated and then ignored. (Before fact_gate() existed, each installer read
+# a `gates:` value far enough to know a fact NAME and then hand-wired that
+# specific FACT_* into its own flag, bypassing whatever this map actually said
+# — a `gates:` edit changed nothing at runtime. That gap is what fact_gate()
+# closes; see its header in .chezmoitemplates/facts-gate.sh.tmpl for the full
+# history.) facts-validate.tmpl still runs first and still `fail`s on an
+# unknown fact, a boolean compared to a value, or a `desktop.<typo>` — a gate
+# name can never quietly mean nothing, and now it can never quietly mean
+# nothing to the INSTALLER either.
 #
 # The map is PER DISTRO rather than global because the conditional key sets
 # genuinely differ: intelPackages / intelHweKernel / studioPackages exist only
