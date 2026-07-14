@@ -1,92 +1,292 @@
-# .chezmoidata/agents.yaml — single source of truth for agent MCP servers,
-# dotagents remote skills, and pi auth providers.
+# .chezmoidata/agents.yaml — single source of truth for ALL agent configuration.
 #
-# Three templates range over this file to render per-agent MCP config:
-#   - dot_agents/private_readonly_agents.toml.tmpl   (Claude Code + Codex, via dotagents)
-#   - dot_pi/agent/private_readonly_mcp.json.tmpl    (pi)
-#   - dot_config/opencode/readonly_opencode.json.tmpl (opencode)
-# Add or remove a server HERE and all three pick it up on the next apply — the
-# old "add an MCP server to both or pi silently falls behind" multi-file edit is
-# gone. The per-agent FORMAT (pi's lifecycle: "eager", opencode's type names,
-# dotagents TOML shape) stays in each consuming template; this file is
-# transport-neutral.
+# Consumer map:
+#   agents.mcp.servers
+#     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json
+#   agents.skills.remote
+#     -> dotagents remote skill installation
+#   agents.pi.packages / defaults / auth.providers
+#     -> pi package installer and live settings/auth merge scripts
+#   agents.opencode.model / smallModel / providers / ohMyOpenagent
+#     -> opencode.json and oh-my-openagent.jsonc
 #
-# Secrets: header values are 1Password item-REFERENCE strings (op://...), NOT
-# resolved values — .chezmoidata/*.yaml is static data, not a template, so
-# onepasswordRead cannot run here. Each consumer template wraps the reference in
-# onepasswordRead at render, keeping secrets out of the onchange fingerprint and
-# chezmoi diff/state (same property the former inline refs had).
+# Add or change agent configuration HERE, not in the consuming templates. Those
+# templates retain only target-specific FORMAT and live-file merge mechanics.
+# haptic.pi remains in haptic.yaml because it is haptic event data, not agent
+# configuration.
 #
-# install-dotagents-skills fingerprints this file alongside agents.toml.tmpl
-# (the config-solaar dual-hash pattern), so a server/skill added here re-triggers
-# the dotagents install even though the raw template text is unchanged.
+# Secrets: .chezmoidata files are static, so secret values are stored as op://
+# reference strings. resolve-op-refs-json.tmpl recursively walks maps, slices,
+# and scalars: a string starting exactly with op:// is onepasswordRead-resolved
+# at render time; every other value and type passes through unchanged. This is
+# field-independent and therefore works for provider options, nested headers,
+# MCP headers, and pi auth without secret-key-specific template branches.
+#
+# agents.opencode.providerKeyOrder is formatting metadata for the recursive JSON
+# emitter. YAML maps do not preserve source order through chezmoi's data merge,
+# while this refactor has a byte-identical rendered-config contract. Validated
+# exact rules cover one-off complete key sets; reusable regex rules cover
+# repeated shapes. Omitted maps use deterministic lexical ordering. Paths are
+# rooted at providers.
+#
+# Naming: keys owned by this repo use camelCase. Keys below
+# agents.opencode.ohMyOpenagent.{agents,categories} and provider definitions are
+# upstream schema identifiers and are emitted VERBATIM (for example
+# multimodal-looker, fallback_models, tool_call). Never normalize them.
+#
+# install-dotagents-skills hashes only unresolved agents.mcp +
+# agents.skills.remote data alongside the raw agents.toml template, so relevant
+# edits re-trigger without coupling pi/OpenCode-only changes to dotagents.
+# Rendered secrets are not fingerprinted; secret rotation alone follows each
+# consumer's documented onchange behavior.
 
 agents:
-  # MCP servers consumed by all three templates. `transport` is the discriminator:
-  #   stdio -> command + args
-  #   http  -> url + headers  (header-name -> op:// item reference; resolved by the template)
+  # MCP servers consumed by dotagents, pi, and OpenCode. `transport` is the
+  # discriminator: stdio uses command/args; http uses url/headers.
   mcp:
     servers:
-      - name: codegraph
-        transport: stdio
-        command: codegraph
-        args: [serve, --mcp]
-
-      - name: glab
-        transport: stdio
-        command: glab
-        args: [mcp, serve]
-
-      - name: context7
-        transport: http
-        url: https://mcp.context7.com/mcp
-        headers:
-          CONTEXT7_API_KEY: 'op://Private/Context7/API Key'
-
-      - name: websearch
-        transport: http
-        url: https://mcp.exa.ai/mcp
-        headers:
-          x-api-key: 'op://Private/Exa/API Key'
-
-  # dotagents remote skills (Claude Code + Codex). `ref` rule:
-  #   absent  -> the template resolves the newest release tag via gitHubLatestRelease
-  #   present -> literal (a branch head, e.g. improve's "main", which publishes no tags)
-  # Local path skills stay in agents.toml.tmpl (pending future removal): single
-  # consumer, so data-ifying them yields no dedup.
+    - name: codegraph
+      transport: stdio
+      command: codegraph
+      args:
+      - serve
+      - "--mcp"
+    - name: glab
+      transport: stdio
+      command: glab
+      args:
+      - mcp
+      - serve
+    - name: context7
+      transport: http
+      url: https://mcp.context7.com/mcp
+      headers:
+        CONTEXT7_API_KEY: op://Private/Context7/API Key
+    - name: websearch
+      transport: http
+      url: https://mcp.exa.ai/mcp
+      headers:
+        x-api-key: op://Private/Exa/API Key
+  # dotagents remote skills (Claude Code + Codex). Missing `ref` means newest
+  # GitHub release; present `ref` is literal (improve tracks main).
   skills:
     remote:
-      - name: playwright-cli
-        source: microsoft/playwright-cli
-        # ref absent -> newest release via gitHubLatestRelease
-
-      - name: improve
-        source: shadcn/improve
-        ref: main   # publishes no releases/tags; track the default branch head
-
-      - name: dotagents
-        source: getsentry/dotagents
-        # ref absent -> newest release via gitHubLatestRelease
-
-  # pi auth providers — static API-key credentials data-driven into
-  # ~/.pi/agent/auth.json by the read-merge-write SCRIPT
-  # .chezmoiscripts/70-agents/run_onchange_after_config-pi-auth.sh.tmpl.
-  # auth.json is pi-LIVE-WRITTEN: OAuth providers (e.g. Codex) refresh tokens
-  # there on a frequent cadence, so it is NOT a chezmoi-managed target (the
-  # former dot_pi/agent/private_readonly_auth.json.tmpl fought pi for the same
-  # bytes). The script overlays ONLY these declared api_key providers and
-  # preserves every entry pi owns (OAuth tokens it wrote under other names) —
-  # the same read-merge-write shape config-pi / config-solaar use. `key` is an
-  # op:// item-REFERENCE string (like the MCP `headers` above), resolved via
-  # onepasswordRead at render in the script — keep secrets out of this static
-  # data file. OAuth providers (codex, …) are written by pi itself and NEVER
-  # declared here; only static api_key providers belong.
+    - name: playwright-cli
+      source: microsoft/playwright-cli
+    - name: improve
+      source: shadcn/improve
+      ref: main
+    - name: dotagents
+      source: getsentry/dotagents
+  # pi package sources, live settings defaults, and static API-key auth. The
+  # settings/auth targets are pi-live-written; scripts merge only these fields.
   pi:
+    # Unpinned by design: npm sources track latest and git sources track their
+    # default branch, matching the unsettled dotagents remote-skill trade-off.
+    # pi-mcp-extension is the MCP client; compound-engineering supplies ce-* +
+    # lfg skills; pi-subagents delegates work; pi-ask-user supplies ask_user.
+    packages:
+    - npm:pi-mcp-extension
+    - git:github.com/EveryInc/compound-engineering-plugin
+    - npm:pi-subagents
+    - npm:pi-ask-user
+    defaults:
+      # The provider/model must already be credentialed in pi's live auth.json.
+      # openai-codex uses pi-owned OAuth; the static providers below are merged
+      # separately and must never replace OAuth entries pi refreshes itself.
+      provider: openai-codex
+      model: gpt-5.6-sol
+      # Valid: off | minimal | low | medium | high | xhigh | max.
+      thinkingLevel: xhigh
     auth:
       providers:
-        - name: kimi-coding
-          type: api_key
-          key: 'op://Private/Kimi/API Key'
-        - name: zai
-          type: api_key
-          key: 'op://Private/Z.ai/API Key'
+      - name: kimi-coding
+        type: api_key
+        key: op://Private/Kimi/API Key
+      - name: zai
+        type: api_key
+        key: op://Private/Z.ai/API Key
+  # OpenCode defaults, full provider definitions, and oh-my-openagent mappings.
+  # Provider shapes are deliberately heterogeneous and emitted recursively.
+  # The Anthropic provider is omitted from Windows renders: Meridian is POSIX-only.
+  opencode:
+    model: anthropic/claude-opus-4-8
+    smallModel: openrouter/openrouter/free
+    providers:
+      opencode:
+        options:
+          apiKey: op://Private/Opencode/API Key
+        whitelist:
+        - deepseek-v4-flash-free
+        - mimo-v2.5-free
+        - nemotron-3-ultra-free
+        - north-mini-code-free
+      openrouter:
+        options:
+          apiKey: op://Private/OpenRouter/API Key
+          headers:
+            HTTP-Referer: https://opencode.ai/
+            X-OpenRouter-Title: OpenCode
+            X-OpenRouter-Categories: cli-agent
+        models:
+          openrouter/free:
+            name: Free Models Router
+            cost:
+              input: 0
+              output: 0
+              cache_read: 0
+              cache_write: 0
+          openrouter/auto: {}
+          openrouter/fusion: {}
+        whitelist:
+        - openrouter/free
+        - openrouter/auto
+        - openrouter/fusion
+      anthropic:
+        options:
+          baseURL: http://127.0.0.1:3456
+          apiKey: x
+    # Exact rules cover one-off objects and must list their complete key set.
+    # Pattern rules reuse preferred order across repeated model shapes; absent
+    # optional keys are ignored and remaining keys sort lexically. The resolver
+    # validates duplicate/stale/overlapping rules and exact key-set drift.
+    providerKeyOrder:
+      exact:
+      - path: []
+        keys:
+        - opencode
+        - openrouter
+        - anthropic
+      - path: [openrouter]
+        keys:
+        - options
+        - models
+        - whitelist
+      - path: [openrouter, options, headers]
+        keys:
+        - HTTP-Referer
+        - X-OpenRouter-Title
+        - X-OpenRouter-Categories
+      - path: [openrouter, models]
+        keys:
+        - openrouter/free
+        - openrouter/auto
+        - openrouter/fusion
+      - path: [openrouter, models, openrouter/free]
+        keys:
+        - name
+        - cost
+      - path: [anthropic, options]
+        keys:
+        - baseURL
+        - apiKey
+      patterns:
+      - pattern: ^/openrouter/models/.+/cost$
+        keys:
+        - input
+        - output
+        - cache_read
+        - cache_write
+    # Upstream oh-my-openagent identifiers below are verbatim schema keys.
+    ohMyOpenagent:
+      # Per-agent mappings (oh-my-openagent.jsonc "agents").
+      # Model Mapping Reference:
+      # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
+      agents:
+        sisyphus:
+          model: anthropic/claude-opus-4-8
+          variant: max
+          fallback_models:
+            - openai/gpt-5.6-terra
+        hephaestus:
+          model: openai/gpt-5.5
+        oracle:
+          model: openai/gpt-5.6-sol
+          fallback_models:
+            - model: anthropic/claude-opus-4-8
+              variant: max
+        librarian:
+          model: openai/gpt-5.6-terra
+          fallback_models:
+            - anthropic/claude-haiku-4-5
+        explore:
+          model: openai/gpt-5.6-terra
+          fallback_models:
+            - anthropic/claude-haiku-4-5
+        multimodal-looker:
+          model: openai/gpt-5.6-terra
+          fallback_models:
+            - model: anthropic/claude-opus-4-8
+              variant: max
+        prometheus:
+          model: anthropic/claude-opus-4-8
+          variant: max
+          fallback_models:
+            - model: openai/gpt-5.6-sol
+              variant: high
+        metis:
+          model: anthropic/claude-sonnet-5
+          fallback_models:
+            - model: anthropic/claude-opus-4-8
+              variant: max
+            - openai/gpt-5.6-sol
+        momus:
+          model: openai/gpt-5.6-sol
+          variant: xhigh
+          fallback_models:
+            - model: anthropic/claude-opus-4-8
+              variant: max
+        atlas:
+          model: anthropic/claude-sonnet-5
+          variant: max
+          fallback_models:
+            - openai/gpt-5.6-terra
+        sisyphus-junior:
+          model: anthropic/claude-sonnet-5
+          variant: max
+          fallback_models:
+            - openai/gpt-5.6-terra
+      # Per-category mappings (oh-my-openagent.jsonc "categories").
+      # Model Mapping Reference:
+      # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
+      categories:
+        visual-engineering:
+          model: anthropic/claude-opus-4-8
+          variant: max
+          fallback_models:
+            - openai/gpt-5.6-terra
+        ultrabrain:
+          model: openai/gpt-5.6-sol
+          variant: xhigh
+          fallback_models:
+            - model: anthropic/claude-opus-4-8
+              variant: max
+        deep:
+          model: openai/gpt-5.6-terra
+          fallback_models:
+            - model: anthropic/claude-opus-4-8
+              variant: max
+        artistry:
+          model: anthropic/claude-opus-4-8
+          variant: max
+          fallback_models:
+            - openai/gpt-5.6-sol
+        quick:
+          model: openai/gpt-5.6-terra
+          fallback_models:
+            - anthropic/claude-haiku-4-5
+        unspecified-low:
+          model: anthropic/claude-sonnet-5
+          variant: max
+          fallback_models:
+            - openai/gpt-5.6-terra
+        unspecified-high:
+          model: anthropic/claude-opus-4-8
+          variant: max
+          fallback_models:
+            - model: openai/gpt-5.6-sol
+              variant: high
+        writing:
+          model: anthropic/claude-sonnet-5
+          fallback_models:
+            - openai/gpt-5.6-terra

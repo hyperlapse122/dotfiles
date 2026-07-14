@@ -51,9 +51,8 @@ you, not the set it accepts:
 > Gemini 3.5 Flash (Low / Medium / High) · Gemini 3.1 Pro (Low / High) ·
 > Claude Sonnet 4.6 (Thinking) · Claude Opus 4.6 (Thinking) · GPT-OSS 120B (Medium)
 
-`--model` **also** accepts the raw ids — the ones the `google-agy` provider block
-of `dot_config/opencode/readonly_opencode.json.tmpl` uses — and that set is
-**larger than what `agy models` lists**:
+`--model` **also** accepts Antigravity's raw model ids directly, and that
+agy-local accepted set is **larger than what `agy models` lists**:
 
 | Id | Note |
 |---|---|

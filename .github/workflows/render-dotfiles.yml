@@ -443,8 +443,8 @@ jobs:
           fi
 
           if grep -En '(zai|zai-coding-plan|moonshotai|google-agy)/' \
-            .chezmoidata/models.yaml; then
-            echo 'proxy-only model provider prefix remains in models.yaml' >&2
+            .chezmoidata/agents.yaml; then
+            echo 'proxy-only model provider prefix remains in agents.yaml' >&2
             exit 1
           fi
 
@@ -852,8 +852,8 @@ jobs:
           if ($meridianPlugins.Count -ne 0) {
             throw "POSIX-only Meridian plugin rendered on Windows: $($meridianPlugins -join ', ')"
           }
-          if ($opencode.provider.anthropic.options.baseURL -eq 'http://127.0.0.1:3456') {
-            throw 'POSIX-only Meridian Anthropic baseURL rendered on Windows'
+          if ($null -ne $opencode.provider.anthropic) {
+            throw 'POSIX-only Meridian Anthropic provider rendered on Windows'
           }
 
       - name: Upload rendered files

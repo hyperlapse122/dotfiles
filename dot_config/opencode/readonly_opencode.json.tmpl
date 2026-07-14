@@ -79,10 +79,10 @@
     }
   },
 {{- /* MCP servers are data-driven from .chezmoidata/agents.yaml
-       (.agents.mcp.servers). Header values are onepasswordRead-resolved at
-       render from the op:// refs in the data file; the toPrettyJson|replace
-       pattern mirrors oh-my-openagent.jsonc.tmpl (shift the block one indent
-       level to nest inside this 2-space object). */ -}}
+       (.agents.mcp.servers). The recursive resolver applies the shared
+       op:// -> onepasswordRead / else-as-is rule to every header value; the
+       toPrettyJson|replace pattern mirrors oh-my-openagent.jsonc.tmpl (shift
+       the block one indent level to nest inside this 2-space object). */ -}}
 {{- $mcp := dict -}}
 {{- range .agents.mcp.servers -}}
 {{- if eq .transport "stdio" -}}
@@ -90,7 +90,8 @@
 {{- else -}}
 {{- $h := dict -}}
 {{- range $k, $v := .headers -}}
-{{- $h = set $h $k (onepasswordRead $v) -}}
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson -}}
+{{- $h = set $h $k $resolved -}}
 {{- end -}}
 {{- $mcp = set $mcp .name (dict "type" "remote" "enabled" true "url" .url "headers" $h) -}}
 {{- end -}}
@@ -143,56 +144,19 @@
       "glab auth status --show-token": "deny"
     }
   },
-  "model": {{ .models.opencode.model | toJson }},
-  "small_model": {{ .models.opencode.smallModel | toJson }},
+  "model": {{ .agents.opencode.model | toJson }},
+  "small_model": {{ .agents.opencode.smallModel | toJson }},
   "experimental": {
     "continue_loop_on_deny": true
   },
-  "provider": {
-    "opencode": {
-      "options": {
-        "apiKey": "{{ onepasswordRead "op://Private/Opencode/API Key" }}"
-      },
-      "whitelist": [
-        "deepseek-v4-flash-free",
-        "mimo-v2.5-free",
-        "nemotron-3-ultra-free",
-        "north-mini-code-free"
-      ]
-    },
-    "openrouter": {
-      "options": {
-        "apiKey": "{{ onepasswordRead "op://Private/OpenRouter/API Key" }}",
-        "headers": {
-          "HTTP-Referer": "https://opencode.ai/",
-          "X-OpenRouter-Title": "OpenCode",
-          "X-OpenRouter-Categories": "cli-agent"
-        }
-      },
-      "models": {
-        "openrouter/free": {
-          "name": "Free Models Router",
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cache_read": 0,
-            "cache_write": 0
-          }
-        },
-        "openrouter/auto": {},
-        "openrouter/fusion": {}
-      },
-      "whitelist": [
-        "openrouter/free",
-        "openrouter/auto",
-        "openrouter/fusion"
-      ]
-    }{{ if ne .chezmoi.os "windows" }},
-    "anthropic": {
-      "options": {
-        "baseURL": "http://127.0.0.1:3456",
-        "apiKey": "x"
-      }
-    }{{ end }}
-  }
+{{- $providers := .agents.opencode.providers -}}
+{{- $providerOrders := .agents.opencode.providerKeyOrder -}}
+{{- if eq .chezmoi.os "windows" -}}
+{{- /* Meridian is POSIX-only. `omit` returns a copy rather than mutating the
+       shared template data. The POSIX root exact-order rule names Anthropic,
+       so Windows intentionally emits the two common providers lexically. */ -}}
+{{- $providers = omit $providers "anthropic" -}}
+{{- $providerOrders = dict -}}
+{{- end }}
+  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $providers "indent" "  " "orders" $providerOrders) }}
 }

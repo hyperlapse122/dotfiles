@@ -2,7 +2,8 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/70-agents/run_onchange_after_install-pi-packages.sh.tmpl
 #
-# Installs the pi packages declared in .chezmoidata/pi.yaml (pi.packages) —
+# Installs the pi packages declared in .chezmoidata/agents.yaml
+# (`agents.pi.packages`) —
 # `pi install <source>` per entry. The set today: pi-mcp-extension (the MCP
 # client — pi ships no MCP support of its own, so without it the servers in
 # ~/.pi/agent/mcp.json, source dot_pi/agent/private_readonly_mcp.json.tmpl, are
@@ -31,9 +32,10 @@
 # skills make by tracking their newest upstream release: a bad upstream publish
 # reaches the host on the next install.
 #
-# onchange trigger: the PACKAGES array below is RENDERED from .chezmoidata/
-# pi.yaml (pi.packages), so it IS the trigger. There is no other source-dir
-# dependency to hash, so there is deliberately NO fingerprint block — editing
+# onchange trigger: the PACKAGES array below is RENDERED from
+# .chezmoidata/agents.yaml (`agents.pi.packages`), so it IS the trigger. There is
+# no other source-dir dependency to hash, so there is deliberately NO fingerprint
+# block — editing
 # the data changes this script's rendered content and re-runs it (the same
 # shape as install-vscodium-extensions).
 #
@@ -53,7 +55,7 @@
 set -euo pipefail
 
 PACKAGES=(
-{{- range .pi.packages }}
+{{- range .agents.pi.packages }}
   {{ . | quote }}
 {{- end }}
 )
