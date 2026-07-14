@@ -1,13 +1,41 @@
 {{- /*
-kde-guard.sh.tmpl — runtime KDE Plasma host guard.
+kde-guard.sh.tmpl — KDE Plasma host guard, resolved from the fact registry.
 
-Desktop detection is keyed on the shell binary the ISO shipped
-(plasmashell, stable from first boot): exits 0 on a non-KDE host so the
-same script deploys everywhere and self-selects at runtime.
+`desktop` is a named host fact (.chezmoidata/facts.yaml → .chezmoitemplates/
+facts.tmpl). The verdict is the one this guard always gave — desktop=kde IS
+`plasmashell` on PATH, the shell binary the ISO shipped, stable from first boot —
+but it is now probed ONCE per chezmoi command and BAKED IN by facts-sh.tmpl,
+instead of re-derived by a `command -v` at each of the 15 include sites.
 
-Usage: {{ includeTemplate "kde-guard.sh.tmpl" "my-script-name" }}
+Deploy-everywhere-and-self-select is unchanged (KTD12): a non-KDE host exits 0,
+so this stays a runtime skip, not a non-deployment gate. The skip message is the
+pre-registry one, verbatim.
+
+Baking the fact means a desktop swap changes this partial's rendered output, and
+with it the content of every consuming run_onchange_ script — so they all re-run.
+That is correct, not churn: the host became a different host.
+
+ARGUMENT — a dict, NOT the bare display-name string this partial used to take:
+
+  {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "my-script.sh") }}
+
+facts-sh.tmpl needs the chezmoi context (.chezmoi.*, .factRegistry), and a
+partial's `.` is only ever what its caller passed: there is no route back to the
+root context from inside one — chezmoi exposes no `data` template function, and
+`includeTemplate` takes exactly one data argument. So the caller hands over both,
+the way fingerprint.tmpl already does. A call site still passing a bare string
+aborts the apply with a message naming the fix, rather than rendering a guard
+whose FACT_DESKTOP is unset and which would therefore never fire.
+
+Consumers get the WHOLE FACT_* set in scope for free — do NOT inline
+facts-sh.tmpl again alongside this guard.
 */ -}}
-if ! command -v plasmashell >/dev/null 2>&1; then
-  printf '%s: plasmashell not found (non-KDE system), skipping.\n' '{{ . }}'
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "kde-guard.sh.tmpl: expected a dict, got a %s (%v). This guard inlines facts-sh.tmpl, which needs the chezmoi context, so the call site must pass it: {{ includeTemplate \"kde-guard.sh.tmpl\" (dict \"ctx\" . \"name\" %q) }}" (kindOf .) . .) -}}
+{{- end -}}
+{{- $name := .name -}}
+{{ includeTemplate "facts-sh.tmpl" .ctx }}
+if [[ "$FACT_DESKTOP" != kde ]]; then
+  printf '%s: plasmashell not found (non-KDE system), skipping.\n' '{{ $name }}'
   exit 0
 fi

@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-touchpad.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-touchpad.sh") -}}
 
 TOUCHPAD_TARGET_NAMES=(
   'SynPS/2 Synaptics TouchPad'

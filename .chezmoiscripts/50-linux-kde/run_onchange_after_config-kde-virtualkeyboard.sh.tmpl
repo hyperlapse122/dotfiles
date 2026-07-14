@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-virtualkeyboard.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-virtualkeyboard.sh") -}}
 
 VIRTUAL_KEYBOARD_DESKTOP_FILE='/usr/share/applications/fcitx5-wayland-launcher.desktop'
 

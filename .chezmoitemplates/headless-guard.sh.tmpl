@@ -1,32 +1,65 @@
 {{- /*
-headless-guard.sh.tmpl — skip the whole script on headless/server installs.
+headless-guard.sh.tmpl — skip the whole script on headless/server installs,
+resolved from the fact registry.
 
-Everything gated behind this configures a graphical desktop (desktop
-firewalld zones, zram-swap disable, ThinkPad ACPI, DNS/NetworkManager
-reloads, …), none of which belongs on a headless server (Ubuntu Server,
-RHEL server, minimal cloud image, …). The canonical systemd signal for
-"graphical workstation vs headless server" is the default boot target:
-desktops default to graphical.target, server installs to multi-user.target.
-The host is treated as a server (skip, exit 0) when its default target is
-not graphical.target AND no display-manager is enabled —
-/etc/systemd/system/display-manager.service is the alias symlink systemd
-creates when a DM (gdm/sddm/plasmalogin/…) is enabled, a reliable positive
-desktop signal. (`systemctl list-unit-files display-manager.service` is NOT
-usable here: it exits 0 even when nothing matches.) Hosts without systemd
-fall through and run. Override on a headless box you nonetheless want
-configured with INSTALL_SYSTEM_CONFIG_FORCE=1; note chezmoi records a clean
-exit-0 skip as a successful run, so re-run with `chezmoi apply --force`.
+Everything gated behind this configures a graphical desktop (desktop firewalld
+zones, zram-swap disable, ThinkPad ACPI, DNS/NetworkManager reloads, …), none of
+which belongs on a headless server (Ubuntu Server, RHEL server, minimal cloud
+image, …).
 
-Usage: {{ includeTemplate "headless-guard.sh.tmpl" "my-script-name" }}
+`headless` is a named host fact (.chezmoidata/facts.yaml), probed once per
+chezmoi command by write_facts_cache in .install-prerequisites.sh and baked in
+below by facts-sh.tmpl. The probe is unchanged, only relocated: the canonical
+systemd signal for "graphical workstation vs headless server" is the default boot
+target (desktops default to graphical.target, server installs to
+multi-user.target), so the host is headless when its default target is not
+graphical.target AND no display-manager is enabled —
+/etc/systemd/system/display-manager.service is the alias symlink systemd creates
+when a DM (gdm/sddm/plasmalogin/…) is enabled, a reliable positive desktop
+signal. (`systemctl list-unit-files display-manager.service` is NOT usable: it
+exits 0 even when nothing matches.) A host with no systemd resolves the fact
+FALSE — treated as a desktop and configured — exactly as the old inline
+`command -v systemctl` fall-through did.
+
+INSTALL_SYSTEM_CONFIG_FORCE=1 still overrides, and still layers ON TOP of the
+fact rather than inside it — the same shape the installers' FORCE_* use (KTD9).
+The registry stays a statement about the HOST; an override is a statement about
+the RUN, and the two must not be conflated in facts-sh.tmpl, which
+install-system-10-files also consumes for its /etc gates. Note chezmoi records a
+clean exit-0 skip as a successful run, so re-run with `chezmoi apply --force`.
+
+The skip MESSAGE is the pre-registry one minus one detail: it used to interpolate
+the probe's own `systemctl get-default` output (`default target=%s`). There is no
+probe here to interpolate, so the parenthetical states what the fact means
+instead. The two override lines are verbatim.
+
+ARGUMENT — a dict, NOT the bare display-name string this partial used to take:
+
+  {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "my-script") }}
+
+facts-sh.tmpl needs the chezmoi context (.chezmoi.*, .factRegistry), and a
+partial's `.` is only ever what its caller passed: there is no route back to the
+root context from inside one — chezmoi exposes no `data` template function, and
+`includeTemplate` takes exactly one data argument. So the caller hands over both,
+the way fingerprint.tmpl already does. A call site still passing a bare string
+aborts the apply with a message naming the fix, rather than rendering a guard
+whose FACT_HEADLESS is unset and which would therefore never fire.
+
+Consumers get the WHOLE FACT_* set in scope for free — install-system-10-files
+resolves its /etc manifest gates straight out of it. Do NOT inline facts-sh.tmpl
+again alongside this guard.
 */ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "headless-guard.sh.tmpl: expected a dict, got a %s (%v). This guard inlines facts-sh.tmpl, which needs the chezmoi context, so the call site must pass it: {{ includeTemplate \"headless-guard.sh.tmpl\" (dict \"ctx\" . \"name\" %q) }}" (kindOf .) . .) -}}
+{{- end -}}
+{{- $name := .name -}}
+{{ includeTemplate "facts-sh.tmpl" .ctx }}
 # Skip on headless / server installs; see .chezmoitemplates/headless-guard.sh.tmpl
-# for the full rationale. Override with INSTALL_SYSTEM_CONFIG_FORCE=1.
-if [[ "${INSTALL_SYSTEM_CONFIG_FORCE:-}" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
-  default_target="$(systemctl get-default 2>/dev/null || true)"
-  if [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]; then
-    printf '%s: skipped (headless/server install: default target=%s, no display-manager).\n' '{{ . }}' "${default_target:-unknown}"
-    printf '  Force a run on a server you do want configured with:\n'
-    printf '    INSTALL_SYSTEM_CONFIG_FORCE=1 chezmoi apply --force\n'
-    exit 0
-  fi
+# for the full rationale. Override with INSTALL_SYSTEM_CONFIG_FORCE=1 — the
+# override is checked FIRST, so it wins over a true headless fact.
+if [[ "${INSTALL_SYSTEM_CONFIG_FORCE:-}" != "1" && "$FACT_HEADLESS" -eq 1 ]]; then
+  printf '%s: skipped (headless/server install: default target is not graphical.target, no display-manager).\n' '{{ $name }}'
+  printf '  Force a run on a server you do want configured with:\n'
+  printf '    INSTALL_SYSTEM_CONFIG_FORCE=1 chezmoi apply --force\n'
+  exit 0
 fi

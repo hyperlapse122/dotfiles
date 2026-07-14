@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-dolphin.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-dolphin.sh") -}}
 
 configure_dolphin() {
   printf 'config-kde-dolphin.sh: opening home folder on startup...\n'

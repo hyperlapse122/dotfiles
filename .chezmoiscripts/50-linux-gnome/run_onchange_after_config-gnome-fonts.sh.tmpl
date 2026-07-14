@@ -69,7 +69,7 @@ FONTS="{{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ en
 # user's later manual font edits are left be.
 SIG="sans=${SANS}/${SANS_SIZE} mono=${MONO}/${MONO_SIZE} fonts=${FONTS}"
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-fonts" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-fonts") -}}
 
 # Already applied this exact signature once -> respect the user's current fonts.
 # Because $SIG embeds the managed font archive set, a font bump falls through

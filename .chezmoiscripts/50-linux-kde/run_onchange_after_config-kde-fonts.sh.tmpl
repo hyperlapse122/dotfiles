@@ -18,9 +18,20 @@
 #
 # KDE changes apply after restarting plasmashell or logging out/in.
 #
+# The KDE gate is the shared kde-guard partial (the `desktop` host fact), like
+# every other 50-linux-kde script — this script used to carry its own inline
+# plasmashell probe inside configure_kde_fonts() instead, the last KDE probe
+# outside the registry. Consequence of promoting it to the top: a non-KDE
+# host now skips the fontconfig refresh too, where before it still ran. That
+# costs nothing — the GNOME counterpart (config-gnome-fonts) refreshes the same
+# cache from its own script, and a desktop-less host has no session to refresh
+# the cache for.
+#
 # managed fonts: {{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}
 
 set -euo pipefail
+
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-fonts.sh") -}}
 
 SANS="Pretendard"
 MONO="JetBrainsMono Nerd Font"
@@ -55,10 +66,10 @@ _require_font() {
 _font_value() { printf '%s,%d,-1,5,400,0,0,0,0,0,0,0,0,0,0,1' "$1" "$2"; }
 
 configure_kde_fonts() {
-  if ! command -v plasmashell >/dev/null 2>&1; then
-    printf 'config-kde-fonts.sh: plasmashell not found (non-KDE system), skipping KDE config.\n'
-    return 0
-  fi
+  # No plasmashell probe here — the kde-guard include above already left the
+  # script on a non-KDE host. kwriteconfig6 stays a runtime probe: it is TOOL
+  # PRESENCE (this repo's own package list installs it), not host identity, so it
+  # is not a fact.
   if ! command -v kwriteconfig6 >/dev/null 2>&1; then
     printf 'config-kde-fonts.sh: kwriteconfig6 not found, skipping KDE config.\n' >&2
     return 0

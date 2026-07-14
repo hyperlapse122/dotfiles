@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-kickoff.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-kickoff.sh") -}}
 
 configure_kickoff() {
   printf 'config-kde-kickoff.sh: showing favorites and applications as list...\n'

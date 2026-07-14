@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-digitalclock.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-digitalclock.sh") -}}
 
 configure_digitalclock() {
   printf 'config-kde-digitalclock.sh: setting date format to long...\n'

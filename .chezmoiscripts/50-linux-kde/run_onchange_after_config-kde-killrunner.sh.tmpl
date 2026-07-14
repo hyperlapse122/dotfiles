@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-killrunner.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-killrunner.sh") -}}
 
 configure_killrunner() {
   printf 'config-kde-killrunner.sh: setting kill trigger word + CPU-usage sorting...\n'

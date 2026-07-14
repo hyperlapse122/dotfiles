@@ -42,7 +42,7 @@ set -euo pipefail
 
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-app-grid-order-alphabetical"
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-app-grid-order" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-app-grid-order") -}}
 
 # Already ensured once -> respect the user's current grid arrangement, do nothing.
 if [[ -f "$STAMP" ]]; then

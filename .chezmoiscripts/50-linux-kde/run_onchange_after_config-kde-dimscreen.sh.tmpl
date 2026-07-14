@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-dimscreen.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-dimscreen.sh") -}}
 
 configure_dimscreen() {
   printf 'config-kde-dimscreen.sh: disabling automatic screen dimming on inactivity...\n'

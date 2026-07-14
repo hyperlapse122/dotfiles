@@ -36,7 +36,7 @@ set -euo pipefail
 
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-inputsources-hangul"
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "config-gnome-inputmethod" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-inputmethod") -}}
 
 # Already ensured once -> respect the user's current source list, do nothing.
 if [[ -f "$STAMP" ]]; then

@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-spectacle.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-spectacle.sh") -}}
 
 configure_spectacle() {
   printf 'config-kde-spectacle.sh: disabling remembered rectangular selection...\n'

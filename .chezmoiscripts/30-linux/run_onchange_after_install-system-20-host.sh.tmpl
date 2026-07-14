@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "headless-guard.sh.tmpl" "install-system-host" }}
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
 {{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-host" }}
 # Detect distro at runtime for the Ubuntu-specific zram branch below.
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""

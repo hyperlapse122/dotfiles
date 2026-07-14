@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-autotheme.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-autotheme.sh") -}}
 
 configure_autotheme() {
   printf 'config-kde-autotheme.sh: switching to Breeze with automatic day/night global theme...\n'

@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-panel.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-panel.sh") -}}
 
 configure_panel() {
   printf 'config-kde-panel.sh: disabling task manager grouping...\n'

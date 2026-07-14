@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-edges.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-edges.sh") -}}
 
 configure_edges() {
   printf 'config-kde-edges.sh: disabling screen edge actions and monitor-edge pointer barrier...\n'

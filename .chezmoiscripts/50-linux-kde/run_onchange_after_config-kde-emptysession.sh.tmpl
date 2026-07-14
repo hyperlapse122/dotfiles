@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-emptysession.sh" -}}
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-emptysession.sh") -}}
 
 configure_emptysession() {
   printf 'config-kde-emptysession.sh: forcing empty session on login...\n'

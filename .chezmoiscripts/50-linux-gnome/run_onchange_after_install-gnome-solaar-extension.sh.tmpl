@@ -52,7 +52,7 @@ set -euo pipefail
 UUID="solaar-extension@sidevesh"
 EGO_PK=6162
 
-{{ includeTemplate "gnome-guard.sh.tmpl" "install-gnome-solaar-extension" -}}
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "install-gnome-solaar-extension") -}}
 
 # --- Tooling / session guards (any absent condition => safe exit 0) --------
 command -v gnome-extensions >/dev/null 2>&1 \
