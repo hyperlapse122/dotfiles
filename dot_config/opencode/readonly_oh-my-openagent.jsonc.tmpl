@@ -1,13 +1,13 @@
 {{- /* The agent/category model mappings are data-driven: edit
-       .chezmoidata/models.yaml (.models.ohMyOpenagent), not this file.
+       .chezmoidata/agents.yaml (.agents.opencode.ohMyOpenagent), not this file.
        toPrettyJson emits them tab-indented with keys sorted alphabetically;
        the replace shifts the block one tab to sit inside the object. */ -}}
 {
 	"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/assets/oh-my-opencode.schema.json",
 	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
-	"agents": {{ toPrettyJson "\t" .models.ohMyOpenagent.agents | trim | replace "\n" "\n\t" }},
+	"agents": {{ toPrettyJson "\t" .agents.opencode.ohMyOpenagent.agents | trim | replace "\n" "\n\t" }},
 	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
-	"categories": {{ toPrettyJson "\t" .models.ohMyOpenagent.categories | trim | replace "\n" "\n\t" }},
+	"categories": {{ toPrettyJson "\t" .agents.opencode.ohMyOpenagent.categories | trim | replace "\n" "\n\t" }},
 	"disabled_mcps": ["playwright", "lsp"],
 	"disabled_skills": ["playwright"],
 	"disabled_hooks": [

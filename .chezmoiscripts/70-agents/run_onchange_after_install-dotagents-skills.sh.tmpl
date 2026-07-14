@@ -7,18 +7,19 @@
 # install`, driven by the deployed ~/.agents/agents.toml (source:
 # dot_agents/private_readonly_agents.toml.tmpl).
 #
-# onchange trigger: TWO things, because the remote skills track upstream
-# releases instead of hand-maintained pins.
-#   1. The fingerprint block below embeds a sha256 of the RAW agents.toml source
-#      template, catching config edits — a skill/MCP added or removed. Hashing
-#      the raw template (not the rendered target) keeps onepasswordRead secrets
-#      out of the fingerprint, per the script-prefix policy.
-#   2. That raw text is byte-identical across an upstream release (the refs are
-#      template lookups, not literals), so the resolved refs are ALSO rendered
-#      in below. Without them a new release would land in the rendered
-#      ~/.agents/agents.toml while this script — the thing that actually fetches
-#      the skill — never re-ran. Refs are tags, not secrets, so embedding them
-#      is safe.
+# onchange trigger: THREE relevant inputs, because agents.yaml also contains
+# unrelated pi/OpenCode data and remote skills track upstream releases.
+#   1. The fingerprint block embeds a sha256 of the RAW agents.toml source
+#      template, catching target-format/local-skill edits without resolving any
+#      onepasswordRead value.
+#   2. A comment-only selective hash covers ONLY unresolved agents.mcp +
+#      agents.skills.remote data. An MCP/remote-skill edit re-triggers the
+#      install, while pi/OpenCode-only edits in the same data file do not.
+#   3. Raw data is byte-identical across an upstream release (refs are template
+#      lookups, not literals), so resolved refs are ALSO rendered below. Without
+#      them a new release would land in ~/.agents/agents.toml while this script —
+#      the thing that actually fetches the skill — never re-ran. Refs are tags,
+#      not secrets, so embedding them is safe.
 # Caveat: shadcn/improve pins a BRANCH (it publishes no releases/tags), and a
 # branch head cannot be resolved by a chezmoi template function — new commits
 # there do not re-trigger this script. They are picked up whenever the install
@@ -44,16 +45,18 @@
 
 set -euo pipefail
 
-# agents.toml + agents.yaml source fingerprint — chezmoi hashes this rendered
-# script to decide whether to re-run, so embedding the raw template's sha256
-# re-triggers the install on any config edit. The data file is included too:
-# once MCP servers and remote skills moved into .chezmoidata/agents.yaml, a data
-# edit no longer changes the raw agents.toml.tmpl text, so without hashing the
-# data file a server/skill added there would never re-trigger the install (the
-# config-solaar dual-hash pattern). Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl" ".chezmoidata/agents.yaml")) }}
+# Raw agents.toml source fingerprint — target-format and local-skill changes.
+# Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl")) }}
 #
-# Resolved remote skill refs (see header note 2) — these move on an upstream
+# Selective unresolved DATA trigger. toJson is deterministic, and these values
+# contain op:// references rather than resolved secrets. Keeping this separate
+# from the raw-file fingerprint prevents unrelated pi/OpenCode data centralized
+# in agents.yaml from re-running dotagents.
+{{ $dotagentsData := dict "mcp" .agents.mcp "remoteSkills" .agents.skills.remote -}}
+# dotagents-data-sha256: {{ $dotagentsData | toJson | sha256sum }}
+#
+# Resolved remote skill refs (see header note 3) — these move on an upstream
 # release, changing this script's content and re-triggering the install that
 # fetches them. Ranged from .chezmoidata/agents.yaml (skills.remote); keep the
 # data and this block in lockstep. A literal `ref` (e.g. improve's branch head)

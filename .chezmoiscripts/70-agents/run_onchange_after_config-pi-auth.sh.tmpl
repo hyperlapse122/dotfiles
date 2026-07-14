@@ -77,7 +77,8 @@ mkdir -p "$(dirname "$AUTH")"
 # this is deterministic across renders for unchanged data + unchanged secrets.
 DECLARED='{{- $d := dict -}}
 {{- range .agents.pi.auth.providers -}}
-{{- $d = set $d .name (dict "type" .type "key" (onepasswordRead .key)) -}}
+{{- $key := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" .key) | fromJson -}}
+{{- $d = set $d .name (dict "type" .type "key" $key) -}}
 {{- end -}}
 {{ toJson $d }}'
 

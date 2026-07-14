@@ -3,7 +3,8 @@
 # .chezmoiscripts/70-agents/run_onchange_after_config-pi.sh.tmpl
 #
 # Merges pi's model defaults — defaultProvider / defaultModel / defaultThinkingLevel
-# (source: .chezmoidata/pi.yaml) — into ~/.pi/agent/settings.json, the file pi
+# (source: .chezmoidata/agents.yaml, .agents.pi.defaults) — into
+# ~/.pi/agent/settings.json, the file pi
 # LIVE-WRITES (theme, packages, lastChangelogVersion, …).
 #
 # settings.json CANNOT be a chezmoi-managed target: pi read-merge-writes it on
@@ -33,9 +34,9 @@
 # read-merge-write from then on preserves them. Atomic write via a temp + rename.
 #
 # onchange trigger: the rendered values below ARE the trigger. There is no
-# source-dir dependency to hash beyond .chezmoidata/pi.yaml (whose values render
-# into this body), so there is deliberately NO fingerprint block — editing the
-# data changes this script's rendered content and re-runs it (the same shape as
+# source-dir dependency to hash beyond .chezmoidata/agents.yaml (whose values
+# render into this body), so there is deliberately NO fingerprint block — editing
+# the data changes this script's rendered content and re-runs it (the same shape as
 # install-pi-packages and install-vscodium-extensions).
 #
 # Soft-skip: this script must never fail an apply — a missing `pi` binary or a
@@ -72,11 +73,11 @@ fi
 
 mkdir -p "$(dirname "$SETTINGS")"
 
-# Rendered defaults from .chezmoidata/pi.yaml — the onchange trigger.
+# Rendered defaults from .chezmoidata/agents.yaml — the onchange trigger.
 /usr/bin/python3 - "$SETTINGS" \
-  "{{ .pi.defaultProvider }}" \
-  "{{ .pi.defaultModel }}" \
-  "{{ .pi.defaultThinkingLevel }}" \
+  "{{ .agents.pi.defaults.provider }}" \
+  "{{ .agents.pi.defaults.model }}" \
+  "{{ .agents.pi.defaults.thinkingLevel }}" \
   <<'PYEOF'
 import json, os, sys
 path, provider, model, thinking = sys.argv[1:5]
@@ -99,5 +100,5 @@ os.replace(tmp, path)
 os.chmod(path, 0o644)
 PYEOF
 
-echo "config-pi: set defaultProvider={{ .pi.defaultProvider }} defaultModel={{ .pi.defaultModel }} defaultThinkingLevel={{ .pi.defaultThinkingLevel }}"
+echo "config-pi: set defaultProvider={{ .agents.pi.defaults.provider }} defaultModel={{ .agents.pi.defaults.model }} defaultThinkingLevel={{ .agents.pi.defaults.thinkingLevel }}"
 {{ end -}}

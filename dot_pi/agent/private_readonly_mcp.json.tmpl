@@ -1,9 +1,10 @@
 {{- /* pi MCP servers are data-driven from .chezmoidata/agents.yaml
        (.agents.mcp.servers). Add or remove a server there and pi picks it up.
        lifecycle: "eager" is hardcoded per server (load-bearing — see AGENTS.md:
-       a lazy server exposes zero tools under non-interactive `pi -p`). Header
-       values are onepasswordRead-resolved at render from the op:// refs in the
-       data file. toPrettyJson owns the comma/whitespace handling. */ -}}
+       a lazy server exposes zero tools under non-interactive `pi -p`). The
+       recursive resolver applies the shared op:// -> onepasswordRead /
+       else-as-is rule to each header value. toPrettyJson owns the
+       comma/whitespace handling. */ -}}
 {{- $servers := dict -}}
 {{- range .agents.mcp.servers -}}
 {{- $e := dict "lifecycle" "eager" -}}
@@ -16,7 +17,8 @@
 {{- $e = set $e "url" .url -}}
 {{- $h := dict -}}
 {{- range $k, $v := .headers -}}
-{{- $h = set $h $k (onepasswordRead $v) -}}
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson -}}
+{{- $h = set $h $k $resolved -}}
 {{- end -}}
 {{- $e = set $e "headers" $h -}}
 {{- end -}}

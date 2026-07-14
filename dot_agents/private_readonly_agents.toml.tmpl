@@ -96,7 +96,8 @@ url = {{ .url | quote }}
 
 [mcp.headers]
 {{- range $k, $v := .headers }}
-{{ $k }} = '{{ onepasswordRead $v }}'
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson }}
+{{ $k }} = '{{ $resolved }}'
 {{- end }}
 {{- end }}
 {{- end }}

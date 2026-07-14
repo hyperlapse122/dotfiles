@@ -6,7 +6,7 @@ called out as verified were run against the live CLI.
 | | |
 |---|---|
 | Source | `anomalyco/opencode`, GitHub release archive → `~/.local/bin/opencode` |
-| Auth / config | Repo-managed **readonly** `~/.config/opencode/opencode.json` (from `dot_config/opencode/readonly_opencode.json.tmpl`); provider keys under `dot_config/opencode/private_secrets/` via 1Password |
+| Auth / config | Repo-managed **readonly** `~/.config/opencode/opencode.json`; provider data comes from `.chezmoidata/agents.yaml`, with `op://` references resolved from 1Password at render |
 | Canonical | `opencode run --agent <Agent> --dir <worktree> "<brief>"` |
 | Strength | The **agent roster** — plan → execute → critique as distinct agents |
 
@@ -44,7 +44,7 @@ A plan → execute → critique chain is `Prometheus` → `Atlas` → `Momus`;
 ## Model selection is NOT `opencode.json`'s top-level `model`
 
 A plain `opencode run` does **not** use the top-level `model` key.
-oh-my-openagent maps a model per agent/category from `.chezmoidata/models.yaml`
+oh-my-openagent maps a model per agent/category from `.chezmoidata/agents.yaml` (`agents.opencode.ohMyOpenagent`)
 — a verified default run reported `Sisyphus - ultraworker · claude-opus-4-8`.
 **Pick the agent**; override `-m` only when you specifically want a different
 model.
