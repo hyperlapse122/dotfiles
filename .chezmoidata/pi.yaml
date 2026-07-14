@@ -35,11 +35,11 @@ pi:
   # live file by run_onchange_after_config-pi-auth.sh.tmpl. pi's built-in
   # default `google` is NOT credentialed here, so without this every invocation
   # needs explicit --provider/--model.
-  defaultProvider: zai
+  defaultProvider: openai-codex
 
   # Default model id for the provider above. Must be a model the provider
   # accepts (verified: `pi --provider zai --model glm-5.2 --print "say OK"` → OK).
-  defaultModel: glm-5.2
+  defaultModel: gpt-5.6-sol
 
   # Default thinking level — one of: off | minimal | low | medium | high | xhigh | max
-  defaultThinkingLevel: max
+  defaultThinkingLevel: xhigh
