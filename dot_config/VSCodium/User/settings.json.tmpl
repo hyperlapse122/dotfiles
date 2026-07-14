@@ -1,3 +1,12 @@
+{{- /* VSCodium user settings. A .tmpl for ONE reason: `editor.fontFamily` below.
+   The first family in that CSS-style stack is the managed mono face from
+   .chezmoidata/fonts.yaml (`fonts.families.mono`) — the same source the KDE/GNOME
+   font scripts and the fcitx5 classicui config read — and the rest of the stack is
+   `fonts.monoFallbacks`, so changing the mono face is a ONE-FILE edit instead of a
+   four-file hunt. The trailing bare `monospace` is CSS's generic keyword, not a
+   family, so the template appends it after the quoted list. Everything else here is
+   VSCodium's own settings surface and stays literal (this file IS the data for
+   those). Keep the tab indentation — VSCodium rewrites this file with tabs. */ -}}
 {
 	"[json]": {
 		"editor.defaultFormatter": "vscode.json-language-features"
@@ -38,7 +47,7 @@
 		"source.fixAll.biome": "explicit",
 		"source.organizeImports.biome": "explicit"
 	},
-	"editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'D2Coding Nerd Font', 'D2Coding', 'Droid Sans Mono', 'monospace', monospace",
+	"editor.fontFamily": "{{ range prepend .fonts.monoFallbacks .fonts.families.mono }}'{{ . }}', {{ end }}monospace",
 	"editor.fontLigatures": true,
 	"editor.formatOnSave": true,
 	"editor.quickSuggestions": {

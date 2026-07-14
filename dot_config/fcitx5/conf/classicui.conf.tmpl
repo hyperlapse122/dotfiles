@@ -1,13 +1,21 @@
+{{- /* fcitx5 classic UI (the KDE targets' input method; GNOME hosts run ibus and
+   never deploy this file — dot_config/.chezmoiignore). A .tmpl for ONE reason:
+   the three font lines below. The family and size come from .chezmoidata/fonts.yaml
+   (`fonts.families.sans`, `fonts.sizes.sans`) — the same source the KDE/GNOME font
+   scripts and the VSCodium settings read — so changing the sans face is a
+   ONE-FILE edit instead of a four-file hunt. Everything else here is fcitx5's own
+   settings surface and stays literal (this file IS the data for those).
+   `Bold` on TrayFont is fcitx5's weight token, i.e. structure, not a knob. */ -}}
 # 세로 후보 목록
 Vertical Candidate List=False
 # 마우스 휠을 사용하여 이전 또는 다음 페이지로 이동
 WheelForPaging=True
 # 글꼴
-Font="Pretendard 10"
+Font="{{ .fonts.families.sans }} {{ .fonts.sizes.sans }}"
 # 메뉴 글꼴
-MenuFont="Pretendard 10"
+MenuFont="{{ .fonts.families.sans }} {{ .fonts.sizes.sans }}"
 # 트레이 글꼴
-TrayFont="Pretendard Bold 10"
+TrayFont="{{ .fonts.families.sans }} Bold {{ .fonts.sizes.sans }}"
 # 트레이 라벨 윤곽선 색상
 TrayOutlineColor=#000000
 # 트레이 레이블 텍스트 색상

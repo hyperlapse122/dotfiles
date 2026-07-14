@@ -17,6 +17,14 @@
 # is that locale's A→Z order. Only the launcher order is touched; nothing else
 # about the grid, folders, or favorites is changed.
 #
+# The INTENT is DATA, not script: .chezmoidata/gnome.yaml
+# `gnome.appGrid.sortAlphabetically` is the single source of truth (see its
+# header) — set it to false there to leave the launcher on the host's own order,
+# and this script no-ops. It is an intent flag rather than a value because there
+# is no "sort" key in GNOME to write: an EMPTY app-picker-layout is what makes
+# the shell sort the grid itself, so the action is a `reset`, and that semantic
+# (plus the once-only stamp below) is exactly why this stays a script.
+#
 # GNOME normally stays on stock defaults here; this is a deliberate,
 # user-approved exception to that policy (alongside fonts, the GDM
 # password-only greeter, the mouse accel profile, the terminal palette, the
@@ -28,9 +36,11 @@
 # into a custom arrangement (which re-populates app-picker-layout), we do NOT
 # keep wiping it back to alphabetical on every apply.
 #
-# onchange, no external dependency: this script clears a fixed key and has no
-# dependency file to fingerprint, so its onchange trigger is its own rendered
-# content — chezmoi re-runs it only when this script changes. Live-session
+# onchange, no fingerprint block needed: the intent flag RENDERS INTO
+# SORT_ALPHABETICALLY below, so a gnome.yaml edit changes this script's own
+# content and re-triggers it (the same reason config-gnome-mouse carries no
+# fingerprint — a data hash would only add re-runs on comment-only yaml edits).
+# Live-session
 # only: gsettings writes go through dconf-service on the session D-Bus, so on a
 # headless/TTY/first-boot apply this exits 0 WITHOUT stamping. NOTE the onchange
 # behavior: that skipped run is recorded as done and will NOT re-run on the next
@@ -40,9 +50,18 @@
 
 set -euo pipefail
 
+SORT_ALPHABETICALLY={{ .gnome.appGrid.sortAlphabetically | ternary 1 0 }}
+
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-app-grid-order-alphabetical"
 
 {{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-app-grid-order") -}}
+
+# Opted out in .chezmoidata/gnome.yaml -> leave the launcher order alone entirely
+# (no stamp either: flipping the flag back to true must still be able to apply).
+if [[ "$SORT_ALPHABETICALLY" -ne 1 ]]; then
+  echo "config-gnome-app-grid-order: gnome.appGrid.sortAlphabetically is false; leaving app-picker-layout alone"
+  exit 0
+fi
 
 # Already ensured once -> respect the user's current grid arrangement, do nothing.
 if [[ -f "$STAMP" ]]; then

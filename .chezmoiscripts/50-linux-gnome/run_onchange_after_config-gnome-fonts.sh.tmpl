@@ -6,8 +6,14 @@
 # GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Brings GNOME's display
 # fonts to PARITY with the KDE target (run_onchange_after_config-kde-fonts):
 #
-#   sans (interface / document / window-title) -> Pretendard 10
-#   mono (monospace)                            -> JetBrainsMono Nerd Font 10
+#   sans (interface / document / window-title) -> fonts.families.sans
+#   mono (monospace)                            -> fonts.families.mono
+#
+# The families and sizes are DATA, not script: .chezmoidata/fonts.yaml
+# (`fonts.families` / `fonts.sizes`) is the single source of truth shared with
+# the KDE script, the fcitx5 classicui config and the VSCodium settings — edit
+# the yaml, not this file. Which gsettings key gets which face is structure and
+# stays here (see the mapping below).
 #
 # KDE keys                          -> GNOME gsettings keys
 #   [General] font                     org.gnome.desktop.interface font-name
@@ -22,10 +28,10 @@
 # the four font keys only — no other theming.
 #
 # onchange trigger: the fingerprint block below embeds a sha256 of the managed
-# font data (.chezmoidata/fonts.yaml); combined with the SANS/MONO constants in
-# this script's own text (and the `.fonts` signature below), chezmoi re-runs
-# whenever a font is bumped or the font choice changes. Comment-only; never
-# executed.
+# font data (.chezmoidata/fonts.yaml); combined with the SANS/MONO values it
+# renders into this script's own text (and the `.fonts` signature below), chezmoi
+# re-runs whenever a font is bumped or the font choice changes. Comment-only;
+# never executed.
 #
 # SESSION-DEPENDENT + user-respecting (same spirit as config-gnome-inputmethod):
 # gsettings writes go through dconf-service on the session D-Bus — on a headless
@@ -36,8 +42,8 @@
 # script) or a manual `chezmoi apply --force`. The stamp still records the exact
 # font SIGNATURE it last applied: an unchanged signature means "already ensured"
 # and we leave the user's current fonts alone (a user who repicks fonts is not
-# fought), while bumping the SANS/MONO constants below changes the signature and
-# re-asserts the new choice — mirroring how the KDE run_onchange behaves.
+# fought), while editing the families/sizes in fonts.yaml changes the signature
+# and re-asserts the new choice — mirroring how the KDE run_onchange behaves.
 #
 # managed fonts: {{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}
 
@@ -48,25 +54,25 @@ set -euo pipefail
 # font bump. `include . | sha256sum` hashes file CONTENT; `(stat .).isDir` skips
 # directories. Comment-only; never executed.
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoidata/fonts.yaml")) }}
-SANS="Pretendard"
-MONO="JetBrainsMono Nerd Font"
-SANS_SIZE=10
-MONO_SIZE=10
+SANS="{{ .fonts.families.sans }}"
+MONO="{{ .fonts.families.mono }}"
+SANS_SIZE={{ .fonts.sizes.sans }}
+MONO_SIZE={{ .fonts.sizes.mono }}
 
 FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-fonts"
 
 # The managed font archive set (same expression as the marker above). A font
 # BUMP in .chezmoidata/fonts.yaml lands a new archive filename even when the
-# Pretendard/JetBrains family names are unchanged, so folding it into the
-# signature makes such a bump fall through the stamp guard below and reach the
-# cache refresh -- the parity the KDE run_onchange marker path gets for free.
+# `fonts.families` names are unchanged, so folding it into the signature makes
+# such a bump fall through the stamp guard below and reach the cache refresh --
+# the parity the KDE run_onchange marker path gets for free.
 FONTS="{{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}"
 
-# Signature of the exact fonts this script wants applied. Bumping any constant
-# above OR any managed font archive changes it, so the stamp no longer matches
-# and the cache refresh + font choice are re-asserted; while it matches, the
-# user's later manual font edits are left be.
+# Signature of the exact fonts this script wants applied. Editing any family or
+# size in .chezmoidata/fonts.yaml — or any managed font archive there — changes
+# it, so the stamp no longer matches and the cache refresh + font choice are
+# re-asserted; while it matches, the user's later manual font edits are left be.
 SIG="sans=${SANS}/${SANS_SIZE} mono=${MONO}/${MONO_SIZE} fonts=${FONTS}"
 
 {{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-fonts") -}}

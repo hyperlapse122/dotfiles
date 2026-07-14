@@ -3,18 +3,22 @@
 # .chezmoiscripts/50-linux-gnome/run_onchange_after_install-gnome-solaar-extension.sh.tmpl
 #
 # GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Installs + enables
-# the official "Solaar Extension" GNOME Shell extension (extensions.gnome.org
-# id 6162, author sidevesh, uuid solaar-extension@sidevesh). It exposes the
-# active / under-pointer window info over D-Bus, which Solaar's Process /
-# MouseProcess rule conditions need on Wayland — without it those conditions
-# only work on X11. This unlocks the per-app Solaar rules
+# the official "Solaar Extension" GNOME Shell extension (author sidevesh). It
+# exposes the active / under-pointer window info over D-Bus, which Solaar's
+# Process / MouseProcess rule conditions need on Wayland — without it those
+# conditions only work on X11. This unlocks the per-app Solaar rules
 # (dot_config/solaar/rules.yaml.tmpl) for the MX Master 4 on the Wayland GNOME
 # targets.
 #
+# WHICH extension is DATA: .chezmoidata/gnome.yaml
+# `gnome.shellExtensions.solaar` carries the upstream `uuid` and the numeric
+# extensions.gnome.org `egoId` (see its header) — edit the yaml, not this file.
+# Every bit of the resolve/download/compat/enable logic below stays here.
+#
 # The build matching the RUNNING shell version is resolved dynamically from
 # the extensions.gnome.org API
-# (extension-info/?pk=6162&shell_version=<major>); the uuid is fixed upstream,
-# so it is hardcoded below and sanity-checked against the response. CAUTION:
+# (extension-info/?pk=<egoId>&shell_version=<major>); the uuid is fixed
+# upstream, so it is sanity-checked against the response. CAUTION:
 # the API returns a download_url even for an UNSUPPORTED shell version (it
 # falls back to the latest build), so compatibility is decided by the
 # response's shell_version_map carrying the running major — never by
@@ -39,9 +43,10 @@
 # the install itself succeeded and must not abort the apply; only network/API/
 # download failures exit 1 to retry on the next apply.
 #
-# onchange, no external dependency: nothing to fingerprint (the download is
-# resolved from live upstream state at run time), so its onchange trigger is
-# its own rendered content — chezmoi re-runs it only when this script changes.
+# onchange, no fingerprint block needed: nothing external to hash (the download
+# is resolved from live upstream state at run time), and the uuid/egoId RENDER
+# INTO this script's own content below, so a gnome.yaml edit re-triggers it (the
+# same reason config-gnome-mouse carries no fingerprint).
 # Soft-skips (exit 0) without gnome-extensions / curl / /usr/bin/python3,
 # without a session D-Bus bus, or when the shell version cannot be determined;
 # onchange records those skips as done (retry via a content change or
@@ -49,8 +54,8 @@
 
 set -euo pipefail
 
-UUID="solaar-extension@sidevesh"
-EGO_PK=6162
+UUID="{{ .gnome.shellExtensions.solaar.uuid }}"
+EGO_PK={{ .gnome.shellExtensions.solaar.egoId }}
 
 {{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "install-gnome-solaar-extension") -}}
 
