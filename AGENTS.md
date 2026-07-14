@@ -28,7 +28,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
 | `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.haptic`, `.vscodium`, `.biopass`, `.models`, `.user`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
-| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, codegraph, cli-proxy-api, aoe), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, virtio-win, prezto), `fonts.toml`. Everything but prezto/fonts is a pinned standalone CLI binary into `~/.local/bin`. Add a new tool to the matching domain file; don't spawn a new one |
+| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, codegraph, cli-proxy-api, aoe), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, virtio-win, prezto), `fonts.toml`. Everything but prezto/fonts is a pinned standalone CLI binary into `~/.local/bin`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
@@ -137,7 +137,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 
 | Dir | Purpose |
 |---|---|
-| `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also re-points `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `codegraph`) at the latest release and prunes older versions |
+| `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also re-points `~/.local/bin` symlinks for the versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `pi`, `codegraph`) at the latest release and prunes older versions |
 | `10-auth/` | GitHub token preflight (before the installers), GitLab PAT login (after the file phase, so the externals-fetched `glab` exists), Docker Hub login, one-time `tailscale up` |
 | `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
 | `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, biopass method policy, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
@@ -1057,7 +1057,7 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `fonts` — see the source-attribute table; a new tool joins the matching file
   rather than getting one of its own, and anything referencing an external by
   path must name the *group* file). For the version-dir
-  installs (`claude`, `codex`, `codegraph`) the `.chezmoiscripts/00-tools/`
+  installs (`claude`, `codex`, `pi`, `codegraph`) the `.chezmoiscripts/00-tools/`
   `run_onchange_after_*` scripts re-point the `~/.local/bin` symlink at the
   freshly fetched version and prune older ones — the latest release id is
   rendered into each script body, so a new upstream release re-triggers the

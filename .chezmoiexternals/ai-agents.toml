@@ -1,4 +1,4 @@
-{{- /* AI coding agents & the local model proxy: claude, codex, agy, opencode, codegraph, cli-proxy-api, aoe. */ -}}
+{{- /* AI coding agents & the local model proxy: claude, codex, agy, opencode, pi, codegraph, cli-proxy-api, aoe. */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -91,6 +91,39 @@ type = "archive-file"
 url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) $opencodeArchiveExtension) }}'
 executable = true
 path = '{{ printf "opencode%s" $executableExtension }}'
+
+{{- /* ---------- pi (earendil-works) — a whole-dir distribution, not a lone binary: the
+       executable resolves its own sibling package.json / theme/ / export-html/ / .wasm, so the
+       tree is extracted per version and ~/.local/bin/pi is symlinked at it by
+       .chezmoiscripts/00-tools/run_onchange_after_pi.sh.tmpl. POSIX only (the release does ship
+       windows .zip assets, but the linker script has no .ps1 counterpart). ---------- */ -}}
+
+{{- if ne .chezmoi.os "windows" -}}
+
+{{- $piTag := (gitHubLatestRelease "earendil-works/pi").TagName | toString -}}
+{{- $piAsset := (printf "pi-%s-%s.tar.gz" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) -}}
+
+{{- /* One combined sha256sum-format sidecar for every asset, so pick our line out of it. */ -}}
+{{- $piSums := output "curl" "-fsSL" (gitHubReleaseAssetURL "earendil-works/pi" $piTag "SHA256SUMS") | toString -}}
+{{- $piSha := "" -}}
+{{- range (splitList "\n" $piSums) -}}
+  {{- $fields := regexSplit "\\s+" (trim .) -1 -}}
+  {{- if and (eq (len $fields) 2) (eq (index $fields 1) $piAsset) -}}
+    {{- $piSha = (index $fields 0) -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $piSha }}{{ fail (printf "pi: no sha256 for %s in the release SHA256SUMS sidecar" $piAsset) }}{{ end }}
+
+[pi]
+type = "archive"
+url = '{{ gitHubReleaseAssetURL "earendil-works/pi" $piTag $piAsset }}'
+targetPath = '{{ printf ".local/share/pi/versions/%s" $piTag }}'
+stripComponents = 1
+
+[pi.checksum]
+sha256 = '{{ $piSha }}'
+
+{{- end }}
 
 {{- /* ---------- codegraph ---------- */ -}}
 
