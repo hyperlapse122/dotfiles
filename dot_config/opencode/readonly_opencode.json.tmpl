@@ -103,46 +103,6 @@
         "serve",
         "--mcp"
       ]
-    },
-    "zai-mcp-server": {
-      "type": "local",
-      "command": [
-        "mise",
-        "--no-config",
-        "--no-env",
-        "--no-hooks",
-        "exec",
-        "-yq",
-        "npm:@z_ai/mcp-server",
-        "node",
-        "--",
-        "zai-mcp-server"
-      ],
-      "environment": {
-        "Z_AI_API_KEY": "{file:./secrets/zai-coding-plan-api-key}",
-        "Z_AI_MODE": "ZAI"
-      }
-    },
-    "web-search-prime": {
-      "type": "remote",
-      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
-      "headers": {
-        "Authorization": "Bearer {file:./secrets/zai-coding-plan-api-key}"
-      }
-    },
-    "web-reader": {
-      "type": "remote",
-      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
-      "headers": {
-        "Authorization": "Bearer {file:./secrets/zai-coding-plan-api-key}"
-      }
-    },
-    "zread": {
-      "type": "remote",
-      "url": "https://api.z.ai/api/mcp/zread/mcp",
-      "headers": {
-        "Authorization": "Bearer {file:./secrets/zai-coding-plan-api-key}"
-      }
     }
   },
   "permission": {
