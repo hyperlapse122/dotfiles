@@ -17,6 +17,7 @@
 | prune stale remote-tracking branches / delete local branches whose upstream is gone        | `git-branch-cleanup`  | remote enumeration, mandatory dry-run preview, `fetch --all --prune`, safe local `: gone]` cleanup   |
 | write a daily work log / 일일 업무 보고 from today's git commits                            | `daily-report`        | `~/src`-wide bare-repo sweep, per-OS date-range `git log`, group → repo grouping, Korean plaintext-fence output |
 | clone a repository, register a new project under `~/src`, or audit the layout             | `src-layout`          | group-name judgment (mirror-or-ask), garden manifest entry + grow/setup-gitdir bootstrap, aoe add handoff, src-audit drift flow |
+| **shell out to another agent CLI** — `pi` / `codex` / `agy` / `opencode` (delegate, parallelize, cross-model review) | `harness-delegation`  | per-CLI non-interactive invocation, harness selection, self-contained brief, sandbox ladder, result verification, `agy -p` flag-order trap |
 | drive a browser / run Playwright tests                                                     | `playwright-cli`      | usage (host-safety rule is in core below)                                                           |
 
 ## Project instruction files — `CLAUDE.md` mirrors `AGENTS.md` (guardrail)
@@ -106,6 +107,13 @@
 
 - A task / issue / MR is **done** only when **every** in-scope item and stated acceptance criterion is actually delivered and verified in it. **MUST NOT** mark work complete while any item is unimplemented, stubbed, reverted, replaced with a weaker substitute, or pushed to a "follow-up" issue/PR, a `TODO`/`FIXME`, or a "known limitation" note. Difficulty or size is not a reason to defer — deliver more commits, not fewer items.
 - Genuinely blocked (confirmed upstream/tooling bug, missing access, irreversible/destructive step, or a decision needing human judgment) → **STOP** and surface it to the user with concrete evidence + a proposed path + an explicit ask, then wait. Never silently defer and report done; a user-acknowledged blocker is the only acceptable incomplete item.
+
+## Delegating to another agent harness (guardrail)
+
+- Four other coding-agent CLIs live on this host — `pi`, `codex`, `agy` (Antigravity/Gemini), `opencode`. **MUST** load `harness-delegation` **before** shelling out to any of them: the non-interactive invocations are not guessable and a wrong one fails *silently* (`agy`'s `-p` takes the prompt as its **value**, so every other flag must precede it; `codex exec` has no `--full-auto`; `pi`'s default provider has no credentials here, so `--model` is mandatory).
+- A delegate shares **none** of your context. The brief **MUST** be self-contained — absolute **worktree** path (never a `~/src/…/<project>/` root, which is a bare repo), branch, exact files in scope, an explicit "do not touch X", and the acceptance criteria — and **MUST** state that the delegate does not commit, push, or open a PR/MR. Branch naming, Conventional Commits, and one-issue-one-MR stay the **caller's** obligation; a delegate that commits bypasses every gate above.
+- **You stay accountable.** A delegation is done only when its exit code is 0, you have **read its output**, and you have **reviewed its `git diff`** — a delegate's claim of success is not completion (Task completion guardrail applies to *you*). **MUST NOT** instruct a delegate to delegate onward: you cannot verify what you cannot see.
+- **MUST** start at the least privilege that can do the job (read-only / plan for analysis; write only when it must edit). **MUST NOT** pass a permission-bypass flag (`codex --dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, `agy --dangerously-skip-permissions`) without an explicit user request in the same turn (destructive/bypass guardrail). **MUST NOT** put a token, key, or secret in a brief — each harness has its own credential store. (Per-CLI flags, model catalogs, capture recipes, parallel fan-out → `harness-delegation`.)
 
 ## Figma
 
