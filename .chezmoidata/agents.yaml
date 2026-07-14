@@ -1,5 +1,5 @@
-# .chezmoidata/agents.yaml — single source of truth for agent MCP servers
-# and dotagents remote skills.
+# .chezmoidata/agents.yaml — single source of truth for agent MCP servers,
+# dotagents remote skills, and pi auth providers.
 #
 # Three templates range over this file to render per-agent MCP config:
 #   - dot_agents/private_readonly_agents.toml.tmpl   (Claude Code + Codex, via dotagents)
@@ -67,3 +67,26 @@ agents:
       - name: dotagents
         source: getsentry/dotagents
         # ref absent -> newest release via gitHubLatestRelease
+
+  # pi auth providers — static API-key credentials data-driven into
+  # ~/.pi/agent/auth.json by the read-merge-write SCRIPT
+  # .chezmoiscripts/70-agents/run_onchange_after_config-pi-auth.sh.tmpl.
+  # auth.json is pi-LIVE-WRITTEN: OAuth providers (e.g. Codex) refresh tokens
+  # there on a frequent cadence, so it is NOT a chezmoi-managed target (the
+  # former dot_pi/agent/private_readonly_auth.json.tmpl fought pi for the same
+  # bytes). The script overlays ONLY these declared api_key providers and
+  # preserves every entry pi owns (OAuth tokens it wrote under other names) —
+  # the same read-merge-write shape config-pi / config-solaar use. `key` is an
+  # op:// item-REFERENCE string (like the MCP `headers` above), resolved via
+  # onepasswordRead at render in the script — keep secrets out of this static
+  # data file. OAuth providers (codex, …) are written by pi itself and NEVER
+  # declared here; only static api_key providers belong.
+  pi:
+    auth:
+      providers:
+        - name: kimi-coding
+          type: api_key
+          key: 'op://Private/Kimi/API Key'
+        - name: zai
+          type: api_key
+          key: 'op://Private/Z.ai/API Key'

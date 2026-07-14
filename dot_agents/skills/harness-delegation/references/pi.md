@@ -6,7 +6,7 @@ verified were run against the live CLI.
 | | |
 |---|---|
 | Source | `earendil-works/pi`, GitHub release tarball → `~/.local/share/pi/versions/<tag>`; `~/.local/bin/pi` is symlinked at the newest by `.chezmoiscripts/00-tools/run_onchange_after_pi.sh.tmpl` (a whole-dir distribution — the binary resolves sibling `package.json` / `theme/` / `.wasm`, so it cannot be a lone binary) |
-| Auth | `~/.pi/agent/auth.json`, chezmoi-managed from `dot_pi/agent/private_readonly_auth.json.tmpl` — 1Password-backed API keys for **`kimi-coding` and `zai` ONLY** |
+| Auth | `~/.pi/agent/auth.json`, a pi-LIVE-WRITTEN file: static 1Password-backed API keys for **`kimi-coding` and `zai` ONLY** are merged in by `.chezmoiscripts/70-agents/run_onchange_after_config-pi-auth.sh.tmpl` (source `.chezmoidata/agents.yaml`); OAuth providers (e.g. codex) are written by pi itself |
 | Canonical | `pi -p --model zai/glm-5.2 --no-session "<brief>"` |
 | Strength | Cheapest/fastest of the four; cleanest stdout (the answer, nothing else) |
 

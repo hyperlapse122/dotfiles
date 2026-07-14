@@ -1,0 +1,104 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/70-agents/run_onchange_after_config-pi-auth.sh.tmpl
+#
+# Merges pi's static API-key auth providers (source: .chezmoidata/agents.yaml,
+# .agents.pi.auth.providers) into ~/.pi/agent/auth.json — the file pi
+# LIVE-WRITES.
+#
+# auth.json CANNOT be a chezmoi-managed target (the former
+# dot_pi/agent/private_readonly_auth.json.tmpl was deleted for this reason): pi
+# needs to WRITE it. For OAuth providers (e.g. Codex) it refreshes tokens on a
+# frequent cadence, and a managed file — let alone a private_readonly_ 0400 one
+# — would fight pi for the same bytes on every session AND was read-only to the
+# owner, which is exactly why pi could never persist an OAuth token at all. This
+# script instead read-merge-WRITES only the declared api_key providers,
+# preserving every entry pi owns (OAuth tokens it wrote for codex, etc.) — the
+# same shape config-pi / config-solaar / config-biopass use for other apps'
+# live-written config.
+#
+# The merge is a top-level jq `+` (NOT the deep `*`): a declared provider entry
+# REPLACES any same-named entry WHOLESALE, so a stale field from a former auth
+# type never lingers. OAuth entries pi wrote under DIFFERENT names are outside
+# the declared set and pass through untouched. The script NEVER deletes a
+# provider — removing one from the data file leaves the deployed entry in place;
+# remove it by hand (a delete-by-name could clobber an OAuth entry we did not
+# declare and know nothing about).
+#
+# Mode: written at 0600 (owner read/write, private) so BOTH this script and pi
+# can keep updating it. The old managed template deployed auth.json at 0400
+# (private_readonly_), so the FIRST apply after this migration rewrites it 0600
+# and unblocks pi's OAuth writes from then on.
+#
+# Why jq here but python3 in config-pi (settings.json): the auth merge is a
+# one-liner and far more legible in jq, and auth.json's frequent-write / OAuth
+# concern is the whole point of this refactor. config-pi keeps python3 (stdlib
+# json, no dependency) because it predates jq being a declared dep and changing
+# it is out of scope. The two scripts intentionally diverge; each documents its
+# own choice. jq is declared in .chezmoidata/packages.yaml (both distros) so a
+# fresh host has it before this after-phase script runs.
+#
+# onchange trigger: the declared providers below — with their 1Password-resolved
+# keys — ARE the trigger (there is no source-dir dependency beyond
+# .chezmoidata/agents.yaml). A rotated API key in 1Password changes the rendered
+# key here, so the script's content hash changes and auth.json is re-written on
+# the next apply (the same shape as auth-gitlab, where the rendered PAT is the
+# trigger). Like auth-gitlab the resolved key lives in the rendered script body
+# — acceptable on a single-user host.
+#
+# Soft-skip: missing `jq` exits 0 with a diagnostic (this is the container
+# caveat — the package installer is skipped in a real container, so jq may be
+# absent from the base image there; a devbox lands auth by hand or via a base
+# image that ships jq). NOTE the standard onchange trade-off: that clean exit-0
+# is recorded as a successful run, so a skipped merge is NOT retried until the
+# rendered content changes — re-run by hand or `chezmoi apply --force`.
+#
+# POSIX-only (`ne windows`) and KEPT in containers, like config-pi: pi is a
+# first-class CLI here and its auth is wanted in a devbox. Unlike config-pi this
+# script does NOT need the `pi` binary on PATH — it writes auth.json directly,
+# so the keys land even on a first apply before pi is fetched (as long as jq is
+# present).
+
+set -euo pipefail
+
+AUTH="${PI_AGENT_AUTH:-$HOME/.pi/agent/auth.json}"
+
+skip() { exit 0; }
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "config-pi-auth: skipped (jq not on PATH)" >&2
+  skip
+fi
+
+mkdir -p "$(dirname "$AUTH")"
+
+# Declared static api_key providers, rendered with 1Password-resolved keys.
+# Compact JSON (toJson) on one bash line. Go's json.Marshal sorts map keys, so
+# this is deterministic across renders for unchanged data + unchanged secrets.
+DECLARED='{{- $d := dict -}}
+{{- range .agents.pi.auth.providers -}}
+{{- $d = set $d .name (dict "type" .type "key" (onepasswordRead .key)) -}}
+{{- end -}}
+{{ toJson $d }}'
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+# Read the live auth.json (or start from the declared set if absent/corrupt),
+# overlay the declared providers with top-level `+` (whole-entry replace), write
+# back atomically at 0600. A corrupt file is backed up before being overwritten
+# so nothing pi wrote is silently destroyed.
+if [[ -f "$AUTH" ]] && jq -e . "$AUTH" >/dev/null 2>&1; then
+  jq --argjson declared "$DECLARED" '. + $declared' "$AUTH" > "$tmp"
+else
+  if [[ -f "$AUTH" ]]; then
+    echo "config-pi-auth: $AUTH is not valid JSON — backing up to ${AUTH}.bak and rewriting from declared providers" >&2
+    cp -a "$AUTH" "${AUTH}.bak"
+  fi
+  printf '%s\n' "$DECLARED" > "$tmp"
+fi
+chmod 600 "$tmp"
+mv -f "$tmp" "$AUTH"
+
+echo "config-pi-auth: merged providers [{{ range .agents.pi.auth.providers }}{{ .name }} {{ end }}] into $AUTH"
+{{ end -}}
