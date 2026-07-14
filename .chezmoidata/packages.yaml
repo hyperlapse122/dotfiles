@@ -1,6 +1,69 @@
+# Package manifest for the two distro installers
+# (.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl and
+# .chezmoiscripts/40-linux-ubuntu/run_onchange_before_ubuntu.sh.tmpl).
+#
+# Single source of truth (like system.yaml): add a package, repo, flatpak, or
+# dotnet tool HERE, not in the installer. Every list is rendered into the
+# installer, so an edit re-triggers the run_onchange_ script automatically.
+#
+# ---------------------------------------------------------------------------
+# `gates:` — which named host fact decides each CONDITIONAL package group.
+#
+# Most keys below install unconditionally. The ones that do not are listed in
+# the per-distro `gates:` map, which binds the KEY to a fact from the host-fact
+# registry (.chezmoidata/facts.yaml). Until now the gate lived in the key NAME
+# and nowhere else: `nvidiaPackages` installs — when? The answer was a sysfs
+# grep buried in each installer, and the two installers had already drifted
+# apart on the very same question (both spelled `IS_VIRT` as a bare
+# systemd-detect-virt while the /etc manifest's `vm` gate used --vm). Now the
+# data names the fact, one probe answers it for the whole repo, and a typo
+# aborts the apply instead of silently evaluating false.
+#
+# Gate-expression grammar — the same one system.yaml's `gate:` uses, checked by
+# the same partial (.chezmoitemplates/facts-validate.tmpl):
+#
+#   <fact>          boolean fact is true       nvidia, intelGpu, ubuntuStudio
+#   !<fact>         boolean fact is false      "!virt"  — MUST be YAML-quoted:
+#                                              a bare `!` opens a YAML tag
+#   <fact>.<value>  string fact equals value   desktop.kde, desktop.gnome
+#
+# THE MAP IS A DECLARATION, NOT A SWITCH — read this before editing one.
+# Each installer renders the whole fact set into bash (FACT_* via
+# .chezmoitemplates/facts-sh.tmpl), seeds its HAS_* / IS_* flags from those
+# facts, and keeps its own `if` around each package array. The arrays stay
+# rendered UNCONDITIONALLY on purpose: the CI shellcheck job lints only the
+# RENDERED script, so a template-gated array would quietly drop out of that
+# coverage on every host that does not match the gate. Changing a value here
+# therefore does not by itself re-gate a group — change the flag the installer
+# seeds too. What the map buys is the thing that was missing: one place that
+# says which fact each group answers to, verified at render time
+# (facts-validate.tmpl `fail`s on an unknown fact, a boolean compared to a
+# value, or a `desktop.<typo>`), so a gate name can never quietly mean nothing.
+#
+# The map is PER DISTRO rather than global because the conditional key sets
+# genuinely differ: intelPackages / intelHweKernel / studioPackages exist only
+# under `ubuntu`. One global map would have to name keys that half of it does
+# not have, and each installer would then need to filter the map before handing
+# it to the validator instead of passing its own distro's values straight
+# through.
+#
+# FORCE_NVIDIA / FORCE_INTEL / FORCE_UBUNTU_STUDIO are NOT facts and are NOT
+# gates: they are env-var escape hatches layered on top of the seeded flag
+# inside the installer (so a GPU-less test container can still exercise the
+# driver repos and package sets). See the closing note in
+# .chezmoidata/facts.yaml for why they must never move into the shared partial.
 packages:
   linux:
     fedora:
+      # Conditional package groups → the fact that gates each. Grammar and the
+      # declaration-not-a-switch rule are in the file header above; every other
+      # key under `fedora:` installs unconditionally. Shorter than ubuntu's map
+      # by design — Fedora has no Intel-graphics stack and no Studio flavor.
+      gates:
+        nvidiaPackages: nvidia  # an NVIDIA GPU is present (PCI vendor 0x10de)
+        kdePackages: desktop.kde  # Fedora KDE Spin (plasmashell shipped by the ISO)
+        gnomePackages: desktop.gnome  # Fedora Workstation (gnome-shell shipped by the ISO)
+        bareMetalPackages: "!virt"  # neither a VM nor a container
       # COPR (community) repositories enabled via `dnf copr enable`.
       coprs:
         - alternateved/keyd  # COPR hosting the keyd keyboard remapper
@@ -183,25 +246,27 @@ packages:
         - wget  # HTTP/HTTPS file downloader
 
         - expect  # automate interactive CLI prompts (TCL expect)
-      # Installed only when KDE Plasma is the desktop (runtime `command -v
-      # plasmashell` gate in run_onchange_before_fedora.sh.tmpl) — Fedora KDE
-      # Spin. fcitx5 is the input method on the KDE targets; GNOME hosts use
-      # the native ibus stack instead (see gnomePackages).
+      # Gate `desktop.kde` — Fedora KDE Spin. fcitx5 is the input method on the
+      # KDE targets; GNOME hosts use the native ibus stack instead (see
+      # gnomePackages). The desktop is ONE fact with one value, so this set and
+      # gnomePackages are mutually exclusive.
       kdePackages:
         - fcitx5  # input method framework (KDE targets)
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
-      # Installed only when GNOME is the desktop (runtime `command -v
-      # gnome-shell` gate) — Fedora Workstation. GNOME stays on its default
+      # Gate `desktop.gnome` — Fedora Workstation. GNOME stays on its default
       # ibus input framework; only the Korean engine is added.
       gnomePackages:
         - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
-      # Installed only on bare metal (systemd-detect-virt reports no VM).
+      # Gate `!virt` — installed only when the host is neither a VM nor a
+      # container (bare `systemd-detect-virt`, which is what this installer has
+      # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
       bareMetalPackages:
         - steam  # Steam game client (needs a real GPU; skipped in VMs)
-      # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de),
-      # pulled from the CUDA + nvidia-container repos added during repo setup.
+      # Gate `nvidia` — an NVIDIA GPU is present (PCI vendor id 0x10de). Pulled
+      # from the CUDA + nvidia-container repos added during repo setup, under
+      # the same gate.
       nvidiaPackages:
         - cuda-drivers  # NVIDIA CUDA driver metapackage
         - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries)
@@ -245,6 +310,23 @@ packages:
             x86_64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass-1.4.1-1.x86_64.rpm
             aarch64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass-1.4.1-1.aarch64.rpm
     ubuntu:
+      # Conditional package groups → the fact that gates each. Grammar and the
+      # declaration-not-a-switch rule are in the file header above; every other
+      # key under `ubuntu:` installs unconditionally.
+      gates:
+        nvidiaPackages: nvidia  # an NVIDIA GPU is present (PCI vendor 0x10de); FORCE_NVIDIA=1 overrides in the installer
+        intelPackages: intelGpu  # an Intel GPU is present (vendor 0x8086 + display-controller class 0x03); FORCE_INTEL=1 overrides
+        # intelHweKernel is a SCALAR, not a list — but it is still a key whose
+        # delivery depends on a fact: install_intel_support() installs it behind
+        # the very same gate as intelPackages. Declared so the map stays a
+        # COMPLETE index of the conditional keys; a conditional key with no gate
+        # entry is precisely the "the gate lives in the key name and nowhere
+        # else" problem this map exists to end.
+        intelHweKernel: intelGpu
+        kdePackages: desktop.kde  # Ubuntu Studio (plasmashell shipped by the ISO)
+        gnomePackages: desktop.gnome  # Ubuntu Desktop (gnome-shell shipped by the ISO)
+        studioPackages: ubuntuStudio  # the ubuntustudio-default-settings seed package is installed; FORCE_UBUNTU_STUDIO=1 overrides
+        bareMetalPackages: "!virt"  # neither a VM nor a container
       # APT third-party repos. Each entry: `id` (becomes /etc/apt/sources.list.d/<id>.list),
       # `keyring-url` (GPG armored key, dearmored to /usr/share/keyrings/<id>.gpg),
       # and `sources-list-lines` (a list of `deb [signed-by=...] ...` entries written
@@ -474,26 +556,26 @@ packages:
         - dracut  # initramfs generator (Ubuntu 26.04 default); its systemd-cryptsetup wires tpm2-device=auto at early boot
         - tpm2-tools  # TPM2 userspace + libtss2 the dracut tpm2-tss module bundles (systemd-cryptenroll TPM2 unlock)
 
-      # Installed only when KDE Plasma is the desktop (runtime `command -v
-      # plasmashell` gate in run_onchange_before_ubuntu.sh.tmpl) — Ubuntu
+      # Gate `desktop.kde` — Ubuntu
       # Studio. fcitx5 is the input method on the KDE targets; GNOME hosts use
-      # the native ibus stack instead (see gnomePackages).
+      # the native ibus stack instead (see gnomePackages). The desktop is ONE
+      # fact with one value, so this set and gnomePackages are mutually
+      # exclusive.
       kdePackages:
         - fcitx5  # input method framework (KDE targets)
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
-      # Installed only when GNOME is the desktop (runtime `command -v
-      # gnome-shell` gate) — Ubuntu Desktop 26.04. GNOME stays on its default
+      # Gate `desktop.gnome` — Ubuntu Desktop 26.04. GNOME stays on its default
       # ibus input framework; only the Korean engine is added.
       gnomePackages:
         - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
 
-      # Ubuntu Studio pro-audio essentials, installed only when the host IS
-      # Ubuntu Studio — runtime `dpkg -s ubuntustudio-default-settings` marker
-      # (preinstalled by the Studio ISO; FORCE_UBUNTU_STUDIO=1 overrides for
-      # smoke tests) in run_onchange_before_ubuntu.sh.tmpl, so a plain Ubuntu
-      # Desktop install never grows the Studio audio stack. All in
+      # Ubuntu Studio pro-audio essentials. Gate `ubuntuStudio` — the
+      # ubuntustudio-default-settings seed package the Studio ISO preinstalls
+      # (every Ubuntu flavor reports ID=ubuntu, so the package IS the flavor;
+      # FORCE_UBUNTU_STUDIO=1 overrides in the installer for smoke tests), so a
+      # plain Ubuntu Desktop install never grows the Studio audio stack. All in
       # resolute/universe; universe is enabled by enable_first_apply_apt_features.
       # Realtime privileges come from the @audio group (Studio-gated in
       # configure_user_groups) + the repo-owned limits.d drop-in
@@ -507,11 +589,13 @@ packages:
         - ubuntustudio-performance-tweaks  # realtime/perf sysctl + tuning
         - ubuntustudio-lowlatency-settings # grub.d drop-in preferring a lowlatency kernel as boot default if installed (ships only /etc/default/grub.d/*, installs no kernel; postinst runs update-grub)
 
-      # Installed only on bare metal (systemd-detect-virt reports no VM).
+      # Gate `!virt` — installed only when the host is neither a VM nor a
+      # container (bare `systemd-detect-virt`, which is what this installer has
+      # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
       bareMetalPackages:
         - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
 
-      # Installed only on hosts with an NVIDIA GPU (PCI vendor id 0x10de). The
+      # Gate `nvidia` — an NVIDIA GPU is present (PCI vendor id 0x10de). The
       # driver is cuda-drivers (the proprietary-module metapackage from the
       # NVIDIA driver installation guide's Ubuntu network-repo procedure —
       # matching the Fedora installer's choice), built via DKMS and pulled from
@@ -538,7 +622,7 @@ packages:
         - libnvidia-container-tools  # CLI tools for the NVIDIA container library
         - libnvidia-container1  # NVIDIA container runtime library
 
-      # Installed only on hosts with an Intel GPU (PCI vendor 0x8086 + display
+      # Gate `intelGpu` — an Intel GPU is present (PCI vendor 0x8086 + display
       # controller class 0x03). Canonical's intel-graphics-preview stack for early
       # enablement of newer Intel GPUs (Arc / Xe / Battlemage / Lunar Lake). The
       # kobuk-team/intel-graphics PPA (resolute) is added on-demand by
@@ -560,6 +644,8 @@ packages:
         - xpu-smi                         # Intel XPU system management interface (GPU telemetry)
         - intel-opencl-icd                # Intel OpenCL runtime (compute)
         - libze-intel-gpu1                # Level Zero Intel GPU driver
+      # Gate `intelGpu` (same as intelPackages — a scalar, not a list, but still
+      # a conditional key; see the gates map above).
       # Hardware-enablement (HWE) kernel installed alongside the Intel graphics
       # stack (--install-recommends) and made the default boot entry via a
       # GRUB_FLAVOUR_ORDER=generic drop-in (see install_intel_support). resolute
