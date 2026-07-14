@@ -190,15 +190,20 @@ fact_nvidia() {
 # class check is load-bearing — 0x8086 is Intel's vendor id for every Intel
 # part, so vendor alone trips on an Intel NIC or chipset. Mirrors the Ubuntu
 # installer's loop (install_intel_support / HAS_INTEL_GPU).
+#
+# Narrow with ONE grep over the whole glob (as fact_nvidia does), then read only
+# the matched devices' class files with the `read` builtin. The obvious shape —
+# looping every PCI device and `$(cat)`-ing its vendor — forks a subprocess per
+# device: measured ~85ms against ~4ms here, and this runs on EVERY chezmoi
+# command, `chezmoi diff` included. Keep it fork-free.
 fact_intel_gpu() {
-  local vendor class
-  for vendor in /sys/bus/pci/devices/*/vendor; do
-    [[ -r "$vendor" ]] || continue
-    [[ "$(cat "$vendor")" == "0x8086" ]] || continue
+  local vendor class value
+  while IFS= read -r vendor; do
     class="${vendor%/vendor}/class"
-    [[ -r "$class" && "$(cat "$class")" == 0x03* ]] || continue
-    return 0
-  done
+    [[ -r "$class" ]] || continue
+    read -r value < "$class" || continue
+    [[ "$value" == 0x03* ]] && return 0
+  done < <(grep -lx '0x8086' /sys/bus/pci/devices/*/vendor 2>/dev/null)
   return 1
 }
 
@@ -234,18 +239,37 @@ fact_ubuntu_studio() {
 #          IS_VIRT, which gates bareMetalPackages.
 # One fact would either install bare-metal packages inside a distrobox or drop a
 # password-less sudo file where it does not land today.
+# A cache we could not refresh must not be read. Every early-return below used to
+# leave the PREVIOUS cache in place while warning that facts "will render false"
+# — so a host whose cache went unwritable silently kept resolving LAST BOOT's
+# hardware identity, and the fail-safe defaults in facts.tmpl never engaged. Two
+# reviewers found the same hole independently. Delete it instead; if even that
+# fails, say so honestly rather than promising a fallback that will not happen.
+invalidate_facts_cache() {
+  local cache_file="$1"
+  [[ -e "$cache_file" ]] || {
+    printf 'install-prerequisites.sh: cannot write %s; host facts take their fail-safe defaults this run.\n' "$cache_file" >&2
+    return 0
+  }
+  if rm -f "$cache_file" 2>/dev/null; then
+    printf 'install-prerequisites.sh: cannot refresh %s; removed it, so host facts take their fail-safe defaults this run.\n' "$cache_file" >&2
+  else
+    printf 'install-prerequisites.sh: cannot refresh OR remove %s; host facts may be STALE this run.\n' "$cache_file" >&2
+  fi
+}
+
 write_facts_cache() {
   local cache_dir cache_file tmp_file
   cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi"
   cache_file="$cache_dir/facts.yaml"
 
   mkdir -p "$cache_dir" 2>/dev/null || {
-    printf 'install-prerequisites.sh: cannot create %s; host facts will render false this run.\n' "$cache_dir" >&2
+    invalidate_facts_cache "$cache_file"
     return 0
   }
 
   tmp_file="$(mktemp "$cache_file.XXXXXX" 2>/dev/null)" || {
-    printf 'install-prerequisites.sh: cannot write %s; host facts will render false this run.\n' "$cache_file" >&2
+    invalidate_facts_cache "$cache_file"
     return 0
   }
 
@@ -259,12 +283,22 @@ write_facts_cache() {
     printf 'ubuntuStudio: %s\n' "$(fact_bool fact_ubuntu_studio)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
-  } >"$tmp_file"
+  } >"$tmp_file" || {
+    # THE WRITE NEEDS THE SAME GUARD AS ITS NEIGHBOURS. This file runs under
+    # `set -euo pipefail` AS CHEZMOI'S read-source-state.pre HOOK, so an
+    # unguarded write error — a full disk, an exceeded quota, EIO — trips
+    # errexit, the hook exits non-zero, and EVERY chezmoi command aborts:
+    # diff, apply, execute-template, the lot. A cache the user cannot write
+    # must degrade to no cache, never to a bricked dotfiles tool.
+    rm -f "$tmp_file" 2>/dev/null || true
+    invalidate_facts_cache "$cache_file"
+    return 0
+  }
 
   # Atomic swap: a template mid-render must never see a half-written cache.
   mv -f "$tmp_file" "$cache_file" 2>/dev/null || {
     rm -f "$tmp_file"
-    printf 'install-prerequisites.sh: cannot replace %s; host facts will render false this run.\n' "$cache_file" >&2
+    invalidate_facts_cache "$cache_file"
   }
   return 0
 }

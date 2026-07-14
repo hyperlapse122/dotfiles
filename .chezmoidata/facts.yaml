@@ -72,13 +72,27 @@
 #   3. Pick the layer by whether the probe needs a subprocess/symlink walk (hook)
 #      or is a plain file test (template). When in doubt, template — it is free.
 #
-# `whenFalse:` is not decoration. Every fact here is FAIL-SAFE: a false or absent
-# value must SKIP something, never grant it — a host with no cache yet (or a
-# render under an empty --config on a machine that has never run chezmoi) resolves
-# every cached fact false, and that must be the harmless direction. `vm` is the one
-# fact gating a PRIVILEGE GRANT (etc/sudoers.d/* → %wheel NOPASSWD), so its false
-# direction — no password-less sudo — is the only safe one; if a future fact cannot
-# be written so that false = skip, it does not belong in this registry.
+# `whenFalse:` is not decoration. Every fact here is FAIL-SAFE, but the safe value
+# is PER FACT, not a uniform false — and the absent-cache default in
+# .chezmoitemplates/facts.tmpl is where that is spelled out. The rule: the value a
+# fact takes when the cache is missing must SKIP the thing it gates, never grant it.
+#
+# For most facts that is `false`, because the gate reads `<fact>` and false means
+# skip. `vm` is the one gating a PRIVILEGE GRANT (etc/sudoers.d/* → %wheel NOPASSWD),
+# so its false direction — no password-less sudo — is the only safe one.
+#
+# TWO facts are INVERTED, and a uniform false was a FAIL-OPEN for both (caught in
+# review, not in testing):
+#   virt      `bareMetalPackages` gates on `!virt`, so false INSTALLS the bare-metal
+#             set. Its safe absent-value is TRUE.
+#   headless  headless-guard SKIPS when the fact is 1, so false lets a headless
+#             server run the desktop/system provisioning that guard exists to keep
+#             off it. Its safe absent-value is TRUE.
+#
+# A new fact whose gate reads `!<fact>`, or whose guard skips on true, belongs in
+# that inverted group — say so in its `whenFalse:` here AND add it to the `true`
+# side of `$absentDefault` in facts.tmpl. A fact that cannot be written so that ONE
+# of its two values is the harmless one does not belong in this registry.
 factRegistry:
   # --- OS / distro / desktop (chezmoi builtins) ------------------------------
   os:

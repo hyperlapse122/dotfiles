@@ -53,11 +53,23 @@ Two rules hold this file together:
 {{-   $cacheHome = joinPath .chezmoi.homeDir ".cache" -}}
 {{- end -}}
 {{- $cachePath := joinPath $cacheHome "chezmoi" "facts.yaml" -}}
+{{- /* SHAPE-CHECK THE RAW TEXT BEFORE fromYaml. `fromYaml` raises a TEMPLATE ERROR on
+   malformed YAML, and a Go template has no recover — so a truncated or corrupt cache
+   would abort the render of the root .chezmoiignore and take the whole tool down, not
+   fall through to the defaults below. The `kindIs "map"` guard that used to sit here
+   was dead code: fromYaml errors first, it never runs.
+
+   The hook writes exactly one shape — comment lines, then `<name>: true|false` — so
+   match that and parse nothing else. Anything unexpected is treated as no cache at
+   all, which is the documented (and now actually reachable) fail-safe path. */ -}}
 {{- $cached := dict -}}
 {{- if stat $cachePath -}}
-{{-   $parsed := include $cachePath | fromYaml -}}
-{{-   if kindIs "map" $parsed -}}
-{{-     $cached = $parsed -}}
+{{-   $raw := include $cachePath -}}
+{{-   if regexMatch "^(#[^\n]*\n|[A-Za-z][A-Za-z0-9]*: (true|false)\n)+$" $raw -}}
+{{-     $parsed := $raw | fromYaml -}}
+{{-     if kindIs "map" $parsed -}}
+{{-       $cached = $parsed -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
 
@@ -66,10 +78,53 @@ Two rules hold this file together:
    false rather than leaking a string into a consumer's `if`. The next real
    chezmoi command rewrites the file before the render, so a damaged cache
    self-heals — no reason to fail the apply over it. */ -}}
+{{- /* THE ABSENT-CACHE DEFAULT IS PER FACT, NOT A UNIFORM false — and getting that
+   wrong is a fail-OPEN, which is why it is spelled out here rather than folded into
+   one `default false`.
+
+   The rule is: the value a fact takes when we DO NOT KNOW must be the one that
+   SKIPS the thing it gates. For four of the six that is `false`, because the gate
+   reads `<fact>` and false means skip:
+
+     nvidia / intelGpu   skip the driver + CUDA / Intel graphics package sets
+     ubuntuStudio        skip the pro-audio stack AND the realtime-limits drop-in
+     vm                  skip etc/sudoers.d/* — the password-less-sudo drop-in.
+                         THIS ONE IS A PRIVILEGE GRANT: `true` would install
+                         `%wheel ALL=(ALL:ALL) NOPASSWD: ALL` on a host we cannot
+                         identify. Never flip it.
+
+   For the other two the gate is INVERTED — the fact being false is what makes the
+   work happen — so the safe unknown value is `true`:
+
+     virt      `bareMetalPackages` gates on `!virt`. A false default would install
+               the bare-metal set (firmware, steam) inside a VM or container.
+     headless  headless-guard SKIPS when the fact is 1. A false default would let a
+               headless server run the whole desktop/system provisioning set that
+               guard exists to keep off it.
+
+   Both were caught in review as fail-open defaults. A future fact whose gate reads
+   `!<fact>`, or whose guard skips on true, belongs in the `true` group — say so in
+   its `whenFalse:` entry in .chezmoidata/facts.yaml.
+
+   A non-boolean value (a truncated or hand-edited cache) takes the same safe
+   default rather than leaking a string into a consumer's `if`; the next real
+   chezmoi command rewrites the file before the render, so a damaged cache
+   self-heals and there is no reason to fail the apply over it. */ -}}
+{{- $absentDefault := dict
+      "nvidia"       false
+      "intelGpu"     false
+      "ubuntuStudio" false
+      "vm"           false
+      "virt"         true
+      "headless"     true -}}
 {{- $facts := dict -}}
-{{- range $name := (list "headless" "intelGpu" "nvidia" "ubuntuStudio" "virt" "vm") -}}
+{{- range $name, $fallback := $absentDefault -}}
 {{-   $value := index $cached $name -}}
-{{-   $_ := set $facts $name (and (kindIs "bool" $value) $value) -}}
+{{-   if kindIs "bool" $value -}}
+{{-     $_ := set $facts $name $value -}}
+{{-   else -}}
+{{-     $_ := set $facts $name $fallback -}}
+{{-   end -}}
 {{- end -}}
 
 {{- /* ---- Layer 2a: chezmoi builtins ---------------------------------------- */ -}}
