@@ -26,8 +26,8 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.packages`, `.fonts`, `.user`, `.system`, `.models`, `.vscodium`, `.solaar`, `.gnome`, `.haptic`) |
-| `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (fingerprint macro + sudo/headless/desktop guards — see below) |
+| `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.haptic`, `.vscodium`, `.biopass`, `.models`, `.user`) |
+| `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, codegraph, cli-proxy-api, aoe), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, virtio-win, prezto), `fonts.toml`. Everything but prezto/fonts is a pinned standalone CLI binary into `~/.local/bin`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
@@ -142,11 +142,131 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
 | `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, biopass method policy, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
-| `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (runtime `plasmashell`/`gnome-shell` guards; see OS gating & script parity); mutually exclusive at runtime, so they share a number |
+| `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (guarded on the `desktop` fact; see OS gating & script parity) — on KDE that is the manifest-driven `config-kde-settings` runner plus the scripts that carry real logic; mutually exclusive at runtime, so they share a number |
 | `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above), plus **LibrePods** compiled from an upstream git branch (see LibrePods below — no in-repo source, so its onchange trigger is a rendered remote sha, not a fingerprint block) |
 | `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents skills/MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`), plus the local Claude Code plugin marketplace (`install-claude-plugins`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
 | `90-services/` | enable the `cli-proxy-api` user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
+
+### Host facts — the named registry every host-identity condition resolves through
+
+Every host-**identity** condition — what the host *is*: its OS, distro, desktop,
+GPU, virtualization, ThinkPad-ness, Ubuntu-Studio-ness, headless/container shape,
+and the platform features the `/etc` manifest gates on — resolves to a fact
+**declared by name in exactly one place**, `.chezmoidata/facts.yaml`
+(`factRegistry`: name, `type`, `probe` layer, what it `gates:`, and its
+`whenFalse:` direction). It is deliberately NOT for what happens to be *installed*
+at the moment a script runs: `command -v kwriteconfig6`, a live D-Bus session, a
+`sudo -n` credential cache describe the moment, not the machine, and stay plain
+runtime probes in bash. Datafying those would fold this repo's own install order
+into the fact set.
+
+**Gate ASSIGNMENT is data; gate RESOLUTION is code.** The yaml declares fact
+NAMES and nothing else — a shell probe spelled as a YAML value is code hiding in
+data. Two probe layers implement them:
+
+- **`probe: hook`** — bash in `.install-prerequisites.sh` (`write_facts_cache`),
+  which chezmoi runs as its `read-source-state.pre` hook: **once per chezmoi
+  command**, before the source state is read, writing
+  `${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml`. A fact lands here when the
+  template functions cannot express it — `nvidia`, `intelGpu`, `vm`, `virt`,
+  `ubuntuStudio`, `headless`. (Windows keeps an all-false mirror in the `.ps1`.)
+- **`probe: template` / `probe: builtin`** — `.chezmoitemplates/facts.tmpl`: an
+  in-process `stat`, a stat-guarded `include`, a `glob`, or chezmoi's own data
+  (`.chezmoi.os`, `.chezmoi.osRelease.id`, `lookPath`). No subprocess, so it costs
+  nothing per render.
+
+`facts.tmpl` merges both layers into ONE map, and that map is the only thing a
+consumer ever reads — never the cache file, never the yaml:
+
+- **templates / `.chezmoiignore` / deployed file content** —
+  `{{ $f := includeTemplate "facts.tmpl" . | fromYaml }}`, then `{{ if $f.nvidia }}`
+  or `{{ if eq $f.desktop "kde" }}`.
+- **scripts** — `{{ includeTemplate "facts-sh.tmpl" . }}`, which renders the same
+  map as bash (`FACT_NVIDIA=1`, `FACT_DESKTOP=gnome`, `FACT_DISTRO=ubuntu`). The
+  three guard partials already inline it, so a guarded script gets the whole
+  `FACT_*` set for free — do NOT inline it a second time alongside a guard.
+- **data files that name a gate** (`system.yaml`'s `gate:`, `packages.yaml`'s
+  `gates:`) — `{{ includeTemplate "facts-validate.tmpl" (dict "ctx" . "gates" (list …)) }}`.
+
+**Gate-expression grammar**, shared by both data files and checked by that one
+partial: `<fact>` (boolean true) · `!<fact>` (boolean false) · `<fact>.<value>`
+(string fact equals value) — `nvidia`, `"!virt"`, `desktop.kde`, `distro.ubuntu`.
+`facts-validate.tmpl` **fails the apply loudly** on an unknown fact name (listing
+the valid ones), on a boolean compared to a value, on a `desktop.<typo>`, on a
+name declared with no probe behind it, and on a probe emitting a name the registry
+does not declare. A gate NEVER silently evaluates false.
+
+**Adding a fact:**
+
+1. **Declare** it in `.chezmoidata/facts.yaml` — name, `type`, `probe`, `gates`,
+   `whenFalse`. This is the only place a fact name is coined.
+2. **Implement** the probe in the layer you named: `write_facts_cache` in
+   `.install-prerequisites.sh` (**and** the all-false line in the `.ps1`), or
+   `facts.tmpl`. Skipping this aborts the apply — a declared-but-unprobed fact
+   does not silently resolve false.
+3. **Pick the layer** by whether the probe needs a subprocess or a symlink walk
+   (hook) or is a plain file test (template). When in doubt, template — it is free.
+
+Every fact is **fail-safe**: false or absent must SKIP something, never grant it —
+a host with no cache yet resolves every cached fact false, so that has to be the
+harmless direction. (Under an empty `--config` — the stub-`op` recipe below, the
+CI `render-internals` job — the pre-hook does not run at all, yet the renders are
+still *correct* rather than merely non-fatal: `facts.tmpl` reads the cache by
+absolute path, independent of which config chezmoi was pointed at, so it sees what
+the last REAL chezmoi command on that host wrote. All-false is what a machine that
+has never run chezmoi gets.) `vm` is the single fact gating a privilege grant (the
+`%wheel NOPASSWD` sudoers drop-in), which is exactly why its false direction is
+*no* password-less sudo. A fact that cannot be written so that false = skip does
+not belong in the registry.
+
+**`FORCE_NVIDIA` / `FORCE_INTEL` / `FORCE_UBUNTU_STUDIO` are not facts** and never
+enter the registry or `facts-sh.tmpl`. They layer on TOP of a fact, in the package
+installers only — `HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1`
+(in practice the Ubuntu one; the Fedora installer has no FORCE path at all and
+seeds its flags straight from the facts).
+`install-system-10-files` shares the same partial, so a FORCE honoured *inside* it
+would let `FORCE_UBUNTU_STUDIO=1` install the realtime-limits drop-in (`@audio
+rtprio 95`, `memlock unlimited`) on a plain Ubuntu Desktop. Same shape for
+`INSTALL_SYSTEM_CONFIG_FORCE=1` in `headless-guard`: a fact is a statement about
+the HOST, an override is a statement about the RUN, and the two must not be
+conflated.
+
+**Fact values are baked at RENDER time, not probed at run time.** That is the
+point — one probe per chezmoi command, one answer everywhere — and it means a
+fact flip (a GPU added, a desktop swapped, a move into a VM) changes the rendered
+content of every consuming `run_onchange_` script and re-runs it. That is correct,
+not churn: the host became a different host.
+
+**`host-facts`** (`dot_local/bin/executable_host-facts.tmpl` → `~/.local/bin`) is
+the tracing half of the registry — the registry ended "look everywhere to CHANGE
+one thing", this ends "look everywhere to CHECK one thing". It prints this host's
+resolved facts *with the probe layer that owns each* (only the hook-layer ones can
+go stale, and only until the next chezmoi command), then every gate declaration
+that reads them — the `packages.yaml` groups and the `system.yaml` `/etc` paths —
+with the verdict each produced on this host, plus any `FORCE_*` in effect. It
+probes nothing, writes nothing, and always exits 0 (a host is never "wrong",
+unlike `src-audit`, which exits 1 on drift). The guard-gated scripts and the
+`.chezmoiignore` blocks are not enumerated yet; the report states that rather than
+omitting it.
+
+**Four traps the registry's shape exists to route around — do not "simplify" them
+away:**
+
+- **`output` ABORTS the render on a non-zero exit.** `systemd-detect-virt --vm`
+  exits 1 on bare metal, so a template-side probe hard-fails `chezmoi init` on
+  every workstation. **Never probe a host fact with `output`** — that is why the
+  shell facts live in the pre-hook cache rather than in `facts.tmpl`.
+- **`include` hard-errors on a missing file; `stat` merely returns nil.** Every
+  absolute-path `include` MUST be `stat`-guarded — an unguarded read of the cache
+  or of `/sys/class/dmi/` takes down *every* render on a host that lacks it (macOS
+  and Windows in CI included).
+- **`glob` does not traverse symlinks**, and `/sys/bus/pci/devices/*` is nothing
+  but symlinks — a template-side PCI walk reports `nvidia: false` on a host whose
+  GPU sits behind a PCIe bridge (this one does). The hook's sysfs grep does not.
+- **YAML reads an unquoted `!virt` as a TAG**, silently swallowing the whole map
+  as its value. A gate expression starting with `!` MUST be quoted:
+  `bareMetalPackages: "!virt"`.
 
 ### Shared script partials — `.chezmoitemplates/`
 
@@ -155,17 +275,38 @@ Recurring script boilerplate lives in `.chezmoitemplates/` and is inlined with
 
 | Partial | Provides |
 |---|---|
+| `facts.tmpl` | THE merged host-fact map (see Host facts above) — the only entry point; `includeTemplate "facts.tmpl" . \| fromYaml` |
+| `facts-sh.tmpl` | the same map as bash (`FACT_DESKTOP=kde`, `FACT_NVIDIA=1`, …), baked at render time; inlined by the three guards below |
+| `facts-validate.tmpl` | the loud abort behind every `gate:` / `gates:` name; takes `(dict "ctx" . "source" … "gates" (list …))` |
 | `fingerprint.tmpl` | the comment-only sha256 dependency block (see the script-prefix policy above); takes `(dict "sourceDir" … "globs" (list …))` |
 | `compound-engineering-ref.tmpl` | newest `compound-engineering-*` release tag (the plugin repo interleaves other tag trains, so plain `gitHubLatestRelease` is wrong); shared by the three agents that install that plugin — `install-compound-engineering` (Codex's `--ref` pin + the script's own onchange trigger) and the opencode.json `plugin` array's git spec — so they cannot land on different releases |
 | `config-secrets-key.tmpl` | the machine-local AES key that encrypts the `.chezmoi.toml.tmpl` prompted secrets (see the Secrets section): reads the user keyring FAIL-SOFT via `chezmoi secret keyring get` in a subshell — the built-in `keyring` template function hard-errors when no keyring daemon is reachable, which would break every headless/CI render; an empty result means "keyring unreachable" and callers take their secret-absent skip path |
 | `sudo-skip-guard.sh.tmpl` | `SUDO` array + soft-skip (exit 0) when sudo would have to prompt but can't — for optional host tuning |
 | `sudo-require-guard.sh.tmpl` | `SUDO` array, exit 1 without root/sudo — for the package installers |
-| `headless-guard.sh.tmpl` | skip on headless/server installs (default target + display-manager probe; `INSTALL_SYSTEM_CONFIG_FORCE=1` overrides) |
-| `kde-guard.sh.tmpl` / `gnome-guard.sh.tmpl` | runtime `plasmashell`/`gnome-shell` desktop guards; every `50-linux-kde/`/`50-linux-gnome/` script starts with one |
+| `headless-guard.sh.tmpl` | skip on headless/server installs — reads the `headless` fact (`INSTALL_SYSTEM_CONFIG_FORCE=1` overrides, layered on top of the fact, never inside it) |
+| `kde-guard.sh.tmpl` / `gnome-guard.sh.tmpl` | desktop guards — read the `desktop` fact; every `50-linux-kde/`/`50-linux-gnome/` script starts with one |
 
-The guard partials take the script's display name as their argument, e.g.
-`{{ includeTemplate "kde-guard.sh.tmpl" "config-kde-krunner.sh" -}}`. Scripts
-with genuinely different guard semantics stay hand-rolled on purpose
+The three guards resolve the host from the **fact registry**, not from a probe of
+their own: `desktop=kde` still *means* `plasmashell` on PATH, but it is resolved
+once per chezmoi command and baked in by `facts-sh.tmpl` instead of re-derived by
+a `command -v` at each of the 22 include sites. Deploy-everywhere-and-self-select
+is unchanged — a non-matching host still exits 0 at runtime, so these are runtime
+skips, not non-deployment gates.
+
+They therefore take a **dict, not the bare display-name string** they used to:
+
+```
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-panel.sh") -}}
+```
+
+`facts-sh.tmpl` needs the chezmoi context (`.chezmoi.*`, `.factRegistry`), and a
+partial's `.` is only ever what its caller passed — chezmoi exposes no `data`
+template function and `includeTemplate` takes exactly one data argument, so there
+is no route back to the root context from inside a partial. The caller hands over
+both, the way `fingerprint.tmpl` already does. A call site still passing a bare
+string **aborts the apply** with a message naming the fix, rather than rendering a
+guard whose `FACT_*` are unset and which would therefore never fire. Scripts with
+genuinely different guard semantics stay hand-rolled on purpose
 (`setup-podman-cluster` degrades to `have_sudo=false` instead of skipping;
 `auth-tailscale` hard-fails inside an OS-branched block).
 
@@ -194,10 +335,13 @@ prefixes order execution):
   /etc file edit no longer restarts network services (the old monolithic
   `install-system-config` did all of this on any tracked-file change).
 
-Gates are named runtime probes (`thinkpad`, `vm`, `ubuntu-studio`,
-`sddm-breeze`, `gdm`) implemented in `10-files`; an unknown gate name aborts, so
-manifest typos fail loud. **Edit the data, not the script** — add/gate/remove
-system files in `system.yaml` + the tree. Full model: `system/README.md`.
+Gates are **named host facts** (`thinkpad`, `vm`, `ubuntuStudio`, `sddmBreeze`,
+`gdm`, `fprintdPam` — see Host facts above), no longer probes `10-files` owns: the
+script reads them out of `facts-sh.tmpl` like every other consumer, and an unknown
+gate name aborts in `facts-validate.tmpl` — on *every* host now, not only on the
+one distro that reads that entry. Manifest typos still fail loud. **Edit the data,
+not the script** — add/gate/remove system files in `system.yaml` + the tree. Full
+model: `system/README.md`.
 
 ### LibrePods — AirPods control for Linux, compiled from upstream source on apply
 
@@ -360,8 +504,10 @@ claude plugin install mxm4-haptic@dotfiles --scope user
 
 A real `chezmoi apply` against the live `$HOME` is a **deploy**, not a verification technique — it writes dotfiles and runs the provisioning scripts. Reach for it only when the user asked for the change to actually land on this host, and say plainly that you did.
 
-- `chezmoi diff` — preview what apply would change. **Primary check after any edit** (run it through the recipe below).
-- `chezmoi execute-template < file.tmpl` — render one template in isolation (output depends on OS + `.chezmoidata`).
+- `chezmoi execute-template < file.tmpl` — render one template in isolation (output depends on OS + `.chezmoidata`). **First check after any edit**: it is the one that surfaces a template error.
+- `chezmoi archive --output <tar>` — write the ENTIRE rendered target state to a tar. **This is the "did anything change?" gate**: archive `main`, archive the branch, `diff` the two tars — byte-identical is the pass condition for a refactor that is supposed to change nothing. Compare like with like: the entry count is **desktop-dependent** (172 entries on this host's natural GNOME render, 179 with a `plasmashell` stub on PATH — the `desktop` fact flips and the KDE-only files, fcitx5 config included, start deploying), so stub the same desktop, or none, on **both** sides.
+- `chezmoi ignored` — list what `.chezmoiignore` excludes, without an apply. The way to test an ignore-set change (stub each desktop on PATH in turn to exercise both branches).
+- `chezmoi diff` — preview what apply would change **against a real destination**. It is **NOT a no-change gate under the recipe below**: the throwaway `--destination` is empty, so every managed file reads as an addition and the diff is the whole target state (168,101 lines here). Use `archive` + tar-diff for that, and keep `diff` for eyeballing one file against the live `$HOME`.
 - `chezmoi cat ~/target/path` — show the rendered target.
 - `chezmoi apply` — deploy (also runs the scripts). Binary: `/usr/bin/chezmoi`. Not a check — see above.
 - **Invoke chezmoi through the zsh wrapper, not the bare binary.**
@@ -378,6 +524,18 @@ A real `chezmoi apply` against the live `$HOME` is a **deploy**, not a verificat
   the same way the wrapper does (`GITHUB_TOKEN="$(gh auth token)" chezmoi …`)
   rather than waiting out the reset.
 
+**An agent worktree inside the source dir POISONS every render — `--source` your
+own tree.** chezmoi reads `.chezmoidata/` **recursively** through the source
+tree, and an agent worktree under `.claude/worktrees/<name>/` is a full copy of
+the repo: *its* `.chezmoidata/` is merged into the source state of a render
+launched from the repo root, at whatever commit that worktree happens to sit on.
+This is not theoretical — it bit the fact-registry refactor, where a render from
+the root reported a gate name that had already been renamed on the branch. So:
+every chezmoi command an agent runs MUST pass `--source <its own worktree>` (the
+stub-`op` recipe below already does), and a verification run from the repo root
+MUST happen with no worktrees present. When a render disagrees with the file you
+are looking at, suspect this first.
+
 #### When local verification is impossible, verify via the PR's CI + artifacts
 
 If the working environment can't run the checks above (no `chezmoi`, no live KDE
@@ -391,8 +549,9 @@ exactly this:
   artifact (managed files rendered into an isolated `$HOME`; scripts/externals
   excluded). Catches template errors in deployed files, asserts the opencode
   plugin versions rendered from GitHub, and renders the solaar gesture rules
-  once per desktop (stub `plasmashell` / `gnome-shell` on PATH) to assert both
-  `lookPath` variants carry their own desktop's D-Bus actions.
+  once per desktop (stub `plasmashell` / `gnome-shell` on PATH, which is what
+  flips the `desktop` fact) to assert both variants carry their own desktop's
+  D-Bus actions.
 - **`render internals (fedora|ubuntu)`** renders every `.chezmoiscripts/**` and
   `.chezmoiexternals/**` template via `chezmoi execute-template` →
   **`rendered-internals-<os>`** artifact. Per-OS gated scripts render to an empty
@@ -458,7 +617,19 @@ env PATH="$scratch/bin:$PATH" \
   --source "$PWD" \
   --destination "$scratch/target" \
   diff --no-pager
+
+# The no-change gate: archive both sides, diff the tars (NOT `diff`, which emits
+# the whole target state as additions against the empty destination above).
+env PATH="$scratch/bin:$PATH" \
+  chezmoi --config "$scratch/empty.toml" \
+  --source "$PWD" \
+  --destination "$scratch/target" \
+  archive --output "$scratch/branch.tar"
 ```
+
+`--source "$PWD"` is load-bearing for an agent: point it at YOUR worktree, never
+let it default to a source dir that contains someone else's — see the worktree
+warning above.
 
 Because the GitHub-API renders need a token and this recipe controls `PATH`
 itself (so the zsh wrapper is bypassed), inject the token the wrapper would have:
@@ -565,18 +736,45 @@ keyring entry can no longer decrypt the stored ciphertexts.
 
 ## Single source of truth — edit the data, not the generated script
 
+- **Host facts (every host-identity gate)**: `.chezmoidata/facts.yaml`. Declare
+  the fact NAME there, implement its probe in the layer the declaration names,
+  and consume it through the one merged entry point — full model, gate grammar,
+  add-a-fact recipe, and the `host-facts` audit command in **Host facts** above.
+  Every other gate in this list (`packages.yaml`'s `gates:`, `system.yaml`'s
+  `gate:`, the guard partials, the `.chezmoiignore` desktop/container blocks)
+  bottoms out here, and an unknown fact name aborts the apply.
 - **dnf packages / repos / COPRs**: `.chezmoidata/packages.yaml`. The
-  `run_onchange_before_fedora.sh.tmpl` renders and installs from it (NVIDIA-GPU,
-  bare-metal, and per-desktop `kdePackages`/`gnomePackages` sections are
-  auto-gated at runtime, and it also drives flatpaks, dotnet
-  tools, direct-URL RPMs, services, and user groups). Add packages/items there,
-  not in the script — editing the data re-triggers the `run_onchange` installer.
-- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA packages — `cuda-drivers` per the NVIDIA driver installation guide's network-repo procedure, with the running kernel's headers installed first — from CUDA + libnvidia-container repos under the `HAS_NVIDIA` gate, the Intel graphics stack + `intelHweKernel` from the kobuk-team/intel-graphics PPA under the `HAS_INTEL_GPU` gate, per-desktop `kdePackages`/`gnomePackages` under the `HAS_KDE`/`HAS_GNOME` gates, the Studio pro-audio `studioPackages` under the `IS_UBUNTU_STUDIO` marker gate, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Add packages/items there; editing the data re-triggers the installer.
-  - **Intel graphics (`intelPackages` + `intelHweKernel`)**: Canonical's intel-graphics-preview stack for newer Intel GPUs. `install_intel_support()` gates on an Intel display-controller PCI device (vendor `0x8086` + class `0x03xxxx`; `FORCE_INTEL=1` overrides, mirroring `FORCE_NVIDIA`), adds the `kobuk-team/intel-graphics` PPA on-demand via `setup_intel_repos()` (key `0C0E…5E1F`, resolute), installs the graphics packages, then installs `linux-generic-hwe-26.04` with `--install-recommends`. It also writes `/etc/default/grub.d/99-hwe-generic-default.cfg` (`GRUB_FLAVOUR_ORDER="generic"`) so the generic HWE kernel is the default boot entry — the `99-` prefix outranks the lowlatency preference from `ubuntustudio-lowlatency-settings` — and runs `update-grub`. No Fedora counterpart.
-- **Fonts**: `.chezmoidata/fonts.yaml` `legacyFontsList`, pinned per font by
-  release tag + sha256. To bump a font: change the tag, re-download, recompute the
-  sha256 (a wrong digest aborts that font's install). The bash installer and its
-  `.ps1` counterpart both read this list.
+  `run_onchange_before_fedora.sh.tmpl` renders and installs from it (it also
+  drives flatpaks, dotnet tools, direct-URL RPMs, services, and user groups). Add
+  packages/items there, not in the script — editing the data re-triggers the
+  `run_onchange` installer. The conditional groups declare their gate in the
+  per-distro `gates:` map (`nvidiaPackages: nvidia`, `kdePackages: desktop.kde`,
+  `bareMetalPackages: "!virt"` — the fact registry's grammar), instead of hiding
+  it in the key NAME and re-probing it in each installer; the installer seeds
+  `HAS_NVIDIA` / `HAS_KDE` / `IS_VIRT` straight from the `FACT_*` set.
+- **apt packages / repos (Ubuntu)**: `.chezmoidata/packages.yaml` under `packages.linux.ubuntu.*`. The `run_onchange_before_ubuntu.sh.tmpl` renders and installs from it (NVIDIA packages — `cuda-drivers` per the NVIDIA driver installation guide's network-repo procedure, with the running kernel's headers installed first — from CUDA + libnvidia-container repos, the Intel graphics stack + `intelHweKernel` from the kobuk-team/intel-graphics PPA, per-desktop `kdePackages`/`gnomePackages`, the Studio pro-audio `studioPackages`, bare-metal, flatpaks, dotnet tools, and direct `.deb`s). Which fact gates each of those groups is declared in the same `gates:` map as Fedora's (`intelPackages: intelGpu`, `studioPackages: ubuntuStudio`, …); the installer seeds `HAS_NVIDIA` / `HAS_INTEL_GPU` / `IS_UBUNTU_STUDIO` / `HAS_KDE` / `HAS_GNOME` / `IS_VIRT` from the `FACT_*` set, with `FORCE_NVIDIA` / `FORCE_INTEL` / `FORCE_UBUNTU_STUDIO` layered on top (Ubuntu only — Fedora has no FORCE path). Add packages/items there; editing the data re-triggers the installer.
+  - **Intel graphics (`intelPackages` + `intelHweKernel`)**: Canonical's intel-graphics-preview stack for newer Intel GPUs. `install_intel_support()` runs when the `intelGpu` fact is true (an Intel *display-controller* PCI device — vendor `0x8086` **and** class `0x03xxxx`, since the vendor half alone trips on an Intel NIC; probed in the pre-hook, `FORCE_INTEL=1` overrides in the installer, mirroring `FORCE_NVIDIA`), adds the `kobuk-team/intel-graphics` PPA on-demand via `setup_intel_repos()` (key `0C0E…5E1F`, resolute), installs the graphics packages, then installs `linux-generic-hwe-26.04` with `--install-recommends`. It also writes `/etc/default/grub.d/99-hwe-generic-default.cfg` (`GRUB_FLAVOUR_ORDER="generic"`) so the generic HWE kernel is the default boot entry — the `99-` prefix outranks the lowlatency preference from `ubuntustudio-lowlatency-settings` — and runs `update-grub`. No Fedora counterpart.
+- **Fonts — the archives AND the families**: `.chezmoidata/fonts.yaml`, two halves
+  under one `fonts:` key, told apart by whether the key contains a `/`.
+  - **Archives** (`<owner>/<repo>/<asset>.zip: {release: <tag>}`) — what gets
+    DOWNLOADED. `.chezmoiexternals/fonts.toml` ranges over them and builds one
+    archive external per entry; the two font scripts range over the same keys for
+    their managed-font marker. To bump a font: change its `release` tag (there is
+    no sha256 to recompute and no font installer script any more — chezmoi's
+    external machinery does it).
+  - **`families` / `sizes` / `monoFallbacks`** — what gets CONFIGURED, and the
+    single source of truth for it. `families.sans` (`Pretendard`) and
+    `families.mono` (`JetBrainsMono Nerd Font`) used to be hardcoded in four
+    places; **NO deployed file carries a family as a literal any more**. The four
+    consumers — two of which are not scripts — are `config-kde-fonts`,
+    `config-gnome-fonts`, `dot_config/fcitx5/conf/classicui.conf.tmpl` (sans, the
+    candidate window), and `dot_config/VSCodium/User/settings.json.tmpl` (mono,
+    rendered first in the CSS fallback stack, then `monoFallbacks`). Change the
+    sans font HERE and all four follow. The family must MATCH what the archives
+    install (fc-match names, not file names) — renaming one without a matching
+    archive only makes the font scripts warn "not installed" and write the config
+    anyway; they never fail the apply. `sizes.small` is KDE's
+    `smallestReadableFont`, which has no GNOME analog.
 - **VSCodium extensions**: `.chezmoidata/vscodium.yaml` (`vscodium.extensions`,
   gallery IDs — Open VSX by default). The list renders into
   `.chezmoiscripts/30-linux/run_onchange_after_install-vscodium-extensions.sh.tmpl`,
@@ -602,7 +800,39 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `solaar.yaml` — a rules-tunable edit only changes the deployed rules.yaml
   (not the raw template text), so the data hash is what makes it restart
   Solaar to load the new value.
-- **GNOME desktop tunables**: `.chezmoidata/gnome.yaml`. Two keys, each rendered
+- **KDE settings manifest + KDE tunables**: `.chezmoidata/kde.yaml`, two roles in
+  one file (the per-setting rationale for every row lives in its header — that is
+  the design record, keep it there).
+  - **`kde.settings` — the manifest.** One row per Plasma setting,
+    `{file, group, key, type, value}`, applied by the single generic runner
+    `.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl`.
+    Eight scripts (autotheme, dimscreen, dolphin, edges, emptysession,
+    killrunner, krunner, spectacle) that were each nothing but a guard, a
+    `command -v kwriteconfig6` skip, and a flat list of `kwriteconfig6` calls
+    collapsed into it. `group` is a `/`-separated PATH (`AC/Display`,
+    `Runners/krunner_kill` → one `--group` per segment); `type` is `bool`/`int`/
+    `string` (`string` deliberately emits NO `--type`, KConfig's `writeEntry`
+    fallback — stated in the data rather than omitted in a script); `@homeDir@` is
+    the one placeholder. A bad row **fails the apply loudly** at render time —
+    unknown type, empty field, unparseable value, a colon (the row delimiter), or a
+    character outside the allowlist (the rows are interpolated into bash) — the
+    same rule as the haptic waveform table. The rendered array IS the onchange
+    trigger; no fingerprint block.
+  - **What does NOT belong in `kde.settings`**: a row is a pure
+    (file, group, key, type, value) tuple and gains **no** conditional field, no
+    precondition, no `if` — ever. A KDE script that needs one stays a script
+    (`virtualkeyboard` carries a file-existence precondition; the four
+    applet-discovery scripts — `calendar`, `digitalclock`, `kickoff`, `panel` —
+    walk `plasma-org.kde.plasma.desktop-appletsrc`; `touchpad` walks KWin's D-Bus
+    devices with capability probes; `fonts` and `wallpaper-breeze` write no
+    `kwriteconfig6` at all). Datafying their logic would turn the manifest into a
+    DSL and cost the comments that carry the design record.
+  - **The tunables** (`kde.calendar`, `kde.digitalClock`, `kde.kickoff`,
+    `kde.panel`, `kde.touchpad`, `kde.virtualKeyboard`, `kde.wallpaper`) are the
+    LEAF VALUES those surviving scripts read — each script keeps its own
+    structure. The applet plugin IDs, rc-file/group/key paths, and D-Bus interface
+    names are structure, not data: they say WHICH knob, not WHAT to set it to.
+- **GNOME desktop tunables**: `.chezmoidata/gnome.yaml`. Six keys, each rendered
   into its own `50-linux-gnome` script — the rendered value IS the onchange
   trigger, no fingerprint block — and each keeping a **value-signature stamp**
   (like `config-gnome-fonts`): a data edit re-asserts the new value exactly
@@ -619,6 +849,25 @@ keyring entry can no longer decrypt the stored ciphertexts.
     `org.gnome.Ptyxis` schema is absent; on a fresh host where Ptyxis has never
     run it seeds the profile UUID Ptyxis would have created, so the first
     terminal window already comes up stock.
+  - `gnome.inputSource` (`ibus` / `hangul`) →
+    `run_onchange_after_config-gnome-inputmethod.sh.tmpl`: the engine pair MERGED
+    into `org.gnome.desktop.input-sources sources`. Applied exactly once (stamp),
+    so editing it after the first apply changes what a FRESH host gets, not what
+    an existing one runs.
+  - `gnome.appGrid.sortAlphabetically` (`true`) →
+    `run_onchange_after_config-gnome-app-grid-order.sh.tmpl`. A **reset intent**,
+    not a value to write: there is no "sort" key in GNOME — an EMPTY
+    `app-picker-layout` is what makes the Shell sort the grid itself. That is why
+    it stays a script.
+  - `gnome.shortcuts.onePassword` (`name` / `command` / `binding`) →
+    `run_onchange_after_config-gnome-1password-shortcut.sh.tmpl`: the custom
+    keybinding triple (GNOME ignores the `X-KDE-Shortcuts` desktop-action key the
+    KDE targets get this from). The dconf PATH it lives at is script structure —
+    an identity, not a setting.
+  - `gnome.shellExtensions.solaar` (`uuid` / `egoId`) →
+    `run_onchange_after_install-gnome-solaar-extension.sh.tmpl`: WHICH extension
+    only; every bit of the download / shell-version compat / enable logic stays in
+    the script.
 - **mxm4-haptic env knobs**: `.chezmoidata/haptic.yaml`.
   `haptic.daemon.{pacingMs,debounceMs,pollMs}` and
   `haptic.notify.{minGapMs,skipReplaces,denyApps,battery}` render as explicit
@@ -810,30 +1059,31 @@ keyring entry can no longer decrypt the stored ciphertexts.
 - Branch on `{{ .chezmoi.os }}` (`linux`/`darwin`/`windows`); exclude whole paths
   per-OS via the nearest `.chezmoiignore` (root, `dot_config/`, `dot_local/bin/`).
   git config splits via `config.tmpl` including `.config_<os>`.
-- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time, plus runtime bash guards (`$os_id` from `/etc/os-release`). No new chezmoi prompt or persisted data var. Ubuntu Studio reports `ID=ubuntu` like any Ubuntu flavor; the flavor marker is the `ubuntustudio-default-settings` package (preinstalled by the Studio ISO), probed at runtime as `IS_UBUNTU_STUDIO` in the apt installer (`FORCE_UBUNTU_STUDIO=1` overrides, mirroring `FORCE_NVIDIA`) and re-checked by `install-system-10-files` (the `ubuntu-studio` gate in `.chezmoidata/system.yaml`) for the realtime limits drop-in.
-- **Desktop detection** (KDE Plasma vs GNOME) has two mechanisms, both keyed on the shell binary the ISO shipped (`plasmashell` / `gnome-shell`, stable from first boot):
-  - **Scripts** gate at RUNTIME: `command -v plasmashell` / `command -v gnome-shell` bash guards (`HAS_KDE`/`HAS_GNOME` in the installers, per-script guards in `50-linux-kde`/`50-linux-gnome`).
-  - **File content** (which can't branch at runtime) gates at RENDER time via `lookPath`: `dot_config/solaar/rules.yaml.tmpl` picks its gesture actions this way, `private_dot_gnupg/.gpg-agent.linux.conf` picks the pinentry (`pinentry-gnome3` on a GNOME-only host, `pinentry-qt` otherwise; the partial is inlined via `includeTemplate` — plain `include` would not render it), `dot_config/environment.d/70-desktop.conf.tmpl` drops the pinentry-qt-only `PINENTRY_KDE_USE_WALLET=1` on a GNOME-only host, and `dot_config/.chezmoiignore` drops the fcitx5 config + `environment.d/50-input-method.conf` on a GNOME-only host (`gnome-shell` on PATH without `plasmashell`). With NEITHER desktop on PATH (headless, container, CI) the KDE variant renders and the fcitx files keep deploying — deterministic CI artifacts, inert without a desktop.
-- **KDE scripts** (`.chezmoiscripts/50-linux-kde/*.tmpl`) are distro-agnostic: they gate only on the OS with `{{ if eq .chezmoi.os "linux" -}}` (no `.chezmoi.osRelease.id` fedora/ubuntu check) and defer entirely to runtime guards — each script skips unless `command -v plasmashell` and its required KDE config tool (`kwriteconfig6`/`kreadconfig6`, etc.) are present. This runs them on any KDE Plasma host, not just Fedora/Ubuntu Studio.
-- **GNOME scripts** (`.chezmoiscripts/50-linux-gnome/*.tmpl`, same `{{ if eq .chezmoi.os "linux" -}}` gate + runtime `command -v gnome-shell` guard). GNOME deliberately stays on its DEFAULTS — no theming, wallpaper, or panel scripts (the KDE config surface has no GNOME mirror here; settings will be added incrementally later), with a growing set of **deliberate, user-requested exceptions**: fonts (parity with KDE, script below), the **GDM password-only greeter** (system tree, next bullet), the mouse accel profile and terminal palette from `.chezmoidata/gnome.yaml`, the 1Password shortcut, and the alphabetical app-grid order below. Scripts:
+- **Distro detection** is by `.chezmoi.osRelease.id` (`fedora` or `ubuntu`) at template render time — the `distro` fact — plus runtime bash guards (`$os_id` from `/etc/os-release`) where a script needs one. No chezmoi prompt or persisted data var. Ubuntu Studio reports `ID=ubuntu` like any Ubuntu flavor, so the flavor is its own fact, `ubuntuStudio`: the Studio ISO's seed package `ubuntustudio-default-settings`, probed ONCE in the pre-hook (its dpkg `.md5sums` marker — not `dpkg -s`, which exits 0 for a removed-but-not-purged package). The apt installer seeds `IS_UBUNTU_STUDIO` from it (`FORCE_UBUNTU_STUDIO=1` overrides there, never in the fact) and `install-system-10-files` reads the SAME fact for the realtime-limits drop-in via the `ubuntuStudio` gate in `.chezmoidata/system.yaml` — one probe, not two.
+- **Desktop detection** (KDE Plasma vs GNOME) is **one fact**, `desktop` (`kde` / `gnome` / `none`), resolved once per chezmoi command in `facts.tmpl` by `lookPath` on the shell binary the ISO shipped (`plasmashell` → kde, else `gnome-shell` → gnome; stable from first boot, and neither binary comes from this repo's package lists). KDE wins when both are present. Both consumer classes read that one value — the old split (a `command -v` in every script, a separate `lookPath` at every file-content site, `HAS_KDE`/`HAS_GNOME` re-probed in each installer) is gone:
+  - **Scripts** read `FACT_DESKTOP` (baked in by `facts-sh.tmpl`): the `kde-guard`/`gnome-guard` partials, and `HAS_KDE`/`HAS_GNOME` seeded from it in the two installers.
+  - **File content** (which can't branch at runtime) reads `$f.desktop` at render time: `dot_config/solaar/rules.yaml.tmpl` picks its gesture D-Bus actions, `private_dot_gnupg/.gpg-agent.linux.conf` picks the pinentry (`pinentry-gnome3` on GNOME, `pinentry-qt` otherwise; inlined via `includeTemplate` — plain `include` would not render it), `dot_config/environment.d/70-desktop.conf.tmpl` drops the pinentry-qt-only `PINENTRY_KDE_USE_WALLET=1` on GNOME, and the two `.chezmoiignore` files under `dot_config/` drop the KDE-only targets on GNOME (the fcitx5 config + `environment.d/50-input-method.conf`, and `autostart/kleopatra.desktop`).
+  - `desktop: none` (headless, container, CI — neither binary on PATH) renders the KDE variant and keeps the fcitx files deploying: deterministic CI artifacts, inert without a desktop. This is also why a `plasmashell` stub on PATH changes what a verification render emits — see Verify edits.
+- **KDE scripts** (`.chezmoiscripts/50-linux-kde/*.tmpl`) are distro-agnostic: they gate only on the OS with `{{ if eq .chezmoi.os "linux" -}}` (no `.chezmoi.osRelease.id` fedora/ubuntu check), then on `desktop.kde` via `kde-guard`, so they run on any KDE Plasma host, not just Fedora/Ubuntu Studio. Each still probes its required KDE **tool** at runtime (`command -v kwriteconfig6`/`kreadconfig6`, a live session, an applet in the rc file) and skips if it is missing — those are deliberately NOT facts: they describe the moment, not the machine (see Host facts). Eight of them were settings-only and are now rows in `.chezmoidata/kde.yaml`, applied by the single `config-kde-settings` runner.
+- **GNOME scripts** (`.chezmoiscripts/50-linux-gnome/*.tmpl`, same `{{ if eq .chezmoi.os "linux" -}}` gate + the `gnome-guard` desktop fact). GNOME deliberately stays on its DEFAULTS — no theming, wallpaper, or panel scripts (the KDE config surface has no GNOME mirror here; settings will be added incrementally later), and it gets **no manifest runner either**: no GNOME script is a pure settings list, every one carries irreducible logic (a GVariant list merge, a Ptyxis profile-UUID seeding, reset-not-set semantics, a network extension install). The **deliberate, user-requested exceptions** to stock GNOME are exactly the six keys in `.chezmoidata/gnome.yaml` (mouse accel profile, terminal palette, ibus input source, alphabetical app grid, 1Password shortcut, Solaar shell extension) plus fonts (parity with KDE, from `fonts.yaml`) and the **GDM password-only greeter** (system tree, below). Scripts:
   - `run_onchange_after_config-gnome-inputmethod.sh.tmpl`: Korean input on GNOME uses the desktop's native **ibus** stack (NOT fcitx5, which is KDE-target-only), so it adds `('ibus', 'hangul')` to `org.gnome.desktop.input-sources sources` — additive (preserves existing sources), live-session-guarded, **exactly once** per user (wallpaper-style stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a user's later source edits are never fought. `run_onchange` with no external dependency to fingerprint (its trigger is its own content); on a headless/first-boot apply it exits 0 without stamping, but note onchange records that skip as done — the source lands on the next content change or `chezmoi apply --force`, not merely because a live session later appears.
-  - `run_onchange_after_config-gnome-fonts.sh.tmpl`: mirrors the KDE `config-kde-fonts` choice onto GNOME's `gsettings` font keys — sans (`interface font-name` / `document-font-name` / `wm.preferences titlebar-font`) → **Pretendard 10**, mono (`interface monospace-font-name`) → **JetBrainsMono Nerd Font 10** (KDE's `smallestReadableFont`/`menuFont`/`toolBarFont` have no GNOME analog and fold into `font-name`). Refreshes the fontconfig cache first (like the KDE script) and warns-not-fails on a not-yet-installed family. `run_onchange` fingerprinted on `.chezmoidata/fonts.yaml` (plus the SANS/MONO constants in the script text), so a font bump or choice change re-triggers it — parity with the KDE `run_onchange`. It also keeps a **font-signature stamp** (the SANS/MONO families+sizes): an unchanged signature means "already ensured" and the user's current fonts are left alone. A headless/TTY apply exits 0 without stamping; note onchange records that skip as done, so the fonts land on the next fingerprint change or `chezmoi apply --force` rather than merely because a live session later appears.
+  - `run_onchange_after_config-gnome-fonts.sh.tmpl`: mirrors the KDE `config-kde-fonts` choice onto GNOME's `gsettings` font keys — sans (`interface font-name` / `document-font-name` / `wm.preferences titlebar-font`) and mono (`interface monospace-font-name`), both read from `fonts.families`/`fonts.sizes` in `.chezmoidata/fonts.yaml`, never hardcoded here (KDE's `smallestReadableFont`/`menuFont`/`toolBarFont` have no GNOME analog and fold into `font-name`). Refreshes the fontconfig cache first (like the KDE script) and warns-not-fails on a not-yet-installed family. `run_onchange` fingerprinted on `.chezmoidata/fonts.yaml`, so a font bump or a family/size change re-triggers it — parity with the KDE `run_onchange`. It also keeps a **font-signature stamp** (the SANS/MONO families+sizes): an unchanged signature means "already ensured" and the user's current fonts are left alone. A headless/TTY apply exits 0 without stamping; note onchange records that skip as done, so the fonts land on the next fingerprint change or `chezmoi apply --force` rather than merely because a live session later appears.
   - `run_onchange_after_config-gnome-app-grid-order.sh.tmpl`: sorts the Application launcher (app grid) icons alphabetically by clearing the custom layout — `gsettings reset org.gnome.shell app-picker-layout` (an empty `app-picker-layout` makes GNOME Shell lay the grid out itself, sorted by display name with **locale collation**, which under a Korean locale IS 가나다순; no Korean-specific handling needed). **Exactly once** per user (wallpaper-style stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so that once the user drags icons into a custom arrangement — which re-populates `app-picker-layout` — it is never wiped back to alphabetical on every apply. `run_onchange` with no external dependency to fingerprint (its trigger is its own content), live-session-guarded; a headless/first-boot apply exits 0 without stamping, and onchange records that skip as done — the layout is cleared on the next content change or `chezmoi apply --force`, not merely because a live session later appears.
 - **GDM greeter → password-only** (the GNOME targets; the second GNOME-defaults exception): the gnome-keyring login keyring is encrypted with the login password, so a fingerprint login at the greeter leaves it locked — fprintd proves identity but hands PAM no secret (gnome-keyring#1). The system tree ships `etc/dconf/profile/gdm` (an override in `/etc/dconf/profile/`, which outranks the vendor profile in `/usr/share/dconf/profile/` — upstream ships only `user-db` + `file-db`, no `system-db:gdm`; the greeter always launches with `DCONF_PROFILE=gdm`, a fixed upstream build constant on both distros) plus `etc/dconf/db/gdm.d/50-no-fingerprint-login` and its lock, setting `org.gnome.login-screen enable-fingerprint-authentication=false`; `install-system-10-files` runs `dconf update` after installing them. All three files carry the `gdm` gate (probe: `/usr/share/gdm/greeter-dconf-defaults` readable — the exact file-db the profile references), so KDE hosts skip them. The IN-SESSION lock screen reads the same schema from the logged-in user's OWN dconf, not the gdm profile, so fingerprint unlock there keeps working — net effect: password at the greeter (keyring always unlocks; any fresh session needs that anyway since the keyring daemon dies with the session), fingerprint in-session.
-- **Fingerprint at polkit prompts** — `system/linux/etc/pam.d/polkit-1` (`fprintd-pam` gate). Enrolling a finger in Settings does NOT wire `pam_fprintd` into the generic auth stack on either distro: Ubuntu ships the `fprintd` pam-auth-update profile as `Default: no`, Fedora leaves the authselect `with-fingerprint` feature off, and the greeter/lock-screen fingerprint prompts work only because GDM has its own standalone `gdm-fingerprint` PAM service that hardcodes the module. polkit's stack is therefore password-only out of the box (Ubuntu 26.04 ships it as a VENDOR file, `/usr/lib/pam.d/polkit-1` — PAM reads `/etc/pam.d` first and only falls back to the vendor dir, so a file in the system tree overrides it with no dpkg conffile conflict). The shipped copy is the vendor stack verbatim plus `auth sufficient pam_fprintd.so max-tries=1 timeout=10`: a matched finger ends the stack, and every other outcome (no reader, nothing enrolled, timeout, bad read) is ignored so the password entry still works. GNOME Shell's polkit dialog needs no fingerprint-specific support — it relays PAM's `show-info`/`request` messages generically. **Do NOT "fix" this with `pam-auth-update` / a `common-auth` entry instead**: that stacks `pam_fprintd` into `gdm-password` too, handing the greeter fingerprint auth back and re-locking the login keyring — the exact failure the bullet above exists to prevent. The gate probes for `pam_fprintd.so` + a Debian-style `/etc/pam.d/common-auth` (the file `@include`s it), so Fedora — whose rpm-owned `polkit-1` includes `system-auth` — is skipped rather than overwritten. Terminal `sudo` is deliberately left password-only (its PAM file is a dpkg conffile).
+- **Fingerprint at polkit prompts** — `system/linux/etc/pam.d/polkit-1` (`fprintdPam` gate). Enrolling a finger in Settings does NOT wire `pam_fprintd` into the generic auth stack on either distro: Ubuntu ships the `fprintd` pam-auth-update profile as `Default: no`, Fedora leaves the authselect `with-fingerprint` feature off, and the greeter/lock-screen fingerprint prompts work only because GDM has its own standalone `gdm-fingerprint` PAM service that hardcodes the module. polkit's stack is therefore password-only out of the box (Ubuntu 26.04 ships it as a VENDOR file, `/usr/lib/pam.d/polkit-1` — PAM reads `/etc/pam.d` first and only falls back to the vendor dir, so a file in the system tree overrides it with no dpkg conffile conflict). The shipped copy is the vendor stack verbatim plus `auth sufficient pam_fprintd.so max-tries=1 timeout=10`: a matched finger ends the stack, and every other outcome (no reader, nothing enrolled, timeout, bad read) is ignored so the password entry still works. GNOME Shell's polkit dialog needs no fingerprint-specific support — it relays PAM's `show-info`/`request` messages generically. **Do NOT "fix" this with `pam-auth-update` / a `common-auth` entry instead**: that stacks `pam_fprintd` into `gdm-password` too, handing the greeter fingerprint auth back and re-locking the login keyring — the exact failure the bullet above exists to prevent. The `fprintdPam` fact is `pam_fprintd.so` present **AND** a Debian-style `/etc/pam.d/common-auth` (the file `@include`s it) — the conjunction is load-bearing: drop the second half and a Fedora apply, whose rpm-owned `polkit-1` includes `system-auth` instead, overwrites that file with a stack referencing a file Fedora does not have, breaking every polkit prompt on the host. Terminal `sudo` is deliberately left password-only (its PAM file is a dpkg conffile).
 - **Input method per desktop**: KDE targets run fcitx5 (`kdePackages`, `dot_config/fcitx5/`, `environment.d/50-input-method.conf` XMODIFIERS, KWin virtual-keyboard script); GNOME targets run ibus (`gnomePackages` installs `ibus-hangul`, GNOME manages the IM environment itself — no fcitx files deploy there, per the `.chezmoiignore` gate above).
 - **Shared system-config** (the `.chezmoiscripts/30-linux/` `install-system-10-files`/`20-host`/`30-network` set — see The `system/` tree section) includes Ubuntu runtime branches: `20-host` masks `zramswap.service` on Ubuntu via a separate block (never appended to the Fedora mask line — `systemctl mask` writes `/dev/null` even for nonexistent units), and `10-files` drives `locale-gen` on Ubuntu.
 - **Ubuntu-specific scripts** (`.chezmoiscripts/40-linux-ubuntu/`, gate = `{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-ubuntu" -}}`):
   - `run_onchange_before_ubuntu.sh.tmpl` — apt provisioner (mirrors the Fedora installer with apt semantics; idempotent, all service/group steps guarded). Secure Boot + NVIDIA: Ubuntu's dkms signs module builds with the shim-signed MOK (`/var/lib/shim-signed/mok/`); when that key is not yet enrolled, the installer uses the MOK password chezmoi prompts for at `chezmoi init` (stored keyring-encrypted as `mokPasswordCipher` in `.chezmoi.toml.tmpl` and decrypted at render time via `config-secrets-key.tmpl` — Ubuntu-only, same mechanism and security trade-offs as the LUKS passphrase, see the Secrets section; blank = skip the NVIDIA stack, 8-16 chars per shim-signed's `update-secureboot-policy`) to enroll non-interactively: it generates the keypair if missing (`update-secureboot-policy --new-key`), preseeds shim-signed's `shim/secureboot_key(_again)` debconf questions so the dkms postinst's interactive "configuring secure boot" dialog never poses, installs the driver, then verifies the certificate is enrolled or pending (queueing it via `mokutil --import` with the password on stdin if not) and clears the debconf password again via an EXIT trap, so a failed install clears it too. The user completes enrollment in MokManager at next boot with that password.
   - `run_onchange_after_ubuntu-tailscale-ufw.sh.tmpl` — sets `DEFAULT_FORWARD_POLICY=ACCEPT` and inserts a marker-delimited `*nat`/`MASQUERADE` block in `/etc/ufw/before.rules`; idempotent. `run_onchange` with no external dependency (the NAT rule derives from runtime `primary_if` detection), so the trigger is its own content; a run skipped for missing sudo is recorded as done and completes on the next content change or `chezmoi apply --force`
   - `run_onchange_after_luks-tpm2.sh.tmpl` (**Fedora + Ubuntu**, `(or fedora ubuntu)` gate) — prompts at `chezmoi init` for the existing LUKS passphrase (stored keyring-encrypted as `luksPassphraseCipher` in `.chezmoi.toml.tmpl`, decrypted at render time via `config-secrets-key.tmpl` — see the Secrets section; blank = skip) and drives the deployed `~/.local/bin/setup-luks-tpm2-unlock.sh` **non-interactively** (passphrase handed over via the `SETUP_LUKS_TPM2_PASSPHRASE` env var, base64-wrapped in the transient run-script for shell-safety only) to enroll every LUKS device for TPM2 auto-unlock. **Both distros share ONE backend: dracut + systemd-cryptenroll** (`dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh`, inlined by the tool's `{{ include }}`). dracut builds a systemd-based initramfs whose systemd-cryptsetup honours the crypttab `tpm2-device=auto` option, so `systemd-cryptenroll` seals a TPM2 keyslot and the crypttab carries `tpm2-device=auto,x-initrd.attach` (root) / `tpm2-device=auto,nofail` (non-root); `backend_finalize` writes the `tpm2-tss` dracut module drop-in (`/etc/dracut.conf.d/tpm2-tss.conf`) and rebuilds with `dracut -f --regenerate-all`. Ubuntu 26.04 switched its initramfs generator from initramfs-tools to dracut, so the old clevis/initramfs-tools workaround (needed because initramfs-tools ignored `tpm2-device=auto`, Launchpad #1980018) is gone — Ubuntu now uses the Fedora path verbatim (only `dracut` + `tpm2-tools` are pinned in `packages.yaml`; Fedora needs no extra packages). `run_onchange` fingerprinted on the enrollment tool source (`dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl` + its inlined `.setup-luks-tpm2-unlock_dracut.sh` backend), so a change to the enrollment logic re-triggers it; the prompted passphrase is never part of the fingerprint. Because a stored passphrase decrypts (base64) into the script body, the first apply after init stores one also changes the hash and fires enrollment. Note the onchange trade-off vs the former `run_after`: a run skipped for a blank passphrase / absent TPM / missing sudo is recorded as done and is NOT retried on the next apply unless the fingerprint changes — re-enroll with `chezmoi apply --force` (entering the passphrase) or by invoking the tool directly; every precondition still soft-skips `exit 0`, and enrollment stays idempotent once every device carries a systemd-tpm2 token. A blank passphrase — always returned by non-interactive/CI `promptString` — stores an empty cipher and takes the skip path (the template guards `.luksPassphraseCipher` with `hasKey` so the render-dotfiles empty-config internals render doesn't error; an unreachable user keyring at apply-render time likewise degrades to the skip path). The tool's default interactive path is unchanged; the env-passphrase mode is opt-in (see its header). The `render-dotfiles` Linux `apply` job answers the prompts non-interactively (`printf '\n\n\n' | chezmoi apply --init --no-tty`, since newer chezmoi errors on `/dev/tty` in a container instead of defaulting) and asserts the rendered tool carries the shared dracut backend.
-  - Ubuntu Studio pro-audio — **Studio-only, all three pieces gated on the `ubuntustudio-default-settings` marker** so a plain Ubuntu Desktop install never grows them: `packages.yaml` `studioPackages` (4 pkgs: `ubuntustudio-audio-core`, `ubuntustudio-pipewire-config`, `ubuntustudio-performance-tweaks`, `ubuntustudio-lowlatency-settings`), the `audio` group added in `configure_user_groups()`, and the `system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf` realtime limits drop-in (the `ubuntu-studio` gate in `.chezmoidata/system.yaml` re-checks the marker).
+  - Ubuntu Studio pro-audio — **Studio-only, all three pieces gated on the one `ubuntuStudio` fact** so a plain Ubuntu Desktop install never grows them: `packages.yaml` `studioPackages` (4 pkgs: `ubuntustudio-audio-core`, `ubuntustudio-pipewire-config`, `ubuntustudio-performance-tweaks`, `ubuntustudio-lowlatency-settings`), the `audio` group added in `configure_user_groups()`, and the `system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf` realtime limits drop-in (the `ubuntuStudio` gate in `.chezmoidata/system.yaml`). `FORCE_UBUNTU_STUDIO=1` reaches the package installer ONLY, never the /etc file — a package set is testable, a privilege grant (`@audio rtprio 95`, `memlock unlimited`) is not.
 - **De-branded** (the KDE targets — Fedora KDE Spin and Ubuntu Studio; GRUB and Plymouth are left native by choice; the GNOME targets keep their stock look entirely, per the GNOME-defaults policy above): each distro's shipped desktop branding is reverted to stock across three surfaces — the desktop to Plasma/Breeze — **config-override only, no branding package is purged (and none is added)**:
-  - **Global Theme**: one cross-distro script, `config-kde-autotheme` (linux gate + runtime plasmashell guard, like every `50-linux-kde` script), puts Plasma's default Breeze Global Theme on automatic day/night switching: `AutomaticLookAndFeel=true` + `DefaultLightLookAndFeel=org.kde.breeze.desktop` / `DefaultDarkLookAndFeel=org.kde.breezedark.desktop` + an initial `LookAndFeelPackage=org.kde.breezedark.desktop` pin (automatic Breeze Dark ⇄ Light, timed off the Night Light schedule). On Plasma < 6.5 the auto-switch keys are silently ignored, so it degrades to the `LookAndFeelPackage` Breeze Dark pin. The Plasma session's icon theme, cursor, and splash follow the active Breeze variant on next login. (The former `config-kde-darkmode` Breeze-Dark-pin script was removed in favour of this.)
+  - **Global Theme**: four `kdeglobals [KDE]` rows in `.chezmoidata/kde.yaml`, applied by the generic `config-kde-settings` runner (they were the `config-kde-autotheme` script until it collapsed into the manifest): Plasma's default Breeze Global Theme on automatic day/night switching — `AutomaticLookAndFeel=true` + `DefaultLightLookAndFeel=org.kde.breeze.desktop` / `DefaultDarkLookAndFeel=org.kde.breezedark.desktop` + an initial `LookAndFeelPackage=org.kde.breezedark.desktop` pin (automatic Breeze Dark ⇄ Light, timed off the Night Light schedule). On Plasma < 6.5 the auto-switch keys are silently ignored, so it degrades to the `LookAndFeelPackage` Breeze Dark pin. The Plasma session's icon theme, cursor, and splash follow the active Breeze variant on next login. (The former `config-kde-darkmode` Breeze-Dark-pin script was removed in favour of this.)
   - **Boot splash (Plymouth) → left native**: Plymouth is no longer customized on either distro. The former Fedora `plymouthd.conf` (bgrt + `DeviceScale=2`) and the Ubuntu bgrt `update-alternatives` swap were removed — a `bgrt`/spinner splash could swallow the early-boot LUKS passphrase prompt on Ubuntu (Launchpad #1864586). Fedora's removed `/etc/plymouth/plymouthd.conf` is cleaned up via a `distro: fedora`-scoped `removed:` entry in `.chezmoidata/system.yaml` (never touching a native/user file at that path on Ubuntu). Per the no-teardown-scripts rule above, Ubuntu's `default.plymouth` alternative is **not** reverted by a shipped script: a host still carrying the old manual `bgrt` pick reverts to the distro default by hand — `sudo update-alternatives --auto default.plymouth && sudo update-initramfs -u -k all`. Each distro keeps whatever Plymouth theme it ships.
-  - **Login greeter (SDDM)**: `system/linux/etc/sddm.conf.d/90-breeze.conf` (`[Theme] Current=breeze`) deploys to both distros via the system tree; the `90-` prefix outranks vendor drop-ins. The `sddm-breeze` gate in `.chezmoidata/system.yaml` skips deploying it when `/usr/share/sddm/themes/breeze/theme.conf` is absent (forcing a missing theme breaks the login screen). This path was previously an orphan in the removed-path list; that entry is dropped now that the file is shipped again.
-  - **Wallpaper**: `run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl` (linux gate + live-KDE-session guard) applies Plasma's default "Next" wallpaper via `plasma-apply-wallpaperimage`, **exactly once** (per-user stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a wallpaper the user later picks is never reverted. `run_onchange` with no external dependency (its trigger is its own content); on a headless/first-boot apply it exits 0, and onchange records that skip as done, so the wallpaper is applied on the next content change or `chezmoi apply --force` rather than merely because a live Plasma session later appears.
-- **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists and RPM Fusion/COPRs have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos plus CUDA/libnvidia-container NVIDIA packages under the `HAS_NVIDIA` gate instead.
+  - **Login greeter (SDDM)**: `system/linux/etc/sddm.conf.d/90-breeze.conf` (`[Theme] Current=breeze`) deploys to both distros via the system tree; the `90-` prefix outranks vendor drop-ins. The `sddmBreeze` gate in `.chezmoidata/system.yaml` skips deploying it when `/usr/share/sddm/themes/breeze/theme.conf` is absent (forcing a missing theme breaks the login screen). This path was previously an orphan in the removed-path list; that entry is dropped now that the file is shipped again.
+  - **Wallpaper**: `run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl` (linux gate + the `desktop` fact via `kde-guard`, then a live-session probe) applies the wallpaper package named by `kde.wallpaper.theme` (`Next`, Plasma's upstream Breeze default) via `plasma-apply-wallpaperimage`, **exactly once** (per-user stamp under `${XDG_STATE_HOME:-~/.local/state}/chezmoi/`) so a wallpaper the user later picks is never reverted. Its `XDG_CURRENT_DESKTOP` test is the one host-desktop probe left outside the registry, and deliberately so: that is a SESSION variable — empty in a TTY apply on a KDE host — so it answers "is a Plasma session live *right now*", which is a question about the moment, not about the machine. `run_onchange` with no external dependency (its trigger is its own content); on a headless/first-boot apply it exits 0, and onchange records that skip as done, so the wallpaper is applied on the next content change or `chezmoi apply --force` rather than merely because a live Plasma session later appears.
+- **Mechanism deltas** (Fedora-only infra, not gaps): KR mirror lists and RPM Fusion/COPRs have no Ubuntu equivalent; Ubuntu provisioning uses multiverse + vendor apt repos plus CUDA/libnvidia-container NVIDIA packages instead — both distros gate that group on the same `nvidia` fact.
 - POSIX scripts/wrappers keep a Windows `.ps1` counterpart in sync
   (`executable_code`/`.ps1`, `executable_opencode`/`.ps1`). Files migrated from the
   legacy nix/dotbot config are now the source of truth here — don't defer back to
@@ -843,18 +1093,20 @@ keyring entry can no longer decrypt the stored ciphertexts.
 
 Runtime-detected, no prompt: Podman creates `/run/.containerenv`, Docker creates
 `/.dockerenv` (neither exists on a bare-metal host or VM, so a normal host
-`chezmoi apply` is unaffected). Both the root `.chezmoiignore` (via `stat`) and
-`.install-prerequisites.sh` (via `is_container()`) branch on these markers.
-Intended for CI runners and dedicated containers with their own `$HOME`.
+`chezmoi apply` is unaffected). This is the **`container` fact** — declared in
+`.chezmoidata/facts.yaml`, resolved in `facts.tmpl`, and read from there by the
+root `.chezmoiignore`; `.install-prerequisites.sh` keeps its own bash
+`is_container()` because the hook runs before any template does. Intended for CI
+runners and dedicated containers with their own `$HOME`.
 
 **distrobox and toolbox are the explicit opt-out** — both bind-mount the host
 `$HOME` and both create `/run/.toolboxenv` (distrobox `touch`es it for toolbx
 prompt compatibility), so an apply inside one targets the real host `$HOME` and
-must provision fully like the host, not skip. Detection therefore skips only a
+must provision fully like the host, not skip. The fact therefore means only a
 *real* container: a Podman/Docker marker present **without** `/run/.toolboxenv`
-(`is_devbox()` in the hook; a `(not (stat "/run/.toolboxenv"))` guard in
-`.chezmoiignore`). Keep the two detection sites in lockstep — same markers, same
-sense — or the hook and the ignore set will disagree.
+(`is_devbox()` in the hook). Keep the fact's predicate and the hook's byte-for-byte
+in lockstep — same markers, same sense — or the hook and the ignore set will
+disagree about the same machine.
 
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
   block skips every provisioning script — `.chezmoiscripts/{30-linux,20-linux-fedora,40-linux-ubuntu,50-linux-kde,50-linux-gnome,10-auth,80-keys}/*.sh`
