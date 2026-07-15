@@ -14,7 +14,8 @@
 		"hooks": false,
 		"plugins": false
 	},
-	"disabled_mcps": ["lsp"],
+	"disabled_mcps": ["playwright", "lsp"],
+	"disabled_skills": ["playwright"],
 	"disabled_hooks": [
 		"session-notification",
 		"no-sisyphus-gpt",
@@ -28,7 +29,7 @@
 		"cooldown_seconds": 60,
 		"notify_on_fallback": true
 	},
-	"browser_automation_engine": { "provider": "playwright" },
+	"browser_automation_engine": { "provider": "playwright-cli" },
 	"git_master": {
 		"commit_footer": false,
 		"include_co_authored_by": false,

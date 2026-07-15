@@ -1,41 +1,26 @@
-{{- /* Remote skills + MCP servers are data-driven from .chezmoidata/agents.yaml
-       (range over .agents.skills.remote and .agents.mcp.servers). The twelve
-       local path skills below stay literal here — single consumer, pending
-       future removal. Add or remove a remote skill or MCP server in the DATA
-       file, not here.
+{{- /* MCP servers are data-driven from .chezmoidata/agents.yaml (range over
+       .agents.mcp.servers). The twelve local path skills below stay literal here —
+       single consumer. Add or remove an MCP server in the DATA file, not here.
 
-       Remote skill `ref`: absent -> newest release via gitHubLatestRelease
-       (release-tracking); present -> literal (improve's "main", which publishes
-       no tags). These are GitHub API calls: run chezmoi through the zsh wrapper
-       (or `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is injected.
+       Agent skills that used to be dotagents remote skills are NO LONGER declared here —
+       they are chezmoi externals (the list is data in .chezmoidata/agents.yaml,
+       agents.skills.external) that deploy straight into ~/.agents/skills/<name>. See
+       .chezmoiexternals/ai-agents.toml.
+       dotagents still owns the ~/.claude/skills -> ~/.agents/skills symlink and its
+       `install` never prunes an undeclared dir (prune is sync-only), so those externals
+       coexist with the path: skills below.
 
        NOT here: everyinc/compound-engineering-plugin. It ships a first-class
        plugin for every agent this repo runs, so it is installed through each
        agent's own plugin mechanism instead of being vendored in as dotagents
        skills — see .chezmoiscripts/70-agents/install-compound-engineering
        (Claude Code + Codex) and the `plugin` array of
-       dot_config/opencode/readonly_opencode.json.tmpl (OpenCode).
-
-       install-dotagents-skills embeds these same refs in its onchange
-       fingerprint, so a new upstream release re-triggers the install that
-       actually fetches it — keep the two in sync. */ -}}
+       dot_config/opencode/readonly_opencode.json.tmpl (OpenCode). */ -}}
 version = 1
 agents = ["claude", "codex"]
 
 [trust]
-github_orgs = ["getsentry", "microsoft", "shadcn"]
 git_domains = ["git.jpi.app"]
-
-{{- range .agents.skills.remote }}
-[[skills]]
-name = {{ .name | quote }}
-source = {{ .source | quote }}
-{{- if hasKey . "ref" }}
-ref = {{ .ref | quote }}
-{{- else }}
-ref = {{ (gitHubLatestRelease .source).TagName | quote }}
-{{- end }}
-{{- end }}
 
 [[skills]]
 name = "ci-cd-monitoring"

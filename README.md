@@ -41,9 +41,10 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    Ubuntu via apt), fonts, importing the GPG key, authenticating GitHub /
    Tailscale, switching the login shell to zsh, and writing desktop (KDE or
    GNOME) / Solaar / system config. It also fetches pinned standalone CLI
-   binaries into `~/.local/bin` (via [`.chezmoiexternals/`](.chezmoiexternals)),
-   and provisions coding-agent skills and MCP servers via `dotagents` into
-   `~/.agents/` from the pinned set in
+   binaries into `~/.local/bin` and coding-agent skills into `~/.agents/skills/`
+   (via [`.chezmoiexternals/`](.chezmoiexternals)), and provisions MCP servers
+   plus the local agent skills via `dotagents` into `~/.agents/` from the pinned
+   set in
    [`dot_agents/private_readonly_agents.toml.tmpl`](dot_agents/private_readonly_agents.toml.tmpl)
    (rendered to `~/.agents/agents.toml`).
    The desktop is detected at apply time (`plasmashell` vs `gnome-shell`):
@@ -206,7 +207,9 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
   `~/.local/bin` (claude-code, codex, codegraph, Meridian, gh, glab, kubectl,
-  helm, shellcheck, uv, …), plus prezto and the fonts.
+  helm, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
+  declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
+  into `~/.agents/skills/`.
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust sources, built on apply by

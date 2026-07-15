@@ -1,4 +1,4 @@
-{{- /* AI coding agents & the local Claude Max proxy: claude, codex, agy, opencode, pi, meridian, the pi/hermes scrub plugins, codegraph, aoe. */ -}}
+{{- /* AI coding agents & the local Claude Max proxy: claude, codex, agy, opencode, pi, meridian, the pi/hermes scrub plugins, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -243,4 +243,47 @@ path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
 # The sidecar is sha256sum output ("<hash>  <file>"), so take the first field.
 sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agent-of-empires" $aoeTag (printf "aoe-%s-%s.tar.gz.sha256" .chezmoi.os .chezmoi.arch)) | toString | trim | splitList " " | first }}'
 
+{{- end }}
+
+{{- /* ---------- agent skills (~/.agents/skills/<name>) — formerly dotagents remote skills.
+       The LIST is data in .chezmoidata/agents.yaml (agents.skills.external); this section
+       ranges over it. Now chezmoi externals so each skill's release/branch is pinned by
+       chezmoi at render time rather than fetched by `dotagents install`. Every source repo
+       keeps its skill in a skills/<name>/ subdir, so stripComponents=3 drops the
+       <repo>-<ref>/skills/<name>/ prefix (leaving SKILL.md + references/ at the target root)
+       and the include (anchored on the skills/<name>/ path segment) isolates exactly that
+       one skill — it excludes repo-root files, a repo's own dot-claude skills tree or nested
+       package skills trees, and any sibling skill in the same repo (a source repo can ship
+       several skills under skills/). exact=true so a skill update removes deleted files. Ref
+       rule per entry: no `ref` key -> newest GitHub release (gitHubLatestRelease); a `ref`
+       key -> that branch head resolved to a commit via git ls-remote (repos with no
+       releases/tags, e.g. shadcn/improve), so both the URL and chezmoi's refresh key stay
+       immutable for one render (the meridian-plugin-hermes-scrub pattern). The GitHub
+       archive URL form takes a tag OR a commit. dotagents still runs for the MCP servers and
+       the twelve path: skills and still owns the ~/.claude/skills -> ~/.agents/skills
+       symlink; its `install` never prunes an UNDECLARED dir (prune is sync-only, which the
+       apply never runs), so these externals coexist with the path: skills. POSIX only,
+       matching the install-dotagents-skills linux+darwin gate. GitHub API calls: render
+       chezmoi through the zsh wrapper (or `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is
+       injected. ---------- */ -}}
+
+{{- if ne .chezmoi.os "windows" -}}
+{{- range .agents.skills.external }}
+{{- $ref := "" -}}
+{{- if hasKey . "ref" -}}
+  {{- $ref = output "sh" "-c" (printf "git ls-remote https://github.com/%s.git refs/heads/%s 2>/dev/null || true" .source .ref) | regexFind "^[0-9a-f]{40}" -}}
+  {{- if not (regexMatch "^[0-9a-f]{40}$" $ref) -}}
+    {{- fail (printf "%s skill: could not resolve %s refs/heads/%s to a 40-character commit sha" .name .source .ref) -}}
+  {{- end -}}
+{{- else -}}
+  {{- $ref = (gitHubLatestRelease .source).TagName | toString -}}
+{{- end }}
+
+[".agents/skills/{{ .name }}"]
+type = "archive"
+url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
+exact = true
+stripComponents = 3
+include = ["*/skills/{{ .name }}/**"]
+{{- end }}
 {{- end }}

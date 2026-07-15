@@ -3,8 +3,8 @@
 # Consumer map:
 #   agents.mcp.servers
 #     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json
-#   agents.skills.remote
-#     -> dotagents remote skill installation
+#   agents.skills.external
+#     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
 #   agents.pi.packages / defaults / auth.providers
 #     -> pi package installer and live settings/auth merge scripts
 #   agents.opencode.plugins / model / smallModel / providers / ohMyOpenagent
@@ -27,11 +27,11 @@
 # upstream schema identifiers and are emitted VERBATIM (for example
 # multimodal-looker, fallback_models, tool_call). Never normalize them.
 #
-# install-dotagents-skills hashes only unresolved agents.mcp +
-# agents.skills.remote data alongside the raw agents.toml template, so relevant
-# edits re-trigger without coupling pi/OpenCode-only changes to dotagents.
-# Rendered secrets are not fingerprinted; secret rotation alone follows each
-# consumer's documented onchange behavior.
+# install-dotagents-skills hashes only the unresolved agents.mcp data alongside
+# the raw agents.toml template, so an MCP edit re-triggers dotagents without
+# coupling pi/OpenCode-only changes to it. Rendered secrets are not
+# fingerprinted; secret rotation alone follows each consumer's documented
+# onchange behavior.
 
 agents:
   # MCP servers consumed by dotagents, pi, and OpenCode. `transport` is the
@@ -60,17 +60,20 @@ agents:
       url: https://mcp.exa.ai/mcp
       headers:
         x-api-key: op://Private/Exa/API Key
-  # dotagents remote skills (Claude Code + Codex). Missing `ref` means newest
-  # GitHub release; present `ref` is literal (improve tracks main).
+  # Agent skills fetched as chezmoi externals into ~/.agents/skills/<name> (the
+  # former dotagents remote skills). .chezmoiexternals/ai-agents.toml ranges over
+  # this list. `name` is BOTH the target dir under ~/.agents/skills/ and the
+  # skills/<name>/ subdir inside the source repo. Ref rule: absent -> newest
+  # GitHub release (gitHubLatestRelease); present -> a branch head resolved to a
+  # commit via git ls-remote (repos with no releases/tags). The twelve local
+  # path: skills stay literal in agents.toml (single consumer).
   skills:
-    remote:
+    external:
     - name: playwright-cli
       source: microsoft/playwright-cli
     - name: improve
       source: shadcn/improve
       ref: main
-    - name: dotagents
-      source: getsentry/dotagents
   # pi package sources, live settings defaults, and static API-key auth. The
   # settings/auth targets are pi-live-written; scripts merge only these fields.
   pi:
@@ -163,6 +166,13 @@ agents:
         - mimo-v2.5-free
         - nemotron-3-ultra-free
         - north-mini-code-free
+        - big-pickle
+      zai-coding-plan:
+        options:
+          apiKey: "op://Private/Kimi/API Key"
+      kimi-for-coding:
+        options:
+          apiKey: "op://Private/Z.ai/API Key"
       openrouter:
         options:
           apiKey: op://Private/OpenRouter/API Key
@@ -192,97 +202,160 @@ agents:
       agents:
         sisyphus:
           model: anthropic/claude-opus-4-8
-          variant: max
+          variant: xhigh
           fallback_models:
-            - openai/gpt-5.6-terra
+            - kimi-for-coding/k2p7
+            - kimi-for-coding/k2p6
+            - kimi-for-coding/k2p5
+            - model: openai/gpt-5.6-terra
+              variant: medium
+            - model: openai/gpt-5.5
+              variant: medium
+            - zai-coding-plan/glm-5.2
         hephaestus:
-          model: openai/gpt-5.5
+          model: openai/gpt-5.6-sol
+          variant: high
+          fallback_models:
+            - model: openai/gpt-5.5
+              variant: medium
         oracle:
           model: openai/gpt-5.6-sol
+          variant: high
           fallback_models:
+            - model: openai/gpt-5.5
+              variant: high
             - model: anthropic/claude-opus-4-8
-              variant: max
+              variant: xhigh
+            - zai-coding-plan/glm-5.2
         librarian:
-          model: openai/gpt-5.6-terra
+          model: openai/gpt-5.6-luna-fast
           fallback_models:
+            - openai/gpt-5.4-mini-fast
             - anthropic/claude-haiku-4-5
         explore:
-          model: openai/gpt-5.6-terra
+          model: openai/gpt-5.6-luna-fast
           fallback_models:
+            - openai/gpt-5.4-mini-fast
             - anthropic/claude-haiku-4-5
         multimodal-looker:
           model: openai/gpt-5.6-terra
+          variant: medium
           fallback_models:
-            - model: anthropic/claude-opus-4-8
-              variant: max
+            - model: openai/gpt-5.5
+              variant: medium
+            - kimi-for-coding/k2p7
+            - kimi-for-coding/k2p6
+            - zai-coding-plan/glm-5v-turbo
         prometheus:
           model: anthropic/claude-opus-4-8
-          variant: max
+          variant: xhigh
           fallback_models:
             - model: openai/gpt-5.6-sol
               variant: high
+            - model: openai/gpt-5.5
+              variant: high
+            - zai-coding-plan/glm-5.2
         metis:
           model: anthropic/claude-sonnet-5
           fallback_models:
             - model: anthropic/claude-opus-4-8
-              variant: max
-            - openai/gpt-5.6-sol
+              variant: xhigh
+            - model: openai/gpt-5.6-sol
+              variant: high
+            - model: openai/gpt-5.5
+              variant: high
+            - zai-coding-plan/glm-5.2
+            - kimi-for-coding/k2p7
+            - kimi-for-coding/k2p6
+            - kimi-for-coding/k2p5
         momus:
           model: openai/gpt-5.6-sol
           variant: xhigh
           fallback_models:
+            - model: openai/gpt-5.5
+              variant: xhigh
             - model: anthropic/claude-opus-4-8
-              variant: max
+              variant: xhigh
+            - zai-coding-plan/glm-5.2
         atlas:
           model: anthropic/claude-sonnet-5
-          variant: max
           fallback_models:
-            - openai/gpt-5.6-terra
+            - anthropic/claude-sonnet-4-6
+            - kimi-for-coding/k2p7
+            - kimi-for-coding/k2p6
+            - model: openai/gpt-5.5
+              variant: medium
         sisyphus-junior:
           model: anthropic/claude-sonnet-5
-          variant: max
           fallback_models:
-            - openai/gpt-5.6-terra
+            - anthropic/claude-sonnet-4-6
+            - kimi-for-coding/k2p7
+            - kimi-for-coding/k2p6
+            - model: openai/gpt-5.5
+              variant: medium
+            - opencode/big-pickle
       # Per-category mappings (oh-my-openagent.jsonc "categories").
       # Model Mapping Reference:
       # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
       categories:
         visual-engineering:
-          model: anthropic/claude-opus-4-8
-          variant: max
+          model: zai-coding-plan/glm-5.1
           fallback_models:
-            - openai/gpt-5.6-terra
+            - model: anthropic/claude-opus-4-8
+              variant: xhigh
+            - zai-coding-plan/glm-5.2
+            - kimi-for-coding/k2p5
         ultrabrain:
           model: openai/gpt-5.6-sol
           variant: xhigh
           fallback_models:
+            - model: openai/gpt-5.5
+              variant: xhigh
             - model: anthropic/claude-opus-4-8
-              variant: max
+              variant: xhigh
+            - zai-coding-plan/glm-5.2
         deep:
           model: openai/gpt-5.6-terra
+          variant: xhigh
           fallback_models:
+            - model: openai/gpt-5.6-sol
+              variant: high
+            - model: openai/gpt-5.5
+              variant: medium
             - model: anthropic/claude-opus-4-8
-              variant: max
+              variant: xhigh
+            - kimi-for-coding/k2p6
+            - zai-coding-plan/glm-5.2
         artistry:
           model: anthropic/claude-opus-4-8
-          variant: max
+          variant: xhigh
           fallback_models:
             - openai/gpt-5.6-sol
+            - openai/gpt-5.5
+            - kimi-for-coding/k2p7
+            - kimi-for-coding/k2p6
+            - zai-coding-plan/glm-5.2
+            - zai-coding-plan/glm-5.1
         quick:
-          model: openai/gpt-5.6-terra
+          model: openai/gpt-5.4-mini
           fallback_models:
             - anthropic/claude-haiku-4-5
         unspecified-low:
-          model: anthropic/claude-sonnet-5
-          variant: max
+          model: openai/gpt-5.6-luna
+          variant: xhigh
           fallback_models:
-            - openai/gpt-5.6-terra
+            - anthropic/claude-sonnet-4-6
+            - model: openai/gpt-5.5
+              variant: medium
+            - kimi-for-coding/k2p6
         unspecified-high:
           model: anthropic/claude-opus-4-8
           variant: max
           fallback_models:
-            - model: openai/gpt-5.6-sol
+            - model: openai/gpt-5.5
               variant: high
+            - zai-coding-plan/glm-5.1
+            - kimi-for-coding/k2p5
         writing:
           model: anthropic/claude-sonnet-5
           fallback_models:

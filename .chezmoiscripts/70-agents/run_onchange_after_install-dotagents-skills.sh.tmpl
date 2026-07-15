@@ -7,30 +7,22 @@
 # install`, driven by the deployed ~/.agents/agents.toml (source:
 # dot_agents/private_readonly_agents.toml.tmpl).
 #
-# onchange trigger: THREE relevant inputs, because agents.yaml also contains
-# unrelated pi/OpenCode data and remote skills track upstream releases.
+# onchange trigger: TWO relevant inputs, because agents.yaml also contains
+# unrelated pi/OpenCode data.
 #   1. The fingerprint block embeds a sha256 of the RAW agents.toml source
 #      template, catching target-format/local-skill edits without resolving any
 #      onepasswordRead value.
-#   2. A comment-only selective hash covers ONLY unresolved agents.mcp +
-#      agents.skills.remote data. An MCP/remote-skill edit re-triggers the
-#      install, while pi/OpenCode-only edits in the same data file do not.
-#   3. Raw data is byte-identical across an upstream release (refs are template
-#      lookups, not literals), so resolved refs are ALSO rendered below. Without
-#      them a new release would land in ~/.agents/agents.toml while this script —
-#      the thing that actually fetches the skill — never re-ran. Refs are tags,
-#      not secrets, so embedding them is safe.
-# Caveat: shadcn/improve pins a BRANCH (it publishes no releases/tags), and a
-# branch head cannot be resolved by a chezmoi template function — new commits
-# there do not re-trigger this script. They are picked up whenever the install
-# does run (a config edit, another skill's release, or `chezmoi apply --force`).
+#   2. A comment-only selective hash covers ONLY the unresolved agents.mcp data.
+#      An MCP edit re-triggers the install, while pi/OpenCode-only edits in the
+#      same data file do not.
+# The former remote skills are no longer dotagents-managed — they are chezmoi
+# externals whose list is data in .chezmoidata/agents.yaml (agents.skills.external)
+# and deploy into ~/.agents/skills/<name> during the file phase, so a skill release
+# no longer needs to re-trigger this script. dotagents still
+# owns the ~/.claude/skills symlink and never prunes those undeclared dirs
+# (prune is sync-only, and this script runs only `install`).
 #
-# This replaces the former `run_after_` + internal stamp-guard design, whose
-# every-apply execution existed to (a) refresh the then-UNPINNED remote skills
-# past their `minimum_release_age` settle and (b) retry soft-skipped first
-# applies; (a) is obsolete — the settle window is gone and the rendered refs
-# above re-trigger this script on their own — and (b) is accepted as the
-# standard onchange trade-off:
+# Standard onchange trade-off (this was a `run_after_` + stamp-guard before):
 #   - chezmoi records a clean exit-0 run as done, so a soft-skipped or failed
 #     install (mise/git absent, network down) is NOT retried on the next apply
 #     until the fingerprint changes — after fixing the cause, re-run by hand
@@ -53,21 +45,8 @@ set -euo pipefail
 # contain op:// references rather than resolved secrets. Keeping this separate
 # from the raw-file fingerprint prevents unrelated pi/OpenCode data centralized
 # in agents.yaml from re-running dotagents.
-{{ $dotagentsData := dict "mcp" .agents.mcp "remoteSkills" .agents.skills.remote -}}
+{{ $dotagentsData := dict "mcp" .agents.mcp -}}
 # dotagents-data-sha256: {{ $dotagentsData | toJson | sha256sum }}
-#
-# Resolved remote skill refs (see header note 3) — these move on an upstream
-# release, changing this script's content and re-triggering the install that
-# fetches them. Ranged from .chezmoidata/agents.yaml (skills.remote); keep the
-# data and this block in lockstep. A literal `ref` (e.g. improve's branch head)
-# prints verbatim. Comment-only; never executed.
-{{- range .agents.skills.remote }}
-{{- if hasKey . "ref" }}
-#   {{ .source }}@{{ .ref }}
-{{- else }}
-#   {{ .source }}@{{ (gitHubLatestRelease .source).TagName }}
-{{- end }}
-{{- end }}
 #
 # NOT provisioned here: everyinc/compound-engineering-plugin. It is installed
 # through each agent's native plugin mechanism instead — see the sibling
@@ -99,7 +78,7 @@ fi
 mkdir -p "$HOME/.claude" "$HOME/.codex" || true
 
 set +e
-install_output="$(mise --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
+install_output="$(mise --no-config --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
 install_rc=$?
 set -e
 if [[ $install_rc -ne 0 ]]; then
