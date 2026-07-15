@@ -164,8 +164,8 @@ agents:
       versionSource: compoundEngineeringRelease
       targets:
         opencode: [""]
-    model: anthropic/claude-opus-4-8
-    smallModel: openrouter/openrouter/free
+    model: anthropic/claude-opus-4-7
+    smallModel: anthropic/claude-haiku-4-5
     providers:
       opencode:
         options:
@@ -247,7 +247,6 @@ agents:
           variant: medium
           fallback_models:
             - kimi-for-coding/k2p6
-            - zai-coding-plan/glm-5v-turbo
         prometheus:
           model: anthropic/claude-opus-4-7
           variant: max

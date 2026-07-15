@@ -50,7 +50,13 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
    - `kimi-k2.5` / `k2p5` → `kimi-for-coding/k2p5`
    - `glm-5` → `zai-coding-plan/glm-5.1` (the non-turbo GLM-5 tier; keep
      `glm-5.2` distinct → `zai-coding-plan/glm-5.2`)
-   - `glm-4.6v` → `zai-coding-plan/glm-5v-turbo`
+   - `glm-4.6v` → **drop**. The closest available match
+     `zai-coding-plan/glm-5v-turbo` is a vision-tier model not served under
+     the GLM Coding Plan subscription this repo authenticates against — it is
+     listed by `opencode models` but every ping against it hangs and times out
+     with an empty response, so it can never satisfy the ping gate below. No
+     other GLM family member is a viable vision-fallback substitute under this
+     tier, so this reference name has no mapping and the entry drops entirely.
    - `gemini-3.1-pro` → `google-agy/gemini-pro-agent`
    - `gemini-3-flash` → `google-agy/gemini-3-flash`
    - `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.x`,
@@ -72,6 +78,51 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
 
 Cover every agent and every category present in the reference. Keep the two
 `# Model Mapping Reference:` comment blocks intact.
+
+## Ping-check every distinct model (required, before writing the file)
+
+A model listed by `opencode models` can still be unreachable right now — auth
+expired, provider throttling, or a delisted id that hasn't yet propagated to the
+local refresh. Before you edit `.chezmoidata/agents.yaml`, live-check every
+`provider/model` the mapping is about to reference:
+
+1. **Collect every distinct `provider/model` pair** across the resolved mapping
+   — both `model` and every entry in `fallback_models`, agents + categories.
+   Dedupe: one ping per pair, never per usage.
+2. **Ping each pair from a clean scratch dir** — never from this repo. `opencode
+   run` walks up from CWD picking up the nearest `opencode.json` + `AGENTS.md`;
+   from the chezmoi source that pulls in the repo's config, skills, and MCP
+   servers, all noise for a liveness check (and any one of them can fail-loud
+   on an unrelated concern and mask a genuine model verdict):
+
+   ```sh
+   ping_dir="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch/omo-ping"
+   mkdir -p "$ping_dir"
+   # for each distinct provider/model in the resolved mapping:
+   ( cd "$ping_dir" && opencode run --model "<provider>/<model>" "ping" )
+   # …at the end of the ping-check phase:
+   rm -rf "$ping_dir"
+   ```
+
+   Reuse the same `$ping_dir` for every ping in this run; the subshell keeps
+   your own CWD on the chezmoi source unchanged.
+
+3. **Classify the outcome**:
+   - Exit 0 with any short coherent reply → USABLE, keep as mapped.
+   - Non-zero exit, an auth / rate-limit / 5xx / timeout error, or an obviously
+     empty response → UNUSABLE on this host right now. Treat exactly like a
+     model missing from `opencode models` (rule 3 above): drop from every
+     fallback chain, promote the next surviving entry to `model` where needed,
+     and flag it in your report.
+4. If ping-drops empty an agent's or category's chain entirely, fall back to
+   the last-known survivor from the reference (verbatim, variant preserved) and
+   flag it loudly — never leave the entry without a `model`.
+5. Cache the verdict per pair within this run. Never re-ping the same
+   `provider/model` twice, and space pings on the same provider apart if you
+   start seeing rate-limit responses.
+
+Only after every remaining pair in the final mapping pings USABLE may you write
+`.chezmoidata/agents.yaml`.
 
 ## Verify before finishing (required)
 
