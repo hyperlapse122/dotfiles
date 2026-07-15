@@ -124,12 +124,13 @@ factRegistry:
       lookPath "plasmashell" → kde, else lookPath "gnome-shell" → gnome, else none.
       Keyed on the shell binary the ISO shipped, so it is stable from first boot
       (neither binary comes from this repo's package lists). KDE wins when both are
-      present — that is today's precedence in dot_config/.chezmoiignore, which drops
-      the fcitx5 config only on a host with gnome-shell AND NOT plasmashell.
+      present — the precedence encoded in .chezmoitemplates/facts.tmpl (lookPath
+      plasmashell first, then gnome-shell).
     gates: >-
       kdePackages / gnomePackages in packages.yaml; the 50-linux-kde and
-      50-linux-gnome script guards; the fcitx5-vs-ibus input-method split; the
-      pinentry choice; the solaar gesture D-Bus actions.
+      50-linux-gnome script guards; the per-desktop fcitx5 launch mechanism
+      (KDE via KWin virtualkeyboard, GNOME via XDG autostart + Kimpanel);
+      the pinentry choice; the solaar gesture D-Bus actions.
     whenFalse: >-
       `none` (headless, container, CI — neither shell binary on PATH): neither
       per-desktop package set installs, and the KDE variant renders for the

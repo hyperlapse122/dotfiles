@@ -9,24 +9,6 @@ systemd
 wireplumber
 {{- end }}
 
-# fcitx5 is the input method on the KDE targets only (Fedora KDE Spin, Ubuntu
-# Studio); GNOME hosts (Fedora Workstation, Ubuntu Desktop) stay on GNOME's
-# default ibus stack, so neither the fcitx5 config nor the fcitx XMODIFIERS
-# environment drop-in may deploy there — a stray XMODIFIERS=@im=fcitx would
-# point XWayland apps at an input method that isn't running.
-#
-# The desktop is the `desktop` fact (.chezmoidata/facts.yaml, resolved in
-# .chezmoitemplates/facts.tmpl), which encodes this file's own former precedence:
-# KDE wins when both shells are on PATH, so `gnome` means gnome-shell WITHOUT
-# plasmashell — exactly the triple this line used to spell. With neither desktop
-# (headless, container, CI) the fact is `none`, so these files keep deploying, as
-# before.
-{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
-{{- if and (eq .chezmoi.os "linux") (eq $f.desktop "gnome") }}
-environment.d/50-input-method.conf
-fcitx5
-{{- end }}
-
 # tmux and zsh cannot be used from Windows
 {{- if eq .chezmoi.os "windows" }}
 tmux

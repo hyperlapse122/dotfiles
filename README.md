@@ -47,15 +47,18 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    set in
    [`dot_agents/private_readonly_agents.toml.tmpl`](dot_agents/private_readonly_agents.toml.tmpl)
    (rendered to `~/.agents/agents.toml`).
-   The desktop is detected at apply time (`plasmashell` vs `gnome-shell`):
-   KDE hosts get fcitx5 Korean input plus the Breeze de-branding scripts, while
-   GNOME hosts stay on GNOME defaults — the only GNOME change is Korean input
-   via the desktop's native ibus (`ibus-hangul` + a one-time
-   `('ibus', 'hangul')` input source). On Ubuntu, Tailscale egress-NAT via ufw
-   is enabled; on Ubuntu Studio specifically (detected by its
-   `ubuntustudio-default-settings` package), pro-audio essentials (PipeWire
-   config, `@audio` realtime privileges, low-latency boot tuning) are also
-   provisioned.
+   The desktop is detected at apply time (`plasmashell` vs `gnome-shell`).
+   fcitx5 (`fcitx5` + `fcitx5-hangul`) is installed on every Linux target as
+   the unified Korean input method — KDE routes it through KWin's Wayland
+   input-method socket, GNOME through a per-user XDG autostart entry, with a
+   one-shot migration that strips any legacy `('ibus', …)` entry from GNOME's
+   input sources and installs the Kimpanel Shell extension so the candidate
+   popup renders inside GNOME Shell. KDE hosts additionally get the Breeze
+   de-branding scripts, while GNOME hosts otherwise stay on GNOME defaults.
+   On Ubuntu, Tailscale egress-NAT via ufw is enabled; on Ubuntu Studio
+   specifically (detected by its `ubuntustudio-default-settings` package),
+   pro-audio essentials (PipeWire config, `@audio` realtime privileges,
+   low-latency boot tuning) are also provisioned.
 
 Meridian is installed from the exact NPM package version named by its latest
 GitHub Release, linked through `~/.local/share/meridian/current`, and started as
@@ -86,10 +89,11 @@ sessions.
   or **Fedora 44 KDE Spin** for the full experience. Detection is implicit —
   `osRelease.id` (`fedora` or `ubuntu`) plus runtime guards for the desktop
   (`plasmashell` vs `gnome-shell`) and for the Ubuntu Studio flavor
-  (`ubuntustudio-default-settings`); no interactive prompt. GNOME hosts keep
-  GNOME defaults (input method: ibus); KDE hosts get fcitx5 and the Breeze
-  de-branding. Ubuntu Studio additionally gets pro-audio essentials on every
-  `chezmoi apply`.
+  (`ubuntustudio-default-settings`); no interactive prompt. fcitx5 is the
+  unified input method on every Linux target (see `packages.yaml`
+  `kdePackages` / `gnomePackages`); KDE hosts additionally get the Breeze
+  de-branding, while GNOME hosts otherwise keep GNOME defaults. Ubuntu Studio
+  additionally gets pro-audio essentials on every `chezmoi apply`.
 - macOS and Windows get the cross-platform dotfiles only.
 - **`sudo` access** — installing packages and writing `/etc` config needs root.
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled

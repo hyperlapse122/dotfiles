@@ -1,0 +1,116 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl
+#
+# GNOME hosts (Fedora Workstation, Ubuntu Desktop). Migration for the unified
+# input-method policy (fcitx5 everywhere; ibus rejected as buggy — see
+# .chezmoidata/packages.yaml gnomePackages).
+#
+# GNOME Shell has a BUILT-IN ibus integration that owns the Wayland
+# text-input protocol whenever any ('ibus', <engine>) pair is present in
+# org.gnome.desktop.input-sources sources — even if the user selected an xkb
+# entry as active. That routing pre-empts fcitx5's own text-input-v3 client,
+# so this script strips every ('ibus', …) tuple from the list, leaving
+# whatever xkb layouts the user has behind. A FRESH GNOME host defaults to
+# ('xkb', <locale>) only, so this is a no-op there; the value comes from
+# migrating an existing host that had ibus configured under GNOME's native
+# stack.
+#
+# ONE-SHOT + user-respecting (same pattern as the wallpaper script and the
+# extension installers): stripping is a per-user policy decision, not a
+# recurring assertion. Once we have run once, we do NOT re-strip on every
+# apply — a user who later re-adds an ibus engine on purpose is not fought.
+#
+# onchange, no fingerprint block needed: nothing external drives the trigger
+# and no data value flows in; the trigger is this script's own rendered
+# content. Live-session only: gsettings writes go through dconf-service on
+# the session D-Bus, so on a headless/TTY/first-boot apply this exits 0
+# WITHOUT stamping. NOTE the onchange trade-off: that skipped run is
+# recorded as done and will NOT re-run on the next apply just because a live
+# GNOME session appears — the strip lands on the next content change or a
+# manual `chezmoi apply --force`. Once the stamp exists this script is a
+# no-op regardless.
+
+set -euo pipefail
+
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-inputsources-strip-ibus"
+
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-remove-ibus-source") -}}
+
+# Already stripped once -> respect the user's current source list, do nothing.
+if [[ -f "$STAMP" ]]; then
+  echo "config-gnome-remove-ibus-source: already stripped once ($STAMP); leaving input sources alone"
+  exit 0
+fi
+
+# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+  echo "config-gnome-remove-ibus-source: no D-Bus session bus; skip (retries next apply)"
+  exit 0
+fi
+command -v gsettings >/dev/null 2>&1 \
+  || { echo "config-gnome-remove-ibus-source: gsettings absent; skip"; exit 0; }
+# /usr/bin/python3, NOT bare python3 (mise may shadow it): GVariant text for
+# a(ss) is valid Python literal syntax, so filtering the list parses with
+# ast.literal_eval instead of hand-rolled string munging.
+[[ -x /usr/bin/python3 ]] \
+  || { echo "config-gnome-remove-ibus-source: /usr/bin/python3 absent; skip"; exit 0; }
+
+if ! current="$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)"; then
+  echo "config-gnome-remove-ibus-source: cannot read org.gnome.desktop.input-sources sources; skip"
+  exit 0
+fi
+
+# Filter every ('ibus', <engine>) tuple out of the existing list. Output
+# protocol: NO_IBUS (nothing to remove; already ibus-free), PARSE_ERROR
+# (unexpected GVariant text — leave untouched), EMPTY (removing ibus would
+# leave an empty source list — leave untouched so GNOME's own locale defaults
+# still populate it on next login), or the new list in GVariant text form.
+filtered="$(/usr/bin/python3 - "$current" <<'PYEOF'
+import ast
+import sys
+
+raw = sys.argv[1].strip()
+if raw.startswith("@a(ss)"):
+    raw = raw[len("@a(ss)"):].strip()
+try:
+    sources = [tuple(item) for item in ast.literal_eval(raw)]
+except (SyntaxError, ValueError):
+    print("PARSE_ERROR")
+    sys.exit(0)
+
+kept = [s for s in sources if not (len(s) >= 1 and s[0] == "ibus")]
+if len(kept) == len(sources):
+    print("NO_IBUS")
+elif not kept:
+    print("EMPTY")
+else:
+    print(repr(kept))
+PYEOF
+)"
+
+case "$filtered" in
+  PARSE_ERROR)
+    echo "config-gnome-remove-ibus-source: unexpected sources format (${current}); leaving untouched" >&2
+    exit 0
+    ;;
+  NO_IBUS)
+    echo "config-gnome-remove-ibus-source: no ibus entries in input sources; nothing to strip"
+    ;;
+  EMPTY)
+    echo "config-gnome-remove-ibus-source: stripping ibus would leave source list EMPTY (${current}); leaving untouched — add an xkb layout first" >&2
+    exit 0
+    ;;
+  *)
+    gsettings set org.gnome.desktop.input-sources sources "$filtered"
+    echo "config-gnome-remove-ibus-source: stripped ibus entries -> ${filtered}"
+    echo "config-gnome-remove-ibus-source: fcitx5 handles Korean input now (autostart entry: ~/.config/autostart/org.fcitx.Fcitx5.desktop)"
+    ;;
+esac
+
+# Stamp only after the desired state is reached, so any skip path above
+# retries on a later apply.
+mkdir -p "$(dirname "$STAMP")"
+touch "$STAMP"
+exit 0
+{{ end -}}

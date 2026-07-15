@@ -44,19 +44,6 @@
 #                  re-asserts the new value exactly once, while a user's later
 #                  manual palette pick in Ptyxis is never fought.
 #
-# gnome.inputSource:
-#   type / id     : the ibus engine registered as a GNOME input source by
-#                   run_onchange_after_config-gnome-inputmethod.sh.tmpl —
-#                   org.gnome.desktop.input-sources `sources` gains the
-#                   ('<type>', '<id>') pair. GNOME's NATIVE stack is ibus (fcitx5
-#                   is the KDE-target input method here), so `type` is `ibus` and
-#                   `id` is the engine name (`hangul` ← the ibus-hangul package
-#                   in gnomePackages). The script MERGES the pair into whatever
-#                   sources the user already has and applies exactly once (stamp),
-#                   so editing this after the first apply does NOT swap the
-#                   engine on an existing host — it only changes what a fresh
-#                   host gets (and what `chezmoi apply --force` would add).
-#
 # gnome.appGrid:
 #   sortAlphabetically : the app-grid ORDER INTENT, applied by
 #                   run_onchange_after_config-gnome-app-grid-order.sh.tmpl.
@@ -95,14 +82,23 @@
 #                   extension-info API query that resolves a build for the RUNNING
 #                   shell version. Both identify WHICH extension; the script keeps
 #                   every bit of the download/compat/enable logic (see its header).
+#   kimpanel      : Input-method panel extension installed by
+#                   run_onchange_after_install-gnome-kimpanel-extension.sh.tmpl.
+#                   Load-bearing on GNOME Wayland: mutter has no wlr-layer-shell,
+#                   so fcitx5-classicui cannot draw its candidate popup
+#                   as a layer surface — without Kimpanel the popup either
+#                   misses the caret or renders through XWayland at the top-left
+#                   of the screen. Kimpanel receives fcitx5's candidate state
+#                   over the KDE Kimpanel D-Bus interface (fcitx5-module-kimpanel
+#                   in the fcitx5 package on both distros) and renders it inside
+#                   GNOME Shell instead. The `uuid` / `egoId` pair works exactly
+#                   like the solaar entry above; the script mirrors the same
+#                   resolve/download/enable logic.
 gnome:
   mouse:
     accelProfile: flat
   terminal:
     palette: gnome
-  inputSource:
-    type: ibus
-    id: hangul
   appGrid:
     sortAlphabetically: true
   shortcuts:
@@ -114,3 +110,6 @@ gnome:
     solaar:
       uuid: solaar-extension@sidevesh
       egoId: 6162
+    kimpanel:
+      uuid: kimpanel@kde.org
+      egoId: 261

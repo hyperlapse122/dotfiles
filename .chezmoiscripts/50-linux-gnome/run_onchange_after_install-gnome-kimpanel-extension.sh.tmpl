@@ -1,0 +1,211 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/50-linux-gnome/run_onchange_after_install-gnome-kimpanel-extension.sh.tmpl
+#
+# GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Installs + enables
+# the "Input Method Panel" GNOME Shell extension (Kimpanel). Load-bearing for
+# the unified input-method policy: fcitx5 runs on GNOME too now, but mutter
+# has no wlr-layer-shell so fcitx5-classicui cannot draw its candidate popup
+# as a layer surface — without Kimpanel the popup either misses the caret or
+# renders through XWayland at the top-left of the screen. Kimpanel receives
+# fcitx5's candidate state over the KDE Kimpanel D-Bus interface
+# (fcitx5-module-kimpanel, bundled with fcitx5 on both distros) and renders
+# it inside GNOME Shell. See .chezmoidata/gnome.yaml
+# `gnome.shellExtensions.kimpanel` for the design record.
+#
+# WHICH extension is DATA: .chezmoidata/gnome.yaml
+# `gnome.shellExtensions.kimpanel` carries the upstream `uuid` and the numeric
+# extensions.gnome.org `egoId` (see its header) — edit the yaml, not this file.
+# Every bit of the resolve/download/compat/enable logic below stays here, and
+# mirrors run_onchange_after_install-gnome-solaar-extension.sh.tmpl (same
+# extensions.gnome.org API shape, same enable-via-gsettings semantics).
+#
+# The build matching the RUNNING shell version is resolved dynamically from
+# the extensions.gnome.org API
+# (extension-info/?pk=<egoId>&shell_version=<major>); the uuid is fixed
+# upstream, so it is sanity-checked against the response. CAUTION:
+# the API returns a download_url even for an UNSUPPORTED shell version (it
+# falls back to the latest build), so compatibility is decided by the
+# response's shell_version_map carrying the running major — never by
+# download_url presence. When no compatible build exists this warns and exits
+# 0; note the onchange trade-off: that skip is recorded as done, so once
+# upstream ships support, pick it up with `chezmoi apply --force` or on the
+# next content change. A NETWORK / API failure instead exits non-zero on
+# purpose: chezmoi records no success, so the script retries on the next apply
+# (same failed-vs-not-installed distinction as install-vscodium-extensions).
+#
+# Idempotent: an already-installed extension (`gnome-extensions info`) skips
+# the download entirely. Enabling is a direct GSettings append to the
+# org.gnome.shell enabled-extensions list, NOT `gnome-extensions enable`: that
+# command drives the running shell's org.gnome.Shell.Extensions D-Bus API,
+# which REJECTS a uuid the shell hasn't scanned yet — and a freshly installed
+# extension stays unknown until the session restarts, so the enable would fail
+# exactly on the first install. The GSettings append works either way and makes
+# the extension auto-enable at next login; an already-listed uuid is left alone
+# (no write). A FRESHLY installed extension only loads once the GNOME session
+# restarts — the script prints a relogin note. Enabling is best-effort: a
+# genuine gsettings failure (missing schema, no dconf) warns and exits 0, since
+# the install itself succeeded and must not abort the apply; only network/API/
+# download failures exit 1 to retry on the next apply.
+#
+# onchange, no fingerprint block needed: nothing external to hash (the download
+# is resolved from live upstream state at run time), and the uuid/egoId RENDER
+# INTO this script's own content below, so a gnome.yaml edit re-triggers it (the
+# same reason config-gnome-mouse carries no fingerprint).
+# Soft-skips (exit 0) without gnome-extensions / curl / /usr/bin/python3,
+# without a session D-Bus bus, or when the shell version cannot be determined;
+# onchange records those skips as done (retry via a content change or
+# `chezmoi apply --force`).
+
+set -euo pipefail
+
+UUID="{{ .gnome.shellExtensions.kimpanel.uuid }}"
+EGO_PK={{ .gnome.shellExtensions.kimpanel.egoId }}
+
+{{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "install-gnome-kimpanel-extension") -}}
+
+# --- Tooling / session guards (any absent condition => safe exit 0) --------
+command -v gnome-extensions >/dev/null 2>&1 \
+  || { echo "install-gnome-kimpanel-extension: gnome-extensions absent; skip"; exit 0; }
+command -v curl >/dev/null 2>&1 \
+  || { echo "install-gnome-kimpanel-extension: curl absent; skip"; exit 0; }
+# /usr/bin/python3, NOT bare python3 (mise may shadow it): used only for its
+# stdlib json module — jq is not guaranteed on these hosts.
+[[ -x /usr/bin/python3 ]] \
+  || { echo "install-gnome-kimpanel-extension: /usr/bin/python3 absent; skip"; exit 0; }
+# The `gsettings set` of the enabled-extensions key writes through
+# dconf-service on the session D-Bus, so a headless/TTY apply cannot finish.
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+  echo "install-gnome-kimpanel-extension: no D-Bus session bus; skip"
+  exit 0
+fi
+
+shell_major="$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -n1 || true)"
+if [[ ! "$shell_major" =~ ^[0-9]+$ ]]; then
+  echo "install-gnome-kimpanel-extension: cannot determine gnome-shell version; skip"
+  exit 0
+fi
+
+freshly_installed=0
+if gnome-extensions info "$UUID" >/dev/null 2>&1; then
+  echo "install-gnome-kimpanel-extension: $UUID already installed; skipping download"
+else
+  info_url="https://extensions.gnome.org/extension-info/?pk=${EGO_PK}&shell_version=${shell_major}"
+  if ! info_json="$(curl -fsSL --max-time 30 "$info_url")"; then
+    echo "install-gnome-kimpanel-extension: extensions.gnome.org query FAILED (${info_url}); will retry on next apply" >&2
+    exit 1
+  fi
+
+  # Output protocol: NO_COMPAT (shell_version_map has no entry for the running
+  # shell major — see the header caveat), PARSE_ERROR (unexpected response
+  # shape), UUID_MISMATCH:<uuid> (upstream renamed the extension?), or the
+  # resolved download URL path.
+  resolved="$(/usr/bin/python3 - "$info_json" "$shell_major" "$UUID" <<'PYEOF'
+import json
+import sys
+
+raw, major, expected_uuid = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    info = json.loads(raw)
+except ValueError:
+    print("PARSE_ERROR")
+    sys.exit(0)
+if info.get("uuid") != expected_uuid:
+    print("UUID_MISMATCH:%s" % info.get("uuid"))
+    sys.exit(0)
+if major not in info.get("shell_version_map", {}):
+    print("NO_COMPAT")
+    sys.exit(0)
+print(info.get("download_url") or "PARSE_ERROR")
+PYEOF
+)"
+
+  case "$resolved" in
+    NO_COMPAT)
+      echo "install-gnome-kimpanel-extension: no compatible build for GNOME Shell ${shell_major} yet; skipping (once upstream ships one, pick it up with \`chezmoi apply --force\`)" >&2
+      exit 0
+      ;;
+    PARSE_ERROR | UUID_MISMATCH:*)
+      echo "install-gnome-kimpanel-extension: unexpected extension-info response (${resolved}); will retry on next apply" >&2
+      exit 1
+      ;;
+  esac
+
+  download_url="$resolved"
+  [[ "$download_url" == /* ]] && download_url="https://extensions.gnome.org${download_url}"
+
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "$tmpdir"' EXIT
+  zip="$tmpdir/${UUID}.shell-extension.zip"
+  if ! curl -fsSL --max-time 120 -o "$zip" "$download_url"; then
+    echo "install-gnome-kimpanel-extension: download FAILED (${download_url}); will retry on next apply" >&2
+    exit 1
+  fi
+
+  gnome-extensions install --force "$zip"
+  freshly_installed=1
+  echo "install-gnome-kimpanel-extension: installed $UUID (build for GNOME Shell ${shell_major})"
+fi
+
+# Enable = append the uuid to org.gnome.shell enabled-extensions directly.
+# `gnome-extensions enable` would fail here on a fresh install (the running
+# shell's D-Bus API rejects a uuid it hasn't scanned yet — see header); the
+# GSettings append works regardless and auto-enables at next login. Idempotent
+# whether freshly installed or long-present (already-listed uuid => no write);
+# a deliberately disabled extension is re-added only when this script's content
+# changes (onchange), so a user who disables it is not fought on every apply.
+# Best-effort: any gsettings failure warns and exits 0 — the install succeeded
+# and must not abort the apply.
+if current="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null)"; then
+  # The value is GVariant text — `['a@b', 'c@d']`, or `@as []` when empty —
+  # which ast.literal_eval parses once the `@as` type annotation is stripped;
+  # a python list repr of strings is valid GVariant text to write back.
+  new_value="$(/usr/bin/python3 - "$current" "$UUID" <<'PYEOF'
+import ast
+import sys
+
+raw, uuid = sys.argv[1], sys.argv[2]
+value = raw.strip()
+if value.startswith("@as"):
+    value = value[len("@as"):].strip()
+try:
+    exts = ast.literal_eval(value) if value else []
+except (ValueError, SyntaxError):
+    print("PARSE_ERROR")
+    sys.exit(0)
+if not isinstance(exts, (list, tuple)):
+    print("PARSE_ERROR")
+    sys.exit(0)
+exts = list(exts)
+if uuid in exts:
+    print("ALREADY_PRESENT")
+    sys.exit(0)
+exts.append(uuid)
+print(repr(exts))
+PYEOF
+)" || new_value="PARSE_ERROR"
+
+  case "$new_value" in
+    ALREADY_PRESENT)
+      echo "install-gnome-kimpanel-extension: $UUID already in enabled-extensions; nothing to write"
+      ;;
+    PARSE_ERROR)
+      echo "install-gnome-kimpanel-extension: WARNING: unexpected enabled-extensions value (${current}); enable $UUID manually" >&2
+      ;;
+    *)
+      if gsettings set org.gnome.shell enabled-extensions "$new_value"; then
+        echo "install-gnome-kimpanel-extension: added $UUID to enabled-extensions"
+      else
+        echo "install-gnome-kimpanel-extension: WARNING: gsettings write failed; enable $UUID manually" >&2
+      fi
+      ;;
+  esac
+else
+  echo "install-gnome-kimpanel-extension: WARNING: cannot read org.gnome.shell enabled-extensions (gsettings/schema/dconf unavailable); enable $UUID manually" >&2
+fi
+
+if ((freshly_installed)); then
+  echo "install-gnome-kimpanel-extension: NOTE: a freshly installed extension only loads after the GNOME session restarts — log out and back in before the fcitx5 candidate popup can render inside GNOME Shell."
+fi
+exit 0
+{{ end -}}

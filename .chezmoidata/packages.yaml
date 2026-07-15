@@ -286,18 +286,27 @@ packages:
         - wget  # HTTP/HTTPS file downloader
 
         - expect  # automate interactive CLI prompts (TCL expect)
-      # Gate `desktop.kde` — Fedora KDE Spin. fcitx5 is the input method on the
-      # KDE targets; GNOME hosts use the native ibus stack instead (see
-      # gnomePackages). The desktop is ONE fact with one value, so this set and
-      # gnomePackages are mutually exclusive.
+      # Gate `desktop.kde` — Fedora KDE Spin. fcitx5 is the unified input-method
+      # framework across both KDE and GNOME (see gnomePackages for the same set
+      # under its own gate; the two are mutually exclusive so the packages
+      # cannot double-install). The KDE gate additionally pulls the Qt pinentry
+      # KDE hosts reference from ~/.gnupg/gpg-agent.conf.
       kdePackages:
-        - fcitx5  # input method framework (KDE targets)
+        - fcitx5  # input method framework
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
-      # Gate `desktop.gnome` — Fedora Workstation. GNOME stays on its default
-      # ibus input framework; only the Korean engine is added.
+      # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
+      # framework as the KDE targets (unified input-method policy: ibus is
+      # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
+      # fcitx5 autostarts from a per-user XDG autostart entry
+      # (dot_config/autostart/org.fcitx.Fcitx5.desktop, NotShowIn=KDE), the
+      # ibus source is REMOVED from org.gnome.desktop.input-sources on existing
+      # hosts, and Kimpanel is installed so the candidate popup renders inside
+      # GNOME Shell (mutter has no wlr-layer-shell) — see gnome.yaml
+      # shellExtensions.kimpanel and .chezmoiscripts/50-linux-gnome/.
       gnomePackages:
-        - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
+        - fcitx5  # input method framework
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
@@ -615,19 +624,27 @@ packages:
         - dracut  # initramfs generator (Ubuntu 26.04 default); its systemd-cryptsetup wires tpm2-device=auto at early boot
         - tpm2-tools  # TPM2 userspace + libtss2 the dracut tpm2-tss module bundles (systemd-cryptenroll TPM2 unlock)
 
-      # Gate `desktop.kde` — Ubuntu
-      # Studio. fcitx5 is the input method on the KDE targets; GNOME hosts use
-      # the native ibus stack instead (see gnomePackages). The desktop is ONE
-      # fact with one value, so this set and gnomePackages are mutually
-      # exclusive.
+      # Gate `desktop.kde` — Ubuntu Studio. fcitx5 is the unified input-method
+      # framework across both KDE and GNOME (see gnomePackages for the same
+      # set under its own gate; the two are mutually exclusive so the packages
+      # cannot double-install). The KDE gate additionally pulls the Qt
+      # pinentry KDE hosts reference from ~/.gnupg/gpg-agent.conf.
       kdePackages:
-        - fcitx5  # input method framework (KDE targets)
+        - fcitx5  # input method framework
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
-      # Gate `desktop.gnome` — Ubuntu Desktop 26.04. GNOME stays on its default
-      # ibus input framework; only the Korean engine is added.
+      # Gate `desktop.gnome` — Ubuntu Desktop 26.04. GNOME uses the SAME fcitx5
+      # framework as the KDE targets (unified input-method policy: ibus is
+      # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
+      # fcitx5 autostarts from a per-user XDG autostart entry
+      # (dot_config/autostart/org.fcitx.Fcitx5.desktop, NotShowIn=KDE), the
+      # ibus source is REMOVED from org.gnome.desktop.input-sources on existing
+      # hosts, and Kimpanel is installed so the candidate popup renders inside
+      # GNOME Shell (mutter has no wlr-layer-shell) — see gnome.yaml
+      # shellExtensions.kimpanel and .chezmoiscripts/50-linux-gnome/.
       gnomePackages:
-        - ibus-hangul  # Korean (Hangul) input engine for ibus (GNOME default IM framework)
+        - fcitx5  # input method framework
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
 
       # Ubuntu Studio pro-audio essentials. No fedora counterpart, and not an

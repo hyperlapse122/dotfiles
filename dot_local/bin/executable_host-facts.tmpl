@@ -355,8 +355,10 @@ printf '                        headless-guard. They read the desktop and headle
 printf '                        above, so this host runs the ones matching\n'
 printf '                        desktop=%s, headless=%s.\n' "$(fact_value desktop)" "$(fact_value headless)"
 printf '  .chezmoiignore        the container skip block (root) and the GNOME-only\n'
-printf '                        fcitx5 / kleopatra blocks (dot_config/), decided by\n'
-printf '                        container (=%s) and desktop (=%s).\n' "$(fact_value container)" "$(fact_value desktop)"
+printf '                        kleopatra autostart block (dot_config/, decided by\n'
+printf '                        container (=%s) and desktop (=%s)). fcitx5 is now the\n' "$(fact_value container)" "$(fact_value desktop)"
+printf '                        unified input method (see AGENTS.md "Input method"),\n'
+printf '                        so no desktop-gated fcitx5 ignore remains.\n'
 printf '\n'
 printf '  Follow-up: enumerate them per script / per ignored path, the way the two\n'
 printf '  sections above enumerate their manifests. "chezmoi ignored" already lists the\n'

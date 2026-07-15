@@ -242,10 +242,13 @@ kde:
 #
 # kde.virtualKeyboard (run_onchange_after_config-kde-virtualkeyboard.sh.tmpl):
 #   desktopFile    : kwinrc [Wayland] InputMethod — the .desktop file KWin
-#                    launches as the Wayland input method. fcitx5 is the KDE
-#                    targets' input method (GNOME hosts use ibus instead, see
-#                    gnome.yaml). The script writes it with `--type path` and
-#                    skips cleanly when the file is not installed yet.
+#                    launches as the Wayland input method. fcitx5 is the
+#                    unified input method across KDE and GNOME (see
+#                    packages.yaml); on KDE KWin owns launch through this
+#                    wayland-launcher entry, on GNOME an XDG autostart entry
+#                    handles it (dot_config/autostart/org.fcitx.Fcitx5.desktop).
+#                    The script writes it with `--type path` and skips cleanly
+#                    when the file is not installed yet.
 #
 # kde.wallpaper (run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl):
 #   theme          : the wallpaper package under /usr/share/wallpapers/<theme>/
