@@ -178,10 +178,10 @@ agents:
         - big-pickle
       zai-coding-plan:
         options:
-          apiKey: "op://Private/Kimi/API Key"
+          apiKey: "op://Private/Z.ai/API Key"
       kimi-for-coding:
         options:
-          apiKey: "op://Private/Z.ai/API Key"
+          apiKey: "op://Private/Kimi/API Key"
       openrouter:
         options:
           apiKey: op://Private/OpenRouter/API Key
