@@ -28,11 +28,13 @@ is a compact JSON array for callers to parse and pretty-print.
 {{-     end -}}
 {{-   end -}}
 {{- /* source names the GitHub repo and is required only where it is consumed:
-   versionSource=latestTag (gitHubLatestTag) and install=git (the spec URL). An
-   npm package resolved from the registry (versionSource=npmLatest) may have no
-   public repo, so source is optional there. */ -}}
-{{-   if and (or (eq $plugin.versionSource "latestTag") (eq $plugin.install "git")) (not (hasKey $plugin "source")) -}}
-{{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] requires source for versionSource=latestTag or install=git" $index) -}}
+   versionSource=latestTag (gitHubLatestTag) and install=localArchive (the
+   archive URL rendered by .chezmoiexternals/ai-agents.toml, which reads the
+   same plugin entry). An npm package resolved from the registry
+   (versionSource=npmLatest) may have no public repo, so source is optional
+   there. */ -}}
+{{-   if and (or (eq $plugin.versionSource "latestTag") (eq $plugin.install "localArchive")) (not (hasKey $plugin "source")) -}}
+{{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] requires source for versionSource=latestTag or install=localArchive" $index) -}}
 {{-   end -}}
 {{-   $version := "" -}}
 {{-   if eq $plugin.versionSource "latestTag" -}}
@@ -50,11 +52,24 @@ is a compact JSON array for callers to parse and pretty-print.
 {{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] resolved invalid npm version %q" $index $version) -}}
 {{-     end -}}
 {{-     $base = printf "%s@%s" $plugin.package $version -}}
-{{-   else if eq $plugin.install "git" -}}
-{{-     if not (regexMatch "[0-9]+\\.[0-9]+\\.[0-9]+([-.][0-9A-Za-z.-]+)?$" $version) -}}
-{{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] resolved unpinned git ref %q" $index $version) -}}
+{{-   else if eq $plugin.install "localArchive" -}}
+{{-     if not (hasKey $plugin "externalPath") -}}
+{{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] requires externalPath for install=localArchive" $index) -}}
 {{-     end -}}
-{{-     $base = printf "%s@git+https://github.com/%s.git#%s" $plugin.package $plugin.source $version -}}
+{{- /* Chezmoi extracts the release tarball to
+   `$HOME/<externalPath>/v<version>/` in .chezmoiexternals/ai-agents.toml and
+   .chezmoiscripts/00-tools/run_onchange_after_compound-engineering prunes
+   siblings. Every agent then references the same fully-rendered absolute
+   path. compoundEngineeringRelease yields tags of the form
+   `compound-engineering-v<semver>`; trim the front-half prefix and keep the
+   `v` so the on-disk segment matches the release tag's version suffix. */ -}}
+{{-     $verSegment := "" -}}
+{{-     if eq $plugin.versionSource "compoundEngineeringRelease" -}}
+{{-       $verSegment = printf "v%s" (trimPrefix "compound-engineering-v" $version) -}}
+{{-     else -}}
+{{-       $verSegment = printf "v%s" (trimPrefix "v" $version) -}}
+{{-     end -}}
+{{-     $base = printf "%s/%s/%s" (trimSuffix "/" $ctx.chezmoi.homeDir) $plugin.externalPath $verSegment -}}
 {{-   else -}}
 {{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] has unknown install %q" $index $plugin.install) -}}
 {{-   end -}}

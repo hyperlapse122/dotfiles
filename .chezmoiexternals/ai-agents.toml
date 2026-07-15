@@ -200,3 +200,44 @@ stripComponents = 3
 include = ["*/skills/{{ .name }}/**"]
 {{- end }}
 {{- end }}
+
+{{- /* ---------- opencode.plugins with install=localArchive — release tarballs extracted per
+       version so every agent references the same on-disk path. Data lives in
+       .chezmoidata/agents.yaml (agents.opencode.plugins); the OpenCode `plugin` array reads
+       the same entry through .chezmoitemplates/opencode-plugins-json.tmpl, and
+       .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering registers the
+       same path with Claude Code, Codex, and pi. Sibling versions are pruned by
+       .chezmoiscripts/00-tools/run_onchange_after_compound-engineering.
+       stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix so the
+       repo root (package.json, .opencode/, .claude-plugin/, .codex-plugin/, skills/, ...)
+       lands directly at the target. exact=true so a version's extracted tree cleans up
+       upstream deletions. POSIX only — matches the install script's linux+darwin gate
+       and the sibling agent-skills block. compoundEngineeringRelease yields tags of the
+       form `compound-engineering-v<semver>`; the on-disk version segment strips the
+       front-half prefix and keeps the `v` so it matches the tag's own version suffix. */ -}}
+
+{{- $ctx := . -}}
+{{- if ne .chezmoi.os "windows" -}}
+{{- range .agents.opencode.plugins -}}
+{{-   if eq .install "localArchive" -}}
+{{-     $ref := "" -}}
+{{-     if eq .versionSource "compoundEngineeringRelease" -}}
+{{-       $ref = includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{-     else -}}
+{{-       fail (printf "%s plugin: unsupported versionSource %q for install=localArchive" .package .versionSource) -}}
+{{-     end -}}
+{{-     $verSegment := "" -}}
+{{-     if eq .versionSource "compoundEngineeringRelease" -}}
+{{-       $verSegment = printf "v%s" (trimPrefix "compound-engineering-v" $ref) -}}
+{{-     else -}}
+{{-       $verSegment = printf "v%s" (trimPrefix "v" $ref) -}}
+{{-     end }}
+
+[{{ printf "%s/%s" .externalPath $verSegment | quote }}]
+type = "archive"
+url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
+stripComponents = 1
+exact = true
+{{-   end -}}
+{{- end -}}
+{{- end -}}

@@ -77,15 +77,17 @@ agents:
   # pi package sources, live settings defaults, and static API-key auth. The
   # settings/auth targets are pi-live-written; scripts merge only these fields.
   pi:
-    # Unpinned by design: npm sources track latest and git sources track their
-    # default branch, matching the unsettled dotagents remote-skill trade-off.
-    # pi-mcp-extension is the MCP client; compound-engineering supplies ce-* +
-    # lfg skills; pi-subagents delegates work; pi-ask-user supplies ask_user.
+    # Unpinned by design: npm sources track latest, matching the unsettled
+    # dotagents remote-skill trade-off. pi-mcp-extension is the MCP client;
+    # pi-subagents delegates work; pi-ask-user supplies ask_user.
+    # compound-engineering is NOT here — it is provisioned for pi through the
+    # SAME versioned local-archive path as Claude/Codex/OpenCode; see
+    # `agents.opencode.plugins` (install: localArchive) and
+    # .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering.
     packages:
     - npm:pi-mcp-extension
     - npm:pi-subagents
     - npm:pi-ask-user
-    - git:github.com/EveryInc/compound-engineering-plugin
     defaults:
       # Keys intentionally match pi's settings.json schema so config-pi can
       # render and merge this object wholesale. The provider/model must already
@@ -133,6 +135,21 @@ agents:
     # to tag against; `source` is therefore omitted for those entries.
     # compound-engineering uses its filtered release train because that repo
     # interleaves unrelated marketplace/CLI tags.
+    #
+    # Install forms:
+    #   npm          -> `<pkg>@<version>` (opencode-only plugin)
+    #   localArchive -> Chezmoi extracts the GitHub release tarball to
+    #                   `~/<externalPath>/v<version>/` via
+    #                   .chezmoiexternals/ai-agents.toml; every agent then
+    #                   references that fully-rendered versioned path.
+    #                   OpenCode gets it in its `plugin` array via
+    #                   opencode-plugins-json.tmpl; Claude Code / Codex / pi
+    #                   are registered by
+    #                   .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering
+    #                   which points each agent's plugin marketplace / `pi
+    #                   install` at the same versioned path. `externalPath`
+    #                   is required; the version segment (`v<version>`) is
+    #                   appended by each consumer.
     plugins:
     - package: oh-my-openagent
       source: code-yeongyu/oh-my-openagent
@@ -160,8 +177,9 @@ agents:
         opencode: [""]
     - package: compound-engineering
       source: EveryInc/compound-engineering-plugin
-      install: git
+      install: localArchive
       versionSource: compoundEngineeringRelease
+      externalPath: .local/share/compound-engineering
       targets:
         opencode: [""]
     model: anthropic/claude-opus-4-7
