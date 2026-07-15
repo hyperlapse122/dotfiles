@@ -14,6 +14,12 @@
 # Linux the report is a page of `false` about a host it cannot describe. Deploying
 # it there also renders a body shellcheck proves unreachable (SC2317), which is how
 # this was caught: the CI job lints the RENDERED macOS output.
+#
+# import-wifi-1password provisions NetworkManager (Linux-only) Wi-Fi connections
+# and bakes render-time-resolved op:// PSKs into its body (private_ 0700), so
+# deploying it off Linux would resolve secrets into a copy that can never run —
+# gate it out entirely.
 {{- if ne .chezmoi.os "linux" }}
 host-facts
+import-wifi-1password
 {{- end }}

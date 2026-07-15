@@ -26,7 +26,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.haptic`, `.vscodium`, `.agents`, `.user`) |
+| `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.wifi`, `.haptic`, `.vscodium`, `.agents`, `.user`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, meridian, the pi/hermes Meridian scrub plugins, codegraph, aoe, and the agent skills listed in `.chezmoidata/agents.yaml` under `agents.skills.external`), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, prezto), `fonts.toml`. Everything but prezto/fonts, the source-built Meridian scrub plugins, and the agent skills is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the scrubbers are versioned/commit-pinned source trees consumed by `60-build/`, and the agent skills are archive subtrees extracted into `~/.agents/skills/<name>/`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -73,8 +73,9 @@ directories a `**` glob matches. See `run_onchange_after_install-system-10-files
   dependency's raw template text (its `onepasswordRead` refs, not the resolved
   values), so a secret never enters the fingerprint or `chezmoi diff`/state.
   Never fingerprint a rendered secret — hash the command/tool SOURCE instead
-  (e.g. `import-wifi-1password` hashes the deployed command's code, not the Wi-Fi
-  passwords it reads from `op` at runtime).
+  (e.g. the `import-wifi-1password` fingerprint hashes `.chezmoidata/wifi.yaml`'s
+  raw `op://` references, not the Wi-Fi passwords they resolve to inside the
+  private_ tool).
 - **Target the globs.** Never fingerprint a build script's own output dir (e.g.
   `crates/mxm4-haptic/**` including `target/`) or it re-triggers forever.
 - **No dependency file? Onchange still applies** — the trigger is simply the
@@ -760,6 +761,28 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `solaar.yaml` — a rules-tunable edit only changes the deployed rules.yaml
   (not the raw template text), so the data hash is what makes it restart
   Solaar to load the new value.
+- **Wi-Fi networks**: `.chezmoidata/wifi.yaml`. `wifi.networks` (one entry per
+  network: `ssid`, `psk`, optional `priority`/`dns`/`ignoreAutoDns`) plus
+  `wifi.defaults` (`dns`/`ignoreAutoDns`, applied unless a network overrides them)
+  render into the private_ tool
+  `dot_local/bin/private_executable_import-wifi-1password.tmpl` →
+  `~/.local/bin/import-wifi-1password`, which is driven on apply by
+  `.chezmoiscripts/30-linux/run_onchange_after_import-wifi-1password.sh.tmpl` and
+  declaratively add/overwrites one NetworkManager connection per network (DNS →
+  `ipv4.dns`; `ignoreAutoDns` → `ipv4.ignore-auto-dns`). This REPLACES the former
+  "list every 1Password `Wireless Router` item" discovery model — only networks
+  enumerated HERE are provisioned. `ssid` and `psk` are each a literal OR an
+  `op://` reference, resolved at RENDER time by
+  `.chezmoitemplates/resolve-op-refs-json.tmpl` (the same rule agents.yaml uses).
+  Because the resolved PSKs are baked into the rendered tool, its source is
+  `private_` (deployed 0700, owner-only) and Linux-gated in
+  `dot_local/bin/.chezmoiignore` — never a world-readable 0755 script and never
+  resolved into a macOS/Windows copy. The run_onchange fingerprints BOTH the
+  `.tmpl` source AND `wifi.yaml` (raw `op://` refs, never the passwords), so a
+  network-list edit re-triggers the import while no secret enters state; the
+  agents.toml trade-off applies — a PSK rotated in 1Password alone does NOT
+  re-trigger (re-run by hand or `chezmoi apply --force`). Add/tune networks HERE,
+  not in the tool.
 - **KDE settings manifest + KDE tunables**: `.chezmoidata/kde.yaml`, two roles in
   one file (the per-setting rationale for every row lives in its header — that is
   the design record, keep it there).
