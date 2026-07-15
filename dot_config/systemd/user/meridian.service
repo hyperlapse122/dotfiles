@@ -1,0 +1,14 @@
+[Unit]
+Description=Meridian — local Claude Max proxy for coding agents
+
+[Service]
+Type=simple
+Environment="MERIDIAN_HOST=127.0.0.1"
+Environment="MERIDIAN_PORT=3456"
+Environment="MERIDIAN_CLAUDE_PATH=%h/.local/bin/claude"
+ExecStart=/usr/bin/mise --no-config exec node@latest -- %h/.local/bin/meridian
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

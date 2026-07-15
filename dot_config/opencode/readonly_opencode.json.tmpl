@@ -16,7 +16,6 @@
        Its release train is compound-engineering-*, NOT the repo's other tag
        trains — hence the shared lookup rather than a plain gitHubLatestTag. */ -}}
 {{- $ohMyOpenagent := (gitHubLatestTag "code-yeongyu/oh-my-openagent").Name | trimPrefix "v" -}}
-{{- $anthropicAuth := (gitHubLatestTag "ex-machina-co/opencode-anthropic-auth").Name | trimPrefix "v" -}}
 {{- $wakatime := (gitHubLatestTag "angristan/opencode-wakatime").Name | trimPrefix "v" -}}
 {{- $compoundEngineering := includeTemplate "compound-engineering-ref.tmpl" . -}}
 {
@@ -24,9 +23,9 @@
   "autoupdate": "notify",
   "plugin": [
     "oh-my-openagent@{{ $ohMyOpenagent }}",
-    "@ex-machina/opencode-anthropic-auth@{{ $anthropicAuth }}",
     "opencode-wakatime@{{ $wakatime }}",
-    "compound-engineering@git+https://github.com/EveryInc/compound-engineering-plugin.git#{{ $compoundEngineering }}"
+    "compound-engineering@git+https://github.com/EveryInc/compound-engineering-plugin.git#{{ $compoundEngineering }}"{{ if ne .chezmoi.os "windows" }},
+    {{ joinPath .chezmoi.homeDir ".local/share/meridian/current/plugin/meridian.ts" | toJson }}{{ end }}
   ],
   "lsp": {
     "buf": {
@@ -150,5 +149,14 @@
   "experimental": {
     "continue_loop_on_deny": true
   },
-  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" .agents.opencode.providers "indent" "  " "orders" .agents.opencode.providerKeyOrder) }}
+{{- $providers := .agents.opencode.providers -}}
+{{- $providerOrders := .agents.opencode.providerKeyOrder -}}
+{{- if eq .chezmoi.os "windows" -}}
+{{- /* Meridian is POSIX-only. `omit` returns a copy rather than mutating the
+       shared template data. The POSIX root exact-order rule names Anthropic,
+       so Windows intentionally emits the two common providers lexically. */ -}}
+{{- $providers = omit $providers "anthropic" -}}
+{{- $providerOrders = dict -}}
+{{- end }}
+  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $providers "indent" "  " "orders" $providerOrders) }}
 }

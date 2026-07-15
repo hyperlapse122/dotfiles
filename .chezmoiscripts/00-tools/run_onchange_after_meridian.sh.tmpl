@@ -1,0 +1,142 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- $tag := (gitHubLatestRelease "rynfar/meridian").TagName | toString -}}
+{{- if not (regexMatch "^meridian-v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" $tag) -}}
+  {{- fail (printf "meridian: latest GitHub release tag %q is not meridian-v<semver>" $tag) -}}
+{{- end -}}
+{{- $version := trimPrefix "meridian-v" $tag -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/00-tools/run_onchange_after_meridian.sh.tmpl
+#
+# Installs the runtime dependencies missing from Meridian's NPM tarball, then
+# validates and atomically promotes the exact GitHub-release-derived version
+# extracted by .chezmoiexternals/ai-agents.toml. The public links are never
+# changed until npm and `meridian --version` both succeed.
+#
+# onchange trigger: the resolved remote release version is rendered below. It
+# is the only input outside this script, so there is deliberately no source-tree
+# fingerprint. A failed run exits non-zero and is retried on a later apply; it
+# must not be recorded as a successful half-install.
+
+set -euo pipefail
+
+VERSION={{ $version | quote }}
+INSTALL_DIR="${MERIDIAN_INSTALL_DIR:-$HOME/.local/share/meridian}"
+BIN_DIR="${MERIDIAN_BIN_DIR:-$HOME/.local/bin}"
+dest="$INSTALL_DIR/versions/$VERSION"
+cli="$dest/dist/cli.js"
+
+if [ ! -d "$dest" ]; then
+  printf 'meridian: extracted version directory missing: %s\n' "$dest" >&2
+  exit 1
+fi
+if [ ! -f "$dest/package.json" ]; then
+  printf 'meridian: package.json missing from extracted version: %s\n' "$dest" >&2
+  exit 1
+fi
+if [ ! -x "$cli" ]; then
+  printf 'meridian: CLI is missing or not executable: %s\n' "$cli" >&2
+  exit 1
+fi
+
+if command -v mise >/dev/null 2>&1; then
+  MISE=(mise)
+elif [ -x "$HOME/.local/bin/mise" ]; then
+  MISE=("$HOME/.local/bin/mise")
+else
+  printf 'meridian: mise not found; cannot install Node runtime dependencies\n' >&2
+  exit 1
+fi
+
+if ! "${MISE[@]}" --no-config exec node@latest -- npm --version >/dev/null 2>&1; then
+  printf 'meridian: npm is unavailable through mise node@latest\n' >&2
+  exit 1
+fi
+
+# No package argument: install only the published package's production runtime
+# dependencies in this exact version directory. --no-save prevents a generated
+# lockfile/package mutation; ignore-scripts preserves the repo-wide lifecycle
+# hardening (Meridian resolves the repo-managed Claude binary via the service
+# environment instead of relying on its optional postinstall).
+(
+  cd "$dest"
+  "${MISE[@]}" --no-config exec node@latest -- \
+    npm install --omit=dev --ignore-scripts --no-audit --no-fund --no-save
+)
+
+actual_version=$("${MISE[@]}" --no-config exec node@latest -- node "$cli" --version | tr -d '\r\n')
+if [ "$actual_version" != "$VERSION" ]; then
+  printf 'meridian: version mismatch after install (expected %s, got %s)\n' "$VERSION" "$actual_version" >&2
+  exit 1
+fi
+
+mkdir -p "$BIN_DIR"
+current="$INSTALL_DIR/current"
+bin_link="$BIN_DIR/meridian"
+tmp_current="$INSTALL_DIR/.current.$$.tmp"
+tmp_bin="$BIN_DIR/.meridian.$$.tmp"
+cleanup() {
+  rm -f "$tmp_current" "$tmp_bin"
+}
+trap cleanup EXIT
+
+for path in "$current" "$bin_link"; do
+  if [ -e "$path" ] && [ ! -L "$path" ]; then
+    printf 'meridian: refusing to replace non-symlink path: %s\n' "$path" >&2
+    exit 1
+  fi
+done
+
+ln -s "$dest" "$tmp_current"
+ln -s "$current/dist/cli.js" "$tmp_bin"
+
+# Node's renameSync maps to the portable atomic rename(2) operation. Promote
+# both sibling symlinks with rollback if the second rename fails; `mv` cannot be
+# used portably because GNU/BSD differ when the destination is a symlink to a
+# directory.
+"${MISE[@]}" --no-config exec node@latest -- node - \
+  "$tmp_current" "$current" "$tmp_bin" "$bin_link" <<'NODE'
+const fs = require("node:fs")
+
+const [tmpCurrent, current, tmpBin, binLink] = process.argv.slice(2)
+const pairs = [
+  [tmpCurrent, current],
+  [tmpBin, binLink],
+]
+const previous = pairs.map(([, destination]) => {
+  try {
+    return fs.readlinkSync(destination)
+  } catch (error) {
+    if (error.code === "ENOENT") return null
+    throw error
+  }
+})
+let promoted = 0
+try {
+  for (const [temporary, destination] of pairs) {
+    fs.renameSync(temporary, destination)
+    promoted += 1
+  }
+} catch (error) {
+  for (let index = promoted - 1; index >= 0; index -= 1) {
+    const destination = pairs[index][1]
+    fs.rmSync(destination, { force: true })
+    if (previous[index] !== null) fs.symlinkSync(previous[index], destination)
+  }
+  throw error
+}
+NODE
+
+# Prune only after successful validation and link promotion. `current` is a
+# sibling of versions/, so it can never enter this narrow loop.
+if [ -d "$INSTALL_DIR/versions" ]; then
+  for directory in "$INSTALL_DIR/versions"/*; do
+    [ -d "$directory" ] || continue
+    if [ "$directory" != "$dest" ]; then
+      rm -rf "$directory"
+    fi
+  done
+fi
+
+printf 'meridian: installed and selected version %s\n' "$VERSION"
+
+{{ end -}}
