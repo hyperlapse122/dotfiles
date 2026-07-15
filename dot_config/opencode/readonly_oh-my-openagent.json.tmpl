@@ -4,9 +4,7 @@
        the replace shifts the block one tab to sit inside the object. */ -}}
 {
 	"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/assets/oh-my-opencode.schema.json",
-	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
 	"agents": {{ toPrettyJson "\t" .agents.opencode.ohMyOpenagent.agents | trim | replace "\n" "\n\t" }},
-	// Model Mapping Reference: https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
 	"categories": {{ toPrettyJson "\t" .agents.opencode.ohMyOpenagent.categories | trim | replace "\n" "\n\t" }},
 	"disabled_mcps": ["playwright", "lsp"],
 	"disabled_skills": ["playwright"],
@@ -19,7 +17,6 @@
 	"model_fallback": true,
 	"runtime_fallback": {
 		"enabled": true,
-		// "retry_on_errors": [429],
 		"max_fallback_attempts": 3,
 		"cooldown_seconds": 60,
 		"notify_on_fallback": true
