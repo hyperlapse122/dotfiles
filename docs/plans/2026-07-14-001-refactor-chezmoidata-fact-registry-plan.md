@@ -361,7 +361,7 @@ U1 is additive and lands alone: the registry exists, nothing consumes it, no ren
 - **Dependencies:** U1, U2.
 - **Files:** `.chezmoidata/kde.yaml` (new), `.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl` (new). Delete: `config-kde-autotheme`, `config-kde-dimscreen`, `config-kde-dolphin`, `config-kde-edges`, `config-kde-emptysession`, `config-kde-killrunner`, `config-kde-krunner`, `config-kde-spectacle`.
 - **Approach:** Per KTD10 — row shape `<file>:<group>[/<subgroup>…]:<key>:<type>:<value>`, subgroup path split into repeated `--group` arguments, `--` always emitted before the value. `config-kde-dolphin` writes `HomeUrl "$HOME"`: render that from `.chezmoi.homeDir` at template time so the manifest holds no shell expansion. Carry each collapsed script's rationale comments into the YAML header, the way `solaar.yaml` does. Validate every row at render time with `fail` (R14): reject an unknown `--type`, an empty file/group/key, a value that does not parse for its type, and a value containing a colon or a shell metacharacter.
-- **Execution note:** Deleting a `run_onchange_` script needs no teardown — chezmoi keys script state on the target path, so a deleted source never runs again. `virtualkeyboard` is **not** collapsed: it carries a file-existence precondition, and the manifest gains no conditional field (see Scope Boundaries).
+- **Execution note:** `virtualkeyboard` is **not** collapsed: it carries a file-existence precondition, and the manifest gains no conditional field (see Scope Boundaries).
 - **Patterns to follow:** `.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl` (the TARGETS array shape and the fingerprint block); `hooks.json.tmpl` (the `fail` validator).
 - **Test scenarios:**
   - The rendered runner writes exactly the same `(file, group-path, key, value)` set the eight deleted scripts wrote. Diff the two lists mechanically before deleting anything.
@@ -453,7 +453,6 @@ Global:
 - The `render-dotfiles` CI workflow is green, including the per-desktop solaar assertion and `shellcheck`.
 - `host-facts` on this host explains why it received the NVIDIA packages, and reports a `FORCE_*` override when one is set.
 - `AGENTS.md` describes the post-registry repo, including the add-a-fact recipe; `CLAUDE.md` is still the one-line `@AGENTS.md` import.
-- No teardown or revert script was added — removals happen at the source, per the repo's standing rule.
 - Dead-end code from abandoned approaches is removed, not left in the diff.
 
 Per-unit: each unit's **Verification** line is its done signal.
