@@ -22,14 +22,23 @@ is a compact JSON array for callers to parse and pretty-print.
 {{-   if not (kindIs "map" $plugin) -}}
 {{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] must be a map" $index) -}}
 {{-   end -}}
-{{-   range $field := list "package" "source" "install" "versionSource" "targets" -}}
+{{-   range $field := list "package" "install" "versionSource" "targets" -}}
 {{-     if not (hasKey $plugin $field) -}}
 {{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] is missing %s" $index $field) -}}
 {{-     end -}}
 {{-   end -}}
+{{- /* source names the GitHub repo and is required only where it is consumed:
+   versionSource=latestTag (gitHubLatestTag) and install=git (the spec URL). An
+   npm package resolved from the registry (versionSource=npmLatest) may have no
+   public repo, so source is optional there. */ -}}
+{{-   if and (or (eq $plugin.versionSource "latestTag") (eq $plugin.install "git")) (not (hasKey $plugin "source")) -}}
+{{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] requires source for versionSource=latestTag or install=git" $index) -}}
+{{-   end -}}
 {{-   $version := "" -}}
 {{-   if eq $plugin.versionSource "latestTag" -}}
 {{-     $version = (gitHubLatestTag $plugin.source).Name | trimPrefix "v" -}}
+{{-   else if eq $plugin.versionSource "npmLatest" -}}
+{{-     $version = output "curl" "-fsSL" (printf "https://registry.npmjs.org/%s/latest" $plugin.package) | fromJson | dig "version" "" -}}
 {{-   else if eq $plugin.versionSource "compoundEngineeringRelease" -}}
 {{-     $version = includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
 {{-   else -}}

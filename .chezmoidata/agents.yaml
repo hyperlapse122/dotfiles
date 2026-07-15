@@ -127,6 +127,9 @@ agents:
   opencode:
     # Plugin versions resolve at render time. `latestTag` strips a leading `v`
     # from the newest GitHub tag before producing an exact npm spec.
+    # `npmLatest` reads the latest version straight from the npm registry
+    # (registry.npmjs.org/<pkg>/latest) for a package with no public GitHub repo
+    # to tag against; `source` is therefore omitted for those entries.
     # compound-engineering uses its filtered release train because that repo
     # interleaves unrelated marketplace/CLI tags.
     plugins:
@@ -147,6 +150,11 @@ agents:
       source: ex-machina-co/opencode-anthropic-auth
       install: npm
       versionSource: latestTag
+      targets:
+        opencode: [""]
+    - package: "@oyng/opencode-agy-auth"
+      install: npm
+      versionSource: npmLatest
       targets:
         opencode: [""]
     - package: compound-engineering
