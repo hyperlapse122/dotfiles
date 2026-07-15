@@ -6,8 +6,15 @@
 	"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/assets/oh-my-opencode.schema.json",
 	"agents": {{ toPrettyJson "\t" .agents.opencode.ohMyOpenagent.agents | trim | replace "\n" "\n\t" }},
 	"categories": {{ toPrettyJson "\t" .agents.opencode.ohMyOpenagent.categories | trim | replace "\n" "\n\t" }},
-	"disabled_mcps": ["playwright", "lsp"],
-	"disabled_skills": ["playwright"],
+	"claude_code": {
+		"mcp": false,
+		"commands": false,
+		"skills": false,
+		"agents": false,
+		"hooks": false,
+		"plugins": false
+	},
+	"disabled_mcps": ["lsp"],
 	"disabled_hooks": [
 		"session-notification",
 		"no-sisyphus-gpt",
@@ -21,7 +28,7 @@
 		"cooldown_seconds": 60,
 		"notify_on_fallback": true
 	},
-	"browser_automation_engine": { "provider": "playwright-cli" },
+	"browser_automation_engine": { "provider": "playwright" },
 	"git_master": {
 		"commit_footer": false,
 		"include_co_authored_by": false,
