@@ -26,7 +26,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_once_*` | runs once, ever |
 | `.chezmoiscripts/run_onchange_*` | re-runs whenever its rendered content changes |
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
-| `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.haptic`, `.vscodium`, `.biopass`, `.agents`, `.user`) |
+| `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.haptic`, `.vscodium`, `.agents`, `.user`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
 | `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, meridian, the pi/hermes Meridian scrub plugins, codegraph, aoe, and the agent skills listed in `.chezmoidata/agents.yaml` under `agents.skills.external`), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, prezto), `fonts.toml`. Everything but prezto/fonts, the source-built Meridian scrub plugins, and the agent skills is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the scrubbers are versioned/commit-pinned source trees consumed by `60-build/`, and the agent skills are archive subtrees extracted into `~/.agents/skills/<name>/`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
@@ -140,10 +140,10 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also installs Meridian's runtime dependencies and re-points `~/.local/bin` symlinks for versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `pi`, `meridian`, `codegraph`) at the latest release, then prunes older versions |
 | `10-auth/` | GitHub token preflight (before the installers), GitLab PAT login (after the file phase, so the externals-fetched `glab` exists), Docker Hub login, one-time `tailscale up` |
 | `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
-| `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, biopass method policy, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
+| `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (guarded on the `desktop` fact; see OS gating & script parity) — on KDE that is the manifest-driven `config-kde-settings` runner plus the scripts that carry real logic; mutually exclusive at runtime, so they share a number |
-| `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above), **LibrePods** compiled from an upstream git branch (see LibrePods below), and the externally fetched **Meridian pi/hermes scrub plugins** compiled from upstream source (Pi: latest release; Hermes: resolved `main` commit because it has no releases/tags); remote-only inputs use a rendered ref/commit as their onchange trigger rather than a source-tree fingerprint |
+| `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above) and the externally fetched **Meridian pi/hermes scrub plugins** compiled from upstream source (Pi: latest release; Hermes: resolved `main` commit because it has no releases/tags); remote-only inputs use a rendered ref/commit as their onchange trigger rather than a source-tree fingerprint |
 | `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents skills/MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's packages (`install-pi-packages`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
 | `90-services/` | enable the Meridian user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
@@ -338,8 +338,7 @@ prefixes order execution):
   One reload is **change-gated rather than dir-gated**: a `bluetoothd` restart
   (needed because it only reads `/etc/bluetooth/main.conf` at startup) fires
   only when the install loop's `cmp -s` saw an `etc/bluetooth/` file genuinely
-  differ, since a restart drops every live Bluetooth connection — see LibrePods
-  below before touching it.
+  differ, since a restart drops every live Bluetooth connection.
 - **`install-system-20-host`** — user lingering, rootful podman socket mask,
   zram-swap disable. Own-content trigger.
 - **`install-system-30-network`** — firewalld (masquerade, tailscale0→trusted,
@@ -355,117 +354,6 @@ gate name aborts in `facts-validate.tmpl` — on *every* host now, not only on t
 one distro that reads that entry. Manifest typos still fail loud. **Edit the data,
 not the script** — add/gate/remove system files in `system.yaml` + the tree. Full
 model: `system/README.md`.
-
-### LibrePods — AirPods control for Linux, compiled from upstream source on apply
-
-`librepods-org/librepods` (ear detection, ANC/Transparency, battery, conversational
-awareness, gesture media control) is neither a package, an external, nor an in-repo
-crate: it is **built from an upstream git branch on every apply that sees a new
-upstream commit**. One subsystem, five source pieces:
-
-- **`.chezmoiscripts/60-build/run_onchange_after_build-librepods.sh.tmpl`** (linux
-  gate, container-SKIPPED) — clones/advances a throwaway checkout in
-  `${XDG_CACHE_HOME:-~/.cache}/librepods-src` (never under `~/src`, which is the
-  aoe/garden project layout, and never inside the chezmoi source dir),
-  `cargo install --root "$HOME/.local" --locked --force --path <src>/linux-rust`,
-  hand-installs upstream's `.desktop` + icon into the XDG user dirs (chezmoi cannot
-  manage them — they only exist after the clone), then `systemctl --user enable`s the
-  unit. Structured exactly like `build-mxm4-haptic` — same mise-`rust@latest`-then-
-  system-`cargo` resolution, same `daemon-reload`-as-user-bus-probe, same
-  soft-skip-`exit 0` on every failure path (no sha, no git, no toolchain, build
-  failure, no user bus). It `enable`s without `--now` and only *restarts* an already
-  running unit, so a headless apply never tries to launch a tray GUI.
-- **`dot_config/systemd/user/librepods.service`** — bound to `graphical-session.target`
-  (it needs the session bus, a live BlueZ session, and a tray host), `ExecStart=%h/.local/bin/librepods
-  --start-minimized`, `Restart=on-failure` — **not** `always`: a clean exit means the
-  user quit the tray app on purpose and systemd must not resurrect it.
-- **`dot_config/wireplumber/wireplumber.conf.d/51-bluez-avrcp.conf`** — the dummy AVRCP
-  player (below).
-- **`system/linux/etc/bluetooth/main.conf`** — the `DeviceID` spoof (below).
-- **`.chezmoidata/packages.yaml`** — the build deps, per distro: `libdbus-1-dev` +
-  `libpulse-dev` (Ubuntu) / `dbus-devel` + `pulseaudio-libs-devel` (Fedora); pkg-config
-  is already in the build-tooling group. They land in the BEFORE phase, so a normal
-  apply has the headers by the time the build runs; a missing one is not probed for —
-  it surfaces as a cargo failure, which soft-skips like every other path.
-
-**Why build from source — a nightly artifact is not an install source.** The Linux app
-is a Rust rewrite that lives ONLY on the upstream `linux/rust` branch, under
-`linux-rust/`. It is **not on `main`** (which still carries the legacy Qt app — and
-whose README is the one you find first). Upstream's README calls that branch's CI build
-the "Nightly (recommended)", but a nightly is nothing but a **GitHub Actions artifact**:
-it needs an authenticated API call to download AND it **expires after 90 days**. Verified
-2026-07-14: every Linux artifact ever produced was already expired except two, the newest
-expiring 2026-07-27 — and the branch has had no code commit since 2026-04-20, so no fresh
-ones appear on their own. The only Linux *release* (`linux-v0.1.0`, 2025-11-10) is far
-older than the branch head. **Do NOT "simplify" this into a `.chezmoiexternals/` entry** —
-there is no durable URL to pin, and it would 404 within days.
-
-**The onchange trigger is a ROLLING REMOTE REF, and the missing `fingerprint.tmpl` block
-is deliberate, not an oversight.** The fingerprint partial hashes files in the chezmoi
-SOURCE dir; this script has no source-dir input at all — its only input is a remote git
-branch. So the script uses chezmoi's `output` template function to run `git ls-remote` at
-render time and renders the resolved 40-char branch-head sha into a `# nightly ref:`
-comment (and into the `SHA=` it checks out). That embedded sha **is** the trigger: a new
-upstream commit changes the rendered script's content, so chezmoi re-runs the build. Three
-consequences to keep in mind before touching it:
-
-- This is the repo's **first use of `output`**, and it adds a network call (`git
-  ls-remote`, no auth needed) to **every source-state read** — every `chezmoi diff`
-  included.
-- Rolling = **unsettled by design**: a bad upstream commit reaches the host on the next
-  apply. Same trade-off the release-tracking dotagents skills already make.
-- When `ls-remote` fails (offline, DNS, upstream down), `regexFind` yields an **empty**
-  sha and the script soft-skips rather than checking out garbage; the next apply with a
-  working network re-renders a real sha — a changed script body — and the build runs.
-
-**VendorID/DeviceID spoofing — three gotchas.** `DeviceID = bluetooth:004C:0000:0000` in
-the system tree's `/etc/bluetooth/main.conf` (0x004C is Apple's Bluetooth SIG vendor id)
-is what unlocks the features upstream marks *"needs VendorID spoofing; use at your own
-risk"* — Hearing Aid, Transparency Mode customization, Bluetooth multipoint (2 devices),
-Loud Sound Reduction. It has to live in that one file because **BlueZ has no conf.d
-drop-in for `main.conf`** (only `input.conf`/`network.conf` take one). Then:
-
-1. It is a **GLOBAL adapter property** — the DID is advertised over SDP by the ADAPTER,
-   not per-peer — so *every* Bluetooth peer sees this host as Apple, including the Galaxy
-   Buds4 Pro the same file is tuned for. Not an AirPods-only switch.
-2. **AirPods must be RE-PAIRED after it changes.** They cache the peer's DID at pairing
-   time, so an already-paired set keeps the old id and none of the above unlocks.
-3. Spoofed AirPods may **periodically disconnect** (and reconnect, with the sound),
-   because LibrePods does not fully emulate an Apple device. Revert = delete the line and
-   restart bluetooth.
-
-**The bluetoothd restart in `install-system-10-files` is CHANGE-gated, not dir-gated — do
-NOT "make it consistent" with the other reloads.** bluetoothd reads `main.conf` once at
-startup and has no reload path, so a changed `DeviceID` is inert until a restart. But
-unlike the neighbouring reloads in that script (`systemctl daemon-reload`, `udevadm
-control --reload`, `sysctl --system`), which are cheap and side-effect-free and are
-therefore fine firing on every run — i.e. whenever ANY tracked `/etc` file changes — a
-bluetoothd restart **drops every live Bluetooth connection**: mouse, keyboard, headphones.
-So the install loop sets a `bluetooth_changed` flag via `cmp -s` against the deployed copy
-(tested *before* the install, since afterwards the two are identical by construction), and
-the restart fires only on a genuine change. Accepted trade-off: a host whose
-`/etc/bluetooth/main.conf` was hand-edited to already match will not be "repaired" by a
-re-apply, because `cmp` sees no difference.
-
-**Media controls need the WirePlumber dummy AVRCP player — and `mpris-proxy` must NOT be
-used.** AirPods only send AVRCP commands to a peer that advertises an AVRCP *player*, and
-Linux runs no MPRIS↔AVRCP bridge by default, so the gesture taps go nowhere. On this
-PipeWire + WirePlumber host the fix is `bluez5.dummy-avrcp-player = true`. BlueZ's
-`mpris-proxy` is the PulseAudio-era answer and is a **trap**: upstream explicitly warns
-that running it alongside WirePlumber conflicts with the bluez5 monitor's own player and
-**breaks** media controls instead of fixing them.
-
-**It is a `ksni` StatusNotifierItem tray app, so it needs a StatusNotifier host.** KDE
-Plasma hosts one natively; on GNOME that host is the **"Ubuntu AppIndicators"** extension
-(present and enabled on this repo's Ubuntu GNOME target). Without a host the app still
-runs, it just draws no tray icon (`--no-tray` exists). The unit passes `--start-minimized`
-so a login doesn't pop the main window. Skipped in containers — no AirPods, no BlueZ
-session bus, no tray host, and the Rust compile would be wasted.
-
-**Verified 2026-07-14** on the Ubuntu 26.04 GNOME target: branch head `672e65ad`
-(2026-05-15) compiles clean in ~2m47s and the binary links `libpulse.so.0` +
-`libdbus-1.so.3`. (It happened to link without `libpulse-dev` present, but the headers are
-declared in `packages.yaml` so a fresh/minimal host builds reliably — don't drop them.)
 
 ### Agent skills, MCPs & trust — managed by `dotagents`
 
@@ -980,32 +868,6 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `solaar.yaml` alongside `rules.yaml.tmpl`). The pi extension needs no such
   fingerprint: it is a managed target with no onchange script, so a re-rendered
   `.ts` is simply reloaded by pi on the next session.
-- **Biopass auth-method policy**: `.chezmoidata/biopass.yaml`.
-  `biopass.methods` (per-method enable flags — face-only for now, so fprintd
-  keeps sole ownership of fingerprint auth) renders into
-  `.chezmoiscripts/30-linux/run_onchange_after_config-biopass.sh.tmpl`, which
-  converges `methods.<name>.enable` in each user's
-  `~/.config/com.ticklab.biopass/config.yaml` (PyYAML via `/usr/bin/python3`,
-  config-solaar-style; the rendered values ARE the onchange trigger, no
-  fingerprint block). `biopass.cameraPairs` (same file) lists known RGB+IR
-  camera pairs, each side a stable `/dev/v4l/by-id` path (`rgbPath`/`irPath`,
-  used verbatim) or a v4l device name (`rgbName`/`irName`, resolved
-  lowest-index node → persistent symlink): when a host has BOTH sides of a
-  pair, the script also pins `methods.face.camera` + `methods.face.
-  anti_spoofing.ir_camera` to them, preferring persistent symlinks over
-  renumbering-prone `/dev/videoN` (Biopass stat()s the path and matches
-  st_rdev, so symlinks work); no matching pair means the camera keys are
-  left alone. It soft-skips when biopass isn't installed or the config
-  doesn't exist yet — Biopass's shipped defaults are already face-only, so an
-  absent config needs no write, and hand-rolling one would pin a schema_version
-  that could drift from the app. Toggle a method HERE, not in the script. The
-  package itself is a version-pinned direct install from GitHub releases (no
-  apt/dnf repo): `directDebs` (Ubuntu) / `directRpms` (Fedora) in
-  `packages.yaml`, where a pinned `version` converges the installed package to
-  that exact version — to upgrade, bump the pin AND the asset URLs together in
-  both entries. PAM enablement stays a deliberate manual `pam-auth-update`
-  step (see the packages.yaml comments; auto-enabling would re-lock the login
-  keyring at the GDM greeter).
 - **Shared agent instructions (Claude Code / Codex / opencode)**:
   `dot_agents/readonly_AGENTS.md` (→ `~/.agents/AGENTS.md`) is the single
   source of the common agent-instruction core (the RFC-2119 guardrails +
@@ -1274,11 +1136,9 @@ disagree about the same machine.
 
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
   block skips every provisioning script — `.chezmoiscripts/{30-linux,20-linux-fedora,40-linux-ubuntu,50-linux-kde,50-linux-gnome,10-auth,80-keys}/*.sh`
-  plus `.chezmoiscripts/60-build/*mxm4-haptic.sh` and
-  `.chezmoiscripts/60-build/*librepods.sh` (no package installs, `/etc` config,
+  plus `.chezmoiscripts/60-build/*mxm4-haptic.sh` (no package installs, `/etc` config,
   GPG/GitHub/Tailscale auth, fonts, KDE/GNOME settings, pro-audio realtime provisioning,
-  MX Master haptic build, or LibrePods build — a container has no AirPods, no BlueZ
-  session bus and no tray host, so that full Rust compile would be pure waste) — and,
+  or the MX Master haptic build) — and,
   because the 80-keys age-identity import is
   among the skips, also `src/garden.yaml` (an encrypted target with no
   identity present would otherwise abort the apply; this is also what keeps

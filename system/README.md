@@ -75,7 +75,7 @@ system/linux/etc/locale.conf
 
 | Path | Used for |
 |---|---|
-| `etc/bluetooth/main.conf` | BlueZ daemon config: `Experimental`/`KernelExperimental = false`, `ControllerMode = dual` (Classic A2DP for stereo on Samsung Galaxy Buds, which only do mono over LE Audio on current BlueZ) |
+| `etc/bluetooth/main.conf` | BlueZ daemon config: `Experimental`/`KernelExperimental = true`, `ControllerMode = dual` (Classic A2DP dual mode so stereo audio stays available on TWS earbuds that fall back to mono over LE Audio on current BlueZ) |
 | `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
 | `etc/keyd/default.conf` | keyd keyboard remapping (CapsLock → Hangeul, meta layer) |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |

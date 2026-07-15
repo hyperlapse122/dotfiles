@@ -67,11 +67,8 @@ src/garden.yaml
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
 # container, deploy the CLI dotfiles only and skip all host provisioning:
 # package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
-# KDE/GNOME settings, pro-audio realtime provisioning, the MX Master haptic build, and the
-# LibrePods build (a desktop/BlueZ tray app — there are no AirPods, no BlueZ
-# session bus and no StatusNotifier tray host in a container, so there is nothing
-# for it to drive; the build is also a full Rust compile, wasted in a throwaway
-# CI container). The OpenCode workspace and both Meridian scrub-plugin
+# KDE/GNOME settings, pro-audio realtime provisioning, and the MX Master haptic
+# build. The OpenCode workspace and both Meridian scrub-plugin
 # builds are deliberately KEPT: the agent CLIs and Meridian are first-class
 # here (the OpenCode workspace build soft-skips when its toolchain is absent;
 # each billing scrubber fails clearly so a missing plugin is retried rather than
@@ -97,7 +94,6 @@ src/garden.yaml
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
-.chezmoiscripts/60-build/*librepods.sh
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude Code haptic plugin and the pi haptic extension have nothing to
 # pulse — skip the deployed plugin tree, the `claude plugin install` script, and

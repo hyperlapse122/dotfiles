@@ -14,7 +14,7 @@
 # owner, which is exactly why pi could never persist an OAuth token at all. This
 # script instead read-merge-WRITES only the declared api_key providers,
 # preserving every entry pi owns (OAuth tokens it wrote for codex, etc.) — the
-# same shape config-pi / config-solaar / config-biopass use for other apps'
+# same shape config-pi / config-solaar use for other apps'
 # live-written config.
 #
 # The merge is a top-level jq `+` (NOT the deep `*`): a declared provider entry

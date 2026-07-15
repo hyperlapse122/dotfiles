@@ -209,14 +209,6 @@ packages:
         - solaar  # Logitech HID++ device manager
         - solaar-udev  # udev rules granting Solaar device access
 
-        # LibrePods (AirPods control) build deps — the linux-rust crate is compiled
-        # from upstream source by .chezmoiscripts/60-build/run_onchange_after_build-librepods.sh.tmpl,
-        # so the headers must be present before that script runs. pkg-config is
-        # already in the "Build tooling" group above (Fedora satisfies it from
-        # pkgconf-pkg-config), so only the two libraries are listed here.
-        - dbus-devel  # libdbus-1 headers (the app drives BlueZ over D-Bus)
-        - pulseaudio-libs-devel  # libpulse headers (audio routing / ear detection)
-
         # Password manager
         - 1password  # 1Password desktop app
         - 1password-cli  # 1Password CLI (op)
@@ -349,19 +341,6 @@ packages:
           rpms:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
             aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
-        # Biopass — same package as the Ubuntu directDebs entry (see its comment
-        # for the full rationale: Howdy replacement, self-contained Tauri
-        # bundle, install stays package-only / PAM enablement stays manual; the
-        # broken-since-Fedora-43 principis/howdy COPR is why Howdy was dropped
-        # here too). GitHub releases only; the release rpms are unsigned, so no
-        # `keys` (dnf's default localpkg_gpgcheck=0 accepts a URL/local rpm).
-        # Face-only method policy: .chezmoidata/biopass.yaml. To upgrade, bump
-        # `version` AND both URLs together, matching the deb entry.
-        - id: biopass  # face + fingerprint biometric login (Howdy alternative)
-          version: "1.4.1"
-          rpms:
-            x86_64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass-1.4.1-1.x86_64.rpm
-            aarch64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass-1.4.1-1.aarch64.rpm
     ubuntu:
       # Conditional package groups → the fact that gates each. Grammar and the
       # declaration-not-a-switch rule are in the file header above; every other
@@ -526,14 +505,6 @@ packages:
 
         # Logitech device manager
         - solaar  # Logitech HID++ device manager
-
-        # LibrePods (AirPods control) build deps — the linux-rust crate is compiled
-        # from upstream source by .chezmoiscripts/60-build/run_onchange_after_build-librepods.sh.tmpl,
-        # so the headers must be present before that script runs. pkg-config is
-        # already in the "Build tooling" group above, so only the two libraries
-        # are listed here.
-        - libdbus-1-dev  # libdbus-1 headers (the app drives BlueZ over D-Bus; dbus-devel equivalent)
-        - libpulse-dev  # libpulse headers (audio routing / ear detection; pulseaudio-libs-devel equivalent)
 
         # Password manager
         - 1password  # 1Password desktop app (from 1password apt repo)
@@ -762,26 +733,3 @@ packages:
           debs:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer_amd64.deb
             aarch64: https://download.teamviewer.com/download/linux/teamviewer_arm64.deb
-        # Biopass (TickLabVN/Biopass) — Windows Hello-style face + fingerprint
-        # PAM auth with a management GUI. Replaces the originally considered
-        # Howdy: Howdy's beta PPA publishes no resolute (26.04) dist and its
-        # focal deb's postinst builds a 2018 dlib that no longer compiles on a
-        # modern Python (verified broken in a container), while Biopass ships a
-        # self-contained Tauri deb (bundled onnxruntime/libcamera; deps curl,
-        # fprintd, libwebkit2gtk-4.1-0, libturbojpeg0 all resolve from the
-        # Ubuntu archives) whose postinst only runs ldconfig plus a non-fatal
-        # per-user ONNX model download. GitHub releases only (no apt repo),
-        # asset names carry the tag — to upgrade, bump `version` AND both URLs
-        # together. Install is package-only by design: the shipped PAM profile
-        # (/usr/share/pam-configs/biopass) is `Default: no`, and enabling it
-        # via `sudo pam-auth-update` stays a deliberate manual step (see
-        # upstream docs/PAM.md) — auto-enabling would stack face auth into
-        # gdm-password and re-lock the login keyring at the greeter, the exact
-        # failure the GDM password-only-greeter setup exists to prevent.
-        # Enabled-method policy (face-only for now): .chezmoidata/biopass.yaml.
-        # Fedora installs the same release via directRpms below.
-        - id: biopass  # face + fingerprint biometric login (Howdy alternative)
-          version: "1.4.1"
-          debs:
-            x86_64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass_1.4.1_amd64.deb
-            aarch64: https://github.com/TickLabVN/biopass/releases/download/1.4.1/biopass_1.4.1_arm64.deb
