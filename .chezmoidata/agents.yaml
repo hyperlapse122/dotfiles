@@ -89,9 +89,10 @@ agents:
     defaults:
       # Keys intentionally match pi's settings.json schema so config-pi can
       # render and merge this object wholesale. The provider/model must already
-      # be usable through pi's live auth.json or managed models.json.
-      defaultProvider: openai-codex
-      defaultModel: gpt-5.6-sol
+      # be usable through pi's live auth.json (zai is a built-in provider
+      # reached via the zai api_key auth below; no models.json override).
+      defaultProvider: zai
+      defaultModel: glm-5.2
       # Valid: off | minimal | low | medium | high | xhigh | max.
       defaultThinkingLevel: max
       subagents:
@@ -211,6 +212,7 @@ agents:
         sisyphus:
           model: anthropic/claude-opus-4-7
           variant: max
+          # fallback_models: []
           fallback_models:
             - kimi-for-coding/k2p6
             - kimi-for-coding/k2p5

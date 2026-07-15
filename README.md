@@ -60,20 +60,6 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    pro-audio essentials (PipeWire config, `@audio` realtime privileges,
    low-latency boot tuning) are also provisioned.
 
-Meridian is installed from the exact NPM package version named by its latest
-GitHub Release, linked through `~/.local/share/meridian/current`, and started as
-a user service on Linux/macOS. It stays loopback-only at `127.0.0.1:3456` and
-routes Pi Anthropic requests through the repo-managed Claude binary. Meridian's
-Pi and Hermes prompt scrubbers are fetched as commit-pinned source externals,
-built with their locked TypeScript toolchains, and atomically linked into the
-plugin auto-discovery directory so identifying harness boilerplate is removed
-before requests reach Claude. Pi tracks its newest GitHub release; the
-release-less Hermes plugin tracks a resolved `main` commit. OpenCode does not
-load Meridian or route providers through it. Meridian owns and live-writes its
-profiles, OAuth, settings, and telemetry under `~/.config/meridian/`; those files
-are intentionally unmanaged (the two `plugins/*-scrub.js` symlinks are
-provisioned by build scripts, not managed config files).
-
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
 via `glab auth login --use-keyring`, along with the registry→host mapping
@@ -202,15 +188,14 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   grouped by area with numeric prefixes fixing cross-group execution order
   (chezmoi runs each phase's scripts alphabetically by target path):
   `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `40-linux-ubuntu/`,
-  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`,
-  `90-services/`.
+  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`.
 - [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
   into scripts via `includeTemplate`: the `run_onchange_` dependency
   fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (claude-code, codex, codegraph, Meridian, gh, glab, kubectl,
+  `~/.local/bin` (claude-code, codex, codegraph, gh, glab, kubectl,
   helm, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
   declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
   into `~/.agents/skills/`.
@@ -232,32 +217,8 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
   template (MCP servers).
-- [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgents for
-  Meridian and `mxm4-hapticd`).
-
-### One-time migration from the legacy proxy
-
-Run the matching command **before the first apply that removes the old managed
-service file**. The repository deliberately does not ship a teardown script:
-
-```sh
-# Linux
-legacy_proxy='cli-proxy''-api'
-systemctl --user disable --now "${legacy_proxy}.service"
-
-# macOS
-legacy_proxy='cli-proxy''-api'
-legacy_label="dev.h82.${legacy_proxy}"
-launchctl bootout "gui/$UID/${legacy_label}"
-
-# Show (but do not delete) the unmanaged credential state left for review.
-legacy_state="$HOME/.${legacy_proxy}"
-printf 'Legacy credential state remains at %s\n' "$legacy_state"
-```
-
-The legacy proxy's unmanaged credential directory and its 1Password item are
-not deleted. After Meridian is verified, remove that credential state manually
-only if it is no longer needed.
+- [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgent for
+  `mxm4-hapticd`).
 
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).

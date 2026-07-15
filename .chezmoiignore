@@ -48,13 +48,10 @@ src/garden.yaml
 {{- end }}
 
 # Pi is provisioned only on POSIX. Its mxm4-haptic extension shells out to the
-# cross-platform Linux/macOS client, and models.json routes built-in Anthropic
-# models through the POSIX-only Meridian service. Skip both on Windows, where
-# neither pi nor Meridian is installed. (No installer is stranded: pi
-# auto-discovers the extension and reads models.json directly.)
+# cross-platform Linux/macOS client. Skip it on Windows, where pi is not
+# installed. (No installer is stranded: pi auto-discovers the extension.)
 {{- if eq .chezmoi.os "windows" }}
 .pi/agent/extensions/mxm4-haptic.ts
-.pi/agent/models.json
 {{- end }}
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
@@ -68,11 +65,9 @@ src/garden.yaml
 # container, deploy the CLI dotfiles only and skip all host provisioning:
 # package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
 # KDE/GNOME settings, pro-audio realtime provisioning, and the MX Master haptic
-# build. The OpenCode workspace and both Meridian scrub-plugin
-# builds are deliberately KEPT: the agent CLIs and Meridian are first-class
-# here (the OpenCode workspace build soft-skips when its toolchain is absent;
-# each billing scrubber fails clearly so a missing plugin is retried rather than
-# silently recorded).
+# build. The OpenCode workspace build is deliberately KEPT: the agent CLIs are
+# first-class here (the OpenCode workspace build soft-skips when its toolchain
+# is absent).
 #
 # distrobox and toolbox are the OPT-OUT: both bind-mount the host $HOME and both
 # create /run/.toolboxenv (distrobox touches it for toolbx compatibility), so an

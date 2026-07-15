@@ -28,7 +28,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
 | `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.networking`, `.haptic`, `.vscodium`, `.agents`, `.user`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
-| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, meridian, the pi/hermes Meridian scrub plugins, codegraph, aoe, and the agent skills listed in `.chezmoidata/agents.yaml` under `agents.skills.external`), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, prezto), `fonts.toml`. Everything but prezto/fonts, the source-built Meridian scrub plugins, and the agent skills is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the scrubbers are versioned/commit-pinned source trees consumed by `60-build/`, and the agent skills are archive subtrees extracted into `~/.agents/skills/<name>/`. Add a new tool to the matching domain file; don't spawn a new one |
+| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, codegraph, aoe, and the agent skills listed in `.chezmoidata/agents.yaml` under `agents.skills.external`), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, prezto), `fonts.toml`. Everything but prezto/fonts and the agent skills is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the agent skills are archive subtrees extracted into `~/.agents/skills/<name>/`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
@@ -138,16 +138,15 @@ is idempotent, but a renumber costs one heavy apply on every host.
 
 | Dir | Purpose |
 |---|---|
-| `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also installs Meridian's runtime dependencies and re-points `~/.local/bin` symlinks for versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `pi`, `meridian`, `codegraph`) at the latest release, then prunes older versions |
+| `00-tools/` | first: `run_once_before_mise-trust.sh.tmpl` trusts the repo-root `mise.toml` before anything can need mise; also re-points `~/.local/bin` symlinks for versioned CLIs fetched by `.chezmoiexternals/` (`claude`, `codex`, `pi`, `codegraph`) at the latest release, then prunes older versions |
 | `10-auth/` | GitHub token preflight (before the installers), GitLab PAT login (after the file phase, so the externals-fetched `glab` exists), Docker Hub login, one-time `tailscale up` |
 | `20-linux-fedora/` | Fedora package installer (`run_onchange_before_fedora` driven by `.chezmoidata/packages.yaml`) |
 | `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (guarded on the `desktop` fact; see OS gating & script parity) — on KDE that is the manifest-driven `config-kde-settings` runner plus the scripts that carry real logic; mutually exclusive at runtime, so they share a number |
-| `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above) and the externally fetched **Meridian pi/hermes scrub plugins** compiled from upstream source (Pi: latest release; Hermes: resolved `main` commit because it has no releases/tags); remote-only inputs use a rendered ref/commit as their onchange trigger rather than a source-tree fingerprint |
+| `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above) |
 | `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's packages (`install-pi-packages`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
-| `90-services/` | enable the Meridian user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
 
 ### Host facts — the named registry every host-identity condition resolves through
 
@@ -418,9 +417,7 @@ The event→waveform map is GENERATED from `.chezmoidata/haptic.yaml` (`haptic.p
 
 **Packages** are declared in `.chezmoidata/agents.yaml` (`agents.pi.packages`) and rendered into the `PACKAGES` array of `.chezmoiscripts/70-agents/run_onchange_after_install-pi-packages.sh.tmpl`, which loops `pi install` over them — four entries today: `npm:pi-mcp-extension`, `npm:pi-subagents`, `npm:pi-ask-user`, and `git:github.com/EveryInc/compound-engineering-plugin` (the native pi counterpart of the Claude/Codex/opencode plugin installs — ce-* + lfg skills). Add/remove packages in the DATA file, not the script. It is a script and not a managed target because **`~/.pi/agent/settings.json`, where pi records installed packages, is LIVE-WRITTEN by pi** (`theme`, `packages`, `lastChangelogVersion`) — a chezmoi-managed file there would fight the agent for the same file on every session, exactly the way a managed `~/.claude/settings.json` would fight Claude Code and `aoe` (previous section). `pi install <source>` is **idempotent**: re-running on an already-installed package exits 0 and does not duplicate the array entry, so the script is free to re-run. pi installs with npm under `~/.pi/agent/npm/`, so this repo's `~/.npmrc` hardening reaches it too — `save-exact=true` means the package lands exactly pinned in that tree. The **rendered `PACKAGES` array IS the onchange trigger**: it is rendered from the data file (nothing else in the source dir to depend on), so there is deliberately no fingerprint block (the `install-vscodium-extensions` shape). POSIX-only (`ne windows`, matching the externals' pi block — the Windows assets exist but the `~/.local/bin` linker in `00-tools/` has no `.ps1` counterpart) and deliberately **kept in containers**, like the dotagents and compound-engineering installs beside it: pi is a first-class CLI here. Standard onchange trade-off applies — a soft-skipped run (no `pi` on PATH) is recorded as done and only retries on the next content change or `chezmoi apply --force`.
 
-**Settings defaults** (`defaultProvider` / `defaultModel` / `defaultThinkingLevel` plus the nested `subagents` defaults) are set the same way and for the same reason they are NOT a managed `settings.json` target: `~/.pi/agent/settings.json` is live-written by pi, so a managed file (let alone a `readonly_` 0444 one) would fight it every session. `.chezmoidata/agents.yaml` stores `agents.pi.defaults` with the SAME structure and key names as `settings.json`; `.chezmoiscripts/70-agents/run_onchange_after_config-pi.sh.tmpl` renders that whole object once with `toPrettyJson` and overlays it via jq's top-level `+`. Undeclared TOP-LEVEL keys pi owns (`packages`, `theme`, `lastChangelogVersion`, …) survive, while a declared nested object such as `subagents` replaces that same live top-level value wholesale. Adding another managed setting therefore needs only a data edit, not a parallel script argument/assignment. If pi has not yet run, the script creates the file from the declared object plus an empty `packages` array, so the alphabetically-later `install-pi-packages` script can merge package entries into it. Why not `pi config` / `/settings` / CLI flags: `pi config` is a TUI with no non-interactive setter, `/settings` is interactive-only, the `--provider`/`--model`/`--thinking` flags are per-invocation and would fight pi's Ctrl+P model cycling, and there is NO env var for these defaults. The root defaults today are `openai-codex` / `gpt-5.6-sol` / `max`; pi's OAuth entry remains live-owned. The script prepends `~/.local/bin` to `PATH` because chezmoi's non-interactive environment may omit the directory where the file phase linked `pi`; missing `pi` or `jq` is a HARD failure (exit 1), so a failed apply retries rather than recording a successful onchange skip. Same POSIX-only / container-kept shape as `install-pi-packages`, but deliberately not its soft-skip behavior.
-
-**Anthropic through Meridian** is a provider-level override in the managed readonly `dot_pi/agent/readonly_models.json` → `~/.pi/agent/models.json`. It changes only built-in provider `anthropic`'s `baseUrl`, dummy `apiKey`, and `x-meridian-agent: pi` header; Pi keeps its built-in Anthropic model catalog and metadata. The header is load-bearing because Pi's User-Agent resembles Claude Code and Meridian cannot auto-detect the Pi passthrough adapter reliably. Unlike `settings.json` and `auth.json`, Pi does not live-write `models.json`, so readonly management is safe. This target deploys on Linux/macOS and is ignored on Windows with the rest of the POSIX-only Pi/Meridian integration.
+**Settings defaults** (`defaultProvider` / `defaultModel` / `defaultThinkingLevel` plus the nested `subagents` defaults) are set the same way and for the same reason they are NOT a managed `settings.json` target: `~/.pi/agent/settings.json` is live-written by pi, so a managed file (let alone a `readonly_` 0444 one) would fight it every session. `.chezmoidata/agents.yaml` stores `agents.pi.defaults` with the SAME structure and key names as `settings.json`; `.chezmoiscripts/70-agents/run_onchange_after_config-pi.sh.tmpl` renders that whole object once with `toPrettyJson` and overlays it via jq's top-level `+`. Undeclared TOP-LEVEL keys pi owns (`packages`, `theme`, `lastChangelogVersion`, …) survive, while a declared nested object such as `subagents` replaces that same live top-level value wholesale. Adding another managed setting therefore needs only a data edit, not a parallel script argument/assignment. If pi has not yet run, the script creates the file from the declared object plus an empty `packages` array, so the alphabetically-later `install-pi-packages` script can merge package entries into it. Why not `pi config` / `/settings` / CLI flags: `pi config` is a TUI with no non-interactive setter, `/settings` is interactive-only, the `--provider`/`--model`/`--thinking` flags are per-invocation and would fight pi's Ctrl+P model cycling, and there is NO env var for these defaults. The root defaults today are `zai` / `glm-5.2` / `max`; pi's OAuth entry remains live-owned. The script prepends `~/.local/bin` to `PATH` because chezmoi's non-interactive environment may omit the directory where the file phase linked `pi`; missing `pi` or `jq` is a HARD failure (exit 1), so a failed apply retries rather than recording a successful onchange skip. Same POSIX-only / container-kept shape as `install-pi-packages`, but deliberately not its soft-skip behavior.
 
 **Auth** (`~/.pi/agent/auth.json`) follows the same live-written-file rule as settings.json, and for a stronger reason: pi needs to WRITE auth.json — OAuth providers (e.g. Codex) refresh tokens there on a frequent cadence, and the former `dot_pi/agent/private_readonly_auth.json.tmpl` deployed it at 0400, both fighting pi for the bytes AND being read-only to the owner (so pi could never persist an OAuth token at all). It is now a read-merge-write SCRIPT, `.chezmoiscripts/70-agents/run_onchange_after_config-pi-auth.sh.tmpl`, that overlays only the static api_key providers (source: `.chezmoidata/agents.yaml`, `.agents.pi.auth.providers` — `kimi-coding`, `zai`) into the live file, preserving every OAuth entry pi wrote under other names. The merge is a top-level jq `+` (whole-entry replace, NOT the deep `*`, so a former auth type leaves no stale field); it writes 0600 so both the script and pi can keep updating it. jq is shared with `config-pi` and declared in `.chezmoidata/packages.yaml` (both distros), so a fresh host has it before these after-phase scripts run; the container caveat is that the package installer is skipped in a real container, so jq may be absent from the base image there and the script soft-skips (a devbox lands auth by hand or via a base image that ships jq). The resolved keys ARE the onchange trigger (like `auth-gitlab`), so a rotated 1Password key re-writes auth.json on the next apply. Same POSIX-only / container-kept shape as `config-pi`, except `config-pi-auth` still soft-skips a missing `jq` and needs no `pi` binary, so the keys can land even before pi is fetched.
 
@@ -1025,66 +1022,14 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `fonts` — see the source-attribute table; a new tool joins the matching file
   rather than getting one of its own, and anything referencing an external by
   path must name the *group* file). For the version-dir
-  installs (`claude`, `codex`, `pi`, `meridian`, `codegraph`) the `.chezmoiscripts/00-tools/`
+  installs (`claude`, `codex`, `pi`, `codegraph`) the `.chezmoiscripts/00-tools/`
   `run_onchange_after_*` scripts re-point the `~/.local/bin` symlink at the
   freshly fetched version and prune older ones — the latest release id is
   rendered into each script body, so a new upstream release re-triggers the
-  onchange re-link. Meridian's linker additionally installs the published
-  package's production dependencies with mise-managed Node before validating
-  and atomically promoting the new tree. The two `meridian-plugin-*-scrub`
-  externals are the deliberate source-build exception: their pinned source is
-  extracted under `~/.local/share/meridian/plugins/<name>/versions/` and
-  compiled by `60-build` scripts rather than linked into `~/.local/bin`.
+  onchange re-link.
   (The version-dir linker scripts were previously named `run_after_onchange_*`, which
   chezmoi parses as a plain every-apply `run_after_` because the attribute
   order is `run_[once_|onchange_][before_|after_]`.)
-- **Meridian** is the POSIX user-scoped Claude Max proxy. Its latest GitHub
-  Release (`meridian-v<version>`) selects the exact same-version
-  `@rynfar/meridian` NPM tarball in `.chezmoiexternals/ai-agents.toml`; a
-  release/NPM mismatch or malformed sha512 integrity aborts the render. The
-  archive lands under `~/.local/share/meridian/versions/`, and
-  `.chezmoiscripts/00-tools/run_onchange_after_meridian.sh.tmpl` installs
-  production dependencies with `mise --no-config exec node@latest`, validates
-  the CLI version, atomically updates `current` + `~/.local/bin/meridian`, then
-  prunes old versions. The Linux unit is
-  `dot_config/systemd/user/meridian.service`; macOS uses
-  `Library/LaunchAgents/dev.h82.meridian.plist`; both are enabled by
-  `.chezmoiscripts/90-services/run_onchange_after_meridian-service.sh.tmpl`,
-  bind only `127.0.0.1:3456`, and explicitly select the repo-managed Claude
-  binary. Pi's readonly `models.json` provider override routes Anthropic to the
-  loopback service with `x-meridian-agent: pi`, preserving Pi's built-in model
-  catalog and its existing default model. OpenCode does not load Meridian or
-  route providers through it.
-
-  **Prompt scrubbers:** `rynfar/meridian-plugin-pi-scrub` tracks its newest
-  `meridian-plugin-pi-scrub-v<semver>` GitHub release in the same
-  `ai-agents.toml`; its archive URL is pinned to the release's 40-char target
-  commit, not its movable tag. `rynfar/meridian-plugin-hermes-scrub` publishes
-  no release or tag yet, so it deliberately tracks `main` resolved to a 40-char
-  commit on every render (rolling/unsettled, like the release-less `improve`
-  skill). GitHub publishes no built assets and the NPM tarballs omit `src/`, so
-  two sibling `run_onchange_after_build-meridian-plugin-*-scrub.sh.tmpl`
-  scripts run locked `npm ci` + the explicit TypeScript build with mise-managed
-  Node, validate plugin identity/scope, and atomically link `pi-scrub.js` and
-  `hermes-scrub.js` into `~/.config/meridian/plugins/`. Pi is restricted to its
-  matching adapter; Hermes MUST have no adapter restriction because its headerless
-  traffic can arrive through any fallback adapter and the transform self-scopes
-  by content. The auto-discovery symlinks keep `plugins.json` live/user-owned.
-  Each successful install calls `POST /plugins/reload` and accepts it as live
-  only when the JSON response reports that plugin active; an unavailable
-  service is left for the next start, while an inactive result is warned for
-  diagnosis. The Linux render-internals matrix additionally smoke-builds the Pi
-  scrubber's rendered source URL. The rendered release tag/branch commit is each
-  script's onchange trigger (no source fingerprint), failures are hard so a
-  missing billing scrub is retried, and old versions are pruned only after
-  promotion. Both are POSIX-only and container-kept.
-
-  Meridian's profiles, OAuth, settings, and telemetry under
-  `~/.config/meridian/` are live-written and MUST NOT become managed targets
-  (the auto-discovered plugin symlink above is the one script-owned entry).
-  Existing hosts follow README's manual
-  one-time legacy-service stop before applying; do not add a teardown script or
-  delete unmanaged credential state.
 - **Repo-root `mise.toml`** is the dev toolchain for working on this repo itself
   (bun + rust, with `postinstall` hooks running `vp install`, `cargo fetch`, and
   `dotagents install`); it is chezmoiignored and trusted once via
@@ -1174,14 +1119,10 @@ disagree about the same machine.
   the render-dotfiles CI `apply --init` jobs green, since they run in
   containers with a dummy `op`). Deliberately KEPT: the opencode plugin build
   (`build-opencode-plugins`; opencode is a first-class CLI here and it soft-skips
-  when mise is absent), the two Meridian scrub-plugin builds (the agent CLIs
-  + Meridian are first-class here, and each build fails clearly if its
-  toolchain/source is unavailable), the dotagents skills install
+  when mise is absent), the dotagents skills install
   (`run_onchange_after_install-dotagents-skills`; soft-skips on missing prerequisites and
-  preflights `~/.claude`/`~/.codex`), and the `00-tools/` + `90-services/` scripts (CLI
-  symlinks are wanted in a container; Meridian's dependency/link and service
-  enable scripts soft-skip or fail clearly when their runtime/session
-  prerequisites are absent). Adjust skips in that one gated block, never by editing the
+  preflights `~/.claude`/`~/.codex`), and the `00-tools/` scripts (CLI
+  symlinks are wanted in a container). Adjust skips in that one gated block, never by editing the
   scripts.
 - **No package installs in a container.** `.install-prerequisites.sh` expects `op` +
   `mise` from the base image; it never runs dnf/apt/brew inside a container and fails

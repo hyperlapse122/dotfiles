@@ -1,11 +1,5 @@
 .config/opencode/commands
 
-# OpenCode no longer routes through Meridian. The former build script created
-# these outside chezmoi's managed target set, so remove the stale auto-discovery
-# link and its versioned source/build tree explicitly.
-.config/meridian/plugins/opencode-scrub.js
-.local/share/meridian/plugins/opencode-scrub
-
 # Orphaned compound-engineering skills. They used to be fetched into
 # ~/.agents/skills/ by the dotagents `[[skills]] name = "*"` wildcard entry;
 # that entry is gone, because the plugin is now installed natively per agent
