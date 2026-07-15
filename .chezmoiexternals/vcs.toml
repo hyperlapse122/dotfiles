@@ -33,16 +33,6 @@ url = '{{ $glabArchiveUrl }}'
 path = '{{ printf "bin/glab%s" $executableExtension }}'
 executable = true
 
-[glab-skill]
-type = "file"
-targetPath = '.agents/skills/glab/SKILL.md'
-url = '{{ $glabSkillUrl }}'
-
-[glab-stack-skill]
-type = "file"
-targetPath = '.agents/skills/glab-stack/SKILL.md'
-url = '{{ $glabStackSkillUrl }}'
-
 {{- /* ---------- garden ---------- */ -}}
 
 {{- $gardenTag := (gitHubLatestRelease "garden-rs/garden").TagName | toString -}}
