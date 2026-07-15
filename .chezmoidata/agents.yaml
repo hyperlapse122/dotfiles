@@ -212,7 +212,6 @@ agents:
         sisyphus:
           model: anthropic/claude-opus-4-7
           variant: max
-          # fallback_models: []
           fallback_models:
             - kimi-for-coding/k2p6
             - kimi-for-coding/k2p5
