@@ -71,8 +71,11 @@ src/garden.yaml
 # LibrePods build (a desktop/BlueZ tray app — there are no AirPods, no BlueZ
 # session bus and no StatusNotifier tray host in a container, so there is nothing
 # for it to drive; the build is also a full Rust compile, wasted in a throwaway
-# CI container). The opencode plugin build is deliberately KEPT (opencode is a
-# first-class CLI here; that script soft-skips when its toolchain is absent).
+# CI container). The OpenCode workspace and all three Meridian scrub-plugin
+# builds are deliberately KEPT: the agent CLIs and Meridian are first-class
+# here (the OpenCode workspace build soft-skips when its toolchain is absent;
+# each billing scrubber fails clearly so a missing plugin is retried rather than
+# silently recorded).
 #
 # distrobox and toolbox are the OPT-OUT: both bind-mount the host $HOME and both
 # create /run/.toolboxenv (distrobox touches it for toolbx compatibility), so an

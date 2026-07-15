@@ -1,0 +1,229 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- $release := gitHubLatestRelease "rynfar/meridian-plugin-pi-scrub" -}}
+{{- $tag := $release.TagName | toString -}}
+{{- if not (regexMatch "^meridian-plugin-pi-scrub-v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" $tag) -}}
+  {{- fail (printf "meridian-plugin-pi-scrub: latest GitHub release tag %q is not meridian-plugin-pi-scrub-v<semver>" $tag) -}}
+{{- end -}}
+{{- $version := trimPrefix "meridian-plugin-pi-scrub-v" $tag -}}
+{{- $commit := $release.TargetCommitish | toString -}}
+{{- if not (regexMatch "^[0-9a-f]{40}$" $commit) -}}
+  {{- fail (printf "meridian-plugin-pi-scrub: release %s target %q is not a 40-character commit sha" $tag $commit) -}}
+{{- end -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-pi-scrub.sh.tmpl
+#
+# Builds @rynfar/meridian-plugin-pi-scrub from the exact GitHub release source
+# archive fetched by .chezmoiexternals/ai-agents.toml, then atomically links its
+# compiled entry point into ~/.config/meridian/plugins/. Meridian auto-discovers
+# top-level *.js files there, so plugins.json remains live/user-owned and does
+# not become a chezmoi target.
+#
+# The external is source-only: GitHub publishes no binary release asset, while
+# the NPM tarball already contains dist/ and omits src/. Building the release
+# source is therefore the only path that both honors the requested source build
+# and keeps the source/ref visible in chezmoi state. npm ci honors upstream's
+# package-lock.json; lifecycle scripts stay disabled during dependency install,
+# and only the explicit build command is allowed to run.
+#
+# onchange trigger: the resolved release tag and immutable target commit are
+# rendered below. They are the only inputs outside this script, so there is no
+# source-tree fingerprint block. A new release changes the rendered body and
+# re-runs the build. Tracking latest is unsettled by design, like Meridian and
+# the other release-resolved externals.
+#
+# Failure is hard, not a soft-skip: the existing plugin link is left untouched
+# until install, build, and module validation all succeed, and a non-zero exit
+# makes chezmoi retry rather than recording a missing billing-scrubber as done.
+# A reload failure is different: the artifact is installed correctly and will
+# be discovered on the next Meridian restart, so that path only warns.
+#
+# POSIX-only, matching the Meridian external/service. Deliberately kept in real
+# containers: Pi and Meridian are first-class CLIs there, unlike hardware-only
+# builds such as mxm4-haptic and LibrePods.
+
+set -euo pipefail
+
+# release: {{ $tag }} @ {{ $commit }}
+TAG={{ $tag | quote }}
+VERSION={{ $version | quote }}
+COMMIT={{ $commit | quote }}
+INSTALL_DIR="${MERIDIAN_PI_SCRUB_INSTALL_DIR:-$HOME/.local/share/meridian/plugins/pi-scrub}"
+PLUGIN_DIR="${MERIDIAN_PI_SCRUB_PLUGIN_DIR:-$HOME/.config/meridian/plugins}"
+source_dir="$INSTALL_DIR/versions/$VERSION"
+dist="$source_dir/dist/index.js"
+plugin_link="$PLUGIN_DIR/pi-scrub.js"
+
+if [ ! -d "$source_dir" ]; then
+  printf 'meridian-plugin-pi-scrub: release source directory missing: %s\n' "$source_dir" >&2
+  exit 1
+fi
+for required in package.json package-lock.json; do
+  if [ ! -f "$source_dir/$required" ]; then
+    printf 'meridian-plugin-pi-scrub: release source missing %s: %s\n' "$required" "$source_dir" >&2
+    exit 1
+  fi
+done
+
+if command -v mise >/dev/null 2>&1; then
+  MISE=(mise)
+elif [ -x "$HOME/.local/bin/mise" ]; then
+  MISE=("$HOME/.local/bin/mise")
+else
+  printf 'meridian-plugin-pi-scrub: mise not found; cannot build release %s\n' "$TAG" >&2
+  exit 1
+fi
+
+NPM=("${MISE[@]}" --no-config exec node@latest -- npm)
+NODE=("${MISE[@]}" --no-config exec node@latest -- node)
+if ! "${NPM[@]}" --version >/dev/null 2>&1; then
+  printf 'meridian-plugin-pi-scrub: npm is unavailable through mise node@latest\n' >&2
+  exit 1
+fi
+
+# Refuse a mismatched archive before running any package command. The name check
+# catches a wrong/corrupt source tree; the version check keeps the release tag,
+# versioned destination, and package metadata in lockstep.
+"${NODE[@]}" --input-type=module - "$source_dir/package.json" "$VERSION" <<'NODE'
+import { readFile } from "node:fs/promises"
+
+const [packagePath, expectedVersion] = process.argv.slice(2)
+const pkg = JSON.parse(await readFile(packagePath, "utf8"))
+if (pkg.name !== "@rynfar/meridian-plugin-pi-scrub") {
+  throw new Error(`unexpected package name: ${String(pkg.name)}`)
+}
+if (pkg.version !== expectedVersion) {
+  throw new Error(`package version mismatch: expected ${expectedVersion}, got ${String(pkg.version)}`)
+}
+NODE
+
+# Delete dist first so a failed compiler cannot be mistaken for a successful
+# rebuild through stale output from an earlier run. npm ci likewise replaces
+# node_modules from the exact lockfile rather than incrementally mutating it.
+rm -rf "$source_dir/dist"
+(
+  cd "$source_dir"
+  "${NPM[@]}" ci --ignore-scripts --no-audit --no-fund
+  "${NPM[@]}" --ignore-scripts run build
+)
+
+if [ ! -s "$dist" ]; then
+  printf 'meridian-plugin-pi-scrub: build produced no dist/index.js for %s\n' "$TAG" >&2
+  exit 1
+fi
+
+# Import the built ESM before exposing it to Meridian. Besides syntax/import
+# resolution, assert the safety-critical scope: this scrubber must affect only
+# Pi adapter requests and must provide an onRequest transform.
+"${NODE[@]}" --input-type=module - "$dist" <<'NODE'
+import { pathToFileURL } from "node:url"
+
+const module = await import(pathToFileURL(process.argv[2]).href)
+const plugin = module.default
+if (plugin?.name !== "pi-scrub") {
+  throw new Error(`unexpected plugin name: ${String(plugin?.name)}`)
+}
+if (!Array.isArray(plugin.adapters) || plugin.adapters.length !== 1 || plugin.adapters[0] !== "pi") {
+  throw new Error(`unexpected adapter scope: ${JSON.stringify(plugin?.adapters)}`)
+}
+if (typeof plugin.onRequest !== "function") {
+  throw new Error("plugin has no onRequest transform")
+}
+NODE
+
+mkdir -p "$PLUGIN_DIR"
+if [ -e "$plugin_link" ] && [ ! -L "$plugin_link" ]; then
+  printf 'meridian-plugin-pi-scrub: refusing to replace non-symlink path: %s\n' "$plugin_link" >&2
+  exit 1
+fi
+
+tmp_link="$PLUGIN_DIR/.pi-scrub.$$.tmp"
+cleanup() {
+  rm -f "$tmp_link"
+}
+trap cleanup EXIT
+rm -f "$tmp_link"
+ln -s "$dist" "$tmp_link"
+
+# Node's renameSync maps to atomic rename(2) on both Linux and macOS. The old
+# plugin remains active until this one operation succeeds.
+"${NODE[@]}" - "$tmp_link" "$plugin_link" <<'NODE'
+const fs = require("node:fs")
+const [temporary, destination] = process.argv.slice(2)
+fs.renameSync(temporary, destination)
+NODE
+trap - EXIT
+
+# Prune old release trees only after the new build has been validated and linked.
+# The live symlink points directly into source_dir, so it can never reference a
+# directory removed by this loop.
+if [ -d "$INSTALL_DIR/versions" ]; then
+  for directory in "$INSTALL_DIR/versions"/*; do
+    [ -d "$directory" ] || continue
+    if [ "$directory" != "$source_dir" ]; then
+      rm -rf "$directory"
+    fi
+  done
+fi
+
+printf 'meridian-plugin-pi-scrub: built and linked %s (%s)\n' "$VERSION" "$COMMIT"
+
+# A running service will not notice a newly auto-discovered file until reload.
+# Failure is harmless: 90-services starts Meridian later on a first install, and
+# an already-running service picks it up on its next restart. A defined-but-empty
+# override disables the live reload (useful for isolated verification); an unset
+# variable takes the loopback default.
+#
+# HTTP 200 alone is NOT success: Meridian returns 200 even when an individual
+# plugin failed validation/import and reports that failure in `plugins[]`.
+# Parse the response with the already-resolved Node runtime and only claim a live
+# reload when pi-scrub itself is present with status=active.
+reload_url="${MERIDIAN_PI_SCRUB_RELOAD_URL-http://127.0.0.1:3456/plugins/reload}"
+reload_response="$INSTALL_DIR/.pi-scrub-reload.$$.json"
+reload_state=unavailable
+cleanup_reload() {
+  rm -f "$reload_response"
+}
+trap cleanup_reload EXIT
+if [ -n "$reload_url" ] && command -v curl >/dev/null 2>&1 \
+  && curl -fsS --max-time 5 -X POST "$reload_url" -o "$reload_response" 2>/dev/null; then
+  reload_state=inactive
+  if "${NODE[@]}" --input-type=module - "$reload_response" <<'NODE'
+import { readFile } from "node:fs/promises"
+
+let payload
+try {
+  payload = JSON.parse(await readFile(process.argv[2], "utf8"))
+} catch (error) {
+  console.error(`meridian-plugin-pi-scrub: invalid reload response: ${String(error)}`)
+  process.exit(1)
+}
+const plugin = Array.isArray(payload.plugins)
+  ? payload.plugins.find((candidate) => candidate?.name === "pi-scrub")
+  : undefined
+if (payload.success !== true || plugin?.status !== "active") {
+  const detail = plugin
+    ? `${String(plugin.status)}${plugin.error ? `: ${String(plugin.error)}` : ""}`
+    : "not listed"
+  console.error(`meridian-plugin-pi-scrub: reload left pi-scrub ${detail}`)
+  process.exit(1)
+}
+NODE
+  then
+    reload_state=active
+  fi
+fi
+cleanup_reload
+trap - EXIT
+
+case "$reload_state" in
+  active)
+    printf 'meridian-plugin-pi-scrub: reloaded Meridian plugins (pi-scrub active)\n'
+    ;;
+  inactive)
+    printf 'meridian-plugin-pi-scrub: Meridian reloaded but pi-scrub is inactive; inspect the diagnostic above or the /plugins UI\n' >&2
+    ;;
+  *)
+    printf 'meridian-plugin-pi-scrub: Meridian reload unavailable; the plugin will load on the next service restart\n' >&2
+    ;;
+esac
+{{ end -}}

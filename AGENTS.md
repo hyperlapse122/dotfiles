@@ -28,7 +28,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
 | `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.haptic`, `.vscodium`, `.biopass`, `.agents`, `.user`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
-| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, meridian, codegraph, aoe), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, virtio-win, prezto), `fonts.toml`. Everything but prezto/fonts is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`. Add a new tool to the matching domain file; don't spawn a new one |
+| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, meridian, the pi/opencode/hermes Meridian scrub plugins, codegraph, aoe), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, virtio-win, prezto), `fonts.toml`. Everything but prezto/fonts and the source-built Meridian scrub plugins is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the scrubbers are versioned/commit-pinned source trees consumed by `60-build/`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
@@ -143,7 +143,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `30-linux/` | cross-distro Linux provisioning: the `install-system-10-files`/`20-host`/`30-network` set (see The `system/` tree below), chsh-zsh, solaar, biopass method policy, LUKS-TPM2, Wi-Fi import, default browser, podman cluster |
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (guarded on the `desktop` fact; see OS gating & script parity) — on KDE that is the manifest-driven `config-kde-settings` runner plus the scripts that carry real logic; mutually exclusive at runtime, so they share a number |
-| `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above), plus **LibrePods** compiled from an upstream git branch (see LibrePods below — no in-repo source, so its onchange trigger is a rendered remote sha, not a fingerprint block) |
+| `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above), **LibrePods** compiled from an upstream git branch (see LibrePods below), and the externally fetched **Meridian pi/opencode/hermes scrub plugins** compiled from upstream source (pi/opencode: latest release; Hermes: resolved `main` commit because it has no releases/tags); remote-only inputs use a rendered ref/commit as their onchange trigger rather than a source-tree fingerprint |
 | `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents skills/MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's packages (`install-pi-packages`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
 | `90-services/` | enable the Meridian user service (`systemctl --user` on Linux, `launchctl bootstrap` of the LaunchAgent on macOS); soft-skips without a user session bus / GUI session |
@@ -1135,8 +1135,11 @@ keyring entry can no longer decrypt the stored ciphertexts.
   rendered into each script body, so a new upstream release re-triggers the
   onchange re-link. Meridian's linker additionally installs the published
   package's production dependencies with mise-managed Node before validating
-  and atomically promoting the new tree. (They were previously named
-  `run_after_onchange_*`, which
+  and atomically promoting the new tree. The three `meridian-plugin-*-scrub`
+  externals are the deliberate source-build exception: their pinned source is
+  extracted under `~/.local/share/meridian/plugins/<name>/versions/` and
+  compiled by `60-build` scripts rather than linked into `~/.local/bin`.
+  (The version-dir linker scripts were previously named `run_after_onchange_*`, which
   chezmoi parses as a plain every-apply `run_after_` because the attribute
   order is `run_[once_|onchange_][before_|after_]`.)
 - **Meridian** is the POSIX user-scoped Claude Max proxy. Its latest GitHub
@@ -1156,9 +1159,37 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `~/.local/share/meridian/current/plugin/meridian.ts` path and routes its
   Anthropic provider to the loopback service; Pi's readonly `models.json`
   provider override does the same with `x-meridian-agent: pi`, preserving Pi's
-  built-in model catalog and its existing default model. Meridian's profiles,
-  OAuth, settings, and telemetry under `~/.config/meridian/` are live-written
-  and MUST NOT become managed targets. Existing hosts follow README's manual
+  built-in model catalog and its existing default model.
+
+  **Prompt scrubbers:** `rynfar/meridian-plugin-pi-scrub` and
+  `rynfar/meridian-plugin-opencode-scrub` track their newest
+  `meridian-plugin-<agent>-scrub-v<semver>` GitHub release in the same
+  `ai-agents.toml`; each archive URL is pinned to the release's 40-char target
+  commit, not its movable tag. `rynfar/meridian-plugin-hermes-scrub` publishes
+  no release or tag yet, so it deliberately tracks `main` resolved to a 40-char
+  commit on every render (rolling/unsettled, like the release-less `improve`
+  skill). GitHub publishes no built assets and the NPM tarballs omit `src/`, so
+  three sibling `run_onchange_after_build-meridian-plugin-*-scrub.sh.tmpl`
+  scripts run locked `npm ci` + the explicit TypeScript build with mise-managed
+  Node, validate plugin identity/scope, and atomically link `pi-scrub.js`,
+  `opencode-scrub.js`, and `hermes-scrub.js` into
+  `~/.config/meridian/plugins/`. Pi/OpenCode are restricted to their matching
+  adapters; Hermes MUST have no adapter restriction because its headerless
+  traffic can arrive through any fallback adapter and the transform self-scopes
+  by content. The auto-discovery symlinks keep `plugins.json` live/user-owned.
+  Each successful install calls `POST /plugins/reload` and accepts it as live
+  only when the JSON response reports that plugin active; an unavailable
+  service is left for the next start, while an inactive result is warned for
+  diagnosis. The Linux render-internals matrix additionally smoke-builds the Pi
+  scrubber's rendered source URL. The rendered release tag/branch commit is each
+  script's onchange trigger (no source fingerprint), failures are hard so a
+  missing billing scrub is retried, and old versions are pruned only after
+  promotion. All three are POSIX-only and container-kept.
+
+  Meridian's profiles, OAuth, settings, and telemetry under
+  `~/.config/meridian/` are live-written and MUST NOT become managed targets
+  (the auto-discovered plugin symlink above is the one script-owned entry).
+  Existing hosts follow README's manual
   one-time legacy-service stop before applying; do not add a teardown script or
   delete unmanaged credential state.
 - **Repo-root `mise.toml`** is the dev toolchain for working on this repo itself
@@ -1249,7 +1280,9 @@ disagree about the same machine.
   the render-dotfiles CI `apply --init` jobs green, since they run in
   containers with a dummy `op`). Deliberately KEPT: the opencode plugin build
   (`build-opencode-plugins`; opencode is a first-class CLI here and it soft-skips
-  when mise is absent), the dotagents skills install
+  when mise is absent), the three Meridian scrub-plugin builds (the agent CLIs
+  + Meridian are first-class here, and each build fails clearly if its
+  toolchain/source is unavailable), the dotagents skills install
   (`run_onchange_after_install-dotagents-skills`; soft-skips on missing prerequisites and
   preflights `~/.claude`/`~/.codex`), and the `00-tools/` + `90-services/` scripts (CLI
   symlinks are wanted in a container; Meridian's dependency/link and service

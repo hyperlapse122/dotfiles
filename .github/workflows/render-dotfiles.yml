@@ -336,7 +336,7 @@ jobs:
         run: |
           set -euxo pipefail
           if command -v dnf >/dev/null 2>&1; then
-            dnf install -y --setopt=install_weak_deps=False git tar gzip >/dev/null
+            dnf install -y --setopt=install_weak_deps=False curl git tar gzip >/dev/null
           else
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
@@ -344,6 +344,12 @@ jobs:
           fi
 
       - uses: actions/checkout@v7
+
+      # The rendered pi-scrub builder is smoke-executed below with a tiny mise
+      # compatibility shim, so give both distro containers one known Node/npm.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
 
       - name: Install chezmoi + dummy op
         run: |
@@ -419,8 +425,12 @@ jobs:
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           linker="${out}/.chezmoiscripts/00-tools/run_onchange_after_meridian.sh"
+          pi_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-pi-scrub.sh"
+          opencode_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-opencode-scrub.sh"
+          hermes_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-hermes-scrub.sh"
           service="${out}/.chezmoiscripts/90-services/run_onchange_after_meridian-service.sh"
-          for rendered in "${external}" "${linker}" "${service}"; do
+          for rendered in "${external}" "${linker}" "${pi_scrub_builder}" \
+            "${opencode_scrub_builder}" "${hermes_scrub_builder}" "${service}"; do
             test -s "${rendered}"
             test ! -e "${rendered}.render-error.txt"
           done
@@ -428,8 +438,26 @@ jobs:
           grep -Eq "^targetPath = '\.local/share/meridian/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
           grep -Eq "^url = 'https://registry\.npmjs\.org/@rynfar/meridian/-/meridian-[0-9]+\.[0-9]+\.[0-9]+[^']*\.tgz'$" "${external}"
           grep -Eq "^sha512 = '[0-9a-f]{128}'$" "${external}"
-          bash -n "${linker}" "${service}"
+          grep -Fx '[meridian-plugin-pi-scrub]' "${external}"
+          grep -Eq "^targetPath = '\.local/share/meridian/plugins/pi-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
+          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-pi-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          grep -Fx '[meridian-plugin-opencode-scrub]' "${external}"
+          grep -Eq "^targetPath = '\.local/share/meridian/plugins/opencode-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
+          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-opencode-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          grep -Fx '[meridian-plugin-hermes-scrub]' "${external}"
+          grep -Eq "^targetPath = '\.local/share/meridian/plugins/hermes-scrub/versions/[0-9a-f]{40}'$" "${external}"
+          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-hermes-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          bash -n "${linker}" "${pi_scrub_builder}" "${opencode_scrub_builder}" \
+            "${hermes_scrub_builder}" "${service}"
           grep -F 'npm install --omit=dev --ignore-scripts' "${linker}"
+          for scrub_builder in "${pi_scrub_builder}" "${opencode_scrub_builder}" "${hermes_scrub_builder}"; do
+            grep -F 'ci --ignore-scripts --no-audit --no-fund' "${scrub_builder}"
+            grep -F -- '--ignore-scripts run build' "${scrub_builder}"
+            grep -F 'plugin?.status !== "active"' "${scrub_builder}"
+          done
+          grep -F 'plugin_link="$PLUGIN_DIR/pi-scrub.js"' "${pi_scrub_builder}"
+          grep -F 'plugin_link="$PLUGIN_DIR/opencode-scrub.js"' "${opencode_scrub_builder}"
+          grep -F 'plugin_link="$PLUGIN_DIR/hermes-scrub.js"' "${hermes_scrub_builder}"
           grep -F 'systemctl --user enable --now meridian.service' "${service}"
 
           legacy_proxy='cli-proxy''-api'
@@ -447,6 +475,72 @@ jobs:
             echo 'proxy-only model provider prefix remains in agents.yaml' >&2
             exit 1
           fi
+
+      - name: Smoke-build the Meridian pi-scrub external
+        run: |
+          set -euo pipefail
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          external="${out}/.chezmoiexternals/ai-agents.toml"
+          builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-pi-scrub.sh"
+          scratch="${RUNNER_TEMP}/meridian-pi-scrub-smoke"
+          install_dir="${scratch}/install"
+          plugin_dir="${scratch}/plugins"
+          mkdir -p "${scratch}/bin" "${install_dir}/versions/stale" "${plugin_dir}"
+
+          # Extract the concrete version + commit-pinned archive URL from the
+          # rendered external. Node is already required by the builder; using it
+          # here avoids distro-specific TOML tooling in the Fedora/Ubuntu matrix.
+          mapfile -t metadata < <(node --input-type=module - "${external}" <<'NODE'
+          import { readFile } from "node:fs/promises"
+
+          const text = await readFile(process.argv[2], "utf8")
+          const section = text.match(/\[meridian-plugin-pi-scrub\]\n([\s\S]*?)(?=\n\[|$)/)?.[1]
+          const target = section?.match(/^targetPath = '([^']+)'$/m)?.[1]
+          const url = section?.match(/^url = '([^']+)'$/m)?.[1]
+          if (!target || !url) throw new Error("rendered pi-scrub external metadata missing")
+          console.log(target.split("/").at(-1))
+          console.log(url)
+          NODE
+          )
+          version=${metadata[0]}
+          url=${metadata[1]}
+          source_dir="${install_dir}/versions/${version}"
+          mkdir -p "${source_dir}"
+          curl -fsSL "${url}" | tar xz --strip-components=1 -C "${source_dir}"
+
+          # Production uses real mise. This focused smoke shim implements only
+          # the exact `mise --no-config exec node@latest -- <command>` contract
+          # the rendered builder calls, forwarding to setup-node's Node/npm.
+          cat > "${scratch}/bin/mise" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          [ "${1-}" = "--no-config" ] && shift
+          [ "${1-}" = "exec" ] || exit 64
+          shift
+          [ "${1-}" = "node@latest" ] || exit 64
+          shift
+          [ "${1-}" = "--" ] && shift
+          exec "$@"
+          SH
+          chmod 0755 "${scratch}/bin/mise"
+
+          env PATH="${scratch}/bin:${PATH}" \
+            MERIDIAN_PI_SCRUB_INSTALL_DIR="${install_dir}" \
+            MERIDIAN_PI_SCRUB_PLUGIN_DIR="${plugin_dir}" \
+            MERIDIAN_PI_SCRUB_RELOAD_URL= \
+            bash "${builder}"
+
+          test -L "${plugin_dir}/pi-scrub.js"
+          test -s "$(readlink -f "${plugin_dir}/pi-scrub.js")"
+          test ! -e "${install_dir}/versions/stale"
+          node --input-type=module - "${plugin_dir}/pi-scrub.js" <<'NODE'
+          import { pathToFileURL } from "node:url"
+
+          const plugin = (await import(pathToFileURL(process.argv[2]).href)).default
+          if (plugin?.name !== "pi-scrub" || plugin?.adapters?.join(",") !== "pi") {
+            throw new Error("built pi-scrub plugin identity/scope mismatch")
+          }
+          NODE
 
       - name: Assert fact-registry failure contracts
         run: |
@@ -692,8 +786,12 @@ jobs:
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           linker="${out}/.chezmoiscripts/00-tools/run_onchange_after_meridian.sh"
+          pi_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-pi-scrub.sh"
+          opencode_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-opencode-scrub.sh"
+          hermes_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-hermes-scrub.sh"
           service="${out}/.chezmoiscripts/90-services/run_onchange_after_meridian-service.sh"
-          for rendered in "${external}" "${linker}" "${service}"; do
+          for rendered in "${external}" "${linker}" "${pi_scrub_builder}" \
+            "${opencode_scrub_builder}" "${hermes_scrub_builder}" "${service}"; do
             test -s "${rendered}"
             test ! -e "${rendered}.render-error.txt"
           done
@@ -701,8 +799,26 @@ jobs:
           grep -Eq "^targetPath = '\.local/share/meridian/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
           grep -Eq "^url = 'https://registry\.npmjs\.org/@rynfar/meridian/-/meridian-[0-9]+\.[0-9]+\.[0-9]+[^']*\.tgz'$" "${external}"
           grep -Eq "^sha512 = '[0-9a-f]{128}'$" "${external}"
-          bash -n "${linker}" "${service}"
+          grep -Fx '[meridian-plugin-pi-scrub]' "${external}"
+          grep -Eq "^targetPath = '\.local/share/meridian/plugins/pi-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
+          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-pi-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          grep -Fx '[meridian-plugin-opencode-scrub]' "${external}"
+          grep -Eq "^targetPath = '\.local/share/meridian/plugins/opencode-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
+          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-opencode-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          grep -Fx '[meridian-plugin-hermes-scrub]' "${external}"
+          grep -Eq "^targetPath = '\.local/share/meridian/plugins/hermes-scrub/versions/[0-9a-f]{40}'$" "${external}"
+          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-hermes-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          bash -n "${linker}" "${pi_scrub_builder}" "${opencode_scrub_builder}" \
+            "${hermes_scrub_builder}" "${service}"
           grep -F 'npm install --omit=dev --ignore-scripts' "${linker}"
+          for scrub_builder in "${pi_scrub_builder}" "${opencode_scrub_builder}" "${hermes_scrub_builder}"; do
+            grep -F 'ci --ignore-scripts --no-audit --no-fund' "${scrub_builder}"
+            grep -F -- '--ignore-scripts run build' "${scrub_builder}"
+            grep -F 'plugin?.status !== "active"' "${scrub_builder}"
+          done
+          grep -F 'plugin_link="$PLUGIN_DIR/pi-scrub.js"' "${pi_scrub_builder}"
+          grep -F 'plugin_link="$PLUGIN_DIR/opencode-scrub.js"' "${opencode_scrub_builder}"
+          grep -F 'plugin_link="$PLUGIN_DIR/hermes-scrub.js"' "${hermes_scrub_builder}"
           grep -F 'launchctl bootstrap "gui/$UID"' "${service}"
 
       - name: Upload rendered internals
@@ -906,6 +1022,31 @@ jobs:
           # Per-template render failures are captured as *.render-error.txt inside
           # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
           exit 0
+
+      - name: Assert POSIX Meridian internals are excluded (windows)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
+          $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
+          $builders = @(
+            (Join-Path $out '.chezmoiscripts\60-build\run_onchange_after_build-meridian-plugin-pi-scrub.sh'),
+            (Join-Path $out '.chezmoiscripts\60-build\run_onchange_after_build-meridian-plugin-opencode-scrub.sh'),
+            (Join-Path $out '.chezmoiscripts\60-build\run_onchange_after_build-meridian-plugin-hermes-scrub.sh')
+          )
+          foreach ($path in @($external) + $builders) {
+            if (-not (Test-Path $path)) { throw "rendered internal missing: $path" }
+            if (Test-Path "$path.render-error.txt") { throw "rendered internal failed: $path" }
+          }
+          foreach ($builder in $builders) {
+            if ((Get-Item $builder).Length -ne 0) {
+              throw "POSIX-only Meridian scrub builder rendered on Windows: $builder"
+            }
+          }
+          foreach ($name in @('pi', 'opencode', 'hermes')) {
+            if (Select-String -LiteralPath $external -SimpleMatch "[meridian-plugin-${name}-scrub]" -Quiet) {
+              throw "POSIX-only Meridian $name-scrub external rendered on Windows"
+            }
+          }
 
       - name: Upload rendered internals
         if: always()
