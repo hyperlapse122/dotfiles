@@ -12,7 +12,7 @@
 #              (flat checkout, misplaced clone, unregistered project). Exit 1.
 #
 # Never deletes or modifies anything; deletion decisions stay with the user,
-# and worktree removal stays with aoe. Procedure reference: the src-layout skill.
+# and worktree removal stays with aoe.
 set -eu
 
 src="$HOME/src"

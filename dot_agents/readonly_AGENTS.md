@@ -8,16 +8,6 @@
 
 | Before you…                                                                                | Load skill            | What it covers                                                                                      |
 | ------------------------------------------------------------------------------------------ | --------------------- | --------------------------------------------------------------------------------------------------- |
-| **create or manage a PR/MR** — REQUIRED: load before any `gh pr create` / `glab mr create` | `pr-mr`               | draft-first ordering, duplicate/source-branch traps, issue-linking, pre-create gates, checkbox sync |
-| read or create GitLab issues / tasks / work items / labels / uploads / descriptions        | `gitlab-issues`       | read flow, issue-vs-task, labels, planning metadata, image uploads, templates                       |
-| monitor or fix a CI/CD pipeline                                                            | `ci-cd-monitoring`    | poll states, CLI recipes, fix-red procedure, pre-existing-failure exception                         |
-| name/rename a branch, write a commit, or resolve a rebase                                  | `git-workflow`        | forbidden-shape table, rename recipes, commit-type table, rebase intent resolution                  |
-| edit `package.json` deps, lifecycle-script overrides, or cooldown handling                 | `js-package-managers` | per-manager override mechanics, exact-pin correction, cooldown handling                             |
-| take a single issue/PR/MR URL end-to-end (triage → fix → one PR/MR → green pipeline)       | `ship-issue`          | URL parsing, from-scratch triage + parent/sibling lookup, one-PR-per-issue, CI self-heal loop        |
-| prune stale remote-tracking branches / delete local branches whose upstream is gone        | `git-branch-cleanup`  | remote enumeration, mandatory dry-run preview, `fetch --all --prune`, safe local `: gone]` cleanup   |
-| write a daily work log / 일일 업무 보고 from today's git commits                            | `daily-report`        | `~/src`-wide bare-repo sweep, per-OS date-range `git log`, group → repo grouping, Korean plaintext-fence output |
-| clone a repository, register a new project under `~/src`, or audit the layout             | `src-layout`          | group-name judgment (mirror-or-ask), garden manifest entry + grow/setup-gitdir bootstrap, aoe add handoff, src-audit drift flow |
-| **shell out to another agent CLI** — `pi` / `codex` / `agy` / `opencode` (delegate, parallelize, cross-model review) | `harness-delegation`  | per-CLI non-interactive invocation, harness selection, self-contained brief, sandbox ladder, result verification, `agy -p` flag-order trap |
 | drive a browser / run Playwright tests                                                     | `playwright-cli`      | usage (host-safety rule is in core below)                                                           |
 
 ## Project instruction files — `CLAUDE.md` mirrors `AGENTS.md` (guardrail)
@@ -51,7 +41,7 @@
 - **MUST** `cd` into a worktree before doing any work: the project root has no checkout (`git status` there fails with "this operation must be run in a work tree") and `.bare/` is not one either. `main` is the default-branch worktree.
 - A worktree directory is named after its **agent-of-empires session**, which is **not** its branch — `examvue-apps/wu` sits on `chore/add-claude-md-agents-imports`. The Git Flow gate below applies to the **branch**, never to the directory name; **MUST NOT** rename a worktree dir to match its branch, or a branch to match its dir.
 - Worktrees are created and **locked** by `aoe` (agent-of-empires). **MUST NOT** hand-remove or unlock one (`git worktree remove` / `--force`) — delete through `aoe`, or ask the user.
-- Clone a new project INTO the layout, never as a flat checkout — and never by a hand-rolled `git clone`: every project is **declared in the garden registry** (`~/src/garden.yaml`, chezmoi-managed 0444, age-ENCRYPTED in the public dotfiles repo — edit with `chezmoi edit ~/src/garden.yaml`, or non-interactively `chezmoi decrypt`/`chezmoi encrypt` on the source `src/encrypted_readonly_garden.yaml.age`, then `chezmoi apply`; never commit the trees list in plaintext). Run every `chezmoi` command through the zsh wrapper — `zsh -ic 'chezmoi <args>'` from a non-zsh shell — so it injects `GITHUB_TOKEN`; bare `chezmoi` renders `.chezmoiexternals/` against the anonymous GitHub API rate limit. `garden grow` performs the bare clone; the default-branch worktree is created by **`aoe`**, not `git worktree add` — `aoe` owns and locks every worktree. (Tree-entry format + group-judgment procedure → `src-layout`.)
+- Clone a new project INTO the layout, never as a flat checkout — and never by a hand-rolled `git clone`: every project is **declared in the garden registry** (`~/src/garden.yaml`, chezmoi-managed 0444, age-ENCRYPTED in the public dotfiles repo — edit with `chezmoi edit ~/src/garden.yaml`, or non-interactively `chezmoi decrypt`/`chezmoi encrypt` on the source `src/encrypted_readonly_garden.yaml.age`, then `chezmoi apply`; never commit the trees list in plaintext). Run every `chezmoi` command through the zsh wrapper — `zsh -ic 'chezmoi <args>'` from a non-zsh shell — so it injects `GITHUB_TOKEN`; bare `chezmoi` renders `.chezmoiexternals/` against the anonymous GitHub API rate limit. `garden grow` performs the bare clone; the default-branch worktree is created by **`aoe`**, not `git worktree add` — `aoe` owns and locks every worktree.
 
   ```sh
   # after adding the tree entry to the source garden.yaml + chezmoi apply:
@@ -80,40 +70,33 @@
 - Every branch name **MUST** start with a Git Flow prefix: `feature/` `bugfix/` `hotfix/` `refactor/` `docs/` `chore/` `release/` (or the project's documented equivalent set).
 - Before the **first commit** on any new or newly-switched branch, **MUST** run `git branch --show-current` and confirm the prefix. Treat every fresh branch as failing until confirmed; run the gate once per branch and never skip it on the first commit.
 - Gate fails → **MUST** `git branch -m <old> <prefix>/<slug>` **before** the first commit lands; renaming after a commit/push is **forbidden**. The gate rejects shape, not provenance — a hand-picked bare slug (`add-auth`) is as forbidden as an auto-generated name (`opencode/playful-engine`, `13-feat-x`).
-- Slug **MUST** be a 3–6 word human summary (`-`-separated), not the issue title / number / a placeholder. **One task = one branch**; **MUST NOT** create a sibling branch — rename instead. (Forbidden-shape table, rename recipes, naming table → `git-workflow`.)
+- Slug **MUST** be a 3–6 word human summary (`-`-separated), not the issue title / number / a placeholder. **One task = one branch**; **MUST NOT** create a sibling branch — rename instead.
 
 ## Commit messages
 
 - **MUST** follow Conventional Commits: `<type>(<scope>)<!>: <description>`.
 - Subject **MUST** be entirely lowercase — no exceptions for acronyms, brands, or proper nouns (commitlint `subject-case` rejects any uppercase; put canonical-case tokens in the body) — imperative, no trailing period, ≤50 chars (≤72 max).
-- **MUST NOT**: emojis, sentence case, trailing periods, vague subjects (`update stuff`, `fix things`, `wip`), or AI-tool branding (no "Generated with Claude", no `🤖`, no AI `Co-authored-by:`). (Type table, scope/body/breaking-change, trailers, examples → `git-workflow`.)
+- **MUST NOT**: emojis, sentence case, trailing periods, vague subjects (`update stuff`, `fix things`, `wip`), or AI-tool branding (no "Generated with Claude", no `🤖`, no AI `Co-authored-by:`).
 
 ## Rebase
 
-- During a rebase Git's `--ours` / `--theirs` are **reversed** vs merge: `--ours` is the rebase target (`main`), `--theirs` is the feature commit being applied. Wrong side / direction → `git rebase --abort` and restart; **MUST NOT** continue. (Intent-based conflict resolution → `git-workflow`.)
+- During a rebase Git's `--ours` / `--theirs` are **reversed** vs merge: `--ours` is the rebase target (`main`), `--theirs` is the feature commit being applied. Wrong side / direction → `git rebase --abort` and restart; **MUST NOT** continue.
 
 ## Issue ↔ MR scope
 
 - One issue / work item is delivered by **exactly one** MR, regardless of size — **MUST NOT** split it into "phases", stacked/sequential MRs, or a chain of follow-up MRs. Deliver more commits in the single MR, not more MRs.
-- **MUST NOT** author or restructure an issue body as sequential delivery "Phase 1 / Phase 2 …" sections that imply multiple MRs. Genuinely separable later work (a prod cut-over, a future migration) → a **separate issue** (itself one MR), linked as a follow-up — never a numbered delivery phase of the current issue. (Detail → `pr-mr`, `gitlab-issues`.)
+- **MUST NOT** author or restructure an issue body as sequential delivery "Phase 1 / Phase 2 …" sections that imply multiple MRs. Genuinely separable later work (a prod cut-over, a future migration) → a **separate issue** (itself one MR), linked as a follow-up — never a numbered delivery phase of the current issue.
 
 ## CI/CD
 
 - **MUST** monitor the pipeline to a terminal state on every push that opens or updates a PR/MR — the task is done when it lands green, not when the push succeeds. **MUST NOT** declare ready / complete while a pipeline is failing, cancelled, or running.
-- **MUST** wait on a running pipeline with a SINGLE native blocking call — `gh run watch <run-id> --exit-status`, `gh pr checks <n> --watch`, or `glab ci status --live`. **MUST NOT** poll it by re-running one-shot status commands as repeated tool calls, or by wrapping any pipeline check in a shell `while` / `until` / `for` / `sleep` / `watch` loop. (Native blockers, poll states → `ci-cd-monitoring`.)
-- **MUST NOT** "fix" a red pipeline by disabling / skipping / deleting a job, re-running hoping for green, pushing `[skip ci]` on a change-bearing commit, or force-pushing to hide history. (Poll states, CLI recipes, fix-red procedure, pre-existing-failure exception → `ci-cd-monitoring`.)
+- **MUST** wait on a running pipeline with a SINGLE native blocking call — `gh run watch <run-id> --exit-status`, `gh pr checks <n> --watch`, or `glab ci status --live`. **MUST NOT** poll it by re-running one-shot status commands as repeated tool calls, or by wrapping any pipeline check in a shell `while` / `until` / `for` / `sleep` / `watch` loop.
+- **MUST NOT** "fix" a red pipeline by disabling / skipping / deleting a job, re-running hoping for green, pushing `[skip ci]` on a change-bearing commit, or force-pushing to hide history.
 
 ## Task completion — no silent deferral (guardrail)
 
 - A task / issue / MR is **done** only when **every** in-scope item and stated acceptance criterion is actually delivered and verified in it. **MUST NOT** mark work complete while any item is unimplemented, stubbed, reverted, replaced with a weaker substitute, or pushed to a "follow-up" issue/PR, a `TODO`/`FIXME`, or a "known limitation" note. Difficulty or size is not a reason to defer — deliver more commits, not fewer items.
 - Genuinely blocked (confirmed upstream/tooling bug, missing access, irreversible/destructive step, or a decision needing human judgment) → **STOP** and surface it to the user with concrete evidence + a proposed path + an explicit ask, then wait. Never silently defer and report done; a user-acknowledged blocker is the only acceptable incomplete item.
-
-## Delegating to another agent harness (guardrail)
-
-- Four other coding-agent CLIs live on this host — `pi`, `codex`, `agy` (Antigravity/Gemini), `opencode`. **MUST** load `harness-delegation` **before** shelling out to any of them: the non-interactive invocations are not guessable and a wrong one fails *silently* (`agy`'s `-p` takes the prompt as its **value**, so every other flag must precede it; `codex exec` has no `--full-auto`; `pi` has repo-configured defaults, while an explicit `--model` selects a different provider/model).
-- A delegate shares **none** of your context. The brief **MUST** be self-contained — absolute **worktree** path (never a `~/src/…/<project>/` root, which is a bare repo), branch, exact files in scope, an explicit "do not touch X", and the acceptance criteria — and **MUST** state that the delegate does not commit, push, or open a PR/MR. Branch naming, Conventional Commits, and one-issue-one-MR stay the **caller's** obligation; a delegate that commits bypasses every gate above.
-- **You stay accountable.** A delegation is done only when its exit code is 0, you have **read its output**, and you have **reviewed its `git diff`** — a delegate's claim of success is not completion (Task completion guardrail applies to *you*). **MUST NOT** instruct a delegate to delegate onward: you cannot verify what you cannot see.
-- **MUST** start at the least privilege that can do the job (read-only / plan for analysis; write only when it must edit). **MUST NOT** pass a permission-bypass flag (`codex --dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, `agy --dangerously-skip-permissions`) without an explicit user request in the same turn (destructive/bypass guardrail). **MUST NOT** put a token, key, or secret in a brief — each harness has its own credential store. (Per-CLI flags, model catalogs, capture recipes, parallel fan-out → `harness-delegation`.)
 
 ## Figma
 
@@ -151,8 +134,8 @@
 
 - User-global config hardens npm / pnpm / Yarn / Bun via three switches — lifecycle scripts disabled, exact-version pinning, 1-week cooldown. **MUST** preserve all three; **MUST NOT** edit user-global configs to relax any of them.
 - **MUST** pin every `dependencies` / `devDependencies` / `optionalDependencies` entry to an exact version (no `^` `~` `>=` `latest` `*` `x`); **MUST** correct an existing range when editing a `package.json` for any reason; **MUST NOT** introduce a range or hand-edit a lockfile to dodge the rule.
-- `peerDependencies` are the **exception**: they **MUST NOT** be exact-pinned — declare the widest compatible range (`^<major>`, `>=`, `^18 || ^19`, or `*`). **MUST NOT** "correct" a peer range to an exact pin. Internal lockstep/prerelease-versioned peers are the sub-exception and stay exact-pinned; a project `AGENTS.md` may codify this. (Detail → `js-package-managers`.)
-- Cooldown: a version **MUST** be ≥1 week old — pin the most recent that qualifies. **MUST NOT** add a package to a preapproved / exclude list, nor lower the cooldown, without explicit per-package user approval. (Per-manager override mechanics, exceptions → `js-package-managers`.)
+- `peerDependencies` are the **exception**: they **MUST NOT** be exact-pinned — declare the widest compatible range (`^<major>`, `>=`, `^18 || ^19`, or `*`). **MUST NOT** "correct" a peer range to an exact pin. Internal lockstep/prerelease-versioned peers are the sub-exception and stay exact-pinned; a project `AGENTS.md` may codify this.
+- Cooldown: a version **MUST** be ≥1 week old — pin the most recent that qualifies. **MUST NOT** add a package to a preapproved / exclude list, nor lower the cooldown, without explicit per-package user approval.
 
 ## mise (tool version manager)
 
@@ -161,4 +144,4 @@
 
 ## GitLab CLI (glab)
 
-- **MUST** pass project paths to `glab` / `glab api` with slashes intact (`group/sub/project`), never URL-encoded (`group%2Fsub%2Fproject`); prefer `:fullpath` when the repo remote points at the target. (Issue / MR / pipeline playbooks → `gitlab-issues`, `pr-mr`, `ci-cd-monitoring`.)
+- **MUST** pass project paths to `glab` / `glab api` with slashes intact (`group/sub/project`), never URL-encoded (`group%2Fsub%2Fproject`); prefer `:fullpath` when the repo remote points at the target.

@@ -43,7 +43,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    GNOME) / Solaar / system config. It also fetches pinned standalone CLI
    binaries into `~/.local/bin` and coding-agent skills into `~/.agents/skills/`
    (via [`.chezmoiexternals/`](.chezmoiexternals)), and provisions MCP servers
-   plus the local agent skills via `dotagents` into `~/.agents/` from the pinned
+   via `dotagents` into `~/.agents/` from the pinned
    set in
    [`dot_agents/private_readonly_agents.toml.tmpl`](dot_agents/private_readonly_agents.toml.tmpl)
    (rendered to `~/.agents/agents.toml`).
@@ -148,7 +148,7 @@ rate limit.
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
 `/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE/GNOME
 settings, and no pro-audio realtime/system provisioning. The OpenCode plugin build and `dotagents`
-skills install still run (and soft-skip if their toolchains are missing). This
+install still run (and soft-skip if their toolchains are missing). This
 makes the repo usable as-is on CI runners and in dedicated containers that have
 their own `$HOME`.
 
@@ -231,7 +231,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   Linux). `@h82/mxm4-haptic` is a library, not a plugin. See
   [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
-  template plus the local agent skills under `dot_agents/skills/`.
+  template (MCP servers).
 - [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgents for
   Meridian and `mxm4-hapticd`).
 

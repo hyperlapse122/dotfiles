@@ -1,14 +1,14 @@
-{{- /* MCP servers are data-driven from .chezmoidata/agents.yaml (range over
-       .agents.mcp.servers). The twelve local path skills below stay literal here —
-       single consumer. Add or remove an MCP server in the DATA file, not here.
+{{- /* This file declares ONLY the MCP servers, data-driven from
+       .chezmoidata/agents.yaml (range over .agents.mcp.servers). Add or remove an
+       MCP server in the DATA file, not here.
 
-       Agent skills that used to be dotagents remote skills are NO LONGER declared here —
-       they are chezmoi externals (the list is data in .chezmoidata/agents.yaml,
-       agents.skills.external) that deploy straight into ~/.agents/skills/<name>. See
+       There are NO local path: skills any more. Every user-scoped skill is a
+       chezmoi external (the list is data in .chezmoidata/agents.yaml,
+       agents.skills.external) that deploys straight into ~/.agents/skills/<name>. See
        .chezmoiexternals/ai-agents.toml.
-       dotagents still owns the ~/.claude/skills -> ~/.agents/skills symlink and its
-       `install` never prunes an undeclared dir (prune is sync-only), so those externals
-       coexist with the path: skills below.
+       dotagents still owns the ~/.claude/skills -> ~/.agents/skills symlink — through
+       which those externals reach Claude Code — and its `install` never prunes an
+       undeclared dir (prune is sync-only), so the externals coexist with the symlink.
 
        NOT here: everyinc/compound-engineering-plugin. It ships a first-class
        plugin for every agent this repo runs, so it is installed through each
@@ -21,54 +21,6 @@ agents = ["claude", "codex"]
 
 [trust]
 git_domains = ["git.jpi.app"]
-
-[[skills]]
-name = "ci-cd-monitoring"
-source = "path:skills/ci-cd-monitoring"
-
-[[skills]]
-name = "daily-report"
-source = "path:skills/daily-report"
-
-[[skills]]
-name = "git-branch-cleanup"
-source = "path:skills/git-branch-cleanup"
-
-[[skills]]
-name = "git-workflow"
-source = "path:skills/git-workflow"
-
-[[skills]]
-name = "gitlab-issues"
-source = "path:skills/gitlab-issues"
-
-[[skills]]
-name = "glab"
-source = "path:skills/glab"
-
-[[skills]]
-name = "glab-stack"
-source = "path:skills/glab-stack"
-
-[[skills]]
-name = "harness-delegation"
-source = "path:skills/harness-delegation"
-
-[[skills]]
-name = "js-package-managers"
-source = "path:skills/js-package-managers"
-
-[[skills]]
-name = "pr-mr"
-source = "path:skills/pr-mr"
-
-[[skills]]
-name = "ship-issue"
-source = "path:skills/ship-issue"
-
-[[skills]]
-name = "src-layout"
-source = "path:skills/src-layout"
 
 {{- range .agents.mcp.servers }}
 [[mcp]]
