@@ -96,7 +96,7 @@
 #                   resolve/download/enable logic.
 gnome:
   mouse:
-    accelProfile: flat
+    accelProfile: adaptive
   terminal:
     palette: gnome
   appGrid:
