@@ -22,13 +22,6 @@
 # field-independent and therefore works for provider options, nested headers,
 # MCP headers, and pi auth without secret-key-specific template branches.
 #
-# agents.opencode.providerKeyOrder is formatting metadata for the recursive JSON
-# emitter. YAML maps do not preserve source order through chezmoi's data merge,
-# while this refactor has a byte-identical rendered-config contract. Validated
-# exact rules cover one-off complete key sets; reusable regex rules cover
-# repeated shapes. Omitted maps use deterministic lexical ordering. Paths are
-# rooted at providers.
-#
 # Naming: keys owned by this repo use camelCase. Keys below
 # agents.opencode.ohMyOpenagent.{agents,categories} and provider definitions are
 # upstream schema identifiers and are emitted VERBATIM (for example
@@ -87,17 +80,37 @@ agents:
     # lfg skills; pi-subagents delegates work; pi-ask-user supplies ask_user.
     packages:
     - npm:pi-mcp-extension
-    - git:github.com/EveryInc/compound-engineering-plugin
     - npm:pi-subagents
     - npm:pi-ask-user
+    - git:github.com/EveryInc/compound-engineering-plugin
     defaults:
-      # The provider/model must already be credentialed in pi's live auth.json.
-      # openai-codex uses pi-owned OAuth; the static providers below are merged
-      # separately and must never replace OAuth entries pi refreshes itself.
-      provider: openai-codex
-      model: gpt-5.6-sol
+      # Keys intentionally match pi's settings.json schema so config-pi can
+      # render and merge this object wholesale. The provider/model must already
+      # be usable through pi's live auth.json or managed models.json.
+      defaultProvider: openai-codex
+      defaultModel: gpt-5.6-sol
       # Valid: off | minimal | low | medium | high | xhigh | max.
-      thinkingLevel: xhigh
+      defaultThinkingLevel: max
+      subagents:
+        defaultModel: gpt-5.6-terra
+        agentOverrides:
+          researcher:
+            model: gpt-5.6-luna
+          planner:
+            model: gpt-5.6-sol
+            thinking: xhigh
+          worker:
+            model: gpt-5.6-luna
+          reviewer:
+            model: gpt-5.6-sol
+            thinking: xhigh
+          context-builder:
+            model: gpt-5.6-sol
+          oracle:
+            model: gpt-5.6-sol
+            thinking: max
+          delegate:
+            model: gpt-5.6-luna
     auth:
       providers:
       - name: kimi-coding
@@ -146,47 +159,6 @@ agents:
         options:
           baseURL: http://127.0.0.1:3456
           apiKey: x
-    # Exact rules cover one-off objects and must list their complete key set.
-    # Pattern rules reuse preferred order across repeated model shapes; absent
-    # optional keys are ignored and remaining keys sort lexically. The resolver
-    # validates duplicate/stale/overlapping rules and exact key-set drift.
-    providerKeyOrder:
-      exact:
-      - path: []
-        keys:
-        - opencode
-        - openrouter
-        - anthropic
-      - path: [openrouter]
-        keys:
-        - options
-        - models
-        - whitelist
-      - path: [openrouter, options, headers]
-        keys:
-        - HTTP-Referer
-        - X-OpenRouter-Title
-        - X-OpenRouter-Categories
-      - path: [openrouter, models]
-        keys:
-        - openrouter/free
-        - openrouter/auto
-        - openrouter/fusion
-      - path: [openrouter, models, openrouter/free]
-        keys:
-        - name
-        - cost
-      - path: [anthropic, options]
-        keys:
-        - baseURL
-        - apiKey
-      patterns:
-      - pattern: ^/openrouter/models/.+/cost$
-        keys:
-        - input
-        - output
-        - cache_read
-        - cache_write
     # Upstream oh-my-openagent identifiers below are verbatim schema keys.
     ohMyOpenagent:
       # Per-agent mappings (oh-my-openagent.jsonc "agents").

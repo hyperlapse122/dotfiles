@@ -6,7 +6,7 @@ verified were run against the live CLI.
 | | |
 |---|---|
 | Source | `earendil-works/pi`, GitHub release tarball → `~/.local/share/pi/versions/<tag>`; `~/.local/bin/pi` is symlinked at the newest by `.chezmoiscripts/00-tools/run_onchange_after_pi.sh.tmpl` (a whole-dir distribution — the binary resolves sibling `package.json` / `theme/` / `.wasm`, so it cannot be a lone binary) |
-| Auth / defaults | `~/.pi/agent/auth.json` is pi-LIVE-WRITTEN: static 1Password-backed API keys for **`kimi-coding` and `zai` ONLY** are merged in by `config-pi-auth`, while pi owns OAuth entries. `config-pi` merges the repo default `openai-codex/gpt-5.6-sol` at `xhigh`. Both sources live under `agents.pi` in `.chezmoidata/agents.yaml`. |
+| Auth / defaults | `~/.pi/agent/auth.json` is pi-LIVE-WRITTEN: static 1Password-backed API keys for **`kimi-coding` and `zai` ONLY** are merged in by `config-pi-auth`, while pi owns OAuth entries. `config-pi` merges the repo default `openai-codex/gpt-5.6-sol` at `max` plus the declared subagent defaults. Both data sources live under `agents.pi` in `.chezmoidata/agents.yaml`. |
 | Canonical | `pi -p --model zai/glm-5.2 --no-session "<brief>"` |
 | Strength | Cheapest/fastest of the four with the explicit Z.ai model above; cleanest stdout (the answer, nothing else) |
 
@@ -46,6 +46,7 @@ Working directory: **cwd** — there is no `--cd`. `cd <worktree> && pi …`.
 |---|---|
 | `kimi-coding` | `k2p7` · `kimi-for-coding` · `kimi-k2-thinking` |
 | `zai` | `glm-4.5-air` · `glm-4.7` · `glm-5-turbo` · `glm-5.1` · `glm-5.2` (1M ctx) · `glm-5v-turbo` (vision) |
+| `anthropic` | `claude-opus-4-8` (Meridian-backed) |
 | `openai-codex` | `gpt-5.6-sol` (repo-configured OAuth-backed default) |
 
 Verified working: `zai/glm-5.2`, `kimi-coding/k2p7`; the configured default is `openai-codex/gpt-5.6-sol`.
@@ -68,7 +69,7 @@ pi -p --mode json --model zai/glm-5.2 --no-session "<brief>" \
 
 ## Gotchas
 
-- No `--model` → repo-configured `openai-codex/gpt-5.6-sol` at `xhigh`; requires pi's OAuth entry in the live auth file.
+- No `--model` → repo-configured `openai-codex/gpt-5.6-sol` at `max`; requires pi's OAuth entry in the live auth file.
 - Bad model id → **exit 1**.
 - No working-directory flag. cwd is the whole scope story.
 - `--print`/`-p` is a **boolean** here — the opposite of [`agy`](agy.md), and

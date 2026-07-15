@@ -30,13 +30,11 @@
 # (private_readonly_), so the FIRST apply after this migration rewrites it 0600
 # and unblocks pi's OAuth writes from then on.
 #
-# Why jq here but python3 in config-pi (settings.json): the auth merge is a
-# one-liner and far more legible in jq, and auth.json's frequent-write / OAuth
-# concern is the whole point of this refactor. config-pi keeps python3 (stdlib
-# json, no dependency) because it predates jq being a declared dep and changing
-# it is out of scope. The two scripts intentionally diverge; each documents its
-# own choice. jq is declared in .chezmoidata/packages.yaml (both distros) so a
-# fresh host has it before this after-phase script runs.
+# jq is shared with config-pi (settings.json): both are top-level JSON overlay
+# merges, while this auth merge additionally resolves 1Password-backed values
+# and replaces each declared provider wholesale. jq is declared in
+# .chezmoidata/packages.yaml (both distros) so a fresh host has it before these
+# after-phase scripts run.
 #
 # onchange trigger: the declared providers below — with their 1Password-resolved
 # keys — ARE the trigger (there is no source-dir dependency beyond

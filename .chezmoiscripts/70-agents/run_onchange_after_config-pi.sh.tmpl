@@ -2,18 +2,17 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/70-agents/run_onchange_after_config-pi.sh.tmpl
 #
-# Merges pi's model defaults — defaultProvider / defaultModel / defaultThinkingLevel
-# (source: .chezmoidata/agents.yaml, .agents.pi.defaults) — into
-# ~/.pi/agent/settings.json, the file pi
-# LIVE-WRITES (theme, packages, lastChangelogVersion, …).
+# Merges pi's declared settings defaults (source: .chezmoidata/agents.yaml,
+# .agents.pi.defaults) into ~/.pi/agent/settings.json, the file pi LIVE-WRITES
+# (theme, packages, lastChangelogVersion, …).
 #
 # settings.json CANNOT be a chezmoi-managed target: pi read-merge-writes it on
 # every session, so a managed file — let alone a readonly_ 0444 one — would fight
 # pi for the same file, exactly the way a managed ~/.claude/settings.json would
 # fight Claude Code and aoe (see install-claude-plugins). This script instead
-# read-merge-WRITES only the three default keys, preserving every key pi owns —
-# the same shape config-solaar and config-biopass use for other apps'
-# live-written config files.
+# read-merge-WRITES the declared settings-shaped defaults object, preserving
+# every other key pi owns — the same shape config-solaar and config-biopass use
+# for other apps' live-written config files.
 #
 # Why not the alternatives:
 #   - `pi config` is a TUI (no non-interactive setter);
@@ -23,82 +22,85 @@
 #   - there is NO env var for these defaults (pi's env vars cover only API keys).
 # Merging into the live file is the only reproducible, non-conflicting route.
 #
-# The merge is a plain JSON read-modify-write via /usr/bin/python3 (stdlib json —
-# no PyYAML, no jq dependency; NOT bare `python3`, which mise may shadow — see
-# config-solaar). It reads settings.json (or starts from {}), sets the three
-# keys, and writes back at a WRITABLE mode (0644) so pi can keep writing it. If
-# settings.json does not yet exist (pi never run), this CREATES it with the three
-# defaults + an empty packages array, so pi's later `pi install`
+# .agents.pi.defaults deliberately uses the same keys as settings.json. The
+# whole map is rendered once with toPrettyJson and overlaid with jq's top-level
+# `+`, so adding another declared default needs only a data edit — no matching
+# argument or assignment in this script. It reads settings.json (or starts from
+# {} when the file is absent, malformed, or not an object), preserves undeclared
+# keys, ensures an empty packages array exists on first creation, and writes back
+# at a WRITABLE mode (0644) so pi can keep writing it. pi's later `pi install`
 # (run_onchange_after_install-pi-packages, alphabetically AFTER this script)
 # merges packages into a file that already carries the defaults — and pi's own
-# read-merge-write from then on preserves them. Atomic write via a temp + rename.
+# read-merge-write from then on preserves them. Atomic write via a same-directory
+# temp + rename.
 #
-# onchange trigger: the rendered values below ARE the trigger. There is no
+# onchange trigger: the rendered JSON object below IS the trigger. There is no
 # source-dir dependency to hash beyond .chezmoidata/agents.yaml (whose values
 # render into this body), so there is deliberately NO fingerprint block — editing
 # the data changes this script's rendered content and re-runs it (the same shape as
 # install-pi-packages and install-vscodium-extensions).
 #
-# Soft-skip: this script must never fail an apply — a missing `pi` binary or a
-# missing python3 exits 0 after a diagnostic. NOTE the standard onchange
-# trade-off: chezmoi records that clean exit-0 as a successful run, so a skipped
-# merge is NOT retried on the next apply until the rendered content changes —
-# re-run by hand or `chezmoi apply --force`.
+# Hard requirement: missing `pi` or `jq` exits 1 after a diagnostic. Unlike a
+# soft-skipped onchange script, this leaves the apply failed so the merge retries
+# on the next apply instead of being recorded as successfully skipped.
 #
 # POSIX-only (`ne windows`) and KEPT in containers, like its sibling
-# install-pi-packages: pi is a first-class CLI here, its config is wanted in a
-# devbox, and every failure path soft-skips.
+# install-pi-packages: pi is a first-class CLI here and its config is required in
+# a devbox too.
 
 set -euo pipefail
 
 SETTINGS="${PI_AGENT_SETTINGS:-$HOME/.pi/agent/settings.json}"
 
-skip() { exit 0; }
+# chezmoi's non-interactive script environment may omit the user-local bin dir,
+# even though the file phase linked pi there earlier in the same apply.
+PATH="$HOME/.local/bin${PATH:+:$PATH}"
+export PATH
+
+fail() { exit 1; }
 
 # `pi` is fetched by .chezmoiexternals/ai-agents.toml during the file phase and
 # symlinked into ~/.local/bin by .chezmoiscripts/00-tools/run_onchange_after_pi,
-# so it exists by this after-phase script on a normal apply. Absent (first
-# bootstrap, fetch failed) → nothing to configure.
+# so it exists by this after-phase script on a normal apply. If it is absent
+# (first bootstrap or failed fetch), fail the apply so the merge is retried.
 if ! command -v pi >/dev/null 2>&1; then
-  echo "config-pi: skipped (pi not on PATH)" >&2
-  skip
+  echo "config-pi: failed (pi not on PATH, including $HOME/.local/bin)" >&2
+  fail
 fi
 
-# /usr/bin/python3 carries the stdlib json module everywhere pi runs. Defensive
-# guard for a stripped host.
-if ! [ -x /usr/bin/python3 ]; then
-  echo "config-pi: skipped (/usr/bin/python3 not found)" >&2
-  skip
+if ! command -v jq >/dev/null 2>&1; then
+  echo "config-pi: failed (jq not on PATH)" >&2
+  fail
 fi
 
 mkdir -p "$(dirname "$SETTINGS")"
 
-# Rendered defaults from .chezmoidata/agents.yaml — the onchange trigger.
-/usr/bin/python3 - "$SETTINGS" \
-  "{{ .agents.pi.defaults.provider }}" \
-  "{{ .agents.pi.defaults.model }}" \
-  "{{ .agents.pi.defaults.thinkingLevel }}" \
-  <<'PYEOF'
-import json, os, sys
-path, provider, model, thinking = sys.argv[1:5]
-data = {}
-if os.path.exists(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (ValueError, OSError):
-        data = {}
-data.setdefault("packages", [])
-data["defaultProvider"] = provider
-data["defaultModel"] = model
-data["defaultThinkingLevel"] = thinking
-tmp = path + ".tmp"
-with open(tmp, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
-    f.write("\n")
-os.replace(tmp, path)
-os.chmod(path, 0o644)
-PYEOF
+# Settings-shaped defaults rendered wholesale from .chezmoidata/agents.yaml —
+# the onchange trigger. The quoted heredoc prevents shell expansion inside any
+# future string value.
+DEFAULTS=$(cat <<'JSONEOF'
+{{ toPrettyJson "  " .agents.pi.defaults | trim }}
+JSONEOF
+)
 
-echo "config-pi: set defaultProvider={{ .agents.pi.defaults.provider }} defaultModel={{ .agents.pi.defaults.model }} defaultThinkingLevel={{ .agents.pi.defaults.thinkingLevel }}"
+tmp="$(mktemp "${SETTINGS}.tmp.XXXXXX")"
+trap 'rm -f "$tmp"' EXIT
+
+# Overlay the declared top-level keys onto a valid live settings object. An
+# absent, malformed, or non-object file follows the old reset-to-defaults path.
+if [[ -f "$SETTINGS" ]] && jq -e 'type == "object"' "$SETTINGS" >/dev/null 2>&1; then
+  jq --argjson defaults "$DEFAULTS" \
+    '. + $defaults | if has("packages") then . else . + {"packages": []} end' \
+    "$SETTINGS" > "$tmp"
+else
+  jq -n --argjson defaults "$DEFAULTS" \
+    '$defaults | if has("packages") then . else . + {"packages": []} end' \
+    > "$tmp"
+fi
+
+chmod 644 "$tmp"
+mv -f "$tmp" "$SETTINGS"
+trap - EXIT
+
+echo "config-pi: merged declared defaults into $SETTINGS"
 {{ end -}}

@@ -5,36 +5,18 @@ resolve-op-refs-json.tmpl — recursively render data as JSON while resolving
 Input (dict):
   value     required; any map, slice, scalar, or null
   indent    optional; indentation of the value's containing line (default "")
-  orders    optional; exact + reusable pattern rules for established non-lexical
-            object order (schema below)
-  segments  internal recursion path (callers normally omit it)
-  mode      internal path-collection mode (callers normally omit it)
 
 Every string beginning exactly with "op://" is passed to onepasswordRead. Every
 other scalar and type is serialized unchanged. Maps and slices recurse, so the
 rule applies uniformly to heterogeneous provider options, nested headers, model
 definitions, MCP data, and auth data without field-specific branches.
 
-Ordering is a separate formatting concern. Exact rules use a path-segment list
-and must name the complete key set of one map. Pattern rules match slash-joined
-map paths and are reusable preferred-key lists: absent keys are ignored and
-unlisted keys follow lexically. Duplicate rule ids/order keys, stale exact paths,
-exact key-set drift, unmatched patterns, and overlapping patterns all fail the
-render loudly.
-
-orders schema:
-  exact:
-    - path: [provider]
-      keys: [first, second]
-  patterns:
-    - pattern: '^/models/[^/]+$'
-      keys: [name, options]
+Map keys are emitted in deterministic lexical order.
 
 Usage:
   {{ includeTemplate "resolve-op-refs-json.tmpl" (dict
        "value" .agents.opencode.providers
-       "indent" "  "
-       "orders" .agents.opencode.providerKeyOrder) }}
+       "indent" "  ") }}
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "resolve-op-refs-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
@@ -43,173 +25,18 @@ Usage:
 {{-   fail "resolve-op-refs-json.tmpl: missing required argument value" -}}
 {{- end -}}
 {{- $value := .value -}}
-{{- $segments := list -}}
-{{- if hasKey . "segments" -}}{{- $segments = .segments -}}{{- end -}}
-{{- $path := "" -}}
-{{- if gt (len $segments) 0 -}}{{- $path = printf "/%s" (join "/" $segments) -}}{{- end -}}
-{{- $mode := "emit" -}}
-{{- if hasKey . "mode" -}}{{- $mode = .mode -}}{{- end -}}
-{{- if eq $mode "paths" -}}
-{{-   if kindIs "map" $value -}}
-@{{ $path }}|
-{{-     range $key := (keys $value | sortAlpha) -}}
-{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "segments" (append $segments $key) "mode" "paths") }}
-{{-     end -}}
-{{-   else if kindIs "slice" $value -}}
-{{-     range $index, $item := $value -}}
-{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "segments" (append $segments (printf "%d" $index)) "mode" "paths") }}
-{{-     end -}}
-{{-   end -}}
-{{- else -}}
 {{-   $indent := "" -}}
 {{-   if hasKey . "indent" -}}{{- $indent = .indent -}}{{- end -}}
-{{-   $orders := dict -}}
-{{-   if hasKey . "orders" -}}{{- $orders = .orders -}}{{- end -}}
-{{-   if not (kindIs "map" $orders) -}}
-{{-     fail (printf "resolve-op-refs-json.tmpl: orders must be a map, got %s" (kindOf $orders)) -}}
-{{-   end -}}
-{{-   $exactRules := list -}}
-{{-   if hasKey $orders "exact" -}}{{- $exactRules = $orders.exact -}}{{- end -}}
-{{-   $patternRules := list -}}
-{{-   if hasKey $orders "patterns" -}}{{- $patternRules = $orders.patterns -}}{{- end -}}
-{{-   if not (kindIs "slice" $exactRules) -}}
-{{-     fail (printf "resolve-op-refs-json.tmpl: orders.exact must be a slice, got %s" (kindOf $exactRules)) -}}
-{{-   end -}}
-{{-   if not (kindIs "slice" $patternRules) -}}
-{{-     fail (printf "resolve-op-refs-json.tmpl: orders.patterns must be a slice, got %s" (kindOf $patternRules)) -}}
-{{-   end -}}
-{{-   $isRoot := eq (len $segments) 0 -}}
-{{-   if $isRoot -}}
-{{-     $exactDefs := dict -}}
-{{-     range $index, $rule := $exactRules -}}
-{{-       if not (kindIs "map" $rule) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: orders.exact[%d] must be a map" $index) -}}
-{{-       end -}}
-{{-       if or (not (hasKey $rule "path")) (not (kindIs "slice" $rule.path)) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: orders.exact[%d].path must be a slice" $index) -}}
-{{-       end -}}
-{{-       if or (not (hasKey $rule "keys")) (not (kindIs "slice" $rule.keys)) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: orders.exact[%d].keys must be a slice" $index) -}}
-{{-       end -}}
-{{-       $ruleID := toJson $rule.path -}}
-{{-       if hasKey $exactDefs $ruleID -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: duplicate exact order rule path %s" $ruleID) -}}
-{{-       end -}}
-{{-       $_ := set $exactDefs $ruleID true -}}
-{{-       if ne (len $rule.keys) (len (uniq $rule.keys)) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: exact order rule %s contains duplicate keys" $ruleID) -}}
-{{-       end -}}
-{{-       $node := $value -}}
-{{-       range $segment := $rule.path -}}
-{{-         if not (kindIs "string" $segment) -}}
-{{-           fail (printf "resolve-op-refs-json.tmpl: exact order rule path %s contains non-string segment %v" $ruleID $segment) -}}
-{{-         end -}}
-{{-         if kindIs "map" $node -}}
-{{-           if not (hasKey $node $segment) -}}
-{{-             fail (printf "resolve-op-refs-json.tmpl: exact order rule path %s did not match a map" $ruleID) -}}
-{{-           end -}}
-{{-           $node = index $node $segment -}}
-{{-         else if kindIs "slice" $node -}}
-{{-           if not (regexMatch "^[0-9]+$" $segment) -}}
-{{-             fail (printf "resolve-op-refs-json.tmpl: exact order rule path %s uses non-numeric slice segment %q" $ruleID $segment) -}}
-{{-           end -}}
-{{-           $sliceIndex := atoi $segment -}}
-{{-           if ge $sliceIndex (len $node) -}}
-{{-             fail (printf "resolve-op-refs-json.tmpl: exact order rule path %s slice index %d is out of range" $ruleID $sliceIndex) -}}
-{{-           end -}}
-{{-           $node = index $node $sliceIndex -}}
-{{-         else -}}
-{{-           fail (printf "resolve-op-refs-json.tmpl: exact order rule path %s did not match a map" $ruleID) -}}
-{{-         end -}}
-{{-       end -}}
-{{-       if not (kindIs "map" $node) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: exact order rule path %s did not match a map" $ruleID) -}}
-{{-       end -}}
-{{-       if ne (len $rule.keys) (len $node) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: exact order rule %s key-set mismatch: rule has %d keys, map has %d" $ruleID (len $rule.keys) (len $node)) -}}
-{{-       end -}}
-{{-       range $key := $rule.keys -}}
-{{-         if not (hasKey $node $key) -}}
-{{-           fail (printf "resolve-op-refs-json.tmpl: exact order rule %s names missing key %q" $ruleID $key) -}}
-{{-         end -}}
-{{-       end -}}
-{{-     end -}}
-{{-     $patternDefs := dict -}}
-{{-     range $index, $rule := $patternRules -}}
-{{-       if not (kindIs "map" $rule) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: orders.patterns[%d] must be a map" $index) -}}
-{{-       end -}}
-{{-       if or (not (hasKey $rule "pattern")) (not (kindIs "string" $rule.pattern)) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: orders.patterns[%d].pattern must be a string" $index) -}}
-{{-       end -}}
-{{-       if or (not (hasKey $rule "keys")) (not (kindIs "slice" $rule.keys)) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: orders.patterns[%d].keys must be a slice" $index) -}}
-{{-       end -}}
-{{-       if hasKey $patternDefs $rule.pattern -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: duplicate pattern order rule %q" $rule.pattern) -}}
-{{-       end -}}
-{{-       $_ := set $patternDefs $rule.pattern true -}}
-{{-       if ne (len $rule.keys) (len (uniq $rule.keys)) -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: pattern order rule %q contains duplicate keys" $rule.pattern) -}}
-{{-       end -}}
-{{-     end -}}
-{{-     $mapPathsRaw := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $value "mode" "paths") -}}
-{{-     $mapPaths := list -}}
-{{-     $mapPathsText := trimSuffix "|" $mapPathsRaw -}}
-{{-     if ne $mapPathsText "" -}}
-{{-       range $encodedPath := splitList "|" $mapPathsText -}}
-{{-         $mapPaths = append $mapPaths (trimPrefix "@" $encodedPath) -}}
-{{-       end -}}
-{{-     end -}}
-{{-     range $rule := $patternRules -}}
-{{-       $matched := false -}}
-{{-       range $mapPath := $mapPaths -}}
-{{-         if regexMatch $rule.pattern $mapPath -}}{{- $matched = true -}}{{- end -}}
-{{-       end -}}
-{{-       if not $matched -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: pattern order rule %q did not match a map" $rule.pattern) -}}
-{{-       end -}}
-{{-     end -}}
-{{-     range $mapPath := $mapPaths -}}
-{{-       $matchedPatterns := list -}}
-{{-       range $rule := $patternRules -}}
-{{-         if regexMatch $rule.pattern $mapPath -}}{{- $matchedPatterns = append $matchedPatterns $rule.pattern -}}{{- end -}}
-{{-       end -}}
-{{-       if gt (len $matchedPatterns) 1 -}}
-{{-         fail (printf "resolve-op-refs-json.tmpl: path %q matches overlapping pattern rules: %s" $mapPath (join ", " $matchedPatterns)) -}}
-{{-       end -}}
-{{-     end -}}
-{{-   end -}}
 {{-   $childIndent := printf "%s  " $indent -}}
 {{-   if kindIs "map" $value -}}
 {{-     if eq (len $value) 0 -}}
 {}
 {{-     else -}}
-{{-       $orderedKeys := list -}}
-{{-       $matchedExact := false -}}
-{{-       $segmentID := toJson $segments -}}
-{{-       range $rule := $exactRules -}}
-{{-         if eq (toJson $rule.path) $segmentID -}}
-{{-           $matchedExact = true -}}
-{{-           range $key := $rule.keys -}}{{- $orderedKeys = append $orderedKeys $key -}}{{- end -}}
-{{-         end -}}
-{{-       end -}}
-{{-       if not $matchedExact -}}
-{{-         range $rule := $patternRules -}}
-{{-           if regexMatch $rule.pattern $path -}}
-{{-             range $key := $rule.keys -}}
-{{-               if hasKey $value $key -}}{{- $orderedKeys = append $orderedKeys $key -}}{{- end -}}
-{{-             end -}}
-{{-           end -}}
-{{-         end -}}
-{{-       end -}}
-{{-       range (keys $value | sortAlpha) -}}
-{{-         if not (has . $orderedKeys) -}}{{- $orderedKeys = append $orderedKeys . -}}{{- end -}}
-{{-       end -}}
+{{-       $orderedKeys := keys $value | sortAlpha -}}
 {
 {{-       $last := sub (len $orderedKeys) 1 -}}
 {{-       range $index, $key := $orderedKeys }}
-{{ $childIndent }}{{ $key | toJson }}: {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "indent" $childIndent "orders" $orders "segments" (append $segments $key)) }}{{ if lt $index $last }},{{ end }}
+{{ $childIndent }}{{ $key | toJson }}: {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "indent" $childIndent) }}{{ if lt $index $last }},{{ end }}
 {{-       end }}
 {{ $indent }}}
 {{-     end -}}
@@ -220,7 +47,7 @@ Usage:
 [
 {{-       $last := sub (len $value) 1 -}}
 {{-       range $index, $item := $value }}
-{{ $childIndent }}{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "indent" $childIndent "orders" $orders "segments" (append $segments (printf "%d" $index))) }}{{ if lt $index $last }},{{ end }}
+{{ $childIndent }}{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "indent" $childIndent) }}{{ if lt $index $last }},{{ end }}
 {{-       end }}
 {{ $indent }}]
 {{-     end -}}
@@ -229,4 +56,3 @@ Usage:
 {{-   else -}}
 {{ $value | toJson }}
 {{-   end -}}
-{{- end -}}

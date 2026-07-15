@@ -150,13 +150,10 @@
     "continue_loop_on_deny": true
   },
 {{- $providers := .agents.opencode.providers -}}
-{{- $providerOrders := .agents.opencode.providerKeyOrder -}}
 {{- if eq .chezmoi.os "windows" -}}
 {{- /* Meridian is POSIX-only. `omit` returns a copy rather than mutating the
-       shared template data. The POSIX root exact-order rule names Anthropic,
-       so Windows intentionally emits the two common providers lexically. */ -}}
+       shared template data. */ -}}
 {{- $providers = omit $providers "anthropic" -}}
-{{- $providerOrders = dict -}}
 {{- end }}
-  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $providers "indent" "  " "orders" $providerOrders) }}
+  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $providers "indent" "  ") }}
 }
