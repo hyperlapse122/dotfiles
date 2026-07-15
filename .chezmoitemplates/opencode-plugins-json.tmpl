@@ -59,8 +59,15 @@ is a compact JSON array for callers to parse and pretty-print.
 {{- /* Chezmoi extracts the release tarball to
    `$HOME/<externalPath>/v<version>/` in .chezmoiexternals/ai-agents.toml and
    .chezmoiscripts/00-tools/run_onchange_after_compound-engineering prunes
-   siblings. Every agent then references the same fully-rendered absolute
-   path. compoundEngineeringRelease yields tags of the form
+   siblings. Every agent then references the same on-disk tree; OpenCode
+   receives the NPM `file:` protocol spec `<pkg>@file:<abs-path>` — the same
+   shape as the `<pkg>@<version>` entries above — because a BARE absolute path
+   is recognized by `opencode plugin` as "already configured" but never
+   actually installed into `~/.cache/opencode/packages/`, so the plugin's
+   default export never gets dynamically imported and its `config` hook never
+   runs. The `file:` form triggers the proper bun install step and creates a
+   `<pkg>@file:` package-cache entry that OpenCode can import.
+   compoundEngineeringRelease yields tags of the form
    `compound-engineering-v<semver>`; trim the front-half prefix and keep the
    `v` so the on-disk segment matches the release tag's version suffix. */ -}}
 {{-     $verSegment := "" -}}
@@ -69,7 +76,8 @@ is a compact JSON array for callers to parse and pretty-print.
 {{-     else -}}
 {{-       $verSegment = printf "v%s" (trimPrefix "v" $version) -}}
 {{-     end -}}
-{{-     $base = printf "%s/%s/%s" (trimSuffix "/" $ctx.chezmoi.homeDir) $plugin.externalPath $verSegment -}}
+{{-     $abs := printf "%s/%s/%s" (trimSuffix "/" $ctx.chezmoi.homeDir) $plugin.externalPath $verSegment -}}
+{{-     $base = printf "%s@file:%s" $plugin.package $abs -}}
 {{-   else -}}
 {{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] has unknown install %q" $index $plugin.install) -}}
 {{-   end -}}

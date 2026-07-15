@@ -33,15 +33,18 @@
 #   1. UNIFIED pinning across all four agents, including Claude — whose
 #      `plugin marketplace add` takes NO `--ref` and would otherwise track the
 #      upstream default branch.
-#   2. The former `compound-engineering@git+https://…git#tag` OpenCode plugin
-#      spec broke plugin loading — the resolved cache dir layout invalidated
-#      the plugin's own `path.resolve(pluginDir, "../../skills")` walk.
-#   3. The path CHANGES on every ref bump (`.local/share/compound-engineering/
+#   2. The path CHANGES on every ref bump (`.local/share/compound-engineering/
 #      v<ver>/`), so agents re-register at a NEW absolute path rather than the
 #      CLIs having to notice new content behind an unchanged path.
-#   4. `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering`
+#   3. `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering`
 #      prunes older sibling versions after the file phase, so disk usage stays
 #      bounded.
+#   4. OpenCode reads the SAME on-disk tree through a `<pkg>@file:<abs-path>`
+#      NPM spec (see opencode-plugins-json.tmpl), so all four agents point at
+#      the identical extracted release rather than a per-agent cache. NOTE:
+#      OpenCode's plugin installer accepts a BARE absolute path as "already
+#      configured" but never actually installs/imports it — the `file:`
+#      protocol is what triggers the real bun install step.
 #
 # Pinning is now UNIFIED: all four agents load the SAME extracted tag through
 # .chezmoitemplates/compound-engineering-ref.tmpl — the ai-agents.toml external
