@@ -214,18 +214,17 @@ jobs:
             # plugin must still satisfy one of the two pinned forms above.
             jq -e '.plugin | all(
               test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$") or
-              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$") or
-              test("^/.+/\\.local/share/meridian/current/plugin/meridian\\.ts$")
+              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$")
             )' "${cfg}/${f}" >/dev/null
           done
 
           opencode_cfg="${cfg}/opencode.json"
           tui_cfg="${cfg}/tui.json"
           pi_models="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/models.json"
-          jq -e '[.plugin[] | select(test("^/.+/\\.local/share/meridian/current/plugin/meridian\\.ts$"))] | length == 1' "${opencode_cfg}" >/dev/null
-          jq -e '[.plugin[] | select(test("^/.+/\\.local/share/meridian/current/plugin/meridian\\.ts$"))] | length == 0' "${tui_cfg}" >/dev/null
-          jq -e '.plugin | all(startswith("@ex-machina/opencode-anthropic-auth@") | not)' "${opencode_cfg}" >/dev/null
-          jq -e '.provider.anthropic.options == {"baseURL":"http://127.0.0.1:3456","apiKey":"x"}' "${opencode_cfg}" >/dev/null
+          jq -e '.plugin | all(contains("meridian") | not)' "${opencode_cfg}" >/dev/null
+          jq -e '.plugin | all(contains("meridian") | not)' "${tui_cfg}" >/dev/null
+          jq -e '[.plugin[] | select(test("^@ex-machina/opencode-anthropic-auth@[0-9]+\\.[0-9]+\\.[0-9]+"))] | length == 1' "${opencode_cfg}" >/dev/null
+          jq -e '.provider | has("anthropic") | not' "${opencode_cfg}" >/dev/null
           test -f "${pi_models}"
           jq -e '. == {"providers":{"anthropic":{"baseUrl":"http://127.0.0.1:3456","apiKey":"x","headers":{"x-meridian-agent":"pi"}}}}' "${pi_models}" >/dev/null
 
@@ -426,11 +425,10 @@ jobs:
           external="${out}/.chezmoiexternals/ai-agents.toml"
           linker="${out}/.chezmoiscripts/00-tools/run_onchange_after_meridian.sh"
           pi_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-pi-scrub.sh"
-          opencode_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-opencode-scrub.sh"
           hermes_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-hermes-scrub.sh"
           service="${out}/.chezmoiscripts/90-services/run_onchange_after_meridian-service.sh"
           for rendered in "${external}" "${linker}" "${pi_scrub_builder}" \
-            "${opencode_scrub_builder}" "${hermes_scrub_builder}" "${service}"; do
+            "${hermes_scrub_builder}" "${service}"; do
             test -s "${rendered}"
             test ! -e "${rendered}.render-error.txt"
           done
@@ -441,22 +439,18 @@ jobs:
           grep -Fx '[meridian-plugin-pi-scrub]' "${external}"
           grep -Eq "^targetPath = '\.local/share/meridian/plugins/pi-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
           grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-pi-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
-          grep -Fx '[meridian-plugin-opencode-scrub]' "${external}"
-          grep -Eq "^targetPath = '\.local/share/meridian/plugins/opencode-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
-          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-opencode-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          ! grep -F '[meridian-plugin-opencode-scrub]' "${external}"
           grep -Fx '[meridian-plugin-hermes-scrub]' "${external}"
           grep -Eq "^targetPath = '\.local/share/meridian/plugins/hermes-scrub/versions/[0-9a-f]{40}'$" "${external}"
           grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-hermes-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
-          bash -n "${linker}" "${pi_scrub_builder}" "${opencode_scrub_builder}" \
-            "${hermes_scrub_builder}" "${service}"
+          bash -n "${linker}" "${pi_scrub_builder}" "${hermes_scrub_builder}" "${service}"
           grep -F 'npm install --omit=dev --ignore-scripts' "${linker}"
-          for scrub_builder in "${pi_scrub_builder}" "${opencode_scrub_builder}" "${hermes_scrub_builder}"; do
+          for scrub_builder in "${pi_scrub_builder}" "${hermes_scrub_builder}"; do
             grep -F 'ci --ignore-scripts --no-audit --no-fund' "${scrub_builder}"
             grep -F -- '--ignore-scripts run build' "${scrub_builder}"
             grep -F 'plugin?.status !== "active"' "${scrub_builder}"
           done
           grep -F 'plugin_link="$PLUGIN_DIR/pi-scrub.js"' "${pi_scrub_builder}"
-          grep -F 'plugin_link="$PLUGIN_DIR/opencode-scrub.js"' "${opencode_scrub_builder}"
           grep -F 'plugin_link="$PLUGIN_DIR/hermes-scrub.js"' "${hermes_scrub_builder}"
           grep -F 'systemctl --user enable --now meridian.service' "${service}"
 
@@ -703,18 +697,17 @@ jobs:
             fi
             jq -e '.plugin | all(
               test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$") or
-              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$") or
-              test("^/.+/\\.local/share/meridian/current/plugin/meridian\\.ts$")
+              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$")
             )' "${cfg}/${f}" >/dev/null
           done
 
           opencode_cfg="${cfg}/opencode.json"
           tui_cfg="${cfg}/tui.json"
           pi_models="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/models.json"
-          jq -e '[.plugin[] | select(test("^/.+/\\.local/share/meridian/current/plugin/meridian\\.ts$"))] | length == 1' "${opencode_cfg}" >/dev/null
-          jq -e '[.plugin[] | select(test("^/.+/\\.local/share/meridian/current/plugin/meridian\\.ts$"))] | length == 0' "${tui_cfg}" >/dev/null
-          jq -e '.plugin | all(startswith("@ex-machina/opencode-anthropic-auth@") | not)' "${opencode_cfg}" >/dev/null
-          jq -e '.provider.anthropic.options == {"baseURL":"http://127.0.0.1:3456","apiKey":"x"}' "${opencode_cfg}" >/dev/null
+          jq -e '.plugin | all(contains("meridian") | not)' "${opencode_cfg}" >/dev/null
+          jq -e '.plugin | all(contains("meridian") | not)' "${tui_cfg}" >/dev/null
+          jq -e '[.plugin[] | select(test("^@ex-machina/opencode-anthropic-auth@[0-9]+\\.[0-9]+\\.[0-9]+"))] | length == 1' "${opencode_cfg}" >/dev/null
+          jq -e '.provider | has("anthropic") | not' "${opencode_cfg}" >/dev/null
           test -f "${pi_models}"
           jq -e '. == {"providers":{"anthropic":{"baseUrl":"http://127.0.0.1:3456","apiKey":"x","headers":{"x-meridian-agent":"pi"}}}}' "${pi_models}" >/dev/null
 
@@ -787,11 +780,10 @@ jobs:
           external="${out}/.chezmoiexternals/ai-agents.toml"
           linker="${out}/.chezmoiscripts/00-tools/run_onchange_after_meridian.sh"
           pi_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-pi-scrub.sh"
-          opencode_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-opencode-scrub.sh"
           hermes_scrub_builder="${out}/.chezmoiscripts/60-build/run_onchange_after_build-meridian-plugin-hermes-scrub.sh"
           service="${out}/.chezmoiscripts/90-services/run_onchange_after_meridian-service.sh"
           for rendered in "${external}" "${linker}" "${pi_scrub_builder}" \
-            "${opencode_scrub_builder}" "${hermes_scrub_builder}" "${service}"; do
+            "${hermes_scrub_builder}" "${service}"; do
             test -s "${rendered}"
             test ! -e "${rendered}.render-error.txt"
           done
@@ -802,22 +794,18 @@ jobs:
           grep -Fx '[meridian-plugin-pi-scrub]' "${external}"
           grep -Eq "^targetPath = '\.local/share/meridian/plugins/pi-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
           grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-pi-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
-          grep -Fx '[meridian-plugin-opencode-scrub]' "${external}"
-          grep -Eq "^targetPath = '\.local/share/meridian/plugins/opencode-scrub/versions/[0-9]+\.[0-9]+\.[0-9]+[^']*'$" "${external}"
-          grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-opencode-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
+          ! grep -F '[meridian-plugin-opencode-scrub]' "${external}"
           grep -Fx '[meridian-plugin-hermes-scrub]' "${external}"
           grep -Eq "^targetPath = '\.local/share/meridian/plugins/hermes-scrub/versions/[0-9a-f]{40}'$" "${external}"
           grep -Eq "^url = 'https://github\.com/rynfar/meridian-plugin-hermes-scrub/archive/[0-9a-f]{40}\.tar\.gz'$" "${external}"
-          bash -n "${linker}" "${pi_scrub_builder}" "${opencode_scrub_builder}" \
-            "${hermes_scrub_builder}" "${service}"
+          bash -n "${linker}" "${pi_scrub_builder}" "${hermes_scrub_builder}" "${service}"
           grep -F 'npm install --omit=dev --ignore-scripts' "${linker}"
-          for scrub_builder in "${pi_scrub_builder}" "${opencode_scrub_builder}" "${hermes_scrub_builder}"; do
+          for scrub_builder in "${pi_scrub_builder}" "${hermes_scrub_builder}"; do
             grep -F 'ci --ignore-scripts --no-audit --no-fund' "${scrub_builder}"
             grep -F -- '--ignore-scripts run build' "${scrub_builder}"
             grep -F 'plugin?.status !== "active"' "${scrub_builder}"
           done
           grep -F 'plugin_link="$PLUGIN_DIR/pi-scrub.js"' "${pi_scrub_builder}"
-          grep -F 'plugin_link="$PLUGIN_DIR/opencode-scrub.js"' "${opencode_scrub_builder}"
           grep -F 'plugin_link="$PLUGIN_DIR/hermes-scrub.js"' "${hermes_scrub_builder}"
           grep -F 'launchctl bootstrap "gui/$UID"' "${service}"
 
@@ -962,12 +950,10 @@ jobs:
           $opencodePath = Join-Path $out '.config\opencode\opencode.json'
           if (-not (Test-Path $opencodePath)) { throw "rendered OpenCode config missing: $opencodePath" }
           $opencode = Get-Content -Raw $opencodePath | ConvertFrom-Json
-          $meridianPlugins = @($opencode.plugin | Where-Object {
-            ($_ -replace '\\', '/') -match '/\.local/share/meridian/current/plugin/meridian\.ts$'
-          })
-          if ($meridianPlugins.Count -ne 0) {
-            throw "POSIX-only Meridian plugin rendered on Windows: $($meridianPlugins -join ', ')"
-          }
+          $meridianPlugins = @($opencode.plugin | Where-Object { $_ -match 'meridian' })
+          if ($meridianPlugins.Count -ne 0) { throw "Meridian plugin rendered in OpenCode: $($meridianPlugins -join ', ')" }
+          $anthropicAuthPlugins = @($opencode.plugin | Where-Object { $_ -match '^@ex-machina/opencode-anthropic-auth@[0-9]+\.[0-9]+\.[0-9]+' })
+          if ($anthropicAuthPlugins.Count -ne 1) { throw 'Pinned Anthropic auth plugin missing from OpenCode config' }
           if ($null -ne $opencode.provider.anthropic) {
             throw 'POSIX-only Meridian Anthropic provider rendered on Windows'
           }
@@ -1030,7 +1016,6 @@ jobs:
           $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
           $builders = @(
             (Join-Path $out '.chezmoiscripts\60-build\run_onchange_after_build-meridian-plugin-pi-scrub.sh'),
-            (Join-Path $out '.chezmoiscripts\60-build\run_onchange_after_build-meridian-plugin-opencode-scrub.sh'),
             (Join-Path $out '.chezmoiscripts\60-build\run_onchange_after_build-meridian-plugin-hermes-scrub.sh')
           )
           foreach ($path in @($external) + $builders) {
@@ -1042,7 +1027,7 @@ jobs:
               throw "POSIX-only Meridian scrub builder rendered on Windows: $builder"
             }
           }
-          foreach ($name in @('pi', 'opencode', 'hermes')) {
+          foreach ($name in @('pi', 'hermes')) {
             if (Select-String -LiteralPath $external -SimpleMatch "[meridian-plugin-${name}-scrub]" -Quiet) {
               throw "POSIX-only Meridian $name-scrub external rendered on Windows"
             }

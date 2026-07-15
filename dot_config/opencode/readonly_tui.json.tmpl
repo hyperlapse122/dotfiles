@@ -1,7 +1,4 @@
-{{- /* Version resolved at apply time from oh-my-openagent's latest GitHub tag,
-       which is pushed on every npm publish and so mirrors the npm version 1:1
-       (GitHub *Releases* can lag npm). Install is still from npm. */ -}}
-{{- $ohMyOpenagent := (gitHubLatestTag "code-yeongyu/oh-my-openagent").Name | trimPrefix "v" -}}
+{{- $plugins := includeTemplate "opencode-plugins-json.tmpl" (dict "ctx" . "target" "tui") | fromJson -}}
 {
   "$schema": "https://opencode.ai/tui.json",
   "keybinds": {
@@ -12,8 +9,5 @@
     "enabled": true
   },
   "diff_style": "auto",
-  "plugin": [
-    "oh-my-openagent@{{ $ohMyOpenagent }}/tui",
-    "oh-my-openagent@{{ $ohMyOpenagent }}"
-  ]
+  "plugin": {{ toPrettyJson "  " $plugins | trim | replace "\n" "\n  " }}
 }

@@ -59,16 +59,16 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 Meridian is installed from the exact NPM package version named by its latest
 GitHub Release, linked through `~/.local/share/meridian/current`, and started as
 a user service on Linux/macOS. It stays loopback-only at `127.0.0.1:3456` and
-routes OpenCode plus Pi Anthropic requests through the repo-managed Claude
-binary. Meridian's pi, OpenCode, and Hermes prompt scrubbers are fetched as
-commit-pinned source externals, built with their locked TypeScript toolchains,
-and atomically linked into the plugin auto-discovery directory so identifying
-harness boilerplate is removed before requests reach Claude. Pi/OpenCode track
-their newest GitHub release; the release-less Hermes plugin tracks a resolved
-`main` commit. Meridian owns and live-writes its profiles, OAuth, settings, and
-telemetry under `~/.config/meridian/`; those files are intentionally unmanaged
-(the three `plugins/*-scrub.js` symlinks are provisioned by build scripts, not
-managed config files).
+routes Pi Anthropic requests through the repo-managed Claude binary. Meridian's
+Pi and Hermes prompt scrubbers are fetched as commit-pinned source externals,
+built with their locked TypeScript toolchains, and atomically linked into the
+plugin auto-discovery directory so identifying harness boilerplate is removed
+before requests reach Claude. Pi tracks its newest GitHub release; the
+release-less Hermes plugin tracks a resolved `main` commit. OpenCode does not
+load Meridian or route providers through it. Meridian owns and live-writes its
+profiles, OAuth, settings, and telemetry under `~/.config/meridian/`; those files
+are intentionally unmanaged (the two `plugins/*-scrub.js` symlinks are
+provisioned by build scripts, not managed config files).
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring

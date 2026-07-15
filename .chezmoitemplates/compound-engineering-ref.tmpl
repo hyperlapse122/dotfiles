@@ -10,7 +10,7 @@
            (Codex pins the marketplace snapshot to this tag; Claude Code cannot
            pin — its CLI takes no ref — so there the tag is only the onchange
            trigger, and it tracks the default branch)
-         - dot_config/opencode/readonly_opencode.json.tmpl (the `plugin` array's
+         - opencode-plugins-json.tmpl (the OpenCode plugin array's
            git+https://…#<tag> dependency spec)
     */ -}}
 {{- range (gitHubReleases "everyinc/compound-engineering-plugin") -}}

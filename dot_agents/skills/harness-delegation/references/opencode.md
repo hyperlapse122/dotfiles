@@ -6,7 +6,7 @@ called out as verified were run against the live CLI.
 | | |
 |---|---|
 | Source | `anomalyco/opencode`, GitHub release archive → `~/.local/bin/opencode` |
-| Auth / config | Repo-managed **readonly** `~/.config/opencode/opencode.json`; provider data comes from `.chezmoidata/agents.yaml`, `op://` references resolve from 1Password at render, and POSIX Anthropic routes through the local Meridian service |
+| Auth / config | Repo-managed **readonly** `~/.config/opencode/opencode.json`; plugins and provider data come from `.chezmoidata/agents.yaml`, Anthropic auth uses `@ex-machina/opencode-anthropic-auth`, and `op://` references resolve from 1Password at render |
 | Canonical | `opencode run --agent <Agent> --dir <worktree> "<brief>"` |
 | Strength | The **agent roster** — plan → execute → critique as distinct agents |
 
@@ -65,12 +65,6 @@ opencode run --format json --agent oracle --dir "$wt" "<brief>" \
 
 ## Gotchas
 
-- **Meridian-backed Anthropic.** `anthropic/*` requests route through the local
-  Meridian service at `http://127.0.0.1:3456`; its stable OpenCode plugin path is
-  `~/.local/share/meridian/current/plugin/meridian.ts`. A delegation can hang or
-  return empty when the proxy or Claude authentication is unavailable. Check
-  `curl -fsS http://127.0.0.1:3456/health` and, on Linux,
-  `systemctl --user status meridian.service`.
 - `--auto` is **rarely needed**: permissions are already configured in the
   repo-managed readonly `opencode.json` (bash `*` allowed; edits allowed except
   denied credential paths and `/tmp`, `/var/tmp`, `/dev/shm`), and the

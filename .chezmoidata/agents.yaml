@@ -7,7 +7,7 @@
 #     -> dotagents remote skill installation
 #   agents.pi.packages / defaults / auth.providers
 #     -> pi package installer and live settings/auth merge scripts
-#   agents.opencode.model / smallModel / providers / ohMyOpenagent
+#   agents.opencode.plugins / model / smallModel / providers / ohMyOpenagent
 #     -> opencode.json and oh-my-openagent.jsonc
 #
 # Add or change agent configuration HERE, not in the consuming templates. Those
@@ -121,8 +121,37 @@ agents:
         key: op://Private/Z.ai/API Key
   # OpenCode defaults, full provider definitions, and oh-my-openagent mappings.
   # Provider shapes are deliberately heterogeneous and emitted recursively.
-  # The Anthropic provider is omitted from Windows renders: Meridian is POSIX-only.
   opencode:
+    # Plugin versions resolve at render time. `latestTag` strips a leading `v`
+    # from the newest GitHub tag before producing an exact npm spec.
+    # compound-engineering uses its filtered release train because that repo
+    # interleaves unrelated marketplace/CLI tags.
+    plugins:
+    - package: oh-my-openagent
+      source: code-yeongyu/oh-my-openagent
+      install: npm
+      versionSource: latestTag
+      targets:
+        opencode: [""]
+        tui: ["/tui", ""]
+    - package: opencode-wakatime
+      source: angristan/opencode-wakatime
+      install: npm
+      versionSource: latestTag
+      targets:
+        opencode: [""]
+    - package: "@ex-machina/opencode-anthropic-auth"
+      source: ex-machina-co/opencode-anthropic-auth
+      install: npm
+      versionSource: latestTag
+      targets:
+        opencode: [""]
+    - package: compound-engineering
+      source: EveryInc/compound-engineering-plugin
+      install: git
+      versionSource: compoundEngineeringRelease
+      targets:
+        opencode: [""]
     model: anthropic/claude-opus-4-8
     smallModel: openrouter/openrouter/free
     providers:
@@ -155,10 +184,6 @@ agents:
         - openrouter/free
         - openrouter/auto
         - openrouter/fusion
-      anthropic:
-        options:
-          baseURL: http://127.0.0.1:3456
-          apiKey: x
     # Upstream oh-my-openagent identifiers below are verbatim schema keys.
     ohMyOpenagent:
       # Per-agent mappings (oh-my-openagent.jsonc "agents").

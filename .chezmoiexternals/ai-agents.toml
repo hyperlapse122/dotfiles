@@ -1,4 +1,4 @@
-{{- /* AI coding agents & the local Claude Max proxy: claude, codex, agy, opencode, pi, meridian, the pi/opencode/hermes scrub plugins, codegraph, aoe. */ -}}
+{{- /* AI coding agents & the local Claude Max proxy: claude, codex, agy, opencode, pi, meridian, the pi/hermes scrub plugins, codegraph, aoe. */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -189,31 +189,6 @@ sha512 = '{{ $meridianSha512 }}'
 type = "archive"
 targetPath = '{{ printf ".local/share/meridian/plugins/pi-scrub/versions/%s" $meridianPiScrubVersion }}'
 url = '{{ printf "https://github.com/rynfar/meridian-plugin-pi-scrub/archive/%s.tar.gz" $meridianPiScrubCommit }}'
-stripComponents = 1
-
-{{- end }}
-
-{{- /* ---------- meridian-plugin-opencode-scrub — same source-build model as
-       pi-scrub: latest release target commit -> versioned source archive ->
-       60-build compiler/linker. POSIX only, matching Meridian itself. ---------- */ -}}
-
-{{- if ne .chezmoi.os "windows" -}}
-
-{{- $meridianOpencodeScrubRelease := gitHubLatestRelease "rynfar/meridian-plugin-opencode-scrub" -}}
-{{- $meridianOpencodeScrubTag := $meridianOpencodeScrubRelease.TagName | toString -}}
-{{- if not (regexMatch "^meridian-plugin-opencode-scrub-v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" $meridianOpencodeScrubTag) -}}
-  {{- fail (printf "meridian-plugin-opencode-scrub: latest GitHub release tag %q is not meridian-plugin-opencode-scrub-v<semver>" $meridianOpencodeScrubTag) -}}
-{{- end -}}
-{{- $meridianOpencodeScrubVersion := trimPrefix "meridian-plugin-opencode-scrub-v" $meridianOpencodeScrubTag -}}
-{{- $meridianOpencodeScrubCommit := $meridianOpencodeScrubRelease.TargetCommitish | toString -}}
-{{- if not (regexMatch "^[0-9a-f]{40}$" $meridianOpencodeScrubCommit) -}}
-  {{- fail (printf "meridian-plugin-opencode-scrub: release %s target %q is not a 40-character commit sha" $meridianOpencodeScrubTag $meridianOpencodeScrubCommit) -}}
-{{- end }}
-
-[meridian-plugin-opencode-scrub]
-type = "archive"
-targetPath = '{{ printf ".local/share/meridian/plugins/opencode-scrub/versions/%s" $meridianOpencodeScrubVersion }}'
-url = '{{ printf "https://github.com/rynfar/meridian-plugin-opencode-scrub/archive/%s.tar.gz" $meridianOpencodeScrubCommit }}'
 stripComponents = 1
 
 {{- end }}

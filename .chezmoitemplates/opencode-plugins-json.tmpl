@@ -1,0 +1,58 @@
+{{- /*
+opencode-plugins-json.tmpl — resolve the data-driven OpenCode plugin list.
+
+Input (dict):
+  ctx     required; root chezmoi context
+  target  required; opencode or tui
+
+Each plugin declares its exact package source, installation form, version
+resolver, and target-specific suffixes in .chezmoidata/agents.yaml. The output
+is a compact JSON array for callers to parse and pretty-print.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "opencode-plugins-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if or (not (hasKey . "ctx")) (not (hasKey . "target")) -}}
+{{-   fail "opencode-plugins-json.tmpl: ctx and target are required" -}}
+{{- end -}}
+{{- $ctx := .ctx -}}
+{{- $target := .target -}}
+{{- $specs := list -}}
+{{- range $index, $plugin := $ctx.agents.opencode.plugins -}}
+{{-   if not (kindIs "map" $plugin) -}}
+{{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] must be a map" $index) -}}
+{{-   end -}}
+{{-   range $field := list "package" "source" "install" "versionSource" "targets" -}}
+{{-     if not (hasKey $plugin $field) -}}
+{{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] is missing %s" $index $field) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   $version := "" -}}
+{{-   if eq $plugin.versionSource "latestTag" -}}
+{{-     $version = (gitHubLatestTag $plugin.source).Name | trimPrefix "v" -}}
+{{-   else if eq $plugin.versionSource "compoundEngineeringRelease" -}}
+{{-     $version = includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{-   else -}}
+{{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] has unknown versionSource %q" $index $plugin.versionSource) -}}
+{{-   end -}}
+{{-   $base := "" -}}
+{{-   if eq $plugin.install "npm" -}}
+{{-     if not (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+([-.][0-9A-Za-z.-]+)?$" $version) -}}
+{{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] resolved invalid npm version %q" $index $version) -}}
+{{-     end -}}
+{{-     $base = printf "%s@%s" $plugin.package $version -}}
+{{-   else if eq $plugin.install "git" -}}
+{{-     if not (regexMatch "[0-9]+\\.[0-9]+\\.[0-9]+([-.][0-9A-Za-z.-]+)?$" $version) -}}
+{{-       fail (printf "opencode-plugins-json.tmpl: plugins[%d] resolved unpinned git ref %q" $index $version) -}}
+{{-     end -}}
+{{-     $base = printf "%s@git+https://github.com/%s.git#%s" $plugin.package $plugin.source $version -}}
+{{-   else -}}
+{{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] has unknown install %q" $index $plugin.install) -}}
+{{-   end -}}
+{{-   if hasKey $plugin.targets $target -}}
+{{-     range $suffix := index $plugin.targets $target -}}
+{{-       $specs = append $specs (printf "%s%s" $base $suffix) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- toJson $specs -}}
