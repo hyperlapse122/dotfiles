@@ -1,6 +1,6 @@
 {{- /*
-  Host/system-level externals: docker credential helpers, wakatime-cli, the
-  virtio-win guest driver ISO, and the prezto zsh framework.
+  Host/system-level externals: docker credential helpers, wakatime-cli, and the
+  prezto zsh framework.
 */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
@@ -43,43 +43,6 @@ targetPath = '{{ printf ".local/bin/wakatime-cli%s" $executableExtension }}'
 url = '{{ gitHubLatestReleaseAssetURL "wakatime/wakatime-cli" (printf "wakatime-cli-%s-%s.zip" .chezmoi.os .chezmoi.arch) }}'
 executable = true
 path = '{{ printf "wakatime-cli-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
-
-{{- /* ---------- virtio-win ---------- */ -}}
-
-{{/*
-  virtio-win guest driver ISO for the win11-vm helper (dot_local/bin/
-  executable_win11-vm), pre-fetched at apply time so a fresh host can create a
-  Windows 11 guest with virtio disk/NIC without hunting for driver media.
-
-  RESOLVED AT RENDER TIME, not hand-pinned: the ISO is published on
-  fedorapeople.org (the upstream virtio-win/virtio-win-pkg-scripts GitHub repo
-  carries no release assets, so the gitHubLatestRelease pattern used by the CLI
-  externals cannot apply). `getRedirectedURL` follows the `stable-virtio/`
-  alias's redirect chain to the current fully-versioned archive URL
-  (…/archive-virtio/virtio-win-X.Y.Z-N/virtio-win-X.Y.Z.iso). Using the alias
-  URL directly would never change and so defeat chezmoi's URL-keyed external
-  cache (fetch once, then never again) while hiding which version an apply
-  actually got; resolving it keeps the auto-latest semantics of the
-  gitHubLatestRelease externals — the rendered URL changes exactly when
-  upstream re-points the alias, and only then is the ~750MB ISO re-fetched.
-  `stable-virtio/` (the qualified/tested line) is deliberate over
-  `latest-virtio/`. Like the gitHubLatestRelease externals, rendering the
-  source state performs a network request, so offline renders fail here first.
-
-  Linux-only (the libvirt/KVM host stack this feeds is linux-only), and skipped
-  in real containers (same marker probe as the root .chezmoiignore): a ~750MB
-  ISO is dead weight in a podman/docker apply, while distrobox/toolbox share
-  the host $HOME and behave like the host.
-*/ -}}
-{{- if and (eq .chezmoi.os "linux") (not (and (or (stat "/run/.containerenv") (stat "/.dockerenv")) (not (stat "/run/.toolboxenv")))) }}
-
-{{- $virtioWinIsoLink := getRedirectedURL "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso" }}
-
-[".local/share/virtio-win/virtio-win.iso"]
-type = "file"
-url = {{ $virtioWinIsoLink | quote }}
-
-{{- end }}
 
 {{- /* ---------- prezto (zsh framework; no windows) ---------- */ -}}
 

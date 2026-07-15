@@ -306,12 +306,105 @@ configure_time() {
   "${SUDO[@]}" timedatectl set-ntp true
 }
 
+# Generate the DKMS MOK signing keypair if missing. This ONE keypair is the
+# trust anchor for every out-of-tree module signed on this host:
+#   - kmod-nvidia-latest-dkms's postinst signs each NVIDIA .ko with it
+#     (the DKMS default when a key exists at /var/lib/dkms/mok.{pub,key})
+#   - sign_virtualbox_modules() and the /etc/kernel/install.d/50-vbox-sign.install
+#     hook sign Oracle's non-DKMS vbox modules with it too
+# So one mokutil enrollment covers both stacks — no per-package MOK. Idempotent.
+#
+# On a Fedora host that installs VirtualBox WITHOUT NVIDIA, no DKMS build ever
+# fires, so dkms's own /usr/lib/dkms/mok_signing_setup (called from the DKMS
+# postinst) never runs and the key file never appears. We call that script
+# ourselves when present, and fall back to `openssl req` when it isn't — either
+# path lands the pair at the paths mokutil enrollment reads below.
+ensure_dkms_mok_generated() {
+  [[ -d /sys/firmware/efi ]] || return 0
+  mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled' || return 0
+
+  local mok_pub=/var/lib/dkms/mok.pub
+  local mok_key=/var/lib/dkms/mok.key
+  if "${SUDO[@]}" test -f "${mok_pub}" && "${SUDO[@]}" test -f "${mok_key}"; then
+    return 0
+  fi
+
+  if [[ -x /usr/lib/dkms/mok_signing_setup ]]; then
+    "${SUDO[@]}" /usr/lib/dkms/mok_signing_setup
+    return 0
+  fi
+
+  # Fallback: mint the pair directly. DER cert + PEM key at DKMS-standard
+  # paths, RSA 2048, 100-year validity (the kernel checks signature integrity
+  # not cert expiry, so a long-expiring cert saves a re-enrollment reboot),
+  # self-describing subject so it stands out in `mokutil --list-enrolled`.
+  "${SUDO[@]}" mkdir -p /var/lib/dkms
+  "${SUDO[@]}" openssl req -new -x509 -newkey rsa:2048 \
+    -keyout "${mok_key}" -outform DER -out "${mok_pub}" \
+    -nodes -days 36500 \
+    -subj '/CN=DKMS module signing key (chezmoi-managed)/'
+  "${SUDO[@]}" chmod 600 "${mok_key}"
+}
+
+# Sign the VirtualBox modules for the running kernel so they load under Secure
+# Boot. Oracle's Fedora RPM does NOT use DKMS or akmods — its postinst runs
+# /sbin/vboxconfig which builds `vbox*.ko` unsigned — so we do the signing
+# manually here (whereas NVIDIA's kmod-nvidia-latest-dkms signs itself during
+# its own postinst). We reuse the DKMS MOK for the shared-trust-anchor reason
+# ensure_dkms_mok_generated documents above.
+#
+# Runs unconditionally (no HAS_NVIDIA-style gate) — VirtualBox is a base
+# package on both distros. Kernel UPDATES re-invoke this loop via the
+# /etc/kernel/install.d/50-vbox-sign.install hook (shipped by
+# system/linux/etc/, Fedora-gated in .chezmoidata/system.yaml). The hook
+# duplicates the sign-file loop rather than sourcing this template — it must
+# run outside a chezmoi apply, on every new kernel install.
+sign_virtualbox_modules() {
+  rpm -q VirtualBox-7.2 >/dev/null 2>&1 || return 0
+
+  ensure_dkms_mok_generated
+
+  local mok_pub=/var/lib/dkms/mok.pub
+  local mok_key=/var/lib/dkms/mok.key
+  if ! "${SUDO[@]}" test -f "${mok_pub}" || ! "${SUDO[@]}" test -f "${mok_key}"; then
+    return 0  # Secure Boot off or MOK generation skipped — unsigned modules load fine
+  fi
+
+  # /sbin/vboxconfig is Oracle's build+load entry point; idempotent, and a
+  # no-op when the modules are already built for the running kernel. Run it
+  # first so a fresh apply after `dnf update kernel` (with no reboot yet) still
+  # has vbox*.ko built for `uname -r` to sign.
+  if [[ -x /sbin/vboxconfig ]]; then
+    "${SUDO[@]}" /sbin/vboxconfig >/dev/null 2>&1 || true
+  fi
+
+  local kernel_ver sign_file module_dir
+  kernel_ver="$(uname -r)"
+  sign_file="/usr/src/kernels/${kernel_ver}/scripts/sign-file"
+  if [[ ! -x "${sign_file}" ]]; then
+    printf 'install-fedora.sh: %s not found; cannot sign vbox modules. kernel-devel-matched should have installed it — check that its version matches the running kernel.\n' "${sign_file}" >&2
+    return 0
+  fi
+
+  module_dir="$(dirname "$(modinfo -n vboxdrv 2>/dev/null || true)")"
+  if [[ -z "${module_dir}" || "${module_dir}" == "." || ! -d "${module_dir}" ]]; then
+    printf 'install-fedora.sh: vbox modules not built for kernel %s; skipping signing (vboxconfig above may have failed silently).\n' "${kernel_ver}" >&2
+    return 0
+  fi
+
+  local mod modfile
+  for mod in vboxdrv vboxnetflt vboxnetadp vboxpci; do
+    modfile="${module_dir}/${mod}.ko"
+    [[ -f "${modfile}" ]] || continue
+    "${SUDO[@]}" "${sign_file}" sha256 "${mok_key}" "${mok_pub}" "${modfile}" 2>/dev/null || true
+  done
+}
+
 # Enable the system services this machine depends on, then enroll the DKMS MOK
 # signing key when booted with Secure Boot.
 enable_services() {
   "${SUDO[@]}" systemctl enable --now keyd
   "${SUDO[@]}" systemctl enable --now tailscaled
-  "${SUDO[@]}" systemctl enable --now libvirtd.service
 
   # NVIDIA persistence daemon only on NVIDIA hosts (same HAS_NVIDIA gate as the
   # driver install).
@@ -323,8 +416,9 @@ enable_services() {
   "${SUDO[@]}" systemctl unmask systemd-timesyncd
   "${SUDO[@]}" systemctl enable --now systemd-timesyncd
 
-  # Import the DKMS MOK signing key for the NVIDIA driver at
-  # /var/lib/dkms/mok.pub. Skipped unless booted via UEFI
+  # Import the DKMS MOK signing key at /var/lib/dkms/mok.pub — it covers both
+  # NVIDIA's DKMS-signed modules AND the VirtualBox modules sign_virtualbox_modules
+  # (which runs above) signs against the same key. Skipped unless booted via UEFI
   # with Secure Boot on — otherwise unsigned modules load fine and
   # `mokutil --import` would queue a pointless MOK Manager prompt on next boot.
   # The key is DER-encoded. `mokutil --test-key` confusingly exits 1 when the key
@@ -343,7 +437,7 @@ enable_services() {
       certs+=(/var/lib/dkms/mok.pub)
     fi
     if [[ ${#certs[@]} -eq 0 ]]; then
-      printf 'install-fedora.sh: no DKMS MOK key found; skipping MOK import.\n'
+      printf 'install-fedora.sh: no DKMS MOK key found; skipping MOK import (sign_virtualbox_modules should have seeded one if VirtualBox is installed).\n'
     else
       for cert in "${certs[@]}"; do
         if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
@@ -359,6 +453,7 @@ enable_services() {
       done
       if [[ ${#to_import[@]} -gt 0 ]]; then
         "${SUDO[@]}" mokutil --import "${to_import[@]}"
+        printf 'install-fedora.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the one-time password entered above; NVIDIA and VirtualBox modules stay unloadable until then.\n' >&2
       else
         printf 'install-fedora.sh: DKMS MOK key already enrolled or queued.\n'
       fi
@@ -383,7 +478,7 @@ set_up_nvidia_container_toolkit() {
 # Add the user to the device/virtualization groups and allocate rootless-Podman
 # subordinate id ranges. Group changes only take effect on next login.
 configure_user_groups() {
-  "${SUDO[@]}" usermod -aG keyd,libvirt "$USER"
+  "${SUDO[@]}" usermod -aG keyd,vboxusers "$USER"
   if getent group docker >/dev/null 2>&1; then "${SUDO[@]}" gpasswd -d "$USER" docker 2>/dev/null || true; fi
 
   # Allocate subordinate UID/GID ranges for rootless Podman user namespaces.
@@ -394,9 +489,9 @@ configure_user_groups() {
 
   # Notify when the current shell is missing a just-added group; silent on re-runs
   # after re-login.
-  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw libvirt; then
+  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw vboxusers; then
     printf '\n'
-    printf 'NOTE: Added "%s" to groups: keyd, libvirt\n' "$USER"
+    printf 'NOTE: Added "%s" to groups: keyd, vboxusers\n' "$USER"
     printf '      Log out and back in (or reboot) for group membership to take effect.\n'
   fi
 }
@@ -406,6 +501,10 @@ install_direct_rpms
 install_flatpak_packages
 install_dotnet_tools
 configure_time
+# Sign Oracle's non-DKMS vbox modules BEFORE enable_services so the DKMS MOK
+# is seeded and ready for its `mokutil --import` loop. No-op when VirtualBox
+# isn't installed or Secure Boot is off; safe on every host.
+sign_virtualbox_modules
 enable_services
 set_up_nvidia_container_toolkit
 configure_user_groups

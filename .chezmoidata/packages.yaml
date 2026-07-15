@@ -100,6 +100,7 @@ packages:
         - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
         - https://dl.google.com/linux/linux_signing_key.pub  # Google Chrome repo signing key
         - https://repo.cider.sh/RPM-GPG-KEY  # Cider Collective repo signing key
+        - https://www.virtualbox.org/download/oracle_vbox_2016.asc  # Oracle VirtualBox package signing key (2016-, current)
       # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
       # Counterpart of ubuntu's `aptRepos` — named for the artifact, like
       # directRpms/directDebs, because the entry SHAPE is the mechanism: dnf reads a
@@ -151,13 +152,13 @@ packages:
       # `deb ` line yourself — so on ubuntu tailscale is a hand-written aptRepos entry.
       repoFiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
+        - https://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo  # Oracle VirtualBox stable RPM repo (fetched over HTTPS; the .repo file's own baseurl stays as Oracle publishes it — http:// with gpgcheck=1 + repo_gpgcheck=1, signed by oracle_vbox_2016.asc)
       # dnf groups installed via `dnf group install` (own transaction, separate
       # from the individual packages below). Fedora-only mechanism: dnf comps groups
       # are first-class install targets. apt has no group verb (its task metapackages
       # are just packages), so the ubuntu equivalents sit in `packages` unwrapped.
       groups:
         - development-tools  # core build toolchain (gcc, make, autotools, git, ...)
-        - virtualization  # libvirt + qemu virtualization stack
         - c-development  # C headers/libraries for building against system libs
       # Foundational packages installed in their own transaction before the main
       # set, so kernel headers/devel are in place when the DKMS packages
@@ -250,23 +251,26 @@ packages:
         # Wayland clipboard management
         - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
 
-        # Virtualization (KVM/QEMU/libvirt + VM disk-image tooling; fuse3 + ntfs-3g give
-        # read-only ReFS/NTFS access to Windows Dev Drive vhdx mounts)
-        - edk2-ovmf  # UEFI firmware for QEMU guests, including Secure Boot builds
+        # Virtualization — Oracle VirtualBox (KVM/QEMU/libvirt/virt-manager dropped in
+        # favor of VirtualBox for its stronger cross-platform Windows guest tooling).
+        # Kernel modules build via /sbin/vboxconfig (Oracle's Fedora RPM does NOT
+        # use DKMS or akmods — the postinst runs vboxconfig once for the running
+        # kernel). configure_user_groups adds the user to `vboxusers` so USB
+        # passthrough works. On Secure Boot: sign_virtualbox_modules() in this
+        # installer signs the built modules with the DKMS MOK (seeded by
+        # ensure_dkms_mok_generated if missing — same key NVIDIA's kmod-nvidia-latest-dkms
+        # uses, so one mokutil enrollment covers both stacks). Kernel updates are
+        # covered by the /etc/kernel/install.d/50-vbox-sign.install hook shipped
+        # via system/linux/etc/ (Fedora-gated in .chezmoidata/system.yaml). The
+        # Extension Pack (USB 2.0/3.0, VRDE, PXE via Intel NIC) is PUEL-licensed
+        # and NOT installed here — download separately if the license fits the
+        # use case. fuse3 + ntfs-3g keep working for read-only ReFS/NTFS access to
+        # Windows Dev Drive vhdx mounts on the guest side.
+        - VirtualBox-7.2  # Oracle VirtualBox 7.2 (from the Oracle repo added in repoFiles above)
         - fuse3  # FUSE 3 userspace filesystem support
         - fuse3-devel  # FUSE 3 headers (refs-fuse / refsprogs build dependency)
-        - guestfs-tools  # CLI tools to inspect/modify VM disk images
-        - libguestfs  # library for accessing/editing VM disk images
-        - libvirt-daemon-kvm  # libvirt QEMU/KVM driver and daemon integration
         - ntfs-3g  # NTFS read/write driver (FUSE)
-        - qemu-img  # QEMU disk-image create/convert tool (vhdx, qcow2, ...)
-        - qemu-kvm  # QEMU/KVM x86 hypervisor package
-        - swtpm  # TPM 2.0 emulator for Windows 11 guests
-        - swtpm-tools  # TPM setup/local CA helpers used by libvirt managed vTPM
         - systemd-container  # systemd-nspawn / machinectl container tooling
-        - virt-install  # CLI VM installer (osinfo-aware Windows 11 definitions)
-        - virt-manager  # graphical VM manager
-        - virt-viewer  # SPICE/VNC console viewer for libvirt guests
 
         # Dynamic Kernel Module Support
         - dkms  # builds/signs out-of-tree kernel modules (e.g. the NVIDIA dkms driver)
@@ -457,6 +461,15 @@ packages:
           keyringUrl: https://packages.microsoft.com/keys/microsoft.asc
           sourcesListLines:
             - "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-edge.gpg] https://packages.microsoft.com/repos/edge stable main"
+        - id: virtualbox
+          # Oracle VirtualBox stable Debian repo — the .repo suite matches the Ubuntu
+          # codename (resolute for 26.04), component is `contrib`, arch amd64 only
+          # (Oracle publishes no arm64 index). oracle_vbox_2016.asc is Oracle's current
+          # signing key. Suite bumps track the LTS codename — update alongside a
+          # release upgrade.
+          keyringUrl: https://www.virtualbox.org/download/oracle_vbox_2016.asc
+          sourcesListLines:
+            - "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] http://download.virtualbox.org/virtualbox/debian resolute contrib"
       # Foundational packages installed before the main set (build headers needed
       # for DKMS module builds).
       corePackages:
@@ -560,15 +573,26 @@ packages:
         # Desktop notifications
         - libnotify-bin  # notify-send CLI (used by dot_local/bin/kde-color-picker; Fedora bundles it in libnotify)
 
-        # Virtualization
+        # Virtualization — Oracle VirtualBox (KVM/QEMU/libvirt/virt-manager dropped in
+        # favor of VirtualBox for its stronger cross-platform Windows guest tooling).
+        # The `virtualbox-7.2` postinst builds the vboxdrv/vboxnetflt/vboxnetadp
+        # kernel modules via DKMS (via the virtualbox-dkms dependency);
+        # configure_user_groups adds the user to `vboxusers` (USB passthrough needs
+        # it). On Secure Boot, DKMS module signing reuses shim-signed's MOK — the
+        # ensure_shim_mok_enrolled() function in this installer sets it up ONCE at
+        # the top of the run (before the base-packages install, so virtualbox-dkms
+        # can sign against it during its postinst) and NVIDIA's later DKMS build
+        # signs against the SAME MOK. The Extension Pack (USB 2.0/3.0, VRDE, PXE
+        # via Intel NIC) is PUEL-licensed and NOT installed here — download
+        # separately if the license fits the use case. fuse3 + ntfs-3g keep
+        # working for read-only ReFS/NTFS access to Windows Dev Drive vhdx mounts
+        # on the guest side.
+        - virtualbox-7.2  # Oracle VirtualBox 7.2 (from the Oracle apt repo added in aptRepos above)
         - fuse3  # FUSE 3 userspace filesystem support
         - libfuse3-dev  # FUSE 3 headers (fuse3-devel equivalent)
-        - guestfs-tools  # CLI tools to inspect/modify VM disk images
-        - libguestfs-tools  # library tools for accessing/editing VM disk images
         - ntfs-3g  # NTFS read/write driver (FUSE)
-        - qemu-utils  # QEMU disk-image tools (qemu-img equivalent)
         - systemd-container  # systemd-nspawn / machinectl container tooling
-        - dkms  # builds/signs out-of-tree kernel modules
+        - dkms  # builds/signs out-of-tree kernel modules (VirtualBox, NVIDIA)
 
         # Tauri development
         - curl  # HTTP client / file downloader
@@ -581,16 +605,6 @@ packages:
         - wget  # HTTP/HTTPS file downloader
 
         - expect  # automate interactive CLI prompts
-
-        # Virtualization support
-        - qemu-system-x86  # QEMU/KVM x86 system emulator (the qemu-kvm metapackage was dropped on Ubuntu 26.04)
-        - libvirt-daemon-system  # libvirt daemon + systemd integration
-        - ovmf  # UEFI firmware for QEMU guests, including Secure Boot builds
-        - swtpm  # TPM 2.0 emulator for Windows 11 guests
-        - swtpm-tools  # TPM setup/local CA helpers used by libvirt managed vTPM
-        - virtinst  # virt-install and osinfo-aware VM provisioning helpers
-        - virt-manager  # graphical VM manager
-        - virt-viewer  # SPICE/VNC console viewer for libvirt guests
 
         # LUKS TPM2 auto-unlock (dot_local/bin/setup-luks-tpm2-unlock.sh, shared dracut
         # backend). Ubuntu 26.04 switched its initramfs generator to dracut, which builds

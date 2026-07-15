@@ -97,9 +97,30 @@ APT=("${SUDO[@]}" env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get)
 # decrypted into this script's transient run-script, so avoid
 # `--verbose`/`--dry-run` applies with a real password stored; base64 wraps it
 # for shell safety only, NOT secrecy. Blank at init (or an unreachable keyring
-# at render time) = skip the NVIDIA stack on a Secure Boot host without an
-# enrolled MOK. Used only by install_nvidia_support() below.
+# at render time) = the NVIDIA driver hard-skips on a Secure Boot host without
+# an enrolled MOK (its unsigned modules risk a black-screen boot), and
+# virtualbox-dkms still installs but its modules stay unloadable until the
+# user enrolls a MOK by hand. Consumed by ensure_shim_mok_enrolled() below.
 MOK_PASSWORD="$(printf '%s' {{ $mokPassword | b64enc | quote }} | base64 -d)"
+
+# Runtime MOK enrollment state, set by ensure_shim_mok_enrolled() which runs
+# BEFORE the base package install so virtualbox-dkms (pulled in by the
+# unconditional virtualbox-7.2 package) has a MOK to sign against during its
+# postinst dkms build. Both DKMS-signed stacks on the host (virtualbox-dkms
+# and the NVIDIA driver's DKMS build under install_nvidia_support) use the
+# same shim-signed MOK at /var/lib/shim-signed/mok/, so one enrollment covers
+# both — a step that used to live INSIDE install_nvidia_support and only ran
+# there.
+#   0 = irrelevant (Secure Boot off — kernel loads unsigned modules)
+#   1 = ready (MOK already enrolled by a previous boot, OR queued this run)
+#   2 = blocked (Secure Boot on, MOK_PASSWORD absent or wrong length — the
+#       NVIDIA install hard-skips; VirtualBox still installs and warns)
+MOK_STATE=0
+
+# 1 = ensure_shim_mok_enrolled queued a fresh enrollment this run and preseeded
+# shim-signed's debconf, so finalize_mok_enrollment must run after packages
+# install to belt-and-braces enroll the MOK and clear the debconf preseed.
+MOK_ENROLL_QUEUED=0
 
 # Package sets rendered from .chezmoidata/packages.yaml.
 core_packages=(
@@ -346,8 +367,51 @@ finish_mok_enrollment() {
     if ! "${SUDO[@]}" mokutil --list-new 2>/dev/null | grep -qiF "${fingerprint}"; then
       printf '%s\n%s\n' "${MOK_PASSWORD}" "${MOK_PASSWORD}" | "${SUDO[@]}" mokutil --import "${mok_der}"
     fi
-    printf 'run_onchange_before_ubuntu.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the prompted MOK password; the NVIDIA modules stay unloadable until then.\n' >&2
+    printf 'run_onchange_before_ubuntu.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the prompted MOK password; the DKMS modules (NVIDIA driver, VirtualBox) stay unloadable until then.\n' >&2
   fi
+}
+
+# Set up shim-signed's MOK BEFORE the base package install so virtualbox-dkms
+# (pulled in unconditionally by virtualbox-7.2) has a MOK to sign its modules
+# against during its postinst dkms build. Sets MOK_STATE and MOK_ENROLL_QUEUED
+# (see the header where they are defined for the state semantics). Runs
+# unconditionally on Secure Boot Ubuntu — the MOK is a host-level trust anchor
+# and reused by every dkms package on the machine, not a per-package concern.
+ensure_shim_mok_enrolled() {
+  if ! command -v mokutil >/dev/null 2>&1 || ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    return 0  # Secure Boot off / no mokutil — MOK_STATE stays 0 (irrelevant)
+  fi
+
+  local mok_der=/var/lib/shim-signed/mok/MOK.der
+  if [[ -f "${mok_der}" ]] && "${SUDO[@]}" mokutil --test-key "${mok_der}" 2>/dev/null | grep -q 'is already enrolled'; then
+    MOK_STATE=1  # already enrolled by a previous boot — nothing to queue
+    return 0
+  fi
+
+  if [[ -z "${MOK_PASSWORD}" ]]; then
+    printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled and no MOK is enrolled; NVIDIA driver/CUDA install will be skipped and virtualbox-dkms modules will not load. Re-run `chezmoi init` to enter a MOK enrollment password (or enroll a MOK / disable Secure Boot), then `chezmoi apply --force`.\n' >&2
+    MOK_STATE=2  # blocked
+    return 0
+  fi
+
+  if [[ "${#MOK_PASSWORD}" -lt 8 || "${#MOK_PASSWORD}" -gt 16 ]]; then
+    printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled but the MOK password is outside the 8-16 characters shim-signed'\''s update-secureboot-policy accepts; NVIDIA driver/CUDA install will be skipped and virtualbox-dkms modules will not load. Re-run `chezmoi init` with a password in that range, then `chezmoi apply --force`.\n' >&2
+    MOK_STATE=2  # blocked
+    return 0
+  fi
+
+  prepare_mok_enrollment "${mok_der}"
+  MOK_ENROLL_QUEUED=1
+  MOK_STATE=1  # ready — either after this run's queue, or once user completes MokManager
+}
+
+# Belt-and-braces enrollment finish after the packages that write to shim-signed's
+# debconf preseed have installed. dkms postinst usually queues the MOK itself via
+# `update-secureboot-policy --enroll-key`, but this path guarantees it — and clears
+# the debconf preseed via the EXIT trap prepare_mok_enrollment installed.
+finalize_mok_enrollment() {
+  [[ "${MOK_ENROLL_QUEUED}" -eq 1 ]] || return 0
+  finish_mok_enrollment /var/lib/shim-signed/mok/MOK.der
 }
 
 install_nvidia_support() {
@@ -356,28 +420,16 @@ install_nvidia_support() {
   fi
 
   # cuda-drivers builds its GPU kernel modules with DKMS; under Secure Boot the
-  # kernel loads them only when signed by an enrolled MOK. With the shim-signed
-  # MOK already enrolled the install just proceeds (dkms signs every build with
-  # it). Otherwise a chezmoi-prompted MOK password (see MOK_PASSWORD above)
-  # drives the enrollment non-interactively; without one, a Secure Boot host
-  # skips the NVIDIA stack entirely (a black screen at boot is worse than no
-  # driver) — re-run `chezmoi init` to enter the password, then
-  # `chezmoi apply --force`.
-  local mok_der=/var/lib/shim-signed/mok/MOK.der
-  local mok_enroll=0
-  if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
-    if [[ -f "${mok_der}" ]] && "${SUDO[@]}" mokutil --test-key "${mok_der}" 2>/dev/null | grep -q 'is already enrolled'; then
-      : # signing key already trusted by shim; nothing to enroll
-    elif [[ -n "${MOK_PASSWORD}" && "${#MOK_PASSWORD}" -ge 8 && "${#MOK_PASSWORD}" -le 16 ]]; then
-      mok_enroll=1
-      prepare_mok_enrollment "${mok_der}"
-    elif [[ -n "${MOK_PASSWORD}" ]]; then
-      printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled but the MOK password is outside the 8-16 characters shim-signed'\''s update-secureboot-policy accepts; skipping NVIDIA driver/CUDA install. Re-run `chezmoi init` with a password in that range, then `chezmoi apply --force`.\n' >&2
-      return 0
-    else
-      printf 'run_onchange_before_ubuntu.sh: Secure Boot is enabled and no MOK is enrolled; skipping NVIDIA driver/CUDA install (the DKMS modules would not load). Re-run `chezmoi init` to enter a MOK enrollment password (or enroll a MOK / disable Secure Boot), then `chezmoi apply --force`.\n' >&2
-      return 0
-    fi
+  # kernel loads them only when signed by an enrolled MOK. Unlike VirtualBox —
+  # whose unsigned modules just mean VMs fail to start (safe) — an NVIDIA
+  # driver install that lands unsigned modules can leave the host at a black
+  # screen on next boot (Xorg falls back to nouveau which then also fails),
+  # so hard-skip when the MOK cannot be enrolled. ensure_shim_mok_enrolled()
+  # already queued (or verified) the MOK before this function runs; here we
+  # only need to gate on the resulting state.
+  if [[ "${MOK_STATE}" -eq 2 ]]; then
+    printf 'run_onchange_before_ubuntu.sh: skipping NVIDIA driver/CUDA install (MOK enrollment blocked — see ensure_shim_mok_enrolled warning above).\n' >&2
+    return 0
   fi
 
   setup_nvidia_repos
@@ -389,10 +441,6 @@ install_nvidia_support() {
   install_ubuntu_packages "linux-headers-$(uname -r)"
 
   install_ubuntu_packages "${nvidia_packages[@]}"
-
-  if [[ "${mok_enroll}" -eq 1 ]]; then
-    finish_mok_enrollment "${mok_der}"
-  fi
 
   # Emit the CDI spec so podman can inject the GPU. Enumerating the live GPU can
   # fail before the freshly built driver is loaded on first boot, so a failure
@@ -457,8 +505,9 @@ install_intel_support() {
 }
 
 # Enable a systemd unit only when its unit file exists, so a host missing an
-# optional package (libvirt, nvidia) is skipped rather than failing.
-# The second argument selects "now" (enable --now) or "later" (enable only).
+# optional package (e.g. nvidia-persistenced without the NVIDIA driver) is skipped
+# rather than failing. The second argument selects "now" (enable --now) or "later"
+# (enable only).
 enable_unit() {
   local svc="$1" when="${2:-now}"
   systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}" || return 0
@@ -472,7 +521,6 @@ enable_unit() {
 enable_services() {
   enable_unit keyd
   enable_unit tailscaled
-  enable_unit libvirtd
 
   # NVIDIA persistence daemon only on NVIDIA hosts (same gate as the driver
   # install); it only needs to be up once the driver is loaded, so enable it for
@@ -498,7 +546,7 @@ configure_time() {
 configure_user_groups() {
   local target_user grp
   target_user="${SUDO_USER:-$USER}"
-  local -a groups=(keyd libvirt kvm)
+  local -a groups=(keyd vboxusers)
 
   # @audio grants the realtime privileges from the Studio limits.d drop-in
   # (95-ubuntustudio-audio.conf) — Studio-only, like the drop-in itself. The
@@ -525,7 +573,16 @@ enable_first_apply_apt_features
 "${APT[@]}" update
 install_ubuntu_packages "${core_packages[@]}"
 "${APT[@]}" update
+# Set up shim-signed's MOK BEFORE the base packages install so virtualbox-dkms
+# (pulled in unconditionally by virtualbox-7.2) signs its modules with it during
+# the postinst dkms build; the same MOK later covers cuda-drivers under
+# install_nvidia_support. On non-Secure-Boot hosts this is a no-op.
+ensure_shim_mok_enrolled
 install_ubuntu_packages "${packages[@]}"
+# Finish the enrollment after the packages that wrote through the debconf
+# preseed have installed; also clears the preseed via the EXIT trap that
+# prepare_mok_enrollment installed.
+finalize_mok_enrollment
 install_nvidia_support
 install_intel_support
 install_direct_debs

@@ -1,0 +1,67 @@
+#!/bin/bash
+# kernel-install(8) drop-in — sign Oracle VirtualBox kernel modules for a
+# newly-installed kernel so they load under Secure Boot. This hook runs OUTSIDE
+# any chezmoi apply, on every `dnf install kernel-*` (or dracut/kernel-install
+# invocation), and mirrors sign_virtualbox_modules() from
+# .chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl — the
+# installer handles the running kernel; this hook handles every future one.
+#
+# Chezmoi ships this ONLY on Fedora (system.yaml `gate: distro.fedora`):
+# Ubuntu's virtualbox-dkms uses shim-signed's DKMS integration to re-sign on
+# kernel install already, so no equivalent is needed there. The Oracle Fedora
+# RPM does NOT use DKMS or akmods — its /sbin/vboxconfig builds `vbox*.ko`
+# unsigned — hence this manual sign-file loop.
+#
+# The trust anchor is the DKMS MOK at /var/lib/dkms/mok.{pub,key}, seeded by
+# the installer's ensure_dkms_mok_generated() (or by dkms itself on an NVIDIA
+# host that installed its DKMS driver first). Same MOK covers NVIDIA and
+# VirtualBox, so one mokutil enrollment satisfies both.
+#
+# Called by kernel-install(8) as: <command> <kernel-version> <boot-dir> [initrd...]
+#   command == "add"   -> new kernel installed; sign for it
+#   command == "remove"-> nothing to sign; exit 0
+# Every failure path exits 0: this hook must NEVER block a kernel install
+# (a Secure Boot host without a MOK yet still needs to boot the new kernel;
+# it just won't have working VirtualBox until MOK is enrolled).
+set -eu
+
+command="${1:-}"
+kernel_ver="${2:-}"
+
+[[ "${command}" == "add" ]] || exit 0
+[[ -n "${kernel_ver}" ]] || exit 0
+
+# Nothing to do without VirtualBox
+rpm -q VirtualBox-7.2 >/dev/null 2>&1 || exit 0
+
+# Nothing to do without a MOK to sign against
+MOK_KEY=/var/lib/dkms/mok.key
+MOK_CERT=/var/lib/dkms/mok.pub
+[[ -f "${MOK_KEY}" && -f "${MOK_CERT}" ]] || exit 0
+
+# Nothing to do off Secure Boot — the kernel loads unsigned modules
+[[ -d /sys/firmware/efi ]] || exit 0
+command -v mokutil >/dev/null 2>&1 || exit 0
+mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled' || exit 0
+
+SIGN_FILE="/usr/src/kernels/${kernel_ver}/scripts/sign-file"
+[[ -x "${SIGN_FILE}" ]] || exit 0
+
+# Build the vbox modules for the NEW kernel. vboxconfig defaults to `uname -r`,
+# so KERN_VER overrides it to target the freshly-installed kernel rather than
+# the currently-running one. Idempotent.
+if [[ -x /sbin/vboxconfig ]]; then
+  KERN_VER="${kernel_ver}" /sbin/vboxconfig >/dev/null 2>&1 || true
+fi
+
+# Sign each vbox module for the new kernel. Sign-file writes a signature block
+# to the end of the .ko in place; safe to run on an already-signed module (adds
+# a second signature the kernel then ignores).
+module_dir="/lib/modules/${kernel_ver}/updates"
+for mod in vboxdrv vboxnetflt vboxnetadp vboxpci; do
+  modfile="${module_dir}/${mod}.ko"
+  [[ -f "${modfile}" ]] || continue
+  "${SIGN_FILE}" sha256 "${MOK_KEY}" "${MOK_CERT}" "${modfile}" 2>/dev/null || true
+done
+
+exit 0

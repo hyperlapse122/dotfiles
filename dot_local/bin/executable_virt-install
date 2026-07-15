@@ -1,7 +1,0 @@
-#!/bin/sh
-# virt-install — system-python wrapper; see executable_virt-manager for why
-# (mise python shadows the system python3 that owns PyGObject/`gi`, and
-# Ubuntu ships these tools with `#!/usr/bin/env python3` shebangs).
-PATH="/usr/bin:/bin:$PATH"
-export PATH
-exec /usr/bin/virt-install "$@"

@@ -94,6 +94,15 @@ system:
       # rpm-owned polkit-1 includes system-auth and must not be overwritten.
       - path: etc/pam.d/polkit-1
         gate: fprintdPam
+      # kernel-install(8) drop-in that re-signs Oracle VirtualBox modules on
+      # every new kernel install. Fedora-only: Oracle's Fedora RPM does NOT use
+      # DKMS or akmods (its /sbin/vboxconfig builds unsigned modules), so
+      # nothing else picks up a kernel upgrade under Secure Boot without this
+      # hook. Ubuntu's virtualbox-dkms uses shim-signed's DKMS integration and
+      # needs no equivalent. Mode 0755 — kernel-install invokes it directly.
+      - path: etc/kernel/install.d/50-vbox-sign.install
+        mode: "755"
+        gate: distro.fedora
 
     # Absolute /etc paths that the installer previously shipped but that no
     # longer exist in system/linux/etc/. Listed explicitly so every machine —
