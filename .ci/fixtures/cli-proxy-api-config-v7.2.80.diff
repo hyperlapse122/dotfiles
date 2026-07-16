@@ -6,21 +6,21 @@
 @@ -3 +5 @@
 -host: ""
 +host: "127.0.0.1"
-@@ -26 +28 @@
+@@ -26 +28 @@ remote-management:
 -  disable-control-panel: false
 +  disable-control-panel: true
-@@ -30 +32 @@
+@@ -30 +32 @@ remote-management:
 -  # disable-auto-update-panel: false
 +  disable-auto-update-panel: true
-@@ -36 +38 @@
+@@ -36 +38 @@ remote-management:
 -auth-dir: "~/.cli-proxy-api"
 +auth-dir: "~/.local/share/cli-proxy-api/auth"
-@@ -39,4 +41 @@
+@@ -39,4 +41 @@ auth-dir: "~/.cli-proxy-api"
 -api-keys:
 -  - "your-api-key-1"
 -  - "your-api-key-2"
 -  - "your-api-key-3"
 +api-keys: []
-@@ -84 +83 @@
+@@ -84 +83 @@ plugins:
 -commercial-mode: false
 +commercial-mode: true

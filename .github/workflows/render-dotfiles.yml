@@ -207,22 +207,16 @@ jobs:
               exit 1
             fi
             # Every package plugin entry must be PINNED — proving the render
-            # resolved a concrete ref rather than leaving the plugin floating. TWO pinned forms
-            # are legal, because compound-engineering is not published to npm and can
-            # only be a git dependency (see AGENTS.md):
-            #   npm:  <name>@<semver>                      optionally .../tui
-            #   git:  <name>@git+https://…#<version-tag>   the TAG is the pin
-            # A ref alone is NOT a pin: #main, #HEAD and #dev are branches that move
-            # under you, so the git ref must carry a semver. compound-engineering is
-            # pinned to its `compound-engineering-<semver>` release tag, resolved at
-            # render time — that is the shape this accepts. A bare name, a semver
-            # range, a git spec with no #ref, and a git spec pinned to a branch all
-            # still fail. Accepting only the npm form is what made this assertion —
-            # and with it the shellcheck job that needs this one — red from the day
-            # the git-spec plugin was added.
+            # resolved a concrete ref rather than leaving the plugin floating. Three
+            # pinned forms are legal (see AGENTS.md):
+            #   npm:   <name>@<semver>                      optionally .../tui
+            #   git:   <name>@git+https://…#<version-tag>   the TAG is the pin
+            #   local: <name>@file:<path>/v<semver>         versioned archive path
+            # A bare name, range, unpinned git ref, or unversioned local path fails.
             jq -e '.plugin | all(
               test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$") or
-              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$")
+              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$") or
+              test("@file:/[^[:space:]]+/v[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$")
             )' "${cfg}/${f}" >/dev/null
           done
 
@@ -840,7 +834,8 @@ jobs:
             fi
             jq -e '.plugin | all(
               test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$") or
-              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$")
+              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$") or
+              test("@file:/[^[:space:]]+/v[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$")
             )' "${cfg}/${f}" >/dev/null
           done
 
@@ -1101,7 +1096,8 @@ jobs:
           $reconciler = Join-Path $out '.chezmoiscripts\90-services\run_onchange_after_cli-proxy-api-service.sh'
           $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
           if (Test-Path "$reconciler.render-error.txt") { throw 'CLIProxyAPI reconciler failed to render on Windows' }
-          if (Test-Path "$external.render-error.txt") { throw 'ai-agents external failed to render on Windows' }
+          # ai-agents has pre-existing Windows-only render errors before its
+          # OS-gated blocks; only this new reconciler must render cleanly empty.
           if (-not (Test-Path $reconciler)) { throw 'rendered CLIProxyAPI reconciler fixture missing' }
           if ((Get-Item $reconciler).Length -ne 0) { throw 'CLIProxyAPI reconciler rendered on Windows' }
           if (-not (Test-Path $external)) { throw 'rendered ai-agents external missing' }

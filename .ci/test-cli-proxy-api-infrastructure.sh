@@ -88,12 +88,14 @@ config=$root/dot_config/cli-proxy-api/readonly_config.yaml
 upstream=$scratch/config.example.yaml
 actual_diff=$scratch/config.diff
 curl -fsSL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/v7.2.80/config.example.yaml > "$upstream"
-set +e
-diff -U0 --label upstream/config.example.yaml --label dot_config/cli-proxy-api/readonly_config.yaml \
-  "$upstream" "$config" > "$actual_diff"
-diff_rc=$?
-set -e
-[ "$diff_rc" -eq 1 ]
+git diff --no-index --no-prefix --unified=0 "$upstream" "$config" |
+  awk '
+    /^diff --git / || /^index / { next }
+    /^--- / { print "--- upstream/config.example.yaml"; next }
+    /^\+\+\+ / { print "+++ dot_config/cli-proxy-api/readonly_config.yaml"; next }
+    { print }
+  ' > "$actual_diff"
+[ -s "$actual_diff" ]
 cmp "$actual_diff" "$root/.ci/fixtures/cli-proxy-api-config-v7.2.80.diff"
 
 grep -qx 'host: "127.0.0.1"' "$config"
