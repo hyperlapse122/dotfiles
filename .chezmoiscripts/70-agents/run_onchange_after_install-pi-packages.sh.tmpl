@@ -99,7 +99,7 @@ done
 # and the readonly bit. The npm install side-effect under ~/.pi/agent/npm/
 # survives; only pi's settings bookkeeping is discarded.
 cp -a "$snapshot" "$SETTINGS"
-chmod 444 "$SETTINGS" 2>/dev/null || true
+chmod 400 "$SETTINGS" 2>/dev/null || true
 trap - EXIT
 rm -f "$snapshot"
 
