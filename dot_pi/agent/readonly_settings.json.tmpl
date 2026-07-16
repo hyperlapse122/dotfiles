@@ -34,9 +34,16 @@
        dir; here we match pi's format. Resolved inline (same release) so no
        shared partial is needed. */ -}}
 {{- $piVer := (gitHubLatestRelease "earendil-works/pi").TagName | toString | trimPrefix "v" -}}
-{{- /* deepCopy carries `packages` verbatim from .agents.pi.settings; only
-       lastChangelogVersion is injected (it is dynamic, not declared). */ -}}
 {{- $settings := deepCopy $d -}}
 {{- $settings = set $settings "lastChangelogVersion" $piVer -}}
-{{ toPrettyJson "  " $settings }}
+{{- /* Resolve any `op://` 1Password reference ANYWHERE in the object — recursive,
+       by VALUE not field name — through resolve-op-refs-json.tmpl, the same
+       rule dot_config/opencode/readonly_opencode.json.tmpl uses for its
+       providers. So a key like `defaultProvider` can stay a plain name while a
+       secret (e.g. an inline apiKey) declared as `op://...` in
+       .agents.pi.settings is read from 1Password and baked in at render time.
+       NOTE the file deploys 0444 (world-readable), the same exposure profile as
+       opencode.json — only put a secret here if that is acceptable; pi's API
+       keys otherwise live in the 0600 ~/.pi/agent/auth.json (config-pi-auth). */ -}}
+{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $settings) }}
 {{- end }}

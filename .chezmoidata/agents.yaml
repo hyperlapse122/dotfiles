@@ -136,6 +136,8 @@ agents:
       webSearch:
         preferredBasicProvider: exa
         preferredThoroughProvider: exa
+        apiKeys:
+          exa: "op://Private/Exa/API Key"
       # lastChangelogVersion is NOT declared here — it is rendered dynamically
       # from the installed pi version (resolved inline from the
       # earendil-works/pi release, the same one .chezmoiexternals/ai-agents.toml
