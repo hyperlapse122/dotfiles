@@ -145,7 +145,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (guarded on the `desktop` fact; see OS gating & script parity) — on KDE that is the manifest-driven `config-kde-settings` runner plus the scripts that carry real logic; mutually exclusive at runtime, so they share a number |
 | `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above) |
-| `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents MCPs, the compound-engineering plugin for Claude Code + Codex + pi (`install-compound-engineering`, all three registered at the same versioned local path that the file-phase external extracts — OpenCode reads that path directly from its config), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's packages (`install-pi-packages`) |
+| `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`, both registered at the same versioned local path that the file-phase external extracts — OpenCode reads that path directly from its config, and pi installs it as a native `git:` source from its managed settings), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's extensions (`update-pi-extensions`, a single `pi update --extensions`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
 
 ### Host facts — the named registry every host-identity condition resolves through
@@ -979,7 +979,7 @@ keyring entry can no longer decrypt the stored ciphertexts.
   - `agents.pi.settings` is the whole pi settings.json object (renamed from
     `agents.pi.defaults`, same key names as pi's schema) rendered wholesale
     into the MANAGED, READONLY `~/.pi/agent/settings.json` (deepCopy in
-    `dot_pi/agent/readonly_settings.json.tmpl`, with `lastChangelogVersion`
+    `dot_pi/agent/private_readonly_settings.json.tmpl`, with `lastChangelogVersion`
     injected from the pi release and any `op://` refs resolved by
     `resolve-op-refs-json.tmpl`). `packages` is nested inside it and ALSO
     renders into the `PACKAGES` array of the package install script (the
