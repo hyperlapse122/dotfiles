@@ -715,7 +715,7 @@ jobs:
               > "${scratch}/cli-proxy-api.service"
             systemd-analyze --user verify "${scratch}/cli-proxy-api.service"
           else
-            plutil -lint "${scratch}/archive-root/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
+            plutil -lint "${scratch}/target/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
           fi
 
       - name: Run the managed external through the sterile launcher and shared probe
