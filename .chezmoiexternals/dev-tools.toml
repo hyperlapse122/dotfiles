@@ -1,6 +1,6 @@
 {{- /*
-  Developer CLIs & language servers: ast-grep, buf, marksman, shellcheck,
-  wasm-pack, rust-analyzer, uv/uvx.
+  Developer CLIs & language servers: ast-grep, buf, marksman, jq (macOS),
+  shellcheck, wasm-pack, rust-analyzer, uv/uvx.
 */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
@@ -107,6 +107,32 @@ targetPath = '.local/bin/marksman.exe'
 url = {{ gitHubReleaseAssetURL "artempyanykh/marksman" $marksmanTag "marksman.exe" | quote }}
 executable = true
 
+{{- end }}
+
+{{- /* ---------- jq (macOS needs it for CLIProxyAPI semantic readiness) ---------- */ -}}
+
+{{- if eq .chezmoi.os "darwin" }}
+{{- $jqTag := (gitHubLatestRelease "jqlang/jq").TagName | toString -}}
+{{- $jqAsset := printf "jq-macos-%s" .chezmoi.arch -}}
+{{- $jqSums := output "curl" "-fsSL" (gitHubReleaseAssetURL "jqlang/jq" $jqTag "sha256sum.txt") | toString -}}
+{{- $jqSha := "" -}}
+{{- range splitList "\n" $jqSums -}}
+  {{- $fields := regexSplit "\\s+" (trim .) -1 -}}
+  {{- if and (eq (len $fields) 2) (eq (index $fields 1) $jqAsset) -}}
+    {{- $jqSha = index $fields 0 | lower -}}
+  {{- end -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $jqSha) -}}
+  {{- fail (printf "jq: invalid or missing sha256 for %s" $jqAsset) -}}
+{{- end }}
+[jq]
+type = "file"
+targetPath = '.local/bin/jq'
+url = {{ gitHubReleaseAssetURL "jqlang/jq" $jqTag $jqAsset | quote }}
+executable = true
+
+[jq.checksum]
+sha256 = '{{ $jqSha }}'
 {{- end }}
 
 {{- /* ---------- shellcheck ---------- */ -}}

@@ -1,0 +1,67 @@
+{{- $home := .chezmoi.homeDir -}}
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.h82.cli-proxy-api</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ $home }}/.local/libexec/cli-proxy-api-launch</string>
+    <string>--</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CPA_HOME</key>
+    <string>{{ $home }}</string>
+    <key>CPA_ACTIVE_BINARY</key>
+    <string>{{ $home }}/.local/share/cli-proxy-api/current/cli-proxy-api</string>
+    <key>CPA_CONFIG</key>
+    <string>{{ $home }}/.config/cli-proxy-api/config.yaml</string>
+    <key>CPA_AUTH_DIR</key>
+    <string>{{ $home }}/.local/share/cli-proxy-api/auth</string>
+    <key>CPA_WORK_DIR</key>
+    <string>{{ $home }}/.local/share/cli-proxy-api/work</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>ENV</key>
+    <string></string>
+    <key>BASH_ENV</key>
+    <string></string>
+    <key>DYLD_INSERT_LIBRARIES</key>
+    <string></string>
+    <key>DYLD_LIBRARY_PATH</key>
+    <string></string>
+    <key>DYLD_FRAMEWORK_PATH</key>
+    <string></string>
+    <key>DYLD_FALLBACK_LIBRARY_PATH</key>
+    <string></string>
+    <key>DYLD_FALLBACK_FRAMEWORK_PATH</key>
+    <string></string>
+    <key>DYLD_VERSIONED_LIBRARY_PATH</key>
+    <string></string>
+    <key>DYLD_VERSIONED_FRAMEWORK_PATH</key>
+    <string></string>
+    <key>DYLD_ROOT_PATH</key>
+    <string></string>
+    <key>DYLD_IMAGE_SUFFIX</key>
+    <string></string>
+    <key>DYLD_FORCE_FLAT_NAMESPACE</key>
+    <string></string>
+    <key>DYLD_SHARED_REGION</key>
+    <string></string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>{{ $home }}/.local/share/cli-proxy-api/work/supervisor.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{ $home }}/.local/share/cli-proxy-api/work/supervisor.log</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- Fail closed: launchd starts once per login and the reconciler performs
+       explicit kickstarts. Permanent launcher/runtime failures do not loop. -->
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+</dict>
+</plist>

@@ -28,7 +28,7 @@ Source filename attributes encode the target:
 | `.chezmoiscripts/run_after_*` | re-runs on every `chezmoi apply` (unconditionally) — **avoid; prefer `run_onchange_` + a dependency fingerprint, see below** |
 | `.chezmoidata/*` | template data (`.factRegistry`, `.packages`, `.fonts`, `.system`, `.kde`, `.gnome`, `.solaar`, `.networking`, `.haptic`, `.vscodium`, `.agents`, `.user`) |
 | `.chezmoitemplates/*` | shared template partials, inlined via `includeTemplate` (the fact-registry trio + fingerprint macro + sudo/headless/desktop guards — see below) |
-| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, codegraph, aoe, the agent skills listed in `.chezmoidata/agents.yaml` under `agents.skills.external`, and the compound-engineering release tarball declared in `agents.opencode.plugins` under `install: localArchive`), `dev-tools.toml` (ast-grep, buf, marksman, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, prezto), `fonts.toml`. Everything but prezto/fonts, the agent skills, and the compound-engineering plugin is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the agent skills are archive subtrees extracted into `~/.agents/skills/<name>/`; the compound-engineering plugin extracts to `~/.local/share/compound-engineering/v<semver>/`. Add a new tool to the matching domain file; don't spawn a new one |
+| `.chezmoiexternals/*` | external fetches, grouped by DOMAIN into six files (not one file per tool): `ai-agents.toml` (claude-code, codex, agy, opencode, pi, CLIProxyAPI, codegraph, aoe, the agent skills listed in `.chezmoidata/agents.yaml` under `agents.skills.external`, and the compound-engineering release tarball declared in `agents.opencode.plugins` under `install: localArchive`), `dev-tools.toml` (ast-grep, buf, marksman, macOS jq, shellcheck, wasm-pack, rust-analyzer, uv/uvx), `vcs.toml` (gh, glab, garden), `k8s.toml` (kubectl, helm, minikube), `system.toml` (docker credential helpers, wakatime-cli, prezto), `fonts.toml`. Everything but prezto/fonts, the agent skills, and the compound-engineering plugin is a pinned standalone CLI binary or versioned CLI tree linked into `~/.local/bin`; the agent skills are archive subtrees extracted into `~/.agents/skills/<name>/`; the compound-engineering plugin extracts to `~/.local/share/compound-engineering/v<semver>/`; CLIProxyAPI extracts a checksum-verified full binary to `~/.local/share/cli-proxy-api/versions/<tag>-<digest>/` and is activated separately by `90-services/`. Add a new tool to the matching domain file; don't spawn a new one |
 | `.chezmoiignore` | per-OS target exclusions (itself Go-templated) |
 
 Source paths beginning with `.` (e.g. `.taplo.toml`, `.vscode/`,
@@ -147,6 +147,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above) |
 | `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`, both registered at the same versioned local path that the file-phase external extracts — OpenCode reads that path directly from its config, and pi installs it as a native `git:` source from its managed settings), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's extensions (`update-pi-extensions`, a single `pi update --extensions`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
+| `90-services/` | last: reconciles the checksum-verified CLIProxyAPI candidate into stable links, starts the platform user service, runs semantic readiness, and performs only manifest-proven binary rollback; Linux/macOS workstation hosts only |
 
 ### Host facts — the named registry every host-identity condition resolves through
 
@@ -292,6 +293,7 @@ Recurring script boilerplate lives in `.chezmoitemplates/` and is inlined with
 | `fingerprint.tmpl` | the comment-only sha256 dependency block (see the script-prefix policy above); takes `(dict "sourceDir" … "globs" (list …))` |
 | `resolve-op-refs-json.tmpl` | recursively emits maps/slices/scalars as deterministic, lexically ordered JSON, resolving only string values beginning exactly `op://` through `onepasswordRead` |
 | `opencode-plugins-json.tmpl` | resolves the data-driven `.agents.opencode.plugins` list into exact npm/localArchive specs for `opencode.json` and `tui.json`, including target-specific suffixes; `install: localArchive` renders `<pkg>@file:<absolute-path>` (NPM `file:` protocol — a bare absolute path is "already configured" to `opencode plugin` but never actually installed into `~/.cache/opencode/packages/`, so its default export never gets imported and its `config` hook never runs) |
+| `cli-proxy-api-ref.tmpl` | shared CLIProxyAPI release identity for the grouped external and service reconciler: newest semver release, exact full archive for Linux/macOS amd64/arm64, official sidecar SHA-256, and `<tag>-<digest-prefix>` identity; deterministic tests can inject OS/arch/tag/checksums |
 | `compound-engineering-ref.tmpl` | newest `compound-engineering-*` release tag (the plugin repo interleaves other tag trains, so plain `gitHubLatestRelease` is wrong); shared by the consumers of that plugin — `.chezmoiexternals/ai-agents.toml` (archive URL + versioned target path), `opencode-plugins-json.tmpl` (opencode.json's `plugin` array reference), `00-tools/run_onchange_after_compound-engineering` (sibling-version prune), and `70-agents/run_onchange_after_install-compound-engineering` (Claude/Codex marketplace registration at the versioned path) — so OpenCode, Claude, and Codex load the SAME extracted release tree (pi diverges to a `git:` source) |
 | `config-secrets-key.tmpl` | the machine-local AES key that encrypts the `.chezmoi.toml.tmpl` prompted secrets (see the Secrets section): reads the user keyring FAIL-SOFT via `chezmoi secret keyring get` in a subshell — the built-in `keyring` template function hard-errors when no keyring daemon is reachable, which would break every headless/CI render; an empty result means "keyring unreachable" and callers take their secret-absent skip path |
 | `sudo-skip-guard.sh.tmpl` | `SUDO` array + soft-skip (exit 0) when sudo would have to prompt but can't — for optional host tuning |
@@ -354,6 +356,108 @@ gate name aborts in `facts-validate.tmpl` — on *every* host now, not only on t
 one distro that reads that entry. Manifest typos still fail loud. **Edit the data,
 not the script** — add/gate/remove system files in `system.yaml` + the tree. Full
 model: `system/README.md`.
+
+### CLIProxyAPI — credential-free localhost infrastructure, not an agent route
+
+`router-for-me/CLIProxyAPI` is managed on Linux and macOS workstation hosts as
+an **unattached infrastructure service**. It is not an OpenCode/Pi provider,
+MCP, plugin, or default route; `.chezmoidata/agents.yaml` carries no reference
+to it. Windows and real containers receive no binary, config, launcher, service,
+or reconciler. Historical `~/.cli-proxy-api` state is neither read nor deleted.
+
+The managed pieces are deliberately split:
+
+- `.chezmoitemplates/cli-proxy-api-ref.tmpl` resolves the newest semver release,
+  the exact **full** platform archive (Linux/macOS, amd64/arm64), and exactly one
+  SHA-256 from upstream's `checksums.txt`. Its identity is
+  `<tag>-<first-12-digest>` so a same-tag asset replacement becomes a new
+  candidate. `.chezmoiexternals/ai-agents.toml` extracts only the binary to
+  `~/.local/share/cli-proxy-api/versions/<identity>/cli-proxy-api` as 0500.
+  Missing, duplicate, malformed, no-plugin, or unsupported selector results
+  MUST fail rendering. Never silently fall back to another asset.
+- `dot_config/cli-proxy-api/readonly_config.yaml` →
+  `~/.config/cli-proxy-api/config.yaml` is the complete reviewed upstream
+  `v7.2.80` `config.example.yaml`, not a minimal hand-written config.
+  `.ci/fixtures/cli-proxy-api-config-v7.2.80.diff` is the exhaustive allowed
+  upstream diff. Refreshing the snapshot is a manual source review: update the
+  full file, pinned upstream diff/checksum fixtures, native smoke expectations,
+  and docs together. Binary releases remain dynamic-latest per the external
+  policy; the config never auto-merges upstream changes.
+- `dot_local/libexec/private_executable_cli-proxy-api-launch` is an **internal
+  supervisor launcher**, not an operator helper. Both the systemd user unit and
+  LaunchAgent call it. Do not add login commands, browser/page openers, or
+  credential-management wrappers beside it.
+- `.chezmoiscripts/90-services/run_onchange_after_cli-proxy-api-service.sh.tmpl`
+  disables persistence, activates the versioned candidate through
+  `~/.local/share/cli-proxy-api/current` and `~/.local/bin/cli-proxy-api`, proves
+  it in a bounded foreground launch, then starts the native user supervisor and
+  repeats the shared semantic probe. The stable binary link is for
+  observability/manual invocation only; no managed client consumes it. systemd
+  has bounded failure-only restarts; the LaunchAgent deliberately uses
+  `RunAtLoad` without `KeepAlive`, so a permanent failure stays stopped instead
+  of producing an unbounded launchd loop.
+
+**Runtime contract:** the config binds only `127.0.0.1:8317`, has empty client
+API keys and Management secret, disables remote management, the control panel,
+panel updates, and plugins, and keeps debug/pprof/file logging off.
+`commercial-mode: true` is load-bearing: upstream otherwise force-writes failed
+request bodies even when normal file logging is disabled. The service
+specifications clear loader/startup variables before the shell starts, and the
+launcher validates owner-controlled, non-symlink 0700 auth and work directories
+on **every start**, rejects any auth entry and work-directory `.env` without
+deleting them, changes into that work directory, sets umask 077, and execs with
+`env -i` plus only the fixed runtime allowlist. It always passes `-local-model`.
+That flag disables mutable model-catalog updates, but upstream still makes one
+credential-free Antigravity version-metadata request; there is no upstream disable switch. Do
+not weaken these boundaries or add provider/client/Management credentials here.
+
+**Readiness authority:** `.ci/smoke-cli-proxy-api.sh` is sourced by both the host
+reconciler and native CI. Given the supervisor-reported PID, it waits only for
+that PID to bind, then requires exactly one `127.0.0.1:8317` listener whose text
+executable is the active candidate, `/healthz` success, and a valid
+`/v1beta/interactions` `agent` request returning HTTP 503 JSON containing
+`no auth available`. The `agent` shape intentionally forces the built-in
+`gemini-interactions` provider path; an arbitrary unknown model returns 502
+before auth selection and is not a valid no-credential proof. Management,
+`management.html`, and plugin-resource routes must each return 404. The probe
+also verifies config immutability, empty auth state, absent panel/plugin
+artifacts, and that its request canary reached neither state nor supervisor
+output, then re-proves the same PID/executable/listener identity to close a port
+handoff race. Keep this one semantic authority rather than forking service and
+CI checks.
+
+**Activation and rollback:** the reconciler validates ownership, modes, and
+symlink shape before changing links. Its 0600 last-known-good manifest records
+the complete release identity, the extracted binary digest captured only after
+semantic readiness, and a hash of every non-binary input (config, launcher,
+active platform service definition, reconciler source, and probe). The official
+sidecar proves release-asset consistency before extraction (it is not an
+independent publisher signature); the manifest digest detects later mutation of
+a same-release candidate and every rollback binary. A failed new candidate is
+always stopped. Automatic prior-binary restart is allowed only when that
+manifest proves a **binary-only** change and the restored binary passes the same
+probe. Any preflight integrity failure removes launchable stable links; config
+or policy drift leaves the service disabled across future logins (nonzero apply),
+with a manifest-proven prior link restored only for manual recovery after a
+post-activation failure. Older verified candidates are intentionally retained —
+never add implicit pruning or delete/print historical credential state.
+
+Verification lives in `.ci/test-cli-proxy-api-infrastructure.sh` (all selector
+mappings, checksum failures, exact upstream config diff, static policy),
+`.ci/test-cli-proxy-api-service.sh` (launcher rejection plus Linux/macOS
+supervisor transitions and rollback), and
+`.ci/run-cli-proxy-api-native-smoke.sh` (real resolved binary through the sterile
+launcher). `render-dotfiles.yml` runs native Ubuntu/macOS provenance + smoke,
+`systemd-analyze verify` / `plutil -lint`, container/Windows fences, and rendered
+ShellCheck on pull requests **and pushes to main**. Adapter tests prove state
+transitions; they MUST NOT be described as real user-manager activation.
+
+Management API activation is separate security work:
+[issue #48](https://github.com/hyperlapse122/dotfiles/issues/48). CPA Usage
+Keeper and GNOME/KDE applets are motivations only, not part of this
+infrastructure or that issue's implementation. No plaintext Management secret,
+provider credential, client key, generated auth state, or consumer routing
+belongs in this change.
 
 ### Agent skills, MCPs & trust — managed by `dotagents`
 
@@ -469,14 +573,15 @@ it finds any nested copy and names the offending path. Remove that worktree or
 pass `--source <its own worktree>`, where its `.chezmoidata` is legitimately the
 top-level one. The stub-`op` recipe below already passes `--source "$PWD"`.
 
-#### When local verification is impossible, verify via the PR's CI + artifacts
+#### When local verification is impossible, verify via CI + artifacts
 
 If the working environment can't run the checks above (no `chezmoi`, no live KDE
 session, no root, no target-distro container — e.g. a sandboxed agent), **do not
-claim a change is verified**. State the local limitation plainly, open the PR,
-and drive verification from the CI run and its artifacts instead. The
-`.github/workflows/render-dotfiles.yml` workflow (PR-triggered) is built for
-exactly this:
+claim a change is verified**. State the local limitation plainly and drive
+verification from the repository's delivery CI and artifacts instead. The
+`.github/workflows/render-dotfiles.yml` workflow runs for pull requests **and
+pushes to main** and is built for exactly this:
+
 - **`apply --init (fedora|ubuntu)`** runs a real `chezmoi apply --init` in
   `fedora:latest` / `ubuntu:latest` containers → **`rendered-files-<os>`**
   artifact (managed files rendered into an isolated `$HOME`; scripts/externals
@@ -490,17 +595,21 @@ exactly this:
   **`rendered-internals-<os>`** artifact. Per-OS gated scripts render to an empty
   file on the non-matching OS; a `*.render-error.txt` beside an entry flags a
   render failure to inspect.
+- **`CLIProxyAPI resolver + native smoke (linux|darwin)`** resolves and verifies
+  the exact release, hard-renders the supported externals, runs native binary
+  semantics, exercises deterministic supervisor transitions, validates platform
+  target modes/fences, and emits both rendered reconciler variants.
 - **`shellcheck (rendered scripts + repo-meta)`** — `needs: [apply,
-  render-internals, apply-macos]`, so it lints the REAL rendered Fedora + Ubuntu +
-  macOS output of the
-  provisioning scripts (the `.tmpl` files shellcheck can't parse directly) plus
-  the non-deployed repo-meta scripts (`.install-prerequisites.sh`, the `.ci`
-  smoke test). Findings also land in the **`shellcheck-report`** artifact. This is
-  the sole shellcheck gate (it replaced the old source-only `shell-lint` job in
-  `ci.yml`), so it is **PR-only** — a direct push to `main` is not shell-linted.
-  A gate behind `needs:` is SKIPPED when an upstream fails; skipped is red, not
-  passed, because the required lint never ran. The workflow's final `gate` job
-  enforces that every job, including both lint gates, actually reached success.
+  render-internals, cli-proxy-api, apply-macos]`, so it lints the REAL rendered
+  Fedora + Ubuntu + macOS provisioning scripts, both native CLIProxyAPI
+  reconciler variants, and every non-deployed `.ci/*.sh` repo-meta script plus
+  `.install-prerequisites.sh`. Findings also land in the
+  **`shellcheck-report`** artifact. This is the sole shellcheck gate (it replaced
+  the old source-only `shell-lint` job in `ci.yml`) and now runs on both PRs and
+  direct pushes to `main`. A gate behind `needs:` is SKIPPED when an upstream
+  fails; skipped is red, not passed, because the required lint never ran. The
+  workflow's final `gate` job enforces that every job, including both lint gates,
+  actually reached success.
 
 Read the job logs and download the artifacts (they carry `retention-days: 3`) to
 confirm what actually rendered before relying on a change. `ci.yml` covers the
@@ -1033,9 +1142,9 @@ keyring entry can no longer decrypt the stored ciphertexts.
   completions; `pipx`, python-dependent and the backend behind `pipx:mmdc`).
   Everything else — a **standalone CLI binary from a GitHub release / vendor
   manifest** — belongs in `.chezmoiexternals/`, NOT here. That is why `gh`,
-  `glab`, `opencode`, `aoe`, `wakatime-cli`, `agy`, `shellcheck`, `wasm-pack`,
-  `rust-analyzer`, and `uv` are all externals. mise still enforces a 24h
-  `minimum_release_age` cooldown with an excludes list — add a fast-moving
+  `glab`, `opencode`, `aoe`, `wakatime-cli`, `agy`, `CLIProxyAPI`, `shellcheck`,
+  `wasm-pack`, `rust-analyzer`, and `uv` are all externals. mise still enforces a
+  24h `minimum_release_age` cooldown with an excludes list — add a fast-moving
   *registry* package to `minimum_release_age_excludes`, don't disable the gate
   (and don't leave an exclude behind for a tool that has since moved to an
   external — it's dead weight).
@@ -1057,7 +1166,9 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `run_onchange_after_*` scripts re-point the `~/.local/bin` symlink at the
   freshly fetched version and prune older ones — the latest release id is
   rendered into each script body, so a new upstream release re-triggers the
-  onchange re-link.
+  onchange re-link. CLIProxyAPI is the deliberate exception: `90-services/`
+  owns its two stable links and readiness-gated rollback, and older verified
+  candidate dirs are retained rather than pruned.
   (The version-dir linker scripts were previously named `run_after_onchange_*`, which
   chezmoi parses as a plain every-apply `run_after_` because the attribute
   order is `run_[once_|onchange_][before_|after_]`.)
@@ -1141,9 +1252,10 @@ disagree about the same machine.
 
 - **Only the CLI dotfiles deploy in a container.** The `.chezmoiignore` container
   block skips every provisioning script — `.chezmoiscripts/{30-linux,20-linux-fedora,40-linux-ubuntu,50-linux-kde,50-linux-gnome,10-auth,80-keys}/*.sh`
-  plus `.chezmoiscripts/60-build/*mxm4-haptic.sh` (no package installs, `/etc` config,
+  plus `.chezmoiscripts/60-build/*mxm4-haptic.sh` and the CLIProxyAPI
+  `90-services` reconciler (no package installs, `/etc` config,
   GPG/GitHub/Tailscale auth, fonts, KDE/GNOME settings, pro-audio realtime provisioning,
-  or the MX Master haptic build) — and,
+  MX Master haptic build, or localhost proxy service) — and,
   because the 80-keys age-identity import is
   among the skips, also `src/garden.yaml` (an encrypted target with no
   identity present would otherwise abort the apply; this is also what keeps
@@ -1153,8 +1265,10 @@ disagree about the same machine.
   when mise is absent), the dotagents skills install
   (`run_onchange_after_install-dotagents-skills`; soft-skips on missing prerequisites and
   preflights `~/.claude`/`~/.codex`), and the `00-tools/` scripts (CLI
-  symlinks are wanted in a container). Adjust skips in that one gated block, never by editing the
-  scripts.
+  symlinks are wanted in a container). CLIProxyAPI is the exception to the general
+  CLI rule: its grouped external block, config, internal launcher, native service,
+  and reconciler are all excluded because it is host-local infrastructure, not a
+  container CLI. Adjust skips in that one gated block, never by editing the scripts.
 - **No package installs in a container.** `.install-prerequisites.sh` expects `op` +
   `mise` from the base image; it never runs dnf/apt/brew inside a container and fails
   fast with guidance when either is missing.

@@ -1,0 +1,64 @@
+{{- /*
+Shared CLIProxyAPI release identity.
+
+Production callers pass (dict "ctx" .). Deterministic tests may additionally
+pass os, arch, tag, and checksums so every selector/failure branch is exercised
+without depending on the runner architecture or network.
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- $os := $ctx.chezmoi.os -}}
+{{- $arch := $ctx.chezmoi.arch -}}
+{{- if hasKey . "os" -}}{{- $os = .os -}}{{- end -}}
+{{- if hasKey . "arch" -}}{{- $arch = .arch -}}{{- end -}}
+{{- if not (or (eq $os "linux") (eq $os "darwin")) -}}
+  {{- fail (printf "CLIProxyAPI: unsupported operating system %q" $os) -}}
+{{- end -}}
+{{- if eq $arch "arm64" -}}
+  {{- $arch = "aarch64" -}}
+{{- else if ne $arch "amd64" -}}
+  {{- fail (printf "CLIProxyAPI: unsupported architecture %q" $arch) -}}
+{{- end -}}
+
+{{- $tag := "" -}}
+{{- if hasKey . "tag" -}}
+  {{- $tag = .tag | toString -}}
+{{- else -}}
+  {{- $tag = (gitHubLatestRelease "router-for-me/CLIProxyAPI").TagName | toString -}}
+{{- end -}}
+{{- if not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" $tag) -}}
+  {{- fail (printf "CLIProxyAPI: invalid release tag %q" $tag) -}}
+{{- end -}}
+{{- $version := trimPrefix "v" $tag -}}
+{{- $asset := printf "CLIProxyAPI_%s_%s_%s.tar.gz" $version $os $arch -}}
+
+{{- $checksums := "" -}}
+{{- if hasKey . "checksums" -}}
+  {{- $checksums = .checksums | toString -}}
+{{- else -}}
+  {{- $checksums = output "curl" "-fsSL" (gitHubReleaseAssetURL "router-for-me/CLIProxyAPI" $tag "checksums.txt") | toString -}}
+{{- end -}}
+{{- $sha256 := "" -}}
+{{- $matches := 0 -}}
+{{- range splitList "\n" $checksums -}}
+  {{- $fields := regexSplit "\\s+" (trim .) -1 -}}
+  {{- if and (eq (len $fields) 2) (eq (index $fields 1) $asset) -}}
+    {{- $sha256 = index $fields 0 | lower -}}
+    {{- $matches = add $matches 1 -}}
+  {{- end -}}
+{{- end -}}
+{{- if ne $matches 1 -}}
+  {{- fail (printf "CLIProxyAPI: expected one checksum for %s, found %d" $asset $matches) -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha256) -}}
+  {{- fail (printf "CLIProxyAPI: invalid sha256 for %s" $asset) -}}
+{{- end -}}
+
+{{- dict
+  "tag" $tag
+  "version" $version
+  "os" $os
+  "arch" $arch
+  "asset" $asset
+  "sha256" $sha256
+  "identity" (printf "%s-%s" $tag (substr 0 12 $sha256))
+  | toJson -}}

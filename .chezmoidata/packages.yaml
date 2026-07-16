@@ -182,6 +182,7 @@ packages:
         - fd-find  # fast, user-friendly find alternative (fd)
         - gh  # GitHub CLI
         - jq  # JSON processor (config-pi/config-pi-auth merge pi's live settings/auth JSON)
+        - lsof  # listener ownership checks for CLIProxyAPI readiness
         # kdotool: managed by mise (cargo:kdotool, same as Ubuntu — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
@@ -478,6 +479,7 @@ packages:
         - fd-find  # fast find alternative (binary: fdfind)
         - gh  # GitHub CLI
         - jq  # JSON processor (config-pi/config-pi-auth merge pi's live settings/auth JSON)
+        - lsof  # listener ownership checks for CLIProxyAPI readiness
         # kdotool: managed by mise (cargo:kdotool — no native Ubuntu package)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)

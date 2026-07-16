@@ -13,4 +13,5 @@ wireplumber
 {{- if eq .chezmoi.os "windows" }}
 tmux
 zsh
+cli-proxy-api
 {{- end }}

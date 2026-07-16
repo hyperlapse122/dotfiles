@@ -1,0 +1,26 @@
+--- upstream/config.example.yaml
++++ dot_config/cli-proxy-api/readonly_config.yaml
+@@ -0,0 +1,2 @@
++# Managed CLIProxyAPI v7.2.80 baseline; refresh manually from the tagged upstream example.
++# Safety delta: loopback-only, sterile auth, disabled panel/updates, commercial mode.
+@@ -3 +5 @@
+-host: ""
++host: "127.0.0.1"
+@@ -26 +28 @@
+-  disable-control-panel: false
++  disable-control-panel: true
+@@ -30 +32 @@
+-  # disable-auto-update-panel: false
++  disable-auto-update-panel: true
+@@ -36 +38 @@
+-auth-dir: "~/.cli-proxy-api"
++auth-dir: "~/.local/share/cli-proxy-api/auth"
+@@ -39,4 +41 @@
+-api-keys:
+-  - "your-api-key-1"
+-  - "your-api-key-2"
+-  - "your-api-key-3"
++api-keys: []
+@@ -84 +83 @@
+-commercial-mode: false
++commercial-mode: true
