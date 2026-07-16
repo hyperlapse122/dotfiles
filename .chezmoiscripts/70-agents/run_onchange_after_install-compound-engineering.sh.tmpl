@@ -15,11 +15,13 @@
 # .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering.sh.tmpl
 #
 # Registers everyinc/compound-engineering-plugin (the ce-* + lfg workflow skills)
-# with Claude Code, Codex, and pi, all sourcing the plugin from the SAME
-# versioned local path where .chezmoiexternals/ai-agents.toml extracts the
-# release tarball. OpenCode reads the same path directly from
-# dot_config/opencode/readonly_opencode.json.tmpl (file phase, no script for
-# that agent).
+# with Claude Code and Codex, all sourcing the plugin from the SAME versioned
+# local path where .chezmoiexternals/ai-agents.toml extracts the release
+# tarball. OpenCode reads the same path directly from
+# dot_config/opencode/readonly_opencode.json.tmpl, and pi loads it from its
+# MANAGED ~/.pi/agent/settings.json (dot_pi/agent/readonly_settings.json.tmpl,
+# which deepCopies .agents.pi.settings) — both file-phase, no script for those
+# two agents.
 #
 # WHY a plugin, and not dotagents skills: upstream ships a first-class plugin
 # for every agent this repo runs, so each agent loads the skill set natively
@@ -61,9 +63,11 @@
 #     old-path marketplace registration (identified by the stable marketplace
 #     NAME from .claude-plugin/marketplace.json) before re-adding at the new
 #     path, then re-installs the plugin.
-#   - pi: `pi install <source>` keys by source string, so a bumped path is a
-#     new package. This script removes any prior local install under BASE_DIR
-#     before installing the current path.
+#   - pi / OpenCode: NO ref-bump handling here. pi's packages array is the
+#     MANAGED settings.json (only the current version's absolute path is ever
+#     declared), and the 00-tools sibling-version pruner keeps disk bounded,
+#     so there is no stale registration to scrub. OpenCode likewise reads the
+#     current path straight from its readonly config.
 #
 # Idempotent (unchanged version): a re-run at the same CE_VERSION exits 0 —
 # the marketplace remove no-ops (nothing at the old path), the add hits the
@@ -145,32 +149,7 @@ install_codex() {
   fi
 }
 
-install_pi() {
-  if ! command -v pi >/dev/null 2>&1; then
-    warn "pi: skipped (not on PATH)"
-    return 0
-  fi
-
-  # pi install keys by source string, so a bumped $CE_VERSION means a NEW
-  # entry rather than an update in place. Scrub stale sibling installs under
-  # BASE_DIR before installing the current path so the packages array does
-  # not accumulate every prior version. `pi remove` is a no-op on an unknown
-  # source, so guarded errors stay swallowed.
-  if pi_list_output="$(pi list 2>/dev/null)"; then
-    while IFS= read -r stale; do
-      [ -n "$stale" ] || continue
-      pi remove "$stale" >/dev/null 2>&1 || true
-    done < <(printf '%s\n' "$pi_list_output" | grep -oE "${BASE_DIR}/[^[:space:]]+" | sort -u | grep -vFx "$MARKETPLACE_PATH")
-  fi
-
-  if ! pi install "$MARKETPLACE_PATH"; then
-    warn "pi: skipped (install failed)"
-    return 0
-  fi
-}
-
 install_claude
 install_codex
-install_pi
 {{ end -}}
 {{ end -}}

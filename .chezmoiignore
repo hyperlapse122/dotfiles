@@ -48,10 +48,13 @@ src/garden.yaml
 {{- end }}
 
 # Pi is provisioned only on POSIX. Its mxm4-haptic extension shells out to the
-# cross-platform Linux/macOS client. Skip it on Windows, where pi is not
-# installed. (No installer is stranded: pi auto-discovers the extension.)
+# cross-platform Linux/macOS client, and its settings.json is a managed 0444
+# target that pi cannot write. Skip both on Windows, where pi is not installed.
+# (No installer is stranded: pi auto-discovers the extension, and the package
+# install script gates itself on `pi` being on PATH.)
 {{- if eq .chezmoi.os "windows" }}
 .pi/agent/extensions/mxm4-haptic.ts
+.pi/agent/settings.json
 {{- end }}
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.

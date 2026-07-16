@@ -100,6 +100,10 @@ path = '{{ printf "opencode%s" $executableExtension }}'
 
 {{- if ne .chezmoi.os "windows" -}}
 
+{{- /* $piTag is also resolved inline by dot_pi/agent/readonly_settings.json.tmpl
+       (lastChangelogVersion) so the managed settings.json matches the
+       installed pi. Kept in sync by reading the same release — no shared
+       partial. */ -}}
 {{- $piTag := (gitHubLatestRelease "earendil-works/pi").TagName | toString -}}
 {{- $piAsset := (printf "pi-%s-%s.tar.gz" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) -}}
 

@@ -77,22 +77,38 @@ agents:
   # pi package sources, live settings defaults, and static API-key auth. The
   # settings/auth targets are pi-live-written; scripts merge only these fields.
   pi:
-    # Unpinned by design: npm sources track latest, matching the unsettled
-    # dotagents remote-skill trade-off. pi-mcp-extension is the MCP client;
-    # pi-subagents delegates work; pi-ask-user supplies ask_user.
-    # compound-engineering is NOT here — it is provisioned for pi through the
-    # SAME versioned local-archive path as Claude/Codex/OpenCode; see
-    # `agents.opencode.plugins` (install: localArchive) and
-    # .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering.
-    packages:
-    - npm:pi-mcp-extension
-    - npm:pi-subagents
-    - npm:pi-ask-user
-    defaults:
-      # Keys intentionally match pi's settings.json schema so config-pi can
-      # render and merge this object wholesale. The provider/model must already
-      # be usable through pi's live auth.json (zai is a built-in provider
-      # reached via the zai api_key auth below; no models.json override).
+    # Everything under `settings` renders wholesale into the MANAGED, READONLY
+    # ~/.pi/agent/settings.json (dot_pi/agent/readonly_settings.json.tmpl), so
+    # the keys intentionally match pi's settings.json schema. pi can no longer
+    # write that file (deployed 0444, like opencode.json), so every value pi
+    # used to live-manage lives HERE instead. The provider/model must already
+    # be usable through pi's live auth.json (zai is a built-in provider reached
+    # via the zai api_key auth below; no models.json override).
+    settings:
+      # `packages` is emitted VERBATIM into the managed settings.json (deepCopy
+      # in dot_pi/agent/readonly_settings.json.tmpl) and `pi install`ed verbatim
+      # by run_onchange_after_install-pi-packages — no partial, no resolution:
+      # what is listed here is exactly what pi loads. Unpinned by design (npm:
+      # and git: both track latest) — the same unsettled trade-off the dotagents
+      # remote skills make.
+      #   - pi-mcp-extension: the MCP client (pi ships no MCP support of its
+      #     own; without it the servers in ~/.pi/agent/mcp.json are inert).
+      #   - pi-subagents: delegates work to builtin/custom subagents.
+      #   - pi-ask-user: supplies the ask_user tool.
+      # compound-engineering is installed for pi as a NATIVE `git:` source, NOT
+      # via the versioned local-archive path Claude/Codex/OpenCode use. That is
+      # a deliberate divergence for now: pi tracks the repo's default branch
+      # (unpinned) instead of the extracted release tarball, so it does NOT
+      # consume compound-engineering-ref.tmpl or the localArchive machinery.
+      packages:
+      - npm:pi-mcp-extension
+      - npm:pi-subagents
+      - npm:pi-ask-user
+      - npm:@counterposition/pi-web-search
+      - git:github.com/EveryInc/compound-engineering-plugin
+      # `theme` is declared here because pi can no longer persist a theme choice
+      # to a readonly settings.json — it is fixed to the default.
+      theme: dark
       defaultProvider: zai
       defaultModel: glm-5.2
       # Valid: off | minimal | low | medium | high | xhigh | max.
@@ -117,6 +133,13 @@ agents:
             thinking: max
           delegate:
             model: gpt-5.6-luna
+      webSearch:
+        preferredBasicProvider: exa
+        preferredThoroughProvider: exa
+      # lastChangelogVersion is NOT declared here — it is rendered dynamically
+      # from the installed pi version (resolved inline from the
+      # earendil-works/pi release, the same one .chezmoiexternals/ai-agents.toml
+      # fetches) so the managed file always matches the pi on disk.
     auth:
       providers:
       - name: kimi-coding

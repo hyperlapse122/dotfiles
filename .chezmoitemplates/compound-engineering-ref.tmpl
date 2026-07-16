@@ -4,7 +4,7 @@
        cli-*), so `gitHubLatestRelease` would eventually resolve to the wrong one —
        take the newest release whose tag carries the compound-engineering- prefix.
 
-       Shared so the FOUR consumers of this plugin can never land on different
+       Shared so the consumers of this plugin can never land on different
        releases — the extracted archive path is the same versioned local dir
        (~/.local/share/compound-engineering/v<semver>/), so every agent
        resolves to that same on-disk tree:
@@ -17,9 +17,13 @@
            — prunes sibling versions under ~/.local/share/compound-engineering
            so only the current tag remains on disk.
          - .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering
-           — registers the same versioned path with Claude Code, Codex, and pi
-           (OpenCode is file-phase only; every ref bump also re-registers here
-           because the marketplace path itself changed).
+           — registers the same versioned path with Claude Code and Codex
+           (OpenCode is file-phase only: it reads the path from its readonly
+           config; every ref bump also re-registers here for Claude/Codex
+           because the marketplace path itself changed). pi is NOT a consumer
+           of this ref: it installs compound-engineering as a native `git:`
+           source (a packages entry), tracking the default branch unpinned,
+           rather than the extracted release tarball.
        Claude gains a proper pin here too: its `plugin marketplace add` takes no
        --ref, but a versioned LOCAL PATH is unambiguous.
     */ -}}

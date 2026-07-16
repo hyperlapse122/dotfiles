@@ -1,0 +1,42 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- /* ~/.pi/agent/settings.json — MANAGED READONLY (0444), the pi counterpart of
+       dot_config/opencode/readonly_opencode.json.tmpl.
+
+       pi LIVE-WROTE this file in its former design (theme, packages,
+       lastChangelogVersion) and a read-merge-write script overlaid declared
+       defaults. That is gone: this file is now a chezmoi-managed 0444 target,
+       so pi CANNOT write it — not theme, not lastChangelogVersion, and not the
+       packages array. The trade-off is accepted (and matches opencode's
+       contract): pi's runtime writes are blocked, and the actual package
+       INSTALLATION — the one side-effect pi can no longer perform itself via
+       `pi install` (which writes settings) — is done by
+       .chezmoiscripts/70-agents/run_onchange_after_install-pi-packages, which
+       briefly lifts the readonly bit, runs `pi install` per declared package,
+       and restores both the canonical content and the readonly bit.
+
+       Everything here is data-driven from .chezmoidata/agents.yaml:
+         - the whole object is deepCopied from .agents.pi.settings (same key
+           names as pi's settings.json schema, INCLUDING `packages` — npm
+           sources plus compound-engineering as a native `git:` source, not the
+           localArchive path the other agents use), so adding a new key is a
+           DATA edit;
+         - `lastChangelogVersion` is the installed pi version, resolved inline
+           from the SAME earendil-works/pi release .chezmoiexternals/
+           ai-agents.toml fetches (so it always matches the pi on disk);
+         - `theme` is declared (pi can no longer persist a theme choice, so it
+           is fixed here to the documented default).
+
+       Plain JSON, not JSONC — no comments in the rendered file. */ -}}
+{{- $d := .agents.pi.settings -}}
+{{- /* The GitHub tag carries a leading `v` (v0.80.7) — pi's own version and the
+       value pi writes to lastChangelogVersion strip it (0.80.7).
+       .chezmoiexternals/ai-agents.toml keeps the `v` for the versioned on-disk
+       dir; here we match pi's format. Resolved inline (same release) so no
+       shared partial is needed. */ -}}
+{{- $piVer := (gitHubLatestRelease "earendil-works/pi").TagName | toString | trimPrefix "v" -}}
+{{- /* deepCopy carries `packages` verbatim from .agents.pi.settings; only
+       lastChangelogVersion is injected (it is dynamic, not declared). */ -}}
+{{- $settings := deepCopy $d -}}
+{{- $settings = set $settings "lastChangelogVersion" $piVer -}}
+{{ toPrettyJson "  " $settings }}
+{{- end }}

@@ -2,79 +2,106 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/70-agents/run_onchange_after_install-pi-packages.sh.tmpl
 #
-# Installs the pi packages declared in .chezmoidata/agents.yaml
-# (`agents.pi.packages`) —
-# `pi install <source>` per entry. The set today: pi-mcp-extension (the MCP
-# client — pi ships no MCP support of its own, so without it the servers in
-# ~/.pi/agent/mcp.json, source dot_pi/agent/private_readonly_mcp.json.tmpl, are
-# inert, and without that config the extension has nothing to connect to; the
-# two halves are useless apart), the compound-engineering plugin (ce-* + lfg
-# skills, the native pi counterpart of the Claude/Codex/opencode installs),
-# pi-subagents, and pi-ask-user. Add/remove packages in the DATA FILE, not
-# here — the list renders into the PACKAGES array below.
+# (Re)installs every pi package declared in the MANAGED, READONLY
+# ~/.pi/agent/settings.json. settings.json is deployed 0444 by
+# dot_pi/agent/readonly_settings.json.tmpl (the pi counterpart of
+# dot_config/opencode/readonly_opencode.json.tmpl), so pi CANNOT write it —
+# which means pi cannot run `pi install` itself (that command both installs the
+# npm deps under ~/.pi/agent/npm/ AND appends the source to the packages array
+# in settings.json; the second step would fail against a readonly file). This
+# script is therefore the ONLY thing that performs the install side-effect.
 #
-# WHY a script, and not a chezmoi-managed target: pi records its installed
-# packages in ~/.pi/agent/settings.json, which pi LIVE-WRITES (`theme`,
-# `lastChangelogVersion`, …). A chezmoi-managed file there — let alone a
-# `readonly_` 0444 one — would fight the agent for the same file on every
-# session, exactly the way a managed ~/.claude/settings.json would fight Claude
-# Code and aoe (see install-claude-plugins). `pi install` is therefore the ONLY
-# correct mechanism: it owns settings.json, we only ask it to converge.
+# Mechanism (snapshot / install / restore):
+#   1. settings.json is rendered by the file phase (packages array verbatim
+#      from .agents.pi.settings in .chezmoidata/agents.yaml — npm sources
+#      plus compound-engineering as a native `git:` source).
+#   2. This script snapshots that canonical content, briefly lifts the readonly
+#      bit, and runs `pi install` per declared package. pi install is idempotent
+#      (a package already listed is reconfirmed, never duplicated), so the only
+#      lasting side-effect lands under ~/.pi/agent/npm/.
+#   3. The snapshot is restored over settings.json (so pi's bookkeeping is
+#      discarded and the declared content wins) and the 0444 bit is restored.
+#      chezmoi re-asserts the same canonical content on the next apply
+#      regardless.
 #
-# `pi install <source>` is IDEMPOTENT: re-running it on an already-installed
-# package exits 0 and does NOT duplicate the entry in the packages array, so
-# this script is free to re-run. pi installs the package with npm under
-# ~/.pi/agent/npm/, so this repo's ~/.npmrc hardening applies there too —
-# `save-exact=true` means it lands exactly pinned in that tree.
+# This replaces the former `pi install`-owns-settings model: settings.json is no
+# longer live-written by anyone. opencode's readonly plugin array is
+# self-installing (its loader bun-installs from the array); pi is not, so this
+# script exists where opencode needs none.
 #
-# Packages are UNPINNED by design (npm: tracks npm latest, git: tracks the
-# repo's default branch) — the same unsettled trade-off the dotagents remote
-# skills make by tracking their newest upstream release: a bad upstream publish
-# reaches the host on the next install.
+# Packages are UNPINNED by design (npm: tracks npm latest) — the same unsettled
+# trade-off the dotagents remote skills make by tracking their newest upstream
+# release: a bad upstream publish reaches the host on the next install.
 #
-# onchange trigger: the PACKAGES array below is RENDERED from
-# .chezmoidata/agents.yaml (`agents.pi.packages`), so it IS the trigger. There is
-# no other source-dir dependency to hash, so there is deliberately NO fingerprint
-# block — editing
-# the data changes this script's rendered content and re-runs it (the same
-# shape as install-vscodium-extensions).
+# onchange trigger: the PACKAGES array below is RENDERED verbatim from
+# .agents.pi.settings.packages in .chezmoidata/agents.yaml, so it IS the
+# trigger (the same shape as install-vscodium-extensions and the old form of
+# this script). No fingerprint block.
 #
-# Soft-skip: this script must never fail an apply — a missing `pi` binary exits
-# 0 after a diagnostic. NOTE the standard onchange trade-off: chezmoi records
-# that clean exit-0 as a successful run, so a skipped install is NOT retried on
-# the next apply until the rendered content changes — after fixing the cause,
-# re-run `pi install` by hand or `chezmoi apply --force`.
+# Soft-skip: this script must never fail an apply — a missing `pi` binary or a
+# missing settings.json exits 0 after a diagnostic. NOTE the standard onchange
+# trade-off: chezmoi records that clean exit-0 as a successful run, so a skipped
+# install is NOT retried on the next apply until the rendered content changes —
+# after fixing the cause, re-run `pi install` by hand or `chezmoi apply
+# --force`.
 #
 # POSIX-only (`ne windows`): pi is fetched per-version by .chezmoiexternals/
-# ai-agents.toml, whose pi block skips Windows — the release does ship windows
-# .zip assets, but the ~/.local/bin symlinker (00-tools/run_onchange_after_pi)
-# has no .ps1 counterpart. Deliberately KEPT in containers, like the dotagents
-# and compound-engineering installs in this directory: pi is a first-class CLI
-# here and is wanted in a devbox.
+# ai-agents.toml, whose pi block skips Windows. Deliberately KEPT in containers,
+# like the dotagents and compound-engineering installs in this directory: pi is a
+# first-class CLI here and is wanted in a devbox.
 
 set -euo pipefail
 
+SETTINGS="${PI_AGENT_SETTINGS:-$HOME/.pi/agent/settings.json}"
+
+# chezmoi's non-interactive script environment may omit the user-local bin dir,
+# even though the file phase linked pi there earlier in the same apply.
+PATH="$HOME/.local/bin${PATH:+:$PATH}"
+export PATH
+
 PACKAGES=(
-{{- range .agents.pi.packages }}
+{{- range .agents.pi.settings.packages }}
   {{ . | quote }}
 {{- end }}
 )
 
 skip() { exit 0; }
 
-# `pi` is fetched by .chezmoiexternals/ai-agents.toml during the file phase and
-# symlinked into ~/.local/bin by .chezmoiscripts/00-tools/run_onchange_after_pi,
-# so it exists by this after-phase script on a normal apply. Absent (first
-# bootstrap, fetch failed) → nothing to install.
 if ! command -v pi >/dev/null 2>&1; then
   echo "install-pi-packages: skipped (pi not on PATH)" >&2
   skip
 fi
 
+if [[ ! -f "$SETTINGS" ]]; then
+  echo "install-pi-packages: skipped ($SETTINGS absent — file phase did not deploy it)" >&2
+  skip
+fi
+
+# Snapshot the canonical managed content before letting pi install touch it.
+snapshot="$(mktemp "${SETTINGS}.snapshot.XXXXXX")"
+trap 'rm -f "$snapshot"' EXIT
+cp -a "$SETTINGS" "$snapshot"
+
+# Briefly lift the readonly bit so pi install can complete its (idempotent)
+# bookkeeping. chmod u+w is enough for the owner; ignore failure (already
+# writable, or something else — the restore below is authoritative either way).
+chmod u+w "$SETTINGS" 2>/dev/null || true
+
+rc=0
 for pkg in "${PACKAGES[@]}"; do
   if ! pi install "$pkg"; then
-    echo "install-pi-packages: skipped (install of ${pkg} failed)" >&2
-    skip
+    echo "install-pi-packages: warning (install of ${pkg} failed)" >&2
+    rc=1
   fi
 done
+
+# Restore the canonical content (absolute compound-engineering path preserved)
+# and the readonly bit. The npm install side-effect under ~/.pi/agent/npm/
+# survives; only pi's settings bookkeeping is discarded.
+cp -a "$snapshot" "$SETTINGS"
+chmod 444 "$SETTINGS" 2>/dev/null || true
+trap - EXIT
+rm -f "$snapshot"
+
+exit $rc
 {{ end -}}
