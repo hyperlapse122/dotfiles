@@ -59,8 +59,16 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
      tier, so this reference name has no mapping and the entry drops entirely.
    - `gemini-3.1-pro` → `google-agy/gemini-pro-agent`
    - `gemini-3-flash` → `google-agy/gemini-3-flash`
-   - `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.x`,
-     `big-pickle`, and any name that already appears verbatim → use as-is.
+   - `claude-opus-4-7` with `variant: max` → `anthropic/claude-opus-4-8` with
+     `variant: xhigh` (Anthropic's own recommendation: the 4-8 generation
+     supersedes 4-7 and `xhigh` is the recommended reasoning tier). Every
+     `claude-opus-4-7` occurrence in the current upstream reference carries
+     `variant: max`, so this remap is effectively unconditional today; if a
+     future reference ever emits `claude-opus-4-7` without that variant,
+     resolve verbatim to `anthropic/claude-opus-4-7` and flag it in your
+     summary.
+   - `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.x`, `big-pickle`, and any
+     name that already appears verbatim → use as-is.
    - Any other name: use the CLOSEST available id in the same family; if there
      is none, treat it as a drop (next rule) and flag it in your summary.
 3. **Drop** any entry whose resolved id is NOT in the available-models list
@@ -68,7 +76,9 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
    map, or any family with no configured provider). A dropped primary promotes
    the next surviving entry.
 4. **Preserve the reference `variant` verbatim** on every surviving entry
-   (including on `gemini-*` → `google-agy/*`).
+   (including on `gemini-*` → `google-agy/*`), except where rule 2 explicitly
+   remaps model+variant together — currently only `claude-opus-4-7` with
+   `variant: max` → `claude-opus-4-8` with `variant: xhigh`.
 5. **Dedupe**: after mapping, collapse entries that resolve to the same
    `provider/model` (+ variant), keeping the first occurrence's position.
 6. The first surviving entry becomes `model` (+ `variant`); the rest become
