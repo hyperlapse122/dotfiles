@@ -227,11 +227,14 @@ cpa_smoke_checks() {
   cpa_expect_404 http://127.0.0.1:8317/management.html || return 1
   cpa_expect_404 http://127.0.0.1:8317/v0/resource/plugins/example || return 1
 
-  cpa_config_dir=$(dirname "$CPA_SOURCE_CONFIG")
-  [ ! -e "$cpa_config_dir/static/management.html" ] || {
-    cpa_fail "management panel artifact exists"
-    return 1
-  }
+  cpa_source_config_dir=$(dirname "$CPA_SOURCE_CONFIG")
+  cpa_runtime_config_dir=$(dirname "$CPA_CONFIG")
+  for cpa_panel_dir in "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
+    [ ! -e "$cpa_panel_dir/static/management.html" ] || {
+      cpa_fail "management panel artifact exists"
+      return 1
+    }
+  done
   [ ! -e "$CPA_WORK_DIR/plugins" ] || {
     cpa_fail "plugin artifact directory exists"
     return 1
@@ -252,7 +255,7 @@ cpa_smoke_checks() {
   # Remove verifier-owned response files before checking whether the request
   # canary escaped into application state or supervisor output.
   cpa_smoke_cleanup || return 1
-  for cpa_scan_root in "$CPA_AUTH_DIR" "$CPA_WORK_DIR" "$cpa_config_dir"; do
+  for cpa_scan_root in "$CPA_AUTH_DIR" "$CPA_WORK_DIR" "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
     if [ -d "$cpa_scan_root" ] && grep -R -F -l -- "$cpa_canary" "$cpa_scan_root" >/dev/null 2>&1; then
       cpa_fail "request canary persisted under managed state"
       return 1

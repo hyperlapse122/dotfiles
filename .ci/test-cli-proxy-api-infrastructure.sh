@@ -147,6 +147,8 @@ grep -F 'Management API credential is missing or invalid' "$reconciler" >/dev/nu
 grep -F '[ "${#cpa_management_read}" -ge 32 ]' "$reconciler" >/dev/null
 grep -F 'CPA_AWK_SECRET' "$reconciler" >/dev/null
 grep -F 'CPA_MANAGEMENT_SECRET_SHA256' "$reconciler" >/dev/null
+grep -F 'source_config_sha256' "$reconciler" >/dev/null
+awk '/^if ! cpa_preflight_candidate/{candidate=NR} candidate && NR > candidate && /^if ! cpa_nonbinary_hash=\$\(cpa_compute_nonbinary_hash\)/{found=1} END{exit !found}' "$reconciler"
 grep -F '/opt/homebrew/bin/op' "$reconciler" >/dev/null
 grep -F '/usr/local/bin/op' "$reconciler" >/dev/null
 grep -F '"$CPA_OP" read' "$reconciler" >/dev/null

@@ -137,7 +137,9 @@ cpa_prepare_runtime_config() {
   fi
   if [ "$CPA_TEST_ADAPTER" -eq 0 ] &&
      [ -f "$CPA_CONFIG" ] && [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 400 ] &&
-     [ -f "$CPA_MANIFEST" ] && [ "$(awk -F= '$1 == "management_secret_sha256" { print $2; exit }' "$CPA_MANIFEST")" = "$CPA_MANAGEMENT_SECRET_SHA256" ]; then
+     [ -f "$CPA_MANIFEST" ] &&
+     [ "$(awk -F= '$1 == "management_secret_sha256" { print $2; exit }' "$CPA_MANIFEST")" = "$CPA_MANAGEMENT_SECRET_SHA256" ] &&
+     [ "$(awk -F= '$1 == "source_config_sha256" { print $2; exit }' "$CPA_MANIFEST")" = "$(cpa_reconcile_sha256 "$CPA_SOURCE_CONFIG")" ]; then
     CPA_RUNTIME_CREATED=0
     CPA_RUNTIME_REUSED=1
     return 0
@@ -497,6 +499,7 @@ cpa_manifest_is_valid() {
   cpa_manifest_binary=$(cpa_manifest_value binary_sha256)
   cpa_manifest_nonbinary=$(cpa_manifest_value nonbinary_sha256)
   cpa_manifest_management=$(cpa_manifest_value management_secret_sha256)
+  cpa_manifest_source_config=$(cpa_manifest_value source_config_sha256)
   printf '%s' "$cpa_manifest_tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || return 1
   [ "$cpa_manifest_asset" = "CLIProxyAPI_${cpa_manifest_tag#v}_${CPA_RELEASE_OS}_${CPA_RELEASE_ARCH}.tar.gz" ] || return 1
   printf '%s' "$cpa_manifest_archive" | grep -Eq '^[0-9a-f]{64}$' || return 1
@@ -504,6 +507,7 @@ cpa_manifest_is_valid() {
   printf '%s' "$cpa_manifest_binary" | grep -Eq '^[0-9a-f]{64}$' || return 1
   printf '%s' "$cpa_manifest_nonbinary" | grep -Eq '^[0-9a-f]{64}$' || return 1
   printf '%s' "$cpa_manifest_management" | grep -Eq '^[0-9a-f]{64}$' || return 1
+  printf '%s' "$cpa_manifest_source_config" | grep -Eq '^[0-9a-f]{64}$' || return 1
 }
 
 cpa_compute_nonbinary_hash() {
@@ -870,6 +874,13 @@ if ! cpa_preflight_candidate; then
   cpa_rollback || true
   cpa_reconcile_fail "candidate failed foreground semantic readiness"
 fi
+# A real bootstrap rewrites the plaintext runtime key to bcrypt before the
+# candidate is considered ready. Refresh the attestation baseline to the
+# post-bootstrap file before comparing the remaining inputs.
+if ! cpa_nonbinary_hash=$(cpa_compute_nonbinary_hash); then
+  cpa_rollback || true
+  cpa_reconcile_fail "could not hash managed inputs after bootstrap"
+fi
 if ! cpa_preflight_binary_hash=$(cpa_reconcile_sha256 "$CPA_CANDIDATE"); then
   cpa_rollback || true
   cpa_reconcile_fail "could not hash candidate after foreground readiness"
@@ -891,6 +902,7 @@ cpa_write_manifest() {
   cpa_manifest_binary=$1
   cpa_manifest_nonbinary=$2
   cpa_manifest_management=$3
+  cpa_manifest_source_config=$(cpa_reconcile_sha256 "$CPA_SOURCE_CONFIG") || return 1
   cpa_manifest_new=$CPA_MANIFEST.new.$$
   rm -f "$cpa_manifest_new" || return 1
   {
@@ -902,6 +914,7 @@ cpa_write_manifest() {
     printf 'binary_sha256=%s\n' "$cpa_manifest_binary"
     printf 'nonbinary_sha256=%s\n' "$cpa_manifest_nonbinary"
     printf 'management_secret_sha256=%s\n' "$cpa_manifest_management"
+    printf 'source_config_sha256=%s\n' "$cpa_manifest_source_config"
   } > "$cpa_manifest_new" || {
     rm -f "$cpa_manifest_new"
     return 1

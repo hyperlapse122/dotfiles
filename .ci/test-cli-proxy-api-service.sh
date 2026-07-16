@@ -699,6 +699,10 @@ mkdir -p "$service_home/.config/cli-proxy-api/static"
 printf 'panel\n' > "$service_home/.config/cli-proxy-api/static/management.html"
 assert_smoke_rejects CPA_TEST_STATE_SCENARIO panel-artifact
 rm -rf "$service_home/.config/cli-proxy-api/static"
+mkdir -p "$service_home/.local/share/cli-proxy-api/runtime/static"
+printf 'panel\n' > "$service_home/.local/share/cli-proxy-api/runtime/static/management.html"
+assert_smoke_rejects CPA_TEST_STATE_SCENARIO panel-artifact
+rm -rf "$service_home/.local/share/cli-proxy-api/runtime/static"
 mkdir -p "$service_home/.local/share/cli-proxy-api/work/plugins"
 assert_smoke_rejects CPA_TEST_STATE_SCENARIO plugin-artifact
 rm -rf "$service_home/.local/share/cli-proxy-api/work/plugins"
