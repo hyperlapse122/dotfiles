@@ -483,6 +483,12 @@ if run_reconciler "$rendered_reconciler"; then
   exit 1
 fi
 rm -f "$stub_bin/sha256sum"
+# The failed hash preflight removes the runtime copy; restore a locked fixture
+# before exercising the healthy no-op path below.
+mkdir -p "$service_home/.local/share/cli-proxy-api/runtime"
+chmod 600 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" 2>/dev/null || true
+cp "$service_home/.config/cli-proxy-api/config.yaml" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 
 smoke_sentinel=$scratch/must-not-delete
 mkdir -p "$smoke_sentinel"

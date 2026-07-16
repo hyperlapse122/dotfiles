@@ -40,6 +40,7 @@ CPA_MANIFEST="$CPA_BASE/last-known-good"
 CPA_BIN_DIR="$CPA_HOME/.local/bin"
 CPA_RUNTIME_CREATED=0
 CPA_RUNTIME_REUSED=0
+CPA_RUNTIME_TMP=
 CPA_MANAGEMENT_ENABLED=0
 CPA_OP=
 CPA_BIN_LINK="$CPA_BIN_DIR/cli-proxy-api"
@@ -141,10 +142,10 @@ cpa_prepare_runtime_config() {
     CPA_RUNTIME_REUSED=1
     return 0
   fi
-  cpa_runtime_tmp="$CPA_RUNTIME_DIR/config.yaml.new.$$"
-  rm -f "$cpa_runtime_tmp" || return 1
+  CPA_RUNTIME_TMP="$CPA_RUNTIME_DIR/config.yaml.new.$$"
+  rm -f "$CPA_RUNTIME_TMP" || return 1
   if [ "$CPA_TEST_ADAPTER" -eq 1 ]; then
-    cp "$CPA_SOURCE_CONFIG" "$cpa_runtime_tmp" || return 1
+    cp "$CPA_SOURCE_CONFIG" "$CPA_RUNTIME_TMP" || return 1
   else
     CPA_AWK_SECRET="$CPA_MANAGEMENT_SECRET" awk '
       /^  secret-key:[[:space:]]*""[[:space:]]*$/ {
@@ -154,19 +155,23 @@ cpa_prepare_runtime_config() {
       }
       { print }
       END { if (!found) exit 1 }
-    ' "$CPA_SOURCE_CONFIG" > "$cpa_runtime_tmp" || {
-      rm -f "$cpa_runtime_tmp"
+    ' "$CPA_SOURCE_CONFIG" > "$CPA_RUNTIME_TMP" || {
+      rm -f "$CPA_RUNTIME_TMP"
+      CPA_RUNTIME_TMP=
       return 1
     }
   fi
-  chmod 600 "$cpa_runtime_tmp" || {
-    rm -f "$cpa_runtime_tmp"
+  chmod 600 "$CPA_RUNTIME_TMP" || {
+    rm -f "$CPA_RUNTIME_TMP"
+    CPA_RUNTIME_TMP=
     return 1
   }
-  mv -f "$cpa_runtime_tmp" "$CPA_CONFIG" || {
-    rm -f "$cpa_runtime_tmp"
+  mv -f "$CPA_RUNTIME_TMP" "$CPA_CONFIG" || {
+    rm -f "$CPA_RUNTIME_TMP"
+    CPA_RUNTIME_TMP=
     return 1
   }
+  CPA_RUNTIME_TMP=
   CPA_RUNTIME_CREATED=1
   CPA_RUNTIME_REUSED=0
   if [ "$CPA_TEST_ADAPTER" -eq 1 ] && [ "$CPA_MANAGEMENT_ENABLED" -eq 0 ]; then
@@ -204,6 +209,10 @@ cpa_wait_for_runtime_hash() {
 }
 
 cpa_remove_runtime_config() {
+  if [ -n "$CPA_RUNTIME_TMP" ]; then
+    rm -f "$CPA_RUNTIME_TMP" || return 1
+    CPA_RUNTIME_TMP=
+  fi
   if [ "$CPA_RUNTIME_CREATED" -eq 1 ]; then
     rm -f "$CPA_CONFIG" || return 1
     CPA_RUNTIME_CREATED=0
@@ -564,6 +573,12 @@ cpa_abort_transaction() {
       CPA_TRANSACTION_ACTIVE=0
     fi
     cpa_remove_active_links || true
+    cpa_remove_runtime_config || true
+  # Runtime preparation happens before the transaction flag is raised. If an
+  # interrupt lands in that window, remove only the newly-created plaintext
+  # config and any temporary copy even though no service links need changing.
+  elif [ "$CPA_RUNTIME_REUSED" -eq 0 ] &&
+       { [ "$CPA_RUNTIME_CREATED" -eq 1 ] || [ -n "$CPA_RUNTIME_TMP" ]; }; then
     cpa_remove_runtime_config || true
   fi
 }
