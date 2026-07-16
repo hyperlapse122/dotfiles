@@ -480,22 +480,32 @@ CPA_BIN_DIR_SAFE=1
 [ ! -e "$CPA_CURRENT" ] || [ -L "$CPA_CURRENT" ] || cpa_preflight_fail "current path must be a symlink"
 [ ! -e "$CPA_BIN_LINK" ] || [ -L "$CPA_BIN_LINK" ] || cpa_preflight_fail "binary path must be a symlink"
 if [ -e "$CPA_MANIFEST" ] || [ -L "$CPA_MANIFEST" ]; then
-  [ -f "$CPA_MANIFEST" ] && [ ! -L "$CPA_MANIFEST" ] || cpa_preflight_fail "last-known-good manifest is not a regular file"
+  if [ ! -f "$CPA_MANIFEST" ] || [ -L "$CPA_MANIFEST" ]; then
+    cpa_preflight_fail "last-known-good manifest is not a regular file"
+  fi
   [ "$(cpa_reconcile_stat_uid "$CPA_MANIFEST")" = "$(id -u)" ] || cpa_preflight_fail "last-known-good manifest owner mismatch"
   [ "$(cpa_reconcile_stat_mode "$CPA_MANIFEST")" = 600 ] || cpa_preflight_fail "last-known-good manifest mode must be 0600"
   [ "$(cpa_reconcile_stat_nlink "$CPA_MANIFEST")" = 1 ] || cpa_preflight_fail "last-known-good manifest must not be a hard link"
 fi
-[ -f "$CPA_CONFIG" ] && [ ! -L "$CPA_CONFIG" ] || cpa_preflight_fail "managed config missing or unsafe"
+if [ ! -f "$CPA_CONFIG" ] || [ -L "$CPA_CONFIG" ]; then
+  cpa_preflight_fail "managed config missing or unsafe"
+fi
 [ "$(cpa_reconcile_stat_uid "$CPA_CONFIG")" = "$(id -u)" ] || cpa_preflight_fail "managed config owner mismatch"
 [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 444 ] || cpa_preflight_fail "managed config mode must be 0444"
-[ -x "$CPA_LAUNCHER" ] && [ ! -L "$CPA_LAUNCHER" ] || cpa_preflight_fail "managed launcher missing or unsafe"
+if [ ! -x "$CPA_LAUNCHER" ] || [ -L "$CPA_LAUNCHER" ]; then
+  cpa_preflight_fail "managed launcher missing or unsafe"
+fi
 [ "$(cpa_reconcile_stat_uid "$CPA_LAUNCHER")" = "$(id -u)" ] || cpa_preflight_fail "managed launcher owner mismatch"
 [ "$(cpa_reconcile_stat_mode "$CPA_LAUNCHER")" = 700 ] || cpa_preflight_fail "managed launcher mode must be 0700"
-[ -f "$CPA_SERVICE_FILE" ] && [ ! -L "$CPA_SERVICE_FILE" ] || cpa_preflight_fail "platform service definition missing or unsafe"
+if [ ! -f "$CPA_SERVICE_FILE" ] || [ -L "$CPA_SERVICE_FILE" ]; then
+  cpa_preflight_fail "platform service definition missing or unsafe"
+fi
 [ "$(cpa_reconcile_stat_uid "$CPA_SERVICE_FILE")" = "$(id -u)" ] || cpa_preflight_fail "platform service definition owner mismatch"
 [ "$(cpa_reconcile_stat_mode "$CPA_SERVICE_FILE")" = 444 ] || cpa_preflight_fail "platform service definition mode must be 0444"
 [ -x "$CPA_JQ" ] || cpa_preflight_fail "jq is required for semantic readiness: $CPA_JQ"
-[ -f "$CPA_CANDIDATE" ] && [ -x "$CPA_CANDIDATE" ] && [ ! -L "$CPA_CANDIDATE" ] || cpa_preflight_fail "verified release candidate missing or unsafe: $CPA_CANDIDATE"
+if [ ! -f "$CPA_CANDIDATE" ] || [ ! -x "$CPA_CANDIDATE" ] || [ -L "$CPA_CANDIDATE" ]; then
+  cpa_preflight_fail "verified release candidate missing or unsafe: $CPA_CANDIDATE"
+fi
 [ "$(cpa_reconcile_stat_uid "$CPA_CANDIDATE")" = "$(id -u)" ] || cpa_preflight_fail "candidate owner mismatch"
 [ "$(cpa_reconcile_stat_mode "$CPA_CANDIDATE")" = 500 ] || cpa_preflight_fail "candidate mode must be 0500"
 cpa_candidate_binary_hash=$(cpa_reconcile_sha256 "$CPA_CANDIDATE") || cpa_preflight_fail "could not hash release candidate"

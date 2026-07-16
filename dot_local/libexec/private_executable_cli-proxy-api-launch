@@ -74,7 +74,9 @@ directory_is_empty() {
 [ ! -L "$CPA_ACTIVE_BINARY" ] || fail "active binary must not be a symlink"
 [ -f "$CPA_ACTIVE_BINARY" ] || fail "active binary is not a regular file"
 [ -x "$CPA_ACTIVE_BINARY" ] || fail "active binary is not executable"
-[ -f "$CPA_CONFIG" ] && [ ! -L "$CPA_CONFIG" ] || fail "config is not a regular file"
+if [ ! -f "$CPA_CONFIG" ] || [ -L "$CPA_CONFIG" ]; then
+  fail "config is not a regular file"
+fi
 [ -r "$CPA_CONFIG" ] || fail "config is not readable"
 [ "$(stat_uid "$CPA_CONFIG")" = "$owner_uid" ] || fail "config owner mismatch"
 [ "$(stat_mode "$CPA_CONFIG")" = 444 ] || fail "config mode must be 0444"

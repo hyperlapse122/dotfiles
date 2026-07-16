@@ -109,10 +109,10 @@ cpa_smoke_checks() {
     cpa_fail "expected PID $cpa_expected_pid is not running"
     return 1
   }
-  [ -f "$CPA_CONFIG" ] && [ ! -L "$CPA_CONFIG" ] || {
+  if [ ! -f "$CPA_CONFIG" ] || [ -L "$CPA_CONFIG" ]; then
     cpa_fail "config is not a regular file"
     return 1
-  }
+  fi
   grep -qx 'commercial-mode: true' "$CPA_CONFIG" || {
     cpa_fail "commercial mode must suppress request-error logging"
     return 1
@@ -210,10 +210,10 @@ cpa_smoke_checks() {
 
 cpa_smoke() {
   cpa_expected_pid=${1:?expected pid required}
-  [ -d "$CPA_WORK_DIR" ] && [ ! -L "$CPA_WORK_DIR" ] || {
+  if [ ! -d "$CPA_WORK_DIR" ] || [ -L "$CPA_WORK_DIR" ]; then
     cpa_fail "working directory is missing or unsafe"
     return 1
-  }
+  fi
   # Never trust an inherited cleanup path. The verifier owns only this child of
   # the already-validated managed work directory.
   CPA_SMOKE_TMP=$CPA_WORK_DIR/smoke.$cpa_expected_pid.$$

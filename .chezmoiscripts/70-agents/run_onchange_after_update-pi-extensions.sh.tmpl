@@ -50,6 +50,7 @@ export PATH
 
 # Rendered from .agents.pi.settings.packages — the onchange trigger ONLY; the
 # command below reads the list straight from settings.json.
+# shellcheck disable=SC2034
 PACKAGES=(
 {{- range .agents.pi.settings.packages }}
   {{ . | quote }}
