@@ -660,13 +660,26 @@ jobs:
         run: |
           set -euxo pipefail
           scratch="${RUNNER_TEMP}/cli-proxy-api"
-          rm -rf "${scratch}/archive-root"
-          mkdir -p "${scratch}/archive-root"
+          out="${scratch}/target"
+          mkdir -p \
+            "${out}/.config/cli-proxy-api" \
+            "${out}/.local/libexec"
+          targets=(
+            "${out}/.config/cli-proxy-api/config.yaml"
+            "${out}/.local/libexec/cli-proxy-api-launch"
+          )
+          if [[ "${CPA_PLATFORM}" == linux ]]; then
+            mkdir -p "${out}/.config/systemd/user"
+            targets+=("${out}/.config/systemd/user/cli-proxy-api.service")
+          else
+            mkdir -p "${out}/Library/LaunchAgents"
+            targets+=("${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist")
+          fi
+          # Apply only this integration's targets. A full empty-config archive on
+          # macOS renders unrelated Linux templates that require osRelease.id.
           chezmoi --config "${scratch}/empty.toml" \
             --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            archive --exclude=encrypted,externals,scripts --output "${scratch}/targets.tar"
-          tar xf "${scratch}/targets.tar" -C "${scratch}/archive-root"
-          out="${scratch}/archive-root"
+            apply "${targets[@]}"
           test -f "${out}/.config/cli-proxy-api/config.yaml"
           test -x "${out}/.local/libexec/cli-proxy-api-launch"
           target_mode() {
