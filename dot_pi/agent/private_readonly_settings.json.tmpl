@@ -1,18 +1,19 @@
 {{ if ne .chezmoi.os "windows" -}}
-{{- /* ~/.pi/agent/settings.json — MANAGED READONLY (0444), the pi counterpart of
+{{- /* ~/.pi/agent/settings.json — MANAGED PRIVATE-READONLY (0400, owner-read-only), the pi counterpart of
        dot_config/opencode/readonly_opencode.json.tmpl.
 
        pi LIVE-WROTE this file in its former design (theme, packages,
        lastChangelogVersion) and a read-merge-write script overlaid declared
-       defaults. That is gone: this file is now a chezmoi-managed 0444 target,
+       defaults. That is gone: this file is now a chezmoi-managed `private_readonly_` 0400 target (owner-read-only),
        so pi CANNOT write it — not theme, not lastChangelogVersion, and not the
        packages array. The trade-off is accepted (and matches opencode's
        contract): pi's runtime writes are blocked, and the actual package
        INSTALLATION — the one side-effect pi can no longer perform itself via
        `pi install` (which writes settings) — is done by
-       .chezmoiscripts/70-agents/run_onchange_after_install-pi-packages, which
-       briefly lifts the readonly bit, runs `pi install` per declared package,
-       and restores both the canonical content and the readonly bit.
+       .chezmoiscripts/70-agents/run_onchange_after_update-pi-extensions, which
+       runs `pi update --extensions` (reads the declared list FROM settings,
+       updates deps under ~/.pi/agent/npm/, writes nothing) so it never fights
+       the readonly file.
 
        Everything here is data-driven from .chezmoidata/agents.yaml:
          - the whole object is deepCopied from .agents.pi.settings (same key
@@ -42,8 +43,8 @@
        providers. So a key like `defaultProvider` can stay a plain name while a
        secret (e.g. an inline apiKey) declared as `op://...` in
        .agents.pi.settings is read from 1Password and baked in at render time.
-       NOTE the file deploys 0444 (world-readable), the same exposure profile as
-       opencode.json — only put a secret here if that is acceptable; pi's API
-       keys otherwise live in the 0600 ~/.pi/agent/auth.json (config-pi-auth). */ -}}
+       NOTE the file deploys 0400 (owner-read-only — tighter than opencode.json's
+       0444, because `op://` refs may bake secrets here); pi's API keys
+       otherwise live in the 0600 ~/.pi/agent/auth.json (config-pi-auth). */ -}}
 {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $settings) }}
 {{- end }}
