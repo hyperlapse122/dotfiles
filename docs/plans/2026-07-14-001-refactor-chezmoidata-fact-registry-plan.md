@@ -11,6 +11,8 @@ execution: code
 
 # Named Host Facts and Data-Driven Branching - Plan
 
+> **Status:** Implemented (commit `d0f0eba`, merged via PR #44).
+
 ## Goal Capsule
 
 - **Objective:** Make every host-identity condition in this repo resolve to a named fact declared in one place, move desktop settings out of scripts into data, and unify the `.chezmoidata/` schema — so that changing a value and tracing why a host got something each have exactly one place to look.

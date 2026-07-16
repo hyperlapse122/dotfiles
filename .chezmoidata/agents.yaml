@@ -65,8 +65,9 @@ agents:
   # this list. `name` is BOTH the target dir under ~/.agents/skills/ and the
   # skills/<name>/ subdir inside the source repo. Ref rule: absent -> newest
   # GitHub release (gitHubLatestRelease); present -> a branch head resolved to a
-  # commit via git ls-remote (repos with no releases/tags). The twelve local
-  # path: skills stay literal in agents.toml (single consumer).
+  # commit via git ls-remote (repos with no releases/tags). There are no local
+  # `path:` skills any more — every user-scoped skill is a chezmoi external, and
+  # `agents.toml` declares MCP servers only.
   skills:
     external:
     - name: playwright-cli
@@ -74,23 +75,28 @@ agents:
     - name: improve
       source: shadcn/improve
       ref: main
-  # pi package sources, live settings defaults, and static API-key auth. The
-  # settings/auth targets are pi-live-written; scripts merge only these fields.
+  # pi package sources, managed settings defaults, and static API-key auth.
+  # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
+  # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
+  # settings.json managed readonly" for the full model.
   pi:
     # Everything under `settings` renders wholesale into the MANAGED, READONLY
-    # ~/.pi/agent/settings.json (dot_pi/agent/readonly_settings.json.tmpl), so
-    # the keys intentionally match pi's settings.json schema. pi can no longer
-    # write that file (deployed 0444, like opencode.json), so every value pi
-    # used to live-manage lives HERE instead. The provider/model must already
-    # be usable through pi's live auth.json (zai is a built-in provider reached
-    # via the zai api_key auth below; no models.json override).
+    # ~/.pi/agent/settings.json (dot_pi/agent/private_readonly_settings.json.tmpl),
+    # so the keys intentionally match pi's settings.json schema. pi can no longer
+    # write that file (deployed 0400, owner-read-only — tighter than opencode.json's
+    # 0444 since op:// refs may bake secrets here), so every value pi used to
+    # live-manage lives HERE instead. The provider/model must already be usable
+    # through pi's live auth.json (zai is a built-in provider reached via the zai
+    # api_key auth below; no models.json override).
     settings:
       # `packages` is emitted VERBATIM into the managed settings.json (deepCopy
-      # in dot_pi/agent/readonly_settings.json.tmpl) and `pi install`ed verbatim
-      # by run_onchange_after_install-pi-packages — no partial, no resolution:
+      # in dot_pi/agent/private_readonly_settings.json.tmpl) AND into the PACKAGES
+      # array of run_onchange_after_update-pi-extensions.sh.tmpl, which reconciles
+      # installed extensions via `pi update --extensions` (NOT `pi install` —
+      # that would write to the readonly settings). No partial, no resolution:
       # what is listed here is exactly what pi loads. Unpinned by design (npm:
-      # and git: both track latest) — the same unsettled trade-off the dotagents
-      # remote skills make.
+      # and git: both track latest) — the same unsettled trade-off the agent-skill
+      # externals make.
       #   - pi-mcp-extension: the MCP client (pi ships no MCP support of its
       #     own; without it the servers in ~/.pi/agent/mcp.json are inert).
       #   - pi-subagents: delegates work to builtin/custom subagents.

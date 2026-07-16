@@ -11,6 +11,8 @@ execution: code
 
 # Remove User-Scoped Local Agent Skills - Plan
 
+> **Status:** Implemented (commit `44a6774`).
+
 ## Goal Capsule
 
 - **Objective:** Delete all twelve user-scoped *local* (`path:`) agent skills from the dotfiles source and reconcile every reference to them so no agent instruction points at a skill that no longer ships.

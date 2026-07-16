@@ -11,6 +11,8 @@ execution: code
 
 # Remove Meridian and cli-proxy-api Residue - Plan
 
+> **Status:** Implemented (commit `c4748b5`).
+
 ## Goal Capsule
 
 - **Objective:** Fully remove the active Meridian proxy integration, purge the leftover cli-proxy-api text and CI guards it superseded, and switch Pi's managed default from Codex to Z.ai `glm-5.2` so the main session keeps a smart model without any proxy.

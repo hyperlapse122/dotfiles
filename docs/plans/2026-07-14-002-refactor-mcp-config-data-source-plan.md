@@ -11,6 +11,8 @@ execution: code
 
 # Centralize MCP + Remote Skill Config into .chezmoidata - Plan
 
+> **Status:** Implemented (commit `f8b828a`).
+
 ## Goal Capsule
 
 - **Objective:** Make one `.chezmoidata` data file the single source of truth for MCP server definitions and dotagents remote-skill definitions, consumed by the three agent-config templates.
