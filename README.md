@@ -118,8 +118,11 @@ launchctl print "gui/$(id -u)/dev.h82.cli-proxy-api"             # macOS
 Authenticated localhost Management API activation is delivered by
 [issue #48](https://github.com/hyperlapse122/dotfiles/issues/48); CPA Usage Keeper
 and GNOME/KDE applets remain future consumers, not part of this service. The
-Management API is loopback-only, and config-write requests fail closed against
-the locked runtime copy.
+Management API is loopback-only. Mode 0400 blocks persistence to the managed
+runtime file, but authenticated holders retain full upstream Management authority;
+unsupported write routes may transiently affect in-memory state until restart even
+when persistence fails. Consumers must use read endpoints only; a future
+fine-grained route-filtering gateway remains out of scope.
 Windows and real containers receive none of these artifacts.
 
 ## Prerequisites

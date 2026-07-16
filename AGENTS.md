@@ -405,7 +405,11 @@ off. The reconciler reads the Management credential from the unresolved
 `.chezmoidata/cli-proxy-api.yaml`, creates a private runtime copy under
 `~/.local/share/cli-proxy-api/runtime/config.yaml`, waits for upstream bcrypt
 conversion, then locks that copy at mode 0400. The source snapshot remains
-0444 and is never used as runtime-mutable state.
+0444 and is never used as runtime-mutable state. Mode 0400 prevents persistence to
+that managed runtime file, but authenticated holders retain full upstream
+Management authority; unsupported write routes may transiently mutate in-memory
+state until restart even when persistence fails. Consumers must use read
+endpoints only, and a future fine-grained route-filtering gateway is out of scope.
 `commercial-mode: true` is load-bearing: upstream otherwise force-writes failed
 request bodies even when normal file logging is disabled. The service
 specifications clear loader/startup variables before the shell starts, and the
@@ -427,8 +431,10 @@ executable is the active candidate, `/healthz` success, and a valid
 `gemini-interactions` provider path; an arbitrary unknown model returns 502
 before auth selection and is not a valid no-credential proof. Management
 requests must return 401 without a key and succeed with the configured key only
-on loopback; the control-panel and plugin-resource routes remain 404. The
-probe also verifies source/runtime config immutability, locked runtime state,
+on loopback; supported consumers use read endpoints only, while unsupported
+write routes are not filtered and may affect in-memory state until restart. The
+control-panel and plugin-resource routes remain 404. The probe also verifies
+source/runtime persistence immutability, locked runtime state,
 empty auth state, absent panel/plugin artifacts, and that its request canary
 reached neither state nor supervisor output, then re-proves the same
 PID/executable/listener identity to close a port handoff race. Keep this one
@@ -464,8 +470,10 @@ Management API activation is tracked in
 [issue #48](https://github.com/hyperlapse122/dotfiles/issues/48). CPA Usage
 Keeper and GNOME/KDE applets are motivations only, not part of this
 infrastructure. No plaintext Management secret, provider credential, client
-key, generated auth state, or consumer routing belongs in this change; config
-writes remain fail-closed because the runtime copy is locked after bootstrap.
+key, generated auth state, or consumer routing belongs in this change. Mode 0400
+blocks persistence to the runtime file, but does not revoke upstream authority;
+write routes are unsupported, consumers use read endpoints only, and a future
+fine-grained route-filtering gateway remains out of scope.
 
 ### Agent skills, MCPs & trust — managed by `dotagents`
 
