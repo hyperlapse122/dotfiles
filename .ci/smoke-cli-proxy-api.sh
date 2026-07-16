@@ -268,7 +268,7 @@ cpa_smoke_checks() {
   cpa_listener_owned "$cpa_expected_pid" || return 1
 }
 
-cpa_smoke() {
+cpa_smoke() (
   cpa_expected_pid=${1:?expected pid required}
   if [ ! -d "$CPA_WORK_DIR" ] || [ -L "$CPA_WORK_DIR" ]; then
     cpa_fail "working directory is missing or unsafe"
@@ -284,6 +284,10 @@ cpa_smoke() {
   mkdir -m 700 "$CPA_SMOKE_TMP" 2>/dev/null || {
     [ -d "$CPA_SMOKE_TMP" ] && chmod 700 "$CPA_SMOKE_TMP"
   }
+  # Keep cleanup local to this verifier subshell so an interrupted curl cannot
+  # overwrite the reconciler's traps while leaving the header file behind.
+  trap 'cpa_smoke_cleanup || true' EXIT
+  trap 'cpa_smoke_cleanup || true; exit 1' HUP INT TERM
   cpa_smoke_max=${CPA_SMOKE_MAX_ATTEMPTS:-10}
   case $cpa_smoke_max in *[!0-9]*|0) cpa_smoke_max=10 ;; esac
   cpa_attempt=0
@@ -319,7 +323,7 @@ cpa_smoke() {
     cpa_smoke_cleanup || true
     return "$cpa_result"
   fi
-}
+)
 
 if [ "${CPA_SMOKE_MAIN:-0}" = 1 ]; then
   cpa_smoke "${CPA_EXPECTED_PID:?CPA_EXPECTED_PID is required}"

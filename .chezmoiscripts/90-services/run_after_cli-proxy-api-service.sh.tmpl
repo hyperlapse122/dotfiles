@@ -39,7 +39,9 @@ CPA_TEST_ADAPTER=0
 CPA_MANIFEST="$CPA_BASE/last-known-good"
 CPA_BIN_DIR="$CPA_HOME/.local/bin"
 CPA_RUNTIME_CREATED=0
+CPA_RUNTIME_REUSED=0
 CPA_MANAGEMENT_ENABLED=0
+CPA_OP=
 CPA_BIN_LINK="$CPA_BIN_DIR/cli-proxy-api"
 CPA_STOP_EXPECTED_BINARY=
 CPA_TRANSACTION_ACTIVE=0
@@ -72,10 +74,24 @@ cpa_reconcile_sha256() {
   printf '%s\n' "$cpa_sha_digest"
 }
 
+cpa_resolve_op() {
+  if [ "$CPA_TEST_ADAPTER" -eq 1 ] && [ -n "${CPA_TEST_OP:-}" ] && [ -x "$CPA_TEST_OP" ]; then
+    CPA_OP=$CPA_TEST_OP
+    return 0
+  fi
+  for cpa_op_path in /usr/bin/op /usr/local/bin/op /opt/homebrew/bin/op "$CPA_HOME/.local/bin/op"; do
+    if [ -x "$cpa_op_path" ]; then
+      CPA_OP=$cpa_op_path
+      return 0
+    fi
+  done
+  return 1
+}
+
 cpa_read_management_secret() {
   [ -n "$CPA_MANAGEMENT_SECRET_REF" ] || return 1
-  command -v op >/dev/null 2>&1 || return 1
-  cpa_management_read=$(op read "$CPA_MANAGEMENT_SECRET_REF") || return 1
+  [ -n "$CPA_OP" ] && [ -x "$CPA_OP" ] || return 1
+  cpa_management_read=$("$CPA_OP" read "$CPA_MANAGEMENT_SECRET_REF") || return 1
   [ -n "$cpa_management_read" ] || return 1
   # Restrict the item to a printable, one-line alphabet that is safe in the
   # temporary YAML double-quoted scalar and in a curl config header. This also
@@ -115,12 +131,14 @@ cpa_prepare_runtime_config() {
   cpa_reconcile_private_dir "CLIProxyAPI runtime directory" "$CPA_RUNTIME_DIR" 1
   if [ "$CPA_TEST_ADAPTER" -eq 1 ] && [ -f "$CPA_CONFIG" ] && [ ! -L "$CPA_CONFIG" ]; then
     CPA_RUNTIME_CREATED=1
+    CPA_RUNTIME_REUSED=1
     return 0
   fi
   if [ "$CPA_TEST_ADAPTER" -eq 0 ] &&
      [ -f "$CPA_CONFIG" ] && [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 400 ] &&
      [ -f "$CPA_MANIFEST" ] && [ "$(awk -F= '$1 == "management_secret_sha256" { print $2; exit }' "$CPA_MANIFEST")" = "$CPA_MANAGEMENT_SECRET_SHA256" ]; then
     CPA_RUNTIME_CREATED=0
+    CPA_RUNTIME_REUSED=1
     return 0
   fi
   cpa_runtime_tmp="$CPA_RUNTIME_DIR/config.yaml.new.$$"
@@ -149,12 +167,13 @@ cpa_prepare_runtime_config() {
     rm -f "$cpa_runtime_tmp"
     return 1
   }
-  if [ "$CPA_TEST_ADAPTER" -eq 1 ]; then
+  CPA_RUNTIME_CREATED=1
+  CPA_RUNTIME_REUSED=0
+  if [ "$CPA_TEST_ADAPTER" -eq 1 ] && [ "$CPA_MANAGEMENT_ENABLED" -eq 0 ]; then
     chmod 400 "$CPA_CONFIG" || return 1
   else
     chmod 600 "$CPA_CONFIG" || return 1
   fi
-  CPA_RUNTIME_CREATED=1
 }
 
 cpa_lock_runtime_config() {
@@ -399,6 +418,10 @@ cpa_preflight_fail() {
   # No rejected candidate remains launchable through a managed stable link.
   # `current` is under the owner-only base and is removed first by this call.
   cpa_remove_active_links || true
+  # A newly-created runtime config may still contain the plaintext bootstrap key
+  # when a later preflight check fails. Remove only state created by this run;
+  # a reused locked config is never touched.
+  cpa_remove_runtime_config || true
   cpa_reconcile_fail "$@"
 }
 
@@ -643,24 +666,38 @@ fi
 [ "$(cpa_reconcile_stat_uid "$CPA_SOURCE_CONFIG")" = "$(id -u)" ] || cpa_preflight_fail "managed source config owner mismatch"
 [ "$(cpa_reconcile_stat_mode "$CPA_SOURCE_CONFIG")" = 444 ] || cpa_preflight_fail "managed source config mode must be 0444"
 if [ "$CPA_TEST_ADAPTER" -eq 0 ]; then
+  cpa_resolve_op || cpa_preflight_fail "1Password CLI is unavailable at an approved path"
   if ! cpa_read_management_secret; then
-    cpa_disable_service || true
-    rm -f "$CPA_CONFIG"
     cpa_preflight_fail "Management API credential is missing or invalid"
   fi
 else
-  # Deterministic manager fixtures exercise the existing provider-free path;
-  # native runs always take the credentialed path above.
-  CPA_MANAGEMENT_ENABLED=0
-  CPA_MANAGEMENT_SECRET_SHA256=0000000000000000000000000000000000000000000000000000000000000000
+  if [ "${CPA_TEST_MANAGEMENT:-0}" = 1 ]; then
+    cpa_resolve_op || cpa_preflight_fail "test 1Password CLI is unavailable"
+    if ! cpa_read_management_secret; then
+      cpa_preflight_fail "test Management API credential is missing or invalid"
+    fi
+  else
+    # Deterministic manager fixtures retain the existing provider-free path;
+    # management-enabled fixture runs opt in above with a stub op binary.
+    CPA_MANAGEMENT_ENABLED=0
+    CPA_MANAGEMENT_SECRET_SHA256=0000000000000000000000000000000000000000000000000000000000000000
+  fi
 fi
 cpa_validate_existing_runtime || cpa_preflight_fail "existing runtime config is unsafe"
 cpa_prepare_runtime_config || cpa_preflight_fail "could not prepare private runtime config"
 [ "$(cpa_reconcile_stat_uid "$CPA_CONFIG")" = "$(id -u)" ] || cpa_preflight_fail "runtime config owner mismatch"
 if [ "$CPA_TEST_ADAPTER" -eq 1 ]; then
-  [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 400 ] || cpa_preflight_fail "runtime config fixture mode must be 0400"
+  if [ "$CPA_MANAGEMENT_ENABLED" -eq 1 ] && [ "$CPA_RUNTIME_REUSED" -eq 0 ]; then
+    [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 600 ] || cpa_preflight_fail "runtime config fixture bootstrap mode must be 0600"
+  else
+    [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 400 ] || cpa_preflight_fail "runtime config fixture mode must be 0400"
+  fi
 else
-  [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 600 ] || cpa_preflight_fail "runtime config bootstrap mode must be 0600"
+  if [ "$CPA_RUNTIME_REUSED" -eq 1 ]; then
+    [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 400 ] || cpa_preflight_fail "runtime config reuse mode must be 0400"
+  else
+    [ "$(cpa_reconcile_stat_mode "$CPA_CONFIG")" = 600 ] || cpa_preflight_fail "runtime config bootstrap mode must be 0600"
+  fi
 fi
 if [ ! -x "$CPA_LAUNCHER" ] || [ -L "$CPA_LAUNCHER" ]; then
   cpa_preflight_fail "managed launcher missing or unsafe"

@@ -183,6 +183,11 @@ mkdir -p "$service_home/.config/cli-proxy-api" "$service_home/.local/libexec" \
 chmod 700 "$service_home/.local/share/cli-proxy-api" "$service_home/.local/share/cli-proxy-api/versions"
 cp "$root/dot_config/cli-proxy-api/readonly_config.yaml" "$service_home/.config/cli-proxy-api/config.yaml"
 chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
+management_secret=synthetic-management-key-0123456789abcdef
+management_source=$scratch/management-config.yaml
+sed 's/secret-key: ""/secret-key: "$2b$12$fixture-management-hash"/' \
+  "$service_home/.config/cli-proxy-api/config.yaml" > "$management_source"
+chmod 444 "$management_source"
 mkdir -p "$service_home/.local/share/cli-proxy-api/runtime"
 cp "$service_home/.config/cli-proxy-api/config.yaml" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
@@ -222,6 +227,18 @@ export CPA_TEST_PID="$dummy_pid" CPA_TEST_HOME="$service_home" \
   CPA_TEST_LOG="$scratch/manager.log" CPA_TEST_STATE="$scratch/manager.state" \
   CPA_TEST_EXECUTABLE_DIR="$old_dir"
 printf '0\n' > "$CPA_TEST_STATE"
+
+cat > "$stub_bin/op" <<'EOF'
+#!/bin/sh
+set -eu
+[ "${1-}" = read ] || exit 1
+case ${CPA_TEST_OP_MODE:-valid} in
+  missing|unreadable) exit 1 ;;
+  malformed) printf short ;;
+  *) printf '%s' "$CPA_TEST_MANAGEMENT_SECRET" ;;
+esac
+EOF
+chmod 700 "$stub_bin/op"
 
 cat > "$stub_bin/lsof" <<'EOF'
 #!/bin/sh
@@ -274,11 +291,20 @@ done
 [ -n "$out" ] && [ -n "$url" ]
 if [ -n "$config_file" ] && grep -q '^header = "Authorization: Bearer ' "$config_file"; then
   authenticated=1
+  management_header_value=$(sed -n 's/^header = "Authorization: Bearer \(.*\)"$/\1/p' "$config_file")
+  if [ -n "${CPA_TEST_EXPECTED_MANAGEMENT_SECRET:-}" ] &&
+     [ "$management_header_value" != "$CPA_TEST_EXPECTED_MANAGEMENT_SECRET" ]; then
+    authenticated=2
+  fi
 fi
 [ "${CPA_TEST_CURL_SCENARIO:-}" != transport-failure ] || exit 7
 current=$(readlink "$CPA_TEST_HOME/.local/share/cli-proxy-api/current")
 if [ "${CPA_TEST_SIGNAL_STAGE:-}" = foreground ]; then
   case $url in */healthz) kill -TERM "$PPID"; exit 7 ;; esac
+fi
+if [ "${CPA_TEST_SIGNAL_STAGE:-}" = smoke-header ] && [ "$authenticated" = 1 ]; then
+  kill -TERM "$PPID"
+  exit 7
 fi
 if [ "${CPA_TEST_CURL_SCENARIO:-}" = listener-handoff ]; then
   case $url in */healthz) printf '0\n' > "$CPA_TEST_STATE" ;; esac
@@ -467,10 +493,138 @@ run_reconciler "$rendered_reconciler" "CPA_SMOKE_TMP=$smoke_sentinel"
 [ "$(readlink "$service_home/.local/share/cli-proxy-api/current")" = "$old_dir" ]
 grep -qx "release_id=$release_id" "$service_home/.local/share/cli-proxy-api/last-known-good"
 
+# Management-enabled deterministic runs use the real reconciler secret path and
+# a stub op binary while retaining the existing manager/lsof/curl adapters.
+chmod 600 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+cp "$management_source" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+: > "$CPA_TEST_LOG"
+run_reconciler "$rendered_reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret" \
+  CPA_TEST_OP="$stub_bin/op"
+management_manifest=$(cat "$service_home/.local/share/cli-proxy-api/last-known-good")
+: > "$CPA_TEST_LOG"
+run_reconciler "$rendered_reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret" \
+  CPA_TEST_OP="$stub_bin/op"
+if grep -Eq ' disable | restart | bootstrap ' "$CPA_TEST_LOG"; then
+  printf 'unchanged management apply restarted service\n' >&2
+  exit 1
+fi
+[ "$(cat "$service_home/.local/share/cli-proxy-api/last-known-good")" = "$management_manifest" ]
+
+# A newly-created plaintext runtime config is removed when hash validation fails
+# before the transaction trap is active.
+rm -f "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+if run_reconciler "$rendered_reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret" \
+  CPA_TEST_OP="$stub_bin/op"; then
+  printf 'plaintext bootstrap failure unexpectedly passed\n' >&2
+  exit 1
+fi
+[ ! -e "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" ]
+
+# Restore a locked bcrypt fixture for the remaining management-aware smoke test.
+cp "$management_source" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+run_reconciler "$rendered_reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret" \
+  CPA_TEST_OP="$stub_bin/op"
+
+for op_mode in missing malformed unreadable; do
+  : > "$CPA_TEST_LOG"
+  if run_reconciler "$rendered_reconciler" \
+    CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+    CPA_TEST_MANAGEMENT_SECRET="$management_secret" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret" \
+    CPA_TEST_OP_MODE="$op_mode" CPA_TEST_OP="$stub_bin/op"; then
+    printf 'invalid credential mode unexpectedly passed: %s\n' "$op_mode" >&2
+    exit 1
+  fi
+  [ "$(cat "$CPA_TEST_STATE")" = 0 ]
+  [ ! -e "$service_home/.local/share/cli-proxy-api/current" ]
+  [ ! -e "$service_home/.local/bin/cli-proxy-api" ]
+  rm -f "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+  cp "$management_source" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+  chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+  run_reconciler "$rendered_reconciler" \
+    CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+    CPA_TEST_MANAGEMENT_SECRET="$management_secret" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret" \
+    CPA_TEST_OP="$stub_bin/op"
+done
+
+# Rotation changes both the runtime hash and the manifest credential digest.
+management_secret_rotated=synthetic-management-key-rotated-0123456789abcdef
+management_source_rotated=$scratch/management-config-rotated.yaml
+sed 's/fixture-management-hash/rotated-management-hash/' "$management_source" > "$management_source_rotated"
+chmod 444 "$management_source_rotated"
+old_management_manifest=$(cat "$service_home/.local/share/cli-proxy-api/last-known-good")
+chmod 600 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+cp "$management_source_rotated" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+run_reconciler "$rendered_reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret_rotated" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret_rotated" \
+  CPA_TEST_OP="$stub_bin/op"
+[ "$(cat "$service_home/.local/share/cli-proxy-api/last-known-good")" != "$old_management_manifest" ]
+
+# A failed candidate may roll back with an unchanged credential, but not after
+# the credential rotates.
+management_bad_id=v7.2.82-cccccccccccc
+management_bad_dir=$service_home/.local/share/cli-proxy-api/versions/$management_bad_id
+mkdir -p "$management_bad_dir"
+printf '%s\n' '#!/bin/sh' '# management rollback fixture' 'exit 0' > "$management_bad_dir/cli-proxy-api"
+chmod 500 "$management_bad_dir/cli-proxy-api"
+sed \
+  -e 's/^CPA_RELEASE_TAG=.*/CPA_RELEASE_TAG="v7.2.82"/' \
+  -e 's/^CPA_RELEASE_ASSET=.*/CPA_RELEASE_ASSET="CLIProxyAPI_7.2.82_linux_amd64.tar.gz"/' \
+  -e 's/^CPA_RELEASE_SHA256=.*/CPA_RELEASE_SHA256="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"/' \
+  -e "s/^CPA_RELEASE_ID=.*/CPA_RELEASE_ID=\"$management_bad_id\"/" \
+  "$rendered_reconciler" > "$scratch/management-bad-reconciler"
+chmod 700 "$scratch/management-bad-reconciler"
+: > "$CPA_TEST_LOG"
+if run_reconciler "$scratch/management-bad-reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 CPA_TEST_BAD_ID="$management_bad_id" \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret_rotated" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret_rotated" \
+  CPA_TEST_OP="$stub_bin/op"; then
+  printf 'management binary-only rollback fixture unexpectedly passed\n' >&2
+  exit 1
+fi
+[ "$(readlink "$service_home/.local/share/cli-proxy-api/current")" = "$old_dir" ]
+[ "$(cat "$CPA_TEST_STATE")" = 1 ]
+[ "$(grep -Ec 'restart|bootstrap' "$CPA_TEST_LOG")" -eq 1 ]
+
+# New credential + failed candidate must not restart the old credentialed service.
+: > "$CPA_TEST_LOG"
+if run_reconciler "$scratch/management-bad-reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 CPA_TEST_BAD_ID="$management_bad_id" \
+  CPA_TEST_MANAGEMENT_SECRET=synthetic-management-key-new-0123456789abcdef \
+  CPA_TEST_EXPECTED_MANAGEMENT_SECRET=synthetic-management-key-new-0123456789abcdef \
+  CPA_TEST_OP="$stub_bin/op"; then
+  printf 'credential-changed rollback fixture unexpectedly passed\n' >&2
+  exit 1
+fi
+[ "$(readlink "$service_home/.local/share/cli-proxy-api/current")" = "$old_dir" ]
+[ "$(cat "$CPA_TEST_STATE")" = 0 ]
+[ "$(grep -Ec 'restart|bootstrap' "$CPA_TEST_LOG")" -eq 0 ]
+
+# Restore the rotated locked runtime and prove the healthy path remains usable.
+cp "$management_source_rotated" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+run_reconciler "$rendered_reconciler" \
+  CPA_TEST_MANAGEMENT=1 CPA_TEST_MANAGEMENT_ENABLED=1 \
+  CPA_TEST_MANAGEMENT_SECRET="$management_secret_rotated" CPA_TEST_EXPECTED_MANAGEMENT_SECRET="$management_secret_rotated" \
+  CPA_TEST_OP="$stub_bin/op"
+
 if command -v sha256sum >/dev/null 2>&1; then
   smoke_config_sha=$(sha256sum "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" | awk '{print $1}')
+  smoke_source_sha=$(sha256sum "$service_home/.config/cli-proxy-api/config.yaml" | awk '{print $1}')
 else
   smoke_config_sha=$(shasum -a 256 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" | awk '{print $1}')
+  smoke_source_sha=$(shasum -a 256 "$service_home/.config/cli-proxy-api/config.yaml" | awk '{print $1}')
 fi
 env \
   PATH="$stub_bin:$PATH" \
@@ -480,7 +634,7 @@ env \
   CPA_AUTH_DIR="$service_home/.local/share/cli-proxy-api/auth" \
   CPA_WORK_DIR="$service_home/.local/share/cli-proxy-api/work" \
   CPA_ACTIVE_BINARY="$old_dir/cli-proxy-api" CPA_JQ="$real_jq" \
-  CPA_EXPECTED_CONFIG_SHA256="$smoke_config_sha" CPA_EXPECTED_SOURCE_CONFIG_SHA256="$smoke_config_sha" \
+  CPA_EXPECTED_CONFIG_SHA256="$smoke_config_sha" CPA_EXPECTED_SOURCE_CONFIG_SHA256="$smoke_source_sha" \
   CPA_LOG_FILE="$service_home/.local/share/cli-proxy-api/work/supervisor.log" \
   CPA_TEST_PID="$CPA_TEST_PID" CPA_TEST_HOME="$CPA_TEST_HOME" CPA_TEST_STATE="$CPA_TEST_STATE" \
   CPA_SMOKE_MAX_ATTEMPTS=1 /bin/sh -c 'export CPA_MANAGEMENT_ENABLED=1; . "$1"; cpa_smoke "$2"' sh "$root/.ci/smoke-cli-proxy-api.sh" "$CPA_TEST_PID"
@@ -511,6 +665,27 @@ done
 for scenario in transport-failure health-redirect health-malformed provider-unauthorized provider-malformed optional-enabled listener-handoff; do
   assert_smoke_rejects CPA_TEST_CURL_SCENARIO "$scenario"
 done
+
+# An interruption after the authenticated header is created must remove that
+# file before the smoke verifier exits.
+if env \
+  PATH="$stub_bin:$PATH" CPA_TEST_PID="$CPA_TEST_PID" CPA_TEST_HOME="$CPA_TEST_HOME" \
+  CPA_TEST_STATE="$CPA_TEST_STATE" CPA_TEST_SIGNAL_STAGE=smoke-header \
+  CPA_TEST_MANAGEMENT_ENABLED=1 CPA_MANAGEMENT_ENABLED=1 \
+  CPA_MANAGEMENT_SECRET="$management_secret" CPA_ACTIVE_BINARY="$old_dir/cli-proxy-api" \
+  CPA_SOURCE_CONFIG="$service_home/.config/cli-proxy-api/config.yaml" \
+  CPA_CONFIG="$service_home/.local/share/cli-proxy-api/runtime/config.yaml" \
+  CPA_AUTH_DIR="$service_home/.local/share/cli-proxy-api/auth" \
+  CPA_WORK_DIR="$service_home/.local/share/cli-proxy-api/work" CPA_JQ="$real_jq" \
+  CPA_EXPECTED_CONFIG_SHA256="$smoke_config_sha" CPA_LOG_FILE="$service_home/.local/share/cli-proxy-api/work/supervisor.log" \
+  CPA_SMOKE_MAX_ATTEMPTS=1 /bin/sh -c '. "$1"; cpa_smoke "$2"' sh "$root/.ci/smoke-cli-proxy-api.sh" "$CPA_TEST_PID"; then
+  printf 'interrupted authenticated smoke unexpectedly passed\n' >&2
+  exit 1
+fi
+if find "$service_home/.local/share/cli-proxy-api/work" -name management-header.conf -print -quit | grep -q .; then
+  printf 'management header survived interrupted smoke\n' >&2
+  exit 1
+fi
 printf 'credential residue\n' > "$service_home/.local/share/cli-proxy-api/auth/residue"
 assert_smoke_rejects CPA_TEST_STATE_SCENARIO auth-residue
 rm -f "$service_home/.local/share/cli-proxy-api/auth/residue"

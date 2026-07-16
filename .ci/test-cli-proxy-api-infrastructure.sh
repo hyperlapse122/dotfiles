@@ -147,6 +147,13 @@ grep -F 'Management API credential is missing or invalid' "$reconciler" >/dev/nu
 grep -F '[ "${#cpa_management_read}" -ge 32 ]' "$reconciler" >/dev/null
 grep -F 'CPA_AWK_SECRET' "$reconciler" >/dev/null
 grep -F 'CPA_MANAGEMENT_SECRET_SHA256' "$reconciler" >/dev/null
+grep -F '/opt/homebrew/bin/op' "$reconciler" >/dev/null
+grep -F '/usr/local/bin/op' "$reconciler" >/dev/null
+grep -F '"$CPA_OP" read' "$reconciler" >/dev/null
+if grep -F 'command -v op' "$reconciler" >/dev/null; then
+  printf 'reconciler must resolve op through approved absolute paths\n' >&2
+  exit 1
+fi
 if grep -F 'MANAGEMENT_PASSWORD=' "$reconciler" >/dev/null; then
   printf 'reconciler must not inject MANAGEMENT_PASSWORD\n' >&2
   exit 1
