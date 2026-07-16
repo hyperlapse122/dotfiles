@@ -1,0 +1,72 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/70-agents/run_onchange_after_update-pi-extensions.sh.tmpl
+#
+# Reconciles pi's installed extensions with the MANAGED, READONLY
+# ~/.pi/agent/settings.json via `pi update --extensions`. settings.json is
+# deployed 0400 (private_readonly_) by dot_pi/agent/private_readonly_settings
+# .json.tmpl, so pi CANNOT write it — which rules out `pi install` (that command
+# appends the source to the settings packages array AND installs deps, so its
+# settings step would fail against a readonly file). `pi update --extensions`
+# instead reads the declared package list FROM settings and updates the npm deps
+# under ~/.pi/agent/npm/ WITHOUT writing settings, so it is the one command that
+# works against the managed readonly file. This script is just the apply-time
+# trigger for it — formerly run_onchange_after_install-pi-packages, which looped
+# `pi install` behind a snapshot/chmod/restore dance; `pi update --extensions`
+# makes all of that unnecessary.
+#
+# The declared packages live in .chezmoidata/agents.yaml
+# (.agents.pi.settings.packages) — npm sources plus compound-engineering as a
+# native `git:` source (NOT the localArchive path the other agents share). pi
+# reads them straight from settings.json; this script does NOT pass them. The
+# PACKAGES array below is RENDERED but UNUSED by the command — it exists ONLY
+# as the onchange trigger, so this script re-runs whenever the declared set
+# changes (the install-vscodium-extensions shape: no fingerprint block, the
+# rendered content IS the trigger).
+#
+# Packages are UNPINNED by design (npm: and git: both track latest) — the same
+# unsettled trade-off the dotagents remote skills make by tracking their newest
+# upstream release: a bad upstream publish reaches the host on the next update.
+#
+# Soft-skip: a missing `pi` binary or a missing settings.json exits 0 after a
+# diagnostic. NOTE the standard onchange trade-off: chezmoi records that clean
+# exit-0 as a successful run, so a skipped update is NOT retried on the next
+# apply until the rendered content changes — after fixing the cause, re-run
+# `pi update --extensions` by hand or `chezmoi apply --force`.
+#
+# POSIX-only (`ne windows`): pi is fetched per-version by .chezmoiexternals/
+# ai-agents.toml, whose pi block skips Windows. Deliberately KEPT in containers,
+# like the dotagents and compound-engineering installs beside it: pi is a
+# first-class CLI here and is wanted in a devbox.
+
+set -euo pipefail
+
+SETTINGS="${PI_AGENT_SETTINGS:-$HOME/.pi/agent/settings.json}"
+
+# chezmoi's non-interactive script environment may omit the user-local bin dir,
+# even though the file phase linked pi there earlier in the same apply.
+PATH="$HOME/.local/bin${PATH:+:$PATH}"
+export PATH
+
+# Rendered from .agents.pi.settings.packages — the onchange trigger ONLY; the
+# command below reads the list straight from settings.json.
+PACKAGES=(
+{{- range .agents.pi.settings.packages }}
+  {{ . | quote }}
+{{- end }}
+)
+
+skip() { exit 0; }
+
+if ! command -v pi >/dev/null 2>&1; then
+  echo "update-pi-extensions: skipped (pi not on PATH)" >&2
+  skip
+fi
+
+if [[ ! -f "$SETTINGS" ]]; then
+  echo "update-pi-extensions: skipped ($SETTINGS absent — file phase did not deploy it)" >&2
+  skip
+fi
+
+pi update --extensions
+{{ end -}}
