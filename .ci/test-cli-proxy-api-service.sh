@@ -22,12 +22,15 @@ launcher_home=$scratch/launcher-home
 launcher_auth=$launcher_home/.local/share/cli-proxy-api/auth
 launcher_work=$launcher_home/.local/share/cli-proxy-api/work
 launcher_current=$launcher_home/.local/share/cli-proxy-api/current
-launcher_config=$launcher_home/.config/cli-proxy-api/config.yaml
+launcher_source=$launcher_home/.config/cli-proxy-api/config.yaml
+launcher_config=$launcher_home/.local/share/cli-proxy-api/runtime/config.yaml
 launcher_binary=$launcher_current/cli-proxy-api
-mkdir -p "$launcher_auth" "$launcher_work" "$launcher_current" "$(dirname "$launcher_config")"
+mkdir -p "$launcher_auth" "$launcher_work" "$launcher_current" "$(dirname "$launcher_config")" "$(dirname "$launcher_source")"
 chmod 700 "$launcher_auth" "$launcher_work" "$launcher_current"
-printf 'host: "127.0.0.1"\nport: 8317\ncommercial-mode: true\n' > "$launcher_config"
-chmod 444 "$launcher_config"
+printf 'host: "127.0.0.1"\nport: 8317\ncommercial-mode: true\n' > "$launcher_source"
+chmod 444 "$launcher_source"
+cp "$launcher_source" "$launcher_config"
+chmod 400 "$launcher_config"
 cp "$root/dot_local/libexec/private_executable_cli-proxy-api-launch" "$scratch/launcher"
 chmod 700 "$scratch/launcher"
 cat > "$launcher_binary" <<'EOF'
@@ -40,6 +43,7 @@ chmod 700 "$launcher_binary"
 
 CPA_HOME="$launcher_home" \
 CPA_ACTIVE_BINARY="$launcher_binary" \
+CPA_SOURCE_CONFIG="$launcher_source" \
 CPA_CONFIG="$launcher_config" \
 CPA_AUTH_DIR="$launcher_auth" \
 CPA_WORK_DIR="$launcher_work" \
@@ -76,7 +80,7 @@ run_launcher() {
   env \
     "PATH=$scratch/poison-bin" "HOME=$scratch/ambient-home-canary" \
     "CPA_HOME=$launcher_home" "CPA_ACTIVE_BINARY=$launcher_binary" \
-    "CPA_CONFIG=$launcher_config" "CPA_AUTH_DIR=$launcher_auth" \
+    "CPA_SOURCE_CONFIG=$launcher_source" "CPA_CONFIG=$launcher_config" "CPA_AUTH_DIR=$launcher_auth" \
     "CPA_WORK_DIR=$launcher_work" "$scratch/launcher" --
 }
 
@@ -113,14 +117,25 @@ rm "$launcher_binary"
 mv "$launcher_binary.real" "$launcher_binary"
 
 chmod 644 "$launcher_config"
-assert_launcher_rejects 'config mode must be 0444' run_launcher
-chmod 444 "$launcher_config"
+assert_launcher_rejects 'runtime config mode must be 0400' run_launcher
+chmod 600 "$launcher_config"
+assert_launcher_rejects 'runtime config mode must be 0400' run_launcher
+if ! env \
+  "PATH=$scratch/poison-bin" "HOME=$scratch/ambient-home-canary" \
+  "CPA_HOME=$launcher_home" "CPA_ACTIVE_BINARY=$launcher_binary" \
+  "CPA_SOURCE_CONFIG=$launcher_source" "CPA_CONFIG=$launcher_config" \
+  "CPA_BOOTSTRAP=1" "CPA_AUTH_DIR=$launcher_auth" "CPA_WORK_DIR=$launcher_work" \
+  "$scratch/launcher" --; then
+  printf 'launcher rejected an explicitly bootstrapped runtime config\n' >&2
+  exit 1
+fi
+chmod 400 "$launcher_config"
 mv "$launcher_config" "$launcher_config.real"
 ln -s "$launcher_config.real" "$launcher_config"
 assert_launcher_rejects 'config is not a regular file' run_launcher
 rm "$launcher_config"
 mv "$launcher_config.real" "$launcher_config"
-chmod 444 "$launcher_config"
+chmod 400 "$launcher_config"
 
 mv "$launcher_work" "$launcher_work.real"
 ln -s "$launcher_work.real" "$launcher_work"
@@ -168,6 +183,9 @@ mkdir -p "$service_home/.config/cli-proxy-api" "$service_home/.local/libexec" \
 chmod 700 "$service_home/.local/share/cli-proxy-api" "$service_home/.local/share/cli-proxy-api/versions"
 cp "$root/dot_config/cli-proxy-api/readonly_config.yaml" "$service_home/.config/cli-proxy-api/config.yaml"
 chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
+mkdir -p "$service_home/.local/share/cli-proxy-api/runtime"
+cp "$service_home/.config/cli-proxy-api/config.yaml" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 cp "$root/dot_local/libexec/private_executable_cli-proxy-api-launch" "$service_home/.local/libexec/cli-proxy-api-launch"
 chmod 700 "$service_home/.local/libexec/cli-proxy-api-launch"
 if [ "$platform" = linux ]; then
@@ -241,9 +259,12 @@ set -eu
 out=
 url=
 request_data=
+config_file=
+authenticated=0
 while [ "$#" -gt 0 ]; do
   case $1 in
     -o) out=$2; shift 2 ;;
+    -K|--config) config_file=$2; shift 2 ;;
     --data) request_data=$2; shift 2 ;;
     -w|-H|--max-time|--noproxy) shift 2 ;;
     -*) shift ;;
@@ -251,6 +272,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ -n "$out" ] && [ -n "$url" ]
+if [ -n "$config_file" ] && grep -q '^header = "Authorization: Bearer ' "$config_file"; then
+  authenticated=1
+fi
 [ "${CPA_TEST_CURL_SCENARIO:-}" != transport-failure ] || exit 7
 current=$(readlink "$CPA_TEST_HOME/.local/share/cli-proxy-api/current")
 if [ "${CPA_TEST_SIGNAL_STAGE:-}" = foreground ]; then
@@ -260,9 +284,9 @@ if [ "${CPA_TEST_CURL_SCENARIO:-}" = listener-handoff ]; then
   case $url in */healthz) printf '0\n' > "$CPA_TEST_STATE" ;; esac
 fi
 if [ "${CPA_TEST_MUTATE_CONFIG:-0}" = 1 ] && [ ! -e "$CPA_TEST_STATE.config-mutated" ]; then
-  chmod 644 "$CPA_TEST_HOME/.config/cli-proxy-api/config.yaml"
-  printf '# startup mutation\n' >> "$CPA_TEST_HOME/.config/cli-proxy-api/config.yaml"
-  chmod 444 "$CPA_TEST_HOME/.config/cli-proxy-api/config.yaml"
+  chmod 644 "$CPA_TEST_HOME/.local/share/cli-proxy-api/runtime/config.yaml"
+  printf '# startup mutation\n' >> "$CPA_TEST_HOME/.local/share/cli-proxy-api/runtime/config.yaml"
+  chmod 444 "$CPA_TEST_HOME/.local/share/cli-proxy-api/runtime/config.yaml"
   : > "$CPA_TEST_STATE.config-mutated"
 fi
 if [ -n "${CPA_TEST_MUTATE_PRIOR:-}" ] && [ ! -e "$CPA_TEST_STATE.prior-mutated" ]; then
@@ -292,7 +316,19 @@ case $url in
       body='{"error":{"type":"server_error","code":"internal_server_error","message":"no auth available"}}'
     fi
     ;;
-  */v0/management/config|*/management.html|*/v0/resource/plugins/example)
+  */v0/management/config)
+    if [ "${CPA_TEST_MANAGEMENT_ENABLED:-0}" != 1 ]; then
+      status=404
+      body='not found'
+    elif [ "$authenticated" = 1 ]; then
+      status=200
+      body='{}'
+    else
+      status=401
+      body='{"error":"missing management key"}'
+    fi
+    ;;
+  */management.html|*/v0/resource/plugins/example)
     status=404
     body='not found'
     ;;
@@ -394,12 +430,12 @@ if run_reconciler "$rendered_reconciler"; then
   exit 1
 fi
 chmod 755 "$service_home/.local/bin"
-chmod 644 "$service_home/.config/cli-proxy-api/config.yaml"
+chmod 644 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 if run_reconciler "$rendered_reconciler"; then
   printf 'writable managed config unexpectedly passed\n' >&2
   exit 1
 fi
-chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 printf 'preserve current collision\n' > "$service_home/.local/share/cli-proxy-api/current"
 if run_reconciler "$rendered_reconciler"; then
   printf 'regular current collision unexpectedly passed\n' >&2
@@ -432,10 +468,22 @@ run_reconciler "$rendered_reconciler" "CPA_SMOKE_TMP=$smoke_sentinel"
 grep -qx "release_id=$release_id" "$service_home/.local/share/cli-proxy-api/last-known-good"
 
 if command -v sha256sum >/dev/null 2>&1; then
-  smoke_config_sha=$(sha256sum "$service_home/.config/cli-proxy-api/config.yaml" | awk '{print $1}')
+  smoke_config_sha=$(sha256sum "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" | awk '{print $1}')
 else
-  smoke_config_sha=$(shasum -a 256 "$service_home/.config/cli-proxy-api/config.yaml" | awk '{print $1}')
+  smoke_config_sha=$(shasum -a 256 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" | awk '{print $1}')
 fi
+env \
+  PATH="$stub_bin:$PATH" \
+  CPA_MANAGEMENT_ENABLED=1 CPA_TEST_MANAGEMENT_ENABLED=1 CPA_MANAGEMENT_SECRET=synthetic-management-key-0123456789abcdef \
+  CPA_SOURCE_CONFIG="$service_home/.config/cli-proxy-api/config.yaml" \
+  CPA_CONFIG="$service_home/.local/share/cli-proxy-api/runtime/config.yaml" \
+  CPA_AUTH_DIR="$service_home/.local/share/cli-proxy-api/auth" \
+  CPA_WORK_DIR="$service_home/.local/share/cli-proxy-api/work" \
+  CPA_ACTIVE_BINARY="$old_dir/cli-proxy-api" CPA_JQ="$real_jq" \
+  CPA_EXPECTED_CONFIG_SHA256="$smoke_config_sha" CPA_EXPECTED_SOURCE_CONFIG_SHA256="$smoke_config_sha" \
+  CPA_LOG_FILE="$service_home/.local/share/cli-proxy-api/work/supervisor.log" \
+  CPA_TEST_PID="$CPA_TEST_PID" CPA_TEST_HOME="$CPA_TEST_HOME" CPA_TEST_STATE="$CPA_TEST_STATE" \
+  CPA_SMOKE_MAX_ATTEMPTS=1 /bin/sh -c 'export CPA_MANAGEMENT_ENABLED=1; . "$1"; cpa_smoke "$2"' sh "$root/.ci/smoke-cli-proxy-api.sh" "$CPA_TEST_PID"
 assert_smoke_rejects() {
   scenario_type=$1
   scenario=$2
@@ -444,7 +492,8 @@ assert_smoke_rejects() {
     "PATH=$stub_bin:$PATH" "CPA_TEST_PID=$CPA_TEST_PID" \
     "CPA_TEST_HOME=$CPA_TEST_HOME" "CPA_TEST_STATE=$CPA_TEST_STATE" \
     "CPA_ACTIVE_BINARY=$old_dir/cli-proxy-api" \
-    "CPA_CONFIG=$service_home/.config/cli-proxy-api/config.yaml" \
+    "CPA_SOURCE_CONFIG=$service_home/.config/cli-proxy-api/config.yaml" \
+    "CPA_CONFIG=$service_home/.local/share/cli-proxy-api/runtime/config.yaml" \
     "CPA_AUTH_DIR=$service_home/.local/share/cli-proxy-api/auth" \
     "CPA_WORK_DIR=$service_home/.local/share/cli-proxy-api/work" \
     "CPA_JQ=$real_jq" "CPA_EXPECTED_CONFIG_SHA256=$smoke_config_sha" \
@@ -478,10 +527,12 @@ if run_reconciler "$rendered_reconciler" CPA_TEST_MUTATE_CONFIG=1; then
   printf 'startup config mutation unexpectedly passed\n' >&2
   exit 1
 fi
-grep -q 'startup mutation' "$service_home/.config/cli-proxy-api/config.yaml"
-chmod 644 "$service_home/.config/cli-proxy-api/config.yaml"
-cp "$root/dot_config/cli-proxy-api/readonly_config.yaml" "$service_home/.config/cli-proxy-api/config.yaml"
-chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
+[ ! -e "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" ]
+grep -qx 'commercial-mode: true' "$service_home/.config/cli-proxy-api/config.yaml"
+mkdir -p "$service_home/.local/share/cli-proxy-api/runtime"
+cp "$service_home/.config/cli-proxy-api/config.yaml" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 644 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 rm -f "$CPA_TEST_STATE.config-mutated"
 
 : > "$CPA_TEST_LOG"
@@ -503,7 +554,7 @@ fi
 
 for signal_stage in foreground supervisor; do
   : > "$CPA_TEST_LOG"
-  if run_reconciler "$rendered_reconciler" "CPA_TEST_SIGNAL_STAGE=$signal_stage"; then
+  if run_reconciler "$rendered_reconciler" "CPA_TEST_SIGNAL_STAGE=$signal_stage" CPA_TEST_FORCE_RECONCILE=1; then
     printf 'interrupted %s transaction unexpectedly passed\n' "$signal_stage" >&2
     exit 1
   fi
@@ -543,7 +594,7 @@ else
 fi
 for failed_command in $required_commands; do
   : > "$CPA_TEST_LOG"
-  if run_reconciler "$rendered_reconciler" "CPA_TEST_FAIL_COMMAND=$failed_command"; then
+  if run_reconciler "$rendered_reconciler" "CPA_TEST_FAIL_COMMAND=$failed_command" CPA_TEST_FORCE_RECONCILE=1; then
     printf 'supervisor command failure was ignored: %s\n' "$failed_command" >&2
     exit 1
   fi
@@ -608,9 +659,13 @@ rm -f "$CPA_TEST_STATE.prior-mutated"
 run_reconciler "$rendered_reconciler"
 
 # A changed non-binary input forbids automatic prior restart and leaves stopped.
-chmod 644 "$service_home/.config/cli-proxy-api/config.yaml"
-printf '# changed policy fixture\n' >> "$service_home/.config/cli-proxy-api/config.yaml"
-chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
+mkdir -p "$service_home/.local/share/cli-proxy-api/runtime"
+chmod 644 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" 2>/dev/null || true
+cp "$service_home/.config/cli-proxy-api/config.yaml" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 644 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+printf '# changed policy fixture\n' >> "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 : > "$CPA_TEST_LOG"
 if run_reconciler "$scratch/bad-reconciler" CPA_TEST_BAD_ID=$bad_id; then
   printf 'changed-config candidate unexpectedly passed\n' >&2
@@ -622,9 +677,10 @@ grep -q ' disable ' "$CPA_TEST_LOG"
 [ "$(cat "$CPA_TEST_STATE")" = 0 ]
 
 # Restore the managed config and last-known-good state for failed-rollback proof.
-chmod 644 "$service_home/.config/cli-proxy-api/config.yaml"
-cp "$root/dot_config/cli-proxy-api/readonly_config.yaml" "$service_home/.config/cli-proxy-api/config.yaml"
-chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
+mkdir -p "$service_home/.local/share/cli-proxy-api/runtime"
+cp "$service_home/.config/cli-proxy-api/config.yaml" "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 644 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 : > "$CPA_TEST_LOG"
 if run_reconciler "$scratch/bad-reconciler" CPA_TEST_FAIL_ALL=1; then
   printf 'failed rollback unexpectedly passed\n' >&2
@@ -655,7 +711,7 @@ grep -q ' disable ' "$CPA_TEST_LOG"
 : > "$CPA_TEST_LOG"
 run_reconciler "$rendered_reconciler"
 if [ "$platform" = darwin ]; then
-  if run_reconciler "$rendered_reconciler" CPA_TEST_LOADED_NO_PID=1; then
+  if run_reconciler "$rendered_reconciler" CPA_TEST_LOADED_NO_PID=1 CPA_TEST_FORCE_RECONCILE=1; then
     printf 'loaded launchd job without a PID was mistaken for stopped\n' >&2
     exit 1
   fi
@@ -667,7 +723,7 @@ if [ "$platform" = darwin ]; then
   printf '0\n' > "$CPA_TEST_STATE"
   run_reconciler "$rendered_reconciler"
 fi
-if run_reconciler "$rendered_reconciler" CPA_TEST_STOP_FAIL=1; then
+if run_reconciler "$rendered_reconciler" CPA_TEST_STOP_FAIL=1 CPA_TEST_FORCE_RECONCILE=1; then
   printf 'failed stop/disable unexpectedly passed\n' >&2
   exit 1
 fi
@@ -684,7 +740,7 @@ printf '0\n' > "$CPA_TEST_STATE"
 run_reconciler "$rendered_reconciler"
 rm -f "$service_home/.local/share/cli-proxy-api/current"
 printf 'preserve unsafe current collision\n' > "$service_home/.local/share/cli-proxy-api/current"
-if run_reconciler "$rendered_reconciler" CPA_TEST_STOP_FAIL=1; then
+if run_reconciler "$rendered_reconciler" CPA_TEST_STOP_FAIL=1 CPA_TEST_FORCE_RECONCILE=1; then
   printf 'unsafe current plus failed stop unexpectedly passed\n' >&2
   exit 1
 fi

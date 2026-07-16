@@ -357,7 +357,7 @@ one distro that reads that entry. Manifest typos still fail loud. **Edit the dat
 not the script** — add/gate/remove system files in `system.yaml` + the tree. Full
 model: `system/README.md`.
 
-### CLIProxyAPI — credential-free localhost infrastructure, not an agent route
+### CLIProxyAPI — authenticated loopback infrastructure, not an agent route
 
 `router-for-me/CLIProxyAPI` is managed on Linux and macOS workstation hosts as
 an **unattached infrastructure service**. It is not an OpenCode/Pi provider,
@@ -387,7 +387,7 @@ The managed pieces are deliberately split:
   supervisor launcher**, not an operator helper. Both the systemd user unit and
   LaunchAgent call it. Do not add login commands, browser/page openers, or
   credential-management wrappers beside it.
-- `.chezmoiscripts/90-services/run_onchange_after_cli-proxy-api-service.sh.tmpl`
+- `.chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh.tmpl`
   disables persistence, activates the versioned candidate through
   `~/.local/share/cli-proxy-api/current` and `~/.local/bin/cli-proxy-api`, proves
   it in a bounded foreground launch, then starts the native user supervisor and
@@ -397,19 +397,26 @@ The managed pieces are deliberately split:
   `RunAtLoad` without `KeepAlive`, so a permanent failure stays stopped instead
   of producing an unbounded launchd loop.
 
-**Runtime contract:** the config binds only `127.0.0.1:8317`, has empty client
-API keys and Management secret, disables remote management, the control panel,
-panel updates, and plugins, and keeps debug/pprof/file logging off.
+**Runtime contract:** the reviewed source config binds only `127.0.0.1:8317`, has
+empty client API keys and Management secret, disables remote management, the
+control panel, panel updates, and plugins, and keeps debug/pprof/file logging
+off. The reconciler reads the Management credential from the unresolved
+`op://Private/CLIProxyAPI/Management API Key` reference in
+`.chezmoidata/cli-proxy-api.yaml`, creates a private runtime copy under
+`~/.local/share/cli-proxy-api/runtime/config.yaml`, waits for upstream bcrypt
+conversion, then locks that copy at mode 0400. The source snapshot remains
+0444 and is never used as runtime-mutable state.
 `commercial-mode: true` is load-bearing: upstream otherwise force-writes failed
 request bodies even when normal file logging is disabled. The service
 specifications clear loader/startup variables before the shell starts, and the
 launcher validates owner-controlled, non-symlink 0700 auth and work directories
 on **every start**, rejects any auth entry and work-directory `.env` without
-deleting them, changes into that work directory, sets umask 077, and execs with
-`env -i` plus only the fixed runtime allowlist. It always passes `-local-model`.
-That flag disables mutable model-catalog updates, but upstream still makes one
-credential-free Antigravity version-metadata request; there is no upstream disable switch. Do
-not weaken these boundaries or add provider/client/Management credentials here.
+deleting them, validates the owner-read-only runtime config, changes into that
+work directory, sets umask 077, and execs with `env -i` plus only the fixed
+runtime allowlist. It always passes `-local-model`. That flag disables mutable
+model-catalog updates, but upstream still makes one credential-free Antigravity
+version-metadata request; there is no upstream disable switch. Do not weaken
+these boundaries or add provider/client credentials here.
 
 **Readiness authority:** `.ci/smoke-cli-proxy-api.sh` is sourced by both the host
 reconciler and native CI. Given the supervisor-reported PID, it waits only for
@@ -418,13 +425,14 @@ executable is the active candidate, `/healthz` success, and a valid
 `/v1beta/interactions` `agent` request returning HTTP 503 JSON containing
 `no auth available`. The `agent` shape intentionally forces the built-in
 `gemini-interactions` provider path; an arbitrary unknown model returns 502
-before auth selection and is not a valid no-credential proof. Management,
-`management.html`, and plugin-resource routes must each return 404. The probe
-also verifies config immutability, empty auth state, absent panel/plugin
-artifacts, and that its request canary reached neither state nor supervisor
-output, then re-proves the same PID/executable/listener identity to close a port
-handoff race. Keep this one semantic authority rather than forking service and
-CI checks.
+before auth selection and is not a valid no-credential proof. Management
+requests must return 401 without a key and succeed with the configured key only
+on loopback; the control-panel and plugin-resource routes remain 404. The
+probe also verifies source/runtime config immutability, locked runtime state,
+empty auth state, absent panel/plugin artifacts, and that its request canary
+reached neither state nor supervisor output, then re-proves the same
+PID/executable/listener identity to close a port handoff race. Keep this one
+semantic authority rather than forking service and CI checks.
 
 **Activation and rollback:** the reconciler validates ownership, modes, and
 symlink shape before changing links. Its 0600 last-known-good manifest records
@@ -452,12 +460,12 @@ launcher). `render-dotfiles.yml` runs native Ubuntu/macOS provenance + smoke,
 ShellCheck on pull requests **and pushes to main**. Adapter tests prove state
 transitions; they MUST NOT be described as real user-manager activation.
 
-Management API activation is separate security work:
+Management API activation is tracked in
 [issue #48](https://github.com/hyperlapse122/dotfiles/issues/48). CPA Usage
 Keeper and GNOME/KDE applets are motivations only, not part of this
-infrastructure or that issue's implementation. No plaintext Management secret,
-provider credential, client key, generated auth state, or consumer routing
-belongs in this change.
+infrastructure. No plaintext Management secret, provider credential, client
+key, generated auth state, or consumer routing belongs in this change; config
+writes remain fail-closed because the runtime copy is locked after bootstrap.
 
 ### Agent skills, MCPs & trust — managed by `dotagents`
 
