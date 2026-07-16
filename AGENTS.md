@@ -942,7 +942,12 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `aoe-session` (derives title / group / default branch from
   the tree path + bare HEAD and shells out to `aoe add`, skipping a worktree
   that already has a session — `aoe` still creates and locks the worktree, and
-  the garden manifest still declares no `worktree:` tree). The source is
+  the garden manifest still declares no `worktree:` tree). A tree MAY instead be
+  **non-bare** — a plain clone (`path: <host>/[<group>/]<project>`, no `bare:` /
+  refspec) for a dependency you only want cloned, never developed via aoe
+  worktrees; `garden grow` then does a normal `git clone`, the path IS the
+  working checkout, and `src-audit` handles both shapes (a non-bare tree is a
+  plain clone, NOT a garden `worktree:` tree — those stay forbidden). The source is
   **age-encrypted** — this repo is public and the trees list (internal project
   names/URLs) is not: edit with `chezmoi edit ~/src/garden.yaml`, or
   non-interactively `chezmoi decrypt`/`chezmoi encrypt` on the `.age` source
