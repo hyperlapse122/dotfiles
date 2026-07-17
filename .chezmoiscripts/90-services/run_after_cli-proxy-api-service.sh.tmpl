@@ -34,6 +34,13 @@ CPA_CANDIDATE="$CPA_CANDIDATE_DIR/cli-proxy-api"
 CPA_AUTH_DIR="$CPA_BASE/auth"
 CPA_WORK_DIR="$CPA_BASE/work"
 CPA_SUPERVISOR_LOG="$CPA_WORK_DIR/supervisor.log"
+# Management control panel asset paths. The chezmoi external places the pinned
+# management.html under $CPA_BASE/panel/; this reconciler copies it into the
+# runtime static directory so the server serves a pre-placed local file and
+# never performs a runtime GitHub fetch (disable-control-panel: false).
+CPA_PANEL_SOURCE="$CPA_BASE/panel/management.html"
+CPA_PANEL_TARGET_DIR="$CPA_RUNTIME_DIR/static"
+CPA_PANEL_TARGET="$CPA_PANEL_TARGET_DIR/management.html"
 CPA_SMOKE_MAX_ATTEMPTS=10
 CPA_TEST_ADAPTER=0
 CPA_MANIFEST="$CPA_BASE/last-known-good"
@@ -42,6 +49,7 @@ CPA_RUNTIME_CREATED=0
 CPA_RUNTIME_REUSED=0
 CPA_RUNTIME_TMP=
 CPA_MANAGEMENT_ENABLED=0
+CPA_PANEL_ENABLED=0
 CPA_OP=
 CPA_BIN_LINK="$CPA_BIN_DIR/cli-proxy-api"
 CPA_STOP_EXPECTED_BINARY=
@@ -221,6 +229,36 @@ cpa_remove_runtime_config() {
     rm -f "$CPA_CONFIG" || return 1
     CPA_RUNTIME_CREATED=0
   fi
+}
+
+cpa_sync_panel_asset() {
+  # The management control panel asset is owned by chezmoi (a pinned external
+  # at $CPA_PANEL_SOURCE). Copy it into the runtime static directory so the
+  # server serves a pre-placed local file (disable-control-panel: false) and
+  # never contacts GitHub at runtime. A missing source (test adapter without a
+  # fixture, or a first apply whose external fetch has not yet landed the file)
+  # is a soft skip: the panel route stays 404 and the reconciler does not fail.
+  if [ ! -f "$CPA_PANEL_SOURCE" ] || [ -L "$CPA_PANEL_SOURCE" ]; then
+    # Production requires the chezmoi external to have staged the asset so the
+    # /management.html route serves a local file; a missing source would let the
+    # server fall back to a runtime GitHub fetch (violating the no-fetch design).
+    # The test adapter opts out because its harness stages fixtures explicitly.
+    [ "$CPA_TEST_ADAPTER" -eq 1 ] || return 1
+    return 0
+  fi
+  cpa_reconcile_private_dir "CLIProxyAPI panel static directory" "$CPA_PANEL_TARGET_DIR" 1
+  if [ ! -f "$CPA_PANEL_TARGET" ] || [ -L "$CPA_PANEL_TARGET" ] ||
+     ! cmp -s "$CPA_PANEL_SOURCE" "$CPA_PANEL_TARGET"; then
+    cpa_panel_tmp="$CPA_PANEL_TARGET_DIR/management.html.new.$$"
+    rm -f "$cpa_panel_tmp" || return 1
+    cp "$CPA_PANEL_SOURCE" "$cpa_panel_tmp" || { rm -f "$cpa_panel_tmp"; return 1; }
+    chmod 400 "$cpa_panel_tmp" || { rm -f "$cpa_panel_tmp"; return 1; }
+    mv -f "$cpa_panel_tmp" "$CPA_PANEL_TARGET" || { rm -f "$cpa_panel_tmp"; return 1; }
+  fi
+  [ "$(cpa_reconcile_stat_uid "$CPA_PANEL_TARGET")" = "$(id -u)" ] || return 1
+  case $(cpa_reconcile_stat_mode "$CPA_PANEL_TARGET") in 400) ;; *) return 1 ;; esac
+  [ ! -L "$CPA_PANEL_TARGET" ] || return 1
+  CPA_PANEL_ENABLED=1
 }
 
 cpa_reconcile_stat_uid() {
@@ -724,6 +762,7 @@ else
 fi
 cpa_validate_existing_runtime || cpa_preflight_fail "existing runtime config is unsafe"
 cpa_prepare_runtime_config || cpa_preflight_fail "could not prepare private runtime config"
+cpa_sync_panel_asset || cpa_preflight_fail "could not sync management control panel asset"
 [ "$(cpa_reconcile_stat_uid "$CPA_CONFIG")" = "$(id -u)" ] || cpa_preflight_fail "runtime config owner mismatch"
 if [ "$CPA_TEST_ADAPTER" -eq 1 ]; then
   if [ "$CPA_MANAGEMENT_ENABLED" -eq 1 ] && [ "$CPA_RUNTIME_REUSED" -eq 0 ]; then

@@ -294,6 +294,7 @@ Recurring script boilerplate lives in `.chezmoitemplates/` and is inlined with
 | `resolve-op-refs-json.tmpl` | recursively emits maps/slices/scalars as deterministic, lexically ordered JSON, resolving only string values beginning exactly `op://` through `onepasswordRead` |
 | `opencode-plugins-json.tmpl` | resolves the data-driven `.agents.opencode.plugins` list into exact npm/localArchive specs for `opencode.json` and `tui.json`, including target-specific suffixes; `install: localArchive` renders `<pkg>@file:<absolute-path>` (NPM `file:` protocol — a bare absolute path is "already configured" to `opencode plugin` but never actually installed into `~/.cache/opencode/packages/`, so its default export never gets imported and its `config` hook never runs) |
 | `cli-proxy-api-ref.tmpl` | shared CLIProxyAPI release identity for the grouped external and service reconciler: newest semver release, exact full archive for Linux/macOS amd64/arm64, official sidecar SHA-256, and `<tag>-<digest-prefix>` identity; deterministic tests can inject OS/arch/tag/checksums |
+| `cli-proxy-api-panel-ref.tmpl` | management control-panel release identity: newest semver tag + the single `management.html` asset SHA-256 (read from the GitHub REST API asset digest, since `gitHubLatestRelease` does not expose it) for router-for-me/Cli-Proxy-API-Management-Center; consumed by the `cli-proxy-api-panel` external (download URL + checksum) and the service reconciler (panel asset path). Deterministic tests can inject tag/digest |
 | `compound-engineering-ref.tmpl` | newest `compound-engineering-*` release tag (the plugin repo interleaves other tag trains, so plain `gitHubLatestRelease` is wrong); shared by the consumers of that plugin — `.chezmoiexternals/ai-agents.toml` (archive URL + versioned target path), `opencode-plugins-json.tmpl` (opencode.json's `plugin` array reference), `00-tools/run_onchange_after_compound-engineering` (sibling-version prune), and `70-agents/run_onchange_after_install-compound-engineering` (Claude/Codex marketplace registration at the versioned path) — so OpenCode, Claude, and Codex load the SAME extracted release tree (pi diverges to a `git:` source) |
 | `config-secrets-key.tmpl` | the machine-local AES key that encrypts the `.chezmoi.toml.tmpl` prompted secrets (see the Secrets section): reads the user keyring FAIL-SOFT via `chezmoi secret keyring get` in a subshell — the built-in `keyring` template function hard-errors when no keyring daemon is reachable, which would break every headless/CI render; an empty result means "keyring unreachable" and callers take their secret-absent skip path |
 | `sudo-skip-guard.sh.tmpl` | `SUDO` array + soft-skip (exit 0) when sudo would have to prompt but can't — for optional host tuning |
@@ -373,6 +374,12 @@ The managed pieces are deliberately split:
   `<tag>-<first-12-digest>` so a same-tag asset replacement becomes a new
   candidate. `.chezmoiexternals/ai-agents.toml` extracts only the binary to
   `~/.local/share/cli-proxy-api/versions/<identity>/cli-proxy-api` as 0500.
+  A sibling `cli-proxy-api-panel` external (identity from
+  `cli-proxy-api-panel-ref.tmpl`) fetches the single `management.html`
+  control-panel asset to `~/.local/share/cli-proxy-api/panel/management.html`
+  (0400); the service reconciler copies it into the runtime static directory so
+  the server serves a pre-placed local file and never performs a runtime
+  GitHub fetch.
   Missing, duplicate, malformed, no-plugin, or unsupported selector results
   MUST fail rendering. Never silently fall back to another asset.
 - `dot_config/cli-proxy-api/readonly_config.yaml` →
@@ -398,13 +405,20 @@ The managed pieces are deliberately split:
   of producing an unbounded launchd loop.
 
 **Runtime contract:** the reviewed source config binds only `127.0.0.1:8317`, has
-empty client API keys and Management secret, disables remote management, the
-control panel, panel updates, and plugins, and keeps debug/pprof/file logging
-off. The reconciler reads the Management credential from the unresolved
+empty client API keys, disables remote management and plugins, keeps the
+panel's background auto-update off, and keeps debug/pprof/file logging off. The
+Management secret (filled into the runtime config from the 1Password reference
+below) and the management control panel asset (a chezmoi-owned pinned external
+copied into the runtime static directory) are both provisioned at apply time,
+so the source snapshot stays sterile while the running service has a live
+Management API and a served control panel with zero runtime GitHub fetches. The reconciler reads the Management credential from the unresolved
 `op://Private/CLI Proxy API/password` reference in
 `.chezmoidata/cli-proxy-api.yaml`, creates a private runtime copy under
 `~/.local/share/cli-proxy-api/runtime/config.yaml`, waits for upstream bcrypt
-conversion, then locks that copy at mode 0400. The source snapshot remains
+conversion, then locks that copy at mode 0400, and copies the chezmoi-owned
+management panel asset into the runtime static directory
+(`~/.local/share/cli-proxy-api/runtime/static/management.html`) so the
+/management.html route serves a pre-placed local file. The source snapshot remains
 0444 and is never used as runtime-mutable state. Mode 0400 prevents persistence to
 that managed runtime file, but authenticated holders retain full upstream
 Management authority; unsupported write routes may transiently mutate in-memory
@@ -433,9 +447,13 @@ before auth selection and is not a valid no-credential proof. Management
 requests must return 401 without a key and succeed with the configured key only
 on loopback; supported consumers use read endpoints only, while unsupported
 write routes are not filtered and may affect in-memory state until restart. The
-control-panel and plugin-resource routes remain 404. The probe also verifies
-source/runtime persistence immutability, locked runtime state,
-empty auth state, absent panel/plugin artifacts, and that its request canary
+plugin-resource route remains 404; the control-panel route is parameterized via
+CPA_PANEL_ENABLED — HTTP 200 with the pre-placed runtime asset present when an
+asset is staged (reconciler copy or a native-smoke fixture), 404 with it absent
+otherwise, plus a stray-asset check on the source config dir in both branches.
+The probe also verifies source/runtime persistence immutability, locked runtime
+state, empty auth state, no plugin artifacts (and no panel artifact where the
+panel is disabled), and that its request canary
 reached neither state nor supervisor output, then re-proves the same
 PID/executable/listener identity to close a port handoff race. Keep this one
 semantic authority rather than forking service and CI checks.
@@ -445,7 +463,9 @@ symlink shape before changing links. The source-only
 `dot_local/share/private_cli-proxy-api/private_versions/` hierarchy makes the
 state and versions directories explicit private 0700 chezmoi targets; each
 dynamic release directory remains a regular 0755 target inside that private
-hierarchy. `.chezmoi.toml.tmpl` pins chezmoi's umask to `0022`, keeping
+hierarchy. The sibling `private_panel/` does the same for the chezmoi-owned
+management panel asset, into which the `cli-proxy-api-panel` external extracts
+the checksum-verified `management.html`. `.chezmoi.toml.tmpl` pins chezmoi's umask to `0022`, keeping
 `~/.local/bin` at the reconciler-compatible 0755 instead of Ubuntu's default
 0775. The reconciler preserves those target modes rather than creating
 perpetual apply drift. Its 0600 last-known-good manifest records
@@ -473,10 +493,14 @@ launcher). `render-dotfiles.yml` runs native Ubuntu/macOS provenance + smoke,
 ShellCheck on pull requests **and pushes to main**. Adapter tests prove state
 transitions; they MUST NOT be described as real user-manager activation.
 
-Management API activation is tracked in
-[issue #48](https://github.com/hyperlapse122/dotfiles/issues/48). CPA Usage
-Keeper and GNOME/KDE applets are motivations only, not part of this
-infrastructure. No plaintext Management secret, provider credential, client
+Management API activation (the JSON endpoints and the control panel) is
+delivered: the panel is a chezmoi-owned pinned external served from a
+pre-placed local asset, and the Management API is live with the
+1Password-injected secret — both loopback-only, with no runtime GitHub fetch.
+[Issue #48](https://github.com/hyperlapse122/dotfiles/issues/48) now tracks only
+the remaining fine-grained route-filtering gateway; until it lands, consumers
+use read endpoints only. CPA Usage Keeper and GNOME/KDE applets are motivations
+only, not part of this infrastructure. No plaintext Management secret, provider credential, client
 key, generated auth state, or consumer routing belongs in this change. Mode 0400
 blocks persistence to the runtime file, but does not revoke upstream authority;
 write routes are unsupported, consumers use read endpoints only, and a future

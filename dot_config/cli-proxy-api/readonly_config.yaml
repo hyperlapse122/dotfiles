@@ -1,5 +1,5 @@
 # Managed CLIProxyAPI v7.2.80 baseline; refresh manually from the tagged upstream example.
-# Safety delta: loopback-only, sterile auth, disabled panel/updates, commercial mode.
+# Safety delta: loopback-only, sterile auth, chezmoi-pinned panel (no runtime GitHub fetch), commercial mode.
 # Server host/interface to bind to. Default is empty ("") to bind all interfaces (IPv4 + IPv6).
 # Use "127.0.0.1" or "localhost" to restrict access to local machine only.
 host: "127.0.0.1"
@@ -25,7 +25,7 @@ remote-management:
   secret-key: ""
 
   # Disable the bundled management control panel asset download and HTTP route when true.
-  disable-control-panel: true
+  disable-control-panel: false
 
   # Disable automatic periodic background updates of the management panel from GitHub (default: false).
   # When enabled, the panel is only downloaded on first access if missing, and never auto-updated afterward.
