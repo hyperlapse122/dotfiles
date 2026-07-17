@@ -224,17 +224,40 @@ cpa_smoke_checks() {
   else
     cpa_expect_404 http://127.0.0.1:8317/v0/management/config || return 1
   fi
-  cpa_expect_404 http://127.0.0.1:8317/management.html || return 1
   cpa_expect_404 http://127.0.0.1:8317/v0/resource/plugins/example || return 1
 
   cpa_source_config_dir=$(dirname "$CPA_SOURCE_CONFIG")
   cpa_runtime_config_dir=$(dirname "$CPA_CONFIG")
-  for cpa_panel_dir in "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
-    [ ! -e "$cpa_panel_dir/static/management.html" ] || {
-      cpa_fail "management panel artifact exists"
+  if [ "${CPA_PANEL_ENABLED:-0}" -eq 1 ]; then
+    # The panel asset is pre-placed (chezmoi external copied by the reconciler,
+    # or a native-smoke fixture). The route serves the local file without auth;
+    # the HTML/JS then authenticates against /v0/management/*. Assert HTTP 200
+    # and presence at the runtime static path, absence in the source config dir.
+    cpa_status=$(cpa_http_status http://127.0.0.1:8317/management.html "$CPA_SMOKE_TMP/panel-body") || {
+      cpa_fail "management panel transport failure"
       return 1
     }
-  done
+    [ "$cpa_status" = 200 ] || {
+      cpa_fail "management panel returned HTTP $cpa_status, expected 200"
+      return 1
+    }
+    [ -e "$cpa_runtime_config_dir/static/management.html" ] || {
+      cpa_fail "management panel runtime asset missing"
+      return 1
+    }
+    [ ! -e "$cpa_source_config_dir/static/management.html" ] || {
+      cpa_fail "stray management panel artifact in source config dir"
+      return 1
+    }
+  else
+    cpa_expect_404 http://127.0.0.1:8317/management.html || return 1
+    for cpa_panel_dir in "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
+      [ ! -e "$cpa_panel_dir/static/management.html" ] || {
+        cpa_fail "management panel artifact exists"
+        return 1
+      }
+    done
+  fi
   [ ! -e "$CPA_WORK_DIR/plugins" ] || {
     cpa_fail "plugin artifact directory exists"
     return 1

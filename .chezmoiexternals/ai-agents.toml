@@ -146,6 +146,26 @@ readonly = true
 
 [cli-proxy-api.checksum]
 sha256 = '{{ $cpaRef.sha256 }}'
+
+{{- /* ---------- CLIProxyAPI management control panel asset ---------- */ -}}
+{{- /* A single self-contained management.html release asset (no archive, no
+     checksums sidecar). The 90-services reconciler copies this source file
+     into the runtime static directory so the server serves a pre-placed asset
+     and never performs a GitHub fetch at runtime; the resolved tag+sha act as
+     the reconciler onchange trigger. Mirrors the binary's checksum-verified,
+     render-time-resolved pinning. */ -}}
+{{- $cpaPanelRef := includeTemplate "cli-proxy-api-panel-ref.tmpl" (dict "ctx" .) | fromJson }}
+[cli-proxy-api-panel]
+type = "file"
+targetPath = '{{ printf ".local/share/cli-proxy-api/panel/management.html" }}'
+url = '{{ $cpaPanelRef.url }}'
+# readonly+private -> 0400 owner-read-only. Reconciler reads+copies it into the
+# locked runtime static dir; no other consumer touches this source copy.
+private = true
+readonly = true
+
+[cli-proxy-api-panel.checksum]
+sha256 = '{{ $cpaPanelRef.sha256 }}'
 {{- end }}
 
 {{- /* ---------- codegraph ---------- */ -}}

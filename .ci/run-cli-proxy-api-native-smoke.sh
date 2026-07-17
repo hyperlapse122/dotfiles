@@ -68,6 +68,15 @@ chmod 600 "$CPA_CONFIG"
 CPA_MANAGEMENT_SECRET="$management_secret"
 # shellcheck disable=SC2034
 CPA_MANAGEMENT_ENABLED=1
+# Pre-place a management.html fixture at the runtime static path so the
+# /management.html route serves a local file (disable-control-panel: false in
+# the copied config) and the real binary never attempts a GitHub fetch. The
+# shared smoke asserts HTTP 200 via CPA_PANEL_ENABLED.
+mkdir -m 700 "$runtime_dir/static"
+printf '<!doctype html><title>cli-proxy-api panel fixture</title>\n' > "$runtime_dir/static/management.html"
+chmod 400 "$runtime_dir/static/management.html"
+# shellcheck disable=SC2034
+CPA_PANEL_ENABLED=1
 export CPA_AUTH_DIR="$home/.local/share/cli-proxy-api/auth"
 export CPA_WORK_DIR="$home/.local/share/cli-proxy-api/work"
 CPA_JQ=${CPA_JQ_OVERRIDE:-$(command -v jq)}
