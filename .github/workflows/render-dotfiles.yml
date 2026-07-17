@@ -653,7 +653,7 @@ jobs:
           [[ "$(manifest_value CPA_RELEASE_ASSET)" == "$(jq -r .asset "${scratch}/release.json")" ]]
           [[ "$(manifest_value CPA_RELEASE_SHA256)" == "$(jq -r .sha256 "${scratch}/release.json")" ]]
           [[ "$(manifest_value CPA_RELEASE_ID)" == "$(jq -r .identity "${scratch}/release.json")" ]]
-          grep -F 'CPA_MANAGEMENT_SECRET_REF="op://Private/CLIProxyAPI/Management API Key"' "${scratch}/reconciler.sh"
+          grep -F 'CPA_MANAGEMENT_SECRET_REF="op://Private/CLI Proxy API/password"' "${scratch}/reconciler.sh"
           ! grep -F 'MANAGEMENT_PASSWORD' "${scratch}/reconciler.sh" >/dev/null
           CPA_TEST_OWNER_TEST=1 \
             .ci/test-cli-proxy-api-service.sh "${scratch}/reconciler.sh" "${CPA_PLATFORM}"

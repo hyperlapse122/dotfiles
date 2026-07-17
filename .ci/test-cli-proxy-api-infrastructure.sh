@@ -84,6 +84,52 @@ cat > "$scratch/malformed.tmpl" <<'EOF'
 EOF
 assert_render_fails "$scratch/malformed.tmpl" 'invalid sha256'
 
+# The reconciler refuses a group/world-writable ~/.local/bin because that
+# directory owns the stable activation link. Pin chezmoi's umask so hosts whose
+# login default is 0002 still render the directory as 0755.
+grep -qx 'umask = 0o022' "$root/.chezmoi.toml.tmpl"
+# Explicit private source directories prevent the reconciler's 0700 state tree
+# from fighting chezmoi's synthesized regular parent-directory modes.
+[ -f "$root/dot_local/share/private_cli-proxy-api/.gitkeep" ]
+[ -f "$root/dot_local/share/private_cli-proxy-api/private_versions/.gitkeep" ]
+
+# Render the real config template, then prove its umask and the private source
+# attributes win over a process umask of 0002. The release fixture models the
+# regular dynamic parent synthesized for an archive-file external.
+chezmoi --config "$scratch/empty.toml" \
+  --source "$root" --destination "$scratch/target" --no-tty \
+  init --config-path "$scratch/rendered-config.toml" --promptDefaults
+mode_source=$scratch/mode-source
+mode_target=$scratch/mode-target
+mkdir -p \
+  "$mode_target" \
+  "$mode_source/dot_local/bin" \
+  "$mode_source/dot_local/share"
+cp -R "$root/dot_local/share/private_cli-proxy-api" "$mode_source/dot_local/share/"
+mkdir -p "$mode_source/dot_local/share/private_cli-proxy-api/private_versions/release-fixture"
+: > "$mode_source/dot_local/bin/.gitkeep"
+: > "$mode_source/dot_local/share/private_cli-proxy-api/private_versions/release-fixture/.gitkeep"
+grep -x 'umask = 0o022' "$scratch/rendered-config.toml" > "$scratch/umask.toml"
+(
+  umask 0002
+  chezmoi --config "$scratch/umask.toml" \
+    --source "$mode_source" --destination "$mode_target" \
+    apply --force --include=dirs --parent-dirs \
+    "$mode_target/.local/bin" \
+    "$mode_target/.local/share/cli-proxy-api"
+)
+mode_of() {
+  if [ "$(uname -s)" = Darwin ]; then
+    stat -f '%Lp' "$1"
+  else
+    stat -c '%a' "$1"
+  fi
+}
+[ "$(mode_of "$mode_target/.local/bin")" = 755 ]
+[ "$(mode_of "$mode_target/.local/share/cli-proxy-api")" = 700 ]
+[ "$(mode_of "$mode_target/.local/share/cli-proxy-api/versions")" = 700 ]
+[ "$(mode_of "$mode_target/.local/share/cli-proxy-api/versions/release-fixture")" = 755 ]
+
 config=$root/dot_config/cli-proxy-api/readonly_config.yaml
 upstream=$scratch/config.example.yaml
 actual_diff=$scratch/config.diff
@@ -140,7 +186,7 @@ if grep -F '<string>/bin/sh</string>' "$launch_agent" >/dev/null; then
 fi
 grep -F '[cli-proxy-api]' "$root/.chezmoiexternals/ai-agents.toml" >/dev/null
 grep -F 'includeTemplate "cli-proxy-api-ref.tmpl"' "$root/.chezmoiexternals/ai-agents.toml" >/dev/null
-grep -F 'op://Private/CLIProxyAPI/Management API Key' "$root/.chezmoidata/cli-proxy-api.yaml" >/dev/null
+grep -F 'op://Private/CLI Proxy API/password' "$root/.chezmoidata/cli-proxy-api.yaml" >/dev/null
 grep -F 'secret-key: ""' "$config" >/dev/null
 reconciler=$root/.chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh.tmpl
 grep -F 'Management API credential is missing or invalid' "$reconciler" >/dev/null

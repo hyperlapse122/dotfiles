@@ -401,7 +401,7 @@ The managed pieces are deliberately split:
 empty client API keys and Management secret, disables remote management, the
 control panel, panel updates, and plugins, and keeps debug/pprof/file logging
 off. The reconciler reads the Management credential from the unresolved
-`op://Private/CLIProxyAPI/Management API Key` reference in
+`op://Private/CLI Proxy API/password` reference in
 `.chezmoidata/cli-proxy-api.yaml`, creates a private runtime copy under
 `~/.local/share/cli-proxy-api/runtime/config.yaml`, waits for upstream bcrypt
 conversion, then locks that copy at mode 0400. The source snapshot remains
@@ -441,7 +441,14 @@ PID/executable/listener identity to close a port handoff race. Keep this one
 semantic authority rather than forking service and CI checks.
 
 **Activation and rollback:** the reconciler validates ownership, modes, and
-symlink shape before changing links. Its 0600 last-known-good manifest records
+symlink shape before changing links. The source-only
+`dot_local/share/private_cli-proxy-api/private_versions/` hierarchy makes the
+state and versions directories explicit private 0700 chezmoi targets; each
+dynamic release directory remains a regular 0755 target inside that private
+hierarchy. `.chezmoi.toml.tmpl` pins chezmoi's umask to `0022`, keeping
+`~/.local/bin` at the reconciler-compatible 0755 instead of Ubuntu's default
+0775. The reconciler preserves those target modes rather than creating
+perpetual apply drift. Its 0600 last-known-good manifest records
 the complete release identity, the extracted binary digest captured only after
 semantic readiness, and a hash of every non-binary input (config, launcher,
 active platform service definition, reconciler source, and probe). The official

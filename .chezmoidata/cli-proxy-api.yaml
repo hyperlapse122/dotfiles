@@ -3,4 +3,4 @@
 # renders the credential into a target, fingerprint, or service definition.
 cliProxyApi:
   management:
-    credential: op://Private/CLIProxyAPI/Management API Key
+    credential: "op://Private/CLI Proxy API/password"

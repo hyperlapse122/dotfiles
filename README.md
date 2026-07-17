@@ -78,8 +78,8 @@ Linux and macOS workstation applies install
 [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) as
 managed **infrastructure only**. The service binds to `127.0.0.1:8317`; no Pi,
 OpenCode, Claude, Codex, or other client is routed through it. Its Management API
-credential is read from the `op://Private/CLIProxyAPI/Management API Key` item at
-apply time; the source snapshot stays read-only and the private runtime copy is
+credential is read from `op://Private/CLI Proxy API/password` at apply time;
+the source snapshot stays read-only and the private runtime copy is
 bcrypt-locked at mode 0400 before supervision. Client API keys, provider
 credentials, control-panel assets, and provider plugins remain disabled, so a
 provider-routable request intentionally returns HTTP 503 `no auth available`.

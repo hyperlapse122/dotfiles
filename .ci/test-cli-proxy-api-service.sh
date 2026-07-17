@@ -183,7 +183,44 @@ mkdir -p "$service_home/.config/cli-proxy-api" "$service_home/.local/libexec" \
 chmod 700 "$service_home/.local/share/cli-proxy-api" "$service_home/.local/share/cli-proxy-api/versions"
 cp "$root/dot_config/cli-proxy-api/readonly_config.yaml" "$service_home/.config/cli-proxy-api/config.yaml"
 chmod 444 "$service_home/.config/cli-proxy-api/config.yaml"
-management_secret=synthetic-management-key-0123456789abcdef
+management_secret='synthetic-management-key-0123456789&*?()[]{}'
+# Exercise the production (non-adapter) YAML interpolation with punctuation in
+# the accepted password alphabet instead of only testing a pre-bcrypt fixture.
+config_prep_lib=$scratch/config-prep.sh
+awk '
+  /^cpa_prepare_runtime_config\(\) \{/ { copy=1 }
+  /^cpa_lock_runtime_config\(\) \{/ { copy=0 }
+  copy { print }
+' "$rendered_reconciler" > "$config_prep_lib"
+cat > "$scratch/run-config-prep.sh" <<'EOF'
+#!/bin/sh
+set -eu
+cpa_reconcile_private_dir() {
+  mkdir -p "$2"
+  chmod 700 "$2"
+}
+. "$1"
+CPA_TEST_ADAPTER=0
+CPA_RUNTIME_DIR=$2
+CPA_CONFIG=$CPA_RUNTIME_DIR/config.yaml
+CPA_SOURCE_CONFIG=$3
+CPA_MANIFEST=$4
+CPA_MANAGEMENT_SECRET=$5
+CPA_MANAGEMENT_SECRET_SHA256=fixture
+CPA_RUNTIME_CREATED=0
+CPA_RUNTIME_REUSED=0
+CPA_RUNTIME_TMP=
+CPA_MANAGEMENT_ENABLED=1
+cpa_prepare_runtime_config
+grep -Fqx "  secret-key: \"$CPA_MANAGEMENT_SECRET\"" "$CPA_CONFIG"
+EOF
+chmod 700 "$scratch/run-config-prep.sh"
+"$scratch/run-config-prep.sh" \
+  "$config_prep_lib" \
+  "$scratch/config-prep-runtime" \
+  "$service_home/.config/cli-proxy-api/config.yaml" \
+  "$scratch/config-prep-manifest" \
+  "$management_secret"
 management_source=$scratch/management-config.yaml
 sed 's/secret-key: ""/secret-key: "$2b$12$fixture-management-hash"/' \
   "$service_home/.config/cli-proxy-api/config.yaml" > "$management_source"
@@ -217,6 +254,7 @@ release_id=$(awk -F= '$1 == "CPA_RELEASE_ID" { gsub(/^"|"$/, "", $2); print $2; 
 [ -n "$release_id" ]
 old_dir=$service_home/.local/share/cli-proxy-api/versions/$release_id
 mkdir -p "$old_dir"
+chmod 755 "$old_dir"
 cp "$old_binary_fixture" "$old_dir/cli-proxy-api"
 chmod 500 "$old_dir/cli-proxy-api"
 
@@ -394,7 +432,13 @@ case " $* " in
     printf '0\n' > "$CPA_TEST_STATE"
     ;;
   *' daemon-reload '*) [ "${CPA_TEST_FAIL_COMMAND:-}" != daemon-reload ] ;;
-  *' reset-failed '*) [ "${CPA_TEST_FAIL_COMMAND:-}" != reset-failed ] ;;
+  *' is-failed '*)
+    [ "${CPA_TEST_UNIT_FAILED:-0}" = 1 ] || [ "${CPA_TEST_FAIL_COMMAND:-}" = reset-failed ]
+    ;;
+  *' reset-failed '*)
+    [ "${CPA_TEST_UNIT_FAILED:-0}" = 1 ] || [ "${CPA_TEST_FAIL_COMMAND:-}" = reset-failed ] || exit 1
+    [ "${CPA_TEST_FAIL_COMMAND:-}" != reset-failed ]
+    ;;
   *' enable '*) [ "${CPA_TEST_FAIL_COMMAND:-}" != enable ] ;;
   *' restart '*)
     [ "${CPA_TEST_MANAGER_FAIL:-0}" != 1 ] || exit 1
@@ -450,12 +494,32 @@ run_reconciler() {
     "$@" /bin/sh "$script"
 }
 
+assert_mode() {
+  expected_mode=$1
+  mode_path=$2
+  if [ "$(uname -s)" = Darwin ]; then
+    actual_mode=$(stat -f '%Lp' "$mode_path")
+  else
+    actual_mode=$(stat -c '%a' "$mode_path")
+  fi
+  if [ "$actual_mode" != "$expected_mode" ]; then
+    printf 'unexpected mode for %s: expected %s, got %s\n' "$mode_path" "$expected_mode" "$actual_mode" >&2
+    exit 1
+  fi
+}
+
 chmod 777 "$service_home/.local/bin"
 if run_reconciler "$rendered_reconciler"; then
   printf 'world-writable binary directory unexpectedly passed\n' >&2
   exit 1
 fi
 chmod 755 "$service_home/.local/bin"
+chmod 775 "$old_dir"
+if run_reconciler "$rendered_reconciler"; then
+  printf 'group-writable candidate directory unexpectedly passed\n' >&2
+  exit 1
+fi
+chmod 755 "$old_dir"
 chmod 644 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 if run_reconciler "$rendered_reconciler"; then
   printf 'writable managed config unexpectedly passed\n' >&2
@@ -493,11 +557,39 @@ chmod 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
 smoke_sentinel=$scratch/must-not-delete
 mkdir -p "$smoke_sentinel"
 printf 'keep\n' > "$smoke_sentinel/sentinel"
+# chezmoi owns the state/versions parents as private 0700 directories and the
+# release-specific external parent as 0755 beneath them. Reconciliation must
+# preserve those target modes or every later apply reports drift.
+chmod 700 \
+  "$service_home/.local/share/cli-proxy-api" \
+  "$service_home/.local/share/cli-proxy-api/versions"
+chmod 755 "$old_dir"
 : > "$CPA_TEST_LOG"
 run_reconciler "$rendered_reconciler" "CPA_SMOKE_TMP=$smoke_sentinel"
 [ -f "$smoke_sentinel/sentinel" ]
 [ "$(readlink "$service_home/.local/share/cli-proxy-api/current")" = "$old_dir" ]
 grep -qx "release_id=$release_id" "$service_home/.local/share/cli-proxy-api/last-known-good"
+assert_mode 700 "$service_home/.local/share/cli-proxy-api"
+assert_mode 700 "$service_home/.local/share/cli-proxy-api/versions"
+assert_mode 755 "$old_dir"
+
+# A successfully created runtime config becomes durable state. The EXIT trap
+# must retain it after the transaction commits instead of treating success like
+# an interrupted pre-transaction bootstrap.
+rm -f "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+run_reconciler "$rendered_reconciler" CPA_TEST_FORCE_RECONCILE=1
+if [ ! -f "$service_home/.local/share/cli-proxy-api/runtime/config.yaml" ]; then
+  printf 'committed runtime config was removed on reconciler exit\n' >&2
+  exit 1
+fi
+assert_mode 400 "$service_home/.local/share/cli-proxy-api/runtime/config.yaml"
+
+if [ "$platform" = linux ]; then
+  : > "$CPA_TEST_LOG"
+  run_reconciler "$rendered_reconciler" CPA_TEST_UNIT_FAILED=1 CPA_TEST_FORCE_RECONCILE=1
+  grep -Fq 'systemctl --user reset-failed cli-proxy-api.service' "$CPA_TEST_LOG"
+  [ "$(cat "$CPA_TEST_STATE")" = 1 ]
+fi
 
 # Management-enabled deterministic runs use the real reconciler secret path and
 # a stub op binary while retaining the existing manager/lsof/curl adapters.
@@ -563,7 +655,7 @@ for op_mode in missing malformed unreadable; do
 done
 
 # Rotation changes both the runtime hash and the manifest credential digest.
-management_secret_rotated=synthetic-management-key-rotated-0123456789abcdef
+management_secret_rotated='synthetic-management-key-rotated-0123456789&*?()[]{}'
 management_source_rotated=$scratch/management-config-rotated.yaml
 sed 's/fixture-management-hash/rotated-management-hash/' "$management_source" > "$management_source_rotated"
 chmod 444 "$management_source_rotated"
@@ -582,6 +674,7 @@ run_reconciler "$rendered_reconciler" \
 management_bad_id=v7.2.82-cccccccccccc
 management_bad_dir=$service_home/.local/share/cli-proxy-api/versions/$management_bad_id
 mkdir -p "$management_bad_dir"
+chmod 755 "$management_bad_dir"
 printf '%s\n' '#!/bin/sh' '# management rollback fixture' 'exit 0' > "$management_bad_dir/cli-proxy-api"
 chmod 500 "$management_bad_dir/cli-proxy-api"
 sed \
@@ -810,6 +903,7 @@ rm -f "$stub_bin/mv"
 bad_id=v7.2.81-bbbbbbbbbbbb
 bad_dir=$service_home/.local/share/cli-proxy-api/versions/$bad_id
 mkdir -p "$bad_dir"
+chmod 755 "$bad_dir"
 printf '%s\n' '#!/bin/sh' '# deterministic bad-semantics fixture' 'exit 0' > "$bad_dir/cli-proxy-api"
 chmod 500 "$bad_dir/cli-proxy-api"
 sed \

@@ -94,12 +94,14 @@ cpa_read_management_secret() {
   [ -n "$CPA_OP" ] && [ -x "$CPA_OP" ] || return 1
   cpa_management_read=$("$CPA_OP" read "$CPA_MANAGEMENT_SECRET_REF") || return 1
   [ -n "$cpa_management_read" ] || return 1
-  # Restrict the item to a printable, one-line alphabet that is safe in the
-  # temporary YAML double-quoted scalar and in a curl config header. This also
-  # rejects trailing/control data without ever printing the secret.
+  # Accept printable, non-space ASCII while excluding the two characters that
+  # require escaping in both the temporary YAML scalar and curl's quoted config
+  # value. Embedded newlines/control data are rejected without printing them.
   case $cpa_management_read in
-    *[!A-Za-z0-9._~!@#$%^+=,:/-]*) return 1 ;;
+    *'
+'*|*\"*|*\\*) return 1 ;;
   esac
+  printf '%s' "$cpa_management_read" | LC_ALL=C grep -Eq '^[!-~]+$' || return 1
   [ "${#cpa_management_read}" -ge 32 ] || return 1
   CPA_MANAGEMENT_SECRET=$cpa_management_read
   CPA_MANAGEMENT_SECRET_SHA256=$(printf '%s' "$CPA_MANAGEMENT_SECRET" | cpa_reconcile_sha256_stream) || return 1
@@ -261,6 +263,18 @@ cpa_reconcile_private_dir() {
   fi
 }
 
+cpa_reconcile_managed_dir() {
+  cpa_dir_label=$1
+  cpa_dir_path=$2
+  [ ! -L "$cpa_dir_path" ] || cpa_preflight_fail "$cpa_dir_label must not be a symlink"
+  if [ ! -e "$cpa_dir_path" ]; then
+    mkdir -m 755 "$cpa_dir_path"
+  fi
+  [ -d "$cpa_dir_path" ] || cpa_preflight_fail "$cpa_dir_label is not a directory"
+  [ "$(cpa_reconcile_stat_uid "$cpa_dir_path")" = "$(id -u)" ] || cpa_preflight_fail "$cpa_dir_label owner mismatch"
+  [ "$(cpa_reconcile_stat_mode "$cpa_dir_path")" = 755 ] || cpa_preflight_fail "$cpa_dir_label mode must be 0755"
+}
+
 cpa_atomic_link() {
   cpa_link_target=$1
   cpa_link_path=$2
@@ -360,7 +374,7 @@ cpa_attested_manifest_binary() {
   cpa_attested_binary=$cpa_attested_dir/cli-proxy-api
   [ -d "$cpa_attested_dir" ] && [ ! -L "$cpa_attested_dir" ] || return 1
   [ "$(cpa_reconcile_stat_uid "$cpa_attested_dir")" = "$(id -u)" ] || return 1
-  [ "$(cpa_reconcile_stat_mode "$cpa_attested_dir")" = 700 ] || return 1
+  [ "$(cpa_reconcile_stat_mode "$cpa_attested_dir")" = 755 ] || return 1
   [ -f "$cpa_attested_binary" ] && [ -x "$cpa_attested_binary" ] && [ ! -L "$cpa_attested_binary" ] || return 1
   [ "$(cpa_reconcile_stat_uid "$cpa_attested_binary")" = "$(id -u)" ] || return 1
   [ "$(cpa_reconcile_stat_mode "$cpa_attested_binary")" = 500 ] || return 1
@@ -451,7 +465,11 @@ cpa_start_service() {
   cpa_prepare_supervisor_log || return 1
 {{- if eq .chezmoi.os "linux" }}
   systemctl --user daemon-reload || return 1
-  systemctl --user reset-failed cli-proxy-api.service || return 1
+  # reset-failed returns nonzero for a fresh/inactive unit with no loaded failed
+  # state. Only require it when systemd reports that there is state to clear.
+  if systemctl --user is-failed --quiet cli-proxy-api.service; then
+    systemctl --user reset-failed cli-proxy-api.service || return 1
+  fi
   systemctl --user enable cli-proxy-api.service >/dev/null || return 1
   systemctl --user restart cli-proxy-api.service || return 1
 {{- else }}
@@ -656,7 +674,9 @@ cpa_preflight_candidate() {
 cpa_reconcile_private_dir "CLIProxyAPI state directory" "$CPA_BASE" 1
 CPA_BASE_SAFE=1
 cpa_reconcile_private_dir "CLIProxyAPI versions directory" "$CPA_VERSIONS" 1
-cpa_reconcile_private_dir "CLIProxyAPI candidate directory" "$CPA_CANDIDATE_DIR" 1
+# The dynamic external parent is a regular 0755 target nested below the private
+# state/versions directories; preserve chezmoi's mode instead of creating drift.
+cpa_reconcile_managed_dir "CLIProxyAPI candidate directory" "$CPA_CANDIDATE_DIR"
 cpa_reconcile_private_dir "CLIProxyAPI auth directory" "$CPA_AUTH_DIR"
 cpa_reconcile_private_dir "CLIProxyAPI working directory" "$CPA_WORK_DIR"
 [ ! -L "$CPA_BIN_DIR" ] || cpa_preflight_fail "binary directory must not be a symlink"
@@ -770,7 +790,7 @@ cpa_prior_binary_is_valid() {
     [ "$cpa_prior_dir" = "$CPA_VERSIONS/$cpa_prior_release" ] &&
     [ -d "$cpa_prior_dir" ] && [ ! -L "$cpa_prior_dir" ] &&
     [ "$(cpa_reconcile_stat_uid "$cpa_prior_dir")" = "$(id -u)" ] &&
-    [ "$(cpa_reconcile_stat_mode "$cpa_prior_dir")" = 700 ] &&
+    [ "$(cpa_reconcile_stat_mode "$cpa_prior_dir")" = 755 ] &&
     [ -f "$cpa_prior_dir/cli-proxy-api" ] && [ -x "$cpa_prior_dir/cli-proxy-api" ] &&
     [ ! -L "$cpa_prior_dir/cli-proxy-api" ] &&
     [ "$(cpa_reconcile_stat_uid "$cpa_prior_dir/cli-proxy-api")" = "$(id -u)" ] &&
@@ -949,6 +969,10 @@ if ! cpa_finalize_activation; then
   cpa_rollback || true
   cpa_reconcile_fail "final integrity attestation or manifest commit failed"
 fi
+# The locked runtime config is committed durable state now. Clear its creation
+# marker before lowering the transaction flag so the EXIT trap cannot classify
+# a successful first bootstrap as abandoned pre-transaction state.
+CPA_RUNTIME_CREATED=0
 CPA_TRANSACTION_ACTIVE=0
 
 # Older verified candidates are retained. Removing user-state trees is a

@@ -8,6 +8,10 @@
 # --RAW-CONTROL-CHARS preserves chezmoi's colored diff. Root keys must precede [edit].
 pager = "less"
 pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
+# Ubuntu's login umask is 0002, but the CLIProxyAPI reconciler's stable link
+# requires ~/.local/bin to be non-group-writable. Pin chezmoi-managed normal
+# files/directories to 0644/0755 on POSIX hosts.
+umask = 0o022
 {{ end }}
 # Age encryption for `encrypted_` source files (the ~/src garden project
 # registry — kept ciphertext-only in this public repo). The recipient below is
