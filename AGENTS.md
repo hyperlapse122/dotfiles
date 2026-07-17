@@ -1329,5 +1329,8 @@ disagree about the same machine.
 
 Conventional Commits (per the global rules), scoped by area — history is mostly
 `chore(<area>)`, e.g. `chore(fedora)`, `chore(scripts)`, `chore(tailscale)`.
-Trunk-based on `main`; **always `git push` to `origin/main` immediately after
-committing** (single-maintainer repo, no PR/review gate).
+Feature-branch workflow: each change lands on a Git Flow-prefixed branch, is
+pushed and opened as a pull request, and is merged to `main` only after the CI
+workflows (`render-dotfiles.yml`, `ci.yml`) pass on the PR. Direct pushes to
+`main` are not used even though this is a single-maintainer repo — the PR is the
+CI gate.
