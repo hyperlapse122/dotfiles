@@ -114,6 +114,7 @@ agents:
       - npm:pi-mcp-extension
       - npm:pi-subagents
       - npm:pi-ask-user
+      - npm:@ff-labs/pi-fff
       - git:github.com/EveryInc/compound-engineering-plugin
       # `theme` is declared here because pi can no longer persist a theme choice
       # to a readonly settings.json — it is fixed to the default.
