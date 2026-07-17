@@ -36,6 +36,25 @@ cpa_http_status() {
   curl --noproxy '*' -sS --max-time 3 -o "$2" -w '%{http_code}' "$1"
 }
 
+cpa_management_header_file() {
+  cpa_header_path=$CPA_SMOKE_TMP/management-header.conf
+  [ -n "${CPA_MANAGEMENT_SECRET:-}" ] || return 1
+  (umask 077; printf 'header = "Authorization: Bearer %s"\n' "$CPA_MANAGEMENT_SECRET" > "$cpa_header_path") || return 1
+  chmod 600 "$cpa_header_path" || return 1
+  printf '%s\n' "$cpa_header_path"
+}
+
+cpa_management_status() {
+  cpa_management_header=$1
+  cpa_management_body=$2
+  if [ -n "$cpa_management_header" ]; then
+    curl --config "$cpa_management_header" --noproxy '*' -sS --max-time 3 \
+      -o "$cpa_management_body" -w '%{http_code}' "$3"
+  else
+    cpa_http_status "$3" "$cpa_management_body"
+  fi
+}
+
 cpa_directory_is_empty() {
   for cpa_entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
     [ ! -e "$cpa_entry" ] && [ ! -L "$cpa_entry" ] || return 1
@@ -95,6 +114,7 @@ cpa_listener_owned() {
 cpa_smoke_checks() {
   cpa_expected_pid=$1
   : "${CPA_ACTIVE_BINARY:?CPA_ACTIVE_BINARY is required}"
+  : "${CPA_SOURCE_CONFIG:?CPA_SOURCE_CONFIG is required}"
   : "${CPA_CONFIG:?CPA_CONFIG is required}"
   : "${CPA_AUTH_DIR:?CPA_AUTH_DIR is required}"
   : "${CPA_WORK_DIR:?CPA_WORK_DIR is required}"
@@ -110,7 +130,11 @@ cpa_smoke_checks() {
     return 1
   }
   if [ ! -f "$CPA_CONFIG" ] || [ -L "$CPA_CONFIG" ]; then
-    cpa_fail "config is not a regular file"
+    cpa_fail "runtime config is not a regular file"
+    return 1
+  fi
+  if [ ! -f "$CPA_SOURCE_CONFIG" ] || [ -L "$CPA_SOURCE_CONFIG" ]; then
+    cpa_fail "source config is not a regular file"
     return 1
   fi
   grep -qx 'commercial-mode: true' "$CPA_CONFIG" || {
@@ -122,7 +146,16 @@ cpa_smoke_checks() {
     return 1
   }
   [ "$cpa_before_hash" = "$CPA_EXPECTED_CONFIG_SHA256" ] || {
-    cpa_fail "managed config changed before readiness"
+    cpa_fail "runtime config changed before readiness"
+    return 1
+  }
+  cpa_source_hash=$(cpa_sha256 "$CPA_SOURCE_CONFIG") || {
+    cpa_fail "could not hash source config"
+    return 1
+  }
+  cpa_source_before_hash=${CPA_EXPECTED_SOURCE_CONFIG_SHA256:-$cpa_source_hash}
+  [ "$cpa_source_before_hash" = "$cpa_source_hash" ] || {
+    cpa_fail "managed source config changed during readiness"
     return 1
   }
   cpa_listener_owned "$cpa_expected_pid" || return 1
@@ -163,15 +196,45 @@ cpa_smoke_checks() {
     return 1
   }
 
-  cpa_expect_404 http://127.0.0.1:8317/v0/management/config || return 1
+  if [ "${CPA_MANAGEMENT_ENABLED:-0}" -eq 1 ]; then
+    cpa_management_body=$CPA_SMOKE_TMP/management.json
+    cpa_status=$(cpa_management_status "" "$cpa_management_body" http://127.0.0.1:8317/v0/management/config) || {
+      cpa_fail "unauthenticated management request transport failure"
+      return 1
+    }
+    [ "$cpa_status" = 401 ] || {
+      cpa_fail "unauthenticated management request returned HTTP $cpa_status, expected 401"
+      return 1
+    }
+    cpa_management_header=$(cpa_management_header_file) || {
+      cpa_fail "could not create private management header file"
+      return 1
+    }
+    cpa_status=$(cpa_management_status "$cpa_management_header" "$cpa_management_body" http://127.0.0.1:8317/v0/management/config) || {
+      cpa_fail "authenticated management request transport failure"
+      return 1
+    }
+    [ "$cpa_status" = 200 ] || {
+      cpa_fail "authenticated management request returned HTTP $cpa_status, expected 200"
+      return 1
+    }
+    # The authenticated response may include the persisted bcrypt hash. Never
+    # pass the plaintext credential to a subprocess for leakage checks; native
+    # smoke scans the isolated state after this probe.
+  else
+    cpa_expect_404 http://127.0.0.1:8317/v0/management/config || return 1
+  fi
   cpa_expect_404 http://127.0.0.1:8317/management.html || return 1
   cpa_expect_404 http://127.0.0.1:8317/v0/resource/plugins/example || return 1
 
-  cpa_config_dir=$(dirname "$CPA_CONFIG")
-  [ ! -e "$cpa_config_dir/static/management.html" ] || {
-    cpa_fail "management panel artifact exists"
-    return 1
-  }
+  cpa_source_config_dir=$(dirname "$CPA_SOURCE_CONFIG")
+  cpa_runtime_config_dir=$(dirname "$CPA_CONFIG")
+  for cpa_panel_dir in "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
+    [ ! -e "$cpa_panel_dir/static/management.html" ] || {
+      cpa_fail "management panel artifact exists"
+      return 1
+    }
+  done
   [ ! -e "$CPA_WORK_DIR/plugins" ] || {
     cpa_fail "plugin artifact directory exists"
     return 1
@@ -192,7 +255,7 @@ cpa_smoke_checks() {
   # Remove verifier-owned response files before checking whether the request
   # canary escaped into application state or supervisor output.
   cpa_smoke_cleanup || return 1
-  for cpa_scan_root in "$CPA_AUTH_DIR" "$CPA_WORK_DIR" "$cpa_config_dir"; do
+  for cpa_scan_root in "$CPA_AUTH_DIR" "$CPA_WORK_DIR" "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
     if [ -d "$cpa_scan_root" ] && grep -R -F -l -- "$cpa_canary" "$cpa_scan_root" >/dev/null 2>&1; then
       cpa_fail "request canary persisted under managed state"
       return 1
@@ -208,7 +271,7 @@ cpa_smoke_checks() {
   cpa_listener_owned "$cpa_expected_pid" || return 1
 }
 
-cpa_smoke() {
+cpa_smoke() (
   cpa_expected_pid=${1:?expected pid required}
   if [ ! -d "$CPA_WORK_DIR" ] || [ -L "$CPA_WORK_DIR" ]; then
     cpa_fail "working directory is missing or unsafe"
@@ -224,6 +287,10 @@ cpa_smoke() {
   mkdir -m 700 "$CPA_SMOKE_TMP" 2>/dev/null || {
     [ -d "$CPA_SMOKE_TMP" ] && chmod 700 "$CPA_SMOKE_TMP"
   }
+  # Keep cleanup local to this verifier subshell so an interrupted curl cannot
+  # overwrite the reconciler's traps while leaving the header file behind.
+  trap 'cpa_smoke_cleanup || true' EXIT
+  trap 'cpa_smoke_cleanup || true; exit 1' HUP INT TERM
   cpa_smoke_max=${CPA_SMOKE_MAX_ATTEMPTS:-10}
   case $cpa_smoke_max in *[!0-9]*|0) cpa_smoke_max=10 ;; esac
   cpa_attempt=0
@@ -259,7 +326,7 @@ cpa_smoke() {
     cpa_smoke_cleanup || true
     return "$cpa_result"
   fi
-}
+)
 
 if [ "${CPA_SMOKE_MAIN:-0}" = 1 ]; then
   cpa_smoke "${CPA_EXPECTED_PID:?CPA_EXPECTED_PID is required}"

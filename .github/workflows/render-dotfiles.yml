@@ -456,7 +456,7 @@ jobs:
         run: |
           set -euxo pipefail
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
-          reconciler="${out}/.chezmoiscripts/90-services/run_onchange_after_cli-proxy-api-service.sh"
+          reconciler="${out}/.chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           test -f "${reconciler}"
           test ! -e "${reconciler}.render-error.txt"
@@ -641,7 +641,7 @@ jobs:
           chezmoi --config "${scratch}/empty.toml" \
             --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
             execute-template \
-            < .chezmoiscripts/90-services/run_onchange_after_cli-proxy-api-service.sh.tmpl \
+            < .chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh.tmpl \
             > "${scratch}/reconciler.sh"
           bash -n "${scratch}/reconciler.sh"
           cp "${scratch}/reconciler.sh" "${scratch}/reconciler-${CPA_PLATFORM}.sh"
@@ -653,6 +653,8 @@ jobs:
           [[ "$(manifest_value CPA_RELEASE_ASSET)" == "$(jq -r .asset "${scratch}/release.json")" ]]
           [[ "$(manifest_value CPA_RELEASE_SHA256)" == "$(jq -r .sha256 "${scratch}/release.json")" ]]
           [[ "$(manifest_value CPA_RELEASE_ID)" == "$(jq -r .identity "${scratch}/release.json")" ]]
+          grep -F 'CPA_MANAGEMENT_SECRET_REF="op://Private/CLIProxyAPI/Management API Key"' "${scratch}/reconciler.sh"
+          ! grep -F 'MANAGEMENT_PASSWORD' "${scratch}/reconciler.sh" >/dev/null
           CPA_TEST_OWNER_TEST=1 \
             .ci/test-cli-proxy-api-service.sh "${scratch}/reconciler.sh" "${CPA_PLATFORM}"
 
@@ -681,6 +683,8 @@ jobs:
             --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
             apply "${targets[@]}"
           test -f "${out}/.config/cli-proxy-api/config.yaml"
+          test ! -e "${out}/.local/share/cli-proxy-api/runtime"
+          grep -qx '  secret-key: ""' "${out}/.config/cli-proxy-api/config.yaml"
           test -x "${out}/.local/libexec/cli-proxy-api-launch"
           target_mode() {
             if [[ "${CPA_PLATFORM}" == darwin ]]; then
@@ -1106,7 +1110,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
-          $reconciler = Join-Path $out '.chezmoiscripts\90-services\run_onchange_after_cli-proxy-api-service.sh'
+          $reconciler = Join-Path $out '.chezmoiscripts\90-services\run_after_cli-proxy-api-service.sh'
           $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
           if (Test-Path "$reconciler.render-error.txt") { throw 'CLIProxyAPI reconciler failed to render on Windows' }
           # ai-agents has pre-existing Windows-only render errors before its

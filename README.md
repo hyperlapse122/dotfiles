@@ -60,7 +60,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    specifically (detected by its `ubuntustudio-default-settings` package),
    pro-audio essentials (PipeWire config, `@audio` realtime privileges,
    low-latency boot tuning) are also provisioned. On Linux and macOS workstation
-   hosts, apply also installs and readiness-checks the credential-free
+   hosts, apply also installs and readiness-checks the authenticated loopback
    CLIProxyAPI localhost service described below.
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
@@ -77,10 +77,12 @@ sessions.
 Linux and macOS workstation applies install
 [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) as
 managed **infrastructure only**. The service binds to `127.0.0.1:8317`; no Pi,
-OpenCode, Claude, Codex, or other client is routed through it. It has no client
-API keys, provider credentials, Management API credential, control panel, or
-provider plugins, so a provider-routable request intentionally returns HTTP 503
-`no auth available`.
+OpenCode, Claude, Codex, or other client is routed through it. Its Management API
+credential is read from the `op://Private/CLIProxyAPI/Management API Key` item at
+apply time; the source snapshot stays read-only and the private runtime copy is
+bcrypt-locked at mode 0400 before supervision. Client API keys, provider
+credentials, control-panel assets, and provider plugins remain disabled, so a
+provider-routable request intentionally returns HTTP 503 `no auth available`.
 
 Chezmoi downloads the latest full native release with its official SHA-256 into
 a version-and-digest candidate directory. A late `90-services` reconciler first
@@ -95,7 +97,10 @@ than pruned automatically.
 
 Both systemd and launchd call a private internal launcher that rejects residual
 auth files, symlinks, and a working-directory `.env`, then starts through
-`env -i` with `-local-model`. systemd retries failures within a bounded window;
+`env -i` with `-local-model`. The reconciler rejects missing, malformed, or
+unreadable credentials, performs complete apply-time rotation, and only permits
+binary-only rollback when the credential and every policy input are unchanged.
+systemd retries failures within a bounded window;
 the LaunchAgent starts once per login and deliberately stays stopped after a
 failure rather than looping indefinitely. The complete managed config is a reviewed upstream
 `v7.2.80` snapshot and advances only by an explicit source diff. Historical
@@ -110,9 +115,14 @@ systemctl --user status cli-proxy-api.service                    # Linux
 launchctl print "gui/$(id -u)/dev.h82.cli-proxy-api"             # macOS
 ```
 
-Secure localhost Management API activation is tracked separately in
-[issue #48](https://github.com/hyperlapse122/dotfiles/issues/48); CPA Usage
-Keeper and GNOME/KDE applets remain future consumers, not part of this service.
+Authenticated localhost Management API activation is delivered by
+[issue #48](https://github.com/hyperlapse122/dotfiles/issues/48); CPA Usage Keeper
+and GNOME/KDE applets remain future consumers, not part of this service. The
+Management API is loopback-only. Mode 0400 blocks persistence to the managed
+runtime file, but authenticated holders retain full upstream Management authority;
+unsupported write routes may transiently affect in-memory state until restart even
+when persistence fails. Consumers must use read endpoints only; a future
+fine-grained route-filtering gateway remains out of scope.
 Windows and real containers receive none of these artifacts.
 
 ## Prerequisites

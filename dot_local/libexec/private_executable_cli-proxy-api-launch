@@ -24,6 +24,7 @@ shift
 : "${CPA_HOME:?CPA_HOME is required}"
 : "${CPA_ACTIVE_BINARY:?CPA_ACTIVE_BINARY is required}"
 : "${CPA_CONFIG:?CPA_CONFIG is required}"
+: "${CPA_SOURCE_CONFIG:?CPA_SOURCE_CONFIG is required}"
 : "${CPA_AUTH_DIR:?CPA_AUTH_DIR is required}"
 : "${CPA_WORK_DIR:?CPA_WORK_DIR is required}"
 
@@ -67,7 +68,8 @@ directory_is_empty() {
 [ -d "$CPA_HOME" ] || fail "managed home is not a directory"
 [ "$(stat_uid "$CPA_HOME")" = "$owner_uid" ] || fail "managed home owner mismatch"
 [ "$CPA_ACTIVE_BINARY" = "$CPA_HOME/.local/share/cli-proxy-api/current/cli-proxy-api" ] || fail "active binary path is unmanaged"
-[ "$CPA_CONFIG" = "$CPA_HOME/.config/cli-proxy-api/config.yaml" ] || fail "config path is unmanaged"
+[ "$CPA_SOURCE_CONFIG" = "$CPA_HOME/.config/cli-proxy-api/config.yaml" ] || fail "source config path is unmanaged"
+[ "$CPA_CONFIG" = "$CPA_HOME/.local/share/cli-proxy-api/runtime/config.yaml" ] || fail "runtime config path is unmanaged"
 [ "$CPA_AUTH_DIR" = "$CPA_HOME/.local/share/cli-proxy-api/auth" ] || fail "auth directory path is unmanaged"
 [ "$CPA_WORK_DIR" = "$CPA_HOME/.local/share/cli-proxy-api/work" ] || fail "working directory path is unmanaged"
 
@@ -77,9 +79,19 @@ directory_is_empty() {
 if [ ! -f "$CPA_CONFIG" ] || [ -L "$CPA_CONFIG" ]; then
   fail "config is not a regular file"
 fi
-[ -r "$CPA_CONFIG" ] || fail "config is not readable"
-[ "$(stat_uid "$CPA_CONFIG")" = "$owner_uid" ] || fail "config owner mismatch"
-[ "$(stat_mode "$CPA_CONFIG")" = 444 ] || fail "config mode must be 0444"
+[ -r "$CPA_CONFIG" ] || fail "runtime config is not readable"
+[ "$(stat_uid "$CPA_CONFIG")" = "$owner_uid" ] || fail "runtime config owner mismatch"
+cpa_config_mode=$(stat_mode "$CPA_CONFIG")
+case $cpa_config_mode in
+  400) ;;
+  600)
+    [ "${CPA_BOOTSTRAP:-0}" = 1 ] || fail "runtime config mode must be 0400"
+    ;;
+  *) fail "runtime config mode must be 0400" ;;
+esac
+[ -f "$CPA_SOURCE_CONFIG" ] || fail "source config is missing"
+[ ! -L "$CPA_SOURCE_CONFIG" ] || fail "source config must not be a symlink"
+[ "$(stat_mode "$CPA_SOURCE_CONFIG")" = 444 ] || fail "source config mode must be 0444"
 
 validate_private_dir "auth directory" "$CPA_AUTH_DIR"
 validate_private_dir "working directory" "$CPA_WORK_DIR"

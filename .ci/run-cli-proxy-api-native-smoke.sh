@@ -25,10 +25,11 @@ trap cleanup EXIT INT TERM
 home=$scratch/home
 candidate_dir=$home/.local/share/cli-proxy-api/versions/native-smoke
 config_dir=$home/.config/cli-proxy-api
-mkdir -p "$candidate_dir" "$config_dir" "$home/.local/libexec" \
+runtime_dir=$home/.local/share/cli-proxy-api/runtime
+mkdir -p "$candidate_dir" "$config_dir" "$runtime_dir" "$home/.local/libexec" \
   "$home/.local/share/cli-proxy-api/auth" "$home/.local/share/cli-proxy-api/work"
 chmod 700 "$home/.local/share/cli-proxy-api" \
-  "$home/.local/share/cli-proxy-api/versions" "$candidate_dir" \
+  "$home/.local/share/cli-proxy-api/versions" "$candidate_dir" "$runtime_dir" \
   "$home/.local/share/cli-proxy-api/auth" "$home/.local/share/cli-proxy-api/work"
 historical_dir=$home/.cli-proxy-api
 mkdir -m 700 "$historical_dir"
@@ -55,7 +56,18 @@ chmod 700 "$home/.local/libexec/cli-proxy-api-launch"
 
 export CPA_HOME="$home"
 export CPA_ACTIVE_BINARY="$home/.local/share/cli-proxy-api/current/cli-proxy-api"
-export CPA_CONFIG="$config_dir/config.yaml"
+export CPA_SOURCE_CONFIG="$config_dir/config.yaml"
+export CPA_CONFIG="$runtime_dir/config.yaml"
+management_secret=${CPA_MANAGEMENT_SECRET:-native-cli-proxy-api-management-secret-0123456789}
+case "$management_secret" in
+  *[!A-Za-z0-9._~!@#$%^+=,:/-]*|"") printf 'invalid native Management credential\n' >&2; exit 1 ;;
+esac
+[ "${#management_secret}" -ge 32 ] || { printf 'native Management credential is too short\n' >&2; exit 1; }
+(umask 077; CPA_AWK_SECRET="$management_secret" awk '/^  secret-key: ""$/ { print "  secret-key: \"" ENVIRON["CPA_AWK_SECRET"] "\""; next } { print }' "$CPA_SOURCE_CONFIG" > "$CPA_CONFIG")
+chmod 600 "$CPA_CONFIG"
+CPA_MANAGEMENT_SECRET="$management_secret"
+# shellcheck disable=SC2034
+CPA_MANAGEMENT_ENABLED=1
 export CPA_AUTH_DIR="$home/.local/share/cli-proxy-api/auth"
 export CPA_WORK_DIR="$home/.local/share/cli-proxy-api/work"
 CPA_JQ=${CPA_JQ_OVERRIDE:-$(command -v jq)}
@@ -76,14 +88,29 @@ historical_hash_before=$(cpa_sha256 "$historical_dir/sentinel")
 chmod 000 "$historical_dir"
 
 HOME="$scratch/ambient-home-canary" \
-CPA_HOME=$CPA_HOME CPA_ACTIVE_BINARY=$CPA_ACTIVE_BINARY CPA_CONFIG=$CPA_CONFIG \
-CPA_AUTH_DIR=$CPA_AUTH_DIR CPA_WORK_DIR=$CPA_WORK_DIR CPA_JQ=$CPA_JQ \
+CPA_HOME=$CPA_HOME CPA_ACTIVE_BINARY=$CPA_ACTIVE_BINARY CPA_SOURCE_CONFIG=$CPA_SOURCE_CONFIG CPA_CONFIG=$CPA_CONFIG \
+CPA_BOOTSTRAP=1 CPA_AUTH_DIR=$CPA_AUTH_DIR CPA_WORK_DIR=$CPA_WORK_DIR CPA_JQ=$CPA_JQ \
 MANAGEMENT_PASSWORD=environment-canary HOME_JWT=environment-canary \
 GITSTORE_GIT_TOKEN=environment-canary OBJECTSTORE_SECRET_KEY=environment-canary \
 HTTPS_PROXY=http://environment-canary.invalid OP_SERVICE_ACCOUNT_TOKEN=environment-canary \
 ANTHROPIC_API_KEY=environment-canary \
   "$home/.local/libexec/cli-proxy-api-launch" -- > "$CPA_LOG_FILE" 2>&1 &
 pid=$!
+
+hash_attempt=0
+while ! grep -Eq '^[[:space:]]+secret-key:[[:space:]]*.*[$]2[aby][$][0-9]+[$]' "$CPA_CONFIG"; do
+  hash_attempt=$((hash_attempt + 1))
+  [ "$hash_attempt" -lt 15 ] || { printf 'runtime config was not bcrypt-hashed\n' >&2; exit 1; }
+  sleep 1
+done
+runtime_config=$(cat "$CPA_CONFIG")
+case "$runtime_config" in
+  *"$management_secret"*) printf 'runtime config retained plaintext credential\n' >&2; exit 1 ;;
+esac
+unset runtime_config
+chmod 400 "$CPA_CONFIG"
+CPA_EXPECTED_CONFIG_SHA256=$(cpa_sha256 "$CPA_CONFIG")
+export CPA_EXPECTED_CONFIG_SHA256
 
 cpa_smoke "$pid"
 kill -0 "$pid"
@@ -103,7 +130,7 @@ if [ -r "/proc/$pid/environ" ]; then
 else
   child_env=$(ps eww -p "$pid" -o command=)
 fi
-for forbidden in MANAGEMENT_PASSWORD HOME_JWT GITSTORE_GIT_TOKEN OBJECTSTORE_SECRET_KEY HTTPS_PROXY OP_SERVICE_ACCOUNT_TOKEN ANTHROPIC_API_KEY CPA_HOME CPA_ACTIVE_BINARY CPA_CONFIG CPA_AUTH_DIR CPA_WORK_DIR CPA_JQ CPA_EXPECTED_CONFIG_SHA256 CPA_SMOKE_MAX_ATTEMPTS CPA_SMOKE_CANARY; do
+for forbidden in MANAGEMENT_PASSWORD HOME_JWT GITSTORE_GIT_TOKEN OBJECTSTORE_SECRET_KEY HTTPS_PROXY OP_SERVICE_ACCOUNT_TOKEN ANTHROPIC_API_KEY CPA_HOME CPA_ACTIVE_BINARY CPA_SOURCE_CONFIG CPA_CONFIG CPA_BOOTSTRAP CPA_AUTH_DIR CPA_WORK_DIR CPA_JQ CPA_EXPECTED_CONFIG_SHA256 CPA_SMOKE_MAX_ATTEMPTS CPA_SMOKE_CANARY; do
   if printf '%s\n' "$child_env" | grep -q "${forbidden}="; then
     printf 'native child environment leaked %s\n' "$forbidden" >&2
     exit 1

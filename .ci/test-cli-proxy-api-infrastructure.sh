@@ -111,13 +111,16 @@ grep -qx 'debug: false' "$config"
 grep -qx 'logging-to-file: false' "$config"
 
 launcher=$root/dot_local/libexec/private_executable_cli-proxy-api-launch
+grep -F 'CPA_SOURCE_CONFIG' "$launcher" >/dev/null
+grep -F 'runtime config mode must be 0400' "$launcher" >/dev/null
 grep -F 'PATH=/usr/bin:/bin:/usr/sbin:/sbin' "$launcher" >/dev/null
 grep -F 'exec env -i' "$launcher" >/dev/null
 grep -F -- '-local-model' "$launcher" >/dev/null
 grep -F 'forbidden .env' "$launcher" >/dev/null
 grep -F 'Restart=on-failure' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
 grep -F 'CPA_HOME=%h' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
-grep -F 'CPA_CONFIG=%h/.config/cli-proxy-api/config.yaml' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
+grep -F 'CPA_SOURCE_CONFIG=%h/.config/cli-proxy-api/config.yaml' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
+grep -F 'CPA_CONFIG=%h/.local/share/cli-proxy-api/runtime/config.yaml' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
 grep -F 'Environment=LD_AUDIT=' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
 grep -F 'StandardError=append:%h/.local/share/cli-proxy-api/work/supervisor.log' "$root/dot_config/systemd/user/readonly_cli-proxy-api.service" >/dev/null
 launch_agent=$root/Library/LaunchAgents/readonly_dev.h82.cli-proxy-api.plist.tmpl
@@ -128,6 +131,7 @@ if grep -F '<key>KeepAlive</key>' "$launch_agent" >/dev/null; then
 fi
 grep -F '<key>CPA_HOME</key>' "$launch_agent" >/dev/null
 grep -F '{{ $home }}/.config/cli-proxy-api/config.yaml' "$launch_agent" >/dev/null
+grep -F '{{ $home }}/.local/share/cli-proxy-api/runtime/config.yaml' "$launch_agent" >/dev/null
 grep -F '<key>DYLD_INSERT_LIBRARIES</key>' "$launch_agent" >/dev/null
 grep -F '<key>StandardErrorPath</key>' "$launch_agent" >/dev/null
 if grep -F '<string>/bin/sh</string>' "$launch_agent" >/dev/null; then
@@ -136,6 +140,26 @@ if grep -F '<string>/bin/sh</string>' "$launch_agent" >/dev/null; then
 fi
 grep -F '[cli-proxy-api]' "$root/.chezmoiexternals/ai-agents.toml" >/dev/null
 grep -F 'includeTemplate "cli-proxy-api-ref.tmpl"' "$root/.chezmoiexternals/ai-agents.toml" >/dev/null
+grep -F 'op://Private/CLIProxyAPI/Management API Key' "$root/.chezmoidata/cli-proxy-api.yaml" >/dev/null
+grep -F 'secret-key: ""' "$config" >/dev/null
+reconciler=$root/.chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh.tmpl
+grep -F 'Management API credential is missing or invalid' "$reconciler" >/dev/null
+grep -F '[ "${#cpa_management_read}" -ge 32 ]' "$reconciler" >/dev/null
+grep -F 'CPA_AWK_SECRET' "$reconciler" >/dev/null
+grep -F 'CPA_MANAGEMENT_SECRET_SHA256' "$reconciler" >/dev/null
+grep -F 'source_config_sha256' "$reconciler" >/dev/null
+awk '/^if ! cpa_preflight_candidate/{candidate=NR} candidate && NR > candidate && /^if ! cpa_nonbinary_hash=\$\(cpa_compute_nonbinary_hash\)/{found=1} END{exit !found}' "$reconciler"
+grep -F '/opt/homebrew/bin/op' "$reconciler" >/dev/null
+grep -F '/usr/local/bin/op' "$reconciler" >/dev/null
+grep -F '"$CPA_OP" read' "$reconciler" >/dev/null
+if grep -F 'command -v op' "$reconciler" >/dev/null; then
+  printf 'reconciler must resolve op through approved absolute paths\n' >&2
+  exit 1
+fi
+if grep -F 'MANAGEMENT_PASSWORD=' "$reconciler" >/dev/null; then
+  printf 'reconciler must not inject MANAGEMENT_PASSWORD\n' >&2
+  exit 1
+fi
 
 # Infrastructure only: no agent provider/MCP/default points at the localhost
 # service, and no operator-facing login/management helper is restored.

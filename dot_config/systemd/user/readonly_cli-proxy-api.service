@@ -12,7 +12,8 @@ TimeoutStartSec=15
 UMask=0077
 Environment=CPA_HOME=%h
 Environment=CPA_ACTIVE_BINARY=%h/.local/share/cli-proxy-api/current/cli-proxy-api
-Environment=CPA_CONFIG=%h/.config/cli-proxy-api/config.yaml
+Environment=CPA_SOURCE_CONFIG=%h/.config/cli-proxy-api/config.yaml
+Environment=CPA_CONFIG=%h/.local/share/cli-proxy-api/runtime/config.yaml
 Environment=CPA_AUTH_DIR=%h/.local/share/cli-proxy-api/auth
 Environment=CPA_WORK_DIR=%h/.local/share/cli-proxy-api/work
 Environment=PATH=/usr/bin:/bin:/usr/sbin:/sbin
