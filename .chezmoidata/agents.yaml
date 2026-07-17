@@ -90,11 +90,15 @@ agents:
     # api_key auth below; no models.json override).
     settings:
       # `packages` is emitted VERBATIM into the managed settings.json (deepCopy
-      # in dot_pi/agent/private_readonly_settings.json.tmpl) AND into the PACKAGES
-      # array of run_onchange_after_update-pi-extensions.sh.tmpl, which reconciles
+      # in dot_pi/agent/private_readonly_settings.json.tmpl) AND ranged over by
+      # run_onchange_after_update-pi-extensions.sh.tmpl, which reconciles
       # installed extensions via `pi update --extensions` (NOT `pi install` —
-      # that would write to the readonly settings). No partial, no resolution:
-      # what is listed here is exactly what pi loads. Unpinned by design (npm:
+      # that would write to the readonly settings). pi loads exactly what is
+      # listed here straight from settings.json; the script never passes the
+      # list to the command — instead it resolves each entry to its latest
+      # version/reference at render time and bakes it into comment lines as the
+      # onchange trigger (resolve-and-bake, like compound-engineering-ref.tmpl),
+      # so a new upstream release re-runs the update. Unpinned by design (npm:
       # and git: both track latest) — the same unsettled trade-off the agent-skill
       # externals make.
       #   - pi-mcp-extension: the MCP client (pi ships no MCP support of its
