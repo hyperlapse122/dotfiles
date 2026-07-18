@@ -31,21 +31,28 @@ encryption = "age"
 
 [data]
 {{- /* Prompted secrets are stored AES-encrypted (encryptAES + the user-keyring
-   key from .chezmoitemplates/config-secrets-key.tmpl), never plaintext — the
-   rendered chezmoi.toml carries only ciphertext. The hasKey guard replicates
-   promptStringOnce (re-init keeps the stored value) WITHOUT re-encrypting an
-   already-encrypted value. A non-blank answer with no keyring key available
-   fails loudly instead of silently discarding what was typed; a blank answer
-   (also what non-interactive/CI init gets) stores "" and keeps the skip path.
-   Consumers decrypt at apply-render time with the same partial. */}}
+   key), never plaintext — the rendered chezmoi.toml carries only ciphertext.
+   The hasKey guard replicates promptStringOnce (re-init keeps the stored value)
+   WITHOUT re-encrypting an already-encrypted value, and — crucially — WITHOUT
+   touching the keyring at all on a provisioned host (so a lost keyring entry
+   there degrades to the decrypt consumers' skip path, never a fresh wrong key).
+   The keyring key is resolved GET-OR-CREATE (config-secrets-key-ensure.tmpl)
+   ONLY when a non-blank answer is actually being encrypted: chezmoi renders and
+   prompts on this config template BEFORE the read-source-state.pre hook that
+   also seeds the key runs, so on a fresh machine's first `chezmoi init` the key
+   must be created right here or the prompt would have nothing to encrypt with.
+   A non-blank answer with a genuinely unreachable keyring still fails loudly
+   rather than silently discarding what was typed; a blank answer (also what
+   non-interactive/CI init gets) stores "" and keeps the skip path. Consumers
+   decrypt at apply-render time with the read-only config-secrets-key.tmpl. */}}
 {{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
-{{-   $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
 {{-   $luksPassphraseCipher := "" -}}
 {{-   if hasKey . "luksPassphraseCipher" -}}
 {{-     $luksPassphraseCipher = .luksPassphraseCipher -}}
 {{-   else -}}
 {{-     $plain := promptString "Existing LUKS passphrase for TPM2 auto-unlock enrollment (leave blank to skip)" "" -}}
 {{-     if ne $plain "" -}}
+{{-       $secretsKey := includeTemplate "config-secrets-key-ensure.tmpl" . -}}
 {{-       if eq $secretsKey "" -}}
 {{-         fail "config-secrets key unavailable (user keyring locked or unreachable); re-run `chezmoi init` from a desktop session, or leave the prompt blank to skip" -}}
 {{-       end -}}
@@ -55,13 +62,13 @@ encryption = "age"
     luksPassphraseCipher = {{ $luksPassphraseCipher | quote }}
 {{ end -}}
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "ubuntu") -}}
-{{-   $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
 {{-   $mokPasswordCipher := "" -}}
 {{-   if hasKey . "mokPasswordCipher" -}}
 {{-     $mokPasswordCipher = .mokPasswordCipher -}}
 {{-   else -}}
 {{-     $plain := promptString "MOK enrollment password for Secure Boot NVIDIA DKMS module signing (8-16 chars; leave blank to skip)" "" -}}
 {{-     if ne $plain "" -}}
+{{-       $secretsKey := includeTemplate "config-secrets-key-ensure.tmpl" . -}}
 {{-       if eq $secretsKey "" -}}
 {{-         fail "config-secrets key unavailable (user keyring locked or unreachable); re-run `chezmoi init` from a desktop session, or leave the prompt blank to skip" -}}
 {{-       end -}}
