@@ -98,12 +98,20 @@ ensure_op_authenticated() {
 # its prompted secrets (LUKS passphrase, MOK password) AES-encrypted in
 # ~/.config/chezmoi/chezmoi.toml instead of plaintext. The AES key lives ONLY
 # in the user keyring (Secret Service) under service=chezmoi-config-secrets /
-# user=<username>; templates read it back fail-soft via
-# `chezmoi secret keyring get` (.chezmoitemplates/config-secrets-key.tmpl).
-# Generate it here — this hook runs before chezmoi renders the config template
-# on `init` — once per user+host, and NEVER fail (or hang) the hook over it:
-# with no reachable keyring (headless/TTY/container) the templates behave as
-# if no secret was entered.
+# user=<username>.
+#
+# This hook is an EARLY BEST-EFFORT seed, NOT the thing the first-init prompt
+# depends on: chezmoi renders (and prompts on) the config template BEFORE it
+# runs this read-source-state.pre hook, so on a fresh machine's first `chezmoi
+# init` the key does not exist yet when the LUKS/MOK prompt fires. The prompt
+# path in .chezmoi.toml.tmpl therefore resolves the key GET-OR-CREATE via
+# .chezmoitemplates/config-secrets-key-ensure.tmpl, seeding it inside that same
+# render. Seeding it here too keeps it present for later commands and mirrors
+# the Windows-parity .ps1 path (whose config-secrets-key-ensure sibling is
+# Linux-only). Idempotent: after the first render created the key, this GET
+# finds it and no-ops. NEVER fail (or hang) the hook over it: with no reachable
+# keyring (headless/TTY/container) the templates behave as if no secret was
+# entered.
 #
 # LINUX-ONLY, deliberately: both encrypted config secrets are Linux-gated, and
 # macOS's keyring backend (go-keyring drives /usr/bin/security) can escalate
@@ -332,11 +340,13 @@ if [[ -n "${_INSTALL_PREREQUISITES_TEST_SOURCE:-}" ]]; then
   return 0
 fi
 
-# The config-secrets key must exist before chezmoi renders .chezmoi.toml.tmpl
-# (`init` encrypts its prompted secrets with it), so ensure it BEFORE the fast
-# path — a fully provisioned host still needs it on its next `init`. One
-# keyring read per hook run; soft-skips real containers (no keyring there, and
-# the container CLI-only profile deploys no secret consumers anyway).
+# Seed the config-secrets key early (best-effort) — see ensure_config_secrets_key
+# above for why the first-init prompt does NOT rely on this hook (the config
+# template renders before it and seeds the key itself via
+# config-secrets-key-ensure.tmpl). Run it BEFORE the fast path so a fully
+# provisioned host still refreshes it on its next command. One keyring read per
+# hook run; soft-skips real containers (no keyring there, and the container
+# CLI-only profile deploys no secret consumers anyway).
 if ! is_container; then
   ensure_config_secrets_key
 fi

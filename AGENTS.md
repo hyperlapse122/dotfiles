@@ -296,7 +296,8 @@ Recurring script boilerplate lives in `.chezmoitemplates/` and is inlined with
 | `cli-proxy-api-ref.tmpl` | shared CLIProxyAPI release identity for the grouped external and service reconciler: newest semver release, exact full archive for Linux/macOS amd64/arm64, official sidecar SHA-256, and `<tag>-<digest-prefix>` identity; deterministic tests can inject OS/arch/tag/checksums |
 | `cli-proxy-api-panel-ref.tmpl` | management control-panel release identity: newest semver tag + the single `management.html` asset SHA-256 (read from the GitHub REST API asset digest, since `gitHubLatestRelease` does not expose it) for router-for-me/Cli-Proxy-API-Management-Center; consumed by the `cli-proxy-api-panel` external (download URL + checksum) and the service reconciler (panel asset path). Deterministic tests can inject tag/digest |
 | `compound-engineering-ref.tmpl` | newest `compound-engineering-*` release tag (the plugin repo interleaves other tag trains, so plain `gitHubLatestRelease` is wrong); shared by the consumers of that plugin — `.chezmoiexternals/ai-agents.toml` (archive URL + versioned target path), `opencode-plugins-json.tmpl` (opencode.json's `plugin` array reference), `00-tools/run_onchange_after_compound-engineering` (sibling-version prune), and `70-agents/run_onchange_after_install-compound-engineering` (Claude/Codex marketplace registration at the versioned path) — so OpenCode, Claude, and Codex load the SAME extracted release tree (pi diverges to a `git:` source) |
-| `config-secrets-key.tmpl` | the machine-local AES key that encrypts the `.chezmoi.toml.tmpl` prompted secrets (see the Secrets section): reads the user keyring FAIL-SOFT via `chezmoi secret keyring get` in a subshell — the built-in `keyring` template function hard-errors when no keyring daemon is reachable, which would break every headless/CI render; an empty result means "keyring unreachable" and callers take their secret-absent skip path |
+| `config-secrets-key.tmpl` | READ (never create) the machine-local AES key that encrypts the `.chezmoi.toml.tmpl` prompted secrets (see the Secrets section): reads the user keyring FAIL-SOFT via `chezmoi secret keyring get` in a subshell — the built-in `keyring` template function hard-errors when no keyring daemon is reachable, which would break every headless/CI render; an empty result means "keyring unreachable" and callers take their secret-absent skip path. Used by the DECRYPT consumers (`run_onchange_after_luks-tpm2`, `run_onchange_before_ubuntu`), which must not mint a fresh key on a lost-keyring host |
+| `config-secrets-key-ensure.tmpl` | GET-OR-CREATE variant of the above, used ONLY by `.chezmoi.toml.tmpl`'s prompt path when a non-blank secret is actually being encrypted. chezmoi renders (and prompts on) the config template BEFORE the `read-source-state.pre` hook that also seeds the key runs, so on a fresh machine's first `chezmoi init` the key must be minted here, in the same render, or a typed passphrase hits the loud `fail`. Same fail-soft/`timeout`/Linux-only contract as the read-only sibling; creating only on the store path (not the decrypt path) avoids replacing a lost key with a wrong one |
 | `sudo-skip-guard.sh.tmpl` | `SUDO` array + soft-skip (exit 0) when sudo would have to prompt but can't — for optional host tuning |
 | `sudo-require-guard.sh.tmpl` | `SUDO` array, exit 1 without root/sudo — for the package installers |
 | `headless-guard.sh.tmpl` | skip on headless/server installs — reads the `headless` fact (`INSTALL_SYSTEM_CONFIG_FORCE=1` overrides, layered on top of the fact, never inside it) |
@@ -838,18 +839,26 @@ on a locked keychain and wedge a headless apply (it hung the render-dotfiles
 macos CI job), and no darwin template consumes the key; the `.ps1` hook keeps
 a Windows Credential Manager mirror for parity (headless-safe, no consumer
 yet). All keyring calls are `timeout`-wrapped so an unanswered Secret Service
-prompter degrades to a skip, never a hang. `.install-prerequisites.{sh,ps1}`
-generates the key (before the hook's fast path, so it also lands on
-already-provisioned hosts) ahead of chezmoi's first config-template render;
-templates read it back through
-`.chezmoitemplates/config-secrets-key.tmpl` (fail-soft, see the partials
-table), and the two consumer scripts (`run_onchange_after_luks-tpm2`,
-`run_onchange_before_ubuntu`) `decryptAES` at apply-render time. Semantics:
-a blank prompt (always the case non-interactively/CI) stores `""` and every
-consumer takes its skip path; a typed answer with no reachable keyring fails
-the init loudly (`fail`) rather than silently dropping the input; the config
-template guards each cipher with `hasKey`, so a re-init keeps the stored
-ciphertext verbatim (no re-prompt, no double-encrypt). Re-prompt by deleting
+prompter degrades to a skip, never a hang. The key is minted GET-OR-CREATE by
+`.chezmoi.toml.tmpl`'s prompt path (`.chezmoitemplates/config-secrets-key-ensure.tmpl`)
+the moment a non-blank secret is being encrypted — this is load-bearing, because
+chezmoi renders (and prompts on) the config template BEFORE it runs the
+`.install-prerequisites.{sh,ps1}` `read-source-state.pre` hook that also seeds
+the key, so on a fresh machine's FIRST `chezmoi init` the key does not exist yet
+when the prompt fires and it must be created inside that same render or a typed
+passphrase aborts with the loud `fail` (the "keyring locked or unreachable"
+symptom on a brand-new host). The hook seeding is now only an early
+best-effort / Windows-parity path. The DECRYPT consumers
+(`run_onchange_after_luks-tpm2`, `run_onchange_before_ubuntu`) read the key back
+through the READ-ONLY `.chezmoitemplates/config-secrets-key.tmpl` and `decryptAES`
+at apply-render time — read-only on purpose, so a host that stored a cipher but
+lost its keyring entry degrades to the skip path instead of minting a fresh key
+that cannot decrypt the old ciphertext. Semantics: a blank prompt (always the
+case non-interactively/CI) stores `""` and every consumer takes its skip path; a
+typed answer with a genuinely unreachable keyring still fails the init loudly
+(`fail`) rather than silently dropping the input; the config template guards each
+cipher with `hasKey`, so a re-init keeps the stored ciphertext verbatim (no
+re-prompt, no double-encrypt) and never touches the keyring on a provisioned host. Re-prompt by deleting
 the `*Cipher` keys from the config and re-running `chezmoi init` (or
 `chezmoi init --data=false`) — also the recovery path when a lost/rotated
 keyring entry can no longer decrypt the stored ciphertexts.

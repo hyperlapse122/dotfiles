@@ -282,10 +282,13 @@ function Install-Prerequisites {
 # execution (variable unset).
 if ($env:_INSTALL_PREREQUISITES_TEST_SOURCE) { return }
 
-# The config-secrets key must exist before chezmoi renders .chezmoi.toml.tmpl
-# (`init` encrypts its prompted secrets with it), so ensure it BEFORE the fast
-# path — a fully provisioned host still needs it on its next `init` (mirrors
-# the POSIX hook; no container branch, Windows has none).
+# Seed the config-secrets key early (best-effort), BEFORE the fast path — a
+# fully provisioned host still refreshes it on its next command. Mirrors the
+# POSIX hook (no container branch, Windows has none). NOTE: like the POSIX side,
+# this hook runs AFTER chezmoi renders .chezmoi.toml.tmpl, so it is not what a
+# first-init prompt depends on — the config template's prompt path seeds the key
+# itself (config-secrets-key-ensure.tmpl, Linux-only). No Windows template
+# consumes the key today; this keeps the credential-store infra in lockstep.
 Confirm-ConfigSecretsKey
 
 # Refresh the host-fact cache the templates read. Must precede the fast path — a

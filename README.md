@@ -72,6 +72,34 @@ on-demand OAuth **fallback** — for a host without a PAT, a revoked session, or
 host you want on OAuth: browser flow by default, `--device` for headless
 sessions.
 
+### Encrypted host prompts (keyring — LUKS passphrase / MOK password)
+
+During `chezmoi init`, Linux hosts are prompted for two per-host secrets that
+have no 1Password item — the existing **LUKS passphrase** (Fedora + Ubuntu, for
+TPM2 auto-unlock enrollment) and, on Ubuntu, the **MOK password** (Secure Boot
+signing of the NVIDIA DKMS modules). Both are optional; **leave a prompt blank to
+skip** it (no full-disk encryption, no NVIDIA / Secure Boot, or a headless host).
+
+These are never written in plaintext. Each is stored in
+`~/.config/chezmoi/chezmoi.toml` as AES ciphertext under a random 256-bit key
+that lives **only in your user keyring** (the Secret Service — GNOME Keyring on
+GNOME, KWallet's Secret Service on KDE), under
+`service=chezmoi-config-secrets`. The key is minted on demand the moment you type
+a non-blank answer, so:
+
+- **Run `chezmoi init` from inside a real graphical desktop session** (not a raw
+  TTY / SSH-only shell) so the keyring is unlocked and reachable. If the keyring
+  cannot be reached when you type a passphrase, init stops with
+  `config-secrets key unavailable (user keyring locked or unreachable)` — re-run
+  from a desktop session, or leave the prompt blank to skip.
+- A **blank** answer (also what non-interactive / CI runs get) stores nothing and
+  simply skips that feature.
+- **Re-prompt / recover** later — e.g. to set a passphrase you skipped, or if the
+  keyring entry was lost or rotated (a lost key can no longer decrypt the stored
+  ciphertext) — by deleting the `luksPassphraseCipher` / `mokPasswordCipher` keys
+  from `~/.config/chezmoi/chezmoi.toml` and re-running `chezmoi init`
+  (or `chezmoi init --data=false`).
+
 ## CLIProxyAPI localhost service
 
 Linux and macOS workstation applies install
