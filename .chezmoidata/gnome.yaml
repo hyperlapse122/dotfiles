@@ -13,8 +13,9 @@
 #                  by run_onchange_after_config-gnome-mouse.sh.tmpl. One of
 #                  libinput's profiles: `flat` (constant 1:1 mapping, no
 #                  speed-dependent curve — the standard choice for high-DPI
-#                  mice; pointer speed then comes from hardware DPI, see
-#                  solaar.yaml `dpi`), `adaptive` (the GNOME default curve),
+#                  mice; pointer speed then comes from the mouse's own
+#                  hardware DPI, set in its firmware / the Solaar GUI),
+#                  `adaptive` (the GNOME default curve),
 #                  or `custom`. The script stamps the exact value it applied
 #                  (value-signature, like config-gnome-fonts): editing this
 #                  re-asserts the new value exactly once, while a user's later
