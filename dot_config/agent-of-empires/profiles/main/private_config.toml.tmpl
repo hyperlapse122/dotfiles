@@ -8,7 +8,7 @@ on_launch = ["mise install -yq"]
 container_runtime = "apple_container"
 {{- else -}}
 container_runtime = "podman"
-{{- end -}}
+{{- end }}
 {{ if and (eq "linux" .chezmoi.os) (eq "fedora" .chezmoi.osRelease.id) -}}
 selinux_relabel = true
 {{- end }}
