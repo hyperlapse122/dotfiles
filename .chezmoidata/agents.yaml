@@ -120,8 +120,8 @@ agents:
       # `theme` is declared here because pi can no longer persist a theme choice
       # to a readonly settings.json — it is fixed to the default.
       theme: dark
-      defaultProvider: zai
-      defaultModel: glm-5.2
+      defaultProvider: kimi-coding
+      defaultModel: k3
       # Valid: off | minimal | low | medium | high | xhigh | max.
       defaultThinkingLevel: max
       subagents:
@@ -144,15 +144,6 @@ agents:
             thinking: max
           delegate:
             model: gpt-5.6-luna
-      webSearch:
-        preferredBasicProvider: exa
-        preferredThoroughProvider: exa
-        apiKeys:
-          exa: "op://Private/Exa/API Key"
-      # lastChangelogVersion is NOT declared here — it is rendered dynamically
-      # from the installed pi version (resolved inline from the
-      # earendil-works/pi release, the same one .chezmoiexternals/ai-agents.toml
-      # fetches) so the managed file always matches the pi on disk.
     auth:
       providers:
       - name: kimi-coding
