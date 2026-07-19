@@ -77,6 +77,16 @@ fi
 # exist.
 mkdir -p "$HOME/.claude" "$HOME/.codex" || true
 
+# Run dotagents THROUGH mise, not off the system PATH. This serves two ends at
+# once: `npm:@sentry/dotagents@latest` is the dotagents CLI itself (mise's npm
+# backend), and the trailing `node` tool puts mise-managed node — which bundles
+# `npm` — on PATH for the duration of the run. So even on a host where node/npm
+# come from mise and this non-interactive script never ran `mise activate`, any
+# `npm` (or `npx`) dotagents shells out to resolves to the mise-managed one
+# instead of failing with "npm: command not found". The
+# `--no-config --no-env --no-hooks` flags keep it independent of whatever mise
+# config sits in the script's cwd. (The sibling pi-extensions update resolves
+# npm the same way.)
 set +e
 install_output="$(mise --no-config --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
 install_rc=$?

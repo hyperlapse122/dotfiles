@@ -69,6 +69,26 @@ if [[ ! -f "$SETTINGS" ]]; then
   skip
 fi
 
+# `pi update --extensions` shells out to `npm` to fetch/update the declared
+# extensions under ~/.pi/agent/npm/. On hosts where node/npm are provided by
+# mise, this non-interactive chezmoi script environment never runs
+# `mise activate`, so mise-managed npm is NOT on PATH and pi would die with
+# "npm: command not found". Resolve npm the same way the sibling dotagents
+# install does: prefer an already-visible npm, otherwise run pi INSIDE the mise
+# environment (`mise exec -y node` puts mise-managed node — which bundles npm —
+# on PATH for the duration of the pi run, while the ~/.local/bin entry above
+# keeps pi itself resolvable). The `--no-config --no-env --no-hooks` flags make
+# it independent of whatever mise config happens to sit in the script's cwd,
+# matching the dotagents invocation.
+if command -v npm >/dev/null 2>&1; then
+  npm_via_mise=0
+elif command -v mise >/dev/null 2>&1; then
+  npm_via_mise=1
+else
+  echo "update-pi-extensions: skipped (no npm on PATH and mise unavailable to provide one)" >&2
+  skip
+fi
+
 # Resolved latest versions/references (render-time) — the onchange trigger.
 # Generated from .agents.pi.settings.packages; pi reads the list from
 # settings.json, NOT from here. See the header for the resolve-and-bake rationale.
@@ -89,5 +109,9 @@ fi
 {{-   end }}
 {{ end }}
 
-pi update --extensions
+if [[ "$npm_via_mise" -eq 1 ]]; then
+  mise --no-config --no-env --no-hooks exec -y node -- pi update --extensions
+else
+  pi update --extensions
+fi
 {{ end -}}
