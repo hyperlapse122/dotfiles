@@ -86,4 +86,8 @@ networking:
     #   - ssid: "V6PriorityNet"       # per-family manual override
     #     psk: "op://Private/V6/password"
     #     ipv6: { dns: ["2620:fe::fe"] }   # Quad9 v6 for this network only
-    networks: []
+    networks:
+      - ssid: "op://Private/KT HomeHub 5G/name"
+        psk: "op://Private/KT HomeHub 5G/password"
+      - ssid: "op://Private/CPS-01/name"
+        psk: "op://Private/CPS-01/password"
