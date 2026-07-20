@@ -9,6 +9,8 @@
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
 #   agents.pi.settings / auth.providers
 #     -> managed Pi settings plus package-update and live auth merge scripts
+#   agents.claude.settings
+#     -> read-merge-write of the live ~/.claude/settings.json (config-claude-settings)
 #   agents.opencode.plugins / model / smallModel / providers / ohMyOpenagent
 #     -> opencode.json and oh-my-openagent.jsonc
 #
@@ -83,6 +85,35 @@ agents:
     - name: improve
       source: shadcn/improve
       ref: main
+  # Claude Code settings VALUES (not capabilities) merged into the live
+  # ~/.claude/settings.json by
+  # .chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl.
+  # settings.json is NOT a chezmoi-managed target — Claude Code live-writes it
+  # (theme, effortLevel, tui), aoe injects session-tracking hooks, and `claude
+  # plugin install` writes enabledPlugins/extraKnownMarketplaces — so this is a
+  # read-merge-WRITE (top-level jq `+`) that (re)asserts ONLY the keys below and
+  # preserves every other key byte-identical, the same shape config-pi-auth uses
+  # for pi's live-written auth.json. AGENTS.md "Claude Code plugins" carves this
+  # out from the "ship a plugin, not settings" rule: a plugin registers
+  # hooks/commands but cannot set a settings VALUE like effortLevel.
+  #
+  # No secrets, so the rendered values are baked straight into the script as its
+  # onchange trigger (no resolve-op-refs-json.tmpl, no fingerprint block): editing
+  # a value here re-runs the merge on the next apply. Always-assert, no
+  # value-signature stamp — a `/effort` or `/model` UI change to an UNCHANGED
+  # value is NOT reverted by a routine apply (the standard onchange trade-off),
+  # but a data edit or `chezmoi apply --force` re-asserts it. Keys must match
+  # Claude Code's settings.json schema; values are seeded from this host today.
+  claude:
+    settings:
+      # Reasoning effort tier.
+      effortLevel: xhigh
+      # Quoted so YAML does not read the `[1m]` suffix as a flow sequence.
+      model: "opus[1m]"
+      # Auto-skip the bypass/dangerous-mode confirmation. Undocumented in Claude's
+      # public settings schema but present in the live file; renders on EVERY host
+      # — scope per-host if any host should keep the confirmation guardrail.
+      skipDangerousModePermissionPrompt: true
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
