@@ -181,7 +181,7 @@ packages:
         - chezmoi  # declarative dotfiles manager (manages this repo)
         - fd-find  # fast, user-friendly find alternative (fd)
         - gh  # GitHub CLI
-        - jq  # JSON processor (config-pi/config-pi-auth merge pi's live settings/auth JSON)
+        - jq  # JSON processor (config-pi-auth + config-claude-settings merge live agent JSON: pi auth.json, Claude settings.json)
         - lsof  # listener ownership checks for CLIProxyAPI readiness
         # kdotool: managed by mise (cargo:kdotool, same as Ubuntu — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
@@ -478,7 +478,7 @@ packages:
         # chezmoi: managed by mise
         - fd-find  # fast find alternative (binary: fdfind)
         - gh  # GitHub CLI
-        - jq  # JSON processor (config-pi/config-pi-auth merge pi's live settings/auth JSON)
+        - jq  # JSON processor (config-pi-auth + config-claude-settings merge live agent JSON: pi auth.json, Claude settings.json)
         - lsof  # listener ownership checks for CLIProxyAPI readiness
         # kdotool: managed by mise (cargo:kdotool — no native Ubuntu package)
         - nvtop  # GPU process/usage monitor

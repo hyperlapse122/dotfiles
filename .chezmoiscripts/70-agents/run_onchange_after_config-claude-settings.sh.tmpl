@@ -1,0 +1,102 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# .chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl
+#
+# Merges the declared Claude Code settings VALUES (source: .chezmoidata/agents.yaml,
+# .agents.claude.settings) into ~/.claude/settings.json — the file Claude Code
+# LIVE-WRITES.
+#
+# settings.json CANNOT be a chezmoi-managed target: Claude Code live-writes it
+# (theme, effortLevel, tui), aoe injects its session-tracking hooks into the
+# `hooks` key, and `claude plugin install` writes enabledPlugins/
+# extraKnownMarketplaces. A managed file — let alone a readonly_ 0444 one —
+# would fight all three. The repo's standing answer ("add capabilities as a
+# plugin, not settings") does not cover this case, because a plugin can register
+# hooks and commands but cannot set a settings VALUE like effortLevel. So this
+# script instead read-merge-WRITES only the declared keys, exactly the shape
+# config-pi-auth uses for pi's live-written auth.json (see the AGENTS.md
+# "Claude Code plugins" carve-out).
+#
+# The merge is a top-level jq `+` (NOT the deep `*`): the declared keys REPLACE
+# their same-named top-level entries wholesale, and every other top-level key —
+# hooks (aoe), enabledPlugins/extraKnownMarketplaces (plugins), theme, tui, the
+# notification keys — is outside the declared set and passes through untouched.
+# The script NEVER deletes a key: removing one from the data file leaves the
+# deployed value in place (change it by hand). All three managed keys are
+# top-level scalars in the live file today and there is no `permissions` object,
+# so a top-level overlay is the correct shape (not the documented permissions.*
+# keys).
+#
+# Mode: written at 0644 (owner-writable) so BOTH this script and Claude Code /
+# aoe can keep updating it. The values are non-secret, so unlike config-pi-auth's
+# 0600 there is no reason to lock it down — and locking it would stop the
+# co-writers.
+#
+# jq is shared with config-pi-auth (auth.json): both are top-level JSON overlay
+# merges. jq is declared in .chezmoidata/packages.yaml (both distros) so a fresh
+# host has it before these after-phase scripts run.
+#
+# onchange trigger: the declared values below (baked in via `toJson`) ARE the
+# trigger — there are no secrets and no source-dir dependency beyond
+# .chezmoidata/agents.yaml, so no resolve-op-refs-json.tmpl and no fingerprint
+# block. Editing a value in agents.yaml changes the rendered DECLARED here, so
+# the script's content hash changes and settings.json is re-written on the next
+# apply. Always-assert, no value-signature stamp: NOTE the standard onchange
+# trade-off — a `/effort` or `/model` UI change to an UNCHANGED declared value is
+# NOT reverted by a routine apply (the script re-runs only when its content
+# changes), so the UI edit persists until the next data edit or
+# `chezmoi apply --force`.
+#
+# Soft-skip: missing `jq` exits 0 with a diagnostic (the container caveat — the
+# package installer is skipped in a real container, so jq may be absent from the
+# base image there; a devbox lands settings by hand or via a base image that
+# ships jq). That clean exit-0 is recorded as a successful run, so a skipped
+# merge is NOT retried until the rendered content changes — re-run by hand or
+# `chezmoi apply --force`.
+#
+# POSIX-only (`ne windows`) and KEPT in containers, like config-pi-auth: Claude
+# Code is a first-class CLI here and its settings are wanted in a devbox (the
+# container block skips only *claude-plugins.sh). It does NOT need the `claude`
+# binary on PATH — it writes settings.json directly, so the values land even on
+# a first apply before Claude Code has run (as long as jq is present).
+
+set -euo pipefail
+
+SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+
+skip() { exit 0; }
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "config-claude-settings: skipped (jq not on PATH)" >&2
+  skip
+fi
+
+mkdir -p "$(dirname "$SETTINGS")"
+
+# Declared settings values, rendered as compact JSON. Go's json.Marshal sorts
+# map keys and preserves native types (bool stays bool), so this is deterministic
+# across renders for unchanged data. No `op://` refs — these values are
+# non-secret and baked in directly.
+DECLARED='{{ .agents.claude.settings | toJson }}'
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+# Read the live settings.json (or start from the declared set if absent/corrupt),
+# overlay the declared keys with top-level `+` (whole-entry replace), write back
+# atomically at 0644. A corrupt file is backed up before being overwritten so
+# nothing Claude Code or aoe wrote is silently destroyed.
+if [[ -f "$SETTINGS" ]] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
+  jq --argjson declared "$DECLARED" '. + $declared' "$SETTINGS" > "$tmp"
+else
+  if [[ -f "$SETTINGS" ]]; then
+    echo "config-claude-settings: $SETTINGS is not valid JSON — backing up to ${SETTINGS}.bak and rewriting from declared values" >&2
+    cp -a "$SETTINGS" "${SETTINGS}.bak"
+  fi
+  printf '%s\n' "$DECLARED" > "$tmp"
+fi
+chmod 644 "$tmp"
+mv -f "$tmp" "$SETTINGS"
+
+echo "config-claude-settings: merged declared settings values into $SETTINGS"
+{{ end -}}

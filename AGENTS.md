@@ -145,7 +145,7 @@ is idempotent, but a renumber costs one heavy apply on every host.
 | `40-linux-ubuntu/` | Ubuntu package installer (`run_onchange_before_ubuntu`, same data file — the before-phase installer position is unaffected by the number since Fedora/Ubuntu never coexist) plus `ubuntu-tailscale-ufw`, numbered after `30-linux` so the ufw edits follow the firewalld/system-network config |
 | `50-linux-kde/`, `50-linux-gnome/` | per-desktop config scripts (guarded on the `desktop` fact; see OS gating & script parity) — on KDE that is the manifest-driven `config-kde-settings` runner plus the scripts that carry real logic; mutually exclusive at runtime, so they share a number |
 | `60-build/` | build on apply: the in-repo `crates/` + `packages/` trees (see above) |
-| `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`, both registered at the same versioned local path that the file-phase external extracts — OpenCode reads that path directly from its config, and pi installs it as a native `git:` source from its managed settings), the local Claude Code plugin marketplace (`install-claude-plugins`), plus pi's extensions (`update-pi-extensions`, a single `pi update --extensions`) |
+| `70-agents/` | agent provisioning, late so it lands on a fully provisioned host (see next section): dotagents MCPs, the compound-engineering plugin for Claude Code + Codex (`install-compound-engineering`, both registered at the same versioned local path that the file-phase external extracts — OpenCode reads that path directly from its config, and pi installs it as a native `git:` source from its managed settings), the local Claude Code plugin marketplace (`install-claude-plugins`), the Claude settings-value merge (`config-claude-settings`, read-merge-writes `effortLevel`/`model`/`skipDangerousModePermissionPrompt` into the live `settings.json`), plus pi's extensions (`update-pi-extensions`, a single `pi update --extensions`) |
 | `80-keys/` | one-time key imports from 1Password (`run_once_`): the GPG private key (`after_`, position irrelevant) and the age identity for `encrypted_` source files (`before_` — MUST precede the file phase, which is where chezmoi decrypts) |
 | `90-services/` | last: reconciles the checksum-verified CLIProxyAPI candidate into stable links, starts the platform user service, runs semantic readiness, and performs only manifest-proven binary rollback; Linux/macOS workstation hosts only |
 
@@ -567,7 +567,9 @@ of scope.
 
 ### Claude Code plugins — local marketplace under `dot_local/share/claude-plugins/`
 
-`~/.claude/settings.json` is **not chezmoi-manageable and must never become a managed target.** Claude Code live-writes it (`theme`, `effortLevel`, `tui`, `permissions.defaultMode`) and `aoe` injects its session-tracking hooks into its `hooks` key — a managed file (let alone a `readonly_` 0444 one) would fight both. Anything this repo wants to add to Claude Code therefore ships as a **plugin**, not as settings.
+`~/.claude/settings.json` is **not chezmoi-manageable and must never become a managed target.** Claude Code live-writes it (`theme`, `effortLevel`, `tui`, `permissions.defaultMode`) and `aoe` injects its session-tracking hooks into its `hooks` key — a managed file (let alone a `readonly_` 0444 one) would fight both. Anything this repo wants to add to Claude Code therefore ships as a **plugin**, not as settings — with one carve-out for pinning specific setting *values*, below.
+
+**Carve-out — managing setting *values* (not capabilities).** The "ship a plugin, not settings" rule is about *capabilities*: a plugin registers hooks and commands but **cannot set a settings value** like `effortLevel`. For the handful of values this repo does want pinned across machines, `.chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl` **read-merge-writes** them into the live `settings.json` — the same sanctioned pattern `config-pi-auth` uses for pi's live-written `auth.json`, and explicitly **not** making the file a managed target (the "must never become a managed target" line above still holds: this script owns no bytes, it overlays three keys and preserves the rest). It sets exactly three top-level keys — `effortLevel`, `model`, `skipDangerousModePermissionPrompt` (data in `.chezmoidata/agents.yaml` `agents.claude.settings`) — via a top-level `jq +`, so `hooks` (aoe), `enabledPlugins`/`extraKnownMarketplaces` (plugins), `theme`, `tui`, and the notification keys all pass through byte-identical. Always-assert, no value-signature stamp: the rendered values are the onchange trigger, so a data edit re-asserts on the next apply while a `/effort` or `/model` UI change to an *unchanged* value persists until the next data edit or `chezmoi apply --force`. Written 0644 so Claude Code and `aoe` keep writing the file. Gated `ne windows`, kept in containers (the container block skips only `*claude-plugins.sh`) — Claude Code is a first-class CLI wanted in a devbox. This is the one exception to "not as settings"; capabilities still ship as a plugin.
 
 `dot_local/share/claude-plugins/` → `~/.local/share/claude-plugins/` is a local plugin **marketplace** (`.claude-plugin/marketplace.json`, name `dotfiles`), installed by `.chezmoiscripts/70-agents/run_onchange_after_install-claude-plugins.sh.tmpl`:
 
@@ -1159,9 +1161,9 @@ keyring entry can no longer decrypt the stored ciphertexts.
   `worktree:` trees (worktrees are created and locked by aoe only).
 - **All agent configuration**: `.chezmoidata/agents.yaml`. This is the single
   source of truth for the Pi provider/model baseline, MCP servers, agent skill
-  externals, pi packages/defaults/static auth, OpenCode models/providers, and
-  oh-my-openagent model mappings. Change agent data HERE, not in a consuming
-  template.
+  externals, pi packages/defaults/static auth, the pinned Claude Code settings
+  values, OpenCode models/providers, and oh-my-openagent model mappings. Change
+  agent data HERE, not in a consuming template.
   - `agents.pi.models` holds the explicit empty provider map rendered into
     `~/.pi/agent/models.json`. It clears the former CLIProxyAPI Anthropic
     override so Pi uses its built-in direct provider catalog, and is gated out
@@ -1200,6 +1202,14 @@ keyring entry can no longer decrypt the stored ciphertexts.
     read-merge-write script (auth.json STAYS live-written for OAuth refresh,
     unlike settings.json); pi-owned OAuth providers remain live data and are
     never declared here.
+  - `agents.claude.settings` holds the Claude Code settings VALUES this repo
+    pins — `effortLevel`, `model`, `skipDangerousModePermissionPrompt` — rendered
+    into `.chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl`
+    as its onchange trigger. That script read-merge-writes ONLY those keys into
+    the live `~/.claude/settings.json` (top-level `jq +`, never a managed target;
+    see the "Claude Code plugins" carve-out), preserving `hooks`/`enabledPlugins`/
+    `theme`/`tui` unchanged. Non-secret, so no `op://` resolution and no
+    fingerprint block. Edit the data, not the script.
   - `agents.opencode.plugins` is the single plugin manifest for both
     `opencode.json` and `tui.json`: each entry declares its package, GitHub
     source, npm/localArchive install form, version resolver, and target suffixes.
