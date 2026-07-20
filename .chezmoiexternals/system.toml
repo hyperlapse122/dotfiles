@@ -62,11 +62,16 @@ refreshPeriod = "8760h"
   WinBox is not published on GitHub, so — like the claude/codex externals in
   ai-agents.toml — the version is resolved at render time from MikroTik's
   LATEST.4 endpoint (returns the bare current version, e.g. "4.3") rather than
-  pinned. The linux/windows zips carry the binary at the archive root (plus an
-  assets/img icon we drop by extracting only the executable); macOS ships only a
-  .dmg, which chezmoi cannot extract, so it is staged for manual install.
-  MikroTik publishes Linux as x86_64-only and the tool is desktop-only, so the
-  block gates on amd64-linux / windows / darwin and is skipped in containers.
+  pinned. Every platform lands the app in the SAME ~/.local/share/winbox folder:
+  the linux/windows zips carry the binary + assets/img/winbox.png and are
+  extracted whole (type=archive preserves the executable bit — verified), so the
+  GUI keeps its bundled icon; the linux launcher is rendered separately as
+  dot_local/share/applications/winbox.desktop. macOS ships only a .dmg, which
+  chezmoi cannot extract, so it is staged here and
+  .chezmoiscripts/00-tools/run_onchange_after_winbox-macos mounts it and copies
+  WinBox.app into the same folder. MikroTik publishes Linux as x86_64-only and
+  the tool is desktop-only, so the block gates on amd64-linux / windows / darwin
+  and is skipped in containers.
 */ -}}
 
 {{- $winboxFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
@@ -80,11 +85,10 @@ refreshPeriod = "8760h"
 {{- if and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64") }}
 
 [winbox]
-type = "archive-file"
+type = "archive"
 url = '{{ printf "%s/WinBox_Linux.zip" $winboxBase }}'
-path = 'WinBox'
-targetPath = '.local/bin/winbox'
-executable = true
+targetPath = '.local/share/winbox'
+exact = true
 
 {{- else if eq .chezmoi.os "windows" }}
 
@@ -92,15 +96,15 @@ executable = true
 {{- if eq .chezmoi.arch "arm64" }}{{ $winboxAsset = "WinBox_Windows_arm64.zip" }}{{ end }}
 
 [winbox]
-type = "archive-file"
+type = "archive"
 url = '{{ printf "%s/%s" $winboxBase $winboxAsset }}'
-path = 'WinBox.exe'
-targetPath = '.local/bin/winbox.exe'
-executable = true
+targetPath = '.local/share/winbox'
+exact = true
 
 {{- else if eq .chezmoi.os "darwin" }}
 
-# chezmoi cannot extract a .dmg: stage the installer; mount and copy WinBox.app manually.
+# chezmoi cannot extract a .dmg: stage it here; run_onchange_after_winbox-macos
+# mounts it and copies WinBox.app into ~/.local/share/winbox.
 [winbox]
 type = "file"
 url = '{{ printf "%s/WinBox.dmg" $winboxBase }}'
