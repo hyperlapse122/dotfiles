@@ -7,4 +7,4 @@ if ! command -v mise >/dev/null 2>&1; then
   exit 127
 fi
 
-exec mise --no-config --no-env --no-hooks exec -y bun -- env ZAI_API_KEY="{{ onepasswordRead "op://Private/Z.ai/API Key" }}" bunx -y tokscale "$@"
+exec mise --no-config --no-env --no-hooks exec -y node -- env ZAI_API_KEY="{{ onepasswordRead "op://Private/Z.ai/API Key" }}" npx -y tokscale "$@"
