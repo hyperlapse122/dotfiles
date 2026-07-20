@@ -105,8 +105,9 @@ are git-ignored.
 
 `figma-auth` is installed on Linux/macOS by
 `run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
-is never run during apply. Invoke `figma-auth opencode` or `figma-auth pi`
-manually when authorizing. The targets are respectively
+is never run during apply. The Figma MCP's headerless OAuth entry comes from
+`.chezmoidata/agents.yaml`; invoke `figma-auth opencode` and `figma-auth pi`
+manually to seed each harness's native OAuth store. The targets are respectively
 `~/.local/share/opencode/mcp-auth.json` and
 `~/.pi/agent/mcp-auth/<sha256("figma")[0:16]>.json`; writes are private and
 atomic. A soft-skipped build preserves the installed executable and, under

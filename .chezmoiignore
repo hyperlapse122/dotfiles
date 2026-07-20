@@ -1,6 +1,5 @@
 # Repository files
 ./AGENTS.md
-./agents.toml
 ./agents.lock
 ./CLAUDE.md
 ./mise.toml

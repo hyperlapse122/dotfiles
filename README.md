@@ -281,7 +281,7 @@ single-source-of-truth data files, OS gating, secrets, and commit style).
 Everything at the top level is chezmoi source state rendered into `$HOME` (see
 the attribute table in [`AGENTS.md`](AGENTS.md)), except the source-only trees
 below — excluded from deployment via `.chezmoiignore` — and the repo-meta files
-(`AGENTS.md`, `LICENSE`, `mise.toml`, `agents.toml`, …).
+(`AGENTS.md`, `LICENSE`, `mise.toml`, …).
 
 - [`.chezmoidata/`](.chezmoidata) — template data, the single source of truth
   for packages ([`packages.yaml`](.chezmoidata/packages.yaml): dnf + apt,
@@ -315,8 +315,11 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   `run_onchange_after_build-opencode-plugins.sh.tmpl` builds and links the
   OpenCode plugins; `run_onchange_after_build-figma-auth.sh.tmpl` compiles the
   standalone `figma-auth <opencode|pi>` utility into `~/.local/bin/figma-auth`.
-  Apply never starts its interactive OAuth flow: run it on demand to write the
-  selected harness's private native credential file. Build failures preserve
+  The Figma MCP endpoint is declared once in `.chezmoidata/agents.yaml` and
+  renders into every agent config without embedding credentials. Apply never
+  starts its interactive OAuth flow: run `figma-auth opencode` and `figma-auth
+  pi` on demand to write each harness's private native credential file. Build
+  failures preserve
   the last executable and retry after an input change or `chezmoi apply
   --force`. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config

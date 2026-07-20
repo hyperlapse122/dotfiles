@@ -1,13 +1,25 @@
 {{- /* pi MCP servers are data-driven from .chezmoidata/agents.yaml
        (.agents.mcp.servers). Add or remove a server there and pi picks it up.
        lifecycle: "eager" is hardcoded per server (load-bearing — see AGENTS.md:
-       a lazy server exposes zero tools under non-interactive `pi -p`). The
-       recursive resolver applies the shared op:// -> onepasswordRead /
+       a lazy server exposes zero tools under non-interactive `pi -p`). HTTP
+       headers are optional; `auth: oauth` maps to the explicit auth object that
+       makes pi-mcp-extension load its native OAuth store. The recursive resolver
+       applies the shared op:// -> onepasswordRead /
        else-as-is rule to each header value. toPrettyJson owns the
        comma/whitespace handling. */ -}}
 {{- $servers := dict -}}
 {{- range .agents.mcp.servers -}}
 {{- $e := dict "lifecycle" "eager" -}}
+{{- if hasKey . "auth" -}}
+{{- $auth := get . "auth" -}}
+{{- if ne $auth "oauth" -}}
+{{- fail (printf "pi mcp: server %q has unknown auth %q; valid values: oauth" .name $auth) -}}
+{{- end -}}
+{{- if eq .transport "stdio" -}}
+{{- fail (printf "pi mcp: stdio server %q cannot declare auth %q" .name $auth) -}}
+{{- end -}}
+{{- $e = set $e "auth" (dict "type" "oauth") -}}
+{{- end -}}
 {{- if eq .transport "stdio" -}}
 {{- $e = set $e "transport" "stdio" -}}
 {{- $e = set $e "command" .command -}}
@@ -15,12 +27,14 @@
 {{- else -}}
 {{- $e = set $e "transport" "streamable-http" -}}
 {{- $e = set $e "url" .url -}}
+{{- if hasKey . "headers" -}}
 {{- $h := dict -}}
-{{- range $k, $v := .headers -}}
+{{- range $k, $v := get . "headers" -}}
 {{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson -}}
 {{- $h = set $h $k $resolved -}}
 {{- end -}}
 {{- $e = set $e "headers" $h -}}
+{{- end -}}
 {{- end -}}
 {{- $servers = set $servers .name $e -}}
 {{- end -}}

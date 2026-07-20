@@ -55,21 +55,36 @@
     }
   },
 {{- /* MCP servers are data-driven from .chezmoidata/agents.yaml
-       (.agents.mcp.servers). The recursive resolver applies the shared
+       (.agents.mcp.servers). HTTP headers are optional; `auth: oauth` marks a
+       headerless server that uses OpenCode's native OAuth store and needs no
+       target-specific JSON field. The recursive resolver applies the shared
        op:// -> onepasswordRead / else-as-is rule to every header value; the
        toPrettyJson|replace pattern mirrors oh-my-openagent.jsonc.tmpl (shift
        the block one indent level to nest inside this 2-space object). */ -}}
 {{- $mcp := dict -}}
 {{- range .agents.mcp.servers -}}
+{{- if hasKey . "auth" -}}
+{{- $auth := get . "auth" -}}
+{{- if ne $auth "oauth" -}}
+{{- fail (printf "opencode mcp: server %q has unknown auth %q; valid values: oauth" .name $auth) -}}
+{{- end -}}
+{{- if eq .transport "stdio" -}}
+{{- fail (printf "opencode mcp: stdio server %q cannot declare auth %q" .name $auth) -}}
+{{- end -}}
+{{- end -}}
 {{- if eq .transport "stdio" -}}
 {{- $mcp = set $mcp .name (dict "type" "local" "command" (concat (list .command) .args)) -}}
 {{- else -}}
+{{- $remote := dict "type" "remote" "enabled" true "url" .url -}}
+{{- if hasKey . "headers" -}}
 {{- $h := dict -}}
-{{- range $k, $v := .headers -}}
+{{- range $k, $v := get . "headers" -}}
 {{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson -}}
 {{- $h = set $h $k $resolved -}}
 {{- end -}}
-{{- $mcp = set $mcp .name (dict "type" "remote" "enabled" true "url" .url "headers" $h) -}}
+{{- $remote = set $remote "headers" $h -}}
+{{- end -}}
+{{- $mcp = set $mcp .name $remote -}}
 {{- end -}}
 {{- end -}}
   "mcp": {{ toPrettyJson "  " $mcp | trim | replace "\n" "\n  " }},
