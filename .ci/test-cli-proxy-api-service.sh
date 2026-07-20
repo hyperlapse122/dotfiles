@@ -88,13 +88,39 @@ printf 'forbidden\n' > "$launcher_work/.env"
 assert_launcher_rejects 'forbidden .env' run_launcher
 rm -f "$launcher_work/.env"
 
-printf 'credential\n' > "$launcher_auth/residue"
-assert_launcher_rejects 'auth directory is not empty' run_launcher
-rm -f "$launcher_auth/residue"
+printf '{"type":"fixture"}\n' > "$launcher_auth/persisted-auth"
+chmod 600 "$launcher_auth/persisted-auth"
+run_launcher
+rm -f "$launcher_auth/persisted-auth"
 
-printf 'credential\n' > "$launcher_auth/.hidden-residue"
-assert_launcher_rejects 'auth directory is not empty' run_launcher
-rm -f "$launcher_auth/.hidden-residue"
+printf '{"type":"fixture"}\n' > "$launcher_auth/.hidden-auth"
+chmod 600 "$launcher_auth/.hidden-auth"
+run_launcher
+rm -f "$launcher_auth/.hidden-auth"
+
+printf '{"type":"fixture"}\n' > "$launcher_auth/writable-auth"
+chmod 644 "$launcher_auth/writable-auth"
+assert_launcher_rejects 'auth entry mode must be 0600' run_launcher
+rm -f "$launcher_auth/writable-auth"
+
+: > "$launcher_auth/empty-auth"
+chmod 600 "$launcher_auth/empty-auth"
+assert_launcher_rejects 'auth entry is not a non-empty regular file' run_launcher
+rm -f "$launcher_auth/empty-auth"
+
+mkdir "$launcher_auth/nested-auth"
+assert_launcher_rejects 'auth entry is not a non-empty regular file' run_launcher
+rmdir "$launcher_auth/nested-auth"
+
+printf '{"type":"fixture"}\n' > "$scratch/external-auth"
+chmod 600 "$scratch/external-auth"
+ln -s "$scratch/external-auth" "$launcher_auth/symlink-auth"
+assert_launcher_rejects 'auth entry is not a non-empty regular file' run_launcher
+rm -f "$launcher_auth/symlink-auth"
+
+ln "$scratch/external-auth" "$launcher_auth/hardlink-auth"
+assert_launcher_rejects 'auth entry must not be a hard link' run_launcher
+rm -f "$launcher_auth/hardlink-auth" "$scratch/external-auth"
 
 chmod 755 "$launcher_auth"
 assert_launcher_rejects 'auth directory mode must be 0700' run_launcher
@@ -150,6 +176,13 @@ if [ "${CPA_TEST_OWNER_TEST:-0}" = 1 ]; then
   /usr/bin/sudo chown "$foreign_uid" "$launcher_auth"
   assert_launcher_rejects 'auth directory owner mismatch' run_launcher
   /usr/bin/sudo chown "$launcher_uid" "$launcher_auth"
+
+  printf '{"type":"fixture"}\n' > "$launcher_auth/foreign-auth"
+  chmod 600 "$launcher_auth/foreign-auth"
+  /usr/bin/sudo chown "$foreign_uid" "$launcher_auth/foreign-auth"
+  assert_launcher_rejects 'auth entry owner mismatch' run_launcher
+  /usr/bin/sudo chown "$launcher_uid" "$launcher_auth/foreign-auth"
+  rm -f "$launcher_auth/foreign-auth"
 fi
 
 rmdir "$launcher_work/tmp"
@@ -188,6 +221,8 @@ management_secret='synthetic-management-key-0123456789&*?()[]{}'
 # the accepted password alphabet instead of only testing a pre-bcrypt fixture.
 config_prep_lib=$scratch/config-prep.sh
 awk '
+  /^cpa_write_runtime_config\(\) \{/ { copy=1 }
+  /^cpa_realpath\(\) \{/ { copy=0 }
   /^cpa_prepare_runtime_config\(\) \{/ { copy=1 }
   /^cpa_lock_runtime_config\(\) \{/ { copy=0 }
   copy { print }
@@ -221,6 +256,16 @@ chmod 700 "$scratch/run-config-prep.sh"
   "$service_home/.config/cli-proxy-api/config.yaml" \
   "$scratch/config-prep-manifest" \
   "$management_secret"
+misplaced_source=$scratch/misplaced-source-config.yaml
+awk '
+  /^tls:[[:space:]]*$/ { print; print "  secret-key: \"\""; next }
+  { print }
+' "$service_home/.config/cli-proxy-api/config.yaml" > "$misplaced_source"
+shared_runtime=$scratch/shared-runtime-config.yaml
+/bin/sh -c '. "$1"; cpa_write_runtime_config "$2" "$3" "$4"' sh \
+  "$config_prep_lib" "$misplaced_source" "$shared_runtime" "$management_secret"
+grep -Fqx '  secret-key: ""' "$shared_runtime"
+grep -Fqx "  secret-key: \"$management_secret\"" "$shared_runtime"
 management_source=$scratch/management-config.yaml
 sed 's/secret-key: ""/secret-key: "$2b$12$fixture-management-hash"/' \
   "$service_home/.config/cli-proxy-api/config.yaml" > "$management_source"
@@ -371,13 +416,25 @@ fi
 status=200
 body='{"status":"ok"}'
 case $url in
+  */v1/models)
+    status=200
+    body='{"object":"list","data":[]}'
+    ;;
   */v1beta/interactions)
     if [ "${CPA_TEST_FAIL_ALL:-0}" = 1 ] || { [ -n "${CPA_TEST_BAD_ID:-}" ] && [ "$(basename "$current")" = "$CPA_TEST_BAD_ID" ]; }; then
       status=500
       body='{"error":{"type":"server_error","code":"unexpected","message":"fixture failure"}}'
     else
-      status=503
-      body='{"error":{"type":"server_error","code":"internal_server_error","message":"no auth available"}}'
+      case $request_data in
+        *'"model":"cli-proxy-api-readiness-invalid"'*'"agent":"cli-proxy-api-readiness"'*)
+          status=400
+          body='{"error":{"type":"invalid_request_error","message":"request requires exactly one of model or agent"}}'
+          ;;
+        *)
+          status=503
+          body='{"error":{"type":"server_error","code":"internal_server_error","message":"no auth available"}}'
+          ;;
+      esac
     fi
     ;;
   */v0/management/config)
@@ -409,6 +466,12 @@ case ${CPA_TEST_CURL_SCENARIO:-} in
     ;;
   provider-malformed)
     case $url in */v1beta/interactions) status=503; body='not-json' ;; esac
+    ;;
+  models-failure)
+    case $url in */v1/models) status=500; body='{"error":"fixture failure"}' ;; esac
+    ;;
+  models-malformed)
+    case $url in */v1/models) status=200; body='not-json' ;; esac
     ;;
   optional-enabled)
     case $url in */v0/management/config|*/management.html|*/v0/resource/plugins/example) status=200; body='{}' ;; esac
@@ -508,6 +571,40 @@ assert_mode() {
   fi
 }
 
+source_config=$service_home/.config/cli-proxy-api/config.yaml
+source_config_baseline=$root/dot_config/cli-proxy-api/readonly_config.yaml
+assert_source_config_rejected() {
+  source_fixture=$1
+  source_case=$2
+  chmod 600 "$source_config"
+  cp "$source_fixture" "$source_config"
+  chmod 444 "$source_config"
+  if run_reconciler "$rendered_reconciler" 2> "$scratch/source-config-$source_case-error"; then
+    printf 'unsafe source config unexpectedly passed: %s\n' "$source_case" >&2
+    exit 1
+  fi
+  grep -Fq \
+    'managed source config must contain exactly one empty remote-management secret-key' \
+    "$scratch/source-config-$source_case-error"
+}
+
+# Reuse the production interpolation fixture to prove a plaintext source value
+# is rejected explicitly instead of being accepted as runtime input.
+assert_source_config_rejected "$scratch/config-prep-runtime/config.yaml" plaintext
+assert_source_config_rejected "$misplaced_source" misplaced
+duplicate_source=$scratch/duplicate-source-config.yaml
+awk '
+  /^auth-dir:/ {
+    print "remote-management: # duplicate spelling must be rejected"
+    print "  secret-key: \"synthetic-duplicate-source-secret\""
+  }
+  { print }
+' "$source_config_baseline" > "$duplicate_source"
+assert_source_config_rejected "$duplicate_source" duplicate
+chmod 600 "$source_config"
+cp "$source_config_baseline" "$source_config"
+chmod 444 "$source_config"
+
 chmod 777 "$service_home/.local/bin"
 if run_reconciler "$rendered_reconciler"; then
   printf 'world-writable binary directory unexpectedly passed\n' >&2
@@ -572,6 +669,20 @@ grep -qx "release_id=$release_id" "$service_home/.local/share/cli-proxy-api/last
 assert_mode 700 "$service_home/.local/share/cli-proxy-api"
 assert_mode 700 "$service_home/.local/share/cli-proxy-api/versions"
 assert_mode 755 "$old_dir"
+
+persistent_auth=$service_home/.local/share/cli-proxy-api/auth/persistent-auth
+printf '{"type":"fixture","disabled":true}\n' > "$persistent_auth"
+chmod 600 "$persistent_auth"
+run_reconciler "$rendered_reconciler"
+printf '{"type":"fixture"}\n' > "$service_home/.local/share/cli-proxy-api/auth/unsafe-auth"
+chmod 644 "$service_home/.local/share/cli-proxy-api/auth/unsafe-auth"
+if run_reconciler "$rendered_reconciler" 2> "$scratch/unsafe-auth-error"; then
+  printf 'unsafe persistent auth unexpectedly passed reconciler preflight\n' >&2
+  exit 1
+fi
+grep -Fq 'auth directory contains unsafe persistent state' "$scratch/unsafe-auth-error"
+rm -f "$service_home/.local/share/cli-proxy-api/auth/unsafe-auth"
+run_reconciler "$rendered_reconciler"
 
 # A successfully created runtime config becomes durable state. The EXIT trap
 # must retain it after the transaction commits instead of treating success like
@@ -761,7 +872,7 @@ assert_smoke_rejects() {
 for scenario in missing wrong-pid non-loopback multiple wrong-executable; do
   assert_smoke_rejects CPA_TEST_LISTENER_SCENARIO "$scenario"
 done
-for scenario in transport-failure health-redirect health-malformed provider-unauthorized provider-malformed optional-enabled listener-handoff; do
+for scenario in transport-failure health-redirect health-malformed provider-unauthorized provider-malformed models-failure models-malformed optional-enabled listener-handoff; do
   assert_smoke_rejects CPA_TEST_CURL_SCENARIO "$scenario"
 done
 

@@ -108,25 +108,33 @@ managed **infrastructure only**. The service binds to `127.0.0.1:8317`; no Pi,
 OpenCode, Claude, Codex, or other client is routed through it. Its Management API
 credential is read from `op://Private/CLI Proxy API/password` at apply time;
 the source snapshot stays read-only and the private runtime copy is
-bcrypt-locked at mode 0400 before supervision. Client API keys, provider
-credentials, control-panel assets, and provider plugins remain disabled, so a
-provider-routable request intentionally returns HTTP 503 `no auth available`.
+bcrypt-locked at mode 0400 before supervision. Client API keys and provider
+plugins remain disabled. Provider credentials created through the loopback
+Management UI/API persist only as owner-private live files under
+`~/.local/share/cli-proxy-api/auth/`; they are never rendered from this repo.
 
 Chezmoi downloads the latest full native release with its official SHA-256 into
 a version-and-digest candidate directory. A late `90-services` reconciler first
-disables persistence, commits the candidate links, and proves listener, PID,
-health, no-auth, disabled-route, config, binary, and output-log semantics in a
-bounded foreground launch. Only then does it enable the native user supervisor
-and repeat readiness before pinning the extracted binary digest. Failed
+disables config persistence, commits the candidate links, and proves listener,
+PID, health, credential-safe route, disabled-route, config, auth-metadata,
+binary, and output-log semantics in a bounded foreground launch. Host readiness
+uses only local parser/model-list checks and never consumes a provider credential.
+Only after those checks does the reconciler enable the native user supervisor and
+repeat readiness before pinning the extracted binary digest. Native CI separately
+proves both an isolated empty-auth `no auth available` response and persistent-auth
+startup with a disabled synthetic credential. Failed
 binary-only updates can restart a manifest-proven prior candidate; a changed
 config, policy, or candidate integrity check leaves the service disabled across
 future logins for inspection. Verified older candidates are retained rather
 than pruned automatically.
 
-Both systemd and launchd call a private internal launcher that rejects residual
-auth files, symlinks, and a working-directory `.env`, then starts through
-`env -i` with `-local-model`. The reconciler rejects missing, malformed, or
-unreadable credentials, performs complete apply-time rotation, and only permits
+Both systemd and launchd call a private internal launcher that accepts persistent
+top-level auth files only when each is non-empty, owner-owned, mode 0600,
+non-symlink, and singly linked; unsafe entries and a working-directory `.env`
+fail closed without reading, printing, or deleting credential contents. It then
+starts through `env -i` with `-local-model`. The reconciler rejects missing,
+malformed, or unreadable Management credentials, performs complete apply-time
+rotation, and only permits
 binary-only rollback when the credential and every policy input are unchanged.
 systemd retries failures within a bounded window;
 the LaunchAgent starts once per login and deliberately stays stopped after a
@@ -149,8 +157,9 @@ and GNOME/KDE applets remain future consumers, not part of this service. The
 Management API is loopback-only. Mode 0400 blocks persistence to the managed
 runtime file, but authenticated holders retain full upstream Management authority;
 unsupported write routes may transiently affect in-memory state until restart even
-when persistence fails. Consumers must use read endpoints only; a future
-fine-grained route-filtering gateway remains out of scope.
+when persistence fails. Provider-auth lifecycle routes in the local control panel
+are supported; other consumers use read endpoints only. A future fine-grained
+route-filtering gateway remains out of scope.
 Windows and real containers receive none of these artifacts.
 
 ## Prerequisites

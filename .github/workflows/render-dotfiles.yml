@@ -722,19 +722,24 @@ jobs:
             plutil -lint "${scratch}/target/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
           fi
 
-      - name: Run the managed external through the sterile launcher and shared probe
+      - name: Run the managed external through the hardened launcher and shared probe
         run: |
           set -euxo pipefail
           scratch="${RUNNER_TEMP}/cli-proxy-api"
           identity=$(jq -r .identity "${scratch}/release.json")
           managed_binary="${scratch}/target/.local/share/cli-proxy-api/versions/${identity}/cli-proxy-api"
-          if [[ "${CPA_PLATFORM}" == darwin ]]; then
-            CPA_RELEASE_BINARY="${managed_binary}" \
-              CPA_JQ_OVERRIDE="${scratch}/target/.local/bin/jq" \
-              .ci/run-cli-proxy-api-native-smoke.sh
-          else
-            CPA_RELEASE_BINARY="${managed_binary}" .ci/run-cli-proxy-api-native-smoke.sh
-          fi
+          for persistent_auth in 0 1; do
+            if [[ "${CPA_PLATFORM}" == darwin ]]; then
+              CPA_RELEASE_BINARY="${managed_binary}" \
+                CPA_JQ_OVERRIDE="${scratch}/target/.local/bin/jq" \
+                CPA_NATIVE_PERSISTENT_AUTH="${persistent_auth}" \
+                .ci/run-cli-proxy-api-native-smoke.sh
+            else
+              CPA_RELEASE_BINARY="${managed_binary}" \
+                CPA_NATIVE_PERSISTENT_AUTH="${persistent_auth}" \
+                .ci/run-cli-proxy-api-native-smoke.sh
+            fi
+          done
 
       - name: Upload release identity evidence
         if: always()

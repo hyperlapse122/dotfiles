@@ -47,6 +47,13 @@ stat_mode() {
     stat -c '%a' "$1"
   fi
 }
+stat_nlink() {
+  if [ "$(uname -s)" = Darwin ]; then
+    stat -f '%l' "$1"
+  else
+    stat -c '%h' "$1"
+  fi
+}
 validate_private_dir() {
   label=$1
   path=$2
@@ -58,11 +65,17 @@ validate_private_dir() {
   [ "$(stat_uid "$path")" = "$owner_uid" ] || fail "$label owner mismatch"
   [ "$(stat_mode "$path")" = 700 ] || fail "$label mode must be 0700"
 }
-directory_is_empty() {
+validate_private_auth_state() {
   for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
-    [ ! -e "$entry" ] && [ ! -L "$entry" ] || return 1
+    if [ ! -e "$entry" ] && [ ! -L "$entry" ]; then
+      continue
+    fi
+    [ -f "$entry" ] && [ ! -L "$entry" ] && [ -s "$entry" ] ||
+      fail "auth entry is not a non-empty regular file"
+    [ "$(stat_uid "$entry")" = "$owner_uid" ] || fail "auth entry owner mismatch"
+    [ "$(stat_mode "$entry")" = 600 ] || fail "auth entry mode must be 0600"
+    [ "$(stat_nlink "$entry")" = 1 ] || fail "auth entry must not be a hard link"
   done
-  return 0
 }
 
 [ -d "$CPA_HOME" ] || fail "managed home is not a directory"
@@ -97,8 +110,10 @@ validate_private_dir "auth directory" "$CPA_AUTH_DIR"
 validate_private_dir "working directory" "$CPA_WORK_DIR"
 [ ! -e "$CPA_WORK_DIR/.env" ] || fail "working directory contains forbidden .env"
 
-# Auth state is deliberately sterile. Never delete or print unexpected entries.
-directory_is_empty "$CPA_AUTH_DIR" || fail "auth directory is not empty"
+# Provider auth is live private state. Permit persistent top-level files while
+# rejecting aliases, empty/crash residue, nested trees, and widened access.
+# Never read, delete, or print credential names or contents here.
+validate_private_auth_state "$CPA_AUTH_DIR"
 
 validate_private_dir "temporary directory" "$CPA_WORK_DIR/tmp"
 cd "$CPA_WORK_DIR"

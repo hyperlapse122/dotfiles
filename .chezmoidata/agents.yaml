@@ -120,10 +120,10 @@ agents:
       # `theme` is declared here because pi can no longer persist a theme choice
       # to a readonly settings.json — it is fixed to the default.
       theme: dark
-      defaultProvider: kimi-coding
-      defaultModel: k3
+      defaultProvider: openai-codex
+      defaultModel: gpt-5.6-sol
       # Valid: off | minimal | low | medium | high | xhigh | max.
-      defaultThinkingLevel: max
+      defaultThinkingLevel: xhigh
       subagents:
         defaultModel: gpt-5.6-terra
         agentOverrides:

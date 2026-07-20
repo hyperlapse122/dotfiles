@@ -3,11 +3,15 @@
 set -eu
 
 root=$(unset CDPATH; cd -- "$(dirname "$0")/.." && pwd)
+# shellcheck source=.ci/smoke-cli-proxy-api.sh
+. "$root/.ci/smoke-cli-proxy-api.sh"
 if [ -z "${CPA_RELEASE_ARCHIVE:-}" ] && [ -z "${CPA_RELEASE_BINARY:-}" ]; then
   printf 'CPA_RELEASE_ARCHIVE or CPA_RELEASE_BINARY is required\n' >&2
   exit 1
 fi
 base=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-${HOME}/.cache}}
+persistent_auth=${CPA_NATIVE_PERSISTENT_AUTH:-0}
+case $persistent_auth in 0|1) ;; *) printf 'CPA_NATIVE_PERSISTENT_AUTH must be 0 or 1\n' >&2; exit 1 ;; esac
 scratch=$base/cli-proxy-api-native-smoke-$$
 pid=
 cleanup() {
@@ -31,6 +35,12 @@ mkdir -p "$candidate_dir" "$config_dir" "$runtime_dir" "$home/.local/libexec" \
 chmod 700 "$home/.local/share/cli-proxy-api" \
   "$home/.local/share/cli-proxy-api/versions" "$candidate_dir" "$runtime_dir" \
   "$home/.local/share/cli-proxy-api/auth" "$home/.local/share/cli-proxy-api/work"
+if [ "$persistent_auth" -eq 1 ]; then
+  # Exercise persistent-auth startup without carrying a usable credential or
+  # allowing the readiness probe to contact an upstream provider.
+  printf '{"type":"codex","disabled":true}\n' > "$home/.local/share/cli-proxy-api/auth/native-disabled.json"
+  chmod 600 "$home/.local/share/cli-proxy-api/auth/native-disabled.json"
+fi
 historical_dir=$home/.cli-proxy-api
 mkdir -m 700 "$historical_dir"
 printf 'historical state must remain untouched\n' > "$historical_dir/sentinel"
@@ -63,7 +73,7 @@ case "$management_secret" in
   *[!A-Za-z0-9._~!@#$%^+=,:/-]*|"") printf 'invalid native Management credential\n' >&2; exit 1 ;;
 esac
 [ "${#management_secret}" -ge 32 ] || { printf 'native Management credential is too short\n' >&2; exit 1; }
-(umask 077; CPA_AWK_SECRET="$management_secret" awk '/^  secret-key: ""$/ { print "  secret-key: \"" ENVIRON["CPA_AWK_SECRET"] "\""; next } { print }' "$CPA_SOURCE_CONFIG" > "$CPA_CONFIG")
+(umask 077; cpa_write_runtime_config "$CPA_SOURCE_CONFIG" "$CPA_CONFIG" "$management_secret")
 chmod 600 "$CPA_CONFIG"
 CPA_MANAGEMENT_SECRET="$management_secret"
 # shellcheck disable=SC2034
@@ -84,8 +94,6 @@ case $CPA_JQ in /*) ;; *) printf 'CPA_JQ must be absolute\n' >&2; exit 1 ;; esac
 [ -x "$CPA_JQ" ] || { printf 'CPA_JQ is not executable: %s\n' "$CPA_JQ" >&2; exit 1; }
 export CPA_JQ
 export CPA_LOG_FILE="$scratch/process.log"
-# shellcheck source=.ci/smoke-cli-proxy-api.sh
-. "$root/.ci/smoke-cli-proxy-api.sh"
 CPA_EXPECTED_CONFIG_SHA256=$(cpa_sha256 "$CPA_CONFIG")
 export CPA_EXPECTED_CONFIG_SHA256
 export CPA_SMOKE_MAX_ATTEMPTS=10
@@ -124,10 +132,24 @@ export CPA_EXPECTED_CONFIG_SHA256
 cpa_smoke "$pid"
 kill -0 "$pid"
 
+if [ "$persistent_auth" -eq 0 ]; then
+  no_auth_body=$scratch/no-auth.json
+  no_auth_status=$(curl --noproxy '*' -sS --max-time 5 -o "$no_auth_body" -w '%{http_code}' \
+    -H 'Content-Type: application/json' \
+    --data "{\"agent\":\"cli-proxy-api-readiness\",\"input\":\"$CPA_SMOKE_CANARY\",\"stream\":false}" \
+    http://127.0.0.1:8317/v1beta/interactions)
+  [ "$no_auth_status" = 503 ] || {
+    printf 'provider-routable request returned HTTP %s, expected no-auth 503\n' "$no_auth_status" >&2
+    exit 1
+  }
+  "$CPA_JQ" -e '.error.type == "server_error" and .error.code == "internal_server_error" and (.error.message | ascii_downcase | contains("no auth available"))' "$no_auth_body" >/dev/null
+fi
+
 chmod 700 "$historical_dir"
 [ "$(cpa_sha256 "$historical_dir/sentinel")" = "$historical_hash_before" ]
 [ "$(find "$historical_dir" -print | LC_ALL=C sort)" = "$historical_before" ]
-if find "$home" -type f ! -path "$candidate" -exec grep -F -l -- "$CPA_SMOKE_CANARY" {} + 2>/dev/null | grep -q .; then
+if find "$home" -path "$CPA_AUTH_DIR" -prune -o \
+  -type f ! -path "$candidate" -exec grep -F -l -- "$CPA_SMOKE_CANARY" {} + 2>/dev/null | grep -q .; then
   printf 'request canary escaped into the isolated managed home\n' >&2
   exit 1
 fi
@@ -149,4 +171,5 @@ unset child_env
 
 grep -F 'Local model mode: using embedded model catalogs' "$CPA_LOG_FILE" >/dev/null
 
-printf 'cli-proxy-api native smoke passed on %s/%s\n' "$(uname -s)" "$(uname -m)"
+printf 'cli-proxy-api native smoke passed on %s/%s (persistent-auth=%s)\n' \
+  "$(uname -s)" "$(uname -m)" "$persistent_auth"

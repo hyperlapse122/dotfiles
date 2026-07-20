@@ -1,5 +1,5 @@
 # Managed CLIProxyAPI v7.2.80 baseline; refresh manually from the tagged upstream example.
-# Safety delta: loopback-only, sterile auth, chezmoi-pinned panel (no runtime GitHub fetch), commercial mode.
+# Safety delta: loopback-only, private persistent auth, chezmoi-pinned panel (no runtime GitHub fetch), commercial mode.
 # Server host/interface to bind to. Default is empty ("") to bind all interfaces (IPv4 + IPv6).
 # Use "127.0.0.1" or "localhost" to restrict access to local machine only.
 host: "127.0.0.1"

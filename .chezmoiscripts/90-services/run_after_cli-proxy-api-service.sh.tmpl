@@ -138,6 +138,26 @@ cpa_validate_existing_runtime() {
   fi
 }
 
+cpa_validate_source_config() {
+  awk '
+    /^[^[:space:]#:]*remote-management[^:]*:/ { remote_keys++ }
+    /^[[:space:]]*[^#:]*secret-key[^:]*:/ { all_secret_keys++ }
+    /^remote-management:[[:space:]]*$/ {
+      sections++
+      in_remote=1
+      next
+    }
+    in_remote && /^[^[:space:]]/ { in_remote=0 }
+    in_remote && /^  [^#:]*secret-key[^:]*:/ {
+      keys++
+      if ($0 ~ /^  secret-key:[[:space:]]*""[[:space:]]*$/) empty++
+    }
+    END {
+      exit !(remote_keys == 1 && sections == 1 && all_secret_keys == 1 && keys == 1 && empty == 1)
+    }
+  ' "$CPA_SOURCE_CONFIG"
+}
+
 cpa_prepare_runtime_config() {
   cpa_reconcile_private_dir "CLIProxyAPI runtime directory" "$CPA_RUNTIME_DIR" 1
   if [ "$CPA_TEST_ADAPTER" -eq 1 ] && [ -f "$CPA_CONFIG" ] && [ ! -L "$CPA_CONFIG" ]; then
@@ -159,15 +179,7 @@ cpa_prepare_runtime_config() {
   if [ "$CPA_TEST_ADAPTER" -eq 1 ]; then
     cp "$CPA_SOURCE_CONFIG" "$CPA_RUNTIME_TMP" || return 1
   else
-    CPA_AWK_SECRET="$CPA_MANAGEMENT_SECRET" awk '
-      /^  secret-key:[[:space:]]*""[[:space:]]*$/ {
-        print "  secret-key: \"" ENVIRON["CPA_AWK_SECRET"] "\""
-        found=1
-        next
-      }
-      { print }
-      END { if (!found) exit 1 }
-    ' "$CPA_SOURCE_CONFIG" > "$CPA_RUNTIME_TMP" || {
+    cpa_write_runtime_config "$CPA_SOURCE_CONFIG" "$CPA_RUNTIME_TMP" "$CPA_MANAGEMENT_SECRET" || {
       rm -f "$CPA_RUNTIME_TMP"
       CPA_RUNTIME_TMP=
       return 1
@@ -262,27 +274,15 @@ cpa_sync_panel_asset() {
 }
 
 cpa_reconcile_stat_uid() {
-  if [ "$(uname -s)" = Darwin ]; then
-    stat -f '%u' "$1"
-  else
-    stat -c '%u' "$1"
-  fi
+  cpa_stat_uid "$1"
 }
 
 cpa_reconcile_stat_mode() {
-  if [ "$(uname -s)" = Darwin ]; then
-    stat -f '%Lp' "$1"
-  else
-    stat -c '%a' "$1"
-  fi
+  cpa_stat_mode "$1"
 }
 
 cpa_reconcile_stat_nlink() {
-  if [ "$(uname -s)" = Darwin ]; then
-    stat -f '%l' "$1"
-  else
-    stat -c '%h' "$1"
-  fi
+  cpa_stat_nlink "$1"
 }
 
 cpa_reconcile_private_dir() {
@@ -716,6 +716,7 @@ cpa_reconcile_private_dir "CLIProxyAPI versions directory" "$CPA_VERSIONS" 1
 # state/versions directories; preserve chezmoi's mode instead of creating drift.
 cpa_reconcile_managed_dir "CLIProxyAPI candidate directory" "$CPA_CANDIDATE_DIR"
 cpa_reconcile_private_dir "CLIProxyAPI auth directory" "$CPA_AUTH_DIR"
+cpa_auth_state_is_safe "$CPA_AUTH_DIR" || cpa_preflight_fail "auth directory contains unsafe persistent state"
 cpa_reconcile_private_dir "CLIProxyAPI working directory" "$CPA_WORK_DIR"
 [ ! -L "$CPA_BIN_DIR" ] || cpa_preflight_fail "binary directory must not be a symlink"
 mkdir -p "$CPA_BIN_DIR"
@@ -742,6 +743,8 @@ if [ ! -f "$CPA_SOURCE_CONFIG" ] || [ -L "$CPA_SOURCE_CONFIG" ]; then
 fi
 [ "$(cpa_reconcile_stat_uid "$CPA_SOURCE_CONFIG")" = "$(id -u)" ] || cpa_preflight_fail "managed source config owner mismatch"
 [ "$(cpa_reconcile_stat_mode "$CPA_SOURCE_CONFIG")" = 444 ] || cpa_preflight_fail "managed source config mode must be 0444"
+cpa_validate_source_config ||
+  cpa_preflight_fail "managed source config must contain exactly one empty remote-management secret-key"
 if [ "$CPA_TEST_ADAPTER" -eq 0 ]; then
   cpa_resolve_op || cpa_preflight_fail "1Password CLI is unavailable at an approved path"
   if ! cpa_read_management_secret; then

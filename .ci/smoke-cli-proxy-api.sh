@@ -19,6 +19,52 @@ cpa_sha256() {
   printf '%s\n' "$cpa_sha_digest"
 }
 
+cpa_stat_uid() {
+  if [ "$(uname -s)" = Darwin ]; then
+    stat -f '%u' "$1"
+  else
+    stat -c '%u' "$1"
+  fi
+}
+
+cpa_stat_mode() {
+  if [ "$(uname -s)" = Darwin ]; then
+    stat -f '%Lp' "$1"
+  else
+    stat -c '%a' "$1"
+  fi
+}
+
+cpa_stat_nlink() {
+  if [ "$(uname -s)" = Darwin ]; then
+    stat -f '%l' "$1"
+  else
+    stat -c '%h' "$1"
+  fi
+}
+
+cpa_write_runtime_config() {
+  cpa_runtime_source=$1
+  cpa_runtime_target=$2
+  cpa_runtime_secret=$3
+  [ -n "$cpa_runtime_secret" ] || return 1
+  CPA_AWK_SECRET="$cpa_runtime_secret" awk '
+    /^remote-management:[[:space:]]*$/ {
+      in_remote=1
+      print
+      next
+    }
+    in_remote && /^[^[:space:]]/ { in_remote=0 }
+    in_remote && /^  secret-key:[[:space:]]*""[[:space:]]*$/ {
+      print "  secret-key: \"" ENVIRON["CPA_AWK_SECRET"] "\""
+      found++
+      next
+    }
+    { print }
+    END { if (found != 1) exit 1 }
+  ' "$cpa_runtime_source" > "$cpa_runtime_target"
+}
+
 cpa_realpath() {
   cpa_path=$1
   while [ -L "$cpa_path" ]; do
@@ -55,11 +101,20 @@ cpa_management_status() {
   fi
 }
 
-cpa_directory_is_empty() {
-  for cpa_entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
-    [ ! -e "$cpa_entry" ] && [ ! -L "$cpa_entry" ] || return 1
+cpa_auth_state_is_safe() {
+  cpa_auth_dir=$1
+  [ -d "$cpa_auth_dir" ] && [ ! -L "$cpa_auth_dir" ] || return 1
+  [ "$(cpa_stat_uid "$cpa_auth_dir")" = "$(id -u)" ] || return 1
+  [ "$(cpa_stat_mode "$cpa_auth_dir")" = 700 ] || return 1
+  for cpa_auth_entry in "$cpa_auth_dir"/* "$cpa_auth_dir"/.[!.]* "$cpa_auth_dir"/..?*; do
+    if [ ! -e "$cpa_auth_entry" ] && [ ! -L "$cpa_auth_entry" ]; then
+      continue
+    fi
+    [ -f "$cpa_auth_entry" ] && [ ! -L "$cpa_auth_entry" ] && [ -s "$cpa_auth_entry" ] || return 1
+    [ "$(cpa_stat_uid "$cpa_auth_entry")" = "$(id -u)" ] || return 1
+    [ "$(cpa_stat_mode "$cpa_auth_entry")" = 600 ] || return 1
+    [ "$(cpa_stat_nlink "$cpa_auth_entry")" = 1 ] || return 1
   done
-  return 0
 }
 
 cpa_smoke_cleanup() {
@@ -137,6 +192,10 @@ cpa_smoke_checks() {
     cpa_fail "source config is not a regular file"
     return 1
   fi
+  cpa_auth_state_is_safe "$CPA_AUTH_DIR" || {
+    cpa_fail "persistent auth state is unsafe"
+    return 1
+  }
   grep -qx 'commercial-mode: true' "$CPA_CONFIG" || {
     cpa_fail "commercial mode must suppress request-error logging"
     return 1
@@ -179,20 +238,35 @@ cpa_smoke_checks() {
     cpa_fail "request canary must not be empty"
     return 1
   }
+  # Never consume a persisted provider credential during apply. Exercise the
+  # route with a parser-level rejection that cannot reach auth selection.
   cpa_provider_body=$CPA_SMOKE_TMP/provider.json
   cpa_status=$(curl --noproxy '*' -sS --max-time 5 -o "$cpa_provider_body" -w '%{http_code}' \
     -H 'Content-Type: application/json' \
-    --data "{\"agent\":\"cli-proxy-api-readiness\",\"input\":\"$cpa_canary\",\"stream\":false}" \
+    --data "{\"model\":\"cli-proxy-api-readiness-invalid\",\"agent\":\"cli-proxy-api-readiness\",\"input\":\"$cpa_canary\",\"stream\":false}" \
     http://127.0.0.1:8317/v1beta/interactions) || {
-    cpa_fail "provider-routable request transport failure"
+    cpa_fail "credential-safe route request transport failure"
     return 1
   }
-  [ "$cpa_status" = 503 ] || {
-    cpa_fail "provider-routable request returned HTTP $cpa_status, expected no-auth 503"
+  [ "$cpa_status" = 400 ] || {
+    cpa_fail "credential-safe route request returned HTTP $cpa_status, expected 400"
     return 1
   }
-  "$cpa_jq" -e '.error.type == "server_error" and .error.code == "internal_server_error" and (.error.message | ascii_downcase | contains("no auth available"))' "$cpa_provider_body" >/dev/null 2>&1 || {
-    cpa_fail "provider-routable response is not the expected no-auth JSON"
+  "$cpa_jq" -e '.error.type == "invalid_request_error" and (.error.message | ascii_downcase | contains("exactly one"))' "$cpa_provider_body" >/dev/null 2>&1 || {
+    cpa_fail "credential-safe route response is not the expected parser error"
+    return 1
+  }
+  cpa_models_body=$CPA_SMOKE_TMP/models.json
+  cpa_status=$(cpa_http_status http://127.0.0.1:8317/v1/models "$cpa_models_body") || {
+    cpa_fail "models request transport failure"
+    return 1
+  }
+  [ "$cpa_status" = 200 ] || {
+    cpa_fail "models request returned HTTP $cpa_status"
+    return 1
+  }
+  "$cpa_jq" -e '.object == "list" and (.data | type == "array")' "$cpa_models_body" >/dev/null 2>&1 || {
+    cpa_fail "models response is not the expected JSON"
     return 1
   }
 
@@ -262,8 +336,8 @@ cpa_smoke_checks() {
     cpa_fail "plugin artifact directory exists"
     return 1
   }
-  cpa_directory_is_empty "$CPA_AUTH_DIR" || {
-    cpa_fail "auth state appeared during readiness"
+  cpa_auth_state_is_safe "$CPA_AUTH_DIR" || {
+    cpa_fail "persistent auth state became unsafe during readiness"
     return 1
   }
   cpa_after_hash=$(cpa_sha256 "$CPA_CONFIG") || {
@@ -278,7 +352,9 @@ cpa_smoke_checks() {
   # Remove verifier-owned response files before checking whether the request
   # canary escaped into application state or supervisor output.
   cpa_smoke_cleanup || return 1
-  for cpa_scan_root in "$CPA_AUTH_DIR" "$CPA_WORK_DIR" "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
+  # Persistent auth files contain live credentials; validate metadata above but
+  # never read their contents during verification.
+  for cpa_scan_root in "$CPA_WORK_DIR" "$cpa_source_config_dir" "$cpa_runtime_config_dir"; do
     if [ -d "$cpa_scan_root" ] && grep -R -F -l -- "$cpa_canary" "$cpa_scan_root" >/dev/null 2>&1; then
       cpa_fail "request canary persisted under managed state"
       return 1

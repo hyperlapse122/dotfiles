@@ -181,7 +181,7 @@ grep -F '{{ $home }}/.local/share/cli-proxy-api/runtime/config.yaml' "$launch_ag
 grep -F '<key>DYLD_INSERT_LIBRARIES</key>' "$launch_agent" >/dev/null
 grep -F '<key>StandardErrorPath</key>' "$launch_agent" >/dev/null
 if grep -F '<string>/bin/sh</string>' "$launch_agent" >/dev/null; then
-  printf 'LaunchAgent must execute the sterile launcher directly\n' >&2
+  printf 'LaunchAgent must execute the hardened launcher directly\n' >&2
   exit 1
 fi
 grep -F '[cli-proxy-api]' "$root/.chezmoiexternals/ai-agents.toml" >/dev/null
@@ -189,9 +189,13 @@ grep -F 'includeTemplate "cli-proxy-api-ref.tmpl"' "$root/.chezmoiexternals/ai-a
 grep -F 'op://Private/CLI Proxy API/password' "$root/.chezmoidata/cli-proxy-api.yaml" >/dev/null
 grep -F 'secret-key: ""' "$config" >/dev/null
 reconciler=$root/.chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh.tmpl
+smoke=$root/.ci/smoke-cli-proxy-api.sh
+native_smoke=$root/.ci/run-cli-proxy-api-native-smoke.sh
 grep -F 'Management API credential is missing or invalid' "$reconciler" >/dev/null
 grep -F '[ "${#cpa_management_read}" -ge 32 ]' "$reconciler" >/dev/null
-grep -F 'CPA_AWK_SECRET' "$reconciler" >/dev/null
+grep -F 'cpa_write_runtime_config "$CPA_SOURCE_CONFIG" "$CPA_RUNTIME_TMP"' "$reconciler" >/dev/null
+grep -F 'CPA_AWK_SECRET' "$smoke" >/dev/null
+grep -F 'cpa_write_runtime_config "$CPA_SOURCE_CONFIG" "$CPA_CONFIG"' "$native_smoke" >/dev/null
 grep -F 'CPA_MANAGEMENT_SECRET_SHA256' "$reconciler" >/dev/null
 grep -F 'source_config_sha256' "$reconciler" >/dev/null
 awk '/^if ! cpa_preflight_candidate/{candidate=NR} candidate && NR > candidate && /^if ! cpa_nonbinary_hash=\$\(cpa_compute_nonbinary_hash\)/{found=1} END{exit !found}' "$reconciler"

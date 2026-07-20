@@ -66,12 +66,12 @@
 - Project identity lives in the **group**, never in the title. `session.tie_workdir_to_name` (aoe's default, on) makes the worktree directory leaf follow the title's slug — it bypasses `worktree.bare_repo_path_template` — so a project-named title would rename the directory too, and a later `aoe session rename` would MOVE it. **MUST NOT** put the project or group name in a session title, and **MUST NOT** disable the tie to work around that.
 - Exception: the chezmoi source dir (`~/.local/share/chezmoi`) is chezmoi-owned and stays a plain checkout outside `~/src`.
 
-## Branch naming — gate before first commit
+## Branch ownership and naming — stay on the current branch
 
-- Every branch name **MUST** start with a Git Flow prefix: `feature/` `bugfix/` `hotfix/` `refactor/` `docs/` `chore/` `release/` (or the project's documented equivalent set).
-- Before the **first commit** on any new or newly-switched branch, **MUST** run `git branch --show-current` and confirm the prefix. Treat every fresh branch as failing until confirmed; run the gate once per branch and never skip it on the first commit.
-- Gate fails → **MUST** `git branch -m <old> <prefix>/<slug>` **before** the first commit lands; renaming after a commit/push is **forbidden**. The gate rejects shape, not provenance — a hand-picked bare slug (`add-auth`) is as forbidden as an auto-generated name (`opencode/playful-engine`, `13-feat-x`).
-- Slug **MUST** be a 3–6 word human summary (`-`-separated), not the issue title / number / a placeholder. **One task = one branch**; **MUST NOT** create a sibling branch — rename instead.
+- Branch and worktree creation is owned by `aoe`. Without an explicit user instruction in the same turn, agents **MUST NOT** create, rename, or switch branches (`git checkout -b`, `git switch -c`, `git branch`, `git branch -m`, or an implicit equivalent) and **MUST NOT** create an `aoe` session. This rule overrides generic commit/worktree skills that would automatically create a feature branch.
+- Work **MUST** remain on the branch that was checked out when the task began unless the user explicitly directs a branch change. If that branch is the repository's default branch (`main`/`master`), it is valid and exempt from the Git Flow prefix rule. When the user asks to commit or push work performed there, **MUST** commit and push that same default branch; **MUST NOT** move the changes to a newly-created branch.
+- An existing non-default branch **MUST** start with a Git Flow prefix: `feature/` `bugfix/` `hotfix/` `refactor/` `docs/` `chore/` `release/` (or the project's documented equivalent set). Before its first commit, **MUST** run `git branch --show-current` and confirm the prefix. A noncompliant current branch → **STOP** and ask the user or `aoe` owner to resolve it; **MUST NOT** rename it automatically.
+- When the user explicitly requests a new non-default branch through the `aoe` workflow, its slug **MUST** be a 3–6 word human summary (`-`-separated), not an issue title, number, or placeholder. **One task = one branch**; **MUST NOT** create a sibling branch.
 
 ## Commit messages
 

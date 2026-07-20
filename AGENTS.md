@@ -422,42 +422,55 @@ management panel asset into the runtime static directory
 /management.html route serves a pre-placed local file. The source snapshot remains
 0444 and is never used as runtime-mutable state. Mode 0400 prevents persistence to
 that managed runtime file, but authenticated holders retain full upstream
-Management authority; unsupported write routes may transiently mutate in-memory
-state until restart even when persistence fails. Consumers must use read
-endpoints only, and a future fine-grained route-filtering gateway is out of scope.
+Management authority; general config-changing write routes remain unsupported
+and may transiently mutate in-memory state until restart. Provider-auth lifecycle
+is the deliberate exception: the loopback management UI/API may create, refresh,
+or delete persistent provider auth under
+`~/.local/share/cli-proxy-api/auth/`. That directory is live runtime state, not a
+chezmoi target. Every top-level entry must remain a non-empty regular file owned
+by the user, mode 0600, with exactly one hard link; the reconciler, launcher, and
+smoke probe validate only that metadata and never read, print, or delete credential
+names or contents. Nested directories, symlinks, empty files, widened modes,
+foreign owners, and hard links fail closed.
 `commercial-mode: true` is load-bearing: upstream otherwise force-writes failed
 request bodies even when normal file logging is disabled. The service
 specifications clear loader/startup variables before the shell starts, and the
 launcher validates owner-controlled, non-symlink 0700 auth and work directories
-on **every start**, rejects any auth entry and work-directory `.env` without
-deleting them, validates the owner-read-only runtime config, changes into that
-work directory, sets umask 077, and execs with `env -i` plus only the fixed
-runtime allowlist. It always passes `-local-model`. That flag disables mutable
+plus every persistent auth entry on **every start**, rejects a work-directory
+`.env`, validates the owner-read-only runtime config, changes into that work
+directory, sets umask 077, and execs with `env -i` plus only the fixed runtime
+allowlist. It always passes `-local-model`. That flag disables mutable
 model-catalog updates, but upstream still makes one credential-free Antigravity
-version-metadata request; there is no upstream disable switch. Do not weaken
-these boundaries or add provider/client credentials here.
+version-metadata request; there is no upstream disable switch. Provider
+credentials belong only in the private auth directory — never in source, the
+runtime config, service definitions, environment variables, or repository data.
 
 **Readiness authority:** `.ci/smoke-cli-proxy-api.sh` is sourced by both the host
 reconciler and native CI. Given the supervisor-reported PID, it waits only for
 that PID to bind, then requires exactly one `127.0.0.1:8317` listener whose text
-executable is the active candidate, `/healthz` success, and a valid
-`/v1beta/interactions` `agent` request returning HTTP 503 JSON containing
-`no auth available`. The `agent` shape intentionally forces the built-in
-`gemini-interactions` provider path; an arbitrary unknown model returns 502
-before auth selection and is not a valid no-credential proof. Management
+executable is the active candidate and `/healthz` succeeds. Host readiness MUST
+NOT consume a provider credential or contact an upstream, even when auth is
+empty: it requires a parser-level HTTP 400 for a request carrying both `model`
+and `agent`, then a local `/v1/models` HTTP 200 response with the expected list
+schema. Native CI additionally runs an isolated empty-auth launch and proves the
+strong `/v1beta/interactions` `agent` outcome — HTTP 503 JSON containing
+`no auth available`, with the `agent` shape forcing the built-in
+`gemini-interactions` path — then separately runs with disabled synthetic
+persistent auth. Management
 requests must return 401 without a key and succeed with the configured key only
-on loopback; supported consumers use read endpoints only, while unsupported
-write routes are not filtered and may affect in-memory state until restart. The
+on loopback; provider-auth lifecycle routes are supported, while other write
+routes remain unsupported and may affect in-memory state until restart. The
 plugin-resource route remains 404; the control-panel route is parameterized via
 CPA_PANEL_ENABLED — HTTP 200 with the pre-placed runtime asset present when an
 asset is staged (reconciler copy or a native-smoke fixture), 404 with it absent
 otherwise, plus a stray-asset check on the source config dir in both branches.
-The probe also verifies source/runtime persistence immutability, locked runtime
-state, empty auth state, no plugin artifacts (and no panel artifact where the
-panel is disabled), and that its request canary
-reached neither state nor supervisor output, then re-proves the same
-PID/executable/listener identity to close a port handoff race. Keep this one
-semantic authority rather than forking service and CI checks.
+The shared probe also verifies source/runtime persistence immutability, locked
+runtime state, metadata-safe persistent auth, no plugin artifacts (and no panel
+artifact where the panel is disabled), and that its request canary reached neither
+non-credential state nor supervisor output. It deliberately never scans provider
+auth contents. Finally it re-proves the same PID/executable/listener identity to
+close a port handoff race. Keep this one semantic authority rather than forking
+service and CI checks.
 
 **Activation and rollback:** the reconciler validates ownership, modes, and
 symlink shape before changing links. The source-only
@@ -488,8 +501,9 @@ Verification lives in `.ci/test-cli-proxy-api-infrastructure.sh` (all selector
 mappings, checksum failures, exact upstream config diff, static policy),
 `.ci/test-cli-proxy-api-service.sh` (launcher rejection plus Linux/macOS
 supervisor transitions and rollback), and
-`.ci/run-cli-proxy-api-native-smoke.sh` (real resolved binary through the sterile
-launcher). `render-dotfiles.yml` runs native Ubuntu/macOS provenance + smoke,
+`.ci/run-cli-proxy-api-native-smoke.sh` (real resolved binary through the hardened
+launcher once with empty auth and once with a disabled synthetic persistent-auth
+fixture). `render-dotfiles.yml` runs native Ubuntu/macOS provenance + smoke,
 `systemd-analyze verify` / `plutil -lint`, container/Windows fences, and rendered
 ShellCheck on pull requests **and pushes to main**. Adapter tests prove state
 transitions; they MUST NOT be described as real user-manager activation.
@@ -500,12 +514,15 @@ pre-placed local asset, and the Management API is live with the
 1Password-injected secret — both loopback-only, with no runtime GitHub fetch.
 [Issue #48](https://github.com/hyperlapse122/dotfiles/issues/48) now tracks only
 the remaining fine-grained route-filtering gateway; until it lands, consumers
-use read endpoints only. CPA Usage Keeper and GNOME/KDE applets are motivations
-only, not part of this infrastructure. No plaintext Management secret, provider credential, client
-key, generated auth state, or consumer routing belongs in this change. Mode 0400
-blocks persistence to the runtime file, but does not revoke upstream authority;
-write routes are unsupported, consumers use read endpoints only, and a future
-fine-grained route-filtering gateway remains out of scope.
+use read endpoints except for the supported provider-auth lifecycle in the local
+control panel/API. CPA Usage Keeper and GNOME/KDE applets are motivations only,
+not part of this infrastructure. No plaintext Management secret, provider
+credential, client key, generated auth state, or consumer routing belongs in
+source or rendered configuration; provider auth persists only as owner-private
+live state under the validated auth directory. Mode 0400 blocks persistence to
+the runtime config, but does not revoke upstream authority; non-auth write routes
+remain unsupported, and a future fine-grained route-filtering gateway remains out
+of scope.
 
 ### Agent skills, MCPs & trust — managed by `dotagents`
 
@@ -1334,12 +1351,19 @@ disagree about the same machine.
   `op user get --me` is the human-account fallback), so `onepasswordRead` templates
   resolve exactly as on a host.
 
-## Commits
+## Commits and branch ownership
 
 Conventional Commits (per the global rules), scoped by area — history is mostly
 `chore(<area>)`, e.g. `chore(fedora)`, `chore(scripts)`, `chore(tailscale)`.
-Feature-branch workflow: each change lands on a Git Flow-prefixed branch, is
-pushed and opened as a pull request, and is merged to `main` only after the CI
-workflows (`render-dotfiles.yml`, `ci.yml`) pass on the PR. Direct pushes to
-`main` are not used even though this is a single-maintainer repo — the PR is the
-CI gate.
+Branch and worktree creation is owned by `aoe`: without an explicit user
+instruction, agents MUST NOT create, rename, or switch branches and MUST NOT
+auto-create a feature branch during a commit workflow. This project rule
+overrides generic commit/worktree skills that branch automatically.
+
+Delivery stays on the branch where the work was performed. If that branch is
+`main`, an explicit commit/push request MUST commit and push `main` directly;
+the changes MUST NOT be moved to a newly-created branch. If work is already on
+an `aoe`-managed non-default branch, commit and push that same branch and open a
+pull request when requested. After every push, monitor both
+`render-dotfiles.yml` and `ci.yml` to a terminal successful state before
+reporting completion.

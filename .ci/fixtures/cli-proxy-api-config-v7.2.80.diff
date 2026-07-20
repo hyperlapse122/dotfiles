@@ -2,7 +2,7 @@
 +++ dot_config/cli-proxy-api/readonly_config.yaml
 @@ -0,0 +1,2 @@
 +# Managed CLIProxyAPI v7.2.80 baseline; refresh manually from the tagged upstream example.
-+# Safety delta: loopback-only, sterile auth, chezmoi-pinned panel (no runtime GitHub fetch), commercial mode.
++# Safety delta: loopback-only, private persistent auth, chezmoi-pinned panel (no runtime GitHub fetch), commercial mode.
 @@ -3 +5 @@
 -host: ""
 +host: "127.0.0.1"
