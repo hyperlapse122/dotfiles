@@ -2,7 +2,7 @@
 #
 # Consumer map:
 #   agents.pi.models
-#     -> managed Pi models.json on supported Linux/macOS workstation hosts
+#     -> managed empty Pi models.json baseline on Linux/macOS workstations
 #   agents.mcp.servers
 #     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json
 #   agents.skills.external
@@ -82,25 +82,23 @@ agents:
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
   # settings.json managed readonly" for the full model.
   pi:
-    # Pi alone routes its built-in Anthropic models through CLIProxyAPI. The
-    # managed service has `api-keys: []`, but Pi requires a non-empty apiKey to
-    # expose these models, so `sk-dummy` is a fixed non-secret compatibility
-    # value. This block MUST NOT contain `op://` refs because models.json deploys
-    # 0444 without secret resolution. The target is excluded outside Linux/macOS
-    # workstations and in real containers.
+    # Keep Pi on its built-in direct provider catalog. This explicit empty map
+    # clears the former CLIProxyAPI Anthropic override from the managed
+    # models.json while preserving the file as a migration baseline. It MUST NOT
+    # contain `op://` refs because models.json deploys 0444 without secret
+    # resolution. The target is excluded outside Linux/macOS workstations and in
+    # real containers.
     models:
-      providers:
-        anthropic:
-          baseUrl: http://127.0.0.1:8317
-          apiKey: sk-dummy
+      providers: {}
     # Everything under `settings` renders wholesale into the MANAGED, READONLY
     # ~/.pi/agent/settings.json (dot_pi/agent/private_readonly_settings.json.tmpl),
     # so the keys intentionally match pi's settings.json schema. pi can no longer
     # write that file (deployed 0400, owner-read-only — tighter than opencode.json's
     # 0444 since op:// refs may bake secrets here), so every value pi used to
     # live-manage lives HERE instead. The provider/model must already be usable
-    # through pi's live auth.json (zai is a built-in provider reached via the zai
-    # api_key auth below; the separate models block only overrides Anthropic).
+    # through Pi's built-in catalog and live auth.json. Anthropic OAuth uses the
+    # native `/login anthropic` flow plus the compatibility package declared
+    # below; the separate models block intentionally adds no provider override.
     settings:
       # `packages` is emitted VERBATIM into the managed settings.json (deepCopy
       # in dot_pi/agent/private_readonly_settings.json.tmpl) AND ranged over by
@@ -114,16 +112,21 @@ agents:
       # so a new upstream release re-runs the update. Unpinned by design (npm:
       # and git: both track latest) — the same unsettled trade-off the agent-skill
       # externals make.
+      #   - @gotgenes/pi-anthropic-auth: preserves Pi's built-in Anthropic
+      #     provider and native login while shaping Claude Pro/Max OAuth calls.
       #   - pi-mcp-extension: the MCP client (pi ships no MCP support of its
       #     own; without it the servers in ~/.pi/agent/mcp.json are inert).
       #   - pi-subagents: delegates work to builtin/custom subagents.
       #   - pi-ask-user: supplies the ask_user tool.
+      #   - @ff-labs/pi-fff + @ff-labs/fff-bun: FFF-backed fuzzy file/content
+      #     search and its Bun implementation.
       # compound-engineering is installed for pi as a NATIVE `git:` source, NOT
       # via the versioned local-archive path Claude/Codex/OpenCode use. That is
       # a deliberate divergence for now: pi tracks the repo's default branch
       # (unpinned) instead of the extracted release tarball, so it does NOT
       # consume compound-engineering-ref.tmpl or the localArchive machinery.
       packages:
+      - npm:@gotgenes/pi-anthropic-auth
       - npm:pi-mcp-extension
       - npm:pi-subagents
       - npm:pi-ask-user
@@ -133,8 +136,8 @@ agents:
       # `theme` is declared here because pi can no longer persist a theme choice
       # to a readonly settings.json — it is fixed to the default.
       theme: dark
-      defaultProvider: openai-codex
-      defaultModel: gpt-5.6-sol
+      defaultProvider: anthropic
+      defaultModel: claude-opus-4-8
       # Valid: off | minimal | low | medium | high | xhigh | max.
       defaultThinkingLevel: xhigh
       subagents:

@@ -868,14 +868,15 @@ jobs:
 
           pi_models="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/models.json"
           test -f "${pi_models}"
-          jq -e '. == {
-            "providers": {
-              "anthropic": {
-                "apiKey": "sk-dummy",
-                "baseUrl": "http://127.0.0.1:8317"
-              }
-            }
-          }' "${pi_models}" >/dev/null
+          jq -e '. == {"providers": {}}' "${pi_models}" >/dev/null
+
+          pi_settings="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/settings.json"
+          test -f "${pi_settings}"
+          jq -e '
+            .defaultProvider == "anthropic" and
+            .defaultModel == "claude-opus-4-8" and
+            (.packages | index("npm:@gotgenes/pi-anthropic-auth") != null)
+          ' "${pi_settings}" >/dev/null
           {
             echo "### opencode plugins (macos)"
             echo '```json'

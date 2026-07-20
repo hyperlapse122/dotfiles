@@ -100,22 +100,25 @@ a non-blank answer, so:
   from `~/.config/chezmoi/chezmoi.toml` and re-running `chezmoi init`
   (or `chezmoi init --data=false`).
 
-## CLIProxyAPI localhost service and agent routing
+## CLIProxyAPI localhost service
 
 Linux and macOS workstation applies install
 [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) as a
-managed loopback service. Pi alone routes its built-in Anthropic models through
-`127.0.0.1:8317`; OpenCode, Claude Code, Codex, and non-Anthropic providers keep
-their existing direct configuration. The endpoint and fixed non-secret
-`sk-dummy` compatibility token live under `agents.pi.models` in
-`.chezmoidata/agents.yaml`. Its Management API credential is read from
+managed loopback service. No managed agent configuration routes requests through
+it: Pi uses its built-in `anthropic` provider directly, with
+`@gotgenes/pi-anthropic-auth` supplying Claude Pro/Max OAuth compatibility while
+preserving Pi's native `/login anthropic` flow. The explicit empty provider map
+under `agents.pi.models` renders to `~/.pi/agent/models.json` to clear the former
+localhost override. OpenCode, Claude Code, Codex, and Pi otherwise retain their
+direct provider configuration.
+
+The service's Management API credential is read from
 `op://Private/CLI Proxy API/password` at apply time; the source snapshot stays
 read-only and the private runtime copy is bcrypt-locked at mode 0400 before
-supervision. Server-side client API keys and provider plugins remain disabled;
-the dummy token only satisfies client-library model-availability checks and is
-not validated by the service. Provider credentials created through the loopback
-Management UI/API persist only as owner-private live files under
-`~/.local/share/cli-proxy-api/auth/`; they are never rendered from this repo.
+supervision. Server-side client API keys and provider plugins remain disabled.
+Provider credentials created through the loopback Management UI/API persist only
+as owner-private live files under `~/.local/share/cli-proxy-api/auth/`; they are
+never rendered from this repo.
 
 Chezmoi downloads the latest full native release with its official SHA-256 into
 a version-and-digest candidate directory. A late `90-services` reconciler first
@@ -164,8 +167,9 @@ unsupported write routes may transiently affect in-memory state until restart ev
 when persistence fails. Provider-auth lifecycle routes in the local control panel
 are supported; other consumers use read endpoints only. A future fine-grained
 route-filtering gateway remains out of scope.
-Other operating systems and real containers receive neither these artifacts nor
-the Pi localhost routing override.
+Other operating systems and real containers receive neither the service artifacts
+nor the workstation-only empty models migration target; Pi's direct Anthropic
+auth package remains part of managed settings wherever Pi is provisioned.
 
 ## Prerequisites
 
