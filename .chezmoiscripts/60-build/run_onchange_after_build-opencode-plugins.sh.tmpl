@@ -3,15 +3,16 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl
 #
-# Builds the packages/ Bun workspace in place with Vite+ (`vp`) and symlinks the
-# built OpenCode plugins into ~/.config/opencode/plugins/. This replaces the
+# Builds the packages/ OpenCode plugin/library members in place with Vite+
+# (`vp`) and symlinks the built plugins into ~/.config/opencode/plugins/. This
+# replaces the
 # old dotbot package-build shell step plus the plugin `link:` directives
 # (install.conf.yaml + install.linux.yaml): chezmoi cannot express "build a
 # git-ignored dist/ then symlink it" as a managed file, so it ships as a
 # run_onchange_after_ script.
 #
 # The toolchain comes from mise: `bun` (the package manager `vp` delegates to)
-# is pinned in packages/mise.toml, and `vp` itself is the global `viteplus`
+# is pinned in the repository mise.toml, and `vp` itself is the global `viteplus`
 # tool. chezmoi run scripts execute under a plain non-interactive shell where
 # mise shell-activation is NOT loaded, so bare `vp`/`bun` are not assumed to be
 # on PATH — every invocation is routed through `mise exec`. mise is the ONLY
@@ -21,21 +22,23 @@
 # TARGETED build-input file, so chezmoi re-runs this script whenever a build
 # input is added, removed, or edited. The globs are deliberately narrow — the
 # workspace manifest/lockfile, bunfig + mise config, the root and per-member
-# vite.config.ts, and each member's package.json / tsconfig.json / src/** — and
-# explicitly NOT `packages/**`. A `packages/**` fingerprint would hash the
-# build's own outputs (dist/, node_modules/, .turbo/) and re-trigger this
+# vite.config.ts, and the explicit plugin/library members' package.json,
+# tsconfig.json, vite.config.ts, and src/** inputs — and explicitly NOT the
+# standalone figma-auth CLI or `packages/**`. A `packages/**` fingerprint would
+# hash the build's own outputs (dist/, node_modules/, .turbo/) and re-trigger this
 # script forever on every run. Comment-only; never executed.
 #
 # Cross-platform (linux + darwin) — the workspace builds on both. Gated on
 # `.chezmoi.os in {linux, darwin}`.
 #
 # Soft-skip (exit 0, mirroring the other bootstrap build steps): when mise is
-# absent, `vp install --frozen-lockfile` fails, or `vp run -r build` fails, the
-# script purges any now-stale plugin symlinks (so a failed build never leaves a
+# absent, `vp install --frozen-lockfile` fails, or the filtered recursive build
+# fails, the script purges any now-stale plugin symlinks (so a failed build never
+# leaves a
 # dangling link) and exits 0. NOTE: chezmoi records a clean exit-0 as a
 # successful run, so the script will NOT re-run on the next apply until its
 # fingerprint changes — after fixing the cause, rebuild by hand with
-# `mise -C packages exec -- vp install --frozen-lockfile && mise -C packages exec -- vp run -r build`.
+# `mise -C packages exec -- vp install --frozen-lockfile && mise -C packages exec -- vp run --filter '@h82/opencode-*' --fail-if-no-match build`.
 #
 # Symlink convention (matches the dotbot links it replaces): OpenCode auto-scans
 # top-level *.ts / *.js files under ~/.config/opencode/plugins/ — NOT *.mjs — so
@@ -61,7 +64,7 @@ set -euo pipefail
 # forces a rebuild on any add/remove/edit. TARGETED globs only (never
 # packages/**) so build outputs (dist/, node_modules/, .turbo/) are excluded
 # and the hash stays stable across rebuilds. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "packages/bun.lock" "packages/bunfig.toml" "packages/package.json" "packages/mise.toml" "packages/vite.config.ts" "packages/*/package.json" "packages/*/src/**" "packages/*/tsconfig.json" "packages/*/vite.config.ts")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "mise.toml" "packages/bun.lock" "packages/bunfig.toml" "packages/package.json" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/src/**" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/opencode-mxm4-haptic/package.json" "packages/opencode-mxm4-haptic/src/**" "packages/opencode-mxm4-haptic/tsconfig.json" "packages/opencode-mxm4-haptic/vite.config.ts" "packages/opencode-playwright-cli-session-injection/package.json" "packages/opencode-playwright-cli-session-injection/src/**" "packages/opencode-playwright-cli-session-injection/tsconfig.json" "packages/opencode-playwright-cli-session-injection/vite.config.ts" "packages/opencode-scratch-guard/package.json" "packages/opencode-scratch-guard/src/**" "packages/opencode-scratch-guard/tsconfig.json" "packages/opencode-scratch-guard/vite.config.ts")) }}
 SRC="{{ $sourceDir }}"
 
 PLUGINS_DIR="$HOME/.config/opencode/plugins"
@@ -99,7 +102,7 @@ skip() {
 # (1) mise is the only hard requirement — vp/bun run through `mise exec`, no
 # ambient toolchain is expected. Absent mise → nothing to build, skip.
 if ! command -v mise >/dev/null 2>&1; then
-  printf 'build-opencode-plugins: skipped (mise not installed); build manually with `mise -C packages exec -- vp install --frozen-lockfile && mise -C packages exec -- vp run -r build`.\n' >&2
+  printf 'build-opencode-plugins: skipped (mise not installed); build manually with `mise -C packages exec -- vp install --frozen-lockfile && mise -C packages exec -- vp run --filter '\''@h82/opencode-*'\'' --fail-if-no-match build`.\n' >&2
   skip
 fi
 
@@ -112,10 +115,11 @@ if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
   skip
 fi
 
-# (3) Build every workspace member (`vp run -r build` → `vp pack` per member,
-# in workspace-dependency order). Failure → soft-skip.
-if ! mise -C "$SRC/packages" exec -- vp run -r build; then
-  printf 'build-opencode-plugins: skipped (vp run -r build failed).\n' >&2
+# (3) Select the existing @h82/opencode-* plugins; Vite+ follows their declared
+# build dependencies to the shared library. This excludes standalone
+# @h82/figma-auth, which has its own build/install script. Failure → soft-skip.
+if ! mise -C "$SRC/packages" exec -- vp run --filter '@h82/opencode-*' --fail-if-no-match build; then
+  printf 'build-opencode-plugins: skipped (filtered Vite+ plugin build failed).\n' >&2
   skip
 fi
 

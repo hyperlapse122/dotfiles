@@ -15,7 +15,7 @@ the repo's TypeScript/JavaScript library packages.
 
 ## What this is NOT
 
-- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/60-build/` run_onchange scripts. The plugins built from `packages/` are symlinked into `~/.config/opencode/plugins/`.
+- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/60-build/` run_onchange scripts. OpenCode plugins are symlinked into `~/.config/opencode/plugins/`; standalone CLIs are installed as regular executables in `~/.local/bin/`.
 - **Not published.** Members are `private: true`; the `@h82/` scope is a naming
   namespace, not a registry target.
 
@@ -23,6 +23,7 @@ the repo's TypeScript/JavaScript library packages.
 
 | Path | Package | Purpose |
 |---|---|---|
+| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth <opencode\|pi>` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes the selected harness's private native credential format; apply only compiles and installs it. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`opencode-mxm4-haptic/`](opencode-mxm4-haptic/) | `@h82/opencode-mxm4-haptic` | OpenCode plugin that pulses MX Master 4 haptics on OpenCode events (e.g. `session.idle` → `COMPLETED`). Forwards waveforms to the `mxm4-hapticd` daemon via a bundled `@h82/mxm4-haptic`. |
 | [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the raw `cwd` string) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
@@ -92,11 +93,26 @@ vp fmt                         # Oxfmt (write); `vp fmt --check` to verify
 
 # or target a single member directly:
 cd packages/mxm4-haptic && vp pack
+
+# figma-auth is a compiled CLI rather than a packed library:
+cd packages/figma-auth
+bun build --compile ./src/index.ts --outfile ./dist/figma-auth
 ```
 
 `build` outputs `dist/**`; `typecheck` and `test` build each workspace
 dependency first. Vite+ Task caches (`packages/.turbo/`, `packages/*/.turbo/`)
 are git-ignored.
+
+`figma-auth` is installed on Linux/macOS by
+`run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
+is never run during apply. Invoke `figma-auth opencode` or `figma-auth pi`
+manually when authorizing. The targets are respectively
+`~/.local/share/opencode/mcp-auth.json` and
+`~/.pi/agent/mcp-auth/<sha256("figma")[0:16]>.json`; writes are private and
+atomic. A soft-skipped build preserves the installed executable and, under
+`run_onchange` semantics, retries only after an input change or
+`chezmoi apply --force`; the manual compile command above is the non-deploying
+alternative.
 
 ## Lint + format + test
 

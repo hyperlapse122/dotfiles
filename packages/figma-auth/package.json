@@ -1,0 +1,20 @@
+{
+  "name": "@h82/figma-auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Authenticate the Figma MCP into OpenCode or pi native credential storage.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "jsonc-parser": "3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "typescript": "7.0.2",
+    "vite-plus": "catalog:"
+  }
+}

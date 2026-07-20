@@ -301,15 +301,14 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   `~/.local/bin/`. Linux builds all three binaries: `mxm4-hapticd`,
   `mxm4-haptic-notify`, and `mxm4-haptic`; macOS builds only the daemon and
   client.
-- [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`)
-  by `.chezmoiscripts/60-build/run_onchange_after_build-opencode-plugins.sh.tmpl`
-  into `~/.config/opencode/plugins/`, producing
-  `@h82/opencode-playwright-cli-session-injection` (symlinked as
-  `playwright-cli-session-injection.js` on Linux and macOS),
-  `@h82/opencode-scratch-guard` (symlinked as `scratch-guard.js` on Linux and
-  macOS), and `@h82/opencode-mxm4-haptic` (symlinked as `mxm4-haptic.js` on
-  Linux). `@h82/mxm4-haptic` is a library, not a plugin. See
-  [`packages/README.md`](packages/README.md).
+- [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`).
+  `run_onchange_after_build-opencode-plugins.sh.tmpl` builds and links the
+  OpenCode plugins; `run_onchange_after_build-figma-auth.sh.tmpl` compiles the
+  standalone `figma-auth <opencode|pi>` utility into `~/.local/bin/figma-auth`.
+  Apply never starts its interactive OAuth flow: run it on demand to write the
+  selected harness's private native credential file. Build failures preserve
+  the last executable and retry after an input change or `chezmoi apply
+  --force`. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
   template (MCP servers).
 - [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgents for
