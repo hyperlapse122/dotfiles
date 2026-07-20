@@ -1414,9 +1414,12 @@ disagree about the same machine.
 Conventional Commits (per the global rules), scoped by area — history is mostly
 `chore(<area>)`, e.g. `chore(fedora)`, `chore(scripts)`, `chore(tailscale)`.
 Branch and worktree creation is owned by `aoe`: without an explicit user
-instruction, agents MUST NOT create, rename, or switch branches and MUST NOT
-auto-create a feature branch during a commit workflow. This project rule
-overrides generic commit/worktree skills that branch automatically.
+instruction, agents MUST NOT create or switch branches and MUST NOT auto-create
+a feature branch during a commit workflow. Renaming the current branch in place
+(`git branch -m`) to add a Git Flow prefix is the one permitted exception, and
+only when the branch is absent from the remote — per the branch-naming rule in
+the shared core (`~/.agents/AGENTS.md`). This project rule overrides generic
+commit/worktree skills that branch automatically.
 
 Delivery stays on the branch where the work was performed. If that branch is
 `main`, an explicit commit/push request MUST commit and push `main` directly;
