@@ -49,8 +49,8 @@
 # Claude Code PLUGIN. Unlike the knobs above (which are env vars), these render
 # into the plugin's hook manifest:
 #   dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl
-# and the plugin is installed by
-#   .chezmoiscripts/70-agents/run_onchange_after_install-claude-plugins.sh.tmpl
+# and the plugin is installed by the generic
+#   .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl
 # Tune a waveform HERE, not in the manifest (same rule as solaar.rules
 # .gestureConfirmWaveform). Each value MUST be one of the 16 waveform names in
 # crates/mxm4-haptic/src/lib.rs (WAVEFORMS) — the plugin's hook command passes

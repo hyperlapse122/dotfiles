@@ -49,8 +49,8 @@ set -euo pipefail
 # dotagents-data-sha256: {{ $dotagentsData | toJson | sha256sum }}
 #
 # NOT provisioned here: everyinc/compound-engineering-plugin. It is installed
-# through each agent's native plugin mechanism instead — see the sibling
-# install-compound-engineering script (Claude Code + Codex) and the opencode.json
+# through each agent's native plugin mechanism instead — see the sibling generic
+# install-agent-plugins script (Claude Code + Codex) and the opencode.json
 # `plugin` array (OpenCode).
 
 skip() { exit 0; }

@@ -7,6 +7,9 @@
 #     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
+#   agents.marketplaces + agents.claude.plugins + agents.codex.plugins
+#     -> .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh
+#        (the generic Claude Code + Codex plugin installer)
 #   agents.pi.settings / auth.providers
 #     -> managed Pi settings plus package-update and live auth merge scripts
 #   agents.claude.settings
@@ -85,26 +88,68 @@ agents:
     - name: improve
       source: shadcn/improve
       ref: main
-  # Claude Code settings VALUES (not capabilities) merged into the live
-  # ~/.claude/settings.json by
-  # .chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl.
-  # settings.json is NOT a chezmoi-managed target — Claude Code live-writes it
-  # (theme, effortLevel, tui), aoe injects session-tracking hooks, and `claude
-  # plugin install` writes enabledPlugins/extraKnownMarketplaces — so this is a
-  # read-merge-WRITE (top-level jq `+`) that (re)asserts ONLY the keys below and
-  # preserves every other key byte-identical, the same shape config-pi-auth uses
-  # for pi's live-written auth.json. AGENTS.md "Claude Code plugins" carves this
-  # out from the "ship a plugin, not settings" rule: a plugin registers
-  # hooks/commands but cannot set a settings VALUE like effortLevel.
+  # Claude Code and Codex plugins, single-sourced here (they were previously
+  # hardcoded across two install scripts). The generic runner
+  # run_onchange_after_install-agent-plugins.sh.tmpl ranges over the per-agent
+  # `plugins` lists below and, per entry, registers the marketplace and installs
+  # the plugin with the matching CLI (`claude` / `codex`). MCP is single-sourced
+  # separately (agents.mcp.servers -> dotagents); plugins are per-agent because
+  # applicability differs (mxm4-haptic is Claude-only).
   #
-  # No secrets, so the rendered values are baked straight into the script as its
-  # onchange trigger (no resolve-op-refs-json.tmpl, no fingerprint block): editing
-  # a value here re-runs the merge on the next apply. Always-assert, no
-  # value-signature stamp — a `/effort` or `/model` UI change to an UNCHANGED
-  # value is NOT reverted by a routine apply (the standard onchange trade-off),
-  # but a data edit or `chezmoi apply --force` re-asserts it. Keys must match
-  # Claude Code's settings.json schema; values are seeded from this host today.
+  # `marketplaces` is the shared registry keyed by each marketplace's registered
+  # name (matching its .claude-plugin/marketplace.json `name`). Gating and kind
+  # belong to the MARKETPLACE, not the plugin, so compound-engineering — which
+  # appears in both per-agent lists — declares them once here:
+  #   - kind: how the installer resolves the marketplace source path.
+  #       localDir      -> $HOME/<path> (a directory referenced in place).
+  #       localArchive  -> the versioned tree chezmoi extracts from a GitHub
+  #                        release; the path is NOT stored here. The installer
+  #                        single-sources it from the compound-engineering entry
+  #                        in agents.opencode.plugins (externalPath) plus the
+  #                        version from compound-engineering-ref.tmpl. No
+  #                        version or path literal is copied into a per-agent
+  #                        entry (R3/KTD2).
+  #   - os: the OSes the marketplace applies to. The runner emits a plugin row
+  #     only when .chezmoi.os is in this list (render-time gate, KTD3).
+  #   - container: `skip` filters the row out when the `container` fact is true
+  #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in
+  #     (compound-engineering skills are wanted in a devbox too). This replaces
+  #     the former whole-script .chezmoiignore container exclusion — same net
+  #     behavior, decided per row at render time.
+  marketplaces:
+    dotfiles:
+      kind: localDir
+      path: .local/share/claude-plugins   # relative to $HOME
+      os: [linux]
+      container: skip
+    compound-engineering-plugin:
+      kind: localArchive                   # path from the opencode CE entry + ref
+      os: [linux, darwin]
+      container: keep
+  # `agents.claude` carries two independent things: `settings` (Claude Code
+  # setting VALUES, read-merge-written into the live settings.json by
+  # config-claude-settings) and `plugins` (registered by install-agent-plugins,
+  # see the marketplaces comment above). They share no mechanism beyond the key.
   claude:
+    # Claude Code settings VALUES (not capabilities) merged into the live
+    # ~/.claude/settings.json by
+    # .chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl.
+    # settings.json is NOT a chezmoi-managed target — Claude Code live-writes it
+    # (theme, effortLevel, tui), aoe injects session-tracking hooks, and `claude
+    # plugin install` writes enabledPlugins/extraKnownMarketplaces — so this is a
+    # read-merge-WRITE (top-level jq `+`) that (re)asserts ONLY the keys below and
+    # preserves every other key byte-identical, the same shape config-pi-auth uses
+    # for pi's live-written auth.json. AGENTS.md "Claude Code plugins" carves this
+    # out from the "ship a plugin, not settings" rule: a plugin registers
+    # hooks/commands but cannot set a settings VALUE like effortLevel.
+    #
+    # No secrets, so the rendered values are baked straight into the script as its
+    # onchange trigger (no resolve-op-refs-json.tmpl, no fingerprint block): editing
+    # a value here re-runs the merge on the next apply. Always-assert, no
+    # value-signature stamp — a `/effort` or `/model` UI change to an UNCHANGED
+    # value is NOT reverted by a routine apply (the standard onchange trade-off),
+    # but a data edit or `chezmoi apply --force` re-asserts it. Keys must match
+    # Claude Code's settings.json schema; values are seeded from this host today.
     settings:
       # Reasoning effort tier.
       effortLevel: xhigh
@@ -114,6 +159,14 @@ agents:
       # public settings schema but present in the live file; renders on EVERY host
       # — scope per-host if any host should keep the confirmation guardrail.
       skipDangerousModePermissionPrompt: true
+    # Plugins for Claude Code, registered by the generic install-agent-plugins
+    # runner (marketplace + kind + gating live in `marketplaces` above).
+    plugins:
+    - { name: mxm4-haptic, marketplace: dotfiles }
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
+  codex:
+    plugins:
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
@@ -225,11 +278,12 @@ agents:
     #                   .chezmoiexternals/ai-agents.toml; every agent then
     #                   references that fully-rendered versioned path.
     #                   OpenCode gets it in its `plugin` array via
-    #                   opencode-plugins-json.tmpl; Claude Code / Codex / pi
-    #                   are registered by
-    #                   .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering
-    #                   which points each agent's plugin marketplace / `pi
-    #                   install` at the same versioned path. `externalPath`
+    #                   opencode-plugins-json.tmpl; Claude Code / Codex are
+    #                   registered by the generic
+    #                   .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
+    #                   which points each agent's plugin marketplace at the same
+    #                   versioned path (pi installs CE as a git: source).
+    #                   `externalPath`
     #                   is required; the version segment (`v<version>`) is
     #                   appended by each consumer.
     plugins:

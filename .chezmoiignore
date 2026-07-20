@@ -108,11 +108,14 @@ src/garden.yaml
 Library/LaunchAgents/dev.h82.cli-proxy-api.plist
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude Code haptic plugin and the pi haptic extension have nothing to
-# pulse — skip the deployed plugin tree, the `claude plugin install` script, and
-# the pi extension. (The dotagents skills install in the same 70-agents dir is
-# deliberately KEPT — see below.)
+# pulse — skip the deployed plugin tree and the pi extension. The generic
+# 70-agents/install-agent-plugins.sh script is deliberately KEPT (like the
+# dotagents skills install beside it): it still registers compound-engineering
+# (marketplace container: keep), while the mxm4-haptic row is filtered out at
+# RENDER time because its marketplace is container: skip — so there is no
+# whole-script skip to make here (the merged basename intentionally does not
+# match the former *claude-plugins.sh glob).
 .local/share/claude-plugins
-.chezmoiscripts/70-agents/*claude-plugins.sh
 .pi/agent/extensions/mxm4-haptic.ts
 .pi/agent/models.json
 # CLIProxyAPI infrastructure is deliberately skipped in real containers: no
