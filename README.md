@@ -100,16 +100,20 @@ a non-blank answer, so:
   from `~/.config/chezmoi/chezmoi.toml` and re-running `chezmoi init`
   (or `chezmoi init --data=false`).
 
-## CLIProxyAPI localhost service
+## CLIProxyAPI localhost service and agent routing
 
 Linux and macOS workstation applies install
-[`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) as
-managed **infrastructure only**. The service binds to `127.0.0.1:8317`; no Pi,
-OpenCode, Claude, Codex, or other client is routed through it. Its Management API
-credential is read from `op://Private/CLI Proxy API/password` at apply time;
-the source snapshot stays read-only and the private runtime copy is
-bcrypt-locked at mode 0400 before supervision. Client API keys and provider
-plugins remain disabled. Provider credentials created through the loopback
+[`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) as a
+managed loopback service. Pi alone routes its built-in Anthropic models through
+`127.0.0.1:8317`; OpenCode, Claude Code, Codex, and non-Anthropic providers keep
+their existing direct configuration. The endpoint and fixed non-secret
+`sk-dummy` compatibility token live under `agents.pi.models` in
+`.chezmoidata/agents.yaml`. Its Management API credential is read from
+`op://Private/CLI Proxy API/password` at apply time; the source snapshot stays
+read-only and the private runtime copy is bcrypt-locked at mode 0400 before
+supervision. Server-side client API keys and provider plugins remain disabled;
+the dummy token only satisfies client-library model-availability checks and is
+not validated by the service. Provider credentials created through the loopback
 Management UI/API persist only as owner-private live files under
 `~/.local/share/cli-proxy-api/auth/`; they are never rendered from this repo.
 
@@ -160,7 +164,8 @@ unsupported write routes may transiently affect in-memory state until restart ev
 when persistence fails. Provider-auth lifecycle routes in the local control panel
 are supported; other consumers use read endpoints only. A future fine-grained
 route-filtering gateway remains out of scope.
-Windows and real containers receive none of these artifacts.
+Other operating systems and real containers receive neither these artifacts nor
+the Pi localhost routing override.
 
 ## Prerequisites
 
@@ -227,10 +232,11 @@ rate limit.
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
 `/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE/GNOME
-settings, no pro-audio realtime/system provisioning, and no CLIProxyAPI
-localhost service. The OpenCode plugin build and `dotagents` install still run (and soft-skip if their toolchains are missing). This
-makes the repo usable as-is on CI runners and in dedicated containers that have
-their own `$HOME`.
+settings, no pro-audio realtime/system provisioning, no CLIProxyAPI localhost
+service, and no Pi localhost provider override. The OpenCode plugin build and
+`dotagents` install still run (and soft-skip if their toolchains are missing).
+This makes the repo usable as-is on CI runners and in dedicated containers that
+have their own `$HOME`.
 
 **distrobox and toolbox are the exception.** Both bind-mount the host `$HOME` and
 both create `/run/.toolboxenv`, so `chezmoi apply` inside one detects the shared

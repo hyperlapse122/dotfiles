@@ -48,9 +48,9 @@ src/garden.yaml
 {{- end }}
 
 # Pi is provisioned only on POSIX. Its mxm4-haptic extension shells out to the
-# cross-platform Linux/macOS client, and its settings.json is a managed 0444
-# target that pi cannot write. Skip both on Windows, where pi is not installed.
-# (No installer is stranded: pi auto-discovers the extension, and the package
+# cross-platform Linux/macOS client, and settings.json is a managed private 0400
+# target. Skip both on Windows, where Pi is not installed. (No installer is
+# stranded: Pi auto-discovers the extension/config targets, and the package
 # install script gates itself on `pi` being on PATH.)
 {{- if eq .chezmoi.os "windows" }}
 .pi/agent/extensions/mxm4-haptic.ts
@@ -59,6 +59,12 @@ src/garden.yaml
 .chezmoiscripts/90-services/*cli-proxy-api*.sh
 .config/cli-proxy-api
 .local/libexec/cli-proxy-api-launch
+{{- end }}
+
+# CLIProxyAPI is supported only on Linux/macOS workstations. Keep Pi's localhost
+# Anthropic override off every other OS even though Pi itself is POSIX-capable.
+{{- if not (or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin")) }}
+.pi/agent/models.json
 {{- end }}
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
@@ -109,8 +115,10 @@ Library/LaunchAgents/dev.h82.cli-proxy-api.plist
 .local/share/claude-plugins
 .chezmoiscripts/70-agents/*claude-plugins.sh
 .pi/agent/extensions/mxm4-haptic.ts
-# CLIProxyAPI infrastructure is deliberately skipped in real containers: no
-# external candidate, config, launcher, user service, or reconciliation side effect.
+.pi/agent/models.json
+# CLIProxyAPI infrastructure and Pi routing are deliberately skipped in real
+# containers: no external candidate, config, launcher, user service,
+# reconciliation side effect, or Pi localhost provider override.
 # The 80-keys age-identity import is skipped above, so the encrypted ~/src
 # project registry cannot be decrypted in a container — skip it too (the
 # ~/src layout is a host concept anyway).

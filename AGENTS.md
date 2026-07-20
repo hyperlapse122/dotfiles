@@ -359,13 +359,16 @@ one distro that reads that entry. Manifest typos still fail loud. **Edit the dat
 not the script** — add/gate/remove system files in `system.yaml` + the tree. Full
 model: `system/README.md`.
 
-### CLIProxyAPI — authenticated loopback infrastructure, not an agent route
+### CLIProxyAPI — authenticated loopback infrastructure and Anthropic route
 
 `router-for-me/CLIProxyAPI` is managed on Linux and macOS workstation hosts as
-an **unattached infrastructure service**. It is not an OpenCode/Pi provider,
-MCP, plugin, or default route; `.chezmoidata/agents.yaml` carries no reference
-to it. Windows and real containers receive no binary, config, launcher, service,
-or reconciler. Historical `~/.cli-proxy-api` state is neither read nor deleted.
+a loopback infrastructure service. Pi alone routes its built-in Anthropic models
+through it; OpenCode, Claude Code, Codex, and every non-Anthropic provider keep
+their existing direct configuration. The endpoint and fixed non-secret
+compatibility token live under `.chezmoidata/agents.yaml` `agents.pi.models` and
+render into `~/.pi/agent/models.json`. Other operating systems and real
+containers receive neither the service artifacts nor this Pi routing override.
+Historical `~/.cli-proxy-api` state is neither read nor deleted.
 
 The managed pieces are deliberately split:
 
@@ -399,15 +402,18 @@ The managed pieces are deliberately split:
   disables persistence, activates the versioned candidate through
   `~/.local/share/cli-proxy-api/current` and `~/.local/bin/cli-proxy-api`, proves
   it in a bounded foreground launch, then starts the native user supervisor and
-  repeats the shared semantic probe. The stable binary link is for
-  observability/manual invocation only; no managed client consumes it. systemd
-  has bounded failure-only restarts; the LaunchAgent deliberately uses
+  repeats the shared semantic probe. Pi consumes the loopback HTTP endpoint,
+  never the stable binary link; that link remains for observability and manual
+  invocation only. systemd has bounded failure-only restarts; the
+  LaunchAgent deliberately uses
   `RunAtLoad` without `KeepAlive`, so a permanent failure stays stopped instead
   of producing an unbounded launchd loop.
 
 **Runtime contract:** the reviewed source config binds only `127.0.0.1:8317`, has
 empty client API keys, disables remote management and plugins, keeps the
-panel's background auto-update off, and keeps debug/pprof/file logging off. The
+panel's background auto-update off, and keeps debug/pprof/file logging off. Pi
+sends the fixed `sk-dummy` value required by its client library; it is not a
+secret and the server does not validate it because `api-keys: []`. The
 Management secret (filled into the runtime config from the 1Password reference
 below) and the management control panel asset (a chezmoi-owned pinned external
 copied into the runtime static directory) are both provisioned at apply time,
@@ -517,9 +523,11 @@ the remaining fine-grained route-filtering gateway; until it lands, consumers
 use read endpoints except for the supported provider-auth lifecycle in the local
 control panel/API. CPA Usage Keeper and GNOME/KDE applets are motivations only,
 not part of this infrastructure. No plaintext Management secret, provider
-credential, client key, generated auth state, or consumer routing belongs in
-source or rendered configuration; provider auth persists only as owner-private
-live state under the validated auth directory. Mode 0400 blocks persistence to
+credential, real client key, or generated auth state belongs in source or
+rendered configuration; the only
+consumer route data is Pi's loopback endpoint plus the fixed non-secret
+`sk-dummy` compatibility value under `agents.pi.models`. Provider auth persists
+only as owner-private live state under the validated auth directory. Mode 0400 blocks persistence to
 the runtime config, but does not revoke upstream authority; non-auth write routes
 remain unsupported, and a future fine-grained route-filtering gateway remains out
 of scope.
@@ -597,6 +605,8 @@ The event→waveform map is GENERATED from `.chezmoidata/haptic.yaml` (`haptic.p
 **`~/.pi/agent/settings.json` is a MANAGED `private_readonly_` 0400 target (owner-read-only)** (`dot_pi/agent/private_readonly_settings.json.tmpl`), the pi counterpart of `dot_config/opencode/readonly_opencode.json.tmpl`. It used to be LIVE-WRITTEN by pi (`theme`, `packages`, `lastChangelogVersion`) with a read-merge-write script (`run_onchange_after_config-pi`, now DELETED) overlaying declared defaults; that model is gone. pi can no longer write the file at all — not theme, not packages, not lastChangelogVersion — exactly the opencode contract (opencode.json is readonly and opencode never writes it). The whole object is `deepCopy`'d from `.agents.pi.settings` (renamed from `.agents.pi.defaults`, same key names as pi's settings.json schema, INCLUDING `packages`), with two values injected at render: `lastChangelogVersion` is resolved INLINE from the earendil-works/pi release (the SAME tag `.chezmoiexternals/ai-agents.toml` fetches, `v`-prefix stripped to match pi's own `pi --version` format), and any `op://` 1Password reference anywhere in the object is resolved recursively BY VALUE through `resolve-op-refs-json.tmpl` — the same rule opencode.json uses for its providers, so a key like `defaultProvider` stays a plain name while a secret declared as `op://...` is read from 1Password and baked in. Note the file deploys owner-read-only (0400 — tighter than opencode.json's 0444, since `op://` refs may bake secrets here); pi's API keys otherwise live in the 0600 `~/.pi/agent/auth.json` (config-pi-auth, below). Windows is gated off in `.chezmoiignore`, matching the rest of `dot_pi/`. Adding a managed setting is now a DATA edit (add a key under `.agents.pi.settings`) — no script, no merge.
 
 **Packages** live inside `.agents.pi.settings.packages` and are emitted VERBATIM into the managed settings.json (the deepCopy) AND ranged over by `.chezmoiscripts/70-agents/run_onchange_after_update-pi-extensions.sh.tmpl`, which reconciles installed extensions via a single `pi update --extensions`. Because settings.json is readonly, pi cannot run `pi install` itself — that command appends to the settings packages array AND installs deps, so its settings step would fail against a 0400 file — but `pi update --extensions` reads the declared list FROM settings and updates the deps under `~/.pi/agent/npm/` WITHOUT writing settings, so it never fights the readonly file. (The former `install-pi-packages` script looped `pi install` behind a snapshot/chmod/restore dance; `pi update --extensions` makes all of that unnecessary.) Add/remove packages in the DATA file, not the script. The set today: `npm:pi-mcp-extension` (the MCP client), `npm:pi-subagents`, `npm:pi-ask-user`, and `git:github.com/EveryInc/compound-engineering-plugin` — compound-engineering installs for pi as a NATIVE `git:` source (tracking the repo default branch, unpinned), NOT via the versioned local-archive path Claude/Codex/OpenCode share, so pi does NOT consume `compound-engineering-ref.tmpl` or the localArchive machinery. This is a deliberate divergence for now. pi installs with npm under `~/.pi/agent/npm/`, so this repo's `~/.npmrc` hardening reaches it too (`save-exact=true`). The **resolved versions/references baked into the script as comment lines ARE the onchange trigger** (resolve-and-bake, like `compound-engineering-ref.tmpl` — no fingerprint block): each `npm:` package is resolved to its registry `/latest` version (the same curl `opencode-plugins-json.tmpl` uses) and each `git:` source to its default-branch HEAD via `git ls-remote` (the same resolution the `improve` skill external uses), so a new upstream release changes the rendered content and re-runs the script to fetch it. The former static-list trigger only re-ran on add/remove, so the unpinned versions went stale between edits; resolving the latest version makes the trigger actually track upstream. Like the other resolution partials, a render-time resolution failure aborts the apply loudly rather than silently degrading (the repo is already network-dependent at render — every external and `opencode.json` resolve upstream state the same way). POSIX-only (`ne windows`, matching the externals' pi block — the `~/.local/bin` linker in `00-tools/` has no `.ps1` counterpart) and deliberately **kept in containers**, like the dotagents and compound-engineering installs beside it: pi is a first-class CLI here. Standard onchange trade-off — a soft-skipped run (no `pi` on PATH) is recorded as done and only retries on the next content change or `chezmoi apply --force`.
+
+**Models** (`~/.pi/agent/models.json`) are a managed `readonly_` target (`dot_pi/agent/readonly_models.json.tmpl`) on Linux/macOS workstation hosts. Its built-in `anthropic` provider override renders `agents.pi.models`, keeps Pi's built-in model catalog, points `baseUrl` at the root loopback URL (Pi appends `/v1/messages`), and supplies the fixed `sk-dummy` compatibility token so the models remain available without a direct Anthropic credential. The target is excluded outside Linux/macOS workstations and in real containers alongside the service; removing the override there leaves Pi's normal direct provider behavior untouched. OpenCode does not consume this block and retains its existing provider configuration. Because models.json is 0444, this data path deliberately does not resolve `op://` values; `agents.pi.models` must remain secret-free.
 
 **Auth** (`~/.pi/agent/auth.json`) is STILL a read-merge-write SCRIPT (`.chezmoiscripts/70-agents/run_onchange_after_config-pi-auth.sh.tmpl`), UNLIKE settings.json now that settings is a managed readonly target: pi needs to WRITE auth.json — OAuth providers (e.g. Codex) refresh tokens there on a frequent cadence, and the former `dot_pi/agent/private_readonly_auth.json.tmpl` deployed it at 0400, both fighting pi for the bytes AND being read-only to the owner (so pi could never persist an OAuth token at all). The script overlays only the static api_key providers (source: `.chezmoidata/agents.yaml`, `.agents.pi.auth.providers` — `kimi-coding`, `zai`) into the live file, preserving every OAuth entry pi wrote under other names. The merge is a top-level jq `+` (whole-entry replace, NOT the deep `*`, so a former auth type leaves no stale field); it writes 0600 so both the script and pi can keep updating it. jq is declared in `.chezmoidata/packages.yaml` (both distros), so a fresh host has it before the after-phase scripts run; the container caveat is that the package installer is skipped in a real container, so jq may be absent from the base image there and the script soft-skips (a devbox lands auth by hand or via a base image that ships jq). The resolved keys ARE the onchange trigger (like `auth-gitlab`), so a rotated 1Password key re-writes auth.json on the next apply. Same POSIX-only / container-kept shape, soft-skipping a missing `jq` and needing no `pi` binary, so the keys can land even before pi is fetched.
 
@@ -1148,9 +1158,16 @@ keyring entry can no longer decrypt the stored ciphertexts.
   paths), never `garden prune --rm`/`--no-prompt`, and never declare garden
   `worktree:` trees (worktrees are created and locked by aoe only).
 - **All agent configuration**: `.chezmoidata/agents.yaml`. This is the single
-  source of truth for MCP servers, agent skill externals, pi
-  packages/defaults/static auth, OpenCode models/providers, and oh-my-openagent
-  model mappings. Change agent data HERE, not in a consuming template.
+  source of truth for the Pi CLIProxyAPI route, MCP servers, agent skill
+  externals, pi packages/defaults/static auth, OpenCode models/providers, and
+  oh-my-openagent model mappings. Change agent data HERE, not in a consuming
+  template.
+  - `agents.pi.models` holds Pi's built-in Anthropic provider override: the
+    loopback base URL and fixed non-secret compatibility token rendered into
+    `~/.pi/agent/models.json`. It is gated out outside Linux/macOS workstations
+    and in real containers, exactly where the service is absent. The 0444 target
+    intentionally does not resolve `op://` values. OpenCode does not consume
+    this block.
   - `agents.mcp.servers` is transport-neutral (`stdio` → `command`/`args`; `http`
     → `url` + `headers`) and is ranged over by the THREE agent-config templates:
     `dot_agents/private_readonly_agents.toml.tmpl` (Claude Code + Codex, via
@@ -1341,8 +1358,9 @@ disagree about the same machine.
   preflights `~/.claude`/`~/.codex`), and the `00-tools/` scripts (CLI
   symlinks are wanted in a container). CLIProxyAPI is the exception to the general
   CLI rule: its grouped external block, config, internal launcher, native service,
-  and reconciler are all excluded because it is host-local infrastructure, not a
-  container CLI. Adjust skips in that one gated block, never by editing the scripts.
+  reconciler and Pi models override are all excluded because it is host-local
+  infrastructure, not a container CLI. Adjust skips in that one gated block,
+  never by editing the scripts.
 - **No package installs in a container.** `.install-prerequisites.sh` expects `op` +
   `mise` from the base image; it never runs dnf/apt/brew inside a container and fails
   fast with guidance when either is missing.

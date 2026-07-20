@@ -194,6 +194,7 @@ jobs:
           test ! -e "${out}/.local/libexec/cli-proxy-api-launch"
           test ! -e "${out}/.config/systemd/user/cli-proxy-api.service"
           test ! -e "${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
+          test ! -e "${out}/.pi/agent/models.json"
 
       - name: Assert rendered agent and service configuration
         run: |
@@ -864,6 +865,17 @@ jobs:
           opencode_cfg="${cfg}/opencode.json"
           jq -e '[.plugin[] | select(test("^@ex-machina/opencode-anthropic-auth@[0-9]+\\.[0-9]+\\.[0-9]+"))] | length == 1' "${opencode_cfg}" >/dev/null
           jq -e '.provider | has("anthropic") | not' "${opencode_cfg}" >/dev/null
+
+          pi_models="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/models.json"
+          test -f "${pi_models}"
+          jq -e '. == {
+            "providers": {
+              "anthropic": {
+                "apiKey": "sk-dummy",
+                "baseUrl": "http://127.0.0.1:8317"
+              }
+            }
+          }' "${pi_models}" >/dev/null
           {
             echo "### opencode plugins (macos)"
             echo '```json'
@@ -1053,7 +1065,8 @@ jobs:
             '.config\cli-proxy-api',
             '.local\libexec\cli-proxy-api-launch',
             '.config\systemd\user\cli-proxy-api.service',
-            'Library\LaunchAgents\dev.h82.cli-proxy-api.plist'
+            'Library\LaunchAgents\dev.h82.cli-proxy-api.plist',
+            '.pi\agent\models.json'
           )
           foreach ($relative in $forbidden) {
             $path = Join-Path $out $relative

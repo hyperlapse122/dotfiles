@@ -211,18 +211,36 @@ if grep -F 'MANAGEMENT_PASSWORD=' "$reconciler" >/dev/null; then
   exit 1
 fi
 
-# Infrastructure only: no agent provider/MCP/default points at the localhost
-# service, and no operator-facing login/management helper is restored.
-for consumer in \
-  "$root/.chezmoidata/agents.yaml" \
+# Pi is the only approved agent consumer. Its route data lives under
+# agents.pi.models; OpenCode/settings/MCP configuration must remain unchanged,
+# and no operator-facing login/management helper is restored.
+agents=$root/.chezmoidata/agents.yaml
+pi_models=$root/dot_pi/agent/readonly_models.json.tmpl
+grep -qx '          baseUrl: http://127.0.0.1:8317' "$agents"
+grep -qx '          apiKey: sk-dummy' "$agents"
+grep -F '.agents.pi.models' "$pi_models" >/dev/null
+if grep -F 'resolve-op-refs-json.tmpl' "$pi_models" >/dev/null; then
+  printf 'Pi models target must not resolve secrets into mode 0444\n' >&2
+  exit 1
+fi
+render_template "$pi_models" > "$scratch/pi-models.json"
+jq -e '. == {
+  "providers": {
+    "anthropic": {
+      "apiKey": "sk-dummy",
+      "baseUrl": "http://127.0.0.1:8317"
+    }
+  }
+}' "$scratch/pi-models.json" >/dev/null
+for non_consumer in \
   "$root/dot_config/opencode/readonly_opencode.json.tmpl" \
   "$root/dot_pi/agent/private_readonly_settings.json.tmpl" \
   "$root/dot_pi/agent/private_readonly_mcp.json.tmpl"; do
-  if grep -Eqi 'cli-proxy-api|127[.]0[.]0[.]1:8317' "$consumer"; then
-    printf 'unexpected CLIProxyAPI consumer routing in %s\n' "$consumer" >&2
+  if grep -Eqi 'cli-proxy-api|127[.]0[.]0[.]1:8317' "$non_consumer"; then
+    printf 'unexpected CLIProxyAPI routing in %s\n' "$non_consumer" >&2
     exit 1
   fi
 done
 [ -z "$(find "$root/dot_local/bin" -type f -iname '*cli*proxy*' -print | head -n 1)" ]
 
-printf 'cli-proxy-api infrastructure tests passed\n'
+printf 'cli-proxy-api infrastructure and Pi routing tests passed\n'
