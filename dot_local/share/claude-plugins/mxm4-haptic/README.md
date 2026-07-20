@@ -75,8 +75,9 @@ the daemon owns Linux `hidraw`, so the plugin is not deployed on macOS/Windows.
 
 ## Install
 
-**chezmoi does it automatically on Linux.**
-`.chezmoiscripts/70-agents/run_onchange_after_install-claude-plugins.sh.tmpl`
+**chezmoi does it automatically on Linux.** The generic data-driven installer
+`.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl`
+(ranging over `agents.claude.plugins` in `.chezmoidata/agents.yaml`)
 registers the deployed tree as a local marketplace and installs the plugin:
 
 ```sh

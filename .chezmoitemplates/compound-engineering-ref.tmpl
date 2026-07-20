@@ -16,8 +16,8 @@
          - .chezmoiscripts/00-tools/run_onchange_after_compound-engineering
            — prunes sibling versions under ~/.local/share/compound-engineering
            so only the current tag remains on disk.
-         - .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering
-           — registers the same versioned path with Claude Code and Codex
+         - .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
+           — the generic runner registers the same versioned path with Claude Code and Codex
            (OpenCode is file-phase only: it reads the path from its readonly
            config; every ref bump also re-registers here for Claude/Codex
            because the marketplace path itself changed). pi is NOT a consumer

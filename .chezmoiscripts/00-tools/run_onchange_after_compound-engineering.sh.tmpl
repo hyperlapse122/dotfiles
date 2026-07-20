@@ -24,9 +24,10 @@
 # There is no ~/.local/bin symlink to repoint here: every agent (OpenCode,
 # Claude Code, Codex, pi) references the FULLY-RENDERED versioned path in its
 # own config, so a version bump propagates through chezmoi's own file phase
-# (opencode.json re-render) and the sibling
-# .chezmoiscripts/70-agents/run_onchange_after_install-compound-engineering
-# script (marketplace + pi re-registration at the new path).
+# (opencode.json re-render) and the sibling generic
+# .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
+# script (Claude/Codex marketplace re-registration at the new path; pi via its
+# own git: source).
 #
 # onchange trigger: the rendered $CE_VERSION below IS the trigger — a new
 # upstream compound-engineering-* release changes this script's content and
@@ -39,7 +40,7 @@ CURRENT="$BASE_DIR/{{ $ceVersion }}"
 
 # The file phase must have extracted the current version already; if not, do
 # nothing rather than nuking the whole tree. Same defensive skip as the
-# install-compound-engineering sibling.
+# install-agent-plugins sibling.
 [ -d "$CURRENT" ] || exit 0
 
 for d in "$BASE_DIR"/*; do
