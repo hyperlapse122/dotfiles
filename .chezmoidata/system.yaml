@@ -116,19 +116,4 @@ system:
     # paths only ever deployed there, so a native/user file elsewhere is
     # never deleted.
     removed:
-      - path: /etc/NetworkManager/conf.d/80-lo.conf
-      - path: /etc/NetworkManager/conf.d/90-unmanaged-vmware.conf
-      - path: /etc/NetworkManager/conf.d/91-tailscale.conf
-      - path: /etc/NetworkManager/conf.d/92-docker.conf
-      - path: /etc/NetworkManager/conf.d/93-veth.conf
-      - path: /etc/modprobe.d/audio-hda-no-powersave.conf
-      - path: /etc/systemd/system/docker-prune.service
-      - path: /etc/systemd/system/docker-prune.timer
       - path: /etc/udev/rules.d/logitech-receiver.rules
-      # Fedora-only: the removed plymouthd.conf was only ever DEPLOYED on
-      # Fedora (Ubuntu owns plymouth via the default.plymouth
-      # update-alternatives link and never received this file), so reclaim it
-      # there only — never delete a native or user-created
-      # /etc/plymouth/plymouthd.conf on an Ubuntu host.
-      - path: /etc/plymouth/plymouthd.conf
-        distro: fedora
