@@ -88,7 +88,7 @@ mkdir -p "$HOME/.claude" "$HOME/.codex" || true
 # config sits in the script's cwd. (The sibling pi-extensions update resolves
 # npm the same way.)
 set +e
-install_output="$(mise --no-config --no-env --no-hooks exec -y npm:@sentry/dotagents@latest node -- dotagents --user install 2>&1)"
+install_output="$(mise --no-config --no-env --no-hooks exec -y bun -- bunx @sentry/dotagents --user install 2>&1)"
 install_rc=$?
 set -e
 if [[ $install_rc -ne 0 ]]; then
