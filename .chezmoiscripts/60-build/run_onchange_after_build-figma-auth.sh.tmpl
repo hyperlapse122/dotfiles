@@ -1,0 +1,89 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# Builds the @h82/figma-auth workspace member as a standalone Bun executable
+# and atomically installs it at ~/.local/bin/figma-auth. The utility is an
+# interactive, on-demand command; this apply script only builds and installs it.
+#
+# The targeted fingerprint includes only toolchain/workspace manifests and the
+# figma-auth build inputs. It deliberately excludes dist/, node_modules/, tests,
+# and unrelated workspace members, so build outputs cannot retrigger the script.
+#
+# Missing mise and dependency/build failures are soft skips that preserve the
+# last known good installed executable. Since chezmoi records an exit-0 skip as
+# complete, retry after fixing the cause with `chezmoi apply --force`, or rebuild
+# manually with the two commands printed below.
+
+set -euo pipefail
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/figma-auth/package.json" "packages/figma-auth/tsconfig.json" "packages/figma-auth/vite.config.ts" "packages/figma-auth/src/**")) }}
+SRC="{{ $sourceDir }}"
+DIST="$SRC/packages/figma-auth/dist/figma-auth"
+BIN_DIR="$HOME/.local/bin"
+TARGET="$BIN_DIR/figma-auth"
+
+if ! command -v mise >/dev/null 2>&1; then
+  printf '%s\n' "build-figma-auth: skipped (mise not installed); rebuild with: mise -C \"$SRC/packages\" exec -- vp install --frozen-lockfile && mise -C \"$SRC/packages/figma-auth\" exec -- vp run build" >&2
+  exit 0
+fi
+
+if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
+  printf '%s\n' 'build-figma-auth: skipped (vp install --frozen-lockfile failed); existing executable preserved.' >&2
+  exit 0
+fi
+
+if ! mise -C "$SRC/packages/figma-auth" exec -- vp run build; then
+  printf '%s\n' 'build-figma-auth: skipped (Vite+ build task failed); existing executable preserved.' >&2
+  exit 0
+fi
+
+if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
+  printf '%s\n' 'build-figma-auth: skipped (compiled executable missing); existing executable preserved.' >&2
+  exit 0
+fi
+
+mkdir -p "$BIN_DIR"
+temporary="$(mktemp "$BIN_DIR/.figma-auth.XXXXXX")"
+cleanup() {
+  if [[ -n "$temporary" ]]; then
+    rm -f -- "$temporary"
+  fi
+}
+on_hup() {
+  trap - HUP INT TERM
+  cleanup
+  exit 129
+}
+on_int() {
+  trap - HUP INT TERM
+  cleanup
+  exit 130
+}
+on_term() {
+  trap - HUP INT TERM
+  cleanup
+  exit 143
+}
+trap cleanup EXIT
+trap on_hup HUP
+trap on_int INT
+trap on_term TERM
+chmod 0600 "$temporary"
+cat "$DIST" >"$temporary"
+chmod 0755 "$temporary"
+
+# `mv` treats an existing directory as a container rather than the destination
+# pathname. Refuse every unsafe target shape immediately before promotion.
+if [[ -L "$TARGET" || ( -e "$TARGET" && ! -f "$TARGET" ) ]]; then
+  printf '%s\n' 'build-figma-auth: skipped (install target is not a regular file); existing target preserved.' >&2
+  exit 0
+fi
+
+mv -f -- "$temporary" "$TARGET"
+temporary=''
+if [[ ! -f "$TARGET" || -L "$TARGET" || ! -x "$TARGET" ]]; then
+  printf '%s\n' 'build-figma-auth: skipped (promoted target is not a regular executable).' >&2
+  exit 0
+fi
+printf '%s\n' 'build-figma-auth: installed ~/.local/bin/figma-auth'
+{{ end -}}
