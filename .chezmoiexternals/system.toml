@@ -1,6 +1,6 @@
 {{- /*
-  Host/system-level externals: docker credential helpers, wakatime-cli, and the
-  prezto zsh framework.
+  Host/system-level externals: docker credential helpers, wakatime-cli, the
+  prezto zsh framework, and WinBox (MikroTik RouterOS GUI).
 */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
@@ -55,4 +55,56 @@ url = "https://github.com/sorin-ionescu/prezto.git"
 clone.args = ["--recursive"]
 refreshPeriod = "8760h"
 
+{{- end }}
+
+{{- /* ---------- winbox (MikroTik RouterOS GUI; vendor version endpoint, not GitHub) ---------- */ -}}
+{{- /*
+  WinBox is not published on GitHub, so — like the claude/codex externals in
+  ai-agents.toml — the version is resolved at render time from MikroTik's
+  LATEST.4 endpoint (returns the bare current version, e.g. "4.3") rather than
+  pinned. The linux/windows zips carry the binary at the archive root (plus an
+  assets/img icon we drop by extracting only the executable); macOS ships only a
+  .dmg, which chezmoi cannot extract, so it is staged for manual install.
+  MikroTik publishes Linux as x86_64-only and the tool is desktop-only, so the
+  block gates on amd64-linux / windows / darwin and is skipped in containers.
+*/ -}}
+
+{{- $winboxFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- if not $winboxFacts.container -}}
+{{- $winboxVersion := output "curl" "-fsSL" "https://download.mikrotik.com/routeros/winbox/LATEST.4" | toString | trim -}}
+{{- if not (regexMatch "^[0-9]+\\.[0-9]+" $winboxVersion) -}}
+  {{- fail (printf "winbox: unexpected version %q from the LATEST.4 endpoint" $winboxVersion) -}}
+{{- end -}}
+{{- $winboxBase := printf "https://download.mikrotik.com/routeros/winbox/%s" $winboxVersion -}}
+
+{{- if and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64") }}
+
+[winbox]
+type = "archive-file"
+url = '{{ printf "%s/WinBox_Linux.zip" $winboxBase }}'
+path = 'WinBox'
+targetPath = '.local/bin/winbox'
+executable = true
+
+{{- else if eq .chezmoi.os "windows" }}
+
+{{- $winboxAsset := "WinBox_Windows.zip" -}}
+{{- if eq .chezmoi.arch "arm64" }}{{ $winboxAsset = "WinBox_Windows_arm64.zip" }}{{ end }}
+
+[winbox]
+type = "archive-file"
+url = '{{ printf "%s/%s" $winboxBase $winboxAsset }}'
+path = 'WinBox.exe'
+targetPath = '.local/bin/winbox.exe'
+executable = true
+
+{{- else if eq .chezmoi.os "darwin" }}
+
+# chezmoi cannot extract a .dmg: stage the installer; mount and copy WinBox.app manually.
+[winbox]
+type = "file"
+url = '{{ printf "%s/WinBox.dmg" $winboxBase }}'
+targetPath = '.local/share/winbox/WinBox.dmg'
+
+{{- end }}
 {{- end }}
