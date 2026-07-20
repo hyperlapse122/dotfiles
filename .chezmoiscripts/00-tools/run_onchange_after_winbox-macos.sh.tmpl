@@ -1,0 +1,33 @@
+{{- if and (eq .chezmoi.os "darwin") (not (includeTemplate "facts.tmpl" . | fromYaml).container) -}}
+#!/bin/sh
+# winbox (macOS): chezmoi cannot extract the .dmg the winbox external (see
+# .chezmoiexternals/system.toml) stages, so mount it and copy WinBox.app into
+# ~/.local/share/winbox — matching the extracted-folder result the linux/windows
+# archive externals produce. Re-runs when the resolved winbox version changes
+# (the external fetches the matching .dmg first, so the mount sees the new one).
+{{- $winboxVersion := output "curl" "-fsSL" "https://download.mikrotik.com/routeros/winbox/LATEST.4" | toString | trim -}}
+# winbox version: {{ $winboxVersion }}
+set -eu
+
+dmg="$HOME/.local/share/winbox/WinBox.dmg"
+dest="$HOME/.local/share/winbox"
+
+if [ ! -f "$dmg" ]; then
+	echo "winbox: $dmg not staged yet; skipping" >&2
+	exit 0
+fi
+
+mnt="$(mktemp -d "${TMPDIR:-/tmp}/winbox-dmg.XXXXXX")"
+trap 'hdiutil detach -quiet "$mnt" >/dev/null 2>&1 || true; rmdir "$mnt" 2>/dev/null || true' EXIT
+hdiutil attach -nobrowse -quiet -mountpoint "$mnt" "$dmg"
+
+app="$(find "$mnt" -maxdepth 1 -name '*.app' -print 2>/dev/null | head -n 1)"
+if [ -z "$app" ]; then
+	echo "winbox: no .app found inside $dmg" >&2
+	exit 1
+fi
+
+rm -rf "$dest/WinBox.app"
+cp -R "$app" "$dest/WinBox.app"
+echo "winbox: installed $dest/WinBox.app from $(basename "$dmg")"
+{{- end -}}

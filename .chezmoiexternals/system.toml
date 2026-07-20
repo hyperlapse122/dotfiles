@@ -1,6 +1,6 @@
 {{- /*
-  Host/system-level externals: docker credential helpers, wakatime-cli, and the
-  prezto zsh framework.
+  Host/system-level externals: docker credential helpers, wakatime-cli, the
+  prezto zsh framework, and WinBox (MikroTik RouterOS GUI).
 */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
@@ -55,4 +55,82 @@ url = "https://github.com/sorin-ionescu/prezto.git"
 clone.args = ["--recursive"]
 refreshPeriod = "8760h"
 
+{{- end }}
+
+{{- /* ---------- winbox (MikroTik RouterOS GUI; vendor version endpoint, not GitHub) ---------- */ -}}
+{{- /*
+  WinBox is not published on GitHub, so — like the claude/codex externals in
+  ai-agents.toml — the version is resolved at render time from MikroTik's
+  LATEST.4 endpoint (returns the bare current version, e.g. "4.3") rather than
+  pinned. Every platform lands the app in the SAME ~/.local/share/winbox folder:
+  the linux/windows zips carry the binary + assets/img/winbox.png and are
+  extracted whole (type=archive preserves the executable bit — verified), so the
+  GUI keeps its bundled icon; the linux launcher is rendered separately as
+  dot_local/share/applications/winbox.desktop. macOS ships only a .dmg, which
+  chezmoi cannot extract, so it is staged here and
+  .chezmoiscripts/00-tools/run_onchange_after_winbox-macos mounts it and copies
+  WinBox.app into the same folder. MikroTik publishes Linux as x86_64-only and
+  the tool is desktop-only, so the block gates on amd64-linux / windows / darwin
+  and is skipped in containers.
+
+  linux/windows use TWO archive-file externals (binary + icon) sharing one
+  cached download, NOT a single type=archive: an archive external has no fixed
+  target path, so chezmoi must download and extract the whole zip just to
+  enumerate its entries while building the target state — even during an
+  unrelated `apply --include=externals <other>`, which coupled the cli-proxy-api
+  smoke to a 20 MB MikroTik download. archive-file has explicit target paths, so
+  the zip is fetched only when winbox itself is applied. Mirrors ast-grep/sg.
+*/ -}}
+
+{{- $winboxFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- if not $winboxFacts.container -}}
+{{- $winboxVersion := output "curl" "-fsSL" "https://download.mikrotik.com/routeros/winbox/LATEST.4" | toString | trim -}}
+{{- if not (regexMatch "^[0-9]+\\.[0-9]+" $winboxVersion) -}}
+  {{- fail (printf "winbox: unexpected version %q from the LATEST.4 endpoint" $winboxVersion) -}}
+{{- end -}}
+{{- $winboxBase := printf "https://download.mikrotik.com/routeros/winbox/%s" $winboxVersion -}}
+
+{{- if and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64") }}
+
+[winbox]
+type = "archive-file"
+url = '{{ printf "%s/WinBox_Linux.zip" $winboxBase }}'
+path = 'WinBox'
+targetPath = '.local/share/winbox/WinBox'
+executable = true
+
+[winbox-icon]
+type = "archive-file"
+url = '{{ printf "%s/WinBox_Linux.zip" $winboxBase }}'
+path = 'assets/img/winbox.png'
+targetPath = '.local/share/winbox/assets/img/winbox.png'
+
+{{- else if eq .chezmoi.os "windows" }}
+
+{{- $winboxAsset := "WinBox_Windows.zip" -}}
+{{- if eq .chezmoi.arch "arm64" }}{{ $winboxAsset = "WinBox_Windows_arm64.zip" }}{{ end }}
+
+[winbox]
+type = "archive-file"
+url = '{{ printf "%s/%s" $winboxBase $winboxAsset }}'
+path = 'WinBox.exe'
+targetPath = '.local/share/winbox/WinBox.exe'
+executable = true
+
+[winbox-icon]
+type = "archive-file"
+url = '{{ printf "%s/%s" $winboxBase $winboxAsset }}'
+path = 'assets/img/winbox.png'
+targetPath = '.local/share/winbox/assets/img/winbox.png'
+
+{{- else if eq .chezmoi.os "darwin" }}
+
+# chezmoi cannot extract a .dmg: stage it here; run_onchange_after_winbox-macos
+# mounts it and copies WinBox.app into ~/.local/share/winbox.
+[winbox]
+type = "file"
+url = '{{ printf "%s/WinBox.dmg" $winboxBase }}'
+targetPath = '.local/share/winbox/WinBox.dmg'
+
+{{- end }}
 {{- end }}
