@@ -20,11 +20,11 @@ Add MikroTik **WinBox 4.3** (the RouterOS management GUI) as a chezmoi external 
 
 Every platform lands the app in the **same folder**, `~/.local/share/winbox/`:
 
-- **linux** (`WinBox_Linux.zip`, x86_64-only) → `type = "archive"`, extracts the whole
-  tree (`WinBox` binary + `assets/img/winbox.png`); the exec bit is preserved. A
-  templated `.desktop` launcher is rendered so it appears in the app menu.
-- **windows** amd64 (`WinBox_Windows.zip`) / arm64 (`WinBox_Windows_arm64.zip`) →
-  `type = "archive"`, same whole-tree extraction (`WinBox.exe` + assets).
+- **linux** (`WinBox_Linux.zip`, x86_64-only) → two `archive-file` externals (binary +
+  `assets/img/winbox.png`) sharing one cached download, extracted into the folder; the
+  binary is `executable`. A templated `.desktop` launcher makes it appear in the app menu.
+- **windows** amd64 (`WinBox_Windows.zip`) / arm64 (`WinBox_Windows_arm64.zip`) → two
+  `archive-file` externals (`WinBox.exe` + the icon), same as linux.
 - **darwin** (`WinBox.dmg`) → `type = "file"` stages the disk image (chezmoi cannot
   extract a `.dmg`); a darwin-gated `run_onchange_after` script mounts it and copies
   `WinBox.app` into the same `~/.local/share/winbox/` folder.
@@ -90,11 +90,17 @@ windows and macOS**.
   unexpected 200 body fails loudly instead of building a malformed URL.
 - **KTD2 — Add to `system.toml`, not a new file.** AGENTS.md fixes the grouped externals
   set; WinBox is a host/network desktop utility → `system.toml`.
-- **KTD3 — `type = "archive"` (whole tree) into `~/.local/share/winbox/`, not
-  `archive-file` (binary only).** The GUI loads `assets/img/winbox.png` at runtime, so the
-  icon must travel with the binary. A local `chezmoi apply` test confirmed `archive`
-  preserves the exec bit, so no separate `executable` handling or chmod script is needed.
-  `exact = true` prunes stale files across version bumps.
+- **KTD3 — Two `archive-file` externals (binary + icon) into `~/.local/share/winbox/`,
+  not a single `type = "archive"`.** The GUI loads `assets/img/winbox.png` at runtime, so
+  the icon must travel with the binary — but a `type = "archive"` external has no fixed
+  target path, forcing chezmoi to download and extract the whole 20 MB zip just to
+  enumerate its entries while building the target state, *even during an unrelated
+  `apply --include=externals <other>`* (this broke the cli-proxy-api smoke with a MikroTik
+  connection reset). Two `archive-file` externals sharing one cached download have explicit
+  target paths (`WinBox` + `assets/img/winbox.png`), so the zip is fetched only when winbox
+  itself is applied — the `ast-grep`/`sg` pattern. `executable = true` on the binary. A
+  local filtered `chezmoi apply` confirmed both land correctly (`WinBox` `-rwxr-xr-x` +
+  the PNG).
 - **KTD4 — Consistent `~/.local/share/winbox/` target on every OS.** linux/windows extract
   there directly; macOS copies `WinBox.app` there. One predictable location everywhere.
 - **KTD5 — macOS parity via a darwin-gated `run_onchange_after` script.** chezmoi can't
@@ -161,13 +167,13 @@ script):
 the top-of-file summary comment.
 
 **Approach:** resolve + regex-guard `$winboxVersion`; gate on `not container`; branch by OS:
-linux+amd64 → `type=archive` `WinBox_Linux.zip` → `.local/share/winbox` (`exact`);
-windows → `type=archive`, asset by arch → `.local/share/winbox` (`exact`); darwin →
+linux+amd64 → two `archive-file` externals (`WinBox` + icon) → `.local/share/winbox/…`;
+windows → two `archive-file` externals (`WinBox.exe` + icon), asset by arch; darwin →
 `type=file` `WinBox.dmg` → `.local/share/winbox/WinBox.dmg`.
 
 **Patterns to follow:** `ai-agents.toml` `claude` (curl version) and `cli-proxy-api`
-(facts container gate); `system.toml` `marksman` (per-OS branching); the `fonts.toml`
-`type=archive` extraction idiom.
+(facts container gate); `system.toml` `marksman` (per-OS branching); `dev-tools.toml`
+`ast-grep`/`sg` (two `archive-file` externals sharing one cached download).
 
 **Execution note:** packaging/config — verify by render + install-smoke, not unit tests.
 

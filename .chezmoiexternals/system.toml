@@ -72,6 +72,14 @@ refreshPeriod = "8760h"
   WinBox.app into the same folder. MikroTik publishes Linux as x86_64-only and
   the tool is desktop-only, so the block gates on amd64-linux / windows / darwin
   and is skipped in containers.
+
+  linux/windows use TWO archive-file externals (binary + icon) sharing one
+  cached download, NOT a single type=archive: an archive external has no fixed
+  target path, so chezmoi must download and extract the whole zip just to
+  enumerate its entries while building the target state — even during an
+  unrelated `apply --include=externals <other>`, which coupled the cli-proxy-api
+  smoke to a 20 MB MikroTik download. archive-file has explicit target paths, so
+  the zip is fetched only when winbox itself is applied. Mirrors ast-grep/sg.
 */ -}}
 
 {{- $winboxFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
@@ -85,10 +93,17 @@ refreshPeriod = "8760h"
 {{- if and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64") }}
 
 [winbox]
-type = "archive"
+type = "archive-file"
 url = '{{ printf "%s/WinBox_Linux.zip" $winboxBase }}'
-targetPath = '.local/share/winbox'
-exact = true
+path = 'WinBox'
+targetPath = '.local/share/winbox/WinBox'
+executable = true
+
+[winbox-icon]
+type = "archive-file"
+url = '{{ printf "%s/WinBox_Linux.zip" $winboxBase }}'
+path = 'assets/img/winbox.png'
+targetPath = '.local/share/winbox/assets/img/winbox.png'
 
 {{- else if eq .chezmoi.os "windows" }}
 
@@ -96,10 +111,17 @@ exact = true
 {{- if eq .chezmoi.arch "arm64" }}{{ $winboxAsset = "WinBox_Windows_arm64.zip" }}{{ end }}
 
 [winbox]
-type = "archive"
+type = "archive-file"
 url = '{{ printf "%s/%s" $winboxBase $winboxAsset }}'
-targetPath = '.local/share/winbox'
-exact = true
+path = 'WinBox.exe'
+targetPath = '.local/share/winbox/WinBox.exe'
+executable = true
+
+[winbox-icon]
+type = "archive-file"
+url = '{{ printf "%s/%s" $winboxBase $winboxAsset }}'
+path = 'assets/img/winbox.png'
+targetPath = '.local/share/winbox/assets/img/winbox.png'
 
 {{- else if eq .chezmoi.os "darwin" }}
 
