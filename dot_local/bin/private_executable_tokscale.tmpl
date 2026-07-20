@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if ! command -v mise >/dev/null 2>&1; then
+  printf 'tokscale: `mise` not found on PATH\n' >&2
+  exit 127
+fi
+
+exec mise --no-config --no-env --no-hooks exec -y bun -- env ZAI_API_KEY="{{ onepasswordRead "op://Private/Z.ai/API Key" }}" bunx -y tokscale "$@"
