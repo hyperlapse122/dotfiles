@@ -14,12 +14,12 @@ selinux_relabel = true
 {{- end }}
 
 [session]
+auto_resume_on_restart = true
 click_action = "select_only"
 default_attach_mode = "tmux"
-default_tool = "pi"
+default_tool = "claude"
 new_session_attach_mode = "tmux"
 yolo_mode_default = true
-auto_resume_on_restart = true
 
 [worktree]
 delete_branch_on_cleanup = true
