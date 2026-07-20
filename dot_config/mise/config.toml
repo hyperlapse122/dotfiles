@@ -60,6 +60,10 @@ viteplus = "latest"
   "node-pty",
 ] }
 "npm:@z_ai/mcp-server" = "latest"
+"npm:@agentclientprotocol/claude-agent-acp" = "latest"
+"npm:@agentclientprotocol/codex-acp" = "latest"
+"npm:@google/gemini-cli" = "latest"
+"npm:pi-acp" = "latest"
 
 [settings]
 all_compile = false
