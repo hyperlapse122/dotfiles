@@ -167,6 +167,7 @@ agents:
       # public settings schema but present in the live file; renders on EVERY host
       # — scope per-host if any host should keep the confirmation guardrail.
       skipDangerousModePermissionPrompt: true
+      disableClaudeAiConnectors: true
     # Plugins for Claude Code, registered by the generic install-agent-plugins
     # runner (marketplace + kind + gating live in `marketplaces` above).
     plugins:
