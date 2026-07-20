@@ -1,6 +1,8 @@
 {{- /* This file declares ONLY the MCP servers, data-driven from
        .chezmoidata/agents.yaml (range over .agents.mcp.servers). Add or remove an
-       MCP server in the DATA file, not here.
+       MCP server in the DATA file, not here. HTTP headers are optional;
+       `auth: oauth` marks a headerless server that uses Claude Code/Codex native
+       OAuth storage and therefore needs no target-specific TOML field.
 
        There are NO local path: skills any more. Every user-scoped skill is a
        chezmoi external (the list is data in .chezmoidata/agents.yaml,
@@ -23,6 +25,15 @@ agents = ["claude", "codex"]
 git_domains = ["git.jpi.app"]
 
 {{- range .agents.mcp.servers }}
+{{- if hasKey . "auth" }}
+{{- $auth := get . "auth" }}
+{{- if ne $auth "oauth" }}
+{{- fail (printf "dotagents mcp: server %q has unknown auth %q; valid values: oauth" .name $auth) }}
+{{- end }}
+{{- if eq .transport "stdio" }}
+{{- fail (printf "dotagents mcp: stdio server %q cannot declare auth %q" .name $auth) }}
+{{- end }}
+{{- end }}
 [[mcp]]
 name = {{ .name | quote }}
 {{- if eq .transport "stdio" }}
@@ -30,11 +41,13 @@ command = {{ .command | quote }}
 args = {{ .args | toJson }}
 {{- else }}
 url = {{ .url | quote }}
+{{- if hasKey . "headers" }}
 
 [mcp.headers]
-{{- range $k, $v := .headers }}
+{{- range $k, $v := get . "headers" }}
 {{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson }}
 {{ $k }} = '{{ $resolved }}'
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

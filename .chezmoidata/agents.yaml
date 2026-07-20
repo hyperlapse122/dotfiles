@@ -35,7 +35,9 @@
 
 agents:
   # MCP servers consumed by dotagents, pi, and OpenCode. `transport` is the
-  # discriminator: stdio uses command/args; http uses url/headers.
+  # discriminator: stdio uses command/args; http uses url plus optional headers.
+  # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
+  # native OAuth store; credentials and refresh tokens never enter source data.
   mcp:
     servers:
     - name: codegraph
@@ -50,6 +52,10 @@ agents:
       args:
       - mcp
       - serve
+    - name: figma
+      transport: http
+      url: https://mcp.figma.com/mcp
+      auth: oauth
     - name: context7
       transport: http
       url: https://mcp.context7.com/mcp
