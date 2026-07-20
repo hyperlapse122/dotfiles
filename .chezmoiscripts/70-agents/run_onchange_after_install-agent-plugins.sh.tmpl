@@ -56,7 +56,7 @@ no runtime OS/container guard. Net-identical to the old whole-script
 {{- $os := .chezmoi.os -}}
 {{- $f := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $marketplaces := .agents.marketplaces -}}
-{{- $kinds := list "localDir" "localArchive" -}}
+{{- $kinds := list "localDir" "localArchive" "github" -}}
 {{- $containerVals := list "skip" "keep" -}}
 {{- $osVals := list "linux" "darwin" -}}
 {{- /* Bare-identifier allowlist for plugin + marketplace names and the localDir
@@ -64,6 +64,9 @@ no runtime OS/container guard. Net-identical to the old whole-script
    unresolved placeholder cannot slip through as a literal name. */ -}}
 {{- $nameRe := "^[A-Za-z0-9_.-]+$" -}}
 {{- $pathRe := "^[A-Za-z0-9_./-]+$" -}}
+{{- /* A GitHub marketplace source is owner/repo — bare identifiers on each side
+   of a single slash. */ -}}
+{{- $ghSourceRe := "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" -}}
 
 {{- /* Resolve the compound-engineering localArchive base ONCE: its versioned
    path is single-sourced from the opencode CE entry (externalPath) + the shared
@@ -163,6 +166,15 @@ no runtime OS/container guard. Net-identical to the old whole-script
 {{-         fail (printf "install-agent-plugins: %s uses localArchive marketplace %q, but no matching compound-engineering entry (install=localArchive, versionSource=compoundEngineeringRelease) was found in agents.opencode.plugins to resolve its path from; the localArchive path is single-sourced there (KTD2)" $where $mktName) -}}
 {{-       end -}}
 {{-       $path = $ceBase -}}
+{{-     else if eq $kind "github" -}}
+{{-       if not (hasKey $mkt "source") -}}
+{{-         fail (printf "install-agent-plugins: github marketplace %q is missing `source` (owner/repo)" $mktName) -}}
+{{-       end -}}
+{{-       $src := printf "%v" (index $mkt "source") -}}
+{{-       if not (regexMatch $ghSourceRe $src) -}}
+{{-         fail (printf "install-agent-plugins: github marketplace %q has source %q, which is not owner/repo (bare identifiers, one slash)" $mktName $src) -}}
+{{-       end -}}
+{{-       $path = $src -}}
 {{-     end -}}
 {{-     if not (regexMatch $pathRe $path) -}}
 {{-       fail (printf "install-agent-plugins: %s resolved to path %q outside the allowed set (A-Za-z0-9_./-); the rows are colon-delimited and interpolated into bash" $where $path) -}}
@@ -188,18 +200,23 @@ no runtime OS/container guard. Net-identical to the old whole-script
 #   - <agent>       claude | codex — selects the CLI and its verb set;
 #   - <plugin>      the plugin name (installed as <plugin>@<marketplace>);
 #   - <marketplace> the registered marketplace name (matches its marketplace.json);
-#   - <kind>        localDir (constant path) | localArchive (path changes per ref);
-#   - <path>        the marketplace source directory (already $HOME-resolved).
+#   - <kind>        localDir | localArchive | github — how the source resolves
+#                   and whether the path changes per ref;
+#   - <path>        the marketplace source: a $HOME-resolved directory for the
+#                   local kinds, or an owner/repo for github.
 # Rows are validated + host-gated at RENDER time (undefined marketplace, unknown
-# kind, bad os/container, shell metacharacter, or an unresolvable localArchive
-# path -> the apply aborts naming the entry), so this script trusts its array.
+# kind, bad os/container, shell metacharacter, an unresolvable localArchive path,
+# or a github source that is not owner/repo -> the apply aborts naming the entry),
+# so this script trusts its array.
 #
-# Ref-bump semantics mirror each marketplace's CURRENT sequence, preserving R7:
+# Per-kind install sequence, preserving R7:
 #   - localArchive (compound-engineering): the source PATH changes on every ref
 #     bump. The CLIs do NOT move a configured marketplace in place, so remove the
 #     old registration BY NAME, add the new PATH, then install.
 #   - localDir (dotfiles/mxm4-haptic): a CONSTANT path — add then install, with
 #     NO `remove`, so mxm4-haptic's existing registration is never torn down.
+#   - github (claude-plugins-official): a CONSTANT owner/repo the CLI fetches —
+#     add then install, no `remove` and no local-tree check.
 #
 # Idempotent: `marketplace add` on an already-known marketplace and install/add
 # on an already-installed plugin both no-op and exit 0.
@@ -261,14 +278,20 @@ install_plugins() {
       continue
     fi
 
-    # The marketplace source is chezmoi-deployed (localDir tree) or extracted by
-    # an external (localArchive) in the file phase that precedes this script. A
-    # valid marketplace directory always carries .claude-plugin/marketplace.json;
-    # if it is missing the target was ignored or the apply is partial.
-    if [[ ! -f "$path/.claude-plugin/marketplace.json" ]]; then
-      warn "$agent: skipped ${plugin} (no marketplace at $path)"
-      continue
-    fi
+    # A local marketplace (localDir tree / localArchive extraction) is placed in
+    # the file phase that precedes this script; a valid marketplace directory
+    # always carries .claude-plugin/marketplace.json, so a missing one means the
+    # target was ignored or the apply is partial. A github marketplace has no
+    # local tree — its `path` is an owner/repo the CLI fetches — so skip the
+    # local check for it.
+    case "$kind" in
+      localDir|localArchive)
+        if [[ ! -f "$path/.claude-plugin/marketplace.json" ]]; then
+          warn "$agent: skipped ${plugin} (no marketplace at $path)"
+          continue
+        fi
+        ;;
+    esac
 
     case "$agent" in
       claude)

@@ -109,6 +109,9 @@ agents:
   #                        version from compound-engineering-ref.tmpl. No
   #                        version or path literal is copied into a per-agent
   #                        entry (R3/KTD2).
+  #       github        -> a remote owner/repo marketplace the CLI fetches (no
+  #                        local tree); the `source` (owner/repo) is stored here.
+  #                        Constant source, so add + install with no `remove`.
   #   - os: the OSes the marketplace applies to. The runner emits a plugin row
   #     only when .chezmoi.os is in this list (render-time gate, KTD3).
   #   - container: `skip` filters the row out when the `container` fact is true
@@ -124,6 +127,11 @@ agents:
       container: skip
     compound-engineering-plugin:
       kind: localArchive                   # path from the opencode CE entry + ref
+      os: [linux, darwin]
+      container: keep
+    claude-plugins-official:
+      kind: github                         # anthropics' official plugin marketplace
+      source: anthropics/claude-plugins-official
       os: [linux, darwin]
       container: keep
   # `agents.claude` carries two independent things: `settings` (Claude Code
@@ -164,6 +172,7 @@ agents:
     plugins:
     - { name: mxm4-haptic, marketplace: dotfiles }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    - { name: frontend-design, marketplace: claude-plugins-official }
   codex:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }

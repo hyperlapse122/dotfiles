@@ -1197,13 +1197,15 @@ keyring entry can no longer decrypt the stored ciphertexts.
     shared registry keyed by marketplace name (matching each `.claude-plugin/`
     `marketplace.json`) carrying `kind` (`localDir` → `$HOME/<path>`; `localArchive`
     → the versioned CE path single-sourced from the `agents.opencode.plugins` entry
-    + `compound-engineering-ref.tmpl`, no path/version stored here), plus `os` and
-    `container` gating. The runner validates every referenced entry at render time
-    (undefined marketplace, unknown kind, bad `os`/`container`, a non-bare-identifier
-    name, or an unresolvable `localArchive` path each abort the apply naming the
-    entry) and emits a plugin row only when `.chezmoi.os` is in the marketplace's
-    `os` and, for a `container: skip` marketplace, the `container` fact is false
-    (KTD3). Add/remove a plugin or marketplace HERE, not in the script.
+    + `compound-engineering-ref.tmpl`, no path/version stored here; `github` → a
+    remote `owner/repo` marketplace the CLI fetches, stored as `source`), plus `os`
+    and `container` gating. The runner validates every referenced entry at render
+    time (undefined marketplace, unknown kind, bad `os`/`container`, a
+    non-bare-identifier name, an unresolvable `localArchive` path, or a `github`
+    `source` that is not `owner/repo` each abort the apply naming the entry) and
+    emits a plugin row only when `.chezmoi.os` is in the marketplace's `os` and,
+    for a `container: skip` marketplace, the `container` fact is false (KTD3).
+    Add/remove a plugin or marketplace HERE, not in the script.
   - `agents.pi.settings` is the whole pi settings.json object (renamed from
     `agents.pi.defaults`, same key names as pi's schema) rendered wholesale
     into the MANAGED, READONLY `~/.pi/agent/settings.json` (deepCopy in
