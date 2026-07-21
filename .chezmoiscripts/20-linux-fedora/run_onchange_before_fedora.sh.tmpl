@@ -66,6 +66,7 @@ set -euo pipefail
 # deliberately not the manifest's `vm` fact (systemd-detect-virt --vm), which
 # gates password-less sudo and must stay false in a container.
 HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
+[[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
 
 # The desktop is ONE fact with ONE value (kde | gnome | none), so the two flags
@@ -139,6 +140,11 @@ dotnet_tools=(
   {{ . | quote }}
   {{ end -}}
 )
+nvidia_rpmfusion_excludes=(
+  {{ range .packages.linux.fedora.nvidiaRpmFusionExcludes -}}
+  {{ . | quote }}
+  {{ end -}}
+)
 
 # Point Fedora's base repos at Korea-country metalinks, but only on desktop-class
 # hardware (SMBIOS chassis type). Laptops/servers/VMs keep upstream defaults so a
@@ -168,6 +174,27 @@ configure_kr_mirrorlists() {
   )
 
   "${DNF[@]}" config-manager setopt "${repo_options[@]}"
+}
+
+# Keep NVIDIA's CUDA repository as the sole driver authority while RPM Fusion
+# remains available for Steam and other nonfree packages. RPM Fusion's NVIDIA
+# packages use a conflicting layout (for example xorg-x11-drv-nvidia-cuda
+# conflicts with the CUDA repository's nvidia-driver-cuda), so exclude that
+# complete package family from every RPM Fusion nonfree repository. The DNF 5
+# override is persistent and idempotent. Guarding repo discovery lets this run
+# both before the package fast path on existing hosts and again after RPM Fusion
+# is first installed on a fresh host.
+configure_nvidia_repo_policy() {
+  [[ "${HAS_NVIDIA}" -eq 1 ]] || return 0
+
+  if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
+    printf 'install-fedora.sh: RPM Fusion nonfree repos not present; skipping NVIDIA package exclusions.\n'
+    return 0
+  fi
+
+  local IFS=,
+  "${DNF[@]}" config-manager setopt \
+    "rpmfusion-nonfree*.excludepkgs=${nvidia_rpmfusion_excludes[*]}"
 }
 
 # Add the NVIDIA CUDA + container-toolkit repositories. Split out so it reads as
@@ -211,6 +238,10 @@ setup_fedora_repos() {
       "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
   fi
   "${DNF[@]}" config-manager setopt fedora-cisco-openh264.enabled=1
+
+  # fedora-third-party may have created/enabled RPM Fusion repositories above.
+  # Reconcile the NVIDIA package ownership before the main install transaction.
+  configure_nvidia_repo_policy
 
   # Add the NVIDIA CUDA + container-toolkit repositories only on NVIDIA hosts;
   # the driver/container packages are appended to the install set under the same
@@ -580,6 +611,10 @@ configure_user_groups() {
   fi
 }
 
+# Reconcile existing hosts before install_fedora_packages can return through its
+# all-packages-present fast path. Fresh hosts run this again after RPM Fusion is
+# installed inside setup_fedora_repos.
+configure_nvidia_repo_policy
 install_fedora_packages
 install_nvidia_support
 install_direct_rpms

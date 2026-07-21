@@ -453,6 +453,16 @@ jobs:
             exit 1
           fi
 
+      - name: Assert Fedora NVIDIA repository ownership
+        if: matrix.os == 'fedora'
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh"
+          test -f "${rendered}"
+          test ! -e "${rendered}.render-error.txt"
+          bash -n "${rendered}"
+          "${GITHUB_WORKSPACE}/.ci/smoke-fedora-nvidia-repo-policy.sh" "${rendered}"
+
       - name: Assert CLIProxyAPI internals are excluded from real containers
         run: |
           set -euxo pipefail
