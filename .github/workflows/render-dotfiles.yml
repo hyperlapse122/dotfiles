@@ -186,15 +186,13 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-      - name: Assert CLIProxyAPI is excluded from real containers
+      - name: Assert Pi direct-provider baseline in real containers
         run: |
           set -euxo pipefail
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
-          test ! -e "${out}/.config/cli-proxy-api"
-          test ! -e "${out}/.local/libexec/cli-proxy-api-launch"
-          test ! -e "${out}/.config/systemd/user/cli-proxy-api.service"
-          test ! -e "${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
-          test ! -e "${out}/.pi/agent/models.json"
+          pi_models="${out}/.pi/agent/models.json"
+          test -f "${pi_models}"
+          jq -e '. == {"providers": {}}' "${pi_models}" >/dev/null
 
       - name: Assert rendered agent and service configuration
         run: |
@@ -463,19 +461,6 @@ jobs:
           bash -n "${rendered}"
           "${GITHUB_WORKSPACE}/.ci/smoke-fedora-nvidia-repo-policy.sh" "${rendered}"
 
-      - name: Assert CLIProxyAPI internals are excluded from real containers
-        run: |
-          set -euxo pipefail
-          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
-          reconciler="${out}/.chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh"
-          external="${out}/.chezmoiexternals/ai-agents.toml"
-          test -f "${reconciler}"
-          test ! -e "${reconciler}.render-error.txt"
-          test ! -s "${reconciler}"
-          test -f "${external}"
-          test ! -e "${external}.render-error.txt"
-          ! grep -q '^\[cli-proxy-api\]' "${external}"
-
       - name: Upload rendered internals
         if: always()
         uses: actions/upload-artifact@v7
@@ -484,284 +469,6 @@ jobs:
           path: _artifacts/rendered-internals
           retention-days: 3
           include-hidden-files: true
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Task 3: CLIProxyAPI release provenance, reconciler transitions, target
-  # selection, native binary semantics, and service-file validation. The
-  # supervisor adapters are deterministic on both platforms; this job does NOT
-  # claim to activate a real login-session user manager on an ephemeral runner.
-  # ---------------------------------------------------------------------------
-  cli-proxy-api:
-    name: CLIProxyAPI resolver + native smoke (${{ matrix.platform }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { platform: linux, runner: ubuntu-latest }
-          - { platform: darwin, runner: macos-latest }
-    env:
-      CPA_PLATFORM: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install native smoke dependencies
-        run: |
-          set -euxo pipefail
-          if [[ "${CPA_PLATFORM}" == linux ]]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends curl jq lsof >/dev/null
-          else
-            command -v curl
-            command -v jq
-            command -v lsof
-            command -v plutil
-          fi
-
-          bindir="${RUNNER_TEMP}/bin"
-          mkdir -p "${bindir}"
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "${bindir}"
-          "${bindir}/chezmoi" --version
-
-          # Render-only checks use the standard no-secret op stub. No live HOME,
-          # 1Password account, or host chezmoi config is consulted.
-          cat > "${bindir}/op" <<'EOF'
-          #!/usr/bin/env bash
-          set -eu
-          case "${1-}" in
-            whoami) printf 'dummy@example.invalid\n' ;;
-            read|item) printf dummy-secret ;;
-            *) printf dummy-secret ;;
-          esac
-          EOF
-          chmod 0755 "${bindir}/op"
-          echo "${bindir}" >> "${GITHUB_PATH}"
-
-      - name: Resolve and verify the exact native release
-        run: |
-          set -euo pipefail
-          scratch="${RUNNER_TEMP}/cli-proxy-api"
-          mkdir -p "${scratch}/target"
-          : > "${scratch}/empty.toml"
-          cat > "${scratch}/ref.tmpl" <<'EOF'
-          {{ includeTemplate "cli-proxy-api-ref.tmpl" (dict "ctx" .) }}
-          EOF
-          chezmoi --config "${scratch}/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            execute-template < "${scratch}/ref.tmpl" > "${scratch}/release.json"
-
-          jq -e '
-            (.tag | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) and
-            (.version == (.tag | ltrimstr("v"))) and
-            (.asset | test("^CLIProxyAPI_[0-9]+\\.[0-9]+\\.[0-9]+_(linux|darwin)_(amd64|aarch64)\\.tar\\.gz$")) and
-            (.sha256 | test("^[0-9a-f]{64}$")) and
-            (.identity == (.tag + "-" + .sha256[0:12]))
-          ' "${scratch}/release.json" >/dev/null
-
-          tag=$(jq -r .tag "${scratch}/release.json")
-          asset=$(jq -r .asset "${scratch}/release.json")
-          expected_sha=$(jq -r .sha256 "${scratch}/release.json")
-          checksums_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/${tag}/checksums.txt"
-          archive_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/${tag}/${asset}"
-          curl -fsSL --retry 3 "${checksums_url}" > "${scratch}/checksums.txt"
-          [ "$(awk -v asset="${asset}" '$2 == asset { count++ } END { print count+0 }' "${scratch}/checksums.txt")" -eq 1 ]
-          [ "$(awk -v asset="${asset}" '$2 == asset { print $1 }' "${scratch}/checksums.txt")" = "${expected_sha}" ]
-          curl -fsSL --retry 3 "${archive_url}" > "${scratch}/${asset}"
-          if command -v sha256sum >/dev/null 2>&1; then
-            actual_sha=$(sha256sum "${scratch}/${asset}" | awk '{print $1}')
-          else
-            actual_sha=$(shasum -a 256 "${scratch}/${asset}" | awk '{print $1}')
-          fi
-          [ "${actual_sha}" = "${expected_sha}" ]
-          tar tzf "${scratch}/${asset}" > "${scratch}/archive-contents.txt"
-          grep -qx 'cli-proxy-api' "${scratch}/archive-contents.txt"
-          mkdir -p "${scratch}/extracted"
-          tar xzf "${scratch}/${asset}" -C "${scratch}/extracted" cli-proxy-api
-          if command -v sha256sum >/dev/null 2>&1; then
-            binary_sha=$(sha256sum "${scratch}/extracted/cli-proxy-api" | awk '{print $1}')
-          else
-            binary_sha=$(shasum -a 256 "${scratch}/extracted/cli-proxy-api" | awk '{print $1}')
-          fi
-          {
-            printf 'archive_sha256=%s  %s\n' "${actual_sha}" "${asset}"
-            printf 'binary_sha256=%s  cli-proxy-api\n' "${binary_sha}"
-          } > "${scratch}/verified.txt"
-          echo "CPA_RELEASE_ARCHIVE=${scratch}/${asset}" >> "${GITHUB_ENV}"
-
-      - name: Hard-render the supported external manifests
-        run: |
-          set -euo pipefail
-          stat_mode() {
-            if [[ "${CPA_PLATFORM}" == darwin ]]; then
-              stat -f '%Lp' "$1"
-            else
-              stat -c '%a' "$1"
-            fi
-          }
-          scratch="${RUNNER_TEMP}/cli-proxy-api"
-          chezmoi --config "${scratch}/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            execute-template < .chezmoiexternals/ai-agents.toml > "${scratch}/ai-agents.toml"
-          chezmoi --config "${scratch}/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            execute-template < .chezmoiexternals/dev-tools.toml > "${scratch}/dev-tools.toml"
-
-          tag=$(jq -r .tag "${scratch}/release.json")
-          asset=$(jq -r .asset "${scratch}/release.json")
-          identity=$(jq -r .identity "${scratch}/release.json")
-          sha=$(jq -r .sha256 "${scratch}/release.json")
-          grep -F "targetPath = '.local/share/cli-proxy-api/versions/${identity}/cli-proxy-api'" \
-            "${scratch}/ai-agents.toml"
-          grep -F "url = 'https://github.com/router-for-me/CLIProxyAPI/releases/download/${tag}/${asset}'" \
-            "${scratch}/ai-agents.toml"
-          grep -F "sha256 = '${sha}'" "${scratch}/ai-agents.toml"
-
-          managed_binary="${scratch}/target/.local/share/cli-proxy-api/versions/${identity}/cli-proxy-api"
-          mkdir -p "$(dirname "${managed_binary}")"
-          chezmoi --config "${scratch}/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            apply --include=externals "${managed_binary}"
-          test -x "${managed_binary}"
-          [[ "$(stat_mode "${managed_binary}")" == 500 ]]
-
-          if [[ "${CPA_PLATFORM}" == darwin ]]; then
-            grep -q '^\[jq\]$' "${scratch}/dev-tools.toml"
-            grep -q "^targetPath = '.local/bin/jq'$" "${scratch}/dev-tools.toml"
-            grep -Eq "^sha256 = '[0-9a-f]{64}'$" "${scratch}/dev-tools.toml"
-            managed_jq="${scratch}/target/.local/bin/jq"
-            mkdir -p "$(dirname "${managed_jq}")"
-            chezmoi --config "${scratch}/empty.toml" \
-              --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-              apply --include=externals "${managed_jq}"
-            "${managed_jq}" --version
-          elif grep -q '^\[jq\]$' "${scratch}/dev-tools.toml"; then
-            echo 'macOS-only jq external rendered on Linux' >&2
-            exit 1
-          fi
-
-      - name: Test deterministic resolver and infrastructure contracts
-        run: |
-          set -euxo pipefail
-          .ci/test-cli-proxy-api-infrastructure.sh
-
-      - name: Render and test reversible supervisor transitions
-        run: |
-          set -euxo pipefail
-          scratch="${RUNNER_TEMP}/cli-proxy-api"
-          chezmoi --config "${scratch}/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            execute-template \
-            < .chezmoiscripts/90-services/run_after_cli-proxy-api-service.sh.tmpl \
-            > "${scratch}/reconciler.sh"
-          bash -n "${scratch}/reconciler.sh"
-          cp "${scratch}/reconciler.sh" "${scratch}/reconciler-${CPA_PLATFORM}.sh"
-          manifest_value() {
-            awk -F= -v key="$1" '$1 == key { gsub(/^"|"$/, "", $2); print $2; exit }' \
-              "${scratch}/reconciler.sh"
-          }
-          [[ "$(manifest_value CPA_RELEASE_TAG)" == "$(jq -r .tag "${scratch}/release.json")" ]]
-          [[ "$(manifest_value CPA_RELEASE_ASSET)" == "$(jq -r .asset "${scratch}/release.json")" ]]
-          [[ "$(manifest_value CPA_RELEASE_SHA256)" == "$(jq -r .sha256 "${scratch}/release.json")" ]]
-          [[ "$(manifest_value CPA_RELEASE_ID)" == "$(jq -r .identity "${scratch}/release.json")" ]]
-          grep -F 'CPA_MANAGEMENT_SECRET_REF="op://Private/CLI Proxy API/password"' "${scratch}/reconciler.sh"
-          ! grep -F 'MANAGEMENT_PASSWORD' "${scratch}/reconciler.sh" >/dev/null
-          CPA_TEST_OWNER_TEST=1 \
-            .ci/test-cli-proxy-api-service.sh "${scratch}/reconciler.sh" "${CPA_PLATFORM}"
-
-      - name: Assert platform-specific rendered targets
-        run: |
-          set -euxo pipefail
-          scratch="${RUNNER_TEMP}/cli-proxy-api"
-          out="${scratch}/target"
-          mkdir -p \
-            "${out}/.config/cli-proxy-api" \
-            "${out}/.local/libexec"
-          targets=(
-            "${out}/.config/cli-proxy-api/config.yaml"
-            "${out}/.local/libexec/cli-proxy-api-launch"
-          )
-          if [[ "${CPA_PLATFORM}" == linux ]]; then
-            mkdir -p "${out}/.config/systemd/user"
-            targets+=("${out}/.config/systemd/user/cli-proxy-api.service")
-          else
-            mkdir -p "${out}/Library/LaunchAgents"
-            targets+=("${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist")
-          fi
-          # Apply only this integration's targets. A full empty-config archive on
-          # macOS renders unrelated Linux templates that require osRelease.id.
-          chezmoi --config "${scratch}/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" --destination "${scratch}/target" \
-            apply "${targets[@]}"
-          test -f "${out}/.config/cli-proxy-api/config.yaml"
-          test ! -e "${out}/.local/share/cli-proxy-api/runtime"
-          grep -qx '  secret-key: ""' "${out}/.config/cli-proxy-api/config.yaml"
-          test -x "${out}/.local/libexec/cli-proxy-api-launch"
-          target_mode() {
-            if [[ "${CPA_PLATFORM}" == darwin ]]; then
-              stat -f '%Lp' "$1"
-            else
-              stat -c '%a' "$1"
-            fi
-          }
-          [[ "$(target_mode "${out}/.config/cli-proxy-api/config.yaml")" == 444 ]]
-          [[ "$(target_mode "${out}/.local/libexec/cli-proxy-api-launch")" == 700 ]]
-          if [[ "${CPA_PLATFORM}" == linux ]]; then
-            test -f "${out}/.config/systemd/user/cli-proxy-api.service"
-            [[ "$(target_mode "${out}/.config/systemd/user/cli-proxy-api.service")" == 444 ]]
-            test ! -e "${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
-          else
-            test -f "${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
-            [[ "$(target_mode "${out}/Library/LaunchAgents/dev.h82.cli-proxy-api.plist")" == 444 ]]
-            test ! -e "${out}/.config/systemd/user/cli-proxy-api.service"
-          fi
-
-      - name: Validate the native service definition
-        run: |
-          set -euxo pipefail
-          scratch="${RUNNER_TEMP}/cli-proxy-api"
-          if [[ "${CPA_PLATFORM}" == linux ]]; then
-            verify_home="${scratch}/systemd-home"
-            mkdir -p "${verify_home}/.local/libexec"
-            cp dot_local/libexec/private_executable_cli-proxy-api-launch \
-              "${verify_home}/.local/libexec/cli-proxy-api-launch"
-            chmod 700 "${verify_home}/.local/libexec/cli-proxy-api-launch"
-            sed "s|%h|${verify_home}|g" dot_config/systemd/user/readonly_cli-proxy-api.service \
-              > "${scratch}/cli-proxy-api.service"
-            systemd-analyze --user verify "${scratch}/cli-proxy-api.service"
-          else
-            plutil -lint "${scratch}/target/Library/LaunchAgents/dev.h82.cli-proxy-api.plist"
-          fi
-
-      - name: Run the managed external through the hardened launcher and shared probe
-        run: |
-          set -euxo pipefail
-          scratch="${RUNNER_TEMP}/cli-proxy-api"
-          identity=$(jq -r .identity "${scratch}/release.json")
-          managed_binary="${scratch}/target/.local/share/cli-proxy-api/versions/${identity}/cli-proxy-api"
-          for persistent_auth in 0 1; do
-            if [[ "${CPA_PLATFORM}" == darwin ]]; then
-              CPA_RELEASE_BINARY="${managed_binary}" \
-                CPA_JQ_OVERRIDE="${scratch}/target/.local/bin/jq" \
-                CPA_NATIVE_PERSISTENT_AUTH="${persistent_auth}" \
-                .ci/run-cli-proxy-api-native-smoke.sh
-            else
-              CPA_RELEASE_BINARY="${managed_binary}" \
-                CPA_NATIVE_PERSISTENT_AUTH="${persistent_auth}" \
-                .ci/run-cli-proxy-api-native-smoke.sh
-            fi
-          done
-
-      - name: Upload release identity evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: rendered-cli-proxy-api-${{ matrix.platform }}
-          path: |
-            ${{ runner.temp }}/cli-proxy-api/release.json
-            ${{ runner.temp }}/cli-proxy-api/verified.txt
-            ${{ runner.temp }}/cli-proxy-api/reconciler-${{ matrix.platform }}.sh
-          retention-days: 3
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -1072,17 +779,8 @@ jobs:
             throw 'Unexpected Anthropic provider in OpenCode config on Windows'
           }
 
-          $forbidden = @(
-            '.config\cli-proxy-api',
-            '.local\libexec\cli-proxy-api-launch',
-            '.config\systemd\user\cli-proxy-api.service',
-            'Library\LaunchAgents\dev.h82.cli-proxy-api.plist',
-            '.pi\agent\models.json'
-          )
-          foreach ($relative in $forbidden) {
-            $path = Join-Path $out $relative
-            if (Test-Path $path) { throw "CLIProxyAPI target must be absent on Windows: $relative" }
-          }
+          $piModelsPath = Join-Path $out '.pi\agent\models.json'
+          if (Test-Path $piModelsPath) { throw 'Pi models target must be absent on Windows' }
 
       - name: Upload rendered files
         if: always()
@@ -1135,22 +833,6 @@ jobs:
           # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
           exit 0
 
-      - name: Assert CLIProxyAPI internals are excluded from Windows
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
-          $reconciler = Join-Path $out '.chezmoiscripts\90-services\run_after_cli-proxy-api-service.sh'
-          $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
-          if (Test-Path "$reconciler.render-error.txt") { throw 'CLIProxyAPI reconciler failed to render on Windows' }
-          # ai-agents has pre-existing Windows-only render errors before its
-          # OS-gated blocks; only this new reconciler must render cleanly empty.
-          if (-not (Test-Path $reconciler)) { throw 'rendered CLIProxyAPI reconciler fixture missing' }
-          if ((Get-Item $reconciler).Length -ne 0) { throw 'CLIProxyAPI reconciler rendered on Windows' }
-          if (-not (Test-Path $external)) { throw 'rendered ai-agents external missing' }
-          if (Select-String -Quiet -Path $external -Pattern '^\[cli-proxy-api\]') {
-            throw 'CLIProxyAPI external rendered on Windows'
-          }
-
       - name: Upload rendered internals
         if: always()
         uses: actions/upload-artifact@v7
@@ -1175,7 +857,7 @@ jobs:
   # lost. Findings are also uploaded as a `shellcheck-report` artifact.
   shellcheck:
     name: Shellcheck (rendered scripts + repo-meta)
-    needs: [apply, render-internals, cli-proxy-api, apply-macos]
+    needs: [apply, render-internals, apply-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -1341,7 +1023,6 @@ jobs:
       [
         apply,
         render-internals,
-        cli-proxy-api,
         apply-macos,
         apply-windows,
         shellcheck,
@@ -1353,7 +1034,6 @@ jobs:
         env:
           APPLY_RESULT: ${{ needs.apply.result }}
           RENDER_INTERNALS_RESULT: ${{ needs.render-internals.result }}
-          CLI_PROXY_API_RESULT: ${{ needs.cli-proxy-api.result }}
           APPLY_MACOS_RESULT: ${{ needs.apply-macos.result }}
           APPLY_WINDOWS_RESULT: ${{ needs.apply-windows.result }}
           SHELLCHECK_RESULT: ${{ needs.shellcheck.result }}
@@ -1364,7 +1044,6 @@ jobs:
           for result in \
             "apply=${APPLY_RESULT}" \
             "render-internals=${RENDER_INTERNALS_RESULT}" \
-            "cli-proxy-api=${CLI_PROXY_API_RESULT}" \
             "apply-macos=${APPLY_MACOS_RESULT}" \
             "apply-windows=${APPLY_WINDOWS_RESULT}" \
             "shellcheck=${SHELLCHECK_RESULT}" \
