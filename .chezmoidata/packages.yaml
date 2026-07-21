@@ -153,6 +153,19 @@ packages:
       repoFiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
         - https://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo  # Oracle VirtualBox stable RPM repo (fetched over HTTPS; the .repo file's own baseurl stays as Oracle publishes it — http:// with gpgcheck=1 + repo_gpgcheck=1, signed by oracle_vbox_2016.asc)
+      # Fedora enables RPM Fusion for Steam and other nonfree packages while the
+      # CUDA repository owns the NVIDIA driver stack below. These package-name
+      # globs become repository-scoped DNF exclusions so RPM Fusion cannot offer
+      # its incompatible driver layout into the same transaction. Ubuntu has no
+      # counterpart because it does not enable RPM Fusion.
+      nvidiaRpmFusionExcludes:
+        - akmod-nvidia*
+        - kmod-nvidia*
+        - nvidia-modprobe
+        - nvidia-persistenced
+        - nvidia-settings
+        - nvidia-xconfig
+        - xorg-x11-drv-nvidia*
       # dnf groups installed via `dnf group install` (own transaction, separate
       # from the individual packages below). Fedora-only mechanism: dnf comps groups
       # are first-class install targets. apt has no group verb (its task metapackages
