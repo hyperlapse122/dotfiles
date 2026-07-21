@@ -54,15 +54,6 @@ src/garden.yaml
 {{- if eq .chezmoi.os "windows" }}
 .pi/agent/extensions/mxm4-haptic.ts
 .pi/agent/settings.json
-# CLIProxyAPI has no Windows service/reconciler and must not render partial state.
-.chezmoiscripts/90-services/*cli-proxy-api*.sh
-.config/cli-proxy-api
-.local/libexec/cli-proxy-api-launch
-{{- end }}
-
-# CLIProxyAPI is supported only on Linux/macOS workstations. Keep Pi's localhost
-# Anthropic override off every other OS even though Pi itself is POSIX-capable.
-{{- if not (or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin")) }}
 .pi/agent/models.json
 {{- end }}
 
@@ -101,11 +92,6 @@ src/garden.yaml
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
-.chezmoiscripts/90-services/*cli-proxy-api*.sh
-.config/cli-proxy-api
-.config/systemd/user/cli-proxy-api.service
-.local/libexec/cli-proxy-api-launch
-Library/LaunchAgents/dev.h82.cli-proxy-api.plist
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude Code haptic plugin and the pi haptic extension have nothing to
 # pulse — skip the deployed plugin tree and the pi extension. The generic
@@ -117,11 +103,6 @@ Library/LaunchAgents/dev.h82.cli-proxy-api.plist
 # match the former *claude-plugins.sh glob).
 .local/share/claude-plugins
 .pi/agent/extensions/mxm4-haptic.ts
-.pi/agent/models.json
-# CLIProxyAPI infrastructure is deliberately skipped in real containers: no
-# external candidate, config, launcher, user service, or reconciliation side
-# effect. The empty Pi models baseline only migrates workstation hosts away from
-# the former localhost override, so containers do not need that target either.
 # The 80-keys age-identity import is skipped above, so the encrypted ~/src
 # project registry cannot be decrypted in a container — skip it too (the
 # ~/src layout is a host concept anyway).

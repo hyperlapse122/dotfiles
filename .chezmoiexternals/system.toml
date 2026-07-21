@@ -77,8 +77,8 @@ refreshPeriod = "8760h"
   cached download, NOT a single type=archive: an archive external has no fixed
   target path, so chezmoi must download and extract the whole zip just to
   enumerate its entries while building the target state — even during an
-  unrelated `apply --include=externals <other>`, which coupled the cli-proxy-api
-  smoke to a 20 MB MikroTik download. archive-file has explicit target paths, so
+  unrelated `apply --include=externals <other>`, which coupled unrelated checks
+  to a 20 MB MikroTik download. archive-file has explicit target paths, so
   the zip is fetched only when winbox itself is applied. Mirrors ast-grep/sg.
 */ -}}
 

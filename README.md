@@ -59,9 +59,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    On Ubuntu, Tailscale egress-NAT via ufw is enabled; on Ubuntu Studio
    specifically (detected by its `ubuntustudio-default-settings` package),
    pro-audio essentials (PipeWire config, `@audio` realtime privileges,
-   low-latency boot tuning) are also provisioned. On Linux and macOS workstation
-   hosts, apply also installs and readiness-checks the authenticated loopback
-   CLIProxyAPI localhost service described below.
+   low-latency boot tuning) are also provisioned.
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
@@ -100,77 +98,6 @@ a non-blank answer, so:
   from `~/.config/chezmoi/chezmoi.toml` and re-running `chezmoi init`
   (or `chezmoi init --data=false`).
 
-## CLIProxyAPI localhost service
-
-Linux and macOS workstation applies install
-[`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) as a
-managed loopback service. No managed agent configuration routes requests through
-it: Pi uses its built-in `anthropic` provider directly, with
-`@gotgenes/pi-anthropic-auth` supplying Claude Pro/Max OAuth compatibility while
-preserving Pi's native `/login anthropic` flow. The explicit empty provider map
-under `agents.pi.models` renders to `~/.pi/agent/models.json` to clear the former
-localhost override. OpenCode, Claude Code, Codex, and Pi otherwise retain their
-direct provider configuration.
-
-The service's Management API credential is read from
-`op://Private/CLI Proxy API/password` at apply time; the source snapshot stays
-read-only and the private runtime copy is bcrypt-locked at mode 0400 before
-supervision. Server-side client API keys and provider plugins remain disabled.
-Provider credentials created through the loopback Management UI/API persist only
-as owner-private live files under `~/.local/share/cli-proxy-api/auth/`; they are
-never rendered from this repo.
-
-Chezmoi downloads the latest full native release with its official SHA-256 into
-a version-and-digest candidate directory. A late `90-services` reconciler first
-disables config persistence, commits the candidate links, and proves listener,
-PID, health, credential-safe route, disabled-route, config, auth-metadata,
-binary, and output-log semantics in a bounded foreground launch. Host readiness
-uses only local parser/model-list checks and never consumes a provider credential.
-Only after those checks does the reconciler enable the native user supervisor and
-repeat readiness before pinning the extracted binary digest. Native CI separately
-proves both an isolated empty-auth `no auth available` response and persistent-auth
-startup with a disabled synthetic credential. Failed
-binary-only updates can restart a manifest-proven prior candidate; a changed
-config, policy, or candidate integrity check leaves the service disabled across
-future logins for inspection. Verified older candidates are retained rather
-than pruned automatically.
-
-Both systemd and launchd call a private internal launcher that accepts persistent
-top-level auth files only when each is non-empty, owner-owned, mode 0600,
-non-symlink, and singly linked; unsafe entries and a working-directory `.env`
-fail closed without reading, printing, or deleting credential contents. It then
-starts through `env -i` with `-local-model`. The reconciler rejects missing,
-malformed, or unreadable Management credentials, performs complete apply-time
-rotation, and only permits
-binary-only rollback when the credential and every policy input are unchanged.
-systemd retries failures within a bounded window;
-the LaunchAgent starts once per login and deliberately stays stopped after a
-failure rather than looping indefinitely. The complete managed config is a reviewed upstream
-`v7.2.80` snapshot and advances only by an explicit source diff. Historical
-`~/.cli-proxy-api` credentials are never read, printed, migrated, or deleted.
-The remaining credential-free Antigravity version metadata request is upstream
-behavior with no disable switch.
-
-Inspect the service with:
-
-```sh
-systemctl --user status cli-proxy-api.service                    # Linux
-launchctl print "gui/$(id -u)/dev.h82.cli-proxy-api"             # macOS
-```
-
-Authenticated localhost Management API activation is delivered by
-[issue #48](https://github.com/hyperlapse122/dotfiles/issues/48); CPA Usage Keeper
-and GNOME/KDE applets remain future consumers, not part of this service. The
-Management API is loopback-only. Mode 0400 blocks persistence to the managed
-runtime file, but authenticated holders retain full upstream Management authority;
-unsupported write routes may transiently affect in-memory state until restart even
-when persistence fails. Provider-auth lifecycle routes in the local control panel
-are supported; other consumers use read endpoints only. A future fine-grained
-route-filtering gateway remains out of scope.
-Other operating systems and real containers receive neither the service artifacts
-nor the workstation-only empty models migration target; Pi's direct Anthropic
-auth package remains part of managed settings wherever Pi is provisioned.
-
 ## Prerequisites
 
 - **Ubuntu 26.04 LTS**, **Ubuntu Studio 26.04 LTS**, **Fedora 44 Workstation**,
@@ -182,8 +109,7 @@ auth package remains part of managed settings wherever Pi is provisioned.
   `kdePackages` / `gnomePackages`); KDE hosts additionally get the Breeze
   de-branding, while GNOME hosts otherwise keep GNOME defaults. Ubuntu Studio
   additionally gets pro-audio essentials on every `chezmoi apply`.
-- macOS gets the cross-platform dotfiles plus the CLIProxyAPI user service;
-  Windows gets cross-platform dotfiles only.
+- macOS and Windows get the cross-platform dotfiles only.
 - **`sudo` access** — installing packages and writing `/etc` config needs root.
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
   at apply time through the 1Password CLI.
@@ -236,8 +162,7 @@ rate limit.
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
 `/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE/GNOME
-settings, no pro-audio realtime/system provisioning, no CLIProxyAPI localhost
-service, and no Pi localhost provider override. The OpenCode plugin build and
+settings, and no pro-audio realtime/system provisioning. The OpenCode plugin build and
 `dotagents` install still run (and soft-skip if their toolchains are missing).
 This makes the repo usable as-is on CI runners and in dedicated containers that
 have their own `$HOME`.
@@ -292,15 +217,14 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   grouped by area with numeric prefixes fixing cross-group execution order
   (chezmoi runs each phase's scripts alphabetically by target path):
   `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `40-linux-ubuntu/`,
-  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`,
-  `90-services/`.
+  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`.
 - [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
   into scripts via `includeTemplate`: the `run_onchange_` dependency
   fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (claude-code, codex, CLIProxyAPI, codegraph, gh, glab, kubectl,
+  `~/.local/bin` (claude-code, codex, codegraph, gh, glab, kubectl,
   helm, macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
   declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
   into `~/.agents/skills/`.
@@ -324,8 +248,8 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   --force`. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
   template (MCP servers).
-- [`Library/`](Library) — macOS-only `~/Library` payload (LaunchAgents for
-  `mxm4-hapticd` and CLIProxyAPI).
+- [`Library/`](Library) — macOS-only `~/Library` payload (the `mxm4-hapticd`
+  LaunchAgent).
 
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).

@@ -1,6 +1,0 @@
-# CLIProxyAPI Management API credential source. Keep the value as an unresolved
-# 1Password reference: the service reconciler reads it at apply time and never
-# renders the credential into a target, fingerprint, or service definition.
-cliProxyApi:
-  management:
-    credential: "op://Private/CLI Proxy API/password"

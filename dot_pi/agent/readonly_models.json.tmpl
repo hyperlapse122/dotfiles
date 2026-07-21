@@ -1,13 +1,7 @@
-{{- /* ~/.pi/agent/models.json — managed direct-provider baseline for Pi on
-       supported Linux/macOS workstation hosts.
+{{- /* ~/.pi/agent/models.json — managed direct-provider baseline for Pi.
 
        The data-driven .agents.pi.models object intentionally contains an empty
-       providers map. Rendering it replaces the former CLIProxyAPI Anthropic
-       override while leaving Pi's built-in provider catalog and native endpoints
+       providers map, leaving Pi's built-in provider catalog and native endpoints
        untouched. This 0444 target deliberately does not call the secret resolver:
-       `agents.pi.models` must contain no `op://` values. The root .chezmoiignore
-       excludes it outside Linux/macOS workstations. */ -}}
-{{- $f := includeTemplate "facts.tmpl" . | fromYaml -}}
-{{- if and (or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin")) (not $f.container) -}}
+       `agents.pi.models` must contain no `op://` values. */ -}}
 {{ .agents.pi.models | toPrettyJson }}
-{{- end }}
