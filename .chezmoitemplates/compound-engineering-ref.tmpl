@@ -17,9 +17,11 @@
            — prunes sibling versions under ~/.local/share/compound-engineering
            so only the current tag remains on disk.
          - .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
-           — the generic runner registers the same versioned path with Claude Code and Codex
+           — the generic runner registers the same versioned path with Claude Code and Codex,
+             and installs its native bundle root for AGY
            (OpenCode is file-phase only: it reads the path from its readonly
-           config; every ref bump also re-registers here for Claude/Codex
+           config; every ref bump also re-registers here for Claude/Codex and
+           reinstalls the resolved bundle for AGY
            because the marketplace path itself changed). pi is NOT a consumer
            of this ref: it installs compound-engineering as a native `git:`
            source (a packages entry), tracking the default branch unpinned,

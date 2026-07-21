@@ -1,13 +1,13 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- /*
-run_onchange_after_install-agent-plugins.sh.tmpl — the generic Claude Code +
-Codex plugin installer. Replaces install-claude-plugins (mxm4-haptic) and
+run_onchange_after_install-agent-plugins.sh.tmpl — the generic Claude Code,
+Codex, and AGY plugin installer. Replaces install-claude-plugins (mxm4-haptic) and
 install-compound-engineering (compound-engineering), both of which hardcoded
 their plugin + marketplace names.
 
 The plugins are DATA: .chezmoidata/agents.yaml is the single source of truth.
-agents.claude.plugins and agents.codex.plugins are per-agent {name, marketplace}
-lists; agents.marketplaces is the shared registry that carries each
+agents.claude.plugins, agents.codex.plugins, and agents.agy.plugins are
+per-agent {name, marketplace} lists; agents.marketplaces is the shared registry that carries each
 marketplace's kind + os + container gating. Edit the yaml, not the PLUGINS array
 below — the rows render into this script, so a data edit changes this script's
 content and re-triggers it (the same move config-kde-settings made for eight KDE
@@ -87,7 +87,7 @@ no runtime OS/container guard. Net-identical to the old whole-script
 {{- end -}}
 
 {{- $rows := list -}}
-{{- range $agent := (list "claude" "codex") -}}
+{{- range $agent := (list "agy" "claude" "codex") -}}
 {{-   $agentCfg := index $ctx.agents $agent -}}
 {{-   $plugins := list -}}
 {{-   if $agentCfg -}}{{- if hasKey $agentCfg "plugins" -}}{{- $plugins = index $agentCfg "plugins" -}}{{- end -}}{{- end -}}
@@ -191,13 +191,13 @@ no runtime OS/container guard. Net-identical to the old whole-script
 #!/usr/bin/env bash
 # .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl
 #
-# The generic Claude Code + Codex plugin installer: registers every plugin in
-# .chezmoidata/agents.yaml (agents.claude.plugins + agents.codex.plugins) with
-# the matching CLI. EDIT THE YAML, not the PLUGINS array below — the rows render
+# The generic Claude Code + Codex + AGY plugin installer: registers every plugin
+# in .chezmoidata/agents.yaml (agents.{claude,codex,agy}.plugins) with the
+# matching CLI. EDIT THE YAML, not the PLUGINS array below — the rows render
 # into this script, so a data edit re-triggers this run_onchange_ script.
 #
 # Each row is "<agent>:<plugin>:<marketplace>:<kind>:<path>":
-#   - <agent>       claude | codex — selects the CLI and its verb set;
+#   - <agent>       claude | codex | agy — selects the CLI and its verb set;
 #   - <plugin>      the plugin name (installed as <plugin>@<marketplace>);
 #   - <marketplace> the registered marketplace name (matches its marketplace.json);
 #   - <kind>        localDir | localArchive | github — how the source resolves
@@ -278,20 +278,12 @@ install_plugins() {
       continue
     fi
 
-    # A local marketplace (localDir tree / localArchive extraction) is placed in
-    # the file phase that precedes this script; a valid marketplace directory
-    # always carries .claude-plugin/marketplace.json, so a missing one means the
-    # target was ignored or the apply is partial. A github marketplace has no
-    # local tree — its `path` is an owner/repo the CLI fetches — so skip the
-    # local check for it.
-    case "$kind" in
-      localDir|localArchive)
-        if [[ ! -f "$path/.claude-plugin/marketplace.json" ]]; then
-          warn "$agent: skipped ${plugin} (no marketplace at $path)"
-          continue
-        fi
-        ;;
-    esac
+    # Claude and Codex consume marketplace manifests; AGY consumes the native
+    # bundle contract checked in its own branch below.
+    if [[ "$agent" != agy && "$kind" != github && ! -f "$path/.claude-plugin/marketplace.json" ]]; then
+      warn "$agent: skipped ${plugin} (no marketplace at $path)"
+      continue
+    fi
 
     case "$agent" in
       claude)
@@ -319,6 +311,41 @@ install_plugins() {
         fi
         if ! codex plugin add "${plugin}@${market}"; then
           warn "codex: skipped (add of ${plugin}@${market} failed)"
+          continue
+        fi
+        ;;
+      agy)
+        # AGY consumes a native bundle root directly. Local sources must carry
+        # the upstream contract (plugin.json + skills/); github sources are
+        # expanded from the shared owner/repo registry value to a URL.
+        local agy_source="$path"
+        if [[ "$kind" == github ]]; then
+          agy_source="https://github.com/${path}"
+        elif [[ ! -f "$path/plugin.json" || ! -d "$path/skills" ]]; then
+          warn "agy: skipped ${plugin} (no native plugin bundle at $path)"
+          continue
+        fi
+        if [[ "$kind" != github ]]; then
+          if ! command -v jq >/dev/null 2>&1; then
+            warn "agy: skipped ${plugin} (jq not on PATH to verify $path/plugin.json)"
+            continue
+          fi
+          local manifest_name
+          if ! manifest_name=$(jq -er '.name | select(type == "string" and length > 0)' "$path/plugin.json" 2>/dev/null); then
+            warn "agy: skipped ${plugin} (invalid plugin manifest at $path/plugin.json)"
+            continue
+          fi
+          if [[ "$manifest_name" != "$plugin" ]]; then
+            warn "agy: skipped ${plugin} (manifest declares $manifest_name at $path)"
+            continue
+          fi
+        fi
+        if ! agy plugin install "$agy_source"; then
+          warn "agy: skipped ${plugin} (install failed for $agy_source)"
+          continue
+        fi
+        if ! agy plugin validate "$agy_source"; then
+          warn "agy: ${plugin} installed but validation failed for $agy_source"
           continue
         fi
         ;;
