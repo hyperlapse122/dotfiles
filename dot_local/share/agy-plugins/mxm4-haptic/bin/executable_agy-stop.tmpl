@@ -1,0 +1,53 @@
+{{- /* Fail the apply loudly on a typo'd waveform — the 16 names mirror
+       crates/mxm4-haptic/src/lib.rs (WAVEFORMS), same guard as the Claude/pi/codex
+       maps. Only the two waveforms this helper uses are checked. */ -}}
+{{- $waveforms := list
+  "SHARP STATE CHANGE" "DAMP STATE CHANGE" "SHARP COLLISION" "DAMP COLLISION"
+  "SUBTLE COLLISION" "HAPPY ALERT" "ANGRY ALERT" "COMPLETED" "SQUARE" "WAVE"
+  "FIREWORK" "MAD" "KNOCK" "JINGLE" "RINGING" "WHISPER COLLISION" -}}
+{{- range $k := list "settled" "failed" -}}
+{{- $w := index $.haptic.agy $k -}}
+{{- if not (has $w $waveforms) -}}
+{{- fail (printf "haptic.agy.%s = %q is not a known mxm4-haptic waveform; valid names (crates/mxm4-haptic/src/lib.rs WAVEFORMS): %s" $k $w (join ", " $waveforms)) -}}
+{{- end -}}
+{{- end -}}
+#!/usr/bin/env sh
+# mxm4-haptic-agy-stop — agy Stop hook. Buzz the MX Master 4 on a settled/failed
+# turn, then emit a non-blocking response.
+#
+# GENERATED from .chezmoidata/haptic.yaml (haptic.agy) — retune the waveforms THERE.
+# Wired by the sibling hooks.json (Stop event). Reads the Stop event JSON on stdin.
+#
+# CONTRACT: ALWAYS prints "{}" and exits 0. agy hooks speak an allow/deny protocol;
+# "{}" (exit 0) is the non-blocking no-op. A buzz that cannot be delivered — daemon
+# stopped, mouse asleep/unpaired, client not built, jq missing — is a silent no-op
+# that never blocks, slows, or fails the turn. Do not let an error escape.
+#
+# Waveform choice:
+#   fullyIdle == false            -> no buzz (a sub-agent / background task is still
+#                                    running; only the fully-idle root turn buzzes).
+#   terminationReason == "error"  -> FAILED   (the turn died on an error)
+#   or a non-empty `error` field
+#   otherwise                     -> SETTLED  (a clean finish)
+
+SETTLED={{ .haptic.agy.settled | quote }}
+FAILED={{ .haptic.agy.failed | quote }}
+
+# Prefer the well-known client path; fall back to PATH. Absent -> silent no-op.
+h="$HOME/.local/bin/mxm4-haptic"
+if [ ! -x "$h" ]; then
+  h="$(command -v mxm4-haptic 2>/dev/null)" || h=""
+fi
+
+if [ -n "$h" ] && [ -x "$h" ] && command -v jq >/dev/null 2>&1; then
+  # jq reads the event JSON from stdin. Emits S (settled), F (failed), or empty
+  # (skip: not fully idle). On any parse failure w is empty -> no buzz.
+  w="$(jq -r 'if (.fullyIdle == false) then "" elif (.terminationReason == "error") or (((.error // "") | tostring) | length > 0) then "F" else "S" end' 2>/dev/null || printf '')"
+  case "$w" in
+    F) "$h" "$FAILED" >/dev/null 2>&1 ;;
+    S) "$h" "$SETTLED" >/dev/null 2>&1 ;;
+  esac
+fi
+
+printf '{}'
+exit 0

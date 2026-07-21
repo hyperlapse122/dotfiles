@@ -127,3 +127,42 @@ haptic:
     settled: COMPLETED
     failed: MAD
     question: RINGING
+  # haptic.agy — Antigravity CLI (agy) hook event -> waveform, for the mxm4-haptic
+  # agy PLUGIN (dot_local/share/agy-plugins/mxm4-haptic/, installed by the generic
+  # install-agent-plugins runner as agy's native bundle). agy's hooks component is a
+  # ROOT hooks.json (NOT hooks/hooks.json — verified: `agy plugin validate` skips a
+  # hooks/ dir but processes a root hooks.json). Same waveform rule as haptic.claude:
+  # each value MUST be one of the 16 names in crates/mxm4-haptic/src/lib.rs
+  # (WAVEFORMS); the template's fail guard aborts the apply on a typo.
+  #
+  #   settled  <- Stop hook, terminationReason != error and fullyIdle : turn finished
+  #               and the agent (plus any background/sub-agent work) is idle.
+  #   failed   <- Stop hook, terminationReason == "error" or a non-empty error field.
+  #   question <- PreToolUse matching the built-in `ask_question` tool. This hook
+  #               speaks agy's allow/deny protocol, so it ALWAYS returns
+  #               {"decision":"allow"} (fail-open) — a malformed response would deny
+  #               the tool and break agy. Sub-agent gating is free: the Stop hook
+  #               only buzzes when fullyIdle is true.
+  agy:
+    settled: COMPLETED
+    failed: MAD
+    question: RINGING
+  # haptic.codex — OpenAI Codex (codex) hook event -> waveform, for the mxm4-haptic
+  # codex PLUGIN (dot_local/share/codex-plugins/mxm4-haptic/, installed by the same
+  # generic runner). codex's hooks component is hooks/hooks.json (Claude-shape), and
+  # plugin hooks MERGE with the aoe-managed ~/.codex/hooks.json rather than
+  # overwriting it. Each value MUST be one of the 16 WAVEFORMS names.
+  #
+  #   settled  <- Stop hook            : the turn finished. SubagentStop is a separate
+  #                                      event left UNHOOKED, so Stop fires for the
+  #                                      root turn only (free sub-agent gating).
+  #   question <- PermissionRequest    : the agent is waiting on YOU to approve.
+  #
+  # codex has no failed waveform: the Stop payload carries no error/status field, so
+  # a failed turn is indistinguishable from a clean one here. The hooks fire the
+  # buzz then exit 0 with empty stdout — the codex-verified no-op that neither blocks
+  # the turn (Stop) nor alters the permission decision (PermissionRequest defers to
+  # the normal approval flow when no `decision` field is emitted).
+  codex:
+    settled: COMPLETED
+    question: RINGING

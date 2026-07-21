@@ -37,13 +37,15 @@ src/garden.yaml
 ./crates
 ./packages
 
-# The mxm4-haptic Claude Code plugin drives the Linux-only mxm4-hapticd daemon
-# (it owns Linux hidraw for the MX Master 4), so there is nothing to pulse on
-# macOS/Windows — mirrors the Linux-only mxm4-haptic.js OpenCode plugin symlink
-# in .chezmoiscripts/60-build/. Skipping the deployed tree also strands
-# nothing: the Claude installer script below is gated on linux too.
+# The mxm4-haptic Claude Code / Codex / AGY plugins drive the Linux-only
+# mxm4-hapticd daemon (it owns Linux hidraw for the MX Master 4), so there is
+# nothing to pulse on macOS/Windows — mirrors the Linux-only mxm4-haptic.js
+# OpenCode plugin symlink in .chezmoiscripts/60-build/. Skipping the deployed
+# trees also strands nothing: the installer rows below are gated on linux too.
 {{- if ne .chezmoi.os "linux" }}
 .local/share/claude-plugins
+.local/share/codex-plugins
+.local/share/agy-plugins
 {{- end }}
 
 # Pi is provisioned only on POSIX. Its mxm4-haptic extension shells out to the
@@ -93,15 +95,17 @@ src/garden.yaml
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
-# the Claude Code haptic plugin and the pi haptic extension have nothing to
-# pulse — skip the deployed plugin tree and the pi extension. The generic
+# the Claude/Codex/AGY haptic plugins and the pi haptic extension have nothing to
+# pulse — skip the deployed plugin trees and the pi extension. The generic
 # 70-agents/install-agent-plugins.sh script is deliberately KEPT (like the
 # dotagents skills install beside it): it still registers compound-engineering
-# (marketplace container: keep), while the mxm4-haptic row is filtered out at
-# RENDER time because its marketplace is container: skip — so there is no
+# (marketplace container: keep), while the mxm4-haptic rows are filtered out at
+# RENDER time because their marketplaces are container: skip — so there is no
 # whole-script skip to make here (the merged basename intentionally does not
 # match the former *claude-plugins.sh glob).
 .local/share/claude-plugins
+.local/share/codex-plugins
+.local/share/agy-plugins
 .pi/agent/extensions/mxm4-haptic.ts
 # The 80-keys age-identity import is skipped above, so the encrypted ~/src
 # project registry cannot be decrypted in a container — skip it too (the

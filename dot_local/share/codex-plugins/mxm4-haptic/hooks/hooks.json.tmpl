@@ -1,0 +1,65 @@
+{{- /*
+  Codex hook manifest for the mxm4-haptic plugin.
+
+  GENERATED from .chezmoidata/haptic.yaml (haptic.codex) — tune a waveform THERE,
+  never here. The structure (which event) is code and lives in this template; the
+  WAVEFORM per event is the data knob.
+
+  Codex loads a plugin-bundled hooks/hooks.json and MERGES it with the aoe-managed
+  ~/.codex/hooks.json (verified: `codex plugin add` ingests this bundle; docs
+  confirm sources merge), so aoe's session hooks and these coexist untouched.
+
+  Each command is a self-contained `sh -c` (the shape aoe's codex hooks use) that
+  best-effort-fires the mxm4-haptic client, then exits 0 with EMPTY stdout — the
+  codex-verified universal no-op: Stop treats "exit 0, no output" as continue, and
+  PermissionRequest with no `decision` field defers to the normal approval flow
+  (never auto-allow/deny). A buzz that cannot be delivered (daemon stopped, mouse
+  asleep, binary not built) is a silent no-op that never blocks or slows the turn.
+
+  Sub-agent gating is free: SubagentStop is a SEPARATE event, deliberately NOT
+  hooked here, so Stop fires for the ROOT turn only. Hooking SubagentStop would
+  buzz once per sub-agent during a fan-out.
+
+  Codex has no failed waveform — its Stop payload carries no error/status field.
+*/ -}}
+{{- $waveforms := list
+  "SHARP STATE CHANGE" "DAMP STATE CHANGE" "SHARP COLLISION" "DAMP COLLISION"
+  "SUBTLE COLLISION" "HAPPY ALERT" "ANGRY ALERT" "COMPLETED" "SQUARE" "WAVE"
+  "FIREWORK" "MAD" "KNOCK" "JINGLE" "RINGING" "WHISPER COLLISION" -}}
+{{- /* Fail the apply loudly on a typo'd waveform rather than silently never
+       buzzing — the same rule the Claude/pi maps use. The 16 names mirror
+       crates/mxm4-haptic/src/lib.rs (WAVEFORMS). */ -}}
+{{- range $event, $waveform := .haptic.codex -}}
+{{- if not (has $waveform $waveforms) -}}
+{{- fail (printf "haptic.codex.%s = %q is not a known mxm4-haptic waveform; valid names (crates/mxm4-haptic/src/lib.rs WAVEFORMS): %s" $event $waveform (join ", " $waveforms)) -}}
+{{- end -}}
+{{- end -}}
+{{- /* Fire-and-forget: resolve the client (absolute path, then PATH), pulse it,
+       and ALWAYS exit 0 with no output. %s is the waveform. */ -}}
+{{- $cmd := `sh -c 'h="$HOME/.local/bin/mxm4-haptic"; [ -x "$h" ] || h="$(command -v mxm4-haptic 2>/dev/null)" || exit 0; [ -n "$h" ] && "$h" "%s" >/dev/null 2>&1; exit 0'` -}}
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf $cmd .haptic.codex.settled | quote }},
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf $cmd .haptic.codex.question | quote }},
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

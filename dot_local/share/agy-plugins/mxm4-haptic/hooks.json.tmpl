@@ -1,0 +1,47 @@
+{{- /*
+  Antigravity CLI (agy) hook manifest for the mxm4-haptic plugin.
+
+  agy's hooks component is this ROOT hooks.json (verified with `agy plugin
+  validate`: a hooks/ subdir is skipped, a root hooks.json is processed). It wires
+  agy lifecycle events to the sibling bin/ helper scripts; the WAVEFORM per event is
+  the data knob and is baked into those scripts from .chezmoidata/haptic.yaml
+  (haptic.agy) — retune THERE, never here.
+
+  Both helpers are referenced by their chezmoi-deployed absolute path, so they
+  resolve whether agy reads this manifest from the bundle in place or from an
+  imported copy. Unlike the Claude/codex hooks, agy hooks speak an allow/deny
+  protocol on stdout: the Stop helper emits "{}" (non-blocking) and the PreToolUse
+  helper ALWAYS emits {"decision":"allow"} — a malformed response would deny the
+  tool and break agy, so the helper fails open. Sub-agent gating is free: the Stop
+  helper buzzes only when the event's fullyIdle is not false.
+
+    Stop        -> agy-stop : settled (COMPLETED) on a clean finish, failed (MAD)
+                              when terminationReason is "error" or an error is set.
+    PreToolUse  -> agy-ask  : question (RINGING) when the agent calls ask_question.
+*/ -}}
+{{- $bin := printf "%s/.local/share/agy-plugins/mxm4-haptic/bin" .chezmoi.homeDir -}}
+{
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": {{ printf "%s/agy-stop" $bin | quote }},
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "ask_question",
+      "hooks": [
+        {
+          "type": "command",
+          "command": {{ printf "%s/agy-ask" $bin | quote }},
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}
