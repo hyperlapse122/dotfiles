@@ -7,9 +7,9 @@
 #     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
-#   agents.marketplaces + agents.claude.plugins + agents.codex.plugins
+#   agents.marketplaces + agents.{claude,codex,agy}.plugins
 #     -> .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh
-#        (the generic Claude Code + Codex plugin installer)
+#        (the generic Claude Code + Codex + AGY plugin installer)
 #   agents.pi.settings / auth.providers
 #     -> managed Pi settings plus package-update and live auth merge scripts
 #   agents.claude.settings
@@ -97,11 +97,14 @@ agents:
     - name: improve
       source: shadcn/improve
       ref: main
-  # Claude Code and Codex plugins, single-sourced here (they were previously
+  # Claude Code, Codex, and AGY plugins, single-sourced here (the Claude/Codex
+  # declarations were previously
   # hardcoded across two install scripts). The generic runner
   # run_onchange_after_install-agent-plugins.sh.tmpl ranges over the per-agent
   # `plugins` lists below and, per entry, registers the marketplace and installs
-  # the plugin with the matching CLI (`claude` / `codex`). MCP is single-sourced
+  # the plugin with the matching CLI (`claude` / `codex` / `agy`). AGY consumes
+  # the resolved source directly with its native plugin installer rather than
+  # registering a marketplace. MCP is single-sourced
   # separately (agents.mcp.servers -> dotagents); plugins are per-agent because
   # applicability differs (mxm4-haptic is Claude-only).
   #
@@ -189,6 +192,12 @@ agents:
   codex:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+  agy:
+    # AGY installs the native bundle from the same pinned release root consumed
+    # by the other localArchive agents; do not replace this with the unpinned
+    # GitHub URL or the compatibility-only `.agy/` subdirectory.
+    plugins:
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
@@ -230,7 +239,7 @@ agents:
       #   - @ff-labs/pi-fff + @ff-labs/fff-bun: FFF-backed fuzzy file/content
       #     search and its Bun implementation.
       # compound-engineering is installed for pi as a NATIVE `git:` source, NOT
-      # via the versioned local-archive path Claude/Codex/OpenCode use. That is
+      # via the versioned local-archive path Claude/Codex/OpenCode/AGY use. That is
       # a deliberate divergence for now: pi tracks the repo's default branch
       # (unpinned) instead of the extracted release tarball, so it does NOT
       # consume compound-engineering-ref.tmpl or the localArchive machinery.

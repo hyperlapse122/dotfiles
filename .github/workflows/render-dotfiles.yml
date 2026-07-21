@@ -451,6 +451,19 @@ jobs:
             exit 1
           fi
 
+      - name: Assert AGY compound-engineering plugin contract
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
+          test -f "${rendered}"
+          test ! -e "${rendered}.render-error.txt"
+          grep -E '"agy:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
+          grep -F 'agy plugin install "$agy_source"' "${rendered}"
+          grep -F 'agy plugin validate "$agy_source"' "${rendered}"
+          bash -n "${rendered}"
+          "${GITHUB_WORKSPACE}/.ci/smoke-agy-plugin-installer.sh" \
+            "${rendered}" "${RUNNER_TEMP}/agy-plugin-smoke"
+
       - name: Assert Fedora NVIDIA repository ownership
         if: matrix.os == 'fedora'
         run: |
@@ -639,6 +652,19 @@ jobs:
             echo ""
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Assert AGY compound-engineering plugin contract
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
+          test -f "${rendered}"
+          test ! -e "${rendered}.render-error.txt"
+          grep -E '"agy:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
+          grep -F 'agy plugin install "$agy_source"' "${rendered}"
+          grep -F 'agy plugin validate "$agy_source"' "${rendered}"
+          bash -n "${rendered}"
+          "${GITHUB_WORKSPACE}/.ci/smoke-agy-plugin-installer.sh" \
+            "${rendered}" "${RUNNER_TEMP}/agy-plugin-smoke"
 
       - name: Upload rendered internals
         if: always()

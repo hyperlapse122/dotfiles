@@ -281,7 +281,8 @@ include = ["*/skills/{{ .name }}/**"]
        .chezmoidata/agents.yaml (agents.opencode.plugins); the OpenCode `plugin` array reads
        the same entry through .chezmoitemplates/opencode-plugins-json.tmpl, and
        the generic .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins registers the
-       same path with Claude Code and Codex (pi installs CE separately as a git: source). Sibling versions are pruned by
+       same path with Claude Code and Codex and installs the native bundle root
+       for AGY (pi installs CE separately as a git: source). Sibling versions are pruned by
        .chezmoiscripts/00-tools/run_onchange_after_compound-engineering.
        stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix so the
        repo root (package.json, .opencode/, .claude-plugin/, .codex-plugin/, skills/, ...)
