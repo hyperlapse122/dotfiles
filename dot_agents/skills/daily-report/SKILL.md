@@ -13,9 +13,7 @@ description: >
   `(진행 중)`, the business-perspective grouping rules (what to drop, what to
   include), the group → repository → detail output shape inside a single
   ```plaintext fence, and the Korean tone/depth/volume rules with good and bad
-  examples. Do NOT
-  load it for commit-message writing or branch hygiene (use `git-workflow`), or
-  for PR/MR summaries (use `pr-mr`).
+  examples.
 ---
 
 # Daily Log Generator

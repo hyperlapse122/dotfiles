@@ -4,13 +4,14 @@
        `auth: oauth` marks a headerless server that uses Claude Code/Codex native
        OAuth storage and therefore needs no target-specific TOML field.
 
-       There are NO local path: skills any more. Every user-scoped skill is a
-       chezmoi external (the list is data in .chezmoidata/agents.yaml,
-       agents.skills.external) that deploys straight into ~/.agents/skills/<name>. See
-       .chezmoiexternals/ai-agents.toml.
-       dotagents still owns the ~/.claude/skills -> ~/.agents/skills symlink — through
-       which those externals reach Claude Code — and its `install` never prunes an
-       undeclared dir (prune is sync-only), so the externals coexist with the symlink.
+       There are NO dotagents path: skills any more; dotagents declares MCP servers
+       only. User-scoped skills reach ~/.agents/skills/<name> two ways: chezmoi
+       externals (the list is data in .chezmoidata/agents.yaml, agents.skills.external;
+       see .chezmoiexternals/ai-agents.toml), and locally-authored personal skills
+       managed directly as chezmoi source under dot_agents/skills/<name>/ (e.g.
+       daily-report). dotagents still owns the ~/.claude/skills -> ~/.agents/skills
+       symlink — through which both reach Claude Code — and its `install` never prunes
+       an undeclared dir (prune is sync-only), so they coexist with the symlink.
 
        NOT here: everyinc/compound-engineering-plugin. It ships a first-class
        plugin for every agent this repo runs, so it is installed through each

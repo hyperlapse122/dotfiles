@@ -247,10 +247,11 @@ sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agen
        key -> that branch head resolved to a commit via git ls-remote (repos with no
        releases/tags, e.g. shadcn/improve), so both the URL and chezmoi's refresh key stay
        immutable for one render. The GitHub
-       archive URL form takes a tag OR a commit. dotagents still runs for the MCP servers and
-       the twelve path: skills and still owns the ~/.claude/skills -> ~/.agents/skills
+       archive URL form takes a tag OR a commit. dotagents runs for the MCP servers only now
+       (no path: skills any more) and still owns the ~/.claude/skills -> ~/.agents/skills
        symlink; its `install` never prunes an UNDECLARED dir (prune is sync-only, which the
-       apply never runs), so these externals coexist with the path: skills. POSIX only,
+       apply never runs), so these externals coexist with the symlink and with any
+       locally-authored chezmoi-managed skill under dot_agents/skills/<name>/. POSIX only,
        matching the install-dotagents-skills linux+darwin gate. GitHub API calls: render
        chezmoi through the zsh wrapper (or `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is
        injected. ---------- */ -}}

@@ -247,7 +247,9 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   the last executable and retry after an input change or `chezmoi apply
   --force`. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
-  template (MCP servers).
+  template (MCP servers) and any locally-authored personal skill under
+  `dot_agents/skills/<name>/` (e.g. `daily-report`), deployed to
+  `~/.agents/skills/<name>/`.
 - [`Library/`](Library) — macOS-only `~/Library` payload (the `mxm4-hapticd`
   LaunchAgent).
 
