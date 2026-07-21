@@ -85,9 +85,12 @@ agents:
   # this list. `name` is BOTH the target dir under ~/.agents/skills/ and the
   # skills/<name>/ subdir inside the source repo. Ref rule: absent -> newest
   # GitHub release (gitHubLatestRelease); present -> a branch head resolved to a
-  # commit via git ls-remote (repos with no releases/tags). There are no local
-  # `path:` skills any more — every user-scoped skill is a chezmoi external, and
-  # `agents.toml` declares MCP servers only.
+  # commit via git ls-remote (repos with no releases/tags). There are no dotagents
+  # `path:` skills any more; `agents.toml` declares MCP servers only. User-scoped
+  # skills reach ~/.agents/skills/<name> two ways: (a) these chezmoi externals
+  # fetched from GitHub, and (b) locally-authored personal skills managed directly
+  # as chezmoi source under dot_agents/skills/<name>/ (e.g. daily-report) — not
+  # listed here.
   skills:
     external:
     - name: playwright-cli
