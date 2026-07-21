@@ -46,6 +46,7 @@ viteplus = "latest"
 "npm:sharp-cli" = "latest"
 "npm:tokscale" = "latest"
 "npm:typescript-language-server" = "latest"
+"npm:typescript" = "latest"
 "npm:wrangler" = "latest"
 "npm:yaml-language-server" = "latest"
 "npm:cypress" = { version = "latest", allow_builds = ["cypress"] }

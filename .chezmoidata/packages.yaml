@@ -175,6 +175,7 @@ packages:
         - gcc-c++  # GNU C++ compiler
         - pkg-config  # query compile/link flags for installed libraries
         - systemd-devel  # libudev/libsystemd headers (libudev.pc for the hidapi backend)
+        - clang-tools-extra
 
         # CLI utilities
         - btop  # interactive resource/process monitor
@@ -325,6 +326,7 @@ packages:
       dotnetTools:
         - git-credential-manager  # cross-platform Git credential helper (GCM)
         - powershell  # PowerShell (pwsh) cross-platform shell
+        - csharp-ls
       # RPMs installed directly from a vendor URL (no repo): import the GPG
       # key(s), then install the link matching the host arch (skipped when `id`
       # is already an installed package). An entry with a pinned `version` is
@@ -466,6 +468,7 @@ packages:
       packages:
         # Build tooling
         - clang  # LLVM C/C++/Obj-C compiler
+        - clangd
         - g++  # GNU C++ compiler
         - pkg-config  # query compile/link flags for installed libraries
         - libsystemd-dev  # libsystemd headers (systemd-devel equivalent)
