@@ -1,6 +1,16 @@
-{{- /* AI coding agents and adjacent localhost infrastructure: claude, codex, agy, opencode, pi, CLIProxyAPI, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent localhost infrastructure: claude, codex, agent-browser, agy, opencode, pi, CLIProxyAPI, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+
+{{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
+       static-musl build. Shared by the claude and agent-browser externals below so the
+       `ldd` subprocess runs once per render rather than once per consumer. */ -}}
+{{- $isMuslLinux := false -}}
+{{- if eq .chezmoi.os "linux" -}}
+  {{- if eq (output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim) "0" -}}
+    {{- $isMuslLinux = true -}}
+  {{- end -}}
+{{- end -}}
 
 {{- /* ---------- claude-code (anthropic downloads manifest, not a GitHub release) ---------- */ -}}
 
@@ -11,11 +21,8 @@
 {{- $latestReleaseVersion := $latestReleaseManifest.version -}}
 
 {{- $claudeCodePlatformId := (printf "%s-%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) -}}
-{{- if eq .chezmoi.os "linux" -}}
-  {{- $libcOut := output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim -}}
-  {{- if eq $libcOut "0" -}}
-    {{- $claudeCodePlatformId = (printf "%s-musl" $claudeCodePlatformId) -}}
-  {{- end -}}
+{{- if $isMuslLinux -}}
+  {{- $claudeCodePlatformId = (printf "%s-musl" $claudeCodePlatformId) -}}
 {{- end -}}
 
 {{- $claudeCodePlatform := index $latestReleaseManifest.platforms $claudeCodePlatformId -}}
@@ -53,6 +60,70 @@ type = "archive"
 url = '{{ gitHubReleaseAssetURL "openai/codex" $codexTag $codexAsset }}'
 stripComponents = 0
 targetPath = '{{ $codexInstallationPath }}'
+
+{{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
+       ("Browser automation CLI for AI agents"), tracked at the newest release like
+       claude/codex. The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
+       the linux fork split glibc vs static musl, windows carrying .exe) and NO checksums
+       sidecar. chezmoi's go-github does not expose the release asset digest to
+       gitHubLatestRelease, so — mirroring cli-proxy-api-panel-ref.tmpl — one atomic
+       releases/latest REST call yields both the tag and each asset's sha256 digest from the
+       same snapshot (race-free, one round-trip). The download URL is built as a plain
+       string from that same tag rather than via gitHubReleaseAssetURL, which would re-fetch
+       the release and undo the single-call property. Auth is the optional GITHUB_TOKEN
+       header (injected by the zsh chezmoi wrapper locally, secrets.GITHUB_TOKEN in CI, and
+       an unauthenticated fallback for a one-off local render). ---------- */ -}}
+
+{{- /* Portable fetch via `output "curl"` (like the claude entry above), not a `sh -c`
+     string: every other `sh -c` in this file is POSIX-gated, but this external is not, and
+     `sh` may be absent on Windows. The token, when set, rides a discrete `-H` arg rather
+     than being spliced into a shell command line. */ -}}
+{{- $abApiUrl := "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest" -}}
+{{- $abApi := dict -}}
+{{- if (env "GITHUB_TOKEN") -}}
+  {{- $abApi = output "curl" "-fsSL" "-H" (printf "Authorization: Bearer %s" (env "GITHUB_TOKEN")) $abApiUrl | toString | fromJson -}}
+{{- else -}}
+  {{- $abApi = output "curl" "-fsSL" $abApiUrl | toString | fromJson -}}
+{{- end -}}
+{{- $abTag := $abApi.tag_name | toString -}}
+{{- if not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" $abTag) -}}
+  {{- fail (printf "agent-browser: invalid release tag %q" $abTag) -}}
+{{- end -}}
+
+{{- /* windows -> win32, else identity; amd64 -> x64, arm64 unchanged; -musl infix only on a
+     musl linux host (the shared $isMuslLinux probed once at the top of this file). */ -}}
+{{- $abOs := (replace "windows" "win32" .chezmoi.os) -}}
+{{- $abArch := (replace "amd64" "x64" .chezmoi.arch) -}}
+{{- $abMuslInfix := "" -}}
+{{- if $isMuslLinux -}}{{- $abMuslInfix = "-musl" -}}{{- end -}}
+{{- $abAsset := (printf "agent-browser-%s%s-%s%s" $abOs $abMuslInfix $abArch $executableExtension) -}}
+
+{{- /* Pull the sha256 for exactly our platform asset out of the release's asset list; a
+     rename/absence upstream fails the render closed rather than writing a checksum-less
+     external. */ -}}
+{{- $abSha := "" -}}
+{{- $abMatches := 0 -}}
+{{- range $abApi.assets -}}
+  {{- if eq .name $abAsset -}}
+    {{- $abSha = trimPrefix "sha256:" .digest -}}
+    {{- $abMatches = add $abMatches 1 -}}
+  {{- end -}}
+{{- end -}}
+{{- if ne $abMatches 1 -}}
+  {{- fail (printf "agent-browser: expected one %s asset, found %d" $abAsset $abMatches) -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $abSha) -}}
+  {{- fail (printf "agent-browser: invalid sha256 for %s" $abAsset) -}}
+{{- end }}
+
+[agent-browser]
+type = "file"
+targetPath = '{{ printf ".local/bin/agent-browser%s" $executableExtension }}'
+url = '{{ printf "https://github.com/vercel-labs/agent-browser/releases/download/%s/%s" $abTag $abAsset }}'
+executable = true
+
+[agent-browser.checksum]
+sha256 = '{{ $abSha }}'
 
 {{- /* ---------- antigravity (agy) — vendor auto-updater manifest, not a GitHub release ---------- */ -}}
 
