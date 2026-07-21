@@ -27,7 +27,11 @@ cat > "$runtime_bin/codex" <<'EOF'
 #!/usr/bin/env bash
 printf 'codex %s\n' "$*" >> "${AGY_SMOKE_CALLS:?}"
 EOF
-chmod 0700 "$runtime_bin/agy" "$runtime_bin/claude" "$runtime_bin/codex"
+cat > "$runtime_bin/jq" <<'EOF'
+#!/usr/bin/env bash
+sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${@: -1}"
+EOF
+chmod 0700 "$runtime_bin/agy" "$runtime_bin/claude" "$runtime_bin/codex" "$runtime_bin/jq"
 
 : > "$calls"
 env HOME="$scratch/home-success" AGY_SMOKE_CALLS="$calls" \
