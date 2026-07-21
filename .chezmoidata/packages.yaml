@@ -189,6 +189,7 @@ packages:
         - pkg-config  # query compile/link flags for installed libraries
         - systemd-devel  # libudev/libsystemd headers (libudev.pc for the hidapi backend)
         - clang-tools-extra
+        - mingw64-gcc
 
         # CLI utilities
         - btop  # interactive resource/process monitor
