@@ -59,6 +59,13 @@ agents:
       args:
       - mcp
       - serve
+    - name: agent-browser
+      transport: stdio
+      command: agent-browser
+      args:
+      - mcp
+      - "--tools"
+      - all
     - name: figma
       transport: http
       url: https://mcp.figma.com/mcp
@@ -85,6 +92,8 @@ agents:
     external:
     - name: playwright-cli
       source: microsoft/playwright-cli
+    - name: agent-browser
+      source: vercel-labs/agent-browser
     - name: improve
       source: shadcn/improve
       ref: main
