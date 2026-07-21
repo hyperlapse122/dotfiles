@@ -55,4 +55,4 @@ If mise reports `mise ERROR … not trusted`, immediately run `mise trust <path-
 
 ## Project supplement
 
-The root `AGENTS.md` owns chezmoi source attributes, data/script/system ownership, host facts, desktop/container gates, agent and CLIProxyAPI contracts, isolated verification, and repository delivery details. It may add stricter local rules; do not treat this common core as permission to weaken them.
+The root `AGENTS.md` owns chezmoi source attributes, data/script/system ownership, host facts, desktop/container gates, agent contracts, isolated verification, and repository delivery details. It may add stricter local rules; do not treat this common core as permission to weaken them.

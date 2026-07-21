@@ -109,7 +109,7 @@ executable = true
 
 {{- end }}
 
-{{- /* ---------- jq (macOS needs it for CLIProxyAPI semantic readiness) ---------- */ -}}
+{{- /* ---------- jq ---------- */ -}}
 
 {{- if eq .chezmoi.os "darwin" }}
 {{- $jqTag := (gitHubLatestRelease "jqlang/jq").TagName | toString -}}

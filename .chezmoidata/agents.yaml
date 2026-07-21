@@ -195,11 +195,8 @@ agents:
   # settings.json managed readonly" for the full model.
   pi:
     # Keep Pi on its built-in direct provider catalog. This explicit empty map
-    # clears the former CLIProxyAPI Anthropic override from the managed
-    # models.json while preserving the file as a migration baseline. It MUST NOT
-    # contain `op://` refs because models.json deploys 0444 without secret
-    # resolution. The target is excluded outside Linux/macOS workstations and in
-    # real containers.
+    # preserves models.json as a direct-provider baseline. It MUST NOT contain
+    # `op://` refs because models.json deploys 0444 without secret resolution.
     models:
       providers: {}
     # Everything under `settings` renders wholesale into the MANAGED, READONLY

@@ -26,7 +26,7 @@
 # actually advances the UNPINNED packages (npm: and git: both track latest): the
 # former trigger — the static PACKAGES array — only re-ran when the LIST
 # changed, so versions went stale between edits. The resolve-and-bake pattern
-# matches compound-engineering-ref.tmpl and cli-proxy-api-ref.tmpl; like them, a
+# matches compound-engineering-ref.tmpl: a
 # render-time resolution failure aborts the apply loudly rather than silently
 # degrading — the repo is already network-dependent at render (every external
 # and opencode.json resolve upstream state the same way), so this adds no new

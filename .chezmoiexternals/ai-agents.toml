@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent localhost infrastructure: claude, codex, agent-browser, agy, opencode, pi, CLIProxyAPI, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, codex, agent-browser, agy, opencode, pi, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -66,7 +66,7 @@ targetPath = '{{ $codexInstallationPath }}'
        claude/codex. The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
        the linux fork split glibc vs static musl, windows carrying .exe) and NO checksums
        sidecar. chezmoi's go-github does not expose the release asset digest to
-       gitHubLatestRelease, so — mirroring cli-proxy-api-panel-ref.tmpl — one atomic
+       gitHubLatestRelease, so one atomic
        releases/latest REST call yields both the tag and each asset's sha256 digest from the
        same snapshot (race-free, one round-trip). The download URL is built as a plain
        string from that same tag rather than via gitHubReleaseAssetURL, which would re-fetch
@@ -198,45 +198,6 @@ stripComponents = 1
 [pi.checksum]
 sha256 = '{{ $piSha }}'
 
-{{- end }}
-
-{{- /* ---------- CLIProxyAPI — versioned, checksum-verified localhost infrastructure ---------- */ -}}
-{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
-{{- if and (or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin")) (not $facts.container) -}}
-{{- $cpaRef := includeTemplate "cli-proxy-api-ref.tmpl" (dict "ctx" .) | fromJson }}
-[cli-proxy-api]
-type = "archive-file"
-targetPath = '{{ printf ".local/share/cli-proxy-api/versions/%s/cli-proxy-api" $cpaRef.identity }}'
-url = '{{ gitHubReleaseAssetURL "router-for-me/CLIProxyAPI" $cpaRef.tag $cpaRef.asset }}'
-path = 'cli-proxy-api'
-executable = true
-# 0500: an applied candidate is immutable in place. Reconciliation activates it
-# only after the file phase has verified the release archive checksum.
-private = true
-readonly = true
-
-[cli-proxy-api.checksum]
-sha256 = '{{ $cpaRef.sha256 }}'
-
-{{- /* ---------- CLIProxyAPI management control panel asset ---------- */ -}}
-{{- /* A single self-contained management.html release asset (no archive, no
-     checksums sidecar). The 90-services reconciler copies this source file
-     into the runtime static directory so the server serves a pre-placed asset
-     and never performs a GitHub fetch at runtime; the resolved tag+sha act as
-     the reconciler onchange trigger. Mirrors the binary's checksum-verified,
-     render-time-resolved pinning. */ -}}
-{{- $cpaPanelRef := includeTemplate "cli-proxy-api-panel-ref.tmpl" (dict "ctx" .) | fromJson }}
-[cli-proxy-api-panel]
-type = "file"
-targetPath = '{{ printf ".local/share/cli-proxy-api/panel/management.html" }}'
-url = '{{ $cpaPanelRef.url }}'
-# readonly+private -> 0400 owner-read-only. Reconciler reads+copies it into the
-# locked runtime static dir; no other consumer touches this source copy.
-private = true
-readonly = true
-
-[cli-proxy-api-panel.checksum]
-sha256 = '{{ $cpaPanelRef.sha256 }}'
 {{- end }}
 
 {{- /* ---------- codegraph ---------- */ -}}
