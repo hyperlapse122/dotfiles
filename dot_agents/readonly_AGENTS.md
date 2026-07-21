@@ -6,6 +6,8 @@ This file is the common user-scoped instruction core, included verbatim by the C
 
 Load the named operation skill before the operation: `playwright-cli` for browser/Playwright work. Do not add mandatory `ce-work`/`ce-debug` routing here; use the available workflow and the user's direction.
 
+The `lfg` pipeline skill is user-invoked only. MUST NOT invoke it or offer to mimic or hand-roll its plan-through-PR pipeline; when that full autonomous run is the right next step, surface the exact command for the user to run directly (e.g. `/lfg <feature description>`) rather than asking whether to replicate it.
+
 Every directory containing `AGENTS.md` MUST have a sibling `CLAUDE.md` whose entire content is `@AGENTS.md`. MUST create it in the same turn when creating `AGENTS.md`, and MUST repair it whenever it is missing or contains anything else. Edit `AGENTS.md` only; never let the mirror drift.
 
 ## Secrets, destructive actions, and runtime
