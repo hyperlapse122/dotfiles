@@ -277,7 +277,7 @@ agents:
       defaultProvider: zai
       defaultModel: glm-5.2
       # Valid: off | minimal | low | medium | high | xhigh | max.
-      defaultThinkingLevel: xhigh
+      defaultThinkingLevel: max
       subagents:
         defaultModel: gpt-5.6-terra
         agentOverrides:
