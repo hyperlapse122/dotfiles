@@ -219,6 +219,26 @@ agents:
     # terminationReason+fullyIdle; PreToolUse ask_question -> question, always-allow).
     - { name: mxm4-haptic, marketplace: dotfiles-agy }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+  # TODO: Add detailed comment for Kimi Code
+  kimi:
+    # TODO: install compound-engineering (https://github.com/everyinc/compound-engineering-plugin#kimi-code-cli) to Kimi Code
+    # TODO: deep-merge these values to `~/.kimi-code/config.toml` when apply like pi
+    # my intended toml data is:
+    # ```toml
+    # default_model = "kimi-code/k3"
+    # [thinking]
+    # enabled = true
+    # effort = "high"
+    # [upgrade]
+    # auto_install = false
+    # ```
+    settings:
+      default_model: 'kimi-code/k3'
+      thinking:
+        enabled: true
+        effort: max
+      upgrade:
+        auto_install: false
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
