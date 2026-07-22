@@ -173,12 +173,12 @@ intel_packages=(
 )
 intel_hwe_kernel={{ .packages.linux.ubuntu.intelHweKernel | quote }}
 flatpaks=(
-{{ range .packages.linux.ubuntu.flatpaks -}}
+{{ range .packages.linux.flatpaks -}}
   {{ . | quote }}
 {{ end -}}
 )
 dotnet_tools=(
-{{ range .packages.linux.ubuntu.dotnetTools -}}
+{{ range .packages.linux.dotnetTools -}}
   {{ . | quote }}
 {{ end -}}
 )
