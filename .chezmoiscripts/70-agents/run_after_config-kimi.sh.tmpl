@@ -16,7 +16,8 @@ contracts="$($RECONCILER contracts)"
   exit 1
 }
 scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-kimi-settings"
-mkdir -p -m 0700 "$scratch"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
 config="$(mktemp "$scratch/config.XXXXXX.json")"
 tui="$(mktemp "$scratch/tui.XXXXXX.json")"
 cleanup() { rm -f -- "$config" "$tui"; }
