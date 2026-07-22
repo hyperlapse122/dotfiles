@@ -17,6 +17,9 @@
 #     -> read-merge-write of the live ~/.claude/settings.json (config-claude-settings)
 #   agents.opencode.plugins / model / smallModel / providers / ohMyOpenagent
 #     -> opencode.json and oh-my-openagent.jsonc
+#   agents.aoe
+#     -> ~/.config/agent-of-empires/config.toml, deep-merged by
+#        run_after_config-aoe.sh.tmpl via the kimi-reconcile binary
 #
 # Add or change agent configuration HERE, not in the consuming templates. Those
 # templates retain only target-specific FORMAT and live-file merge mechanics.
@@ -241,6 +244,21 @@ agents:
     plugins:
     - name: compound-engineering
       versionSource: compoundEngineeringRelease
+  # aoe (agent-of-empires) launches the kimi agent as a custom agent. Apply
+  # reconciles ONLY these declared leaves into aoe's live global
+  # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile
+  # binary (run_after_config-aoe.sh.tmpl), preserving every undeclared key aoe
+  # writes there itself. custom_agents.kimi points at the off-PATH wrapper
+  # (~/.local/libexec/aoe-bin/kimi) that rewrites aoe's
+  # --dangerously-skip-permissions flag to kimi's --yolo; the invoker expands
+  # the leading ~ to an absolute path at render time. agent_detect_as.kimi =
+  # claude makes aoe emit that claude-style flag.
+  aoe:
+    config.toml:
+      custom_agents:
+        kimi: "~/.local/libexec/aoe-bin/kimi"
+      agent_detect_as:
+        kimi: claude
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —

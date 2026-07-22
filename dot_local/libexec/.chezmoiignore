@@ -1,0 +1,5 @@
+{{- /* The aoe launch wrappers under libexec are POSIX-only; aoe ships no
+       Windows build, so nothing here is deployed there. */ -}}
+{{- if eq .chezmoi.os "windows" }}
+*
+{{- end }}
