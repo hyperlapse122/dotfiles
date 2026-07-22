@@ -1,0 +1,66 @@
+{{- /* TODO: make this file rendered from .agents.mcp */ -}}
+{{- /*
+  TODO: antigravity cli needs pre-registered oauth client id and secret
+
+  Since Antigravity CLI does not compatible dynamic client with figma like opencode,
+  `figma-auth` needs help this situation.
+
+  Antigravity's oauth state is saved at `~/.gemini/antigravity-cli/mcp_oauth_tokens.json` and it's structure is:
+  ```jsonc
+  {
+    "https://mcp.figma.com/mcp": {
+      "client_id": "<oauth client ID>",
+      "token": {
+        "access_token": "<oauth access_token same as opencode>",
+        "token_type": "bearer",
+        "refresh_token": "<oauth refresh_token same as opencode>",
+        "expiry": "<ISO8601 time (sample: `2026-07-22T10:43:48.486939268+09:00`)>"
+      }
+    }
+    // ... other MCPs
+  }
+  ```
+  */ -}}
+{{- $ctx7ApiKey := onepasswordRead "op://Private/Context7/API Key" -}}
+{{- $exaApiKey := onepasswordRead "op://Private/Exa/API Key" -}}
+{
+  "mcpServers": {
+    "codegraph": {
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
+    },
+    "glab": {
+      "command": "glab",
+      "args": [
+        "mcp",
+        "serve"
+      ]
+    },
+    "context7": {
+      "serverUrl": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "{{ $ctx7ApiKey }}"
+      }
+    },
+    "websearch": {
+      "serverUrl": "https://mcp.exa.ai/mcp",
+      "headers": {
+        "x-api-key": "{{ $exaApiKey }}"
+      }
+    },
+    "figma": {
+      "serverUrl": "https://mcp.figma.com/mcp"
+    },
+    "agent-browser": {
+      "command": "agent-browser",
+      "args": [
+        "mcp",
+        "--tools",
+        "all"
+      ]
+    }
+  }
+}
