@@ -14,7 +14,7 @@
 set -euo pipefail
 
 marker="$HOME/.config/chezmoi/gpg-cache-ready"
-bundle="{{ .chezmoi.sourceDir }}/.chezmoitemplates/secrets-bundle.yaml.asc"
+bundle="{{ .chezmoi.sourceDir }}/.chezmoitemplates/secrets-bundle.json.asc"
 
 mkdir -p "$HOME/.config/chezmoi"
 if [ -f "$bundle" ] && gpg --batch --no-tty --decrypt "$bundle" >/dev/null 2>&1; then
