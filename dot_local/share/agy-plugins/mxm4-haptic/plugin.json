@@ -1,0 +1,6 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "mxm4-haptic",
+  "version": "1.0.0",
+  "description": "Pulses the MX Master 4's built-in haptics on Antigravity CLI lifecycle events (turn done, turn failed, waiting on you) via the mxm4-hapticd daemon."
+}

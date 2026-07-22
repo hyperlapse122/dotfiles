@@ -1,0 +1,32 @@
+{{- /* Fail the apply loudly on a typo'd waveform — the 16 names mirror
+       crates/mxm4-haptic/src/lib.rs (WAVEFORMS). Only `question` is used here. */ -}}
+{{- $waveforms := list
+  "SHARP STATE CHANGE" "DAMP STATE CHANGE" "SHARP COLLISION" "DAMP COLLISION"
+  "SUBTLE COLLISION" "HAPPY ALERT" "ANGRY ALERT" "COMPLETED" "SQUARE" "WAVE"
+  "FIREWORK" "MAD" "KNOCK" "JINGLE" "RINGING" "WHISPER COLLISION" -}}
+{{- if not (has .haptic.agy.question $waveforms) -}}
+{{- fail (printf "haptic.agy.question = %q is not a known mxm4-haptic waveform; valid names (crates/mxm4-haptic/src/lib.rs WAVEFORMS): %s" .haptic.agy.question (join ", " $waveforms)) -}}
+{{- end -}}
+#!/usr/bin/env sh
+# mxm4-haptic-agy-ask — agy PreToolUse hook for the built-in `ask_question` tool.
+# Buzz the MX Master 4 (the agent is waiting on YOU to pick an option), then ALWAYS
+# return {"decision":"allow"} so the tool proceeds.
+#
+# GENERATED from .chezmoidata/haptic.yaml (haptic.agy.question) — retune THERE.
+#
+# CONTRACT: this is the one haptic surface that can alter agent behavior. agy's
+# PreToolUse hook speaks an allow/deny protocol: a non-"allow" or malformed response
+# DENIES the tool and breaks agy. So the allow decision is UNCONDITIONAL and printed
+# last, no matter what — the buzz above is best-effort and can never gate it. Do not
+# add an early exit or let an error escape before the allow is printed.
+
+QUESTION={{ .haptic.agy.question | quote }}
+
+h="$HOME/.local/bin/mxm4-haptic"
+if [ ! -x "$h" ]; then
+  h="$(command -v mxm4-haptic 2>/dev/null)" || h=""
+fi
+[ -n "$h" ] && [ -x "$h" ] && "$h" "$QUESTION" >/dev/null 2>&1
+
+printf '{"decision":"allow"}'
+exit 0

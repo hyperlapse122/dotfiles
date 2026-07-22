@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "mxm4-haptic",
+  "description": "Pulses the MX Master 4's built-in haptics on Codex lifecycle events (turn done, waiting on you) via the mxm4-hapticd daemon.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Joosung Park",
+    "email": "iam@h82.dev"
+  },
+  "homepage": "https://github.com/hyperlapse122/dotfiles",
+  "repository": "https://github.com/hyperlapse122/dotfiles",
+  "keywords": ["haptics", "mx-master", "logitech", "notifications"],
+  "license": "UNLICENSED"
+}

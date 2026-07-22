@@ -464,6 +464,22 @@ jobs:
           "${GITHUB_WORKSPACE}/.ci/smoke-agy-plugin-installer.sh" \
             "${rendered}" "${RUNNER_TEMP}/agy-plugin-smoke"
 
+      - name: Assert mxm4-haptic plugin rows are container-filtered
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
+          test -f "${rendered}"
+          # These jobs render inside a real container (/.dockerenv present -> `container`
+          # fact true), and the mxm4-haptic marketplaces are container: skip -> their rows
+          # MUST be filtered out here (no MX Master 4 in a container). This proves the
+          # container gate; the compound-engineering row above (container: keep) proves
+          # rows still render. The linux-only positive render is covered outside CI, like
+          # the pre-existing claude mxm4-haptic row (also container: skip, untested here).
+          if grep -qE '"(codex|agy):mxm4-haptic:' "${rendered}"; then
+            echo "mxm4-haptic plugin row rendered in a container (marketplace is container: skip)" >&2
+            exit 1
+          fi
+
       - name: Assert Fedora NVIDIA repository ownership
         if: matrix.os == 'fedora'
         run: |
@@ -665,6 +681,17 @@ jobs:
           bash -n "${rendered}"
           "${GITHUB_WORKSPACE}/.ci/smoke-agy-plugin-installer.sh" \
             "${rendered}" "${RUNNER_TEMP}/agy-plugin-smoke"
+
+      - name: Assert mxm4-haptic rows are linux-only (absent on macos)
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
+          test -f "${rendered}"
+          # The mxm4-haptic marketplaces are os:[linux]; their rows must NOT render on macos.
+          if grep -qE '"(codex|agy):mxm4-haptic:' "${rendered}"; then
+            echo "mxm4-haptic plugin row leaked into the macos render (marketplace is os:[linux])" >&2
+            exit 1
+          fi
 
       - name: Upload rendered internals
         if: always()

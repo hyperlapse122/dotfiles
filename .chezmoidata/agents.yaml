@@ -109,7 +109,8 @@ agents:
   # the resolved source directly with its native plugin installer rather than
   # registering a marketplace. MCP is single-sourced
   # separately (agents.mcp.servers -> dotagents); plugins are per-agent because
-  # applicability differs (mxm4-haptic is Claude-only).
+  # applicability differs (mxm4-haptic ships to Claude, Codex, AND AGY — each as its
+  # own plugin with the right hook shape; the official LSP plugins are Claude-only).
   #
   # `marketplaces` is the shared registry keyed by each marketplace's registered
   # name (matching its .claude-plugin/marketplace.json `name`). Gating and kind
@@ -138,6 +139,16 @@ agents:
     dotfiles:
       kind: localDir
       path: .local/share/claude-plugins   # relative to $HOME
+      os: [linux]
+      container: skip
+    dotfiles-codex:
+      kind: localDir
+      path: .local/share/codex-plugins    # relative to $HOME; codex reads its .claude-plugin/marketplace.json
+      os: [linux]
+      container: skip
+    dotfiles-agy:
+      kind: localDir
+      path: .local/share/agy-plugins/mxm4-haptic   # agy installs THIS bundle root directly (no marketplace.json)
       os: [linux]
       container: skip
     compound-engineering-plugin:
@@ -194,12 +205,18 @@ agents:
     - { name: csharp-lsp, marketplace: claude-plugins-official }
   codex:
     plugins:
+    # mxm4-haptic: codex plugin with a hooks/hooks.json (Stop -> settled,
+    # PermissionRequest -> question); merges with the aoe-managed ~/.codex/hooks.json.
+    - { name: mxm4-haptic, marketplace: dotfiles-codex }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
   agy:
     # AGY installs the native bundle from the same pinned release root consumed
     # by the other localArchive agents; do not replace this with the unpinned
     # GitHub URL or the compatibility-only `.agy/` subdirectory.
     plugins:
+    # mxm4-haptic: agy plugin with a ROOT hooks.json (Stop -> settled/failed via
+    # terminationReason+fullyIdle; PreToolUse ask_question -> question, always-allow).
+    - { name: mxm4-haptic, marketplace: dotfiles-agy }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only

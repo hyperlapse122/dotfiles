@@ -242,9 +242,11 @@ no runtime OS/container guard. Net-identical to the old whole-script
 
 set -euo pipefail
 
-# Plugin-source fingerprint: the deployed mxm4-haptic tree's SOURCE plus the data
-# file that feeds its hooks.json template. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_local/share/claude-plugins/**" ".chezmoidata/haptic.yaml")) }}
+# Plugin-source fingerprint: every deployed mxm4-haptic plugin tree's SOURCE
+# (Claude, Codex, AGY) plus the data file that feeds their hooks templates, so a
+# waveform retune — whose rendered hook text changes but whose raw template text is
+# byte-identical — still re-triggers this installer. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_local/share/claude-plugins/**" "dot_local/share/codex-plugins/**" "dot_local/share/agy-plugins/**" ".chezmoidata/haptic.yaml")) }}
 
 # Rendered from .chezmoidata/agents.yaml — DO NOT EDIT HERE.
 PLUGINS=(
@@ -321,8 +323,11 @@ install_plugins() {
         local agy_source="$path"
         if [[ "$kind" == github ]]; then
           agy_source="https://github.com/${path}"
-        elif [[ ! -f "$path/plugin.json" || ! -d "$path/skills" ]]; then
-          warn "agy: skipped ${plugin} (no native plugin bundle at $path)"
+        elif [[ ! -f "$path/plugin.json" ]] || { [[ ! -d "$path/skills" ]] && [[ ! -f "$path/hooks.json" ]]; }; then
+          # A native bundle needs plugin.json plus at least one component that has a
+          # consumer here: a skills/ dir (compound-engineering) or a root hooks.json
+          # (mxm4-haptic — agy's hooks component is a root file, not a hooks/ dir).
+          warn "agy: skipped ${plugin} (no native plugin bundle at $path: needs plugin.json + skills/ or hooks.json)"
           continue
         fi
         if [[ "$kind" != github ]]; then
