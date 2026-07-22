@@ -66,9 +66,10 @@ Prettier. A single dependency — `vite-plus`, pinned through the root
 - **One lockfile**: the workspace-root `packages/bun.lock` is the only lockfile
   and is **tracked** (lockfile convention, like the Rust `Cargo.lock` under
   `crates/`). `node_modules/` hoists to `packages/node_modules/`. There are no
-  per-member lockfiles or `node_modules/`. Per-member `dist/` build output,
-  `packages/node_modules/`, and Vite+ Task caches (`packages/.turbo/`) are
-  git-ignored (scoped patterns in the root `.gitignore`).
+  per-member lockfiles or `node_modules/`. Per-member `dist/` build output and
+  `packages/node_modules/` (which holds the Vite+ Task cache at
+  `packages/node_modules/.vite/task-cache/`) are git-ignored (scoped patterns
+  in the root `.gitignore`).
 - **First install**: `vp install --frozen-lockfile` restores dependencies once
   `bun.lock` exists. To add a dependency, edit `package.json` to an exact,
   cooldown-valid version and run `vp install` from `packages/` so the lockfile
@@ -101,8 +102,13 @@ bun build --compile ./src/index.ts --outfile ./dist/figma-auth
 ```
 
 `build` outputs `dist/**`; `typecheck` and `test` build each workspace
-dependency first. Vite+ Task caches (`packages/.turbo/`, `packages/*/.turbo/`)
-are git-ignored.
+dependency first. Vite+ Task caches live at
+`packages/node_modules/.vite/task-cache/` (cleared with `vp cache clean`) and
+are git-ignored. Cached tasks fingerprint their declared `input` set;
+first-party `vp pack` builds are tracked automatically, but a task that shells
+out to an external binary (e.g. `bun build --compile`, as in `figma-auth` and
+`kimi-reconcile`) must declare explicit `input`/`output` on the task or source
+edits replay a stale cached build.
 
 `figma-auth` is installed on Linux/macOS by
 `run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
@@ -162,6 +168,11 @@ The `.vscode/` editor configuration is intentionally not vendored.
    `test` block (`include` + `server.deps.inline: ["vite-plus"]`), and
    `run.tasks` for `build` / `typecheck` / `test` (each `dependsOn` its workspace
    dependencies' `build`). Copy an existing member's config as the template.
+   If a task shells out to an external binary rather than a first-party `vp`
+   command (e.g. `bun build --compile`), declare explicit `input`/`output` on
+   that task — automatic file tracking does not see external-process reads, so
+   without it the cached task replays stale output (see
+   [Working in the workspace](#working-in-the-workspace)).
    Lint/format are workspace-wide (root `vite.config.ts`), so no per-member
    lint/format config is needed.
 4. Document the package in its own `README.md` and add a row to the members
