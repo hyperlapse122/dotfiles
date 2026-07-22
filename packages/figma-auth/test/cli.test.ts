@@ -21,18 +21,22 @@ describe("CLI parsing", () => {
       expect(stderr.output).toBe(USAGE);
       expect(stderr.output).toContain("opencode");
       expect(stderr.output).toContain("pi");
+      expect(stderr.output).toContain("antigravity");
       expect(run).not.toHaveBeenCalled();
     },
   );
 
-  it.each(["opencode", "pi"] as const)("accepts only the %s target", async (target) => {
-    const stdout = sink();
-    const run = vi.fn(async () => undefined);
-    expect(parseTarget([target])).toBe(target);
-    expect(await runCli([target], { stdout, run })).toBe(0);
-    expect(run).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledWith(target, expect.any(AbortSignal));
-  });
+  it.each(["opencode", "pi", "antigravity"] as const)(
+    "accepts only the %s target",
+    async (target) => {
+      const stdout = sink();
+      const run = vi.fn(async () => undefined);
+      expect(parseTarget([target])).toBe(target);
+      expect(await runCli([target], { stdout, run })).toBe(0);
+      expect(run).toHaveBeenCalledOnce();
+      expect(run).toHaveBeenCalledWith(target, expect.any(AbortSignal));
+    },
+  );
 
   it("reports failures without claiming credentials were saved", async () => {
     const stdout = sink();
