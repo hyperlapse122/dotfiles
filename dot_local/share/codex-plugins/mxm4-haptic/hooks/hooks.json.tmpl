@@ -10,7 +10,8 @@
   confirm sources merge), so aoe's session hooks and these coexist untouched.
 
   Each command is a self-contained `sh -c` (the shape aoe's codex hooks use) that
-  best-effort-fires the mxm4-haptic client, then exits 0 with EMPTY stdout — the
+  drains Codex's JSON event from stdin, best-effort-fires the mxm4-haptic client,
+  then exits 0 with EMPTY stdout — the
   codex-verified universal no-op: Stop treats "exit 0, no output" as continue, and
   PermissionRequest with no `decision` field defers to the normal approval flow
   (never auto-allow/deny). A buzz that cannot be delivered (daemon stopped, mouse
@@ -34,9 +35,10 @@
 {{- fail (printf "haptic.codex.%s = %q is not a known mxm4-haptic waveform; valid names (crates/mxm4-haptic/src/lib.rs WAVEFORMS): %s" $event $waveform (join ", " $waveforms)) -}}
 {{- end -}}
 {{- end -}}
-{{- /* Fire-and-forget: resolve the client (absolute path, then PATH), pulse it,
-       and ALWAYS exit 0 with no output. %s is the waveform. */ -}}
-{{- $cmd := `sh -c 'h="$HOME/.local/bin/mxm4-haptic"; [ -x "$h" ] || h="$(command -v mxm4-haptic 2>/dev/null)" || exit 0; [ -n "$h" ] && "$h" "%s" >/dev/null 2>&1; exit 0'` -}}
+{{- /* Drain the complete event first so Codex never writes into a pipe closed by
+       an early no-op exit. Then resolve the client (absolute path, then PATH),
+       pulse it, and ALWAYS exit 0 with no output. %s is the waveform. */ -}}
+{{- $cmd := `sh -c 'cat >/dev/null; h="$HOME/.local/bin/mxm4-haptic"; [ -x "$h" ] || h="$(command -v mxm4-haptic 2>/dev/null)" || exit 0; [ -n "$h" ] && "$h" "%s" >/dev/null 2>&1; exit 0'` -}}
 {
   "hooks": {
     "Stop": [
