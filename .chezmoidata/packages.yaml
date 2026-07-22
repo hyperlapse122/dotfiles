@@ -28,7 +28,7 @@
 # Gate-expression grammar — the same one system.yaml's `gate:` uses, checked by
 # the same partial (.chezmoitemplates/facts-validate.tmpl):
 #
-#   <fact>          boolean fact is true       nvidia, intelGpu, ubuntuStudio
+#   <fact>          boolean fact is true       nvidia, intelGpu, virt
 #   !<fact>         boolean fact is false      "!virt"  — MUST be YAML-quoted:
 #                                              a bare `!` opens a YAML tag
 #   <fact>.<value>  string fact equals value   desktop.kde, desktop.gnome
@@ -59,13 +59,13 @@
 # nothing to the INSTALLER either.
 #
 # The map is PER DISTRO rather than global because the conditional key sets
-# genuinely differ: intelPackages / intelHweKernel / studioPackages exist only
+# genuinely differ: intelPackages / intelHweKernel exist only
 # under `ubuntu`. One global map would have to name keys that half of it does
 # not have, and each installer would then need to filter the map before handing
 # it to the validator instead of passing its own distro's values straight
 # through.
 #
-# FORCE_NVIDIA / FORCE_INTEL / FORCE_UBUNTU_STUDIO are NOT facts and are NOT
+# FORCE_NVIDIA / FORCE_INTEL are NOT facts and are NOT
 # gates: they are env-var escape hatches layered on top of the seeded flag
 # inside the installer (so a GPU-less test container can still exercise the
 # driver repos and package sets). See the closing note in
@@ -396,9 +396,7 @@ packages:
         # entry is precisely the "the gate lives in the key name and nowhere
         # else" problem this map exists to end.
         intelHweKernel: intelGpu
-        kdePackages: desktop.kde  # Ubuntu Studio (plasmashell shipped by the ISO)
         gnomePackages: desktop.gnome  # Ubuntu Desktop (gnome-shell shipped by the ISO)
-        studioPackages: ubuntuStudio  # the ubuntustudio-default-settings seed package is installed; FORCE_UBUNTU_STUDIO=1 overrides
         bareMetalPackages: "!virt"  # neither a VM nor a container
       # Counterpart of fedora's `dnfRepos` — same job (declare a third-party repo
       # inline), different shape, because apt reads a one-line `deb ` source plus a
@@ -530,6 +528,12 @@ packages:
         - yp-tools  # NIS/YP client utilities
         - locales  # locale-gen/update-locale tooling — compiles ko_KR.UTF-8 and writes /etc/default/locale on Ubuntu (Fedora glibc ships it prebuilt)
 
+        # Input method — fcitx5 is the unified Korean IME, installed as a baseline
+        # package on every Ubuntu host (desktop-independent). GNOME autostart +
+        # Kimpanel wiring lives in gnome.yaml / .chezmoiscripts/50-linux-gnome/.
+        - fcitx5  # input method framework
+        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
+
         # Keyboard remapper
         - keyd  # key remapping daemon (native apt package since Ubuntu 25.04 "plucky"; noble/24.04 needs the keyd-team PPA instead)
 
@@ -638,51 +642,18 @@ packages:
         - dracut  # initramfs generator (Ubuntu 26.04 default); its systemd-cryptsetup wires tpm2-device=auto at early boot
         - tpm2-tools  # TPM2 userspace + libtss2 the dracut tpm2-tss module bundles (systemd-cryptenroll TPM2 unlock)
 
-      # Gate `desktop.kde` — Ubuntu Studio. fcitx5 is the unified input-method
-      # framework across both KDE and GNOME (see gnomePackages for the same
-      # set under its own gate; the two are mutually exclusive so the packages
-      # cannot double-install). The KDE gate additionally pulls the Qt
-      # pinentry KDE hosts reference from ~/.gnupg/gpg-agent.conf.
-      kdePackages:
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
-        - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
-      # Gate `desktop.gnome` — Ubuntu Desktop 26.04. GNOME uses the SAME fcitx5
-      # framework as the KDE targets (unified input-method policy: ibus is
-      # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
-      # fcitx5 autostarts from a per-user XDG autostart entry
+      # Gate `desktop.gnome` — Ubuntu Desktop 26.04. Only the GNOME-specific
+      # pinentry is desktop-gated here; the fcitx5 input method is a baseline
+      # package (see `packages:` above) so it installs regardless of desktop.
+      # GNOME has no built-in KWin virtualkeyboard, so fcitx5 autostarts from a
+      # per-user XDG autostart entry
       # (dot_config/autostart/org.fcitx.Fcitx5.desktop, NotShowIn=KDE), the
       # ibus source is REMOVED from org.gnome.desktop.input-sources on existing
       # hosts, and Kimpanel is installed so the candidate popup renders inside
       # GNOME Shell (mutter has no wlr-layer-shell) — see gnome.yaml
       # shellExtensions.kimpanel and .chezmoiscripts/50-linux-gnome/.
       gnomePackages:
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
-
-      # Ubuntu Studio pro-audio essentials. No fedora counterpart, and not an
-      # oversight: Ubuntu Studio is an Ubuntu FLAVOR sharing ID=ubuntu, so it needs a
-      # fact of its own to be distinguishable at all — whereas Fedora's KDE Spin vs
-      # Workstation split is already carried by the `desktop` fact, and Fedora ships
-      # no pro-audio flavor to gate on.
-      # Gate `ubuntuStudio` — the
-      # ubuntustudio-default-settings seed package the Studio ISO preinstalls
-      # (every Ubuntu flavor reports ID=ubuntu, so the package IS the flavor;
-      # FORCE_UBUNTU_STUDIO=1 overrides in the installer for smoke tests), so a
-      # plain Ubuntu Desktop install never grows the Studio audio stack. All in
-      # resolute/universe; universe is enabled by enable_first_apply_apt_features.
-      # Realtime privileges come from the @audio group (Studio-gated in
-      # configure_user_groups) + the repo-owned limits.d drop-in
-      # (system/linux/etc/security/limits.d/95-ubuntustudio-audio.conf, same
-      # Studio gate in .chezmoidata/system.yaml). NOTE: ubuntustudio-installer
-      # (the interactive first-run GUI) and studio-controls are intentionally NOT pinned - the former
-      # contradicts the deterministic-limits approach, the latter does not exist on resolute (jammy/noble only).
-      studioPackages:
-        - ubuntustudio-audio-core          # PipeWire/JACK pro-audio core stack (Depends: ubuntustudio-pipewire-config)
-        - ubuntustudio-pipewire-config     # Ubuntu Studio PipeWire pro-audio configuration (pinned explicitly for clarity; also a dep of audio-core)
-        - ubuntustudio-performance-tweaks  # realtime/perf sysctl + tuning
-        - ubuntustudio-lowlatency-settings # grub.d drop-in preferring a lowlatency kernel as boot default if installed (ships only /etc/default/grub.d/*, installs no kernel; postinst runs update-grub)
 
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
@@ -752,7 +723,7 @@ packages:
       # stack (--install-recommends) and made the default boot entry via a
       # GRUB_FLAVOUR_ORDER=generic drop-in (see install_intel_support). resolute
       # (26.04) is LTS, so linux-generic-hwe-26.04 tracks the rolling HWE generic
-      # kernel; the flavour-order drop-in wins over ubuntustudio-lowlatency-settings.
+      # kernel; the flavour-order drop-in keeps that generic kernel the boot default.
       intelHweKernel: linux-generic-hwe-26.04
 
       # .deb packages installed directly from a vendor URL (no repo): download
