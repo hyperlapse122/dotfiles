@@ -1,10 +1,9 @@
 # dotfiles
 
-Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Four Linux targets are
+Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Three Linux targets are
 supported across two distros and two desktops — **Ubuntu 26.04 LTS** (GNOME,
-primary), **Ubuntu Studio 26.04 LTS** (KDE Plasma 6), **Fedora 44 Workstation**
-(GNOME), and **Fedora 44 KDE Spin** (KDE Plasma 6); macOS and Windows are
-supported as secondary targets.
+primary), **Fedora 44 Workstation** (GNOME), and **Fedora 44 KDE Spin** (KDE
+Plasma 6); macOS and Windows are supported as secondary targets.
 
 ## Set up a new device
 
@@ -27,7 +26,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs these with `dnf`; **Ubuntu / Ubuntu Studio** uses `apt`
+   - **Fedora** installs these with `dnf`; **Ubuntu** uses `apt`
      (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
      Homebrew first if needed).
 
@@ -56,10 +55,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    input sources and installs the Kimpanel Shell extension so the candidate
    popup renders inside GNOME Shell. KDE hosts additionally get the Breeze
    de-branding scripts, while GNOME hosts otherwise stay on GNOME defaults.
-   On Ubuntu, Tailscale egress-NAT via ufw is enabled; on Ubuntu Studio
-   specifically (detected by its `ubuntustudio-default-settings` package),
-   pro-audio essentials (PipeWire config, `@audio` realtime privileges,
-   low-latency boot tuning) are also provisioned.
+   On Ubuntu, Tailscale egress-NAT via ufw is enabled.
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
@@ -100,15 +96,13 @@ a non-blank answer, so:
 
 ## Prerequisites
 
-- **Ubuntu 26.04 LTS**, **Ubuntu Studio 26.04 LTS**, **Fedora 44 Workstation**,
-  or **Fedora 44 KDE Spin** for the full experience. Detection is implicit —
-  `osRelease.id` (`fedora` or `ubuntu`) plus runtime guards for the desktop
-  (`plasmashell` vs `gnome-shell`) and for the Ubuntu Studio flavor
-  (`ubuntustudio-default-settings`); no interactive prompt. fcitx5 is the
-  unified input method on every Linux target (see `packages.yaml`
-  `kdePackages` / `gnomePackages`); KDE hosts additionally get the Breeze
-  de-branding, while GNOME hosts otherwise keep GNOME defaults. Ubuntu Studio
-  additionally gets pro-audio essentials on every `chezmoi apply`.
+- **Ubuntu 26.04 LTS**, **Fedora 44 Workstation**, or **Fedora 44 KDE Spin**
+  for the full experience. Detection is implicit — `osRelease.id` (`fedora` or
+  `ubuntu`) plus a runtime guard for the desktop (`plasmashell` vs
+  `gnome-shell`); no interactive prompt. fcitx5 is the unified input method on
+  every Linux target (a baseline package on Ubuntu, `kdePackages` /
+  `gnomePackages` on Fedora); KDE hosts additionally get the Breeze
+  de-branding, while GNOME hosts otherwise keep GNOME defaults.
 - macOS and Windows get the cross-platform dotfiles only.
 - **`sudo` access** — installing packages and writing `/etc` config needs root.
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
