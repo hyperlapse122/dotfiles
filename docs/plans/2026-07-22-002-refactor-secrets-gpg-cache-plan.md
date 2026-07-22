@@ -234,7 +234,7 @@ U1 → U2 (age retirement; land with U1 so no host is left on a GPG garden witho
 - **Dependencies:** U1 (marker), U2 (GPG `decrypt` backend).
 - **Files:**
   - `.chezmoitemplates/secrets-bundle.tmpl` (new) — returns the decrypted secrets dict, or a not-ready sentinel.
-  - `.chezmoitemplates/secrets-bundle.yaml.asc` (new, produced by U5) — the committed bundle; a small fixture is used for tests until U5 lands.
+  - `.chezmoitemplates/secrets-bundle.json.asc` (new, produced by U5) — the committed bundle; a small fixture is used for tests until U5 lands.
 - **Approach:** `secrets-bundle.tmpl` probes readiness (marker `stat` **and** bundle-file `stat`); when ready it `include`s the bundle ciphertext, `decrypt`s and `fromYaml`s it once, and returns the dict; when not ready it returns an explicit empty/not-ready value the shim can detect. Keep the readiness/decrypt logic here so both the shim and the resolver share one implementation.
 - **Execution note:** Build against a fixture bundle so render-parity tests run before U5 exists.
 - **Patterns to follow:** `.chezmoitemplates/fingerprint.tmpl` (a `.chezmoitemplates` helper using `stat`/`include`); the `decryptAES`/skip-path precedent in `.chezmoiscripts/30-linux/run_onchange_after_luks-tpm2.sh.tmpl` for graceful "key unavailable" degradation.
