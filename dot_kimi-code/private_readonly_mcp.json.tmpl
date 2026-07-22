@@ -1,12 +1,69 @@
-{{- /* TODO: render MCP configurations like this
-       reference https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html */ -}}
-{{- /* TODO: make figma-auth supports kimi code as well. (Kimi code is not compatible as well)
-       reference https://github.com/MoonshotAI/kimi-code repository for how oauth tokens are saved */ -}}
-{
-  "mcpServers": {
-    "figma": {
-      "type": "http",
-      "url": "https://mcp.figma.com/mcp"
-    }
-  }
-}
+{{- /* Kimi Code's user-level mcp.json is fully data-driven from
+       .chezmoidata/agents.yaml (.agents.mcp.servers). Add or remove a server
+       there and the complete managed file changes on the next apply.
+
+       Kimi's native schema infers stdio from command/args and streamable HTTP
+       from url; only legacy SSE uses an explicit transport, which the shared
+       authority does not currently expose. `auth: oauth` validates that the
+       server is remote but emits no field: credentials belong in Kimi's native
+       credentials/mcp store and are provisioned on demand. Optional static
+       headers use the shared recursive op:// resolver. */ -}}
+{{- $servers := dict -}}
+{{- range .agents.mcp.servers -}}
+{{- if not (hasKey . "name") -}}
+{{- fail "kimi mcp: server is missing required field name" -}}
+{{- end -}}
+{{- $name := .name -}}
+{{- if not (hasKey . "transport") -}}
+{{- fail (printf "kimi mcp: server %q is missing required field transport" $name) -}}
+{{- end -}}
+{{- $transport := .transport -}}
+{{- if not (or (eq $transport "stdio") (eq $transport "http")) -}}
+{{- fail (printf "kimi mcp: server %q has unknown transport %q; valid values: stdio, http" $name $transport) -}}
+{{- end -}}
+{{- if hasKey . "auth" -}}
+{{- $auth := get . "auth" -}}
+{{- if ne $auth "oauth" -}}
+{{- fail (printf "kimi mcp: server %q has unknown auth %q; valid values: oauth" $name $auth) -}}
+{{- end -}}
+{{- if eq $transport "stdio" -}}
+{{- fail (printf "kimi mcp: stdio server %q cannot declare auth %q" $name $auth) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $transport "stdio" -}}
+{{- if not (hasKey . "command") -}}
+{{- fail (printf "kimi mcp: stdio server %q is missing required field command" $name) -}}
+{{- end -}}
+{{- if not (hasKey . "args") -}}
+{{- fail (printf "kimi mcp: stdio server %q is missing required field args" $name) -}}
+{{- end -}}
+{{- if hasKey . "url" -}}
+{{- fail (printf "kimi mcp: stdio server %q cannot declare url" $name) -}}
+{{- end -}}
+{{- if hasKey . "headers" -}}
+{{- fail (printf "kimi mcp: stdio server %q cannot declare headers" $name) -}}
+{{- end -}}
+{{- $servers = set $servers $name (dict "command" .command "args" .args) -}}
+{{- else -}}
+{{- if not (hasKey . "url") -}}
+{{- fail (printf "kimi mcp: http server %q is missing required field url" $name) -}}
+{{- end -}}
+{{- if hasKey . "command" -}}
+{{- fail (printf "kimi mcp: http server %q cannot declare command" $name) -}}
+{{- end -}}
+{{- if hasKey . "args" -}}
+{{- fail (printf "kimi mcp: http server %q cannot declare args" $name) -}}
+{{- end -}}
+{{- $entry := dict "url" .url -}}
+{{- if hasKey . "headers" -}}
+{{- $headers := dict -}}
+{{- range $key, $value := get . "headers" -}}
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $value "ctx" $) | fromJson -}}
+{{- $headers = set $headers $key $resolved -}}
+{{- end -}}
+{{- $entry = set $entry "headers" $headers -}}
+{{- end -}}
+{{- $servers = set $servers $name $entry -}}
+{{- end -}}
+{{- end -}}
+{{ toPrettyJson "  " (dict "mcpServers" $servers) }}

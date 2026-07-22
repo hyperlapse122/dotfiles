@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Authenticate the Figma MCP into OpenCode, pi, or Antigravity CLI native credential storage.",
+  "description": "Authenticate the Figma MCP into OpenCode, pi, Antigravity, or Kimi Code native credential storage.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=24"

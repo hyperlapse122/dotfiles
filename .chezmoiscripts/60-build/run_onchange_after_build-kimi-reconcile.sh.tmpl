@@ -1,0 +1,43 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# Builds the bounded Kimi mutable-state reconciler. Its source fingerprint is
+# the only dependency; live state is handled by separate run_after wrappers.
+set -euo pipefail
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/kimi-reconcile/package.json" "packages/kimi-reconcile/tsconfig.json" "packages/kimi-reconcile/vite.config.ts" "packages/kimi-reconcile/src/**")) }}
+
+SRC="{{ $sourceDir }}"
+DIST="$SRC/packages/kimi-reconcile/dist/kimi-reconcile"
+BIN_DIR="$HOME/.local/bin"
+TARGET="$BIN_DIR/kimi-reconcile"
+
+if ! command -v mise >/dev/null 2>&1; then
+  printf '%s\n' 'build-kimi-reconcile: skipped (mise not installed); existing executable preserved.' >&2
+  [[ -x "$TARGET" ]] && exit 0
+  exit 1
+fi
+if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile ||
+   ! mise -C "$SRC/packages/kimi-reconcile" exec -- vp run build; then
+  printf '%s\n' 'build-kimi-reconcile: skipped (dependency install or build failed); existing executable preserved.' >&2
+  [[ -x "$TARGET" ]] && exit 0
+  exit 1
+fi
+if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
+  printf '%s\n' 'build-kimi-reconcile: skipped (compiled executable missing); existing executable preserved.' >&2
+  [[ -x "$TARGET" ]] && exit 0
+  exit 1
+fi
+mkdir -p "$BIN_DIR"
+temporary="$(mktemp "$BIN_DIR/.kimi-reconcile.XXXXXX")"
+trap 'rm -f -- "$temporary"' EXIT
+chmod 0600 "$temporary"
+cp -- "$DIST" "$temporary"
+chmod 0755 "$temporary"
+if [[ -L "$TARGET" || ( -e "$TARGET" && ! -f "$TARGET" ) ]]; then
+  printf '%s\n' 'build-kimi-reconcile: skipped (install target is unsafe); existing target preserved.' >&2
+  exit 0
+fi
+mv -f -- "$temporary" "$TARGET"
+temporary=''
+printf '%s\n' 'build-kimi-reconcile: installed ~/.local/bin/kimi-reconcile'
+{{ end -}}
