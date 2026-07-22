@@ -4,7 +4,7 @@ This is the chezmoi **source state** for `github.com/hyperlapse122/dotfiles`. Ed
 
 ## Source layout and attributes
 
-Chezmoi source names encode targets: `dot_foo` -> `~/.foo`, `*.tmpl` is rendered, `private_` is 0600, `readonly_` is 0444, `executable_` is executable, `encrypted_*.age` is age ciphertext, `.chezmoiscripts/run_once_*` runs once ever, `.chezmoiscripts/run_onchange_*` reruns when rendered content changes, `.chezmoiscripts/run_after_*` runs every apply, `.chezmoidata` is data, `.chezmoitemplates` is shared template code, `.chezmoiexternals` is fetched tooling, and `.chezmoiignore` is templated exclusion. Dot-prefixed source paths are internal; non-dot metadata (`AGENTS.md`, `LICENSE`, `opencode.json`) MUST be listed in the root `.chezmoiignore`. `crates/` and `packages/` are source-only build trees.
+Chezmoi source names encode targets: `dot_foo` -> `~/.foo`, `*.tmpl` is rendered, `private_` is 0600, `readonly_` is 0444, `executable_` is executable, `encrypted_*.asc` is gpg ciphertext, `.chezmoiscripts/run_once_*` runs once ever, `.chezmoiscripts/run_onchange_*` reruns when rendered content changes, `.chezmoiscripts/run_after_*` runs every apply, `.chezmoidata` is data, `.chezmoitemplates` is shared template code, `.chezmoiexternals` is fetched tooling, and `.chezmoiignore` is templated exclusion. Dot-prefixed source paths are internal; non-dot metadata (`AGENTS.md`, `LICENSE`, `opencode.json`) MUST be listed in the root `.chezmoiignore`. `crates/` and `packages/` are source-only build trees.
 
 Edit source files, not deployed files. The source directory itself is the only valid source context; nested worktrees cause recursive data errors, so checks MUST use `--source "$PWD"`. Never commit secrets.
 
@@ -49,7 +49,7 @@ All agent data is in `.chezmoidata/agents.yaml`. MCPs are transport-neutral and 
 
 ## Verification (never deploy live `$HOME`)
 
-The default check uses a per-user scratch directory, stub `op`, empty config, throwaway destination, and `--source "$PWD"`; use the zsh chezmoi wrapper for normal commands, or inject `GITHUB_TOKEN="$(gh auth token)"` when PATH must be controlled. The stub must return newline-free secrets when parsing rendered JSON/TOML. Render every changed template/script through `chezmoi execute-template`; scripts are not targets and MUST be compared as rendered text on both sides. Disclose any onchange side effects, especially network/service restarts; the first apply that reruns `install-system-30-network` MUST be performed from a local console, not SSH/Tailscale.
+The default check uses a per-user scratch directory, stub `op`, empty config, throwaway destination, and `--source "$PWD"`; use the zsh chezmoi wrapper for normal commands, or inject `GITHUB_TOKEN="$(gh auth token)"` when PATH must be controlled. The stub must return newline-free secrets when parsing rendered JSON/TOML. With no readiness marker present (the default), the secret-read / resolve-op-refs cache shims fall back to live `onepasswordRead`, so the `op` stub covers them; to exercise the GPG cache path instead, set `~/.config/chezmoi/gpg-cache-ready` and pass a gpg `--config` carrying the recipient so `decrypt` runs. Render every changed template/script through `chezmoi execute-template`; scripts are not targets and MUST be compared as rendered text on both sides. Disclose any onchange side effects, especially network/service restarts; the first apply that reruns `install-system-30-network` MUST be performed from a local console, not SSH/Tailscale.
 
 `git diff --check`, `git status`, and a diff limited to the requested scope are required. `CLAUDE.md` MUST remain exactly `@AGENTS.md`; wrappers remain bare one-line includes. `chezmoi archive --exclude=encrypted,externals,scripts` may compare extracted target trees, but archive bytes are not comparable by mtime and the archive omits scripts; compare rendered scripts separately and state that blind spot. If local rendering is unavailable, use CI artifacts from `.github/workflows/render-dotfiles.yml` and state the limitation. After a PR receives a `chatgpt-codex-connector` eyes reaction, wait for it to resolve to blocking review comments (address/reply to each) or a thumbs-up before treating review as complete.
 
@@ -64,7 +64,7 @@ env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$
 
 ## Secrets and encrypted state
 
-Secrets come from `onepasswordRead "op://..."` or unresolved data refs. The sole sanctioned repository ciphertext is `src/encrypted_readonly_garden.yaml.age`; edit via the wrapper (`chezmoi edit ~/src/garden.yaml`, or decrypt/encrypt the age source), never commit plaintext. Host LUKS/MOK prompts are AES-encrypted with a key only in the user keyring; read consumers fail soft when unavailable, and only the nonblank prompt path may create a key. Never infer that desktop-mediated `op read` is unavailable from a failed interactive `op whoami`. GitLab PAT setup is data-driven; `auth-glab` remains OAuth fallback.
+Secrets are resolved cache-first: the `secret-read.tmpl` / `resolve-op-refs-json.tmpl` shims read a committed GPG-encrypted bundle (`.chezmoitemplates/secrets-bundle.json.asc`, refreshed from 1Password by `chezmoi-secrets-sync`) when the GPG key is ready, else fall back to live `onepasswordRead "op://..."`; the GPG key import is the one always-live-`op` site. The sanctioned repository ciphertexts are that secrets bundle and `src/encrypted_readonly_garden.yaml.asc` (both GPG); edit the garden via the wrapper (`chezmoi edit ~/src/garden.yaml`), never commit plaintext. Host LUKS/MOK prompts are AES-encrypted with a key only in the user keyring; read consumers fail soft when unavailable, and only the nonblank prompt path may create a key. Never infer that desktop-mediated `op read` is unavailable from a failed interactive `op whoami`. GitLab PAT setup is data-driven; `auth-glab` remains OAuth fallback.
 
 ## Single source of truth
 
@@ -83,7 +83,8 @@ Edit data, not generated scripts or rendered targets:
 | `.chezmoidata/agents.yaml` | MCPs, skills, marketplaces/plugins, Claude values, Pi settings/packages/auth/models, OpenCode providers/plugins/models |
 | `.chezmoidata/system.yaml` | `/etc` manifest gates/modes/checks/removals |
 | `dot_agents/readonly_AGENTS.md` | common instruction source; wrappers are one-line includes |
-| `src/encrypted_readonly_garden.yaml.age` | private `~/src/garden.yaml` registry |
+| `src/encrypted_readonly_garden.yaml.asc` | private `~/src/garden.yaml` registry (GPG) |
+| `.chezmoitemplates/secrets-bundle.json.asc` | GPG secrets cache (`chezmoi-secrets-sync` <- 1Password), read by the secret-read / resolve-op-refs shims |
 
 Standalone release CLIs belong in grouped `.chezmoiexternals/{ai-agents,dev-tools,vcs,k8s,system,fonts}.toml`; language runtimes/registry backends belong in mise. Keep `rust-analyzer` external plus rustup component, use `/usr/bin/python3` for system scripts, and preserve npm/Bun/Yarn/pnpm hardening.
 
@@ -91,7 +92,7 @@ Standalone release CLIs belong in grouped `.chezmoiexternals/{ai-agents,dev-tool
 
 Branch templates on `.chezmoi.os` and distro on `.chezmoi.osRelease.id`; keep POSIX scripts and Windows `.ps1` counterparts aligned. KDE/GNOME scripts use the desktop fact and soft-skip missing runtime/session tools. GNOME remains stock except data-driven listed exceptions, fonts, fcitx5, and password-only GDM. Ubuntu and Fedora have separate package mechanisms but share facts. Do not turn runtime tool presence into a host fact.
 
-A real container is `/run/.containerenv` or `/.dockerenv` without `/run/.toolboxenv`; the `facts.tmpl` and `.install-prerequisites.sh` `is_container`/`is_devbox` predicates MUST stay in lockstep. Containers skip package/system/auth/desktop/haptic provisioning, garden, and age keys, but keep CLI dotfiles, `00-tools`, OpenCode plugin build, Claude/Codex dotagents, compound-engineering, and Pi. No package installation occurs in a container. Change container skips only in the single gated `.chezmoiignore` block, never by editing scripts. `OP_SERVICE_ACCOUNT_TOKEN` is the CI secret path.
+A real container is `/run/.containerenv` or `/.dockerenv` without `/run/.toolboxenv`; the `facts.tmpl` and `.install-prerequisites.sh` `is_container`/`is_devbox` predicates MUST stay in lockstep. Containers skip package/system/auth/desktop/haptic provisioning, garden, and the GPG key, but keep CLI dotfiles, `00-tools`, OpenCode plugin build, Claude/Codex dotagents, compound-engineering, and Pi. No package installation occurs in a container. Change container skips only in the single gated `.chezmoiignore` block, never by editing scripts. `OP_SERVICE_ACCOUNT_TOKEN` is the CI secret path.
 
 ## Repository delivery
 

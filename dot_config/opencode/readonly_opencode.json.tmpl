@@ -79,7 +79,7 @@
 {{- if hasKey . "headers" -}}
 {{- $h := dict -}}
 {{- range $k, $v := get . "headers" -}}
-{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson -}}
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v "ctx" $) | fromJson -}}
 {{- $h = set $h $k $resolved -}}
 {{- end -}}
 {{- $remote = set $remote "headers" $h -}}
@@ -140,5 +140,5 @@
   "experimental": {
     "continue_loop_on_deny": true
   },
-  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" .agents.opencode.providers "indent" "  ") }}
+  "provider": {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" .agents.opencode.providers "indent" "  " "ctx" $) }}
 }

@@ -292,7 +292,7 @@ factRegistry:
     gates: >-
       The root .chezmoiignore container block: every provisioning script, the
       mxm4-haptic build, the Claude Code plugin tree, and
-      src/garden.yaml (whose age identity the skipped 80-keys import would have
+      src/garden.yaml (whose GPG key the skipped 80-keys import would have
       provided).
     whenFalse: A normal host — everything deploys.
 

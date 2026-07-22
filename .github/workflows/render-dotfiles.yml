@@ -97,8 +97,10 @@ jobs:
 
           # Dummy `op`: satisfies op_ready() (`op whoami`), onepasswordRead
           # (`op read`) and onepassword (`op item get --format json`) with
-          # placeholders — no real 1Password is contacted. printf (not a heredoc)
-          # keeps YAML block indentation out of the shebang line.
+          # placeholders — no real 1Password is contacted. The secret-read /
+          # resolve-op-refs cache shims fall back to onepasswordRead here (no GPG
+          # key or readiness marker in CI), so this stub covers them too. printf
+          # (not a heredoc) keeps YAML block indentation out of the shebang line.
           {
             printf '%s\n' '#!/usr/bin/env bash'
             printf '%s\n' 'set -eu'

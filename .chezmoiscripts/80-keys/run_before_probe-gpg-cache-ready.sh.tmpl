@@ -1,0 +1,25 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# Per-apply GPG cache readiness probe (KTD2). Writes ~/.config/chezmoi/gpg-cache-ready
+# iff the committed secrets bundle decrypts non-interactively with the imported GPG
+# key, and removes it otherwise. The secret-read shim gates cache-vs-op on this marker,
+# so a host that cannot decrypt *now* (locked/absent/rotated key, cold gpg-agent, no
+# bundle yet) degrades to the live-op fallback instead of hard-failing the file phase.
+#
+# MUST stay a plain `run_before_` (every apply, before the file phase): the marker has
+# to reflect current decrypt-ability, not a one-time import. Ordered AFTER the key
+# import — chezmoi orders before-phase scripts by target name, and `probe-gpg-cache-ready`
+# sorts after `import-gpg-key`, so the key exists before this probe test-decrypts.
+
+set -euo pipefail
+
+marker="$HOME/.config/chezmoi/gpg-cache-ready"
+bundle="{{ .chezmoi.sourceDir }}/.chezmoitemplates/secrets-bundle.json.asc"
+
+mkdir -p "$HOME/.config/chezmoi"
+if [ -f "$bundle" ] && gpg --batch --no-tty --decrypt "$bundle" >/dev/null 2>&1; then
+  ( umask 077; : > "$marker" )
+else
+  rm -f "$marker"
+fi
+{{ end -}}

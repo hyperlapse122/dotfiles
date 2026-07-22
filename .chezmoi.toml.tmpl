@@ -12,17 +12,19 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
 # independent of a distribution's login umask.
 umask = 0o022
 {{ end }}
-# Age encryption for `encrypted_` source files (the ~/src garden project
-# registry — kept ciphertext-only in this public repo). The recipient below is
-# the PUBLIC half (safe to commit); the identity is provisioned from 1Password
-# into ~/.config/chezmoi/key.txt by
-# .chezmoiscripts/80-keys/run_once_before_import-age-key.sh.tmpl, which runs in
+# GPG encryption for `encrypted_` source files (the ~/src garden project
+# registry and the secrets cache — kept ciphertext-only in this public repo).
+# The recipient below is the PUBLIC key fingerprint (safe to commit); the
+# private key is provisioned from 1Password and imported by
+# .chezmoiscripts/80-keys/run_once_before_import-gpg-key.sh.tmpl, which runs in
 # the before phase so the key exists before the file phase decrypts. Windows
 # and containers never decrypt: src/garden.yaml is chezmoiignored there.
-encryption = "age"
-[age]
-    identity = "{{ .chezmoi.homeDir }}/.config/chezmoi/key.txt"
-    recipient = "age1e98kgx82xu88458clnypmd35jph37feq5gy0u62xw0pad53d2fws4ls6xa"
+encryption = "gpg"
+[gpg]
+    # Same key as .chezmoidata/user.yaml gpgPubKey (used by chezmoi-secrets-sync and the
+    # 80-keys import). Kept as a literal because this config template renders BEFORE
+    # .chezmoidata loads; on key rotation, update both.
+    recipient = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"
 
 [edit]
     command = '{{ printf "codium%s" $executableExtension }}'

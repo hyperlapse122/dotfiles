@@ -1,2 +1,2 @@
 [settings]
-api_key = {{ onepasswordRead "op://Private/WakaTime/API Key" }}
+api_key = {{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/WakaTime/API Key") }}
