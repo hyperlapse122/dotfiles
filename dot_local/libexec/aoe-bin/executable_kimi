@@ -1,0 +1,29 @@
+#!/bin/sh
+# aoe launch wrapper for the kimi agent.
+#
+# aoe launches kimi as a custom agent detected as "claude" (agent_detect_as in
+# ~/.config/agent-of-empires/config.toml), so it passes claude's
+# --dangerously-skip-permissions flag. kimi rejects that flag; its equivalent
+# yolo switch is --yolo. Rewrite that one flag in place, pass every other
+# argument through unchanged, and exec the real kimi external
+# (~/.local/bin/kimi) by absolute path. This wrapper lives off-PATH under
+# ~/.local/libexec/aoe-bin, so exec'ing the absolute path never re-invokes it.
+set -eu
+
+# `for arg in "$@"` expands the argument list once, so rebuilding "$@" via
+# `set --` inside the loop is safe and preserves arguments containing spaces.
+first=1
+for arg in "$@"; do
+	case "$arg" in
+	--dangerously-skip-permissions) repl=--yolo ;;
+	*) repl=$arg ;;
+	esac
+	if [ "$first" -eq 1 ]; then
+		set -- "$repl"
+		first=0
+	else
+		set -- "$@" "$repl"
+	fi
+done
+
+exec "$HOME/.local/bin/kimi" "$@"

@@ -1,0 +1,33 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# Reasserts only the declared aoe TOML leaves (agents.aoe in
+# .chezmoidata/agents.yaml) into aoe's live global config on every apply,
+# preserving every undeclared key aoe writes there itself. run_after (like
+# config-kimi): live edits do not change a chezmoi source fingerprint. Reuses
+# the existing kimi-reconcile binary; its `settings` subcommand is a
+# target-neutral TOML-leaf reconciler despite the kimi-historical name.
+set -euo pipefail
+
+RECONCILER="$HOME/.local/bin/kimi-reconcile"
+AOE_HOME="$HOME/.config/agent-of-empires"
+if [[ ! -x "$RECONCILER" ]]; then
+  printf '%s\n' 'config-aoe: kimi-reconcile is unavailable; run chezmoi apply --force after fixing its build.' >&2
+  exit 1
+fi
+contracts="$($RECONCILER contracts)"
+[[ "$contracts" == *'"settings":"kimi-settings/v1"'* ]] || {
+  printf '%s\n' 'config-aoe: installed reconciler has an incompatible settings contract.' >&2
+  exit 1
+}
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-aoe-settings"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
+config="$(mktemp "$scratch/config.XXXXXX.json")"
+cleanup() { rm -f -- "$config"; }
+trap cleanup EXIT
+chmod 0600 "$config"
+cat >"$config" <<'JSON'
+{{ index .agents.aoe "config.toml" | toPrettyJson | replace "~/" (printf "%s/" .chezmoi.homeDir) }}
+JSON
+"$RECONCILER" settings "$AOE_HOME" config.toml "$config"
+{{ end -}}
