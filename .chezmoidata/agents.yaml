@@ -274,8 +274,8 @@ agents:
       # `theme` is declared here because pi can no longer persist a theme choice
       # to a readonly settings.json — it is fixed to the default.
       theme: dark
-      defaultProvider: anthropic
-      defaultModel: claude-opus-4-8
+      defaultProvider: zai
+      defaultModel: glm-5.2
       # Valid: off | minimal | low | medium | high | xhigh | max.
       defaultThinkingLevel: xhigh
       subagents:
