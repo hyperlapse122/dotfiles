@@ -1,0 +1,34 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- $ctx := . -}}
+{{- $kimiPlugins := .agents.kimi.plugins -}}
+{{- if ne (len $kimiPlugins) 1 -}}{{- fail "install-kimi-plugins: agents.kimi.plugins must contain exactly the owned compound-engineering entry" -}}{{- end -}}
+{{- $kimiCe := index $kimiPlugins 0 -}}
+{{- if or (ne $kimiCe.name "compound-engineering") (ne $kimiCe.versionSource "compoundEngineeringRelease") -}}{{- fail "install-kimi-plugins: unsupported Kimi plugin declaration" -}}{{- end -}}
+{{- $cePlugin := dict -}}
+{{- range .agents.opencode.plugins -}}
+{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}{{- $cePlugin = . -}}{{- end -}}
+{{- end -}}
+{{- if not $cePlugin -}}{{- fail "install-kimi-plugins: compound-engineering archive authority is missing" -}}{{- end -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+#!/usr/bin/env bash
+# Reconciles only compound-engineering's Kimi record and managed tree from the
+# same pinned archive used by the other agents. Unrelated plugins are preserved.
+set -euo pipefail
+RECONCILER="$HOME/.local/bin/kimi-reconcile"
+KIMI_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+SOURCE="$HOME/{{ $cePlugin.externalPath }}/{{ $ceVersion }}"
+if [[ ! -x "$RECONCILER" ]]; then
+  printf '%s\n' 'install-kimi-plugins: kimi-reconcile is unavailable; run chezmoi apply --force after fixing its build.' >&2
+  exit 1
+fi
+[[ "$($RECONCILER contracts)" == *'"plugin":"kimi-plugin/v1"'* ]] || {
+  printf '%s\n' 'install-kimi-plugins: installed reconciler has an incompatible plugin contract.' >&2
+  exit 1
+}
+if [[ ! -d "$SOURCE" ]]; then
+  printf '%s\n' 'install-kimi-plugins: pinned compound-engineering archive is missing; retry chezmoi apply.' >&2
+  exit 1
+fi
+"$RECONCILER" plugin "$KIMI_HOME" "$SOURCE" "{{ $ceRef }}"
+{{ end -}}

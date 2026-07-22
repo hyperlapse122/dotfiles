@@ -23,7 +23,8 @@ the repo's TypeScript/JavaScript library packages.
 
 | Path | Package | Purpose |
 |---|---|---|
-| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth <opencode\|pi>` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes the selected harness's private native credential format; apply only compiles and installs it. |
+| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth <opencode\|pi\|antigravity\|kimi>` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes the selected harness's private native credential format; apply only compiles and installs it. |
+| [`kimi-reconcile/`](kimi-reconcile/) | `@h82/kimi-reconcile` | Compiled apply helper that overlays declared Kimi TOML leaves and transactionally owns only the compound-engineering plugin record/tree. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`opencode-mxm4-haptic/`](opencode-mxm4-haptic/) | `@h82/opencode-mxm4-haptic` | OpenCode plugin that pulses MX Master 4 haptics on OpenCode events (e.g. `session.idle` → `COMPLETED`). Forwards waveforms to the `mxm4-hapticd` daemon via a bundled `@h82/mxm4-haptic`. |
 | [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the raw `cwd` string) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
@@ -106,11 +107,15 @@ are git-ignored.
 `figma-auth` is installed on Linux/macOS by
 `run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
 is never run during apply. The Figma MCP's headerless OAuth entry comes from
-`.chezmoidata/agents.yaml`; invoke `figma-auth opencode` and `figma-auth pi`
+`.chezmoidata/agents.yaml`; invoke `figma-auth opencode`, `figma-auth pi`, or
+`figma-auth kimi`
 manually to seed each harness's native OAuth store. The targets are respectively
 `~/.local/share/opencode/mcp-auth.json` and
 `~/.pi/agent/mcp-auth/<sha256("figma")[0:16]>.json`; writes are private and
-atomic. A soft-skipped build preserves the installed executable and, under
+atomic. Kimi writes its native client, token, and discovery documents under
+`$KIMI_CODE_HOME/credentials/mcp/` (default `~/.kimi-code/credentials/mcp/`),
+preserving discovery metadata when a fresh flow does not replace it. A
+soft-skipped build preserves the installed executable and, under
 `run_onchange` semantics, retries only after an input change or
 `chezmoi apply --force`; the manual compile command above is the non-deploying
 alternative.

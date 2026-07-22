@@ -1,0 +1,33 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# Reasserts only declared Kimi TOML leaves on every apply. This deliberately is
+# run_after: live edits do not change a chezmoi source fingerprint.
+set -euo pipefail
+
+RECONCILER="$HOME/.local/bin/kimi-reconcile"
+KIMI_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+if [[ ! -x "$RECONCILER" ]]; then
+  printf '%s\n' 'config-kimi: kimi-reconcile is unavailable; run chezmoi apply --force after fixing its build.' >&2
+  exit 1
+fi
+contracts="$($RECONCILER contracts)"
+[[ "$contracts" == *'"settings":"kimi-settings/v1"'* ]] || {
+  printf '%s\n' 'config-kimi: installed reconciler has an incompatible settings contract.' >&2
+  exit 1
+}
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-kimi-settings"
+mkdir -p -m 0700 "$scratch"
+config="$(mktemp "$scratch/config.XXXXXX.json")"
+tui="$(mktemp "$scratch/tui.XXXXXX.json")"
+cleanup() { rm -f -- "$config" "$tui"; }
+trap cleanup EXIT
+chmod 0600 "$config" "$tui"
+cat >"$config" <<'JSON'
+{{ index .agents.kimi.settings "config.toml" | toPrettyJson }}
+JSON
+cat >"$tui" <<'JSON'
+{{ index .agents.kimi.settings "tui.toml" | toPrettyJson }}
+JSON
+"$RECONCILER" settings "$KIMI_HOME" config.toml "$config"
+"$RECONCILER" settings "$KIMI_HOME" tui.toml "$tui"
+{{ end -}}

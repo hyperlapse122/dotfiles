@@ -1,0 +1,15 @@
+{
+  "name": "@h82/kimi-reconcile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Safely reconcile selected Kimi Code settings and managed plugins.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=24" },
+  "dependencies": { "smol-toml": "1.7.0" },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "typescript": "7.0.2",
+    "vite-plus": "catalog:"
+  }
+}

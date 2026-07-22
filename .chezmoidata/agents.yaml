@@ -5,7 +5,7 @@
 #     -> managed empty Pi models.json baseline on Linux/macOS workstations
 #   agents.mcp.servers
 #     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json,
-#        gemini mcp_config.json
+#        gemini mcp_config.json, kimi-code mcp.json
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
 #   agents.marketplaces + agents.{claude,codex,agy}.plugins
@@ -42,8 +42,10 @@
 # onchange behavior.
 
 agents:
-  # MCP servers consumed by dotagents, pi, and OpenCode. `transport` is the
-  # discriminator: stdio uses command/args; http uses url plus optional headers.
+  # MCP servers consumed by dotagents, Pi, OpenCode, Gemini, and Kimi Code.
+  # `transport` is the discriminator: stdio uses command/args; http uses url plus
+  # optional headers. Each consumer maps that neutral shape into its native
+  # schema; the managed Kimi mcp.json owns the complete server inventory.
   # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
   # native OAuth store; credentials and refresh tokens never enter source data.
   mcp:
@@ -219,26 +221,26 @@ agents:
     # terminationReason+fullyIdle; PreToolUse ask_question -> question, always-allow).
     - { name: mxm4-haptic, marketplace: dotfiles-agy }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
-  # TODO: Add detailed comment for Kimi Code
   kimi:
-    # TODO: install compound-engineering (https://github.com/everyinc/compound-engineering-plugin#kimi-code-cli) to Kimi Code
-    # TODO: deep-merge these values to `~/.kimi-code/config.toml` when apply like pi
-    # my intended toml data is:
-    # ```toml
-    # default_model = "kimi-code/k3"
-    # [thinking]
-    # enabled = true
-    # effort = "high"
-    # [upgrade]
-    # auto_install = false
-    # ```
+    # Apply selectively owns only the declared leaves in these native TOML
+    # files. The reconciler preserves every undeclared semantic value; comments
+    # and formatting are not an ownership boundary. mcp.json is different: it
+    # is rendered wholesale from agents.mcp.servers. Figma OAuth remains an
+    # explicit `figma-auth kimi` action and stays in Kimi's native credential
+    # store. Apply also owns only compound-engineering's installed record and
+    # managed copy, preserving all unrelated plugins.
     settings:
-      default_model: 'kimi-code/k3'
-      thinking:
-        enabled: true
-        effort: max
-      upgrade:
-        auto_install: false
+      config.toml:
+        default_model: 'kimi-code/k3'
+        thinking:
+          enabled: true
+          effort: max
+      tui.toml:
+        upgrade:
+          auto_install: false
+    plugins:
+    - name: compound-engineering
+      versionSource: compoundEngineeringRelease
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —

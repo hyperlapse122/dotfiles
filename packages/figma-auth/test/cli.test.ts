@@ -22,11 +22,12 @@ describe("CLI parsing", () => {
       expect(stderr.output).toContain("opencode");
       expect(stderr.output).toContain("pi");
       expect(stderr.output).toContain("antigravity");
+      expect(stderr.output).toContain("kimi");
       expect(run).not.toHaveBeenCalled();
     },
   );
 
-  it.each(["opencode", "pi", "antigravity"] as const)(
+  it.each(["opencode", "pi", "antigravity", "kimi"] as const)(
     "accepts only the %s target",
     async (target) => {
       const stdout = sink();
