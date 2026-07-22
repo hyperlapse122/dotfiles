@@ -46,5 +46,5 @@
        NOTE the file deploys 0400 (owner-read-only — tighter than opencode.json's
        0444, because `op://` refs may bake secrets here); pi's API keys
        otherwise live in the 0600 ~/.pi/agent/auth.json (config-pi-auth). */ -}}
-{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $settings) }}
+{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $settings "ctx" $) }}
 {{- end }}

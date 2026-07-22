@@ -46,7 +46,7 @@ url = {{ .url | quote }}
 
 [mcp.headers]
 {{- range $k, $v := get . "headers" }}
-{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson }}
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v "ctx" $) | fromJson }}
 {{ $k }} = '{{ $resolved }}'
 {{- end }}
 {{- end }}

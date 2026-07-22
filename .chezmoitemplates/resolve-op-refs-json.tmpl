@@ -5,18 +5,28 @@ resolve-op-refs-json.tmpl — recursively render data as JSON while resolving
 Input (dict):
   value     required; any map, slice, scalar, or null
   indent    optional; indentation of the value's containing line (default "")
+  ctx       optional; the chezmoi root context ($). When present on the OUTERMOST
+            call, the GPG secrets cache is decrypted ONCE (secrets-bundle.tmpl) and
+            threaded through the recursion as `secrets`.
+  secrets   optional; a pre-resolved {op:// URI -> value} map, threaded internally
+            through BOTH recursive calls so the bundle is decrypted once, not per leaf.
 
-Every string beginning exactly with "op://" is passed to onepasswordRead. Every
-other scalar and type is serialized unchanged. Maps and slices recurse, so the
-rule applies uniformly to heterogeneous provider options, nested headers, model
-definitions, MCP data, and auth data without field-specific branches.
+Every string beginning exactly with "op://" is resolved cache-first: served from
+the decrypted secrets cache when the ref is present, else read live via
+onepasswordRead (which CI stubs). Every other scalar and type is serialized
+unchanged. Maps and slices recurse, so the rule applies uniformly to heterogeneous
+provider options, nested headers, model definitions, MCP data, and auth data
+without field-specific branches. When neither ctx nor secrets is supplied, the
+cache is empty and every op:// ref falls back to onepasswordRead (backward
+compatible with pre-cache callers).
 
 Map keys are emitted in deterministic lexical order.
 
-Usage:
+Usage (a consuming template passes the root context as ctx):
   {{ includeTemplate "resolve-op-refs-json.tmpl" (dict
        "value" .agents.opencode.providers
-       "indent" "  ") }}
+       "indent" "  "
+       "ctx" $) }}
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "resolve-op-refs-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
@@ -27,6 +37,12 @@ Usage:
 {{- $value := .value -}}
 {{-   $indent := "" -}}
 {{-   if hasKey . "indent" -}}{{- $indent = .indent -}}{{- end -}}
+{{-   $secrets := dict -}}
+{{-   if hasKey . "secrets" -}}
+{{-     $secrets = .secrets -}}
+{{-   else if hasKey . "ctx" -}}
+{{-     $secrets = includeTemplate "secrets-bundle.tmpl" .ctx | fromJson -}}
+{{-   end -}}
 {{-   $childIndent := printf "%s  " $indent -}}
 {{-   if kindIs "map" $value -}}
 {{-     if eq (len $value) 0 -}}
@@ -36,7 +52,7 @@ Usage:
 {
 {{-       $last := sub (len $orderedKeys) 1 -}}
 {{-       range $index, $key := $orderedKeys }}
-{{ $childIndent }}{{ $key | toJson }}: {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "indent" $childIndent) }}{{ if lt $index $last }},{{ end }}
+{{ $childIndent }}{{ $key | toJson }}: {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "indent" $childIndent "secrets" $secrets) }}{{ if lt $index $last }},{{ end }}
 {{-       end }}
 {{ $indent }}}
 {{-     end -}}
@@ -47,12 +63,12 @@ Usage:
 [
 {{-       $last := sub (len $value) 1 -}}
 {{-       range $index, $item := $value }}
-{{ $childIndent }}{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "indent" $childIndent) }}{{ if lt $index $last }},{{ end }}
+{{ $childIndent }}{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "indent" $childIndent "secrets" $secrets) }}{{ if lt $index $last }},{{ end }}
 {{-       end }}
 {{ $indent }}]
 {{-     end -}}
 {{-   else if and (kindIs "string" $value) (hasPrefix "op://" $value) -}}
-{{ onepasswordRead $value | toJson }}
+{{- if hasKey $secrets $value }}{{ index $secrets $value | toJson }}{{ else }}{{ onepasswordRead $value | toJson }}{{ end }}
 {{-   else -}}
 {{ $value | toJson }}
 {{-   end -}}

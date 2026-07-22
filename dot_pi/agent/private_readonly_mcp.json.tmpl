@@ -30,7 +30,7 @@
 {{- if hasKey . "headers" -}}
 {{- $h := dict -}}
 {{- range $k, $v := get . "headers" -}}
-{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v) | fromJson -}}
+{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v "ctx" $) | fromJson -}}
 {{- $h = set $h $k $resolved -}}
 {{- end -}}
 {{- $e = set $e "headers" $h -}}

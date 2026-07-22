@@ -133,11 +133,11 @@ login_host() {
 status=0
 
 login_host git.jpi.app registry.jpi.app <<EOF || status=1
-{{ onepasswordRead "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/PAT" }}
+{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/PAT") }}
 EOF
 
 login_host gitlab.com registry.gitlab.com <<EOF || status=1
-{{ onepasswordRead "op://Private/GitLab/PAT" }}
+{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/GitLab/PAT") }}
 EOF
 
 if [[ "$status" -ne 0 ]]; then
