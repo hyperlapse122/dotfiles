@@ -335,6 +335,7 @@ packages:
       # Flatpak apps installed system-wide from Flathub via `flatpak install`.
       flatpaks:
         - com.discordapp.Discord  # Discord voice/text chat client
+        - org.telegram.desktop
       # Global .NET tools installed via `dotnet tool install -g`.
       dotnetTools:
         - git-credential-manager  # cross-platform Git credential helper (GCM)
@@ -732,6 +733,7 @@ packages:
       # Flatpak apps installed system-wide from Flathub via `flatpak install`.
       flatpaks:
         - com.discordapp.Discord  # Discord voice/text chat client
+        - org.telegram.desktop
 
       # Global .NET tools installed via `dotnet tool install -g`.
       dotnetTools:
