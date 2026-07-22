@@ -224,7 +224,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (claude-code, codex, codegraph, gh, glab, kubectl,
+  `~/.local/bin` (claude-code, codex, kimi, codegraph, gh, glab, kubectl,
   helm, macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
   declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
   into `~/.agents/skills/`.

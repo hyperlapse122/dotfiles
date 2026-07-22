@@ -53,13 +53,9 @@ viteplus = "latest"
 "pipx:mmdc" = "latest"
 
 # Agentic AI
-# codex is NOT here: .chezmoiexternals/ai-agents.toml fetches the standalone
-# release and 00-tools/run_onchange_after_codex.sh links it into ~/.local/bin.
+# codex and kimi are NOT here: .chezmoiexternals/ai-agents.toml fetches their
+# standalone releases; codex's linker and kimi's external expose ~/.local/bin.
 "npm:@sentry/dotagents" = "latest"
-"npm:@moonshot-ai/kimi-code" = { version = "latest", allow_builds = [
-  "@moonshot-ai/kimi-code",
-  "node-pty",
-] }
 "npm:@z_ai/mcp-server" = "latest"
 "npm:@agentclientprotocol/claude-agent-acp" = "latest"
 "npm:@agentclientprotocol/codex-acp" = "latest"
@@ -74,7 +70,6 @@ minimum_release_age = "24h"
 minimum_release_age_excludes = [
   "pipx",
   "npm:@sentry/dotagents",
-  "npm:@moonshot-ai/kimi-code",
   "npm:npm",
   "npm:tokscale",
   "viteplus",

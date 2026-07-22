@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: claude, codex, agent-browser, agy, opencode, pi, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, codex, kimi, agent-browser, agy, opencode, pi, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -60,6 +60,57 @@ type = "archive"
 url = '{{ gitHubReleaseAssetURL "openai/codex" $codexTag $codexAsset }}'
 stripComponents = 0
 targetPath = '{{ $codexInstallationPath }}'
+
+{{- /* ---------- kimi-code — the official standalone release is one executable per
+       platform zip. Resolve the tag, download URL, and GitHub-computed sha256 from one
+       releases/latest response so a moving latest pointer cannot mix release identities.
+       Auth is optional and uses a discrete curl argument; the token never enters rendered
+       output. Missing or malformed metadata fails the render closed. ---------- */ -}}
+
+{{- $kimiApiUrl := "https://api.github.com/repos/MoonshotAI/kimi-code/releases/latest" -}}
+{{- $kimiApi := dict -}}
+{{- if (env "GITHUB_TOKEN") -}}
+  {{- $kimiApi = output "curl" "-fsSL" "-H" (printf "Authorization: Bearer %s" (env "GITHUB_TOKEN")) $kimiApiUrl | toString | fromJson -}}
+{{- else -}}
+  {{- $kimiApi = output "curl" "-fsSL" $kimiApiUrl | toString | fromJson -}}
+{{- end -}}
+{{- $kimiTag := $kimiApi.tag_name | toString -}}
+{{- if not (regexMatch "^@moonshot-ai/kimi-code@[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" $kimiTag) -}}
+  {{- fail (printf "kimi-code: invalid release tag %q" $kimiTag) -}}
+{{- end -}}
+
+{{- $kimiOs := replace "windows" "win32" .chezmoi.os -}}
+{{- $kimiArch := replace "amd64" "x64" .chezmoi.arch -}}
+{{- $kimiAsset := printf "kimi-code-%s-%s.zip" $kimiOs $kimiArch -}}
+{{- $kimiUrl := "" -}}
+{{- $kimiSha := "" -}}
+{{- $kimiMatches := 0 -}}
+{{- range $kimiApi.assets -}}
+  {{- if eq .name $kimiAsset -}}
+    {{- $kimiUrl = .browser_download_url | toString -}}
+    {{- $kimiSha = trimPrefix "sha256:" .digest -}}
+    {{- $kimiMatches = add $kimiMatches 1 -}}
+  {{- end -}}
+{{- end -}}
+{{- if ne $kimiMatches 1 -}}
+  {{- fail (printf "kimi-code: expected one %s asset, found %d" $kimiAsset $kimiMatches) -}}
+{{- end -}}
+{{- if not (regexMatch "^https://github\\.com/MoonshotAI/kimi-code/releases/download/.+/.+$" $kimiUrl) -}}
+  {{- fail (printf "kimi-code: invalid download URL for %s" $kimiAsset) -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $kimiSha) -}}
+  {{- fail (printf "kimi-code: invalid sha256 for %s" $kimiAsset) -}}
+{{- end }}
+
+[kimi]
+type = "archive-file"
+targetPath = '{{ printf ".local/bin/kimi%s" $executableExtension }}'
+url = '{{ $kimiUrl }}'
+path = '{{ printf "kimi%s" $executableExtension }}'
+executable = true
+
+[kimi.checksum]
+sha256 = '{{ $kimiSha }}'
 
 {{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
        ("Browser automation CLI for AI agents"), tracked at the newest release like
