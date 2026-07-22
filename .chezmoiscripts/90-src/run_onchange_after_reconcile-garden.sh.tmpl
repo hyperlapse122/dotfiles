@@ -1,0 +1,133 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# scripts/src/reconcile-garden.sh
+#
+# Apply-time garden provisioning + reconcile. Turns the documented manual
+# bootstrap into an automatic step of `chezmoi apply`: whenever the ~/src
+# project registry changes, grow every declared tree and run the three custom
+# bootstrap commands (setup-gitdir, setup-upstream, aoe-session). aoe-session
+# additionally self-heals each session's group to the host-inclusive policy.
+#
+# ADDITIVE ONLY. This never removes, relocates, or unlocks a tree, clone, or
+# aoe worktree — aoe owns worktree lifecycle, and trees dropped from the
+# manifest are left in place for `src-audit` to report.
+#
+# GATING. Runs only where the ~/src layout exists. Windows renders out via the
+# OS guard above — an empty render, the same OS-gate idiom config-solaar uses;
+# the ~/src garden is POSIX-only. The container skip lives in the single gated
+# .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the sanctioned mechanism
+# that also skips src/garden.yaml. It runs on Linux and macOS on a real host.
+#
+# PLACEMENT (90-src, last). Deliberately the last after-phase script. It must
+# run after 10-auth's after-scripts (which configure the gh/glab git credential
+# helpers the private https clones need) and after target application
+# (~/src/garden.yaml decrypted; the garden + aoe externals materialized under
+# ~/.local/bin). Placing it LAST means a hard-fail here does not abort the
+# unrelated after-phase provisioning that would otherwise follow (/etc, host,
+# network, desktop, agent plugins, key import) — none of that depends on the
+# garden.
+#
+# HARD-FAIL. A grow or bootstrap failure fails the apply (set -euo pipefail).
+# But `garden grow '*'` exits 0 even when a tree fails to clone, so its exit
+# code alone does NOT enforce that — the completeness check below re-verifies
+# every declared tree is actually a valid clone and exits non-zero (naming the
+# tree) on any missing, broken, or half-cloned tree. It never auto-repairs
+# (that would mean destructive rm), so a corrupt tree exits with a manual
+# cleanup hint rather than being silently accepted or repaired.
+#
+# NON-INTERACTIVE. GIT_TERMINAL_PROMPT=0 so an auth/reachability gap fails fast
+# instead of hanging apply on a credential prompt. Credentials are injected by
+# the native gh/glab helpers from 10-auth; this script passes no tokens.
+#
+# Dependency fingerprint — chezmoi hashes this rendered script to decide whether
+# to re-run it, so embedding the sha256 of the ENCRYPTED registry SOURCE forces
+# a re-run whenever the manifest changes (trees added, or the aoe-session group
+# formula edited). age is non-deterministic, so any re-encrypt re-triggers even
+# on identical plaintext — a harmless over-trigger, since the reconcile is
+# idempotent. Hashing the ciphertext (raw source bytes) never exposes a secret.
+# Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "src/encrypted_readonly_garden.yaml.age")) }}
+set -euo pipefail
+
+export GIT_TERMINAL_PROMPT=0
+src="$HOME/src"
+
+# Prerequisites are hard requirements: the garden + aoe externals and the
+# decrypted registry are all materialized during target application, before
+# this after-phase script. Their absence is a real failure, not a soft skip.
+command -v garden >/dev/null 2>&1 || { echo "reconcile-garden: garden not on PATH (externals not applied? see .chezmoiexternals/vcs.toml)" >&2; exit 1; }
+command -v aoe    >/dev/null 2>&1 || { echo "reconcile-garden: aoe not on PATH (externals not applied? see .chezmoiexternals/ai-agents.toml)" >&2; exit 1; }
+[ -f "$src/garden.yaml" ] || { echo "reconcile-garden: $src/garden.yaml missing (chezmoi apply did not deploy it)" >&2; exit 1; }
+
+# 1. Grow every declared tree (idempotent; already-grown trees are no-ops).
+echo "reconcile-garden: garden grow '*'"
+garden --chdir "$src" grow '*'
+
+# 2. Completeness check — the real hard-fail gate. `garden grow '*'` exits 0
+#    even when trees fail to clone, so re-verify each DECLARED tree is a valid
+#    clone. A bare tree (path ends in /.bare) must be a bare git repo; a
+#    non-bare tree (plain clone) must be a git work tree. Missing/broken/
+#    half-cloned => exit non-zero, naming the tree, so a silent clone failure
+#    fails the apply. Mirrors the shape in dot_local/bin/executable_src-audit.
+check_tree() {
+  local name="$1" tp="$2"
+  if [ -z "$tp" ]; then
+    echo "reconcile-garden: cannot resolve tree path for '$name'" >&2
+    return 1
+  fi
+  case "$tp" in
+    */.bare)
+      if ! git -C "$tp" rev-parse --is-bare-repository >/dev/null 2>&1; then
+        echo "reconcile-garden: '$name' not grown/broken at $tp — clone failed or was left half-materialized. Fix: garden --chdir ~/src grow $name; if a partial clone is present, remove $(dirname "$tp") and re-apply." >&2
+        return 1
+      fi
+      ;;
+    *)
+      if ! git -C "$tp" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "reconcile-garden: '$name' not grown/broken at $tp (fix: garden --chdir ~/src grow $name)" >&2
+        return 1
+      fi
+      ;;
+  esac
+}
+
+# Enumerate declared trees AND their resolved paths in ONE `garden ls -v` call.
+# Capture garden's OWN exit status first: a hard `ls` failure (crash, non-zero)
+# must fail the apply, not pass vacuously — an empty tree_info would otherwise
+# skip the completeness loop entirely. garden prints grown-tree lines to STDERR
+# and missing-tree lines to STDOUT, so 2>&1 merges both (same reason as
+# dot_local/bin/executable_src-audit); "# <name> [branch] <path>" (grown) and
+# "#- <name> <path>" (missing) both carry the resolved path as the last field.
+raw_ls="$(garden --chdir "$src" ls --all --no-commands --no-remotes --no-gardens --no-groups -v 2>&1)" || {
+  echo "reconcile-garden: 'garden ls' failed — cannot verify grow completeness:" >&2
+  printf '%s\n' "$raw_ls" >&2
+  exit 1
+}
+tree_info="$(printf '%s\n' "$raw_ls" | sed -n -e 's/^# //p' -e 's/^#- //p')"
+
+rc=0
+# Heredoc (not a pipe) so the loop runs in THIS shell and rc survives it.
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  name="${line%% *}"                        # first field = tree name
+  case "$name" in ""|.) continue ;; esac    # skip garden's synthesized "." root
+  tp="${line##* }"                          # last field = resolved TREE_PATH
+  check_tree "$name" "$tp" || rc=1
+done <<EOF
+$tree_info
+EOF
+if [ "$rc" -ne 0 ]; then
+  echo "reconcile-garden: grow incomplete (see above) — failing apply" >&2
+  exit 1
+fi
+
+# 3. Bootstrap: write the .git pointer, set upstreams, hand the default-branch
+#    worktree to aoe and enforce its group policy. Idempotent, and each command
+#    self-skips non-bare trees. aoe-session's group self-heal is a local
+#    aoe-metadata operation with no network dependency; it rides along here.
+echo "reconcile-garden: garden cmd '*' setup-gitdir setup-upstream aoe-session"
+garden --chdir "$src" cmd '*' setup-gitdir setup-upstream aoe-session
+
+echo "reconcile-garden: done"
+{{ end -}}

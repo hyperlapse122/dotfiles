@@ -31,6 +31,7 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 | `60-build` | Rust haptic and Vite+ agent-plugin builds |
 | `70-agents` | dotagents, plugins, Claude values, Pi extensions/auth |
 | `80-keys` | one-time GPG and age imports |
+| `90-src` | reconcile the `~/src` garden on manifest change (grow-all, the three bootstrap commands, aoe group self-heal); runs last so a garden failure cannot abort other provisioning |
 
 ## Host facts, gates, and system configuration
 

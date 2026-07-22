@@ -27,7 +27,9 @@
 
 # The age identity is provisioned only on POSIX hosts (.chezmoiscripts/80-keys/
 # is a bash script with no .ps1 counterpart), so Windows can never decrypt the
-# encrypted ~/src project registry — skip it there.
+# encrypted ~/src project registry — skip it there. (The 90-src reconcile
+# script OS-gates itself out on Windows via its own render guard, like
+# config-solaar, so it needs no entry here.)
 {{- if eq .chezmoi.os "windows" }}
 src/garden.yaml
 {{- end }}
@@ -107,8 +109,10 @@ src/garden.yaml
 .local/share/codex-plugins
 .local/share/agy-plugins
 .pi/agent/extensions/mxm4-haptic.ts
-# The 80-keys age-identity import is skipped above, so the encrypted ~/src
-# project registry cannot be decrypted in a container — skip it too (the
-# ~/src layout is a host concept anyway).
+# The ~/src garden is a host concept: the 80-keys age-identity import is skipped
+# above so the encrypted project registry cannot be decrypted here, and the
+# 90-src reconcile script (grow/bootstrap/aoe) would have nothing to provision
+# and would hard-fail on the then-absent registry — skip both.
+.chezmoiscripts/90-src/*.sh
 src/garden.yaml
 {{- end }}
