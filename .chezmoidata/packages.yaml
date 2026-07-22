@@ -72,6 +72,38 @@
 # .chezmoidata/facts.yaml for why they must never move into the shared partial.
 packages:
   linux:
+    # ------------------------------------------------------------------------
+    # Distro-independent shared package lists. flatpaks and dotnetTools are NOT
+    # a per-distro concern: Flatpak apps come from Flathub (`flatpak install`)
+    # and .NET global tools from `dotnet tool install -g` — both distro-agnostic
+    # delivery mechanisms. They live HERE, as direct siblings of the
+    # fedora:/ubuntu: maps (not nested under a distro), so there is ONE copy to
+    # edit and no way for the two to drift apart. Both installers read these
+    # shared keys (.packages.linux.flatpaks / .packages.linux.dotnetTools);
+    # every OTHER key below is genuinely per-distro and stays under its distro.
+    # Do NOT re-add flatpaks:/dotnetTools: under fedora:/ubuntu: — the installers
+    # now read only these shared keys, so a per-distro copy would be silently
+    # ignored (install nothing) rather than merged.
+    #
+    # Safe as list-typed siblings of the distro sub-maps because NO consumer
+    # iterates the key SET of .packages.linux — the two installers and
+    # dot_local/bin/executable_host-facts.tmpl all index it by explicit distro
+    # name (`.packages.linux.fedora.*`, `index .packages.linux $distro`) — so
+    # extra siblings here are inert to every reader.
+
+    # Flatpak apps installed system-wide from Flathub via `flatpak install`.
+    flatpaks:
+      - com.discordapp.Discord  # Discord voice/text chat client
+      - org.telegram.desktop
+    # Global .NET tools installed via `dotnet tool install -g`. Union of the two
+    # lists that were previously per-distro (csharp-ls used to be Fedora-only).
+    # Order preserved from Fedora's list so its rendered dotnet_tools array is
+    # byte-identical and its installer does not needlessly re-run.
+    dotnetTools:
+      - git-credential-manager  # cross-platform Git credential helper (GCM)
+      - powershell  # PowerShell (pwsh) cross-platform shell
+      - csharp-ls  # C# language server (LSP)
+
     fedora:
       # Conditional package groups → the fact that gates each. Grammar and the
       # declaration-not-a-switch rule are in the file header above; every other
@@ -332,15 +364,6 @@ packages:
         - nvidia-container-toolkit-base  # base components for the container toolkit
         - libnvidia-container-tools  # CLI tools for the NVIDIA container library
         - libnvidia-container1  # NVIDIA container runtime library
-      # Flatpak apps installed system-wide from Flathub via `flatpak install`.
-      flatpaks:
-        - com.discordapp.Discord  # Discord voice/text chat client
-        - org.telegram.desktop
-      # Global .NET tools installed via `dotnet tool install -g`.
-      dotnetTools:
-        - git-credential-manager  # cross-platform Git credential helper (GCM)
-        - powershell  # PowerShell (pwsh) cross-platform shell
-        - csharp-ls
       # RPMs installed directly from a vendor URL (no repo): import the GPG
       # key(s), then install the link matching the host arch (skipped when `id`
       # is already an installed package). An entry with a pinned `version` is
@@ -729,16 +752,6 @@ packages:
       # (26.04) is LTS, so linux-generic-hwe-26.04 tracks the rolling HWE generic
       # kernel; the flavour-order drop-in wins over ubuntustudio-lowlatency-settings.
       intelHweKernel: linux-generic-hwe-26.04
-
-      # Flatpak apps installed system-wide from Flathub via `flatpak install`.
-      flatpaks:
-        - com.discordapp.Discord  # Discord voice/text chat client
-        - org.telegram.desktop
-
-      # Global .NET tools installed via `dotnet tool install -g`.
-      dotnetTools:
-        - git-credential-manager  # cross-platform Git credential helper (GCM)
-        - powershell  # PowerShell (pwsh) cross-platform shell
 
       # .deb packages installed directly from a vendor URL (no repo): download
       # the matching arch .deb and install with dpkg -i. An entry with a pinned
