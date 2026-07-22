@@ -21,6 +21,9 @@ umask = 0o022
 # and containers never decrypt: src/garden.yaml is chezmoiignored there.
 encryption = "gpg"
 [gpg]
+    # Same key as .chezmoidata/user.yaml gpgPubKey (used by chezmoi-secrets-sync and the
+    # 80-keys import). Kept as a literal because this config template renders BEFORE
+    # .chezmoidata loads; on key rotation, update both.
     recipient = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"
 
 [edit]

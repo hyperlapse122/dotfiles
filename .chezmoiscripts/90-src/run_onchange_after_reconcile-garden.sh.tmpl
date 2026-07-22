@@ -43,11 +43,11 @@
 # Dependency fingerprint — chezmoi hashes this rendered script to decide whether
 # to re-run it, so embedding the sha256 of the ENCRYPTED registry SOURCE forces
 # a re-run whenever the manifest changes (trees added, or the aoe-session group
-# formula edited). age is non-deterministic, so any re-encrypt re-triggers even
+# formula edited). gpg is non-deterministic, so any re-encrypt re-triggers even
 # on identical plaintext — a harmless over-trigger, since the reconcile is
 # idempotent. Hashing the ciphertext (raw source bytes) never exposes a secret.
 # Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "src/encrypted_readonly_garden.yaml.age")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "src/encrypted_readonly_garden.yaml.asc")) }}
 set -euo pipefail
 
 export GIT_TERMINAL_PROMPT=0
