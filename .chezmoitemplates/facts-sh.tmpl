@@ -24,16 +24,14 @@ Two things to know before editing:
     every consuming run_onchange_ script, which re-runs it. That is correct
     behaviour, not churn: the host became a different host.
 
-  * NO FORCE_* LOGIC LIVES HERE, EVER. FORCE_NVIDIA / FORCE_INTEL /
-    FORCE_UBUNTU_STUDIO layer on top of a fact in the two package installers
-    ONLY:
+  * NO FORCE_* LOGIC LIVES HERE, EVER. FORCE_NVIDIA / FORCE_INTEL layer on top of
+    a fact in the two package installers ONLY:
 
         HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 
     install-system-10-files shares this same partial, so a FORCE_* honoured here
-    would let FORCE_UBUNTU_STUDIO=1 install the realtime-limits drop-in (@audio
-    rtprio 95, memlock unlimited) on a plain Ubuntu Desktop — a privilege
-    escalation that today's split deliberately blocks.
+    could layer a privilege-granting /etc drop-in onto a host whose fact is
+    false — an escalation that today's split deliberately blocks.
 */ -}}
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $registry := .factRegistry -}}

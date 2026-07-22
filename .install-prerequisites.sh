@@ -227,18 +227,6 @@ fact_headless() {
   [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]
 }
 
-# Ubuntu Studio. Every Ubuntu flavor reports ID=ubuntu, so the flavor is its
-# seed package: ubuntustudio-default-settings, preinstalled by the Studio ISO.
-# Probed as a `stat` on the dpkg .md5sums marker rather than `dpkg -s` (which the
-# installers use): `dpkg -s` exits 0 for a REMOVED-but-not-purged package (state
-# `config-files`), which would grant @audio realtime limits on a host that no
-# longer has the pro-audio stack. `.md5sums` is deleted on remove; `.list` is
-# not, so it is the wrong marker too. The package is Architecture: all, so its
-# dpkg info files carry no :arch qualifier.
-fact_ubuntu_studio() {
-  [[ -e /var/lib/dpkg/info/ubuntustudio-default-settings.md5sums ]]
-}
-
 # vm and virt are TWO facts on purpose — the repo already treats them as two
 # conditions and collapsing them would flip a consumer:
 #   vm   = `systemd-detect-virt --vm`  (VMs only) — system.yaml's `vm` gate, the
@@ -288,7 +276,6 @@ write_facts_cache() {
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
     printf 'intelGpu: %s\n'     "$(fact_bool fact_intel_gpu)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
-    printf 'ubuntuStudio: %s\n' "$(fact_bool fact_ubuntu_studio)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
   } >"$tmp_file" || {
