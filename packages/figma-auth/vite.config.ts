@@ -10,6 +10,8 @@ export default defineConfig({
       build: {
         command: "bun build --compile ./src/index.ts --outfile ./dist/figma-auth",
         dependsOn: [{ task: "build", from: "dependencies" }],
+        // Explicit inputs: auto file tracking misses reads by the external
+        // bun process, so source edits would replay a stale cached build.
         input: [
           "src/**",
           "package.json",
