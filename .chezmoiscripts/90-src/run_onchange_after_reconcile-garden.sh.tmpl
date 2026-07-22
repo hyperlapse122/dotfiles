@@ -1,3 +1,4 @@
+{{ if ne .chezmoi.os "windows" -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 # scripts/src/reconcile-garden.sh
@@ -12,10 +13,11 @@
 # aoe worktree — aoe owns worktree lifecycle, and trees dropped from the
 # manifest are left in place for `src-audit` to report.
 #
-# GATING. Runs only where the ~/src layout exists. The Windows and container
-# skips live in the single gated .chezmoiignore block (as
-# `.chezmoiscripts/90-src/*.sh`), the same mechanism that skips src/garden.yaml
-# — never in this script. It runs on Linux and macOS on a real host.
+# GATING. Runs only where the ~/src layout exists. Windows renders out via the
+# OS guard above — an empty render, the same OS-gate idiom config-solaar uses;
+# the ~/src garden is POSIX-only. The container skip lives in the single gated
+# .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the sanctioned mechanism
+# that also skips src/garden.yaml. It runs on Linux and macOS on a real host.
 #
 # PLACEMENT (90-src, last). Deliberately the last after-phase script. It must
 # run after 10-auth's after-scripts (which configure the gh/glab git credential
@@ -128,3 +130,4 @@ echo "reconcile-garden: garden cmd '*' setup-gitdir setup-upstream aoe-session"
 garden --chdir "$src" cmd '*' setup-gitdir setup-upstream aoe-session
 
 echo "reconcile-garden: done"
+{{ end -}}

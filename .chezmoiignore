@@ -27,11 +27,11 @@
 
 # The age identity is provisioned only on POSIX hosts (.chezmoiscripts/80-keys/
 # is a bash script with no .ps1 counterpart), so Windows can never decrypt the
-# encrypted ~/src project registry — skip it, and the garden reconcile that
-# consumes it, there.
+# encrypted ~/src project registry — skip it there. (The 90-src reconcile
+# script OS-gates itself out on Windows via its own render guard, like
+# config-solaar, so it needs no entry here.)
 {{- if eq .chezmoi.os "windows" }}
 src/garden.yaml
-.chezmoiscripts/90-src/*.sh
 {{- end }}
 
 # Vendored source dirs: crates/ + packages/ monorepos are built/used in place,
