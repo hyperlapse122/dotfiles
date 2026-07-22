@@ -4,7 +4,8 @@
 #   agents.pi.models
 #     -> managed empty Pi models.json baseline on Linux/macOS workstations
 #   agents.mcp.servers
-#     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json
+#     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json,
+#        gemini mcp_config.json
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
 #   agents.marketplaces + agents.{claude,codex,agy}.plugins

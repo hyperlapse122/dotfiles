@@ -619,8 +619,8 @@ jobs:
           pi_settings="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/settings.json"
           test -f "${pi_settings}"
           jq -e '
-            .defaultProvider == "anthropic" and
-            .defaultModel == "claude-opus-4-8" and
+            .defaultProvider == "zai" and
+            .defaultModel == "glm-5.2" and
             (.packages | index("npm:@gotgenes/pi-anthropic-auth") != null)
           ' "${pi_settings}" >/dev/null
           {
