@@ -40,7 +40,7 @@ script**:
   file elsewhere).
 
 Gates are *named host facts* from the registry (`.chezmoidata/facts.yaml`) —
-`thinkpad`, `vm`, `ubuntuStudio`, `sddmBreeze`, `gdm`, `fprintdPam`. The
+`thinkpad`, `vm`, `sddmBreeze`, `gdm`, `fprintdPam`. The
 installer no longer probes for any of them: `gate_ok()` is a lookup into the
 `FACT_*` variables the registry resolved once for this chezmoi command. A gate
 naming a fact the registry does not declare aborts the render, so typos fail
@@ -84,7 +84,6 @@ system/linux/etc/locale.conf
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
 | `etc/pam.d/polkit-1` | fingerprint at polkit prompts (`fprintdPam` gate): overrides the vendor `/usr/lib/pam.d/polkit-1` with the same stack plus a `sufficient pam_fprintd` line, so a polkit dialog takes a finger and still falls back to the password entry. Scoped to polkit on purpose — putting fprintd in `common-auth` would give the GDM greeter fingerprint auth back and re-lock the login keyring |
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreeze` gate skips it when the theme is not installed |
-| `etc/security/limits.d/95-ubuntustudio-audio.conf` | `@audio` group realtime privileges (rtprio/memlock) — `ubuntuStudio` gate |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
 | `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |

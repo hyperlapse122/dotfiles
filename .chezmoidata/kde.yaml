@@ -62,14 +62,12 @@
 # PER-SETTING RATIONALE (carried over verbatim from the eight collapsed scripts)
 #
 # kdeglobals [KDE] — Global Theme  (was config-kde-autotheme.sh)
-#   Fedora + Ubuntu Studio. Puts the desktop on Plasma's default Breeze Global
+#   Fedora KDE Spin. Puts the desktop on Plasma's default Breeze Global
 #   Theme with automatic day/night switching (Plasma 6.5+):
 #     LookAndFeelPackage      = org.kde.breezedark.desktop  (initial theme)
 #     DefaultLightLookAndFeel = org.kde.breeze.desktop       (daytime theme)
 #     DefaultDarkLookAndFeel  = org.kde.breezedark.desktop   (night theme)
 #     AutomaticLookAndFeel    = true
-#   On Ubuntu Studio this also moves the session off its shipped custom Global
-#   Theme onto Breeze.
 #   Priority-1 behaviour is automatic Breeze Dark + Breeze Light switching, timed
 #   off the Night Light schedule. On Plasma < 6.5 the auto-switch keys are unknown
 #   and silently ignored, so the LookAndFeelPackage pin alone leaves the desktop on
@@ -183,7 +181,7 @@ kde:
     - { file: spectaclerc, group: General, key: rememberSelectionRect, type: string, value: Never }
 
 # KDE Plasma 6 desktop tunables, rendered into the .chezmoiscripts/50-linux-kde/
-# config scripts (the KDE targets: Fedora KDE Spin, Ubuntu Studio).
+# config scripts (the KDE target: Fedora KDE Spin).
 #
 # Single source of truth (like gnome.yaml / solaar.yaml): tune a value HERE, not
 # in the script. Every value below renders into the consuming script's body, so a

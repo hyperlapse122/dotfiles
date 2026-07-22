@@ -140,7 +140,7 @@ ensure_config_secrets_key() {
 # --- Host-fact cache — layer 1 of the named-fact registry -------------------
 #
 # The registry's SHELL layer (names declared in .chezmoidata/facts.yaml; merged
-# entry point .chezmoitemplates/facts.tmpl). These six facts live here — and not
+# entry point .chezmoitemplates/facts.tmpl). These five facts live here — and not
 # in a template — because the template functions cannot express them:
 #
 #   * `output` propagates a non-zero exit as a template error that ABORTS the
@@ -164,9 +164,9 @@ ensure_config_secrets_key() {
 #   1. Every probe ALWAYS exits 0 and prints a bare `true` / `false`. A host
 #      that lacks the probe's mechanism (no systemd-detect-virt, no /sys, no
 #      dpkg — macOS, a minimal container) prints `false`, which is the
-#      conservative direction for all six: skip NVIDIA, skip Intel, skip the
-#      bare-metal package set, skip ThinkPad ACPI, skip the Studio realtime
-#      limits, treat the host as a desktop rather than a server.
+#      conservative direction for all five: skip NVIDIA, skip Intel, skip the
+#      bare-metal package set, skip ThinkPad ACPI, treat the host as a desktop
+#      rather than a server.
 #   2. It NEVER fails the hook. A read-only or full $HOME must not take down
 #      `chezmoi diff`; a warning plus a missing cache degrades to exactly the
 #      all-false that facts.tmpl already renders when the file is absent.
@@ -227,18 +227,6 @@ fact_headless() {
   [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]
 }
 
-# Ubuntu Studio. Every Ubuntu flavor reports ID=ubuntu, so the flavor is its
-# seed package: ubuntustudio-default-settings, preinstalled by the Studio ISO.
-# Probed as a `stat` on the dpkg .md5sums marker rather than `dpkg -s` (which the
-# installers use): `dpkg -s` exits 0 for a REMOVED-but-not-purged package (state
-# `config-files`), which would grant @audio realtime limits on a host that no
-# longer has the pro-audio stack. `.md5sums` is deleted on remove; `.list` is
-# not, so it is the wrong marker too. The package is Architecture: all, so its
-# dpkg info files carry no :arch qualifier.
-fact_ubuntu_studio() {
-  [[ -e /var/lib/dpkg/info/ubuntustudio-default-settings.md5sums ]]
-}
-
 # vm and virt are TWO facts on purpose — the repo already treats them as two
 # conditions and collapsing them would flip a consumer:
 #   vm   = `systemd-detect-virt --vm`  (VMs only) — system.yaml's `vm` gate, the
@@ -288,7 +276,6 @@ write_facts_cache() {
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
     printf 'intelGpu: %s\n'     "$(fact_bool fact_intel_gpu)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
-    printf 'ubuntuStudio: %s\n' "$(fact_bool fact_ubuntu_studio)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
   } >"$tmp_file" || {

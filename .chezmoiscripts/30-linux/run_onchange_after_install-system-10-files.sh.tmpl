@@ -23,9 +23,8 @@
 # implementation now serves this script, host-facts, and the two package
 # installers) — this script probes the host for NOTHING any more. That is what
 # retired the `sudo dmidecode -t system` grep (the thinkpad fact reads the same
-# two DMI fields from world-readable /sys/class/dmi/id/, no elevation) and the
-# `dpkg -s ubuntustudio-default-settings` test (which exits 0 for a
-# removed-but-not-purged package; the fact stats the dpkg .md5sums marker).
+# two DMI fields from world-readable /sys/class/dmi/id/, no elevation) — this
+# script probes the host for nothing.
 # Every gate name is validated against the registry at render time below, so an
 # unknown one aborts the whole chezmoi command instead of silently resolving
 # false. The PER-FACT "why" (vm vs. the registry's broader virt; fprintdPam's
@@ -125,7 +124,6 @@ gate_reason() {
   case "$1" in
     thinkpad) printf 'not a ThinkPad system' ;;
     vm) printf 'not a VM' ;;
-    ubuntuStudio) printf 'ubuntu-studio-only (realtime audio limits)' ;;
     sddmBreeze) printf 'breeze sddm theme absent' ;;
     gdm) printf 'gdm not installed' ;;
     fprintdPam) printf 'no pam_fprintd module or non-Debian PAM stack' ;;

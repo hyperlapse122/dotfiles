@@ -22,10 +22,9 @@ set -euo pipefail
 # APT repositories, dpkg architecture setup for Steam, apt/flatpak/dotnet
 # packages, direct .deb installs, NVIDIA driver + CUDA + container toolkit, the
 # Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), system
-# services, and user groups. Serves both Ubuntu flavors — Ubuntu Desktop 26.04
-# (GNOME) and Ubuntu Studio 26.04 (KDE Plasma) — with the per-desktop package
-# sets (kdePackages/gnomePackages) and the Studio pro-audio stack
-# (studioPackages, @audio group) gated on named host facts; packages.yaml's
+# services, and user groups. Serves Ubuntu Desktop 26.04 (GNOME): the GNOME
+# package set (gnomePackages) is gated on the `desktop` host fact and the
+# fcitx5 Korean IME installs as a baseline package; packages.yaml's
 # `gates:` map says which fact gates which group. Every install path is guarded
 # so chezmoi can safely re-run this script when .chezmoidata/packages.yaml
 # changes.
@@ -44,11 +43,11 @@ set -euo pipefail
 # fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), not hand-wired
 # to a FACT_* variable here. This script used to carry its own probes (a sysfs
 # 0x10de scan for the NVIDIA GPU, a vendor+class sysfs walk for the Intel GPU,
-# systemd-detect-virt, a `dpkg -s` Studio marker check, and a pair of
-# `command -v` desktop checks), then — once those became registry facts — a
+# systemd-detect-virt, and a pair of `command -v` desktop checks), then — once
+# those became registry facts — a
 # stage that still hand-picked which FACT_* answered each flag, bypassing
 # whatever the map itself said. Now the map drives the flag directly: change
-# `gates.kdePackages` from `desktop.kde` to something else and this flag
+# `gates.gnomePackages` from `desktop.gnome` to something else and this flag
 # follows it, no script edit required. See the file header in
 # .chezmoidata/packages.yaml. HAS_INTEL_GPU is seeded from intelPackages' gate
 # (intelHweKernel declares the identical `intelGpu` gate in the map, purely so
@@ -64,8 +63,6 @@ HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDI
 [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 HAS_INTEL_GPU=0; fact_gate {{ index $gates "intelPackages" | quote }} && HAS_INTEL_GPU=1
 [[ "${FORCE_INTEL:-0}" == 1 ]] && HAS_INTEL_GPU=1
-IS_UBUNTU_STUDIO=0; fact_gate {{ index $gates "studioPackages" | quote }} && IS_UBUNTU_STUDIO=1
-[[ "${FORCE_UBUNTU_STUDIO:-0}" == 1 ]] && IS_UBUNTU_STUDIO=1
 
 # HAS_BARE_METAL is seeded from bareMetalPackages' `!virt` gate — the BARE
 # systemd-detect-virt, true for a container as well as a VM. That is
@@ -74,12 +71,9 @@ IS_UBUNTU_STUDIO=0; fact_gate {{ index $gates "studioPackages" | quote }} && IS_
 # counterpart.
 HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
 
-# The desktop is ONE fact with ONE value (kde | gnome | none), so the two flags
-# are mutually exclusive by construction — where the old pair of independent
-# `command -v` probes would have set both on a host that happened to carry both
-# shells. KDE wins that tie (the precedence facts.yaml declares); `none` (a
-# server, a container) installs neither set, as before.
-HAS_KDE=0; fact_gate {{ index $gates "kdePackages" | quote }} && HAS_KDE=1
+# The desktop is ONE fact with ONE value (gnome | none). Ubuntu is a GNOME-only
+# target, so only the GNOME flag is seeded here; `none` (a server, a container)
+# installs no desktop set, as before.
 HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "run_onchange_before_ubuntu.sh" -}}
@@ -140,23 +134,9 @@ if [[ "${HAS_BARE_METAL}" -eq 1 ]]; then
 {{ end -}}
   )
 fi
-if [[ "${HAS_KDE}" -eq 1 ]]; then
-  packages+=(
-{{ range .packages.linux.ubuntu.kdePackages -}}
-    {{ . | quote }}
-{{ end -}}
-  )
-fi
 if [[ "${HAS_GNOME}" -eq 1 ]]; then
   packages+=(
 {{ range .packages.linux.ubuntu.gnomePackages -}}
-    {{ . | quote }}
-{{ end -}}
-  )
-fi
-if [[ "${IS_UBUNTU_STUDIO}" -eq 1 ]]; then
-  packages+=(
-{{ range .packages.linux.ubuntu.studioPackages -}}
     {{ . | quote }}
 {{ end -}}
   )
@@ -474,15 +454,14 @@ install_intel_support() {
   setup_intel_repos
   "${APT[@]}" update
 
-  # Make the generic (HWE) kernel the default boot entry, ahead of the lowlatency
-  # flavour ubuntustudio-lowlatency-settings prefers. Written BEFORE the kernel
-  # install so its postinst update-grub already emits the HWE entry as default;
-  # the 99- prefix outranks the ubuntustudio grub.d drop-in.
+  # Make the generic (HWE) kernel the default boot entry. Written BEFORE the
+  # kernel install so its postinst update-grub already emits the HWE entry as
+  # default; the 99- prefix outranks any vendor grub.d flavour-order drop-in.
   if [[ -d /etc/default/grub.d ]]; then
     printf '%s\n' \
       '# Managed by chezmoi - Intel graphics enablement.' \
-      '# Boot the generic (HWE) kernel by default, ahead of the lowlatency flavour' \
-      '# ubuntustudio-lowlatency-settings prefers. The 99- prefix outranks it.' \
+      '# Boot the generic (HWE) kernel by default. The 99- prefix outranks any' \
+      '# vendor grub.d flavour-order drop-in.' \
       'GRUB_FLAVOUR_ORDER="generic"' \
       | "${SUDO[@]}" tee /etc/default/grub.d/99-hwe-generic-default.cfg >/dev/null
   fi
@@ -547,14 +526,6 @@ configure_user_groups() {
   local target_user grp
   target_user="${SUDO_USER:-$USER}"
   local -a groups=(keyd vboxusers)
-
-  # @audio grants the realtime privileges from the Studio limits.d drop-in
-  # (95-ubuntustudio-audio.conf) — Studio-only, like the drop-in itself. The
-  # audio group exists on every Ubuntu, so membership (direct device access)
-  # is deliberately NOT granted on a plain Desktop install.
-  if [[ "${IS_UBUNTU_STUDIO}" -eq 1 ]]; then
-    groups+=(audio)
-  fi
 
   # Add user to groups only when they exist.
   for grp in "${groups[@]}"; do

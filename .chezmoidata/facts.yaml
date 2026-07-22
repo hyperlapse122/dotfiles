@@ -113,7 +113,7 @@ factRegistry:
     gates: >-
       The two package installers (20-linux-fedora vs 40-linux-ubuntu), the
       Ubuntu-only locale-gen / MOK / ufw paths, and system.yaml's per-distro
-      `removed:` entries. Ubuntu Studio also reports ID=ubuntu — see ubuntuStudio.
+      `removed:` entries.
     whenFalse: >-
       Empty (non-Linux): every distro-gated script renders to nothing on that OS.
   desktop:
@@ -209,24 +209,6 @@ factRegistry:
       keeps host-hardware packages out of a VM/container.
 
   # --- Distro flavor / platform features -------------------------------------
-  ubuntuStudio:
-    type: bool
-    probe: hook
-    absentDefault: false
-    source: >-
-      stat /var/lib/dpkg/info/ubuntustudio-default-settings.md5sums — the Studio ISO's
-      seed package (every Ubuntu flavor reports ID=ubuntu, so the package IS the
-      flavor). The .md5sums marker, NOT `dpkg -s` (exits 0 for a removed-but-not-purged
-      package, state `config-files`) and NOT the .list file (which survives a remove).
-      The package is Architecture: all, so its dpkg info files carry no :arch suffix.
-    gates: >-
-      studioPackages, the @audio user group, and
-      etc/security/limits.d/95-ubuntustudio-audio.conf (@audio rtprio 95, memlock
-      unlimited). FORCE_UBUNTU_STUDIO=1 overrides in the INSTALLER only — never for
-      the /etc file, see the FORCE_* note below.
-    whenFalse: >-
-      A plain Ubuntu Desktop grows no pro-audio stack and no realtime scheduling
-      limits it has nothing to use them for.
   sddmBreeze:
     type: bool
     probe: template
@@ -299,13 +281,13 @@ factRegistry:
 # ---------------------------------------------------------------------------
 # FORCE_* overrides are NOT facts and never enter this registry.
 #
-# FORCE_NVIDIA / FORCE_INTEL / FORCE_UBUNTU_STUDIO exist so a GPU-less test
-# container can still exercise the driver and Studio package sets. They layer on
-# TOP of a fact, in the package installers ONLY:
+# FORCE_NVIDIA / FORCE_INTEL exist so a GPU-less test container can still
+# exercise the driver package sets. They layer on TOP of a fact, in the package
+# installers ONLY:
 #
 #   HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 #
 # They must never move into facts-sh.tmpl, because install-system-10-files shares
-# that partial: FORCE_UBUNTU_STUDIO=1 would then install the realtime-limits
-# drop-in (@audio rtprio 95, memlock unlimited) on a plain Ubuntu Desktop — a
-# privilege escalation today's split deliberately blocks.
+# that partial: a FORCE_* honoured there could layer a privilege-granting /etc
+# drop-in onto a host whose fact is false — an escalation today's split
+# deliberately blocks.

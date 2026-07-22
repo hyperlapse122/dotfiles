@@ -24,9 +24,6 @@ system:
     #            vm           systemd-detect-virt --vm — VMs ONLY. Deliberately
     #                         not the registry's `virt` fact (which is true for a
     #                         container too): this gate grants password-less sudo.
-    #            ubuntuStudio the Studio ISO's seed package is installed (every
-    #                         Ubuntu flavor reports ID=ubuntu, so the package IS
-    #                         the flavor).
     #            sddmBreeze   the breeze SDDM theme is installed.
     #            gdm          the GDM greeter's compiled defaults db exists.
     #            fprintdPam   pam_fprintd.so installed AND a Debian-style
@@ -54,16 +51,6 @@ system:
         mode: "440"
         gate: vm
         check: visudo
-      # Studio-only: every Ubuntu flavor reports ID=ubuntu, so the flavor is
-      # detected by its seed package (ubuntustudio-default-settings,
-      # preinstalled by the Studio ISO). A plain Ubuntu Desktop install must
-      # not grant @audio realtime privileges it has no pro-audio stack for.
-      # Same gate as studioPackages/@audio in run_onchange_before_ubuntu.
-      # FORCE_UBUNTU_STUDIO=1 is an INSTALLER-only override and deliberately
-      # does not reach this file: it would grant @audio realtime privileges on
-      # a plain Ubuntu Desktop.
-      - path: etc/security/limits.d/95-ubuntustudio-audio.conf
-        gate: ubuntuStudio
       # De-brands the login greeter to upstream Breeze on both distros.
       # Forcing Current=breeze without the theme installed yields a broken
       # login screen, so skip when the breeze SDDM theme is absent.
@@ -117,3 +104,7 @@ system:
     # never deleted.
     removed:
       - path: /etc/udev/rules.d/logitech-receiver.rules
+      # Ubuntu Studio pro-audio realtime limits — removed with Ubuntu Studio
+      # support. Ubuntu-scoped: this drop-in was only ever deployed there.
+      - path: /etc/security/limits.d/95-ubuntustudio-audio.conf
+        distro: ubuntu

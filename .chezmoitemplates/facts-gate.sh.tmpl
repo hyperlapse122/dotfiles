@@ -57,16 +57,14 @@ WHAT THIS PARTIAL DELIBERATELY DOES NOT DO:
     system.yaml's `gate:` column, host-facts validates both). A typo is
     therefore still caught at render time, exactly as before — fact_gate()
     only has to PARSE the three grammar shapes at runtime, never police them.
-  * CARRY FORCE_* LOGIC. FORCE_NVIDIA / FORCE_INTEL / FORCE_UBUNTU_STUDIO stay
-    in the two package installers ONLY, layered on top of fact_gate()'s
-    result:
+  * CARRY FORCE_* LOGIC. FORCE_NVIDIA / FORCE_INTEL stay in the two package
+    installers ONLY, layered on top of fact_gate()'s result:
 
       HAS_NVIDIA=0; fact_gate "nvidia" && HAS_NVIDIA=1
       [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 
-    install-system-10-files shares this very partial, and a leaked
-    FORCE_UBUNTU_STUDIO would install the realtime-scheduling limits.d
-    drop-in (@audio rtprio 95, memlock unlimited) on a plain Ubuntu Desktop —
+    install-system-10-files shares this very partial, and a leaked FORCE_* could
+    layer a privilege-granting /etc drop-in onto a host whose fact is false —
     see the FORCE_* note at the bottom of .chezmoidata/facts.yaml.
 
 The dispatch table inside fact_gate() is rendered FROM the fact registry

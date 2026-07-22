@@ -42,7 +42,7 @@ Three rules hold this file together:
   * A MISSING CACHE IS NOT AN ERROR. Every hook fact then resolves to its
     registry-declared `absentDefault`, the per-fact value that skips the gated
     action. In particular, `virt` and `headless` resolve true because their gates
-    are inverted; driver, Studio, and privilege-grant facts resolve false.
+    are inverted; driver and privilege-grant facts resolve false.
     This is what makes the empty---config renders — the AGENTS.md stub-`op`
     recipe and the CI render-internals job, where the hook does not run at all —
     correct rather than merely non-fatal: the cache file persists on the host
@@ -104,11 +104,10 @@ Three rules hold this file together:
    and reads that decision instead of maintaining either fact-name list here.
 
    The rule is: the value a fact takes when we DO NOT KNOW must be the one that
-   SKIPS the thing it gates. For four of the six that is `false`, because the gate
+   SKIPS the thing it gates. For three of the five that is `false`, because the gate
    reads `<fact>` and false means skip:
 
      nvidia / intelGpu   skip the driver + CUDA / Intel graphics package sets
-     ubuntuStudio        skip the pro-audio stack AND the realtime-limits drop-in
      vm                  skip etc/sudoers.d/* — the password-less-sudo drop-in.
                          THIS ONE IS A PRIVILEGE GRANT: `true` would install
                          `%wheel ALL=(ALL:ALL) NOPASSWD: ALL` on a host we cannot
