@@ -42,7 +42,7 @@ Three rules hold this file together:
   * A MISSING CACHE IS NOT AN ERROR. Every hook fact then resolves to its
     registry-declared `absentDefault`, the per-fact value that skips the gated
     action. In particular, `virt` and `headless` resolve true because their gates
-    are inverted; driver, Studio, and privilege-grant facts resolve false.
+    are inverted; driver and privilege-grant facts resolve false.
     This is what makes the empty---config renders — the AGENTS.md stub-`op`
     recipe and the CI render-internals job, where the hook does not run at all —
     correct rather than merely non-fatal: the cache file persists on the host

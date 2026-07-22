@@ -43,11 +43,11 @@ set -euo pipefail
 # fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), not hand-wired
 # to a FACT_* variable here. This script used to carry its own probes (a sysfs
 # 0x10de scan for the NVIDIA GPU, a vendor+class sysfs walk for the Intel GPU,
-# systemd-detect-virt, a `dpkg -s` Studio marker check, and a pair of
-# `command -v` desktop checks), then — once those became registry facts — a
+# systemd-detect-virt, and a pair of `command -v` desktop checks), then — once
+# those became registry facts — a
 # stage that still hand-picked which FACT_* answered each flag, bypassing
 # whatever the map itself said. Now the map drives the flag directly: change
-# `gates.kdePackages` from `desktop.kde` to something else and this flag
+# `gates.gnomePackages` from `desktop.gnome` to something else and this flag
 # follows it, no script edit required. See the file header in
 # .chezmoidata/packages.yaml. HAS_INTEL_GPU is seeded from intelPackages' gate
 # (intelHweKernel declares the identical `intelGpu` gate in the map, purely so

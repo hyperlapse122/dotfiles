@@ -166,8 +166,8 @@ function Confirm-ConfigSecretsKey {
 # the two in sync). Layer 1 of the named-fact registry — see the long rationale
 # in the POSIX hook and .chezmoidata/facts.yaml.
 #
-# Every one of the six cached facts is Linux-specific (a PCI vendor scan under
-# /sys, systemd-detect-virt, a dpkg marker, a systemd default target), so on
+# Every one of the five cached facts is Linux-specific (a PCI vendor scan under
+# /sys, systemd-detect-virt, a systemd default target), so on
 # Windows their actual probe results are all FALSE. These are platform results,
 # distinct from the fail-safe defaults used when no cache exists at all.
 # The file is still WRITTEN rather than skipped, because .chezmoitemplates/

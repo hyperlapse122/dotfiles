@@ -183,7 +183,7 @@ printf '\n'
 
 # --- 2. Package groups ------------------------------------------------------
 # Rendered from THIS host's distro map only. The `gates:` maps are per-distro
-# (Fedora has no Intel-graphics stack and no Studio flavor), and the two
+# (Fedora has no Intel-graphics stack), and the two
 # installers are mutually exclusive at runtime — printing the other distro's map
 # would be noise that never runs here.
 printf '## package groups  (.chezmoidata/packages.yaml, gates:)\n\n'
@@ -238,7 +238,7 @@ for row in "${PKG_GATES[@]}"; do
     fi
   elif [[ "$forced" -eq 1 ]]; then
     # The whole reason the FORCE_* hatches exist: a GPU-less container can still
-    # exercise the driver and Studio package sets. BY OVERRIDE, not by fact — a
+    # exercise the driver package sets. BY OVERRIDE, not by fact — a
     # fact alone cannot explain a host that took the NVIDIA path without a GPU.
     printf '  RECEIVED  %-18s BY OVERRIDE %s=1 — %s\n' "$key" "$force" "$(gate_why "$gate")"
   else

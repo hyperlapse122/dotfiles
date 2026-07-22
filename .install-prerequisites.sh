@@ -140,7 +140,7 @@ ensure_config_secrets_key() {
 # --- Host-fact cache — layer 1 of the named-fact registry -------------------
 #
 # The registry's SHELL layer (names declared in .chezmoidata/facts.yaml; merged
-# entry point .chezmoitemplates/facts.tmpl). These six facts live here — and not
+# entry point .chezmoitemplates/facts.tmpl). These five facts live here — and not
 # in a template — because the template functions cannot express them:
 #
 #   * `output` propagates a non-zero exit as a template error that ABORTS the
@@ -164,9 +164,9 @@ ensure_config_secrets_key() {
 #   1. Every probe ALWAYS exits 0 and prints a bare `true` / `false`. A host
 #      that lacks the probe's mechanism (no systemd-detect-virt, no /sys, no
 #      dpkg — macOS, a minimal container) prints `false`, which is the
-#      conservative direction for all six: skip NVIDIA, skip Intel, skip the
-#      bare-metal package set, skip ThinkPad ACPI, skip the Studio realtime
-#      limits, treat the host as a desktop rather than a server.
+#      conservative direction for all five: skip NVIDIA, skip Intel, skip the
+#      bare-metal package set, skip ThinkPad ACPI, treat the host as a desktop
+#      rather than a server.
 #   2. It NEVER fails the hook. A read-only or full $HOME must not take down
 #      `chezmoi diff`; a warning plus a missing cache degrades to exactly the
 #      all-false that facts.tmpl already renders when the file is absent.

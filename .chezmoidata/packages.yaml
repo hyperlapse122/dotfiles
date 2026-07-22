@@ -108,7 +108,7 @@ packages:
       # Conditional package groups → the fact that gates each. Grammar and the
       # declaration-not-a-switch rule are in the file header above; every other
       # key under `fedora:` installs unconditionally. Shorter than ubuntu's map
-      # by design — Fedora has no Intel-graphics stack and no Studio flavor.
+      # by design — Fedora has no Intel-graphics stack.
       gates:
         nvidiaPackages: nvidia  # an NVIDIA GPU is present (PCI vendor 0x10de)
         kdePackages: desktop.kde  # Fedora KDE Spin (plasmashell shipped by the ISO)
