@@ -310,7 +310,9 @@ sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agen
        Ref rule per entry: `versionSource: glabRelease` -> the shared
        glab-release-ref.tmpl partial (the glab CLI's latest release — the same tag the
        vcs.toml binary pins, so skills and CLI never diverge by configuration; mutually
-       exclusive with `ref`, and unknown versionSource values fail); otherwise no `ref`
+       exclusive with `ref` (enforced), and unknown versionSource values fail; the tag is
+       resolved lazily once per render and shared by every glabRelease entry, so all such
+       skills pin one atomic tag); otherwise no `ref`
        key -> newest GitHub release (gitHubLatestRelease); a `ref` key -> that branch head
        resolved to a commit via git ls-remote (repos with no releases/tags, e.g.
        shadcn/improve). In every case the resolved ref sits in the URL, so both the URL and
@@ -326,11 +328,18 @@ sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agen
 
 {{- if ne .chezmoi.os "windows" -}}
 {{- $skillsCtx := . -}}
+{{- /* Lazy per-render cache: resolved on the first glabRelease entry, so one
+       render pins every glabRelease skill to one atomic tag. */ -}}
+{{- $glabReleaseRef := "" -}}
 {{- range .agents.skills.external }}
 {{- $ref := "" -}}
+{{- if and (hasKey . "versionSource") (hasKey . "ref") -}}
+  {{- fail (printf "%s skill: versionSource and ref are mutually exclusive" .name) -}}
+{{- end -}}
 {{- if hasKey . "versionSource" -}}
   {{- if eq .versionSource "glabRelease" -}}
-    {{- $ref = includeTemplate "glab-release-ref.tmpl" $skillsCtx -}}
+    {{- if eq $glabReleaseRef "" -}}{{- $glabReleaseRef = includeTemplate "glab-release-ref.tmpl" $skillsCtx -}}{{- end -}}
+    {{- $ref = $glabReleaseRef -}}
   {{- else -}}
     {{- fail (printf "%s skill: unsupported versionSource %q" .name .versionSource) -}}
   {{- end -}}
