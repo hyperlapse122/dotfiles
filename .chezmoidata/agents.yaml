@@ -88,15 +88,30 @@ agents:
         x-api-key: op://Private/Exa/API Key
   # Agent skills fetched as chezmoi externals into ~/.agents/skills/<name> (the
   # former dotagents remote skills). .chezmoiexternals/ai-agents.toml ranges over
-  # this list. `name` is BOTH the target dir under ~/.agents/skills/ and the
-  # skills/<name>/ subdir inside the source repo. Ref rule: absent -> newest
-  # GitHub release (gitHubLatestRelease); present -> a branch head resolved to a
-  # commit via git ls-remote (repos with no releases/tags). There are no dotagents
-  # `path:` skills any more; `agents.toml` declares MCP servers only. User-scoped
-  # skills reach ~/.agents/skills/<name> two ways: (a) these chezmoi externals
-  # fetched from GitHub, and (b) locally-authored personal skills managed directly
-  # as chezmoi source under dot_agents/skills/<name>/ (e.g. daily-report) — not
-  # listed here.
+  # this list. Keys per entry:
+  #   name          -> target dir under ~/.agents/skills/; for host: github it
+  #                    is ALSO the skills/<name>/ subdir inside the source repo.
+  #   source        -> owner/repo on the host.
+  #   host          -> github (default): whole-skill archive external extracted
+  #                    from the repo tarball. gitlab: raw single-file external
+  #                    fetching <skillPath>/SKILL.md — correct when a skill
+  #                    subtree is exactly one SKILL.md (glab's bundled skills);
+  #                    a subtree that gains sibling files must switch to an
+  #                    archive form.
+  #   ref           -> (github only) a branch head resolved to a commit via git
+  #                    ls-remote (repos with no releases/tags); absent -> newest
+  #                    GitHub release (gitHubLatestRelease).
+  #   versionSource -> glabRelease: ref from the shared
+  #                    .chezmoitemplates/glab-release-ref.tmpl (the glab CLI's
+  #                    latest release, lockstep with the vcs.toml binary).
+  #                    Mutually exclusive with ref; unknown values fail.
+  #   skillPath     -> (gitlab only) repo-internal directory holding SKILL.md.
+  # There are no dotagents `path:` skills any more; `agents.toml` declares MCP
+  # servers only. User-scoped skills reach ~/.agents/skills/<name> two ways:
+  # (a) these chezmoi externals (GitHub archives, or GitLab raw files for
+  # glab's bundled skills), and (b) locally-authored personal skills managed
+  # directly as chezmoi source under dot_agents/skills/<name>/ (e.g.
+  # daily-report) — not listed here.
   skills:
     external:
     - name: playwright-cli
@@ -106,6 +121,16 @@ agents:
     - name: improve
       source: shadcn/improve
       ref: main
+    - name: glab
+      source: gitlab-org/cli
+      host: gitlab
+      versionSource: glabRelease
+      skillPath: internal/commands/skills/bundled/assets/glab
+    - name: glab-stack
+      source: gitlab-org/cli
+      host: gitlab
+      versionSource: glabRelease
+      skillPath: internal/commands/skills/bundled/assets/glab-stack
   # Claude Code, Codex, and AGY plugins, single-sourced here (the Claude/Codex
   # declarations were previously
   # hardcoded across two install scripts). The generic runner

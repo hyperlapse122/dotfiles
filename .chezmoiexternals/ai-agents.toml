@@ -287,18 +287,37 @@ sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agen
 {{- /* ---------- agent skills (~/.agents/skills/<name>) — formerly dotagents remote skills.
        The LIST is data in .chezmoidata/agents.yaml (agents.skills.external); this section
        ranges over it. Now chezmoi externals so each skill's release/branch is pinned by
-       chezmoi at render time rather than fetched by `dotagents install`. Every source repo
-       keeps its skill in a skills/<name>/ subdir, so stripComponents=3 drops the
-       <repo>-<ref>/skills/<name>/ prefix (leaving SKILL.md + references/ at the target root)
-       and the include (anchored on the skills/<name>/ path segment) isolates exactly that
-       one skill — it excludes repo-root files, a repo's own dot-claude skills tree or nested
-       package skills trees, and any sibling skill in the same repo (a source repo can ship
-       several skills under skills/). exact=true so a skill update removes deleted files. Ref
-       rule per entry: no `ref` key -> newest GitHub release (gitHubLatestRelease); a `ref`
-       key -> that branch head resolved to a commit via git ls-remote (repos with no
-       releases/tags, e.g. shadcn/improve), so both the URL and chezmoi's refresh key stay
-       immutable for one render. The GitHub
-       archive URL form takes a tag OR a commit. dotagents runs for the MCP servers only now
+       chezmoi at render time rather than fetched by `dotagents install`. Two fetch forms,
+       keyed on the entry's `host` (default github; unknown values fail):
+
+       host: github — every source repo keeps its skill in a skills/<name>/ subdir, so
+       stripComponents=3 drops the <repo>-<ref>/skills/<name>/ prefix (leaving SKILL.md +
+       references/ at the target root) and the include (anchored on the skills/<name>/ path
+       segment) isolates exactly that one skill — it excludes repo-root files, a repo's own
+       dot-claude skills tree or nested package skills trees, and any sibling skill in the
+       same repo (a source repo can ship several skills under skills/). exact=true so a
+       skill update removes deleted files. The GitHub archive URL form takes a tag OR a
+       commit.
+
+       host: gitlab — a raw single-file external, for a skill whose subtree is exactly one
+       SKILL.md (glab's bundled skills, whose `skillPath` is
+       internal/commands/skills/bundled/assets/<name>/): fetching that one file beats
+       extracting the whole repo tarball per skill. `exact` does not apply to a single
+       file — the file is replaced when its URL changes, and an upstream removal 404s the
+       fetch, failing apply loudly. A subtree that later gains sibling files (references/)
+       must switch this branch to an archive form.
+
+       Ref rule per entry: `versionSource: glabRelease` -> the shared
+       glab-release-ref.tmpl partial (the glab CLI's latest release — the same tag the
+       vcs.toml binary pins, so skills and CLI never diverge by configuration; mutually
+       exclusive with `ref` (enforced), and unknown versionSource values fail; the tag is
+       resolved lazily once per render and shared by every glabRelease entry, so all such
+       skills pin one atomic tag); otherwise no `ref`
+       key -> newest GitHub release (gitHubLatestRelease); a `ref` key -> that branch head
+       resolved to a commit via git ls-remote (repos with no releases/tags, e.g.
+       shadcn/improve). In every case the resolved ref sits in the URL, so both the URL and
+       chezmoi's refresh key stay immutable for one render and a release bump re-fetches on
+       the next apply. dotagents runs for the MCP servers only now
        (no path: skills any more) and still owns the ~/.claude/skills -> ~/.agents/skills
        symlink; its `install` never prunes an UNDECLARED dir (prune is sync-only, which the
        apply never runs), so these externals coexist with the symlink and with any
@@ -308,9 +327,23 @@ sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agen
        injected. ---------- */ -}}
 
 {{- if ne .chezmoi.os "windows" -}}
+{{- $skillsCtx := . -}}
+{{- /* Lazy per-render cache: resolved on the first glabRelease entry, so one
+       render pins every glabRelease skill to one atomic tag. */ -}}
+{{- $glabReleaseRef := "" -}}
 {{- range .agents.skills.external }}
 {{- $ref := "" -}}
-{{- if hasKey . "ref" -}}
+{{- if and (hasKey . "versionSource") (hasKey . "ref") -}}
+  {{- fail (printf "%s skill: versionSource and ref are mutually exclusive" .name) -}}
+{{- end -}}
+{{- if hasKey . "versionSource" -}}
+  {{- if eq .versionSource "glabRelease" -}}
+    {{- if eq $glabReleaseRef "" -}}{{- $glabReleaseRef = includeTemplate "glab-release-ref.tmpl" $skillsCtx -}}{{- end -}}
+    {{- $ref = $glabReleaseRef -}}
+  {{- else -}}
+    {{- fail (printf "%s skill: unsupported versionSource %q" .name .versionSource) -}}
+  {{- end -}}
+{{- else if hasKey . "ref" -}}
   {{- $ref = output "sh" "-c" (printf "git ls-remote https://github.com/%s.git refs/heads/%s 2>/dev/null || true" .source .ref) | regexFind "^[0-9a-f]{40}" -}}
   {{- if not (regexMatch "^[0-9a-f]{40}$" $ref) -}}
     {{- fail (printf "%s skill: could not resolve %s refs/heads/%s to a 40-character commit sha" .name .source .ref) -}}
@@ -318,6 +351,20 @@ sha256 = '{{ output "curl" "-fsSL" (gitHubReleaseAssetURL "agent-of-empires/agen
 {{- else -}}
   {{- $ref = (gitHubLatestRelease .source).TagName | toString -}}
 {{- end }}
+{{- $host := "github" -}}
+{{- if hasKey . "host" -}}{{- $host = .host -}}{{- end -}}
+{{- if and (ne $host "github") (ne $host "gitlab") -}}
+  {{- fail (printf "%s skill: unsupported host %q" .name $host) -}}
+{{- end -}}
+{{- if eq $host "gitlab" -}}
+  {{- if not (hasKey . "skillPath") -}}
+    {{- fail (printf "%s skill: host gitlab requires skillPath" .name) -}}
+  {{- end }}
+
+[".agents/skills/{{ .name }}/SKILL.md"]
+type = "file"
+url = '{{ printf "https://gitlab.com/%s/-/raw/%s/%s/SKILL.md?ref_type=tags" .source $ref .skillPath }}'
+{{- else }}
 
 [".agents/skills/{{ .name }}"]
 type = "archive"
@@ -325,6 +372,7 @@ url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
 exact = true
 stripComponents = 3
 include = ["*/skills/{{ .name }}/**"]
+{{- end }}
 {{- end }}
 {{- end }}
 

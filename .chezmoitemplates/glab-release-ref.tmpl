@@ -1,0 +1,18 @@
+{{- /* Latest gitlab-org/cli release tag (vX.Y.Z).
+
+       Shared so the consumers of glab's release can never be configured
+       against different versions — the bundled skills are version-locked to
+       the CLI they document:
+         - .chezmoiexternals/vcs.toml — the glab binary archive URL.
+         - .chezmoiexternals/ai-agents.toml — the glab/glab-stack bundled-skill
+           raw URLs (the agents.skills.external entries with
+           versionSource: glabRelease).
+       Each consumer still re-resolves the moving `latest` pointer in its own
+       render pass, so a release landing mid-render can transiently desync the
+       two; that is a re-render flake cleared by re-rendering, not a lockstep
+       break. Resolution is GitLab's releases/permalink/latest redirect plus
+       one curl, fail-closed via curl -f (moved here verbatim from vcs.toml).
+    */ -}}
+{{- $glabLatestReleaseUrl := (getRedirectedURL "https://gitlab.com/api/v4/projects/34675721/releases/permalink/latest") -}}
+{{- $glabLatestRelease := output "curl" "-fsSL" $glabLatestReleaseUrl | fromJson -}}
+{{- $glabLatestRelease.tag_name | toString -}}
