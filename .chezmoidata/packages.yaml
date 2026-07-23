@@ -95,6 +95,7 @@ packages:
     flatpaks:
       - com.discordapp.Discord  # Discord voice/text chat client
       - org.telegram.desktop
+      - io.github.nroduit.Weasis
     # Global .NET tools installed via `dotnet tool install -g`. Union of the two
     # lists that were previously per-distro (csharp-ls used to be Fedora-only).
     # Order preserved from Fedora's list so its rendered dotnet_tools array is
