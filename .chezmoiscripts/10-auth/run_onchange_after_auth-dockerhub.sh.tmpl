@@ -3,24 +3,29 @@
 #
 # auth-dockerhub — populate the Docker Hub credential into the OS-native
 # keychain so podman / the podman-docker `docker` shim (and buildah/skopeo)
-# can pull & push docker.io images without an interactive `docker login`.
+# can pull & push docker.io and dhi.io images without an interactive
+# `docker login`.
 #
-# ~/.config/containers/auth.json maps `docker.io` -> the `dockerhub`
-# credHelper, i.e. `docker-credential-dockerhub` (deployed to ~/.local/bin).
-# That helper is a pure passthrough to the platform keychain — Linux:
+# One Docker Hub credential authenticates two registries: Docker Hub itself
+# (`docker.io`) and Docker Hardened Images (`dhi.io` — `docker login dhi.io`
+# takes the same Docker Hub username + PAT). ~/.config/containers/auth.json
+# maps both `docker.io` and `dhi.io` -> the `dockerhub` credHelper, i.e.
+# `docker-credential-dockerhub` (deployed to ~/.local/bin). That helper is a
+# pure passthrough to the platform keychain — Linux:
 # docker-credential-secretservice (D-Bus Secret Service: KWallet / GNOME
 # Keyring), macOS: docker-credential-osxkeychain — it fetches nothing on its
-# own, so the credential must be *stored* into the keychain up front. We do
-# that with the Docker credential-helper `store` protocol: one JSON object
-# {ServerURL,Username,Secret} on stdin.
+# own, so the credential must be *stored* into the keychain up front, once per
+# registry domain. We do that with the Docker credential-helper `store`
+# protocol: one JSON object {ServerURL,Username,Secret} on stdin per domain.
 #
-# ServerURL MUST be `docker.io`. Podman passes exactly `docker.io` to the
-# credHelper's `get` when resolving docker.io/* refs (it uses the registry
-# domain, not Docker's historical `https://index.docker.io/v1/`), so the
-# stored key has to match or the credential is never found. This host is
-# podman-only via the podman-docker shim (see AGENTS.md), so `docker.io` is
-# the single authoritative key; note podman honors `credHelpers` but ignores
-# the `credsStore` field.
+# ServerURL MUST be the bare registry domain (`docker.io` / `dhi.io`). Podman
+# passes exactly that domain to the credHelper's `get` when resolving
+# docker.io/* and dhi.io/* refs (it uses the registry domain, not Docker's
+# historical `https://index.docker.io/v1/`), so each stored key has to match
+# its domain or the credential is never found. This host is podman-only via
+# the podman-docker shim (see AGENTS.md), so these bare domains are the
+# authoritative keys; note podman honors `credHelpers` but ignores the
+# `credsStore` field.
 #
 # run_after: the helper is a chezmoi-deployed file, so it must be applied
 # first. run_onchange: when the token rotates in 1Password the rendered secret
@@ -55,13 +60,15 @@ fi
 {{- if or (eq .id "username") (eq .label "username") -}}{{- $dockerUser = .value -}}{{- end -}}
 {{- if or (eq .id "API") (eq .label "API") -}}{{- $dockerSecret = .value -}}{{- end -}}
 {{- end -}}
+{{ range $server := list "docker.io" "dhi.io" -}}
 if "$helper" store <<'JSON'
-{{ dict "ServerURL" "docker.io" "Username" ($dockerUser | trim) "Secret" ($dockerSecret | trim) | toJson }}
+{{ dict "ServerURL" $server "Username" ($dockerUser | trim) "Secret" ($dockerSecret | trim) | toJson }}
 JSON
 then
-  printf 'auth-dockerhub: stored Docker Hub credential for docker.io in the native keychain.\n'
+  printf 'auth-dockerhub: stored Docker Hub credential for %s in the native keychain.\n' '{{ $server }}'
 else
-  printf 'auth-dockerhub: could not store credential (Secret Service unavailable/locked?); skipping. Re-run chezmoi apply in an unlocked desktop session.\n' >&2
+  printf 'auth-dockerhub: could not store credential for %s (Secret Service unavailable/locked?); skipping. Re-run chezmoi apply in an unlocked desktop session.\n' '{{ $server }}' >&2
 fi
+{{ end -}}
 
 {{ end -}}
