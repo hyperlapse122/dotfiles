@@ -1,4 +1,6 @@
-{{- /* Version-control & repo-orchestration CLIs: gh, glab (+ its bundled skills), garden. */ -}}
+{{- /* Version-control & repo-orchestration CLIs: gh, glab, garden. glab's
+       bundled skills are agent-skill externals in ai-agents.toml, pinned to
+       the same release via glab-release-ref.tmpl. */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 {{- /* tar.gz on unix, zip on windows — glab and garden agree; gh does NOT (see $ghArchiveExtension). */ -}}
@@ -19,12 +21,12 @@ stripComponents = {{ replace "linux" "1" (replace "darwin" "1" (replace "windows
 
 {{- /* ---------- glab (GitLab-hosted release, not GitHub) ---------- */ -}}
 
-{{- $glabLatestReleaseUrl := (getRedirectedURL "https://gitlab.com/api/v4/projects/34675721/releases/permalink/latest") -}}
-{{- $glabLatestRelease := output "curl" "-fsSL" $glabLatestReleaseUrl | fromJson -}}
+{{- /* The tag is single-sourced with the bundled-skill externals in
+       ai-agents.toml (their versionSource: glabRelease) via the shared
+       partial, so the CLI and its skills never pin different releases. */ -}}
+{{- $glabTag := includeTemplate "glab-release-ref.tmpl" . -}}
 
-{{- $glabArchiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s%s" $glabLatestRelease.tag_name (replace "v" "" $glabLatestRelease.tag_name) .chezmoi.os .chezmoi.arch $archiveExtension) -}}
-{{- $glabSkillUrl := (printf "https://gitlab.com/gitlab-org/cli/-/raw/%s/internal/commands/skills/bundled/assets/glab/SKILL.md?ref_type=tags" $glabLatestRelease.tag_name) -}}
-{{- $glabStackSkillUrl := (printf "https://gitlab.com/gitlab-org/cli/-/raw/%s/internal/commands/skills/bundled/assets/glab-stack/SKILL.md?ref_type=tags" $glabLatestRelease.tag_name) }}
+{{- $glabArchiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s%s" $glabTag (replace "v" "" $glabTag) .chezmoi.os .chezmoi.arch $archiveExtension) }}
 
 [glab]
 targetPath = '{{ printf ".local/bin/glab%s" $executableExtension }}'
