@@ -46,8 +46,14 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
    configured here; collapse to the family's serving provider.)
 2. **Map reference model names to the available equivalent** (reference name →
    available id):
-   - `kimi-k2.6` → `kimi-for-coding/k2p6`
-   - `kimi-k2.5` / `k2p5` → `kimi-for-coding/k2p5`
+   - `kimi-k3` → `kimi-for-coding/k3`. The current `dev` reference uses
+     `kimi-k3` everywhere the chain used to name `kimi-k2.x`; it is the newest
+     kimi tier and appears verbatim in the available list. General kimi rule:
+     `kimi-k<major>[.<minor>]` → `kimi-for-coding/k<major>[p<minor>]`, resolved
+     against whichever tier is actually present in the available-models list.
+   - `kimi-k2.6` → `kimi-for-coding/k2p6` (legacy tier; only if the reference
+     still names it)
+   - `kimi-k2.5` / `k2p5` → `kimi-for-coding/k2p5` (legacy tier)
    - `glm-5` → `zai-coding-plan/glm-5.1` (the non-turbo GLM-5 tier; keep
      `glm-5.2` distinct → `zai-coding-plan/glm-5.2`)
    - `glm-4.6v` → **drop**. The closest available match
@@ -59,14 +65,22 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
      tier, so this reference name has no mapping and the entry drops entirely.
    - `gemini-3.1-pro` → `google-agy/gemini-pro-agent`
    - `gemini-3-flash` → `google-agy/gemini-3-flash`
+   - `claude-opus-4-8` appearing DIRECTLY in the reference (with ANY variant —
+     the current `dev` reference uses `variant: max` on every occurrence) →
+     resolve VERBATIM to `anthropic/claude-opus-4-8` and preserve the variant
+     as-is. `max` stays `max`; do NOT force it to `xhigh`. This is rule 4
+     (preserve verbatim), NOT the 4-7 remap below — the two are different cases
+     and the reference now emits 4-8 directly, so the mapping carries
+     `variant: max` throughout. `max` is a valid tier (same set pi uses:
+     off | minimal | low | medium | high | xhigh | max) and the ping/verify
+     gates key on the model id only, never the variant.
    - `claude-opus-4-7` with `variant: max` → `anthropic/claude-opus-4-8` with
-     `variant: xhigh` (Anthropic's own recommendation: the 4-8 generation
-     supersedes 4-7 and `xhigh` is the recommended reasoning tier). Every
-     `claude-opus-4-7` occurrence in the current upstream reference carries
-     `variant: max`, so this remap is effectively unconditional today; if a
-     future reference ever emits `claude-opus-4-7` without that variant,
-     resolve verbatim to `anthropic/claude-opus-4-7` and flag it in your
-     summary.
+     `variant: xhigh` (LEGACY remap for when upstream still named 4-7; the 4-8
+     generation supersedes it and `xhigh` was the recommended tier). The
+     current `dev` reference no longer emits `claude-opus-4-7` at all, so this
+     remap does not fire today — keep it only for older references. If a future
+     reference emits `claude-opus-4-7` WITHOUT `variant: max`, resolve verbatim
+     to `anthropic/claude-opus-4-7` and flag it in your summary.
    - `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.x`, `big-pickle`, and any
      name that already appears verbatim → use as-is.
    - Any other name: use the CLOSEST available id in the same family; if there
@@ -76,9 +90,14 @@ ordered chain into the yaml shape (`model` + optional `variant`, then
    map, or any family with no configured provider). A dropped primary promotes
    the next surviving entry.
 4. **Preserve the reference `variant` verbatim** on every surviving entry
-   (including on `gemini-*` → `google-agy/*`), except where rule 2 explicitly
-   remaps model+variant together — currently only `claude-opus-4-7` with
-   `variant: max` → `claude-opus-4-8` with `variant: xhigh`.
+   (including on `gemini-*` → `google-agy/*`, and on `claude-opus-4-8` with
+   `variant: max` → keep `max`), except where rule 2 explicitly remaps
+   model+variant together — the only such case is the LEGACY `claude-opus-4-7`
+   with `variant: max` → `claude-opus-4-8` with `variant: xhigh`, which the
+   current `dev` reference does not trigger. Same-model-different-variant
+   entries are NOT collapsed by rule 5 (the dedupe key includes the variant),
+   so chains like `gpt-5.6-sol` at `xhigh` then `high`, or `gpt-5.6-terra` /
+   `gpt-5.6-luna` at two tiers, are expected and kept.
 5. **Dedupe**: after mapping, collapse entries that resolve to the same
    `provider/model` (+ variant), keeping the first occurrence's position.
 6. The first surviving entry becomes `model` (+ `variant`); the rest become
@@ -108,14 +127,20 @@ local refresh. Before you edit `.chezmoidata/agents.yaml`, live-check every
    ```sh
    ping_dir="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch/omo-ping"
    mkdir -p "$ping_dir"
-   # for each distinct provider/model in the resolved mapping:
-   ( cd "$ping_dir" && opencode run --model "<provider>/<model>" "ping" )
+   # for each distinct provider/model in the resolved mapping — ALWAYS wrap in
+   # `timeout` so a model that never terminates its turn (see big-pickle in the
+   # classify rule) cannot hang the whole phase; capture the exit code:
+   out=$( cd "$ping_dir" && timeout 120 opencode run --model "<provider>/<model>" "ping" 2>&1 ); echo "exit=$?"
    # …at the end of the ping-check phase:
    rm -rf "$ping_dir"
    ```
 
    Reuse the same `$ping_dir` for every ping in this run; the subshell keeps
-   your own CWD on the chezmoi source unchanged.
+   your own CWD on the chezmoi source unchanged. To go faster while respecting
+   rate limits, run DIFFERENT providers in parallel but keep pings to the SAME
+   provider sequential — background one subshell per provider group, each
+   looping its own models to a per-group log file, then `wait` and read the
+   logs.
 
 3. **Classify the outcome**:
    - Exit 0 with any short coherent reply → USABLE, keep as mapped.
@@ -124,12 +149,45 @@ local refresh. Before you edit `.chezmoidata/agents.yaml`, live-check every
      model missing from `opencode models` (rule 3 above): drop from every
      fallback chain, promote the next surviving entry to `model` where needed,
      and flag it in your report.
+   - Known case — `opencode/big-pickle`: it replies `pong` immediately but then
+     emits a self-continuation "boulder" template and never terminates its
+     turn, so a bare `opencode run "ping"` runs until `timeout` kills it
+     (exit 124). That is a non-zero/timeout outcome → UNUSABLE; do not agonize
+     over the coherent `pong`. It is only ever a last-resort fallback
+     (`sisyphus`, `sisyphus-junior`, both of which retain other survivors), so
+     dropping it is safe.
 4. If ping-drops empty an agent's or category's chain entirely, fall back to
    the last-known survivor from the reference (verbatim, variant preserved) and
    flag it loudly — never leave the entry without a `model`.
 5. Cache the verdict per pair within this run. Never re-ping the same
    `provider/model` twice, and space pings on the same provider apart if you
-   start seeing rate-limit responses.
+   start seeing rate-limit responses. EXCEPTION: if the host's auth/config
+   state demonstrably changes mid-run — e.g. the user authenticates a provider
+   after you reported it unusable — a single re-ping of the affected pair is
+   correct and expected; the state change invalidates the cached verdict.
+6. **OAuth-plugin providers (notably `google-agy`) need special care.** Unlike
+   `anthropic`/`openai`/`zai-coding-plan`/`kimi-for-coding` — which carry an
+   `apiKey` (an `op://` ref) in the repo `providers` block and therefore ping
+   fine from any CWD — `google-agy` is NOT in the `providers` map. It is served
+   by the `@oyng/opencode-agy-auth` plugin against an OAuth session in the
+   GLOBAL `~/.local/share/opencode/auth.json`, established on demand. Because
+   that global auth.json loads from every CWD, the clean-dir ping is still a
+   FAITHFUL test: a failing google-agy ping (`Error: Google Generative AI API
+   key is missing`, exit 1) is the real current state, NOT a scratch-dir
+   artifact.
+   - Diagnose with `opencode auth list` (does not ping a model, so it respects
+     rule 5). It lists which providers hold credentials. If `google-agy` is
+     absent while `anthropic`/`openai` are present, google-agy is simply
+     unauthenticated on this host — that is the cause of the failure.
+   - Do NOT silently drop a whole provider that powers category PRIMARIES:
+     `visual-engineering` and `artistry` default to `google-agy/gemini-pro-agent`
+     and `writing` to `google-agy/gemini-3-flash`. Prefer to SURFACE it — tell
+     the user google-agy is unauthenticated and how to fix it (`opencode auth
+     login` → google-agy, or the harness's AGY login) — then re-ping after they
+     confirm (rule-5 exception) and keep google-agy if it now passes. Only if
+     the user is unavailable or declines, fall back to rule 3: drop google-agy,
+     promote survivors, and flag the demotion LOUDLY so the changed primaries
+     are obvious.
 
 Only after every remaining pair in the final mapping pings USABLE may you write
 `.chezmoidata/agents.yaml`.
@@ -159,5 +217,8 @@ and re-run.
 
 Summarize: which agents/categories changed, notable promotions/demotions vs the
 previous state, anything dropped as unavailable, and any reference model you
-could not resolve. Note that opencode must be restarted for a live session to
-pick up config changes. Do not commit unless asked.
+could not resolve. Also call out any provider whose availability hinged on auth
+state (e.g. `google-agy` failing until the user logged in, then restored on
+re-ping) and whether a re-ping was performed. Note that opencode must be
+restarted for a live session to pick up config changes. Do not commit unless
+asked.
