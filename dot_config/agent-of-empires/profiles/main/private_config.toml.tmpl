@@ -9,6 +9,8 @@ container_runtime = "apple_container"
 {{- else -}}
 container_runtime = "podman"
 {{- end }}
+extra_volumes = ["~/.1password/agent.sock:~/.1password/agent.sock"]
+mount_ssh = true
 {{ if and (eq "linux" .chezmoi.os) (eq "fedora" .chezmoi.osRelease.id) -}}
 selinux_relabel = true
 {{- end }}
@@ -19,6 +21,9 @@ click_action = "select_only"
 default_attach_mode = "tmux"
 default_tool = "claude"
 new_session_attach_mode = "tmux"
+opencode_preassign_session_id = false
+smart_rename = false
+strict_hotkeys = false
 yolo_mode_default = true
 
 [worktree]
