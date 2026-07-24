@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Start Open Design's guarded user service, wait for the production web UI,
+# then hand off to Chrome app mode. Desktop-only failure notification lives
+# here; the shared preflight and protocol-sensitive od wrapper remain silent
+# toward the desktop.
+
+set -euo pipefail
+
+readonly ENSURE_SERVICE="$HOME/.local/libexec/open-design/ensure-service"
+readonly ICON="$HOME/.local/share/open-design/source/tools/pack/resources/linux/icon.png"
+readonly APP_URL="http://127.0.0.1:36947/"
+readonly UNIT="open-design.service"
+
+if "$ENSURE_SERVICE" web >/dev/null; then
+  :
+else
+  status=$?
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send \
+      --app-name='Open Design' \
+      --icon="$ICON" \
+      'Open Design failed to start' \
+      "Inspect with: systemctl --user status $UNIT; journalctl --user-unit $UNIT" \
+      >/dev/null 2>&1 || true
+  fi
+  exit "$status"
+fi
+
+exec google-chrome "--app=$APP_URL"

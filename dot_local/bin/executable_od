@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# On-demand Open Design CLI/MCP entry point. Keep stdout untouched: after the
+# readiness preflight succeeds, this process becomes the upstream Node CLI.
+
+set -euo pipefail
+
+readonly SOURCE="$HOME/.local/share/open-design/source"
+readonly CLI="$SOURCE/apps/daemon/bin/od.mjs"
+readonly ENSURE="$HOME/.local/libexec/open-design/ensure-service"
+
+[[ -x "$ENSURE" ]] || {
+  printf 'od: Open Design activation helper is missing: %s\n' "$ENSURE" >&2
+  exit 1
+}
+[[ -x "$CLI" ]] || {
+  printf 'od: upstream Open Design CLI is missing: %s\n' "$CLI" >&2
+  exit 1
+}
+command -v mise >/dev/null 2>&1 || {
+  printf 'od: mise is required\n' >&2
+  exit 1
+}
+
+runtime_dir=$("$ENSURE" daemon)
+export OD_DATA_DIR="$HOME/.od"
+export OD_DAEMON_URL="http://127.0.0.1:43909"
+export OD_SIDECAR_IPC_BASE="$runtime_dir/open-design/ipc"
+export OD_SIDECAR_IPC_PATH="$OD_SIDECAR_IPC_BASE/default/daemon.sock"
+
+exec mise --no-config --no-env --no-hooks exec node@24 -- node "$CLI" "$@"

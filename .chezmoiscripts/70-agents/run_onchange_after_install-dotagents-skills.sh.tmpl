@@ -9,9 +9,10 @@
 #
 # onchange trigger: TWO relevant inputs, because agents.yaml also contains
 # unrelated pi/OpenCode data.
-#   1. The fingerprint block embeds a sha256 of the RAW agents.toml source
-#      template, catching target-format/local-skill edits without resolving any
-#      onepasswordRead value.
+#   1. The fingerprint block embeds sha256s of the RAW agents.toml source
+#      template and shared MCP applicability helper, catching target-format,
+#      host-gate, and local-skill edits without resolving any onepasswordRead
+#      value.
 #   2. A comment-only selective hash covers ONLY the unresolved agents.mcp data.
 #      An MCP edit re-triggers the install, while pi/OpenCode-only edits in the
 #      same data file do not.
@@ -39,7 +40,7 @@ set -euo pipefail
 
 # Raw agents.toml source fingerprint — target-format and local-skill changes.
 # Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_agents/private_readonly_agents.toml.tmpl" ".chezmoitemplates/agent-mcp-servers-json.tmpl")) }}
 #
 # Selective unresolved DATA trigger. toJson is deterministic, and these values
 # contain op:// references rather than resolved secrets. Keeping this separate

@@ -1,0 +1,198 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $tag := (gitHubLatestRelease "nexu-io/open-design").TagName | toString -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+# Provision the latest Open Design release into execution-only user state.
+# The rendered release tag is this script's onchange trigger; no generated
+# checkout or build output participates in the fingerprint.
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/systemd/user/open-design.service.tmpl" "dot_local/libexec/open-design/executable_service")) }}
+
+set -euo pipefail
+
+ROOT="$HOME/.local/share/open-design"
+SOURCE="$ROOT/source"
+STAGE="$ROOT/.source-stage"
+MARKER="$ROOT/successful-release"
+UPDATING="$ROOT/updating"
+LOCK="$ROOT/provision.lock"
+RESTART_NEEDED="$ROOT/restart-needed"
+LOCK_TIMEOUT="${OPEN_DESIGN_LOCK_TIMEOUT:-60}"
+TAG={{ $tag | quote }}
+ORIGIN="https://github.com/nexu-io/open-design.git"
+UNIT="open-design.service"
+
+fail() {
+  printf 'open-design: %s\n' "$*" >&2
+  exit 1
+}
+
+owned_directory() {
+  local path=$1 owner
+  [[ -d "$path" && ! -L "$path" ]] || return 1
+  owner=$(stat -c '%u' -- "$path" 2>/dev/null) || return 1
+  [[ "$owner" == "$UID" ]]
+}
+
+normalize_origin() {
+  local value=$1
+  value=${value%/}
+  value=${value%.git}
+  printf '%s\n' "$value"
+}
+
+validate_checkout() {
+  local path=$1 actual head tag_commit
+  [[ -d "$path" && ! -L "$path" && -d "$path/.git" ]] ||
+    fail "managed checkout is not a regular Git worktree: $path"
+  actual=$(git -C "$path" config --get remote.origin.url) ||
+    fail "managed checkout has no origin: $path"
+  [[ $(normalize_origin "$actual") == "$(normalize_origin "$ORIGIN")" ]] ||
+    fail "managed checkout has unexpected origin: $actual"
+  head=$(git -C "$path" rev-parse HEAD) ||
+    fail "cannot resolve managed checkout HEAD"
+  tag_commit=$(git -C "$path" rev-parse "${TAG}^{commit}") ||
+    fail "cannot resolve release tag $TAG"
+  [[ "$head" == "$tag_commit" ]] ||
+    fail "managed checkout HEAD does not match $TAG"
+}
+
+validate_runtime_contract() {
+  local path=$1 node_version package_manager declared_node declared_pnpm
+  node_version=$(mise --no-config --no-env --no-hooks exec node@24 -- node --version) ||
+    fail "cannot resolve the managed Node runtime"
+  [[ "$node_version" == v24.* ]] ||
+    fail "managed runtime is not Node 24: $node_version"
+  package_manager=$(jq -er '.packageManager' "$path/package.json") ||
+    fail "upstream packageManager is missing"
+  declared_node=$(jq -er '.engines.node' "$path/package.json") ||
+    fail "upstream engines.node is missing"
+  declared_pnpm=$(jq -er '.engines.pnpm' "$path/package.json") ||
+    fail "upstream engines.pnpm is missing"
+  [[ "$package_manager" =~ ^pnpm@10([.]|$) &&
+    "$declared_node" == *24* && "$declared_pnpm" == *10* ]] ||
+    fail "upstream Node/pnpm contract is not Node 24 and pnpm 10"
+}
+
+build_checkout() (
+  local path=$1
+  validate_runtime_contract "$path"
+  cd "$path"
+  env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    mise --no-config --no-env --no-hooks exec node@24 -- corepack enable ||
+    fail "release $TAG Corepack enable failed"
+  mise --no-config --no-env --no-hooks exec node@24 -- pnpm install ||
+    fail "release $TAG dependency install failed"
+  mise --no-config --no-env --no-hooks exec node@24 -- pnpm bootstrap ||
+    fail "release $TAG bootstrap failed"
+  mise --no-config --no-env --no-hooks exec node@24 -- \
+    pnpm --filter @open-design/web build ||
+    fail "release $TAG web build failed"
+  [[ -x "$path/apps/daemon/bin/od.mjs" ]] ||
+    fail "release $TAG did not produce an executable apps/daemon/bin/od.mjs"
+  [[ -f "$path/tools/pack/resources/linux/icon.png" ]] ||
+    fail "release $TAG is missing tools/pack/resources/linux/icon.png"
+)
+
+command -v git >/dev/null 2>&1 || fail "git is required"
+command -v mise >/dev/null 2>&1 || fail "mise is required"
+command -v flock >/dev/null 2>&1 || fail "flock is required"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+
+if [[ -e "$ROOT" || -L "$ROOT" ]]; then
+  owned_directory "$ROOT" || fail "managed parent is unsafe: $ROOT"
+else
+  mkdir -p -- "$ROOT" || fail "cannot create managed parent: $ROOT"
+  chmod 0700 -- "$ROOT"
+  owned_directory "$ROOT" || fail "managed parent is unsafe after creation: $ROOT"
+fi
+for state_file in "$MARKER" "$UPDATING" "$LOCK" "$RESTART_NEEDED"; do
+  if [[ -L "$state_file" || ( -e "$state_file" && ! -f "$state_file" ) ]]; then
+    fail "managed state path is unsafe: $state_file"
+  fi
+done
+
+# The guard is intentionally durable on failure. Every entry point refuses to
+# start while it exists, so an in-place failed upgrade cannot execute partial
+# source. The next successful apply clears it.
+( umask 077; printf '%s\n' "$TAG" >"$UPDATING" ) ||
+  fail "cannot create updating guard"
+
+was_active=0
+[[ -e "$RESTART_NEEDED" ]] && was_active=1
+user_bus=0
+if systemctl --user show-environment >/dev/null 2>&1; then
+  user_bus=1
+  if systemctl --user is-active --quiet "$UNIT"; then
+    was_active=1
+    systemctl --user stop "$UNIT" ||
+      fail "cannot stop active $UNIT before update"
+  fi
+fi
+
+exec 9>"$LOCK"
+flock -w "$LOCK_TIMEOUT" -x 9 ||
+  fail "timed out waiting for the Open Design service to stop"
+
+if [[ -e "$SOURCE" || -L "$SOURCE" ]]; then
+  owned_directory "$SOURCE" || fail "managed checkout is unsafe: $SOURCE"
+  actual=$(git -C "$SOURCE" config --get remote.origin.url 2>/dev/null) ||
+    fail "managed checkout is not a Git worktree: $SOURCE"
+  [[ $(normalize_origin "$actual") == "$(normalize_origin "$ORIGIN")" ]] ||
+    fail "managed checkout has unexpected origin: $actual"
+  git -C "$SOURCE" fetch --force --depth=1 origin \
+    "refs/tags/$TAG:refs/tags/$TAG" ||
+    fail "cannot fetch release tag $TAG"
+  git -C "$SOURCE" reset --hard "$TAG" ||
+    fail "cannot reset managed checkout to $TAG"
+  validate_checkout "$SOURCE"
+  build_checkout "$SOURCE"
+else
+  if [[ -L "$STAGE" ]]; then
+    rm -f -- "$STAGE"
+  elif [[ -e "$STAGE" ]]; then
+    owned_directory "$STAGE" ||
+      fail "interrupted staging path is unsafe: $STAGE"
+    rm -rf -- "$STAGE"
+  fi
+  git clone --depth=1 --single-branch --branch "$TAG" "$ORIGIN" "$STAGE" ||
+    fail "cannot shallow-clone release tag $TAG"
+  validate_checkout "$STAGE"
+  build_checkout "$STAGE"
+  mv -- "$STAGE" "$SOURCE" || fail "cannot promote staged checkout"
+fi
+
+validate_checkout "$SOURCE"
+temporary_marker=$(mktemp "$ROOT/.successful-release.XXXXXX") ||
+  fail "cannot allocate successful-release marker"
+cleanup_marker() {
+  rm -f -- "$temporary_marker"
+}
+trap cleanup_marker EXIT
+chmod 0600 -- "$temporary_marker"
+printf '%s\n' "$TAG" >"$temporary_marker"
+mv -f -- "$temporary_marker" "$MARKER"
+rm -f -- "$UPDATING"
+if [[ "$was_active" -eq 1 ]]; then
+  ( umask 077; printf '%s\n' "$TAG" >"$RESTART_NEEDED" ) ||
+    fail "cannot record pending service restart"
+fi
+
+flock -u 9
+exec 9>&-
+
+if [[ "$user_bus" -eq 1 ]]; then
+  systemctl --user daemon-reload ||
+    fail "build succeeded but user service manager reload failed"
+  if [[ "$was_active" -eq 1 ]]; then
+    systemctl --user restart "$UNIT" ||
+      fail "build succeeded but active $UNIT could not restart"
+    rm -f -- "$RESTART_NEEDED"
+  fi
+else
+  [[ "$was_active" -eq 0 ]] ||
+    fail "build succeeded but pending $UNIT restart requires a user service manager"
+  printf '%s\n' 'open-design: build complete; user service manager unavailable, runtime reconciliation skipped' >&2
+fi
+
+printf 'open-design: prepared %s\n' "$TAG"
+{{ end -}}

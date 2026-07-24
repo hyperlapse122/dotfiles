@@ -1,0 +1,97 @@
+{{- /*
+agent-mcp-servers-json.tmpl — validate and filter the neutral MCP inventory.
+
+Input (dict):
+  ctx        required; root chezmoi context
+  os         optional; host OS override for isolated tests
+  container  optional; container-fact override for isolated tests
+
+Production consumers pass only ctx. The helper then uses .chezmoi.os and the
+shared facts.tmpl container fact. It emits a compact JSON list for consumers to
+parse before applying their target-specific transport/auth formatting.
+
+Optional server applicability fields in .chezmoidata/agents.yaml:
+  os: [linux, darwin, windows]  omitted means every OS
+  container: keep | skip       omitted means keep
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "agent-mcp-servers-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if not (hasKey . "ctx") -}}
+{{-   fail "agent-mcp-servers-json.tmpl: ctx is required" -}}
+{{- end -}}
+{{- $ctx := .ctx -}}
+{{- $os := $ctx.chezmoi.os -}}
+{{- if hasKey . "os" -}}
+{{-   if not (kindIs "string" .os) -}}
+{{-     fail (printf "agent-mcp-servers-json.tmpl: os override must be a string, got %s" (kindOf .os)) -}}
+{{-   end -}}
+{{-   $os = .os -}}
+{{- end -}}
+{{- $container := false -}}
+{{- if hasKey . "container" -}}
+{{-   if not (kindIs "bool" .container) -}}
+{{-     fail (printf "agent-mcp-servers-json.tmpl: container override must be a bool, got %s" (kindOf .container)) -}}
+{{-   end -}}
+{{-   $container = .container -}}
+{{- else -}}
+{{-   $facts := includeTemplate "facts.tmpl" $ctx | fromYaml -}}
+{{-   $container = $facts.container -}}
+{{- end -}}
+{{- $validOS := list "linux" "darwin" "windows" -}}
+{{- $validContainers := list "keep" "skip" -}}
+{{- $eligible := list -}}
+{{- range $index, $server := $ctx.agents.mcp.servers -}}
+{{-   if not (kindIs "map" $server) -}}
+{{-     fail (printf "agent mcp: servers[%d] must be a map, got %s" $index (kindOf $server)) -}}
+{{-   end -}}
+{{-   if not (hasKey $server "name") -}}
+{{-     fail (printf "agent mcp: servers[%d] is missing required field name" $index) -}}
+{{-   end -}}
+{{-   if not (kindIs "string" $server.name) -}}
+{{-     fail (printf "agent mcp: servers[%d] field name must be a string, got %s" $index (kindOf $server.name)) -}}
+{{-   end -}}
+{{-   $name := $server.name -}}
+{{-   if eq $name "" -}}
+{{-     fail (printf "agent mcp: servers[%d] field name must not be empty" $index) -}}
+{{-   end -}}
+{{-   if not (hasKey $server "transport") -}}
+{{-     fail (printf "agent mcp: server %q is missing required field transport" $name) -}}
+{{-   end -}}
+{{-   if not (kindIs "string" $server.transport) -}}
+{{-     fail (printf "agent mcp: server %q field transport must be a string, got %s" $name (kindOf $server.transport)) -}}
+{{-   end -}}
+{{-   if not (has $server.transport (list "stdio" "http")) -}}
+{{-     fail (printf "agent mcp: server %q has unknown transport %q; valid values: stdio, http" $name $server.transport) -}}
+{{-   end -}}
+{{-   $serverOS := $validOS -}}
+{{-   if hasKey $server "os" -}}
+{{-     if not (kindIs "slice" $server.os) -}}
+{{-       fail (printf "agent mcp: server %q field os must be a list, got %s" $name (kindOf $server.os)) -}}
+{{-     end -}}
+{{-     $serverOS = list -}}
+{{-     range $entry := $server.os -}}
+{{-       if not (kindIs "string" $entry) -}}
+{{-         fail (printf "agent mcp: server %q os entries must be strings, got %s" $name (kindOf $entry)) -}}
+{{-       end -}}
+{{-       if not (has $entry $validOS) -}}
+{{-         fail (printf "agent mcp: server %q has unknown os %q; valid values: linux, darwin, windows" $name $entry) -}}
+{{-       end -}}
+{{-       $serverOS = append $serverOS $entry -}}
+{{-     end -}}
+{{-   end -}}
+{{-   $containerPolicy := "keep" -}}
+{{-   if hasKey $server "container" -}}
+{{-     if not (kindIs "string" $server.container) -}}
+{{-       fail (printf "agent mcp: server %q field container must be a string, got %s" $name (kindOf $server.container)) -}}
+{{-     end -}}
+{{-     $containerPolicy = $server.container -}}
+{{-     if not (has $containerPolicy $validContainers) -}}
+{{-       fail (printf "agent mcp: server %q has unknown container value %q; valid values: keep, skip" $name $containerPolicy) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if and (has $os $serverOS) (not (and $container (eq $containerPolicy "skip"))) -}}
+{{-     $eligible = append $eligible $server -}}
+{{-   end -}}
+{{- end -}}
+{{- toJson $eligible -}}
