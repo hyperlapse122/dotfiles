@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Start Open Design on demand and wait for one named endpoint to become ready.
+# The sole stdout line is the validated runtime directory, intended for callers
+# to capture before they exec a protocol-sensitive process.
+
+set -euo pipefail
+
+readonly ROOT="$HOME/.local/share/open-design"
+readonly MARKER="$ROOT/successful-release"
+readonly UPDATING="$ROOT/updating"
+readonly UNIT="open-design.service"
+readonly ATTEMPTS=240
+readonly INTERVAL=0.25
+
+fail() {
+  printf 'open-design: %s\n' "$*" >&2
+  printf 'open-design: inspect with `systemctl --user status %s` or `journalctl --user-unit %s`.\n' \
+    "$UNIT" "$UNIT" >&2
+  exit 1
+}
+
+resolve_runtime_dir() {
+  local runtime=${XDG_RUNTIME_DIR:-"/run/user/$UID"}
+  local owner
+
+  [[ "$runtime" == /* && "$runtime" != "/" ]] ||
+    fail "user runtime directory must be an absolute non-root path"
+  [[ -d "$runtime" && ! -L "$runtime" ]] ||
+    fail "user runtime directory is missing or unsafe: $runtime"
+  owner=$(stat -c '%u' -- "$runtime" 2>/dev/null) ||
+    fail "cannot inspect user runtime directory: $runtime"
+  [[ "$owner" == "$UID" ]] ||
+    fail "user runtime directory is not owned by uid $UID: $runtime"
+  printf '%s\n' "$runtime"
+}
+
+daemon_ready() {
+  local body
+  body=$(curl --fail --silent --show-error --max-time 2 \
+    http://127.0.0.1:43909/api/ready </dev/null 2>/dev/null) || return 1
+  jq -e '
+    .ok == true and
+    .ready == true and
+    has("version") and
+    (.version != null)
+  ' <<<"$body" >/dev/null 2>&1
+}
+
+web_ready() {
+  curl --fail --silent --show-error --max-time 2 --output /dev/null \
+    http://127.0.0.1:36947/ </dev/null 2>/dev/null
+}
+
+poll_ready() {
+  local mode=$1
+  local attempt
+
+  for ((attempt = 1; attempt <= ATTEMPTS; attempt++)); do
+    if ! systemctl --user is-active --quiet "$UNIT" </dev/null >/dev/null 2>&1; then
+      return 2
+    fi
+    if { [[ "$mode" == daemon ]] && daemon_ready; } ||
+      { [[ "$mode" == web ]] && web_ready; }
+    then
+      return 0
+    fi
+    if ((attempt < ATTEMPTS)); then
+      sleep "$INTERVAL"
+    fi
+  done
+  return 1
+}
+
+case ${1-} in
+  daemon) mode=daemon ;;
+  web) mode=web ;;
+  *) fail "usage: ensure-service daemon|web" ;;
+esac
+
+command -v systemctl >/dev/null 2>&1 || fail "systemctl is required"
+command -v curl >/dev/null 2>&1 || fail "curl is required"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+command -v timeout >/dev/null 2>&1 || fail "timeout is required"
+
+runtime_dir=$(resolve_runtime_dir)
+[[ ! -e "$UPDATING" ]] || fail "provisioning is incomplete"
+[[ -f "$MARKER" && ! -L "$MARKER" && -s "$MARKER" ]] ||
+  fail "successful release marker is missing or unsafe"
+
+if ! systemctl --user start "$UNIT" </dev/null >/dev/null 2>&1; then
+  fail "failed to start $UNIT"
+fi
+
+export UNIT ATTEMPTS INTERVAL
+export -f daemon_ready web_ready poll_ready
+set +e
+timeout --signal=TERM 60 bash -c 'poll_ready "$1"' _ "$mode" </dev/null
+status=$?
+set -e
+case $status in
+  0)
+    printf '%s\n' "$runtime_dir"
+    ;;
+  2)
+    fail "$UNIT stopped before readiness"
+    ;;
+  *)
+    fail "$UNIT did not become ready within 60 seconds"
+    ;;
+esac

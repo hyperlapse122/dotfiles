@@ -1,6 +1,6 @@
 {{- /* This file declares ONLY the MCP servers, data-driven from
-       .chezmoidata/agents.yaml (range over .agents.mcp.servers). Add or remove an
-       MCP server in the DATA file, not here. HTTP headers are optional;
+       .chezmoidata/agents.yaml through agent-mcp-servers-json.tmpl. Add or remove
+       an MCP server in the DATA file, not here. HTTP headers are optional;
        `auth: oauth` marks a headerless server that uses Claude Code/Codex native
        OAuth storage and therefore needs no target-specific TOML field.
 
@@ -25,7 +25,8 @@ agents = ["claude", "codex"]
 [trust]
 git_domains = ["git.jpi.app"]
 
-{{- range .agents.mcp.servers }}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson }}
+{{- range $mcpServers }}
 {{- if hasKey . "auth" }}
 {{- $auth := get . "auth" }}
 {{- if ne $auth "oauth" }}

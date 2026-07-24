@@ -1,5 +1,5 @@
 {{- /* Kimi Code's user-level mcp.json is fully data-driven from
-       .chezmoidata/agents.yaml (.agents.mcp.servers). Add or remove a server
+       .chezmoidata/agents.yaml through agent-mcp-servers-json.tmpl. Add or remove a server
        there and the complete managed file changes on the next apply.
 
        Kimi's native schema infers stdio from command/args and streamable HTTP
@@ -9,7 +9,8 @@
        credentials/mcp store and are provisioned on demand. Optional static
        headers use the shared recursive op:// resolver. */ -}}
 {{- $servers := dict -}}
-{{- range .agents.mcp.servers -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- range $mcpServers -}}
 {{- if not (hasKey . "name") -}}
 {{- fail "kimi mcp: server is missing required field name" -}}
 {{- end -}}

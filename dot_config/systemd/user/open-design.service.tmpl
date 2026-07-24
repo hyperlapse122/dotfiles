@@ -1,0 +1,16 @@
+[Unit]
+Description=Open Design local web and daemon service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/libexec/open-design/service
+WorkingDirectory=%h/.local/share/open-design/source
+RuntimeDirectory=open-design
+RuntimeDirectoryMode=0700
+Environment=OD_DATA_DIR=%h/.od
+Environment=OD_DAEMON_URL=http://127.0.0.1:43909
+Environment=OD_SIDECAR_IPC_BASE=%t/open-design/ipc
+Environment=OD_SIDECAR_IPC_PATH=%t/open-design/ipc/default/daemon.sock
+Restart=on-failure
+RestartPreventExitStatus=78
+RestartSec=2

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Guarded Open Design service launcher. Exit 78 denotes provision-state
+# rejection and is excluded from systemd's Restart=on-failure policy.
+
+set -euo pipefail
+
+readonly GUARD_EXIT=78
+readonly ROOT="$HOME/.local/share/open-design"
+readonly SOURCE="$ROOT/source"
+readonly MARKER="$ROOT/successful-release"
+readonly UPDATING="$ROOT/updating"
+readonly LOCK="$ROOT/provision.lock"
+readonly ORIGIN="https://github.com/nexu-io/open-design.git"
+
+guard_fail() {
+  printf 'open-design-service: %s\n' "$*" >&2
+  exit "$GUARD_EXIT"
+}
+
+normalize_origin() {
+  local value=$1
+  value=${value%/}
+  value=${value%.git}
+  printf '%s\n' "$value"
+}
+
+command -v flock >/dev/null 2>&1 || guard_fail "flock is required"
+command -v git >/dev/null 2>&1 || guard_fail "git is required"
+command -v mise >/dev/null 2>&1 || guard_fail "mise is required"
+
+[[ -d "$ROOT" && ! -L "$ROOT" ]] || guard_fail "managed parent is unavailable"
+[[ ! -L "$LOCK" && ( ! -e "$LOCK" || -f "$LOCK" ) ]] ||
+  guard_fail "provision lock is unsafe"
+exec 9>"$LOCK" || guard_fail "cannot open provision lock"
+flock -s 9 || guard_fail "cannot acquire provision lock"
+
+[[ ! -e "$UPDATING" ]] || guard_fail "provisioning is incomplete"
+[[ -f "$MARKER" && ! -L "$MARKER" && -s "$MARKER" ]] ||
+  guard_fail "successful release marker is missing or unsafe"
+[[ -d "$SOURCE" && ! -L "$SOURCE" && -d "$SOURCE/.git" ]] ||
+  guard_fail "managed checkout is unavailable"
+
+tag=$(<"$MARKER")
+[[ -n "$tag" && "$tag" != *$'\n'* ]] || guard_fail "successful release marker is invalid"
+actual=$(git -C "$SOURCE" config --get remote.origin.url 2>/dev/null) ||
+  guard_fail "managed checkout has no origin"
+[[ $(normalize_origin "$actual") == "$(normalize_origin "$ORIGIN")" ]] ||
+  guard_fail "managed checkout origin is unexpected"
+head=$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null) ||
+  guard_fail "managed checkout HEAD is unreadable"
+tag_commit=$(git -C "$SOURCE" rev-parse "${tag}^{commit}" 2>/dev/null) ||
+  guard_fail "successful release tag is unreadable"
+[[ "$head" == "$tag_commit" ]] || guard_fail "managed checkout does not match successful release"
+[[ -x "$SOURCE/apps/daemon/bin/od.mjs" ]] || guard_fail "upstream CLI is missing"
+[[ -f "$SOURCE/tools/pack/resources/linux/icon.png" ]] || guard_fail "upstream icon is missing"
+
+cd "$SOURCE"
+exec mise --no-config --no-env --no-hooks exec node@24 -- \
+  pnpm tools-dev run web --prod --web-port 36947 --daemon-port 43909

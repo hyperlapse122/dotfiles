@@ -38,6 +38,21 @@ jobs:
       - run: cargo test
       - run: cargo fmt --check
 
+  open-design-integration:
+    name: Open Design integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run isolated Open Design integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .ci/test-open-design-integration.sh
+
   # NOTE: shellcheck moved to the `render-dotfiles` workflow's `shellcheck` job,
   # which runs after the Fedora/Ubuntu render so it can lint the REAL rendered
   # scripts (including the `.chezmoiscripts/**` templates shellcheck cannot parse

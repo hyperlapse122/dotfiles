@@ -15,9 +15,23 @@
 # (manifest: .chezmoidata/system.yaml), never linked into $HOME.
 ./system
 
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
+
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
 ./Library
+{{- end }}
+
+# Open Design is a Linux user-service integration. Keep all of its managed
+# entry points together under this one platform gate so unsupported hosts never
+# receive a launcher whose provisioner/service cannot exist.
+{{- if ne .chezmoi.os "linux" }}
+.chezmoiscripts/60-build/*open-design.sh
+.config/systemd/user/open-design.service
+.local/libexec/open-design
+.local/bin/od
+.local/bin/open-design
+.local/share/applications/open-design.desktop
 {{- end }}
 
 # Windows-only
@@ -32,6 +46,13 @@
 # config-solaar, so it needs no entry here.)
 {{- if eq .chezmoi.os "windows" }}
 src/garden.yaml
+{{- end }}
+
+# The service, CLI, and MCP provider also belong on eligible headless Linux
+# hosts. Only the graphical launcher requires a known KDE or GNOME session.
+{{- if and (eq .chezmoi.os "linux") (not (or (eq $f.desktop "kde") (eq $f.desktop "gnome"))) }}
+.local/bin/open-design
+.local/share/applications/open-design.desktop
 {{- end }}
 
 # Vendored source dirs: crates/ + packages/ monorepos are built/used in place,
@@ -86,7 +107,6 @@ src/garden.yaml
 # and resolved once in .chezmoitemplates/facts.tmpl, which is also what the guard
 # partials and the installers read. The markers are no longer stat'd here: one
 # machine, one answer.
-{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
 {{- if $f.container }}
 .chezmoiscripts/30-linux/*.sh
 .chezmoiscripts/20-linux-fedora/*.sh
@@ -96,6 +116,12 @@ src/garden.yaml
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
+.chezmoiscripts/60-build/*open-design.sh
+.config/systemd/user/open-design.service
+.local/libexec/open-design
+.local/bin/od
+.local/bin/open-design
+.local/share/applications/open-design.desktop
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude/Codex/AGY haptic plugins and the pi haptic extension have nothing to
 # pulse — skip the deployed plugin trees and the pi extension. The generic

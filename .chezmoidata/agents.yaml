@@ -51,6 +51,11 @@ agents:
   # schema; the managed Kimi mcp.json owns the complete server inventory.
   # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
   # native OAuth store; credentials and refresh tokens never enter source data.
+  # Optional host applicability is shared across every consumer:
+  #   os: [linux, darwin, windows]  (omitted means every OS)
+  #   container: keep | skip       (omitted means keep)
+  # agent-mcp-servers-json.tmpl validates and filters these fields before any
+  # target-specific formatter sees the record.
   mcp:
     servers:
     - name: codegraph
@@ -72,6 +77,14 @@ agents:
       - mcp
       - "--tools"
       - all
+    - name: open-design
+      transport: stdio
+      command: od
+      args:
+      - mcp
+      os:
+      - linux
+      container: skip
     - name: figma
       transport: http
       url: https://mcp.figma.com/mcp

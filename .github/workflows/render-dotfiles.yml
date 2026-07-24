@@ -322,11 +322,11 @@ jobs:
         run: |
           set -euxo pipefail
           if command -v dnf >/dev/null 2>&1; then
-            dnf install -y --setopt=install_weak_deps=False curl git tar gzip >/dev/null
+            dnf install -y --setopt=install_weak_deps=False curl git jq tar gzip >/dev/null
           else
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y --no-install-recommends ca-certificates curl git tar gzip >/dev/null
+            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip >/dev/null
           fi
 
       - uses: actions/checkout@v7
@@ -491,6 +491,14 @@ jobs:
           test ! -e "${rendered}.render-error.txt"
           bash -n "${rendered}"
           "${GITHUB_WORKSPACE}/.ci/smoke-fedora-nvidia-repo-policy.sh" "${rendered}"
+
+      - name: Assert Open Design integration
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/60-build/run_onchange_after_build-open-design.sh"
+          test -f "${rendered}"
+          test ! -e "${rendered}.render-error.txt"
+          "${GITHUB_WORKSPACE}/.ci/test-open-design-integration.sh" "${rendered}"
 
       - name: Upload rendered internals
         if: always()

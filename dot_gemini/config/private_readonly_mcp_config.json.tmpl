@@ -1,5 +1,5 @@
 {{- /* gemini (Google Gemini CLI / Antigravity CLI) MCP servers are data-driven
-       from .chezmoidata/agents.yaml (.agents.mcp.servers). Add or remove a
+       from .chezmoidata/agents.yaml through agent-mcp-servers-json.tmpl. Add or remove a
        server there and the gemini config picks it up, mirroring pi mcp.json and
        opencode.json. gemini's mcpServers object uses `command`/`args` for stdio
        servers and `serverUrl` (plus optional `headers`) for HTTP servers;
@@ -11,7 +11,8 @@
        toPrettyJson owns the comma/whitespace handling (and emits keys
        alphabetically, like the pi and opencode siblings). */ -}}
 {{- $servers := dict -}}
-{{- range .agents.mcp.servers -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- range $mcpServers -}}
 {{- if hasKey . "auth" -}}
 {{- $auth := get . "auth" -}}
 {{- if ne $auth "oauth" -}}
