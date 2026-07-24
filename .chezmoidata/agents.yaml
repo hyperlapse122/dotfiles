@@ -304,12 +304,13 @@ agents:
   #     done here yet.
   aoe:
     config.toml:
-      custom_agents:
-        kimi: "~/.local/libexec/aoe-bin/kimi"
-        # Bare on-PATH shell agent; key is the aoe agent name, value the command.
-        zsh: zsh
-      agent_detect_as:
-        kimi: claude
+      session:
+        custom_agents:
+          kimi: "~/.local/libexec/aoe-bin/kimi"
+          # Bare on-PATH shell agent; key is the aoe agent name, value the command.
+          zsh: zsh
+        agent_detect_as:
+          kimi: claude
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
   # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
