@@ -16,3 +16,13 @@
 # re-create the ce-* dirs now that the wildcard entry is gone.
 .agents/skills/ce-*
 .agents/skills/lfg
+
+# Removed hub + its @AGENTS.md mirror. The user-scoped instruction core is now
+# composed per harness by .chezmoitemplates/agents-instructions.tmpl and rendered
+# straight into each harness wrapper (~/.claude/CLAUDE.md, ~/.codex/AGENTS.md,
+# ~/.config/opencode/AGENTS.md, ~/.gemini/GEMINI.md, ~/.pi/agent/AGENTS.md), so
+# the shared ~/.agents/AGENTS.md hub and its ~/.agents/CLAUDE.md mirror no longer
+# have a source. Deleting the dot_agents source files stops managing them but
+# does not delete the already-deployed copies — prune them here.
+.agents/AGENTS.md
+.agents/CLAUDE.md

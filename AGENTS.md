@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This is the chezmoi **source state** for `github.com/hyperlapse122/dotfiles`. Edit this checkout, never deployed `$HOME`; apply only when the user asks for deployment. The common guardrails in `dot_agents/readonly_AGENTS.md` are binding; this file is the repository supplement and may add stricter local rules. `CLAUDE.md` must remain exactly `@AGENTS.md`.
+This is the chezmoi **source state** for `github.com/hyperlapse122/dotfiles`. Edit this checkout, never deployed `$HOME`; apply only when the user asks for deployment. The common guardrails in `.chezmoitemplates/agents-instructions.tmpl` (composed per harness into each agent wrapper) are binding; this file is the repository supplement and may add stricter local rules. `CLAUDE.md` must remain exactly `@AGENTS.md`.
 
 ## Source layout and attributes
 
@@ -82,7 +82,7 @@ Edit data, not generated scripts or rendered targets:
 | `.chezmoidata/haptic.yaml` | daemon/notify environment and Claude/Pi/Codex/AGY event waveforms |
 | `.chezmoidata/agents.yaml` | MCPs, skills, marketplaces/plugins, Claude values, Pi settings/packages/auth/models, OpenCode providers/plugins/models |
 | `.chezmoidata/system.yaml` | `/etc` manifest gates/modes/checks/removals |
-| `dot_agents/readonly_AGENTS.md` | common instruction source; wrappers are one-line includes |
+| `.chezmoitemplates/agents-instructions.tmpl` | common instruction source, composed per harness into each agent wrapper |
 | `src/encrypted_readonly_garden.yaml.asc` | private `~/src/garden.yaml` registry (GPG) |
 | `.chezmoitemplates/secrets-bundle.json.asc` | GPG secrets cache (`chezmoi-secrets-sync` <- 1Password), read by the secret-read / resolve-op-refs shims |
 
