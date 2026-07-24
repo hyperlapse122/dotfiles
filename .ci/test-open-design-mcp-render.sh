@@ -95,10 +95,21 @@ render_consumer() {
   printf '%s\n' "$output"
 }
 
+open_design_eligible=$(
+  chezmoi --config "$empty_config" --source "$repo_root" execute-template \
+    '{{ includeTemplate "facts.tmpl" . | fromYaml | toJson }}' |
+    jq -r '.os == "linux" and (.container | not)'
+)
+
 agents_output=$(render_consumer agents.toml dot_agents/private_readonly_agents.toml.tmpl)
-grep -F 'name = "open-design"' "$agents_output" >/dev/null
-grep -F 'command = "od"' "$agents_output" >/dev/null
-grep -F 'args = ["mcp"]' "$agents_output" >/dev/null
+if [[ $open_design_eligible == true ]]; then
+  grep -F 'name = "open-design"' "$agents_output" >/dev/null
+  grep -F 'command = "od"' "$agents_output" >/dev/null
+  grep -F 'args = ["mcp"]' "$agents_output" >/dev/null
+elif grep -F 'name = "open-design"' "$agents_output" >/dev/null; then
+  printf 'Open Design MCP rendered in ineligible agents.toml\n' >&2
+  exit 1
+fi
 
 for entry in \
   "pi.json:dot_pi/agent/private_readonly_mcp.json.tmpl" \
@@ -107,19 +118,28 @@ for entry in \
   "kimi.json:dot_kimi-code/private_readonly_mcp.json.tmpl"
 do
   output=$(render_consumer "${entry%%:*}" "${entry#*:}")
-  jq -e '
-    [
-      paths(objects) as $path
-      | getpath($path)
-      | select(has("open-design"))
-      | .["open-design"]
-    ] as $servers
-    | ($servers | length) == 1
-      and (
-        ($servers[0].command == "od" and $servers[0].args == ["mcp"])
-        or $servers[0].command == ["od", "mcp"]
-      )
-  ' "$output" >/dev/null
+  if [[ $open_design_eligible == true ]]; then
+    jq -e '
+      [
+        paths(objects) as $path
+        | getpath($path)
+        | select(has("open-design"))
+        | .["open-design"]
+      ] as $servers
+      | ($servers | length) == 1
+        and (
+          ($servers[0].command == "od" and $servers[0].args == ["mcp"])
+          or $servers[0].command == ["od", "mcp"]
+        )
+    ' "$output" >/dev/null
+  elif jq -e '
+    paths(objects) as $path
+    | getpath($path)
+    | select(has("open-design"))
+  ' "$output" >/dev/null; then
+    printf 'Open Design MCP rendered in ineligible %s\n' "$output" >&2
+    exit 1
+  fi
 done
 
 for template in \
