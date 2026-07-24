@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
 mkdir -p -- "$scratch_root"
+export XDG_RUNTIME_DIR="$scratch_root"
 scratch=$(mktemp -d "$scratch_root/open-design-integration.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
