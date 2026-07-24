@@ -269,19 +269,32 @@ agents:
     plugins:
     - name: compound-engineering
       versionSource: compoundEngineeringRelease
-  # aoe (agent-of-empires) launches the kimi agent as a custom agent. Apply
+  # aoe (agent-of-empires) launches custom agents declared here. Apply
   # reconciles ONLY these declared leaves into aoe's live global
   # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile
   # binary (run_after_config-aoe.sh.tmpl), preserving every undeclared key aoe
-  # writes there itself. custom_agents.kimi points at the off-PATH wrapper
-  # (~/.local/libexec/aoe-bin/kimi) that rewrites aoe's
-  # --dangerously-skip-permissions flag to kimi's --yolo; the invoker expands
-  # the leading ~ to an absolute path at render time. agent_detect_as.kimi =
-  # claude makes aoe emit that claude-style flag.
+  # writes there itself. Each custom_agents.<name> value is the command aoe runs
+  # for that agent; the invoker replaces `~/` with the home dir in the emitted
+  # JSON, so a leading-~/ wrapper path is expanded to absolute while a bare
+  # command name (no ~/) passes through verbatim. agent_detect_as.<name> tells
+  # aoe which known agent's launch flags to emit; a name absent from that map is
+  # launched with no injected flag.
+  #   - kimi: the off-PATH wrapper (~/.local/libexec/aoe-bin/kimi), expanded to
+  #     an absolute path at render time, that rewrites aoe's
+  #     --dangerously-skip-permissions into kimi's --yolo. agent_detect_as.kimi =
+  #     claude makes aoe emit that claude-style flag for the wrapper to translate.
+  #   - zsh: the bare `zsh` command (resolved on PATH, no wrapper, no ~/ to
+  #     expand), with NO agent_detect_as entry, so aoe injects no flag and runs a
+  #     plain interactive shell. Registered ahead of use — the intent is to later
+  #     point aoe's default sessions (e.g. default-branch worktrees) at this
+  #     plain-shell agent instead of a coding agent; that default wiring is not
+  #     done here yet.
   aoe:
     config.toml:
       custom_agents:
         kimi: "~/.local/libexec/aoe-bin/kimi"
+        # Bare on-PATH shell agent; key is the aoe agent name, value the command.
+        zsh: zsh
       agent_detect_as:
         kimi: claude
   # pi package sources, managed settings defaults, and static API-key auth.
