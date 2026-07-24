@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start Open Design on demand and wait for one named endpoint to become ready.
+# Start Open Design on demand and optionally wait for one named endpoint.
 # The sole stdout line is the validated runtime directory, intended for callers
 # to capture before they exec a protocol-sensitive process.
 
@@ -72,15 +72,18 @@ poll_ready() {
 }
 
 case ${1-} in
+  start) mode=start ;;
   daemon) mode=daemon ;;
   web) mode=web ;;
-  *) fail "usage: ensure-service daemon|web" ;;
+  *) fail "usage: ensure-service start|daemon|web" ;;
 esac
 
 command -v systemctl >/dev/null 2>&1 || fail "systemctl is required"
-command -v curl >/dev/null 2>&1 || fail "curl is required"
-command -v jq >/dev/null 2>&1 || fail "jq is required"
-command -v timeout >/dev/null 2>&1 || fail "timeout is required"
+if [[ "$mode" != start ]]; then
+  command -v curl >/dev/null 2>&1 || fail "curl is required"
+  command -v jq >/dev/null 2>&1 || fail "jq is required"
+  command -v timeout >/dev/null 2>&1 || fail "timeout is required"
+fi
 
 runtime_dir=$(resolve_runtime_dir)
 [[ ! -e "$UPDATING" ]] || fail "provisioning is incomplete"
@@ -89,6 +92,11 @@ runtime_dir=$(resolve_runtime_dir)
 
 if ! systemctl --user start "$UNIT" </dev/null >/dev/null 2>&1; then
   fail "failed to start $UNIT"
+fi
+
+if [[ "$mode" == start ]]; then
+  printf '%s\n' "$runtime_dir"
+  exit 0
 fi
 
 export UNIT ATTEMPTS INTERVAL
