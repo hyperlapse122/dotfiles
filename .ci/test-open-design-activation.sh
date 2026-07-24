@@ -53,7 +53,36 @@ set -euo pipefail
     "${OD_DATA_DIR:-}" "${OD_DAEMON_URL:-}" "${OD_SIDECAR_IPC_BASE:-}" "${OD_SIDECAR_IPC_PATH:-}"
 } >>"$TEST_LOG"
 if [[ " $* " == *" node "*"apps/daemon/bin/od.mjs "* ]]; then
-  cat
+  if [[ " $* " == *" mcp "* ]]; then
+    while IFS= read -r request; do
+      jq -ce '
+        if .method == "initialize" then
+          {
+            jsonrpc: "2.0",
+            id: .id,
+            result: {
+              protocolVersion: "2025-06-18",
+              capabilities: {tools: {}},
+              serverInfo: {name: "open-design", version: "test"}
+            }
+          }
+        elif .method == "tools/call" then
+          {
+            jsonrpc: "2.0",
+            id: .id,
+            result: {
+              content: [{type: "text", text: "Open Design daemon is unreachable"}],
+              isError: true
+            }
+          }
+        else
+          error("unexpected MCP request")
+        end
+      ' <<<"$request"
+    done
+  else
+    cat
+  fi
   printf 'upstream-stderr\n' >&2
   exit "${UPSTREAM_EXIT:-0}"
 fi
@@ -155,6 +184,23 @@ grep -F 'systemctl --user start open-design.service' "$log"
 grep -F 'systemctl --user is-active --quiet open-design.service' "$log"
 grep -F 'http://127.0.0.1:43909/api/ready' "$log"
 
+# Start-only activation validates and requests the service start, then returns
+# the runtime path without loading or polling readiness-only tools.
+: >"$log"
+runtime=$(env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
+  PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" \
+  "$test_home/.local/libexec/open-design/ensure-service" start </dev/null)
+[[ "$runtime" == "$scratch/runtime" ]]
+grep -F 'systemctl --user start open-design.service' "$log"
+if grep -E '^(curl|sleep) ' "$log"; then
+  printf 'start-only activation polled readiness\n' >&2
+  exit 1
+fi
+env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
+  PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" \
+  "$test_home/.local/libexec/open-design/ensure-service" start </dev/null >/dev/null
+[[ $(grep -Fc 'systemctl --user start open-design.service' "$log") -eq 2 ]]
+
 : >"$log"
 runtime=$(env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
   PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" \
@@ -222,12 +268,23 @@ grep -F 'runtime directory is missing or unsafe' "$scratch/runtime.err"
 # daemon/data/IPC contract, and execs the upstream Node CLI without consuming
 # stdin or adding bytes to stdout.
 : >"$log"
-printf 'json-rpc-input\n' |
+initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
+tool_call='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_status","arguments":{}}}'
+printf '%s\n%s\n' "$initialize" "$tool_call" |
   env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
-    PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" \
+    PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" DAEMON_READY=false \
     "$test_home/.local/bin/od" mcp --example \
     >"$scratch/od.out" 2>"$scratch/od.err"
-grep -Fx 'json-rpc-input' "$scratch/od.out"
+jq -se '
+  length == 2 and
+  .[0].jsonrpc == "2.0" and
+  .[0].id == 1 and
+  .[0].result.protocolVersion == "2025-06-18" and
+  .[0].result.serverInfo.name == "open-design" and
+  .[1].id == 2 and
+  .[1].result.isError == true and
+  (.[1].result.content[0].text | contains("daemon is unreachable"))
+' "$scratch/od.out" >/dev/null
 grep -Fx 'upstream-stderr' "$scratch/od.err"
 grep -F 'node@24 -- node' "$log"
 grep -F 'apps/daemon/bin/od.mjs mcp --example ' "$log"
@@ -235,8 +292,13 @@ grep -F "OD_DATA_DIR=$test_home/.od" "$log"
 grep -F 'OD_DAEMON_URL=http://127.0.0.1:43909' "$log"
 grep -F "OD_SIDECAR_IPC_BASE=$scratch/runtime/open-design/ipc" "$log"
 grep -F "OD_SIDECAR_IPC_PATH=$scratch/runtime/open-design/ipc/default/daemon.sock" "$log"
+if grep -E '^(curl|sleep) ' "$log"; then
+  printf 'od mcp waited for daemon readiness before initialize\n' >&2
+  exit 1
+fi
 
 # Exec transparency includes the upstream exit status.
+: >"$log"
 set +e
 env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
   PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" UPSTREAM_EXIT=23 \
@@ -245,6 +307,10 @@ env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
 status=$?
 set -e
 [[ $status -eq 23 ]]
+daemon_probe_line=$(grep -n -m1 '^curl .*http://127.0.0.1:43909/api/ready' "$log" | cut -d: -f1)
+upstream_line=$(grep -n -m1 '^argv=.*apps/daemon/bin/od.mjs' "$log" | cut -d: -f1)
+[[ -n "$daemon_probe_line" && -n "$upstream_line" ]]
+[[ $daemon_probe_line -lt $upstream_line ]]
 
 # Preflight failures never invoke upstream and never send desktop notifications.
 : >"$log"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # On-demand Open Design CLI/MCP entry point. Keep stdout untouched: after the
-# readiness preflight succeeds, this process becomes the upstream Node CLI.
+# activation preflight succeeds, this process becomes the upstream Node CLI.
 
 set -euo pipefail
 
@@ -21,7 +21,11 @@ command -v mise >/dev/null 2>&1 || {
   exit 1
 }
 
-runtime_dir=$("$ENSURE" daemon)
+activation_mode=daemon
+if [[ ${1-} == mcp ]]; then
+  activation_mode=start
+fi
+runtime_dir=$("$ENSURE" "$activation_mode")
 export OD_DATA_DIR="$HOME/.od"
 export OD_DAEMON_URL="http://127.0.0.1:43909"
 export OD_SIDECAR_IPC_BASE="$runtime_dir/open-design/ipc"
