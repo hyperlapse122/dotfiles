@@ -5,6 +5,35 @@ on:
   pull_request:
 
 jobs:
+  codex-wrapper:
+    name: Codex Tokscale wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Render Tokscale wrapper
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/op-stub"
+          printf '#!/usr/bin/env bash\nprintf dummy-secret\n' > "$RUNNER_TEMP/op-stub/op"
+          chmod 700 "$RUNNER_TEMP/op-stub/op"
+          : > "$RUNNER_TEMP/empty.toml"
+          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            execute-template \
+            < dot_local/bin/private_executable_tokscale.tmpl \
+            > "$RUNNER_TEMP/tokscale"
+          chmod 700 "$RUNNER_TEMP/tokscale"
+      - name: Test Codex wrapper
+        env:
+          TOKSCALE_WRAPPER_UNDER_TEST: ${{ runner.temp }}/tokscale
+        run: .ci/test-codex-tokscale-wrapper.sh
+
   ts-workspace:
     name: TypeScript workspace (packages/)
     runs-on: ubuntu-latest
