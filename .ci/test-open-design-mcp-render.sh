@@ -112,7 +112,7 @@ elif grep -F 'name = "open-design"' "$agents_output" >/dev/null; then
 fi
 
 for entry in \
-  "pi.json:dot_pi/agent/private_readonly_mcp.json.tmpl" \
+  "pi.json:dot_pi/private_agent/private_readonly_mcp.json.tmpl" \
   "opencode.json:dot_config/opencode/readonly_opencode.json.tmpl" \
   "gemini.json:dot_gemini/config/private_readonly_mcp_config.json.tmpl" \
   "kimi.json:dot_kimi-code/private_readonly_mcp.json.tmpl"
@@ -144,7 +144,7 @@ done
 
 for template in \
   dot_agents/private_readonly_agents.toml.tmpl \
-  dot_pi/agent/private_readonly_mcp.json.tmpl \
+  dot_pi/private_agent/private_readonly_mcp.json.tmpl \
   dot_config/opencode/readonly_opencode.json.tmpl \
   dot_gemini/config/private_readonly_mcp_config.json.tmpl \
   dot_kimi-code/private_readonly_mcp.json.tmpl
