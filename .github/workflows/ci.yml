@@ -52,6 +52,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: .ci/test-open-design-integration.sh
+      - name: Run Open Design sleep hook
+        run: .ci/test-open-design-sleep-hook.sh
 
   # NOTE: shellcheck moved to the `render-dotfiles` workflow's `shellcheck` job,
   # which runs after the Fedora/Ubuntu render so it can lint the REAL rendered
