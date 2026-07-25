@@ -336,6 +336,8 @@ packages:
         - fcitx5  # input method framework
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
+        - kitty  # GPU-accelerated terminal emulator (default terminal on this desktop)
+        - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
       # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
       # framework as the KDE targets (unified input-method policy: ibus is
       # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
@@ -349,6 +351,8 @@ packages:
         - fcitx5  # input method framework
         - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
+        - kitty  # GPU-accelerated terminal emulator (default terminal on this desktop)
+        - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
       # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
@@ -655,6 +659,8 @@ packages:
       # shellExtensions.kimpanel and .chezmoiscripts/50-linux-gnome/.
       gnomePackages:
         - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
+        - kitty  # GPU-accelerated terminal emulator (default terminal on this desktop)
+        - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
 
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
