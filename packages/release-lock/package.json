@@ -1,0 +1,14 @@
+{
+  "name": "@h82/release-lock",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Resolve external tool releases into the static .chezmoidata release lock.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=24" },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "typescript": "7.0.2",
+    "vite-plus": "catalog:"
+  }
+}
