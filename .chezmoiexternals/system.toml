@@ -7,14 +7,14 @@
 
 {{- /* ---------- docker-credential-helpers (one helper per OS credential store) ---------- */ -}}
 
-{{- $dockerCredentialHelpersTag := (gitHubLatestRelease "docker/docker-credential-helpers").TagName | toString -}}
+{{- $dockerCredentialHelpersUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "docker-credential-helpers" "field" "url" "platform" "auto") }}
 
 {{- if eq .chezmoi.os "linux" }}
 
 [docker-credential-secretservice]
 type = "file"
 targetPath = '.local/bin/docker-credential-secretservice'
-url = {{ gitHubReleaseAssetURL "docker/docker-credential-helpers" $dockerCredentialHelpersTag (printf "docker-credential-secretservice-%s.%s-%s" $dockerCredentialHelpersTag .chezmoi.os .chezmoi.arch) | quote }}
+url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
 
 {{- else if eq .chezmoi.os "darwin" }}
@@ -22,7 +22,7 @@ executable = true
 [docker-credential-osxkeychain]
 type = "file"
 targetPath = '.local/bin/docker-credential-osxkeychain'
-url = {{ gitHubReleaseAssetURL "docker/docker-credential-helpers" $dockerCredentialHelpersTag (printf "docker-credential-osxkeychain-%s.%s-%s" $dockerCredentialHelpersTag .chezmoi.os .chezmoi.arch) | quote }}
+url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
 
 {{- else if eq .chezmoi.os "windows" }}
@@ -30,7 +30,7 @@ executable = true
 [docker-credential-wincred]
 type = "file"
 targetPath = '.local/bin/docker-credential-wincred.exe'
-url = {{ gitHubReleaseAssetURL "docker/docker-credential-helpers" $dockerCredentialHelpersTag (printf "docker-credential-wincred-%s.%s-%s.exe" $dockerCredentialHelpersTag .chezmoi.os .chezmoi.arch) | quote }}
+url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
 
 {{- end }}
@@ -40,7 +40,7 @@ executable = true
 [wakatime-cli]
 type = "archive-file"
 targetPath = '{{ printf ".local/bin/wakatime-cli%s" $executableExtension }}'
-url = '{{ gitHubLatestReleaseAssetURL "wakatime/wakatime-cli" (printf "wakatime-cli-%s-%s.zip" .chezmoi.os .chezmoi.arch) }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wakatime-cli" "field" "url" "platform" "auto") }}'
 executable = true
 path = '{{ printf "wakatime-cli-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
 

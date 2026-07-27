@@ -5,7 +5,10 @@
 
 {{- /* ---------- kubectl (versioned by the kubernetes/kubernetes tag, served from dl.k8s.io) ---------- */ -}}
 
-{{- $kubectlTag := (gitHubLatestRelease "kubernetes/kubernetes").TagName | toString }}
+{{- /* Version-only lock read: the tag comes from the release lock (resolved at
+       refresh time by packages/release-lock), the download URL keeps building
+       against dl.k8s.io (KTD8). */ -}}
+{{- $kubectlTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kubectl") }}
 
 [kubectl]
 type = "file"
@@ -19,9 +22,9 @@ targetPath = '{{ printf ".local/bin/kubectl-convert%s" $executableExtension }}'
 url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert%s" $kubectlTag .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true
 
-{{- /* ---------- helm (tag from GitHub, archive from get.helm.sh) ---------- */ -}}
+{{- /* ---------- helm (tag from the release lock, archive from get.helm.sh) ---------- */ -}}
 
-{{- $helmTag := (gitHubLatestRelease "helm/helm").TagName | toString }}
+{{- $helmTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "helm") }}
 
 [helm]
 targetPath = '{{ printf ".local/bin/helm%s" $executableExtension }}'
@@ -35,6 +38,6 @@ executable = true
 [minikube]
 type = "archive-file"
 targetPath = '{{ printf ".local/bin/minikube%s" $executableExtension }}'
-url = '{{ gitHubLatestReleaseAssetURL "kubernetes/minikube" (printf "minikube-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "url" "platform" "auto") }}'
 path = '{{ printf "out/minikube-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true

@@ -25,7 +25,7 @@
 
 ['{{ replace "/" "_" $key }}']
     type = "archive"
-    url = {{ gitHubReleaseAssetURL $repository $release $assetName | quote }}
+    url = {{ printf "https://github.com/%s/releases/download/%s/%s" $repository $release $assetName | quote }}
     exact = false
     exclude = ["**/*.woff", "**/*.woff2", "**/*.eot", "**/*.css", "**/*.scss", "**/*.svg", "**/*.json", "**/*.md", "**/*.txt", "**/LICENSE*", "**/OFL*"]
     targetPath = {{ printf "%s/%s" $userFontDir $subdir | quote }}

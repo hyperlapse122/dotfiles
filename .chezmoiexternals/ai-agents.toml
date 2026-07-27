@@ -39,18 +39,17 @@ size = {{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArt
 
 {{- $codexArch := (replace "amd64" "x86_64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
 
-{{- $codexTag := ((gitHubLatestRelease "openai/codex").TagName | toString) -}}
+{{- $codexTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex") -}}
 {{- $codexRelease := (replace "rust-v" "" $codexTag) -}}
 {{- $codexTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
 
 {{- $codexReleasePath := (printf "%s-%s-%s" $codexRelease $codexArch $codexTarget) -}}
-{{- $codexAsset := (printf "codex-package-%s-%s.tar.zst" $codexArch $codexTarget) -}}
 
 {{- $codexInstallationPath := (joinPath ".codex" "packages" "standalone" "releases" $codexReleasePath) }}
 
 [codex]
 type = "archive"
-url = '{{ gitHubReleaseAssetURL "openai/codex" $codexTag $codexAsset }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex" "field" "url" "platform" "auto") }}'
 stripComponents = 0
 targetPath = '{{ $codexInstallationPath }}'
 
@@ -137,14 +136,12 @@ executable = true
 sha512 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "sha512")) }}'
 {{- end }}
 
-{{- /* ---------- opencode (darwin ships a .zip, unlike the tar.gz users below) ---------- */ -}}
-
-{{- $opencodeArchiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".zip" (replace "windows" ".zip" .chezmoi.os))) }}
+{{- /* ---------- opencode (darwin ships a .zip, unlike the tar.gz users below) ---------- */}}
 
 [opencode]
 targetPath = '{{ printf ".local/bin/opencode%s" $executableExtension }}'
 type = "archive-file"
-url = '{{ gitHubLatestReleaseAssetURL "anomalyco/opencode" (printf "opencode-%s-%s%s" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch) $opencodeArchiveExtension) }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "opencode" "field" "url" "platform" "auto") }}'
 executable = true
 path = '{{ printf "opencode%s" $executableExtension }}'
 
@@ -156,22 +153,19 @@ path = '{{ printf "opencode%s" $executableExtension }}'
 
 {{- if ne .chezmoi.os "windows" -}}
 
-{{- /* $piTag is also resolved inline by dot_pi/agent/readonly_settings.json.tmpl
-       (lastChangelogVersion) so the managed settings.json matches the
-       installed pi. Kept in sync by reading the same release — no shared
-       partial. */ -}}
-{{- $piTag := (gitHubLatestRelease "earendil-works/pi").TagName | toString -}}
-{{- $piAsset := (printf "pi-%s-%s.tar.gz" .chezmoi.os (replace "amd64" "x64" .chezmoi.arch)) -}}
+{{- /* $piTag is also read by dot_pi/agent/readonly_settings.json.tmpl
+       (lastChangelogVersion) from the SAME release-lock key, so the managed
+       settings.json always matches the pi on disk — no shared partial. */ -}}
+{{- $piTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi") -}}
 
-{{- /* The per-asset sha256 (upstream publishes one combined SHA256SUMS sidecar)
-       is resolved at refresh time by packages/release-lock; the render reads
-       the locked digest. The tag and asset URL still come from the gitHub*
-       builtins above/below (migrated separately). */ -}}
+{{- /* The tag, per-asset URL and sha256 (upstream publishes one combined
+       SHA256SUMS sidecar) are resolved at refresh time by
+       packages/release-lock; the render reads the locked values. */ -}}
 {{- $piSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi" "field" "sha256" "platform" "auto") }}
 
 [pi]
 type = "archive"
-url = '{{ gitHubReleaseAssetURL "earendil-works/pi" $piTag $piAsset }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi" "field" "url" "platform" "auto") }}'
 targetPath = '{{ printf ".local/share/pi/versions/%s" $piTag }}'
 stripComponents = 1
 
@@ -182,7 +176,7 @@ sha256 = '{{ $piSha }}'
 
 {{- /* ---------- codegraph ---------- */ -}}
 
-{{- $codegraphTag := (gitHubLatestRelease "colbymchenry/codegraph").TagName | toString }}
+{{- $codegraphTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph") }}
 
 [codegraph]
 {{ if ne .chezmoi.os "windows" }}
@@ -191,18 +185,18 @@ targetPath = '{{ printf ".codegraph/versions/%s" $codegraphTag }}'
 targetPath = '{{ joinPath (env "LOCALAPPDATA") "codegraph" "current" }}'
 {{ end }}
 type = "archive"
-url = '{{ gitHubReleaseAssetURL "colbymchenry/codegraph" $codegraphTag (printf "codegraph-%s-%s.tar.gz" (replace "windows" "win32" .chezmoi.os) (replace "amd64" "x64" .chezmoi.arch)) }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph" "field" "url" "platform" "auto") }}'
 stripComponents = 1
 
 {{- /* ---------- agent-of-empires (aoe) — the worktree/session orchestrator; no windows build ---------- */ -}}
 
 {{- if ne "windows" .chezmoi.os }}
 
-{{- $aoeTag := (gitHubLatestRelease "agent-of-empires/agent-of-empires").TagName | toString }}
+{{- $aoeTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe") }}
 
 [aoe]
 type = "archive-file"
-url = {{ gitHubReleaseAssetURL "agent-of-empires/agent-of-empires" $aoeTag (printf "aoe-%s-%s.tar.gz" .chezmoi.os .chezmoi.arch) | quote }}
+url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "url" "platform" "auto") | quote }}
 executable = true
 targetPath = ".local/bin/aoe"
 path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
@@ -242,7 +236,8 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" 
        exclusive with `ref` (enforced), and unknown versionSource values fail; the tag is
        read once per render from the release lock and shared by every glabRelease entry,
        so all such skills pin one atomic tag); otherwise no `ref`
-       key -> newest GitHub release (gitHubLatestRelease); a `ref` key -> that branch head
+       key -> the newest upstream release tag recorded in the release lock,
+       keyed on the skill name; a `ref` key -> that branch head
        resolved to a commit sha in the release lock at refresh time by
        packages/release-lock (repos with no releases/tags, e.g.
        shadcn/improve). In every case the resolved ref sits in the URL, so both the URL and
@@ -252,10 +247,9 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" 
        symlink; its `install` never prunes an UNDECLARED dir (prune is sync-only, which the
        apply never runs), so these externals coexist with the symlink and with any
        locally-authored chezmoi-managed skill under dot_agents/skills/<name>/. POSIX only,
-       matching the install-dotagents-skills linux+darwin gate. GitHub API calls (the
-       gitHub* builtins above and the no-`ref` branch) still resolve at render time, so
-       render chezmoi through the zsh wrapper (or `zsh -ic 'chezmoi …'`) so GITHUB_TOKEN is
-       injected. ---------- */ -}}
+       matching the install-dotagents-skills linux+darwin gate. Every ref in this
+       file now resolves from the release lock at render time, so the render
+       performs no GitHub API calls. ---------- */ -}}
 
 {{- if ne .chezmoi.os "windows" -}}
 {{- $skillsCtx := . -}}
@@ -280,7 +274,9 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" 
          skill name; the lock read fails closed if the key is missing (R6). */ -}}
   {{- $ref = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $skillsCtx "tool" .name) -}}
 {{- else -}}
-  {{- $ref = (gitHubLatestRelease .source).TagName | toString -}}
+  {{- /* No `ref` key: the newest upstream release tag recorded in the release
+         lock at refresh time, keyed on the skill name (R6 fail-closed). */ -}}
+  {{- $ref = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $skillsCtx "tool" .name) -}}
 {{- end }}
 {{- $host := "github" -}}
 {{- if hasKey . "host" -}}{{- $host = .host -}}{{- end -}}
