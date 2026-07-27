@@ -5,6 +5,15 @@ export interface LockedArtifact {
   readonly url: string;
   /** Lowercase hex sha256, or null when the source publishes no digest. */
   readonly sha256: string | null;
+  /**
+   * Lowercase hex sha512, recorded as published. Only vendor manifests that
+   * expose sha512 alone (antigravity) carry this; chezmoi externals verify
+   * sha256 only, so this is informational, exactly as today's template treats
+   * it.
+   */
+  readonly sha512?: string | null;
+  /** Byte size of the artifact, where the source publishes one (claude). */
+  readonly size?: number;
   /** Present when this target borrows the amd64 build and runs it emulated. */
   readonly emulated?: true;
 }
@@ -15,6 +24,12 @@ export interface LockedTool {
   readonly source: string;
   /** The upstream tag or version, verbatim (leading `v` preserved when present). */
   readonly version: string;
+  /**
+   * npm `dist.integrity` (sha512-base64), recorded as published for
+   * completeness. Version-only for consumers: chezmoi cannot verify an npm
+   * subresource integrity string.
+   */
+  readonly integrity?: string | null;
   /** Absent for tools whose consumers only need a version. */
   readonly artifacts?: Readonly<Partial<Record<PlatformKey, LockedArtifact>>>;
 }
@@ -38,6 +53,9 @@ export type ResolverKind =
   | "vendorManifest"
   | "gitRef";
 
+/** The vendor endpoints the vendorManifest kind knows how to read. */
+export type VendorName = "claude" | "antigravity" | "winbox";
+
 /**
  * Asset selection for one tool.
  *
@@ -48,12 +66,36 @@ export type AssetSelector = (platform: Platform, tag: string) => string | null;
 
 export interface ToolSpec {
   readonly kind: ResolverKind;
-  /** `owner/repo` for GitHub kinds. */
+  /**
+   * `owner/repo` for the GitHub kinds and gitRef, the package name for npm,
+   * and the endpoint base URL for gitlabRelease and vendorManifest.
+   */
   readonly source: string;
   /** Omit for version-only tools — no artifacts block is emitted. */
   readonly asset?: AssetSelector;
   /** Declared, never inferred — so a stale asset pattern cannot hide behind a silent skip. */
   readonly emulatedPlatforms?: readonly PlatformKey[];
+  /**
+   * githubRelease only: resolve the newest release whose tag carries this
+   * prefix instead of `releases/latest` (KTD10 — compound-engineering's repo
+   * interleaves marketplace-*, cli-* tag trains).
+   */
+  readonly tagPrefix?: string;
+  /**
+   * githubRelease only: the tool publishes distinct static-musl linux builds;
+   * resolve them into the `-musl` lock keys next to the glibc ones (KTD11).
+   */
+  readonly linuxMusl?: boolean;
+  /** vendorManifest only: which vendor endpoint shape to read. */
+  readonly vendor?: VendorName;
+  /** gitRef only: the ref to resolve, e.g. `refs/heads/main` or `HEAD`. */
+  readonly ref?: string;
+  /**
+   * KTD10 tag-shape transform applied to the resolved tag before it is
+   * recorded (e.g. stripping the leading `v` for an npm-pinned plugin), so
+   * consumers read the locked version verbatim.
+   */
+  readonly versionTransform?: (tag: string) => string;
 }
 
 export type Registry = Readonly<Record<string, ToolSpec>>;

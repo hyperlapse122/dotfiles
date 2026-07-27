@@ -14,14 +14,20 @@ The plan this package implements is
 
 ## Status
 
-Partial. The `githubRelease` resolver kind is implemented and verified; the
-lock file itself and the template migration are not yet landed. Nothing in
-`chezmoi apply` consumes this package yet — it currently runs standalone.
+All six resolver kinds are implemented and the committed
+`.chezmoidata/releases.json` covers every render-time resolution source in the
+repo. Nothing in `chezmoi apply` consumes the lock yet — the shared read
+template and consumer migration are the later units of the plan — so this
+package currently runs standalone.
 
 | Resolver kind | State |
 |---|---|
 | `githubRelease` | implemented |
-| `githubTag`, `gitlabRelease`, `npm`, `vendorManifest`, `gitRef` | not yet implemented |
+| `githubTag` | implemented |
+| `gitlabRelease` | implemented |
+| `npm` | implemented |
+| `vendorManifest` | implemented |
+| `gitRef` | implemented |
 
 ## Why digests are free
 
@@ -46,16 +52,30 @@ blanked.
 ## Adding a tool
 
 Add an entry to [`src/registry.ts`](src/registry.ts) naming its resolver kind,
-its source, and an `asset` selector returning the upstream filename for a
-platform. Two conventions matter:
+its source, and — for tools with downloadable artifacts — an `asset` selector
+returning the upstream filename for a platform. Conventions that matter:
 
-- A selector returns `null` for a platform the tool deliberately does not target
-  (jq is darwin-only here).
-- `unsupportedPlatforms` declares targets upstream genuinely does not build.
-  This is declared rather than inferred on purpose: any *other* missing asset is
-  a hard error, so a stale asset pattern cannot hide behind a silent skip. That
-  strictness is what surfaced `buf` naming its linux arm64 build `aarch64` while
-  darwin and windows use `arm64`.
+- A selector returns `null` for a platform the tool deliberately does not
+  target (jq is darwin-only here; pi and aoe skip windows).
+- `emulatedPlatforms` declares targets upstream genuinely does not build,
+  served by the amd64 artifact under emulation. This is declared rather than
+  inferred on purpose: any *other* missing asset is a hard error, so a stale
+  asset pattern cannot hide behind a silent skip. That strictness is what
+  surfaced `buf` naming its linux arm64 build `aarch64` while darwin and
+  windows use `arm64`.
+- `tagPrefix` (githubRelease) resolves the newest release whose tag carries
+  the prefix instead of `releases/latest`, for repos that interleave several
+  tag trains (compound-engineering next to marketplace-*/cli-*).
+- `linuxMusl` (githubRelease) locks the distinct static-musl linux builds
+  under `-musl` platform keys next to the glibc ones (agent-browser; claude's
+  vendor manifest maps its musl platform ids onto the same keys).
+- `versionTransform` (githubTag) applies the tag-shape transform in the
+  registry so consumers read the locked version verbatim — e.g. stripping the
+  leading `v` for the npm-pinned OpenCode plugins.
+- npm entries record `dist.integrity` and the antigravity manifest its
+  `sha512` as published; both are informational only — chezmoi externals
+  verify sha256, so those entries stay version-only/sha256-null for
+  consumers.
 
 ## Verification
 

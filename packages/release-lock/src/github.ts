@@ -1,4 +1,4 @@
-import { ALL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
+import { ALL_PLATFORMS, MUSL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
 
 /**
@@ -29,7 +29,7 @@ export class ResolutionError extends Error {
   }
 }
 
-function authHeaders(token: string | undefined): Record<string, string> {
+export function authHeaders(token: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     accept: "application/vnd.github+json",
     "user-agent": "h82-release-lock",
@@ -65,6 +65,39 @@ export async function fetchLatestRelease(
 }
 
 /**
+ * The newest release whose tag carries `tagPrefix`, from one release-list
+ * call. KTD10: a repo that interleaves several tag trains
+ * (compound-engineering-* next to marketplace-*, cli-*) must filter, because
+ * `releases/latest` would eventually land on the wrong train.
+ */
+export async function fetchLatestReleaseByPrefix(
+  source: string,
+  tagPrefix: string,
+  token: string | undefined,
+): Promise<GitHubRelease> {
+  const response = await fetch(`https://api.github.com/repos/${source}/releases?per_page=100`, {
+    headers: authHeaders(token),
+  });
+  if (!response.ok) {
+    throw new ResolutionError(source, `releases returned HTTP ${response.status}`);
+  }
+  const releases = (await response.json()) as GitHubRelease[];
+  if (!Array.isArray(releases)) {
+    throw new ResolutionError(source, "releases response is not a list");
+  }
+  const release = releases.find(
+    (candidate) =>
+      typeof candidate.tag_name === "string" &&
+      candidate.tag_name.startsWith(tagPrefix) &&
+      Array.isArray(candidate.assets),
+  );
+  if (!release) {
+    throw new ResolutionError(source, `no release tag carries the prefix "${tagPrefix}"`);
+  }
+  return release;
+}
+
+/**
  * Resolve one tool to its locked entry.
  *
  * A selector returning null means the tool publishes nothing for that platform,
@@ -76,7 +109,9 @@ export async function resolveGitHubRelease(
   spec: ToolSpec,
   token: string | undefined,
 ): Promise<LockedTool> {
-  const release = await fetchLatestRelease(spec.source, token);
+  const release = spec.tagPrefix
+    ? await fetchLatestReleaseByPrefix(spec.source, spec.tagPrefix, token)
+    : await fetchLatestRelease(spec.source, token);
   const tag = release.tag_name;
 
   if (!spec.asset) {
@@ -86,8 +121,9 @@ export async function resolveGitHubRelease(
   const byName = new Map(release.assets.map((asset) => [asset.name, asset]));
   const artifacts: Partial<Record<PlatformKey, LockedArtifact>> = {};
   const emulated = new Set(spec.emulatedPlatforms ?? []);
+  const platforms = spec.linuxMusl ? [...ALL_PLATFORMS, ...MUSL_PLATFORMS] : ALL_PLATFORMS;
 
-  for (const platform of ALL_PLATFORMS) {
+  for (const platform of platforms) {
     const key = platformKey(platform);
     const viaEmulation = emulated.has(key);
     const target = viaEmulation ? { os: platform.os, arch: "amd64" as const } : platform;

@@ -1,6 +1,11 @@
 import { REGISTRY } from "./registry.js";
-import { resolveGitHubRelease, ResolutionError } from "./github.js";
-import type { LockedTool, ReleaseLock } from "./types.js";
+import { resolveGitHubRelease } from "./github.js";
+import { resolveGitHubTag } from "./github-tag.js";
+import { resolveGitLabRelease } from "./gitlab.js";
+import { resolveGitRef } from "./git-ref.js";
+import { resolveNpmPackage } from "./npm.js";
+import { resolveVendorManifest } from "./vendor-manifest.js";
+import type { LockedTool, ReleaseLock, ToolSpec } from "./types.js";
 
 /**
  * Resolve every registered tool and print the lock as JSON on stdout.
@@ -21,6 +26,23 @@ function sortedTools(tools: Record<string, LockedTool>): Record<string, LockedTo
   return Object.fromEntries(Object.entries(tools).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+function resolve(name: string, spec: ToolSpec, token: string | undefined): Promise<LockedTool> {
+  switch (spec.kind) {
+    case "githubRelease":
+      return resolveGitHubRelease(name, spec, token);
+    case "githubTag":
+      return resolveGitHubTag(name, spec, token);
+    case "gitlabRelease":
+      return resolveGitLabRelease(name, spec);
+    case "npm":
+      return resolveNpmPackage(name, spec);
+    case "vendorManifest":
+      return resolveVendorManifest(name, spec);
+    case "gitRef":
+      return resolveGitRef(name, spec);
+  }
+}
+
 export async function resolveAll(token: string | undefined): Promise<{
   lock: ReleaseLock;
   failures: string[];
@@ -32,10 +54,7 @@ export async function resolveAll(token: string | undefined): Promise<{
   const settled = await Promise.all(
     entries.map(async ([name, spec]) => {
       try {
-        if (spec.kind !== "githubRelease") {
-          throw new ResolutionError(spec.source, `resolver kind ${spec.kind} not implemented yet`);
-        }
-        return { name, tool: await resolveGitHubRelease(name, spec, token) };
+        return { name, tool: await resolve(name, spec, token) };
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         return { name, failure: detail };
