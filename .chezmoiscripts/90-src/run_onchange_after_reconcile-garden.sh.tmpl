@@ -122,9 +122,11 @@ if [ "$rc" -ne 0 ]; then
   exit 1
 fi
 
-# 3. Bootstrap: write the .git pointer, set upstreams, hand the default-branch
-#    worktree to aoe and enforce its group policy. Idempotent, and each command
-#    self-skips non-bare trees. aoe-session's group self-heal is a local
+# 3. Bootstrap: write the .git pointer, set upstreams, and session each tree in
+#    aoe per its shape (bare: the default-branch worktree on the plain-shell
+#    zsh agent; non-bare: aoe's default tool directly on the checkout) and
+#    enforce its group policy. Idempotent; setup-gitdir and setup-upstream
+#    self-skip non-bare trees. aoe-session's group self-heal is a local
 #    aoe-metadata operation with no network dependency; it rides along here.
 echo "reconcile-garden: garden cmd '*' setup-gitdir setup-upstream aoe-session"
 garden --chdir "$src" cmd '*' setup-gitdir setup-upstream aoe-session

@@ -1,0 +1,59 @@
+name: Refresh release lock
+
+# Re-resolves .chezmoidata/releases.json from upstream on a schedule.
+#
+# The resolver omits sources it could not reach and exits non-zero; `--out`
+# overlays the result onto the committed lock, so a failed source keeps its last
+# good entry instead of being blanked. The commit therefore happens even on a
+# partial failure, and the job still reports failure afterwards.
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-release-lock
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Resolve upstream releases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Resolve releases into the lock
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Commit the lock when it changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .chezmoidata/releases.json; then
+            echo "Lock unchanged — nothing to commit."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'chore(release-lock): refresh release lock' \
+              -- .chezmoidata/releases.json
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+
+      - name: Fail when any source could not be resolved
+        if: steps.resolve.outputs.exit_code != '0'
+        run: |
+          echo "::error::One or more sources failed to resolve; their previous lock entries were kept."
+          exit 1

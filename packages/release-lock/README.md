@@ -42,14 +42,14 @@ comparing it to the recorded digest.
 ## Usage
 
 ```sh
-cd packages/release-lock
-bun run src/cli.ts            # prints the resolved lock as JSON on stdout
+bun run packages/release-lock/src/cli.ts                          # print to stdout
+bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
 ```
 
 A source that fails to resolve is reported on stderr and omitted from the
-emitted lock, and the process exits non-zero. Callers merge the emission over
-the committed lock so a failed entry keeps its previous value rather than being
-blanked.
+resolution, and the process exits non-zero. `--out` overlays the resolution onto
+the file already at that path, so an omitted entry keeps its last good value
+rather than being blanked.
 
 ## Adding a tool
 
@@ -60,11 +60,12 @@ returning the upstream filename for a platform. Conventions that matter:
 - A selector returns `null` for a platform the tool deliberately does not
   target (jq is darwin-only here; pi and aoe skip windows).
 - `emulatedPlatforms` declares targets upstream genuinely does not build,
-  served by the amd64 artifact under emulation. This is declared rather than
-  inferred on purpose: any *other* missing asset is a hard error, so a stale
-  asset pattern cannot hide behind a silent skip. That strictness is what
-  surfaced `buf` naming its linux arm64 build `aarch64` while darwin and
-  windows use `arm64`.
+  served by the amd64 artifact under emulation and marked `emulated: true` in
+  the lock, so an `x86_64` URL under an `arm64` key is deliberate. This is
+  declared rather than inferred on purpose: any *other* missing asset is a
+  hard error, so a stale asset pattern cannot hide behind a silent skip. That
+  strictness is what surfaced `buf` naming its linux arm64 build `aarch64`
+  while darwin and windows use `arm64`.
 - `tagPrefix` (githubRelease) resolves the newest release whose tag carries
   the prefix instead of `releases/latest`, for repos that interleave several
   tag trains (compound-engineering next to marketplace-*/cli-*).
@@ -74,6 +75,9 @@ returning the upstream filename for a platform. Conventions that matter:
 - `versionTransform` (githubTag) applies the tag-shape transform in the
   registry so consumers read the locked version verbatim — e.g. stripping the
   leading `v` for the npm-pinned OpenCode plugins.
+- A tool whose binary is not a GitHub asset — `kubectl` from `dl.k8s.io`,
+  `helm` from `get.helm.sh` — takes only its tag from the release and carries
+  no `asset` selector, so the lock holds a version and no artifacts block.
 - npm entries record `dist.integrity` and the antigravity manifest its
   `sha512` as published; both are informational only — chezmoi externals
   verify sha256, so those entries stay version-only/sha256-null for
