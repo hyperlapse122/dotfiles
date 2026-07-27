@@ -2,23 +2,25 @@
 
 Resolves external tool releases into the static `.chezmoidata` release lock.
 
-This exists so a chezmoi source-state read performs **no network I/O**. Today
-every version, asset URL, and checksum is resolved at render time — partly
-through chezmoi's `gitHub*` builtins (HTTP-cached, but only for the 60 seconds
-GitHub's `Cache-Control` allows) and partly through `output "curl"` and
-`getRedirectedURL`, which are never cached and shell out on every render. Both
-fail with no network reachable, so an offline `chezmoi diff` is impossible.
+This exists so a chezmoi source-state read performs **no network I/O**.
+Versions, asset URLs, and checksums used to be resolved at render time —
+partly through chezmoi's `gitHub*` builtins (HTTP-cached, but only for the 60
+seconds GitHub's `Cache-Control` allows) and partly through `output "curl"`
+and `getRedirectedURL`, which were never cached and shelled out on every
+render. Both failed with no network reachable, so an offline `chezmoi diff`
+was impossible.
 
 The plan this package implements is
 [`docs/plans/2026-07-27-001-refactor-static-release-artifact-lock-plan.md`](../../docs/plans/2026-07-27-001-refactor-static-release-artifact-lock-plan.md).
 
 ## Status
 
-All six resolver kinds are implemented and the committed
+All six resolver kinds are implemented, the committed
 `.chezmoidata/releases.json` covers every render-time resolution source in the
-repo. Nothing in `chezmoi apply` consumes the lock yet — the shared read
-template and consumer migration are the later units of the plan — so this
-package currently runs standalone.
+repo, and the lock is now the sole version/URL/checksum source: every
+`.chezmoiexternals` file and every version-consuming script template reads it
+through `.chezmoitemplates/release-lock-ref.tmpl`. A source-state read performs
+no network I/O; re-run this package to refresh the lock.
 
 | Resolver kind | State |
 |---|---|
