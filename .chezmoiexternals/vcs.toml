@@ -38,7 +38,13 @@ executable = true
 
 {{- $gardenTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden") -}}
 {{- $gardenVersion := trimPrefix "v" $gardenTag -}}
-{{- $gardenArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
+{{- /* windows-arm64 borrows the amd64 build (lock marks it emulated), so the
+       archive-internal path composes from the SERVED arch, not the host's. */ -}}
+{{- $gardenPathArch := .chezmoi.arch -}}
+{{- if eq (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden" "field" "emulated" "platform" "auto" "optional" true)) "true" -}}
+{{-   $gardenPathArch = "amd64" -}}
+{{- end -}}
+{{- $gardenArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" $gardenPathArch)) -}}
 {{- $gardenOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
 {{- $gardenStem := (printf "garden-%s-%s-%s" $gardenVersion $gardenArch $gardenOperatingSystem) }}
 

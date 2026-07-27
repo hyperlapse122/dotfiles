@@ -5,7 +5,8 @@ artifact lock (.chezmoidata/releases.json, exposed to templates as .releases).
 Input (dict):
   ctx       required; root chezmoi context (carries .releases and .chezmoi)
   tool      required; lock key under .releases.tools
-  field     optional; "version" (default), "url", "sha256", "sha512", or "size"
+  field     optional; "version" (default), "url", "sha256", "sha512", "size",
+            or "emulated"
   platform  required for artifact fields; an explicit lock platform key
             (e.g. "linux-amd64", "windows-arm64") or "auto" to compose
             "<os>-<arch>" from ctx.chezmoi
@@ -20,7 +21,10 @@ Every lookup fails the render with the missing key named (R6): a consumer
 whose tool or platform the lock does not carry aborts, and no call site ever
 falls back to a live lookup. Version-only entries (no artifacts block) still
 resolve "version". An emulated entry returns its recorded (amd64) URL and
-sha256 verbatim — consumers never special-case emulation. Lockstep groups
+sha256 verbatim — url/digest consumers never special-case emulation. The one
+special-case is an archive-file external composing its archive-internal
+`path` from the platform: it reads field "emulated" (optional:true) and
+composes the path for the served amd64 build instead. Lockstep groups
 (glab binary + skills, compound-engineering's five consumers, pi's three)
 hold structurally because every consumer reads the same one lock key (R7).
 */ -}}
@@ -34,7 +38,7 @@ hold structurally because every consumer reads the same one lock key (R7).
 {{- $tool := .tool -}}
 {{- $field := "version" -}}
 {{- if hasKey . "field" -}}{{- $field = .field -}}{{- end -}}
-{{- if not (or (eq $field "version") (eq $field "url") (eq $field "sha256") (eq $field "sha512") (eq $field "size")) -}}
+{{- if not (or (eq $field "version") (eq $field "url") (eq $field "sha256") (eq $field "sha512") (eq $field "size") (eq $field "emulated")) -}}
 {{-   fail (printf "release-lock-ref.tmpl: unsupported field %q" $field) -}}
 {{- end -}}
 {{- $optional := false -}}
