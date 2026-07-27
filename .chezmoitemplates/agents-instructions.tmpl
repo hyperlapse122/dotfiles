@@ -4,13 +4,11 @@ This file is the common user-scoped instruction core, composed per agent harness
 
 ## Routing and mirrors
 
-Load the named operation skill before the operation: `playwright-cli` for browser/Playwright work. Do not add mandatory `ce-work`/`ce-debug` routing here; use the available workflow and the user's direction.
+Load the named operation skill before the operation: `playwright-cli` for browser/Playwright work. Do not add mandatory `ce-work`/`ce-debug` routing here; use the available workflow and the user's direction.{{ if eq .harness "opencode" }}
 
-{{ if eq .harness "opencode" -}}
-The `lfg` pipeline skill runs agent-invoked here: when the `/lfg <plan>` command directs you — it injects a prompt telling you to invoke the lfg skill, and there is no standalone skill file to defer to — invoke `lfg` directly rather than merely surfacing the command. Do not invoke it on your own initiative; the `/lfg` command is the trigger. MUST NOT hand-roll or mimic its plan-through-PR pipeline outside that skill.
-{{- else -}}
-The `lfg` pipeline skill is user-invoked only. MUST NOT invoke it or offer to mimic or hand-roll its plan-through-PR pipeline; when that full autonomous run is the right next step, surface the exact command for the user to run directly (e.g. `/lfg <feature description>`) rather than asking whether to replicate it.
-{{- end }}
+The `lfg` pipeline skill runs agent-invoked here: when the `/lfg <plan>` command directs you — it injects a prompt telling you to invoke the lfg skill, and there is no standalone skill file to defer to — invoke `lfg` directly rather than merely surfacing the command. Do not invoke it on your own initiative; the `/lfg` command is the trigger. MUST NOT hand-roll or mimic its plan-through-PR pipeline outside that skill.{{ end }}
+
+During `lfg` pipeline execution, MUST run fully autonomously — MUST NOT pause to ask the user questions or seek confirmations, and MUST drive every stage (plan, implement, review and fix, commit, push, PR, CI watch) to completion itself. Per the skill's purpose, MUST open the MR/PR itself rather than surfacing a command for the user, and merge it itself once CI is green and the change is mergeable — never stop at an unmerged PR. This autopilot overrides the general ask-before-ambiguous/irreversible-action guidance for the duration of the run; the secrets and CI-weakening guards are separate prohibitions, not confirmations, and still hold.
 
 Every directory containing `AGENTS.md` MUST have a sibling `CLAUDE.md` whose entire content is `@AGENTS.md`. MUST create it in the same turn when creating `AGENTS.md`, and MUST repair it whenever it is missing or contains anything else. Edit `AGENTS.md` only; never let the mirror drift.
 
