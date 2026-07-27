@@ -34,14 +34,14 @@ comparing it to the recorded digest.
 ## Usage
 
 ```sh
-cd packages/release-lock
-bun run src/cli.ts            # prints the resolved lock as JSON on stdout
+bun run packages/release-lock/src/cli.ts                          # print to stdout
+bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
 ```
 
 A source that fails to resolve is reported on stderr and omitted from the
-emitted lock, and the process exits non-zero. Callers merge the emission over
-the committed lock so a failed entry keeps its previous value rather than being
-blanked.
+resolution, and the process exits non-zero. `--out` overlays the resolution onto
+the file already at that path, so an omitted entry keeps its last good value
+rather than being blanked.
 
 ## Adding a tool
 
@@ -51,11 +51,19 @@ platform. Two conventions matter:
 
 - A selector returns `null` for a platform the tool deliberately does not target
   (jq is darwin-only here).
-- `unsupportedPlatforms` declares targets upstream genuinely does not build.
-  This is declared rather than inferred on purpose: any *other* missing asset is
-  a hard error, so a stale asset pattern cannot hide behind a silent skip. That
-  strictness is what surfaced `buf` naming its linux arm64 build `aarch64` while
-  darwin and windows use `arm64`.
+- `emulatedPlatforms` declares targets upstream genuinely does not build. Those
+  borrow the same OS's amd64 artifact and are marked `emulated: true` in the
+  lock, so an `x86_64` URL under an `arm64` key is deliberate — `garden`,
+  `minikube`, and `wasm-pack` have no windows arm64 build.
+
+Both are declared rather than inferred on purpose: any *other* missing asset is
+a hard error, so a stale asset pattern cannot hide behind a silent skip. That
+strictness is what surfaced `buf` naming its linux arm64 build `aarch64` while
+darwin and windows use `arm64`.
+
+A tool whose binary is not a GitHub asset — `kubectl` from `dl.k8s.io`, `helm`
+from `get.helm.sh` — takes only its tag from the release and carries no `asset`
+selector, so the lock holds a version and no artifacts block.
 
 ## Verification
 
