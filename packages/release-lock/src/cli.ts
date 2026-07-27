@@ -16,7 +16,7 @@ function githubToken(): string | undefined {
   return env["CHEZMOI_GITHUB_ACCESS_TOKEN"] ?? env["GITHUB_ACCESS_TOKEN"] ?? env["GITHUB_TOKEN"];
 }
 
-export function outPath(argv: readonly string[]): string | undefined {
+function outPath(argv: readonly string[]): string | undefined {
   const flag = argv.indexOf("--out");
   if (flag === -1) return undefined;
   const value = argv[flag + 1];

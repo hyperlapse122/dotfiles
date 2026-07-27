@@ -56,13 +56,8 @@ describe("RESOLVERS dispatch", () => {
 
   test("gitRef dispatches through its own wrapper, not another kind's resolver", () => {
     expect(typeof RESOLVERS.gitRef).toBe("function");
-    for (const other of [
-      resolveGitHubRelease,
-      resolveGitHubTag,
-      resolveGitLabRelease,
-      resolveNpmPackage,
-      resolveVendorManifest,
-    ]) {
+    for (const [kind, other] of Object.entries(RESOLVERS)) {
+      if (kind === "gitRef") continue;
       expect(RESOLVERS.gitRef).not.toBe(other);
     }
   });
