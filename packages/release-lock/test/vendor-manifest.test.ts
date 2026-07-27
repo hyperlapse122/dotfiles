@@ -21,7 +21,10 @@ function stubRoutes(routes: Record<string, () => Response>): void {
 
 function json(body: unknown): () => Response {
   return () =>
-    new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
 }
 
 function text(body: string): () => Response {
@@ -174,7 +177,9 @@ describe("resolveVendorManifest antigravity", () => {
     source: "https://agy.example.invalid/manifests",
   };
 
-  function agyRoutes(version: string | ((platform: string) => string)): Record<string, () => Response> {
+  function agyRoutes(
+    version: string | ((platform: string) => string),
+  ): Record<string, () => Response> {
     const routes: Record<string, () => Response> = {};
     for (const { os, arch } of ALL_PLATFORMS) {
       const platform = `${os}_${arch}`;

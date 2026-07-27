@@ -68,8 +68,10 @@ interface ClaudeManifest {
 
 async function resolveClaude(name: string, spec: ToolSpec): Promise<LockedTool> {
   const id = (await fetchText(spec.source, `${spec.source}/latest`)).trim();
-  const manifest = (await fetchJson(spec.source, `${spec.source}/${id}/manifest.json`)) as
-    ClaudeManifest;
+  const manifest = (await fetchJson(
+    spec.source,
+    `${spec.source}/${id}/manifest.json`,
+  )) as ClaudeManifest;
   if (typeof manifest.version !== "string" || typeof manifest.platforms !== "object") {
     throw new ResolutionError(spec.source, `${name}: manifest missing version or platforms`);
   }

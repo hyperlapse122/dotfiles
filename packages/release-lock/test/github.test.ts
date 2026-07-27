@@ -160,10 +160,10 @@ describe("resolveGitHubRelease", () => {
 describe("resolveGitHubRelease tagPrefix", () => {
   function stubReleaseList(tags: string[]): void {
     globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify(tags.map((tag_name) => ({ tag_name, assets: [] }))),
-        { status: 200, headers: { "content-type": "application/json" } },
-      )) as typeof globalThis.fetch;
+      new Response(JSON.stringify(tags.map((tag_name) => ({ tag_name, assets: [] }))), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof globalThis.fetch;
   }
 
   test("resolves the newest release whose tag carries the prefix, skipping other tag trains", async () => {

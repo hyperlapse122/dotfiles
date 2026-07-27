@@ -189,7 +189,8 @@ export const REGISTRY: Registry = {
     source: "anomalyco/opencode",
     // linux ships .tar.gz; darwin and windows ship .zip. Upstream also
     // publishes musl and -baseline variants the consumer does not select.
-    asset: ({ os, arch }) => `opencode-${os}-${x64Arch(arch)}${os === "linux" ? ".tar.gz" : ".zip"}`,
+    asset: ({ os, arch }) =>
+      `opencode-${os}-${x64Arch(arch)}${os === "linux" ? ".tar.gz" : ".zip"}`,
   },
 
   pi: {

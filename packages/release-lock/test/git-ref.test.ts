@@ -22,11 +22,7 @@ describe("resolveGitRef", () => {
 
   test("resolves the ref through the injected exec, version-only", async () => {
     const exec = async (args: readonly string[]): Promise<string> => {
-      expect(args).toEqual([
-        "ls-remote",
-        "https://github.com/owner/repo.git",
-        "refs/heads/main",
-      ]);
+      expect(args).toEqual(["ls-remote", "https://github.com/owner/repo.git", "refs/heads/main"]);
       return `${SHA}\trefs/heads/main\n`;
     };
 
