@@ -34,8 +34,13 @@ path = '{{ printf "sg%s" $executableExtension }}'
 {{- /* ---------- buf (+ its protoc plugins, zsh completion and man pages) ---------- */ -}}
 
 {{- $capitalizedOperatingSystemName := (replace "linux" "Linux" (replace "darwin" "Darwin" (replace "windows" "Windows" .chezmoi.os))) -}}
-{{- /* buf keeps arm64 as-is; only amd64 is renamed. NOT the same map as $rustArch. */ -}}
+{{- /* buf renames amd64 to x86_64 everywhere, and arm64 to aarch64 on LINUX ONLY —
+       darwin and windows keep `arm64`. Not the same map as $rustArch. Getting the
+       linux case wrong yields buf-Linux-arm64.tar.gz, which upstream never publishes. */ -}}
 {{- $bufArch := (replace "amd64" "x86_64" .chezmoi.arch) -}}
+{{- if and (eq .chezmoi.arch "arm64") (eq .chezmoi.os "linux") -}}
+  {{- $bufArch = "aarch64" -}}
+{{- end -}}
 {{- $bufTag := (gitHubLatestRelease "bufbuild/buf").TagName | toString -}}
 {{- $bufArchiveUrl := (gitHubReleaseAssetURL "bufbuild/buf" $bufTag (printf "buf-%s-%s%s" $capitalizedOperatingSystemName $bufArch $archiveExtension)) }}
 
