@@ -30,10 +30,11 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
      (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
      Homebrew first if needed).
 
-   The same hook then refuses to continue until `op` is authenticated **and** a
-   **GitHub API token** is present in the environment, so a fresh apply stops with
-   clear guidance here rather than stalling on a 1Password prompt or a GitHub rate
-   limit deep in the source-state read (see the two sections below).
+   The same hook then refuses to continue until `op` is authenticated, so a
+   fresh apply stops with clear guidance here rather than stalling on a
+   1Password prompt deep in the source-state read (see the two sections below).
+   A missing **GitHub API token** only prints an advisory — renders no longer
+   call the GitHub API.
 
 4. Renders every template and applies it to `$HOME`, then runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
@@ -117,30 +118,31 @@ installs the 1Password app and CLI but cannot yet resolve secrets. So:
 1. Run the one-liner above (installs 1Password, `op`, and mise).
 2. Open the **1Password desktop app**, sign in, then enable
    **Settings → Developer → Integrate with 1Password CLI**.
-3. Export a GitHub token so chezmoi does not hit GitHub's anonymous rate limit
-   while reading the source state (see [GitHub API token](#github-api-token-important)
-   below), then re-run to finish applying — all in the same shell:
+3. Re-run to finish applying. Exporting a GitHub token first is optional but
+   recommended — apply-time downloads still benefit from it (see
+   [GitHub API token](#github-api-token-important) below):
 
    ```sh
-   export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")
+   export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")  # optional
    chezmoi apply
    ```
 
-The apply completes once `op` can resolve secrets (`op whoami` succeeds) and a
-GitHub token is present in the environment.
+The apply completes once `op` can resolve secrets (`op whoami` succeeds).
 
 ## GitHub API token (important)
 
-Reading the source state fetches external repos (e.g. prezto) from GitHub, and
-provisioning pulls release assets — fonts and mise-managed tools — from it too.
-Anonymous, those calls share GitHub's 60-requests/hour-per-IP limit, so a fresh
-apply can fail partway with an HTTP 403. Right after `op` is authenticated,
-[`.install-prerequisites.sh`](.install-prerequisites.sh) therefore requires a
-GitHub token in the environment: it uses the first of `CHEZMOI_GITHUB_ACCESS_TOKEN`,
-`GITHUB_ACCESS_TOKEN`, or `GITHUB_TOKEN` (the variables chezmoi itself reads for
-GitHub API calls) and stops with guidance if none is set.
+Reading the source state performs no GitHub API calls — every tool version,
+URL, and checksum is pinned by the generated release lock
+([`.chezmoidata/releases.json`](.chezmoidata/releases.json)). Applying still
+downloads external repos and release assets (fonts, mise-managed tools) from
+GitHub, and anonymous calls share GitHub's 60-requests/hour-per-IP limit, so a
+token remains useful on a fresh apply. Right after `op` is authenticated,
+[`.install-prerequisites.sh`](.install-prerequisites.sh) prints an advisory
+when none of `CHEZMOI_GITHUB_ACCESS_TOKEN`, `GITHUB_ACCESS_TOKEN`, or
+`GITHUB_TOKEN` (the variables chezmoi itself reads) is set — it no longer
+stops the bootstrap.
 
-Inject a token from 1Password, then re-run in the same shell:
+To set one, inject the PAT from 1Password in the same shell:
 
 ```sh
 export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")
