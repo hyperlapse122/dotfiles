@@ -213,22 +213,24 @@ function Write-FactsCache {
     }
 }
 
-# chezmoi calls the GitHub API while reading the source state (fetching the
-# .chezmoiexternals repos) and again during provisioning (release assets). It
-# authenticates with the first of these tokens it finds — CHEZMOI_GITHUB_ACCESS_TOKEN,
-# then GITHUB_ACCESS_TOKEN, then GITHUB_TOKEN. With none set, those calls fall back
-# to GitHub's anonymous 60-requests/hour-per-IP limit and a fresh apply can fail
-# mid-read with an opaque HTTP 403, so require a token up front.
+# The source-state read no longer calls the GitHub API: every tool version,
+# URL, and digest is pinned by the release lock (.chezmoidata/releases.json),
+# so templates render with zero network I/O. Apply-time downloads (external
+# repos and release assets) still hit GitHub, and a token lifts the anonymous
+# 60-requests/hour-per-IP limit should anything reach the API — useful, but it
+# must no longer abort the bootstrap. chezmoi authenticates with the first of
+# these it finds: CHEZMOI_GITHUB_ACCESS_TOKEN, then GITHUB_ACCESS_TOKEN, then
+# GITHUB_TOKEN.
 function Confirm-GitHubToken {
     if ($env:CHEZMOI_GITHUB_ACCESS_TOKEN -or $env:GITHUB_ACCESS_TOKEN -or $env:GITHUB_TOKEN) {
         return $true
     }
     Write-Stderr 'install-prerequisites.ps1: no GitHub API token in the environment.'
-    Write-Stderr 'chezmoi is about to read the source state, which calls the GitHub API;'
-    Write-Stderr 'without a token it shares the anonymous 60-request/hour limit and a fresh'
-    Write-Stderr 'apply can fail. Inject a PAT from 1Password, then re-run in the same shell:'
+    Write-Stderr 'Renders no longer call the GitHub API (the release lock pins every tool),'
+    Write-Stderr 'so this is advisory only: apply-time downloads still benefit from a token.'
+    Write-Stderr 'To set one, inject the PAT from 1Password and re-run in the same shell:'
     Write-Stderr '  $env:GITHUB_TOKEN = op read "op://Private/GitHub/PAT"'
-    return $false
+    return $true
 }
 
 # Install a winget package by its exact ID if it is not already present. Mirrors
@@ -309,9 +311,9 @@ Install-Prerequisites
 # (interactive), or fail fast with guidance (non-interactive / headless).
 if (-not (Confirm-OpAuthenticated)) { exit 1 }
 
-# With `op` authenticated, chezmoi's very next step is to read the source state
-# over the GitHub API. Require a token now — placed after op auth so the `op read`
-# in the guidance actually works — instead of letting the read hit a rate limit.
-if (-not (Confirm-GitHubToken)) { exit 1 }
+# The source-state read is network-free now (the release lock pins every tool),
+# so a missing GitHub token is advisory only. Kept after op auth so the
+# `op read` in the guidance actually works.
+[void](Confirm-GitHubToken)
 
 exit 0

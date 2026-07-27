@@ -82,25 +82,17 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kimi"
        ("Browser automation CLI for AI agents"), tracked at the newest release like
        claude/codex. The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
        the linux fork split glibc vs static musl, windows carrying .exe) and NO checksums
-       sidecar; the tag and each asset's GitHub-computed sha256 digest are resolved at
-       refresh time by packages/release-lock (distinct musl lock keys per KTD11), and the
-       download URL is built as a plain string from that same locked tag (KTD8
-       constructed-URL pattern), so the render performs no network I/O. ---------- */ -}}
-
-{{- $abTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser") -}}
-
-{{- /* windows -> win32, else identity; amd64 -> x64, arm64 unchanged; -musl infix only on a
-     musl linux host (the shared $isMuslLinux probed once at the top of this file). */ -}}
-{{- $abOs := (replace "windows" "win32" .chezmoi.os) -}}
-{{- $abArch := (replace "amd64" "x64" .chezmoi.arch) -}}
-{{- $abMuslInfix := "" -}}
-{{- if $isMuslLinux -}}{{- $abMuslInfix = "-musl" -}}{{- end -}}
-{{- $abAsset := (printf "agent-browser-%s%s-%s%s" $abOs $abMuslInfix $abArch $executableExtension) }}
+       sidecar; the tag, per-platform download URL, and each asset's GitHub-computed
+       sha256 digest are resolved at refresh time by packages/release-lock (distinct musl
+       lock keys per KTD11), so the render only reads the locked values and performs no
+       network I/O. windows-arm64 is served the x64 binary via the lock's emulated entry,
+       so the URL MUST come from the lock — composing the asset name from the host arch
+       would name a build upstream does not publish. ---------- */}}
 
 [agent-browser]
 type = "file"
 targetPath = '{{ printf ".local/bin/agent-browser%s" $executableExtension }}'
-url = '{{ printf "https://github.com/vercel-labs/agent-browser/releases/download/%s/%s" $abTag $abAsset }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
 executable = true
 
 [agent-browser.checksum]

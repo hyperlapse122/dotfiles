@@ -84,10 +84,17 @@ async function resolveClaude(name: string, spec: ToolSpec): Promise<LockedTool> 
     }
   }
   // Iterate the fixed mapping, not the manifest, so an upstream key reorder
-  // never churns the lock.
+  // never churns the lock. A known platform the manifest drops is a hard
+  // error, never a silent skip: a partial artifacts block would blank that
+  // platform's entry in the merged lock and break every render on it.
   for (const [platformId, key] of Object.entries(CLAUDE_PLATFORMS)) {
     const entry = manifest.platforms[platformId];
-    if (!entry) continue;
+    if (!entry) {
+      throw new ResolutionError(
+        spec.source,
+        `${name}: manifest missing known platform id "${platformId}"`,
+      );
+    }
     artifacts[key] = {
       url: `${spec.source}/${id}/${platformId}/${entry.binary}`,
       sha256: normalizeHex(entry.checksum, 64),
