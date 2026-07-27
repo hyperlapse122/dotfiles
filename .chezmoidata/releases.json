@@ -247,31 +247,31 @@
     "rust-analyzer": {
       "kind": "githubRelease",
       "source": "rust-lang/rust-analyzer",
-      "version": "2026-07-20",
+      "version": "2026-07-27",
       "artifacts": {
         "linux-amd64": {
-          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-20/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-          "sha256": "d12f8e6df9b6d84373e80cddb67d183587a52323878e87f4fb6df91814c23d80"
+          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+          "sha256": "ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115"
         },
         "linux-arm64": {
-          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-20/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-          "sha256": "ff03f51db39f67ce5694fed091ca38f936195e5079d26f6c9df64596b5c9e640"
+          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+          "sha256": "4cb0ca4675608e8d73a7f4e43ef733d1f69600845d504c35d2f9d9f240bd3486"
         },
         "darwin-amd64": {
-          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-20/rust-analyzer-x86_64-apple-darwin.gz",
-          "sha256": "2af82b65570becf6aeebce5a891a4724074c0857803dfa46f891487e06218c96"
+          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-apple-darwin.gz",
+          "sha256": "9d1a60991ead6c27baa9d265fc8fd03bba9c39cf0ec2aaf389e37e6155af7cbb"
         },
         "darwin-arm64": {
-          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-20/rust-analyzer-aarch64-apple-darwin.gz",
-          "sha256": "f0db74fed7e356c987a319bde43937e36d3248fc97b390c25abf972e2076b022"
+          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-apple-darwin.gz",
+          "sha256": "102215ae7e7a41c0dda8f24e910a01e757f58091204863e5e3e6696b743f7e97"
         },
         "windows-amd64": {
-          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-20/rust-analyzer-x86_64-pc-windows-msvc.zip",
-          "sha256": "b90bb295aeeaebd72d58d3f67bcba430a2aedbc18689434203186a767b3edc14"
+          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-pc-windows-msvc.zip",
+          "sha256": "7abdf50734026de963b3b25eba7714be8acf43a15ffb7f4f9d8b041e796ce2c9"
         },
         "windows-arm64": {
-          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-20/rust-analyzer-aarch64-pc-windows-msvc.zip",
-          "sha256": "25180c2b54fbfaf356747d834c42a3b5858f2f255520b003070761a616d24728"
+          "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-pc-windows-msvc.zip",
+          "sha256": "ba6da9a8443548e7d6953d4736248019d2f92fa883dad72415a572bbbe4e0e7b"
         }
       }
     },
