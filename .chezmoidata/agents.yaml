@@ -274,6 +274,7 @@ agents:
     settings:
       config.toml:
         default_model: 'kimi-code/k3-256k'
+        default_permission_mode: yolo
         thinking:
           enabled: true
           effort: high
