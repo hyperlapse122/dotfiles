@@ -119,17 +119,11 @@ executable = true
 {{- if eq .chezmoi.os "darwin" }}
 {{- $jqTag := (gitHubLatestRelease "jqlang/jq").TagName | toString -}}
 {{- $jqAsset := printf "jq-macos-%s" .chezmoi.arch -}}
-{{- $jqSums := output "curl" "-fsSL" (gitHubReleaseAssetURL "jqlang/jq" $jqTag "sha256sum.txt") | toString -}}
-{{- $jqSha := "" -}}
-{{- range splitList "\n" $jqSums -}}
-  {{- $fields := regexSplit "\\s+" (trim .) -1 -}}
-  {{- if and (eq (len $fields) 2) (eq (index $fields 1) $jqAsset) -}}
-    {{- $jqSha = index $fields 0 | lower -}}
-  {{- end -}}
-{{- end -}}
-{{- if not (regexMatch "^[0-9a-f]{64}$" $jqSha) -}}
-  {{- fail (printf "jq: invalid or missing sha256 for %s" $jqAsset) -}}
-{{- end }}
+{{- /* The per-asset sha256 (upstream publishes one sha256sum.txt sidecar) is
+       resolved at refresh time by packages/release-lock; the render reads the
+       locked digest. The tag and asset URL still come from the gitHub*
+       builtins (migrated separately). */ -}}
+{{- $jqSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "jq" "field" "sha256" "platform" "auto") }}
 [jq]
 type = "file"
 targetPath = '.local/bin/jq'

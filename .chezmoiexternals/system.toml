@@ -60,9 +60,10 @@ refreshPeriod = "8760h"
 {{- /* ---------- winbox (MikroTik RouterOS GUI; vendor version endpoint, not GitHub) ---------- */ -}}
 {{- /*
   WinBox is not published on GitHub, so — like the claude/codex externals in
-  ai-agents.toml — the version is resolved at render time from MikroTik's
-  LATEST.4 endpoint (returns the bare current version, e.g. "4.3") rather than
-  pinned. Every platform lands the app in the SAME ~/.local/share/winbox folder:
+  ai-agents.toml — the version comes from MikroTik's LATEST.4 endpoint (returns
+  the bare current version, e.g. "4.3"), resolved at refresh time into the
+  release lock by packages/release-lock rather than pinned. Every platform lands
+  the app in the SAME ~/.local/share/winbox folder:
   the linux/windows zips carry the binary + assets/img/winbox.png and are
   extracted whole (type=archive preserves the executable bit — verified), so the
   GUI keeps its bundled icon; the linux launcher is rendered separately as
@@ -84,10 +85,9 @@ refreshPeriod = "8760h"
 
 {{- $winboxFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- if not $winboxFacts.container -}}
-{{- $winboxVersion := output "curl" "-fsSL" "https://download.mikrotik.com/routeros/winbox/LATEST.4" | toString | trim -}}
-{{- if not (regexMatch "^[0-9]+\\.[0-9]+" $winboxVersion) -}}
-  {{- fail (printf "winbox: unexpected version %q from the LATEST.4 endpoint" $winboxVersion) -}}
-{{- end -}}
+{{- /* The version is resolved at refresh time by packages/release-lock from
+       MikroTik's LATEST.4 endpoint; the render reads the locked version. */ -}}
+{{- $winboxVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "winbox") -}}
 {{- $winboxBase := printf "https://download.mikrotik.com/routeros/winbox/%s" $winboxVersion -}}
 
 {{- if and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64") }}
