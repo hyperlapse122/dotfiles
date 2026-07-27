@@ -272,10 +272,10 @@ agents:
     # managed copy, preserving all unrelated plugins.
     settings:
       config.toml:
-        default_model: 'kimi-code/k3'
+        default_model: 'kimi-code/k3-256k'
         thinking:
           enabled: true
-          effort: max
+          effort: high
       tui.toml:
         upgrade:
           auto_install: false
