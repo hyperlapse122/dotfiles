@@ -618,8 +618,8 @@
       "pi-subagents": {
         "kind": "npm",
         "source": "pi-subagents",
-        "version": "0.37.0",
-        "integrity": "sha512-YDTBqjTVmcdbzXBMgda+EOUeJC5TTITEVn6WelKjHyhtuqL3QTjMuu7BVJlQuwi8p4RQSQrA3JWhGckO3rylKw=="
+        "version": "0.37.1",
+        "integrity": "sha512-jG26HYlsKj667b3sVBN2n+ud899HKd3T61NrfXGP7/Rv1POzIkhpgsaFENZoU0ZLFsRyktNws5yDQxxyJcvxZg=="
       },
       "playwright-cli": {
         "kind": "githubRelease",
