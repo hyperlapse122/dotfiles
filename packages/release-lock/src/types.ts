@@ -1,5 +1,13 @@
 import type { Platform, PlatformKey } from "./platforms.js";
 
+/** A resolution failure that names its source, shared by every resolver kind. */
+export class ResolutionError extends Error {
+  constructor(source: string, detail: string) {
+    super(`${source}: ${detail}`);
+    this.name = "ResolutionError";
+  }
+}
+
 /** One downloadable artifact, fully resolved. */
 export interface LockedArtifact {
   readonly url: string;

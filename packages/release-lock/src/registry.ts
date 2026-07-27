@@ -59,7 +59,7 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => {
       switch (os) {
         case "linux":
-          return `marksman-linux-${arch === "amd64" ? "x64" : arch}`;
+          return `marksman-linux-${x64Arch(arch)}`;
         case "darwin":
           return "marksman-macos";
         case "windows":

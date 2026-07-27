@@ -22,27 +22,29 @@ export { ResolutionError };
 
 const HEADERS = { "user-agent": "h82-release-lock" } as const;
 
-async function fetchJson(source: string, url: string): Promise<unknown> {
+async function fetchOrThrow(source: string, url: string): Promise<Response> {
   const response = await fetch(url, { headers: HEADERS });
   if (!response.ok) {
     throw new ResolutionError(source, `${url} returned HTTP ${response.status}`);
   }
-  return response.json();
+  return response;
+}
+
+async function fetchJson(source: string, url: string): Promise<unknown> {
+  return (await fetchOrThrow(source, url)).json();
 }
 
 async function fetchText(source: string, url: string): Promise<string> {
-  const response = await fetch(url, { headers: HEADERS });
-  if (!response.ok) {
-    throw new ResolutionError(source, `${url} returned HTTP ${response.status}`);
-  }
-  return response.text();
+  return (await fetchOrThrow(source, url)).text();
 }
 
+const HEX: Readonly<Record<64 | 128, RegExp>> = { 64: /^[0-9a-f]{64}$/, 128: /^[0-9a-f]{128}$/ };
+
 /** Lowercase hex of the requested length, or null rather than a bad digest. */
-function normalizeHex(digest: unknown, length: number): string | null {
+function normalizeHex(digest: unknown, length: 64 | 128): string | null {
   if (typeof digest !== "string") return null;
   const hex = digest.toLowerCase();
-  return new RegExp(`^[0-9a-f]{${length}}$`).test(hex) ? hex : null;
+  return HEX[length].test(hex) ? hex : null;
 }
 
 /** Manifest platform id -> lock key, in deterministic iteration order. */
@@ -106,12 +108,19 @@ async function resolveAntigravity(name: string, spec: ToolSpec): Promise<LockedT
   const artifacts: Partial<Record<PlatformKey, LockedArtifact>> = {};
   let version: string | undefined;
 
-  for (const platform of ALL_PLATFORMS) {
+  // Fetch all platforms concurrently, then validate in ALL_PLATFORMS order so
+  // the error that surfaces is identical to sequential resolution.
+  const settled = await Promise.allSettled(
+    ALL_PLATFORMS.map((platform) =>
+      fetchJson(spec.source, `${spec.source}/${platform.os}_${platform.arch}.json`),
+    ),
+  );
+
+  for (const [index, platform] of ALL_PLATFORMS.entries()) {
+    const result = settled[index]!;
+    if (result.status === "rejected") throw result.reason;
     const platformId = `${platform.os}_${platform.arch}`;
-    const manifest = (await fetchJson(
-      spec.source,
-      `${spec.source}/${platformId}.json`,
-    )) as AntigravityManifest;
+    const manifest = result.value as AntigravityManifest;
     if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {
       throw new ResolutionError(spec.source, `${name}: ${platformId} manifest missing fields`);
     }

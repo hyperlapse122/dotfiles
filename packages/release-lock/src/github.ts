@@ -1,5 +1,8 @@
 import { ALL_PLATFORMS, MUSL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
+import { ResolutionError } from "./types.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
+
+export { ResolutionError };
 
 /**
  * GitHub release resolution.
@@ -22,13 +25,6 @@ interface GitHubRelease {
   readonly assets: readonly GitHubAsset[];
 }
 
-export class ResolutionError extends Error {
-  constructor(source: string, detail: string) {
-    super(`${source}: ${detail}`);
-    this.name = "ResolutionError";
-  }
-}
-
 export function authHeaders(token: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     accept: "application/vnd.github+json",
@@ -47,17 +43,31 @@ export function normalizeDigest(digest: string | null | undefined): string | nul
   return /^[0-9a-f]{64}$/.test(hex) ? hex : null;
 }
 
+async function fetchReleaseJson(
+  source: string,
+  path: string,
+  label: string,
+  token: string | undefined,
+): Promise<unknown> {
+  const response = await fetch(`https://api.github.com/repos/${source}/${path}`, {
+    headers: authHeaders(token),
+  });
+  if (!response.ok) {
+    throw new ResolutionError(source, `${label} returned HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function fetchLatestRelease(
   source: string,
   token: string | undefined,
 ): Promise<GitHubRelease> {
-  const response = await fetch(`https://api.github.com/repos/${source}/releases/latest`, {
-    headers: authHeaders(token),
-  });
-  if (!response.ok) {
-    throw new ResolutionError(source, `releases/latest returned HTTP ${response.status}`);
-  }
-  const release = (await response.json()) as GitHubRelease;
+  const release = (await fetchReleaseJson(
+    source,
+    "releases/latest",
+    "releases/latest",
+    token,
+  )) as GitHubRelease;
   if (typeof release.tag_name !== "string" || !Array.isArray(release.assets)) {
     throw new ResolutionError(source, "releases/latest response missing tag_name or assets");
   }
@@ -75,13 +85,12 @@ export async function fetchLatestReleaseByPrefix(
   tagPrefix: string,
   token: string | undefined,
 ): Promise<GitHubRelease> {
-  const response = await fetch(`https://api.github.com/repos/${source}/releases?per_page=100`, {
-    headers: authHeaders(token),
-  });
-  if (!response.ok) {
-    throw new ResolutionError(source, `releases returned HTTP ${response.status}`);
-  }
-  const releases = (await response.json()) as GitHubRelease[];
+  const releases = (await fetchReleaseJson(
+    source,
+    "releases?per_page=100",
+    "releases",
+    token,
+  )) as GitHubRelease[];
   if (!Array.isArray(releases)) {
     throw new ResolutionError(source, "releases response is not a list");
   }

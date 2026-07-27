@@ -47,7 +47,8 @@ describe("resolveNpmPackage", () => {
   test("a 404 fails with the source named", async () => {
     stubRegistry("not found", 404);
 
-    await expect(resolveNpmPackage("tool", SPEC)).rejects.toBeInstanceOf(ResolutionError);
-    await expect(resolveNpmPackage("tool", SPEC)).rejects.toThrow(/@scope\/tool/);
+    const error = await resolveNpmPackage("tool", SPEC).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/@scope\/tool/);
   });
 });

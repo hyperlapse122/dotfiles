@@ -40,7 +40,8 @@ describe("resolveGitLabRelease", () => {
   test("a non-200 response fails with the source named", async () => {
     stubRelease("nope", 500);
 
-    await expect(resolveGitLabRelease("glab", SPEC)).rejects.toBeInstanceOf(ResolutionError);
-    await expect(resolveGitLabRelease("glab", SPEC)).rejects.toThrow(/34675721/);
+    const error = await resolveGitLabRelease("glab", SPEC).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/34675721/);
   });
 });

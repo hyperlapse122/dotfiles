@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
+import { ALL_PLATFORMS } from "../src/platforms.js";
 import { resolveVendorManifest, ResolutionError } from "../src/vendor-manifest.js";
 import type { ToolSpec } from "../src/types.js";
 
@@ -94,10 +95,9 @@ describe("resolveVendorManifest claude", () => {
       ),
     });
 
-    await expect(resolveVendorManifest("claude", spec)).rejects.toBeInstanceOf(ResolutionError);
-    await expect(resolveVendorManifest("claude", spec)).rejects.toThrow(
-      /downloads\.example\.invalid/,
-    );
+    const error = await resolveVendorManifest("claude", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/downloads\.example\.invalid/);
   });
 
   test("a failed latest endpoint fails with the source named", async () => {
@@ -118,15 +118,13 @@ describe("resolveVendorManifest antigravity", () => {
 
   function agyRoutes(version: string | ((platform: string) => string)): Record<string, () => Response> {
     const routes: Record<string, () => Response> = {};
-    for (const os of ["linux", "darwin", "windows"]) {
-      for (const arch of ["amd64", "arm64"]) {
-        const platform = `${os}_${arch}`;
-        routes[`https://agy.example.invalid/manifests/${platform}.json`] = json({
-          version: typeof version === "function" ? version(platform) : version,
-          url: `https://agy.example.invalid/download/${platform}`,
-          sha512: SHA512,
-        });
-      }
+    for (const { os, arch } of ALL_PLATFORMS) {
+      const platform = `${os}_${arch}`;
+      routes[`https://agy.example.invalid/manifests/${platform}.json`] = json({
+        version: typeof version === "function" ? version(platform) : version,
+        url: `https://agy.example.invalid/download/${platform}`,
+        sha512: SHA512,
+      });
     }
     return routes;
   }
@@ -148,8 +146,9 @@ describe("resolveVendorManifest antigravity", () => {
   test("disagreeing per-platform versions are a hard error", async () => {
     stubRoutes(agyRoutes((platform) => (platform === "windows_arm64" ? "9.9.9" : "1.1.7")));
 
-    await expect(resolveVendorManifest("agy", spec)).rejects.toBeInstanceOf(ResolutionError);
-    await expect(resolveVendorManifest("agy", spec)).rejects.toThrow(/agy\.example\.invalid/);
+    const error = await resolveVendorManifest("agy", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/agy\.example\.invalid/);
   });
 
   test("a missing platform manifest fails with the source named", async () => {
@@ -180,9 +179,8 @@ describe("resolveVendorManifest winbox", () => {
       "https://download.example.invalid/routeros/winbox/LATEST.4": text("<html>oops</html>"),
     });
 
-    await expect(resolveVendorManifest("winbox", spec)).rejects.toBeInstanceOf(ResolutionError);
-    await expect(resolveVendorManifest("winbox", spec)).rejects.toThrow(
-      /download\.example\.invalid/,
-    );
+    const error = await resolveVendorManifest("winbox", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/download\.example\.invalid/);
   });
 });

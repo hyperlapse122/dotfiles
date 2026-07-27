@@ -55,9 +55,8 @@ describe("resolveGitHubTag", () => {
     globalThis.fetch = (async () =>
       new Response("nope", { status: 404 })) as typeof globalThis.fetch;
 
-    await expect(resolveGitHubTag("tool", spec(), undefined)).rejects.toBeInstanceOf(
-      ResolutionError,
-    );
-    await expect(resolveGitHubTag("tool", spec(), undefined)).rejects.toThrow(/owner\/repo/);
+    const error = await resolveGitHubTag("tool", spec(), undefined).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/owner\/repo/);
   });
 });
