@@ -1,7 +1,6 @@
 {{ if ne .chezmoi.os "windows" -}}
 
-{{- $claudeCodeBaseUrl := "https://downloads.claude.ai/claude-code-releases" -}}
-{{- $latestReleaseId := output "curl" "-fsSL" (printf "%s/latest" $claudeCodeBaseUrl) | toString -}}
+{{- $latestReleaseId := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "claude")) -}}
 
 #!/usr/bin/env bash
 # .chezmoiscripts/00-tools/run_onchange_after_claude.sh.tmpl

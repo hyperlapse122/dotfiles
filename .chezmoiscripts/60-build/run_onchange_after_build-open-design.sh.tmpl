@@ -1,5 +1,5 @@
 {{ if eq .chezmoi.os "linux" -}}
-{{ $tag := (gitHubLatestRelease "nexu-io/open-design").TagName | toString -}}
+{{ $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "open-design")) -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 # Provision the latest Open Design release into execution-only user state.

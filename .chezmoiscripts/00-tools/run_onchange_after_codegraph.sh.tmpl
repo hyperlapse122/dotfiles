@@ -1,6 +1,6 @@
 {{ if ne .chezmoi.os "windows" -}}
 
-{{- $tag := (gitHubLatestRelease "colbymchenry/codegraph").TagName | toString -}}
+{{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph")) -}}
 
 #!/usr/bin/env bash
 # .chezmoiscripts/00-tools/run_onchange_after_codegraph.sh.tmpl
