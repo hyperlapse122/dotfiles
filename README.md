@@ -239,7 +239,9 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   pi` on demand to write each harness's private native credential file. Build
   failures preserve
   the last executable and retry after an input change or `chezmoi apply
-  --force`. See [`packages/README.md`](packages/README.md).
+  --force`. `release-lock/` is a standalone resolver that turns external tool
+  releases into the static `.chezmoidata` release lock; it is not wired into
+  apply yet. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
   template (MCP servers) and any locally-authored personal skill under
   `dot_agents/skills/<name>/` (e.g. `daily-report`), deployed to

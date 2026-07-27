@@ -77,6 +77,15 @@
         "vite-plus": "catalog:",
       },
     },
+    "release-lock": {
+      "name": "@h82/release-lock",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "24.13.2",
+        "typescript": "7.0.2",
+        "vite-plus": "catalog:",
+      },
+    },
   },
   "overrides": {
     "vite": "catalog:",
@@ -107,6 +116,8 @@
     "@h82/opencode-playwright-cli-session-injection": ["@h82/opencode-playwright-cli-session-injection@workspace:opencode-playwright-cli-session-injection"],
 
     "@h82/opencode-scratch-guard": ["@h82/opencode-scratch-guard@workspace:opencode-scratch-guard"],
+
+    "@h82/release-lock": ["@h82/release-lock@workspace:release-lock"],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 
