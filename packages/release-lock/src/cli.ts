@@ -48,7 +48,7 @@ export async function resolveAll(token: string | undefined): Promise<{
     else failures.push(result.failure);
   }
 
-  return { lock: { tools: sortedTools(tools) }, failures };
+  return { lock: { releases: { tools: sortedTools(tools) } }, failures };
 }
 
 const { lock, failures } = await resolveAll(githubToken());

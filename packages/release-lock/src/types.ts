@@ -20,7 +20,14 @@ export interface LockedTool {
 }
 
 export interface ReleaseLock {
-  readonly tools: Readonly<Record<string, LockedTool>>;
+  /**
+   * Nested under `releases` because chezmoi merges every `.chezmoidata` file's
+   * contents at the top level — a bare `tools` key would land in template data
+   * as the collision-prone `.tools` instead of `.releases.tools`.
+   */
+  readonly releases: {
+    readonly tools: Readonly<Record<string, LockedTool>>;
+  };
 }
 
 export type ResolverKind =
