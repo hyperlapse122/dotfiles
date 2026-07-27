@@ -1,4 +1,5 @@
 {{ if ne .chezmoi.os "windows" -}}
+{{ $ctx := . -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/70-agents/run_onchange_after_update-pi-extensions.sh.tmpl
 #
@@ -15,27 +16,23 @@
 # `pi install` behind a snapshot/chmod/restore dance; `pi update --extensions`
 # makes all of that unnecessary.
 #
-# ONCHANGE TRIGGER — resolved versions/references, NOT the static list. Each
-# declared package in .agents.pi.settings.packages is resolved to its latest
-# version (npm: the registry /latest endpoint via curl — the same resolution
-# opencode-plugins-json.tmpl uses) or reference (git: the default-branch HEAD
-# via `git ls-remote` — the same resolution the `improve` skill external uses)
-# and baked into the comment block below. A new upstream release changes one of
-# those lines, which changes this script's rendered hash, which re-runs the
-# script so `pi update --extensions` fetches the new version. This is what
-# actually advances the UNPINNED packages (npm: and git: both track latest): the
-# former trigger — the static PACKAGES array — only re-ran when the LIST
-# changed, so versions went stale between edits. The resolve-and-bake pattern
-# matches compound-engineering-ref.tmpl: a
-# render-time resolution failure aborts the apply loudly rather than silently
-# degrading — the repo is already network-dependent at render (every external
-# and opencode.json resolve upstream state the same way), so this adds no new
-# failure mode. pi reads the package list straight from settings.json; the lines
-# below are the trigger ONLY, never passed to the command.
+# ONCHANGE TRIGGER — lock-pinned versions/references, NOT the static list.
+# Each declared package in .agents.pi.settings.packages is read from the static
+# release artifact lock (.chezmoidata/releases.json, exposed as .releases) via
+# release-lock-ref.tmpl — npm entries are keyed by package name, gitRef entries
+# are matched by source repo — and baked into the comment block below. Bumping
+# a pin in the lock changes one of those lines, which changes this script's
+# rendered hash, which re-runs the script so `pi update --extensions` fetches
+# the new version. This is what advances the PINNED packages: the former
+# trigger — the static PACKAGES array — only re-ran when the LIST changed, so
+# versions went stale between edits. release-lock-ref.tmpl is fail-closed: a
+# package with no lock entry aborts the render loudly, and no live resolution
+# fallback exists. pi reads the package list straight from settings.json; the
+# lines below are the trigger ONLY, never passed to the command.
 #
-# Packages are UNPINNED by design (npm: and git: both track latest) — the same
-# unsettled trade-off the dotagents remote skills make by tracking their newest
-# upstream release: a bad upstream publish reaches the host on the next update.
+# Packages are PINNED by the release lock: versions move only when
+# packages/release-lock regenerates .chezmoidata/releases.json, and this render
+# performs no network I/O.
 #
 # Soft-skip: a missing `pi` binary or a missing settings.json exits 0 after a
 # diagnostic. NOTE the standard onchange trade-off: chezmoi records that clean
@@ -89,21 +86,22 @@ else
   skip
 fi
 
-# Resolved latest versions/references (render-time) — the onchange trigger.
-# Generated from .agents.pi.settings.packages; pi reads the list from
-# settings.json, NOT from here. See the header for the resolve-and-bake rationale.
+# Lock-pinned versions/references (render-time) — the onchange trigger.
+# Generated from .agents.pi.settings.packages via release-lock-ref.tmpl; pi
+# reads the list from settings.json, NOT from here. See the header for the
+# lock-sourced trigger rationale.
 {{ range .agents.pi.settings.packages }}
 {{-   if hasPrefix "npm:" . }}
 {{-     $pkg := trimPrefix "npm:" . -}}
-{{-     $obj := output "curl" "-fsSL" (printf "https://registry.npmjs.org/%s/latest" $pkg) | toString | fromJson -}}
-{{-     $ref := "unknown" -}}
-{{-     if hasKey $obj "version" -}}{{- $ref = $obj.version | toString -}}{{- end -}}
-#   {{ . }} -> {{ $ref }}
+#   {{ . }} -> {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $pkg) }}
 {{-   else if hasPrefix "git:" . -}}
 {{-     $repo := trimPrefix "git:" . -}}
-{{-     $ref := output "sh" "-c" (printf "git ls-remote https://%s.git HEAD 2>/dev/null || true" $repo) | regexFind "^[0-9a-f]{40}" -}}
-{{-     if not (regexMatch "^[0-9a-f]{40}$" $ref) -}}{{- fail (printf "update-pi-extensions: could not resolve %s default-branch HEAD to a 40-character commit sha" .) -}}{{- end -}}
-#   {{ . }} -> {{ $ref }}
+{{-     $tool := "" -}}
+{{-     range $name, $entry := $ctx.releases.tools -}}
+{{-       if and (eq $entry.kind "gitRef") (eq $repo (printf "github.com/%s" $entry.source)) -}}{{- $tool = $name -}}{{- end -}}
+{{-     end -}}
+{{-     if not $tool -}}{{- fail (printf "update-pi-extensions: no gitRef lock entry matching %s — add it to packages/release-lock and refresh .chezmoidata/releases.json" .) -}}{{- end -}}
+#   {{ . }} -> {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $tool) }}
 {{-   else -}}
 #   {{ . }} -> (unmanaged source kind — no resolution)
 {{-   end }}

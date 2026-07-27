@@ -28,19 +28,20 @@ is a compact JSON array for callers to parse and pretty-print.
 {{-     end -}}
 {{-   end -}}
 {{- /* source names the GitHub repo and is required only where it is consumed:
-   versionSource=latestTag (gitHubLatestTag) and install=localArchive (the
-   archive URL rendered by .chezmoiexternals/ai-agents.toml, which reads the
-   same plugin entry). An npm package resolved from the registry
-   (versionSource=npmLatest) may have no public repo, so source is optional
-   there. */ -}}
+   install=localArchive (the archive URL rendered by
+   .chezmoiexternals/ai-agents.toml, which reads the same plugin entry).
+   Versions resolve from the release lock keyed on the package name
+   (latestTag and npmLatest alike), so `source` is not consulted for version
+   resolution at render time and is optional for npm packages with no public
+   repo. */ -}}
 {{-   if and (or (eq $plugin.versionSource "latestTag") (eq $plugin.install "localArchive")) (not (hasKey $plugin "source")) -}}
 {{-     fail (printf "opencode-plugins-json.tmpl: plugins[%d] requires source for versionSource=latestTag or install=localArchive" $index) -}}
 {{-   end -}}
 {{-   $version := "" -}}
 {{-   if eq $plugin.versionSource "latestTag" -}}
-{{-     $version = (gitHubLatestTag $plugin.source).Name | trimPrefix "v" -}}
+{{-     $version = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $plugin.package) -}}
 {{-   else if eq $plugin.versionSource "npmLatest" -}}
-{{-     $version = output "curl" "-fsSL" (printf "https://registry.npmjs.org/%s/latest" $plugin.package) | fromJson | dig "version" "" -}}
+{{-     $version = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $plugin.package) -}}
 {{-   else if eq $plugin.versionSource "compoundEngineeringRelease" -}}
 {{-     $version = includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
 {{-   else -}}

@@ -21,9 +21,9 @@
            sources plus compound-engineering as a native `git:` source, not the
            localArchive path the other agents use), so adding a new key is a
            DATA edit;
-         - `lastChangelogVersion` is the installed pi version, resolved inline
-           from the SAME earendil-works/pi release .chezmoiexternals/
-           ai-agents.toml fetches (so it always matches the pi on disk);
+         - `lastChangelogVersion` is the installed pi version, read from the
+           SAME release-lock key .chezmoiexternals/ai-agents.toml fetches (so
+           it always matches the pi on disk);
          - `theme` is declared (pi can no longer persist a theme choice, so it
            is fixed here to the documented default).
 
@@ -32,9 +32,10 @@
 {{- /* The GitHub tag carries a leading `v` (v0.80.7) — pi's own version and the
        value pi writes to lastChangelogVersion strip it (0.80.7).
        .chezmoiexternals/ai-agents.toml keeps the `v` for the versioned on-disk
-       dir; here we match pi's format. Resolved inline (same release) so no
-       shared partial is needed. */ -}}
-{{- $piVer := (gitHubLatestRelease "earendil-works/pi").TagName | toString | trimPrefix "v" -}}
+       dir; here we match pi's format. Read from the SAME release-lock key the
+       external uses (resolved at refresh time by packages/release-lock), so
+       no shared partial is needed. */ -}}
+{{- $piVer := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi") | trimPrefix "v" -}}
 {{- $settings := deepCopy $d -}}
 {{- $settings = set $settings "lastChangelogVersion" $piVer -}}
 {{- /* Resolve any `op://` 1Password reference ANYWHERE in the object — recursive,

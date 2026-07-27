@@ -17,28 +17,28 @@ function tool(version: string): LockedTool {
 }
 
 function lock(tools: Record<string, LockedTool>): ReleaseLock {
-  return { tools };
+  return { releases: { tools } };
 }
 
 describe("mergeLocks", () => {
   test("a resolved tool overwrites its committed entry", () => {
     const merged = mergeLocks(lock({ gh: tool("v1") }), lock({ gh: tool("v2") }));
-    expect(merged.tools["gh"]?.version).toBe("v2");
+    expect(merged.releases.tools["gh"]?.version).toBe("v2");
   });
 
   test("a tool missing from the resolution keeps its committed entry", () => {
     const merged = mergeLocks(lock({ gh: tool("v1"), uv: tool("0.1") }), lock({ gh: tool("v2") }));
-    expect(merged.tools["uv"]?.version).toBe("0.1");
-    expect(merged.tools["gh"]?.version).toBe("v2");
+    expect(merged.releases.tools["uv"]?.version).toBe("0.1");
+    expect(merged.releases.tools["gh"]?.version).toBe("v2");
   });
 
   test("a first run with no committed lock yields the resolution", () => {
-    expect(Object.keys(mergeLocks(null, lock({ gh: tool("v1") })).tools)).toEqual(["gh"]);
+    expect(Object.keys(mergeLocks(null, lock({ gh: tool("v1") })).releases.tools)).toEqual(["gh"]);
   });
 
   test("tools are sorted so an unchanged upstream serializes identically", () => {
     const merged = mergeLocks(lock({ uv: tool("1") }), lock({ ast: tool("1"), gh: tool("1") }));
-    expect(Object.keys(merged.tools)).toEqual(["ast", "gh", "uv"]);
+    expect(Object.keys(merged.releases.tools)).toEqual(["ast", "gh", "uv"]);
   });
 });
 
@@ -68,7 +68,7 @@ describe("readLock and writeLock", () => {
   test("a written lock round-trips", async () => {
     const path = join(await scratch(), "releases.json");
     await writeLock(path, lock({ gh: tool("v1") }));
-    expect((await readLock(path))?.tools["gh"]?.version).toBe("v1");
+    expect((await readLock(path))?.releases.tools["gh"]?.version).toBe("v1");
     expect(await readFile(path, "utf8")).toMatch(/\n$/);
   });
 
@@ -80,7 +80,7 @@ describe("readLock and writeLock", () => {
     await writeLock(path, mergeLocks(await readLock(path), resolvedWithoutUv));
 
     const after = await readLock(path);
-    expect(after?.tools["gh"]?.version).toBe("v2");
-    expect(after?.tools["uv"]?.version).toBe("0.1");
+    expect(after?.releases.tools["gh"]?.version).toBe("v2");
+    expect(after?.releases.tools["uv"]?.version).toBe("0.1");
   });
 });

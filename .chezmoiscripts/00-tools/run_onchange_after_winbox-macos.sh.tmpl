@@ -5,7 +5,7 @@
 # ~/.local/share/winbox — matching the extracted-folder result the linux/windows
 # archive externals produce. Re-runs when the resolved winbox version changes
 # (the external fetches the matching .dmg first, so the mount sees the new one).
-{{- $winboxVersion := output "curl" "-fsSL" "https://download.mikrotik.com/routeros/winbox/LATEST.4" | toString | trim -}}
+{{- $winboxVersion := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "winbox")) -}}
 # winbox version: {{ $winboxVersion }}
 set -eu
 

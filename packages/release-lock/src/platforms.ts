@@ -12,21 +12,35 @@ export const ARCHITECTURES = ["amd64", "arm64"] as const;
 export type OperatingSystem = (typeof OPERATING_SYSTEMS)[number];
 export type Architecture = (typeof ARCHITECTURES)[number];
 
-/** Lock key for one build target, e.g. `linux-amd64`. */
-export type PlatformKey = `${OperatingSystem}-${Architecture}`;
+/** Lock key for one build target, e.g. `linux-amd64` or `linux-amd64-musl`. */
+export type PlatformKey = `${OperatingSystem}-${Architecture}` | `linux-${Architecture}-musl`;
 
 export interface Platform {
   readonly os: OperatingSystem;
   readonly arch: Architecture;
+  /** Set only on the linux static-musl targets (KTD11); absent means glibc. */
+  readonly libc?: "musl";
 }
 
-export function platformKey({ os, arch }: Platform): PlatformKey {
-  return `${os}-${arch}`;
+export function platformKey({ os, arch, libc }: Platform): PlatformKey {
+  // Only linux targets ever carry libc (MUSL_PLATFORMS), hence the cast.
+  return libc === "musl" ? (`${os}-${arch}-musl` as PlatformKey) : `${os}-${arch}`;
 }
 
 export const ALL_PLATFORMS: readonly Platform[] = OPERATING_SYSTEMS.flatMap((os) =>
   ARCHITECTURES.map((arch) => ({ os, arch })),
 );
+
+/**
+ * The linux static-musl targets, resolved only for tools that opt in via
+ * `linuxMusl` — upstreams that publish a distinct musl build next to the glibc
+ * one (claude, agent-browser) get their own lock keys (KTD11).
+ */
+export const MUSL_PLATFORMS: readonly Platform[] = ARCHITECTURES.map((arch) => ({
+  os: "linux" as const,
+  arch,
+  libc: "musl" as const,
+}));
 
 /** `""` on unix, `".exe"` on windows. */
 export function executableExtension(os: OperatingSystem): string {

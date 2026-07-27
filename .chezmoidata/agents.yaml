@@ -111,9 +111,10 @@ agents:
   #                    subtree is exactly one SKILL.md (glab's bundled skills);
   #                    a subtree that gains sibling files must switch to an
   #                    archive form.
-  #   ref           -> (github only) a branch head resolved to a commit via git
-  #                    ls-remote (repos with no releases/tags); absent -> newest
-  #                    GitHub release (gitHubLatestRelease).
+  #   ref           -> (github only) a branch head resolved to a commit sha in
+  #                    the release lock at refresh time (repos with no
+  #                    releases/tags); absent -> newest GitHub release tag
+  #                    recorded in the release lock.
   #   versionSource -> glabRelease: ref from the shared
   #                    .chezmoitemplates/glab-release-ref.tmpl (the glab CLI's
   #                    latest release, lockstep with the vcs.toml binary).

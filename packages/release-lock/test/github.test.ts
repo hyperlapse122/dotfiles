@@ -156,3 +156,87 @@ describe("resolveGitHubRelease", () => {
     await expect(resolveGitHubRelease("tool", spec(), undefined)).rejects.toThrow(/owner\/repo/);
   });
 });
+
+describe("resolveGitHubRelease tagPrefix", () => {
+  function stubReleaseList(tags: string[]): void {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(tags.map((tag_name) => ({ tag_name, assets: [] }))), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof globalThis.fetch;
+  }
+
+  test("resolves the newest release whose tag carries the prefix, skipping other tag trains", async () => {
+    stubReleaseList(["marketplace-v1.0.3", "compound-engineering-v3.20.0", "cli-v3.13.1"]);
+
+    const locked = await resolveGitHubRelease(
+      "compound-engineering",
+      { kind: "githubRelease", source: "owner/repo", tagPrefix: "compound-engineering-" },
+      undefined,
+    );
+
+    expect(locked.version).toBe("compound-engineering-v3.20.0");
+  });
+
+  test("no release matching the prefix fails with the source named", async () => {
+    stubReleaseList(["marketplace-v1.0.3", "cli-v3.13.1"]);
+
+    await expect(
+      resolveGitHubRelease(
+        "compound-engineering",
+        { kind: "githubRelease", source: "owner/repo", tagPrefix: "compound-engineering-" },
+        undefined,
+      ),
+    ).rejects.toThrow(/owner\/repo/);
+  });
+});
+
+describe("resolveGitHubRelease linuxMusl", () => {
+  test("resolves the musl builds into their own -musl lock keys next to glibc", async () => {
+    stubRelease("v1", [
+      asset("tool-linux-x64", `sha256:${SHA}`),
+      asset("tool-linux-arm64", `sha256:${SHA}`),
+      asset("tool-linux-musl-x64", `sha256:${SHA}`),
+      asset("tool-linux-musl-arm64", `sha256:${SHA}`),
+    ]);
+
+    const locked = await resolveGitHubRelease(
+      "tool",
+      {
+        kind: "githubRelease",
+        source: "owner/repo",
+        linuxMusl: true,
+        asset: ({ os, arch, libc }) =>
+          os === "linux"
+            ? `tool-linux${libc === "musl" ? "-musl" : ""}-${arch === "amd64" ? "x64" : arch}`
+            : null,
+      },
+      undefined,
+    );
+
+    expect(Object.keys(locked.artifacts ?? {}).sort()).toEqual([
+      "linux-amd64",
+      "linux-amd64-musl",
+      "linux-arm64",
+      "linux-arm64-musl",
+    ]);
+    expect(locked.artifacts?.["linux-amd64-musl"]?.url).toContain("tool-linux-musl-x64");
+    expect(locked.artifacts?.["linux-amd64"]?.url).toContain("tool-linux-x64");
+  });
+
+  test("a tool without linuxMusl never emits -musl keys", async () => {
+    stubRelease("v1", [asset("tool-linux-x64", `sha256:${SHA}`)]);
+
+    const locked = await resolveGitHubRelease(
+      "tool",
+      {
+        kind: "githubRelease",
+        source: "owner/repo",
+        asset: ({ os, arch }) => (os === "linux" && arch === "amd64" ? "tool-linux-x64" : null),
+      },
+      undefined,
+    );
+
+    expect(Object.keys(locked.artifacts ?? {})).toEqual(["linux-amd64"]);
+  });
+});

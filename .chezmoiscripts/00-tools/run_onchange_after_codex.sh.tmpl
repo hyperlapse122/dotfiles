@@ -2,7 +2,7 @@
 
 {{- $arch := (replace "amd64" "x86_64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
 
-{{- $tag := ((gitHubLatestRelease "openai/codex").TagName | toString) -}}
+{{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex")) -}}
 {{- $release := (replace "rust-v" "" $tag) -}}
 {{- $target := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
 

@@ -1,6 +1,6 @@
 {{ if ne .chezmoi.os "windows" -}}
 
-{{- $tag := (gitHubLatestRelease "earendil-works/pi").TagName | toString -}}
+{{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi")) -}}
 
 #!/usr/bin/env bash
 # .chezmoiscripts/00-tools/run_onchange_after_pi.sh.tmpl

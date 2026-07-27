@@ -13,7 +13,11 @@ export function sortTools(tools: Record<string, LockedTool>): Record<string, Loc
  * is what leaves a failed entry at its last good value instead of dropping it.
  */
 export function mergeLocks(existing: ReleaseLock | null, resolved: ReleaseLock): ReleaseLock {
-  return { tools: sortTools({ ...existing?.tools, ...resolved.tools }) };
+  return {
+    releases: {
+      tools: sortTools({ ...existing?.releases.tools, ...resolved.releases.tools }),
+    },
+  };
 }
 
 export function serializeLock(lock: ReleaseLock): string {

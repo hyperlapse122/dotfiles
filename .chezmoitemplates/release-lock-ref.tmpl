@@ -1,0 +1,80 @@
+{{- /*
+release-lock-ref.tmpl — the ONLY consumer entry point to the static release
+artifact lock (.chezmoidata/releases.json, exposed to templates as .releases).
+
+Input (dict):
+  ctx       required; root chezmoi context (carries .releases and .chezmoi)
+  tool      required; lock key under .releases.tools
+  field     optional; "version" (default), "url", "sha256", "sha512", "size",
+            or "emulated"
+  platform  required for artifact fields; an explicit lock platform key
+            (e.g. "linux-amd64", "windows-arm64") or "auto" to compose
+            "<os>-<arch>" from ctx.chezmoi
+  musl      optional bool; with platform "auto", append "-musl" — pass the
+            caller's musl-linux probe result verbatim (KTD11: distinct glibc
+            and musl builds get their own lock keys, always-musl tools keep
+            plain keys)
+  optional  optional bool; a missing/null field returns "" instead of
+            failing (for digests upstream does not publish — KTD8)
+
+Every lookup fails the render with the missing key named (R6): a consumer
+whose tool or platform the lock does not carry aborts, and no call site ever
+falls back to a live lookup. Version-only entries (no artifacts block) still
+resolve "version". An emulated entry returns its recorded (amd64) URL and
+sha256 verbatim — url/digest consumers never special-case emulation. The one
+special-case is an archive-file external composing its archive-internal
+`path` from the platform: it reads field "emulated" (optional:true) and
+composes the path for the served amd64 build instead. Lockstep groups
+(glab binary + skills, compound-engineering's five consumers, pi's three)
+hold structurally because every consumer reads the same one lock key (R7).
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "release-lock-ref.tmpl: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if or (not (hasKey . "ctx")) (not (hasKey . "tool")) -}}
+{{-   fail "release-lock-ref.tmpl: ctx and tool are required" -}}
+{{- end -}}
+{{- $ctx := .ctx -}}
+{{- $tool := .tool -}}
+{{- $field := "version" -}}
+{{- if hasKey . "field" -}}{{- $field = .field -}}{{- end -}}
+{{- if not (or (eq $field "version") (eq $field "url") (eq $field "sha256") (eq $field "sha512") (eq $field "size") (eq $field "emulated")) -}}
+{{-   fail (printf "release-lock-ref.tmpl: unsupported field %q" $field) -}}
+{{- end -}}
+{{- $optional := false -}}
+{{- if hasKey . "optional" -}}{{- $optional = .optional -}}{{- end -}}
+{{- if or (not (hasKey $ctx "releases")) (not (hasKey $ctx.releases "tools")) -}}
+{{-   fail "release-lock-ref.tmpl: .chezmoidata/releases.json is missing or carries no tools block" -}}
+{{- end -}}
+{{- if not (hasKey $ctx.releases.tools $tool) -}}
+{{-   fail (printf "release-lock-ref.tmpl: no lock entry for tool %q — add it to packages/release-lock and refresh .chezmoidata/releases.json; no live fallback exists (R6)" $tool) -}}
+{{- end -}}
+{{- $entry := index $ctx.releases.tools $tool -}}
+{{- if eq $field "version" -}}
+{{-   if not (hasKey $entry "version") -}}
+{{-     fail (printf "release-lock-ref.tmpl: lock entry %q carries no version" $tool) -}}
+{{-   end -}}
+{{-   $entry.version | toString -}}
+{{- else -}}
+{{-   if not (hasKey . "platform") -}}
+{{-     fail (printf "release-lock-ref.tmpl: platform is required for field %q of tool %q" $field $tool) -}}
+{{-   end -}}
+{{-   $platform := .platform -}}
+{{-   if eq $platform "auto" -}}
+{{-     $platform = printf "%s-%s" $ctx.chezmoi.os $ctx.chezmoi.arch -}}
+{{-     if and (hasKey . "musl") .musl -}}{{- $platform = printf "%s-musl" $platform -}}{{- end -}}
+{{-   end -}}
+{{-   if or (not (hasKey $entry "artifacts")) (not (hasKey $entry.artifacts $platform)) -}}
+{{-     fail (printf "release-lock-ref.tmpl: lock entry %q has no artifact for platform %q — refresh .chezmoidata/releases.json; no live fallback exists (R6)" $tool $platform) -}}
+{{-   end -}}
+{{-   $value := index (index $entry.artifacts $platform) $field -}}
+{{-   if not $value -}}
+{{-     if $optional -}}
+{{-       "" -}}
+{{-     else -}}
+{{-       fail (printf "release-lock-ref.tmpl: lock entry %q platform %q has no %s — upstream publishes no digest here; pass optional:true and skip the checksum (KTD8)" $tool $platform $field) -}}
+{{-     end -}}
+{{-   else -}}
+{{-     $value | toString -}}
+{{-   end -}}
+{{- end -}}

@@ -3,6 +3,8 @@
        The repo interleaves several tag trains (marketplace-*, cursor-marketplace-*,
        cli-*), so `gitHubLatestRelease` would eventually resolve to the wrong one —
        take the newest release whose tag carries the compound-engineering- prefix.
+       That prefix filtering now happens in the packages/release-lock registry at
+       refresh time; every consumer reads the resolved tag from the lock verbatim.
 
        Shared so the consumers of this plugin can never land on different
        releases — the extracted archive path is the same versioned local dir
@@ -29,9 +31,4 @@
        Claude gains a proper pin here too: its `plugin marketplace add` takes no
        --ref, but a versioned LOCAL PATH is unambiguous.
     */ -}}
-{{- range (gitHubReleases "everyinc/compound-engineering-plugin") -}}
-{{-   if hasPrefix "compound-engineering-" .TagName -}}
-{{-     .TagName -}}
-{{-     break -}}
-{{-   end -}}
-{{- end -}}
+{{- includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "compound-engineering") -}}

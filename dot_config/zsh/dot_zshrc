@@ -21,14 +21,14 @@ source <(minikube completion zsh)
 # Set up helm completions
 source <(helm completion zsh)
 
-# Run chezmoi with a GitHub token: its gitHub* template functions (e.g.
-# gitHubLatestRelease in .chezmoiexternals/) read GITHUB_TOKEN-family env vars,
-# not `gh auth`, and anonymous API calls hit 403 rate limits. Token resolution:
-# `gh auth token` first — the auth-github preflight logs `gh` in with the same
-# PAT, so it's usually available, instant, and prompt-free (no 1Password
-# biometric popup) — then fall back to 1Password (`op read`) when `gh` is
-# missing, not logged in, or returns empty. If both fail, warn and run chezmoi
-# without a token instead of blocking.
+# Run chezmoi with a GitHub token when one is cheap to get: renders no longer
+# call the GitHub API (the release lock pins every tool), but apply-time
+# downloads still benefit from lifting the anonymous rate limit. Token
+# resolution: `gh auth token` first — the auth-github preflight logs `gh` in
+# with the same PAT, so it's usually available, instant, and prompt-free (no
+# 1Password biometric popup) — then fall back to 1Password (`op read`) when
+# `gh` is missing, not logged in, or returns empty. If both fail, warn and run
+# chezmoi without a token instead of blocking.
 chezmoi() {
   if [[ -n "${GITHUB_TOKEN-}" || -n "${GITHUB_ACCESS_TOKEN-}" || -n "${CHEZMOI_GITHUB_ACCESS_TOKEN-}" ]]; then
     command chezmoi "$@"

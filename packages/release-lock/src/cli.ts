@@ -1,7 +1,12 @@
 import { REGISTRY } from "./registry.js";
-import { resolveGitHubRelease, ResolutionError } from "./github.js";
+import { resolveGitHubRelease } from "./github.js";
+import { resolveGitHubTag } from "./github-tag.js";
+import { resolveGitLabRelease } from "./gitlab.js";
+import { resolveGitRef } from "./git-ref.js";
+import { resolveNpmPackage } from "./npm.js";
+import { resolveVendorManifest } from "./vendor-manifest.js";
 import { mergeLocks, readLock, serializeLock, sortTools, writeLock } from "./lock.js";
-import type { LockedTool, ReleaseLock } from "./types.js";
+import type { LockedTool, ReleaseLock, ToolSpec } from "./types.js";
 
 /**
  * Resolve every registered tool into the release lock.
@@ -26,6 +31,23 @@ export function outPath(argv: readonly string[]): string | undefined {
   return value;
 }
 
+function resolve(name: string, spec: ToolSpec, token: string | undefined): Promise<LockedTool> {
+  switch (spec.kind) {
+    case "githubRelease":
+      return resolveGitHubRelease(name, spec, token);
+    case "githubTag":
+      return resolveGitHubTag(name, spec, token);
+    case "gitlabRelease":
+      return resolveGitLabRelease(name, spec);
+    case "npm":
+      return resolveNpmPackage(name, spec);
+    case "vendorManifest":
+      return resolveVendorManifest(name, spec);
+    case "gitRef":
+      return resolveGitRef(name, spec);
+  }
+}
+
 export async function resolveAll(token: string | undefined): Promise<{
   lock: ReleaseLock;
   failures: string[];
@@ -36,10 +58,7 @@ export async function resolveAll(token: string | undefined): Promise<{
   const settled = await Promise.all(
     Object.entries(REGISTRY).map(async ([name, spec]) => {
       try {
-        if (spec.kind !== "githubRelease") {
-          throw new ResolutionError(spec.source, `resolver kind ${spec.kind} not implemented yet`);
-        }
-        return { name, tool: await resolveGitHubRelease(name, spec, token) };
+        return { name, tool: await resolve(name, spec, token) };
       } catch (error) {
         return { name, failure: error instanceof Error ? error.message : String(error) };
       }
@@ -51,7 +70,7 @@ export async function resolveAll(token: string | undefined): Promise<{
     else failures.push(result.failure);
   }
 
-  return { lock: { tools: sortTools(tools) }, failures };
+  return { lock: { releases: { tools: sortTools(tools) } }, failures };
 }
 
 const destination = outPath(process.argv.slice(2));
