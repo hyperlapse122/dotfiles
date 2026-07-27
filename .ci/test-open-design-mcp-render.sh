@@ -115,7 +115,7 @@ for entry in \
   "pi.json:dot_pi/private_agent/private_readonly_mcp.json.tmpl" \
   "opencode.json:dot_config/opencode/readonly_opencode.json.tmpl" \
   "gemini.json:dot_gemini/config/private_readonly_mcp_config.json.tmpl" \
-  "kimi.json:dot_kimi-code/private_readonly_mcp.json.tmpl"
+  "kimi.json:private_dot_kimi-code/private_readonly_mcp.json.tmpl"
 do
   output=$(render_consumer "${entry%%:*}" "${entry#*:}")
   if [[ $open_design_eligible == true ]]; then
@@ -147,7 +147,7 @@ for template in \
   dot_pi/private_agent/private_readonly_mcp.json.tmpl \
   dot_config/opencode/readonly_opencode.json.tmpl \
   dot_gemini/config/private_readonly_mcp_config.json.tmpl \
-  dot_kimi-code/private_readonly_mcp.json.tmpl
+  private_dot_kimi-code/private_readonly_mcp.json.tmpl
 do
   grep -F 'includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .)' \
     "$repo_root/$template" >/dev/null
