@@ -542,31 +542,31 @@
       "opencode": {
         "kind": "githubRelease",
         "source": "anomalyco/opencode",
-        "version": "v1.18.8",
+        "version": "v1.18.9",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-linux-x64.tar.gz",
-            "sha256": "b72014b8b53427fdb5a628d2433569ee7ccd289bd5c4490636064b24791c1305"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.9/opencode-linux-x64.tar.gz",
+            "sha256": "a0fa4b7b8bdacbd013e79a5f69d4220d36b545cd3ea296ba765f3016fa501b5b"
           },
           "linux-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-linux-arm64.tar.gz",
-            "sha256": "3e1b4f3bd12764c911f9211910608f85429b6209900a662c7ed27196c9033b93"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.9/opencode-linux-arm64.tar.gz",
+            "sha256": "b16bd7593ea960a25d9c6849b3023bcd9b9244a6f51675341fd2052043b0670f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-darwin-x64.zip",
-            "sha256": "0193ed3f295bb93f073ae0e8fa0737e9b31f167464761901589401fd278d4cc4"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.9/opencode-darwin-x64.zip",
+            "sha256": "b9e6081f4db1f2066910f121258c23c8243438d22b1b80987d1569c5e40ef00e"
           },
           "darwin-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-darwin-arm64.zip",
-            "sha256": "0fb2e11a819dd97949f0f7e0348e0e0c4fd8c42b3a5ed7aee1f0d437c94b9f0c"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.9/opencode-darwin-arm64.zip",
+            "sha256": "6f998b7dabb9425bb348fd0d88afeb92a14422771231cec9b0f4374b947397e6"
           },
           "windows-amd64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-windows-x64.zip",
-            "sha256": "85baa5de531db8d611fb5d9a62ffee00f6de69ae26e4845ec091dd2da4eb5fd1"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.9/opencode-windows-x64.zip",
+            "sha256": "1becf92ceb23edd7d951e7e3d8efcbe9c9808f5cc728f1b75277d5f951ada5c2"
           },
           "windows-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-windows-arm64.zip",
-            "sha256": "3a2c5a6f246bd0fdb395b35d8cc60f1be86f7f794a22cb517d2fe8de9aa951b4"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.9/opencode-windows-arm64.zip",
+            "sha256": "1f2c650b517d725635e56da080c73c641c250696a3d7e6cdbada96af8f31a6d3"
           }
         }
       },
@@ -607,7 +607,7 @@
       "pi-compound-engineering": {
         "kind": "gitRef",
         "source": "EveryInc/compound-engineering-plugin",
-        "version": "a9f6d530d4446d805a3100387dedd86268d7e695"
+        "version": "583bb3e409b5146fd3f202edf3907eda7ca71e6e"
       },
       "pi-mcp-extension": {
         "kind": "npm",
@@ -691,31 +691,31 @@
       "uv": {
         "kind": "githubRelease",
         "source": "astral-sh/uv",
-        "version": "0.11.33",
+        "version": "0.12.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.11.33/uv-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "3e95b84d8a8b3390c91584d4fd0c4d326e951da2b8fb15a76719368af2795424"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "3340a9d8cffc4d801bc1a7459ebfaf5790c79400720d9b6963d806f058526684"
           },
           "linux-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.11.33/uv-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "e256e5cf23f8c2e7d4d83f029acd662cbe7275ff24268ce1d6d2ba9016855268"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "936fbbf20188a2b1c66bce3dca3f4009a5c9cdf12bb2bbd084e71926f75d6a15"
           },
           "darwin-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.11.33/uv-x86_64-apple-darwin.tar.gz",
-            "sha256": "f1b919f740bd6be1d014ff58c4271b0779a32198adfb19ad9c5d1c4d9b2b4301"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-x86_64-apple-darwin.tar.gz",
+            "sha256": "d41593beaefc54bab7d062af0ef6ca093bfb81d001d58ebbef39e44423f9c496"
           },
           "darwin-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.11.33/uv-aarch64-apple-darwin.tar.gz",
-            "sha256": "d75e3d2bfc203d17388edaabd3aa37958edbcbfc36219e3ee0d31bb080b4baa2"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-aarch64-apple-darwin.tar.gz",
+            "sha256": "2b9e582af54f84fa50c115427451a6c13e80f43b52f8282b8af5791077317bbf"
           },
           "windows-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.11.33/uv-x86_64-pc-windows-msvc.zip",
-            "sha256": "c253ce868ad48d29327b661452ce184c9e333e6d6f5bc8d6fcfbf4dd52b83442"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-x86_64-pc-windows-msvc.zip",
+            "sha256": "68200e25de594df92387186bbfb9d9df606ec1d87efaa0ae0c7f690970e53db6"
           },
           "windows-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.11.33/uv-aarch64-pc-windows-msvc.zip",
-            "sha256": "6eb261d3ad61b35e2a6cfd997b296b908ff74d6199717eca81c3c73e1df7fbc7"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-aarch64-pc-windows-msvc.zip",
+            "sha256": "60c12dc34a8ff0269d7744a3a94506fa8f140618a82194b7bf7834fa789a765b"
           }
         }
       },
