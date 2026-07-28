@@ -50,7 +50,9 @@ map ctrl+page_down next_tab
 # without integration it falls back to the home directory, not an error.
 map ctrl+shift+t new_tab_with_cwd
 # Preserves the upstream home-directory behavior the remap above replaced.
-map ctrl+shift+alt+t new_tab
+# `ctrl+shift+alt+n` is unmapped upstream; `ctrl+shift+alt+t` is NOT used
+# because upstream maps it to `set_tab_title` (rename-tab prompt).
+map ctrl+shift+alt+n new_tab
 
 # --- font ---
 font_family {{ .fonts.families.mono }}
