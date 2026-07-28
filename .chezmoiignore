@@ -82,6 +82,20 @@ src/garden.yaml
 .pi/agent/models.json
 {{- end }}
 
+# CLIProxyAPI ships as a Podman quadlet on Linux and a launchd agent on macOS;
+# Windows gets neither the provisioner nor partial state (the old binary
+# integration's Windows block, restored).
+{{- if eq .chezmoi.os "windows" }}
+.chezmoiscripts/90-services/*cli-proxy-api*.sh
+{{- end }}
+
+# The launchd launcher and the macOS source config are darwin-only; the Linux
+# quadlet reads its config from the data-root seed, not these paths.
+{{- if ne .chezmoi.os "darwin" }}
+.config/cli-proxy-api
+.local/libexec/cli-proxy-api-launch
+{{- end }}
+
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
 ./plans
 
@@ -117,6 +131,11 @@ src/garden.yaml
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
 .chezmoiscripts/60-build/*open-design.sh
+.chezmoiscripts/90-services/*cli-proxy-api*.sh
+# The quadlet units are host-only. Gate the containers/systemd SUBPATH only:
+# dot_config/containers/ also holds auth.json and registries.conf, which deploy
+# everywhere including containers.
+.config/containers/systemd
 .config/systemd/user/open-design.service
 .local/libexec/open-design
 .local/bin/od

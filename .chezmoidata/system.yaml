@@ -97,6 +97,14 @@ system:
       # and container-skipped, matching Open Design's own provisioning scope.
       - path: etc/systemd/system-sleep/open-design.sh
         mode: "755"
+      # systemd system-sleep hook: stop the per-user CLIProxyAPI quadlet
+      # services (proxy + CPA-Manager-Plus panel) before hibernation /
+      # hybrid-sleep / the hibernate leg of suspend-then-hibernate, and
+      # restart exactly the stopped units on resume — a hibernating laptop
+      # must not carry the containers' state across the power cycle. Mode
+      # 0755 like the Open Design hook; no gate, same provisioning scope.
+      - path: etc/systemd/system-sleep/cli-proxy-api.sh
+        mode: "755"
 
     # Absolute /etc paths that the installer previously shipped but that no
     # longer exist in system/linux/etc/. Listed explicitly so every machine —
