@@ -86,7 +86,7 @@ Edit data, not generated scripts or rendered targets:
 |---|---|
 | `.chezmoidata/facts.yaml` | host identity, `gate:`/`gates:` decisions, probes and fail-safe direction |
 | `.chezmoidata/packages.yaml` | Fedora/Ubuntu packages, repos, COPRs/PPAs, flatpaks, dotnet, direct packages, services/groups |
-| `.chezmoidata/fonts.yaml` | font archives, families, sizes and fallbacks for KDE/GNOME/fcitx/VSCodium |
+| `.chezmoidata/fonts.yaml` | font archives, families, sizes and fallbacks for KDE/GNOME/fcitx/VSCodium/kitty |
 | `.chezmoidata/vscodium.yaml` | additive VSCodium extension installer |
 | `.chezmoidata/solaar.yaml` | device settings/rules and restart fingerprint |
 | `.chezmoidata/networking.yaml` | Wi-Fi importer, DNS defaults/overrides, unresolved-ref fingerprint |
