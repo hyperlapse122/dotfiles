@@ -255,9 +255,7 @@ describe("runCli", () => {
   test("missing input is a first run, but empty input fails loudly", async () => {
     const root = await scratch();
     const missing = join(root, "missing.json");
-    expect(
-      await runCli([], { defaultPath: missing, resolve: async () => resolution() }),
-    ).toBe(0);
+    expect(await runCli([], { defaultPath: missing, resolve: async () => resolution() })).toBe(0);
     expect(JSON.parse(await readFile(missing, "utf8"))).toEqual(resolution().lock);
 
     for (const [name, content] of [
@@ -281,9 +279,9 @@ describe("runCli", () => {
     };
 
     expect(await runCli(["--out"], { stderr: capture(), resolve })).toBe(2);
-    expect(
-      await runCli(["--stdout", "--out", "lock.json"], { stderr: capture(), resolve }),
-    ).toBe(2);
+    expect(await runCli(["--stdout", "--out", "lock.json"], { stderr: capture(), resolve })).toBe(
+      2,
+    );
     expect(resolved).toBe(false);
   });
 });

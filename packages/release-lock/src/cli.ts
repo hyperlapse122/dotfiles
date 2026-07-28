@@ -29,9 +29,7 @@ interface CliOptions {
   defaultPath?: string;
   stdout?: Writable;
   stderr?: Writable;
-  resolve?: (
-    token: string | undefined,
-  ) => Promise<{ lock: ReleaseLock; failures: string[] }>;
+  resolve?: (token: string | undefined) => Promise<{ lock: ReleaseLock; failures: string[] }>;
 }
 
 type Output = { kind: "file"; path: string } | { kind: "stdout"; path: string };
@@ -73,7 +71,9 @@ if (import.meta.main) {
   try {
     process.exitCode = await runCli(process.argv.slice(2));
   } catch (error) {
-    process.stderr.write(`release-lock: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(
+      `release-lock: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     process.exitCode = 1;
   }
 }
