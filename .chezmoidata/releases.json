@@ -607,7 +607,7 @@
       "pi-compound-engineering": {
         "kind": "gitRef",
         "source": "EveryInc/compound-engineering-plugin",
-        "version": "583bb3e409b5146fd3f202edf3907eda7ca71e6e"
+        "version": "2d75251cc26728cd9713abf39d13a301016194ce"
       },
       "pi-mcp-extension": {
         "kind": "npm",
