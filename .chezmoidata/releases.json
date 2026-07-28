@@ -532,7 +532,7 @@
       "oh-my-openagent": {
         "kind": "githubTag",
         "source": "code-yeongyu/oh-my-openagent",
-        "version": "4.19.2"
+        "version": "4.19.3"
       },
       "open-design": {
         "kind": "githubRelease",
