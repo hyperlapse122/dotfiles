@@ -59,7 +59,7 @@
        headerless server that uses OpenCode's native OAuth store and needs no
        target-specific JSON field. The recursive resolver applies the shared
        op:// -> onepasswordRead / else-as-is rule to every header value; the
-       toPrettyJson|replace pattern mirrors oh-my-openagent.jsonc.tmpl (shift
+       toPrettyJson|replace pattern mirrors dot_omo/readonly_omo.jsonc.tmpl (shift
        the block one indent level to nest inside this 2-space object). */ -}}
 {{- $mcp := dict -}}
 {{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}

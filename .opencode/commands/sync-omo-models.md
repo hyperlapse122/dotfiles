@@ -204,9 +204,9 @@ mkdir -p "$scratch/bin" "$scratch/target"; : > "$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' > "$scratch/bin/op"; chmod 700 "$scratch/bin/op"
 env PATH="$scratch/bin:$PATH" GITHUB_TOKEN="$(gh auth token 2>/dev/null)" \
   chezmoi --config "$scratch/empty.toml" --source "$PWD" --destination "$scratch/target" \
-  execute-template < dot_config/opencode/readonly_oh-my-openagent.json.tmpl > "$scratch/omo.json"
+  execute-template < dot_omo/readonly_omo.jsonc.tmpl > "$scratch/omo.json"
 opencode models > "$scratch/avail.txt"
-node -e 'const fs=require("fs"),d=process.argv[1];const A=new Set(fs.readFileSync(d+"/avail.txt","utf8").split("\n").map(s=>s.trim()).filter(Boolean));const j=JSON.parse(fs.readFileSync(d+"/omo.json","utf8"));const R=new Set();const c=o=>{for(const v of Object.values(o)){if(v.model)R.add(v.model);for(const f of (v.fallback_models||[]))R.add(typeof f==="string"?f:f.model);}};c(j.agents||{});c(j.categories||{});const m=[...R].filter(x=>!A.has(x)).sort();console.log("distinct:",R.size,"| MISSING:",m.length?m:"NONE");' "$scratch"
+node -e 'const fs=require("fs"),d=process.argv[1];const A=new Set(fs.readFileSync(d+"/avail.txt","utf8").split("\n").map(s=>s.trim()).filter(Boolean));const j=JSON.parse(fs.readFileSync(d+"/omo.json","utf8"));const b=j["[opencode]"]||{};const R=new Set();const c=o=>{for(const v of Object.values(o)){if(v.model)R.add(v.model);for(const f of (v.fallback_models||[]))R.add(typeof f==="string"?f:f.model);}};c(b.agents||{});c(b.categories||{});const m=[...R].filter(x=>!A.has(x)).sort();console.log("distinct:",R.size,"| MISSING:",m.length?m:"NONE");' "$scratch"
 rm -rf "$scratch"
 ```
 
