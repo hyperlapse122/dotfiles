@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { describe, expect, test } from "vite-plus/test";
@@ -82,5 +82,25 @@ describe("readLock and writeLock", () => {
     const after = await readLock(path);
     expect(after?.releases.tools["gh"]?.version).toBe("v2");
     expect(after?.releases.tools["uv"]?.version).toBe("0.1");
+  });
+
+  test("a failed atomic replacement preserves the destination and removes its temporary", async () => {
+    const root = await scratch();
+    const path = join(root, "releases.json");
+    const before = serializeLock(lock({ gh: tool("v1") }));
+    await writeFile(path, before, "utf8");
+
+    await expect(
+      writeLock(path, lock({ gh: tool("v2") }), {
+        writeFile,
+        rename: async () => {
+          throw new Error("rename failed");
+        },
+        unlink,
+      }),
+    ).rejects.toThrow("rename failed");
+
+    expect(await readFile(path, "utf8")).toBe(before);
+    expect((await readdir(root)).filter((entry) => entry.includes(".tmp-"))).toEqual([]);
   });
 });
