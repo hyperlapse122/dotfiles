@@ -143,7 +143,7 @@ There is a second cost. The repository pins everything else — `mise.lock` carr
 
 - Whether every vendor-manifest source can carry a digest at all. MikroTik's `LATEST.4` publishes a bare version string, and the Antigravity platform manifest's digest coverage is unverified. A source that genuinely exposes none records a null digest and keeps its URL, rather than blocking the lock.
 - Whether any GitHub source in scope publishes a release whose assets lack the API `digest` field (older releases predate it). Sampling found full coverage, but the resolver must still handle a null.
-- The Antigravity manifest publishes sha512, which chezmoi externals cannot verify (externals support `sha256` only). Today's template does not enforce it either; the lock records what the manifest offers and the consumer keeps today's behavior.
+- The Antigravity manifest publishes sha512, which chezmoi externals verify natively (`checksum.sha512`). Today's template already enforces it via `[agy.checksum]`, now sourced from the lock's recorded sha512; only the lock's `sha256` field is null for agy because the source publishes no sha256.
 
 ### Sources / Research
 

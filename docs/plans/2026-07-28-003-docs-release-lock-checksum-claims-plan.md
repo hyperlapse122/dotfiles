@@ -93,7 +93,7 @@ Directional guidance, not implementation specification; the implementer may adju
 | Gate | Command / check | Done signal |
 |---|---|---|
 | Scope | `git diff --stat` | Only `docs/plans/2026-07-27-001-refactor-static-release-artifact-lock-plan.md` changed |
-| Claim removal | `rg -n "extending checksum verification\|R12's extension" docs/plans/2026-07-27-001-refactor-static-release-artifact-lock-plan.md` | Zero hits |
+| Claim removal | `rg -n -e "extending checksum verification" -e "R12's extension" docs/plans/2026-07-27-001-refactor-static-release-artifact-lock-plan.md` | Zero hits |
 | Consistency | Read R12, KTD8, U5 scenario, DoD4 after edit | All four carry the recorded-vs-enforced distinction |
 | Whitespace | `git diff --check` | Clean |
 
