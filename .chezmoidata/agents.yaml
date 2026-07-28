@@ -16,7 +16,7 @@
 #   agents.claude.settings
 #     -> read-merge-write of the live ~/.claude/settings.json (config-claude-settings)
 #   agents.opencode.plugins / model / smallModel / providers / ohMyOpenagent
-#     -> opencode.json and oh-my-openagent.jsonc
+#     -> opencode.json and omo.jsonc ("[opencode]" block)
 #   agents.aoe
 #     -> ~/.config/agent-of-empires/config.toml, deep-merged by
 #        run_after_config-aoe.sh.tmpl via the kimi-reconcile binary
@@ -502,7 +502,7 @@ agents:
         - openrouter/fusion
     # Upstream oh-my-openagent identifiers below are verbatim schema keys.
     ohMyOpenagent:
-      # Per-agent mappings (oh-my-openagent.jsonc "agents").
+      # Per-agent mappings (omo.jsonc "[opencode]" agents).
       # Model Mapping Reference:
       # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
       agents:
@@ -578,7 +578,7 @@ agents:
             - kimi-for-coding/k3
             - model: openai/gpt-5.6-sol
               variant: medium
-      # Per-category mappings (oh-my-openagent.jsonc "categories").
+      # Per-category mappings (omo.jsonc "[opencode]" categories).
       # Model Mapping Reference:
       # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
       categories:
