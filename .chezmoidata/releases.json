@@ -33,40 +33,40 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.33.0",
+        "version": "v0.33.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-linux-x64",
-            "sha256": "b77d85eb8d0d305be4170f9477c59f0304b3609dc39bf0e8b8c740a1abd1e08a"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-linux-x64",
+            "sha256": "6e04d06605c4ca62da36e3263086e0f7ceae808b55508de2c3958d4b7fe430aa"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-linux-arm64",
-            "sha256": "fa7b238d76ab45a429c089629417f4f15d68cac9c4369932e5d09d62dada9264"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-linux-arm64",
+            "sha256": "281cce8e3e9eb11fd823b13c085996d7361c35923ad454ce5cb06a5515630e9b"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-darwin-x64",
-            "sha256": "bfa163965806bc2684763a8575ebcdfa2e702001d3733d4a10b10113c53e7ba8"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-darwin-x64",
+            "sha256": "e1196791c202e11875dbcd97de744b088f5a94f3706b3f3b4fa9056a5a2d562b"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-darwin-arm64",
-            "sha256": "d12b70c42e9816c8f44642df6c60c41ccc0b6f34d73f3cf891a5da14045b80e9"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-darwin-arm64",
+            "sha256": "33ce6a3f94322ad8ea4ac28db923737c040db88af8bb199f57778995d451f2c7"
           },
           "windows-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-win32-x64.exe",
-            "sha256": "2033bf28c66e3652b0e4dfe4fd07ba05c22a7678e89185d14c407230659bcc08"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-win32-x64.exe",
+            "sha256": "d5520659190d8112833c36ebffa766453a431e6721cce1b03361058080fb38be"
           },
           "windows-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-win32-x64.exe",
-            "sha256": "2033bf28c66e3652b0e4dfe4fd07ba05c22a7678e89185d14c407230659bcc08",
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-win32-x64.exe",
+            "sha256": "d5520659190d8112833c36ebffa766453a431e6721cce1b03361058080fb38be",
             "emulated": true
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-linux-musl-x64",
-            "sha256": "fec1a2718a35c3e6334df13bca80fe08fa0a2b99977ce8748dd10f6e1f4bffe1"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-linux-musl-x64",
+            "sha256": "bc36927d84f4dddab1a13819775c32008f8e4d40e979197206f9402c41fabbfa"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.0/agent-browser-linux-musl-arm64",
-            "sha256": "20eb6034dbc2b40364675fce1519210268c155748e737ff8ccc291311b965db0"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.1/agent-browser-linux-musl-arm64",
+            "sha256": "b4d73875d0842ddfff7f3bfb15173d81705d96b38b81681b9f9331d0df2d402c"
           }
         }
       },
@@ -542,31 +542,31 @@
       "opencode": {
         "kind": "githubRelease",
         "source": "anomalyco/opencode",
-        "version": "v1.18.7",
+        "version": "v1.18.8",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.7/opencode-linux-x64.tar.gz",
-            "sha256": "cb5d9d6d2f8fbef0a9c975ed4494f73b2a62f4e4ffd508bcc3212da4fa76c3da"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-linux-x64.tar.gz",
+            "sha256": "b72014b8b53427fdb5a628d2433569ee7ccd289bd5c4490636064b24791c1305"
           },
           "linux-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.7/opencode-linux-arm64.tar.gz",
-            "sha256": "6c791e453c2ca03ee3dea09ebd16bfdfac4837e45d344a1487cd196b80090fc7"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-linux-arm64.tar.gz",
+            "sha256": "3e1b4f3bd12764c911f9211910608f85429b6209900a662c7ed27196c9033b93"
           },
           "darwin-amd64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.7/opencode-darwin-x64.zip",
-            "sha256": "feee11da7697a80e2fcf943ff9ca392d4e960c5ddabd918bdd6e4de790279b7e"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-darwin-x64.zip",
+            "sha256": "0193ed3f295bb93f073ae0e8fa0737e9b31f167464761901589401fd278d4cc4"
           },
           "darwin-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.7/opencode-darwin-arm64.zip",
-            "sha256": "47efed233667713fd3e0603ddaea95d0ee2076ce00dc9faa7dbc9208aeb13505"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-darwin-arm64.zip",
+            "sha256": "0fb2e11a819dd97949f0f7e0348e0e0c4fd8c42b3a5ed7aee1f0d437c94b9f0c"
           },
           "windows-amd64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.7/opencode-windows-x64.zip",
-            "sha256": "54598e262c0744e6c3b9ddba85764917a48d366a9aa6c817c2feb9d34b3f1105"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-windows-x64.zip",
+            "sha256": "85baa5de531db8d611fb5d9a62ffee00f6de69ae26e4845ec091dd2da4eb5fd1"
           },
           "windows-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.7/opencode-windows-arm64.zip",
-            "sha256": "98c6eff0c989b21ef02f3777fe67404c9ed72bc21dac42b8a0607b00f2ec338f"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.8/opencode-windows-arm64.zip",
+            "sha256": "3a2c5a6f246bd0fdb395b35d8cc60f1be86f7f794a22cb517d2fe8de9aa951b4"
           }
         }
       },
@@ -618,8 +618,8 @@
       "pi-subagents": {
         "kind": "npm",
         "source": "pi-subagents",
-        "version": "0.37.1",
-        "integrity": "sha512-jG26HYlsKj667b3sVBN2n+ud899HKd3T61NrfXGP7/Rv1POzIkhpgsaFENZoU0ZLFsRyktNws5yDQxxyJcvxZg=="
+        "version": "0.37.2",
+        "integrity": "sha512-pf7DxLBY9pFY3grOFgRfMqoS9QbElWP2ULOCOnmJNrCEvjlA81fiyp0wk1vSaJPJ/rjsP0lA1sAk7S/QD+Olpg=="
       },
       "playwright-cli": {
         "kind": "githubRelease",
