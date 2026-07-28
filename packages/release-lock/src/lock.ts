@@ -1,5 +1,14 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { rename, readFile, unlink, writeFile } from "node:fs/promises";
 import type { LockedTool, ReleaseLock } from "./types.js";
+
+interface LockFileSystem {
+  writeFile: typeof writeFile;
+  rename: typeof rename;
+  unlink: typeof unlink;
+}
+
+const lockFileSystem: LockFileSystem = { writeFile, rename, unlink };
 
 /** Sorted so an unchanged upstream yields a byte-identical file. */
 export function sortTools(tools: Record<string, LockedTool>): Record<string, LockedTool> {
@@ -33,6 +42,18 @@ export async function readLock(path: string): Promise<ReleaseLock | null> {
   }
 }
 
-export async function writeLock(path: string, lock: ReleaseLock): Promise<void> {
-  await writeFile(path, serializeLock(lock), "utf8");
+export async function writeLock(
+  path: string,
+  lock: ReleaseLock,
+  fs: LockFileSystem = lockFileSystem,
+): Promise<void> {
+  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    await fs.writeFile(temporary, serializeLock(lock), { encoding: "utf8", mode: 0o644 });
+    await fs.rename(temporary, path);
+  } finally {
+    await fs.unlink(temporary).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
 }

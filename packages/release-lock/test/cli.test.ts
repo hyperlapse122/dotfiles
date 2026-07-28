@@ -1,4 +1,8 @@
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { afterEach, describe, expect, test } from "vite-plus/test";
+import { DEFAULT_LOCK_PATH, runCli } from "../src/cli.js";
 import { resolveGitHubRelease } from "../src/github.js";
 import { resolveGitHubTag } from "../src/github-tag.js";
 import { resolveGitLabRelease } from "../src/gitlab.js";
@@ -6,12 +10,53 @@ import { resolveNpmPackage } from "../src/npm.js";
 import { resolveVendorManifest } from "../src/vendor-manifest.js";
 import { RESOLVERS, resolveAll } from "../src/resolve-all.js";
 import type { Registry } from "../src/types.js";
+import type { ReleaseLock } from "../src/types.js";
 
 const realFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = realFetch;
 });
+
+async function scratch(): Promise<string> {
+  const base = process.env["XDG_RUNTIME_DIR"] ?? join(homedir(), ".cache");
+  const root = join(base, "release-lock-cli-tests");
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  return mkdtemp(join(root, "case-"));
+}
+
+function locked(version: string): ReleaseLock {
+  return {
+    releases: {
+      tools: {
+        good: { kind: "githubRelease", source: "owner/good", version },
+        failed: { kind: "githubRelease", source: "owner/failed", version: "v1" },
+        retired: { kind: "githubRelease", source: "owner/retired", version: "v1" },
+      },
+    },
+  };
+}
+
+function resolution(failures: string[] = []): {
+  lock: ReleaseLock;
+  failures: string[];
+} {
+  return {
+    lock: {
+      releases: {
+        tools: {
+          good: { kind: "githubRelease", source: "owner/good", version: "v2" },
+        },
+      },
+    },
+    failures,
+  };
+}
+
+function capture(): { values: string[]; write(value: string): void } {
+  const values: string[] = [];
+  return { values, write: (value) => void values.push(value) };
+}
 
 interface SourceStub {
   status: number;
@@ -122,5 +167,123 @@ describe("resolveAll", () => {
 
     expect(lock).toEqual({ releases: { tools: {} } });
     expect(failures).toEqual(["boom"]);
+  });
+});
+
+describe("runCli", () => {
+  test("the default path points at the repository lock", async () => {
+    expect(DEFAULT_LOCK_PATH.endsWith("/.chezmoidata/releases.json")).toBe(true);
+    expect(JSON.parse(await readFile(DEFAULT_LOCK_PATH, "utf8"))).toHaveProperty("releases.tools");
+  });
+
+  test("default refresh carries failed entries forward in place", async () => {
+    const path = join(await scratch(), "releases.json");
+    await writeFile(path, `${JSON.stringify(locked("v1"))}\n`);
+    const stdout = capture();
+    const stderr = capture();
+
+    const exit = await runCli([], {
+      defaultPath: path,
+      stdout,
+      stderr,
+      resolve: async () => resolution(["owner/failed: unavailable"]),
+    });
+
+    expect(exit).toBe(1);
+    expect(stdout.values).toEqual([]);
+    expect(stderr.values.join("")).toContain("owner/failed");
+    const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
+    expect(written.releases.tools["good"]?.version).toBe("v2");
+    expect(written.releases.tools["failed"]?.version).toBe("v1");
+    expect(written.releases.tools["retired"]?.version).toBe("v1");
+  });
+
+  test("a clean default refresh prunes retired entries", async () => {
+    const path = join(await scratch(), "releases.json");
+    await writeFile(path, `${JSON.stringify(locked("v1"))}\n`);
+
+    expect(
+      await runCli([], {
+        defaultPath: path,
+        stderr: capture(),
+        resolve: async () => resolution(),
+      }),
+    ).toBe(0);
+
+    const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
+    expect(Object.keys(written.releases.tools)).toEqual(["good"]);
+  });
+
+  test("--stdout emits a merged lock without modifying the input", async () => {
+    const path = join(await scratch(), "releases.json");
+    const before = `${JSON.stringify(locked("v1"))}\n`;
+    await writeFile(path, before);
+    const stdout = capture();
+
+    const exit = await runCli(["--stdout"], {
+      defaultPath: path,
+      stdout,
+      stderr: capture(),
+      resolve: async () => resolution(["owner/failed: unavailable"]),
+    });
+
+    expect(exit).toBe(1);
+    expect(await readFile(path, "utf8")).toBe(before);
+    const emitted = JSON.parse(stdout.values.join("")) as ReleaseLock;
+    expect(emitted.releases.tools["failed"]?.version).toBe("v1");
+  });
+
+  test("--out refreshes the explicit destination", async () => {
+    const root = await scratch();
+    const defaultPath = join(root, "default.json");
+    const destination = join(root, "other.json");
+    await writeFile(defaultPath, `${JSON.stringify(locked("default"))}\n`);
+    await writeFile(destination, `${JSON.stringify(locked("v1"))}\n`);
+
+    const exit = await runCli(["--out", destination], {
+      defaultPath,
+      stderr: capture(),
+      resolve: async () => resolution(["owner/failed: unavailable"]),
+    });
+
+    expect(exit).toBe(1);
+    const written = JSON.parse(await readFile(destination, "utf8")) as ReleaseLock;
+    expect(written.releases.tools["failed"]?.version).toBe("v1");
+    expect(await readFile(defaultPath, "utf8")).toContain("default");
+  });
+
+  test("missing input is a first run, but empty input fails loudly", async () => {
+    const root = await scratch();
+    const missing = join(root, "missing.json");
+    expect(
+      await runCli([], { defaultPath: missing, resolve: async () => resolution() }),
+    ).toBe(0);
+    expect(JSON.parse(await readFile(missing, "utf8"))).toEqual(resolution().lock);
+
+    for (const [name, content] of [
+      ["empty", ""],
+      ["whitespace", " \n\t"],
+    ] as const) {
+      const malformed = join(root, `${name}.json`);
+      await writeFile(malformed, content);
+      await expect(
+        runCli([], { defaultPath: malformed, resolve: async () => resolution() }),
+      ).rejects.toThrow();
+      expect(await readFile(malformed, "utf8")).toBe(content);
+    }
+  });
+
+  test("invalid output flags fail before resolution", async () => {
+    let resolved = false;
+    const resolve = async (): Promise<ReturnType<typeof resolution>> => {
+      resolved = true;
+      return resolution();
+    };
+
+    expect(await runCli(["--out"], { stderr: capture(), resolve })).toBe(2);
+    expect(
+      await runCli(["--stdout", "--out", "lock.json"], { stderr: capture(), resolve }),
+    ).toBe(2);
+    expect(resolved).toBe(false);
   });
 });

@@ -42,14 +42,24 @@ comparing it to the recorded digest.
 ## Usage
 
 ```sh
-bun run packages/release-lock/src/cli.ts                          # print to stdout
+bun run packages/release-lock/src/cli.ts                          # refresh the repo lock in place
 bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
+bun run packages/release-lock/src/cli.ts --stdout                 # inspect merged JSON
 ```
 
 A source that fails to resolve is reported on stderr and omitted from the
-resolution, and the process exits non-zero. `--out` overlays the resolution onto
-the file already at that path, so an omitted entry keeps its last good value
-rather than being blanked.
+fresh resolution, and the process exits non-zero. Plain invocation and `--out`
+overlay a partial resolution onto the file already at the destination, so an
+omitted entry keeps its last good value rather than being blanked. A clean run
+replaces the tool set, which prunes entries removed from the registry. Writes
+replace the destination atomically.
+
+`--stdout` reads the repository lock and prints the same complete merged JSON
+without modifying it. It is for inspection only: do not redirect any invocation
+over the lock it reads (for example, `--stdout > .chezmoidata/releases.json`).
+The shell truncates a redirection target before the CLI starts, so the process
+cannot recover that prior content. Use plain invocation or `--out` to refresh a
+lock safely.
 
 ## Adding a tool
 
