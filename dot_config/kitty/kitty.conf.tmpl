@@ -23,6 +23,37 @@ remember_window_size  no
 initial_window_width  82c
 initial_window_height 24c
 
+# --- tab bar ---
+# Upstream default is `bottom`; the top edge matches browser/editor tab
+# conventions on both KDE and GNOME.
+tab_bar_edge top
+# Upstream default is `fade`; powerline renders a continuous styled bar.
+# kitty draws the separators itself, and the managed mono face is a Nerd
+# Font, so the glyphs are covered on every managed host.
+tab_bar_style powerline
+tab_powerline_style slanted
+# Index prefix makes `goto_tab N` discoverable; kitty still auto-prepends
+# {bell_symbol}/{activity_symbol} since they are absent from the template.
+tab_title_template "{index}: {title}"
+# Upstream default, written explicitly: closing a tab returns to the
+# last-used tab instead of its neighbor.
+tab_switch_strategy previous
+
+# --- key bindings ---
+# Tab move deliberately stays on the upstream `ctrl+shift+,`/`ctrl+shift+.`
+# (move_tab_backward/forward); `ctrl+shift+page_up`/`ctrl+shift+page_down`
+# are NOT bound here because upstream maps them to scroll_page_up/down.
+# `ctrl+page_up`/`ctrl+page_down` are unmapped upstream.
+map ctrl+page_up previous_tab
+map ctrl+page_down next_tab
+# New tab inherits the cwd via shell integration (enabled by default);
+# without integration it falls back to the home directory, not an error.
+map ctrl+shift+t new_tab_with_cwd
+# Preserves the upstream home-directory behavior the remap above replaced.
+# `ctrl+shift+alt+n` is unmapped upstream; `ctrl+shift+alt+t` is NOT used
+# because upstream maps it to `set_tab_title` (rename-tab prompt).
+map ctrl+shift+alt+n new_tab
+
 # --- font ---
 font_family {{ .fonts.families.mono }}
 font_size {{ .fonts.sizes.terminal }}
