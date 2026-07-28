@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { ALL_PLATFORMS, MUSL_PLATFORMS, platformKey } from "../src/platforms.js";
+import { ALL_PLATFORMS, MUSL_PLATFORMS, platformKey, type Platform } from "../src/platforms.js";
 import { REGISTRY } from "../src/registry.js";
 
 /**
@@ -197,14 +197,29 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
 };
 
 describe("registry asset selectors", () => {
+  // Iterate the EXPECTED table's own keys, never the spec's linuxMusl flag:
+  // the table is the parity contract, so a spec that drops (or a table that
+  // gains) musl coverage without the other must fail here, not pass silently.
+  const platformByKey = new Map<string, Platform>(
+    [...ALL_PLATFORMS, ...MUSL_PLATFORMS].map((platform) => [platformKey(platform), platform]),
+  );
   for (const [tool, expectedByPlatform] of Object.entries(EXPECTED)) {
     const spec = REGISTRY[tool];
     describe(tool, () => {
-      const platforms = spec?.linuxMusl ? [...ALL_PLATFORMS, ...MUSL_PLATFORMS] : ALL_PLATFORMS;
-      for (const platform of platforms) {
-        const key = platformKey(platform);
+      // The table must cover exactly the platforms the spec targets. Drift in
+      // either direction — a removed linuxMusl flag with musl rows left behind,
+      // or musl rows added without the flag — fails this assertion.
+      const specPlatforms = spec?.linuxMusl ? [...ALL_PLATFORMS, ...MUSL_PLATFORMS] : ALL_PLATFORMS;
+      test("covers exactly the spec's target platforms", () => {
+        expect(Object.keys(expectedByPlatform).sort()).toEqual(
+          specPlatforms.map(platformKey).sort(),
+        );
+      });
+      for (const [key, expected] of Object.entries(expectedByPlatform)) {
         test(key, () => {
-          expect(spec?.asset?.(platform, TAG)).toBe(expectedByPlatform[key]);
+          const platform = platformByKey.get(key);
+          expect(platform, `EXPECTED row ${tool}/${key} names an unknown platform`).toBeDefined();
+          expect(spec?.asset?.(platform as Platform, TAG)).toBe(expected);
         });
       }
     });
