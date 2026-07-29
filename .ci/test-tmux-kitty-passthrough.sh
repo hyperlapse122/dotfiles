@@ -95,8 +95,7 @@ tmux -S "$sock" kill-server 2>/dev/null || true
 
 # tmux only forwards a passthrough payload to an ATTACHED client, so the
 # transport cases need a pty. util-linux script(1) covers CI runners; unbuffer
-# (expect) covers hosts that ship it instead. With neither, skip the transport
-# half rather than reporting a pass we did not earn.
+# (expect) covers hosts that ship it instead.
 pty_provider=''
 if command -v script >/dev/null 2>&1; then
   pty_provider=script
@@ -104,14 +103,23 @@ elif command -v unbuffer >/dev/null 2>&1; then
   pty_provider=unbuffer
 fi
 
+# With neither provider the transport half cannot run. That is a legitimate
+# local skip, but in CI it would green the job while proving nothing about the
+# behavior this gate exists to protect, so fail there instead of skipping.
 if [ -z "$pty_provider" ]; then
+  if [ -n "${CI:-}" ]; then
+    fail 'no pty provider in CI (need script(1) or unbuffer); the transport cases cannot run and must not be skipped'
+  fi
   printf 'tmux-kitty-passthrough: options and pane environment OK (tmux %s)\n' "$tmux_version"
-  printf 'tmux-kitty-passthrough: SKIP transport cases — no pty provider (need script(1) or unbuffer)\n'
+  printf 'tmux-kitty-passthrough: SKIP transport cases locally — no pty provider (need script(1) or unbuffer)\n'
   exit 0
 fi
 
 marker="CETMUXPASSTHRU$$"
 fidelity="CEFIDELITY$$"
+# The literal bytes the emitter writes for the fidelity probe: ESC [ 1 m <text>.
+# Matched with grep -F so the bracket stays a bracket.
+sgr_marker=$(printf '\033[1m%s' "$fidelity")
 
 emit="$scratch/emit.sh"
 cat >"$emit" <<EOF
@@ -134,8 +142,11 @@ pty_run() { # $1 = socket, $2 = config, $3 = capture path
   local run_sock=$1 run_conf=$2 cap=$3
   case "$pty_provider" in
     script)
-      TERM=xterm-256color script -q -e -c \
-        "tmux -S $run_sock -f $run_conf new-session $emit" "$cap" >/dev/null 2>&1 || true
+      # script(1) takes ONE command string, so the words must be quoted here or
+      # a scratch path containing a space would split into bogus arguments.
+      local cmd
+      cmd=$(printf 'tmux -S %q -f %q new-session %q' "$run_sock" "$run_conf" "$emit")
+      TERM=xterm-256color script -q -e -c "$cmd" "$cap" >/dev/null 2>&1 || true
       ;;
     unbuffer)
       TERM=xterm-256color unbuffer \
@@ -145,7 +156,19 @@ pty_run() { # $1 = socket, $2 = config, $3 = capture path
   tmux -S "$run_sock" kill-server 2>/dev/null || true
 }
 
-count() { LC_ALL=C grep -ac -- "$1" "$2" 2>/dev/null || true; }
+# Fixed-string match, and always a number. `grep -c` prints 0 and exits 1 on no
+# match, but prints NOTHING when the file is unreadable — an empty result would
+# then satisfy a "!= 0" assertion and pass without proving anything. -F also
+# keeps the ESC-bearing patterns literal instead of letting `[1m` be read as a
+# bracket expression.
+count() {
+  local n
+  n=$(LC_ALL=C grep -acF -- "$1" "$2" 2>/dev/null || true)
+  case "$n" in
+    ''|*[!0-9]*) printf '0' ;;
+    *) printf '%s' "$n" ;;
+  esac
+}
 
 # Run one transport case and assert the capture is usable before its verdict is
 # read. Fidelity comes first: if the capture mangled control bytes, the marker
@@ -153,7 +176,7 @@ count() { LC_ALL=C grep -ac -- "$1" "$2" 2>/dev/null || true; }
 capture_case() { # $1 = label, $2 = socket, $3 = config, $4 = capture path
   pty_run "$2" "$3" "$4"
   [ -s "$4" ] || fail "the $pty_provider capture for the $1 case is empty; the pty run produced nothing"
-  [ "$(count "$(printf '\033')[1m$fidelity" "$4")" != '0' ] \
+  [ "$(count "$sgr_marker" "$4")" != '0' ] \
     || fail "the $pty_provider capture for the $1 case dropped the raw SGR marker; the capture path is not byte-faithful"
 }
 
@@ -169,6 +192,24 @@ capture_case 'passthrough-on' "$sock" "$config" "$scratch/cap-on"
 capture_case 'passthrough-off' "${sock}-off" "$scratch/off.conf" "$scratch/cap-off"
 [ "$(count "$marker" "$scratch/cap-off")" = '0' ] \
   || fail 'passthrough is off but the Kitty graphics payload still reached the client'
+
+# --- 3b. drift guard on the substitution -------------------------------------
+
+# The transport cases assert on a hand-built payload, not on omp itself. That
+# substitution is only valid while omp still wraps its graphics emissions in the
+# tmux passthrough DCS. When omp is installed, prove that; when it is not (CI),
+# say so rather than implying the check ran.
+if command -v omp >/dev/null 2>&1; then
+  omp_bin=$(command -v omp)
+  if LC_ALL=C grep -qaF -- 'Ptmux;' "$omp_bin" 2>/dev/null \
+    && LC_ALL=C grep -qaF -- 'packages/tui/src/tmux.ts' "$omp_bin" 2>/dev/null; then
+    printf 'tmux-kitty-passthrough: drift guard OK — omp still carries its tmux passthrough wrapper\n'
+  else
+    fail 'omp no longer shows a tmux passthrough wrapper; the hand-built payload may no longer match what omp emits, so re-derive the transport assertion against omp'
+  fi
+else
+  printf 'tmux-kitty-passthrough: drift guard not applicable — omp is not installed here\n'
+fi
 
 # --- 4. isolation -------------------------------------------------------------
 
