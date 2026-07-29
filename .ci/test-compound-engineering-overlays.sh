@@ -16,7 +16,9 @@
 set -euo pipefail
 
 root=${1:-$(pwd)}
-scratch="$(mktemp -d -t ce-overlays.XXXXXX)"
+scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
+mkdir -p -- "$scratch_root"
+scratch=$(mktemp -d "$scratch_root/ce-overlays.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
 # --- stub op + empty config so execute-template never hits live 1Password ---
@@ -40,6 +42,10 @@ env PATH="$bin:$PATH" chezmoi \
 home="$scratch/home"
 version=$(grep -oE 'CURRENT="\$BASE_DIR/[^"]+"' "$prov" | sed -E 's|.*/(v[0-9][0-9.]+)"$|\1|')
 [ -n "$version" ] || { echo "could not resolve CE version from rendered script" >&2; exit 1; }
+# The version literal above is one re-trigger signal; the fingerprint block
+# (content-edit re-trigger) must also be present in the rendered provisioner.
+grep -q 'dot_local/share/compound-engineering-overlays/' "$prov" \
+  || { echo "fingerprint block missing from rendered provisioner (content-edit re-trigger broken)" >&2; exit 1; }
 
 ce_base="$home/.local/share/compound-engineering"
 overlays="$home/.local/share/compound-engineering-overlays"
@@ -87,14 +93,16 @@ exact_count=$(grep -c '^exact = true$' "$root/.chezmoiexternals/ai-agents.toml" 
 
 # --- persona content contract ---
 persona="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"
-contract() { grep -qF "$1" "$persona" || { echo "persona missing: $1" >&2; exit 1; }; }
+contract() { grep -qF -- "$1" "$persona" || { echo "persona missing: $1" >&2; exit 1; }; }
 contract 'glab'
 contract 'group/project#<iid>'
 contract 'confidential'
 contract 'sensitive: true'
 contract 'GitLab tools unavailable — source skipped this run.'
 contract 'GitLab write capability unavailable — source degrades to read-only ingest; items will be marked ack_deferred.'
-contract 'glab issue edit <iid> --add-label <configured-label>'
+contract 'glab issue update <iid> --label <configured-label>'
+contract '--paginate'
+contract 'per_page=100'
 # must not lean on gh / GitHub-CLI tooling or fetch merge requests
 if grep -qiE '\bgh\b|github-cli' "$persona"; then
   echo "persona references gh/github-cli tooling" >&2; exit 1

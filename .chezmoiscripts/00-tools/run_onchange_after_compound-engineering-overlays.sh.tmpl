@@ -49,7 +49,9 @@ OVERLAYS="${BASE_DIR}-overlays"
 
 # Both must exist: the file phase extracts CURRENT and deploys OVERLAYS before
 # scripts run. Match the prune script's defensive skip.
-[ -d "$OVERLAYS" ] && [ -d "$CURRENT" ] || exit 0
+if [ ! -d "$OVERLAYS" ] || [ ! -d "$CURRENT" ]; then
+  exit 0
+fi
 
 # Merge the overlays tree onto the current CE version tree at matching relative
 # paths. `/.` copies directory contents (including nested) into the target; -Rp is

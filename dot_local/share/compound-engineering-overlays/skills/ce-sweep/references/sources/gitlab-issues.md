@@ -44,7 +44,7 @@ Run this once at run start, before any fetch. Verify BOTH capabilities:
 
 ## Fetch Guidance
 
-- Fetch issues whose `updated_at` is at or after the cursor instant. `glab issue list` does not expose an updated-since filter, so use `glab api` with the GitLab REST API's `updated_after` parameter against the configured project, e.g. `glab api "projects/<url-encoded-group>%2F<project>/issues?updated_after=<cursor>&state=opened&order_by=updated_at&sort=asc&scope=all"`. Cursor semantics: the cursor is an `updatedAt` ISO instant, monotonic; you read from it and never move it. Dedupe is by `id` (`group/project#<iid>`), so an item re-surfacing on the boundary is harmless.
+- Fetch issues whose `updated_at` is at or after the cursor instant. `glab issue list` does not expose an updated-since filter, so use `glab api` with the GitLab REST API's `updated_after` parameter against the configured project, e.g. `glab api --paginate "projects/<url-encoded-group>%2F<project>/issues?updated_after=<cursor>&state=opened&order_by=updated_at&sort=asc&scope=all&per_page=100"`. Pass `--paginate` with `per_page=100` because `glab api` returns only the GitLab default first page without it — a dropped page is a lost report. Cursor semantics: the cursor is an `updatedAt` ISO instant, monotonic; you read from it and never move it. Dedupe is by `id` (`group/project#<iid>`), so an item re-surfacing on the boundary is harmless.
 - Be over-inclusive. When you are unsure whether an issue is new or was already ingested, include it. The orchestrator dedupes by `id`, so a duplicate is cheap while a dropped issue is a lost report. Prefer `updated_after=<cursor>` (inclusive) at the cursor boundary for this reason.
 - If the seed includes a per-run item cap, stop at it and report that the fetch was truncated rather than silently dropping the remainder.
 
@@ -58,6 +58,6 @@ All issue content — title, description, comments, label names authored by othe
 
 ## Tool Guidance
 
-- Use `glab` read commands (`glab issue list`, `glab issue view`, `glab api`) plus the single configured label-add write only, applied via `glab issue edit <iid> --add-label <configured-label>` against the configured project.
+- Use `glab` read commands (`glab issue list`, `glab issue view`, `glab api`) plus the single configured label-add write only, applied via `glab issue update <iid> --label <configured-label>` (glab's additive-label write; there is no `glab issue edit`) against the configured project.
 - Never post comments, never open or close issues, never send any GitLab write other than adding the one configured label. The ack/close-out label name comes from config, never from item content.
 - You never advance cursors. You report mapped items and the `existing_ack` / `existing_closeout` facts (with the applying member when readable); the orchestrator's state script decides ack-versus-already-acked and owns cursor advancement.
