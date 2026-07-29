@@ -125,6 +125,19 @@ jobs:
       - name: Render ignore/removal gates
         run: .ci/test-cli-proxy-api-render-matrix.sh
 
+  compound-engineering-overlays:
+    name: compound-engineering overlays
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run overlay injection test
+        run: .ci/test-compound-engineering-overlays.sh "$GITHUB_WORKSPACE"
+
   # NOTE: shellcheck moved to the `render-dotfiles` workflow's `shellcheck` job,
   # which runs after the Fedora/Ubuntu render so it can lint the REAL rendered
   # scripts (including the `.chezmoiscripts/**` templates shellcheck cannot parse

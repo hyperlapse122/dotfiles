@@ -326,8 +326,13 @@ include = ["*/skills/{{ .name }}/**"]
        .chezmoiscripts/00-tools/run_onchange_after_compound-engineering.
        stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix so the
        repo root (package.json, .opencode/, .claude-plugin/, .codex-plugin/, skills/, ...)
-       lands directly at the target. exact=true so a version's extracted tree cleans up
-       upstream deletions. POSIX only — matches the install script's linux+darwin gate
+       lands directly at the target. `exact` is intentionally OMITTED so the tree is
+       additive — chezmoi adds/updates archive files but leaves others, letting the
+       compound-engineering-overlays provisioner inject source personas (e.g.
+       ce-sweep's gitlab-issues) that survive every apply. Tradeoff: a version dir no
+       longer self-cleans upstream deletions within a version cycle (each version bump
+       creates a fresh dir, resetting it); CE is the sole localArchive plugin today.
+       POSIX only — matches the install script's linux+darwin gate
        and the sibling agent-skills block. compoundEngineeringRelease yields tags of the
        form `compound-engineering-v<semver>`; the on-disk version segment strips the
        front-half prefix and keeps the `v` so it matches the tag's own version suffix. */ -}}
@@ -353,7 +358,6 @@ include = ["*/skills/{{ .name }}/**"]
 type = "archive"
 url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
 stripComponents = 1
-exact = true
 {{-   end -}}
 {{- end -}}
 {{- end -}}
