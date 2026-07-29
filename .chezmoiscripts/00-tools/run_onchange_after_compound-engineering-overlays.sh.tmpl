@@ -1,0 +1,62 @@
+{{ if ne .chezmoi.os "windows" -}}
+
+{{- $ctx := . -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $cePlugin := "" -}}
+{{- range .agents.opencode.plugins -}}
+{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}
+{{-     $cePlugin = . -}}
+{{-   end -}}
+{{- end -}}
+{{- if $cePlugin -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+
+#!/usr/bin/env bash
+# .chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl
+#
+# Injects the compound-engineering-overlays tree
+# (~/.local/share/compound-engineering-overlays/) onto the currently-pinned
+# compound-engineering version directory (~/.local/share/compound-engineering/v<semver>/).
+# ce-sweep and other skills load per-source personas from references/sources/<type>.md
+# inside that versioned tree, which the release archive does not ship (e.g.
+# gitlab-issues.md); without this overlay every run re-authors them and they diverge
+# across devices.
+#
+# The compound-engineering external is ADDITIVE: .chezmoiexternals/ai-agents.toml's
+# localArchive block intentionally omits `exact`, so chezmoi adds/updates archive
+# files but does not remove others. An injected overlay therefore survives across
+# no-change applies, and this script only needs to (re)run on a CE version bump
+# (a fresh version directory) or an overlay content edit.
+#
+# Re-trigger: the rendered $ceVersion below changes on a version bump (changes the
+# rendered content), and the fingerprint block below changes on an overlay content
+# edit. chezmoi hashes the whole rendered script to decide re-run, so either fires it.
+#
+# Generic: every file under the overlays tree is mirrored onto the CE tree at the
+# matching relative path, so adding a future overlay needs no script change.
+# POSIX `cp -Rp .../.` merges portably across GNU and BSD cp. Mirrors the version
+# resolution in run_onchange_after_compound-engineering (the prune script); this
+# script never prunes version directories and never modifies the overlays source.
+#
+# onchange trigger: rendered $ceVersion + fingerprint block below.
+
+set -euo pipefail
+
+BASE_DIR="$HOME/{{ $cePlugin.externalPath }}"
+CURRENT="$BASE_DIR/{{ $ceVersion }}"
+OVERLAYS="${BASE_DIR}-overlays"
+
+# Both must exist: the file phase extracts CURRENT and deploys OVERLAYS before
+# scripts run. Match the prune script's defensive skip.
+[ -d "$OVERLAYS" ] && [ -d "$CURRENT" ] || exit 0
+
+# Merge the overlays tree onto the current CE version tree at matching relative
+# paths. `/.` copies directory contents (including nested) into the target; -Rp is
+# POSIX and preserves mode; same-named files are overwritten (overlay semantics).
+cp -Rp -- "$OVERLAYS/." "$CURRENT/"
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_local/share/compound-engineering-overlays/**")) }}
+
+{{ end -}}
+{{ end -}}
