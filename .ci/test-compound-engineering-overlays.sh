@@ -4,7 +4,7 @@
 # Renders the overlay provisioner via `chezmoi execute-template` (stub op, empty
 # config, --source PWD), points HOME at a scratch tree so the provisioner's resolved
 # CE version dir lands on a fake CE checkout, runs it, and asserts:
-#   - the persona is injected at the right CE-relative path
+#   - the persona and ce-sweep contract are injected at the right CE-relative paths
 #   - the three upstream source files are preserved (merge, not replace)
 #   - the injected persona is byte-identical to the deployed overlay source
 #   - the provisioner exits 0 when the overlays dir or the CE dir is absent
@@ -57,9 +57,8 @@ build_fake_ce() {
   for f in email github-issues slack; do
     printf 'upstream %s\n' "$f" > "$current/skills/ce-sweep/references/sources/$f.md"
   done
-  mkdir -p "$overlays/skills/ce-sweep/references/sources"
-  cp "$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md" \
-     "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md"
+  mkdir -p "$overlays"
+  cp -Rp "$root/dot_local/share/compound-engineering-overlays/." "$overlays/"
 }
 
 # --- happy path: inject + merge + byte-identical ---
@@ -67,12 +66,16 @@ build_fake_ce
 env HOME="$home" bash "$prov"
 
 src="$current/skills/ce-sweep/references/sources/gitlab-issues.md"
+skill="$current/skills/ce-sweep/SKILL.md"
 [ -f "$src" ] || { echo "persona not injected" >&2; exit 1; }
+[ -f "$skill" ] || { echo "ce-sweep contract not injected" >&2; exit 1; }
 for f in email github-issues slack; do
   [ -f "$current/skills/ce-sweep/references/sources/$f.md" ] || { echo "upstream $f.md lost in merge" >&2; exit 1; }
 done
 cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
   || { echo "injected persona differs from overlay source" >&2; exit 1; }
+cmp -s "$overlays/skills/ce-sweep/SKILL.md" "$skill" \
+  || { echo "injected ce-sweep contract differs from overlay source" >&2; exit 1; }
 
 # --- skip when overlays dir absent (leave CE tree intact) ---
 build_fake_ce
@@ -100,9 +103,11 @@ contract 'confidential'
 contract 'sensitive: true'
 contract 'GitLab tools unavailable — source skipped this run.'
 contract 'GitLab write capability unavailable — source degrades to read-only ingest; items will be marked ack_deferred.'
-contract 'glab issue update <iid> --label <configured-label>'
-contract '--paginate'
-contract 'per_page=100'
+contract 'glab issue update <iid> --repo <group/project> --label <configured-label>'
+contract '--order updated_at --sort desc --output json --page <n> --per-page 100'
+contract 'updated_at >= cursor'
+contract 'members/all/<author-id>'
+contract 'Confidential GitLab issue group/project#<iid>'
 # must not lean on gh / GitHub-CLI tooling or fetch merge requests
 if grep -qiE '\bgh\b|github-cli' "$persona"; then
   echo "persona references gh/github-cli tooling" >&2; exit 1
@@ -110,5 +115,14 @@ fi
 if grep -qiE 'glab mr\b|glab mr list|merge request list' "$persona"; then
   echo "persona fetches merge requests" >&2; exit 1
 fi
+
+# --- overlaid ce-sweep contract propagates per-item sensitivity ---
+skill_source="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/SKILL.md"
+grep -qF 'optional `sensitive`' "$skill_source" \
+  || { echo "ce-sweep mapped-item contract omits per-item sensitivity" >&2; exit 1; }
+grep -qF 'either the source'\''s config entry is marked sensitive or the mapped item carries `sensitive: true`' "$skill_source" \
+  || { echo "ce-sweep upsert contract does not propagate per-item sensitivity" >&2; exit 1; }
+grep -qF 'must also replace its `title` with a neutral, non-sensitive summary' "$skill_source" \
+  || { echo "ce-sweep sensitive-title contract missing" >&2; exit 1; }
 
 echo "compound-engineering overlays: ok"
