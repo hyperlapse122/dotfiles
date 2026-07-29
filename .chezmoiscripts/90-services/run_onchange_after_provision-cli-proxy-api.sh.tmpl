@@ -67,9 +67,110 @@ yaml_quote() {
   printf "'%s'" "$v"
 }
 
+# Emit the source-owned, non-secret fields as stable path=value records.
+# CLIProxyAPI owns this file after seeding and can rewrite comments, ordering,
+# quotes, and secret-key. Keep this parser limited to the generated YAML
+# subset. Fail closed on ambiguous YAML instead of treating it as equivalent.
+managed_config_projection() {
+  awk '
+    function fail() { bad = 1 }
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function scalar(value, type, unquoted, quoted) {
+      value = trim(value)
+      if (value ~ /^["\047].*["\047]$/) {
+        if (substr(value, 1, 1) != substr(value, length(value), 1)) fail()
+        quoted = 1
+        value = substr(value, 2, length(value) - 2)
+      } else if (value ~ /^[&*!|>]/ || value ~ /[[:space:]]+#/) {
+        fail()
+      }
+      if (quoted && type != "string") fail()
+      if (type == "bool" && value !~ /^(true|false)$/) fail()
+      if (type == "int" && value !~ /^[0-9]+$/) fail()
+      if (type == "list") {
+        unquoted = value
+        gsub(/[[:space:]]/, "", unquoted)
+        if (unquoted != "[]") fail()
+        value = "[]"
+      }
+      return value
+    }
+    function keep(path, value, type) {
+      if (++seen[path] != 1) fail()
+      values[path] = scalar(value, type)
+    }
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+    /^[[:space:]]*<<[[:space:]]*:/ { fail(); next }
+    {
+      match($0, /^[[:space:]]*/)
+      indent = RLENGTH
+      line = substr($0, indent + 1)
+      split_at = index(line, ":")
+      if (!split_at) {
+        if (indent > 0 && parent != "remote-management") next
+        fail()
+        next
+      }
+      key = trim(substr(line, 1, split_at - 1))
+      value = substr(line, split_at + 1)
+
+      if (indent == 0) {
+        if (trim(value) == "") parent = key
+        else parent = ""
+        if (key == "remote-management") {
+          if (trim(value) != "" || ++remote_sections != 1) fail()
+          next
+        }
+      }
+      path = ""
+      if (indent == 0) path = key
+      else if (indent == 2) path = parent "." key
+
+      if (path == "port") keep(path, value, "int")
+      else if (path == "remote-management.allow-remote") keep(path, value, "bool")
+      else if (path == "remote-management.disable-control-panel") keep(path, value, "bool")
+      else if (path == "auth-dir") keep(path, value, "string")
+      else if (path == "api-keys") keep(path, value, "list")
+      else if (path == "debug") keep(path, value, "bool")
+      else if (path == "logging-to-file") keep(path, value, "bool")
+      else if (path == "usage-statistics-enabled") keep(path, value, "bool")
+      else if ((key == "port" || key == "allow-remote" ||
+                key == "disable-control-panel" || key == "auth-dir" ||
+                key == "api-keys" || key == "debug" ||
+                key == "logging-to-file" ||
+                key == "usage-statistics-enabled") &&
+               path != "remote-management.secret-key") fail()
+    }
+    END {
+      paths[1] = "port"
+      paths[2] = "remote-management.allow-remote"
+      paths[3] = "remote-management.disable-control-panel"
+      paths[4] = "auth-dir"
+      paths[5] = "api-keys"
+      paths[6] = "debug"
+      paths[7] = "logging-to-file"
+      paths[8] = "usage-statistics-enabled"
+      if (remote_sections != 1) bad = 1
+      for (i = 1; i <= 8; i++) {
+        path = paths[i]
+        if (seen[path] != 1) bad = 1
+      }
+      if (bad) exit 1
+      for (i = 1; i <= 8; i++) {
+        path = paths[i]
+        print path "=" values[path]
+      }
+    }
+  '
+}
+
 # Seed the runtime config when absent; warn on non-secret drift otherwise.
 seed_config() {
-  local desired=$1
+  local desired=$1 desired_projection runtime_projection
   mkdir -p "$CONFIG_DIR" "$AUTH_DIR"
   chmod 700 "$CONFIG_DIR" "$AUTH_DIR" 2>/dev/null || true
   if [ ! -f "$RUNTIME_CONFIG" ]; then
@@ -79,9 +180,9 @@ seed_config() {
     printf '%s\n' "$desired" >"$RUNTIME_CONFIG.tmp"
     mv "$RUNTIME_CONFIG.tmp" "$RUNTIME_CONFIG"
     printf 'provision-cli-proxy-api: seeded runtime config %s\n' "$RUNTIME_CONFIG"
-  elif ! diff \
-    <(grep -v 'secret-key:' "$RUNTIME_CONFIG") \
-    <(printf '%s\n' "$desired" | grep -v 'secret-key:') >/dev/null 2>&1; then
+  elif ! desired_projection=$(printf '%s\n' "$desired" | managed_config_projection) ||
+    ! runtime_projection=$(managed_config_projection <"$RUNTIME_CONFIG") ||
+    [ "$desired_projection" != "$runtime_projection" ]; then
     warn "runtime config drifts from the managed template (non-secret fields); re-seed with: rm \"$RUNTIME_CONFIG\" && chezmoi apply"
   fi
 }

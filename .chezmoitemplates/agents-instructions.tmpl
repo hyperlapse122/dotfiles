@@ -2,6 +2,14 @@
 
 This file is the common user-scoped instruction core, composed per agent harness. Use RFC 2119 terms literally. The repository root `AGENTS.md` is the local supplement and may be stricter; read it before changing this checkout. Edit this source, never deployed instruction targets.
 
+## Writing and language
+
+All agent-authored natural-language text MUST be clear, concise, and direct. This baseline applies to responses, technical documentation, README content, code comments, commit messages, and PR/MR text that the agent writes or substantially revises.
+
+English prose MUST use ASD-STE100 Simplified Technical English principles as practical guidance: use short sentences, express one main instruction or idea per sentence, use active voice when practical, and use terminology consistently. Do not claim certified, complete, or controlled-vocabulary compliance. For other languages, use the equivalent clear and concise conventions of that language; do not impose English grammar or vocabulary on them.
+
+Project instructions MAY refine the covered output, required terminology, and justified exceptions, but MUST NOT remove the clear-and-concise baseline. More-specific repository format and terminology rules take precedence. Preserve exact text when accuracy requires it, including code, commands, logs, error messages, quotations, identifiers, and official names.
+
 ## Routing and mirrors
 
 Load the named operation skill before the operation: `playwright-cli` for browser/Playwright work. Do not add mandatory `ce-work`/`ce-debug` routing here; use the available workflow and the user's direction.{{ if eq .harness "opencode" }}
