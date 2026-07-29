@@ -8,7 +8,7 @@ import type { StorageAdapter } from "./storage/types.js";
 
 const TARGETS = ["opencode", "pi", "omp", "antigravity", "kimi"] as const;
 export type AuthTarget = (typeof TARGETS)[number];
-export const USAGE = "Usage: figma-auth <opencode|pi|omp|antigravity|kimi>\n";
+export const USAGE = `Usage: figma-auth <${TARGETS.join("|")}>\n`;
 
 export interface CliOptions {
   stderr?: { write(value: string): unknown };

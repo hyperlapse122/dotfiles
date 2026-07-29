@@ -4,6 +4,8 @@
 {{- $provider := index $providers 0 -}}
 {{- if or (ne $provider.name "zai") (ne $provider.type "api_key") -}}{{- fail "config-omp-auth: the only supported provider mapping is zai api_key -> ZAI_API_KEY" -}}{{- end -}}
 {{- $key := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $provider.key "ctx" $) | fromJson -}}
+# This script retries on every apply because its rendered secret is not a safe
+# onchange fingerprint input.
 # Reconciles omp's managed ZAI_API_KEY in its live-written dotenv file.
 # Unrelated valid dotenv entries remain byte-identical. No backup is created.
 $ErrorActionPreference = 'Stop'

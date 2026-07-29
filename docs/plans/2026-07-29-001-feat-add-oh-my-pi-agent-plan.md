@@ -34,7 +34,7 @@ Add `omp` as a fully managed agent in this dotfiles, modeled on the existing pi 
 
 ### Problem Frame
 
-The user runs both pi and its fork oh-my-pi (`omp`, fork of `badlogic/pi-mono`) and wants omp managed by these dotfiles the same way pi is — managed settings/models/auth, release-pinned binary, shared MCP, and on-demand Figma auth — so omp is not a hand-maintained outlier. omp is batteries-included (built-in MCP, native Anthropic OAuth, built-in subagents/ask_user/fuzzy search) and ships as a lone per-platform binary with a marketplace plugin model, so pi's archive distribution, extension packages, and `update --extensions` reconcile do not transfer verbatim. The work is to copy pi's *managed-config* pattern and adapt the pieces omp does differently.
+The user runs both pi and its fork oh-my-pi (`omp`, fork of `badlogic/pi-mono`) and wants omp managed by these dotfiles the same way pi is — managed settings/models/auth, release-pinned binary, shared MCP, and on-demand Figma auth — so omp is not a hand-maintained outlier. omp is batteries-included (built-in MCP, native Anthropic OAuth, built-in subagents/ask/fuzzy search) and ships as a lone per-platform binary with a marketplace plugin model, so pi's archive distribution, extension packages, and `update --extensions` reconcile do not transfer verbatim. The work is to copy pi's *managed-config* pattern and adapt the pieces omp does differently.
 
 ### Key Decisions
 
@@ -55,14 +55,14 @@ The user runs both pi and its fork oh-my-pi (`omp`, fork of `badlogic/pi-mono`) 
 
 **Managed agent configuration**
 
-- R4. An `agents.omp` data block drives a managed-readonly omp `settings.json`, a managed models baseline, and `auth.providers` static API-key entries (kimi, zai), mirroring `agents.pi`.
-- R5. `dot_omp/private_agent/` templates render omp's `settings.json`, `models.yml`, `mcp.json`, and `AGENTS.md` under `~/.omp/agent/`.
+- R4. An `agents.omp` data block drives a managed-readonly omp `config.yml`, a managed models baseline, and the managed Z.AI API key.
+- R5. `dot_omp/private_agent/` templates render omp's `config.yml`, `models.yml`, `mcp.json`, and `AGENTS.md` under `~/.omp/agent/`.
 - R6. omp's MCP server list is treated as live at runtime because omp has a built-in MCP runtime (unlike pi's mcp.json, which is inert without an extension).
 
 **Auth and secrets**
 
-- R7. omp static provider credentials (kimi, zai) render to a managed `~/.omp/agent/.env`; OAuth providers use omp's native `/login` and are not chezmoi-managed.
-- R8. A figma-auth omp storage adapter writes Figma-MCP credentials to `~/.omp/agent/mcp-auth/`, and `omp` is registered as a figma-auth target alongside opencode/pi/antigravity/kimi.
+- R7. The static Z.AI provider credential renders to a managed `~/.omp/agent/.env`; OAuth providers use omp's native `/login` and are not chezmoi-managed.
+- R8. A figma-auth omp storage adapter writes a profile-scoped Figma MCP OAuth row to `~/.omp/agent/agent.db`, and `omp` is registered as a figma-auth target alongside opencode/pi/antigravity/kimi.
 
 **Plugins**
 
@@ -77,7 +77,7 @@ The user runs both pi and its fork oh-my-pi (`omp`, fork of `badlogic/pi-mono`) 
 
 ### Acceptance Examples
 
-- AE1. **Windows host** — omp config (`settings.json`, `models.yml`, `mcp.json`, `AGENTS.md`) deploys; only `.omp/agent/extensions/mxm4-haptic.ts` is skipped (no haptic daemon). The omp binary external resolves `omp-windows-x64.exe`. **Covers R11.**
+- AE1. **Windows host** — omp config (`config.yml`, `models.yml`, `mcp.json`, `AGENTS.md`) deploys; only `.omp/agent/extensions/mxm4-haptic.ts` is skipped (no haptic daemon). The omp binary external resolves `omp-windows-x64.exe`. **Covers R11.**
 - AE2. **Container host** — omp CLI dotfiles and managed config deploy; the haptic plugin/extension is skipped because there is no MX Master 4. **Covers R11, R13.**
 - AE3. **Release refresh** — the omp lock entry resolves omp's latest release with per-platform URL + sha256 (no SHA256SUMS sidecar; sha256 comes from the GitHub release asset digest). **Covers R2.**
 
@@ -113,11 +113,10 @@ Resolved during planning: OQ1 (auth) → KTD6; OQ2 (CE marketplace) → KTD3; OQ
 
 Deferred to implementation:
 
-- OQ-A. omp external type — confirm the downloaded asset is a raw binary (`type = "file"`) vs an archive (`type = "archive-file"` with `path`); ensure the executable bit.
+- OQ-A. Verify that the raw-file external installs with the executable bit; add a small onchange `chmod` step only if verification shows it is required.
 - OQ-B. omp `mcp.json` management mode — managed-readonly (pi parity, blocks omp `/mcp add` persistence) vs live-merge; recommend readonly parity, confirm.
-- OQ-C. Exact omp marketplace `name@marketplace` string for compound-engineering and whether `omp plugin install` is idempotent for a reconcile script.
-- OQ-D. mxm4-haptic omp event-name mapping (pi `after_provider_response`/`agent_settled` → omp equivalents) and omp extension import package name (`@oh-my-pi/pi-coding-agent`).
-- OQ-E. Whether `.chezmoiignore` should also skip `.omp/agent/mcp.json` + `AGENTS.md` on Windows (pi omits those) or deploy them (omp is cross-platform); lean deploy.
+- OQ-C. Confirm the compound-engineering catalog's marketplace name and plugin name before writing the reconcile command. Use omp's documented `omp plugin marketplace add` and `omp plugin install --scope user name@marketplace` interface.
+- OQ-D. Confirm the mxm4-haptic event mapping against omp's exported extension event types before writing the handlers. Use the documented `@oh-my-pi/pi-coding-agent` import.
 
 ### Sources
 
@@ -135,9 +134,9 @@ Deferred to implementation:
 - KTD1. **omp install is a release-locked lone-binary external** (`type = "file"` raw binary → `~/.local/bin/omp`, `.exe` on Windows). *(session-settled: user-directed — chosen over npm/bun/mise: standalone release CLIs live in `.chezmoiexternals`.)*
 - KTD2. **No MCP-client or Anthropic-auth plugin for omp**; the pi npm extension list is not ported. omp is batteries-included. *(session-settled: user-directed.)*
 - KTD3. **compound-engineering on omp via omp's marketplace**, consuming `EveryInc/compound-engineering-plugin`'s `.claude-plugin/marketplace.json` (omp's Claude-compatible fallback), reconciled by an onchange script (`omp plugin marketplace add` + `omp plugin install`). *(session-settled: user-directed.)*
-- KTD4. **omp is a figma-auth target** (`OmpStorage` → `~/.omp/agent/mcp-auth/`). *(session-settled: user-directed.)*
+- KTD4. **omp is a figma-auth target** (`OmpStorage` → OMP's profile-scoped OAuth row in `~/.omp/agent/agent.db`). *(session-settled: user-directed.)*
 - KTD5. **omp alongside pi**; pi's surface is unchanged except a shared doc line. *(session-settled: user-directed.)*
-- KTD6. **omp provider auth renders to a managed `~/.omp/agent/.env`** (0600) from `agents.omp.auth.providers` (kimi/zai static API keys). omp has no `auth.json`; OAuth (anthropic) uses omp's native `/login` into `agent.db` and is not chezmoi-managed. Resolves OQ1.
+- KTD6. **omp provider auth renders to a managed `~/.omp/agent/.env`** (0600) from the Z.AI entry in `agents.omp.auth.providers`. omp has no `auth.json`; OAuth uses omp's native `/login` into `agent.db` and is not chezmoi-managed. Resolves OQ1.
 - KTD7. **omp models baseline is `models.yml`** (omp-preferred). Resolves OQ4.
 - KTD8. **mxm4-haptic deploys to `~/.omp/agent/extensions/mxm4-haptic.ts`** via omp's native extension discovery; the extension uses omp's `pi.on(...)` API (fork-compatible). Resolves OQ5.
 - KTD9. **omp is cross-platform** — config templates are not POSIX-gated (deploy on Windows too); only the mxm4-haptic extension template is POSIX-gated. Corrects the requirements' POSIX-only assumption.
@@ -154,7 +153,7 @@ flowchart TB
     H[haptic.omp - .chezmoidata/haptic.yaml]
   end
   RL --> EXT["[omp] external in ai-agents.toml\nraw binary -> ~/.local/bin/omp  (diverges from pi archive)"]
-  A --> T1["dot_omp templates:\nsettings.json / models.yml / mcp.json / AGENTS.md"]
+  A --> T1["dot_omp templates:\nconfig.yml / models.yml / mcp.json / AGENTS.md"]
   A --> ENV["~/.omp/agent/.env provider keys  (diverges from pi auth.json)"]
   A --> CE["CE reconcile via omp marketplace  (diverges from pi update --extensions)"]
   H --> HAP["dot_omp extensions/mxm4-haptic.ts -> ~/.omp/agent/extensions"]
@@ -191,7 +190,7 @@ Three seams diverge from pi and drive most of the implementation risk: (1) raw-b
 - **Requirements:** R1, R3, R4, R10; carries R13 data.
 - **Dependencies:** U1.
 - **Files:** `.chezmoiexternals/ai-agents.toml`, `.chezmoidata/agents.yaml`, `.chezmoidata/haptic.yaml`.
-- **Approach:** Add an `[omp]` external block (POSIX + Windows; no OS gate — omp is cross-platform) of `type = "file"` resolving the locked URL to `.local/bin/omp` (`.exe` on Windows), with `[omp.checksum] sha256` from the lock — modeled on the `cli-proxy-api`/`codegraph` blocks, not pi's archive block. Confirm whether `type = "file"` preserves the executable bit (OQ-A); add a tiny onchange `chmod` if needed. No `run_onchange_after_omp` symlink script (R3). Add an `agents.omp` block to `agents.yaml` mirroring `agents.pi`: `models.providers: {}` empty baseline, `settings` (managed-readonly omp `settings.json` keys — `theme`, `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `subagents`, `warnings`; the `packages` list OMITS `pi-mcp-extension` and `@gotgenes/pi-anthropic-auth` per KTD2 and contains only the omp-relevant sources), and `auth.providers` (kimi, zai `op://` keys). Add a `haptic.omp` block to `haptic.yaml` mirroring `haptic.pi` (`settled`/`failed`/`question` waveform names).
+- **Approach:** Add an `[omp]` external block (POSIX + Windows; no OS gate — omp is cross-platform) of `type = "file"` resolving the locked URL to `.local/bin/omp` (`.exe` on Windows), with `[omp.checksum]` SHA-256 data from the lock. No archive extraction or symlink script is required. Add an `agents.omp` block with an empty model-provider baseline, canonical OMP v17 settings, the Z.AI `op://` key, and the pinned local compound-engineering marketplace source. Add a `haptic.omp` block with settled, failed, and question waveforms.
 - **Patterns to follow:** `[cli-proxy-api]`/`[codegraph]` external blocks; `agents.pi` data block; `haptic.pi`.
 - **Test scenarios:**
   - **Happy path (render):** `chezmoi execute-template` over `ai-agents.toml` renders the `[omp]` block with a concrete locked URL + sha256 on Linux, macOS, and Windows. Covers R1.
@@ -205,11 +204,11 @@ Three seams diverge from pi and drive most of the implementation risk: (1) raw-b
 - **Goal:** Render omp's managed config under `~/.omp/agent/` and teach the shared instructions template about the omp harness.
 - **Requirements:** R4, R5, R6, R12; carries R13 extension.
 - **Dependencies:** U2.
-- **Files:** `dot_omp/private_agent/private_readonly_settings.json.tmpl`, `dot_omp/private_agent/readonly_models.yml.tmpl`, `dot_omp/private_agent/private_readonly_mcp.json.tmpl`, `dot_omp/private_agent/private_readonly_AGENTS.md.tmpl`, `dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl`, `.chezmoitemplates/agents-instructions.tmpl`.
-- **Approach:** Mirror the `dot_pi/private_agent/` templates 1:1 with omp's paths and divergences. `settings.json.tmpl` deep-copies `agents.omp.settings`, injects `lastChangelogVersion` from the omp lock key, and resolves `op://` by value (0400). `readonly_models.yml.tmpl` renders `agents.omp.models` as YAML with NO secret resolution (0444). `mcp.json.tmpl` reuses the shared `agent-mcp-servers-json.tmpl` source with `lifecycle: "eager"` and `auth: oauth` mapping, resolving header `op://` refs (managed-readonly per OQ-B recommendation). `AGENTS.md.tmpl` delegates to `agents-instructions.tmpl` with `harness "omp"`. Add an `{{ if eq .harness "omp" }}` branch to `agents-instructions.tmpl` (alongside the pi branch). Unlike pi's templates, the omp config templates are NOT POSIX-gated (KTD9: deploy on Windows too). The `mxm4-haptic.ts.tmpl` mirrors pi's: validates `haptic.omp` waveforms against the 16-name list (fail-closed), bakes the three waveform consts, and registers `pi.on(...)` event handlers — but imports omp's package (`@oh-my-pi/pi-coding-agent`) and targets omp's event names (OQ-D); it IS POSIX-gated (haptic daemon is POSIX).
+- **Files:** `dot_omp/private_agent/private_readonly_config.yml.tmpl`, `dot_omp/private_agent/readonly_models.yml.tmpl`, `dot_omp/private_agent/private_readonly_mcp.json.tmpl`, `dot_omp/private_agent/private_readonly_AGENTS.md.tmpl`, `dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl`, `.chezmoitemplates/agents-instructions.tmpl`.
+- **Approach:** Render OMP v17's canonical `config.yml` from `agents.omp.settings`. `readonly_models.yml.tmpl` renders `agents.omp.models` as YAML with no secret resolution. `mcp.json.tmpl` reuses the shared MCP source and resolves header `op://` refs. `AGENTS.md.tmpl` delegates to `agents-instructions.tmpl` with `harness "omp"`. The config templates deploy on Windows. The haptic extension imports `@oh-my-pi/pi-coding-agent`, validates waveform names, and handles OMP's `ask` tool. It is skipped on Windows and in containers.
 - **Patterns to follow:** `dot_pi/private_agent/*`; the `{{ if eq .harness "pi" }}` clause in `agents-instructions.tmpl`.
 - **Test scenarios:**
-  - **Happy path (settings render):** `settings.json.tmpl` renders valid JSON with `lastChangelogVersion` matching the omp lock tag (minus `v`) and `op://` keys resolved to literals. Covers R4, R5.
+  - **Happy path (settings render):** `config.yml.tmpl` renders valid YAML with the managed theme, model role, and thinking level. Covers R4, R5.
   - **Happy path (models):** `readonly_models.yml.tmpl` renders valid YAML with no `op://` substring.
   - **Happy path (mcp):** `mcp.json.tmpl` renders the shared MCP servers with `lifecycle: "eager"` and `auth: oauth` mapped to `{type: oauth}`.
   - **Cross-platform (KTD9):** the four config templates have no `{{ if ne .chezmoi.os "windows" }}` gate; only `mxm4-haptic.ts.tmpl` is POSIX-gated. Covers R11, AE1.
@@ -222,16 +221,17 @@ Three seams diverge from pi and drive most of the implementation risk: (1) raw-b
 - **Goal:** Provision omp's static provider keys and reconcile the compound-engineering plugin.
 - **Requirements:** R7, R9.
 - **Dependencies:** U2 (omp on PATH via U2's external).
-- **Files:** `.chezmoiscripts/70-agents/run_onchange_after_config-omp-auth.sh.tmpl`, `.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl`.
-- **Approach:** The auth script writes `~/.omp/agent/.env` (0600, atomic) from `agents.omp.auth.providers`, rendering each `op://` key and emitting `PROVIDER_API_KEY=...`-style entries omp's env-tier credential resolution reads; use read-merge-write to preserve any interactive entries (KTD6). Soft-skip on missing `jq`/`omp` (container caveat, mirroring `config-pi-auth`). The plugin reconcile script runs `omp plugin marketplace add EveryInc/compound-engineering-plugin` then `omp plugin install compound-engineering@<marketplace>` (OQ-C confirms the exact `name@marketplace`); resolve-and-bake the marketplace source SHA into comment lines as the onchange trigger (like `compound-engineering-ref.tmpl`), so an upstream change re-runs. No `omp update --extensions` (omp has none). Soft-skip when `omp` is absent.
+- **Files:** `.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl`, `.chezmoiscripts/70-agents/run_after_config-omp-auth.ps1.tmpl`, `.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl`, `.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.ps1.tmpl`.
+- **Approach:** The POSIX and Windows auth scripts write `~/.omp/agent/.env` (0600 or the platform-equivalent private ACL, atomic) from an explicit provider-to-variable mapping in `agents.omp.auth.providers`: `zai` uses `ZAI_API_KEY`; confirm the supported Kimi provider ID and variable from omp's provider table before adding it. Use read-merge-write so managed variables replace the same names and unrelated entries remain unchanged. Reject symlinks, non-regular targets, invalid variable names, NUL bytes, and values that the documented minimal dotenv parser cannot represent safely. Quote supported values so newline, quote, backslash, and shell metacharacters cannot create new entries. Fail without modifying or copying a malformed existing file; do not create a credential backup. Soft-skip when required runtime tools are absent. The plugin reconcile scripts use omp's documented `omp plugin marketplace add` and `omp plugin install --scope user name@marketplace` commands after resolving the catalog's exact marketplace and plugin names. They install from the repository-managed, versioned compound-engineering marketplace source rather than tracking a mutable remote. Bake the managed version/source fingerprint into comment lines so an update reruns the reconcile. No `omp update --extensions` (omp has none). Soft-skip when `omp` is absent.
 - **Patterns to follow:** `run_onchange_after_config-pi-auth.sh.tmpl` (merge discipline, jq soft-skip, fingerprint comments); `run_onchange_after_update-pi-extensions.sh.tmpl` (resolve-and-bake trigger).
 - **Test scenarios:**
-  - **Happy path (auth):** with an existing omp `.env` containing an interactive key, the script merges the declared provider keys without dropping the interactive one; output is 0600. Covers R7.
-  - **Edge case (corrupt .env):** a malformed existing `.env` is backed up and rewritten from the declared providers.
+  - **Happy path (auth):** on POSIX and Windows, with an existing omp `.env` containing an interactive key, the platform script replaces declared provider variables without dropping unrelated entries; output has private permissions. Covers R7 and R11.
+  - **Edge case (dotenv values):** newline, quote, backslash, shell-metacharacter, NUL, invalid-name, symlink, and non-regular-file inputs cannot redirect the write or create unintended environment entries.
+  - **Edge case (corrupt .env):** a malformed existing `.env` causes a clear failure and remains unchanged; no credential backup is created.
   - **Soft-skip:** with `omp`/`jq` absent, the script exits 0 without writing.
   - **Happy path (CE reconcile):** the reconcile script invokes `omp plugin marketplace add` + `omp plugin install` for compound-engineering; the baked source comment changes the rendered content when upstream moves. Covers R9.
   - **Integration (no extensions command):** the script never calls `update --extensions`.
-- **Verification:** scratch render shows the two scripts produce valid bash with resolved `op://`/SHA comments; `shellcheck`-clean; idempotent on re-run.
+- **Verification:** scratch render shows the POSIX and Windows scripts contain resolved `op://` values and version fingerprints; shell and PowerShell syntax checks pass; repeated runs are idempotent.
 
 ### U5. figma-auth omp storage adapter and tests
 
@@ -239,11 +239,11 @@ Three seams diverge from pi and drive most of the implementation risk: (1) raw-b
 - **Requirements:** R8.
 - **Dependencies:** none (independent package).
 - **Files:** `packages/figma-auth/src/storage/omp.ts`, `packages/figma-auth/src/cli.ts`, `packages/figma-auth/test/omp-storage.test.ts`, `packages/figma-auth/test/cli.test.ts`, `packages/figma-auth/package.json`.
-- **Approach:** Add `OmpStorage` as a 1:1 copy of `PiStorage` with `authDir` default `~/.omp/agent/mcp-auth`, a renamed `ompCredentialFilename`, and retargeted error strings; the credential hash is unchanged (`FIGMA_SERVER_NAME` stays `"figma"`). Register `"omp"` in `cli.ts` `TARGETS`/`USAGE`/`adapterFor` switch. Mirror `test/pi-storage.test.ts` as `test/omp-storage.test.ts` (every `"pi"`→`"omp"`, `new OmpStorage(...)`); extend `test/cli.test.ts` enumerations and USAGE assertions; append "or oh-my-pi" to the `package.json` description.
+- **Approach:** Add `OmpStorage` for OMP v17's native SQLite auth schema. Store the credential under `mcp_oauth:profile:default:https://mcp.figma.com/mcp` in `~/.omp/agent/agent.db`, including refresh endpoints from OAuth discovery. Register `"omp"` in `cli.ts` `TARGETS`/`USAGE`/`adapterFor` and verify the stored row through SQLite.
 - **Patterns to follow:** `src/storage/pi.ts`, `test/pi-storage.test.ts`, `src/cli.ts`.
 - **Test scenarios:**
   - **Happy path (filename):** `ompCredentialFilename()` returns `5b79d0d574eedd09.json`. Covers R8.
-  - **Happy path (commit):** `OmpStorage.commit()` writes the envelope to `~/.omp/agent/mcp-auth/` with 0700 dir / 0600 file.
+  - **Happy path (commit):** `OmpStorage.commit()` writes the native OAuth row to `~/.omp/agent/agent.db` with a 0700 directory and 0600 database.
   - **Edge case (modes/repair):** unsafe-mode dir is repaired; optional fields omitted yield a single `saved_at`.
   - **Edge case (replace):** only the figma-specific file is replaced.
   - **Error path:** malformed/non-object existing file and symlink/non-regular files are rejected.
@@ -256,7 +256,7 @@ Three seams diverge from pi and drive most of the implementation risk: (1) raw-b
 - **Requirements:** R11, R12.
 - **Dependencies:** U2, U3.
 - **Files:** `.chezmoiignore`, `AGENTS.md`.
-- **Approach:** In `.chezmoiignore`, add omp analogues to the pi gating: a Windows-skip for `.omp/agent/extensions/mxm4-haptic.ts` only (KTD9 — omp config deploys on Windows, so do NOT skip `.omp/agent/settings.json`/`models.yml`/`mcp.json`/`AGENTS.md` unless OQ-E decides otherwise; lean deploy); in the container block, add `.omp/agent/extensions/mxm4-haptic.ts` alongside the pi line (haptic skipped in containers) while keeping omp CLI dotfiles deployed. Update `AGENTS.md`'s agent-surfaces paragraph (the sentence beginning "Pi settings are managed readonly…") with an omp sibling describing managed-readonly settings, `.env` auth (not auth.json), marketplace CE reconcile, empty-provider `models.yml` baseline, and cross-platform deploy.
+- **Approach:** In `.chezmoiignore`, skip only `.omp/agent/extensions/mxm4-haptic.ts` on Windows and in containers. Keep `config.yml`, `models.yml`, `mcp.json`, and `AGENTS.md` cross-platform. Update `AGENTS.md` with OMP's managed config, `.env` auth, marketplace reconcile, empty-provider model baseline, and cross-platform deployment.
 - **Patterns to follow:** the pi Windows-skip block and container block in `.chezmoiignore`; the pi sentence in `AGENTS.md`.
 - **Test scenarios:**
   - **Happy path (Windows):** on a Windows-render, omp config files are NOT ignored but `.omp/agent/extensions/mxm4-haptic.ts` is. Covers R11, AE1.

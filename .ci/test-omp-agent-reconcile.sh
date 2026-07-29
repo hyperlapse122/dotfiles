@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-auth_script=${1:?usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT}
-plugin_script=${2:?usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT}
+auth_script=${1:?usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_EXTENSION}
+plugin_script=${2:?usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_EXTENSION}
+haptic_extension=${3:?usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_EXTENSION}
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}
 scratch=$(mktemp -d "$scratch_root/omp-agent-reconcile.XXXXXX")
 cleanup() {
@@ -65,5 +66,7 @@ mapfile -t calls <"$scratch/omp.calls"
 [[ ${#calls[@]} -eq 2 ]]
 [[ ${calls[0]} == "plugin marketplace add $source" ]]
 [[ ${calls[1]} == "plugin install --scope user compound-engineering@compound-engineering-plugin" ]]
+
+bun "$(dirname "$0")/test-omp-haptic-extension.ts" "$haptic_extension"
 
 printf 'omp auth and plugin reconcile tests passed\n'

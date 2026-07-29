@@ -20,7 +20,7 @@ import { join } from "node:path";
 const WAVEFORM_SETTLED = {{ .haptic.omp.settled | quote }};
 const WAVEFORM_FAILED = {{ .haptic.omp.failed | quote }};
 const WAVEFORM_QUESTION = {{ .haptic.omp.question | quote }};
-const QUESTION_TOOL = "ask_user";
+const QUESTION_TOOL = "ask";
 
 function resolveHapticBinary(): string {
   const absolute = join(homedir(), ".local", "bin", "mxm4-haptic");

@@ -1,7 +1,8 @@
-import { chmod, lstat, mkdir, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import Database from "better-sqlite3";
+import { chmod, lstat, mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { OmpStorage, ompCredentialFilename } from "../src/storage/omp.js";
+import { OmpStorage, ompCredentialId } from "../src/storage/omp.js";
 import type { CompletedSession } from "../src/storage/types.js";
 import { createScratch, removeScratch } from "./helpers.js";
 
@@ -12,24 +13,12 @@ function session(optional = true): CompletedSession {
   return {
     clientInformation: {
       client_id: "fake-omp-client",
-      ...(optional
-        ? {
-            client_secret: "fake-omp-secret",
-            client_id_issued_at: 1_721_234_567,
-            client_secret_expires_at: 1_799_999_999,
-          }
-        : {}),
+      ...(optional ? { client_secret: "fake-omp-secret" } : {}),
     },
     tokens: {
       access_token: "fake-omp-access",
       token_type: "bearer",
-      ...(optional
-        ? {
-            refresh_token: "fake-omp-refresh",
-            expires_in: 7200,
-            scope: "mcp",
-          }
-        : {}),
+      ...(optional ? { refresh_token: "fake-omp-refresh", expires_in: 7200, scope: "mcp" } : {}),
     },
     codeVerifier: "fake-omp-verifier",
     oauthState: "not-stored-by-omp",
@@ -37,133 +26,119 @@ function session(optional = true): CompletedSession {
       ? {
           discoveryState: {
             authorizationServerUrl: "https://www.figma.com",
+            authorizationServerMetadata: {
+              issuer: "https://www.figma.com",
+              authorization_endpoint: "https://www.figma.com/oauth/mcp",
+              token_endpoint: "https://api.figma.com/v1/oauth/token",
+              response_types_supported: ["code"],
+            },
           },
         }
       : {}),
   };
 }
 
-async function authDir(): Promise<string> {
+async function dbPath(): Promise<string> {
   const root = await createScratch("omp");
   scratch.push(root);
-  return join(root, ".omp", "agent", "mcp-auth");
+  return join(root, ".omp", "agent", "agent.db");
+}
+
+const openDatabase = (path: string) => new Database(path);
+
+async function readCredential(path: string, profile = "default") {
+  const db = new Database(path, { readonly: true });
+  try {
+    const row = db
+      .prepare(
+        `SELECT credential_type, data FROM auth_credentials
+         WHERE provider = ? AND disabled_cause IS NULL`,
+      )
+      .get(ompCredentialId("https://mcp.figma.com/mcp", profile)) as
+      | { credential_type: string; data: string }
+      | undefined;
+    return row ? { type: row.credential_type, ...JSON.parse(row.data) } : undefined;
+  } finally {
+    db.close();
+  }
 }
 
 describe("omp storage", () => {
-  it("uses the deterministic first 16 hex characters of sha256(figma)", () => {
-    expect(ompCredentialFilename()).toBe("5b79d0d574eedd09.json");
+  it("uses OMP's profile-scoped MCP OAuth provider id", () => {
+    expect(ompCredentialId()).toBe("mcp_oauth:profile:default:https://mcp.figma.com/mcp");
   });
 
-  it("writes the exact native envelope, relative expiry, discovery, and private modes", async () => {
-    const dir = await authDir();
-    const storage = new OmpStorage({ authDir: dir, now: () => Date.parse("2026-07-20T12:34:56Z") });
-    await storage.commit(session());
-    const path = join(dir, ompCredentialFilename());
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({
-      clientInfo: {
-        client_id: "fake-omp-client",
-        client_secret: "fake-omp-secret",
-        client_id_issued_at: 1_721_234_567,
-        client_secret_expires_at: 1_799_999_999,
-      },
-      tokens: {
-        access_token: "fake-omp-access",
-        token_type: "bearer",
-        refresh_token: "fake-omp-refresh",
-        expires_in: 7200,
-        scope: "mcp",
-        saved_at: "2026-07-20T12:34:56.000Z",
-      },
-      codeVerifier: "fake-omp-verifier",
-      discoveryState: {
-        authorizationServerUrl: "https://www.figma.com",
-      },
+  it("writes a native refreshable credential to agent.db with private modes", async () => {
+    const path = await dbPath();
+    await new OmpStorage({
+      dbPath: path,
+      now: () => Date.parse("2026-07-20T12:34:56Z"),
+      openDatabase,
+    }).commit(session());
+
+    expect(await readCredential(path)).toEqual({
+      type: "oauth",
+      access: "fake-omp-access",
+      refresh: "fake-omp-refresh",
+      expires: Date.parse("2026-07-20T14:34:56Z"),
+      clientId: "fake-omp-client",
+      clientSecret: "fake-omp-secret",
+      resource: "https://mcp.figma.com/mcp",
+      tokenUrl: "https://api.figma.com/v1/oauth/token",
+      authorizationUrl: "https://www.figma.com/oauth/mcp",
     });
-    expect((await lstat(dir)).mode & 0o777).toBe(0o700);
+    expect((await lstat(join(path, ".."))).mode & 0o777).toBe(0o700);
     expect((await lstat(path)).mode & 0o777).toBe(0o600);
   });
 
-  it("repairs an existing auth directory with an unsafe mode", async () => {
-    const dir = await authDir();
-    await mkdir(dir, { recursive: true });
-    await chmod(dir, 0o755);
-
-    await new OmpStorage({ authDir: dir, now: () => 0 }).commit(session(false));
-
-    expect((await lstat(dir)).mode & 0o7777).toBe(0o700);
-  });
-
-  it("omits undefined optional fields and injects saved_at once", async () => {
-    const dir = await authDir();
-    await new OmpStorage({ authDir: dir, now: () => 0 }).commit(session(false));
-    const output = await readFile(join(dir, ompCredentialFilename()), "utf8");
-    expect(JSON.parse(output)).toEqual({
-      clientInfo: { client_id: "fake-omp-client" },
-      tokens: {
-        access_token: "fake-omp-access",
-        token_type: "bearer",
-        saved_at: "1970-01-01T00:00:00.000Z",
-      },
-      codeVerifier: "fake-omp-verifier",
+  it("uses a non-expiring sentinel when the server omits expiry", async () => {
+    const path = await dbPath();
+    await new OmpStorage({ dbPath: path, openDatabase }).commit(session(false));
+    expect(await readCredential(path)).toMatchObject({
+      access: "fake-omp-access",
+      refresh: "",
+      expires: Number.MAX_SAFE_INTEGER,
     });
-    expect(output.match(/saved_at/g)).toHaveLength(1);
   });
 
-  it("replaces only the figma-specific file", async () => {
-    const dir = await authDir();
-    await mkdir(dir, { recursive: true });
-    const other = join(dir, "other-server.json");
-    await writeFile(other, "other bytes\n");
-    const storage = new OmpStorage({ authDir: dir, now: () => 0 });
-    await storage.commit(session(false));
-    await storage.commit({
-      ...session(false),
+  it("replaces only the selected profile credential", async () => {
+    const path = await dbPath();
+    await new OmpStorage({ dbPath: path, profile: "work", openDatabase }).commit(session(false));
+    await new OmpStorage({ dbPath: path, openDatabase }).commit(session());
+    await new OmpStorage({ dbPath: path, openDatabase }).commit({
+      ...session(),
       tokens: { access_token: "fake-replacement", token_type: "bearer" },
     });
-    expect(await readFile(other, "utf8")).toBe("other bytes\n");
-    expect(await readFile(join(dir, ompCredentialFilename()), "utf8")).toContain(
-      "fake-replacement",
-    );
-    expect((await readdir(dir)).sort()).toEqual([ompCredentialFilename(), "other-server.json"]);
+
+    expect(await readCredential(path)).toMatchObject({ access: "fake-replacement" });
+    expect(await readCredential(path, "work")).toMatchObject({ access: "fake-omp-access" });
   });
 
-  it.each([
-    ["malformed", "{broken", "malformed JSON"],
-    ["non-object", "[]", "must contain an object"],
-  ])("rejects an existing %s target without mutation", async (_name, source, message) => {
-    const dir = await authDir();
-    await mkdir(dir, { recursive: true });
-    const path = join(dir, ompCredentialFilename());
-    await writeFile(path, source);
-    await expect(new OmpStorage({ authDir: dir }).commit(session())).rejects.toThrow(message);
-    expect(await readFile(path, "utf8")).toBe(source);
+  it("repairs an existing auth directory with an unsafe mode", async () => {
+    const path = await dbPath();
+    await mkdir(join(path, ".."), { recursive: true });
+    await chmod(join(path, ".."), 0o755);
+    await new OmpStorage({ dbPath: path, openDatabase }).commit(session(false));
+    expect((await lstat(join(path, ".."))).mode & 0o7777).toBe(0o700);
   });
 
-  it("rejects symlink and non-regular credential targets", async () => {
-    const dir = await authDir();
-    await mkdir(dir, { recursive: true });
-    const real = join(dir, "real.json");
-    await writeFile(real, "{}\n");
-    await symlink(real, join(dir, ompCredentialFilename()));
-    await expect(new OmpStorage({ authDir: dir }).commit(session())).rejects.toThrow("symlink");
-    expect(await readFile(real, "utf8")).toBe("{}\n");
+  it("rejects symlink directories and database targets", async () => {
+    const path = await dbPath();
+    const parent = join(path, "..", "..");
+    const realDir = join(parent, "real-agent");
+    const linkedDir = join(parent, "linked-agent");
+    await mkdir(realDir, { recursive: true });
+    await symlink(realDir, linkedDir);
+    await expect(
+      new OmpStorage({ dbPath: join(linkedDir, "agent.db"), openDatabase }).commit(session()),
+    ).rejects.toThrow("unsafe omp auth directory");
 
-    const secondDir = await authDir();
-    await mkdir(join(secondDir, ompCredentialFilename()), { recursive: true });
-    await expect(new OmpStorage({ authDir: secondDir }).commit(session())).rejects.toThrow(
-      "non-regular",
-    );
-  });
-
-  it("rejects a symlink auth directory", async () => {
-    const dir = await authDir();
-    const parent = join(dir, "..");
-    const real = join(parent, "real-auth");
-    const link = join(parent, "linked-auth");
-    await mkdir(real, { recursive: true });
-    await symlink(real, link);
-    await expect(new OmpStorage({ authDir: link }).commit(session())).rejects.toThrow(
-      "unsafe omp auth directory",
+    await mkdir(join(path, ".."), { recursive: true });
+    const realDb = join(parent, "real.db");
+    await writeFile(realDb, "unchanged");
+    await symlink(realDb, path);
+    await expect(new OmpStorage({ dbPath: path, openDatabase }).commit(session())).rejects.toThrow(
+      "unsafe omp auth database",
     );
   });
 });
