@@ -51,15 +51,20 @@
 # onchange behavior.
 
 agents:
-  # MCP servers consumed by dotagents, Pi, OpenCode, Gemini, and Kimi Code.
+  # MCP servers consumed by dotagents, Pi, OpenCode, Gemini, Kimi Code, and omp.
   # `transport` is the discriminator: stdio uses command/args; http uses url plus
   # optional headers. Each consumer maps that neutral shape into its native
   # schema; the managed Kimi mcp.json owns the complete server inventory.
   # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
   # native OAuth store; credentials and refresh tokens never enter source data.
-  # Optional host applicability is shared across every consumer:
+  # Optional applicability is shared across every consumer:
   #   os: [linux, darwin, windows]  (omitted means every OS)
-  #   container: keep | skip       (omitted means keep)
+  #   container: keep | skip        (omitted means keep)
+  #   harnessSkip: [<harness id>]   (omitted means every harness)
+  # harnessSkip is an EXCLUSION list, so a new harness inherits every server
+  # unless it is named. Valid ids: claude, codex, opencode, agy, pi, omp, kimi;
+  # dot_agents renders one file for Claude AND Codex and identifies as claude,
+  # so a codex-only exclusion is not expressible.
   # agent-mcp-servers-json.tmpl validates and filters these fields before any
   # target-specific formatter sees the record.
   mcp:
@@ -105,6 +110,11 @@ agents:
       url: https://mcp.exa.ai/mcp
       headers:
         x-api-key: op://Private/Exa/API Key
+      # omp has a native Exa search provider fed by EXA_API_KEY from its dotenv,
+      # so the MCP path would duplicate the capability and put the key in a
+      # second rendered file. Every other harness keeps this server.
+      harnessSkip:
+      - omp
   # Agent skills fetched as chezmoi externals into ~/.agents/skills/<name> (the
   # former dotagents remote skills). .chezmoiexternals/ai-agents.toml ranges over
   # this list. Keys per entry:

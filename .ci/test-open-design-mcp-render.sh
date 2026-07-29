@@ -22,9 +22,10 @@ fixture='{"agents":{"mcp":{"servers":[
 render_servers() {
   local os=$1
   local container=$2
+  local harness=${3:-pi}
   chezmoi --config "$empty_config" --source "$repo_root" --override-data "$fixture" \
     execute-template \
-    "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"os\" \"$os\" \"container\" $container) }}"
+    "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\" \"os\" \"$os\" \"container\" $container) }}"
 }
 
 assert_names() {
@@ -47,13 +48,28 @@ assert_names "$darwin_host" ungated darwin-only
 windows_host=$(render_servers windows false)
 assert_names "$windows_host" ungated
 
+# harnessSkip is an exclusion list: an omitted field keeps the server for every
+# harness, and a named harness loses only that server.
+harness_fixture='{"agents":{"mcp":{"servers":[
+  {"name":"everywhere","transport":"stdio","command":"everywhere","args":[]},
+  {"name":"not-omp","transport":"stdio","command":"not-omp","args":[],"harnessSkip":["omp"]}
+]}}}'
+render_harness() {
+  chezmoi --config "$empty_config" --source "$repo_root" --override-data "$harness_fixture" \
+    execute-template \
+    "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$1\" \"os\" \"linux\" \"container\" false) }}"
+}
+assert_names "$(render_harness pi)" everywhere not-omp
+assert_names "$(render_harness omp)" everywhere
+
 # The real inventory declares Open Design only after its managed `od` wrapper
 # exists, and the common gate omits it outside a Linux host runtime.
 render_real() {
   local os=$1
   local container=$2
+  local harness=${3:-pi}
   chezmoi --config "$empty_config" --source "$repo_root" execute-template \
-    "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"os\" \"$os\" \"container\" $container) }}"
+    "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\" \"os\" \"$os\" \"container\" $container) }}"
 }
 
 real_linux=$(render_real linux false)
@@ -115,6 +131,7 @@ for entry in \
   "pi.json:dot_pi/private_agent/private_readonly_mcp.json.tmpl" \
   "opencode.json:dot_config/opencode/readonly_opencode.json.tmpl" \
   "gemini.json:dot_gemini/config/private_readonly_mcp_config.json.tmpl" \
+  "omp.json:dot_omp/private_agent/private_readonly_mcp.json.tmpl" \
   "kimi.json:private_dot_kimi-code/private_readonly_mcp.json.tmpl"
 do
   output=$(render_consumer "${entry%%:*}" "${entry#*:}")
@@ -142,14 +159,30 @@ do
   fi
 done
 
-for template in \
-  dot_agents/private_readonly_agents.toml.tmpl \
-  dot_pi/private_agent/private_readonly_mcp.json.tmpl \
-  dot_config/opencode/readonly_opencode.json.tmpl \
-  dot_gemini/config/private_readonly_mcp_config.json.tmpl \
-  private_dot_kimi-code/private_readonly_mcp.json.tmpl
+# omp resolves Exa through its native search provider, so the shared websearch
+# server must be absent from its inventory and present in every other one.
+if grep -F 'websearch' "$scratch/rendered/omp.json" >/dev/null; then
+  printf 'websearch leaked into the omp MCP inventory\n' >&2
+  exit 1
+fi
+for rendered in agents.toml pi.json opencode.json gemini.json kimi.json; do
+  if ! grep -F 'websearch' "$scratch/rendered/$rendered" >/dev/null; then
+    printf 'websearch missing from the %s MCP inventory\n' "$rendered" >&2
+    exit 1
+  fi
+done
+
+for entry in \
+  "dot_agents/private_readonly_agents.toml.tmpl:claude" \
+  "dot_pi/private_agent/private_readonly_mcp.json.tmpl:pi" \
+  "dot_config/opencode/readonly_opencode.json.tmpl:opencode" \
+  "dot_gemini/config/private_readonly_mcp_config.json.tmpl:agy" \
+  "dot_omp/private_agent/private_readonly_mcp.json.tmpl:omp" \
+  "private_dot_kimi-code/private_readonly_mcp.json.tmpl:kimi"
 do
-  grep -F 'includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .)' \
+  template=${entry%%:*}
+  harness=${entry##*:}
+  grep -F "includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\")" \
     "$repo_root/$template" >/dev/null
   if grep -F 'range .agents.mcp.servers' "$repo_root/$template" >/dev/null; then
     printf '%s still bypasses the shared MCP applicability helper\n' "$template" >&2
@@ -167,7 +200,7 @@ assert_invalid() {
   local diagnostic=$3
   if chezmoi --config "$empty_config" --source "$repo_root" --override-data "$fixture" \
     execute-template \
-    '{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "os" "linux" "container" false) }}' \
+    '{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "pi" "os" "linux" "container" false) }}' \
     >"$scratch/$name.stdout" 2>"$scratch/$name.stderr"
   then
     printf 'invalid MCP fixture %s rendered successfully\n' "$name" >&2
@@ -191,5 +224,29 @@ assert_invalid container-type \
 assert_invalid invalid-container \
   '{"agents":{"mcp":{"servers":[{"name":"bad","transport":"stdio","command":"bad","args":[],"container":"maybe"}]}}}' \
   'unknown container value "maybe"'
+assert_invalid harness-skip-type \
+  '{"agents":{"mcp":{"servers":[{"name":"bad","transport":"stdio","command":"bad","args":[],"harnessSkip":"omp"}]}}}' \
+  'field harnessSkip must be a list'
+assert_invalid invalid-harness-skip \
+  '{"agents":{"mcp":{"servers":[{"name":"bad","transport":"stdio","command":"bad","args":[],"harnessSkip":["emacs"]}]}}}' \
+  'unknown harnessSkip "emacs"'
+
+# The helper's own required input, not a record field.
+if chezmoi --config "$empty_config" --source "$repo_root" execute-template \
+  '{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) }}' \
+  >"$scratch/missing-harness.stdout" 2>"$scratch/missing-harness.stderr"
+then
+  printf 'helper rendered without a harness id\n' >&2
+  exit 1
+fi
+grep -F 'harness is required' "$scratch/missing-harness.stderr" >/dev/null
+if chezmoi --config "$empty_config" --source "$repo_root" execute-template \
+  '{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "emacs") }}' \
+  >"$scratch/unknown-harness.stdout" 2>"$scratch/unknown-harness.stderr"
+then
+  printf 'helper rendered with an unknown harness id\n' >&2
+  exit 1
+fi
+grep -F 'unknown harness "emacs"' "$scratch/unknown-harness.stderr" >/dev/null
 
 printf 'open-design MCP render tests passed\n'

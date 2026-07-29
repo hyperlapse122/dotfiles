@@ -62,7 +62,7 @@
        toPrettyJson|replace pattern mirrors dot_omo/readonly_omo.jsonc.tmpl (shift
        the block one indent level to nest inside this 2-space object). */ -}}
 {{- $mcp := dict -}}
-{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "opencode") | fromJson -}}
 {{- range $mcpServers -}}
 {{- if hasKey . "auth" -}}
 {{- $auth := get . "auth" -}}

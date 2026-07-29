@@ -4,7 +4,7 @@
      Streamable HTTP and omits type for stdio. OAuth metadata uses
      `auth: {type: "oauth"}`. Header op:// values resolve at render time. */ -}}
 {{- $servers := dict -}}
-{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "omp") | fromJson -}}
 {{- range $mcpServers -}}
 {{- $entry := dict -}}
 {{- if hasKey . "auth" -}}

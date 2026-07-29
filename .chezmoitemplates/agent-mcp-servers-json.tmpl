@@ -1,24 +1,38 @@
 {{- /*
 agent-mcp-servers-json.tmpl — validate and filter the neutral MCP inventory.
 
-Input (dict):
   ctx        required; root chezmoi context
+  harness    required; the calling harness's own id (see $validHarness below)
   os         optional; host OS override for isolated tests
   container  optional; container-fact override for isolated tests
 
-Production consumers pass only ctx. The helper then uses .chezmoi.os and the
-shared facts.tmpl container fact. It emits a compact JSON list for consumers to
-parse before applying their target-specific transport/auth formatting.
+Production consumers pass ctx plus their own harness id. The helper then uses
+.chezmoi.os and the shared facts.tmpl container fact. It emits a compact JSON
+list for consumers to parse before applying their target-specific
+transport/auth formatting. `harness` is required so a consumer that forgets it
+fails loudly instead of silently receiving every server.
 
 Optional server applicability fields in .chezmoidata/agents.yaml:
   os: [linux, darwin, windows]  omitted means every OS
-  container: keep | skip       omitted means keep
+  container: keep | skip        omitted means keep
+  harnessSkip: [<harness id>]   omitted means every harness
+
+harnessSkip is an EXCLUSION list — the set generalization of `container: skip`
+— so an omitted field keeps the server everywhere and a newly added harness
+inherits it automatically. That is the safe default for a shared inventory; an
+inclusion list would silently drop new harnesses.
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "agent-mcp-servers-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
 {{- end -}}
 {{- if not (hasKey . "ctx") -}}
 {{-   fail "agent-mcp-servers-json.tmpl: ctx is required" -}}
+{{- end -}}
+{{- if not (hasKey . "harness") -}}
+{{-   fail "agent-mcp-servers-json.tmpl: harness is required" -}}
+{{- end -}}
+{{- if not (kindIs "string" .harness) -}}
+{{-   fail (printf "agent-mcp-servers-json.tmpl: harness must be a string, got %s" (kindOf .harness)) -}}
 {{- end -}}
 {{- $ctx := .ctx -}}
 {{- $os := $ctx.chezmoi.os -}}
@@ -40,6 +54,11 @@ Optional server applicability fields in .chezmoidata/agents.yaml:
 {{- end -}}
 {{- $validOS := list "linux" "darwin" "windows" -}}
 {{- $validContainers := list "keep" "skip" -}}
+{{- $validHarness := list "claude" "codex" "opencode" "agy" "pi" "omp" "kimi" -}}
+{{- $harness := .harness -}}
+{{- if not (has $harness $validHarness) -}}
+{{-   fail (printf "agent-mcp-servers-json.tmpl: unknown harness %q; valid values: claude, codex, opencode, agy, pi, omp, kimi" $harness) -}}
+{{- end -}}
 {{- $eligible := list -}}
 {{- range $index, $server := $ctx.agents.mcp.servers -}}
 {{-   if not (kindIs "map" $server) -}}
@@ -90,7 +109,22 @@ Optional server applicability fields in .chezmoidata/agents.yaml:
 {{-       fail (printf "agent mcp: server %q has unknown container value %q; valid values: keep, skip" $name $containerPolicy) -}}
 {{-     end -}}
 {{-   end -}}
-{{-   if and (has $os $serverOS) (not (and $container (eq $containerPolicy "skip"))) -}}
+{{-   $harnessSkip := list -}}
+{{-   if hasKey $server "harnessSkip" -}}
+{{-     if not (kindIs "slice" $server.harnessSkip) -}}
+{{-       fail (printf "agent mcp: server %q field harnessSkip must be a list, got %s" $name (kindOf $server.harnessSkip)) -}}
+{{-     end -}}
+{{-     range $entry := $server.harnessSkip -}}
+{{-       if not (kindIs "string" $entry) -}}
+{{-         fail (printf "agent mcp: server %q harnessSkip entries must be strings, got %s" $name (kindOf $entry)) -}}
+{{-       end -}}
+{{-       if not (has $entry $validHarness) -}}
+{{-         fail (printf "agent mcp: server %q has unknown harnessSkip %q; valid values: claude, codex, opencode, agy, pi, omp, kimi" $name $entry) -}}
+{{-       end -}}
+{{-       $harnessSkip = append $harnessSkip $entry -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if and (has $os $serverOS) (not (and $container (eq $containerPolicy "skip"))) (not (has $harness $harnessSkip)) -}}
 {{-     $eligible = append $eligible $server -}}
 {{-   end -}}
 {{- end -}}
