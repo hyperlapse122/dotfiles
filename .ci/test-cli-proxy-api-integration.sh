@@ -149,6 +149,9 @@ runtime_config="$scratch/fakehome/.local/share/cli-proxy-api/config/config.yaml"
 # use a different YAML quote style.
 cat >"$runtime_config" <<'RUNTIME_CONFIG'
 usage-statistics-enabled: true
+runtime-owned:
+  - alpha
+  - name: beta
 logging-to-file: false
 debug: false
 api-keys: []

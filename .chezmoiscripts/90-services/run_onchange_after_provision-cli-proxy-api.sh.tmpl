@@ -110,7 +110,11 @@ managed_config_projection() {
       indent = RLENGTH
       line = substr($0, indent + 1)
       split_at = index(line, ":")
-      if (!split_at) { fail(); next }
+      if (!split_at) {
+        if (indent > 0 && parent != "remote-management") next
+        fail()
+        next
+      }
       key = trim(substr(line, 1, split_at - 1))
       value = substr(line, split_at + 1)
 
