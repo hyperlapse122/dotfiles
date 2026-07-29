@@ -243,20 +243,20 @@
         "kind": "ociImage",
         "source": "docker.io/eceasy/cli-proxy-api",
         "version": "latest",
-        "digest": "sha256:1d59a5e14377c6bf15e2504818a8cb10de691add34e6b9724d938cbe68992d98"
+        "digest": "sha256:f8c2f64abac4762c180376ef12df38cb836dad19f85cc42857f70225b586311b"
       },
       "cli-proxy-api-binary": {
         "kind": "githubRelease",
         "source": "router-for-me/CLIProxyAPI",
-        "version": "v7.2.106",
+        "version": "v7.2.109",
         "artifacts": {
           "darwin-amd64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.106/CLIProxyAPI_7.2.106_darwin_amd64.tar.gz",
-            "sha256": "b79a43c1f68d500851c0973cd5281cf1c7f1f0b6e7386d19f87d2b6f63dd4d25"
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.109/CLIProxyAPI_7.2.109_darwin_amd64.tar.gz",
+            "sha256": "f7876a6d48d23cd3327dacbe7837d8d1319580b2d847186a0d56f73535d4924f"
           },
           "darwin-arm64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.106/CLIProxyAPI_7.2.106_darwin_aarch64.tar.gz",
-            "sha256": "aa10d0b3ac760d840a22e2731ba6db97dba107b42c77efc94eb472fecb879649"
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.109/CLIProxyAPI_7.2.109_darwin_aarch64.tar.gz",
+            "sha256": "315a4d74ebafcb12ccb8a1fa65c66e9600c7e9a5554f04dcf859682ae3ce2d36"
           }
         }
       },
@@ -640,23 +640,23 @@
       "pi": {
         "kind": "githubRelease",
         "source": "earendil-works/pi",
-        "version": "v0.82.1",
+        "version": "v0.83.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/earendil-works/pi/releases/download/v0.82.1/pi-linux-x64.tar.gz",
-            "sha256": "884a9dec7e0b75a54c4d1933c93a7d45af1fbb81c32964c1dd45d67fac1f6544"
+            "url": "https://github.com/earendil-works/pi/releases/download/v0.83.0/pi-linux-x64.tar.gz",
+            "sha256": "b0625eb623197b0afe20c870d21ef2f34481f1504e5777df3f698a66c7636f5f"
           },
           "linux-arm64": {
-            "url": "https://github.com/earendil-works/pi/releases/download/v0.82.1/pi-linux-arm64.tar.gz",
-            "sha256": "9e7036f89370c443235a2a0a8ccc91a9cc2b7f4af5ec20b2dad1c6f72aa916e6"
+            "url": "https://github.com/earendil-works/pi/releases/download/v0.83.0/pi-linux-arm64.tar.gz",
+            "sha256": "b84f9016610c738dd9440df62f649880dbe9951db97a7ae936cbf292850e9802"
           },
           "darwin-amd64": {
-            "url": "https://github.com/earendil-works/pi/releases/download/v0.82.1/pi-darwin-x64.tar.gz",
-            "sha256": "a28cd67f9397a5ad99f9387713bf1c134b747d4b6cb25e00db4f7d009ee9f8c2"
+            "url": "https://github.com/earendil-works/pi/releases/download/v0.83.0/pi-darwin-x64.tar.gz",
+            "sha256": "9ab12e406e545be131d1279a9a2c0d5c0d4a3c6e9d86a52700a7a135a445041b"
           },
           "darwin-arm64": {
-            "url": "https://github.com/earendil-works/pi/releases/download/v0.82.1/pi-darwin-arm64.tar.gz",
-            "sha256": "ca5b660ee0dbf2b4169f69753cf60f4e0edddff4a49427cdd34660e41280249f"
+            "url": "https://github.com/earendil-works/pi/releases/download/v0.83.0/pi-darwin-arm64.tar.gz",
+            "sha256": "147fc3c451ec543a15102af251ce316079c8fcadfe8ae4d3ffee202346e9bed9"
           }
         }
       },
@@ -669,7 +669,7 @@
       "pi-compound-engineering": {
         "kind": "gitRef",
         "source": "EveryInc/compound-engineering-plugin",
-        "version": "95ea8ad0df3db2aef8ba22628bc51d81da11d9eb"
+        "version": "b562b1401e82f9afb5fa1b340f3120a8746c19d7"
       },
       "pi-mcp-extension": {
         "kind": "npm",
