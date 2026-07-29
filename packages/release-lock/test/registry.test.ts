@@ -194,6 +194,16 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": null,
     "windows-arm64": null,
   },
+  "cli-proxy-api-binary": {
+    // darwin-only: linux runs the ociImage quadlet, windows is out of scope.
+    // darwin assets spell arm64 as aarch64; the leading `v` is stripped.
+    "linux-amd64": null,
+    "linux-arm64": null,
+    "darwin-amd64": "CLIProxyAPI_0.0.0_darwin_amd64.tar.gz",
+    "darwin-arm64": "CLIProxyAPI_0.0.0_darwin_aarch64.tar.gz",
+    "windows-amd64": null,
+    "windows-arm64": null,
+  },
 };
 
 describe("registry asset selectors", () => {

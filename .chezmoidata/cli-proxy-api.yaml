@@ -1,0 +1,22 @@
+# CLIProxyAPI integration data. Credentials stay unresolved 1Password
+# references: the 90-services provisioner resolves them at apply time through
+# the secret-read shim and never renders them into a target, fingerprint, or
+# service definition.
+cliProxyApi:
+  management:
+    # CPA Management API key — seeds remote-management.secret-key in the
+    # runtime config on both platforms.
+    credential: "op://Private/CLI Proxy API/password"
+  cpamp:
+    # CPA-Manager-Plus admin key — seeds the CPAMP admin credential file on
+    # Linux (the full-mode panel login).
+    adminCredential: "op://Private/CPA Manager Plus/password"
+  ports:
+    proxy: 8317
+    panel: 18317
+    # OAuth login callback listeners, matching the upstream docker-compose
+    # port set (gemini 8085, codex 1455, claude 54545, 51121, 11451).
+    oauthCallbacks: [8085, 1455, 54545, 51121, 11451]
+  # One data root under the home directory, with exclusive subdirectories per
+  # service: CPA alone writes config/ and auth/, CPAMP alone writes cpamp/.
+  dataRoot: ".local/share/cli-proxy-api"

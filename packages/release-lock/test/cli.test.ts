@@ -8,6 +8,7 @@ import { resolveGitHubTag } from "../src/github-tag.js";
 import { resolveGitLabRelease } from "../src/gitlab.js";
 import { resolveNpmPackage } from "../src/npm.js";
 import { resolveVendorManifest } from "../src/vendor-manifest.js";
+import { resolveOciImage } from "../src/oci-image.js";
 import { RESOLVERS, resolveAll } from "../src/resolve-all.js";
 import type { Registry } from "../src/types.js";
 import type { ReleaseLock } from "../src/types.js";
@@ -87,6 +88,7 @@ describe("RESOLVERS dispatch", () => {
       "githubTag",
       "gitlabRelease",
       "npm",
+      "ociImage",
       "vendorManifest",
     ]);
   });
@@ -97,6 +99,7 @@ describe("RESOLVERS dispatch", () => {
     expect(RESOLVERS.gitlabRelease).toBe(resolveGitLabRelease);
     expect(RESOLVERS.npm).toBe(resolveNpmPackage);
     expect(RESOLVERS.vendorManifest).toBe(resolveVendorManifest);
+    expect(RESOLVERS.ociImage).toBe(resolveOciImage);
   });
 
   test("gitRef dispatches through its own wrapper, not another kind's resolver", () => {

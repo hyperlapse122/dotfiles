@@ -218,6 +218,17 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => (os === "windows" ? null : `aoe-${os}-${arch}.tar.gz`),
   },
 
+  // macOS runs the CLIProxyAPI binary directly under launchd (linux uses the
+  // ociImage quadlet); darwin assets spell arm64 as aarch64.
+  "cli-proxy-api-binary": {
+    kind: "githubRelease",
+    source: "router-for-me/CLIProxyAPI",
+    asset: ({ os, arch }, tag) =>
+      os === "darwin"
+        ? `CLIProxyAPI_${versionFromTag(tag)}_darwin_${arch === "arm64" ? "aarch64" : "amd64"}.tar.gz`
+        : null,
+  },
+
   /* ---------- version-only githubRelease entries ---------- */
 
   // The newest tag of the repo's own release train doubles as the ref for the
@@ -304,5 +315,24 @@ export const REGISTRY: Registry = {
     kind: "gitRef",
     source: "EveryInc/compound-engineering-plugin",
     ref: "HEAD",
+  },
+
+  /* ---------- ociImage: the cli-proxy-api quadlet images ---------- */
+
+  // eceasy/cli-proxy-api is a third-party Docker Hub republisher of
+  // router-for-me/CLIProxyAPI, not an upstream-owned namespace. The digest
+  // pin mitigates tag mutation, not provenance — this trust boundary is
+  // deliberate (Risks & Dependencies in the quadlet plan).
+  "cli-proxy-api": {
+    kind: "ociImage",
+    source: "docker.io/eceasy/cli-proxy-api",
+    tag: "latest",
+  },
+
+  // CPA-Manager-Plus admin panel, published by its author on GHCR.
+  "cpa-manager-plus": {
+    kind: "ociImage",
+    source: "ghcr.io/seakee/cpa-manager-plus",
+    tag: "latest",
   },
 };
