@@ -403,9 +403,9 @@ agents:
       - name: zai
         type: api_key
         key: op://Private/Z.ai/API Key
-  # oh-my-pi (can1357/oh-my-pi) — a fork of pi (badlogic/pi-mono), managed like
-  # pi: settings.json is a MANAGED READONLY target (private_readonly_ 0400), and
-  # the static zai API key is live-managed via ~/.omp/agent/.env. Unlike pi, omp
+  # oh-my-pi (can1357/oh-my-pi) — a fork of pi (badlogic/pi-mono). Its native
+  # config.yml is a MANAGED READONLY target (private_readonly_ 0400), and the
+  # static zai API key is live-managed via ~/.omp/agent/.env. Unlike pi, omp
   # has NO auth.json — OAuth credentials (anthropic, kimi-code) live in
   # ~/.omp/agent/agent.db via omp /login, so only the zai API-key provider is
   # declared here (omp resolves it as ZAI_API_KEY). omp is batteries-included
@@ -413,38 +413,18 @@ agents:
   # and @gotgenes/pi-anthropic-auth packages are NOT carried; compound-
   # engineering is delivered via omp's marketplace, so this settings block
   # carries no `packages` key. omp is also cross-platform (it ships
-  # omp-windows-x64.exe), so its config templates are not POSIX-gated. Settings-
-  # schema parity with pi is assumed (fork); confirm at first apply.
+  # omp-windows-x64.exe), so its config templates are not POSIX-gated. The
+  # settings keys below use omp v17's native config.yml schema.
   omp:
     models:
       providers: {}
     settings:
-      theme: dark
-      defaultProvider: zai
-      defaultModel: glm-5.2
+      theme:
+        dark: titanium
+        light: light
+      modelRoles:
+        default: zai/glm-5.2
       defaultThinkingLevel: max
-      subagents:
-        defaultModel: gpt-5.6-terra
-        agentOverrides:
-          researcher:
-            model: gpt-5.6-luna
-          planner:
-            model: gpt-5.6-sol
-            thinking: xhigh
-          worker:
-            model: gpt-5.6-luna
-          reviewer:
-            model: gpt-5.6-sol
-            thinking: xhigh
-          context-builder:
-            model: gpt-5.6-sol
-          oracle:
-            model: gpt-5.6-sol
-            thinking: max
-          delegate:
-            model: gpt-5.6-luna
-      warnings:
-        anthropicExtraUsage: false
     auth:
       providers:
       - name: zai
