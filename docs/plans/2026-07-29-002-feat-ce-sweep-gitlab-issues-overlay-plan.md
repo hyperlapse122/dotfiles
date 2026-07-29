@@ -45,10 +45,10 @@ The drift is structural, not accidental. The compound-engineering install at `~/
 **Persona content**
 
 - R1. The overlay provides a `gitlab-issues` source persona that mirrors the `github-issues` persona contract — item schema, availability probe, fetch guidance, untrusted-input handling, and tool guidance — adapted to GitLab.
-- R2. The persona uses `glab` for read and the single configured label-add write, never raw API calls or non-native credential injection.
+- R2. The persona uses `glab` for every GitLab operation. It may use `glab api` for read-only fields that issue subcommands do not expose, but never uses direct HTTP clients, manually injects credentials, or performs API writes; the only write is the configured label addition through `glab issue update`.
 - R3. The persona maps each GitLab issue into the sweep item schema: `id` as the stable issue reference, `author_class` inferred from GitLab membership and association, and ack/close-out driven only by the configured label names.
 - R4. The persona covers issues only. Merge requests are out of scope and would be a separate `gitlab-mrs` source type.
-- R5. A confidential issue is included in the sweep and treated as `sensitive` automatically, so its `body` and `quote` are dropped before the state file is written.
+- R5. A confidential issue is included in the sweep and treated as `sensitive` automatically. The source persona returns per-item sensitivity, and the overlaid ce-sweep contract propagates it to `upsert-item`, where `body` and `quote` are dropped before the state file is written. The persisted title is replaced with a neutral confidential-issue summary.
 
 **Overlay delivery and durability**
 
@@ -58,14 +58,14 @@ The drift is structural, not accidental. The compound-engineering install at `~/
 
 **Integration contract**
 
-- R9. ce-sweep's source-loading contract is unchanged: a `type: gitlab-issues` config entry resolves to the injected persona with no modification to the skill or its bundled state script.
+- R9. ce-sweep's source-loading path remains `<type>` -> `references/sources/<type>.md`. A minimal overlaid skill-contract change adds optional per-item `sensitive` output and propagates it to `upsert-item`; the bundled state script is unchanged because it already redacts sensitive item payloads.
 
 ### Acceptance Examples
 
 - AE1. **Covers R5.**
   - **Given:** an open GitLab issue marked confidential.
   - **When:** the persona maps it.
-  - **Then:** the item is upserted with `sensitive: true`; its `body` and `quote` are not written to the state file, while `id`, `origin`, author class, and the one-line title summary are.
+  - **Then:** the item is upserted with `sensitive: true`; its `body` and `quote` are not written to the state file, while `id`, `origin`, author class, and a neutral confidential-issue summary are retained.
 - AE2. **Covers R7.**
   - **Given:** the compound-engineering external re-extracts.
   - **When:** `chezmoi apply` completes.
@@ -84,7 +84,7 @@ The drift is structural, not accidental. The compound-engineering install at `~/
 
 - Upstreaming the persona to `EveryInc/compound-engineering-plugin` is out of scope; it is a possible follow-up once the content stabilizes.
 - A `gitlab-mrs` merge-request persona is out of scope.
-- Modifying ce-sweep's source-loading contract or any bundled script is out of scope; the overlay works entirely within the existing `<type>` -> `references/sources/<type>.md` resolution.
+- Changing ce-sweep's source-loading path or bundled state script is out of scope. The overlay keeps `<type>` -> `references/sources/<type>.md` intact and changes only the skill contract needed to carry optional per-item sensitivity into the existing redaction engine.
 - The per-project `feedback_sources` config entry that selects `type: gitlab-issues` lives in the user's project repo and is out of scope; this plan delivers the persona, not the config.
 
 ### Dependencies and Assumptions
@@ -112,11 +112,12 @@ The drift is structural, not accidental. The compound-engineering install at `~/
 ### Key Technical Decisions
 
 - KTD1. **Deployed overlay tree merged into the CE version dir by a provisioner** (session-settled: user-directed — chosen over an upstream PR and local-then-upstream: converges all devices immediately, keeps the customization private, avoids release-timing dependence). The canonical persona lives under a new deployed overlays tree and a provisioner merges it onto the current CE version directory. Instantiates the brainstorm's local-overlay decision; the file lives outside the versioned tree and is injected into it.
-- KTD2. **`glab` native tooling** (session-settled: user-approved — chosen over raw GitLab API: parity with the `github-issues` persona's `gh`, matches the glab skill/MCP and native-CLI credential hardening). The persona reads and writes through `glab` only.
+- KTD2. **`glab` native tooling** (session-settled: user-approved — chosen over direct HTTP clients and non-native credential injection: parity with the `github-issues` persona's native CLI, matches the glab skill, and keeps credentials inside the official CLI). The persona uses issue subcommands where they expose the needed data and permits read-only `glab api` calls for membership data; it never performs API writes.
 - KTD3. **Issues only** (session-settled: user-approved — chosen over including MRs: GitLab exposes issues and MRs on distinct endpoints, so no PR-exclusion logic is needed). The persona uses `glab issue list` and never `glab mr list`.
 - KTD4. **Confidential implies auto-sensitive** (session-settled: user-directed — chosen over plain-treat and skip: a confidential marker is a reliable sensitivity signal and the state file may be committed). The persona sets `sensitive: true` on any confidential issue so the engine drops `body`/`quote`.
 - KTD5. **Generic overlay-tree merge, not a single-file copier.** The provisioner mirrors the whole `~/.local/share/compound-engineering-overlays/` tree onto the CE version dir at matching relative paths, so any future overlay persona (or other overlaid file) works with no script change. Rejected: a copier hardcoded to the one `gitlab-issues.md` path. The user's stated problem is recurrent ("agents keep creating sources"), the generic form is no more complex than the single-file form, and the carrying cost is a one-line merge — the YAGNI bar for low-cost, problem-aligned generality is met.
 - KTD6. **Remove `exact` from the CE external (make it additive) + `run_onchange_after_` provisioner.** (user-directed mid-planning — chosen over a bare `run_after_` re-injection workaround: addresses the every-apply wipe at the root rather than working around it, and keeps the trigger within the `run_onchange_` pattern `AGENTS.md` prefers over bare `run_after_`.) The compound-engineering `localArchive` external currently sets `exact = true`, which makes chezmoi remove non-archive files from the version dir on every apply — the root cause of an injected overlay being wiped. Removing `exact` makes the external additive (chezmoi adds/updates archive files but leaves others), so an injected overlay survives no-change applies without re-injection. The provisioner is then `run_onchange_after_`, triggered by the rendered version literal (re-inject into a fresh version dir on a bump) plus `fingerprint.tmpl` over the overlays source (re-inject on a content edit); it does not need to run every apply. Tradeoff, accepted: the CE version dir is no longer self-cleaning within a version cycle — upstream deletions and stray files accumulate until the next version bump creates a fresh dir, which resets the tree. CE is the sole `localArchive` plugin, so removing `exact` from the shared template is CE-equivalent today.
+- KTD7. **Overlay the minimal ce-sweep sensitivity contract.** (user-approved continuation after feasibility review — chosen over marking the entire GitLab source sensitive: preserves useful content for public issues while making confidential issues safe.) The canonical overlay includes `skills/ce-sweep/SKILL.md` with only the source-output schema and phase-2d propagation changed: personas may return optional `sensitive`, and item sensitivity is true when either the source config or the item says so. The existing state engine remains authoritative for dropping `body` and `quote`.
 
 ### High-Level Technical Design
 
@@ -151,19 +152,20 @@ The provisioner resolves the current version directory the same way the prune sc
   - `dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md` (create; deploys to `~/.local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md`).
 - **Approach:** Mirror the `github-issues.md` contract section-for-section — opening role paragraph (GitLab Issues source connector, reports facts only, never advances cursors), the item-schema table, Invocation Contract, Availability Probe, Fetch Guidance, Untrusted Input Handling, Tool Guidance — substituting GitLab for GitHub throughout. The upstream `github-issues.md` is verified to exist at `skills/ce-sweep/references/sources/github-issues.md` in the current compound-engineering install (confirmed during planning). GitLab-specific mappings:
   - `id` is `group/project#<iid>` (GitLab issue IIDs are project-scoped and repeat across projects, so the full path plus IID is the stable id, parallel to `owner/repo#1234`).
-  - `author_class` from GitLab author membership/association: project members (Owner/Maintainer/Developer/Reporter) map to `teammate`; a non-member human reporter to `customer`; bot/app/service users to `bot`.
+  - `author_class` from GitLab author membership: project members (Owner/Maintainer/Developer/Reporter) map to `teammate`; a non-member human reporter to `customer`; bot/app/service users to `bot`. Resolve membership through a read-only `glab api projects/<url-encoded-path>/members/all/<user-id>` request after issue retrieval; a 404 means non-member, while other API failures degrade the source rather than guessing.
   - Issues only via `glab issue list`; state explicitly that merge requests are a separate source type and that no PR/MR filtering is needed because the issues endpoint does not return them.
-  - Confidential rule (the one behavioral addition over `github-issues`): when the issue's `confidential` flag is true, the mapped item carries `sensitive: true`; state this both in the item-schema `body`/`media` rows and a dedicated short note, since the sweep engine drops `body`/`quote` for sensitive items before writing state.
-  - Availability probe uses `glab auth status` for read and a label-edit capability check for write, with the same two exact degrade sentences as `github-issues.md` (tools-unavailable skip; write-degraded read-only ingest).
-  - Tool guidance permits `glab issue list` / `glab issue view` reads plus exactly one configured label-add write via `glab issue edit <iid> --add-label <configured-label>`; never comment, close, reopen, or any other write. Cursor and dedupe semantics mirror `github-issues.md` (`updated>=` inclusive, over-inclusive, dedupe by `id`).
+  - Confidential rule (the behavioral addition over `github-issues`): when the issue's `confidential` flag is true, the mapped item carries `sensitive: true` and a neutral summary such as `Confidential GitLab issue <id>`; state this both in the item-schema `body`/`media` rows and a dedicated short note, since the overlaid sweep contract passes item sensitivity to the engine, which drops `body`/`quote` before writing state.
+  - Availability probe uses `glab auth status` for read and a label-update capability check for write, with the same two exact degrade sentences as `github-issues.md` (tools-unavailable skip; write-degraded read-only ingest).
+  - Tool guidance permits `glab issue list` / `glab issue view` and read-only `glab api` membership reads plus exactly one configured label-add write via `glab issue update <iid> --repo <group/project> --label <configured-label>`; the trusted project path comes from source configuration, never issue-authored content. Never comment, close, reopen, or perform any other write.
+  - Cursor reads use `glab issue list --repo <group/project> --order updated_at --sort desc --output json --page <n> --per-page <size>`. Paginate newest-first, client-filter inclusively on `updated_at >= cursor`, and stop only after a complete page falls below the cursor. Dedupe by `id`.
 - **Patterns to follow:** the upstream `github-issues.md` persona in the compound-engineering install at `skills/ce-sweep/references/sources/github-issues.md`; the glab skill conventions (pass GitLab paths with slashes intact, prefer `:fullpath`).
 - **Test scenarios:**
   - Covers AE1. A confidential issue maps to an item with `sensitive: true` and the persona states `body`/`quote` are dropped for sensitive items.
   - Availability probe emits the exact tools-unavailable skip sentence when `glab auth` fails, and the exact write-degraded sentence when read works but label-edit does not.
-  - Tool surface is `glab` read plus the single configured `glab issue edit --add-label` write; the persona never authorizes comments, close, reopen, or cursor advancement.
+  - Tool surface is `glab` read plus the single configured `glab issue update --repo ... --label` write; the persona never authorizes comments, close, reopen, or cursor advancement.
   - Scope uses `glab issue list` only; the persona does not reference `glab mr list` or merge-request fetching.
   - `id` mapping is documented as `group/project#<iid>`.
-- **Verification:** U4's content-contract checks grep-enforce every scenario above against the rendered/deployed persona.
+- **Verification:** U5's content-contract checks grep-enforce every scenario above against the rendered/deployed persona.
 - **Execution note:** Author the persona by adapting the upstream `github-issues.md` prose in place rather than writing from scratch, so the contract stays structurally identical and the GitLab divergence is limited to the mapped substitutions plus the confidential rule.
 
 ### U2. Make the compound-engineering external additive
@@ -177,7 +179,7 @@ The provisioner resolves the current version directory the same way the prune sc
 - **Patterns to follow:** the existing `localArchive` block comment style (multi-line `{{- /* ... */ -}}` explaining the mechanism and its neighbors).
 - **Test scenarios:**
   - Test expectation: none -- this is a one-line config flag removal with a comment edit; its effect (additive extract preserves the overlay) is asserted structurally by U4 (the rendered block omits `exact`) and end-to-end by the acceptance apply.
-- **Verification:** U4 renders `.chezmoiexternals/ai-agents.toml` and asserts the `localArchive` (CE) block contains no `exact` key while the agent-skills block still does.
+- **Verification:** U5 renders `.chezmoiexternals/ai-agents.toml` and asserts the `localArchive` (CE) block contains no `exact` key while the agent-skills block still does.
 
 ### U3. Add the overlay-injection provisioner
 
@@ -196,18 +198,34 @@ The provisioner resolves the current version directory the same way the prune sc
   - The injected `gitlab-issues.md` is byte-identical to the deployed overlay source.
   - The rendered script contains the version literal (bump re-trigger) and the `fingerprint.tmpl` glob over the overlays source (content-edit re-trigger).
   - Render is shellcheck-clean under both linux and darwin gates.
-- **Verification:** U4 renders this script, rewrites the resolved CE path to a scratch fixture, and runs it to assert the scenarios above.
+- **Verification:** U5 renders this script, rewrites the resolved CE path to a scratch fixture, and runs it to assert the scenarios above.
 - **Execution note:** The merge command must be portable across GNU and BSD `cp` because the script renders for linux and darwin; CI runs linux only, so darwin portability is a manual acceptance item (recorded in Definition of Done).
 
-### U4. Add CI verification
+### U4. Overlay per-item sensitivity propagation
+
+- **Goal:** make persona-provided sensitivity reach the existing state-engine redaction path without changing the state script.
+- **Requirements:** R5, R9 (also AE1 and KTD7).
+- **Dependencies:** none.
+- **Files:**
+  - `dot_local/share/compound-engineering-overlays/skills/ce-sweep/SKILL.md` (create from the pinned upstream skill with the minimal contract changes).
+- **Approach:** Copy the pinned ce-sweep `SKILL.md` into the canonical overlay tree. Add optional `sensitive` to the mapped-item output in phase 2b. In phase 2d, require `"sensitive": true` in the JSON passed to `upsert-item` when either the source config or the mapped item is sensitive. Preserve all other upstream text byte-for-byte so future release diffs make drift visible. The state engine already strips `body` and `quote`, so no Python change is needed.
+- **Patterns to follow:** the pinned upstream `skills/ce-sweep/SKILL.md`; `skills/ce-sweep/references/state-schema.md` sensitive semantics.
+- **Test scenarios:**
+  - A mapped public issue under a non-sensitive source is upserted without forced sensitivity.
+  - A mapped confidential issue under a non-sensitive source is upserted with `sensitive: true`.
+  - A source configured sensitive still forces sensitivity on every item.
+  - The overlaid skill retains the existing source persona lookup and phase ordering.
+- **Verification:** the isolated test diffs the overlay against the pinned skill and permits only the documented sensitivity-contract edits, then exercises the state engine with public and confidential fixtures.
+
+### U5. Add CI verification
 
 - **Goal:** an isolated, network-free CI test proving the CE external is additive (no `exact`), the provisioner injects and merges correctly, and the persona satisfies its content contract — modeled on the existing render-and-stub tests.
 - **Requirements:** R1–R5, R7, R8 (also the byte-identical success criterion).
-- **Dependencies:** U1, U2, U3.
+- **Dependencies:** U1, U2, U3, U4.
 - **Files:**
   - `.ci/test-compound-engineering-overlays.sh` (create).
   - `.github/workflows/ci.yml` (add a job that installs chezmoi, renders the external and the provisioner with a stub `op` and empty config under `--source "$PWD"`, and runs the test).
-- **Approach:** Follow the `smoke-agy-plugin-installer.sh` shape. Render `.chezmoiexternals/ai-agents.toml` via `chezmoi execute-template` and assert the `localArchive` (CE) block omits `exact` while the agent-skills block still has it. Render the provisioner; rewrite the resolved CE path inside the rendered script to a scratch fixture; build a fake CE tree (`skills/ce-sweep/references/sources/` with the three upstream filenames) and a deployed overlays tree (the real `gitlab-issues.md` from source); run the provisioner and assert the injection and merge scenarios from U3. Then run a content-contract grep over the persona (the `github-issues.md`-equivalent assertions from U1): contains `glab`, the item-schema field names, a confidential-to-sensitive statement, the two degrade sentences, and the single-label tool guidance; does not contain `gh`/GitHub-cli tooling references or `glab mr`. Keep the test hermetic — no real apply, no network, per the repo verification rules.
+- **Approach:** Follow the `smoke-agy-plugin-installer.sh` shape. Render `.chezmoiexternals/ai-agents.toml` via `chezmoi execute-template` and assert the `localArchive` (CE) block omits `exact` while the agent-skills block still has it. Render the provisioner; rewrite the resolved CE path inside the rendered script to a scratch fixture; build a fake CE tree (`skills/ce-sweep/references/sources/` with the three upstream filenames) and a deployed overlays tree (the canonical persona and overlaid skill); run the provisioner and assert the injection and merge scenarios from U3/U4. Run content-contract checks over the persona and exercise `sweep-state.py` with public/confidential fixtures to prove per-item redaction. Keep the test hermetic — no real apply, no network, per the repo verification rules.
 - **Patterns to follow:** `.ci/smoke-agy-plugin-installer.sh` (render + rewrite-path + stub-bin + assert); `.ci/test-cli-proxy-api-render-matrix.sh` (content-contract grep over rendered output); the `codex-wrapper` job in `.github/workflows/ci.yml` (chezmoi install + `execute-template` + run test).
 - **Test scenarios:**
   - The rendered `localArchive` (CE) block has no `exact` key; the agent-skills block still does.
@@ -216,6 +234,8 @@ The provisioner resolves the current version directory the same way the prune sc
   - The test exits 0 when the overlays dir is absent (provisioner skips cleanly).
   - The test exits 0 when the CE version dir is absent (provisioner skips cleanly).
   - The test asserts the injected persona is byte-identical to the deployed overlay source.
+  - A confidential fixture persists a neutral summary and no `body`/`quote`; a public fixture retains its content.
+  - Cursor guidance contains newest-first pagination and inclusive client filtering, and the label write includes the trusted `--repo` selector.
 - **Verification:** the new `ci.yml` job is green on push.
 
 ---
@@ -226,10 +246,11 @@ The provisioner resolves the current version directory the same way the prune sc
 |---|---|---|
 | U1 | Persona content contract | `.ci/test-compound-engineering-overlays.sh` content-contract grep (glab, item-schema, confidential→sensitive, degrade sentences, single-label tool guidance; no `gh`/MR listing) |
 | U2 | Additive external | `.ci/test-compound-engineering-overlays.sh` asserts the rendered CE `localArchive` block omits `exact` (agent-skills block retains it) |
-| U3 | Provisioner behavior | `.ci/test-compound-engineering-overlays.sh`: injects persona, preserves upstream files, skips cleanly when either dir absent, byte-identical, re-trigger via version literal + fingerprint glob |
+| U3 | Provisioner behavior | `.ci/test-compound-engineering-overlays.sh`: injects persona and skill overlay, preserves upstream files, skips cleanly when either dir absent, byte-identical, re-trigger via version literal + fingerprint glob |
+| U4 | Per-item sensitivity | isolated state-engine fixtures prove confidential items lose `body`/`quote` and receive a neutral summary while public items remain intact |
 | U2, U3 | Render + lint | `render-dotfiles.yml` renders the `.tmpl`; CI shellchecks the rendered script (watch the Windows-render CRLF trap) |
-| U4 | Test infra | new `ci.yml` job green on ubuntu-latest |
-| All | Acceptance (manual / lfg) | a real `chezmoi apply` leaves `~/.local/share/compound-engineering/<version>/skills/ce-sweep/references/sources/gitlab-issues.md` present and byte-identical to source after a first apply and after a second, no-change apply; darwin merge portability confirmed on a macOS host |
+| U5 | Test infra | new `ci.yml` job green on ubuntu-latest |
+| All | Acceptance (isolated) | two consecutive applies use `--source "$PWD"` and an isolated destination with stubbed runtime commands; the injected persona and skill overlay remain byte-identical and upstream source files remain intact |
 
 ---
 
@@ -239,6 +260,7 @@ The provisioner resolves the current version directory the same way the prune sc
 - `.chezmoiexternals/ai-agents.toml` no longer sets `exact` on the CE `localArchive` block (agent-skills block unchanged), with an updated comment recording the additive behavior and the no-self-cleaning tradeoff.
 - The provisioner `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl` renders under linux and darwin, is shellcheck-clean, and re-runs on version bumps and overlay content edits.
 - `.ci/test-compound-engineering-overlays.sh` and its `ci.yml` job pass on ubuntu-latest.
-- After `chezmoi apply` on a host — both a first apply and a second, no-change apply — the persona is present in the current compound-engineering version directory, byte-identical to the source, with the three upstream source files intact.
-- darwin merge portability confirmed on a macOS host (CI covers linux only).
-- (Manual) a ce-sweep run with a `type: gitlab-issues` source loads the canonical persona and does not improvise one.
+- Two isolated applies with `--source "$PWD"` and a throwaway destination leave the persona and skill overlay byte-identical to source with the three upstream source files intact.
+- Confidential-item fixtures prove the persisted state contains no title detail, `body`, or `quote`; public-item fixtures retain normal content.
+
+Post-deployment acceptance, intentionally outside LFG completion: after the user requests a real deployment, confirm first/no-change apply behavior on a host, darwin merge portability on macOS, and a ce-sweep run with `type: gitlab-issues`.
