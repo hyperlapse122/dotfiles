@@ -81,15 +81,6 @@ system:
       # rpm-owned polkit-1 includes system-auth and must not be overwritten.
       - path: etc/pam.d/polkit-1
         gate: fprintdPam
-      # kernel-install(8) drop-in that re-signs Oracle VirtualBox modules on
-      # every new kernel install. Fedora-only: Oracle's Fedora RPM does NOT use
-      # DKMS or akmods (its /sbin/vboxconfig builds unsigned modules), so
-      # nothing else picks up a kernel upgrade under Secure Boot without this
-      # hook. Ubuntu's virtualbox-dkms uses shim-signed's DKMS integration and
-      # needs no equivalent. Mode 0755 — kernel-install invokes it directly.
-      - path: etc/kernel/install.d/50-vbox-sign.install
-        mode: "755"
-        gate: distro.fedora
       # systemd system-sleep hook: stop the per-user open-design.service
       # before hibernation / hybrid-sleep so its daemon and IPC sockets do
       # not outlive the power cycle. Mode 0755 — systemd executes system-sleep
@@ -123,3 +114,13 @@ system:
       # support. Ubuntu-scoped: this drop-in was only ever deployed there.
       - path: /etc/security/limits.d/95-ubuntustudio-audio.conf
         distro: ubuntu
+      # Retired kernel-install(8) drop-in that tried to re-sign Oracle
+      # VirtualBox modules on every new kernel install. It never worked: it
+      # scanned /lib/modules/<ver>/updates while Oracle installs to misc/, and
+      # no vboxconfig entry point can build for a non-running kernel anyway.
+      # Oracle's own vboxdrv.sh now signs during its build — the Fedora
+      # installer links the DKMS MOK into the shim-signed paths vboxdrv.sh
+      # reads — and vboxdrv.service covers new kernels at boot. Fedora-scoped:
+      # the hook was only ever deployed there.
+      - path: /etc/kernel/install.d/50-vbox-sign.install
+        distro: fedora
