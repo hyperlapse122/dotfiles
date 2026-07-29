@@ -1,0 +1,28 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- $ctx := . -}}
+{{- $cePlugin := dict -}}
+{{- range .agents.opencode.plugins -}}
+{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}{{- $cePlugin = . -}}{{- end -}}
+{{- end -}}
+{{- if not $cePlugin -}}{{- fail "update-omp-plugins: compound-engineering localArchive authority is missing from agents.opencode.plugins" -}}{{- end -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+#!/usr/bin/env bash
+# Reconciles omp's compound-engineering plugin from the same pinned localArchive
+# used by OpenCode, Claude, Codex, AGY, and Kimi.
+set -euo pipefail
+
+SOURCE="$HOME/{{ $cePlugin.externalPath }}/{{ $ceVersion }}"
+if ! command -v omp >/dev/null 2>&1; then
+  printf '%s\n' 'update-omp-plugins: skipped (omp not on PATH)' >&2
+  exit 0
+fi
+if [[ ! -f "$SOURCE/.claude-plugin/marketplace.json" ]]; then
+  printf 'update-omp-plugins: pinned marketplace is missing: %s\n' "$SOURCE" >&2
+  exit 1
+fi
+
+omp plugin marketplace add "$SOURCE"
+omp plugin install --scope user 'compound-engineering@compound-engineering-plugin'
+printf 'update-omp-plugins: reconciled compound-engineering from %s\n' "$SOURCE"
+{{ end -}}

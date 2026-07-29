@@ -1,0 +1,78 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $providers := .agents.omp.auth.providers -}}
+{{- if ne (len $providers) 1 -}}{{- fail "config-omp-auth: agents.omp.auth.providers must contain exactly the managed zai provider" -}}{{- end -}}
+{{- $provider := index $providers 0 -}}
+{{- if or (ne $provider.name "zai") (ne $provider.type "api_key") -}}{{- fail "config-omp-auth: the only supported provider mapping is zai api_key -> ZAI_API_KEY" -}}{{- end -}}
+{{- $key := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $provider.key "ctx" $) | fromJson -}}
+# Reconciles omp's managed ZAI_API_KEY in its live-written dotenv file.
+# Unrelated valid dotenv entries remain byte-identical. No backup is created.
+$ErrorActionPreference = 'Stop'
+
+$auth = if ($env:OMP_AGENT_ENV) {
+  $env:OMP_AGENT_ENV
+} else {
+  Join-Path $HOME '.omp/agent/.env'
+}
+$authDir = Split-Path -Parent $auth
+$managedValue = [Text.Encoding]::UTF8.GetString(
+  [Convert]::FromBase64String('{{ $key | b64enc }}')
+)
+
+if (Test-Path -LiteralPath $auth) {
+  $item = Get-Item -Force -LiteralPath $auth
+  if ($item.LinkType -or -not ($item -is [IO.FileInfo])) {
+    throw "config-omp-auth: unsafe target: $auth"
+  }
+}
+
+[IO.Directory]::CreateDirectory($authDir) | Out-Null
+$dirItem = Get-Item -Force -LiteralPath $authDir
+if ($dirItem.LinkType -or -not ($dirItem -is [IO.DirectoryInfo])) {
+  throw "config-omp-auth: unsafe auth directory: $authDir"
+}
+
+$lines = if (Test-Path -LiteralPath $auth) {
+  [IO.File]::ReadAllLines($auth)
+} else {
+  @()
+}
+$preserved = [Collections.Generic.List[string]]::new()
+foreach ($line in $lines) {
+  if ($line -match '^\s*$' -or $line -match '^\s*#') {
+    $preserved.Add($line)
+    continue
+  }
+  if ($line -match '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=') {
+    if ($Matches[1] -ne 'ZAI_API_KEY') {
+      $preserved.Add($line)
+    }
+    continue
+  }
+  throw "config-omp-auth: refusing malformed dotenv line in $auth"
+}
+
+$escaped = $managedValue.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n')
+$preserved.Add("ZAI_API_KEY=`"$escaped`"")
+$contents = [string]::Join([Environment]::NewLine, $preserved) + [Environment]::NewLine
+$temporary = Join-Path $authDir ('.env.' + [Guid]::NewGuid().ToString('N') + '.tmp')
+try {
+  $encoding = [Text.UTF8Encoding]::new($false)
+  $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try {
+    $writer = [IO.StreamWriter]::new($stream, $encoding)
+    try {
+      $writer.Write($contents)
+      $writer.Flush()
+      $stream.Flush($true)
+    } finally {
+      $writer.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+  Move-Item -Force -LiteralPath $temporary -Destination $auth
+} finally {
+  Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $temporary
+}
+Write-Host "config-omp-auth: reconciled ZAI_API_KEY in $auth"
+{{ end -}}
