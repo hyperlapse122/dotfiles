@@ -27,6 +27,14 @@
 .agents/AGENTS.md
 .agents/CLAUDE.md
 
+# omp reads ~/.omp/agent/AGENTS.md natively and never CLAUDE.md, so the sibling
+# @AGENTS.md mirror that dot_omp/private_agent/readonly_CLAUDE.md used to deploy
+# was pointless: the mirror rule is a repository-documentation convention, not a
+# managed-target one (see the managed instruction targets paragraph in
+# AGENTS.md). Deleting that source stops managing the file but leaves the
+# already-deployed 0444 copy behind — prune it here.
+.omp/agent/CLAUDE.md
+
 # Leftovers from the removed CLIProxyAPI binary integration (the 2026-07-21
 # removal was source-only). The revival runs as a Podman quadlet on Linux and a
 # launchd agent on macOS, so the old systemd user unit (linux-only) and the old
