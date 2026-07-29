@@ -1,0 +1,74 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- $providers := .agents.omp.auth.providers -}}
+{{- if ne (len $providers) 1 -}}{{- fail "config-omp-auth: agents.omp.auth.providers must contain exactly the managed zai provider" -}}{{- end -}}
+{{- $provider := index $providers 0 -}}
+{{- if or (ne $provider.name "zai") (ne $provider.type "api_key") -}}{{- fail "config-omp-auth: the only supported provider mapping is zai api_key -> ZAI_API_KEY" -}}{{- end -}}
+{{- $key := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $provider.key "ctx" $) | fromJson -}}
+#!/usr/bin/env bash
+# This script retries on every apply because its rendered secret is not a safe
+# onchange fingerprint input.
+# Reconciles omp's managed ZAI_API_KEY in its live-written dotenv file.
+# Unrelated valid dotenv entries remain byte-identical. Managed duplicates are
+# replaced by one safely quoted value. No credential backup is created.
+set -euo pipefail
+
+AUTH="${OMP_AGENT_ENV:-$HOME/.omp/agent/.env}"
+AUTH_DIR=$(dirname "$AUTH")
+MANAGED_VALUE_B64='{{ $key | b64enc }}'
+
+if [[ -L "$AUTH" ]] || { [[ -e "$AUTH" ]] && [[ ! -f "$AUTH" ]]; }; then
+  printf 'config-omp-auth: unsafe target: %s\n' "$AUTH" >&2
+  exit 1
+fi
+
+mkdir -p "$AUTH_DIR"
+if [[ -L "$AUTH_DIR" ]] || [[ ! -d "$AUTH_DIR" ]]; then
+  printf 'config-omp-auth: unsafe auth directory: %s\n' "$AUTH_DIR" >&2
+  exit 1
+fi
+
+decode_base64() {
+  if printf '%s' "$MANAGED_VALUE_B64" | base64 --decode 2>/dev/null; then
+    return
+  fi
+  printf '%s' "$MANAGED_VALUE_B64" | base64 -D
+}
+
+dotenv_quote() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\n'/\\n}
+  printf '"%s"' "$value"
+}
+
+tmp=$(mktemp "$AUTH_DIR/.env.XXXXXX")
+cleanup() {
+  rm -f -- "$tmp"
+}
+trap cleanup EXIT HUP INT TERM
+chmod 0600 "$tmp"
+
+if [[ -f "$AUTH" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
+      printf '%s\n' "$line" >>"$tmp"
+      continue
+    fi
+    if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+      [[ ${BASH_REMATCH[2]} == ZAI_API_KEY ]] || printf '%s\n' "$line" >>"$tmp"
+      continue
+    fi
+    printf 'config-omp-auth: refusing malformed dotenv line in %s\n' "$AUTH" >&2
+    exit 1
+  done <"$AUTH"
+fi
+
+managed_value=$(decode_base64)
+printf 'ZAI_API_KEY=%s\n' "$(dotenv_quote "$managed_value")" >>"$tmp"
+chmod 0600 "$tmp"
+mv -f -- "$tmp" "$AUTH"
+trap - EXIT HUP INT TERM
+printf 'config-omp-auth: reconciled ZAI_API_KEY in %s\n' "$AUTH"
+{{ end -}}

@@ -1,13 +1,14 @@
 import { runOAuthFlow } from "./oauth.js";
 import { AntigravityStorage } from "./storage/antigravity.js";
 import { OpenCodeStorage } from "./storage/opencode.js";
+import { OmpStorage } from "./storage/omp.js";
 import { PiStorage } from "./storage/pi.js";
 import { KimiStorage } from "./storage/kimi.js";
 import type { StorageAdapter } from "./storage/types.js";
 
-const TARGETS = ["opencode", "pi", "antigravity", "kimi"] as const;
+const TARGETS = ["opencode", "pi", "omp", "antigravity", "kimi"] as const;
 export type AuthTarget = (typeof TARGETS)[number];
-export const USAGE = "Usage: figma-auth <opencode|pi|antigravity|kimi>\n";
+export const USAGE = `Usage: figma-auth <${TARGETS.join("|")}>\n`;
 
 export interface CliOptions {
   stderr?: { write(value: string): unknown };
@@ -26,6 +27,8 @@ export function adapterFor(target: AuthTarget): StorageAdapter {
       return new OpenCodeStorage();
     case "pi":
       return new PiStorage();
+    case "omp":
+      return new OmpStorage();
     case "antigravity":
       return new AntigravityStorage();
     case "kimi":

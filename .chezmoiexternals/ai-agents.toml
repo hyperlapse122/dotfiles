@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: claude, codex, kimi, agent-browser, agy, opencode, pi, codegraph, aoe, cli-proxy-api (darwin), and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, codex, kimi, agent-browser, agy, opencode, pi, omp, codegraph, aoe, cli-proxy-api (darwin), and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -165,6 +165,22 @@ stripComponents = 1
 sha256 = '{{ $piSha }}'
 
 {{- end }}
+
+{{- /* ---------- omp (oh-my-pi, can1357) — a lone per-platform binary that is a
+       fork of pi: a raw executable (windows .exe), cross-platform (unlike pi it
+       ships a windows build), placed directly at ~/.local/bin/omp via type="file"
+       with executable=true. No pi-style archive extraction or symlink script; the
+       tag, per-platform URL and sha256 come from the release lock's per-asset
+       digest, and musl linux hosts pick the static-musl binary. ---------- */}}
+
+[omp]
+type = "file"
+targetPath = '{{ printf ".local/bin/omp%s" $executableExtension }}'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
+executable = true
+
+[omp.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
 
 {{- /* ---------- codegraph ---------- */ -}}
 

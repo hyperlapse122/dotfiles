@@ -1,0 +1,61 @@
+{{- /* omp extension — pulse MX Master 4 haptics on omp lifecycle events.
+
+     Generated from haptic.omp. omp discovers agent/extensions/*.ts directly.
+     The extension is gated off Windows and containers in .chezmoiignore.
+     Delivery failures are silent and never block an agent turn. */ -}}
+{{- $waveforms := list
+  "SHARP STATE CHANGE" "DAMP STATE CHANGE" "SHARP COLLISION" "DAMP COLLISION"
+  "SUBTLE COLLISION" "HAPPY ALERT" "ANGRY ALERT" "COMPLETED" "SQUARE" "WAVE"
+  "FIREWORK" "MAD" "KNOCK" "JINGLE" "RINGING" "WHISPER COLLISION" -}}
+{{- range $event, $waveform := .haptic.omp -}}
+{{- if not (has $waveform $waveforms) -}}
+{{- fail (printf "haptic.omp.%s = %q is not a known mxm4-haptic waveform; valid names: %s" $event $waveform (join ", " $waveforms)) -}}
+{{- end -}}
+{{- end -}}
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+const WAVEFORM_SETTLED = {{ .haptic.omp.settled | quote }};
+const WAVEFORM_FAILED = {{ .haptic.omp.failed | quote }};
+const WAVEFORM_QUESTION = {{ .haptic.omp.question | quote }};
+const QUESTION_TOOL = "ask";
+
+function resolveHapticBinary(): string {
+  const absolute = join(homedir(), ".local", "bin", "mxm4-haptic");
+  return existsSync(absolute) ? absolute : "mxm4-haptic";
+}
+
+export default function (pi: ExtensionAPI): void {
+  let lastProviderStatus: number | undefined;
+
+  async function pulse(waveform: string): Promise<void> {
+    try {
+      await pi.exec(resolveHapticBinary(), [waveform], { timeout: 5000 });
+    } catch {
+      // Haptics are optional. Never fail or delay an agent turn.
+    }
+  }
+
+  pi.on("agent_start", () => {
+    lastProviderStatus = undefined;
+  });
+
+  pi.on("after_provider_response", (event) => {
+    if (typeof event.status === "number") lastProviderStatus = event.status;
+  });
+
+  pi.on("agent_end", async (_event, ctx) => {
+    if (!ctx.hasUI) return;
+    const failed = typeof lastProviderStatus === "number" && lastProviderStatus >= 400;
+    await pulse(failed ? WAVEFORM_FAILED : WAVEFORM_SETTLED);
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    if (!ctx.hasUI) return;
+    if (typeof event.toolName === "string" && event.toolName.toLowerCase() === QUESTION_TOOL) {
+      await pulse(WAVEFORM_QUESTION);
+    }
+  });
+}

@@ -1,0 +1,32 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $ctx := . -}}
+{{- $cePlugin := dict -}}
+{{- range .agents.opencode.plugins -}}
+{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}{{- $cePlugin = . -}}{{- end -}}
+{{- end -}}
+{{- if not $cePlugin -}}{{- fail "update-omp-plugins: compound-engineering localArchive authority is missing from agents.opencode.plugins" -}}{{- end -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+# Reconciles omp's compound-engineering plugin from the pinned localArchive.
+$ErrorActionPreference = 'Stop'
+
+$source = Join-Path $HOME '{{ $cePlugin.externalPath }}/{{ $ceVersion }}'
+if (-not (Get-Command omp -ErrorAction SilentlyContinue)) {
+  Write-Warning 'update-omp-plugins: skipped (omp not on PATH)'
+  exit 0
+}
+$manifest = Join-Path $source '.claude-plugin/marketplace.json'
+if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
+  throw "update-omp-plugins: pinned marketplace is missing: $source"
+}
+
+& omp plugin marketplace add $source
+if ($LASTEXITCODE -ne 0) {
+  throw 'update-omp-plugins: marketplace add failed'
+}
+& omp plugin install --scope user 'compound-engineering@compound-engineering-plugin'
+if ($LASTEXITCODE -ne 0) {
+  throw 'update-omp-plugins: plugin install failed'
+}
+Write-Host "update-omp-plugins: reconciled compound-engineering from $source"
+{{ end -}}

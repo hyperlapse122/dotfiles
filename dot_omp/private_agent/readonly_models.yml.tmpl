@@ -1,0 +1,6 @@
+{{- /* ~/.omp/agent/models.yml — managed direct-provider baseline.
+
+     .agents.omp.models intentionally contains an empty providers map, leaving
+     omp's built-in catalog unchanged. This readonly target does not resolve
+     secrets. agents.omp.models must not contain op:// values. */ -}}
+{{ .agents.omp.models | toYaml }}

@@ -127,6 +127,16 @@ haptic:
     settled: COMPLETED
     failed: MAD
     question: RINGING
+  # haptic.omp — oh-my-pi (omp), a fork of pi: the mxm4-haptic EXTENSION
+  # (dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl -> ~/.omp/agent/extensions)
+  # uses omp's pi-compatible pi.on(...) event API, so it reads the same waveform
+  # keys as haptic.pi. Each value MUST be one of the 16 names in
+  # crates/mxm4-haptic/src/lib.rs (WAVEFORMS); the template's fail guard aborts
+  # the apply on a typo.
+  omp:
+    settled: COMPLETED
+    failed: MAD
+    question: RINGING
   # haptic.agy — Antigravity CLI (agy) hook event -> waveform, for the mxm4-haptic
   # agy PLUGIN (dot_local/share/agy-plugins/mxm4-haptic/, installed by the generic
   # install-agent-plugins runner as agy's native bundle). agy's hooks component is a

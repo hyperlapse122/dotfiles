@@ -1,0 +1,36 @@
+{{- /* ~/.omp/agent/mcp.json — managed native omp MCP servers.
+
+     omp has a built-in MCP runtime. Its native schema uses `type: "http"` for
+     Streamable HTTP and omits type for stdio. OAuth metadata uses
+     `auth: {type: "oauth"}`. Header op:// values resolve at render time. */ -}}
+{{- $servers := dict -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- range $mcpServers -}}
+{{- $entry := dict -}}
+{{- if hasKey . "auth" -}}
+{{- $auth := get . "auth" -}}
+{{- if ne $auth "oauth" -}}
+{{- fail (printf "omp mcp: server %q has unknown auth %q; valid values: oauth" .name $auth) -}}
+{{- end -}}
+{{- if eq .transport "stdio" -}}
+{{- fail (printf "omp mcp: stdio server %q cannot declare auth %q" .name $auth) -}}
+{{- end -}}
+{{- $entry = set $entry "auth" (dict "type" "oauth") -}}
+{{- end -}}
+{{- if eq .transport "stdio" -}}
+{{- $entry = set $entry "command" .command -}}
+{{- $entry = set $entry "args" .args -}}
+{{- else -}}
+{{- $entry = set $entry "type" "http" -}}
+{{- $entry = set $entry "url" .url -}}
+{{- if hasKey . "headers" -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers") "ctx" $) | fromJson -}}
+{{- $entry = set $entry "headers" $headers -}}
+{{- end -}}
+{{- end -}}
+{{- $servers = set $servers .name $entry -}}
+{{- end -}}
+{{ toPrettyJson "  " (dict
+  "$schema" "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json"
+  "mcpServers" $servers
+) }}
