@@ -23,7 +23,12 @@ packages/*/.turbo/
 .claude
 
 ### agents ###
-.agents
+# dotagents auto-generates project state directly under .agents/; that stays
+# untracked. Hand-authored repo-scoped skills in .agents/skills/ ARE tracked —
+# see AGENTS.md "Repo-scoped agent tooling". Do not collapse this back to a
+# bare `.agents`, which makes every descendant unreachable to a negation.
+.agents/*
+!.agents/skills/
 
 ### pi ###
 .pi-subagents
