@@ -118,6 +118,85 @@ has 'systemctl --user restart cli-proxy-api\.service cpa-manager-plus\.service' 
   "$scratch/provision.sh" "provisioner must restart both services on rollout"
 has '\.rolled-out-refs' "$scratch/provision.sh" "rollout must be stamp-gated"
 
+# Exercise the rendered provisioner against the isolated fake home. Stub all
+# rollout commands so this test cannot contact Podman or the user service
+# manager.
+mkdir -p "$scratch/fakehome/.config/containers/systemd"
+cp "$scratch/cpa.container" \
+  "$scratch/fakehome/.config/containers/systemd/cli-proxy-api.container"
+cp "$scratch/cpamp.container" \
+  "$scratch/fakehome/.config/containers/systemd/cpa-manager-plus.container"
+cp "$scratch/cpa.network" \
+  "$scratch/fakehome/.config/containers/systemd/cli-proxy-api.network"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$scratch/bin/podman"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$scratch/bin/systemctl"
+chmod 700 "$scratch/bin/podman" "$scratch/bin/systemctl"
+
+run_provision() {
+  env HOME="$scratch/fakehome" PATH="$scratch/bin:$PATH" \
+    bash "$scratch/provision.sh" 2>&1
+}
+
+first_run=$(run_provision)
+grep -q 'seeded runtime config' <<<"$first_run" ||
+  fail "first provisioner run must seed the runtime config"
+
+runtime_config="$scratch/fakehome/.local/share/cli-proxy-api/config/config.yaml"
+[[ -f "$runtime_config" ]] || fail "runtime config was not seeded"
+
+# Model the runtime-owned first-start rewrite: the plaintext secret becomes a
+# bcrypt value, comments disappear, keys can move, and equivalent strings can
+# use a different YAML quote style.
+cat >"$runtime_config" <<'RUNTIME_CONFIG'
+usage-statistics-enabled: true
+logging-to-file: false
+debug: false
+api-keys: []
+auth-dir: '/CLIProxyAPI/auth'
+remote-management:
+  disable-control-panel: true
+  secret-key: '$2a$10$runtime-owned-hash'
+  allow-remote: true
+port: 8317
+RUNTIME_CONFIG
+
+second_run=$(run_provision)
+grep -q 'runtime config drifts' <<<"$second_run" &&
+  fail "equivalent managed fields must not report drift on the second run"
+
+cp "$runtime_config" "$scratch/equivalent-runtime.yaml"
+expect_drift() {
+  local label=$1
+  local output
+  output=$(run_provision)
+  grep -q 'runtime config drifts' <<<"$output" ||
+    fail "$label must report drift"
+  cp "$scratch/equivalent-runtime.yaml" "$runtime_config"
+}
+
+sed -i 's/^port: 8317$/port: 8318/' "$runtime_config"
+expect_drift "a changed managed field"
+sed -i 's/^  allow-remote: true$/  allow-remote: false/' "$runtime_config"
+expect_drift "a changed remote-management access field"
+sed -i '/^auth-dir:/d' "$runtime_config"
+expect_drift "a missing managed field"
+printf 'debug: false\n' >>"$runtime_config"
+expect_drift "a duplicate managed field"
+sed -i 's/^debug: false$/debug: null/' "$runtime_config"
+expect_drift "a managed field with the wrong type"
+sed -i 's/^debug: false$/debug: "false"/' "$runtime_config"
+expect_drift "a quoted boolean managed field"
+sed -i 's/^port: 8317$/port: "8317"/' "$runtime_config"
+expect_drift "a quoted integer managed field"
+sed -i 's/^api-keys: \[\]$/api-keys: *runtime-keys/' "$runtime_config"
+expect_drift "an aliased managed field"
+sed -i 's#^auth-dir: .*$#auth-dir: |#' "$runtime_config"
+expect_drift "a multiline managed field"
+sed -i 's/^port: 8317$/  port: 8317/' "$runtime_config"
+expect_drift "a managed field with malformed nesting"
+sed -i 's/^port: 8317$/    port: 8317/' "$runtime_config"
+expect_drift "a deeply nested managed field"
+
 # --- macOS plist render ------------------------------------------------------
 render <"$repo_root/Library/LaunchAgents/readonly_dev.h82.cli-proxy-api.plist.tmpl" \
   >"$scratch/cpa.plist"
