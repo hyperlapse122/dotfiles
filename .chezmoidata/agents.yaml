@@ -309,11 +309,13 @@ agents:
       session:
         custom_agents:
           kimi: "~/.local/libexec/aoe-bin/kimi"
+          omp: omp
           'claude-glm': "claude-glm"
           # Bare on-PATH shell agent; key is the aoe agent name, value the command.
           zsh: zsh
         agent_detect_as:
           kimi: claude
+          omp: pi
           claude-glm: claude
   # pi package sources, managed settings defaults, and static API-key auth.
   # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
@@ -421,12 +423,13 @@ agents:
     models:
       providers: {}
     settings:
+      modelRoles: {}
       theme:
         dark: titanium
         light: light
-      modelRoles:
-        default: zai/glm-5.2
-      defaultThinkingLevel: max
+      symbolPreset: nerd
+      setupVersion: 1
+      defaultThinkingLevel: xhigh
     auth:
       providers:
       - name: zai
