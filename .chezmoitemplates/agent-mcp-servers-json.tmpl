@@ -21,6 +21,13 @@ harnessSkip is an EXCLUSION list — the set generalization of `container: skip`
 — so an omitted field keeps the server everywhere and a newly added harness
 inherits it automatically. That is the safe default for a shared inventory; an
 inclusion list would silently drop new harnesses.
+
+An exclusion is only expressible for a harness that renders its OWN file. The
+dot_agents consumer renders one file serving Claude AND Codex and identifies as
+`claude`, so `codex` is a valid CALLER id but not a valid harnessSkip entry:
+accepting it would render green and still ship the server to Codex. The two
+vocabularies are therefore separate, and excluding `claude` withdraws the server
+from Codex too.
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "agent-mcp-servers-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
@@ -55,6 +62,8 @@ inclusion list would silently drop new harnesses.
 {{- $validOS := list "linux" "darwin" "windows" -}}
 {{- $validContainers := list "keep" "skip" -}}
 {{- $validHarness := list "claude" "codex" "opencode" "agy" "pi" "omp" "kimi" -}}
+{{- /* Codex renders no file of its own; see the header. */ -}}
+{{- $skippableHarness := without $validHarness "codex" -}}
 {{- $harness := .harness -}}
 {{- if not (has $harness $validHarness) -}}
 {{-   fail (printf "agent-mcp-servers-json.tmpl: unknown harness %q; valid values: %s" $harness (join ", " $validHarness)) -}}
@@ -118,8 +127,11 @@ inclusion list would silently drop new harnesses.
 {{-       if not (kindIs "string" $entry) -}}
 {{-         fail (printf "agent mcp: server %q harnessSkip entries must be strings, got %s" $name (kindOf $entry)) -}}
 {{-       end -}}
-{{-       if not (has $entry $validHarness) -}}
-{{-         fail (printf "agent mcp: server %q has unknown harnessSkip %q; valid values: %s" $name $entry (join ", " $validHarness)) -}}
+{{-       if not (has $entry $skippableHarness) -}}
+{{-         if has $entry $validHarness -}}
+{{-           fail (printf "agent mcp: server %q cannot skip harness %q, which renders no file of its own; the dot_agents consumer serves it as \"claude\", so skipping it here would render green and still ship the server" $name $entry) -}}
+{{-         end -}}
+{{-         fail (printf "agent mcp: server %q has unknown harnessSkip %q; valid values: %s" $name $entry (join ", " $skippableHarness)) -}}
 {{-       end -}}
 {{-       $harnessSkip = append $harnessSkip $entry -}}
 {{-     end -}}
