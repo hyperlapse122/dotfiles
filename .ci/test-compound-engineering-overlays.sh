@@ -28,24 +28,33 @@ printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invali
 chmod 700 "$bin/op"
 : > "$scratch/empty.toml"
 
-# --- render the provisioner ---
+# --- render the provisioner and external manifest ---
 prov="$scratch/provisioner.sh"
+rendered_externals="$scratch/ai-agents.toml"
 env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
   --source "$root" \
   execute-template \
-  < "$root/.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl" \
+  < "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" \
   > "$prov"
+env PATH="$bin:$PATH" chezmoi \
+  --config "$scratch/empty.toml" \
+  --source "$root" \
+  execute-template \
+  < "$root/.chezmoiexternals/ai-agents.toml" \
+  > "$rendered_externals"
 
 # The rendered script resolves CURRENT="$BASE_DIR/v<semver>" with BASE_DIR under $HOME.
 # Point HOME at a scratch tree and build the matching structure there.
 home="$scratch/home"
 version=$(grep -oE 'CURRENT="\$BASE_DIR/[^"]+"' "$prov" | sed -E 's|.*/(v[0-9][0-9.]+)"$|\1|')
 [ -n "$version" ] || { echo "could not resolve CE version from rendered script" >&2; exit 1; }
-# The version literal above is one re-trigger signal; the fingerprint block
-# (content-edit re-trigger) must also be present in the rendered provisioner.
-grep -q 'dot_local/share/compound-engineering-overlays/' "$prov" \
-  || { echo "fingerprint block missing from rendered provisioner (content-edit re-trigger broken)" >&2; exit 1; }
+# The run_after name is load-bearing because archive-owned files may be restored
+# without any source fingerprint changing.
+case "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" in
+  *"/run_after_"*) ;;
+  *) echo "overlay provisioner must run after every file reconciliation" >&2; exit 1 ;;
+esac
 
 ce_base="$home/.local/share/compound-engineering"
 overlays="$home/.local/share/compound-engineering-overlays"
@@ -54,6 +63,10 @@ current="$ce_base/$version"
 build_fake_ce() {
   rm -rf "$home"
   mkdir -p "$current/skills/ce-sweep/references/sources"
+  cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$current/skills/ce-sweep/SKILL.md"
+  mkdir -p "$current/skills/ce-sweep/scripts"
+  cp "$root/.ci/fixtures/ce-sweep/scripts/sweep-state.py" \
+    "$current/skills/ce-sweep/scripts/sweep-state.py"
   for f in email github-issues slack; do
     printf 'upstream %s\n' "$f" > "$current/skills/ce-sweep/references/sources/$f.md"
   done
@@ -74,8 +87,17 @@ for f in email github-issues slack; do
 done
 cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
   || { echo "injected persona differs from overlay source" >&2; exit 1; }
-cmp -s "$overlays/skills/ce-sweep/SKILL.md" "$skill" \
-  || { echo "injected ce-sweep contract differs from overlay source" >&2; exit 1; }
+grep -qF 'optional `sensitive`' "$skill" \
+  || { echo "ce-sweep mapped-item contract was not patched" >&2; exit 1; }
+grep -qF 'omit `media` because those fields are retained' "$skill" \
+  || { echo "ce-sweep sensitive-field contract was not patched" >&2; exit 1; }
+
+# A later archive reconciliation restores archive-owned files. The run_after
+# provisioner must reapply the strict contract patch on the next apply.
+cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill"
+env HOME="$home" bash "$prov"
+grep -qF 'optional `sensitive`' "$skill" \
+  || { echo "ce-sweep contract was lost after archive reconciliation" >&2; exit 1; }
 
 # --- skip when overlays dir absent (leave CE tree intact) ---
 build_fake_ce
@@ -89,10 +111,19 @@ build_fake_ce
 rm -rf "$current"
 env HOME="$home" bash "$prov"   # exits 0
 
-# --- CE external is additive: exactly one `exact = true` remains (agent-skills block) ---
-exact_count=$(grep -c '^exact = true$' "$root/.chezmoiexternals/ai-agents.toml" || true)
-[ "$exact_count" -eq 1 ] \
-  || { echo "expected exactly one 'exact = true' (agent-skills block); found $exact_count" >&2; exit 1; }
+# --- CE external is additive: inspect its rendered table, not template source ---
+ce_block=$(awk '
+  /^\["\.local\/share\/compound-engineering\/v/ { in_ce=1; first=1 }
+  in_ce && !first && /^\[/ { exit }
+  in_ce { print; first=0 }
+' "$rendered_externals")
+printf '%s\n' "$ce_block" | grep -q '^type = "archive"$' \
+  || { echo "rendered CE external block missing" >&2; exit 1; }
+if printf '%s\n' "$ce_block" | grep -q '^exact = true$'; then
+  echo "rendered CE external is not additive" >&2; exit 1
+fi
+grep -q '^exact = true$' "$rendered_externals" \
+  || { echo "agent-skills exact archives unexpectedly changed" >&2; exit 1; }
 
 # --- persona content contract ---
 persona="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"
@@ -108,6 +139,9 @@ contract '--order updated_at --sort desc --output json --page <n> --per-page 100
 contract 'updated_at >= cursor'
 contract 'members/all/<author-id>'
 contract 'Confidential GitLab issue group/project#<iid>'
+contract 'Fetch is all-or-nothing.'
+contract 'During fetch, use only `glab` read commands'
+contract 'Empty list when none or when the issue is confidential'
 # must not lean on gh / GitHub-CLI tooling or fetch merge requests
 if grep -qiE '\bgh\b|github-cli' "$persona"; then
   echo "persona references gh/github-cli tooling" >&2; exit 1
@@ -116,13 +150,20 @@ if grep -qiE 'glab mr\b|glab mr list|merge request list' "$persona"; then
   echo "persona fetches merge requests" >&2; exit 1
 fi
 
-# --- overlaid ce-sweep contract propagates per-item sensitivity ---
-skill_source="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/SKILL.md"
-grep -qF 'optional `sensitive`' "$skill_source" \
-  || { echo "ce-sweep mapped-item contract omits per-item sensitivity" >&2; exit 1; }
-grep -qF 'either the source'\''s config entry is marked sensitive or the mapped item carries `sensitive: true`' "$skill_source" \
-  || { echo "ce-sweep upsert contract does not propagate per-item sensitivity" >&2; exit 1; }
-grep -qF 'must also replace its `title` with a neutral, non-sensitive summary' "$skill_source" \
-  || { echo "ce-sweep sensitive-title contract missing" >&2; exit 1; }
+# --- state engine redacts sensitive payloads while retaining public content ---
+state="$scratch/state.yaml"
+engine="$root/.ci/fixtures/ce-sweep/scripts/sweep-state.py"
+python3 "$engine" lease-acquire --state "$state" --writer test --ttl-minutes 10 >/dev/null
+python3 "$engine" upsert-item --state "$state" --writer test --source gitlab \
+  --id public --json '{"title":"Public issue","body":"public body","quote":"public quote"}' >/dev/null
+python3 "$engine" upsert-item --state "$state" --writer test --source gitlab \
+  --id confidential --json '{"title":"Confidential GitLab issue group/project#2","body":"secret body","quote":"secret quote","sensitive":true}' >/dev/null
+grep -qF 'Public issue' "$state" || { echo "public title missing from state" >&2; exit 1; }
+grep -qF 'public body' "$state" || { echo "public body was incorrectly redacted" >&2; exit 1; }
+grep -qF 'Confidential GitLab issue group/project#2' "$state" \
+  || { echo "neutral confidential title missing" >&2; exit 1; }
+if grep -qE 'secret body|secret quote' "$state"; then
+  echo "confidential body or quote persisted" >&2; exit 1
+fi
 
 echo "compound-engineering overlays: ok"

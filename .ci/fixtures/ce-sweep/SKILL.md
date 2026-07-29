@@ -91,7 +91,7 @@ For each entry in `feedback_sources`, dispatch a generic subagent at the **extra
 - the source's config entry verbatim,
 - the current cursor from `cursor-get --state <state> --source <source-id>`.
 
-The persona returns mapped items (`id`, `origin`, `author_class`, `title`, `body`, `media`, identity-scoped `existing_ack`, `existing_closeout`, optional `sensitive`) or one of its degrade/skip sentences. Personas report facts and never advance cursors.
+The persona returns mapped items (`id`, `origin`, `author_class`, `body`, `media`, identity-scoped `existing_ack`, `existing_closeout`) or one of its degrade/skip sentences. Personas report facts and never advance cursors.
 - **Skipped source** (read tools unavailable): drop it this run, note in the summary.
 - **Write-degraded source** (read works, no ack-write tool): upsert its items as `ack_deferred` and do NOT advance the cursor past them — they get acked on a later run once write capability returns.
 
@@ -107,7 +107,7 @@ Process each new item in cursor order. This ordering is an invariant; do not reo
 
 1. If the source's config entry has `approved: false` (the user declined standing approval for source-side writes), skip the ack write entirely and upsert the item as `ack_deferred` — never write to a source the user did not approve, even when the write tool is available. Otherwise: if the item's `existing_ack` (own identity) is true, skip the ack write; else perform the source's configured ack action at the source.
 2. Read back and confirm the ack is visible at the source before trusting it.
-3. `upsert-item --state <state> --id <id> --source <source-id> --json <item-json> --writer <writer>`. Include `"sensitive": true` in the item JSON when either the source's config entry is marked sensitive or the mapped item carries `sensitive: true` — the engine drops `body`/`quote` before writing. A source persona that marks an individual item sensitive must also replace its `title` with a neutral, non-sensitive summary because titles are retained.
+3. `upsert-item --state <state> --id <id> --source <source-id> --json <item-json> --writer <writer>`. Include `"sensitive": true` in the item JSON when the source's config entry is marked sensitive — the engine drops `body`/`quote` before writing.
 4. `cursor-advance --state <state> --source <source-id> --to <item's own cursor value> --past-item <id> --writer <writer>` — only after the item is durably in state. Never advance past an item not yet upserted.
 
 A failed ack write -> upsert the item as `ack_deferred` and hold the cursor (do not advance past it). A `LEASE-LOST` from any engine call means another writer took over — stop writing, record `partial` at wrap-up, and exit.

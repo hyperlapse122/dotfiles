@@ -25,7 +25,7 @@ _Product Contract unchanged — requirements, scope, acceptance examples, and th
 
 ### Summary
 
-Add a canonical `gitlab-issues.md` source persona for ce-sweep, version-controlled in this dotfiles repo, and inject it into the currently-pinned compound-engineering version directory so a `type: gitlab-issues` feedback source stops being re-authored per run and converges across devices. Delivery removes the `exact` flag from the compound-engineering external so the tree is additive and injected overlays survive, plus a `run_onchange_after_` provisioner for version bumps and content edits.
+Add a canonical `gitlab-issues.md` source persona for ce-sweep, version-controlled in this dotfiles repo, and inject it into the currently-pinned compound-engineering version directory so a `type: gitlab-issues` feedback source stops being re-authored per run and converges across devices. Delivery removes the `exact` flag from the compound-engineering external so new overlay files survive, plus a strict `run_after_` provisioner that reapplies the minimal archive-owned skill contract after every reconciliation.
 
 ### Problem Frame
 
@@ -103,7 +103,7 @@ The drift is structural, not accidental. The compound-engineering install at `~/
 - In that install, `skills/ce-sweep/references/sources/github-issues.md` is the mirror template: item schema, availability probe via `gh auth status`, `gh issue list --search "updated:>=<cursor>"`, untrusted-input handling, and the single-configured-label write discipline.
 - The compound-engineering external is the `localArchive` archive block in `.chezmoiexternals/ai-agents.toml` (driven by `agents.opencode.plugins` entry `compound-engineering`, `install: localArchive`, `externalPath: .local/share/compound-engineering`). CE is currently the sole `localArchive` plugin, so the block's `exact = true` (line 356) is CE-specific; the separate agent-skills block's `exact = true` (line 312) is unrelated and stays.
 - `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering.sh.tmpl` resolves the pinned version directory and prunes siblings — the version-resolution pattern to mirror.
-- `.chezmoitemplates/fingerprint.tmpl` emits a content-hash fingerprint into the rendered script; chezmoi hashes the whole rendered script to decide re-run, so a rendered version literal plus this fingerprint over the overlay source catches both version bumps and content edits. `.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl` is the neighbor that fingerprints a deployed source tree.
+- Archive-owned files are rewritten during file reconciliation even when the source fingerprint is unchanged, so the contract patch is the justified `run_after_` exception: it validates exact upstream text and fails closed on drift before applying two substitutions.
 
 ---
 
@@ -116,18 +116,18 @@ The drift is structural, not accidental. The compound-engineering install at `~/
 - KTD3. **Issues only** (session-settled: user-approved — chosen over including MRs: GitLab exposes issues and MRs on distinct endpoints, so no PR-exclusion logic is needed). The persona uses `glab issue list` and never `glab mr list`.
 - KTD4. **Confidential implies auto-sensitive** (session-settled: user-directed — chosen over plain-treat and skip: a confidential marker is a reliable sensitivity signal and the state file may be committed). The persona sets `sensitive: true` on any confidential issue so the engine drops `body`/`quote`.
 - KTD5. **Generic overlay-tree merge, not a single-file copier.** The provisioner mirrors the whole `~/.local/share/compound-engineering-overlays/` tree onto the CE version dir at matching relative paths, so any future overlay persona (or other overlaid file) works with no script change. Rejected: a copier hardcoded to the one `gitlab-issues.md` path. The user's stated problem is recurrent ("agents keep creating sources"), the generic form is no more complex than the single-file form, and the carrying cost is a one-line merge — the YAGNI bar for low-cost, problem-aligned generality is met.
-- KTD6. **Remove `exact` from the CE external (make it additive) + `run_onchange_after_` provisioner.** (user-directed mid-planning — chosen over a bare `run_after_` re-injection workaround: addresses the every-apply wipe at the root rather than working around it, and keeps the trigger within the `run_onchange_` pattern `AGENTS.md` prefers over bare `run_after_`.) The compound-engineering `localArchive` external currently sets `exact = true`, which makes chezmoi remove non-archive files from the version dir on every apply — the root cause of an injected overlay being wiped. Removing `exact` makes the external additive (chezmoi adds/updates archive files but leaves others), so an injected overlay survives no-change applies without re-injection. The provisioner is then `run_onchange_after_`, triggered by the rendered version literal (re-inject into a fresh version dir on a bump) plus `fingerprint.tmpl` over the overlays source (re-inject on a content edit); it does not need to run every apply. Tradeoff, accepted: the CE version dir is no longer self-cleaning within a version cycle — upstream deletions and stray files accumulate until the next version bump creates a fresh dir, which resets the tree. CE is the sole `localArchive` plugin, so removing `exact` from the shared template is CE-equivalent today.
-- KTD7. **Overlay the minimal ce-sweep sensitivity contract.** (user-approved continuation after feasibility review — chosen over marking the entire GitLab source sensitive: preserves useful content for public issues while making confidential issues safe.) The canonical overlay includes `skills/ce-sweep/SKILL.md` with only the source-output schema and phase-2d propagation changed: personas may return optional `sensitive`, and item sensitivity is true when either the source config or the item says so. The existing state engine remains authoritative for dropping `body` and `quote`.
+- KTD6. **Remove `exact` from the CE external + retry live reconciliation after every file phase.** (user-directed mid-planning, corrected by implementation review — chosen over an onchange-only injector: additive extraction preserves archive-absent personas but still overwrites archive-owned files.) The `run_after_` provisioner merges the overlay tree and then reapplies the strict ce-sweep contract patch on every apply. Tradeoff, accepted: the CE version dir no longer self-cleans upstream deletions within a version cycle; each version bump resets it.
+- KTD7. **Patch, do not replace, the ce-sweep sensitivity contract.** (user-approved continuation after feasibility review, corrected by implementation review — chosen over marking the entire source sensitive and over copying a stale full skill.) The provisioner validates and replaces exactly the mapped-item schema sentence and phase-2d sensitivity sentence. Unexpected upstream drift is a hard apply failure. The existing state engine remains authoritative for dropping `body` and `quote`; the persona neutralizes retained title/media fields.
 
 ### High-Level Technical Design
 
-Removing `exact` makes the CE external additive, so the injected overlay survives no-change applies; the `run_onchange_after_` provisioner only re-runs on a version bump (fresh version dir) or a content edit.
+Removing `exact` makes archive-absent overlays additive. The `run_after_` provisioner then restores both the persona and the two archive-owned contract substitutions after every file reconciliation.
 
 ```mermaid
 sequenceDiagram
   participant Apply as chezmoi apply
   participant File as file phase
-  participant Script as script phase (run_onchange_after_)
+  participant Script as script phase (run_after_)
   participant CE as CE version dir (additive, no exact)
   Apply->>File: run
   File->>CE: reconcile compound-engineering external (additive: adds archive files, leaves the overlay)
@@ -178,25 +178,25 @@ The provisioner resolves the current version directory the same way the prune sc
 - **Approach:** Chezmoi's `exact = true` removes target entries not present in the archive on every reconciliation; removing it makes the archive external additive (add/update only). CE is the sole `install: localArchive` plugin, so editing the shared `localArchive` template block is CE-equivalent today; note in the comment that a future second `localArchive` plugin would inherit additive behavior (acceptable, and required for any future overlay). The comment should also record the tradeoff: the version dir no longer self-cleans upstream deletions within a version cycle, reset on each version bump.
 - **Patterns to follow:** the existing `localArchive` block comment style (multi-line `{{- /* ... */ -}}` explaining the mechanism and its neighbors).
 - **Test scenarios:**
-  - Test expectation: none -- this is a one-line config flag removal with a comment edit; its effect (additive extract preserves the overlay) is asserted structurally by U4 (the rendered block omits `exact`) and end-to-end by the acceptance apply.
+  - Test expectation: none -- this is a one-line config flag removal with a comment edit; U5 asserts the rendered CE block omits `exact`.
 - **Verification:** U5 renders `.chezmoiexternals/ai-agents.toml` and asserts the `localArchive` (CE) block contains no `exact` key while the agent-skills block still does.
 
 ### U3. Add the overlay-injection provisioner
 
-- **Goal:** a `run_onchange_after_` script that merges the deployed overlays tree onto the current compound-engineering version directory on version bumps and overlay content changes.
+- **Goal:** a `run_after_` script that merges the deployed overlays tree and reapplies the strict ce-sweep sensitivity patch after every external reconciliation.
 - **Requirements:** R6, R7, R8, R9 (also AE2, AE3).
 - **Dependencies:** U1 (the overlays tree must contain the persona), U2 (the external is additive so an injected file survives no-change applies without re-injection).
 - **Files:**
-  - `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl` (create).
-- **Approach:** Mirror the prune script's version resolution and the `install-agent-plugins` onchange pattern. Gate `{{ if ne .chezmoi.os "windows" }}`; resolve `$ceRef` via `.chezmoitemplates/compound-engineering-ref.tmpl`, derive `$ceVersion` (`v<semver>`) and `$BASE_DIR`/`$CURRENT` from the `agents.opencode.plugins` `compound-engineering` entry's `externalPath`, exactly as the prune script does. Render `$ceVersion` into the script body so a version bump changes the rendered content and re-runs the script (injecting into the fresh version dir). Emit the `fingerprint.tmpl` partial over `dot_local/share/compound-engineering-overlays/**` so an overlay content edit also re-runs. At run time: set `OVERLAYS="$HOME/<externalPath>-overlays"` and `CURRENT="$HOME/<externalPath>/$ceVersion"`; if either directory is absent, exit 0; otherwise perform a portable recursive merge of `$OVERLAYS/.` onto `$CURRENT/` (POSIX `cp -Rp`, creating intermediate dirs), overwriting same-named files. The script owns only the merge; it never prunes version directories (the prune script still owns that) and never modifies the overlays source. It does not need to run every apply because U2 made the external additive.
-- **Patterns to follow:** `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering.sh.tmpl` (version resolution, defensive `[ -d ] || exit 0` skip); `.chezmoitemplates/fingerprint.tmpl`; `.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl` (fingerprinting a deployed source tree).
+  - `.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl` (create).
+- **Approach:** Mirror the prune script's version resolution. Gate non-Windows, resolve the current CE directory, merge `$OVERLAYS/.` with portable `cp -Rp`, then patch the archive-owned `skills/ce-sweep/SKILL.md`. Each substitution first accepts the already-patched text, otherwise requires the exact pinned upstream text, applies it, and verifies the result. Missing or drifted skill content is a hard failure. `run_after_` is intentional because file reconciliation can restore the archive-owned skill without changing any source fingerprint.
+- **Patterns to follow:** `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering.sh.tmpl` (version resolution and defensive directory guard); repository `run_after_` retry semantics for live state.
 - **Test scenarios:**
   - Covers AE2, AE3. After the provisioner runs against a scratch CE tree containing `skills/ce-sweep/references/sources/{email,github-issues,slack}.md`, `gitlab-issues.md` is present in that same directory.
   - The three upstream source files remain present after the merge (merge, not replace).
   - When the overlays directory is absent, the script exits 0 without writing under the CE tree.
   - When the CE version directory is absent, the script exits 0 (defensive skip, matching the prune script).
   - The injected `gitlab-issues.md` is byte-identical to the deployed overlay source.
-  - The rendered script contains the version literal (bump re-trigger) and the `fingerprint.tmpl` glob over the overlays source (content-edit re-trigger).
+  - A second simulated archive reconciliation restores the upstream skill and the next provisioner run reapplies the contract.
   - Render is shellcheck-clean under both linux and darwin gates.
 - **Verification:** U5 renders this script, rewrites the resolved CE path to a scratch fixture, and runs it to assert the scenarios above.
 - **Execution note:** The merge command must be portable across GNU and BSD `cp` because the script renders for linux and darwin; CI runs linux only, so darwin portability is a manual acceptance item (recorded in Definition of Done).
@@ -207,15 +207,15 @@ The provisioner resolves the current version directory the same way the prune sc
 - **Requirements:** R5, R9 (also AE1 and KTD7).
 - **Dependencies:** none.
 - **Files:**
-  - `dot_local/share/compound-engineering-overlays/skills/ce-sweep/SKILL.md` (create from the pinned upstream skill with the minimal contract changes).
-- **Approach:** Copy the pinned ce-sweep `SKILL.md` into the canonical overlay tree. Add optional `sensitive` to the mapped-item output in phase 2b. In phase 2d, require `"sensitive": true` in the JSON passed to `upsert-item` when either the source config or the mapped item is sensitive. Preserve all other upstream text byte-for-byte so future release diffs make drift visible. The state engine already strips `body` and `quote`, so no Python change is needed.
+  - `.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl` (strict patch owned with U3).
+- **Approach:** Add optional `sensitive` to the mapped-item output in phase 2b. In phase 2d, require `"sensitive": true` when either the source config or mapped item is sensitive, and require sensitive personas to neutralize retained title/media. Apply only these exact substitutions to the current upstream skill; never replace the full file.
 - **Patterns to follow:** the pinned upstream `skills/ce-sweep/SKILL.md`; `skills/ce-sweep/references/state-schema.md` sensitive semantics.
 - **Test scenarios:**
   - A mapped public issue under a non-sensitive source is upserted without forced sensitivity.
   - A mapped confidential issue under a non-sensitive source is upserted with `sensitive: true`.
   - A source configured sensitive still forces sensitivity on every item.
-  - The overlaid skill retains the existing source persona lookup and phase ordering.
-- **Verification:** the isolated test diffs the overlay against the pinned skill and permits only the documented sensitivity-contract edits, then exercises the state engine with public and confidential fixtures.
+  - The patched skill retains the existing source persona lookup and phase ordering.
+- **Verification:** the isolated test starts from a pinned upstream fixture, applies the strict patch twice across a simulated re-extract, and exercises the state engine with public and confidential fixtures.
 
 ### U5. Add CI verification
 
@@ -225,7 +225,7 @@ The provisioner resolves the current version directory the same way the prune sc
 - **Files:**
   - `.ci/test-compound-engineering-overlays.sh` (create).
   - `.github/workflows/ci.yml` (add a job that installs chezmoi, renders the external and the provisioner with a stub `op` and empty config under `--source "$PWD"`, and runs the test).
-- **Approach:** Follow the `smoke-agy-plugin-installer.sh` shape. Render `.chezmoiexternals/ai-agents.toml` via `chezmoi execute-template` and assert the `localArchive` (CE) block omits `exact` while the agent-skills block still has it. Render the provisioner; rewrite the resolved CE path inside the rendered script to a scratch fixture; build a fake CE tree (`skills/ce-sweep/references/sources/` with the three upstream filenames) and a deployed overlays tree (the canonical persona and overlaid skill); run the provisioner and assert the injection and merge scenarios from U3/U4. Run content-contract checks over the persona and exercise `sweep-state.py` with public/confidential fixtures to prove per-item redaction. Keep the test hermetic — no real apply, no network, per the repo verification rules.
+- **Approach:** Render the external and provisioner with stubbed secrets. Build a fake CE tree from pinned skill/state-engine fixtures, run the provisioner, simulate a later archive overwrite, and run it again. Assert the persona merge, strict skill patch, rendered external scope, and state-engine redaction. Keep the test hermetic — no real apply and no network.
 - **Patterns to follow:** `.ci/smoke-agy-plugin-installer.sh` (render + rewrite-path + stub-bin + assert); `.ci/test-cli-proxy-api-render-matrix.sh` (content-contract grep over rendered output); the `codex-wrapper` job in `.github/workflows/ci.yml` (chezmoi install + `execute-template` + run test).
 - **Test scenarios:**
   - The rendered `localArchive` (CE) block has no `exact` key; the agent-skills block still does.
@@ -246,7 +246,7 @@ The provisioner resolves the current version directory the same way the prune sc
 |---|---|---|
 | U1 | Persona content contract | `.ci/test-compound-engineering-overlays.sh` content-contract grep (glab, item-schema, confidential→sensitive, degrade sentences, single-label tool guidance; no `gh`/MR listing) |
 | U2 | Additive external | `.ci/test-compound-engineering-overlays.sh` asserts the rendered CE `localArchive` block omits `exact` (agent-skills block retains it) |
-| U3 | Provisioner behavior | `.ci/test-compound-engineering-overlays.sh`: injects persona and skill overlay, preserves upstream files, skips cleanly when either dir absent, byte-identical, re-trigger via version literal + fingerprint glob |
+| U3 | Provisioner behavior | `.ci/test-compound-engineering-overlays.sh`: injects the persona, strictly patches the skill, survives a simulated re-extract, preserves upstream files, and skips when either directory is absent |
 | U4 | Per-item sensitivity | isolated state-engine fixtures prove confidential items lose `body`/`quote` and receive a neutral summary while public items remain intact |
 | U2, U3 | Render + lint | `render-dotfiles.yml` renders the `.tmpl`; CI shellchecks the rendered script (watch the Windows-render CRLF trap) |
 | U5 | Test infra | new `ci.yml` job green on ubuntu-latest |
@@ -258,7 +258,7 @@ The provisioner resolves the current version directory the same way the prune sc
 
 - The canonical persona exists at `dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md`.
 - `.chezmoiexternals/ai-agents.toml` no longer sets `exact` on the CE `localArchive` block (agent-skills block unchanged), with an updated comment recording the additive behavior and the no-self-cleaning tradeoff.
-- The provisioner `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl` renders under linux and darwin, is shellcheck-clean, and re-runs on version bumps and overlay content edits.
+- The provisioner `.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl` renders under linux and darwin, is shellcheck-clean, and reapplies the strict skill patch after every file phase.
 - `.ci/test-compound-engineering-overlays.sh` and its `ci.yml` job pass on ubuntu-latest.
 - Two isolated applies with `--source "$PWD"` and a throwaway destination leave the persona and skill overlay byte-identical to source with the three upstream source files intact.
 - Confidential-item fixtures prove the persisted state contains no title detail, `body`, or `quote`; public-item fixtures retain normal content.
