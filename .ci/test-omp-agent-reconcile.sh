@@ -103,48 +103,58 @@ declared_json="$scratch/declared.json"
 awk '/^cat >"\$declared"/{flag=1;next}/^JSON$/{flag=0}flag' "$settings_script" >"$declared_json"
 jq -e 'type == "object" and (keys | length) > 0' "$declared_json" >/dev/null
 
-jq -r '
+# The three-source harvest is shared by the catalog fixture and the shape check.
+harvest_selectors='
   def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
   [ (.modelRoles // {} | to_entries[].value),
     (."task.agentModelOverrides" // {} | to_entries[].value),
     (."retry.fallbackChains" // {} | to_entries[].value[]) ]
-  | map(select(type == "string")) | map(select(startswith("@") | not))
-  | map(strip_thinking) | map(select(endswith("/*") | not))
-  | map(select(contains("/"))) | unique
-  | {models: map({provider: (split("/")[0]), selector: .})}
-' "$declared_json" >"$scratch/catalog-full.json"
+  | map(select(type == "string")) | map(select(startswith("@") | not))'
+
+jq -r "$harvest_selectors
+  | map(strip_thinking) | map(select(endswith(\"/*\") | not))
+  | map(select(contains(\"/\"))) | unique
+  | {models: map({provider: (split(\"/\")[0]), selector: .})}
+" "$declared_json" >"$scratch/catalog-full.json"
+jq -e '(.models | length) > 0' "$scratch/catalog-full.json" >/dev/null
 
 declared_count=$(jq -r 'keys | length' "$declared_json")
 
 run_settings() {
   local label=$1 catalog=$2
   : >"$scratch/$label.calls"
-  if [[ -n $catalog ]]; then
-    OMP_CALLS="$scratch/$label.calls" CANNED_CATALOG="$catalog" \
-      env HOME="$settings_home" PATH="$settings_bin:$PATH" \
-      bash "$settings_script" >"$scratch/$label.out" 2>"$scratch/$label.err"
-  else
-    OMP_CALLS="$scratch/$label.calls" \
-      env HOME="$settings_home" PATH="$settings_bin:$PATH" \
-      bash "$settings_script" >"$scratch/$label.out" 2>"$scratch/$label.err"
-  fi
+  # An empty CANNED_CATALOG and an unset one take the same stub path, so the
+  # assignment needs no fork.
+  OMP_CALLS="$scratch/$label.calls" CANNED_CATALOG="$catalog" \
+    env HOME="$settings_home" PATH="$settings_bin:$PATH" \
+    bash "$settings_script" >"$scratch/$label.out" 2>"$scratch/$label.err"
 }
 
 # One assertion per declared path, and never at a parent namespace.
 run_settings full "$scratch/catalog-full.json"
 [[ $(wc -l <"$scratch/full.calls") -eq $declared_count ]]
 while IFS= read -r path; do
-  grep -qF "config set $path " "$scratch/full.calls"
+  grep -qF "config set $path " "$scratch/full.calls" || {
+    printf 'settings assertion never set declared path %s\n' "$path" >&2
+    exit 1
+  }
 done < <(jq -r 'keys_unsorted[]' "$declared_json")
-if grep -qE '^config set (task|retry|providers|exa|theme) ' "$scratch/full.calls"; then
-  printf 'settings assertion wrote a parent namespace\n' >&2
-  exit 1
-fi
+# Derived from the declared keys, so a newly declared dotted path is guarded too.
+while IFS= read -r parent; do
+  if grep -qF "config set $parent " "$scratch/full.calls"; then
+    printf 'settings assertion wrote parent namespace %s\n' "$parent" >&2
+    exit 1
+  fi
+done < <(jq -r 'keys[] | select(contains(".")) | split(".")[0]' "$declared_json" | sort -u)
 grep -F "asserted $declared_count declared omp settings paths" "$scratch/full.out" >/dev/null
 
 # A selector the catalog covers by provider but does not serve aborts the apply
 # before anything is written.
-absent_selector=$(jq -r '.models[] | select(.provider == "anthropic") | .selector' "$scratch/catalog-full.json" | head -1)
+absent_selector=$(jq -r 'first(.models[] | select(.provider == "anthropic") | .selector) // ""' "$scratch/catalog-full.json")
+[[ -n $absent_selector ]] || {
+  printf 'fixture found no anthropic selector to withhold; the absent-selector case is not being exercised\n' >&2
+  exit 1
+}
 jq --arg s "$absent_selector" '.models |= map(select(.selector != $s))' \
   "$scratch/catalog-full.json" >"$scratch/catalog-absent.json"
 if run_settings absent "$scratch/catalog-absent.json"; then
@@ -193,15 +203,24 @@ fi
 # substitute — it catches a typo in a provider, a model id, or a thinking level
 # at PR time, while the provisioner's own catalog gate catches a retired id on
 # the host that actually has the credentials.
-while IFS= read -r selector; do
+mapfile -t declared_selectors < <(jq -r "$harvest_selectors | unique | .[]" "$declared_json")
+[[ ${#declared_selectors[@]} -gt 0 ]] || {
+  printf 'no declared model selectors extracted; the selector shape check would pass vacuously\n' >&2
+  exit 1
+}
+for selector in "${declared_selectors[@]}"; do
   if [[ ! $selector =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?/[A-Za-z0-9._*-]+(:(off|minimal|low|medium|high|xhigh|max))?$ ]]; then
     printf 'malformed declared model selector: %s\n' "$selector" >&2
     exit 1
   fi
-done < <(jq -r '
-  [ (.modelRoles // {} | to_entries[].value),
-    (."task.agentModelOverrides" // {} | to_entries[].value),
-    (."retry.fallbackChains" // {} | to_entries[].value[]) ]
-  | map(select(type == "string")) | map(select(startswith("@") | not)) | unique | .[]
-' "$declared_json")
-printf 'omp auth and plugin reconcile tests passed\n'
+done
+
+# The parity diff above compares KEY SETS only, so it cannot see a value-rendering
+# divergence. Pin the one that already bit: piping a collection to ConvertTo-Json
+# enumerates it, so a single-element array would serialize as a bare scalar on
+# Windows while POSIX renders a JSON list.
+grep -F 'ConvertTo-Json -InputObject $value' "$settings_ps1" >/dev/null || {
+  printf 'the Windows half must pass -InputObject so a single-element array is not enumerated\n' >&2
+  exit 1
+}
+printf 'omp auth, plugin, and settings reconcile tests passed\n'

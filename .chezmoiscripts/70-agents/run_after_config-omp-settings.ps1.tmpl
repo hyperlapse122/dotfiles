@@ -3,12 +3,18 @@
 {{- if not (kindIs "map" $settings) -}}{{- fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}{{- end -}}
 {{- if eq (len $settings) 0 -}}{{- fail "config-omp-settings: agents.omp.settings declares no paths" -}}{{- end -}}
 {{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
+{{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
 {{-   end -}}
 {{-   if contains "op://" ($value | toJson) -}}
 {{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
+{{-   end -}}
+{{-   if kindIs "string" $value -}}
+{{-     if not (regexMatch $valueRe $value) -}}
+{{-       fail (printf "config-omp-settings: declared path %s has a string value outside the tab-separated transport's safe charset; keep it to letters, digits, space and ._:/@*+-" $path) -}}
+{{-     end -}}
 {{-   end -}}
 {{-   range $other, $_ := $settings -}}
 {{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
@@ -43,90 +49,88 @@ $paths = @($declared.PSObject.Properties.Name)
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('chezmoi-omp-settings-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($scratch) | Out-Null
-$catalogPath = Join-Path $scratch 'catalog.json'
-$catalogError = Join-Path $scratch 'catalog.err'
-
-# The catalog probe is the only network call in the apply path, so bound it and
-# fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
-# so exit status alone cannot tell "absent selector" from "absent credentials".
-$catalog = $null
 try {
-  $probe = Start-Process -FilePath $ompCommand.Source -ArgumentList 'models', '--json' `
-    -RedirectStandardOutput $catalogPath -RedirectStandardError $catalogError `
-    -NoNewWindow -PassThru
-  if ($probe.WaitForExit(15000)) {
-    if ($probe.ExitCode -eq 0 -and (Test-Path -LiteralPath $catalogPath)) {
-      try {
-        $parsed = (Get-Content -Raw -LiteralPath $catalogPath) | ConvertFrom-Json
-        if ($parsed.models -and @($parsed.models).Count -gt 0) {
-          $catalog = $parsed
-        }
-      } catch {
-        $catalog = $null
-      }
-    }
-  } else {
-    $probe.Kill()
-  }
-} catch {
+  $catalogPath = Join-Path $scratch 'catalog.json'
+  $catalogError = Join-Path $scratch 'catalog.err'
+
+  # Bound the probe and fail OPEN: an unauthenticated provider returns a
+  # partial catalog with exit 0, so exit status is NOT the discriminator —
+  # the parse and count gate is.
   $catalog = $null
-}
+  try {
+    $probe = Start-Process -FilePath $ompCommand.Source -ArgumentList 'models', '--json' `
+      -RedirectStandardOutput $catalogPath -RedirectStandardError $catalogError `
+      -NoNewWindow -PassThru
+    if (-not $probe.WaitForExit(15000)) {
+      $probe.Kill()
+    }
+    if (Test-Path -LiteralPath $catalogPath) {
+      $parsed = (Get-Content -Raw -LiteralPath $catalogPath) | ConvertFrom-Json
+      if ($parsed.models -and @($parsed.models).Count -gt 0) {
+        $catalog = $parsed
+      }
+    }
+  } catch {
+    $catalog = $null
+  }
 
-if ($null -eq $catalog) {
-  Write-Warning 'config-omp-settings: model catalog unavailable; skipping selector validation.'
-} else {
-  $thinkingSuffix = ':(off|minimal|low|medium|high|xhigh|max)$'
-  $candidates = [Collections.Generic.List[object]]::new()
-  foreach ($group in @('modelRoles', 'task.agentModelOverrides')) {
-    if ($paths -contains $group) {
-      foreach ($property in $declared.$group.PSObject.Properties) {
-        $candidates.Add([pscustomobject]@{ Where = "$group.$($property.Name)"; Selector = [string]$property.Value })
+  if ($null -eq $catalog) {
+    Write-Warning 'config-omp-settings: model catalog unavailable; skipping selector validation.'
+  } else {
+    $thinkingSuffix = ':(off|minimal|low|medium|high|xhigh|max)$'
+    $candidates = [Collections.Generic.List[object]]::new()
+    foreach ($group in @('modelRoles', 'task.agentModelOverrides')) {
+      if ($paths -contains $group) {
+        foreach ($property in $declared.$group.PSObject.Properties) {
+          $candidates.Add([pscustomobject]@{ Where = "$group.$($property.Name)"; Selector = [string]$property.Value })
+        }
+      }
+    }
+    if ($paths -contains 'retry.fallbackChains') {
+      foreach ($chain in $declared.'retry.fallbackChains'.PSObject.Properties) {
+        $entries = @($chain.Value)
+        for ($index = 0; $index -lt $entries.Count; $index++) {
+          $candidates.Add([pscustomobject]@{
+              Where    = "retry.fallbackChains.$($chain.Name)[$index]"
+              Selector = [string]$entries[$index]
+            })
+        }
+      }
+    }
+
+    # Precomputed once, like the POSIX half, rather than per candidate.
+    $covered = @($catalog.models | ForEach-Object { $_.provider } | Sort-Object -Unique)
+    $known = @($catalog.models | ForEach-Object { $_.selector })
+    foreach ($candidate in $candidates) {
+      # Role aliases are not selectors, and a provider/* chain entry is a routing rule.
+      if ($candidate.Selector.StartsWith('@')) { continue }
+      $selector = $candidate.Selector -replace $thinkingSuffix, ''
+      if ($selector.EndsWith('/*') -or -not $selector.Contains('/')) { continue }
+      $provider = $selector.Split('/')[0]
+      if ($covered -notcontains $provider) {
+        Write-Warning "config-omp-settings: catalog has no $provider models; not validating $($candidate.Where)"
+        continue
+      }
+      if ($known -notcontains $selector) {
+        throw "config-omp-settings: $($candidate.Where) names $selector, which provider $provider does not serve."
       }
     }
   }
-  if ($paths -contains 'retry.fallbackChains') {
-    foreach ($chain in $declared.'retry.fallbackChains'.PSObject.Properties) {
-      $entries = @($chain.Value)
-      for ($index = 0; $index -lt $entries.Count; $index++) {
-        $candidates.Add([pscustomobject]@{
-            Where    = "retry.fallbackChains.$($chain.Name)[$index]"
-            Selector = [string]$entries[$index]
-          })
-      }
-    }
-  }
-
-  $covered = @($catalog.models | ForEach-Object { $_.provider } | Sort-Object -Unique)
-  $known = @($catalog.models | ForEach-Object { $_.selector })
-  foreach ($candidate in $candidates) {
-    # Role aliases are not selectors, and a provider/* chain entry is a routing rule.
-    if ($candidate.Selector.StartsWith('@')) { continue }
-    $selector = $candidate.Selector -replace $thinkingSuffix, ''
-    if ($selector.EndsWith('/*') -or -not $selector.Contains('/')) { continue }
-    $provider = $selector.Split('/')[0]
-    if ($covered -notcontains $provider) {
-      Write-Warning "config-omp-settings: catalog has no $provider models; not validating $($candidate.Where)"
-      continue
-    }
-    if ($known -notcontains $selector) {
-      throw "config-omp-settings: $($candidate.Where) names $selector, which provider $provider does not serve."
-    }
-  }
+} finally {
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -LiteralPath $scratch
 }
 
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -LiteralPath $scratch
-
-# A string-typed setting is stored verbatim, so a scalar must be passed raw;
-# only a record or list is passed as JSON.
+# A string-typed setting is stored verbatim, so it is passed raw; everything else
+# is JSON. ConvertTo-Json takes -InputObject rather than a pipeline, because
+# piping enumerates a collection and would serialize a single-element array as a
+# bare scalar.
 $asserted = 0
 foreach ($path in $paths) {
   $value = $declared.$path
-  if ($value -is [bool]) {
-    $rendered = $value.ToString().ToLowerInvariant()
-  } elseif ($value -is [string] -or $value -is [int] -or $value -is [long] -or $value -is [double]) {
-    $rendered = [string]$value
+  if ($value -is [string]) {
+    $rendered = $value
   } else {
-    $rendered = $value | ConvertTo-Json -Depth 20 -Compress
+    $rendered = ConvertTo-Json -InputObject $value -Depth 20 -Compress
   }
   & $ompCommand.Source config set $path $rendered | Out-Null
   if ($LASTEXITCODE -ne 0) {

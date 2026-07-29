@@ -3,12 +3,18 @@
 {{- if not (kindIs "map" $settings) -}}{{- fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}{{- end -}}
 {{- if eq (len $settings) 0 -}}{{- fail "config-omp-settings: agents.omp.settings declares no paths" -}}{{- end -}}
 {{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
+{{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
 {{-   end -}}
 {{-   if contains "op://" ($value | toJson) -}}
 {{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
+{{-   end -}}
+{{-   if kindIs "string" $value -}}
+{{-     if not (regexMatch $valueRe $value) -}}
+{{-       fail (printf "config-omp-settings: declared path %s has a string value outside the tab-separated transport's safe charset; keep it to letters, digits, space and ._:/@*+-" $path) -}}
+{{-     end -}}
 {{-   end -}}
 {{-   range $other, $_ := $settings -}}
 {{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
@@ -34,6 +40,7 @@
 set -euo pipefail
 
 # chezmoi's non-interactive script environment omits ~/.local/bin, where omp lands.
+# Prepend rather than append so this omp wins over any other on PATH.
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
   *) PATH="$HOME/.local/bin:$PATH" ;;
@@ -52,8 +59,9 @@ fi
 scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-omp-settings"
 mkdir -p "$scratch"
 chmod 0700 "$scratch"
-declared="$(mktemp "$scratch/declared.XXXXXX.json")"
-catalog="$(mktemp "$scratch/catalog.XXXXXX.json")"
+# No suffix after the X run: BSD mktemp(1) only substitutes trailing X's.
+declared="$(mktemp "$scratch/declared.XXXXXX")"
+catalog="$(mktemp "$scratch/catalog.XXXXXX")"
 cleanup() { rm -f -- "$declared" "$catalog"; }
 trap cleanup EXIT HUP INT TERM
 
@@ -64,32 +72,41 @@ JSON
 # The catalog probe is the only network call in the apply path, so bound it and
 # fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
 # so exit status alone cannot tell "absent selector" from "absent credentials".
-catalog_ok=false
-if command -v timeout >/dev/null 2>&1; then
-  timeout 15 omp models --json >"$catalog" 2>/dev/null || true
-else
-  omp models --json >"$catalog" 2>/dev/null || true
-fi
-if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
-  catalog_ok=true
-else
-  printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
-fi
+# The deadline is enforced without `timeout`, which BSD/macOS hosts do not ship.
+omp models --json >"$catalog" 2>/dev/null &
+probe_pid=$!
+probe_waited=0
+while [[ $probe_waited -lt 15 ]] && kill -0 "$probe_pid" 2>/dev/null; do
+  sleep 1
+  probe_waited=$((probe_waited + 1))
+done
+kill "$probe_pid" 2>/dev/null || true
+wait "$probe_pid" 2>/dev/null || true
 
-if [[ $catalog_ok == true ]]; then
+if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
+  # Precomputed once: a per-selector jq would re-parse the whole catalog. Model
+  # ids carry no spaces, so space-padded substring matching is exact.
+  covered=" $(jq -r '[.models[].provider] | unique | join(" ")' "$catalog") "
+  known=" $(jq -r '[.models[].selector] | join(" ")' "$catalog") "
   # Only a provider the catalog speaks for can prove a selector absent. Role
   # aliases are not selectors, and a provider/* chain entry is a routing rule.
   while IFS=$'\t' read -r where selector; do
     [[ -n $selector ]] || continue
     provider=${selector%%/*}
-    if ! jq -e --arg p "$provider" 'any(.models[]; .provider == $p)' "$catalog" >/dev/null; then
-      printf 'config-omp-settings: catalog has no %s models; not validating %s\n' "$provider" "$where" >&2
-      continue
-    fi
-    if ! jq -e --arg s "$selector" 'any(.models[]; .selector == $s)' "$catalog" >/dev/null; then
-      printf 'config-omp-settings: %s names %s, which provider %s does not serve.\n' "$where" "$selector" "$provider" >&2
-      exit 1
-    fi
+    case "$covered" in
+      *" $provider "*) ;;
+      *)
+        printf 'config-omp-settings: catalog has no %s models; not validating %s\n' "$provider" "$where" >&2
+        continue
+        ;;
+    esac
+    case "$known" in
+      *" $selector "*) ;;
+      *)
+        printf 'config-omp-settings: %s names %s, which provider %s does not serve.\n' "$where" "$selector" "$provider" >&2
+        exit 1
+        ;;
+    esac
   done < <(jq -r '
     def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
     [
@@ -103,22 +120,28 @@ if [[ $catalog_ok == true ]]; then
     | map(.sel |= strip_thinking)
     | map(select(.sel | endswith("/*") | not))
     | map(select(.sel | contains("/")))
-    | .[] | .where + "\t" + .sel
+    | .[] | [.where, .sel] | @tsv
   ' "$declared")
+else
+  printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
 fi
 
-# A string-typed setting is stored verbatim, so a scalar must be passed raw;
-# only a record or list is passed as JSON.
+# One jq pass emits every path with its argument already rendered: a string-typed
+# setting is stored verbatim, so it is passed raw, and everything else is JSON.
 asserted=0
-while IFS= read -r path; do
+while IFS=$'\t' read -r path value; do
   [[ -n $path ]] || continue
-  case "$(jq -r --arg p "$path" '.[$p] | type' "$declared")" in
-    object | array) value="$(jq -c --arg p "$path" '.[$p]' "$declared")" ;;
-    *) value="$(jq -r --arg p "$path" '.[$p]' "$declared")" ;;
-  esac
-  omp config set "$path" "$value" >/dev/null
+  omp config set "$path" "$value" >/dev/null || {
+    status=$?
+    printf 'config-omp-settings: failed to assert %s\n' "$path" >&2
+    exit "$status"
+  }
   asserted=$((asserted + 1))
-done < <(jq -r 'keys_unsorted[]' "$declared")
+done < <(jq -r '
+  to_entries[]
+  | [.key, (if (.value | type) == "string" then .value else (.value | tojson) end)]
+  | @tsv
+' "$declared")
 
 printf 'config-omp-settings: asserted %d declared omp settings paths\n' "$asserted"
 {{ end -}}

@@ -23,7 +23,8 @@ render_servers() {
   local os=$1
   local container=$2
   local harness=${3:-pi}
-  chezmoi --config "$empty_config" --source "$repo_root" --override-data "$fixture" \
+  local data=${4:-$fixture}
+  chezmoi --config "$empty_config" --source "$repo_root" --override-data "$data" \
     execute-template \
     "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\" \"os\" \"$os\" \"container\" $container) }}"
 }
@@ -54,20 +55,15 @@ harness_fixture='{"agents":{"mcp":{"servers":[
   {"name":"everywhere","transport":"stdio","command":"everywhere","args":[]},
   {"name":"not-omp","transport":"stdio","command":"not-omp","args":[],"harnessSkip":["omp"]}
 ]}}}'
-render_harness() {
-  chezmoi --config "$empty_config" --source "$repo_root" --override-data "$harness_fixture" \
-    execute-template \
-    "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$1\" \"os\" \"linux\" \"container\" false) }}"
-}
-assert_names "$(render_harness pi)" everywhere not-omp
-assert_names "$(render_harness omp)" everywhere
+assert_names "$(render_servers linux false pi "$harness_fixture")" everywhere not-omp
+assert_names "$(render_servers linux false omp "$harness_fixture")" everywhere
 
 # The real inventory declares Open Design only after its managed `od` wrapper
 # exists, and the common gate omits it outside a Linux host runtime.
 render_real() {
   local os=$1
   local container=$2
-  local harness=${3:-pi}
+  local harness=pi
   chezmoi --config "$empty_config" --source "$repo_root" execute-template \
     "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\" \"os\" \"$os\" \"container\" $container) }}"
 }
@@ -117,24 +113,34 @@ open_design_eligible=$(
     jq -r '.os == "linux" and (.container | not)'
 )
 
-agents_output=$(render_consumer agents.toml dot_agents/private_readonly_agents.toml.tmpl)
-if [[ $open_design_eligible == true ]]; then
-  grep -F 'name = "open-design"' "$agents_output" >/dev/null
-  grep -F 'command = "od"' "$agents_output" >/dev/null
-  grep -F 'args = ["mcp"]' "$agents_output" >/dev/null
-elif grep -F 'name = "open-design"' "$agents_output" >/dev/null; then
-  printf 'Open Design MCP rendered in ineligible agents.toml\n' >&2
-  exit 1
-fi
+# One canonical inventory of every MCP consumer: rendered name, source template,
+# and the harness id it must identify as. Every loop below derives from it, so a
+# seventh consumer is one edit.
+consumers=(
+  "agents.toml:dot_agents/private_readonly_agents.toml.tmpl:claude"
+  "pi.json:dot_pi/private_agent/private_readonly_mcp.json.tmpl:pi"
+  "opencode.json:dot_config/opencode/readonly_opencode.json.tmpl:opencode"
+  "gemini.json:dot_gemini/config/private_readonly_mcp_config.json.tmpl:agy"
+  "omp.json:dot_omp/private_agent/private_readonly_mcp.json.tmpl:omp"
+  "kimi.json:private_dot_kimi-code/private_readonly_mcp.json.tmpl:kimi"
+)
 
-for entry in \
-  "pi.json:dot_pi/private_agent/private_readonly_mcp.json.tmpl" \
-  "opencode.json:dot_config/opencode/readonly_opencode.json.tmpl" \
-  "gemini.json:dot_gemini/config/private_readonly_mcp_config.json.tmpl" \
-  "omp.json:dot_omp/private_agent/private_readonly_mcp.json.tmpl" \
-  "kimi.json:private_dot_kimi-code/private_readonly_mcp.json.tmpl"
-do
-  output=$(render_consumer "${entry%%:*}" "${entry#*:}")
+for entry in "${consumers[@]}"; do
+  IFS=: read -r consumer_name consumer_template _ <<<"$entry"
+  output=$(render_consumer "$consumer_name" "$consumer_template")
+  # agents.toml is TOML, so its Open Design assertions are textual; the rest are
+  # JSON documents whose nesting differs per harness.
+  if [[ $consumer_name == agents.toml ]]; then
+    if [[ $open_design_eligible == true ]]; then
+      grep -F 'name = "open-design"' "$output" >/dev/null
+      grep -F 'command = "od"' "$output" >/dev/null
+      grep -F 'args = ["mcp"]' "$output" >/dev/null
+    elif grep -F 'name = "open-design"' "$output" >/dev/null; then
+      printf 'Open Design MCP rendered in ineligible agents.toml\n' >&2
+      exit 1
+    fi
+    continue
+  fi
   if [[ $open_design_eligible == true ]]; then
     jq -e '
       [
@@ -161,31 +167,25 @@ done
 
 # omp resolves Exa through its native search provider, so the shared websearch
 # server must be absent from its inventory and present in every other one.
-if grep -F 'websearch' "$scratch/rendered/omp.json" >/dev/null; then
-  printf 'websearch leaked into the omp MCP inventory\n' >&2
-  exit 1
-fi
-for rendered in agents.toml pi.json opencode.json gemini.json kimi.json; do
-  if ! grep -F 'websearch' "$scratch/rendered/$rendered" >/dev/null; then
-    printf 'websearch missing from the %s MCP inventory\n' "$rendered" >&2
+for entry in "${consumers[@]}"; do
+  IFS=: read -r consumer_name _ consumer_harness <<<"$entry"
+  if [[ $consumer_harness == omp ]]; then
+    if grep -F 'websearch' "$scratch/rendered/$consumer_name" >/dev/null; then
+      printf 'websearch leaked into the omp MCP inventory\n' >&2
+      exit 1
+    fi
+  elif ! grep -F 'websearch' "$scratch/rendered/$consumer_name" >/dev/null; then
+    printf 'websearch missing from the %s MCP inventory\n' "$consumer_name" >&2
     exit 1
   fi
 done
 
-for entry in \
-  "dot_agents/private_readonly_agents.toml.tmpl:claude" \
-  "dot_pi/private_agent/private_readonly_mcp.json.tmpl:pi" \
-  "dot_config/opencode/readonly_opencode.json.tmpl:opencode" \
-  "dot_gemini/config/private_readonly_mcp_config.json.tmpl:agy" \
-  "dot_omp/private_agent/private_readonly_mcp.json.tmpl:omp" \
-  "private_dot_kimi-code/private_readonly_mcp.json.tmpl:kimi"
-do
-  template=${entry%%:*}
-  harness=${entry##*:}
-  grep -F "includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\")" \
-    "$repo_root/$template" >/dev/null
-  if grep -F 'range .agents.mcp.servers' "$repo_root/$template" >/dev/null; then
-    printf '%s still bypasses the shared MCP applicability helper\n' "$template" >&2
+for entry in "${consumers[@]}"; do
+  IFS=: read -r _ consumer_template consumer_harness <<<"$entry"
+  grep -F "includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$consumer_harness\")" \
+    "$repo_root/$consumer_template" >/dev/null
+  if grep -F 'range .agents.mcp.servers' "$repo_root/$consumer_template" >/dev/null; then
+    printf '%s still bypasses the shared MCP applicability helper\n' "$consumer_template" >&2
     exit 1
   fi
 done

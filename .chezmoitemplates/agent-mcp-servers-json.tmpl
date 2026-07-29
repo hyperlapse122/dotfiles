@@ -57,7 +57,7 @@ inclusion list would silently drop new harnesses.
 {{- $validHarness := list "claude" "codex" "opencode" "agy" "pi" "omp" "kimi" -}}
 {{- $harness := .harness -}}
 {{- if not (has $harness $validHarness) -}}
-{{-   fail (printf "agent-mcp-servers-json.tmpl: unknown harness %q; valid values: claude, codex, opencode, agy, pi, omp, kimi" $harness) -}}
+{{-   fail (printf "agent-mcp-servers-json.tmpl: unknown harness %q; valid values: %s" $harness (join ", " $validHarness)) -}}
 {{- end -}}
 {{- $eligible := list -}}
 {{- range $index, $server := $ctx.agents.mcp.servers -}}
@@ -119,7 +119,7 @@ inclusion list would silently drop new harnesses.
 {{-         fail (printf "agent mcp: server %q harnessSkip entries must be strings, got %s" $name (kindOf $entry)) -}}
 {{-       end -}}
 {{-       if not (has $entry $validHarness) -}}
-{{-         fail (printf "agent mcp: server %q has unknown harnessSkip %q; valid values: claude, codex, opencode, agy, pi, omp, kimi" $name $entry) -}}
+{{-         fail (printf "agent mcp: server %q has unknown harnessSkip %q; valid values: %s" $name $entry (join ", " $validHarness)) -}}
 {{-       end -}}
 {{-       $harnessSkip = append $harnessSkip $entry -}}
 {{-     end -}}
