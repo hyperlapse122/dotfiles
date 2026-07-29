@@ -176,6 +176,20 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": null,
     "windows-arm64": null,
   },
+  omp: {
+    // A lone per-platform binary (oh-my-pi ships a bare executable, not pi's
+    // dir bundle); linux publishes glibc AND static musl, windows carries .exe.
+    "linux-amd64": "omp-linux-x64",
+    "linux-arm64": "omp-linux-arm64",
+    "darwin-amd64": "omp-darwin-x64",
+    "darwin-arm64": "omp-darwin-arm64",
+    "windows-amd64": "omp-windows-x64.exe",
+    // No windows-arm64 build upstream, so it is deliberately not locked.
+    "windows-arm64": null,
+    // linuxMusl: distinct static-musl builds next to the glibc ones.
+    "linux-amd64-musl": "omp-linux-musl-x64",
+    "linux-arm64-musl": "omp-linux-musl-arm64",
+  },
   codegraph: {
     "linux-amd64": "codegraph-linux-x64.tar.gz",
     "linux-arm64": "codegraph-linux-arm64.tar.gz",

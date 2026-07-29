@@ -202,6 +202,21 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => (os === "windows" ? null : `pi-${os}-${x64Arch(arch)}.tar.gz`),
   },
 
+  omp: {
+    kind: "githubRelease",
+    source: "can1357/oh-my-pi",
+    // A lone per-platform binary (oh-my-pi is a fork of pi but ships a bare
+    // executable, not pi's whole-dir bundle): linux publishes glibc AND static
+    // musl, darwin and windows carry the raw binary (windows with .exe). Asset
+    // names use the raw os (`omp-windows-x64.exe`), not the win32 spelling. No
+    // windows-arm64 build upstream, so that target is deliberately not locked.
+    linuxMusl: true,
+    asset: ({ os, arch, libc }) =>
+      os === "windows" && arch === "arm64"
+        ? null
+        : `omp-${os}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}${executableExtension(os)}`,
+  },
+
   codegraph: {
     kind: "githubRelease",
     source: "colbymchenry/codegraph",
