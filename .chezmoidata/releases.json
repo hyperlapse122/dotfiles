@@ -110,23 +110,23 @@
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",
-        "version": "v1.13.1",
+        "version": "v1.13.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.1/aoe-linux-amd64.tar.gz",
-            "sha256": "be3038540b58d7e724c205e6ddee5bbe283025e5906b76f9eab0b403425f8af2"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-linux-amd64.tar.gz",
+            "sha256": "6117e8470732b5c47f42ae47df135216cf8e7aadcb37727497897f8b164eb83f"
           },
           "linux-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.1/aoe-linux-arm64.tar.gz",
-            "sha256": "edf933ce36d55d4b905bf6df90e02aa6aa1a4fdefaae579055fbe555d801034e"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-linux-arm64.tar.gz",
+            "sha256": "8ee957f75daa2284aa377aebc51ac73a221064d68e88670117d6c0c8d6fdc303"
           },
           "darwin-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.1/aoe-darwin-amd64.tar.gz",
-            "sha256": "595009144199993232d1a67483782d0e53561d04a9b7dd7a612e744617cfb10b"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-darwin-amd64.tar.gz",
+            "sha256": "80a82fb3a64d20f24cfe20ba77050ddef66e7fbc9995d4038eb5e8b650d7663c"
           },
           "darwin-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.1/aoe-darwin-arm64.tar.gz",
-            "sha256": "50ae10e125f21fef8501a9e5bfe8cdb4ad76d755f11bafdf7bf4a674989d014c"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-darwin-arm64.tar.gz",
+            "sha256": "fc58fb10a2fe970e915da85f9dc24346348f6d47855cf3c8b9890c10e9cff3c3"
           }
         }
       },
