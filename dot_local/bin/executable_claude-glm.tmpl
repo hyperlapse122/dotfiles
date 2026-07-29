@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if ! command -v claude >/dev/null 2>&1; then
+  printf 'claude-glm: `claude` not found on PATH\n' >&2
+  exit 127
+fi
+
+exec env ANTHROPIC_AUTH_TOKEN="{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/Z.ai/API Key") }}" \
+  ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic" \
+  ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7" ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.2[1m]" ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.2[1m]" \
+  CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1" API_TIMEOUT_MS="3000000" \
+  claude "$@"
