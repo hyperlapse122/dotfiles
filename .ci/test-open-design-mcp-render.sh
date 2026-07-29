@@ -189,6 +189,22 @@ for entry in "${consumers[@]}"; do
     exit 1
   fi
 done
+# The array above is hand-maintained, so prove it is the WHOLE set: a target
+# template that calls the helper but is missing here would ship unverified, which
+# is exactly how omp's own inventory went uncovered until this change.
+mapfile -t helper_callers < <(
+  grep -rl --include='*.tmpl' -F 'includeTemplate "agent-mcp-servers-json.tmpl"' "$repo_root" |
+    sed "s@^$repo_root/@@" |
+    grep -v -e '^\.ci/' -e '^\.chezmoitemplates/' |
+    sort
+)
+if ! diff -u \
+  <(printf '%s\n' "${consumers[@]}" | cut -d: -f2 | sort) \
+  <(printf '%s\n' "${helper_callers[@]}"); then
+  printf 'the consumers list is not the whole set of MCP helper callers\n' >&2
+  exit 1
+fi
+
 
 fingerprint="$repo_root/.chezmoiscripts/70-agents/run_onchange_after_install-dotagents-skills.sh.tmpl"
 grep -F '"dot_agents/private_readonly_agents.toml.tmpl" ".chezmoitemplates/agent-mcp-servers-json.tmpl"' \
@@ -230,6 +246,12 @@ assert_invalid harness-skip-type \
 assert_invalid invalid-harness-skip \
   '{"agents":{"mcp":{"servers":[{"name":"bad","transport":"stdio","command":"bad","args":[],"harnessSkip":["emacs"]}]}}}' \
   'unknown harnessSkip "emacs"'
+# A valid CALLER id that renders no file of its own is NOT a valid exclusion: the
+# dot_agents consumer serves Codex as "claude", so accepting it here would render
+# green and still ship the server to Codex.
+assert_invalid inexpressible-harness-skip \
+  '{"agents":{"mcp":{"servers":[{"name":"bad","transport":"stdio","command":"bad","args":[],"harnessSkip":["codex"]}]}}}' \
+  'cannot skip harness "codex", which renders no file of its own'
 
 # The helper's own required input, not a record field.
 if chezmoi --config "$empty_config" --source "$repo_root" execute-template \

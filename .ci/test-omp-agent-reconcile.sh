@@ -130,15 +130,23 @@ run_settings() {
     bash "$settings_script" >"$scratch/$label.out" 2>"$scratch/$label.err"
 }
 
-# One assertion per declared path, and never at a parent namespace.
+# One assertion per declared path, at the exact value the contract requires, and
+# never at a parent namespace. Comparing the whole recorded call is what makes
+# this load-bearing: a prefix match passes even when the provisioner delivers
+# every record as a literal string, which is the entire model policy.
 run_settings full "$scratch/catalog-full.json"
 [[ $(wc -l <"$scratch/full.calls") -eq $declared_count ]]
-while IFS= read -r path; do
-  grep -qF "config set $path " "$scratch/full.calls" || {
-    printf 'settings assertion never set declared path %s\n' "$path" >&2
+while IFS=$'\t' read -r path want; do
+  grep -qxF "config set $path $want" "$scratch/full.calls" || {
+    printf 'settings assertion did not deliver declared path %s as %s\n' "$path" "$want" >&2
+    printf '  recorded: %s\n' "$(grep -F "config set $path " "$scratch/full.calls" || echo '(absent)')" >&2
     exit 1
   }
-done < <(jq -r 'keys_unsorted[]' "$declared_json")
+done < <(jq -r '
+  to_entries[]
+  | [.key, (if (.value | type) == "string" then .value else (.value | tojson) end)]
+  | @tsv
+' "$declared_json")
 # Derived from the declared keys, so a newly declared dotted path is guarded too.
 while IFS= read -r parent; do
   if grep -qF "config set $parent " "$scratch/full.calls"; then
@@ -216,11 +224,89 @@ for selector in "${declared_selectors[@]}"; do
 done
 
 # The parity diff above compares KEY SETS only, so it cannot see a value-rendering
-# divergence. Pin the one that already bit: piping a collection to ConvertTo-Json
-# enumerates it, so a single-element array would serialize as a bare scalar on
-# Windows while POSIX renders a JSON list.
-grep -F 'ConvertTo-Json -InputObject $value' "$settings_ps1" >/dev/null || {
-  printf 'the Windows half must pass -InputObject so a single-element array is not enumerated\n' >&2
-  exit 1
+# divergence, and CI cannot execute the Windows half at all. Pin every rule that
+# decides what actually reaches the CLI there; each one has a POSIX counterpart the
+# value assertion above already proves behaviorally.
+while IFS='|' read -r pattern why; do
+  [[ -n $pattern ]] || continue
+  grep -F -e "$pattern" -- "$settings_ps1" >/dev/null || {
+    printf 'the Windows half must %s\n' "$why" >&2
+    exit 1
+  }
+done <<'PINS'
+ConvertTo-Json -InputObject $value|pass -InputObject, so a single-element array is not enumerated into a bare scalar
+-Depth 20|serialize nested fallback chains rather than System.Object[] below depth 2
+$value -is [string]|store a string verbatim rather than JSON-quoted
+$1$1\"|escape embedded quotes where the Windows PowerShell 5.1 argument binder does not
+PINS
+
+# Render-time guards are structurally invisible to every test above, which receives
+# already-rendered scripts. These cases fail the RENDER, the only layer that can
+# still catch them: the apply-time catalog gate skips role aliases by design, and
+# omp stores a nonsense selector silently. Requires chezmoi, which the job that
+# rendered the scripts under test already installed.
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+render_config="$scratch/render.toml"
+: >"$render_config"
+# A guard that fires AFTER a credential field is resolved (the duplicate check is
+# one) still walks the op:// shim first, so isolate the render from host secret
+# state: a HOME with no gpg-cache-ready marker takes the live-op fallback, which
+# this stub answers with a newline-free value.
+neg_home="$scratch/neg-home"
+neg_bin="$scratch/neg-bin"
+mkdir -p "$neg_home" "$neg_bin"
+printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$neg_bin/op"
+chmod 0700 "$neg_bin/op"
+assert_render_fails() {
+  local label=$1 template=$2 data=$3 want=$4
+  if env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+    chezmoi --config "$render_config" --source "$repo_root" --override-data "$data" \
+    execute-template <"$repo_root/$template" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
+    printf 'render-negative %s: expected a failed render, got exit 0\n' "$label" >&2
+    exit 1
+  fi
+  grep -qF -e "$want" -- "$scratch/neg.err" || {
+    printf 'render-negative %s: render failed without the expected diagnostic %s\n' "$label" "$want" >&2
+    sed 's/^/  /' "$scratch/neg.err" >&2
+    exit 1
+  }
 }
+
+auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
+settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
+settings_win='.chezmoiscripts/70-agents/run_after_config-omp-settings.ps1.tmpl'
+linux='"chezmoi":{"os":"linux"}'
+windows='"chezmoi":{"os":"windows"}'
+roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
+
+# The credential set is closed so a data edit cannot inject a variable into the
+# environment omp loads for every session, nor silently drop one.
+assert_render_fails auth-outside-closed-set "$auth_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"NODE_OPTIONS\",\"key\":\"x\"}]}}}}" \
+  'declares unsupported variable "NODE_OPTIONS"'
+assert_render_fails auth-emptied-set "$auth_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
+  'must declare ZAI_API_KEY'
+assert_render_fails auth-duplicate "$auth_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"a\"},{\"variable\":\"ZAI_API_KEY\",\"key\":\"b\"}]}}}}" \
+  'duplicates variable "ZAI_API_KEY"'
+
+# Role indirection is the one value shape no later layer validates.
+assert_render_fails settings-dangling-alias "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":{\"commit\":\"@no-such-role\"}}}}}" \
+  'names role alias @no-such-role'
+assert_render_fails settings-dangling-alias-windows "$settings_win" \
+  "{$windows,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":{\"commit\":\"@no-such-role\"}}}}}" \
+  'names role alias @no-such-role'
+assert_render_fails settings-orphan-chain "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"ghost\":[\"anthropic/claude-opus-5:xhigh\"]}}}}}" \
+  'is not a declared modelRoles role'
+# A control character anywhere in the value breaks the tab-separated transport.
+assert_render_fails settings-nested-control-char "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":{\"default\":\"anthropic/claude-opus-5\txhigh\"}}}}}" \
+  'control character or backslash somewhere in its value'
+assert_render_fails settings-parent-namespace "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"exa\":true,\"exa.enableSearch\":true}}}}" \
+  'is a parent namespace of'
+
 printf 'omp auth, plugin, and settings reconcile tests passed\n'

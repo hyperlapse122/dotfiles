@@ -68,11 +68,10 @@ Roles carry the model selectors. A role value is either a model selector, which 
 | `tiny` | `google-antigravity/gemini-3.1-flash-lite` | Titles, memory, background classification |
 | `commit` | `@smol` | Commit messages |
 
-Subagent overrides reference roles. `task` is absent on purpose: it inherits the `task` role.
+Subagent overrides reference roles. `task` is absent on purpose: it inherits the `task` role. So is `scout`, for a reason found during review rather than at planning time: on this host every compound-engineering persona — code review, doc review, simplification — is dispatched as agent type `scout`, so an override pinning it to `@smol` would demote deep-judgment work instead of billing an explorer correctly. Leaving it undeclared is how the job-shape policy actually applies to the observed job shape.
 
 | Agent | Override | Why |
 |---|---|---|
-| `scout` | `@smol` | Read-only exploration |
 | `librarian` | `@smol` | External library research |
 | `reviewer` | `@advisor` | Same critic model as turn review |
 | `designer` | `@designer` | Binds the agent to its role |
@@ -159,7 +158,7 @@ flowchart TB
 - AE1. **Covers R10, R14.** Given a session changed the active model through `/model`, when the next apply runs, then the declared role value is restored.
 - AE2. **Covers R10.** Given omp wrote a settings key beside the declared paths — not a member inside a declared record — when apply runs, then that key is preserved exactly.
 - AE3. **Covers R12.** Given a declared role names a selector whose provider the catalog covers and which the catalog does not contain, when apply runs, then the apply fails and names that selector instead of leaving a startup warning.
-- AE4. **Covers R4, R1.** Given `scout` is declared as `@smol`, when the `smol` role changes, then `scout` follows without any edit to the agent override.
+- AE4. **Covers R4, R1.** Given `librarian` is declared as `@smol`, when the `smol` role changes, then `librarian` follows without any edit to the agent override.
 - AE5. **Covers R18.** Given the shared MCP inventory excludes `websearch` for omp, when every harness config renders, then omp's inventory omits it and the pi, OpenCode, Claude/Codex, AGY, and Kimi inventories are unchanged.
 - AE6. **Covers R9.** Given the advisor has a declared model and the runtime is off, when a session runs normally, then no second model reviews the turn, and enabling the advisor in that session uses the declared model.
 - AE7. **Covers R12.** Given a host where a provider has no credentials and the catalog therefore returns no models for it, when apply runs, then selectors naming that provider are not treated as absent and the apply proceeds.
