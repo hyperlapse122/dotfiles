@@ -258,6 +258,17 @@ packages:
         - solaar  # Logitech HID++ device manager
         - solaar-udev  # udev rules granting Solaar device access
 
+        # Smartcard / code signing — Authenticode signing with the certificate held on
+        # a SafeNet eToken 5110 (Gemalto IDPrime 940). The signing packages form one
+        # chain — osslsigncode -> pkcs11-provider -> opensc -> pcscd -> CCID -> card —
+        # and dropping any of them breaks signing; pcsc-tools is diagnostics only.
+        - pcsc-lite  # PC/SC smartcard daemon; pcscd.socket is enabled by the distro preset, so no enablement script belongs here
+        - pcsc-lite-ccid  # USB CCID reader driver the daemon binds the token through
+        - opensc  # PKCS#11 module for the IDPrime card, plus the pkcs11-tool / pkcs15-tool probes
+        - pkcs11-provider  # OpenSSL 3 PKCS#11 provider; osslsigncode loads it per invocation, so openssl.cnf stays untouched
+        - osslsigncode  # Authenticode signer for PE/MSI (the signtool replacement)
+        - pcsc-tools  # pcsc_scan, the reader-level probe that opensc's tools sit above
+
         # Password manager
         - 1password  # 1Password desktop app
         - 1password-cli  # 1Password CLI (op)
@@ -557,6 +568,17 @@ packages:
 
         # Logitech device manager
         - solaar  # Logitech HID++ device manager
+
+        # Smartcard / code signing — Authenticode signing with the certificate held on
+        # a SafeNet eToken 5110 (Gemalto IDPrime 940). Mirrors the Fedora block; Debian
+        # splits the PKCS#11 module out of the tools package, hence one extra entry.
+        - pcscd  # PC/SC smartcard daemon (pcsc-lite equivalent)
+        - libccid  # USB CCID reader driver (pcsc-lite-ccid equivalent)
+        - opensc  # OpenSC probes: pkcs11-tool / pkcs15-tool
+        - opensc-pkcs11  # the PKCS#11 module itself; Fedora bundles it in opensc
+        - pkcs11-provider  # OpenSSL 3 PKCS#11 provider; osslsigncode loads it per invocation, so openssl.cnf stays untouched
+        - osslsigncode  # Authenticode signer for PE/MSI (the signtool replacement)
+        - pcsc-tools  # pcsc_scan, the reader-level probe that opensc's tools sit above
 
         # Password manager
         - 1password  # 1Password desktop app (from 1password apt repo)
