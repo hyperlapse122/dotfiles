@@ -456,13 +456,36 @@ agents:
     # Model policy: a model selector is named on a role, and a subagent that
     # needs an already-named model points at that role with a "@role" alias
     # (quoted so YAML does not read it as a tag) rather than repeating the id.
-    # Retuning a role therefore propagates to its referents. Placement spreads
-    # the coding loop, deliberation, vision, and mechanical bulk across four
-    # authenticated coding plans so one quota wall is not a full stop. No
+    # Retuning a role therefore propagates to its referents.
+    #
+    # Provider spread, as actually declared: anthropic carries the coding loop,
+    # openai-codex deliberation, and google-antigravity BOTH vision and
+    # mechanical bulk - three plans for those four job shapes, not four. That
+    # sharing is a known trade, not an oversight: Antigravity holds the most
+    # headroom of any plan on this host, and each of the two recovers onto a
+    # different provider at its FIRST chain hop (bulk -> anthropic, vision ->
+    # kimi-code via the inherited `default` chain). Two consequences to keep in
+    # view: an Antigravity wall hits vision and bulk together, and vision's
+    # inherited chain passes through zai/glm-5.2, which has no image input and
+    # therefore cannot serve an image turn. Splitting the two is a provider
+    # move, which the sync-omp-models series rule makes a human decision rather
+    # than a sync action. No
     # provider/* chain is declared: a provider wildcard outranks the role chain
     # by specificity, and google-antigravity serves no claude-opus-5 or
     # claude-fable-5 id, so such a chain would preempt these provider-diverse
     # chains with hops that may all be skipped.
+    #
+    # >>> DO NOT HAND-EDIT THE MODEL SECTION <<<
+    # `modelRoles`, `task.agentModelOverrides`, and `retry.fallbackChains` below
+    # are owned by the repo-scoped skill `.agents/skills/sync-omp-models/SKILL.md`
+    # (`skill://sync-omp-models`). Read it BEFORE touching any of those three
+    # keys, and follow it - it carries the series/always-latest rules, the
+    # subagent-override diff rule, the anchor-provider rule, the capability
+    # gates, and a Verify recipe whose checks fail on a violation. Its companion
+    # `model-notes.md` records which model family suits which job shape and why.
+    # A change made without it will look fine here and break in one of those
+    # gates, or worse, silently place deep-judgment work on a light tier.
+    # Every other key under `settings:` is ordinary data and needs no skill.
     settings:
       modelRoles:
         default: anthropic/claude-opus-5:xhigh      # main coding and editing loop
@@ -471,38 +494,82 @@ agents:
         designer: anthropic/claude-opus-5:high      # UI and visual work
         vision: google-antigravity/gemini-3.1-pro   # image input
         advisor: openai-codex/gpt-5.6-terra:high    # turn review; runtime stays off
-        task: anthropic/claude-sonnet-4-6           # default subagent
-        smol: openai-codex/gpt-5.4-mini             # cheap floor that still follows tools
-        tiny: google-antigravity/gemini-3.1-flash-lite  # titles, memory, background
+        task: anthropic/claude-sonnet-5             # default subagent
+        smol: openai-codex/gpt-5.4-mini             # light floor that still follows tools
+        # `bulk` is the one custom role. It exists because a fallback chain is
+        # keyed by ROLE, so mechanical bulk work can only get its own recovery
+        # order by owning a role; `tiny` aliases it so the selector is named once.
+        bulk: google-antigravity/gemini-3.1-flash-lite  # mechanical bulk, titles, memory
+        tiny: "@bulk"                               # background classification
         commit: "@smol"                             # commit messages
-      # Bundled agents only. `task` is absent on purpose: it inherits the task
-      # role, and `scout` is absent for the same reason plus a measured one: on
-      # this host every compound-engineering persona - code review, doc review,
-      # simplification - is dispatched as agent type `scout`, so pinning it to the
-      # cheap floor would quietly demote deep-judgment work rather than bill an
-      # explorer correctly. `librarian` keeps the floor because its job really is
-      # narrow lookup. `designer` binds the agent to the same-named role so the
-      # two cannot drift. `sonic` is the one model no role names.
+      # A DIFF against each bundled agent's own frontmatter, never a restatement
+      # of it. Resolution is override -> agent frontmatter -> session fallback
+      # (oh-my-pi docs/task-agent-discovery.md), so an omitted agent lands on its
+      # OWN declared model, not on the `task` role. `omp agents unpack` reports
+      # the v17.1.8 bundled defaults as designer/@designer, librarian/@smol,
+      # reviewer/@slow, scout/@smol, sonic/@smol, task/@task; re-read them after
+      # an omp upgrade with the sync-omp-models skill.
+      #   - `task` and `librarian` are absent because their frontmatter already
+      #     names the wanted role (@task, @smol); an entry would be a no-op that
+      #     only drifts. `designer` is absent for the same reason - upstream, not
+      #     this data, is what binds that agent to its same-named role.
+      #   - `scout` IS declared, and must be: on this host every
+      #     compound-engineering persona - code review, doc review, simplification
+      #     - dispatches as agent type `scout`, whose frontmatter pins @smol. Left
+      #     undeclared it runs deep-judgment work on the light floor, so it is
+      #     lifted to the default-subagent tier instead.
+      #   - `sonic` points at the `bulk` role rather than a literal so it picks
+      #     up that role's Haiku-then-GPT recovery order.
       task.agentModelOverrides:
-        librarian: "@smol"
-        reviewer: "@advisor"
-        designer: "@designer"
-        sonic: anthropic/claude-haiku-4-5
+        scout: "@task"                              # CE personas, not an explorer
+        reviewer: "@advisor"                        # same critic model as turn review
+        sonic: "@bulk"                              # mechanical bulk
       task.showResolvedModelBadge: true
       retry.usageAwareFallback: true
-      # Keyed by role only. The default chain covers every role without its own,
-      # including the roles the aliased overrides and `sonic` resolve to.
+      # Keyed by role only. A role with no chain of its own falls to `default`,
+      # which is the deliberation chain - so any LIGHT role must declare one.
+      # That is doubly true for a role whose value is a `@role` alias: omp does
+      # not document whether the active role for chain lookup is the referring
+      # role or its target, so an alias without its own chain can silently land
+      # on `default`. `commit` and `tiny` each declare one to remove that
+      # ambiguity; whichever reading omp uses, they stay on a light chain.
+      #
+      # ANCHOR RULE: each role's RESOLUTION PATH - its own selector plus its
+      # chain - reaches at least one `anthropic` and one `openai-codex` hop.
+      # Those two plans hold the most headroom on this host, so a path that
+      # reaches neither can strand the role once the plan-served providers are
+      # spent. `default` satisfies it through its own Opus selector, so its chain
+      # spends every hop on a different provider. The light chains anchor on
+      # Haiku and Luna, never on a deliberation line, so anchoring cannot
+      # escalate background work.
+      #
+      # `default` walks the communicator alternatives before the deep
+      # specialist: Kimi holds up better than GLM under nested delegation
+      # prompts (oh-my-openagent's tested finding), and Sol changes working
+      # style rather than degrading gracefully, so it sits last as the
+      # different-brain option rather than the first retry.
       retry.fallbackChains:
         default:
-        - openai-codex/gpt-5.6-sol:high
-        - kimi-code/k3
-        - zai/glm-5.2
+        - kimi-code/k3:high
+        - zai/glm-5.2:max
+        - openai-codex/gpt-5.6-sol:xhigh
         smol:
         - google-antigravity/gemini-3.6-flash
+        - anthropic/claude-haiku-4-5
+        - openai-codex/gpt-5.6-luna
         - zai/glm-4.7-flash
+        commit:
+        - google-antigravity/gemini-3.6-flash
+        - anthropic/claude-haiku-4-5
+        - openai-codex/gpt-5.6-luna
         tiny:
         - google-antigravity/gemini-3.6-flash
+        - anthropic/claude-haiku-4-5
+        - openai-codex/gpt-5.6-luna
         - zai/glm-4.7-flash
+        bulk:
+        - anthropic/claude-haiku-4-5
+        - openai-codex/gpt-5.4-mini
       # Exa first; unlisted providers keep their built-in relative order after
       # it. The deep-research surfaces are pinned off rather than left to a
       # default that could change upstream.
