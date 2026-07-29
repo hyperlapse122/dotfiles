@@ -115,7 +115,8 @@ if [ -z "$pty_provider" ]; then
   exit 0
 fi
 
-marker="CETMUXPASSTHRU$$"
+wrapped="CEWRAPPED$$"
+bare="CEBARE$$"
 fidelity="CEFIDELITY$$"
 # The literal bytes the emitter writes for the fidelity probe: ESC [ 1 m <text>.
 # Matched with grep -F so the bracket stays a bracket.
@@ -124,11 +125,31 @@ sgr_marker=$(printf '\033[1m%s' "$fidelity")
 emit="$scratch/emit.sh"
 cat >"$emit" <<EOF
 #!/usr/bin/env bash
-# A bold-SGR marker proves the capture path preserves raw control bytes.
+# \$1 = the socket of the server running this pane.
+#
+# allow-passthrough=on forwards ONLY from a visible pane, so emitting before the
+# client has attached would lose the payload for a reason unrelated to the
+# setting. Wait for a client, then let it paint.
+for _ in \$(seq 1 100); do
+  case "\$(tmux -S "\$1" list-clients -F x 2>/dev/null)" in
+    x*) break ;;
+  esac
+  sleep 0.1
+done
+sleep 0.5
+
+# Three probes, each isolating one layer:
+#
+# 1. A bold-SGR marker: proves the capture path preserves raw control bytes.
 printf '\033[1m%s\033[0m' '$fidelity'
-# A Kitty graphics APC wrapped in the tmux passthrough DCS, escapes doubled —
-# the same shape omp emits.
-printf '\033Ptmux;\033\033_G%s\033\033\\\\\033\\\\' '$marker'
+# 2. A BARE Kitty APC: tmux forwards this whatever allow-passthrough says, so it
+#    proves the client can receive APC bytes at all. Without it, a missing
+#    wrapped payload is ambiguous between "tmux refused" and "this environment
+#    never delivers APCs".
+printf '\033_G%s\033\\\\' '$bare'
+# 3. The DCS-WRAPPED Kitty APC, escapes doubled — the shape omp emits, and the
+#    only one allow-passthrough gates.
+printf '\033Ptmux;\033\033_G%s\033\033\\\\\033\\\\' '$wrapped'
 sleep 1
 EOF
 chmod 700 "$emit"
@@ -139,18 +160,20 @@ chmod 700 "$emit"
 printf 'source-file %s\nset -g allow-passthrough off\n' "$config" >"$scratch/off.conf"
 
 pty_run() { # $1 = socket, $2 = config, $3 = capture path
-  local run_sock=$1 run_conf=$2 cap=$3
+  local run_sock=$1 run_conf=$2 cap=$3 pane_cmd
+  # tmux takes the pane program as ONE shell command string, so quote the words
+  # here or a scratch path containing a space would split into bogus arguments.
+  pane_cmd=$(printf '%q %q' "$emit" "$run_sock")
   case "$pty_provider" in
     script)
-      # script(1) takes ONE command string, so the words must be quoted here or
-      # a scratch path containing a space would split into bogus arguments.
+      # script(1) also takes a single command string.
       local cmd
-      cmd=$(printf 'tmux -S %q -f %q new-session %q' "$run_sock" "$run_conf" "$emit")
+      cmd=$(printf 'tmux -S %q -f %q new-session %q' "$run_sock" "$run_conf" "$pane_cmd")
       TERM=xterm-256color script -q -e -c "$cmd" "$cap" >/dev/null 2>&1 || true
       ;;
     unbuffer)
       TERM=xterm-256color unbuffer \
-        tmux -S "$run_sock" -f "$run_conf" new-session "$emit" >"$cap" 2>&1 || true
+        tmux -S "$run_sock" -f "$run_conf" new-session "$pane_cmd" >"$cap" 2>&1 || true
       ;;
   esac
   tmux -S "$run_sock" kill-server 2>/dev/null || true
@@ -170,28 +193,45 @@ count() {
   esac
 }
 
-# Run one transport case and assert the capture is usable before its verdict is
-# read. Fidelity comes first: if the capture mangled control bytes, the marker
-# verdict below is meaningless, so it must fail loudly rather than skew it.
+# Run one transport case and establish both preconditions before its verdict is
+# read: the capture must be byte-faithful, and the client must be able to receive
+# APC bytes at all. Either precondition failing makes the wrapped-payload verdict
+# meaningless, so each fails loudly with its own cause instead of skewing it.
 capture_case() { # $1 = label, $2 = socket, $3 = config, $4 = capture path
   pty_run "$2" "$3" "$4"
   [ -s "$4" ] || fail "the $pty_provider capture for the $1 case is empty; the pty run produced nothing"
   [ "$(count "$sgr_marker" "$4")" != '0' ] \
     || fail "the $pty_provider capture for the $1 case dropped the raw SGR marker; the capture path is not byte-faithful"
+  [ "$(count "$bare" "$4")" != '0' ] \
+    || fail "the $1 case never delivered a BARE Kitty APC to the client, which tmux forwards regardless of allow-passthrough; this environment cannot carry APC bytes to a tmux client, so the wrapped-payload verdict would be meaningless"
+}
+
+diagnose() { # $1 = capture path
+  printf 'tmux-kitty-passthrough: capture diagnostics\n' >&2
+  printf '  tmux version    : %s\n' "$tmux_version" >&2
+  printf '  pty provider    : %s\n' "$pty_provider" >&2
+  printf '  capture bytes   : %s\n' "$(wc -c <"$1" 2>/dev/null || echo 0)" >&2
+  printf '  raw SGR marker  : %s (nonzero = capture path is byte-faithful)\n' "$(count "$sgr_marker" "$1")" >&2
+  printf '  bare APC        : %s (nonzero = client receives APC bytes)\n' "$(count "$bare" "$1")" >&2
+  printf '  wrapped APC     : %s (nonzero = tmux forwarded the gated form)\n' "$(count "$wrapped" "$1")" >&2
+  printf '  verbatim DCS    : %s (nonzero = tmux passed the wrapper through unparsed)\n' "$(count 'Ptmux;' "$1")" >&2
 }
 
 # --- 3. the transport pair ----------------------------------------------------
 
 capture_case 'passthrough-on' "$sock" "$config" "$scratch/cap-on"
-[ "$(count "$marker" "$scratch/cap-on")" != '0' ] \
-  || fail 'passthrough is on but the Kitty graphics payload never reached the client'
+if [ "$(count "$wrapped" "$scratch/cap-on")" = '0' ]; then
+  diagnose "$scratch/cap-on"
+  fail 'passthrough is on but the wrapped Kitty graphics payload never reached the client'
+fi
 
-# The negative case is what proves the setting is the cause. tmux forwards a
-# BARE Kitty APC whatever this option says and gates only the DCS-wrapped form
-# the emitter above uses, which is the form omp emits.
+# The negative case is what proves the setting is the cause rather than something
+# incidental: the bare probe still arrives, and only the gated form disappears.
 capture_case 'passthrough-off' "${sock}-off" "$scratch/off.conf" "$scratch/cap-off"
-[ "$(count "$marker" "$scratch/cap-off")" = '0' ] \
-  || fail 'passthrough is off but the Kitty graphics payload still reached the client'
+if [ "$(count "$wrapped" "$scratch/cap-off")" != '0' ]; then
+  diagnose "$scratch/cap-off"
+  fail 'passthrough is off but the wrapped Kitty graphics payload still reached the client'
+fi
 
 # --- 3b. drift guard on the substitution -------------------------------------
 
