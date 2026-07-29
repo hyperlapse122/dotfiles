@@ -4,7 +4,8 @@
 # Renders the overlay provisioner via `chezmoi execute-template` (stub op, empty
 # config, --source PWD), points HOME at a scratch tree so the provisioner's resolved
 # CE version dir lands on a fake CE checkout, runs it, and asserts:
-#   - the persona and ce-sweep contract are injected at the right CE-relative paths
+#   - the persona is injected at the right CE-relative path
+#   - archive-owned ce-sweep files remain byte-identical across repeated runs
 #   - the three upstream source files are preserved (merge, not replace)
 #   - the injected persona is byte-identical to the deployed overlay source
 #   - the provisioner exits 0 when the overlays dir or the CE dir is absent
@@ -35,7 +36,7 @@ env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
   --source "$root" \
   execute-template \
-  < "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" \
+  < "$root/.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl" \
   > "$prov"
 env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
@@ -49,12 +50,16 @@ env PATH="$bin:$PATH" chezmoi \
 home="$scratch/home"
 version=$(grep -oE 'CURRENT="\$BASE_DIR/[^"]+"' "$prov" | sed -E 's|.*/(v[0-9][0-9.]+)"$|\1|')
 [ -n "$version" ] || { echo "could not resolve CE version from rendered script" >&2; exit 1; }
-# The run_after name is load-bearing because archive-owned files may be restored
-# without any source fingerprint changing.
-case "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" in
-  *"/run_after_"*) ;;
-  *) echo "overlay provisioner must run after every file reconciliation" >&2; exit 1 ;;
+# The onchange name and source fingerprint are load-bearing. The additive
+# external preserves the installed reference between no-change applies.
+case "$root/.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl" in
+  *"/run_onchange_after_"*) ;;
+  *) echo "overlay provisioner must use onchange lifecycle" >&2; exit 1 ;;
 esac
+fingerprint_path='dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md'
+fingerprint_digest=$(sha256sum "$root/$fingerprint_path" | cut -d ' ' -f 1)
+grep -qF "$fingerprint_path  $fingerprint_digest" "$prov" \
+  || { echo "overlay provisioner fingerprint missing managed reference" >&2; exit 1; }
 
 ce_base="$home/.local/share/compound-engineering"
 overlays="$home/.local/share/compound-engineering-overlays"
@@ -64,11 +69,9 @@ build_fake_ce() {
   rm -rf "$home"
   mkdir -p "$current/skills/ce-sweep/references/sources"
   cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$current/skills/ce-sweep/SKILL.md"
-  mkdir -p "$current/skills/ce-sweep/scripts"
-  cp "$root/.ci/fixtures/ce-sweep/scripts/sweep-state.py" \
-    "$current/skills/ce-sweep/scripts/sweep-state.py"
   for f in email github-issues slack; do
     printf 'upstream %s\n' "$f" > "$current/skills/ce-sweep/references/sources/$f.md"
+    cp "$current/skills/ce-sweep/references/sources/$f.md" "$scratch/expected-$f.md"
   done
   mkdir -p "$overlays"
   cp -Rp "$root/dot_local/share/compound-engineering-overlays/." "$overlays/"
@@ -81,35 +84,47 @@ env HOME="$home" bash "$prov"
 src="$current/skills/ce-sweep/references/sources/gitlab-issues.md"
 skill="$current/skills/ce-sweep/SKILL.md"
 [ -f "$src" ] || { echo "persona not injected" >&2; exit 1; }
-[ -f "$skill" ] || { echo "ce-sweep contract not injected" >&2; exit 1; }
+[ -f "$skill" ] || { echo "ce-sweep skill missing" >&2; exit 1; }
+cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
+  || { echo "ce-sweep skill changed on first run" >&2; exit 1; }
 for f in email github-issues slack; do
-  [ -f "$current/skills/ce-sweep/references/sources/$f.md" ] || { echo "upstream $f.md lost in merge" >&2; exit 1; }
+  cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
+    || { echo "upstream $f.md changed on first run" >&2; exit 1; }
 done
 cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
   || { echo "injected persona differs from overlay source" >&2; exit 1; }
-grep -qF 'optional `sensitive`' "$skill" \
-  || { echo "ce-sweep mapped-item contract was not patched" >&2; exit 1; }
-grep -qF 'omit `media` because those fields are retained' "$skill" \
-  || { echo "ce-sweep sensitive-field contract was not patched" >&2; exit 1; }
 
-# A later archive reconciliation restores archive-owned files. The run_after
-# provisioner must reapply the strict contract patch on the next apply.
+# A later archive reconciliation restores archive-owned files. The provisioner
+# must reinstall only the reference and leave every archive-owned file unchanged.
 cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill"
 env HOME="$home" bash "$prov"
-grep -qF 'optional `sensitive`' "$skill" \
-  || { echo "ce-sweep contract was lost after archive reconciliation" >&2; exit 1; }
+cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
+  || { echo "ce-sweep skill changed on second run" >&2; exit 1; }
+cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
+  || { echo "persona differs after second run" >&2; exit 1; }
+for f in email github-issues slack; do
+  cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
+    || { echo "upstream $f.md changed on second run" >&2; exit 1; }
+done
 
 # --- skip when overlays dir absent (leave CE tree intact) ---
 build_fake_ce
 rm -rf "$overlays"
 env HOME="$home" bash "$prov"
-[ -f "$current/skills/ce-sweep/references/sources/email.md" ] \
-  || { echo "CE tree modified when overlays dir absent" >&2; exit 1; }
+cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$current/skills/ce-sweep/SKILL.md" \
+  || { echo "ce-sweep skill changed when overlay source was absent" >&2; exit 1; }
+[ ! -e "$current/skills/ce-sweep/references/sources/gitlab-issues.md" ] \
+  || { echo "persona created when overlay source was absent" >&2; exit 1; }
+for f in email github-issues slack; do
+  cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
+    || { echo "upstream $f.md changed when overlay source was absent" >&2; exit 1; }
+done
 
 # --- skip when CE version dir absent ---
 build_fake_ce
 rm -rf "$current"
 env HOME="$home" bash "$prov"   # exits 0
+[ ! -e "$current" ] || { echo "CE version dir recreated when absent" >&2; exit 1; }
 
 # --- CE external is additive: inspect its rendered table, not template source ---
 ce_block=$(awk '
@@ -148,22 +163,6 @@ if grep -qiE '\bgh\b|github-cli' "$persona"; then
 fi
 if grep -qiE 'glab mr\b|glab mr list|merge request list' "$persona"; then
   echo "persona fetches merge requests" >&2; exit 1
-fi
-
-# --- state engine redacts sensitive payloads while retaining public content ---
-state="$scratch/state.yaml"
-engine="$root/.ci/fixtures/ce-sweep/scripts/sweep-state.py"
-python3 "$engine" lease-acquire --state "$state" --writer test --ttl-minutes 10 >/dev/null
-python3 "$engine" upsert-item --state "$state" --writer test --source gitlab \
-  --id public --json '{"title":"Public issue","body":"public body","quote":"public quote"}' >/dev/null
-python3 "$engine" upsert-item --state "$state" --writer test --source gitlab \
-  --id confidential --json '{"title":"Confidential GitLab issue group/project#2","body":"secret body","quote":"secret quote","sensitive":true}' >/dev/null
-grep -qF 'Public issue' "$state" || { echo "public title missing from state" >&2; exit 1; }
-grep -qF 'public body' "$state" || { echo "public body was incorrectly redacted" >&2; exit 1; }
-grep -qF 'Confidential GitLab issue group/project#2' "$state" \
-  || { echo "neutral confidential title missing" >&2; exit 1; }
-if grep -qE 'secret body|secret quote' "$state"; then
-  echo "confidential body or quote persisted" >&2; exit 1
 fi
 
 echo "compound-engineering overlays: ok"
