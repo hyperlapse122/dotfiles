@@ -55,6 +55,7 @@ jobs:
           for item in \
             ".chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl:auth.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
+            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
             "dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl:haptic.ts"
           do
             source_path=${item%%:*}
@@ -64,13 +65,24 @@ jobs:
               --source "$GITHUB_WORKSPACE" \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
-          chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh"
+          # The Windows half is OS-gated, so force the render to compare both
+          # halves' declared path sets from this Linux job.
+          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            --override-data '{"chezmoi":{"os":"windows"}}' \
+            execute-template \
+            < ".chezmoiscripts/70-agents/run_after_config-omp-settings.ps1.tmpl" \
+            > "$RUNNER_TEMP/settings.ps1"
+          chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" "$RUNNER_TEMP/settings.sh"
       - name: Test OMP reconciliation and haptics
         run: >-
           .ci/test-omp-agent-reconcile.sh
           "$RUNNER_TEMP/auth.sh"
           "$RUNNER_TEMP/plugins.sh"
           "$RUNNER_TEMP/haptic.ts"
+          "$RUNNER_TEMP/settings.sh"
+          "$RUNNER_TEMP/settings.ps1"
 
   ts-workspace:
     name: TypeScript workspace (packages/)

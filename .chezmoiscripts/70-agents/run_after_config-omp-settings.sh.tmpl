@@ -1,0 +1,143 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- $settings := .agents.omp.settings -}}
+{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
+#!/usr/bin/env bash
+# Asserts the declared omp settings paths (agents.omp.settings in
+# .chezmoidata/agents.yaml) into omp's own ~/.omp/agent/config.yml on every apply.
+#
+# config.yml is deliberately NOT a chezmoi target: omp rewrites it through
+# /model, /settings, and first-run setup, so a managed-readonly target produced
+# permanent drift. run_after (like config-omp-auth and config-aoe) because a live
+# vendor edit does not change a chezmoi source fingerprint, so an onchange script
+# would not re-assert a declared value omp overwrote until the DATA changed.
+#
+# Ownership boundary: each declared path is asserted on its own, so any path omp
+# writes BESIDE the declared set survives byte-identical. A declared path whose
+# type is a record is owned WHOLESALE — `omp config set` replaces the record and
+# rejects a path inside one — so a member omp adds inside a declared record does
+# not survive an apply. That is intended for source-declared roles.
+set -euo pipefail
+
+# chezmoi's non-interactive script environment omits ~/.local/bin, where omp lands.
+# Prepend rather than append so this omp wins over any other on PATH.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+if ! command -v omp >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: omp is unavailable; skipping settings assertion.' >&2
+  exit 0
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: jq is unavailable; skipping settings assertion.' >&2
+  exit 0
+fi
+
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-omp-settings"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
+# No suffix after the X run: BSD mktemp(1) only substitutes trailing X's.
+declared="$(mktemp "$scratch/declared.XXXXXX")"
+catalog="$(mktemp "$scratch/catalog.XXXXXX")"
+cleanup() { rm -f -- "$declared" "$catalog"; }
+trap cleanup EXIT HUP INT TERM
+
+cat >"$declared" <<'JSON'
+{{ $settings | toPrettyJson }}
+JSON
+
+# The catalog probe is the only network call in the apply path, so bound it and
+# fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
+# so exit status alone cannot tell "absent selector" from "absent credentials".
+# The deadline is enforced without `timeout`, which BSD/macOS hosts do not ship.
+omp models --json >"$catalog" 2>/dev/null &
+probe_pid=$!
+probe_waited=0
+while [[ $probe_waited -lt 15 ]] && kill -0 "$probe_pid" 2>/dev/null; do
+  sleep 1
+  probe_waited=$((probe_waited + 1))
+done
+# SIGTERM is catchable and the probe may be wedged in the very call the deadline
+# exists to survive, so escalate rather than `wait` on a process that will not die.
+if kill -0 "$probe_pid" 2>/dev/null; then
+  kill -TERM "$probe_pid" 2>/dev/null || true
+  probe_term=0
+  while [[ $probe_term -lt 2 ]] && kill -0 "$probe_pid" 2>/dev/null; do
+    sleep 1
+    probe_term=$((probe_term + 1))
+  done
+  kill -KILL "$probe_pid" 2>/dev/null || true
+fi
+wait "$probe_pid" 2>/dev/null || true
+
+if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
+  # Precomputed once: a per-selector jq would re-parse the whole catalog. Model
+  # ids carry no spaces, so space-padded substring matching is exact.
+  covered=" $(jq -r '[.models[].provider] | unique | join(" ")' "$catalog") "
+  known=" $(jq -r '[.models[].selector] | join(" ")' "$catalog") "
+  # Only a provider the catalog speaks for can prove a selector absent. Role
+  # aliases are not selectors, and a provider/* chain entry is a routing rule.
+  while IFS=$'\t' read -r where selector; do
+    [[ -n $selector ]] || continue
+    provider=${selector%%/*}
+    case "$covered" in
+      *" $provider "*) ;;
+      *)
+        printf 'config-omp-settings: catalog has no %s models; not validating %s\n' "$provider" "$where" >&2
+        continue
+        ;;
+    esac
+    case "$known" in
+      *" $selector "*) ;;
+      *)
+        printf 'config-omp-settings: %s names %s, which provider %s does not serve.\n' "$where" "$selector" "$provider" >&2
+        exit 1
+        ;;
+    esac
+  done < <(jq -r '
+    def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
+    [
+      ((.modelRoles // {}) | to_entries[] | {where: ("modelRoles." + .key), sel: .value}),
+      ((."task.agentModelOverrides" // {}) | to_entries[] | {where: ("task.agentModelOverrides." + .key), sel: .value}),
+      ((."retry.fallbackChains" // {}) | to_entries[] as $chain | ($chain.value | to_entries[]) |
+        {where: ("retry.fallbackChains." + $chain.key + "[" + (.key | tostring) + "]"), sel: .value})
+    ]
+    | map(select((.sel | type) == "string"))
+    | map(select(.sel | startswith("@") | not))
+    | map(.sel |= strip_thinking)
+    | map(select(.sel | endswith("/*") | not))
+    | map(select(.sel | contains("/")))
+    | .[] | [.where, .sel] | @tsv
+  ' "$declared")
+else
+  printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
+fi
+
+# One jq pass emits every path with its argument already rendered: a string-typed
+# setting is stored verbatim, so it is passed raw, and everything else is JSON.
+asserted=0
+while IFS=$'\t' read -r path value; do
+  [[ -n $path ]] || continue
+  omp config set "$path" "$value" >/dev/null || {
+    status=$?
+    printf 'config-omp-settings: failed to assert %s\n' "$path" >&2
+    exit "$status"
+  }
+  asserted=$((asserted + 1))
+done < <(jq -r '
+  to_entries[]
+  | [.key, (if (.value | type) == "string" then .value else (.value | tojson) end)]
+  | @tsv
+' "$declared")
+
+# A truncated read is the one failure the loop above cannot see: a killed jq or a
+# trap firing mid-stream ends it early, and every iteration that DID run
+# succeeded. Comparing against the render-time count turns that into a failure.
+if [[ $asserted -ne {{ len $settings }} ]]; then
+  printf 'config-omp-settings: asserted %d of {{ len $settings }} declared paths; the declared stream ended early\n' "$asserted" >&2
+  exit 1
+fi
+printf 'config-omp-settings: asserted %d declared omp settings paths\n' "$asserted"
+{{ end -}}

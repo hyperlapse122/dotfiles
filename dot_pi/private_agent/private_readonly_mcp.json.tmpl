@@ -8,7 +8,7 @@
        else-as-is rule to each header value. toPrettyJson owns the
        comma/whitespace handling. */ -}}
 {{- $servers := dict -}}
-{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "pi") | fromJson -}}
 {{- range $mcpServers -}}
 {{- $e := dict "lifecycle" "eager" -}}
 {{- if hasKey . "auth" -}}

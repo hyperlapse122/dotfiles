@@ -9,7 +9,7 @@
        credentials/mcp store and are provisioned on demand. Optional static
        headers use the shared recursive op:// resolver. */ -}}
 {{- $servers := dict -}}
-{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "kimi") | fromJson -}}
 {{- range $mcpServers -}}
 {{- if not (hasKey . "name") -}}
 {{- fail "kimi mcp: server is missing required field name" -}}

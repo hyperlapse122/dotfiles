@@ -25,7 +25,9 @@ agents = ["claude", "codex"]
 [trust]
 git_domains = ["git.jpi.app"]
 
-{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson }}
+{{- /* Identifies as "claude": this one rendered file serves Claude AND Codex,
+       so a codex-only harnessSkip is not expressible. */ -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "claude") | fromJson }}
 {{- range $mcpServers }}
 {{- if hasKey . "auth" }}
 {{- $auth := get . "auth" }}

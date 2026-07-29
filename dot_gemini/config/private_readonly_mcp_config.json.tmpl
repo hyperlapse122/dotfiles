@@ -11,7 +11,7 @@
        toPrettyJson owns the comma/whitespace handling (and emits keys
        alphabetically, like the pi and opencode siblings). */ -}}
 {{- $servers := dict -}}
-{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" .) | fromJson -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "agy") | fromJson -}}
 {{- range $mcpServers -}}
 {{- if hasKey . "auth" -}}
 {{- $auth := get . "auth" -}}
