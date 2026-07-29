@@ -192,16 +192,38 @@ done
 # The array above is hand-maintained, so prove it is the WHOLE set: a target
 # template that calls the helper but is missing here would ship unverified, which
 # is exactly how omp's own inventory went uncovered until this change.
+#
+# Compared with shell builtins on purpose. This job runs in a minimal container
+# that ships no `diff`, and a missing comparison tool exits non-zero exactly like
+# a real mismatch — a verdict that reports the wrong cause is worse than no gate.
 mapfile -t helper_callers < <(
   grep -rl --include='*.tmpl' -F 'includeTemplate "agent-mcp-servers-json.tmpl"' "$repo_root" |
     sed "s@^$repo_root/@@" |
-    grep -v -e '^\.ci/' -e '^\.chezmoitemplates/' |
-    sort
+    grep -v -e '^\.ci/' -e '^\.chezmoitemplates/'
 )
-if ! diff -u \
-  <(printf '%s\n' "${consumers[@]}" | cut -d: -f2 | sort) \
-  <(printf '%s\n' "${helper_callers[@]}"); then
-  printf 'the consumers list is not the whole set of MCP helper callers\n' >&2
+consumer_report=$(printf '  declared: %s\n' "${consumers[@]}")
+for template in "${helper_callers[@]}"; do
+  found=0
+  for entry in "${consumers[@]}"; do
+    IFS=: read -r _ consumer_template _ <<<"$entry"
+    if [[ $consumer_template == "$template" ]]; then
+      found=1
+      break
+    fi
+  done
+  if ((found == 0)); then
+    printf 'MCP helper caller %s is missing from the consumers list, so it ships unverified\n' "$template" >&2
+    printf '%s\n' "$consumer_report" >&2
+    exit 1
+  fi
+done
+# The membership loop above cannot see the reverse direction: a consumer listed
+# here that no longer calls the helper.
+if ((${#helper_callers[@]} != ${#consumers[@]})); then
+  printf 'the consumers list has %d entries but %d templates call the helper\n' \
+    "${#consumers[@]}" "${#helper_callers[@]}" >&2
+  printf '  caller: %s\n' "${helper_callers[@]}" >&2
+  printf '%s\n' "$consumer_report" >&2
   exit 1
 fi
 
