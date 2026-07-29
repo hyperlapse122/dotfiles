@@ -9,6 +9,8 @@
 #   - the three upstream source files are preserved (merge, not replace)
 #   - the injected persona is byte-identical to the deployed overlay source
 #   - the provisioner exits 0 when the overlays dir or the CE dir is absent
+#   - a foreign symlink at the reference path is reclaimed, not written through
+#   - a foreign symlink in the archive-owned directory chain is refused
 #   - the CE external is additive (exact removed from the localArchive block)
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
@@ -36,7 +38,7 @@ env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
   --source "$root" \
   execute-template \
-  < "$root/.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl" \
+  < "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" \
   > "$prov"
 env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
@@ -50,16 +52,15 @@ env PATH="$bin:$PATH" chezmoi \
 home="$scratch/home"
 version=$(grep -oE 'CURRENT="\$BASE_DIR/[^"]+"' "$prov" | sed -E 's|.*/(v[0-9][0-9.]+)"$|\1|')
 [ -n "$version" ] || { echo "could not resolve CE version from rendered script" >&2; exit 1; }
-# The onchange name and source fingerprint are load-bearing. The additive
-# external preserves the installed reference between no-change applies.
-case "$root/.chezmoiscripts/00-tools/run_onchange_after_compound-engineering-overlays.sh.tmpl" in
-  *"/run_onchange_after_"*) ;;
-  *) echo "overlay provisioner must use onchange lifecycle" >&2; exit 1 ;;
+# The run_after_ name is load-bearing: the destination sits in a deliberately
+# additive, third-party-writable tree, so the reference has to be re-asserted on
+# every apply. A fingerprinted onchange run records a clean skip and would never
+# repair live drift such as a foreign symlink at the reference path.
+case "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" in
+  *"/run_onchange_"*) echo "overlay provisioner must retry on every apply" >&2; exit 1 ;;
+  *"/run_after_"*) ;;
+  *) echo "overlay provisioner must use the run_after_ lifecycle" >&2; exit 1 ;;
 esac
-fingerprint_path='dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md'
-fingerprint_digest=$(sha256sum "$root/$fingerprint_path" | cut -d ' ' -f 1)
-grep -qF "$fingerprint_path  $fingerprint_digest" "$prov" \
-  || { echo "overlay provisioner fingerprint missing managed reference" >&2; exit 1; }
 
 ce_base="$home/.local/share/compound-engineering"
 overlays="$home/.local/share/compound-engineering-overlays"
@@ -125,6 +126,44 @@ build_fake_ce
 rm -rf "$current"
 env HOME="$home" bash "$prov"   # exits 0
 [ ! -e "$current" ] || { echo "CE version dir recreated when absent" >&2; exit 1; }
+
+# --- foreign symlink at the reference path: reclaim it, never write through it ---
+# Agents wire a project-local ce-sweep source into this shared tree. Copying
+# through the link would overwrite a tracked file in that checkout, and the
+# escaping link fails kimi-reconcile's plugin source validation on a later phase.
+build_fake_ce
+foreign="$scratch/foreign-checkout/.compound-engineering/ce-sweep/sources"
+mkdir -p "$foreign"
+printf 'project-local persona\n' > "$foreign/gitlab-issues.md"
+cp "$foreign/gitlab-issues.md" "$scratch/expected-foreign.md"
+ln -sfn "$foreign/gitlab-issues.md" "$current/skills/ce-sweep/references/sources/gitlab-issues.md"
+env HOME="$home" bash "$prov"
+[ ! -L "$current/skills/ce-sweep/references/sources/gitlab-issues.md" ] \
+  || { echo "foreign symlink survived the provisioner" >&2; exit 1; }
+cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" \
+  "$current/skills/ce-sweep/references/sources/gitlab-issues.md" \
+  || { echo "persona not reinstalled over the foreign symlink" >&2; exit 1; }
+cmp -s "$scratch/expected-foreign.md" "$foreign/gitlab-issues.md" \
+  || { echo "provisioner wrote through the foreign symlink" >&2; exit 1; }
+
+# --- foreign symlink in the archive-owned directory chain: refuse, do not delete ---
+build_fake_ce
+foreign_dir="$scratch/foreign-sources"
+mkdir -p "$foreign_dir"
+printf 'outside\n' > "$foreign_dir/keep.md"
+rm -rf "$current/skills/ce-sweep/references/sources"
+ln -sfn "$foreign_dir" "$current/skills/ce-sweep/references/sources"
+if env HOME="$home" bash "$prov" 2>"$scratch/chain.err"; then
+  echo "provisioner accepted a symlinked directory component" >&2; exit 1
+fi
+grep -q 'is not a plain directory' "$scratch/chain.err" \
+  || { echo "directory-chain conflict not reported" >&2; exit 1; }
+[ -L "$current/skills/ce-sweep/references/sources" ] \
+  || { echo "provisioner deleted an archive-owned directory component" >&2; exit 1; }
+[ ! -e "$foreign_dir/gitlab-issues.md" ] \
+  || { echo "provisioner wrote through the symlinked directory" >&2; exit 1; }
+cmp -s "$foreign_dir/keep.md" <(printf 'outside\n') \
+  || { echo "provisioner disturbed the symlinked directory contents" >&2; exit 1; }
 
 # --- CE external is additive: inspect its rendered table, not template source ---
 ce_block=$(awk '

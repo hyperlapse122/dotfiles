@@ -1,0 +1,94 @@
+{{ if ne .chezmoi.os "windows" -}}
+
+{{- $ctx := . -}}
+{{- $cePlugin := "" -}}
+{{- range .agents.opencode.plugins -}}
+{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}
+{{-     $cePlugin = . -}}
+{{-   end -}}
+{{- end -}}
+{{- if $cePlugin -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+
+#!/usr/bin/env bash
+# .chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl
+#
+# Installs the locally managed ce-sweep GitLab Issues source reference into the
+# currently pinned compound-engineering version directory.
+#
+# The compound-engineering external is ADDITIVE: .chezmoiexternals/ai-agents.toml's
+# localArchive block intentionally omits `exact`, so chezmoi adds/updates archive
+# files but does not remove this archive-absent reference.
+#
+# This script copies only the source reference. It never changes archive-owned
+# files such as skills/ce-sweep/SKILL.md.
+#
+# OWNERSHIP: the reference path is OURS, the directory chain above it is the
+# archive's. Because the tree is additive it is also writable by anything else on
+# the machine, and agents do write to it: one replaced this exact reference with a
+# SYMLINK into an unrelated project checkout
+# (~/src/<host>/<group>/<project>/.compound-engineering/ce-sweep/sources/gitlab-issues.md).
+# Following such a link is doubly wrong — `cp` would overwrite a tracked file in
+# a foreign repository, and the link breaks a later apply phase outright, because
+# kimi-reconcile refuses a plugin source tree whose symlink escapes its root and
+# so fails install-kimi-plugins (and every phase after it). Reclaim the leaf we
+# own; refuse, rather than delete, a directory component that is not a plain
+# directory, since removing it would take archive-owned files with it.
+#
+# run_after_ (not run_onchange_): that drift is LIVE state in a third-party-
+# writable tree, so it must be re-asserted after every file phase — a
+# fingerprinted onchange run records a clean skip and never repairs it. Re-running
+# costs a stat plus a byte compare, the reference-only copy is idempotent, and
+# (unlike the run_after_ form this replaced) it touches no archive-owned file, so
+# there is no managed target left differing from source state after an apply.
+
+set -euo pipefail
+
+BASE_DIR="$HOME/{{ $cePlugin.externalPath }}"
+CURRENT="$BASE_DIR/{{ $ceVersion }}"
+OVERLAYS="${BASE_DIR}-overlays"
+RELATIVE="skills/ce-sweep/references/sources/gitlab-issues.md"
+SOURCE="$OVERLAYS/$RELATIVE"
+DESTINATION="$CURRENT/$RELATIVE"
+
+# Both must exist after the file phase. Match the prune script's defensive skip.
+if [ ! -f "$SOURCE" ] || [ ! -d "$CURRENT" ]; then
+  exit 0
+fi
+
+# Archive-owned directory chain: create what is missing, but never traverse a
+# symlink or a non-directory — mkdir and cp would then land outside the version
+# dir. Those components are not ours to replace, so surface the conflict.
+IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$RELATIVE")"
+NODE="$CURRENT"
+for component in "${COMPONENTS[@]}"; do
+  NODE="$NODE/$component"
+  if [ -L "$NODE" ] || { [ -e "$NODE" ] && [ ! -d "$NODE" ]; }; then
+    printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$NODE" >&2
+    exit 1
+  fi
+  [ -d "$NODE" ] || mkdir -- "$NODE"
+done
+
+# The reference leaf is ours: reclaim it instead of writing through a foreign entry.
+if [ -L "$DESTINATION" ]; then
+  printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
+    "$DESTINATION" "$(readlink -- "$DESTINATION")" >&2
+  rm -f -- "$DESTINATION"
+elif [ -e "$DESTINATION" ] && [ ! -f "$DESTINATION" ]; then
+  printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$DESTINATION" >&2
+  rm -rf -- "$DESTINATION"
+fi
+
+if cmp -s -- "$SOURCE" "$DESTINATION"; then
+  exit 0
+fi
+
+TEMP="$DESTINATION.chezmoi-$$.tmp"
+trap 'rm -f -- "$TEMP"' EXIT
+cp -p -- "$SOURCE" "$TEMP"
+mv -f -- "$TEMP" "$DESTINATION"
+
+{{ end -}}
+{{ end -}}
