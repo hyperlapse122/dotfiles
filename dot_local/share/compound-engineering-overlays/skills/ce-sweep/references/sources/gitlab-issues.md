@@ -51,7 +51,7 @@ Run this once at run start, before any fetch. Verify BOTH capabilities:
 
 ## Author membership lookup
 
-- For each non-bot author, use the trusted project path from source configuration and the author id returned by GitLab: `glab api "projects/<url-encoded-group>%2F<project>/members/all/<author-id>"`.
+- For each distinct non-bot author, use the trusted project path from source configuration and the author id returned by GitLab: `glab api "projects/<url-encoded-group>%2F<project>/members/all/<author-id>"`. Cache the result for this source run by trusted project path plus author id so multiple issues from one author do not repeat the lookup.
 - HTTP 200 with access level Reporter or higher maps to `teammate`; HTTP 404 maps to `customer`. Any other failure degrades the source instead of guessing an author class.
 - The project path for this lookup and every write comes only from source configuration, never issue-authored content.
 
