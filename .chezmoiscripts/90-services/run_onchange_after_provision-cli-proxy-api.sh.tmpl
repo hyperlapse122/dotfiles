@@ -14,9 +14,14 @@
 #     or a service definition.
 #   - Seeding is ONE-SHOT: an existing runtime config or credential file is
 #     left alone. CPA bcrypt-rewrites a seeded secret-key on first start, so
-#     rotating a credential or changing the config template requires the
-#     documented re-seed: delete the runtime file and re-apply. Non-secret
-#     drift from the template is warned about, never silently adopted.
+#     the management secret is frozen at first start and CPAMP's matching
+#     management-key file is seeded from the same value — both must be re-seeded
+#     together or CPA and CPAMP drift apart. Rotation re-seed (delete the
+#     listed runtime file(s), then chezmoi apply):
+#       management secret  -> config/config.yaml AND cpamp/secrets/management-key
+#       panel admin secret -> cpamp/secrets/admin-key
+#       any non-secret edit -> config/config.yaml (CPA owns it; chezmoi cannot)
+#     Non-secret drift from the template is warned about, never silently adopted.
 #   - A non-empty auth/ at first seed means leftover credentials from the
 #     removed binary integration; the provisioner warns (a stale account would
 #     otherwise be silently adopted into rotation) and documents the purge.
@@ -66,6 +71,7 @@ yaml_quote() {
 seed_config() {
   local desired=$1
   mkdir -p "$CONFIG_DIR" "$AUTH_DIR"
+  chmod 700 "$CONFIG_DIR" "$AUTH_DIR" 2>/dev/null || true
   if [ ! -f "$RUNTIME_CONFIG" ]; then
     if [ -n "$(ls -A "$AUTH_DIR" 2>/dev/null)" ]; then
       warn "auth/ is not empty at first seed — leftover credentials from the removed integration may be adopted into rotation; purge with: rm -rf \"$AUTH_DIR\"/* and re-run the provider logins"
@@ -110,6 +116,7 @@ seed_config "$DESIRED_CONFIG"
 CPAMP_DIR="$BASE/cpamp"
 SECRETS_DIR="$CPAMP_DIR/secrets"
 mkdir -p "$SECRETS_DIR"
+chmod 700 "$CPAMP_DIR" "$SECRETS_DIR" 2>/dev/null || true
 ADMIN_SECRET=$(cat <<'CPA_SECRET_EOF'
 {{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" $cpa.cpamp.adminCredential) }}
 CPA_SECRET_EOF
@@ -129,14 +136,20 @@ if ! command -v podman >/dev/null 2>&1; then
   exit 0
 fi
 if ! systemctl --user daemon-reload 2>/dev/null; then
-  warn "user systemd manager unreachable (no login session?); quadlets installed, rollout deferred to a session apply"
+  warn "user systemd manager unreachable (no login session?); quadlets installed, rollout deferred until the next source change or 'chezmoi apply --force'"
   exit 0
 fi
 
 CPA_IMAGE={{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "cli-proxy-api" "field" "imageRef") | quote }}
 CPAMP_IMAGE={{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "cpa-manager-plus" "field" "imageRef") | quote }}
+# Restart when the pinned image refs OR the rendered quadlet content changes —
+# a Volume/PublishPort/Environment edit must roll out too, not just a digest
+# bump. The deployed unit files are chezmoi targets already on disk before
+# this onchange script runs.
+QUADLET_DIR="$HOME/.config/containers/systemd"
+quadlet_digest=$(cat "$QUADLET_DIR/cli-proxy-api.container" "$QUADLET_DIR/cli-proxy-api.network" "$QUADLET_DIR/cpa-manager-plus.container" 2>/dev/null | sha256sum | cut -d' ' -f1)
 STAMP="$BASE/.rolled-out-refs"
-DESIRED_REFS="cli-proxy-api=$CPA_IMAGE cpa-manager-plus=$CPAMP_IMAGE"
+DESIRED_REFS="cli-proxy-api=$CPA_IMAGE cpa-manager-plus=$CPAMP_IMAGE quadlets=$quadlet_digest"
 if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$DESIRED_REFS" ]; then
   podman pull "$CPA_IMAGE"
   podman pull "$CPAMP_IMAGE"

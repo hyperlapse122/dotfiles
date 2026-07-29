@@ -24,9 +24,10 @@ Environment=CPA_MANAGEMENT_KEY_FILE=/data/secrets/management-key
 Environment=CPA_MANAGER_ADMIN_KEY_FILE=/data/secrets/admin-key
 Environment=USAGE_DB_PATH=/data/usage.sqlite
 Environment=CPA_MANAGER_DATA_KEY_PATH=/data/data.key
-TimeoutStopSec=15
 
 [Service]
+# Short, deliberate stop window (see cli-proxy-api.container). The service-level
+# key governs the stop timeout; Quadlet .container has no TimeoutStopSec in [Container].
 TimeoutStopSec=20
 Restart=on-failure
 RestartSec=2

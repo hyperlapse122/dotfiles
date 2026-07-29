@@ -184,6 +184,16 @@ assert_calls stop 2 "pre suspend-then-hibernate (hibernate leg)"
 LOGINCTL_USERS="1000 alice" run_hook post suspend-then-hibernate hibernate
 assert_calls start 2 "post suspend-then-hibernate (hibernate leg)"
 
+# A post after a failed hibernate still restarts the recorded units: the pre
+# record survives even when the resume does not carry the hibernate action (so
+# the post sees a plain-suspend state). This would no-op under an action-gated
+# post; the record drives the restart.
+reset_scenario
+LOGINCTL_USERS="1000 alice" run_hook pre hibernate
+: >"$systemctl_log"
+LOGINCTL_USERS="1000 alice" run_hook post suspend
+assert_calls start 2 "post after failed hibernate (record drives restart)"
+
 # A repeated pre without an intervening post loses nothing (idempotency).
 reset_scenario
 LOGINCTL_USERS="1000 alice" run_hook pre hibernate

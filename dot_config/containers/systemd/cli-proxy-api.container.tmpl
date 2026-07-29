@@ -22,11 +22,11 @@ Volume=%h/{{ $cpa.dataRoot }}/config:/CLIProxyAPI/config:Z
 Volume=%h/{{ $cpa.dataRoot }}/auth:/CLIProxyAPI/auth:Z
 # Quadlet Exec replaces the image CMD wholesale, so the full command.
 Exec=./CLIProxyAPI --config /CLIProxyAPI/config/config.yaml
-# SIGKILL exposure is token files and in-flight stats writes, never committed
-# state — a short, deliberate stop window.
-TimeoutStopSec=15
 
 [Service]
+# Short, deliberate stop window: SIGKILL exposure is token files and in-flight
+# stats writes, never committed state. (Quadlet .container has no TimeoutStopSec
+# key in [Container]; the service-level key governs the stop timeout.)
 TimeoutStopSec=20
 Restart=on-failure
 RestartSec=2

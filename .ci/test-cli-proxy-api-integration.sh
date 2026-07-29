@@ -90,6 +90,18 @@ has '^After=cli-proxy-api\.service$' "$scratch/cpamp.container" \
 has '^WantedBy=default\.target$' "$scratch/cpa.container" "CPA must start at login"
 has '^WantedBy=default\.target$' "$scratch/cpamp.container" "CPAMP must start at login"
 
+# A systemd [Service]-only key in [Container] (e.g. TimeoutStopSec) makes
+# podman-system-generator reject the unit and silently emit no service — guard
+# the section that previously carried that bug.
+for f in "$scratch/cpa.container" "$scratch/cpamp.container"; do
+  awk '
+    /^\[Container\]/ { in_c = 1; next }
+    /^\[/            { in_c = 0 }
+    in_c && /^TimeoutStopSec=/ { bad = 1 }
+    END { exit bad ? 0 : 1 }
+  ' "$f" && fail "[Container] in $f has a [Service]-only key (TimeoutStopSec); podman-system-generator would reject it"
+done
+
 # --- Provisioner render ------------------------------------------------------
 render <"$repo_root/.chezmoiscripts/90-services/run_onchange_after_provision-cli-proxy-api.sh.tmpl" \
   >"$scratch/provision.sh"

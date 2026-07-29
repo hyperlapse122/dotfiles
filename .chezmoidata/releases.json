@@ -239,6 +239,27 @@
           }
         }
       },
+      "cli-proxy-api": {
+        "kind": "ociImage",
+        "source": "docker.io/eceasy/cli-proxy-api",
+        "version": "latest",
+        "digest": "sha256:669be5626de1112f11f48abc6119fdc4a01f2e90e1e9abb2a89db3bd8bca0df8"
+      },
+      "cli-proxy-api-binary": {
+        "kind": "githubRelease",
+        "source": "router-for-me/CLIProxyAPI",
+        "version": "v7.2.104",
+        "artifacts": {
+          "darwin-amd64": {
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.104/CLIProxyAPI_7.2.104_darwin_amd64.tar.gz",
+            "sha256": "a0104243082dafd2249374311e9233fb25bb09ec1bbeced86b9f704a79e6ef65"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.104/CLIProxyAPI_7.2.104_darwin_aarch64.tar.gz",
+            "sha256": "3d52c292af57ea7114bacf35fb1b76c9552448940d3e9f10d39c1ec57229c0e0"
+          }
+        }
+      },
       "codegraph": {
         "kind": "githubRelease",
         "source": "colbymchenry/codegraph",
@@ -305,6 +326,12 @@
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
         "version": "compound-engineering-v3.20.0"
+      },
+      "cpa-manager-plus": {
+        "kind": "ociImage",
+        "source": "ghcr.io/seakee/cpa-manager-plus",
+        "version": "latest",
+        "digest": "sha256:516c169d2910b59cb90b7831f18bec03c9d4cf9fa2b62035e7a6c25990e5ee47"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -786,33 +813,6 @@
         "kind": "vendorManifest",
         "source": "https://download.mikrotik.com/routeros/winbox/LATEST.4",
         "version": "4.3"
-      },
-      "cli-proxy-api": {
-        "kind": "ociImage",
-        "source": "docker.io/eceasy/cli-proxy-api",
-        "version": "latest",
-        "digest": "sha256:669be5626de1112f11f48abc6119fdc4a01f2e90e1e9abb2a89db3bd8bca0df8"
-      },
-      "cli-proxy-api-binary": {
-        "kind": "githubRelease",
-        "source": "router-for-me/CLIProxyAPI",
-        "version": "v7.2.104",
-        "artifacts": {
-          "darwin-amd64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.104/CLIProxyAPI_7.2.104_darwin_amd64.tar.gz",
-            "sha256": "a0104243082dafd2249374311e9233fb25bb09ec1bbeced86b9f704a79e6ef65"
-          },
-          "darwin-arm64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.104/CLIProxyAPI_7.2.104_darwin_aarch64.tar.gz",
-            "sha256": "3d52c292af57ea7114bacf35fb1b76c9552448940d3e9f10d39c1ec57229c0e0"
-          }
-        }
-      },
-      "cpa-manager-plus": {
-        "kind": "ociImage",
-        "source": "ghcr.io/seakee/cpa-manager-plus",
-        "version": "latest",
-        "digest": "sha256:516c169d2910b59cb90b7831f18bec03c9d4cf9fa2b62035e7a6c25990e5ee47"
       }
     }
   }
