@@ -80,6 +80,7 @@ src/garden.yaml
 .pi/agent/extensions/mxm4-haptic.ts
 .pi/agent/settings.json
 .pi/agent/models.json
+.omp/agent/extensions/mxm4-haptic.ts
 {{- end }}
 
 # CLIProxyAPI ships as a Podman quadlet on Linux and a launchd agent on macOS;
@@ -154,6 +155,7 @@ src/garden.yaml
 .local/share/codex-plugins
 .local/share/agy-plugins
 .pi/agent/extensions/mxm4-haptic.ts
+.omp/agent/extensions/mxm4-haptic.ts
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the
 # 90-src reconcile script (grow/bootstrap/aoe) would have nothing to provision
