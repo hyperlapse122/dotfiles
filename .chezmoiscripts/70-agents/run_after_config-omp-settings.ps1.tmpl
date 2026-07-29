@@ -1,0 +1,139 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $settings := .agents.omp.settings -}}
+{{- if not (kindIs "map" $settings) -}}{{- fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}{{- end -}}
+{{- if eq (len $settings) 0 -}}{{- fail "config-omp-settings: agents.omp.settings declares no paths" -}}{{- end -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch $pathRe $path) -}}
+{{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
+{{-   end -}}
+{{-   if contains "op://" ($value | toJson) -}}
+{{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
+{{-   end -}}
+{{-   range $other, $_ := $settings -}}
+{{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
+{{-       fail (printf "config-omp-settings: declared path %s is a parent namespace of %s; asserting the parent would destroy every sibling setting omp owns under it" $path $other) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+# Asserts the declared omp settings paths (agents.omp.settings in
+# .chezmoidata/agents.yaml) into omp's own config.yml on every apply. The POSIX
+# half carries the full rationale; this counterpart exists because omp ships a
+# Windows build and the retired config.yml target was its only settings delivery
+# there. The halves share no rendered data block: each re-derives and
+# re-validates the same declared map behind its own OS gate.
+#
+# Ownership boundary: each declared path is asserted on its own, so any path omp
+# writes BESIDE the declared set survives. A declared record-typed path is owned
+# WHOLESALE, because `omp config set` replaces a record and rejects a path inside
+# one.
+$ErrorActionPreference = 'Stop'
+
+$ompCommand = Get-Command omp -ErrorAction SilentlyContinue
+if (-not $ompCommand) {
+  Write-Warning 'config-omp-settings: omp is unavailable; skipping settings assertion.'
+  exit 0
+}
+
+$declaredJson = @'
+{{ $settings | toPrettyJson }}
+'@
+$declared = $declaredJson | ConvertFrom-Json
+$paths = @($declared.PSObject.Properties.Name)
+
+$scratch = Join-Path ([IO.Path]::GetTempPath()) ('chezmoi-omp-settings-' + [Guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($scratch) | Out-Null
+$catalogPath = Join-Path $scratch 'catalog.json'
+$catalogError = Join-Path $scratch 'catalog.err'
+
+# The catalog probe is the only network call in the apply path, so bound it and
+# fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
+# so exit status alone cannot tell "absent selector" from "absent credentials".
+$catalog = $null
+try {
+  $probe = Start-Process -FilePath $ompCommand.Source -ArgumentList 'models', '--json' `
+    -RedirectStandardOutput $catalogPath -RedirectStandardError $catalogError `
+    -NoNewWindow -PassThru
+  if ($probe.WaitForExit(15000)) {
+    if ($probe.ExitCode -eq 0 -and (Test-Path -LiteralPath $catalogPath)) {
+      try {
+        $parsed = (Get-Content -Raw -LiteralPath $catalogPath) | ConvertFrom-Json
+        if ($parsed.models -and @($parsed.models).Count -gt 0) {
+          $catalog = $parsed
+        }
+      } catch {
+        $catalog = $null
+      }
+    }
+  } else {
+    $probe.Kill()
+  }
+} catch {
+  $catalog = $null
+}
+
+if ($null -eq $catalog) {
+  Write-Warning 'config-omp-settings: model catalog unavailable; skipping selector validation.'
+} else {
+  $thinkingSuffix = ':(off|minimal|low|medium|high|xhigh|max)$'
+  $candidates = [Collections.Generic.List[object]]::new()
+  foreach ($group in @('modelRoles', 'task.agentModelOverrides')) {
+    if ($paths -contains $group) {
+      foreach ($property in $declared.$group.PSObject.Properties) {
+        $candidates.Add([pscustomobject]@{ Where = "$group.$($property.Name)"; Selector = [string]$property.Value })
+      }
+    }
+  }
+  if ($paths -contains 'retry.fallbackChains') {
+    foreach ($chain in $declared.'retry.fallbackChains'.PSObject.Properties) {
+      $entries = @($chain.Value)
+      for ($index = 0; $index -lt $entries.Count; $index++) {
+        $candidates.Add([pscustomobject]@{
+            Where    = "retry.fallbackChains.$($chain.Name)[$index]"
+            Selector = [string]$entries[$index]
+          })
+      }
+    }
+  }
+
+  $covered = @($catalog.models | ForEach-Object { $_.provider } | Sort-Object -Unique)
+  $known = @($catalog.models | ForEach-Object { $_.selector })
+  foreach ($candidate in $candidates) {
+    # Role aliases are not selectors, and a provider/* chain entry is a routing rule.
+    if ($candidate.Selector.StartsWith('@')) { continue }
+    $selector = $candidate.Selector -replace $thinkingSuffix, ''
+    if ($selector.EndsWith('/*') -or -not $selector.Contains('/')) { continue }
+    $provider = $selector.Split('/')[0]
+    if ($covered -notcontains $provider) {
+      Write-Warning "config-omp-settings: catalog has no $provider models; not validating $($candidate.Where)"
+      continue
+    }
+    if ($known -notcontains $selector) {
+      throw "config-omp-settings: $($candidate.Where) names $selector, which provider $provider does not serve."
+    }
+  }
+}
+
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -LiteralPath $scratch
+
+# A string-typed setting is stored verbatim, so a scalar must be passed raw;
+# only a record or list is passed as JSON.
+$asserted = 0
+foreach ($path in $paths) {
+  $value = $declared.$path
+  if ($value -is [bool]) {
+    $rendered = $value.ToString().ToLowerInvariant()
+  } elseif ($value -is [string] -or $value -is [int] -or $value -is [long] -or $value -is [double]) {
+    $rendered = [string]$value
+  } else {
+    $rendered = $value | ConvertTo-Json -Depth 20 -Compress
+  }
+  & $ompCommand.Source config set $path $rendered | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "config-omp-settings: failed to assert $path"
+  }
+  $asserted++
+}
+
+Write-Host "config-omp-settings: asserted $asserted declared omp settings paths"
+{{ end -}}
