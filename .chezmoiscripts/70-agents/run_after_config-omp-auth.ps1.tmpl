@@ -1,13 +1,32 @@
 {{ if eq .chezmoi.os "windows" -}}
-{{- $providers := .agents.omp.auth.providers -}}
-{{- if ne (len $providers) 1 -}}{{- fail "config-omp-auth: agents.omp.auth.providers must contain exactly the managed zai provider" -}}{{- end -}}
-{{- $provider := index $providers 0 -}}
-{{- if or (ne $provider.name "zai") (ne $provider.type "api_key") -}}{{- fail "config-omp-auth: the only supported provider mapping is zai api_key -> ZAI_API_KEY" -}}{{- end -}}
-{{- $key := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $provider.key "ctx" $) | fromJson -}}
-# This script retries on every apply because its rendered secret is not a safe
+{{- $env := .agents.omp.auth.env -}}
+{{- $required := list "ZAI_API_KEY" "EXA_API_KEY" -}}
+{{- if not (kindIs "slice" $env) -}}{{- fail (printf "config-omp-auth: agents.omp.auth.env must be a list, got %s" (kindOf $env)) -}}{{- end -}}
+{{- $names := list -}}
+{{- $values := list -}}
+{{- range $index, $entry := $env -}}
+{{-   $where := printf "agents.omp.auth.env[%d]" $index -}}
+{{-   if not (kindIs "map" $entry) -}}{{- fail (printf "config-omp-auth: %s must be a map, got %s" $where (kindOf $entry)) -}}{{- end -}}
+{{-   if not (hasKey $entry "variable") -}}{{- fail (printf "config-omp-auth: %s is missing the `variable` field" $where) -}}{{- end -}}
+{{-   if not (kindIs "string" $entry.variable) -}}{{- fail (printf "config-omp-auth: %s field `variable` must be a string, got %s" $where (kindOf $entry.variable)) -}}{{- end -}}
+{{-   if not (has $entry.variable $required) -}}{{- fail (printf "config-omp-auth: %s declares unsupported variable %q; the closed set is ZAI_API_KEY and EXA_API_KEY" $where $entry.variable) -}}{{- end -}}
+{{-   if has $entry.variable $names -}}{{- fail (printf "config-omp-auth: %s duplicates variable %q" $where $entry.variable) -}}{{- end -}}
+{{-   if not (hasKey $entry "key") -}}{{- fail (printf "config-omp-auth: %s is missing the `key` field" $where) -}}{{- end -}}
+{{-   $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $entry.key "ctx" $) | fromJson -}}
+{{-   if not (kindIs "string" $resolved) -}}{{- fail (printf "config-omp-auth: %s field `key` must resolve to a string" $where) -}}{{- end -}}
+{{-   if eq $resolved "" -}}{{- fail (printf "config-omp-auth: %s resolved to an empty value" $where) -}}{{- end -}}
+{{-   $names = append $names $entry.variable -}}
+{{-   $values = append $values ($resolved | b64enc) -}}
+{{- end -}}
+{{- range $want := $required -}}
+{{-   if not (has $want $names) -}}{{- fail (printf "config-omp-auth: agents.omp.auth.env must declare %s" $want) -}}{{- end -}}
+{{- end -}}
+# This script retries on every apply because its rendered secrets are not a safe
 # onchange fingerprint input.
-# Reconciles omp's managed ZAI_API_KEY in its live-written dotenv file.
-# Unrelated valid dotenv entries remain byte-identical. No backup is created.
+# Reconciles omp's managed environment credentials in its live-written dotenv
+# file. The declared set is closed (see .chezmoidata/agents.yaml), so this script
+# can never be steered into writing an arbitrary variable. Unrelated valid dotenv
+# entries remain byte-identical. No backup is created.
 $ErrorActionPreference = 'Stop'
 
 $auth = if ($env:OMP_AGENT_ENV) {
@@ -16,9 +35,8 @@ $auth = if ($env:OMP_AGENT_ENV) {
   Join-Path $HOME '.omp/agent/.env'
 }
 $authDir = Split-Path -Parent $auth
-$managedValue = [Text.Encoding]::UTF8.GetString(
-  [Convert]::FromBase64String('{{ $key | b64enc }}')
-)
+$managedNames = @({{ range $names }}{{ . | quote }}, {{ end }}$null) | Where-Object { $null -ne $_ }
+$managedValuesB64 = @({{ range $values }}{{ . | quote }}, {{ end }}$null) | Where-Object { $null -ne $_ }
 
 if (Test-Path -LiteralPath $auth) {
   $item = Get-Item -Force -LiteralPath $auth
@@ -45,7 +63,7 @@ foreach ($line in $lines) {
     continue
   }
   if ($line -match '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=') {
-    if ($Matches[1] -ne 'ZAI_API_KEY') {
+    if ($managedNames -notcontains $Matches[1]) {
       $preserved.Add($line)
     }
     continue
@@ -53,8 +71,13 @@ foreach ($line in $lines) {
   throw "config-omp-auth: refusing malformed dotenv line in $auth"
 }
 
-$escaped = $managedValue.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n')
-$preserved.Add("ZAI_API_KEY=`"$escaped`"")
+for ($index = 0; $index -lt $managedNames.Count; $index++) {
+  $managedValue = [Text.Encoding]::UTF8.GetString(
+    [Convert]::FromBase64String($managedValuesB64[$index])
+  )
+  $escaped = $managedValue.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n')
+  $preserved.Add("$($managedNames[$index])=`"$escaped`"")
+}
 $contents = [string]::Join([Environment]::NewLine, $preserved) + [Environment]::NewLine
 $temporary = Join-Path $authDir ('.env.' + [Guid]::NewGuid().ToString('N') + '.tmp')
 try {
@@ -76,5 +99,5 @@ try {
 } finally {
   Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $temporary
 }
-Write-Host "config-omp-auth: reconciled ZAI_API_KEY in $auth"
+Write-Host "config-omp-auth: reconciled $($managedNames -join ' ') in $auth"
 {{ end -}}

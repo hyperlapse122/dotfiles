@@ -513,11 +513,22 @@ agents:
       symbolPreset: nerd
       setupVersion: 1
       defaultThinkingLevel: xhigh
+    # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
+    # openai-codex, google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
+    # via omp /login and are never declared here. This is a TOOL/PROVIDER
+    # CREDENTIAL map keyed by environment variable, deliberately not the
+    # model-provider `auth.providers` shape pi uses — Exa is a search tool, not a
+    # model provider. run_after_config-omp-auth requires exactly this closed set:
+    # a shape-only check would let a data edit inject an arbitrary variable such
+    # as HTTP_PROXY or NODE_OPTIONS into the environment omp loads for every
+    # session, and dropping the cardinality check would let an emptied map
+    # silently delete a key.
     auth:
-      providers:
-      - name: zai
-        type: api_key
+      env:
+      - variable: ZAI_API_KEY
         key: op://Private/Z.ai/API Key
+      - variable: EXA_API_KEY
+        key: op://Private/Exa/API Key
   # OpenCode defaults, full provider definitions, and oh-my-openagent mappings.
   # Provider shapes are deliberately heterogeneous and emitted recursively.
   opencode:
