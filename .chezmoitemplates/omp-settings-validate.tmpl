@@ -1,0 +1,108 @@
+{{- /*
+omp-settings-validate.tmpl — fail the apply LOUDLY on a bad omp settings
+declaration, before either provisioner half renders a single line of script.
+
+The POSIX and PowerShell halves of config-omp-settings deliberately share no
+rendered DATA block: each re-derives the declared map behind its own OS gate, so
+neither can ship a value the other never saw. They DO share this validation,
+because a guard that exists in one half only is a guard that silently does not
+apply on the other platform — the same reason facts-validate.tmpl is one partial
+rather than a copy per installer.
+
+Every check here aborts the whole chezmoi command. None of them can be satisfied
+by a runtime skip, because a declaration this file rejects is wrong on every host.
+
+  1. SHAPE. agents.omp.settings is a non-empty map of dotted paths.
+  2. PATH GRAMMAR. Each key is the dotted form `omp config list` prints.
+  3. CREDENTIAL-FREE. No op:// reference at any depth: omp receives settings as
+     process arguments, which are world-readable in /proc, so credentials belong
+     in agents.omp.auth.env instead.
+  4. TRANSPORT-SAFE AT EVERY DEPTH. The POSIX half carries values to the CLI over
+     a tab-separated jq stream, and jq's @tsv escapes tab, newline, carriage
+     return and backslash as two-character sequences that `read -r` does NOT undo.
+     A top-level charset check misses this, because every model selector lives
+     one level down inside a record; so the check runs against the JSON encoding,
+     where a control character at ANY depth appears as its own escape.
+  5. NO PARENT NAMESPACE. A declared parent would be asserted WHOLESALE and
+     destroy every sibling setting omp owns beneath it.
+  6. ROLE INDIRECTION RESOLVES. `@name` is the one value shape no later layer can
+     check: the catalog gate skips it (an alias is not a selector) and omp itself
+     accepts a dangling alias silently. Unresolvable indirection is therefore
+     render-time-fatal or it is never reported at all. Both directions are
+     checked: every `@name` names a declared role, and every fallback-chain key
+     is a declared role whose chain it overrides.
+
+  {{ includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- if not $ctx -}}{{- fail "omp-settings-validate.tmpl: ctx is required" -}}{{- end -}}
+{{- $settings := .settings -}}
+{{- if not (kindIs "map" $settings) -}}
+{{-   fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}
+{{- end -}}
+{{- if eq (len $settings) 0 -}}
+{{-   fail "config-omp-settings: agents.omp.settings declares no paths" -}}
+{{- end -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
+{{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch $pathRe $path) -}}
+{{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
+{{-   end -}}
+{{-   $json := $value | toJson -}}
+{{-   if contains "op://" $json -}}
+{{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
+{{-   end -}}
+{{-   range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
+{{-     if contains $escape $json -}}
+{{-       fail (printf "config-omp-settings: declared path %s carries a control character or backslash somewhere in its value; the tab-separated transport to the CLI cannot round-trip one, at any depth" $path) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if kindIs "string" $value -}}
+{{-     if not (regexMatch $valueRe $value) -}}
+{{-       fail (printf "config-omp-settings: declared path %s has a string value outside the safe charset; keep it to letters, digits, space and ._:/@*+-" $path) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   range $other, $_ := $settings -}}
+{{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
+{{-       fail (printf "config-omp-settings: declared path %s is a parent namespace of %s; asserting the parent would destroy every sibling setting omp owns under it" $path $other) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Role indirection: `@name` must name a declared role, in both directions. */ -}}
+{{- $roles := dict -}}
+{{- if hasKey $settings "modelRoles" -}}
+{{-   $roles = index $settings "modelRoles" -}}
+{{-   if not (kindIs "map" $roles) -}}
+{{-     fail (printf "config-omp-settings: modelRoles must be a map of role name to selector, got %s" (kindOf $roles)) -}}
+{{-   end -}}
+{{- end -}}
+{{- $aliasSites := dict -}}
+{{- range $group := list "modelRoles" "task.agentModelOverrides" -}}
+{{-   if hasKey $settings $group -}}
+{{-     range $role, $sel := index $settings $group -}}
+{{-       if kindIs "string" $sel -}}
+{{-         $_ := set $aliasSites (printf "%s.%s" $group $role) $sel -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey $settings "retry.fallbackChains" -}}
+{{-   range $role, $chain := index $settings "retry.fallbackChains" -}}
+{{-     if not (hasKey $roles $role) -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains declares a chain for %q, which is not a declared modelRoles role; the chain would never be consulted" $role) -}}
+{{-     end -}}
+{{-     range $index, $sel := $chain -}}
+{{-       if kindIs "string" $sel -}}
+{{-         $_ := set $aliasSites (printf "retry.fallbackChains.%s[%d]" $role $index) $sel -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- range $where, $sel := $aliasSites -}}
+{{-   if hasPrefix "@" $sel -}}
+{{-     if not (hasKey $roles (trimPrefix "@" $sel)) -}}
+{{-       fail (printf "config-omp-settings: %s names role alias %s, which modelRoles does not declare; no later layer can catch this because the catalog gate skips aliases and omp stores a dangling one silently" $where $sel) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}

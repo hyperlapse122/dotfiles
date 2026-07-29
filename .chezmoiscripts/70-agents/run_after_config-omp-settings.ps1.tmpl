@@ -1,27 +1,6 @@
 {{ if eq .chezmoi.os "windows" -}}
 {{- $settings := .agents.omp.settings -}}
-{{- if not (kindIs "map" $settings) -}}{{- fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}{{- end -}}
-{{- if eq (len $settings) 0 -}}{{- fail "config-omp-settings: agents.omp.settings declares no paths" -}}{{- end -}}
-{{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
-{{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
-{{- range $path, $value := $settings -}}
-{{-   if not (regexMatch $pathRe $path) -}}
-{{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
-{{-   end -}}
-{{-   if contains "op://" ($value | toJson) -}}
-{{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
-{{-   end -}}
-{{-   if kindIs "string" $value -}}
-{{-     if not (regexMatch $valueRe $value) -}}
-{{-       fail (printf "config-omp-settings: declared path %s has a string value outside the tab-separated transport's safe charset; keep it to letters, digits, space and ._:/@*+-" $path) -}}
-{{-     end -}}
-{{-   end -}}
-{{-   range $other, $_ := $settings -}}
-{{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
-{{-       fail (printf "config-omp-settings: declared path %s is a parent namespace of %s; asserting the parent would destroy every sibling setting omp owns under it" $path $other) -}}
-{{-     end -}}
-{{-   end -}}
-{{- end -}}
+{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 # Asserts the declared omp settings paths (agents.omp.settings in
 # .chezmoidata/agents.yaml) into omp's own config.yml on every apply. The POSIX
 # half carries the full rationale; this counterpart exists because omp ships a
@@ -34,6 +13,15 @@
 # WHOLESALE, because `omp config set` replaces a record and rejects a path inside
 # one.
 $ErrorActionPreference = 'Stop'
+
+# chezmoi's script environment does not carry ~/.local/bin, where the omp
+# external lands as omp.exe, and nothing on Windows puts that directory on PATH.
+# Without this the probe below finds nothing and the skip is PERMANENT, not
+# transient: no later apply can fix a directory that is never searched.
+$ompBin = Join-Path $HOME '.local\bin'
+if (($env:Path -split ';') -notcontains $ompBin) {
+  $env:Path = "$ompBin;$env:Path"
+}
 
 $ompCommand = Get-Command omp -ErrorAction SilentlyContinue
 if (-not $ompCommand) {
@@ -124,6 +112,16 @@ try {
 # is JSON. ConvertTo-Json takes -InputObject rather than a pipeline, because
 # piping enumerates a collection and would serialize a single-element array as a
 # bare scalar.
+#
+# Windows PowerShell 5.1 — chezmoi's documented fallback when pwsh is absent —
+# passes native-command arguments verbatim, so the quotes in a compact JSON
+# argument reach CommandLineToArgvW as delimiters and omp receives `{default:...}`
+# instead of JSON. pwsh 7.3+ in Standard mode already escapes correctly, so
+# escape only where the binder does not. The declared data carries no backslash
+# (omp-settings-validate.tmpl rejects one at every depth), but the pattern still
+# doubles any run preceding a quote, which is what CommandLineToArgvW requires.
+$legacyArgv = $PSVersionTable.PSVersion.Major -lt 7 -or
+  (Get-Variable -Name PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue) -eq 'Legacy'
 $asserted = 0
 foreach ($path in $paths) {
   $value = $declared.$path
@@ -131,12 +129,19 @@ foreach ($path in $paths) {
     $rendered = $value
   } else {
     $rendered = ConvertTo-Json -InputObject $value -Depth 20 -Compress
+    if ($legacyArgv) {
+      $rendered = $rendered -replace '(\\*)"', '$1$1\"'
+    }
   }
   & $ompCommand.Source config set $path $rendered | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "config-omp-settings: failed to assert $path"
   }
   $asserted++
+}
+
+if ($asserted -ne {{ len $settings }}) {
+  throw "config-omp-settings: asserted $asserted of {{ len $settings }} declared paths"
 }
 
 Write-Host "config-omp-settings: asserted $asserted declared omp settings paths"

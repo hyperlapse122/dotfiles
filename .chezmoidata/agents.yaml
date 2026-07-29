@@ -476,10 +476,14 @@ agents:
         tiny: google-antigravity/gemini-3.1-flash-lite  # titles, memory, background
         commit: "@smol"                             # commit messages
       # Bundled agents only. `task` is absent on purpose: it inherits the task
-      # role. `designer` binds the agent to the same-named role so the two
-      # cannot drift. `sonic` is the one model no role names.
+      # role, and `scout` is absent for the same reason plus a measured one: on
+      # this host every compound-engineering persona - code review, doc review,
+      # simplification - is dispatched as agent type `scout`, so pinning it to the
+      # cheap floor would quietly demote deep-judgment work rather than bill an
+      # explorer correctly. `librarian` keeps the floor because its job really is
+      # narrow lookup. `designer` binds the agent to the same-named role so the
+      # two cannot drift. `sonic` is the one model no role names.
       task.agentModelOverrides:
-        scout: "@smol"
         librarian: "@smol"
         reviewer: "@advisor"
         designer: "@designer"

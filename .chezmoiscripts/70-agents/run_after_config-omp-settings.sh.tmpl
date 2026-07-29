@@ -1,27 +1,6 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- $settings := .agents.omp.settings -}}
-{{- if not (kindIs "map" $settings) -}}{{- fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}{{- end -}}
-{{- if eq (len $settings) 0 -}}{{- fail "config-omp-settings: agents.omp.settings declares no paths" -}}{{- end -}}
-{{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
-{{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
-{{- range $path, $value := $settings -}}
-{{-   if not (regexMatch $pathRe $path) -}}
-{{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
-{{-   end -}}
-{{-   if contains "op://" ($value | toJson) -}}
-{{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
-{{-   end -}}
-{{-   if kindIs "string" $value -}}
-{{-     if not (regexMatch $valueRe $value) -}}
-{{-       fail (printf "config-omp-settings: declared path %s has a string value outside the tab-separated transport's safe charset; keep it to letters, digits, space and ._:/@*+-" $path) -}}
-{{-     end -}}
-{{-   end -}}
-{{-   range $other, $_ := $settings -}}
-{{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
-{{-       fail (printf "config-omp-settings: declared path %s is a parent namespace of %s; asserting the parent would destroy every sibling setting omp owns under it" $path $other) -}}
-{{-     end -}}
-{{-   end -}}
-{{- end -}}
+{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 #!/usr/bin/env bash
 # Asserts the declared omp settings paths (agents.omp.settings in
 # .chezmoidata/agents.yaml) into omp's own ~/.omp/agent/config.yml on every apply.
@@ -80,7 +59,17 @@ while [[ $probe_waited -lt 15 ]] && kill -0 "$probe_pid" 2>/dev/null; do
   sleep 1
   probe_waited=$((probe_waited + 1))
 done
-kill "$probe_pid" 2>/dev/null || true
+# SIGTERM is catchable and the probe may be wedged in the very call the deadline
+# exists to survive, so escalate rather than `wait` on a process that will not die.
+if kill -0 "$probe_pid" 2>/dev/null; then
+  kill -TERM "$probe_pid" 2>/dev/null || true
+  probe_term=0
+  while [[ $probe_term -lt 2 ]] && kill -0 "$probe_pid" 2>/dev/null; do
+    sleep 1
+    probe_term=$((probe_term + 1))
+  done
+  kill -KILL "$probe_pid" 2>/dev/null || true
+fi
 wait "$probe_pid" 2>/dev/null || true
 
 if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
@@ -143,5 +132,12 @@ done < <(jq -r '
   | @tsv
 ' "$declared")
 
+# A truncated read is the one failure the loop above cannot see: a killed jq or a
+# trap firing mid-stream ends it early, and every iteration that DID run
+# succeeded. Comparing against the render-time count turns that into a failure.
+if [[ $asserted -ne {{ len $settings }} ]]; then
+  printf 'config-omp-settings: asserted %d of {{ len $settings }} declared paths; the declared stream ended early\n' "$asserted" >&2
+  exit 1
+fi
 printf 'config-omp-settings: asserted %d declared omp settings paths\n' "$asserted"
 {{ end -}}
