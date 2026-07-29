@@ -1,0 +1,124 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- $settings := .agents.omp.settings -}}
+{{- if not (kindIs "map" $settings) -}}{{- fail (printf "config-omp-settings: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}{{- end -}}
+{{- if eq (len $settings) 0 -}}{{- fail "config-omp-settings: agents.omp.settings declares no paths" -}}{{- end -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch $pathRe $path) -}}
+{{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
+{{-   end -}}
+{{-   if contains "op://" ($value | toJson) -}}
+{{-     fail (printf "config-omp-settings: declared path %s carries an op:// reference, but omp settings are credential-free by contract because the CLI receives values as process arguments; declare the credential under agents.omp.auth.env instead" $path) -}}
+{{-   end -}}
+{{-   range $other, $_ := $settings -}}
+{{-     if and (ne $path $other) (hasPrefix (printf "%s." $path) $other) -}}
+{{-       fail (printf "config-omp-settings: declared path %s is a parent namespace of %s; asserting the parent would destroy every sibling setting omp owns under it" $path $other) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+#!/usr/bin/env bash
+# Asserts the declared omp settings paths (agents.omp.settings in
+# .chezmoidata/agents.yaml) into omp's own ~/.omp/agent/config.yml on every apply.
+#
+# config.yml is deliberately NOT a chezmoi target: omp rewrites it through
+# /model, /settings, and first-run setup, so a managed-readonly target produced
+# permanent drift. run_after (like config-omp-auth and config-aoe) because a live
+# vendor edit does not change a chezmoi source fingerprint, so an onchange script
+# would not re-assert a declared value omp overwrote until the DATA changed.
+#
+# Ownership boundary: each declared path is asserted on its own, so any path omp
+# writes BESIDE the declared set survives byte-identical. A declared path whose
+# type is a record is owned WHOLESALE — `omp config set` replaces the record and
+# rejects a path inside one — so a member omp adds inside a declared record does
+# not survive an apply. That is intended for source-declared roles.
+set -euo pipefail
+
+# chezmoi's non-interactive script environment omits ~/.local/bin, where omp lands.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+if ! command -v omp >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: omp is unavailable; skipping settings assertion.' >&2
+  exit 0
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: jq is unavailable; skipping settings assertion.' >&2
+  exit 0
+fi
+
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-omp-settings"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
+declared="$(mktemp "$scratch/declared.XXXXXX.json")"
+catalog="$(mktemp "$scratch/catalog.XXXXXX.json")"
+cleanup() { rm -f -- "$declared" "$catalog"; }
+trap cleanup EXIT HUP INT TERM
+
+cat >"$declared" <<'JSON'
+{{ $settings | toPrettyJson }}
+JSON
+
+# The catalog probe is the only network call in the apply path, so bound it and
+# fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
+# so exit status alone cannot tell "absent selector" from "absent credentials".
+catalog_ok=false
+if command -v timeout >/dev/null 2>&1; then
+  timeout 15 omp models --json >"$catalog" 2>/dev/null || true
+else
+  omp models --json >"$catalog" 2>/dev/null || true
+fi
+if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
+  catalog_ok=true
+else
+  printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
+fi
+
+if [[ $catalog_ok == true ]]; then
+  # Only a provider the catalog speaks for can prove a selector absent. Role
+  # aliases are not selectors, and a provider/* chain entry is a routing rule.
+  while IFS=$'\t' read -r where selector; do
+    [[ -n $selector ]] || continue
+    provider=${selector%%/*}
+    if ! jq -e --arg p "$provider" 'any(.models[]; .provider == $p)' "$catalog" >/dev/null; then
+      printf 'config-omp-settings: catalog has no %s models; not validating %s\n' "$provider" "$where" >&2
+      continue
+    fi
+    if ! jq -e --arg s "$selector" 'any(.models[]; .selector == $s)' "$catalog" >/dev/null; then
+      printf 'config-omp-settings: %s names %s, which provider %s does not serve.\n' "$where" "$selector" "$provider" >&2
+      exit 1
+    fi
+  done < <(jq -r '
+    def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
+    [
+      ((.modelRoles // {}) | to_entries[] | {where: ("modelRoles." + .key), sel: .value}),
+      ((."task.agentModelOverrides" // {}) | to_entries[] | {where: ("task.agentModelOverrides." + .key), sel: .value}),
+      ((."retry.fallbackChains" // {}) | to_entries[] as $chain | ($chain.value | to_entries[]) |
+        {where: ("retry.fallbackChains." + $chain.key + "[" + (.key | tostring) + "]"), sel: .value})
+    ]
+    | map(select((.sel | type) == "string"))
+    | map(select(.sel | startswith("@") | not))
+    | map(.sel |= strip_thinking)
+    | map(select(.sel | endswith("/*") | not))
+    | map(select(.sel | contains("/")))
+    | .[] | .where + "\t" + .sel
+  ' "$declared")
+fi
+
+# A string-typed setting is stored verbatim, so a scalar must be passed raw;
+# only a record or list is passed as JSON.
+asserted=0
+while IFS= read -r path; do
+  [[ -n $path ]] || continue
+  case "$(jq -r --arg p "$path" '.[$p] | type' "$declared")" in
+    object | array) value="$(jq -c --arg p "$path" '.[$p]' "$declared")" ;;
+    *) value="$(jq -r --arg p "$path" '.[$p]' "$declared")" ;;
+  esac
+  omp config set "$path" "$value" >/dev/null
+  asserted=$((asserted + 1))
+done < <(jq -r 'keys_unsorted[]' "$declared")
+
+printf 'config-omp-settings: asserted %d declared omp settings paths\n' "$asserted"
+{{ end -}}
