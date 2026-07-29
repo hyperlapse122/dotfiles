@@ -308,12 +308,14 @@ packages:
         # Kernel modules build via /sbin/vboxconfig (Oracle's Fedora RPM does NOT
         # use DKMS or akmods — the postinst runs vboxconfig once for the running
         # kernel). configure_user_groups adds the user to `vboxusers` so USB
-        # passthrough works. On Secure Boot: sign_virtualbox_modules() in this
-        # installer signs the built modules with the DKMS MOK (seeded by
+        # passthrough works. On Secure Boot: Oracle's own vboxdrv.sh signs the
+        # modules it builds, but only reads key material from the Debian paths
+        # /var/lib/shim-signed/mok/MOK.{der,priv}, so provision_vbox_module_signing()
+        # in this installer links those at the DKMS MOK (seeded by
         # ensure_dkms_mok_generated if missing — same key NVIDIA's kmod-nvidia-latest-dkms
-        # uses, so one mokutil enrollment covers both stacks). Kernel updates are
-        # covered by the /etc/kernel/install.d/50-vbox-sign.install hook shipped
-        # via system/linux/etc/ (Fedora-gated in .chezmoidata/system.yaml). The
+        # uses, so one mokutil enrollment covers both stacks). Kernel updates need
+        # nothing extra: vboxdrv.service runs `setup_complete || setup` at boot,
+        # which rebuilds AND signs for the newly booted kernel. The
         # Extension Pack (USB 2.0/3.0, VRDE, PXE via Intel NIC) is PUEL-licensed
         # and NOT installed here — download separately if the license fits the
         # use case. fuse3 + ntfs-3g keep working for read-only ReFS/NTFS access to

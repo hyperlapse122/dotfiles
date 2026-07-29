@@ -492,6 +492,19 @@ jobs:
           bash -n "${rendered}"
           "${GITHUB_WORKSPACE}/.ci/smoke-fedora-nvidia-repo-policy.sh" "${rendered}"
 
+      - name: Assert Fedora VirtualBox Secure Boot signing
+        if: matrix.os == 'fedora'
+        run: |
+          set -euo pipefail
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh"
+          rendered_etc="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh"
+          for f in "${rendered}" "${rendered_etc}"; do
+            test -f "${f}"
+            test ! -e "${f}.render-error.txt"
+            bash -n "${f}"
+          done
+          "${GITHUB_WORKSPACE}/.ci/smoke-fedora-virtualbox-signing.sh" "${rendered}" "${rendered_etc}"
+
       - name: Assert Open Design integration
         run: |
           set -euo pipefail
