@@ -17,16 +17,19 @@
 # OS guard above — an empty render, the same OS-gate idiom config-solaar uses;
 # the ~/src garden is POSIX-only. The container skip lives in the single gated
 # .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the sanctioned mechanism
-# that also skips src/garden.yaml. It runs on Linux and macOS on a real host.
+# that also skips .config/garden/garden.yaml. It runs on Linux and macOS on a real host.
 #
 # PLACEMENT (90-src, last). Deliberately the last after-phase script. It must
 # run after 10-auth's after-scripts (which configure the gh/glab git credential
-# helpers the private https clones need) and after target application
-# (~/src/garden.yaml decrypted; the garden + aoe externals materialized under
-# ~/.local/bin). Placing it LAST means a hard-fail here does not abort the
-# unrelated after-phase provisioning that would otherwise follow (/etc, host,
-# network, desktop, agent plugins, key import) — none of that depends on the
-# garden.
+# helpers the private https clones need) and after target application (the
+# registry now deploys to ~/.config/garden/garden.yaml; the garden + aoe
+# externals materialize under ~/.local/bin). Unlike the old target, deploying
+# the registry there has no ~/src side effect — `garden grow` below creates
+# ~/src itself when absent, so per Risk-4 ~/src may be absent for the ENTIRE
+# after-phase if an apply aborts before this script runs. Placing it LAST
+# means a hard-fail here does not abort the unrelated after-phase
+# provisioning that would otherwise follow (/etc, host, network, desktop,
+# agent plugins, key import) — none of that depends on the garden.
 #
 # HARD-FAIL. A grow or bootstrap failure fails the apply (set -euo pipefail).
 # But `garden grow '*'` exits 0 even when a tree fails to clone, so its exit
@@ -47,22 +50,22 @@
 # on identical plaintext — a harmless over-trigger, since the reconcile is
 # idempotent. Hashing the ciphertext (raw source bytes) never exposes a secret.
 # Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "src/encrypted_readonly_garden.yaml.asc")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/garden/encrypted_readonly_garden.yaml.asc")) }}
 set -euo pipefail
 
 export GIT_TERMINAL_PROMPT=0
-src="$HOME/src"
+reg="$HOME/.config/garden/garden.yaml"
 
 # Prerequisites are hard requirements: the garden + aoe externals and the
 # decrypted registry are all materialized during target application, before
 # this after-phase script. Their absence is a real failure, not a soft skip.
 command -v garden >/dev/null 2>&1 || { echo "reconcile-garden: garden not on PATH (externals not applied? see .chezmoiexternals/vcs.toml)" >&2; exit 1; }
 command -v aoe    >/dev/null 2>&1 || { echo "reconcile-garden: aoe not on PATH (externals not applied? see .chezmoiexternals/ai-agents.toml)" >&2; exit 1; }
-[ -f "$src/garden.yaml" ] || { echo "reconcile-garden: $src/garden.yaml missing (chezmoi apply did not deploy it)" >&2; exit 1; }
+[ -f "$reg" ] || { echo "reconcile-garden: $reg missing (chezmoi apply did not deploy it)" >&2; exit 1; }
 
 # 1. Grow every declared tree (idempotent; already-grown trees are no-ops).
 echo "reconcile-garden: garden grow '*'"
-garden --chdir "$src" grow '*'
+garden --config "$reg" grow '*'
 
 # 2. Completeness check — the real hard-fail gate. `garden grow '*'` exits 0
 #    even when trees fail to clone, so re-verify each DECLARED tree is a valid
@@ -79,13 +82,13 @@ check_tree() {
   case "$tp" in
     */.bare)
       if ! git -C "$tp" rev-parse --is-bare-repository >/dev/null 2>&1; then
-        echo "reconcile-garden: '$name' not grown/broken at $tp — clone failed or was left half-materialized. Fix: garden --chdir ~/src grow $name; if a partial clone is present, remove $(dirname "$tp") and re-apply." >&2
+        echo "reconcile-garden: '$name' not grown/broken at $tp — clone failed or was left half-materialized. Fix: garden --config ~/.config/garden/garden.yaml grow $name; if a partial clone is present, remove $(dirname "$tp") and re-apply." >&2
         return 1
       fi
       ;;
     *)
       if ! git -C "$tp" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo "reconcile-garden: '$name' not grown/broken at $tp (fix: garden --chdir ~/src grow $name)" >&2
+        echo "reconcile-garden: '$name' not grown/broken at $tp (fix: garden --config ~/.config/garden/garden.yaml grow $name)" >&2
         return 1
       fi
       ;;
@@ -99,7 +102,7 @@ check_tree() {
 # and missing-tree lines to STDOUT, so 2>&1 merges both (same reason as
 # dot_local/bin/executable_src-audit); "# <name> [branch] <path>" (grown) and
 # "#- <name> <path>" (missing) both carry the resolved path as the last field.
-raw_ls="$(garden --chdir "$src" ls --all --no-commands --no-remotes --no-gardens --no-groups -v 2>&1)" || {
+raw_ls="$(garden --config "$reg" ls --all --no-commands --no-remotes --no-gardens --no-groups -v 2>&1)" || {
   echo "reconcile-garden: 'garden ls' failed — cannot verify grow completeness:" >&2
   printf '%s\n' "$raw_ls" >&2
   exit 1
@@ -129,7 +132,7 @@ fi
 #    self-skip non-bare trees. aoe-session's group self-heal is a local
 #    aoe-metadata operation with no network dependency; it rides along here.
 echo "reconcile-garden: garden cmd '*' setup-gitdir setup-upstream aoe-session"
-garden --chdir "$src" cmd '*' setup-gitdir setup-upstream aoe-session
+garden --config "$reg" cmd '*' setup-gitdir setup-upstream aoe-session
 
 echo "reconcile-garden: done"
 {{ end -}}

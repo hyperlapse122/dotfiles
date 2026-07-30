@@ -1,11 +1,11 @@
 #!/bin/sh
 # src-audit — read-only drift report for the ~/src project layout
-# (~/src/<host>/[<group>/]<project>/<worktree>; registry: ~/src/garden.yaml).
+# (~/src/<host>/[<group>/]<project>/<worktree>; registry: ~/.config/garden/garden.yaml).
 #
 # Reports three kinds of drift:
 #   missing    declared in garden.yaml but not grown on this host. Informational
 #              (exit 0) — the manifest is the union across hosts; grow on demand
-#              with `garden --chdir ~/src grow <name>`.
+#              with `garden --config ~/.config/garden/garden.yaml grow <name>`.
 #   broken     grown, but the on-disk layout does not match its declaration — a
 #              BARE tree's project root lacks the "gitdir: ./.bare" pointer, or a
 #              NON-BARE tree's path is not a valid clone. Exit 1.
@@ -16,10 +16,14 @@
 # and worktree removal stays with aoe.
 set -eu
 
+# INVARIANT: this MUST match the manifest's garden.root
+# (dot_config/garden/encrypted_readonly_garden.yaml.asc) — nothing verifies
+# the two agree.
 src="$HOME/src"
+reg="$HOME/.config/garden/garden.yaml"
 [ -d "$src" ] || { echo "src-audit: $src does not exist — nothing to audit"; exit 0; }
 command -v garden >/dev/null 2>&1 || { echo "src-audit: garden not on PATH (installed to ~/.local/bin by chezmoi apply — .chezmoiexternals/vcs.toml)" >&2; exit 2; }
-[ -f "$src/garden.yaml" ] || { echo "src-audit: $src/garden.yaml missing (chezmoi apply?)" >&2; exit 2; }
+[ -f "$reg" ] || { echo "src-audit: $reg missing (chezmoi apply?)" >&2; exit 2; }
 
 tmproot="${XDG_RUNTIME_DIR:-$HOME/.cache}"
 mkdir -p "$tmproot"
@@ -29,7 +33,7 @@ trap 'rm -rf "$scratch"' EXIT
 garden_ls() {
   # garden ls prints grown-tree lines ("# <name> [branch]") to stderr and
   # missing-tree lines ("#- <name>") to stdout — merge both for parsing.
-  garden --chdir "$src" ls --all --no-commands --no-remotes --no-gardens --no-groups 2>&1
+  garden --config "$reg" ls --all --no-commands --no-remotes --no-gardens --no-groups 2>&1
 }
 
 # "# <name> [branch]" = grown on disk, "#- <name>" = declared but missing.
@@ -49,7 +53,7 @@ echo "## broken (grown, but the on-disk layout does not match its declaration)"
 broken=0
 while IFS= read -r name; do
   [ -n "$name" ] || continue
-  tree_path="$(garden --chdir "$src" eval '${TREE_PATH}' "$name" 2>/dev/null)"
+  tree_path="$(garden --config "$reg" eval '${TREE_PATH}' "$name" 2>/dev/null)"
   case "$tree_path" in
     */.bare)
       # BARE tree: the project root (parent of .bare) carries the git pointer,
@@ -57,7 +61,7 @@ while IFS= read -r name; do
       root="$(dirname "$tree_path")"
       printf '%s\n' "$root" >>"$scratch/roots"
       if [ ! -f "$root/.git" ] || [ "$(cat "$root/.git")" != "gitdir: ./.bare" ]; then
-        printf '%s (fix: garden --chdir ~/src setup-gitdir %s)\n' "$root" "$name"
+        printf '%s (fix: garden --config ~/.config/garden/garden.yaml setup-gitdir %s)\n' "$root" "$name"
         broken=1
       fi
       ;;
@@ -65,7 +69,7 @@ while IFS= read -r name; do
       # NON-BARE tree: the tree path itself is a plain clone (its own work tree).
       printf '%s\n' "$tree_path" >>"$scratch/roots"
       if ! git -C "$tree_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        printf '%s (fix: garden --chdir ~/src grow %s)\n' "$tree_path" "$name"
+        printf '%s (fix: garden --config ~/.config/garden/garden.yaml grow %s)\n' "$tree_path" "$name"
         broken=1
       fi
       ;;
@@ -79,7 +83,7 @@ echo "## unmanaged (repository on disk that no declared project accounts for)"
 # properly-shaped project root (the declared tree path is <project>/.bare, so
 # the root's .git pointer reads as an unreferenced repo) — filter out declared
 # roots and anything below them (worktrees are aoe's domain).
-yes n | garden --chdir "$src" prune 2>/dev/null | sed -n 's/^# //p' | sort -u >"$scratch/pruned" || true
+yes n | garden --config "$reg" prune 2>/dev/null | sed -n 's/^# //p' | sort -u >"$scratch/pruned" || true
 unmanaged=0
 while IFS= read -r path; do
   [ -n "$path" ] || continue
