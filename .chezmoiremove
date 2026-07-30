@@ -46,3 +46,10 @@
 {{- if ne .chezmoi.os "darwin" }}
 .local/libexec/cli-proxy-api-launch
 {{- end }}
+
+# The garden project registry moved from ~/src/garden.yaml to
+# ~/.config/garden/garden.yaml so ~/src holds only project trees. Deleting the
+# old source stops managing the old target but leaves the already-deployed 0444
+# copy behind — prune it here, in the target-application phase, so no stale
+# registry is visible to the 90-src reconcile script that runs last.
+src/garden.yaml
