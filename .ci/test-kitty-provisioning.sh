@@ -40,7 +40,7 @@ render() {
 }
 
 has() { grep -qE -- "$1" "$2" || fail "$3 (in $2)"; }
-lacks() { grep -qE -- "$1" "$2" && fail "$3 (in $2)" || true; }
+lacks() { if grep -qE -- "$1" "$2"; then fail "$3 (in $2)"; fi; }
 
 # --- the release lock carries kitty for both Linux architectures -------------
 lock="$repo_root/.chezmoidata/releases.json"
