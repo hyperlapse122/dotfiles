@@ -204,7 +204,7 @@ jobs:
         run: .ci/test-tmux-kitty-passthrough.sh
 
   kitty-provisioning:
-    name: kitty provisioning and vertical tab bar
+    name: kitty provisioning and tab bar
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

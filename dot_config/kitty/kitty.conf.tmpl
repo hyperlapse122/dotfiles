@@ -20,23 +20,24 @@
 # of the prior deliberate `yes`.
 hide_window_decorations no
 remember_window_size  no
-# 128c, not the historical 82c: the vertical tab bar below occupies 28 columns
-# of the window (measured with kitty 0.48.1 at the managed font/size — the
-# upstream "about twenty title cells" figure counts title cells only), and
-# `initial_window_width` in cells accounts for margins and padding but NEVER for
-# the tab bar. 128c therefore yields a 100x24 text area, widening the old 82x24.
+# 128c, not the historical 82c: the wider window is kept deliberately now that
+# the tab bar sits on the top edge again, where the bar costs one row and no
+# columns, so the full width is text area. `initial_window_width` in cells
+# accounts for margins and padding but NEVER for the tab bar.
 initial_window_width  128c
 initial_window_height 24c
 
 # --- tab bar ---
+# Top edge, not kitty's default `bottom`: matches browser/editor tab conventions.
+# The vertical `left` edge (kitty >= 0.48) was tried and reverted — it did not
+# render stably enough in daily use.
 tab_bar_edge top
-# Upstream default is 2, which would hide the sidebar until a second tab opens.
-# The sidebar is the point here, so show it from the first tab.
+# Upstream default is 2, which hides the bar until a second tab opens. Show it
+# from the first tab so opening a second one never reflows the text area.
 tab_bar_min_tabs 1
 # Upstream default is `fade`; powerline renders a continuous styled bar. kitty
 # draws the separators itself, and the managed mono face is a Nerd Font, so the
-# glyphs are covered on every managed host. Retained unchanged from the previous
-# horizontal bar: the vertical layout reuses the same per-tab draw function.
+# glyphs are covered on every managed host.
 tab_bar_style powerline
 tab_powerline_style slanted
 # Index prefix makes `goto_tab N` discoverable; kitty still auto-prepends

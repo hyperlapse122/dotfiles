@@ -4,8 +4,8 @@
 # Verifies the render-level contract of the kitty provisioning migration:
 # kitty is provisioned from the locked upstream bundle instead of the distro
 # package, the managed launcher entry points at that bundle and claims no MIME
-# types, and the managed config asks for the vertical tab bar the 0.48 bundle
-# provides.
+# types, and the managed config keeps the tab bar on the top edge using the 0.48
+# key names the bundle expects.
 #
 # Never runs chezmoi apply, never downloads the kitty bundle, and never launches
 # kitty — per the repo's non-deployment verification policy. The bundle download,
@@ -139,16 +139,17 @@ printf '%s\n' "$container_block" | grep -qF '.local/share/applications/kitty.des
   || fail "the launcher is not skipped inside the container block"
 render <"$ignore" >"$scratch/ignore.rendered"
 lacks '\{\{' "$scratch/ignore.rendered" ".chezmoiignore has unresolved template markers"
-# --- the managed config asks for the vertical tab bar -----------------------
+# --- the managed config keeps the top-edge tab bar ---------------------------
 render <"$repo_root/dot_config/kitty/kitty.conf.tmpl" >"$scratch/kitty.conf"
 lacks '\{\{' "$scratch/kitty.conf" "kitty.conf has unresolved template markers"
-has '^tab_bar_edge left$' "$scratch/kitty.conf" "tab bar is not on the left edge"
-has '^tab_bar_min_tabs 1$' "$scratch/kitty.conf" "sidebar is not shown for a single tab"
-has '^initial_window_width +128c$' "$scratch/kitty.conf" "window width does not absorb the sidebar"
+has '^tab_bar_edge top$' "$scratch/kitty.conf" "tab bar is not on the top edge"
+has '^tab_bar_min_tabs 1$' "$scratch/kitty.conf" "tab bar is not shown for a single tab"
+has '^initial_window_width +128c$' "$scratch/kitty.conf" "managed window width changed"
 has '^tab_bar_style powerline$' "$scratch/kitty.conf" "powerline tab bar style was lost"
 has '^tab_powerline_style slanted$' "$scratch/kitty.conf" "slanted powerline separators were lost"
 has '^strip_trailing_spaces smart$' "$scratch/kitty.conf" "renamed trailing-space key not applied"
-lacks '^tab_bar_edge top$' "$scratch/kitty.conf" "tab bar is still on the top edge"
+lacks '^tab_bar_edge (left|right|bottom)$' "$scratch/kitty.conf" \
+  "a second tab_bar_edge line would win over the top edge"
 lacks '^strip_trailing_space ' "$scratch/kitty.conf" \
   "the pre-0.48 singular trailing-space key is still present"
 # Plan 004's chrome and font coupling must be untouched.
