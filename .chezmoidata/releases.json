@@ -514,11 +514,6 @@
         "source": "nexu-io/open-design",
         "version": "open-design-v0.16.1"
       },
-      "playwright-cli": {
-        "kind": "githubRelease",
-        "source": "microsoft/playwright-cli",
-        "version": "v0.1.17"
-      },
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",

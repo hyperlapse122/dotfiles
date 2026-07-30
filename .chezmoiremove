@@ -16,6 +16,12 @@
 .agents/skills/ce-*
 .agents/skills/lfg
 
+# The playwright-cli external skill was retired from .chezmoidata/agents.yaml;
+# deleting the source declaration stops managing it but leaves the
+# already-deployed ~/.agents/skills/playwright-cli directory behind — prune it
+# here.
+.agents/skills/playwright-cli
+
 # Removed hub + its @AGENTS.md mirror. The user-scoped instruction core is now
 # composed per harness by .chezmoitemplates/agents-instructions.tmpl and rendered
 # straight into each managed harness wrapper (`~/.claude/CLAUDE.md`,

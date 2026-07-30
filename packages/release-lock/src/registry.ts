@@ -234,10 +234,6 @@ export const REGISTRY: Registry = {
 
   /* ---------- version-only githubRelease entries ---------- */
 
-  // The newest tag of the repo's own release train doubles as the ref for the
-  // playwright-cli skill external (agents.skills.external entry with no ref).
-  "playwright-cli": { kind: "githubRelease", source: "microsoft/playwright-cli" },
-
   "compound-engineering": {
     kind: "githubRelease",
     source: "everyinc/compound-engineering-plugin",

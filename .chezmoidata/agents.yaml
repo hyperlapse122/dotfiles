@@ -130,8 +130,6 @@ agents:
   # daily-report) — not listed here.
   skills:
     external:
-    - name: playwright-cli
-      source: microsoft/playwright-cli
     - name: agent-browser
       source: vercel-labs/agent-browser
     - name: improve
