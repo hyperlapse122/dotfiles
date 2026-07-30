@@ -9,8 +9,8 @@
 # every ce-* skill would load TWICE: once as a stale directory here and once
 # from the plugin.
 #
-# Safe: these `ce-*` / `lfg` patterns match neither the external skills deployed
-# there (`playwright-cli`, `improve`) nor the locally-authored chezmoi-managed
+# Safe: these `ce-*` / `lfg` patterns match neither the external skill deployed
+# there (`improve`) nor the locally-authored chezmoi-managed
 # skills under dot_agents/skills/<name>/ (`daily-report`); dotagents will never
 # re-create the ce-* dirs now that the wildcard entry is gone.
 .agents/skills/ce-*
