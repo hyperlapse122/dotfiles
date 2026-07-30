@@ -66,18 +66,28 @@ if [[ -n "$claude_haptic_path" ]]; then
   grep -F 'claude plugin install mxm4-haptic@dotfiles --scope user' "$calls"
   grep -F "codex plugin marketplace add $codex_haptic_fixture" "$calls"
   grep -F 'codex plugin add mxm4-haptic@dotfiles-codex' "$calls"
-  ! grep -Fq 'claude plugin marketplace remove dotfiles' "$calls"
-  ! grep -Fq 'codex plugin marketplace remove dotfiles-codex' "$calls"
+  if grep -Fq 'claude plugin marketplace remove dotfiles' "$calls"; then
+    exit 1
+  fi
+  if grep -Fq 'codex plugin marketplace remove dotfiles-codex' "$calls"; then
+    exit 1
+  fi
 else
-  ! grep -q 'mxm4-haptic' "$calls"
+  if grep -q 'mxm4-haptic' "$calls"; then
+    exit 1
+  fi
 fi
-! grep -q '^agy ' "$calls"
+if grep -q '^agy ' "$calls"; then
+  exit 1
+fi
 
 : > "$calls"
 env HOME="$scratch/home-failure" PLUGIN_SMOKE_CALLS="$calls" CLAUDE_SMOKE_FAIL=add \
   PATH="$runtime_bin:$PATH" bash "$runtime_script" 2> "$scratch/failure.stderr"
 grep -F 'claude: skipped compound-engineering (marketplace add failed' "$scratch/failure.stderr"
-! grep -q '^claude plugin install ' "$calls"
+if grep -q '^claude plugin install ' "$calls"; then
+  exit 1
+fi
 grep -F 'codex plugin add compound-engineering@compound-engineering-plugin' "$calls"
 
 rm -f "$archive_fixture/.claude-plugin/marketplace.json"
@@ -85,4 +95,6 @@ rm -f "$archive_fixture/.claude-plugin/marketplace.json"
 env HOME="$scratch/home-missing" PLUGIN_SMOKE_CALLS="$calls" \
   PATH="$runtime_bin:$PATH" bash "$runtime_script" 2> "$scratch/missing.stderr"
 grep -F 'no marketplace at' "$scratch/missing.stderr"
-! grep -q 'compound-engineering' "$calls"
+if grep -q 'compound-engineering' "$calls"; then
+  exit 1
+fi
