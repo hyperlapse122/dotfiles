@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { ALL_PLATFORMS } from "../src/platforms.js";
 import { resolveVendorManifest, ResolutionError } from "../src/vendor-manifest.js";
 import type { ToolSpec } from "../src/types.js";
 
 const realFetch = globalThis.fetch;
 
 const SHA = "a".repeat(64);
-const SHA512 = "b".repeat(128);
 
 /** URL-prefix routed stub; an unrouted request 404s. */
 function stubRoutes(routes: Record<string, () => Response>): void {
@@ -170,65 +168,14 @@ describe("resolveVendorManifest claude", () => {
   });
 });
 
-describe("resolveVendorManifest antigravity", () => {
-  const spec: ToolSpec = {
+test("rejects the retired antigravity vendor as unknown", async () => {
+  const spec = {
     kind: "vendorManifest",
     vendor: "antigravity",
     source: "https://agy.example.invalid/manifests",
-  };
+  } as unknown as ToolSpec;
 
-  function agyRoutes(
-    version: string | ((platform: string) => string),
-  ): Record<string, () => Response> {
-    const routes: Record<string, () => Response> = {};
-    for (const { os, arch } of ALL_PLATFORMS) {
-      const platform = `${os}_${arch}`;
-      routes[`https://agy.example.invalid/manifests/${platform}.json`] = json({
-        version: typeof version === "function" ? version(platform) : version,
-        url: `https://agy.example.invalid/download/${platform}`,
-        sha512: SHA512,
-      });
-    }
-    return routes;
-  }
-
-  test("records the published sha512 with a null sha256 for every platform", async () => {
-    stubRoutes(agyRoutes("1.1.7"));
-
-    const locked = await resolveVendorManifest("agy", spec);
-
-    expect(locked.version).toBe("1.1.7");
-    expect(Object.keys(locked.artifacts ?? {})).toHaveLength(6);
-    expect(locked.artifacts?.["darwin-arm64"]).toEqual({
-      url: "https://agy.example.invalid/download/darwin_arm64",
-      sha256: null,
-      sha512: SHA512,
-    });
-  });
-
-  test("disagreeing per-platform versions are a hard error", async () => {
-    stubRoutes(agyRoutes((platform) => (platform === "windows_arm64" ? "9.9.9" : "1.1.7")));
-
-    const error = await resolveVendorManifest("agy", spec).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ResolutionError);
-    expect((error as Error).message).toMatch(/agy\.example\.invalid/);
-  });
-
-  test("a missing platform manifest fails with the source named", async () => {
-    stubRoutes({});
-
-    await expect(resolveVendorManifest("agy", spec)).rejects.toThrow(/agy\.example\.invalid/);
-  });
-
-  test("a platform manifest missing fields is a hard error", async () => {
-    const routes = agyRoutes("1.1.7");
-    routes["https://agy.example.invalid/manifests/linux_amd64.json"] = json({ version: "1.1.7" });
-    stubRoutes(routes);
-
-    const error = await resolveVendorManifest("agy", spec).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ResolutionError);
-    expect((error as Error).message).toMatch(/linux_amd64 manifest missing fields/);
-  });
+  await expect(resolveVendorManifest("agy", spec)).rejects.toThrow('unknown vendor "antigravity"');
 });
 
 describe("resolveVendorManifest winbox", () => {

@@ -1,33 +1,23 @@
 {{ if ne .chezmoi.os "windows" -}}
 
 {{- $ctx := . -}}
-{{- $cePlugin := "" -}}
-{{- range .agents.opencode.plugins -}}
-{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}
-{{-     $cePlugin = . -}}
-{{-   end -}}
-{{- end -}}
-{{- if $cePlugin -}}
+{{- $name := "compound-engineering-plugin" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index .agents.marketplaces $name -}}
 {{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
 
 #!/usr/bin/env bash
 # .chezmoiscripts/00-tools/run_onchange_after_compound-engineering.sh.tmpl
 #
 # Prunes older extracted versions under ~/<externalPath>/, keeping only the
-# release currently pinned by .chezmoidata/agents.yaml (agents.opencode.plugins
-# entry with install=localArchive + versionSource=compoundEngineeringRelease).
-# Chezmoi's exact=true only cleans within ONE target path, so sibling version
-# directories under the same parent accumulate without this — same shape as the
-# claude/codex/pi/codegraph linker scripts in this directory.
+# release currently pinned by the neutral
+# agents.marketplaces.compound-engineering-plugin authority.
+# Chezmoi's exact=true only cleans within one target path, so sibling version
+# directories under the same parent accumulate without this.
 #
-# There is no ~/.local/bin symlink to repoint here: every agent (OpenCode,
-# Claude Code, Codex, pi) references the FULLY-RENDERED versioned path in its
-# own config, so a version bump propagates through chezmoi's own file phase
-# (opencode.json re-render) and the sibling generic
-# .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
-# script (Claude/Codex marketplace re-registration at the new path; pi via its
-# own git: source).
+# There is no ~/.local/bin symlink to repoint. Claude, Codex, and omp consume
+# the fully rendered versioned marketplace path. A version bump re-registers
+# the path through the surviving agent-plugin and omp updater scripts.
 #
 # onchange trigger: the rendered $CE_VERSION below IS the trigger — a new
 # upstream compound-engineering-* release changes this script's content and
@@ -35,7 +25,7 @@
 
 set -euo pipefail
 
-BASE_DIR="$HOME/{{ $cePlugin.externalPath }}"
+BASE_DIR="$HOME/{{ $ceAuthority.externalPath }}"
 CURRENT="$BASE_DIR/{{ $ceVersion }}"
 
 # The file phase must have extracted the current version already; if not, do
@@ -49,5 +39,4 @@ for d in "$BASE_DIR"/*; do
   rm -rf -- "$d" || true
 done
 
-{{ end -}}
 {{ end -}}

@@ -22,7 +22,7 @@ fixture='{"agents":{"mcp":{"servers":[
 render_servers() {
   local os=$1
   local container=$2
-  local harness=${3:-pi}
+  local harness=${3:-claude}
   local data=${4:-$fixture}
   chezmoi --config "$empty_config" --source "$repo_root" --override-data "$data" \
     execute-template \
@@ -55,7 +55,7 @@ harness_fixture='{"agents":{"mcp":{"servers":[
   {"name":"everywhere","transport":"stdio","command":"everywhere","args":[]},
   {"name":"not-omp","transport":"stdio","command":"not-omp","args":[],"harnessSkip":["omp"]}
 ]}}}'
-assert_names "$(render_servers linux false pi "$harness_fixture")" everywhere not-omp
+assert_names "$(render_servers linux false claude "$harness_fixture")" everywhere not-omp
 assert_names "$(render_servers linux false omp "$harness_fixture")" everywhere
 
 # The real inventory declares Open Design only after its managed `od` wrapper
@@ -63,7 +63,7 @@ assert_names "$(render_servers linux false omp "$harness_fixture")" everywhere
 render_real() {
   local os=$1
   local container=$2
-  local harness=pi
+  local harness=claude
   chezmoi --config "$empty_config" --source "$repo_root" execute-template \
     "{{ includeTemplate \"agent-mcp-servers-json.tmpl\" (dict \"ctx\" . \"harness\" \"$harness\" \"os\" \"$os\" \"container\" $container) }}"
 }
@@ -113,16 +113,12 @@ open_design_eligible=$(
     jq -r '.os == "linux" and (.container | not)'
 )
 
-# One canonical inventory of every MCP consumer: rendered name, source template,
-# and the harness id it must identify as. Every loop below derives from it, so a
-# seventh consumer is one edit.
+# One canonical inventory of every direct MCP consumer: rendered name, source
+# template, and the harness id it must identify as. Every loop below derives
+# from it, so a third consumer is one edit.
 consumers=(
   "agents.toml:dot_agents/private_readonly_agents.toml.tmpl:claude"
-  "pi.json:dot_pi/private_agent/private_readonly_mcp.json.tmpl:pi"
-  "opencode.json:dot_config/opencode/readonly_opencode.json.tmpl:opencode"
-  "gemini.json:dot_gemini/config/private_readonly_mcp_config.json.tmpl:agy"
   "omp.json:dot_omp/private_agent/private_readonly_mcp.json.tmpl:omp"
-  "kimi.json:private_dot_kimi-code/private_readonly_mcp.json.tmpl:kimi"
 )
 
 for entry in "${consumers[@]}"; do
@@ -238,7 +234,7 @@ assert_invalid() {
   local diagnostic=$3
   if chezmoi --config "$empty_config" --source "$repo_root" --override-data "$fixture" \
     execute-template \
-    '{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "pi" "os" "linux" "container" false) }}' \
+    '{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "claude" "os" "linux" "container" false) }}' \
     >"$scratch/$name.stdout" 2>"$scratch/$name.stderr"
   then
     printf 'invalid MCP fixture %s rendered successfully\n' "$name" >&2
@@ -268,6 +264,11 @@ assert_invalid harness-skip-type \
 assert_invalid invalid-harness-skip \
   '{"agents":{"mcp":{"servers":[{"name":"bad","transport":"stdio","command":"bad","args":[],"harnessSkip":["emacs"]}]}}}' \
   'unknown harnessSkip "emacs"'
+for retired_harness in pi opencode agy kimi omo; do
+  assert_invalid "retired-${retired_harness}-harness-skip" \
+    "{\"agents\":{\"mcp\":{\"servers\":[{\"name\":\"bad\",\"transport\":\"stdio\",\"command\":\"bad\",\"args\":[],\"harnessSkip\":[\"${retired_harness}\"]}]}}}" \
+    "unknown harnessSkip \"${retired_harness}\""
+done
 # A valid CALLER id that renders no file of its own is NOT a valid exclusion: the
 # dot_agents consumer serves Codex as "claude", so accepting it here would render
 # green and still ship the server to Codex.

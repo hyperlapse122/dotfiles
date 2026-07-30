@@ -3,7 +3,6 @@
     "tamasfe.even-better-toml",
     "anthropic.claude-code",
     "void-zero.vite-plus-extension-pack",
-    "openai.chatgpt",
-    "sst-dev.opencode"
+    "openai.chatgpt"
   ]
 }

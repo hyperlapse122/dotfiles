@@ -1,34 +1,40 @@
-{{- /* Newest compound-engineering-plugin release tag.
+{{- /* Validate and resolve the shared compound-engineering archive authority.
 
        The repo interleaves several tag trains (marketplace-*, cursor-marketplace-*,
-       cli-*), so `gitHubLatestRelease` would eventually resolve to the wrong one —
-       take the newest release whose tag carries the compound-engineering- prefix.
-       That prefix filtering now happens in the packages/release-lock registry at
-       refresh time; every consumer reads the resolved tag from the lock verbatim.
+       cli-*), so the release lock filters for compound-engineering-* at refresh.
+       Every consumer validates the neutral marketplace row before reading that
+       resolved tag. The row is platform-neutral even though its `os` list gates
+       only the generic Claude/Codex installer.
 
-       Shared so the consumers of this plugin can never land on different
-       releases — the extracted archive path is the same versioned local dir
-       (~/.local/share/compound-engineering/v<semver>/), so every agent
-       resolves to that same on-disk tree:
-         - .chezmoiexternals/ai-agents.toml — the archive external's URL uses
-           the raw tag (compound-engineering-v<semver>) and the target path
-           uses v<semver> (front-half prefix stripped).
-         - .chezmoitemplates/opencode-plugins-json.tmpl — renders the fully
-           qualified plugin path into opencode.json.
-         - .chezmoiscripts/00-tools/run_onchange_after_compound-engineering
-           — prunes sibling versions under ~/.local/share/compound-engineering
-           so only the current tag remains on disk.
-         - .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
-           — the generic runner registers the same versioned path with Claude Code and Codex,
-             and installs its native bundle root for AGY
-           (OpenCode is file-phase only: it reads the path from its readonly
-           config; every ref bump also re-registers here for Claude/Codex and
-           reinstalls the resolved bundle for AGY
-           because the marketplace path itself changed). pi is NOT a consumer
-           of this ref: it installs compound-engineering as a native `git:`
-           source (a packages entry), tracking the default branch unpinned,
-           rather than the extracted release tarball.
-       Claude gains a proper pin here too: its `plugin marketplace add` takes no
-       --ref, but a versioned LOCAL PATH is unambiguous.
+       The extracted archive path is
+       ~/.local/share/compound-engineering/v<semver>/ on every OS:
+         - .chezmoiexternals/ai-agents.toml emits one archive external.
+         - the 00-tools scripts prune versions and install overlays on POSIX.
+         - install-agent-plugins registers the path with Claude and Codex.
+         - both omp updater variants register the same path with omp.
     */ -}}
+{{- $name := "compound-engineering-plugin" -}}
+{{- if not (hasKey .agents.marketplaces $name) -}}
+{{-   fail (printf "compound-engineering: authority %q is missing from agents.marketplaces" $name) -}}
+{{- end -}}
+{{- $authority := index .agents.marketplaces $name -}}
+{{- range $field := (list "kind" "source" "externalPath" "versionSource") -}}
+{{-   if not (hasKey $authority $field) -}}
+{{-     fail (printf "compound-engineering: authority %q is missing %q" $name $field) -}}
+{{-   end -}}
+{{- end -}}
+{{- if ne (printf "%v" (index $authority "kind")) "localArchive" -}}
+{{-   fail (printf "compound-engineering: authority %q must use kind localArchive" $name) -}}
+{{- end -}}
+{{- $source := printf "%v" (index $authority "source") -}}
+{{- if not (regexMatch "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" $source) -}}
+{{-   fail (printf "compound-engineering: authority %q has unsafe source %q" $name $source) -}}
+{{- end -}}
+{{- $path := printf "%v" (index $authority "externalPath") -}}
+{{- if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $path)) (hasPrefix "/" $path) (regexMatch "(^|/)\\.\\.(/|$)" $path) -}}
+{{-   fail (printf "compound-engineering: authority %q has unsafe externalPath %q" $name $path) -}}
+{{- end -}}
+{{- if ne (printf "%v" (index $authority "versionSource")) "compoundEngineeringRelease" -}}
+{{-   fail (printf "compound-engineering: authority %q has unsupported versionSource %q" $name (index $authority "versionSource")) -}}
+{{- end -}}
 {{- includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "compound-engineering") -}}

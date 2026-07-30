@@ -164,14 +164,6 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `codex-package-${rustArch(arch)}-${muslTarget(os)}.tar.zst`,
   },
 
-  kimi: {
-    kind: "githubRelease",
-    source: "MoonshotAI/kimi-code",
-    // Tag shape is `@moonshot-ai/kimi-code@<semver>` (KTD10); assets are one
-    // executable zip per platform.
-    asset: ({ os, arch }) => `kimi-code-${win32Os(os)}-${x64Arch(arch)}.zip`,
-  },
-
   "agent-browser": {
     kind: "githubRelease",
     source: "vercel-labs/agent-browser",
@@ -182,24 +174,6 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch, libc }) =>
       `agent-browser-${win32Os(os)}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}${executableExtension(os)}`,
     emulatedPlatforms: ["windows-arm64"],
-  },
-
-  opencode: {
-    kind: "githubRelease",
-    source: "anomalyco/opencode",
-    // linux ships .tar.gz; darwin and windows ship .zip. Upstream also
-    // publishes musl and -baseline variants the consumer does not select.
-    asset: ({ os, arch }) =>
-      `opencode-${os}-${x64Arch(arch)}${os === "linux" ? ".tar.gz" : ".zip"}`,
-  },
-
-  pi: {
-    kind: "githubRelease",
-    source: "earendil-works/pi",
-    // Upstream ships windows .zip assets, but every consumer is POSIX-only
-    // (the external skips windows; the linker script has no .ps1 counterpart),
-    // so windows is deliberately not locked.
-    asset: ({ os, arch }) => (os === "windows" ? null : `pi-${os}-${x64Arch(arch)}.tar.gz`),
   },
 
   omp: {
@@ -275,42 +249,10 @@ export const REGISTRY: Registry = {
   // Version-only tag for the build-open-design script's onchange trigger.
   "open-design": { kind: "githubRelease", source: "nexu-io/open-design" },
 
-  /* ---------- githubTag: the OpenCode latestTag plugin pins ---------- */
-
-  // npm-installed plugins pinned to the newest GitHub tag with the leading
-  // `v` stripped (KTD10), so consumers read the locked version verbatim.
-  "oh-my-openagent": {
-    kind: "githubTag",
-    source: "code-yeongyu/oh-my-openagent",
-    versionTransform: versionFromTag,
-  },
-
-  "opencode-wakatime": {
-    kind: "githubTag",
-    source: "angristan/opencode-wakatime",
-    versionTransform: versionFromTag,
-  },
-
-  "@ex-machina/opencode-anthropic-auth": {
-    kind: "githubTag",
-    source: "ex-machina-co/opencode-anthropic-auth",
-    versionTransform: versionFromTag,
-  },
-
   /* ---------- gitlabRelease ---------- */
 
   // One key serves the vcs.toml binary and both bundled skills (AE5).
   glab: { kind: "gitlabRelease", source: "https://gitlab.com/api/v4/projects/34675721" },
-
-  /* ---------- npm: the OpenCode npmLatest pin and the six pi extensions ---------- */
-
-  "@oyng/opencode-agy-auth": { kind: "npm", source: "@oyng/opencode-agy-auth" },
-  "@gotgenes/pi-anthropic-auth": { kind: "npm", source: "@gotgenes/pi-anthropic-auth" },
-  "pi-mcp-extension": { kind: "npm", source: "pi-mcp-extension" },
-  "pi-subagents": { kind: "npm", source: "pi-subagents" },
-  "pi-ask-user": { kind: "npm", source: "pi-ask-user" },
-  "@ff-labs/pi-fff": { kind: "npm", source: "@ff-labs/pi-fff" },
-  "@ff-labs/fff-bun": { kind: "npm", source: "@ff-labs/fff-bun" },
 
   /* ---------- vendorManifest ---------- */
 
@@ -318,12 +260,6 @@ export const REGISTRY: Registry = {
     kind: "vendorManifest",
     vendor: "claude",
     source: "https://downloads.claude.ai/claude-code-releases",
-  },
-
-  agy: {
-    kind: "vendorManifest",
-    vendor: "antigravity",
-    source: "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
   },
 
   winbox: {
@@ -337,14 +273,6 @@ export const REGISTRY: Registry = {
   // The improve skill has no releases/tags; agents.skills.external pins its
   // `ref: main` branch head to a commit.
   improve: { kind: "gitRef", source: "shadcn/improve", ref: "refs/heads/main" },
-
-  // pi installs compound-engineering as a native `git:` source tracking the
-  // default branch; the update-pi-extensions trigger bakes its HEAD sha.
-  "pi-compound-engineering": {
-    kind: "gitRef",
-    source: "EveryInc/compound-engineering-plugin",
-    ref: "HEAD",
-  },
 
   /* ---------- ociImage: the cli-proxy-api quadlet images ---------- */
 

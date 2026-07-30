@@ -15,7 +15,7 @@ The plan this package implements is
 
 ## Status
 
-All six resolver kinds are implemented, the committed
+All seven resolver kinds are implemented, the committed
 `.chezmoidata/releases.json` covers every render-time resolution source in the
 repo, and the lock is now the sole version/URL/checksum source: every
 `.chezmoiexternals` file and every version-consuming script template reads it
@@ -30,6 +30,7 @@ no network I/O; re-run this package to refresh the lock.
 | `npm` | implemented |
 | `vendorManifest` | implemented |
 | `gitRef` | implemented |
+| `ociImage` | implemented |
 
 ## Why digests are free
 
@@ -68,7 +69,7 @@ its source, and — for tools with downloadable artifacts — an `asset` selecto
 returning the upstream filename for a platform. Conventions that matter:
 
 - A selector returns `null` for a platform the tool deliberately does not
-  target (jq is darwin-only here; pi and aoe skip windows).
+  target (jq is darwin-only here; kitty and aoe skip unsupported platforms).
 - `emulatedPlatforms` declares targets upstream genuinely does not build,
   served by the amd64 artifact under emulation and marked `emulated: true` in
   the lock, so an `x86_64` URL under an `arm64` key is deliberate. This is
@@ -82,15 +83,13 @@ returning the upstream filename for a platform. Conventions that matter:
 - `linuxMusl` (githubRelease) locks the distinct static-musl linux builds
   under `-musl` platform keys next to the glibc ones (agent-browser; claude's
   vendor manifest maps its musl platform ids onto the same keys).
-- `versionTransform` (githubTag) applies the tag-shape transform in the
-  registry so consumers read the locked version verbatim — e.g. stripping the
-  leading `v` for the npm-pinned OpenCode plugins.
+- `versionTransform` (githubTag) applies a required tag-shape transform in the
+  registry so consumers read the normalized locked version.
 - A tool whose binary is not a GitHub asset — `kubectl` from `dl.k8s.io`,
   `helm` from `get.helm.sh` — takes only its tag from the release and carries
   no `asset` selector, so the lock holds a version and no artifacts block.
-- npm entries record `dist.integrity` and the antigravity manifest its
-  `sha512` as published; both are informational only — chezmoi externals
-  verify sha256, so those entries stay version-only/sha256-null for
+- npm entries record `dist.integrity` as published. It is informational only:
+  chezmoi externals verify sha256, so npm entries stay version-only for
   consumers.
 
 ## Verification

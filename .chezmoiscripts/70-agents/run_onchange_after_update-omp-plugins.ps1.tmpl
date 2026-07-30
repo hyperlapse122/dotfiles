@@ -1,16 +1,13 @@
 {{ if eq .chezmoi.os "windows" -}}
 {{- $ctx := . -}}
-{{- $cePlugin := dict -}}
-{{- range .agents.opencode.plugins -}}
-{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}{{- $cePlugin = . -}}{{- end -}}
-{{- end -}}
-{{- if not $cePlugin -}}{{- fail "update-omp-plugins: compound-engineering localArchive authority is missing from agents.opencode.plugins" -}}{{- end -}}
+{{- $name := "compound-engineering-plugin" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index .agents.marketplaces $name -}}
 {{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
-# Reconciles omp's compound-engineering plugin from the pinned localArchive.
+# Reconciles omp's compound-engineering plugin from the neutral pinned archive.
 $ErrorActionPreference = 'Stop'
 
-$source = Join-Path $HOME '{{ $cePlugin.externalPath }}/{{ $ceVersion }}'
+$source = Join-Path $HOME '{{ $ceAuthority.externalPath }}/{{ $ceVersion }}'
 if (-not (Get-Command omp -ErrorAction SilentlyContinue)) {
   Write-Warning 'update-omp-plugins: skipped (omp not on PATH)'
   exit 0

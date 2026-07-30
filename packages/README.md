@@ -15,7 +15,7 @@ the repo's TypeScript/JavaScript library packages.
 
 ## What this is NOT
 
-- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, they are built on apply by the `.chezmoiscripts/60-build/` run_onchange scripts. OpenCode plugins are symlinked into `~/.config/opencode/plugins/`; standalone CLIs are installed as regular executables in `~/.local/bin/`.
+- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, `.chezmoiscripts/60-build/` run-on-change scripts build them and install standalone CLIs as regular executables in `~/.local/bin/`.
 - **Not published.** Members are `private: true`; the `@h82/` scope is a naming
   namespace, not a registry target.
 
@@ -23,13 +23,10 @@ the repo's TypeScript/JavaScript library packages.
 
 | Path | Package | Purpose |
 |---|---|---|
-| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth <opencode\|pi\|antigravity\|kimi>` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes the selected harness's private native credential format; apply only compiles and installs it. |
-| [`kimi-reconcile/`](kimi-reconcile/) | `@h82/kimi-reconcile` | Compiled apply helper that overlays declared Kimi TOML leaves and transactionally owns only the compound-engineering plugin record/tree. |
+| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth omp` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes omp's private SQLite credential row; apply only compiles and installs it. |
+| [`kimi-reconcile/`](kimi-reconcile/) | `@h82/kimi-reconcile` | Historical-name apply helper that overlays declared TOML settings leaves. It has no Kimi Code plugin contract. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
-| [`opencode-mxm4-haptic/`](opencode-mxm4-haptic/) | `@h82/opencode-mxm4-haptic` | OpenCode plugin that pulses MX Master 4 haptics on OpenCode events (e.g. `session.idle` → `COMPLETED`). Forwards waveforms to the `mxm4-hapticd` daemon via a bundled `@h82/mxm4-haptic`. |
-| [`opencode-playwright-cli-session-injection/`](opencode-playwright-cli-session-injection/) | `@h82/opencode-playwright-cli-session-injection` | OpenCode plugin that sets `PLAYWRIGHT_CLI_SESSION = opencode-<hash8>` (first 8 hex chars of the SHA-1 of the raw `cwd` string) via the `shell.env` hook, giving each project a stable, isolated `playwright-cli` browser session. Cross-platform. |
-| [`opencode-scratch-guard/`](opencode-scratch-guard/) | `@h82/opencode-scratch-guard` | OpenCode plugin that enforces the `AGENTS.md` temp-file policy: injects a per-user scratch dir as `$TMPDIR` via `shell.env`, and denies the shared system temp (`/tmp`, `/var/tmp`, `/dev/shm`) for `bash`/`write`/`edit`/`read` via `tool.execute.before`. Mode via `OPENCODE_SCRATCH_GUARD` (`enforce`/`warn`/`off`). Cross-platform. |
-| [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases (version, per-platform asset URL, sha256) into the static `.chezmoidata` release lock, so a source-state read needs no network. Standalone today — apply does not consume it yet; see its README for resolver-kind status. |
+| [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
 
 ## Toolchain: Vite+
 
@@ -114,18 +111,12 @@ edits replay a stale cached build.
 `figma-auth` is installed on Linux/macOS by
 `run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
 is never run during apply. The Figma MCP's headerless OAuth entry comes from
-`.chezmoidata/agents.yaml`; invoke `figma-auth opencode`, `figma-auth pi`, or
-`figma-auth kimi`
-manually to seed each harness's native OAuth store. The targets are respectively
-`~/.local/share/opencode/mcp-auth.json` and
-`~/.pi/agent/mcp-auth/<sha256("figma")[0:16]>.json`; writes are private and
-atomic. Kimi writes its native client, token, and discovery documents under
-`$KIMI_CODE_HOME/credentials/mcp/` (default `~/.kimi-code/credentials/mcp/`),
-preserving discovery metadata when a fresh flow does not replace it. A
-soft-skipped build preserves the installed executable and, under
-`run_onchange` semantics, retries only after an input change or
-`chezmoi apply --force`; the manual compile command above is the non-deploying
-alternative.
+`.chezmoidata/agents.yaml`. Run `figma-auth omp` manually to seed or refresh the
+`https://mcp.figma.com/mcp` row in `~/.omp/agent/agent.db`; the transaction
+preserves every unrelated row. A soft-skipped build preserves the installed
+executable and, under `run_onchange` semantics, retries only after an input
+change or `chezmoi apply --force`. The manual compile command above is the
+non-deploying alternative.
 
 ## Lint + format + test
 

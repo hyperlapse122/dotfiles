@@ -1,21 +1,17 @@
 import { ResolutionError } from "./github.js";
-import { ALL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
+import type { PlatformKey } from "./platforms.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
 
 export { ResolutionError };
 
 /**
- * Vendor manifest resolution — the three non-registry sources resolved at
+ * Vendor manifest resolution — the two non-registry sources resolved at
  * render time today:
  *
  * - claude: downloads.claude.ai `latest` release id + per-id `manifest.json`
  *   carrying per-platform binary name, sha256 checksum, and size. The
  *   manifest's platform ids map onto lock keys, with the musl builds landing
  *   in the `-musl` keys (KTD11).
- * - antigravity (agy): one GCS manifest per platform carrying `url` and a
- *   `sha512` digest. chezmoi externals verify sha256 only, so the sha512 is
- *   recorded as published and `sha256` stays null — exactly the behaviour of
- *   today's template, which records it without enforcing.
  * - winbox: MikroTik's LATEST.4 endpoint, a bare version string. Upstream
  *   publishes no digest anywhere, so the entry is version-only.
  */
@@ -38,13 +34,13 @@ async function fetchText(source: string, url: string): Promise<string> {
   return (await fetchOrThrow(source, url)).text();
 }
 
-const HEX: Readonly<Record<64 | 128, RegExp>> = { 64: /^[0-9a-f]{64}$/, 128: /^[0-9a-f]{128}$/ };
+const SHA256 = /^[0-9a-f]{64}$/;
 
-/** Lowercase hex of the requested length, or null rather than a bad digest. */
-function normalizeHex(digest: unknown, length: 64 | 128): string | null {
+/** Lowercase hex sha256, or null rather than a bad digest. */
+function normalizeSha256(digest: unknown): string | null {
   if (typeof digest !== "string") return null;
   const hex = digest.toLowerCase();
-  return HEX[length].test(hex) ? hex : null;
+  return SHA256.test(hex) ? hex : null;
 }
 
 /** Manifest platform id -> lock key, in deterministic iteration order. */
@@ -99,55 +95,12 @@ async function resolveClaude(name: string, spec: ToolSpec): Promise<LockedTool> 
     }
     artifacts[key] = {
       url: `${spec.source}/${id}/${platformId}/${entry.binary}`,
-      sha256: normalizeHex(entry.checksum, 64),
+      sha256: normalizeSha256(entry.checksum),
       ...(typeof entry.size === "number" ? { size: entry.size } : {}),
     };
   }
 
   return { kind: spec.kind, source: spec.source, version: manifest.version, artifacts };
-}
-
-interface AntigravityManifest {
-  readonly version: string;
-  readonly url: string;
-  readonly sha512: string;
-}
-
-async function resolveAntigravity(name: string, spec: ToolSpec): Promise<LockedTool> {
-  const artifacts: Partial<Record<PlatformKey, LockedArtifact>> = {};
-  let version: string | undefined;
-
-  // Fetch all platforms concurrently, then validate in ALL_PLATFORMS order so
-  // the error that surfaces is identical to sequential resolution.
-  const settled = await Promise.allSettled(
-    ALL_PLATFORMS.map((platform) =>
-      fetchJson(spec.source, `${spec.source}/${platform.os}_${platform.arch}.json`),
-    ),
-  );
-
-  for (const [index, platform] of ALL_PLATFORMS.entries()) {
-    const result = settled[index]!;
-    if (result.status === "rejected") throw result.reason;
-    const platformId = `${platform.os}_${platform.arch}`;
-    const manifest = result.value as AntigravityManifest;
-    if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {
-      throw new ResolutionError(spec.source, `${name}: ${platformId} manifest missing fields`);
-    }
-    if (version === undefined) version = manifest.version;
-    if (manifest.version !== version) {
-      throw new ResolutionError(
-        spec.source,
-        `${name}: platform manifests disagree on version (${version} vs ${manifest.version})`,
-      );
-    }
-    artifacts[platformKey(platform)] = {
-      url: manifest.url,
-      sha256: null,
-      sha512: normalizeHex(manifest.sha512, 128),
-    };
-  }
-
-  return { kind: spec.kind, source: spec.source, version: version as string, artifacts };
 }
 
 async function resolveWinbox(name: string, spec: ToolSpec): Promise<LockedTool> {
@@ -162,8 +115,6 @@ export async function resolveVendorManifest(name: string, spec: ToolSpec): Promi
   switch (spec.vendor) {
     case "claude":
       return resolveClaude(name, spec);
-    case "antigravity":
-      return resolveAntigravity(name, spec);
     case "winbox":
       return resolveWinbox(name, spec);
     default:

@@ -56,6 +56,7 @@ jobs:
             ".chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl:auth.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
             ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
+            ".chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl:agent-plugins.sh" \
             "dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl:haptic.ts"
           do
             source_path=${item%%:*}
@@ -74,15 +75,20 @@ jobs:
             execute-template \
             < ".chezmoiscripts/70-agents/run_after_config-omp-settings.ps1.tmpl" \
             > "$RUNNER_TEMP/settings.ps1"
-          chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" "$RUNNER_TEMP/settings.sh"
-      - name: Test OMP reconciliation and haptics
-        run: >-
-          .ci/test-omp-agent-reconcile.sh
-          "$RUNNER_TEMP/auth.sh"
-          "$RUNNER_TEMP/plugins.sh"
-          "$RUNNER_TEMP/haptic.ts"
-          "$RUNNER_TEMP/settings.sh"
-          "$RUNNER_TEMP/settings.ps1"
+          chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
+            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/agent-plugins.sh"
+      - name: Test OMP reconciliation, haptics, and plugin installer
+        run: |
+          set -euo pipefail
+          .ci/test-omp-agent-reconcile.sh \
+            "$RUNNER_TEMP/auth.sh" \
+            "$RUNNER_TEMP/plugins.sh" \
+            "$RUNNER_TEMP/haptic.ts" \
+            "$RUNNER_TEMP/settings.sh" \
+            "$RUNNER_TEMP/settings.ps1"
+          .ci/smoke-agent-plugin-installer.sh \
+            "$RUNNER_TEMP/agent-plugins.sh" \
+            "$RUNNER_TEMP/agent-plugin-smoke"
 
   ts-workspace:
     name: TypeScript workspace (packages/)

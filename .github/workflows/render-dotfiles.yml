@@ -2,8 +2,7 @@ name: Render dotfiles
 
 # On every pull request and push to main, actually run `chezmoi apply --init` on all four target
 # platforms and capture what chezmoi renders, so a reviewer can eyeball the real
-# output of any template change (e.g. the opencode plugin versions now resolved
-# from GitHub at apply time) without a local checkout:
+# output of any template change without a local checkout:
 #   * Fedora + Ubuntu — slim container images (`apply` / `render-internals`).
 #   * macOS           — a native `macos-latest` runner (`apply-macos`); a
 #                       container cannot provide a `darwin` chezmoi, and darwin-only
@@ -24,12 +23,11 @@ name: Render dotfiles
 # rendered bash/sh script across Fedora, Ubuntu AND macOS, and `lint-powershell`
 # runs PSScriptAnalyzer over the Windows `.ps1` files.
 #
-# No real 1Password or GitHub PAT is used: a PATH-local dummy `op` satisfies
-# `onepasswordRead` / `onepassword`, a dummy `mise` satisfies the container
-# fast-path in .install-prerequisites.sh, and GitHub API calls (gitHubLatestTag
-# and the .chezmoiexternals release lookups) authenticate with the workflow's
-# built-in GITHUB_TOKEN. Artifacts are short-lived (retention-days: 3) — a
-# review aid, not a release artifact.
+# No real 1Password or GitHub PAT is used. A PATH-local dummy `op` satisfies
+# `onepasswordRead` / `onepassword`, and a dummy `mise` satisfies the container
+# fast path in .install-prerequisites.sh. Source rendering reads external
+# versions, URLs, and digests only from `.chezmoidata/releases.json`. Artifacts
+# are short-lived (retention-days: 3) and are review aids, not release artifacts.
 
 on:
   push:
@@ -50,12 +48,9 @@ defaults:
     shell: bash
 
 env:
-  # chezmoi reads CHEZMOI_GITHUB_ACCESS_TOKEN / GITHUB_ACCESS_TOKEN / GITHUB_TOKEN
-  # (in that order) for GitHub API calls. The built-in token lifts the anonymous
-  # 60 req/h limit so gitHubLatestTag and the .chezmoiexternals release lookups
-  # do not flake. chezmoi is installed at its latest release — the externals use
-  # recent template functions (gitHubReleaseAssetURL, getRedirectedURL) that an
-  # older pinned chezmoi would not define.
+  # Bootstrap commands can use the workflow token to download the current
+  # chezmoi release. Template rendering itself performs no GitHub release
+  # lookup; the committed release lock is authoritative.
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -90,8 +85,7 @@ jobs:
       - name: Install chezmoi + dummy op/mise
         run: |
           set -euxo pipefail
-          # Latest chezmoi via the README bootstrap URL (externals rely on recent
-          # template functions like gitHubReleaseAssetURL / getRedirectedURL).
+          # Use the current chezmoi release to exercise current render behavior.
           sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
           chezmoi --version
 
@@ -141,10 +135,8 @@ jobs:
 
           # Non-fatal: --keep-going renders everything it can and reports a
           # non-zero rc if ANY managed file errors. We surface that rc but do not
-          # fail the job here — the "Assert opencode plugin versions" step is the
-          # authoritative gate (it fails the job if the templates this PR touches
-          # did not render). This keeps an unrelated secret-file quirk from
-          # reddening the render check.
+          # fail the job here — targeted assertion steps below are the
+          # authoritative gates for templates changed by a PR.
           #
           # Feed blank lines on stdin with --no-tty: the Fedora/Ubuntu config template
           # calls promptString for the LUKS passphrase (and, on Ubuntu, for the
@@ -188,49 +180,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-      - name: Assert Pi direct-provider baseline in real containers
-        run: |
-          set -euxo pipefail
-          out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
-          pi_models="${out}/.pi/agent/models.json"
-          test -f "${pi_models}"
-          jq -e '. == {"providers": {}}' "${pi_models}" >/dev/null
-
-      - name: Assert rendered agent and service configuration
-        run: |
-          set -euxo pipefail
-          cfg="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.config/opencode"
-          for f in opencode.json tui.json; do
-            test -f "${cfg}/${f}"
-            jq empty "${cfg}/${f}"                       # valid JSON
-            if grep -q '{{' "${cfg}/${f}"; then
-              echo "::error::${f} still contains an unrendered template" >&2
-              exit 1
-            fi
-            # Every package plugin entry must be PINNED — proving the render
-            # resolved a concrete ref rather than leaving the plugin floating. Three
-            # pinned forms are legal (see AGENTS.md):
-            #   npm:   <name>@<semver>                      optionally .../tui
-            #   git:   <name>@git+https://…#<version-tag>   the TAG is the pin
-            #   local: <name>@file:<path>/v<semver>         versioned archive path
-            # A bare name, range, unpinned git ref, or unversioned local path fails.
-            jq -e '.plugin | all(
-              test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$") or
-              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$") or
-              test("@file:/[^[:space:]]+/v[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$")
-            )' "${cfg}/${f}" >/dev/null
-          done
-
-          opencode_cfg="${cfg}/opencode.json"
-          jq -e '[.plugin[] | select(test("^@ex-machina/opencode-anthropic-auth@[0-9]+\\.[0-9]+\\.[0-9]+"))] | length == 1' "${opencode_cfg}" >/dev/null
-          jq -e '.provider | has("anthropic") | not' "${opencode_cfg}" >/dev/null
-          {
-            echo "### opencode plugins (${{ matrix.os }})"
-            echo '```json'
-            jq -c '.plugin' "${cfg}/opencode.json"
-            jq -c '.plugin' "${cfg}/tui.json"
-            echo '```'
-          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Assert LUKS TPM2 tool renders the shared dracut backend
         run: |
@@ -331,11 +280,6 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      # The rendered pi-scrub builder is smoke-executed below with a tiny mise
-      # compatibility shim, so give both distro containers one known Node/npm.
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
 
       - name: Install chezmoi + dummy op
         run: |
@@ -453,18 +397,18 @@ jobs:
             exit 1
           fi
 
-      - name: Assert AGY compound-engineering plugin contract
+      - name: Assert surviving compound-engineering plugin contract
         run: |
           set -euo pipefail
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
           test -f "${rendered}"
           test ! -e "${rendered}.render-error.txt"
-          grep -E '"agy:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
-          grep -F 'agy plugin install "$agy_source"' "${rendered}"
-          grep -F 'agy plugin validate "$agy_source"' "${rendered}"
+          grep -E '"claude:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
+          grep -E '"codex:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
+          ! grep -qE '"(agy|pi|opencode|kimi|omo):compound-engineering:' "${rendered}"
           bash -n "${rendered}"
-          "${GITHUB_WORKSPACE}/.ci/smoke-agy-plugin-installer.sh" \
-            "${rendered}" "${RUNNER_TEMP}/agy-plugin-smoke"
+          "${GITHUB_WORKSPACE}/.ci/smoke-agent-plugin-installer.sh" \
+            "${rendered}" "${RUNNER_TEMP}/agent-plugin-smoke"
 
       - name: Assert mxm4-haptic plugin rows are container-filtered
         run: |
@@ -475,9 +419,9 @@ jobs:
           # fact true), and the mxm4-haptic marketplaces are container: skip -> their rows
           # MUST be filtered out here (no MX Master 4 in a container). This proves the
           # container gate; the compound-engineering row above (container: keep) proves
-          # rows still render. The linux-only positive render is covered outside CI, like
-          # the pre-existing claude mxm4-haptic row (also container: skip, untested here).
-          if grep -qE '"(codex|agy):mxm4-haptic:' "${rendered}"; then
+          # rows still render. The Linux-host positive path runs in ci.yml's
+          # native omp-agent-integration job.
+          if grep -qE '"(claude|codex):mxm4-haptic:' "${rendered}"; then
             echo "mxm4-haptic plugin row rendered in a container (marketplace is container: skip)" >&2
             exit 1
           fi
@@ -613,46 +557,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-      - name: Assert rendered agent and service configuration
-        run: |
-          set -euxo pipefail
-          cfg="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.config/opencode"
-          for f in opencode.json tui.json; do
-            test -f "${cfg}/${f}"
-            jq empty "${cfg}/${f}"
-            if grep -q '{{' "${cfg}/${f}"; then
-              echo "::error::${f} still contains an unrendered template" >&2
-              exit 1
-            fi
-            jq -e '.plugin | all(
-              test("@[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$") or
-              test("@git\\+https://[^#]+#[A-Za-z0-9._-]*[0-9]+\\.[0-9]+\\.[0-9]+$") or
-              test("@file:/[^[:space:]]+/v[0-9]+\\.[0-9]+\\.[0-9]+(/tui)?$")
-            )' "${cfg}/${f}" >/dev/null
-          done
-
-          opencode_cfg="${cfg}/opencode.json"
-          jq -e '[.plugin[] | select(test("^@ex-machina/opencode-anthropic-auth@[0-9]+\\.[0-9]+\\.[0-9]+"))] | length == 1' "${opencode_cfg}" >/dev/null
-          jq -e '.provider | has("anthropic") | not' "${opencode_cfg}" >/dev/null
-
-          pi_models="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/models.json"
-          test -f "${pi_models}"
-          jq -e '. == {"providers": {}}' "${pi_models}" >/dev/null
-
-          pi_settings="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.pi/agent/settings.json"
-          test -f "${pi_settings}"
-          jq -e '
-            .defaultProvider == "zai" and
-            .defaultModel == "glm-5.2" and
-            (.packages | index("npm:@gotgenes/pi-anthropic-auth") != null)
-          ' "${pi_settings}" >/dev/null
-          {
-            echo "### opencode plugins (macos)"
-            echo '```json'
-            jq -c '.plugin' "${cfg}/opencode.json"
-            jq -c '.plugin' "${cfg}/tui.json"
-            echo '```'
-          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Render .chezmoiscripts and .chezmoiexternals
         run: |
@@ -692,18 +596,18 @@ jobs:
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Assert AGY compound-engineering plugin contract
+      - name: Assert surviving compound-engineering plugin contract
         run: |
           set -euo pipefail
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
           test -f "${rendered}"
           test ! -e "${rendered}.render-error.txt"
-          grep -E '"agy:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
-          grep -F 'agy plugin install "$agy_source"' "${rendered}"
-          grep -F 'agy plugin validate "$agy_source"' "${rendered}"
+          grep -E '"claude:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
+          grep -E '"codex:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
+          ! grep -qE '"(agy|pi|opencode|kimi|omo):compound-engineering:' "${rendered}"
           bash -n "${rendered}"
-          "${GITHUB_WORKSPACE}/.ci/smoke-agy-plugin-installer.sh" \
-            "${rendered}" "${RUNNER_TEMP}/agy-plugin-smoke"
+          "${GITHUB_WORKSPACE}/.ci/smoke-agent-plugin-installer.sh" \
+            "${rendered}" "${RUNNER_TEMP}/agent-plugin-smoke"
 
       - name: Assert mxm4-haptic rows are linux-only (absent on macos)
         run: |
@@ -711,7 +615,7 @@ jobs:
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
           test -f "${rendered}"
           # The mxm4-haptic marketplaces are os:[linux]; their rows must NOT render on macos.
-          if grep -qE '"(codex|agy):mxm4-haptic:' "${rendered}"; then
+          if grep -qE '"(claude|codex):mxm4-haptic:' "${rendered}"; then
             echo "mxm4-haptic plugin row leaked into the macos render (marketplace is os:[linux])" >&2
             exit 1
           fi
@@ -754,9 +658,8 @@ jobs:
           $bindir = Join-Path $env:RUNNER_TEMP 'bin'
           New-Item -ItemType Directory -Force -Path $bindir | Out-Null
 
-          # Latest chezmoi straight from its GitHub release (the .chezmoiexternals
-          # templates rendered below use recent template functions an older pinned
-          # build would not define). browser_download_url is public, so no auth.
+          # Use the current chezmoi release to exercise current render behavior.
+          # browser_download_url is public, so authentication is optional.
           $hdr = @{ 'User-Agent' = 'gh-actions' }
           if ($env:GITHUB_TOKEN) { $hdr['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
           $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/twpayne/chezmoi/releases/latest' -Headers $hdr
@@ -841,23 +744,6 @@ jobs:
           # robocopy's exit 1 (success) must not fail the step.
           exit 0
 
-      - name: Assert OpenCode config on Windows
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-files'
-
-          $opencodePath = Join-Path $out '.config\opencode\opencode.json'
-          if (-not (Test-Path $opencodePath)) { throw "rendered OpenCode config missing: $opencodePath" }
-          $opencode = Get-Content -Raw $opencodePath | ConvertFrom-Json
-          $anthropicAuthPlugins = @($opencode.plugin | Where-Object { $_ -match '^@ex-machina/opencode-anthropic-auth@[0-9]+\.[0-9]+\.[0-9]+' })
-          if ($anthropicAuthPlugins.Count -ne 1) { throw 'Pinned Anthropic auth plugin missing from OpenCode config' }
-          if ($null -ne $opencode.provider.anthropic) {
-            throw 'Unexpected Anthropic provider in OpenCode config on Windows'
-          }
-
-          $piModelsPath = Join-Path $out '.pi\agent\models.json'
-          if (Test-Path $piModelsPath) { throw 'Pi models target must be absent on Windows' }
-
       - name: Upload rendered files
         if: always()
         uses: actions/upload-artifact@v7
@@ -908,6 +794,51 @@ jobs:
           # Per-template render failures are captured as *.render-error.txt inside
           # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
           exit 0
+
+      - name: Assert Windows compound-engineering and omp integration
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
+          $externals = Join-Path $out '.chezmoiexternals\ai-agents.toml'
+          $updater = Join-Path $out '.chezmoiscripts\70-agents\run_onchange_after_update-omp-plugins.ps1'
+          $settings = Join-Path $out '.chezmoiscripts\70-agents\run_after_config-omp-settings.ps1'
+          foreach ($path in @($externals, $updater, $settings)) {
+            if (-not (Test-Path $path)) { throw "missing rendered survivor path: $path" }
+            if (Test-Path "$path.render-error.txt") { throw "render failed: $path" }
+          }
+
+          $match = [regex]::Match(
+            (Get-Content -Raw $externals),
+            '\["(?<relative>\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+)"\]'
+          )
+          if (-not $match.Success) { throw 'compound-engineering external missing on Windows' }
+
+          $fakeHome = Join-Path $env:RUNNER_TEMP 'omp-plugin-home'
+          $source = Join-Path $fakeHome ($match.Groups['relative'].Value -replace '/', '\')
+          New-Item -ItemType Directory -Force -Path (Join-Path $source '.claude-plugin') | Out-Null
+          Set-Content -Path (Join-Path $source '.claude-plugin\marketplace.json') -Value '{}'
+
+          $fakeBin = Join-Path $env:RUNNER_TEMP 'omp-plugin-bin'
+          $calls = Join-Path $env:RUNNER_TEMP 'omp-plugin-calls.txt'
+          New-Item -ItemType Directory -Force -Path $fakeBin | Out-Null
+          $omp = @(
+            '@echo off',
+            ('echo %*>>"{0}"' -f $calls),
+            'exit /b 0'
+          ) -join "`r`n"
+          Set-Content -Path (Join-Path $fakeBin 'omp.cmd') -Value $omp -Encoding Ascii
+
+          $env:HOME = $fakeHome
+          $env:USERPROFILE = $fakeHome
+          $env:PATH = "$fakeBin;$env:PATH"
+          & pwsh -NoProfile -File $updater
+          if ($LASTEXITCODE -ne 0) { throw "omp updater failed ($LASTEXITCODE)" }
+          $actual = @(Get-Content $calls)
+          if ($actual.Count -ne 2) { throw "expected two omp calls, got $($actual.Count)" }
+          if ($actual[0] -ne "plugin marketplace add $source") { throw "unexpected add call: $($actual[0])" }
+          if ($actual[1] -ne 'plugin install --scope user compound-engineering@compound-engineering-plugin') {
+            throw "unexpected install call: $($actual[1])"
+          }
 
       - name: Upload rendered internals
         if: always()

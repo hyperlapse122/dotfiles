@@ -1,7 +1,0 @@
-{{- /* ~/.pi/agent/models.json — managed direct-provider baseline for Pi.
-
-       The data-driven .agents.pi.models object intentionally contains an empty
-       providers map, leaving Pi's built-in provider catalog and native endpoints
-       untouched. This 0444 target deliberately does not call the secret resolver:
-       `agents.pi.models` must contain no `op://` values. */ -}}
-{{ .agents.pi.models | toPrettyJson }}

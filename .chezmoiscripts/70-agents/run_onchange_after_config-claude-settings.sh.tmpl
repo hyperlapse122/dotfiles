@@ -13,9 +13,8 @@
 # would fight all three. The repo's standing answer ("add capabilities as a
 # plugin, not settings") does not cover this case, because a plugin can register
 # hooks and commands but cannot set a settings VALUE like effortLevel. So this
-# script instead read-merge-WRITES only the declared keys, exactly the shape
-# config-pi-auth uses for pi's live-written auth.json (see the AGENTS.md
-# "Claude Code plugins" carve-out).
+# script instead read-merge-writes only the declared top-level keys. This is the
+# per-key assertion boundary for a vendor-owned live file.
 #
 # The merge is a top-level jq `+` (NOT the deep `*`): the declared keys REPLACE
 # their same-named top-level entries wholesale, and every other top-level key —
@@ -27,14 +26,11 @@
 # so a top-level overlay is the correct shape (not the documented permissions.*
 # keys).
 #
-# Mode: written at 0644 (owner-writable) so BOTH this script and Claude Code /
-# aoe can keep updating it. The values are non-secret, so unlike config-pi-auth's
-# 0600 there is no reason to lock it down — and locking it would stop the
-# co-writers.
-#
-# jq is shared with config-pi-auth (auth.json): both are top-level JSON overlay
-# merges. jq is declared in .chezmoidata/packages.yaml (both distros) so a fresh
-# host has it before these after-phase scripts run.
+# Mode: 0644 (owner-writable) so this script, Claude Code, and aoe can update it.
+# The values are non-secret, and locking the file would stop the co-writers.
+# `jq` performs the top-level JSON overlay. It is declared in
+# .chezmoidata/packages.yaml for both distros, so a fresh host has it before
+# these after-phase scripts run.
 #
 # onchange trigger: the declared values below (baked in via `toJson`) ARE the
 # trigger — there are no secrets and no source-dir dependency beyond
@@ -54,11 +50,10 @@
 # merge is NOT retried until the rendered content changes — re-run by hand or
 # `chezmoi apply --force`.
 #
-# POSIX-only (`ne windows`) and KEPT in containers, like config-pi-auth: Claude
-# Code is a first-class CLI here and its settings are wanted in a devbox (the
-# container block skips only *claude-plugins.sh). It does NOT need the `claude`
-# binary on PATH — it writes settings.json directly, so the values land even on
-# a first apply before Claude Code has run (as long as jq is present).
+# POSIX-only (`ne windows`) and kept in containers. Claude Code is a first-class
+# CLI here, and its settings are wanted in a devbox. The script does not need
+# the `claude` binary on PATH because it writes settings.json directly. It can
+# land values before Claude has run when `jq` is present.
 
 set -euo pipefail
 

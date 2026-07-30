@@ -57,57 +57,15 @@
 # it through verbatim, and an unknown name makes mxm4-haptic exit 2 (a silent
 # no-op, since the hook wrapper always exits 0).
 #
-# The map mirrors the OpenCode plugin's (packages/opencode-mxm4-haptic/
-# src/index.ts), so both agents buzz identically:
+# Claude maps native hooks to waveforms:
 #
-#   stop        <- session.idle       : the agent finished its turn.
-#   stopFailure <- session.error      : the turn ended on an API error.
-#   notification<- permission.updated : the agent is waiting on YOU to decide.
-#   question    <- the Question tool  : the agent asked you to pick an option
-#                                       (Claude Code's AskUserQuestion tool).
+#   stop         <- Stop               : the root turn finished.
+#   stopFailure  <- StopFailure        : the root turn failed.
+#   notification <- Notification       : the user must decide.
+#   question     <- AskUserQuestion    : the user must answer.
 #
-# NOTE the sub-agent gating comes free here. The OpenCode plugin must inspect
-# each session's parentID to avoid buzzing once per sub-agent during a fan-out;
-# Claude Code fires Stop/StopFailure for the ROOT agent ONLY (a sub-agent fires
-# SubagentStop, which this plugin deliberately leaves unhooked), so there is no
-# gating logic to write. Hooking SubagentStop would buzz once per sub-agent —
-# don't.
-#
-# haptic.pi — pi extension event -> waveform, for the mxm4-haptic pi EXTENSION
-# (dot_pi/agent/extensions/mxm4-haptic.ts.tmpl, auto-discovered by pi from
-# ~/.pi/agent/extensions/ — no build, loaded via jiti). Same rule as
-# haptic.claude: each value MUST be one of the 16 waveform names in
-# crates/mxm4-haptic/src/lib.rs (WAVEFORMS); the template's fail guard aborts
-# the apply on a typo'd name. pi has no shell hooks and no hook manifest, so
-# unlike Claude Code the waveforms render directly into the extension's .ts as
-# baked-in consts (not a JSON manifest).
-#
-# The map mirrors haptic.claude / the OpenCode plugin so all THREE agents buzz
-# identically:
-#
-#   settled  <- agent_settled         : the agent finished its turn and is idle
-#                                       waiting for you (pi's equivalent of
-#                                       Claude Stop / OpenCode session.idle).
-#   failed   <- agent_settled after   : the run died on an API error (the last
-#               an error response       provider response >= 400) — pi's best
-#                                       equivalent of Claude StopFailure /
-#                                       OpenCode session.error. There is no
-#                                       dedicated "turn failed" event in pi,
-#                                       so the extension tracks the last
-#                                       after_provider_response status and
-#                                       switches the waveform on settle.
-#   question <- the ask_user tool     : the agent wants you to pick an option /
-#                                       answer (pi-ask-user). pi has no
-#                                       separate permission/elicitation event,
-#                                       so this one hook collapses Claude's
-#                                       Notification(elicitation) +
-#                                       PreToolUse(AskUserQuestion).
-#
-# Sub-agent gating is free here too, and for a different reason than the other
-# two: pi-subagents spawns each child as a SEPARATE pi process in --mode json -p
-# (headless, ctx.hasUI === false), so gating every handler on ctx.hasUI excludes
-# children — no parentID inspection, no child-status polling. The same gate also
-# silences `pi -p` / script runs (no human watching in real time).
+# Claude Code fires Stop and StopFailure for the root agent only. A subagent
+# fires SubagentStop, which this plugin deliberately leaves unhooked.
 haptic:
   daemon:
     pacingMs: 180
@@ -123,37 +81,15 @@ haptic:
     stopFailure: MAD
     notification: RINGING
     question: RINGING
-  pi:
-    settled: COMPLETED
-    failed: MAD
-    question: RINGING
-  # haptic.omp — oh-my-pi (omp), a fork of pi: the mxm4-haptic EXTENSION
+  # haptic.omp — oh-my-pi (omp): the mxm4-haptic extension
   # (dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl -> ~/.omp/agent/extensions)
-  # uses omp's pi-compatible pi.on(...) event API, so it reads the same waveform
-  # keys as haptic.pi. Each value MUST be one of the 16 names in
-  # crates/mxm4-haptic/src/lib.rs (WAVEFORMS); the template's fail guard aborts
-  # the apply on a typo.
-  omp:
-    settled: COMPLETED
-    failed: MAD
-    question: RINGING
-  # haptic.agy — Antigravity CLI (agy) hook event -> waveform, for the mxm4-haptic
-  # agy PLUGIN (dot_local/share/agy-plugins/mxm4-haptic/, installed by the generic
-  # install-agent-plugins runner as agy's native bundle). agy's hooks component is a
-  # ROOT hooks.json (NOT hooks/hooks.json — verified: `agy plugin validate` skips a
-  # hooks/ dir but processes a root hooks.json). Same waveform rule as haptic.claude:
-  # each value MUST be one of the 16 names in crates/mxm4-haptic/src/lib.rs
+  # uses omp's pi-compatible pi.on(...) event API. `settled` handles
+  # `agent_settled`; `failed` switches that event after a failed provider
+  # response; `question` handles `ask_user`. The extension gates every handler
+  # on `ctx.hasUI`, which excludes headless child processes and scripts. Each
+  # value MUST be one of the 16 names in crates/mxm4-haptic/src/lib.rs
   # (WAVEFORMS); the template's fail guard aborts the apply on a typo.
-  #
-  #   settled  <- Stop hook, terminationReason != error and fullyIdle : turn finished
-  #               and the agent (plus any background/sub-agent work) is idle.
-  #   failed   <- Stop hook, terminationReason == "error" or a non-empty error field.
-  #   question <- PreToolUse matching the built-in `ask_question` tool. This hook
-  #               speaks agy's allow/deny protocol, so it ALWAYS returns
-  #               {"decision":"allow"} (fail-open) — a malformed response would deny
-  #               the tool and break agy. Sub-agent gating is free: the Stop hook
-  #               only buzzes when fullyIdle is true.
-  agy:
+  omp:
     settled: COMPLETED
     failed: MAD
     question: RINGING

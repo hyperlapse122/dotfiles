@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Safely reconcile selected Kimi Code settings and managed plugins.",
+  "description": "Target-neutral TOML-leaf settings reconciler consumed by aoe (kimi-historical binary name).",
   "license": "UNLICENSED",
   "engines": { "node": ">=24" },
   "dependencies": { "smol-toml": "1.7.0" },

@@ -8,14 +8,14 @@
 # dot_agents/private_readonly_agents.toml.tmpl).
 #
 # onchange trigger: TWO relevant inputs, because agents.yaml also contains
-# unrelated pi/OpenCode data.
+# unrelated omp and marketplace data.
 #   1. The fingerprint block embeds sha256s of the RAW agents.toml source
 #      template and shared MCP applicability helper, catching target-format,
 #      host-gate, and local-skill edits without resolving any onepasswordRead
 #      value.
 #   2. A comment-only selective hash covers ONLY the unresolved agents.mcp data.
-#      An MCP edit re-triggers the install, while pi/OpenCode-only edits in the
-#      same data file do not.
+#      An MCP edit re-triggers the install, while omp-only or marketplace edits
+#      in the same data file do not.
 # The former remote skills are no longer dotagents-managed — they are chezmoi
 # externals whose list is data in .chezmoidata/agents.yaml (agents.skills.external)
 # and deploy into ~/.agents/skills/<name> during the file phase, so a skill release
@@ -44,15 +44,14 @@ set -euo pipefail
 #
 # Selective unresolved DATA trigger. toJson is deterministic, and these values
 # contain op:// references rather than resolved secrets. Keeping this separate
-# from the raw-file fingerprint prevents unrelated pi/OpenCode data centralized
-# in agents.yaml from re-running dotagents.
+# from the raw-file fingerprint prevents unrelated omp and marketplace data in
+# agents.yaml from re-running dotagents.
 {{ $dotagentsData := dict "mcp" .agents.mcp -}}
 # dotagents-data-sha256: {{ $dotagentsData | toJson | sha256sum }}
 #
-# NOT provisioned here: everyinc/compound-engineering-plugin. It is installed
-# through each agent's native plugin mechanism instead — see the sibling generic
-# install-agent-plugins script (Claude Code + Codex) and the opencode.json
-# `plugin` array (OpenCode).
+# NOT provisioned here: everyinc/compound-engineering-plugin. Each surviving
+# harness installs it through its native plugin mechanism. See the sibling
+# generic installer (Claude Code + Codex) and both omp updater scripts.
 
 skip() { exit 0; }
 
@@ -85,9 +84,8 @@ mkdir -p "$HOME/.claude" "$HOME/.codex" || true
 # come from mise and this non-interactive script never ran `mise activate`, any
 # `npm` (or `npx`) dotagents shells out to resolves to the mise-managed one
 # instead of failing with "npm: command not found". The
-# `--no-config --no-env --no-hooks` flags keep it independent of whatever mise
-# config sits in the script's cwd. (The sibling pi-extensions update resolves
-# npm the same way.)
+# `--no-config --no-env --no-hooks` flags keep it independent of any mise
+# config in the script's working directory.
 set +e
 install_output="$(mise --no-config --no-env --no-hooks exec -y bun -- bunx @sentry/dotagents --user install 2>&1)"
 install_rc=$?

@@ -19,7 +19,7 @@
 # rendered; every other string is used verbatim. So `ssid` and `psk` may each be
 # EITHER a literal ("MyHome_5G") OR a 1Password reference
 # ("op://Private/Home Wi-Fi/password"). This is the resolve-op-refs-json.tmpl
-# rule (the same one agents.yaml / opencode.json use), applied to this whole
+# rule (the same one used by agent configs), applied to this whole
 # structure — so a per-network DNS entry could even be an op:// ref too.
 #
 # Because secrets are resolved at RENDER time, the rendered tool CONTAINS the real

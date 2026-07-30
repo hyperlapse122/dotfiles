@@ -1,6 +1,3 @@
-### oh-my-openagent ###
-.omo
-
 ### Vendored monorepo build artifacts (crates/ + packages/) ###
 # Rust build artifacts
 target/
@@ -29,9 +26,6 @@ packages/*/.turbo/
 # bare `.agents`, which makes every descendant unreachable to a negation.
 .agents/*
 !.agents/skills/
-
-### pi ###
-.pi-subagents
 
 ### Compound Engineering ###
 docs/plans/.*.md

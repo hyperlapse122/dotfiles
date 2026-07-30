@@ -158,8 +158,8 @@ rate limit.
 `/run/.containerenv` or Docker's `/.dockerenv` — it deploys the cross-platform
 **CLI dotfiles only** and skips all host provisioning: no package installs, no
 `/etc` system config, no GPG / GitHub / Tailscale auth, no fonts, no KDE/GNOME
-settings, and no pro-audio realtime/system provisioning. The OpenCode plugin build and
-`dotagents` install still run (and soft-skip if their toolchains are missing).
+settings, and no pro-audio realtime/system provisioning. Surviving agent
+dotfiles and `dotagents` provisioning still run.
 This makes the repo usable as-is on CI runners and in dedicated containers that
 have their own `$HOME`.
 
@@ -220,8 +220,8 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (claude-code, codex, kimi, codegraph, gh, glab, kubectl,
-  helm, macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
+  `~/.local/bin` (claude-code, codex, codegraph, gh, glab, kubectl, helm,
+  macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
   declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
   into `~/.agents/skills/`.
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
@@ -232,18 +232,14 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   `mxm4-haptic-notify`, and `mxm4-haptic`; macOS builds only the daemon and
   client.
 - [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`).
-  `run_onchange_after_build-opencode-plugins.sh.tmpl` builds and links the
-  OpenCode plugins; `run_onchange_after_build-figma-auth.sh.tmpl` compiles the
-  standalone `figma-auth <opencode|pi>` utility into `~/.local/bin/figma-auth`.
-  The Figma MCP endpoint is declared once in `.chezmoidata/agents.yaml` and
-  renders into every agent config without embedding credentials. Apply never
-  starts its interactive OAuth flow: run `figma-auth opencode` and `figma-auth
-  pi` on demand to write each harness's private native credential file. Build
-  failures preserve
-  the last executable and retry after an input change or `chezmoi apply
-  --force`. `release-lock/` is a standalone resolver that turns external tool
-  releases into the static `.chezmoidata` release lock; it is not wired into
-  apply yet. See [`packages/README.md`](packages/README.md).
+  `run_onchange_after_build-figma-auth.sh.tmpl` compiles the standalone
+  `figma-auth omp` utility into `~/.local/bin/figma-auth`. The Figma MCP endpoint
+  is declared once in `.chezmoidata/agents.yaml` and renders without embedded
+  credentials. Apply never starts the interactive OAuth flow. Run `figma-auth
+  omp` on demand to update omp's private OAuth row. Build failures preserve the
+  last executable and retry after an input change or `chezmoi apply --force`.
+  `release-lock/` generates the static external-tool lock consumed by templates
+  and externals. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
   template (MCP servers) and any locally-authored personal skill under
   `dot_agents/skills/<name>/` (e.g. `daily-report`), deployed to
@@ -253,6 +249,36 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).
+
+## Managed agent harnesses
+
+This repository manages only **Claude**, **Codex**, and **omp**. Removing the
+Pi, Kimi Code, OpenCode, oh-my-openagent, and AGY sources does not delete
+already-deployed host files, installed binaries, or provider-side OAuth grants.
+
+The following cleanup is optional. Remove only the listed Figma data if the
+retired harnesses are no longer in use:
+
+- OpenCode: remove the top-level `figma` and `Figma` properties from
+  `~/.local/share/opencode/mcp-auth.json`. Keep the file and all other
+  properties.
+- Pi: delete
+  `~/.pi/agent/mcp-auth/5b79d0d574eedd09.json`.
+- Kimi Code: under `~/.kimi-code/credentials/mcp/`, delete the
+  `figma-16c8c86ce11b09357be35b5b-{client,tokens,discovery}.json` files and
+  `.figma-16c8c86ce11b09357be35b5b-transaction.json` when present.
+- AGY: remove only the top-level `https://mcp.figma.com/mcp` property from
+  `~/.gemini/antigravity-cli/mcp_oauth_tokens.json`. Keep the file and all
+  other properties.
+
+Local deletion does not revoke provider access. To revoke it, open Figma
+**Settings → Security → Connected apps** and revoke only the obsolete `Codex`
+registrations that correspond to these four stores. Every retired flow used
+that client name. If the entries cannot be distinguished, skip provider
+revocation rather than invalidate the current omp authorization.
+
+Do not remove omp's Figma row from `~/.omp/agent/agent.db`. The surviving
+`figma-auth omp` command owns that row.
 
 ## License
 
