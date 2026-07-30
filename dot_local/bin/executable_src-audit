@@ -39,8 +39,12 @@ garden_ls() {
 # "# <name> [branch]" = grown on disk, "#- <name>" = declared but missing.
 # A bare "." is garden's synthesized default tree for the config dir (shown
 # when no declared tree matches, e.g. an empty manifest) — not a project.
-garden_ls | sed -n 's/^# //p' | sed 's/ .*//' | grep -v '^$' | grep -v '^\.$' >"$scratch/grown" || true
-garden_ls | sed -n 's/^#- //p' | sed 's/ .*//' | grep -v '^$' | grep -v '^\.$' >"$scratch/missing" || true
+# One `garden ls` call feeds both classifications: the two greps read the same
+# listing of the same registry and on-disk state, so re-invoking garden would
+# only spawn a second process for identical output.
+ls_out="$(garden_ls)" || true
+printf '%s\n' "$ls_out" | sed -n 's/^# //p'  | sed 's/ .*//' | grep -v '^$' | grep -v '^\.$' >"$scratch/grown" || true
+printf '%s\n' "$ls_out" | sed -n 's/^#- //p' | sed 's/ .*//' | grep -v '^$' | grep -v '^\.$' >"$scratch/missing" || true
 
 rc=0
 
