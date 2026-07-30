@@ -199,6 +199,15 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": "codegraph-win32-x64.zip",
     "windows-arm64": "codegraph-win32-arm64.zip",
   },
+  kitty: {
+    "linux-amd64": "kitty-0.0.0-x86_64.txz",
+    "linux-arm64": "kitty-0.0.0-arm64.txz",
+    // Upstream ships a .dmg for macOS and no windows build at all.
+    "darwin-amd64": null,
+    "darwin-arm64": null,
+    "windows-amd64": null,
+    "windows-arm64": null,
+  },
   aoe: {
     "linux-amd64": "aoe-linux-amd64.tar.gz",
     "linux-arm64": "aoe-linux-arm64.tar.gz",

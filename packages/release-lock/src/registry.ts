@@ -226,6 +226,20 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `codegraph-${win32Os(os)}-${x64Arch(arch)}${archiveExtension(os)}`,
   },
 
+  kitty: {
+    kind: "githubRelease",
+    source: "kovidgoyal/kitty",
+    // Linux-only app bundle: upstream publishes kitty-<version>-x86_64.txz and
+    // kitty-<version>-arm64.txz, embedding the bare version (no leading `v`).
+    // macOS ships only a .dmg (chezmoi cannot extract one) and there is no
+    // windows build, so both are deliberately not locked. The linux arm64
+    // spelling is `arm64` here, NOT bufArch's `aarch64`.
+    asset: ({ os, arch }, tag) =>
+      os === "linux"
+        ? `kitty-${versionFromTag(tag)}-${arch === "amd64" ? "x86_64" : "arm64"}.txz`
+        : null,
+  },
+
   aoe: {
     kind: "githubRelease",
     source: "agent-of-empires/agent-of-empires",

@@ -55,6 +55,18 @@ src/garden.yaml
 .local/share/applications/open-design.desktop
 {{- end }}
 
+# kitty is provisioned from the upstream bundle by
+# .chezmoiscripts/00-tools/run_onchange_before_kitty.sh (the distro package no
+# longer installs it — see the kitty note in .chezmoidata/packages.yaml). Both
+# the provisioner and the launcher entry it points at only make sense on a Linux
+# host with a graphical session: a headless or non-KDE/GNOME host has no use for
+# a GPU terminal and no menu to show it in. The managed kitty.conf itself is NOT
+# gated here — it deploys everywhere and is inert without kitty.
+{{- if or (ne .chezmoi.os "linux") (not (or (eq $f.desktop "kde") (eq $f.desktop "gnome"))) }}
+.chezmoiscripts/00-tools/*kitty.sh
+.local/share/applications/kitty.desktop
+{{- end }}
+
 # Vendored source dirs: crates/ + packages/ monorepos are built/used in place,
 # never linked into $HOME (mirrors ./system above).
 ./crates
@@ -133,6 +145,11 @@ src/garden.yaml
 .chezmoiscripts/60-build/*mxm4-haptic.sh
 .chezmoiscripts/60-build/*open-design.sh
 .chezmoiscripts/90-services/*cli-proxy-api*.sh
+# No graphical session in a container, so the kitty bundle has nothing to draw
+# on. 00-tools is not wildcarded here (unlike the distro/desktop dirs above),
+# so this provisioner needs its own line.
+.chezmoiscripts/00-tools/*kitty.sh
+.local/share/applications/kitty.desktop
 # The quadlet units are host-only. Gate the containers/systemd SUBPATH only:
 # dot_config/containers/ also holds auth.json and registries.conf, which deploy
 # everywhere including containers.

@@ -488,6 +488,21 @@
           }
         }
       },
+      "kitty": {
+        "kind": "githubRelease",
+        "source": "kovidgoyal/kitty",
+        "version": "v0.48.1",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/kovidgoyal/kitty/releases/download/v0.48.1/kitty-0.48.1-x86_64.txz",
+            "sha256": "ab7d4978b146a3f4799d74fdd6fddf322e5cf93601494e3fcbed925141611963"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/kovidgoyal/kitty/releases/download/v0.48.1/kitty-0.48.1-arm64.txz",
+            "sha256": "6b0d8fe0af20ba03348e97e303f3c6084b5338bb4abd52737d8e2ffd2dba3d33"
+          }
+        }
+      },
       "kubectl": {
         "kind": "githubRelease",
         "source": "kubernetes/kubernetes",

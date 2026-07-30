@@ -1,0 +1,122 @@
+{{ if eq .chezmoi.os "linux" -}}
+
+{{- $version := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kitty")) -}}
+{{- $url := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kitty" "field" "url" "platform" "auto")) -}}
+{{- $sha256 := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kitty" "field" "sha256" "platform" "auto")) -}}
+
+#!/usr/bin/env bash
+# .chezmoiscripts/00-tools/run_onchange_before_kitty.sh.tmpl
+#
+# Provisions the locked upstream kitty app bundle. kitty is this repo's default
+# Linux terminal and is NO LONGER installed from the distro package (see the
+# kitty note in .chezmoidata/packages.yaml): the vertical tab bar the managed
+# config asks for needs kitty >= 0.48, and the Fedora stream skipped 0.44-0.46
+# and has not submitted 0.48 at all.
+#
+# Layout mirrors the versioned-payload lane beside this script (codegraph,
+# codex): versions/<version> holds one immutable tree, `current` points at the
+# live one, and ~/.local/bin carries the two entry points. Keeping `current`
+# indirect is what makes the ~/.local/bin links survive a version bump, and it
+# is also what the managed launcher entry
+# (dot_local/share/applications/kitty.desktop.tmpl) points Exec/Icon at.
+#
+# `before_` IS LOAD-BEARING, unlike the `after_` siblings in this directory.
+# The distro package installers are `run_onchange_before_fedora.sh` and
+# `run_onchange_before_ubuntu.sh`, and chezmoi's phase wins over the directory
+# number: an `after_` script here would run AFTER those installers had already
+# finished without installing kitty, so a failed download on a fresh host would
+# leave it with no terminal at all. Running in the same phase puts `00-tools`
+# ahead of `20-linux-fedora`/`40-linux-ubuntu` by path order.
+#
+# This script HARD-FAILS on every error path, which aborts the apply before
+# those installers run. A soft skip would hand a fresh host the same
+# no-terminal state the ordering above exists to prevent.
+#
+# Host gating lives entirely in .chezmoiignore (non-Linux, no KDE/GNOME desktop
+# fact, and containers all skip the rendered script), so there is no in-script
+# gate to keep in sync.
+#
+# onchange trigger: the locked version, URL and checksum are rendered into the
+# body below, so an unchanged lock renders byte-identical content and chezmoi
+# does not invoke this script at all.
+
+set -euo pipefail
+
+VERSION={{ $version | quote }}
+URL={{ $url | quote }}
+SHA256={{ $sha256 | quote }}
+
+INSTALL_DIR="$HOME/.local/share/kitty"
+BIN_DIR="$HOME/.local/bin"
+dest="$INSTALL_DIR/versions/$VERSION"
+
+fail() {
+  printf 'kitty: %s\n' "$*" >&2
+  exit 1
+}
+
+for tool in curl tar sha256sum xz; do
+  command -v "$tool" >/dev/null 2>&1 || fail "$tool is required to provision kitty"
+done
+
+mkdir -p "$INSTALL_DIR/versions" "$BIN_DIR" || fail "cannot create $INSTALL_DIR"
+
+# Remember the live tree BEFORE the flip so the prune below can keep it for one
+# more generation: a running kitty lazily loads fonts and python modules out of
+# its own tree, so pruning the version it is executing from would break the
+# session the operator is applying from.
+previous=""
+if [ -L "$INSTALL_DIR/current" ]; then
+  previous=$(readlink -f "$INSTALL_DIR/current" 2>/dev/null || printf '')
+fi
+
+if [ ! -x "$dest/bin/kitty" ]; then
+  scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}"
+  mkdir -p "$scratch_root" || fail "cannot create scratch root $scratch_root"
+  scratch=$(mktemp -d "$scratch_root/kitty-provision.XXXXXX") || fail "cannot create scratch dir"
+  # shellcheck disable=SC2064  # expand $scratch now, not at trap time
+  trap "rm -rf -- '$scratch'" EXIT
+
+  curl -fsSL --retry 3 --retry-delay 2 -o "$scratch/kitty.txz" "$URL" \
+    || fail "cannot download $URL"
+  printf '%s  %s\n' "$SHA256" "$scratch/kitty.txz" | sha256sum -c - >/dev/null 2>&1 \
+    || fail "checksum mismatch for $URL (expected $SHA256)"
+
+  stage="$scratch/stage"
+  mkdir -p "$stage" || fail "cannot create staging dir"
+  # The archive members are rooted at bin/, lib/ and share/ with no wrapping
+  # directory, so it extracts straight into the version tree.
+  tar -xJf "$scratch/kitty.txz" -C "$stage" || fail "cannot extract the kitty bundle"
+  [ -x "$stage/bin/kitty" ] || fail "extracted bundle has no bin/kitty"
+  [ -x "$stage/bin/kitten" ] || fail "extracted bundle has no bin/kitten"
+
+  rm -rf -- "$dest.new"
+  mv -- "$stage" "$dest.new" || fail "cannot stage $dest.new"
+  rm -rf -- "$dest"
+  mv -- "$dest.new" "$dest" || fail "cannot install into $dest"
+fi
+
+[ -x "$dest/bin/kitty" ] || fail "no kitty executable at $dest/bin/kitty"
+
+ln -sfn "$dest" "$INSTALL_DIR/current"
+ln -sf "$INSTALL_DIR/current/bin/kitty" "$BIN_DIR/kitty"
+ln -sf "$INSTALL_DIR/current/bin/kitten" "$BIN_DIR/kitten"
+
+# Prune superseded versions, keeping the just-installed tree and the one that
+# was live before this run. `current` lives beside versions/ rather than inside
+# it, but test -d follows symlinks, so links are skipped defensively.
+if [ -d "$INSTALL_DIR/versions" ]; then
+  for d in "$INSTALL_DIR/versions"/*; do
+    if [ -L "$d" ] || [ ! -d "$d" ]; then
+      continue
+    fi
+    if [ "$d" = "$dest" ] || [ "$d" = "$previous" ]; then
+      continue
+    fi
+    rm -rf -- "$d"
+  done
+fi
+
+printf 'kitty: provisioned %s at %s\n' "$VERSION" "$dest"
+
+{{ end -}}
