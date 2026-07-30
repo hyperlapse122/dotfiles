@@ -67,9 +67,10 @@ chmod 0755 "$fake_bin/omp"
 OMP_CALLS="$scratch/omp.calls" env HOME="$home" PATH="$fake_bin:$PATH" bash "$plugin_script"
 
 mapfile -t calls <"$scratch/omp.calls"
-[[ ${#calls[@]} -eq 2 ]]
-[[ ${calls[0]} == "plugin marketplace add $source" ]]
-[[ ${calls[1]} == "plugin install --scope user compound-engineering@compound-engineering-plugin" ]]
+[[ ${#calls[@]} -eq 3 ]]
+[[ ${calls[0]} == "plugin marketplace remove compound-engineering-plugin" ]]
+[[ ${calls[1]} == "plugin marketplace add $source" ]]
+[[ ${calls[2]} == "plugin install --scope user --force compound-engineering@compound-engineering-plugin" ]]
 
 bun "$(dirname "$0")/test-omp-haptic-extension.ts" "$haptic_extension"
 
