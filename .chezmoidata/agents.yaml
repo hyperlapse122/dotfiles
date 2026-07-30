@@ -1,22 +1,15 @@
 # .chezmoidata/agents.yaml — single source of truth for ALL agent configuration.
 #
 # Consumer map:
-#   agents.pi.models
-#     -> managed empty Pi models.json baseline on Linux/macOS workstations
 #   agents.mcp.servers
-#     -> dotagents (Claude Code + Codex), pi mcp.json, opencode.json,
-#        gemini mcp_config.json, kimi-code mcp.json
+#     -> dotagents (Claude Code + Codex) and omp mcp.json
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
-#   agents.marketplaces + agents.{claude,codex,agy}.plugins
+#   agents.marketplaces + agents.{claude,codex}.plugins
 #     -> .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh
-#        (the generic Claude Code + Codex + AGY plugin installer)
-#   agents.pi.settings / auth.providers
-#     -> managed Pi settings plus package-update and live auth merge scripts
+#        (the generic Claude Code + Codex plugin installer)
 #   agents.claude.settings
 #     -> read-merge-write of the live ~/.claude/settings.json (config-claude-settings)
-#   agents.opencode.plugins / model / smallModel / providers / ohMyOpenagent
-#     -> opencode.json and omo.jsonc ("[opencode]" block)
 #   agents.aoe
 #     -> ~/.config/agent-of-empires/config.toml, deep-merged by
 #        run_after_config-aoe.sh.tmpl via the kimi-reconcile binary
@@ -29,32 +22,25 @@
 #
 # Add or change agent configuration HERE, not in the consuming templates. Those
 # templates retain only target-specific FORMAT and live-file merge mechanics.
-# haptic.pi remains in haptic.yaml because it is haptic event data, not agent
-# configuration.
 #
 # Secrets: .chezmoidata files are static, so secret values are stored as op://
 # reference strings. resolve-op-refs-json.tmpl recursively walks maps, slices,
 # and scalars: a string starting exactly with op:// is onepasswordRead-resolved
 # at render time; every other value and type passes through unchanged. This is
 # field-independent and therefore works for provider options, nested headers,
-# MCP headers, and pi auth without secret-key-specific template branches.
-#
-# Naming: keys owned by this repo use camelCase. Keys below
-# agents.opencode.ohMyOpenagent.{agents,categories} and provider definitions are
-# upstream schema identifiers and are emitted VERBATIM (for example
-# multimodal-looker, fallback_models, tool_call). Never normalize them.
+# and MCP headers without secret-key-specific template branches.
 #
 # install-dotagents-skills hashes only the unresolved agents.mcp data alongside
 # the raw agents.toml template, so an MCP edit re-triggers dotagents without
-# coupling pi/OpenCode-only changes to it. Rendered secrets are not
+# coupling other harness-only changes to it. Rendered secrets are not
 # fingerprinted; secret rotation alone follows each consumer's documented
 # onchange behavior.
 
 agents:
-  # MCP servers consumed by dotagents, Pi, OpenCode, Gemini, Kimi Code, and omp.
+  # MCP servers consumed by dotagents (Claude Code + Codex) and omp.
   # `transport` is the discriminator: stdio uses command/args; http uses url plus
   # optional headers. Each consumer maps that neutral shape into its native
-  # schema; the managed Kimi mcp.json owns the complete server inventory.
+  # schema.
   # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
   # native OAuth store; credentials and refresh tokens never enter source data.
   # Optional applicability is shared across every consumer:
@@ -62,7 +48,7 @@ agents:
   #   container: keep | skip        (omitted means keep)
   #   harnessSkip: [<harness id>]   (omitted means every harness)
   # harnessSkip is an EXCLUSION list, so a new harness inherits every server
-  # unless it is named. Valid ids: claude, codex, opencode, agy, pi, omp, kimi;
+  # unless it is named. Valid ids: claude, codex, omp;
   # dot_agents renders one file for Claude AND Codex and identifies as claude,
   # so a codex-only exclusion is not expressible.
   # agent-mcp-servers-json.tmpl validates and filters these fields before any
@@ -161,16 +147,14 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
-  # Claude Code, Codex, and AGY plugins, single-sourced here (the Claude/Codex
+  # Claude Code and Codex plugins, single-sourced here (the Claude/Codex
   # declarations were previously
   # hardcoded across two install scripts). The generic runner
   # run_onchange_after_install-agent-plugins.sh.tmpl ranges over the per-agent
   # `plugins` lists below and, per entry, registers the marketplace and installs
-  # the plugin with the matching CLI (`claude` / `codex` / `agy`). AGY consumes
-  # the resolved source directly with its native plugin installer rather than
-  # registering a marketplace. MCP is single-sourced
+  # the plugin with the matching CLI (`claude` / `codex`). MCP is single-sourced
   # separately (agents.mcp.servers -> dotagents); plugins are per-agent because
-  # applicability differs (mxm4-haptic ships to Claude, Codex, AND AGY — each as its
+  # applicability differs (mxm4-haptic ships to Claude AND Codex — each as its
   # own plugin with the right hook shape; the official LSP plugins are Claude-only).
   #
   # `marketplaces` is the shared registry keyed by each marketplace's registered
@@ -178,19 +162,17 @@ agents:
   # belong to the MARKETPLACE, not the plugin, so compound-engineering — which
   # appears in both per-agent lists — declares them once here:
   #   - kind: how the installer resolves the marketplace source path.
-  #       localDir      -> $HOME/<path> (a directory referenced in place).
   #       localArchive  -> the versioned tree chezmoi extracts from a GitHub
-  #                        release; the path is NOT stored here. The installer
-  #                        single-sources it from the compound-engineering entry
-  #                        in agents.opencode.plugins (externalPath) plus the
-  #                        version from compound-engineering-ref.tmpl. No
-  #                        version or path literal is copied into a per-agent
-  #                        entry (R3/KTD2).
+  #                        release. `source`, `externalPath`, and
+  #                        `versionSource` live on the marketplace row because
+  #                        the archive is shared by Claude, Codex, and omp.
+  #                        Per-agent plugin entries name only the marketplace.
   #       github        -> a remote owner/repo marketplace the CLI fetches (no
   #                        local tree); the `source` (owner/repo) is stored here.
   #                        Constant source, so add + install with no `remove`.
-  #   - os: the OSes the marketplace applies to. The runner emits a plugin row
-  #     only when .chezmoi.os is in this list (render-time gate, KTD3).
+  #   - os: the OSes where the generic Claude/Codex installer emits a plugin
+  #     row. Platform-neutral archive and omp consumers read the named row
+  #     independently, including on Windows.
   #   - container: `skip` filters the row out when the `container` fact is true
   #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in
   #     (compound-engineering skills are wanted in a devbox too). This replaces
@@ -207,13 +189,11 @@ agents:
       path: .local/share/codex-plugins    # relative to $HOME; codex reads its .claude-plugin/marketplace.json
       os: [linux]
       container: skip
-    dotfiles-agy:
-      kind: localDir
-      path: .local/share/agy-plugins/mxm4-haptic   # agy installs THIS bundle root directly (no marketplace.json)
-      os: [linux]
-      container: skip
     compound-engineering-plugin:
-      kind: localArchive                   # path from the opencode CE entry + ref
+      kind: localArchive
+      source: EveryInc/compound-engineering-plugin
+      externalPath: .local/share/compound-engineering
+      versionSource: compoundEngineeringRelease
       os: [linux, darwin]
       container: keep
     claude-plugins-official:
@@ -233,8 +213,7 @@ agents:
     # (theme, effortLevel, tui), aoe injects session-tracking hooks, and `claude
     # plugin install` writes enabledPlugins/extraKnownMarketplaces — so this is a
     # read-merge-WRITE (top-level jq `+`) that (re)asserts ONLY the keys below and
-    # preserves every other key byte-identical, the same shape config-pi-auth uses
-    # for pi's live-written auth.json. AGENTS.md "Claude Code plugins" carves this
+    # preserves every other key byte-identical. AGENTS.md "Claude Code plugins" carves this
     # out from the "ship a plugin, not settings" rule: a plugin registers
     # hooks/commands but cannot set a settings VALUE like effortLevel.
     #
@@ -270,36 +249,6 @@ agents:
     # PermissionRequest -> question); merges with the aoe-managed ~/.codex/hooks.json.
     - { name: mxm4-haptic, marketplace: dotfiles-codex }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
-  agy:
-    # AGY installs the native bundle from the same pinned release root consumed
-    # by the other localArchive agents; do not replace this with the unpinned
-    # GitHub URL or the compatibility-only `.agy/` subdirectory.
-    plugins:
-    # mxm4-haptic: agy plugin with a ROOT hooks.json (Stop -> settled/failed via
-    # terminationReason+fullyIdle; PreToolUse ask_question -> question, always-allow).
-    - { name: mxm4-haptic, marketplace: dotfiles-agy }
-    - { name: compound-engineering, marketplace: compound-engineering-plugin }
-  kimi:
-    # Apply selectively owns only the declared leaves in these native TOML
-    # files. The reconciler preserves every undeclared semantic value; comments
-    # and formatting are not an ownership boundary. mcp.json is different: it
-    # is rendered wholesale from agents.mcp.servers. Figma OAuth remains an
-    # explicit `figma-auth kimi` action and stays in Kimi's native credential
-    # store. Apply also owns only compound-engineering's installed record and
-    # managed copy, preserving all unrelated plugins.
-    settings:
-      config.toml:
-        default_model: 'kimi-code/k3-256k'
-        default_permission_mode: yolo
-        thinking:
-          enabled: true
-          effort: high
-      tui.toml:
-        upgrade:
-          auto_install: false
-    plugins:
-    - name: compound-engineering
-      versionSource: compoundEngineeringRelease
   # aoe (agent-of-empires) launches custom agents declared here. Apply
   # reconciles ONLY these declared leaves into aoe's live global
   # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile
@@ -310,10 +259,6 @@ agents:
   # command name (no ~/) passes through verbatim. agent_detect_as.<name> tells
   # aoe which known agent's launch flags to emit; a name absent from that map is
   # launched with no injected flag.
-  #   - kimi: the off-PATH wrapper (~/.local/libexec/aoe-bin/kimi), expanded to
-  #     an absolute path at render time, that rewrites aoe's
-  #     --dangerously-skip-permissions into kimi's --yolo. agent_detect_as.kimi =
-  #     claude makes aoe emit that claude-style flag for the wrapper to translate.
   #   - zsh: the bare `zsh` command (resolved on PATH, no wrapper, no ~/ to
   #     expand), with NO agent_detect_as entry, so aoe injects no flag and runs a
   #     plain interactive shell. Registered ahead of use — the intent is to later
@@ -324,105 +269,13 @@ agents:
     config.toml:
       session:
         custom_agents:
-          kimi: "~/.local/libexec/aoe-bin/kimi"
           omp: omp
           'claude-glm': "claude-glm"
           # Bare on-PATH shell agent; key is the aoe agent name, value the command.
           zsh: zsh
         agent_detect_as:
-          kimi: claude
           omp: pi
           claude-glm: claude
-  # pi package sources, managed settings defaults, and static API-key auth.
-  # settings.json is a MANAGED READONLY target (private_readonly_ 0400); only
-  # auth.json stays live-written (for OAuth refresh). See AGENTS.md "pi —
-  # settings.json managed readonly" for the full model.
-  pi:
-    # Keep Pi on its built-in direct provider catalog. This explicit empty map
-    # preserves models.json as a direct-provider baseline. It MUST NOT contain
-    # `op://` refs because models.json deploys 0444 without secret resolution.
-    models:
-      providers: {}
-    # Everything under `settings` renders wholesale into the MANAGED, READONLY
-    # ~/.pi/agent/settings.json (dot_pi/agent/private_readonly_settings.json.tmpl),
-    # so the keys intentionally match pi's settings.json schema. pi can no longer
-    # write that file (deployed 0400, owner-read-only — tighter than opencode.json's
-    # 0444 since op:// refs may bake secrets here), so every value pi used to
-    # live-manage lives HERE instead. The provider/model must already be usable
-    # through Pi's built-in catalog and live auth.json. Anthropic OAuth uses the
-    # native `/login anthropic` flow plus the compatibility package declared
-    # below; the separate models block intentionally adds no provider override.
-    settings:
-      # `packages` is emitted VERBATIM into the managed settings.json (deepCopy
-      # in dot_pi/agent/private_readonly_settings.json.tmpl) AND ranged over by
-      # run_onchange_after_update-pi-extensions.sh.tmpl, which reconciles
-      # installed extensions via `pi update --extensions` (NOT `pi install` —
-      # that would write to the readonly settings). pi loads exactly what is
-      # listed here straight from settings.json; the script never passes the
-      # list to the command — instead it resolves each entry to its latest
-      # version/reference at render time and bakes it into comment lines as the
-      # onchange trigger (resolve-and-bake, like compound-engineering-ref.tmpl),
-      # so a new upstream release re-runs the update. Unpinned by design (npm:
-      # and git: both track latest) — the same unsettled trade-off the agent-skill
-      # externals make.
-      #   - @gotgenes/pi-anthropic-auth: preserves Pi's built-in Anthropic
-      #     provider and native login while shaping Claude Pro/Max OAuth calls.
-      #   - pi-mcp-extension: the MCP client (pi ships no MCP support of its
-      #     own; without it the servers in ~/.pi/agent/mcp.json are inert).
-      #   - pi-subagents: delegates work to builtin/custom subagents.
-      #   - pi-ask-user: supplies the ask_user tool.
-      #   - @ff-labs/pi-fff + @ff-labs/fff-bun: FFF-backed fuzzy file/content
-      #     search and its Bun implementation.
-      # compound-engineering is installed for pi as a NATIVE `git:` source, NOT
-      # via the versioned local-archive path Claude/Codex/OpenCode/AGY use. That is
-      # a deliberate divergence for now: pi tracks the repo's default branch
-      # (unpinned) instead of the extracted release tarball, so it does NOT
-      # consume compound-engineering-ref.tmpl or the localArchive machinery.
-      packages:
-      - npm:@gotgenes/pi-anthropic-auth
-      - npm:pi-mcp-extension
-      - npm:pi-subagents
-      - npm:pi-ask-user
-      - npm:@ff-labs/pi-fff
-      - npm:@ff-labs/fff-bun
-      - git:github.com/EveryInc/compound-engineering-plugin
-      # `theme` is declared here because pi can no longer persist a theme choice
-      # to a readonly settings.json — it is fixed to the default.
-      theme: dark
-      defaultProvider: zai
-      defaultModel: glm-5.2
-      # Valid: off | minimal | low | medium | high | xhigh | max.
-      defaultThinkingLevel: max
-      subagents:
-        defaultModel: gpt-5.6-terra
-        agentOverrides:
-          researcher:
-            model: gpt-5.6-luna
-          planner:
-            model: gpt-5.6-sol
-            thinking: xhigh
-          worker:
-            model: gpt-5.6-luna
-          reviewer:
-            model: gpt-5.6-sol
-            thinking: xhigh
-          context-builder:
-            model: gpt-5.6-sol
-          oracle:
-            model: gpt-5.6-sol
-            thinking: max
-          delegate:
-            model: gpt-5.6-luna
-      warnings:
-        anthropicExtraUsage: false
-    auth:
-      providers:
-      - name: kimi-coding
-        type: api_key
-        key: op://Private/Kimi/API Key
-      - name: zai
-        type: api_key
-        key: op://Private/Z.ai/API Key
   # oh-my-pi (can1357/oh-my-pi) — a fork of pi (badlogic/pi-mono).
   #
   # config.yml is NOT a chezmoi target. omp rewrites it itself through /model,
@@ -430,14 +283,14 @@ agents:
   # permanent drift (a deployed 0600 file holding a modelRoles.default present
   # in no source checkout). Instead `run_after_config-omp-settings` asserts each
   # declared PATH below on every apply and leaves everything else to omp. Unlike
-  # pi, omp has NO auth.json — OAuth credentials (anthropic, openai-codex,
-  # google-antigravity, kimi-code) live in ~/.omp/agent/agent.db via omp /login,
-  # so only static API keys are declared here. omp is batteries-included (built-in
-  # MCP runtime, native Anthropic OAuth), so the pi pi-mcp-extension and
-  # @gotgenes/pi-anthropic-auth packages are NOT carried; compound-engineering is
-  # delivered via omp's marketplace, so this settings block carries no `packages`
-  # key. omp is cross-platform (it ships omp-windows-x64.exe), so both the
-  # settings and auth provisioners have Windows counterparts.
+  # upstream pi, omp has no auth.json. OAuth credentials (anthropic,
+  # openai-codex, google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
+  # through omp `/login`, so only static API keys are declared here. omp is
+  # batteries-included (built-in MCP runtime and native Anthropic OAuth), so the
+  # upstream pi-mcp-extension and pi-anthropic-auth packages are not carried.
+  # Compound-engineering is delivered through omp's marketplace, so this
+  # settings block carries no `packages` key. omp is cross-platform and ships
+  # omp-windows-x64.exe, so both provisioners have Windows counterparts.
   omp:
     models:
       providers: {}
@@ -587,9 +440,9 @@ agents:
     # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
     # openai-codex, google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
-    # CREDENTIAL map keyed by environment variable, deliberately not the
-    # model-provider `auth.providers` shape pi uses — Exa is a search tool, not a
-    # model provider. run_after_config-omp-auth requires exactly this closed set:
+    # credential map keyed by environment variable, not a model-provider auth
+    # shape. Exa is a search tool, not a model provider.
+    # run_after_config-omp-auth requires exactly this closed set:
     # a shape-only check would let a data edit inject an arbitrary variable such
     # as HTTP_PROXY or NODE_OPTIONS into the environment omp loads for every
     # session, and dropping the cardinality check would let an emptied map
@@ -600,263 +453,3 @@ agents:
         key: op://Private/Z.ai/API Key
       - variable: EXA_API_KEY
         key: op://Private/Exa/API Key
-  # OpenCode defaults, full provider definitions, and oh-my-openagent mappings.
-  # Provider shapes are deliberately heterogeneous and emitted recursively.
-  opencode:
-    # Plugin versions resolve at render time. `latestTag` strips a leading `v`
-    # from the newest GitHub tag before producing an exact npm spec.
-    # `npmLatest` reads the latest version straight from the npm registry
-    # (registry.npmjs.org/<pkg>/latest) for a package with no public GitHub repo
-    # to tag against; `source` is therefore omitted for those entries.
-    # compound-engineering uses its filtered release train because that repo
-    # interleaves unrelated marketplace/CLI tags.
-    #
-    # Install forms:
-    #   npm          -> `<pkg>@<version>` (opencode-only plugin)
-    #   localArchive -> Chezmoi extracts the GitHub release tarball to
-    #                   `~/<externalPath>/v<version>/` via
-    #                   .chezmoiexternals/ai-agents.toml; every agent then
-    #                   references that fully-rendered versioned path.
-    #                   OpenCode gets it in its `plugin` array via
-    #                   opencode-plugins-json.tmpl; Claude Code / Codex are
-    #                   registered by the generic
-    #                   .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins
-    #                   which points each agent's plugin marketplace at the same
-    #                   versioned path (pi installs CE as a git: source).
-    #                   `externalPath`
-    #                   is required; the version segment (`v<version>`) is
-    #                   appended by each consumer.
-    plugins:
-    - package: oh-my-openagent
-      source: code-yeongyu/oh-my-openagent
-      install: npm
-      versionSource: latestTag
-      targets:
-        opencode: [""]
-        tui: ["/tui", ""]
-    - package: opencode-wakatime
-      source: angristan/opencode-wakatime
-      install: npm
-      versionSource: latestTag
-      targets:
-        opencode: [""]
-    - package: "@ex-machina/opencode-anthropic-auth"
-      source: ex-machina-co/opencode-anthropic-auth
-      install: npm
-      versionSource: latestTag
-      targets:
-        opencode: [""]
-    - package: "@oyng/opencode-agy-auth"
-      install: npm
-      versionSource: npmLatest
-      targets:
-        opencode: [""]
-    - package: compound-engineering
-      source: EveryInc/compound-engineering-plugin
-      install: localArchive
-      versionSource: compoundEngineeringRelease
-      externalPath: .local/share/compound-engineering
-      targets:
-        opencode: [""]
-    model: anthropic/claude-opus-4-7
-    smallModel: anthropic/claude-haiku-4-5
-    providers:
-      opencode:
-        options:
-          apiKey: op://Private/Opencode/API Key
-        whitelist:
-        - deepseek-v4-flash-free
-        - mimo-v2.5-free
-        - nemotron-3-ultra-free
-        - north-mini-code-free
-        - big-pickle
-      zai-coding-plan:
-        options:
-          apiKey: "op://Private/Z.ai/API Key"
-      kimi-for-coding:
-        options:
-          apiKey: "op://Private/Kimi/API Key"
-      openrouter:
-        options:
-          apiKey: op://Private/OpenRouter/API Key
-          headers:
-            HTTP-Referer: https://opencode.ai/
-            X-OpenRouter-Title: OpenCode
-            X-OpenRouter-Categories: cli-agent
-        models:
-          openrouter/free:
-            name: Free Models Router
-            cost:
-              input: 0
-              output: 0
-              cache_read: 0
-              cache_write: 0
-          openrouter/auto: {}
-          openrouter/fusion: {}
-        whitelist:
-        - openrouter/free
-        - openrouter/auto
-        - openrouter/fusion
-    # Upstream oh-my-openagent identifiers below are verbatim schema keys.
-    ohMyOpenagent:
-      # Per-agent mappings (omo.jsonc "[opencode]" agents).
-      # Model Mapping Reference:
-      # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts
-      agents:
-        sisyphus:
-          model: anthropic/claude-opus-5
-          variant: max
-          fallback_models:
-            - kimi-for-coding/k3
-            - model: openai/gpt-5.6-sol
-              variant: medium
-            - zai-coding-plan/glm-5.1
-        hephaestus:
-          model: openai/gpt-5.6-sol
-          variant: medium
-        oracle:
-          model: openai/gpt-5.6-sol
-          variant: xhigh
-          fallback_models:
-            - model: openai/gpt-5.6-sol
-              variant: high
-            - model: google-agy/gemini-pro-agent
-              variant: high
-            - model: anthropic/claude-opus-5
-              variant: max
-            - zai-coding-plan/glm-5.2
-        librarian:
-          model: openai/gpt-5.4-mini-fast
-          fallback_models:
-            - anthropic/claude-haiku-4-5
-        explore:
-          model: openai/gpt-5.4-mini-fast
-          fallback_models:
-            - anthropic/claude-haiku-4-5
-        multimodal-looker:
-          model: openai/gpt-5.6-sol
-          variant: low
-          fallback_models:
-            - kimi-for-coding/k3
-        prometheus:
-          model: anthropic/claude-fable-5
-          variant: xhigh
-          fallback_models:
-            - model: kimi-for-coding/k3
-              variant: max
-        metis:
-          model: anthropic/claude-opus-5
-          variant: high
-          fallback_models:
-            - model: kimi-for-coding/k3
-              variant: low
-        momus:
-          model: openai/gpt-5.6-terra
-          variant: high
-          fallback_models:
-            - model: openai/gpt-5.6-sol
-              variant: xhigh
-            - model: openai/gpt-5.6-sol
-              variant: high
-            - model: anthropic/claude-opus-5
-              variant: max
-            - model: google-agy/gemini-pro-agent
-              variant: high
-            - zai-coding-plan/glm-5.2
-        atlas:
-          model: anthropic/claude-sonnet-4-6
-          fallback_models:
-            - kimi-for-coding/k3
-            - model: openai/gpt-5.6-sol
-              variant: medium
-        sisyphus-junior:
-          model: anthropic/claude-sonnet-4-6
-          fallback_models:
-            - kimi-for-coding/k3
-            - model: openai/gpt-5.6-sol
-              variant: medium
-      # Per-category mappings (omo.jsonc "[opencode]" categories).
-      # Model Mapping Reference:
-      # https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts
-      categories:
-        visual-engineering:
-          model: anthropic/claude-opus-5
-          variant: high
-          fallback_models:
-            - model: kimi-for-coding/k3
-              variant: max
-            - model: anthropic/claude-fable-5
-              variant: low
-            - model: google-agy/gemini-pro-agent
-              variant: high
-            - zai-coding-plan/glm-5.1
-            - zai-coding-plan/glm-5.2
-        ultrabrain:
-          model: openai/gpt-5.6-sol
-          variant: xhigh
-          fallback_models:
-            - model: openai/gpt-5.6-sol
-              variant: high
-            - model: google-agy/gemini-pro-agent
-              variant: high
-            - model: anthropic/claude-opus-5
-              variant: max
-            - zai-coding-plan/glm-5.2
-        deep:
-          model: openai/gpt-5.6-terra
-          variant: xhigh
-          fallback_models:
-            - model: openai/gpt-5.6-terra
-              variant: high
-            - model: openai/gpt-5.6-sol
-              variant: high
-            - model: openai/gpt-5.6-sol
-              variant: medium
-            - model: anthropic/claude-opus-5
-              variant: max
-            - model: google-agy/gemini-pro-agent
-              variant: high
-            - kimi-for-coding/k3
-            - zai-coding-plan/glm-5.2
-        artistry:
-          model: google-agy/gemini-pro-agent
-          variant: high
-          fallback_models:
-            - model: anthropic/claude-opus-5
-              variant: max
-            - model: openai/gpt-5.6-sol
-              variant: high
-            - kimi-for-coding/k3
-            - zai-coding-plan/glm-5.2
-        quick:
-          model: kimi-for-coding/kimi-for-coding-highspeed
-          fallback_models:
-            - openai/gpt-5.4-mini-fast
-            - anthropic/claude-haiku-4-5
-            - google-agy/gemini-3-flash
-        unspecified-low:
-          model: openai/gpt-5.6-luna
-          variant: xhigh
-          fallback_models:
-            - model: openai/gpt-5.6-luna
-              variant: high
-            - anthropic/claude-sonnet-4-6
-            - model: openai/gpt-5.6-sol
-              variant: medium
-            - kimi-for-coding/k3
-            - google-agy/gemini-3-flash
-        unspecified-high:
-          model: kimi-for-coding/k3
-          variant: max
-          fallback_models:
-            - model: anthropic/claude-opus-5
-              variant: high
-            - model: openai/gpt-5.6-sol
-              variant: high
-            - zai-coding-plan/glm-5.1
-            - zai-coding-plan/glm-5.2
-        writing:
-          model: google-agy/gemini-3-flash
-          fallback_models:
-            - kimi-for-coding/k3
-            - anthropic/claude-sonnet-4-6

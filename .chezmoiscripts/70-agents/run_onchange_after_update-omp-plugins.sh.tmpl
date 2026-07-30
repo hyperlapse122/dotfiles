@@ -1,18 +1,14 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- $ctx := . -}}
-{{- $cePlugin := dict -}}
-{{- range .agents.opencode.plugins -}}
-{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}{{- $cePlugin = . -}}{{- end -}}
-{{- end -}}
-{{- if not $cePlugin -}}{{- fail "update-omp-plugins: compound-engineering localArchive authority is missing from agents.opencode.plugins" -}}{{- end -}}
+{{- $name := "compound-engineering-plugin" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index .agents.marketplaces $name -}}
 {{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
 #!/usr/bin/env bash
-# Reconciles omp's compound-engineering plugin from the same pinned localArchive
-# used by OpenCode, Claude, Codex, AGY, and Kimi.
+# Reconciles omp's compound-engineering plugin from the neutral pinned archive.
 set -euo pipefail
 
-SOURCE="$HOME/{{ $cePlugin.externalPath }}/{{ $ceVersion }}"
+SOURCE="$HOME/{{ $ceAuthority.externalPath }}/{{ $ceVersion }}"
 if ! command -v omp >/dev/null 2>&1; then
   printf '%s\n' 'update-omp-plugins: skipped (omp not on PATH)' >&2
   exit 0

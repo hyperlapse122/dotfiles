@@ -13,13 +13,6 @@ export interface LockedArtifact {
   readonly url: string;
   /** Lowercase hex sha256, or null when the source publishes no digest. */
   readonly sha256: string | null;
-  /**
-   * Lowercase hex sha512, recorded as published. Only vendor manifests that
-   * expose sha512 alone (antigravity) carry this; chezmoi externals verify
-   * sha256 only, so this is informational, exactly as today's template treats
-   * it.
-   */
-  readonly sha512?: string | null;
   /** Byte size of the artifact, where the source publishes one (claude). */
   readonly size?: number;
   /** Present when this target borrows the amd64 build and runs it emulated. */
@@ -68,7 +61,7 @@ export type ResolverKind =
   | "ociImage";
 
 /** The vendor endpoints the vendorManifest kind knows how to read. */
-export type VendorName = "claude" | "antigravity" | "winbox";
+export type VendorName = "claude" | "winbox";
 
 /**
  * Asset selection for one tool.

@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: claude, codex, kimi, agent-browser, agy, opencode, pi, omp, codegraph, aoe, cli-proxy-api (darwin), and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, codex, agent-browser, omp, codegraph, aoe, cli-proxy-api (darwin), and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -53,31 +53,6 @@ url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex" "
 stripComponents = 0
 targetPath = '{{ $codexInstallationPath }}'
 
-{{- /* ---------- kimi-code — the official standalone release is one executable per
-       platform zip. The tag (verbatim, `@moonshot-ai/kimi-code@<semver>` — KTD10)
-       and the GitHub-computed per-asset sha256 are resolved at refresh time by
-       packages/release-lock; the download URL is built as a plain string from
-       that same locked tag (KTD8 constructed-URL pattern), so the render
-       performs no network I/O. The tag contains `@`, which the download URL
-       carries percent-encoded (as upstream's browser_download_url does) while
-       the path segment `/` stays literal. ---------- */ -}}
-
-{{- $kimiTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kimi") -}}
-
-{{- $kimiOs := replace "windows" "win32" .chezmoi.os -}}
-{{- $kimiArch := replace "amd64" "x64" .chezmoi.arch -}}
-{{- $kimiAsset := printf "kimi-code-%s-%s.zip" $kimiOs $kimiArch }}
-
-[kimi]
-type = "archive-file"
-targetPath = '{{ printf ".local/bin/kimi%s" $executableExtension }}'
-url = '{{ printf "https://github.com/MoonshotAI/kimi-code/releases/download/%s/%s" (replace "@" "%40" $kimiTag) $kimiAsset }}'
-path = '{{ printf "kimi%s" $executableExtension }}'
-executable = true
-
-[kimi.checksum]
-sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kimi" "field" "sha256" "platform" "auto") }}'
-
 {{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
        ("Browser automation CLI for AI agents"), tracked at the newest release like
        claude/codex. The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
@@ -97,74 +72,6 @@ executable = true
 
 [agent-browser.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
-
-{{- /* ---------- antigravity (agy) — vendor auto-updater manifest, not a GitHub release ---------- */ -}}
-
-{{- /* Version, per-platform URL and sha512 are resolved at refresh time by
-       packages/release-lock from the vendor's per-platform GCS manifests; the
-       render only reads the locked values. The version read also fail-closes
-       here if the lock entry ever loses its version. */ -}}
-{{- $antigravityVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agy") -}}
-{{- $agyLockArtifact := dict "ctx" . "tool" "agy" "platform" "auto" -}}
-
-{{- if eq .chezmoi.os "windows" }}
-[agy]
-type = "file"
-targetPath = '{{ printf ".local/bin/agy%s" $executableExtension }}'
-url = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "url")) }}'
-executable = true
-
-[agy.checksum]
-sha512 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "sha512")) }}'
-{{- else }}
-[agy]
-type = "archive-file"
-targetPath = '.local/bin/agy'
-url = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "url")) }}'
-path = 'antigravity'
-executable = true
-
-[agy.checksum]
-sha512 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "sha512")) }}'
-{{- end }}
-
-{{- /* ---------- opencode (darwin ships a .zip, unlike the tar.gz users below) ---------- */}}
-
-[opencode]
-targetPath = '{{ printf ".local/bin/opencode%s" $executableExtension }}'
-type = "archive-file"
-url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "opencode" "field" "url" "platform" "auto") }}'
-executable = true
-path = '{{ printf "opencode%s" $executableExtension }}'
-
-{{- /* ---------- pi (earendil-works) — a whole-dir distribution, not a lone binary: the
-       executable resolves its own sibling package.json / theme/ / export-html/ / .wasm, so the
-       tree is extracted per version and ~/.local/bin/pi is symlinked at it by
-       .chezmoiscripts/00-tools/run_onchange_after_pi.sh.tmpl. POSIX only (the release does ship
-       windows .zip assets, but the linker script has no .ps1 counterpart). ---------- */ -}}
-
-{{- if ne .chezmoi.os "windows" -}}
-
-{{- /* $piTag is also read by dot_pi/agent/readonly_settings.json.tmpl
-       (lastChangelogVersion) from the SAME release-lock key, so the managed
-       settings.json always matches the pi on disk — no shared partial. */ -}}
-{{- $piTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi") -}}
-
-{{- /* The tag, per-asset URL and sha256 (upstream publishes one combined
-       SHA256SUMS sidecar) are resolved at refresh time by
-       packages/release-lock; the render reads the locked values. */ -}}
-{{- $piSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi" "field" "sha256" "platform" "auto") }}
-
-[pi]
-type = "archive"
-url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "pi" "field" "url" "platform" "auto") }}'
-targetPath = '{{ printf ".local/share/pi/versions/%s" $piTag }}'
-stripComponents = 1
-
-[pi.checksum]
-sha256 = '{{ $piSha }}'
-
-{{- end }}
 
 {{- /* ---------- omp (oh-my-pi, can1357) — a lone per-platform binary that is a
        fork of pi: a raw executable (windows .exe), cross-platform (unlike pi it
@@ -332,48 +239,24 @@ include = ["*/skills/{{ .name }}/**"]
 {{- end }}
 {{- end }}
 
-{{- /* ---------- opencode.plugins with install=localArchive — release tarballs extracted per
-       version so every agent references the same on-disk path. Data lives in
-       .chezmoidata/agents.yaml (agents.opencode.plugins); the OpenCode `plugin` array reads
-       the same entry through .chezmoitemplates/opencode-plugins-json.tmpl, and
-       the generic .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins registers the
-       same path with Claude Code and Codex and installs the native bundle root
-       for AGY (pi installs CE separately as a git: source). Sibling versions are pruned by
-       .chezmoiscripts/00-tools/run_onchange_after_compound-engineering.
-       stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix so the
-       repo root (package.json, .opencode/, .claude-plugin/, .codex-plugin/, skills/, ...)
-       lands directly at the target. `exact` is intentionally OMITTED so the tree is
-       additive — chezmoi adds/updates archive files but leaves others, letting the
-       compound-engineering-overlays provisioner install archive-absent source
-       personas such as ce-sweep's gitlab-issues reference. Tradeoff: a version dir no
-       longer self-cleans upstream deletions within a version cycle (each version bump
-       creates a fresh dir, resetting it); CE is the sole localArchive plugin today.
-       POSIX only — matches the install script's linux+darwin gate
-       and the sibling agent-skills block. compoundEngineeringRelease yields tags of the
-       form `compound-engineering-v<semver>`; the on-disk version segment strips the
-       front-half prefix and keeps the `v` so it matches the tag's own version suffix. */ -}}
+{{- /* ---------- shared compound-engineering localArchive ----------
+       The platform-neutral authority lives at
+       agents.marketplaces.compound-engineering-plugin. One versioned archive
+       is emitted on every OS so both omp updater variants can consume the same
+       local marketplace. POSIX sibling versions are pruned by the 00-tools
+       onchange script. The archive stays additive because the overlay script
+       installs an archive-absent ce-sweep reference.
 
+       stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix.
+       compoundEngineeringRelease yields compound-engineering-v<semver>; the
+       target keeps the v<semver> suffix. */ -}}
 {{- $ctx := . -}}
-{{- if ne .chezmoi.os "windows" -}}
-{{- range .agents.opencode.plugins -}}
-{{-   if eq .install "localArchive" -}}
-{{-     $ref := "" -}}
-{{-     if eq .versionSource "compoundEngineeringRelease" -}}
-{{-       $ref = includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
-{{-     else -}}
-{{-       fail (printf "%s plugin: unsupported versionSource %q for install=localArchive" .package .versionSource) -}}
-{{-     end -}}
-{{-     $verSegment := "" -}}
-{{-     if eq .versionSource "compoundEngineeringRelease" -}}
-{{-       $verSegment = printf "v%s" (trimPrefix "compound-engineering-v" $ref) -}}
-{{-     else -}}
-{{-       $verSegment = printf "v%s" (trimPrefix "v" $ref) -}}
-{{-     end }}
+{{- $name := "compound-engineering-plugin" -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $authority := index .agents.marketplaces $name -}}
+{{- $verSegment := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) }}
 
-[{{ printf "%s/%s" .externalPath $verSegment | quote }}]
+[{{ printf "%s/%s" $authority.externalPath $verSegment | quote }}]
 type = "archive"
-url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
+url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" $authority.source $ceRef }}'
 stripComponents = 1
-{{-   end -}}
-{{- end -}}
-{{- end -}}

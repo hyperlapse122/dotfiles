@@ -15,8 +15,8 @@
 # Binaries (all from one crate, see crates/mxm4-haptic/Cargo.toml):
 #   mxm4-hapticd        the daemon — sole owner of the Bolt receiver HID++
 #                       session; AF_UNIX server (Linux + macOS).
-#   mxm4-haptic         thin one-shot client spawned by Solaar rules (Linux)
-#                       or driven over the socket by the opencode plugin (macOS).
+#   mxm4-haptic         thin one-shot client used by Solaar rules and managed
+#                       agent hook/extension integrations.
 #   mxm4-haptic-notify  desktop-notification -> haptic bridge; eavesdrops the
 #                       D-Bus session bus. Linux-only — NOT built on macOS.
 #

@@ -1,14 +1,9 @@
 {{ if ne .chezmoi.os "windows" -}}
 
 {{- $ctx := . -}}
-{{- $cePlugin := "" -}}
-{{- range .agents.opencode.plugins -}}
-{{-   if and (eq .install "localArchive") (eq .versionSource "compoundEngineeringRelease") -}}
-{{-     $cePlugin = . -}}
-{{-   end -}}
-{{- end -}}
-{{- if $cePlugin -}}
+{{- $name := "compound-engineering-plugin" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index .agents.marketplaces $name -}}
 {{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
 
 #!/usr/bin/env bash
@@ -24,17 +19,11 @@
 # This script copies only the source reference. It never changes archive-owned
 # files such as skills/ce-sweep/SKILL.md.
 #
-# OWNERSHIP: the reference path is OURS, the directory chain above it is the
-# archive's. Because the tree is additive it is also writable by anything else on
-# the machine, and agents do write to it: one replaced this exact reference with a
-# SYMLINK into an unrelated project checkout
-# (~/src/<host>/<group>/<project>/.compound-engineering/ce-sweep/sources/gitlab-issues.md).
-# Following such a link is doubly wrong — `cp` would overwrite a tracked file in
-# a foreign repository, and the link breaks a later apply phase outright, because
-# kimi-reconcile refuses a plugin source tree whose symlink escapes its root and
-# so fails install-kimi-plugins (and every phase after it). Reclaim the leaf we
-# own; refuse, rather than delete, a directory component that is not a plain
-# directory, since removing it would take archive-owned files with it.
+# OWNERSHIP: the reference path is ours, while the directory chain above it is
+# archive-owned. Because the tree is additive, another process can replace the
+# leaf with a symlink into an unrelated checkout. Following it would overwrite
+# a foreign tracked file. Reclaim the leaf we own; refuse, rather than delete,
+# a directory component that is not a plain directory.
 #
 # run_after_ (not run_onchange_): that drift is LIVE state in a third-party-
 # writable tree, so it must be re-asserted after every file phase — a
@@ -45,7 +34,7 @@
 
 set -euo pipefail
 
-BASE_DIR="$HOME/{{ $cePlugin.externalPath }}"
+BASE_DIR="$HOME/{{ $ceAuthority.externalPath }}"
 CURRENT="$BASE_DIR/{{ $ceVersion }}"
 OVERLAYS="${BASE_DIR}-overlays"
 RELATIVE="skills/ce-sweep/references/sources/gitlab-issues.md"
@@ -90,5 +79,4 @@ trap 'rm -f -- "$TEMP"' EXIT
 cp -p -- "$SOURCE" "$TEMP"
 mv -f -- "$TEMP" "$DESTINATION"
 
-{{ end -}}
 {{ end -}}

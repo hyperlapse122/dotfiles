@@ -28,9 +28,7 @@ Scope: `.chezmoidata/agents.yaml`, keys `agents.omp.settings.modelRoles`,
 `agents.omp.auth`, the Exa keys, `theme.*`, `symbolPreset`, `setupVersion`,
 `defaultThinkingLevel`, or `agents.omp.models`. Do not commit unless asked.
 
-This is the sibling of `.opencode/commands/sync-omo-models.md`, which does the
-same job for oh-my-openagent. It lives here instead of in a command directory
-because it is repo-wide knowledge, not a user-invoked entry point: `.agents/skills`
+This is repo-wide knowledge, not a user-invoked command. `.agents/skills`
 is omp's canonical native skill root (`docs/skills.md` § "Built-in skill
 providers and precedence", `agents` provider with its own
 `enableAgentsUser`/`enableAgentsProject` toggles), and the path is dot-prefixed

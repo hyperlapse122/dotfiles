@@ -7,8 +7,8 @@ export { ResolutionError };
 
 /**
  * Git ref resolution — a branch head (or HEAD) resolved to its commit sha,
- * version-only. Replaces the render-time `git ls-remote` calls behind the
- * `ref: main` skill (improve) and pi's `git:` compound-engineering package.
+ * version-only. Replaces the render-time `git ls-remote` calls used by
+ * branch-pinned external skills.
  */
 
 export type GitExec = (args: readonly string[]) => Promise<string>;

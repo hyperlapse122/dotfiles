@@ -140,14 +140,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": "codex-package-x86_64-pc-windows-msvc.tar.zst",
     "windows-arm64": "codex-package-aarch64-pc-windows-msvc.tar.zst",
   },
-  kimi: {
-    "linux-amd64": "kimi-code-linux-x64.zip",
-    "linux-arm64": "kimi-code-linux-arm64.zip",
-    "darwin-amd64": "kimi-code-darwin-x64.zip",
-    "darwin-arm64": "kimi-code-darwin-arm64.zip",
-    "windows-amd64": "kimi-code-win32-x64.zip",
-    "windows-arm64": "kimi-code-win32-arm64.zip",
-  },
   "agent-browser": {
     "linux-amd64": "agent-browser-linux-x64",
     "linux-arm64": "agent-browser-linux-arm64",
@@ -158,23 +150,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     // linuxMusl: distinct static-musl builds next to the glibc ones.
     "linux-amd64-musl": "agent-browser-linux-musl-x64",
     "linux-arm64-musl": "agent-browser-linux-musl-arm64",
-  },
-  opencode: {
-    "linux-amd64": "opencode-linux-x64.tar.gz",
-    "linux-arm64": "opencode-linux-arm64.tar.gz",
-    "darwin-amd64": "opencode-darwin-x64.zip",
-    "darwin-arm64": "opencode-darwin-arm64.zip",
-    "windows-amd64": "opencode-windows-x64.zip",
-    "windows-arm64": "opencode-windows-arm64.zip",
-  },
-  pi: {
-    "linux-amd64": "pi-linux-x64.tar.gz",
-    "linux-arm64": "pi-linux-arm64.tar.gz",
-    "darwin-amd64": "pi-darwin-x64.tar.gz",
-    "darwin-arm64": "pi-darwin-arm64.tar.gz",
-    // Every consumer is POSIX-only, so windows is deliberately not locked.
-    "windows-amd64": null,
-    "windows-arm64": null,
   },
   omp: {
     // A lone per-platform binary (oh-my-pi ships a bare executable, not pi's

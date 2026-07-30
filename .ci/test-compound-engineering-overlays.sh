@@ -15,7 +15,7 @@
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
 #
-# Modelled on .ci/smoke-agy-plugin-installer.sh and the codex-wrapper ci.yml job.
+# Modelled on .ci/smoke-agent-plugin-installer.sh and the codex-wrapper ci.yml job.
 set -euo pipefail
 
 root=${1:-$(pwd)}
@@ -130,7 +130,7 @@ env HOME="$home" bash "$prov"   # exits 0
 # --- foreign symlink at the reference path: reclaim it, never write through it ---
 # Agents wire a project-local ce-sweep source into this shared tree. Copying
 # through the link would overwrite a tracked file in that checkout, and the
-# escaping link fails kimi-reconcile's plugin source validation on a later phase.
+# escaping links must also fail any later source-tree validation.
 build_fake_ce
 foreign="$scratch/foreign-checkout/.compound-engineering/ce-sweep/sources"
 mkdir -p "$foreign"

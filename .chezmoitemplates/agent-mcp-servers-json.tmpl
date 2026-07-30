@@ -61,7 +61,7 @@ from Codex too.
 {{- end -}}
 {{- $validOS := list "linux" "darwin" "windows" -}}
 {{- $validContainers := list "keep" "skip" -}}
-{{- $validHarness := list "claude" "codex" "opencode" "agy" "pi" "omp" "kimi" -}}
+{{- $validHarness := list "claude" "codex" "omp" -}}
 {{- /* Codex renders no file of its own; see the header. */ -}}
 {{- $skippableHarness := without $validHarness "codex" -}}
 {{- $harness := .harness -}}

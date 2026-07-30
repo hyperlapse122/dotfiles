@@ -5,7 +5,6 @@
 ./mise.toml
 ./mise.lock
 ./README.md
-./opencode.json
 ./LICENSE
 ./package.json
 ./docs
@@ -72,26 +71,19 @@ src/garden.yaml
 ./crates
 ./packages
 
-# The mxm4-haptic Claude Code / Codex / AGY plugins drive the Linux-only
+# The mxm4-haptic Claude Code / Codex plugins drive the Linux-only
 # mxm4-hapticd daemon (it owns Linux hidraw for the MX Master 4), so there is
-# nothing to pulse on macOS/Windows — mirrors the Linux-only mxm4-haptic.js
-# OpenCode plugin symlink in .chezmoiscripts/60-build/. Skipping the deployed
-# trees also strands nothing: the installer rows below are gated on linux too.
+# nothing to pulse on macOS/Windows. Skipping the deployed trees also strands
+# nothing: the installer rows below are gated on linux too.
 {{- if ne .chezmoi.os "linux" }}
 .local/share/claude-plugins
 .local/share/codex-plugins
-.local/share/agy-plugins
 {{- end }}
 
-# Pi is provisioned only on POSIX. Its mxm4-haptic extension shells out to the
-# cross-platform Linux/macOS client, and settings.json is a managed private 0400
-# target. Skip both on Windows, where Pi is not installed. (No installer is
-# stranded: Pi auto-discovers the extension/config targets, and the package
-# install script gates itself on `pi` being on PATH.)
+# omp's mxm4-haptic extension shells out to the cross-platform Linux/macOS
+# client, which has no Windows build. Skip it there — omp itself still
+# deploys on Windows via omp-windows-x64.exe; only the extension is absent.
 {{- if eq .chezmoi.os "windows" }}
-.pi/agent/extensions/mxm4-haptic.ts
-.pi/agent/settings.json
-.pi/agent/models.json
 .omp/agent/extensions/mxm4-haptic.ts
 {{- end }}
 
@@ -119,10 +111,7 @@ src/garden.yaml
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
 # container, deploy the CLI dotfiles only and skip all host provisioning:
 # package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
-# KDE/GNOME settings, pro-audio realtime provisioning, and the MX Master haptic
-# build. The OpenCode workspace build is deliberately KEPT: the agent CLIs are
-# first-class here (the OpenCode workspace build soft-skips when its toolchain
-# is absent).
+# KDE/GNOME settings, pro-audio realtime provisioning, and the MX Master haptic build.
 #
 # distrobox and toolbox are the OPT-OUT: both bind-mount the host $HOME and both
 # create /run/.toolboxenv (distrobox touches it for toolbx compatibility), so an
@@ -160,18 +149,16 @@ src/garden.yaml
 .local/bin/open-design
 .local/share/applications/open-design.desktop
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
-# the Claude/Codex/AGY haptic plugins and the pi haptic extension have nothing to
-# pulse — skip the deployed plugin trees and the pi extension. The generic
-# 70-agents/install-agent-plugins.sh script is deliberately KEPT (like the
-# dotagents skills install beside it): it still registers compound-engineering
-# (marketplace container: keep), while the mxm4-haptic rows are filtered out at
-# RENDER time because their marketplaces are container: skip — so there is no
-# whole-script skip to make here (the merged basename intentionally does not
-# match the former *claude-plugins.sh glob).
+# the Claude/Codex haptic plugins have nothing to pulse — skip the deployed
+# plugin trees. The generic 70-agents/install-agent-plugins.sh script is
+# deliberately KEPT (like the dotagents skills install beside it): it still
+# registers compound-engineering (marketplace container: keep), while the
+# mxm4-haptic rows are filtered out at RENDER time because their marketplaces
+# are container: skip — so there is no whole-script skip to make here (the
+# merged basename intentionally does not match the former *claude-plugins.sh
+# glob).
 .local/share/claude-plugins
 .local/share/codex-plugins
-.local/share/agy-plugins
-.pi/agent/extensions/mxm4-haptic.ts
 .omp/agent/extensions/mxm4-haptic.ts
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the

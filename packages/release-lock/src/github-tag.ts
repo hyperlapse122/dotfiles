@@ -6,8 +6,7 @@ export { ResolutionError };
 /**
  * GitHub tag resolution — the newest tag of a repository, version-only.
  *
- * Replaces the render-time `gitHubLatestTag` calls behind the OpenCode
- * plugin pins. The tags endpoint lists newest first, one call per repo.
+ * The tags endpoint lists newest first, one call per repository.
  */
 
 interface GitHubTag {
