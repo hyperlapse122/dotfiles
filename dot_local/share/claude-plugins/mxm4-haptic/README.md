@@ -5,12 +5,10 @@ pulses the MX Master 4's built-in haptics on Claude Code lifecycle events. When
 a turn finishes, the mouse gives a tactile "done" buzz — handy for kicking off a
 long agent run and feeling, rather than watching, for completion.
 
-It is the Claude Code counterpart of
-[`@h82/opencode-mxm4-haptic`](../../../../packages/opencode-mxm4-haptic/), and
-maps the same events to the same waveforms so both agents buzz identically. Where
-the OpenCode plugin is a TypeScript module talking to the daemon over a socket,
-this one is pure declarative config: a hook manifest that shells out to the
-`mxm4-haptic` CLI. No build step, no runtime dependency.
+The plugin is pure declarative config: a hook manifest that shells out to the
+`mxm4-haptic` CLI. It shares waveform definitions with the
+[`@h82/mxm4-haptic`](../../../../packages/mxm4-haptic/) TypeScript parity
+package. No build step or runtime dependency is required.
 
 ## What it does
 
@@ -21,16 +19,11 @@ this one is pure declarative config: a hook manifest that shells out to the
 | `Notification` (`permission_prompt`, `elicitation_dialog`) | `RINGING` | The agent is waiting on **you** to approve something — answer it. |
 | `PreToolUse` (`AskUserQuestion`) | `RINGING` | The agent asked you to pick an option — answer it. |
 
-### Sub-agent gating is free here
+### Root-agent-only completion
 
-The OpenCode plugin has to inspect every session's `parentID` and poll child
-session status, because `session.idle` fires for **each** sub-agent — buzzing on
-all of them would fire repeatedly during one fan-out.
-
-Claude Code needs none of that: `Stop` and `StopFailure` fire for the **root**
-agent only. A sub-agent completing fires `SubagentStop`, which this plugin
-**deliberately does not hook** — hooking it would reintroduce exactly the
-once-per-sub-agent buzzing the OpenCode plugin works to suppress.
+Claude Code emits `Stop` and `StopFailure` for the root agent only. A sub-agent
+completion emits `SubagentStop`, which this plugin deliberately does not hook.
+This keeps one fan-out from producing a buzz for every completed sub-agent.
 
 ### Never interferes with a turn
 
