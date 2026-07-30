@@ -834,10 +834,11 @@ jobs:
           & pwsh -NoProfile -File $updater
           if ($LASTEXITCODE -ne 0) { throw "omp updater failed ($LASTEXITCODE)" }
           $actual = @(Get-Content $calls)
-          if ($actual.Count -ne 2) { throw "expected two omp calls, got $($actual.Count)" }
-          if ($actual[0] -ne "plugin marketplace add $source") { throw "unexpected add call: $($actual[0])" }
-          if ($actual[1] -ne 'plugin install --scope user compound-engineering@compound-engineering-plugin') {
-            throw "unexpected install call: $($actual[1])"
+          if ($actual.Count -ne 3) { throw "expected three omp calls, got $($actual.Count)" }
+          if ($actual[0] -ne 'plugin marketplace remove compound-engineering-plugin') { throw "unexpected remove call: $($actual[0])" }
+          if ($actual[1] -ne "plugin marketplace add $source") { throw "unexpected add call: $($actual[1])" }
+          if ($actual[2] -ne 'plugin install --scope user --force compound-engineering@compound-engineering-plugin') {
+            throw "unexpected install call: $($actual[2])"
           }
 
       - name: Upload rendered internals

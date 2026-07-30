@@ -18,7 +18,11 @@ if [[ ! -f "$SOURCE/.claude-plugin/marketplace.json" ]]; then
   exit 1
 fi
 
+# localArchive PATH changes per ref bump: omp errors on a duplicate marketplace
+# name and does not relocate an existing registration, so drop the stale
+# name-keyed registration before add (mirrors the sibling agent-plugins loop).
+omp plugin marketplace remove compound-engineering-plugin >/dev/null 2>&1 || true
 omp plugin marketplace add "$SOURCE"
-omp plugin install --scope user 'compound-engineering@compound-engineering-plugin'
+omp plugin install --scope user --force 'compound-engineering@compound-engineering-plugin'
 printf 'update-omp-plugins: reconciled compound-engineering from %s\n' "$SOURCE"
 {{ end -}}

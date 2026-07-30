@@ -17,11 +17,18 @@ if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
   throw "update-omp-plugins: pinned marketplace is missing: $source"
 }
 
+# localArchive PATH changes per ref bump: omp errors on a duplicate marketplace
+# name and does not relocate an existing registration, so drop the stale
+# name-keyed registration before add (mirrors the sibling agent-plugins loop).
+& omp plugin marketplace remove compound-engineering-plugin 2>$null
+if ($LASTEXITCODE -ne 0) {
+  Write-Warning 'update-omp-plugins: marketplace remove returned non-zero (continuing)'
+}
 & omp plugin marketplace add $source
 if ($LASTEXITCODE -ne 0) {
   throw 'update-omp-plugins: marketplace add failed'
 }
-& omp plugin install --scope user 'compound-engineering@compound-engineering-plugin'
+& omp plugin install --scope user --force 'compound-engineering@compound-engineering-plugin'
 if ($LASTEXITCODE -ne 0) {
   throw 'update-omp-plugins: plugin install failed'
 }
