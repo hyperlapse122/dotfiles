@@ -177,20 +177,20 @@
         "kind": "ociImage",
         "source": "docker.io/eceasy/cli-proxy-api",
         "version": "latest",
-        "digest": "sha256:721df2c03a613c7e0cbf8ef115da80ead96531f5af23b8128dacb7aa51da7a57"
+        "digest": "sha256:723c898b0e8f78abdb27acb856c5833916caf1e585a413885096ca65f735ee7f"
       },
       "cli-proxy-api-binary": {
         "kind": "githubRelease",
         "source": "router-for-me/CLIProxyAPI",
-        "version": "v7.2.110",
+        "version": "v7.2.111",
         "artifacts": {
           "darwin-amd64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.110/CLIProxyAPI_7.2.110_darwin_amd64.tar.gz",
-            "sha256": "1d2a30512f9b9f458af95509cc3343afc08ccf1aa02dcb8b25760c02ef872aa3"
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.111/CLIProxyAPI_7.2.111_darwin_amd64.tar.gz",
+            "sha256": "6f703cb4facc71117eca8b716bcd4e65fffbea2bd09d3f864eb35cbb99491490"
           },
           "darwin-arm64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.110/CLIProxyAPI_7.2.110_darwin_aarch64.tar.gz",
-            "sha256": "e6dac60c5740677c2bd8147666c290d79686d1a5b93264590897fffd036d1bba"
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.111/CLIProxyAPI_7.2.111_darwin_aarch64.tar.gz",
+            "sha256": "5892280dbe72684ce3f7f303bb607a187164a2c77b811036abeef6f68d4d13f1"
           }
         }
       },
