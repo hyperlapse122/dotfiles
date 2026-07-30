@@ -20,16 +20,27 @@
 # of the prior deliberate `yes`.
 hide_window_decorations no
 remember_window_size  no
-initial_window_width  82c
+# 128c, not the historical 82c: the vertical tab bar below occupies 28 columns
+# of the window (measured with kitty 0.48.1 at the managed font/size — the
+# upstream "about twenty title cells" figure counts title cells only), and
+# `initial_window_width` in cells accounts for margins and padding but NEVER for
+# the tab bar. 128c therefore yields a 100x24 text area, widening the old 82x24.
+initial_window_width  128c
 initial_window_height 24c
 
 # --- tab bar ---
-# Upstream default is `bottom`; the top edge matches browser/editor tab
-# conventions on both KDE and GNOME.
-tab_bar_edge top
-# Upstream default is `fade`; powerline renders a continuous styled bar.
-# kitty draws the separators itself, and the managed mono face is a Nerd
-# Font, so the glyphs are covered on every managed host.
+# Vertical sidebar on the left edge. kitty gained `left`/`right` in 0.48; older
+# builds resolve an unknown value to `bottom` SILENTLY, which is why this line
+# and the 0.48 bundle provisioned by
+# .chezmoiscripts/00-tools/run_onchange_before_kitty.sh must land together.
+tab_bar_edge left
+# Upstream default is 2, which would hide the sidebar until a second tab opens.
+# The sidebar is the point here, so show it from the first tab.
+tab_bar_min_tabs 1
+# Upstream default is `fade`; powerline renders a continuous styled bar. kitty
+# draws the separators itself, and the managed mono face is a Nerd Font, so the
+# glyphs are covered on every managed host. Retained unchanged from the previous
+# horizontal bar: the vertical layout reuses the same per-tab draw function.
 tab_bar_style powerline
 tab_powerline_style slanted
 # Index prefix makes `goto_tab N` discoverable; kitty still auto-prepends
@@ -60,7 +71,9 @@ font_size {{ .fonts.sizes.terminal }}
 
 # --- input / clipboard ---
 copy_on_select        clipboard
-strip_trailing_space  smart
+# Plural since kitty 0.48 renamed the key; the singular spelling is now an
+# unknown key that kitty warns about on every start. Values are unchanged.
+strip_trailing_spaces smart
 
 # --- scrolling ---
 scrollback_lines 10000
