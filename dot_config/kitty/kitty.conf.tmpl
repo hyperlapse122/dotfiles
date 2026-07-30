@@ -29,11 +29,7 @@ initial_window_width  128c
 initial_window_height 24c
 
 # --- tab bar ---
-# Vertical sidebar on the left edge. kitty gained `left`/`right` in 0.48; older
-# builds resolve an unknown value to `bottom` SILENTLY, which is why this line
-# and the 0.48 bundle provisioned by
-# .chezmoiscripts/00-tools/run_onchange_before_kitty.sh must land together.
-tab_bar_edge left
+tab_bar_edge top
 # Upstream default is 2, which would hide the sidebar until a second tab opens.
 # The sidebar is the point here, so show it from the first tab.
 tab_bar_min_tabs 1
