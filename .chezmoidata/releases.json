@@ -331,7 +331,7 @@
         "kind": "ociImage",
         "source": "ghcr.io/seakee/cpa-manager-plus",
         "version": "latest",
-        "digest": "sha256:516c169d2910b59cb90b7831f18bec03c9d4cf9fa2b62035e7a6c25990e5ee47"
+        "digest": "sha256:9a9715cc0849ee2feb553983713e70a197a5272a73b7a6f969fcff4dc26ab465"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
