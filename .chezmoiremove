@@ -1,3 +1,4 @@
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
 .config/opencode/commands
 
 # Orphaned compound-engineering skills. They used to be fetched into
@@ -52,4 +53,12 @@
 # old source stops managing the old target but leaves the already-deployed 0444
 # copy behind — prune it here, in the target-application phase, so no stale
 # registry is visible to the 90-src reconcile script that runs last.
+#
+# GATED to the platforms that actually received the old target. The encrypted
+# registry was chezmoiignored on Windows (no GPG key: 80-keys is bash-only) and
+# in containers, so chezmoi never deployed ~/src/garden.yaml there. An ungated
+# prune would delete a same-named file those hosts own, which chezmoi did not
+# put there — a destructive removal of user data, not a cleanup.
+{{- if and (ne .chezmoi.os "windows") (not $f.container) }}
 src/garden.yaml
+{{- end }}
