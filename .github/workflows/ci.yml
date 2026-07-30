@@ -194,6 +194,19 @@ jobs:
       - name: Run overlay injection test
         run: .ci/test-compound-engineering-overlays.sh "$GITHUB_WORKSPACE"
 
+  garden-registry-relocation:
+    name: garden registry relocation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run garden registry relocation checks
+        run: .ci/test-garden-registry-relocation.sh "$GITHUB_WORKSPACE"
+
   tmux-kitty-passthrough:
     name: tmux Kitty image passthrough
     runs-on: ubuntu-latest

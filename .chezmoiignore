@@ -44,7 +44,7 @@
 # script OS-gates itself out on Windows via its own render guard, like
 # config-solaar, so it needs no entry here.)
 {{- if eq .chezmoi.os "windows" }}
-src/garden.yaml
+.config/garden/garden.yaml
 {{- end }}
 
 # The service, CLI, and MCP provider also belong on eligible headless Linux
@@ -165,5 +165,5 @@ src/garden.yaml
 # 90-src reconcile script (grow/bootstrap/aoe) would have nothing to provision
 # and would hard-fail on the then-absent registry — skip both.
 .chezmoiscripts/90-src/*.sh
-src/garden.yaml
+.config/garden/garden.yaml
 {{- end }}
