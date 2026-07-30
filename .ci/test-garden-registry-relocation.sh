@@ -158,8 +158,12 @@ armor_line=$(head -n1 "$asc")
 # encrypted-session-key packet and an encrypted-data packet. CI has gpg; a
 # missing gpg fails loudly rather than silently skipping this check.
 command -v gpg >/dev/null 2>&1 || fail 'gpg is required to verify the registry ciphertext packet structure'
-packet_dump=$(gpg --list-packets --batch -- "$asc" 2>&1) \
-  || fail "gpg --list-packets could not parse $asc as PGP data (not actually encrypted?): $packet_dump"
+# Do NOT gate on gpg's exit status. `--list-packets` also attempts decryption,
+# so on any host without the private key (every CI runner) it prints the packet
+# dump and THEN exits non-zero with "No secret key". The packet structure is the
+# signal; the exit code is not. A file that is not PGP data emits no packet
+# lines at all, so the two greps below still fail closed for plaintext.
+packet_dump=$(gpg --list-packets --batch -- "$asc" 2>&1 || true)
 printf '%s\n' "$packet_dump" | grep -qF 'pubkey enc packet' \
   || fail "registry ciphertext at $asc has no pubkey-enc packet — the armor header alone is not proof of encryption"
 printf '%s\n' "$packet_dump" | grep -qF 'encrypted data packet' \
