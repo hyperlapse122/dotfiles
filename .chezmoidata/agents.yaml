@@ -346,7 +346,7 @@ agents:
         vision: google-antigravity/gemini-3.1-pro   # image input
         advisor: openai-codex/gpt-5.6-terra:high    # turn review; runtime stays off
         task: anthropic/claude-sonnet-5             # default subagent
-        smol: openai-codex/gpt-5.4-mini             # light floor that still follows tools
+        smol: openai-codex/gpt-5.6-luna             # light floor that still follows tools
         # `bulk` is the one custom role. It exists because a fallback chain is
         # keyed by ROLE, so mechanical bulk work can only get its own recovery
         # order by owning a role; `tiny` aliases it so the selector is named once.
@@ -357,7 +357,7 @@ agents:
       # of it. Resolution is override -> agent frontmatter -> session fallback
       # (oh-my-pi docs/task-agent-discovery.md), so an omitted agent lands on its
       # OWN declared model, not on the `task` role. `omp agents unpack` reports
-      # the v17.1.8 bundled defaults as designer/@designer, librarian/@smol,
+      # the v17.2.1 bundled defaults as designer/@designer, librarian/@smol,
       # reviewer/@slow, scout/@smol, sonic/@smol, task/@task; re-read them after
       # an omp upgrade with the sync-omp-models skill.
       #   - `task` and `librarian` are absent because their frontmatter already
@@ -407,12 +407,10 @@ agents:
         smol:
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
-        - openai-codex/gpt-5.6-luna
         - zai/glm-4.7-flash
         commit:
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
-        - openai-codex/gpt-5.6-luna
         tiny:
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
@@ -420,7 +418,7 @@ agents:
         - zai/glm-4.7-flash
         bulk:
         - anthropic/claude-haiku-4-5
-        - openai-codex/gpt-5.4-mini
+        - openai-codex/gpt-5.6-luna
       # Exa first; unlisted providers keep their built-in relative order after
       # it. The deep-research surfaces are pinned off rather than left to a
       # default that could change upstream.

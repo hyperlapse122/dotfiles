@@ -331,10 +331,10 @@ this table moving with it, the check fails.
 | `vision` | image input | Gemini Pro | image-and-text agent turns with real tool use, which the image-specialist line cannot do |
 | `advisor` | passive turn review | GPT Terra | a critic from a different vendor than the doer; review is its stated job shape |
 | `task` | default subagent | Claude Sonnet | agentic by default and narrates progress, which is what a parent reads back |
-| `smol` | light floor that still calls tools | GPT mini | the vendor names subagents as a target workload for this line |
+| `smol` | light floor that still calls tools | GPT Luna | bounded high-volume tool loops retain real reasoning without entering a deliberation tier |
 | `tiny` | titles, memory, background triage | Gemini Flash-Lite | latency and volume are the job; judgment is not |
 | `bulk` | mechanical edits at volume — the one custom role | Gemini Flash-Lite | same tier as background work, but it owns a role so it can own a recovery order |
-| `commit` | commit messages | GPT mini | bounded transformation with a clear success test |
+| `commit` | commit messages | GPT Luna | bounded transformation with a clear success test still benefits from reliable reasoning |
 | `scout` | read-only exploration — and, on this host, every compound-engineering persona | Claude Sonnet | dispatched work is deep-judgment, not exploration; the light floor would demote it |
 | `reviewer` | code review subagent | GPT Terra | same critic model as turn review, so the two cannot disagree by accident |
 | `sonic` | mechanical bulk | Gemini Flash-Lite | via `@bulk`; routine edits where latency beats depth, stepping down through Claude then GPT |
@@ -357,15 +357,15 @@ omo's published agent and category provider chains.
 | prometheus — planning | Claude Fable, xhigh | `plan` | agree: same line and tier |
 | metis — pre-plan gap analysis | Claude Opus, high | `designer` shares that tier | agree on the tier; omp has no gap-analysis role |
 | atlas, sisyphus-junior — workers | Claude Sonnet | `task` | agree, once the always-latest float lands Sonnet 5 |
-| librarian, explore — utility | GPT mini (fast variant) | `smol` | agree on the line; this host exposes the plain mini id |
+| librarian, explore — utility | GPT mini (fast variant) | `smol` | **diverge** — this host deliberately selects Luna's stronger bounded-work reasoning |
 | visual-engineering category | Claude Opus, max | `designer` | agree: same line |
 | multimodal-looker | GPT Sol low → Kimi K → GLM vision | `vision` | **diverge** — see below |
 | quick category | Kimi Code highspeed alias | `bulk`, `tiny` | **diverge** — see below |
 | writing category | Kimi K, low | — | omp has no writing role |
 
-Nine of eleven comparable slots agree, and this repo derived its placement from
-vendor job shapes before the comparison was run. Treat that as corroboration,
-not as coincidence.
+Eight of eleven comparable slots agree. This repo derived its placement from
+vendor job shapes before the comparison was run. Treat the remaining agreement
+as corroboration, not as coincidence.
 
 **Rules borrowed wholesale.**
 
@@ -384,14 +384,18 @@ not as coincidence.
 
 **Where this repo diverges, and why.**
 
+- `smol` runs GPT Luna rather than omo's GPT mini utility line. Mini is the
+  closer speed-first utility match, but the requested policy favors Luna's
+  stronger reasoning for bounded tool loops without escalating to deliberation.
 - `vision` runs Gemini Pro rather than omo's Sol-first multimodal chain. This is
   provider availability, not disagreement: omo names Gemini 3.1 Pro a
   visual-capable override "where a provider exposes it", and this host exposes
   it through Antigravity with quota to spare.
 - `bulk` and `tiny` run Gemini Flash-Lite rather than omo's Kimi highspeed
   alias. The Kimi membership quota here is shared across every client and is
-  regularly spent, so the plan with headroom wins the background tier. The
-  second hop agrees with omo anyway: both step to the GPT mini line.
+  regularly spent, so the plan with headroom wins the background tier. Its
+  OpenAI anchor uses GPT Luna rather than omo's Mini line to preserve the
+  requested light-family reasoning profile.
 - omo's warnings about MiniMax and Qwen as orchestrators do not apply — neither
   provider is authenticated on this host.
 
@@ -412,12 +416,12 @@ anchoring never escalates background work to a deliberation line.
 |---|---|---|
 | Claude Opus (main loop) | Kimi K → GLM main text → GPT Sol | GLM Flash; any image-only line |
 | Claude Fable (planning) | Claude Opus → Kimi K | GLM Flash; Claude Haiku |
-| GPT Sol (deliberation) | Claude Opus → Kimi K → GLM main text | GPT mini; any Flash-Lite line |
+| GPT Sol (deliberation) | Claude Opus → Kimi K → GLM main text | GPT Luna; any Flash-Lite line |
 | GPT Terra (review) | GPT Sol → Claude Opus | the same family as the model being reviewed |
 | Gemini Pro (vision) | GLM vision → Kimi K | GLM main text and Gemini Flash-Image — neither can do a vision agent turn |
-| GPT mini (light floor) | Gemini Flash → Claude Haiku → GPT Luna → GLM Flash | Claude Opus or GPT Sol; a deliberation line here is pure waste |
+| GPT Luna (light floor) | Gemini Flash → Claude Haiku → GLM Flash | Claude Opus or GPT Sol; a deliberation line here is pure waste |
 | Gemini Flash-Lite (background) | Gemini Flash → Claude Haiku → GPT Luna → GLM Flash | any deliberation tier |
-| Claude Haiku (bulk) | GPT mini | Claude Fable; Kimi K at max effort |
+| Claude Haiku (bulk) | GPT Luna | Claude Fable; Kimi K at max effort |
 
 ## Never place
 
