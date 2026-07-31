@@ -477,35 +477,35 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v17.2.1",
+        "version": "v17.2.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-linux-x64",
-            "sha256": "ac0285a571aa79c58d59482561a3871befe7333dba3a3bdc2e90682653ee33b2"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-linux-x64",
+            "sha256": "306f555637d63dced80cffb2fe908da7e054389f858c071f304bc17e3ed622de"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-linux-arm64",
-            "sha256": "d34883744bb54476f7268aad4b561ea9b1cd826f201d044b337c5a96713fa83d"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-linux-arm64",
+            "sha256": "044e405dc340d1862ba1a634d20ec5c600a40e0ef24221bbdb3db373b1fe3ad5"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-darwin-x64",
-            "sha256": "d23c197d93243122ef9a35a247bdd85075c4c1356dd1fa4a080faaa2dae4b905"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-darwin-x64",
+            "sha256": "d099bfb2a182710fae03fc5eaa74e7e974e65f38b8079b1b798b976d1b9544a9"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-darwin-arm64",
-            "sha256": "b75eddb19ba9ec401fee5ecb35b3ceb5ddc48708e98b5a113136df5d65f2bed8"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-darwin-arm64",
+            "sha256": "33f5980b96017ec20dd002fac6c8a58d6f641ed018f2054efb8b3c16ca343804"
           },
           "windows-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-windows-x64.exe",
-            "sha256": "fd7f8d3e3b34c9933da0c1a4bf991afdad6396b095b20122d6ebddeebc2b28b3"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-windows-x64.exe",
+            "sha256": "111e915f27dbbceaa5c9cfce9cbd465aa445832b157879a338a83ce39765cb10"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-linux-musl-x64",
-            "sha256": "8f05f7eed2940b11c29d7aaf0e641b100c014db5bfbee00afa5dd4929ad5dd6a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-linux-musl-x64",
+            "sha256": "65a6d0cab716103b0ff108770bd52172459d3ddbf484b5bae28962ce89dfd480"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.1/omp-linux-musl-arm64",
-            "sha256": "3babfe15664f32fcc03dc91d92a10341baf6e65b9868351de21c5aa3218e139d"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.2/omp-linux-musl-arm64",
+            "sha256": "bdb98822f13160c640b514b0d3f4c080210fd69e2af34473f26c0fef809a3236"
           }
         }
       },
@@ -579,31 +579,31 @@
       "uv": {
         "kind": "githubRelease",
         "source": "astral-sh/uv",
-        "version": "0.12.0",
+        "version": "0.12.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "3340a9d8cffc4d801bc1a7459ebfaf5790c79400720d9b6963d806f058526684"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "47823f814693bab8623308341369190de30b5c621eec5b1ee20352eae8c7982c"
           },
           "linux-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "936fbbf20188a2b1c66bce3dca3f4009a5c9cdf12bb2bbd084e71926f75d6a15"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "ce218dad9eb48a39dd86160bec6291fac7275f20a9cabcc4bc10dd2c757208f8"
           },
           "darwin-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-x86_64-apple-darwin.tar.gz",
-            "sha256": "d41593beaefc54bab7d062af0ef6ca093bfb81d001d58ebbef39e44423f9c496"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-apple-darwin.tar.gz",
+            "sha256": "69d9f9a00337f25a50dcb13882052da08b8469bac11091c98c5694c3c6721467"
           },
           "darwin-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-aarch64-apple-darwin.tar.gz",
-            "sha256": "2b9e582af54f84fa50c115427451a6c13e80f43b52f8282b8af5791077317bbf"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-apple-darwin.tar.gz",
+            "sha256": "77d2906988e8074fd43f2f329ec452ebbf9b0c257ba1c66451c71de70a6baf42"
           },
           "windows-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-x86_64-pc-windows-msvc.zip",
-            "sha256": "68200e25de594df92387186bbfb9d9df606ec1d87efaa0ae0c7f690970e53db6"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-pc-windows-msvc.zip",
+            "sha256": "8fcb0cb46e1229065e344758980924e569bef5882ef45f46fada8fb24e06b74a"
           },
           "windows-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.0/uv-aarch64-pc-windows-msvc.zip",
-            "sha256": "60c12dc34a8ff0269d7744a3a94506fa8f140618a82194b7bf7834fa789a765b"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-pc-windows-msvc.zip",
+            "sha256": "9bc7c18e616230fa2dc6fb24bc3afde18a95c2b5c9433de747e9502c66041568"
           }
         }
       },
