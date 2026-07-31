@@ -55,7 +55,12 @@ fi
 [[ $(cat "$referent") == 'do not overwrite' ]]
 grep -F 'unsafe target' "$scratch/auth.err" >/dev/null
 
-source="$home/.local/share/compound-engineering/v3.20.0"
+source_line=$(grep -m1 '^SOURCE="\$HOME/' "$plugin_script")
+if [[ ! $source_line =~ ^SOURCE=\"\$HOME/([^\"]+)\"$ ]]; then
+  printf 'plugin script has no literal HOME-relative SOURCE\n' >&2
+  exit 1
+fi
+source="$home/${BASH_REMATCH[1]}"
 mkdir -p "$source/.claude-plugin"
 printf '{"name":"compound-engineering-plugin"}\n' >"$source/.claude-plugin/marketplace.json"
 cat >"$fake_bin/omp" <<'EOF'

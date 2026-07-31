@@ -1,0 +1,25 @@
+# /etc/udev/rules.d/80-uinput.rules — installed by chezmoi
+# (system/linux/etc/**, .chezmoiscripts/30-linux/install-system-10-files).
+#
+# Ubuntu's ydotool package ships /usr/lib/udev/rules.d/80-uinput.rules,
+# which grants /dev/uinput access through a persistent GROUP/MODE
+# assignment rather than the active-seat model this repository uses. udev
+# reads rules.d directories in priority order (/etc highest, then /run,
+# then /usr/lib lowest) and, when the SAME BASENAME exists in more than one
+# directory, reads it ONLY from the highest-priority directory — it does
+# not merge the two files. This file exists solely to occupy that basename
+# with an inert override, so Ubuntu's package-owned rule never takes effect
+# on a managed host.
+#
+# This file intentionally contains NO rule expression and NO
+# GROUP/OWNER/MODE assignment — it grants no access at all. The
+# repository's sole positive /dev/uinput grant is the active-seat
+# TAG+="uaccess" rule in 70-uinput-solaar.rules, shared by Solaar and
+# ydotoold. Fedora does not ship a package-owned 80-uinput.rules, so on
+# Fedora this file is an inert defensive override with nothing to shadow.
+#
+# Do NOT add a rule expression, GROUP, OWNER, MODE, or persistent group
+# membership here. If a future need arises for additional uinput behavior,
+# add it to 70-uinput-solaar.rules (or a new file numbered below 73, per
+# that file's ORDERING note) instead of resurrecting a grant in this
+# basename.

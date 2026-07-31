@@ -300,6 +300,28 @@ install_fedora_packages() {
   "${DNF[@]}" install -y "${packages[@]}"
 }
 
+# Cut over Fedora's package-owned root ydotool.service to the shared per-user
+# runtime once the daemon and a supported desktop are both present, so a
+# single managed user unit — not the package's system unit — owns
+# /dev/uinput and the ydotoold socket
+# (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl). Gated on BOTH
+# the installed daemon and the same KDE/GNOME eligibility predicate that
+# appended ydotool to the package set above: a headless host with an
+# independently installed ydotoold is left untouched. Runs immediately after
+# install_fedora_packages so the package (and its system unit) already
+# exist, before any unrelated post-install setup. Idempotent — stopping an
+# inactive unit and masking an already-masked one are both no-ops — and
+# failures are NOT swallowed: a stop/mask problem must abort the apply
+# rather than leave the root daemon racing the user runtime for
+# /dev/uinput.
+configure_ydotool_package_service() {
+  [[ -x /usr/bin/ydotoold ]] || return 0
+  { [[ "${HAS_KDE}" -eq 1 ]] || [[ "${HAS_GNOME}" -eq 1 ]]; } || return 0
+
+  "${SUDO[@]}" systemctl stop ydotool.service
+  "${SUDO[@]}" systemctl mask ydotool.service
+}
+
 # RPMs installed directly from a vendor URL (no repo). For each entry: skip when
 # already installed — or, for an entry pinning a `version` in the data, when the
 # installed rpm VERSION already matches the pin, so bumping the pin re-runs
@@ -746,6 +768,7 @@ configure_user_groups() {
 # installed inside setup_fedora_repos.
 configure_nvidia_repo_policy
 install_fedora_packages
+configure_ydotool_package_service
 install_nvidia_support
 install_direct_rpms
 install_flatpak_packages

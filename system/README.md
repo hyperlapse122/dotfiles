@@ -86,7 +86,7 @@ system/linux/etc/locale.conf
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreeze` gate skips it when the theme is not installed |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
-| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
+| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access, active-seat `/dev/uinput` grant shared by Solaar and ydotoold (`70-uinput-solaar.rules`, the sole positive `TAG+="uaccess"` grant), comment-only `80-uinput.rules` that shadows Ubuntu's broader vendor rule by basename |
 
 ## The install-system script set (10-files → 20-host → 30-network)
 

@@ -5,7 +5,11 @@
 # diverted action in Solaar's Key/Button Diversion setting. Under Wayland,
 # actions that synthesize input (KeyPress, MouseScroll) write /dev/uinput;
 # the shipped udev rule system/linux/etc/udev/rules.d/70-uinput-solaar.rules
-# (TAG+="uaccess") grants the active seat user that access.
+# (TAG+="uaccess") grants the active seat user that access — the SAME grant
+# the managed ydotoold runtime (~/.config/systemd/user/ydotool.service) uses
+# for keyboard and pointer automation. Do not add GROUP/OWNER/MODE or
+# `input`-group membership here or in that udev rule; the active-seat ACL
+# is the only access path both consumers rely on.
 #
 # === Thumb-button mouse gestures (MX Master 4 + MX Master 3S) ===
 #
@@ -67,9 +71,10 @@
 # GNOME exposes no stable D-Bus method for window tiling (the KDE Left/Right
 # actions), so Left/Right instead synthesize mutter's NATIVE edge-tiling
 # keybindings <Super>Left / <Super>Right via Solaar's KeyPress. KeyPress
-# writes /dev/uinput under Wayland — access stock hosts don't grant, and that
-# the shipped 70-uinput-solaar.rules udev rule (see the header above) now
-# does. KeyPress arguments are X keysym names resolved through Solaar's
+# writes /dev/uinput under Wayland — access stock hosts don't grant, and
+# that the shipped 70-uinput-solaar.rules udev rule (shared with ydotoold;
+# see the header above) now does. KeyPress arguments are X keysym names
+# resolved through Solaar's
 # XK_KEYS map (Super_L, Left, Right all present in 1.1.19's
 # keysyms/keysymdef.py); the [[keys], click] form below is the exact shape
 # 1.1.19's regularize_args parses and its data() re-serializes. gdbus ships
