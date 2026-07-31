@@ -189,12 +189,13 @@ group_block() {  # stdin = one distro's section text, $1 = list key
     grab { print }
   '
 }
-fedora_section=$(sed -n '/^    fedora:$/,/^    ubuntu:$/p' "$packages_yaml")
-ubuntu_section=$(sed -n '/^    ubuntu:$/,$p' "$packages_yaml")
 for group in fedora:kdePackages fedora:gnomePackages ubuntu:kdePackages ubuntu:gnomePackages; do
   distro=${group%%:*}; key=${group#*:}
-  section_var="${distro}_section"
-  n=$(printf '%s\n' "${!section_var}" | group_block "$key" | grep -cE '^\s+- ydotool(\s|#|$)' || true)
+  case "$distro" in
+    fedora) section=$(sed -n '/^    fedora:$/,/^    ubuntu:$/p' "$packages_yaml") ;;
+    ubuntu) section=$(sed -n '/^    ubuntu:$/,$p' "$packages_yaml") ;;
+  esac
+  n=$(printf '%s\n' "$section" | group_block "$key" | grep -cE '^\s+- ydotool(\s|#|$)' || true)
   [[ "$n" -eq 1 ]] || fail "expected exactly 1 ydotool entry in $distro.$key, found $n"
 done
 total=$(grep -cE '^\s+- ydotool(\s|#|$)' "$packages_yaml" || true)
@@ -330,8 +331,11 @@ run_pkg_service() {  # $1=fn-file $2=has_kde $3=has_gnome $4=daemon(present|abse
   : >"$pkg_call_log"
   ( set -euo pipefail
     PATH="$scratch/bin:/usr/bin:/bin"
+    # shellcheck disable=SC2034 # consumed by the evaluated function body
     SUDO=()
+    # shellcheck disable=SC2034 # consumed by the evaluated function body
     HAS_KDE=$has_kde
+    # shellcheck disable=SC2034 # consumed by the evaluated function body
     HAS_GNOME=$has_gnome
     fn_text=$(sed "s#/usr/bin/ydotoold#$daemon_path#" "$fn_file")
     eval "$fn_text"
