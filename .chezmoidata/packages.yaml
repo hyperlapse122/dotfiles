@@ -358,6 +358,7 @@ packages:
         # (this repo adds no teardown scripts, and this manifest has no removal
         # key): sudo dnf remove kitty
         - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
+        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service masks the package's root ydotool.service in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
       # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
       # framework as the KDE targets (unified input-method policy: ibus is
       # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
@@ -374,6 +375,7 @@ packages:
         # kitty: provisioned from the locked upstream bundle — see the note in
         # kdePackages above, including the one-time `sudo dnf remove kitty`.
         - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
+        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service masks the package's root ydotool.service in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
       # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
@@ -422,6 +424,7 @@ packages:
         # entry is precisely the "the gate lives in the key name and nowhere
         # else" problem this map exists to end.
         intelHweKernel: intelGpu
+        kdePackages: desktop.kde  # a KDE Plasma desktop on Ubuntu (Kubuntu, or a manually installed Plasma session)
         gnomePackages: desktop.gnome  # Ubuntu Desktop (gnome-shell shipped by the ISO)
         bareMetalPackages: "!virt"  # neither a VM nor a container
       # Counterpart of fedora's `dnfRepos` — same job (declare a third-party repo
@@ -679,6 +682,13 @@ packages:
         - dracut  # initramfs generator (Ubuntu 26.04 default); its systemd-cryptsetup wires tpm2-device=auto at early boot
         - tpm2-tools  # TPM2 userspace + libtss2 the dracut tpm2-tss module bundles (systemd-cryptenroll TPM2 unlock)
 
+      # Gate `desktop.kde` — a KDE Plasma desktop on Ubuntu (Kubuntu, or a
+      # manually installed Plasma session). Ubuntu ships no first-party KDE
+      # spin, so this group carries only the packages whose eligibility
+      # genuinely tracks KDE/GNOME parity rather than an Ubuntu-native KDE
+      # package set — see gnomePackages below for the GNOME counterpart.
+      kdePackages:
+        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service disables the package's global ydotool.service user-unit enablement in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
       # Gate `desktop.gnome` — Ubuntu Desktop 26.04. Only the GNOME-specific
       # pinentry is desktop-gated here; the fcitx5 input method is a baseline
       # package (see `packages:` above) so it installs regardless of desktop.
@@ -698,6 +708,7 @@ packages:
         # carries). ONE-TIME MANUAL STEP on a host that still carries the distro
         # package: sudo apt remove kitty
         - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
+        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service disables the package's global ydotool.service user-unit enablement in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
 
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has

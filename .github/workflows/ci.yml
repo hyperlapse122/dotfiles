@@ -181,6 +181,25 @@ jobs:
       - name: Render ignore/removal gates
         run: .ci/test-cli-proxy-api-render-matrix.sh
 
+  ydotool-integration:
+    name: ydotool provisioning integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run isolated ydotool integration
+        run: .ci/test-ydotool-integration.sh
+      - name: Render ydotool runtime gates under the container fact
+        run: |
+          set -euo pipefail
+          sudo touch /run/.containerenv
+          trap 'sudo rm -f /run/.containerenv' EXIT
+          YDOTOOL_TEST_EXPECT=container .ci/test-ydotool-integration.sh
+
   compound-engineering-overlays:
     name: compound-engineering overlays
     runs-on: ubuntu-latest

@@ -22,8 +22,9 @@ set -euo pipefail
 # APT repositories, dpkg architecture setup for Steam, apt/flatpak/dotnet
 # packages, direct .deb installs, NVIDIA driver + CUDA + container toolkit, the
 # Intel graphics stack + HWE kernel (kobuk-team PPA, Intel-GPU-gated), system
-# services, and user groups. Serves Ubuntu Desktop 26.04 (GNOME): the GNOME
-# package set (gnomePackages) is gated on the `desktop` host fact and the
+# services, and user groups. Serves Ubuntu Desktop 26.04 (GNOME) plus a
+# manually installed KDE Plasma desktop: the desktop-gated package sets
+# (kdePackages/gnomePackages) are gated on the `desktop` host fact and the
 # fcitx5 Korean IME installs as a baseline package; packages.yaml's
 # `gates:` map says which fact gates which group. Every install path is guarded
 # so chezmoi can safely re-run this script when .chezmoidata/packages.yaml
@@ -71,9 +72,13 @@ HAS_INTEL_GPU=0; fact_gate {{ index $gates "intelPackages" | quote }} && HAS_INT
 # counterpart.
 HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
 
-# The desktop is ONE fact with ONE value (gnome | none). Ubuntu is a GNOME-only
-# target, so only the GNOME flag is seeded here; `none` (a server, a container)
-# installs no desktop set, as before.
+# The desktop is ONE fact with ONE value (kde | gnome | none). Ubuntu ships
+# no first-party KDE spin, but a manually installed KDE Plasma desktop
+# (Kubuntu, or a hand-installed Plasma session) still resolves `desktop.kde`,
+# so both flags are seeded here through the same fact_gate() mechanism as
+# GNOME — KDE wins the tie per facts.yaml's precedence, mirroring the Fedora
+# installer. `none` (a server, a container) installs neither set, as before.
+HAS_KDE=0; fact_gate {{ index $gates "kdePackages" | quote }} && HAS_KDE=1
 HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "run_onchange_before_ubuntu.sh" -}}
@@ -130,6 +135,13 @@ packages=(
 if [[ "${HAS_BARE_METAL}" -eq 1 ]]; then
   packages+=(
 {{ range .packages.linux.ubuntu.bareMetalPackages -}}
+    {{ . | quote }}
+{{ end -}}
+  )
+fi
+if [[ "${HAS_KDE}" -eq 1 ]]; then
+  packages+=(
+{{ range .packages.linux.ubuntu.kdePackages -}}
     {{ . | quote }}
 {{ end -}}
   )
@@ -217,6 +229,30 @@ install_ubuntu_packages() {
   done
   [[ ${#to_install[@]} -eq 0 ]] && return 0
   "${APT[@]}" install -y "${to_install[@]}"
+}
+
+# Cut over Ubuntu's package-owned global ydotool.service user-unit
+# enablement to the shared per-user runtime once the daemon and a supported
+# desktop are both present, so a single managed user unit — not the
+# package's vendor enablement — owns /dev/uinput and the ydotoold socket
+# (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl). Gated on BOTH
+# the installed daemon and the same KDE/GNOME eligibility predicate that
+# appended ydotool to the package set above: a headless host with an
+# independently installed ydotoold is left untouched. `systemctl --global
+# disable` is offline-capable (it edits
+# /etc/systemd/user/default.target.wants, not a live user manager), so —
+# unlike Fedora's system-unit mask — it needs no user bus and runs safely
+# from this root-scoped installer. Runs immediately after
+# install_ubuntu_packages so the package (and its vendor enablement)
+# already exist, before any unrelated post-install setup. Idempotent —
+# disabling an already-disabled unit is a no-op — and failures are NOT
+# swallowed: a disable problem must abort the apply rather than leave the
+# vendor enablement racing the user runtime for /dev/uinput.
+configure_ydotool_package_service() {
+  [[ -x /usr/bin/ydotoold ]] || return 0
+  { [[ "${HAS_KDE}" -eq 1 ]] || [[ "${HAS_GNOME}" -eq 1 ]]; } || return 0
+
+  "${SUDO[@]}" systemctl --global disable ydotool.service
 }
 
 # An entry pinning a `version` in the data converges to that exact version —
@@ -550,6 +586,7 @@ install_ubuntu_packages "${core_packages[@]}"
 # install_nvidia_support. On non-Secure-Boot hosts this is a no-op.
 ensure_shim_mok_enrolled
 install_ubuntu_packages "${packages[@]}"
+configure_ydotool_package_service
 # Finish the enrollment after the packages that wrote through the debconf
 # preseed have installed; also clears the preseed via the EXIT trap that
 # prepare_mok_enrollment installed.
