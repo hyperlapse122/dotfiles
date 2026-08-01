@@ -679,7 +679,7 @@ jobs:
             '@echo off',
             'if /I "%~1"=="whoami" (echo dummy@example.invalid & exit /b 0)',
             'if /I "%~1"=="--version" (echo 2.0.0 & exit /b 0)',
-            'echo dummy-secret',
+            '<nul set /p "=dummy-secret"',
             'exit /b 0'
           ) -join "`r`n"
           Set-Content -Path (Join-Path $bindir 'op.cmd') -Value $op -Encoding Ascii
@@ -798,11 +798,13 @@ jobs:
       - name: Assert Windows compound-engineering and omp integration
         run: |
           $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
           $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
           $externals = Join-Path $out '.chezmoiexternals\ai-agents.toml'
           $updater = Join-Path $out '.chezmoiscripts\70-agents\run_onchange_after_update-omp-plugins.ps1'
           $settings = Join-Path $out '.chezmoiscripts\70-agents\run_after_config-omp-settings.ps1'
-          foreach ($path in @($externals, $updater, $settings)) {
+          $auth = Join-Path $out '.chezmoiscripts\70-agents\run_after_config-omp-auth.ps1'
+          foreach ($path in @($externals, $updater, $settings, $auth)) {
             if (-not (Test-Path $path)) { throw "missing rendered survivor path: $path" }
             if (Test-Path "$path.render-error.txt") { throw "render failed: $path" }
           }
@@ -840,6 +842,34 @@ jobs:
           if ($actual[2] -ne 'plugin install --scope user --force compound-engineering@compound-engineering-plugin') {
             throw "unexpected install call: $($actual[2])"
           }
+          $authHome = Join-Path $env:RUNNER_TEMP 'omp-auth-home'
+          $authEnv = Join-Path $authHome '.omp\agent\.env'
+          New-Item -ItemType Directory -Force -Path (Split-Path $authEnv) | Out-Null
+          @(
+            '# user-owned values stay byte-identical'
+            "OTHER_TOKEN='keep me'"
+            'ZAI_API_KEY=stale'
+            'ZAI_API_KEY="duplicate"'
+            'OPENROUTER_API_KEY=stale'
+            'OPENCODE_API_KEY="duplicate"'
+          ) | Set-Content -LiteralPath $authEnv -Encoding utf8NoBOM
+          $env:OMP_AGENT_ENV = $authEnv
+          & pwsh -NoProfile -File $auth
+          if ($LASTEXITCODE -ne 0) { throw "omp auth reconcile failed ($LASTEXITCODE)" }
+          $authLines = @(Get-Content -LiteralPath $authEnv)
+          foreach ($name in @('ZAI_API_KEY', 'EXA_API_KEY', 'OPENROUTER_API_KEY', 'OPENCODE_API_KEY')) {
+            $assignments = @($authLines | Where-Object { $_ -match "^$name=" })
+            if ($assignments.Count -ne 1) { throw "expected one $name assignment, got $($assignments.Count)" }
+            if ($assignments[0] -ne "$name=`"dummy-secret`"") { throw "unexpected $name value: $($assignments[0])" }
+          }
+          if (-not ($authLines -contains "OTHER_TOKEN='keep me'")) { throw 'unmanaged dotenv line was not preserved' }
+          Set-Content -LiteralPath $authEnv -Value 'NOT A DOTENV ASSIGNMENT' -NoNewline -Encoding utf8NoBOM
+          & pwsh -NoProfile -File $auth *> (Join-Path $env:RUNNER_TEMP 'omp-auth-malformed.log')
+          if ($LASTEXITCODE -eq 0) { throw 'omp auth accepted malformed dotenv input' }
+          if ((Get-Content -Raw -LiteralPath $authEnv) -ne 'NOT A DOTENV ASSIGNMENT') {
+            throw 'omp auth changed malformed dotenv input'
+          }
+          exit 0
 
       - name: Upload rendered internals
         if: always()

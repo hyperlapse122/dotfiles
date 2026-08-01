@@ -438,8 +438,10 @@ agents:
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
     # credential map keyed by environment variable, not a model-provider auth
     # shape. Exa is a search tool, not a model provider.
-    # run_after_config-omp-auth requires exactly this closed set:
-    # a shape-only check would let a data edit inject an arbitrary variable such
+    # run_after_config-omp-auth requires exactly this four-variable closed set:
+    # ZAI_API_KEY, EXA_API_KEY, OPENROUTER_API_KEY, and OPENCODE_API_KEY.
+    # OPENCODE_API_KEY enables both OpenCode providers.
+    # A shape-only check would let a data edit inject an arbitrary variable such
     # as HTTP_PROXY or NODE_OPTIONS into the environment omp loads for every
     # session, and dropping the cardinality check would let an emptied map
     # silently delete a key.
@@ -449,3 +451,7 @@ agents:
         key: op://Private/Z.ai/API Key
       - variable: EXA_API_KEY
         key: op://Private/Exa/API Key
+      - variable: OPENROUTER_API_KEY
+        key: op://Private/OpenRouter/API Key
+      - variable: OPENCODE_API_KEY
+        key: op://Private/Opencode/API Key
