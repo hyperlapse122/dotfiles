@@ -869,6 +869,7 @@ jobs:
           if ((Get-Content -Raw -LiteralPath $authEnv) -ne 'NOT A DOTENV ASSIGNMENT') {
             throw 'omp auth changed malformed dotenv input'
           }
+          exit 0
 
       - name: Upload rendered internals
         if: always()
