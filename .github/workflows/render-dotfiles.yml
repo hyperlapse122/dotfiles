@@ -679,7 +679,7 @@ jobs:
             '@echo off',
             'if /I "%~1"=="whoami" (echo dummy@example.invalid & exit /b 0)',
             'if /I "%~1"=="--version" (echo 2.0.0 & exit /b 0)',
-            'echo dummy-secret',
+            '<nul set /p "=dummy-secret"',
             'exit /b 0'
           ) -join "`r`n"
           Set-Content -Path (Join-Path $bindir 'op.cmd') -Value $op -Encoding Ascii
