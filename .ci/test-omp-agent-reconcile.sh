@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_EXTENSION SETTINGS_SH SETTINGS_PS1'
+usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT AUTH_PS1 PLUGIN_SCRIPT HAPTIC_EXTENSION SETTINGS_SH SETTINGS_PS1'
 auth_script=${1:?$usage}
-plugin_script=${2:?$usage}
-haptic_extension=${3:?$usage}
-settings_script=${4:?$usage}
-settings_ps1=${5:?$usage}
+auth_ps1=${2:?$usage}
+plugin_script=${3:?$usage}
+haptic_extension=${4:?$usage}
+settings_script=${5:?$usage}
+settings_ps1=${6:?$usage}
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}
 scratch=$(mktemp -d "$scratch_root/omp-agent-reconcile.XXXXXX")
 cleanup() {
@@ -23,21 +24,47 @@ cat >"$home/.omp/agent/.env" <<'EOF'
 OTHER_TOKEN='keep me'
 ZAI_API_KEY=stale
 ZAI_API_KEY="duplicate"
+OPENROUTER_API_KEY=stale
+OPENCODE_API_KEY="duplicate"
 EOF
 chmod 0644 "$home/.omp/agent/.env"
 
-env HOME="$home" bash "$auth_script"
-
 auth="$home/.omp/agent/.env"
+run_auth() {
+  env HOME="$home" OMP_AGENT_ENV="$auth" bash "$auth_script"
+}
+run_auth
+
 [[ $(stat -c '%a' "$auth") == 600 ]]
 [[ $(grep -c '^ZAI_API_KEY=' "$auth") -eq 1 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
+[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 1 ]]
+[[ $(grep -c '^OPENCODE_API_KEY=' "$auth") -eq 1 ]]
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
-grep -F 'dummy-secret' "$auth" >/dev/null
-[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
+grep -F 'ZAI_API_KEY="dummy-secret"' "$auth" >/dev/null
+grep -F 'EXA_API_KEY="dummy-secret"' "$auth" >/dev/null
+grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
+grep -F 'OPENCODE_API_KEY="opencode-test-secret"' "$auth" >/dev/null
+ambient="$scratch/ambient.env"
+printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
+OMP_AGENT_ENV="$ambient" run_auth
+[[ $(cat "$ambient") == 'AMBIENT_TOKEN=keep' ]]
+
+# The rendered POSIX and PowerShell scripts must enforce the same ordered set.
+expected_names="$scratch/expected-managed-names"
+printf '%s\n' ZAI_API_KEY EXA_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY >"$expected_names"
+posix_names="$scratch/posix-managed-names"
+grep -m1 '^MANAGED_NAMES=' "$auth_script" |
+  grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names"
+ps1_names="$scratch/ps1-managed-names"
+grep -m1 '^\$managedNames = ' "$auth_ps1" |
+  grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$ps1_names"
+diff -u "$expected_names" "$posix_names"
+diff -u "$expected_names" "$ps1_names"
 
 printf 'NOT A DOTENV ASSIGNMENT\n' >"$auth"
-if env HOME="$home" bash "$auth_script" >"$scratch/malformed.out" 2>"$scratch/malformed.err"; then
+if run_auth >"$scratch/malformed.out" 2>"$scratch/malformed.err"; then
   printf 'auth reconcile accepted malformed dotenv input\n' >&2
   exit 1
 fi
@@ -48,7 +75,7 @@ referent="$scratch/referent"
 printf 'do not overwrite\n' >"$referent"
 rm "$auth"
 ln -s "$referent" "$auth"
-if env HOME="$home" bash "$auth_script" >"$scratch/auth.out" 2>"$scratch/auth.err"; then
+if run_auth >"$scratch/auth.out" 2>"$scratch/auth.err"; then
   printf 'auth reconcile accepted a symlink target\n' >&2
   exit 1
 fi
@@ -279,23 +306,47 @@ assert_render_fails() {
 }
 
 auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
+auth_ps1='.chezmoiscripts/70-agents/run_after_config-omp-auth.ps1.tmpl'
 settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 settings_win='.chezmoiscripts/70-agents/run_after_config-omp-settings.ps1.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 windows='"chezmoi":{"os":"windows"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
+closed_set='ZAI_API_KEY, EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
 
-# The credential set is closed so a data edit cannot inject a variable into the
-# environment omp loads for every session, nor silently drop one.
-assert_render_fails auth-outside-closed-set "$auth_sh" \
+# The credential set is closed on both platforms so a data edit cannot inject a
+# variable into the environment omp loads for every session, nor silently drop
+# one.
+assert_render_fails auth-outside-closed-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"NODE_OPTIONS\",\"key\":\"x\"}]}}}}" \
-  'declares unsupported variable "NODE_OPTIONS"'
-assert_render_fails auth-emptied-set "$auth_sh" \
+  "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
+assert_render_fails auth-outside-closed-set-windows "$auth_ps1" \
+  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"NODE_OPTIONS\",\"key\":\"x\"}]}}}}" \
+  "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
+assert_render_fails auth-emptied-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
   'must declare ZAI_API_KEY'
-assert_render_fails auth-duplicate "$auth_sh" \
+assert_render_fails auth-emptied-set-windows "$auth_ps1" \
+  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
+  'must declare ZAI_API_KEY'
+assert_render_fails auth-duplicate-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"a\"},{\"variable\":\"ZAI_API_KEY\",\"key\":\"b\"}]}}}}" \
   'duplicates variable "ZAI_API_KEY"'
+assert_render_fails auth-duplicate-windows "$auth_ps1" \
+  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"a\"},{\"variable\":\"ZAI_API_KEY\",\"key\":\"b\"}]}}}}" \
+  'duplicates variable "ZAI_API_KEY"'
+assert_render_fails auth-empty-key-linux "$auth_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"\"}]}}}}" \
+  'resolved to an empty value'
+assert_render_fails auth-empty-key-windows "$auth_ps1" \
+  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"\"}]}}}}" \
+  'resolved to an empty value'
+assert_render_fails auth-non-string-key-linux "$auth_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
+  'field `key` must resolve to a string'
+assert_render_fails auth-non-string-key-windows "$auth_ps1" \
+  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
+  'field `key` must resolve to a string'
 
 # Role indirection is the one value shape no later layer validates.
 assert_render_fails settings-dangling-alias "$settings_sh" \

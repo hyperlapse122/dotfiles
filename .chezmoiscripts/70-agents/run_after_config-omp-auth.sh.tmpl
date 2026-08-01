@@ -1,6 +1,6 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- $env := .agents.omp.auth.env -}}
-{{- $required := list "ZAI_API_KEY" "EXA_API_KEY" -}}
+{{- $required := list "ZAI_API_KEY" "EXA_API_KEY" "OPENROUTER_API_KEY" "OPENCODE_API_KEY" -}}
 {{- if not (kindIs "slice" $env) -}}{{- fail (printf "config-omp-auth: agents.omp.auth.env must be a list, got %s" (kindOf $env)) -}}{{- end -}}
 {{- $names := list -}}
 {{- $values := list -}}
@@ -9,7 +9,7 @@
 {{-   if not (kindIs "map" $entry) -}}{{- fail (printf "config-omp-auth: %s must be a map, got %s" $where (kindOf $entry)) -}}{{- end -}}
 {{-   if not (hasKey $entry "variable") -}}{{- fail (printf "config-omp-auth: %s is missing the `variable` field" $where) -}}{{- end -}}
 {{-   if not (kindIs "string" $entry.variable) -}}{{- fail (printf "config-omp-auth: %s field `variable` must be a string, got %s" $where (kindOf $entry.variable)) -}}{{- end -}}
-{{-   if not (has $entry.variable $required) -}}{{- fail (printf "config-omp-auth: %s declares unsupported variable %q; the closed set is ZAI_API_KEY and EXA_API_KEY" $where $entry.variable) -}}{{- end -}}
+{{-   if not (has $entry.variable $required) -}}{{- fail (printf "config-omp-auth: %s declares unsupported variable %q; the closed set is %s" $where $entry.variable (join ", " $required)) -}}{{- end -}}
 {{-   if has $entry.variable $names -}}{{- fail (printf "config-omp-auth: %s duplicates variable %q" $where $entry.variable) -}}{{- end -}}
 {{-   if not (hasKey $entry "key") -}}{{- fail (printf "config-omp-auth: %s is missing the `key` field" $where) -}}{{- end -}}
 {{-   $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $entry.key "ctx" $) | fromJson -}}
