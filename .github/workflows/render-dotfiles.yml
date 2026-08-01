@@ -798,6 +798,7 @@ jobs:
       - name: Assert Windows compound-engineering and omp integration
         run: |
           $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
           $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
           $externals = Join-Path $out '.chezmoiexternals\ai-agents.toml'
           $updater = Join-Path $out '.chezmoiscripts\70-agents\run_onchange_after_update-omp-plugins.ps1'
