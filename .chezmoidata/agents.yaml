@@ -340,7 +340,7 @@ agents:
     settings:
       modelRoles:
         default: anthropic/claude-opus-5:xhigh      # main coding and editing loop
-        slow: openai-codex/gpt-5.6-sol:xhigh        # deliberation ceiling
+        slow: openai-codex/gpt-5.6-sol:medium       # deliberation ceiling
         plan: anthropic/claude-fable-5:xhigh        # planning against a 1M context
         designer: anthropic/claude-opus-5:high      # UI and visual work
         vision: google-antigravity/gemini-3.1-pro   # image input
@@ -403,7 +403,7 @@ agents:
         default:
         - kimi-code/k3:high
         - zai/glm-5.2:max
-        - openai-codex/gpt-5.6-sol:xhigh
+        - openai-codex/gpt-5.6-sol:medium
         smol:
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
