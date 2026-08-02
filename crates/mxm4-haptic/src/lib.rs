@@ -201,8 +201,8 @@ mod ipc_server {
 
     use windows_sys::core::PWSTR;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, GetLastError, LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_PIPE_CONNECTED,
-        HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
+        CloseHandle, GetLastError, LocalFree, ERROR_BROKEN_PIPE, ERROR_INSUFFICIENT_BUFFER,
+        ERROR_NO_DATA, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
     };
     use windows_sys::Win32::Security::Authorization::{
         ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
@@ -390,6 +390,12 @@ mod ipc_server {
                 DisconnectNamedPipe(self.pipe.0);
             }
             if let Some(error) = read_error {
+                if matches!(
+                    error.raw_os_error(),
+                    Some(code) if code == ERROR_BROKEN_PIPE as i32 || code == ERROR_NO_DATA as i32
+                ) {
+                    return Ok(None);
+                }
                 return Err(error);
             }
             if read == 0 {

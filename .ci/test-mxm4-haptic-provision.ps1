@@ -219,6 +219,7 @@ try {
   Assert ([IO.Path]::GetFullPath($registered.Definition.Actions.Item(1).Path) -eq [IO.Path]::GetFullPath($daemonDestination)) 'registered task endpoint drifted'
   $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'mxm4-haptic', [IO.Pipes.PipeDirection]::Out)
   try { $pipe.Connect(15000) } finally { $pipe.Dispose() }
+  Start-Sleep -Milliseconds 250
   Assert ((Wait-TaskState $taskFolder $taskName 4).State -eq 4) 'task stopped after first fixed-pipe acceptance'
 
   # Identical convergence must reconcile live state without invoking either build.
