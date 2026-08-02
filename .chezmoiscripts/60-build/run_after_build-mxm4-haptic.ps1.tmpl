@@ -357,6 +357,7 @@ try {
     }
   }
   if ($task.State -ne 4) {
+    Stop-TaskForReplacement
     Invoke-Native 'task-start' { & schtasks.exe /Run /TN $TaskName }
   }
   Assert-TaskReady
