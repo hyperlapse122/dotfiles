@@ -52,6 +52,19 @@ function Wait-FileWritable([string]$Path, [int]$Seconds = 15) {
   } while ([DateTime]::UtcNow -lt $deadline)
   throw "file $Path did not become writable"
 }
+function Wait-PipeAvailable([int]$Seconds = 15) {
+  $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
+  do {
+    try {
+      $probe = [IO.Pipes.NamedPipeServerStream]::new('mxm4-haptic', [IO.Pipes.PipeDirection]::In, 1)
+      $probe.Dispose()
+      return
+    } catch {
+      Start-Sleep -Milliseconds 100
+    }
+  } while ([DateTime]::UtcNow -lt $deadline)
+  throw 'mxm4-haptic pipe ownership did not become available'
+}
 
 function Wait-TaskState($Folder, [string]$Name, [int]$State, [int]$Seconds = 15) {
   $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
@@ -338,20 +351,28 @@ try {
   Assert ($collision.ExitCode -ne 0) 'daemon accepted a foreign prebound pipe collision'
   $prebound.Dispose()
   $prebound = $null
+  Wait-PipeAvailable
 
   # The real daemon and built TypeScript client retain transport coverage.
-  $daemonProcess = Start-Process -FilePath $Daemon -PassThru -WindowStyle Hidden
+  $daemonLog = Join-Path $fixture 'daemon.stderr.log'
+  $daemonProcess = Start-Process -FilePath $Daemon -PassThru -WindowStyle Hidden -RedirectStandardError $daemonLog
   $clientScript = Join-Path $fixture 'client.mjs'
   $moduleUri = ([Uri]::new([IO.Path]::GetFullPath($ClientModule))).AbsoluteUri
   [IO.File]::WriteAllText($clientScript, "import { sendCommand } from '$moduleUri'; await sendCommand('LONG PRESS');`n")
   $sent = $false
+  $lastClientError = ''
   $deadline = [DateTime]::UtcNow.AddSeconds(15)
   do {
-    & node $clientScript 2>$null
+    $lastClientError = (& node $clientScript 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -eq 0) { $sent = $true; break }
     Start-Sleep -Milliseconds 200
   } while ([DateTime]::UtcNow -lt $deadline)
-  Assert $sent 'TypeScript client could not write to the owned fixed pipe'
+  $daemonState = if ($daemonProcess.HasExited) {
+    "exited $($daemonProcess.ExitCode): $((Get-Content -LiteralPath $daemonLog -Raw -ErrorAction SilentlyContinue).Trim())"
+  } else {
+    'running'
+  }
+  Assert $sent "TypeScript client could not write to the owned fixed pipe (daemon $daemonState; client: $lastClientError)"
   Assert (-not $daemonProcess.HasExited) 'daemon exited after the transport round trip'
 
   try {
