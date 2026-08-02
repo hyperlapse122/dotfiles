@@ -126,6 +126,37 @@
           }
         }
       },
+      "chezmoi": {
+        "kind": "githubRelease",
+        "source": "twpayne/chezmoi",
+        "version": "v2.71.1",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_linux_amd64.tar.gz",
+            "sha256": "e1fb16c962644d57f4d451c324aa86163d00faf5d035500f41fb48943a66dfed"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_linux_arm64.tar.gz",
+            "sha256": "6e88c8150d3d54533ba2f335a52c2ac7b67259c525ba0f19091fc078b6852154"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_darwin_amd64.tar.gz",
+            "sha256": "1551f07cab00441540a12e663ffbf4645664319c0f91d30a5f9a255470b561cc"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_darwin_arm64.tar.gz",
+            "sha256": "9fad1201c328428634b8a086f767df0dfe6dd3ea1128a2a7c45bc0b16641e294"
+          },
+          "windows-amd64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_windows_amd64.zip",
+            "sha256": "efdb5ae7e8e455e8f7c1b3d7d97beb7e946d9234f58d73945b78aaf6a5e92de6"
+          },
+          "windows-arm64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_windows_arm64.zip",
+            "sha256": "fdc6e21dcfd244144c06f3479e51cfabb5343196b88021207a169b0e916bc64d"
+          }
+        }
+      },
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",

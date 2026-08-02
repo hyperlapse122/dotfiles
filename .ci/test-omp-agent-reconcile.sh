@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT AUTH_PS1 PLUGIN_SCRIPT HAPTIC_EXTENSION SETTINGS_SH SETTINGS_PS1'
+usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT AUTH_PS1 PLUGIN_SCRIPT PLUGIN_PS1 HAPTIC_PACKAGE SETTINGS_SH SETTINGS_PS1'
 auth_script=${1:?$usage}
 auth_ps1=${2:?$usage}
 plugin_script=${3:?$usage}
-haptic_extension=${4:?$usage}
-settings_script=${5:?$usage}
-settings_ps1=${6:?$usage}
-scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}
-scratch=$(mktemp -d "$scratch_root/omp-agent-reconcile.XXXXXX")
+plugin_ps1=${4:?$usage}
+haptic_package=${5:?$usage}
+settings_script=${6:?$usage}
+settings_ps1=${7:?$usage}
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+locked_omp_version=$(jq -er '.releases.tools.omp.version | sub("^v"; "")' "$repo_root/.chezmoidata/releases.json")
+scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-agent-reconcile-fixtures
+mkdir -p -- "$scratch_root"
+chmod 0700 -- "$scratch_root"
+scratch=$(mktemp -d "$scratch_root/run.XXXXXX")
 cleanup() {
   rm -rf -- "$scratch"
 }
@@ -82,29 +87,115 @@ fi
 [[ $(cat "$referent") == 'do not overwrite' ]]
 grep -F 'unsafe target' "$scratch/auth.err" >/dev/null
 
-source_line=$(grep -m1 '^SOURCE="\$HOME/' "$plugin_script")
-if [[ ! $source_line =~ ^SOURCE=\"\$HOME/([^\"]+)\"$ ]]; then
-  printf 'plugin script has no literal HOME-relative SOURCE\n' >&2
-  exit 1
-fi
-source="$home/${BASH_REMATCH[1]}"
-mkdir -p "$source/.claude-plugin"
-printf '{"name":"compound-engineering-plugin"}\n' >"$source/.claude-plugin/marketplace.json"
+# Both rendered platform scripts must carry the same data rows, fail-closed
+# lifecycle calls, digest/loader checks, migration boundary, locked OMP
+# version, and raw-input fingerprint set.
+for needle in \
+  'mxm4-haptic@h82-dotfiles' \
+  'compound-engineering' \
+  'plugin marketplace add' \
+  'plugin install --scope user --force' \
+  'plugin enable --scope user' \
+  'payload digest' \
+  'loader health' \
+  'legacy'; do
+  grep -F "$needle" "$plugin_script" >/dev/null
+  grep -F "$needle" "$plugin_ps1" >/dev/null
+done
+grep -F "readonly EXPECTED_OMP_VERSION='$locked_omp_version'" "$plugin_script" >/dev/null
+grep -F "\$expectedOmpVersion = '$locked_omp_version'" "$plugin_ps1" >/dev/null
+posix_fingerprints="$scratch/posix-plugin-fingerprints"
+ps1_fingerprints="$scratch/ps1-plugin-fingerprints"
+grep '^#   ' "$plugin_script" >"$posix_fingerprints"
+grep '^#   ' "$plugin_ps1" >"$ps1_fingerprints"
+[[ -s $posix_fingerprints ]]
+diff -u "$posix_fingerprints" "$ps1_fingerprints"
+for raw_input in \
+  '.chezmoidata/agents.yaml' \
+  '.chezmoidata/haptic.yaml' \
+  '.chezmoidata/releases.json' \
+  'packages/bun.lock' \
+  'packages/mxm4-haptic/src/omp-plugin.ts'; do
+  grep -F "#   $raw_input  " "$posix_fingerprints" >/dev/null
+done
+posix_ids=$(grep -oE '[a-z0-9.-]+@[a-z0-9.-]+' "$plugin_script" | sort -u)
+ps_ids=$(grep -oE '[a-z0-9.-]+@[a-z0-9.-]+' "$plugin_ps1" | sort -u)
+[[ $posix_ids == "$ps_ids" ]]
+[[ -f $haptic_package/package.json && -f $haptic_package/dist/index.js ]]
+source="$home/.local/share/omp-plugins"
+mkdir -p "$source/.omp-plugin" "$source/plugins" "$home/.local/share/compound-engineering/v-test/.claude-plugin"
+cp -R "$haptic_package" "$source/plugins/mxm4-haptic"
+cat >"$source/.omp-plugin/marketplace.json" <<'EOF'
+{"name":"h82-dotfiles","owner":{"name":"test"},"plugins":[{"name":"mxm4-haptic","source":"./plugins/mxm4-haptic"}]}
+EOF
+printf '{"name":"compound-engineering-plugin"}\n' >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json"
+
+# Rendered local paths are immutable desired state. Relocate them into the
+# isolated HOME without letting the provisioner consult the live HOME.
+test_plugin="$scratch/plugins.sh"
+cp "$plugin_script" "$test_plugin"
+haptic_row=$(grep -m1 'mxm4-haptic\\th82-dotfiles\\tlocalDir\\t' "$test_plugin")
+rendered_haptic=${haptic_row#*localDir\\t}
+rendered_haptic=${rendered_haptic%%\\t*}
+ce_row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$test_plugin")
+rendered_ce=${ce_row#*localArchive\\t}
+rendered_ce=${rendered_ce%%\\t*}
+sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
+chmod 0700 "$test_plugin"
+
 cat >"$fake_bin/omp" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
 printf '%s\n' "$*" >>"$OMP_CALLS"
+[[ ${1-} == --version ]] && { printf '%s\n' "${EXPECTED_OMP_VERSION:?}"; exit 0; }
+if [[ -n ${OMP_FAIL_MATCH:-} && "$*" == *"$OMP_FAIL_MATCH"* ]]; then exit 72; fi
+root="$HOME/.omp/plugins"
+mkdir -p "$root"
+case "$*" in
+  "plugin marketplace add "*/omp-plugins) printf '%s\n' "${*:4}" >"$HOME/.haptic-source" ;;
+  "plugin install --scope user --force mxm4-haptic@h82-dotfiles")
+    source=$(cat "$HOME/.haptic-source")
+    install="$root/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0"
+    rm -rf "$install"; mkdir -p "$(dirname "$install")"; cp -R "$source/plugins/mxm4-haptic" "$install"
+    mkdir -p "$root/node_modules/@h82"; ln -sfn "$install" "$root/node_modules/@h82/omp-mxm4-haptic"
+    cat >"$root/installed_plugins.json" <<JSON
+{"version":2,"plugins":{"mxm4-haptic@h82-dotfiles":[{"scope":"user","installPath":"$install","version":"0.0.0"}]}}
+JSON
+    ;;
+  "plugin enable --scope user mxm4-haptic@h82-dotfiles")
+    printf '%s\n' '{"plugins":{"@h82/omp-mxm4-haptic":{"version":"0.0.0","enabled":true}},"settings":{}}' >"$root/omp-plugins.lock.json"
+    ;;
+esac
 EOF
 chmod 0755 "$fake_bin/omp"
 
-OMP_CALLS="$scratch/omp.calls" env HOME="$home" PATH="$fake_bin:$PATH" bash "$plugin_script"
+run_plugins() {
+  OMP_CALLS="$1" OMP_FAIL_MATCH="${2-}" EXPECTED_OMP_VERSION="$locked_omp_version" \
+    env HOME="$home" PATH="$fake_bin:$PATH" bash "$test_plugin"
+}
+legacy="$home/.omp/agent/extensions/mxm4-haptic.ts"
+mkdir -p "$(dirname "$legacy")"
+printf 'legacy owner\n' >"$legacy"
+if run_plugins "$scratch/fail.calls" 'plugin enable --scope user mxm4-haptic@h82-dotfiles' >"$scratch/fail.out" 2>"$scratch/fail.err"; then
+  printf 'injected enable failure unexpectedly succeeded\n' >&2
+  exit 1
+fi
+[[ -f $legacy ]]
+run_plugins "$scratch/omp.calls"
+[[ ! -e $legacy ]]
+run_plugins "$scratch/repeat.calls"
+[[ ! -e $legacy ]]
+[[ $(grep -c 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
+[[ $(grep -c 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
+grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
 
-mapfile -t calls <"$scratch/omp.calls"
-[[ ${#calls[@]} -eq 3 ]]
-[[ ${calls[0]} == "plugin marketplace remove compound-engineering-plugin" ]]
-[[ ${calls[1]} == "plugin marketplace add $source" ]]
-[[ ${calls[2]} == "plugin install --scope user --force compound-engineering@compound-engineering-plugin" ]]
-
-bun "$(dirname "$0")/test-omp-haptic-extension.ts" "$haptic_extension"
+# Same-version package/config changes must replace the full installed payload.
+printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"
+run_plugins "$scratch/update.calls"
+cmp "$source/plugins/mxm4-haptic/package.json" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/package.json"
+cmp "$source/plugins/mxm4-haptic/dist/index.js" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/dist/index.js"
+bun "$(dirname "$0")/test-omp-haptic-plugin.ts" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0"
 
 
 # --- declared omp settings assertion ---------------------------------------
@@ -278,7 +369,7 @@ PINS
 # still catch them: the apply-time catalog gate skips role aliases by design, and
 # omp stores a nonsense selector silently. Requires chezmoi, which the job that
 # rendered the scripts under test already installed.
-repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Reuse the repository root resolved before the release-lock assertions.
 render_config="$scratch/render.toml"
 : >"$render_config"
 # A guard that fires AFTER a credential field is resolved (the duplicate check is

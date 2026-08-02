@@ -187,6 +187,11 @@ agents:
       path: .local/share/codex-plugins    # relative to $HOME; codex reads its .claude-plugin/marketplace.json
       os: [linux]
       container: skip
+    h82-dotfiles:
+      kind: localDir
+      path: .local/share/omp-plugins     # relative to $HOME; OMP-native catalog
+      os: [linux, darwin, windows]
+      container: skip
     compound-engineering-plugin:
       kind: localArchive
       source: EveryInc/compound-engineering-plugin
@@ -290,6 +295,9 @@ agents:
   # settings block carries no `packages` key. omp is cross-platform and ships
   # omp-windows-x64.exe, so both provisioners have Windows counterparts.
   omp:
+    plugins:
+    - { name: mxm4-haptic, marketplace: h82-dotfiles }
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
     models:
       providers: {}
     # Every key below is a LITERAL omp settings path as `omp config list` spells

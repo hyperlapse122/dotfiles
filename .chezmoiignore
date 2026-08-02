@@ -38,6 +38,18 @@
 ./AppData
 {{- end }}
 
+# The Windows daemon provisioner is source-only on POSIX hosts. Its own
+# template guard is defense in depth; the ignore keeps it out of target state.
+{{- if ne .chezmoi.os "windows" }}
+.chezmoiscripts/60-build/*mxm4-haptic.ps1
+{{- end }}
+
+# The haptic systemd units are Linux-only. macOS uses launchd and Windows uses
+# Task Scheduler, so neither host may receive inert systemd targets.
+{{- if ne .chezmoi.os "linux" }}
+.config/systemd/user/mxm4-haptic*.service
+{{- end }}
+
 # The GPG key is provisioned only on POSIX hosts (.chezmoiscripts/80-keys/
 # is a bash script with no .ps1 counterpart), so Windows can never decrypt the
 # encrypted ~/src project registry — skip it there. (The 90-src reconcile
@@ -94,12 +106,6 @@
 .local/share/codex-plugins
 {{- end }}
 
-# omp's mxm4-haptic extension shells out to the cross-platform Linux/macOS
-# client, which has no Windows build. Skip it there — omp itself still
-# deploys on Windows via omp-windows-x64.exe; only the extension is absent.
-{{- if eq .chezmoi.os "windows" }}
-.omp/agent/extensions/mxm4-haptic.ts
-{{- end }}
 
 # CLIProxyAPI ships as a Podman quadlet on Linux and a launchd agent on macOS;
 # Windows gets neither the provisioner nor partial state (the old binary
@@ -146,6 +152,11 @@
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
+.chezmoiscripts/60-build/*mxm4-haptic.ps1
+.config/systemd/user/mxm4-haptic*.service
+Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
+.local/share/omp-plugins
+.omp/agent/extensions/mxm4-haptic.ts
 .chezmoiscripts/60-build/*open-design.sh
 .chezmoiscripts/90-services/*cli-proxy-api*.sh
 # No graphical session in a container, so the kitty bundle has nothing to draw
@@ -173,7 +184,6 @@
 # glob).
 .local/share/claude-plugins
 .local/share/codex-plugins
-.omp/agent/extensions/mxm4-haptic.ts
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the
 # 90-src reconcile script (grow/bootstrap/aoe) would have nothing to provision

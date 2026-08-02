@@ -815,32 +815,20 @@ jobs:
           )
           if (-not $match.Success) { throw 'compound-engineering external missing on Windows' }
 
-          $fakeHome = Join-Path $env:RUNNER_TEMP 'omp-plugin-home'
-          $source = Join-Path $fakeHome ($match.Groups['relative'].Value -replace '/', '\')
-          New-Item -ItemType Directory -Force -Path (Join-Path $source '.claude-plugin') | Out-Null
-          Set-Content -Path (Join-Path $source '.claude-plugin\marketplace.json') -Value '{}'
-
-          $fakeBin = Join-Path $env:RUNNER_TEMP 'omp-plugin-bin'
-          $calls = Join-Path $env:RUNNER_TEMP 'omp-plugin-calls.txt'
-          New-Item -ItemType Directory -Force -Path $fakeBin | Out-Null
-          $omp = @(
-            '@echo off',
-            ('echo %*>>"{0}"' -f $calls),
-            'exit /b 0'
-          ) -join "`r`n"
-          Set-Content -Path (Join-Path $fakeBin 'omp.cmd') -Value $omp -Encoding Ascii
-
-          $env:HOME = $fakeHome
-          $env:USERPROFILE = $fakeHome
-          $env:PATH = "$fakeBin;$env:PATH"
-          & pwsh -NoProfile -File $updater
-          if ($LASTEXITCODE -ne 0) { throw "omp updater failed ($LASTEXITCODE)" }
-          $actual = @(Get-Content $calls)
-          if ($actual.Count -ne 3) { throw "expected three omp calls, got $($actual.Count)" }
-          if ($actual[0] -ne 'plugin marketplace remove compound-engineering-plugin') { throw "unexpected remove call: $($actual[0])" }
-          if ($actual[1] -ne "plugin marketplace add $source") { throw "unexpected add call: $($actual[1])" }
-          if ($actual[2] -ne 'plugin install --scope user --force compound-engineering@compound-engineering-plugin') {
-            throw "unexpected install call: $($actual[2])"
+          $rendered = Get-Content -Raw -LiteralPath $updater
+          [void][ScriptBlock]::Create($rendered)
+          $expectedVersion = (
+            (Get-Content -Raw -LiteralPath '.chezmoidata/releases.json' | ConvertFrom-Json).
+              releases.tools.omp.version -replace '^v', ''
+          )
+          if ($rendered -notmatch "(?m)^\`$expectedOmpVersion = '$([regex]::Escape($expectedVersion))'\r?$") {
+            throw "rendered OMP updater does not use locked version $expectedVersion"
+          }
+          if ($rendered -notmatch "Name = 'mxm4-haptic'; Market = 'h82-dotfiles'; Kind = 'localDir'") {
+            throw 'rendered OMP updater is missing the Windows haptic plugin row'
+          }
+          if ($rendered -notmatch "Name = 'compound-engineering'; Market = 'compound-engineering-plugin'; Kind = 'localArchive'") {
+            throw 'rendered OMP updater is missing the Windows compound-engineering row'
           }
           $authHome = Join-Path $env:RUNNER_TEMP 'omp-auth-home'
           $authEnv = Join-Path $authHome '.omp\agent\.env'
