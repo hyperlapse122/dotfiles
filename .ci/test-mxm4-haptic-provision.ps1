@@ -30,6 +30,16 @@ function Assert-ProvisionFailure([string]$ExpectedPattern) {
 function Get-Digest([string]$Path) {
   return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
+function Resolve-Sid([string]$Value) {
+  try {
+    return [Security.Principal.SecurityIdentifier]::new($Value)
+  } catch {
+    return [Security.Principal.NTAccount]::new($Value).Translate(
+      [Security.Principal.SecurityIdentifier]
+    )
+  }
+}
+
 
 function Wait-TaskState($Folder, [string]$Name, [int]$State, [int]$Seconds = 15) {
   $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
@@ -193,7 +203,7 @@ try {
   $taskFolder = $scheduler.GetFolder('\')
   $registered = Wait-TaskState $taskFolder $taskName 4
   Assert $registered.Enabled 'registered task is disabled'
-  Assert ($registered.Definition.Principal.UserId -eq $sid) 'registered task belongs to a different identity'
+  Assert ((Resolve-Sid $registered.Definition.Principal.UserId).Value -eq $sid) 'registered task belongs to a different identity'
   Assert ([IO.Path]::GetFullPath($registered.Definition.Actions.Item(1).Path) -eq [IO.Path]::GetFullPath($daemonDestination)) 'registered task endpoint drifted'
   $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'mxm4-haptic', [IO.Pipes.PipeDirection]::Out)
   try { $pipe.Connect(5000) } finally { $pipe.Dispose() }
