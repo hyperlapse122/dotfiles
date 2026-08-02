@@ -1,0 +1,10 @@
+# Compound Engineering -- shared project config
+# Commit this file so settings apply to every clone and worktree.
+# Machine-local values belong in config.local.yaml and take precedence.
+
+# --- Artifact root ---
+# This is the only Compound Engineering setting currently read from the shared
+# config layer. It must be a repo-relative directory that stays inside the repo,
+# is not the repo root, and is not under .git/. Unset -> docs.
+
+# docs_root: .compound-engineering/artifacts
