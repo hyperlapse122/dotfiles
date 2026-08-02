@@ -163,7 +163,7 @@ grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-linux-contain
 invalid=NOT_A_REAL_WAVEFORM
 render_invalid() {
   local name=$1 template=$2 override=$3
-  if env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" chezmoi \
+  if env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" "$chezmoi_bin" \
     --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
     --override-data "$override" execute-template <"$repo_root/$template" \
     >"$scratch/$name.invalid.out" 2>"$scratch/$name.invalid.err"; then

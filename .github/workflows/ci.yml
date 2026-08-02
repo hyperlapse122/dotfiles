@@ -197,6 +197,7 @@ jobs:
         with:
           node-version: "24"
           cache: true
+      - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
       - name: Install locked chezmoi
         shell: pwsh
