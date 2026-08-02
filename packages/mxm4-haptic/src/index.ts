@@ -42,10 +42,9 @@ export type WaveformName = (typeof WAVEFORMS)[number][0];
 
 const WAVEFORM_NAMES: ReadonlySet<WaveformName> = new Set(WAVEFORMS.map(([name]) => name));
 
-// Runtime guard for plain-JS callers that bypass the `WaveformName` type;
-// typed TypeScript callers are already constrained at compile time. Keep it:
-// it is not dead code despite `sendCommand` declaring a `WaveformName` param.
-function isWaveformName(name: string): name is WaveformName {
+// Runtime guard for package configuration and plain-JS callers that bypass the
+// `WaveformName` type. Typed TypeScript callers are constrained at compile time.
+export function isWaveformName(name: string): name is WaveformName {
   return WAVEFORM_NAMES.has(name as WaveformName);
 }
 

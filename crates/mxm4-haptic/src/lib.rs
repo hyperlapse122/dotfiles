@@ -4,8 +4,8 @@
 //!   mxm4-haptic-notify  desktop-notification -> haptic bridge
 //!
 //! The client and the notification watcher never touch the device: they
-//! send a waveform name to the daemon over an AF_UNIX socket, and the
-//! daemon does discovery, debounce, queueing and paced playback. This
+//! send a waveform name to the daemon over a local IPC endpoint, and the daemon
+//! does discovery, debounce, queueing, and paced playback. This
 //! keeps a single owner of the HID++ session and removes the on-disk
 //! cache the old single-shot binary needed.
 //!
@@ -82,8 +82,8 @@ pub fn waveform_names() -> Vec<&'static str> {
 /// Windows named-pipe endpoint, shared byte-for-byte with the TS client
 /// `@h82/mxm4-haptic` (packages/mxm4-haptic/src/index.ts). The two MUST
 /// agree. Unlike the per-user POSIX runtime dir, this is the machine-global
-/// `\\.\pipe` namespace; the server relies on the pipe's default ACL (which
-/// grants the creating user full control) — see the crate README caveat.
+/// `\\.\pipe` namespace. The server reserves its first instance for its full
+/// lifetime and applies an explicit current-user/system-only DACL.
 #[cfg(windows)]
 pub const WINDOWS_PIPE_PATH: &str = r"\\.\pipe\mxm4-haptic";
 
@@ -194,24 +194,130 @@ mod ipc_server {
 
 #[cfg(windows)]
 mod ipc_server {
-    use std::ffi::OsStr;
+    use std::ffi::{c_void, OsStr};
     use std::io;
     use std::os::windows::ffi::OsStrExt;
     use std::ptr;
 
+    use windows_sys::core::PWSTR;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE,
+        CloseHandle, GetLastError, LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_PIPE_CONNECTED,
+        HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
     };
-    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
-    use windows_sys::Win32::Storage::FileSystem::{ReadFile, PIPE_ACCESS_INBOUND};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+        SDDL_REVISION_1,
+    };
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY,
+        TOKEN_USER,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        ReadFile, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND,
+    };
     use windows_sys::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
-        PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+        PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct OwnedHandle(HANDLE);
+
+    // Windows kernel handles are process-wide. This wrapper owns one handle,
+    // moves it with the server thread, and closes it exactly once in Drop.
+    unsafe impl Send for OwnedHandle {}
+
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            if self.0 != INVALID_HANDLE_VALUE {
+                unsafe { CloseHandle(self.0) };
+            }
+        }
+    }
+
+    struct LocalAllocation(HLOCAL);
+
+    impl Drop for LocalAllocation {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                unsafe {
+                    LocalFree(self.0);
+                }
+            }
+        }
+    }
+
+    fn current_user_sid() -> io::Result<String> {
+        let mut token = INVALID_HANDLE_VALUE;
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let token = OwnedHandle(token);
+
+        let mut required = 0u32;
+        unsafe {
+            GetTokenInformation(token.0, TokenUser, ptr::null_mut(), 0, &mut required);
+        }
+        if required == 0 || unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
+            return Err(io::Error::last_os_error());
+        }
+
+        let word_size = std::mem::size_of::<usize>();
+        let mut buffer = vec![0usize; (required as usize + word_size - 1) / word_size];
+        if unsafe {
+            GetTokenInformation(
+                token.0,
+                TokenUser,
+                buffer.as_mut_ptr().cast::<c_void>(),
+                required,
+                &mut required,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+
+        let token_user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
+        let mut sid_text: PWSTR = ptr::null_mut();
+        if unsafe { ConvertSidToStringSidW(token_user.User.Sid, &mut sid_text) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let sid_allocation = LocalAllocation(sid_text.cast::<c_void>());
+        let length = unsafe {
+            (0..)
+                .take_while(|offset| *sid_text.add(*offset) != 0)
+                .count()
+        };
+        let sid = String::from_utf16(unsafe { std::slice::from_raw_parts(sid_text, length) })
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        drop(sid_allocation);
+        Ok(sid)
+    }
+
+    fn security_descriptor() -> io::Result<LocalAllocation> {
+        let sid = current_user_sid()?;
+        // Protected DACL: the interactive owner plus LocalSystem. No broad
+        // administrator, authenticated-user, built-in-user, or world ACE is
+        // present, so a different human SID cannot write through group access.
+        let sddl = format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)");
+        let sddl_wide: Vec<u16> = OsStr::new(&sddl).encode_wide().chain(Some(0)).collect();
+        let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+        if unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl_wide.as_ptr(),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                ptr::null_mut(),
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(LocalAllocation(descriptor))
+    }
 
     pub struct IpcServer {
-        /// UTF-16, NUL-terminated pipe name for CreateNamedPipeW.
-        name_wide: Vec<u16>,
+        pipe: OwnedHandle,
         endpoint: String,
     }
 
@@ -219,9 +325,30 @@ mod ipc_server {
         pub fn bind() -> io::Result<Self> {
             let endpoint = super::socket_path()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no named-pipe path"))?;
-            let name_wide = OsStr::new(&endpoint).encode_wide().chain(Some(0)).collect();
+            let name_wide: Vec<u16> = OsStr::new(&endpoint).encode_wide().chain(Some(0)).collect();
+            let descriptor = security_descriptor()?;
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: descriptor.0,
+                bInheritHandle: 0,
+            };
+            let pipe = unsafe {
+                CreateNamedPipeW(
+                    name_wide.as_ptr(),
+                    PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                    1,
+                    0,
+                    512,
+                    0,
+                    &attributes,
+                )
+            };
+            if pipe == INVALID_HANDLE_VALUE {
+                return Err(io::Error::last_os_error());
+            }
             Ok(Self {
-                name_wide,
+                pipe: OwnedHandle(pipe),
                 endpoint,
             })
         }
@@ -230,63 +357,49 @@ mod ipc_server {
             &self.endpoint
         }
 
-        /// Create a fresh single-use inbound pipe instance, wait for one client,
-        /// read its line, then tear the instance down. PIPE_ACCESS_INBOUND: the
-        /// client only ever writes (a waveform name), never reads.
+        /// Reuse the reserved first instance for every client. Keeping this
+        /// handle open for `IpcServer`'s lifetime makes a prebound collision a
+        /// deterministic bind failure and prevents an ownership gap between
+        /// commands.
         pub fn next_name(&self) -> io::Result<Option<String>> {
-            let pipe = unsafe {
-                CreateNamedPipeW(
-                    self.name_wide.as_ptr(),
-                    PIPE_ACCESS_INBOUND,
-                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                    PIPE_UNLIMITED_INSTANCES,
-                    0,
-                    512,
-                    0,
-                    ptr::null::<SECURITY_ATTRIBUTES>(),
-                )
-            };
-            if pipe == INVALID_HANDLE_VALUE {
-                return Err(io::Error::last_os_error());
-            }
-
-            let connected = unsafe { ConnectNamedPipe(pipe, ptr::null_mut()) };
+            let connected = unsafe { ConnectNamedPipe(self.pipe.0, ptr::null_mut()) };
             if connected == 0 {
                 let err = unsafe { GetLastError() };
-                // A client that connected between create and ConnectNamedPipe
-                // yields ERROR_PIPE_CONNECTED — that is still a live client.
                 if err != ERROR_PIPE_CONNECTED {
-                    unsafe { CloseHandle(pipe) };
                     return Err(io::Error::from_raw_os_error(err as i32));
                 }
             }
 
             let mut buf = [0u8; 64];
-            let mut read: u32 = 0;
+            let mut read = 0u32;
             let ok = unsafe {
                 ReadFile(
-                    pipe,
+                    self.pipe.0,
                     buf.as_mut_ptr(),
                     buf.len() as u32,
                     &mut read,
                     ptr::null_mut(),
                 )
             };
-            let name = if ok != 0 && read > 0 {
-                Some(
-                    String::from_utf8_lossy(&buf[..read as usize])
-                        .trim()
-                        .to_uppercase(),
-                )
+            let read_error = if ok == 0 {
+                Some(io::Error::last_os_error())
             } else {
                 None
             };
-
             unsafe {
-                DisconnectNamedPipe(pipe);
-                CloseHandle(pipe);
+                DisconnectNamedPipe(self.pipe.0);
             }
-            Ok(name)
+            if let Some(error) = read_error {
+                return Err(error);
+            }
+            if read == 0 {
+                return Ok(None);
+            }
+            Ok(Some(
+                String::from_utf8_lossy(&buf[..read as usize])
+                    .trim()
+                    .to_uppercase(),
+            ))
         }
     }
 }
@@ -422,6 +535,18 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_pipe_reserves_first_instance_and_releases_on_drop() {
+        let owner = IpcServer::bind().expect("first named-pipe instance");
+        assert!(
+            IpcServer::bind().is_err(),
+            "a second server must not join the fixed endpoint"
+        );
+        drop(owner);
+        IpcServer::bind().expect("ownership must converge after the collision is removed");
     }
 
     // -----------------------------------------------------------------------

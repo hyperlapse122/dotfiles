@@ -1,0 +1,386 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $pluginInputs := includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl")) -}}
+{{ $pluginConfig := printf "settled=%s\nfailed=%s\nquestion=%s\n" .haptic.omp.settled .haptic.omp.failed .haptic.omp.question -}}
+{{ $daemonInputs := "" -}}
+{{ $daemonConfig := "" -}}
+{{ $notifyInputs := "" -}}
+{{ $notifyConfig := "" -}}
+{{ if eq .chezmoi.os "darwin" -}}
+{{ $daemonInputs = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "crates/mxm4-haptic/Cargo.toml" "crates/mxm4-haptic/Cargo.lock" "crates/mxm4-haptic/src/lib.rs" "crates/mxm4-haptic/src/bin/mxm4-haptic.rs" "crates/mxm4-haptic/src/bin/mxm4-hapticd.rs" "Library/LaunchAgents/dev.h82.mxm4-hapticd.plist")) -}}
+{{ else -}}
+{{ $daemonInputs = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "crates/mxm4-haptic/Cargo.toml" "crates/mxm4-haptic/Cargo.lock" "crates/mxm4-haptic/src/lib.rs" "crates/mxm4-haptic/src/bin/mxm4-haptic.rs" "crates/mxm4-haptic/src/bin/mxm4-hapticd.rs" "dot_config/systemd/user/mxm4-hapticd.service.tmpl")) -}}
+{{ $daemonConfig = printf "pacingMs=%v\ndebounceMs=%v\npollMs=%v\n" .haptic.daemon.pacingMs .haptic.daemon.debounceMs .haptic.daemon.pollMs -}}
+{{ $notifyInputs = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "crates/mxm4-haptic/Cargo.toml" "crates/mxm4-haptic/Cargo.lock" "crates/mxm4-haptic/src/lib.rs" "crates/mxm4-haptic/src/bin/mxm4-haptic-notify.rs" "dot_config/systemd/user/mxm4-haptic-notify.service.tmpl")) -}}
+{{ $notifyConfig = printf "minGapMs=%v\nskipReplaces=%v\ndenyApps=%s\nbattery=%v\n" .haptic.notify.minGapMs .haptic.notify.skipReplaces (join "," .haptic.notify.denyApps) .haptic.notify.battery -}}
+{{ end -}}
+#!/usr/bin/env bash
+# Build and reconcile the self-contained OMP plugin and POSIX user daemon.
+# Plugin and daemon/startup inputs intentionally have independent fingerprints
+# and durable stamps; generated dist/ and target/ output is never fingerprinted.
+# plugin inputs:
+{{ $pluginInputs }}
+#   haptic.omp  {{ $pluginConfig | sha256sum }}
+# daemon/startup inputs:
+{{ $daemonInputs }}
+{{ if eq .chezmoi.os "linux" -}}
+#   haptic.daemon  {{ $daemonConfig | sha256sum }}
+# notification bridge inputs:
+{{ $notifyInputs }}
+#   haptic.notify  {{ $notifyConfig | sha256sum }}
+{{ end -}}
+
+set -euo pipefail
+
+SOURCE_ROOT=${MXM4_HAPTIC_SOURCE_ROOT:-{{ $sourceDir | quote }}}
+PLATFORM=${MXM4_HAPTIC_PLATFORM:-{{ .chezmoi.os | quote }}}
+PLUGIN_FINGERPRINT={{ (printf "%s%s" $pluginInputs $pluginConfig | sha256sum) | quote }}
+DAEMON_FINGERPRINT={{ (printf "%s%s" $daemonInputs $daemonConfig | sha256sum) | quote }}
+NOTIFY_FINGERPRINT={{ (printf "%s%s" $notifyInputs $notifyConfig | sha256sum) | quote }}
+PLUGIN_SOURCE="$SOURCE_ROOT/packages/mxm4-haptic"
+PLUGIN_ROOT="$HOME/.local/share/omp-plugins/plugins/mxm4-haptic"
+PLUGIN_MANIFEST="$PLUGIN_ROOT/package.json"
+PLUGIN_DEST="$PLUGIN_ROOT/dist/index.js"
+BIN_DIR="$HOME/.local/bin"
+DAEMON_DEST="$BIN_DIR/mxm4-hapticd"
+STATE_PARENT="$HOME/.local/share/omp-plugins"
+STATE_DIR="$STATE_PARENT/.mxm4-haptic-state"
+PLUGIN_STAMP="$STATE_DIR/plugin"
+DAEMON_STAMP="$STATE_DIR/daemon-$PLATFORM"
+NOTIFY_STAMP="$STATE_DIR/notify-linux"
+UNIT=mxm4-hapticd.service
+LABEL=dev.h82.mxm4-hapticd
+STAGE=
+MAC_WAS_LOADED=0
+MAC_WAS_DISABLED=0
+
+fail() {
+  printf 'mxm4-haptic: %s\n' "$*" >&2
+  exit 1
+}
+
+cleanup() {
+  [[ -z "$STAGE" ]] || rm -rf -- "$STAGE"
+}
+trap cleanup EXIT
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "preflight: $1 is required"
+}
+
+require_writable_directory() {
+  local path=$1
+  [[ -d "$path" && ! -L "$path" && -w "$path" ]] ||
+    fail "preflight: managed directory is unavailable or unsafe: $path"
+}
+
+stamp_matches() {
+  local path=$1 expected=$2
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  [[ $(<"$path") == "$expected" ]]
+}
+
+validate_plugin_manifest() {
+  node - "$PLUGIN_MANIFEST" manifest <<'NODE'
+const fs = require("node:fs");
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (manifest.name !== "@h82/omp-mxm4-haptic" || manifest.type !== "module") throw new Error("unexpected managed plugin identity");
+if (!manifest.omp || !Array.isArray(manifest.omp.extensions) || manifest.omp.extensions.length !== 1 || manifest.omp.extensions[0] !== "./dist/index.js") throw new Error("unexpected managed plugin entry");
+NODE
+}
+
+validate_plugin_artifact() {
+  local bundle=$1
+  [[ -s "$bundle" && -f "$bundle" && ! -L "$bundle" ]] ||
+    fail "artifact validation: plugin bundle is missing"
+  node - "$bundle" artifact <<'NODE'
+const fs = require("node:fs");
+const source = fs.readFileSync(process.argv[2], "utf8");
+const imports = [];
+for (const pattern of [/\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g, /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g]) {
+  for (const match of source.matchAll(pattern)) imports.push(match[1]);
+}
+const forbidden = imports.filter((value) => !value.startsWith("node:"));
+if (forbidden.length) throw new Error(`unbundled runtime imports: ${forbidden.join(", ")}`);
+const { pathToFileURL } = require("node:url");
+import(pathToFileURL(process.argv[2]).href).then((module) => {
+  if (typeof module.default !== "function") throw new Error("plugin default export is not a factory");
+}).catch((error) => { console.error(error); process.exit(1); });
+NODE
+}
+
+validate_daemon_artifacts() {
+  local root=$1
+  if [[ "$daemon_needed" -eq 1 ]]; then
+    [[ -x "$root/release/mxm4-hapticd" ]] ||
+      fail "artifact validation: staged daemon is missing or not executable"
+    [[ -x "$root/release/mxm4-haptic" ]] ||
+      fail "artifact validation: staged client is missing or not executable"
+  fi
+  if [[ "$notify_needed" -eq 1 ]]; then
+    [[ -x "$root/release/mxm4-haptic-notify" ]] ||
+      fail "artifact validation: staged notification bridge is missing or not executable"
+  fi
+}
+
+atomic_install() {
+  local source=$1 destination=$2 mode=$3 temporary
+  mkdir -p -- "${destination%/*}" || fail "atomic install: cannot create ${destination%/*}"
+  temporary=$(mktemp "${destination}.new.XXXXXX") ||
+    fail "atomic install: cannot allocate temporary file for $destination"
+  if ! install -m "$mode" -- "$source" "$temporary"; then
+    rm -f -- "$temporary"
+    fail "atomic install: cannot stage $destination"
+  fi
+  mv -f -- "$temporary" "$destination" ||
+    fail "atomic install: cannot replace $destination"
+}
+
+write_stamp() {
+  local destination=$1 value=$2 temporary
+  temporary=$(mktemp "${destination}.new.XXXXXX") || fail "stamp: cannot allocate $destination"
+  printf '%s\n' "$value" >"$temporary" || fail "stamp: cannot write $destination"
+  chmod 0600 -- "$temporary"
+  mv -f -- "$temporary" "$destination" || fail "stamp: cannot replace $destination"
+}
+
+wait_for_endpoint() {
+  local endpoint=$1 attempts=${MXM4_HAPTIC_READINESS_ATTEMPTS:-50}
+  python3 - "$endpoint" "$attempts" <<'PY'
+import socket
+import sys
+import time
+
+endpoint = sys.argv[1]
+attempts = int(sys.argv[2])
+for _ in range(attempts):
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(0.2)
+    try:
+        client.connect(endpoint)
+        sys.exit(0)
+    except OSError:
+        time.sleep(0.1)
+    finally:
+        client.close()
+sys.exit(1)
+PY
+}
+
+mac_service_loaded() {
+  launchctl print "gui/$UID/$LABEL" >/dev/null 2>&1
+}
+
+mac_service_running() {
+  local state
+  state=$(launchctl print "gui/$UID/$LABEL") || return 1
+  [[ "$state" == *"state = running"* ]]
+}
+
+plugin_needed=0
+daemon_needed=0
+notify_needed=0
+stamp_matches "$PLUGIN_STAMP" "$PLUGIN_FINGERPRINT" &&
+  [[ -f "$PLUGIN_DEST" && ! -L "$PLUGIN_DEST" && -s "$PLUGIN_DEST" ]] || plugin_needed=1
+stamp_matches "$DAEMON_STAMP" "$DAEMON_FINGERPRINT" &&
+  [[ -f "$DAEMON_DEST" && ! -L "$DAEMON_DEST" && -x "$DAEMON_DEST" ]] || daemon_needed=1
+if [[ "$PLATFORM" == linux ]]; then
+  stamp_matches "$NOTIFY_STAMP" "$NOTIFY_FINGERPRINT" &&
+    [[ -f "$BIN_DIR/mxm4-haptic-notify" && ! -L "$BIN_DIR/mxm4-haptic-notify" &&
+      -x "$BIN_DIR/mxm4-haptic-notify" ]] || notify_needed=1
+fi
+
+# Preflight is deliberately complete before mktemp, mkdir, build output removal,
+# live-file replacement, or manager mutation.
+[[ "$PLATFORM" == linux || "$PLATFORM" == darwin ]] ||
+  fail "preflight: unsupported platform $PLATFORM"
+if [[ "$plugin_needed" -eq 1 || "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  for required in cat chmod install mkdir mktemp mv rm; do
+    require_command "$required"
+  done
+fi
+require_writable_directory "$STATE_PARENT"
+require_writable_directory "$PLUGIN_ROOT"
+require_writable_directory "$BIN_DIR"
+for managed_path in "$PLUGIN_ROOT/dist" "$STATE_DIR"; do
+  [[ ! -L "$managed_path" && ( ! -e "$managed_path" || -d "$managed_path" ) ]] ||
+    fail "preflight: managed directory path is unsafe: $managed_path"
+  [[ ! -e "$managed_path" ]] || require_writable_directory "$managed_path"
+done
+if [[ "$plugin_needed" -eq 1 ]]; then
+  require_command vp
+  require_command node
+  [[ -d "$PLUGIN_SOURCE" && ! -L "$PLUGIN_SOURCE" ]] || fail "preflight: plugin source is unavailable"
+  [[ -f "$PLUGIN_MANIFEST" && ! -L "$PLUGIN_MANIFEST" ]] || fail "preflight: managed plugin manifest is unavailable"
+  validate_plugin_manifest || fail "preflight: managed plugin manifest is invalid"
+fi
+if [[ "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  require_command cargo
+  [[ -f "$SOURCE_ROOT/crates/mxm4-haptic/Cargo.toml" ]] || fail "preflight: Rust source is unavailable"
+fi
+require_command python3
+if [[ "$PLATFORM" == linux ]]; then
+  require_command systemctl
+  require_command systemd-analyze
+  [[ -n ${XDG_RUNTIME_DIR:-} && -d "$XDG_RUNTIME_DIR" ]] ||
+    fail "preflight: managed Linux XDG_RUNTIME_DIR is unavailable"
+  ENDPOINT="${XDG_RUNTIME_DIR%/}/mxm4-haptic.sock"
+  SYSTEMD_UNIT="$HOME/.config/systemd/user/$UNIT"
+  [[ -f "$SYSTEMD_UNIT" && ! -L "$SYSTEMD_UNIT" ]] || fail "preflight: managed systemd unit is unavailable"
+  systemctl --user show-environment >/dev/null || fail "preflight: systemd user manager is unreachable"
+  systemd-analyze --user verify "$SYSTEMD_UNIT" >/dev/null || fail "unit validation: $UNIT is invalid"
+else
+  require_command launchctl
+  require_command plutil
+  [[ -n ${TMPDIR:-} && ${TMPDIR%/} != /tmp && -d "$TMPDIR" ]] ||
+    fail "preflight: managed macOS TMPDIR is unavailable"
+  ENDPOINT="${TMPDIR%/}/mxm4-haptic.sock"
+  PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+  [[ -f "$PLIST" && ! -L "$PLIST" ]] || fail "preflight: managed LaunchAgent is unavailable"
+  plutil -lint "$PLIST" >/dev/null || fail "LaunchAgent validation: managed plist is invalid"
+  launchctl print "gui/$UID" >/dev/null || fail "preflight: launchd gui/$UID domain is unreachable"
+  if mac_service_loaded; then
+    MAC_WAS_LOADED=1
+  fi
+  disabled_state=$(launchctl print-disabled "gui/$UID") ||
+    fail "preflight: cannot inspect disabled LaunchAgents"
+  if [[ "$disabled_state" == *"\"$LABEL\" => true"* ]]; then
+    MAC_WAS_DISABLED=1
+  fi
+fi
+if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
+  require_command systemctl
+  require_command systemd-analyze
+  NOTIFY_UNIT="$HOME/.config/systemd/user/mxm4-haptic-notify.service"
+  [[ -f "$NOTIFY_UNIT" && ! -L "$NOTIFY_UNIT" ]] ||
+    fail "preflight: managed notification bridge unit is unavailable"
+  systemctl --user show-environment >/dev/null ||
+    fail "preflight: systemd user manager is unreachable"
+  systemd-analyze --user verify "$NOTIFY_UNIT" >/dev/null ||
+    fail "unit validation: mxm4-haptic-notify.service is invalid"
+fi
+
+if [[ "$plugin_needed" -eq 1 || "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  if [[ -n ${XDG_RUNTIME_DIR:-} ]]; then
+    STAGE_PARENT=$XDG_RUNTIME_DIR
+    require_writable_directory "$STAGE_PARENT"
+  else
+    STAGE_PARENT="$HOME/.cache"
+    if [[ ! -e "$STAGE_PARENT" ]]; then
+      mkdir -m 0700 -- "$STAGE_PARENT" || fail "staging: cannot create private cache directory"
+    fi
+    require_writable_directory "$STAGE_PARENT"
+  fi
+  STAGE=$(mktemp -d "$STAGE_PARENT/mxm4-haptic.XXXXXX") ||
+    fail "staging: cannot allocate build directory"
+  chmod 0700 -- "$STAGE" || fail "staging: cannot secure build directory"
+  mkdir -p -- "$STAGE/plugin/dist" "$STAGE/rust-target" ||
+    fail "staging: cannot prepare build directory"
+fi
+
+if [[ "$plugin_needed" -eq 1 ]]; then
+  rm -f -- "$PLUGIN_SOURCE/dist/omp-plugin/index.js"
+  (cd "$PLUGIN_SOURCE" && vp run build:omp-plugin) || fail "plugin build failed"
+  [[ -s "$PLUGIN_SOURCE/dist/omp-plugin/index.js" ]] ||
+    fail "artifact validation: plugin build output is missing"
+  atomic_install "$PLUGIN_MANIFEST" "$STAGE/plugin/package.json" 0644
+  atomic_install "$PLUGIN_SOURCE/dist/omp-plugin/index.js" "$STAGE/plugin/dist/index.js" 0644
+  validate_plugin_artifact "$STAGE/plugin/dist/index.js" || fail "artifact validation: plugin bundle is invalid"
+fi
+
+if [[ "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  rust_bins=()
+  if [[ "$daemon_needed" -eq 1 ]]; then
+    rust_bins+=(--bin mxm4-hapticd --bin mxm4-haptic)
+  fi
+  if [[ "$notify_needed" -eq 1 ]]; then
+    rust_bins+=(--bin mxm4-haptic-notify)
+  fi
+  cargo build --locked --release \
+    --manifest-path "$SOURCE_ROOT/crates/mxm4-haptic/Cargo.toml" \
+    --target-dir "$STAGE/rust-target" "${rust_bins[@]}" || fail "Rust build failed"
+  validate_daemon_artifacts "$STAGE/rust-target"
+fi
+
+# No live install or manager mutation occurs until every requested build and
+# artifact/startup-definition validation above has succeeded.
+if [[ "$plugin_needed" -eq 1 || "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  mkdir -p -- "$STATE_DIR" || fail "install: cannot create component state directory"
+fi
+if [[ "$plugin_needed" -eq 1 ]]; then
+  atomic_install "$STAGE/plugin/dist/index.js" "$PLUGIN_DEST" 0644
+  write_stamp "$PLUGIN_STAMP" "$PLUGIN_FINGERPRINT"
+fi
+
+if [[ "$daemon_needed" -eq 1 ]]; then
+  atomic_install "$STAGE/rust-target/release/mxm4-hapticd" "$DAEMON_DEST" 0755
+  atomic_install "$STAGE/rust-target/release/mxm4-haptic" "$BIN_DIR/mxm4-haptic" 0755
+fi
+if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
+  atomic_install "$STAGE/rust-target/release/mxm4-haptic-notify" "$BIN_DIR/mxm4-haptic-notify" 0755
+fi
+
+if [[ "$PLATFORM" == linux &&
+  ( "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ) ]]; then
+  systemctl --user daemon-reload || fail "manager reconciliation: daemon-reload failed"
+fi
+
+
+if [[ "$PLATFORM" == linux ]]; then
+  if ! systemctl --user is-enabled --quiet "$UNIT"; then
+    systemctl --user enable "$UNIT" >/dev/null ||
+      fail "manager reconciliation: enable $UNIT failed"
+  fi
+  if systemctl --user is-active --quiet "$UNIT"; then
+    if [[ "$daemon_needed" -eq 1 ]]; then
+      systemctl --user restart "$UNIT" ||
+        fail "manager reconciliation: restart $UNIT failed"
+    fi
+  else
+    systemctl --user start "$UNIT" || fail "manager reconciliation: start $UNIT failed"
+  fi
+  systemctl --user is-enabled --quiet "$UNIT" || fail "manager state: $UNIT is not enabled"
+  systemctl --user is-active --quiet "$UNIT" || fail "manager state: $UNIT is not active"
+  wait_for_endpoint "$ENDPOINT" || fail "readiness: exact endpoint $ENDPOINT did not accept a connection"
+  systemctl --user is-active --quiet "$UNIT" || fail "manager state: $UNIT stopped after readiness"
+else
+  if [[ "$daemon_needed" -eq 1 && "$MAC_WAS_LOADED" -eq 1 ]]; then
+    launchctl bootout "gui/$UID/$LABEL" || fail "manager reconciliation: bootout $LABEL failed"
+    MAC_WAS_LOADED=0
+  fi
+  if [[ "$MAC_WAS_DISABLED" -eq 1 ]]; then
+    launchctl enable "gui/$UID/$LABEL" ||
+      fail "manager reconciliation: cannot clear disabled state"
+  fi
+  if [[ "$MAC_WAS_LOADED" -eq 0 ]]; then
+    launchctl bootstrap "gui/$UID" "$PLIST" ||
+      fail "manager reconciliation: bootstrap $LABEL failed"
+    MAC_WAS_LOADED=1
+  fi
+  if [[ "$daemon_needed" -eq 1 ]] || ! mac_service_running; then
+    launchctl kickstart -k "gui/$UID/$LABEL" ||
+      fail "manager reconciliation: kickstart $LABEL failed"
+  fi
+  mac_service_running || fail "manager state: $LABEL is not running"
+  wait_for_endpoint "$ENDPOINT" || fail "readiness: exact endpoint $ENDPOINT did not accept a connection"
+  mac_service_running || fail "manager state: $LABEL stopped after readiness"
+fi
+if [[ "$daemon_needed" -eq 1 ]]; then
+  write_stamp "$DAEMON_STAMP" "$DAEMON_FINGERPRINT"
+fi
+
+# The Linux notification bridge is reconciled as its own component only after
+# the required daemon transaction succeeds.
+if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
+  systemctl --user enable mxm4-haptic-notify.service >/dev/null ||
+    fail "notification bridge reconciliation: enable failed"
+  if systemctl --user is-active --quiet mxm4-haptic-notify.service; then
+    systemctl --user restart mxm4-haptic-notify.service ||
+      fail "notification bridge reconciliation: restart failed"
+  fi
+  write_stamp "$NOTIFY_STAMP" "$NOTIFY_FINGERPRINT"
+fi
+
+printf 'mxm4-haptic: converged plugin=%s daemon=%s notify=%s\n' \
+  "$plugin_needed" "$daemon_needed" "$notify_needed"
+{{ end -}}

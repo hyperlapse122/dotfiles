@@ -1,28 +1,135 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- $ctx := . -}}
-{{- $name := "compound-engineering-plugin" -}}
+{{- $os := .chezmoi.os -}}
+{{- $home := .chezmoi.homeDir -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
+{{- $ompVersion := trimPrefix "v" (includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" "omp")) -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $marketplaces := .agents.marketplaces -}}
+{{- $plugins := .agents.omp.plugins -}}
+{{- $nameRe := "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" -}}
+{{- $validOS := list "linux" "darwin" "windows" -}}
+{{- $validKinds := list "localDir" "localArchive" -}}
+{{- $validContainers := list "skip" "keep" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
-{{- $ceAuthority := index .agents.marketplaces $name -}}
 {{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+{{- $rows := list -}}
+{{- $seen := dict -}}
+{{- range $i, $plugin := $plugins -}}
+{{-   $where := printf "agents.omp.plugins[%d]" $i -}}
+{{-   if ne (len $plugin) 2 -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
+{{-   if not (and (hasKey $plugin "name") (hasKey $plugin "marketplace")) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
+{{-   $name := printf "%v" (index $plugin "name") -}}
+{{-   $market := printf "%v" (index $plugin "marketplace") -}}
+{{-   if not (regexMatch $nameRe $name) -}}{{ fail (printf "update-omp-plugins: %s has invalid plugin name %q" $where $name) }}{{- end -}}
+{{-   if not (regexMatch $nameRe $market) -}}{{ fail (printf "update-omp-plugins: %s has invalid marketplace name %q" $where $market) }}{{- end -}}
+{{-   $id := printf "%s@%s" $name $market -}}
+{{-   if hasKey $seen $id -}}{{ fail (printf "update-omp-plugins: duplicate OMP plugin %q" $id) }}{{- end -}}
+{{-   $_ := set $seen $id true -}}
+{{-   if not (hasKey $marketplaces $market) -}}{{ fail (printf "update-omp-plugins: %s references undefined marketplace %q" $where $market) }}{{- end -}}
+{{-   $authority := index $marketplaces $market -}}
+{{-   if not (hasKey $authority "kind") -}}{{ fail (printf "update-omp-plugins: marketplace %q is missing kind" $market) }}{{- end -}}
+{{-   $kind := printf "%v" (index $authority "kind") -}}
+{{-   if not (has $kind $validKinds) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsupported kind %q" $market $kind) }}{{- end -}}
+{{-   if not (hasKey $authority "container") -}}{{ fail (printf "update-omp-plugins: marketplace %q is missing container" $market) }}{{- end -}}
+{{-   $container := printf "%v" (index $authority "container") -}}
+{{-   if not (has $container $validContainers) -}}{{ fail (printf "update-omp-plugins: marketplace %q has invalid container value %q" $market $container) }}{{- end -}}
+{{-   if not (hasKey $authority "os") -}}{{ fail (printf "update-omp-plugins: marketplace %q is missing os" $market) }}{{- end -}}
+{{-   $marketOS := list -}}
+{{-   range $value := index $authority "os" -}}
+{{-     $value = printf "%v" $value -}}
+{{-     if not (has $value $validOS) -}}{{ fail (printf "update-omp-plugins: marketplace %q has invalid os %q" $market $value) }}{{- end -}}
+{{-     $marketOS = append $marketOS $value -}}
+{{-   end -}}
+{{-   $source := "" -}}
+{{-   if eq $kind "localDir" -}}
+{{-     if not (hasKey $authority "path") -}}{{ fail (printf "update-omp-plugins: localDir marketplace %q is missing path" $market) }}{{- end -}}
+{{-     $rel := printf "%v" (index $authority "path") -}}
+{{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsafe relative path %q" $market $rel) }}{{- end -}}
+{{-     $source = printf "%s/%s" $home $rel -}}
+{{-   else -}}
+{{-     if ne $market "compound-engineering-plugin" -}}{{ fail (printf "update-omp-plugins: localArchive marketplace %q has no supported authority" $market) }}{{- end -}}
+{{-     if not (hasKey $authority "externalPath") -}}{{ fail "update-omp-plugins: compound-engineering marketplace is missing externalPath" }}{{- end -}}
+{{-     $rel := printf "%v" (index $authority "externalPath") -}}
+{{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}{{ fail (printf "update-omp-plugins: compound-engineering externalPath is unsafe: %q" $rel) }}{{- end -}}
+{{-     $source = printf "%s/%s/%s" $home $rel $ceVersion -}}
+{{-   end -}}
+{{-   if or (contains "\t" $source) (contains "\n" $source) -}}{{ fail (printf "update-omp-plugins: %s resolves to unsafe path %q" $where $source) }}{{- end -}}
+{{-   $strict := eq $id "mxm4-haptic@h82-dotfiles" -}}
+{{-   if and (eq $name "mxm4-haptic") (not $strict) -}}{{ fail "update-omp-plugins: mxm4-haptic must use marketplace h82-dotfiles" }}{{- end -}}
+{{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
+{{-   if and (or (has $os $marketOS) (and (eq $os "windows") (eq $market "compound-engineering-plugin"))) (not (and $facts.container (eq $container "skip"))) -}}
+{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t" $name $market $kind $source $strict)) -}}
+{{-   end -}}
+{{- end -}}
 #!/usr/bin/env bash
-# Reconciles omp's compound-engineering plugin from the neutral pinned archive.
+# Reconciles every eligible agents.omp.plugins row; haptic replacement is proof-gated.
 set -euo pipefail
 
-SOURCE="$HOME/{{ $ceAuthority.externalPath }}/{{ $ceVersion }}"
-if ! command -v omp >/dev/null 2>&1; then
-  printf '%s\n' 'update-omp-plugins: skipped (omp not on PATH)' >&2
-  exit 0
-fi
-if [[ ! -f "$SOURCE/.claude-plugin/marketplace.json" ]]; then
-  printf 'update-omp-plugins: pinned marketplace is missing: %s\n' "$SOURCE" >&2
-  exit 1
-fi
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $fingerprintInputs) }}
 
-# localArchive PATH changes per ref bump: omp errors on a duplicate marketplace
-# name and does not relocate an existing registration, so drop the stale
-# name-keyed registration before add (mirrors the sibling agent-plugins loop).
-omp plugin marketplace remove compound-engineering-plugin >/dev/null 2>&1 || true
-omp plugin marketplace add "$SOURCE"
-omp plugin install --scope user --force 'compound-engineering@compound-engineering-plugin'
-printf 'update-omp-plugins: reconciled compound-engineering from %s\n' "$SOURCE"
+readonly EXPECTED_OMP_VERSION='{{ $ompVersion }}'
+readonly LEGACY_EXTENSION="$HOME/.omp/agent/extensions/mxm4-haptic.ts"
+PLUGINS=(
+{{ join "\n" $rows }}
+)
+
+die() { printf 'update-omp-plugins: %s\n' "$*" >&2; exit 1; }
+
+[[ -n ${HOME:-} && -d $HOME && -w $HOME ]] || die 'preflight: HOME is not writable'
+command -v omp >/dev/null 2>&1 || die 'preflight: omp is not on PATH'
+command -v bun >/dev/null 2>&1 || die 'preflight: bun loader/hash tool is not on PATH'
+omp_version=$(omp --version 2>/dev/null) || die 'preflight: omp --version failed'
+[[ $omp_version =~ (^|[[:space:]])${EXPECTED_OMP_VERSION}([[:space:]]|$) ]] ||
+  die "preflight: expected omp ${EXPECTED_OMP_VERSION}, got ${omp_version}"
+for parent in "$HOME/.omp" "$HOME/.omp/plugins" "$HOME/.omp/agent/extensions"; do
+  if [[ -e $parent ]]; then
+    [[ -d $parent && -w $parent ]] || die "preflight: user path is not writable: $parent"
+  else
+    ancestor=$parent
+    while [[ ! -e $ancestor ]]; do ancestor=${ancestor%/*}; done
+    [[ -d $ancestor && -w $ancestor ]] || die "preflight: cannot create user path below $ancestor"
+  fi
+done
+if [[ ${#PLUGINS[@]} -eq 0 ]]; then printf '%s\n' 'update-omp-plugins: no eligible plugins'; exit 0; fi
+
+helper_root="${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-haptic-reconcile"
+mkdir -p -- "$helper_root" || die 'preflight: cannot create loader helper root'
+chmod 0700 -- "$helper_root" || die 'preflight: cannot secure loader helper root'
+helper=$(mktemp "$helper_root/validate.XXXXXX.ts") || die 'preflight: cannot create loader helper'
+cat >"$helper" <<'BUN'
+{{ includeTemplate "omp-plugin-reconcile-helper.ts.tmpl" . }}
+BUN
+
+strict_source=
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source strict <<<"$row"
+  if [[ $kind == localDir ]]; then
+    [[ -f $source/.omp-plugin/marketplace.json ]] || die "preflight: marketplace manifest is missing: $source"
+  else
+    [[ -f $source/.claude-plugin/marketplace.json ]] || die "preflight: pinned marketplace is missing: $source"
+  fi
+  if [[ $strict == true ]]; then
+    bun "$helper" pre "$source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'precheck: staged haptic validation failed'
+    strict_source=$source
+  fi
+done
+
+mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source strict <<<"$row"
+  id="${name}@${market}"
+  omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
+  omp plugin marketplace add "$source" || die "marketplace add failed for $market"
+  omp plugin install --scope user --force "$id" || die "plugin install failed for $id"
+  omp plugin enable --scope user "$id" || die "plugin enable failed for $id"
+done
+if [[ -n $strict_source ]]; then
+  bun "$helper" post "$strict_source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'postcheck: haptic replacement proof failed'
+  rm -f -- "$LEGACY_EXTENSION" || die 'migration: failed to remove legacy haptic extension'
+  bun "$helper" final "$strict_source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'final postcheck: fresh haptic loader proof failed'
+fi
 {{ end -}}

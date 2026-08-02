@@ -38,6 +38,14 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": "buf-Windows-x86_64.zip",
     "windows-arm64": "buf-Windows-arm64.zip",
   },
+  chezmoi: {
+    "linux-amd64": "chezmoi_0.0.0_linux_amd64.tar.gz",
+    "linux-arm64": "chezmoi_0.0.0_linux_arm64.tar.gz",
+    "darwin-amd64": "chezmoi_0.0.0_darwin_amd64.tar.gz",
+    "darwin-arm64": "chezmoi_0.0.0_darwin_arm64.tar.gz",
+    "windows-amd64": "chezmoi_0.0.0_windows_amd64.zip",
+    "windows-arm64": "chezmoi_0.0.0_windows_arm64.zip",
+  },
   marksman: {
     "linux-amd64": "marksman-linux-x64",
     "linux-arm64": "marksman-linux-arm64",

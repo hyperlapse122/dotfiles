@@ -1,0 +1,165 @@
+import { createHash } from "node:crypto";
+import { realpath, readFile, stat } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const [mode, source, ompRoot, legacy] = process.argv.slice(2);
+const fail = (stage: string, message: string): never => {
+  throw new Error(`${stage}: ${message}`);
+};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const record = (value: unknown, stage: string): Record<string, unknown> => {
+  if (!isRecord(value)) fail(stage, "expected an object");
+  return value;
+};
+const json = async (path: string, stage: string): Promise<unknown> => {
+  try {
+    return JSON.parse(await readFile(path, "utf8")) as unknown;
+  } catch (error) {
+    fail(stage, `${path}: ${error}`);
+  }
+};
+const inside = (root: string, path: string): boolean => {
+  const rel = relative(root, path);
+  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
+};
+const inspectPackage = async (root: string, expectedDigest?: string) => {
+  const manifest = record(
+    await json(resolve(root, "package.json"), "package identity"),
+    "package identity",
+  );
+  if (manifest.name !== "@h82/omp-mxm4-haptic") {
+    fail("package identity", `unexpected name ${manifest.name}`);
+  }
+  const omp = record(manifest.omp, "extension path");
+  const entries = Array.isArray(omp.extensions)
+    ? omp.extensions.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  if (entries.length !== 1 || entries[0] !== "./dist/index.js") {
+    fail("extension path", 'omp.extensions must be exactly ["./dist/index.js"]');
+  }
+  const files = ["package.json", ...entries.map((entry) => entry.replace(/^\.\//, ""))].sort();
+  const hash = createHash("sha256");
+  for (const rel of files) {
+    if (rel.includes("\\") || rel.split("/").includes("..") || isAbsolute(rel)) {
+      fail("payload digest", `unsafe path ${rel}`);
+    }
+    const path = resolve(root, rel);
+    if (!inside(root, path)) fail("payload digest", `payload escapes package: ${rel}`);
+    const info = await stat(path).catch(() => null);
+    if (!info?.isFile()) fail("payload digest", `missing regular payload file ${rel}`);
+    const bytes = await readFile(path);
+    hash.update(Buffer.from(`${Buffer.byteLength(rel)}:${rel}:${bytes.byteLength}:`));
+    hash.update(bytes);
+  }
+  const entry = resolve(root, "dist/index.js");
+  const sourceText = await readFile(entry, "utf8");
+  for (const match of sourceText.matchAll(/(?:from\s*|import\s*\()\s*["']([^"']+)["']/g)) {
+    if (!match[1].startsWith("node:")) {
+      fail("allowed runtime imports", `forbidden import ${match[1]}`);
+    }
+  }
+  const imported = await import(`${pathToFileURL(entry).href}?reconcile=${Date.now()}`).catch((error) =>
+    fail("importability", String(error)),
+  );
+  if (typeof imported.default !== "function") {
+    fail("importability", "default export is not a factory");
+  }
+  const digest = hash.digest("hex");
+  if (expectedDigest && digest !== expectedDigest) {
+    fail("payload digest", `installed ${digest} != staged ${expectedDigest}`);
+  }
+  return { digest, entry, factory: imported.default };
+};
+
+if (mode === "pre") {
+  const catalog = record(
+    await json(resolve(source, ".omp-plugin/marketplace.json"), "catalog"),
+    "catalog",
+  );
+  if (catalog.name !== "h82-dotfiles") {
+    fail("catalog", `unexpected marketplace ${catalog.name}`);
+  }
+  const matches = Array.isArray(catalog.plugins)
+    ? catalog.plugins.filter(
+        (plugin): plugin is Record<string, unknown> =>
+          isRecord(plugin) && plugin.name === "mxm4-haptic",
+      )
+    : [];
+  if (matches.length !== 1 || matches[0].source !== "./plugins/mxm4-haptic") {
+    fail("catalog", "expected one canonical haptic row");
+  }
+  const sourceReal = await realpath(source);
+  const root = await realpath(resolve(source, matches[0].source)).catch((error) =>
+    fail("deployed payload", String(error)),
+  );
+  if (!inside(sourceReal, root)) fail("catalog", "plugin source escapes marketplace");
+  process.stdout.write(`${(await inspectPackage(root)).digest}\n`);
+} else if (mode === "post" || mode === "final") {
+  const staged = await inspectPackage(resolve(source, "plugins/mxm4-haptic"));
+  const installed = record(
+    await json(resolve(ompRoot, "plugins/installed_plugins.json"), "installed state"),
+    "installed state",
+  );
+  const installedPlugins = record(installed.plugins, "installed state");
+  const records = installedPlugins["mxm4-haptic@h82-dotfiles"];
+  if (
+    !Array.isArray(records) ||
+    records.length !== 1 ||
+    !isRecord(records[0]) ||
+    records[0].scope !== "user" ||
+    typeof records[0].installPath !== "string"
+  ) {
+    fail("installed state", "expected exactly one user-scoped haptic plugin");
+  }
+  const installRoot = await realpath(records[0].installPath).catch((error) =>
+    fail("canonical path", String(error)),
+  );
+  const loaded = await inspectPackage(installRoot, staged.digest);
+  const entry = await realpath(loaded.entry);
+  if (!inside(installRoot, entry)) fail("canonical path", `${entry} is outside ${installRoot}`);
+  const linked = await realpath(resolve(ompRoot, "plugins/node_modules/@h82/omp-mxm4-haptic")).catch(
+    (error) => fail("discovery", String(error)),
+  );
+  if (linked !== installRoot) fail("discovery", `runtime link ${linked} != ${installRoot}`);
+  const lock = record(
+    await json(resolve(ompRoot, "plugins/omp-plugins.lock.json"), "enabled state"),
+    "enabled state",
+  );
+  const lockPlugins = record(lock.plugins, "enabled state");
+  const lockedPlugin = lockPlugins["@h82/omp-mxm4-haptic"];
+  if (!isRecord(lockedPlugin) || lockedPlugin.enabled !== true) {
+    fail("enabled state", "package is not enabled");
+  }
+  const handlers = new Map<string, unknown[]>();
+  const api = new Proxy(
+    {
+      on(event: string, handler: unknown) {
+        const values = handlers.get(event) ?? [];
+        values.push(handler);
+        handlers.set(event, values);
+      },
+    },
+    {
+      get(target, property) {
+        if (property in target) return Reflect.get(target, property);
+        return () => fail("loader health", `unexpected registration ${String(property)}`);
+      },
+    },
+  );
+  await loaded.factory(api);
+  const expected = ["after_provider_response", "agent_end", "agent_start", "tool_call"];
+  const actual = [...handlers.entries()]
+    .flatMap(([event, values]) => values.map(() => event))
+    .sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    fail("loader health", `expected one owner, got ${actual.join(",")}`);
+  }
+  if (mode === "final" && (await stat(legacy).catch(() => null))) {
+    fail("migration", `legacy extension still exists: ${legacy}`);
+  }
+  process.stdout.write(`${staged.digest}\n`);
+} else {
+  fail("helper", `unknown mode ${mode}`);
+}

@@ -399,9 +399,9 @@ Two traps make a naive local run wrong, so use this recipe verbatim:
   and the reconcile test then fails on its `dummy-secret` assertion. A scratch
   `HOME` has no marker, so the shim falls back to live `op` and the stub
   answers. CI gets this for free because the marker never exists there.
-- **`.ci/test-omp-agent-reconcile.sh` takes five rendered artifacts**, matching
-  `.github/workflows/ci.yml` `omp-agent-integration`. Render all five, including
-  the OS-gated PowerShell half via `--override-data`, or the test refuses to run.
+- **`.ci/test-omp-agent-reconcile.sh` takes seven rendered artifacts**, matching
+  `.github/workflows/ci.yml` `omp-agent-integration`. Render both OS-specific
+  script halves plus the bundled haptic package, or the test refuses to run.
 
 ```sh
 set -euo pipefail
@@ -423,9 +423,17 @@ for item in "run_after_config-omp-auth.sh.tmpl:auth.sh" \
             "run_after_config-omp-settings.sh.tmpl:settings.sh"; do
   render < ".chezmoiscripts/70-agents/${item%%:*}" > "$scratch/${item#*:}"
 done
-render < "dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl" > "$scratch/haptic.ts"
-render --override-data '{"chezmoi":{"os":"windows"}}' \
-  < ".chezmoiscripts/70-agents/run_after_config-omp-settings.ps1.tmpl" > "$scratch/settings.ps1"
+for item in "run_after_config-omp-auth.ps1.tmpl:auth.ps1" \
+            "run_onchange_after_update-omp-plugins.ps1.tmpl:plugins.ps1" \
+            "run_after_config-omp-settings.ps1.tmpl:settings.ps1"; do
+  render --override-data '{"chezmoi":{"os":"windows"}}' \
+    < ".chezmoiscripts/70-agents/${item%%:*}" > "$scratch/${item#*:}"
+done
+mkdir -p "$scratch/haptic-package/dist"
+render < "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" \
+  > "$scratch/haptic-package/package.json"
+(cd packages/mxm4-haptic && vp run build:omp-plugin)
+cp packages/mxm4-haptic/dist/omp-plugin/index.js "$scratch/haptic-package/dist/index.js"
 chmod 700 "$scratch/auth.sh" "$scratch/plugins.sh" "$scratch/settings.sh"
 
 # 2. Every declared selector must exist in the live catalog.
@@ -454,9 +462,11 @@ jq -r '. as $s | ($s.modelRoles // {}) as $r
   | if length > 0 then "UNANCHORED PATH \($c.key): missing \(join(", "))" else empty end' \
   "$scratch/omp-settings.json"     # must print nothing
 
-# 3. Both platform halves must assert the same declared key set.
-.ci/test-omp-agent-reconcile.sh "$scratch/auth.sh" "$scratch/plugins.sh" \
-  "$scratch/haptic.ts" "$scratch/settings.sh" "$scratch/settings.ps1"
+# 3. Both platform halves must assert the same declared key set and plugin state.
+.ci/test-omp-agent-reconcile.sh \
+  "$scratch/auth.sh" "$scratch/auth.ps1" \
+  "$scratch/plugins.sh" "$scratch/plugins.ps1" \
+  "$scratch/haptic-package" "$scratch/settings.sh" "$scratch/settings.ps1"
 
 # 4. model-notes.md must (a) carry no specs, (b) cover every declared
 #    selector's family, and (c) agree with agents.yaml on role -> family.

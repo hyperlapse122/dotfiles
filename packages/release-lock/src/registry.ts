@@ -53,6 +53,13 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `buf-${capitalized(os)}-${bufArch(os, arch)}${archiveExtension(os)}`,
   },
 
+  chezmoi: {
+    kind: "githubRelease",
+    source: "twpayne/chezmoi",
+    asset: ({ os, arch }, tag) =>
+      `chezmoi_${versionFromTag(tag)}_${os}_${arch}${archiveExtension(os)}`,
+  },
+
   marksman: {
     kind: "githubRelease",
     source: "artempyanykh/marksman",

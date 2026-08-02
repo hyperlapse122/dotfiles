@@ -40,12 +40,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
-      - name: Install chezmoi
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+      - name: Install locked chezmoi
         run: |
           set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Render OMP scripts and extension
+      - name: Render OMP scripts and haptic package
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/op-stub"
@@ -63,8 +72,7 @@ jobs:
             ".chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl:auth.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
             ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
-            ".chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl:agent-plugins.sh" \
-            "dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl:haptic.ts"
+            ".chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl:agent-plugins.sh"
           do
             source_path=${item%%:*}
             output_name=${item#*:}
@@ -73,6 +81,16 @@ jobs:
               --source "$GITHUB_WORKSPACE" \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
+          mkdir -p "$RUNNER_TEMP/haptic-package/dist"
+          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            execute-template \
+            < "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" \
+            > "$RUNNER_TEMP/haptic-package/package.json"
+          (cd packages && vp install --frozen-lockfile)
+          (cd packages/mxm4-haptic && vp run build:omp-plugin)
+          cp packages/mxm4-haptic/dist/omp-plugin/index.js "$RUNNER_TEMP/haptic-package/dist/index.js"
           # The Windows half is OS-gated, so force the render to compare both
           # halves' declared path sets from this Linux job.
           PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
@@ -89,8 +107,30 @@ jobs:
             execute-template \
             < ".chezmoiscripts/70-agents/run_after_config-omp-auth.ps1.tmpl" \
             > "$RUNNER_TEMP/auth.ps1"
+          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            --override-data '{"chezmoi":{"os":"windows"}}' \
+            execute-template \
+            < ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.ps1.tmpl" \
+            > "$RUNNER_TEMP/plugins.ps1"
+          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            execute-template \
+            < ".chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl" \
+            > "$RUNNER_TEMP/build-mxm4-haptic.sh"
           chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
-            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/agent-plugins.sh"
+            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/agent-plugins.sh" \
+            "$RUNNER_TEMP/build-mxm4-haptic.sh"
+      - name: Install locked OMP
+        run: |
+          set -euo pipefail
+          artifact_url=$(jq -r '.releases.tools.omp.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.omp.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/bin/omp"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/bin/omp" | sha256sum --check -
+          chmod 700 "$RUNNER_TEMP/bin/omp"
       - name: Test OMP reconciliation, haptics, and plugin installer
         run: |
           set -euo pipefail
@@ -98,12 +138,17 @@ jobs:
             "$RUNNER_TEMP/auth.sh" \
             "$RUNNER_TEMP/auth.ps1" \
             "$RUNNER_TEMP/plugins.sh" \
-            "$RUNNER_TEMP/haptic.ts" \
+            "$RUNNER_TEMP/plugins.ps1" \
+            "$RUNNER_TEMP/haptic-package" \
             "$RUNNER_TEMP/settings.sh" \
             "$RUNNER_TEMP/settings.ps1"
+          .ci/test-omp-real-plugin.sh "$RUNNER_TEMP/haptic-package"
           .ci/smoke-agent-plugin-installer.sh \
             "$RUNNER_TEMP/agent-plugins.sh" \
             "$RUNNER_TEMP/agent-plugin-smoke"
+          .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"
+          .ci/test-mxm4-haptic-gates.sh
+          .ci/test-mxm4-haptic-chezmoi-retry.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
@@ -124,19 +169,119 @@ jobs:
       - run: vp check
 
   rust-crate:
-    name: Rust crate (crates/mxm4-haptic/)
-    runs-on: ubuntu-latest
+    name: Rust crate (crates/mxm4-haptic/, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: crates/mxm4-haptic
     steps:
       - uses: actions/checkout@v7
       - name: Install libudev (hidapi linux-static-hidraw backend)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --all-targets
       - run: cargo test
       - run: cargo fmt --check
+
+  mxm4-haptic-windows:
+    name: Windows haptic daemon and provisioning
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install locked chezmoi
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lock = Get-Content -LiteralPath '.chezmoidata/releases.json' -Raw | ConvertFrom-Json
+          $artifact = $lock.releases.tools.chezmoi.artifacts.'windows-amd64'
+          $archive = Join-Path $env:RUNNER_TEMP 'chezmoi.zip'
+          $bin = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-WebRequest -Uri $artifact.url -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $artifact.sha256) {
+            throw "chezmoi SHA-256 mismatch: expected $($artifact.sha256), got $actual"
+          }
+          New-Item -ItemType Directory -Path $bin -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $bin -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $bin 'chezmoi.exe'))) {
+            throw 'locked chezmoi archive did not contain chezmoi.exe'
+          }
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Install and build TypeScript client
+        shell: pwsh
+        working-directory: packages
+        run: |
+          vp install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw "vp install exited with code $LASTEXITCODE" }
+          Push-Location mxm4-haptic
+          try {
+            vp run build
+            if ($LASTEXITCODE -ne 0) { throw "TypeScript client build exited with code $LASTEXITCODE" }
+          } finally {
+            Pop-Location
+          }
+      - name: Render Windows OMP reconciler and haptic package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $override = '{"chezmoi":{"os":"windows"}}'
+          $hapticPackage = Join-Path $env:RUNNER_TEMP 'haptic-package'
+          New-Item -ItemType Directory -Path (Join-Path $hapticPackage 'dist') -Force | Out-Null
+          Get-Content -LiteralPath 'dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl' -Raw |
+            chezmoi --config NUL --source $env:GITHUB_WORKSPACE --override-data $override execute-template |
+            Set-Content -LiteralPath (Join-Path $hapticPackage 'package.json') -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "haptic package manifest render exited with code $LASTEXITCODE" }
+          Copy-Item -LiteralPath 'packages/mxm4-haptic/dist/omp-plugin/index.js' `
+            -Destination (Join-Path $hapticPackage 'dist/index.js')
+          $reconciler = Join-Path $env:RUNNER_TEMP 'plugins.ps1'
+          Get-Content -LiteralPath '.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.ps1.tmpl' -Raw |
+            chezmoi --config NUL --source $env:GITHUB_WORKSPACE --override-data $override execute-template |
+            Set-Content -LiteralPath $reconciler -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "OMP reconciler render exited with code $LASTEXITCODE" }
+      - name: Test PowerShell OMP reconciliation
+        shell: pwsh
+        run: |
+          & .ci/test-omp-agent-reconcile.ps1 `
+            -Reconciler (Join-Path $env:RUNNER_TEMP 'plugins.ps1') `
+            -HapticPackage (Join-Path $env:RUNNER_TEMP 'haptic-package')
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell OMP reconcile fixture exited with code $LASTEXITCODE" }
+      - name: Build and test all Rust targets
+        shell: pwsh
+        working-directory: crates/mxm4-haptic
+        run: |
+          cargo build --all-targets
+          if ($LASTEXITCODE -ne 0) { throw "cargo build --all-targets exited with code $LASTEXITCODE" }
+          cargo test
+          if ($LASTEXITCODE -ne 0) { throw "cargo test exited with code $LASTEXITCODE" }
+          cargo build --release --bin mxm4-hapticd
+          if ($LASTEXITCODE -ne 0) { throw "release daemon build exited with code $LASTEXITCODE" }
+      - name: Render Windows provisioner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'build-mxm4-haptic.ps1'
+          Get-Content -LiteralPath '.chezmoiscripts/60-build/run_after_build-mxm4-haptic.ps1.tmpl' -Raw |
+            chezmoi --config NUL --source $env:GITHUB_WORKSPACE --override-data '{"chezmoi":{"os":"windows"}}' execute-template |
+            Set-Content -LiteralPath $output -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Windows provisioner render exited with code $LASTEXITCODE" }
+      - name: Test task, pipe ownership, and TypeScript transport
+        shell: pwsh
+        run: |
+          & .ci/test-mxm4-haptic-provision.ps1 `
+            -Provisioner (Join-Path $env:RUNNER_TEMP 'build-mxm4-haptic.ps1') `
+            -Daemon (Join-Path $env:GITHUB_WORKSPACE 'crates\mxm4-haptic\target\release\mxm4-hapticd.exe') `
+            -ClientModule (Join-Path $env:GITHUB_WORKSPACE 'packages\mxm4-haptic\dist\index.js')
+          if ($LASTEXITCODE -ne 0) { throw "Windows haptic fixture exited with code $LASTEXITCODE" }
 
   open-design-integration:
     name: Open Design integration

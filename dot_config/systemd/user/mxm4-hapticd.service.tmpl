@@ -6,7 +6,7 @@ Description=MX Master 4 haptic daemon (owns the Bolt receiver HID++ session)
 # AF_UNIX socket at $XDG_RUNTIME_DIR/mxm4-haptic.sock.
 
 [Service]
-Type=simple
+Type=exec
 ExecStart=%h/.local/bin/mxm4-hapticd
 Restart=always
 RestartSec=2

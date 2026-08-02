@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "TypeScript client for the mxm4-hapticd AF_UNIX daemon (MX Master 4 haptics).",
+  "description": "Cross-platform TypeScript IPC client and bundled OMP integration for mxm4-hapticd.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=24"
@@ -12,6 +12,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./omp-plugin": {
+      "types": "./src/omp-plugin.ts",
+      "import": "./dist/omp-plugin/index.js"
     }
   },
   "files": [

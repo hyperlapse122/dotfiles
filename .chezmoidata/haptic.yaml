@@ -5,7 +5,7 @@
 #
 # Single source of truth (like packages.yaml): tune a knob HERE, not in the
 # unit files. The build script
-# (.chezmoiscripts/60-build/run_onchange_after_build-mxm4-haptic.sh.tmpl)
+# (.chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl)
 # fingerprints this file alongside the unit templates, so a knob edit re-runs
 # it — `systemctl --user daemon-reload` + a restart of the active units — and
 # the new values take effect on the same apply.
@@ -81,14 +81,15 @@ haptic:
     stopFailure: MAD
     notification: RINGING
     question: RINGING
-  # haptic.omp — oh-my-pi (omp): the mxm4-haptic extension
-  # (dot_omp/private_agent/extensions/mxm4-haptic.ts.tmpl -> ~/.omp/agent/extensions)
-  # uses omp's pi-compatible pi.on(...) event API. `settled` handles
-  # `agent_settled`; `failed` switches that event after a failed provider
-  # response; `question` handles `ask_user`. The extension gates every handler
-  # on `ctx.hasUI`, which excludes headless child processes and scripts. Each
-  # value MUST be one of the 16 names in crates/mxm4-haptic/src/lib.rs
-  # (WAVEFORMS); the template's fail guard aborts the apply on a typo.
+  # haptic.omp — oh-my-pi (OMP) plugin event -> waveform. These values render
+  # into the package-local mxm4Haptic.waveforms configuration at
+  # dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl. The
+  # bundled extension reads only that validated installed configuration.
+  # `settled` handles a UI-backed agent end; `failed` replaces it after the
+  # last numeric provider status is >= 400; `question` handles a UI-backed ask
+  # tool call. Each value MUST be one of the 16 names in
+  # crates/mxm4-haptic/src/lib.rs (WAVEFORMS); the manifest's fail guard aborts
+  # rendering before an invalid plugin can be deployed.
   omp:
     settled: COMPLETED
     failed: MAD
