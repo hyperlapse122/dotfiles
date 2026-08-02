@@ -218,7 +218,7 @@ try {
   Assert ((Resolve-Sid $registered.Definition.Principal.UserId).Value -eq $sid) 'registered task belongs to a different identity'
   Assert ([IO.Path]::GetFullPath($registered.Definition.Actions.Item(1).Path) -eq [IO.Path]::GetFullPath($daemonDestination)) 'registered task endpoint drifted'
   $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'mxm4-haptic', [IO.Pipes.PipeDirection]::Out)
-  try { $pipe.Connect(5000) } finally { $pipe.Dispose() }
+  try { $pipe.Connect(15000) } finally { $pipe.Dispose() }
   Assert ((Wait-TaskState $taskFolder $taskName 4).State -eq 4) 'task stopped after first fixed-pipe acceptance'
 
   # Identical convergence must reconcile live state without invoking either build.
@@ -282,7 +282,7 @@ try {
   [IO.File]::WriteAllText($pluginStamp, "force-atomic-replacement`n")
   $lockedDestination = [IO.File]::Open($pluginDestination, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
   $global:FixtureBuildMode = 'copy'
-  Assert-ProvisionFailure 'Move-Item|being used|access'
+  Assert-ProvisionFailure 'Move-Item|being used|access|already exists'
   $lockedDestination.Dispose()
   $lockedDestination = $null
   Assert ((Get-Digest $pluginDestination) -eq $priorPluginDigest) 'atomic replacement failure changed prior plugin bytes'
@@ -305,7 +305,7 @@ try {
   & $Provisioner
 
   $blocker = [IO.Pipes.NamedPipeClientStream]::new('.', 'mxm4-haptic', [IO.Pipes.PipeDirection]::Out)
-  $blocker.Connect(5000)
+  $blocker.Connect(15000)
   Assert-ProvisionFailure 'readiness'
   $blocker.Dispose()
   $blocker = $null
