@@ -316,6 +316,12 @@ mod ipc_server {
         }
         Ok(LocalAllocation(descriptor))
     }
+    fn is_client_disconnect(code: u32) -> bool {
+        matches!(
+            code,
+            ERROR_BROKEN_PIPE | ERROR_NO_DATA | ERROR_PIPE_NOT_CONNECTED
+        )
+    }
 
     pub struct IpcServer {
         pipe: OwnedHandle,
@@ -367,6 +373,12 @@ mod ipc_server {
             if connected == 0 {
                 let err = unsafe { GetLastError() };
                 if err != ERROR_PIPE_CONNECTED {
+                    if is_client_disconnect(err) {
+                        unsafe {
+                            DisconnectNamedPipe(self.pipe.0);
+                        }
+                        return Ok(None);
+                    }
                     return Err(io::Error::from_raw_os_error(err as i32));
                 }
             }
@@ -391,13 +403,10 @@ mod ipc_server {
                 DisconnectNamedPipe(self.pipe.0);
             }
             if let Some(error) = read_error {
-                if matches!(
-                    error.raw_os_error(),
-                    Some(code)
-                        if code == ERROR_BROKEN_PIPE as i32
-                            || code == ERROR_NO_DATA as i32
-                            || code == ERROR_PIPE_NOT_CONNECTED as i32
-                ) {
+                if error
+                    .raw_os_error()
+                    .is_some_and(|code| is_client_disconnect(code as u32))
+                {
                     return Ok(None);
                 }
                 return Err(error);

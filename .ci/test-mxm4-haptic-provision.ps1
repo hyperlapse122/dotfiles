@@ -374,12 +374,13 @@ try {
   }
   Assert $sent "TypeScript client could not write to the owned fixed pipe (daemon $daemonState; client: $lastClientError)"
   Assert (-not $daemonProcess.HasExited) 'daemon exited after the transport round trip'
-
   try {
     $acl = Get-Acl -LiteralPath '\\.\pipe\mxm4-haptic'
-    $sddl = $acl.Sddl
-    Assert ($sddl -match [regex]::Escape($sid)) 'pipe DACL omits current-user SID'
-    Assert ($sddl -notmatch ';;;WD\)|;;;AU\)|;;;BU\)|;;;BA\)') 'pipe DACL grants another-user group write access'
+    $aceSids = @($acl.Access | ForEach-Object { (Resolve-Sid $_.IdentityReference.Value).Value })
+    Assert ($aceSids -contains $sid) 'pipe DACL omits current-user SID'
+    foreach ($forbidden in @('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545', 'S-1-5-32-544')) {
+      Assert ($aceSids -notcontains $forbidden) "pipe DACL grants forbidden SID $forbidden"
+    }
   } catch [System.Management.Automation.ItemNotFoundException] {
     Write-Host 'named-pipe ACL provider unavailable; different-user DACL assertion not testable on this runner'
   } catch [System.NotSupportedException] {
