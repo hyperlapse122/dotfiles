@@ -129,31 +129,31 @@
       "chezmoi": {
         "kind": "githubRelease",
         "source": "twpayne/chezmoi",
-        "version": "v2.71.1",
+        "version": "v2.72.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_linux_amd64.tar.gz",
-            "sha256": "e1fb16c962644d57f4d451c324aa86163d00faf5d035500f41fb48943a66dfed"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_linux_amd64.tar.gz",
+            "sha256": "0d6665b96c527d57fdc562bf19e808f80f48c2d977062c03e3e65c6b09eafbce"
           },
           "linux-arm64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_linux_arm64.tar.gz",
-            "sha256": "6e88c8150d3d54533ba2f335a52c2ac7b67259c525ba0f19091fc078b6852154"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_linux_arm64.tar.gz",
+            "sha256": "e79a27621256390f03166d3965e6a1946f983a096c4d90f02c43d2aa5b563728"
           },
           "darwin-amd64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_darwin_amd64.tar.gz",
-            "sha256": "1551f07cab00441540a12e663ffbf4645664319c0f91d30a5f9a255470b561cc"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_darwin_amd64.tar.gz",
+            "sha256": "41be255eacf46b1b333591b4ddc7e90e2aa98ccb8dce47609b8284b856841652"
           },
           "darwin-arm64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_darwin_arm64.tar.gz",
-            "sha256": "9fad1201c328428634b8a086f767df0dfe6dd3ea1128a2a7c45bc0b16641e294"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_darwin_arm64.tar.gz",
+            "sha256": "53e576042afba703290bbc320e64d0b6bdf1082a8fb9f0d13b97e68a6e6c059f"
           },
           "windows-amd64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_windows_amd64.zip",
-            "sha256": "efdb5ae7e8e455e8f7c1b3d7d97beb7e946d9234f58d73945b78aaf6a5e92de6"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_windows_amd64.zip",
+            "sha256": "b01b6d449db1e4ca62694482d53ab8395c891cade237c404defc1701ebd2bf66"
           },
           "windows-arm64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_windows_arm64.zip",
-            "sha256": "fdc6e21dcfd244144c06f3479e51cfabb5343196b88021207a169b0e916bc64d"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_windows_arm64.zip",
+            "sha256": "b5236c1cf266232bbfbca9d7ebf287a2a82c8c578908978ef274b6ed6aa29309"
           }
         }
       },
@@ -208,20 +208,20 @@
         "kind": "ociImage",
         "source": "docker.io/eceasy/cli-proxy-api",
         "version": "latest",
-        "digest": "sha256:ce5b2e897dc5a02ea75d42dd9c40eae568336c132483bc204aaa2d0ffe205904"
+        "digest": "sha256:afcdee40b89cf148326e08b76be9c50e9692d009d9e191f8da14f200df94f7b2"
       },
       "cli-proxy-api-binary": {
         "kind": "githubRelease",
         "source": "router-for-me/CLIProxyAPI",
-        "version": "v7.2.114",
+        "version": "v7.2.115",
         "artifacts": {
           "darwin-amd64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.114/CLIProxyAPI_7.2.114_darwin_amd64.tar.gz",
-            "sha256": "1bd6eae86a8b6d8ef3d44e1f99d7b22ab5f1cda8691657a5daf4dfe9398c66f4"
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.115/CLIProxyAPI_7.2.115_darwin_amd64.tar.gz",
+            "sha256": "d910f739c74e1a3b177f05f9f8fd8109e8e2ec0928685e90918cc9bf502afdc2"
           },
           "darwin-arm64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.114/CLIProxyAPI_7.2.114_darwin_aarch64.tar.gz",
-            "sha256": "f84cc31832d07709bfe565c887bd1c9679a949d0952dcdb6d8e6f98c7841f54b"
+            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.115/CLIProxyAPI_7.2.115_darwin_aarch64.tar.gz",
+            "sha256": "d7ef57179e505714025556924b503a6af876367d1998752a16585f49d0604ce5"
           }
         }
       },
