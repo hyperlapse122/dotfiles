@@ -312,6 +312,7 @@ try {
 
   # Exercise disposable current-user XML update semantics independently.
   Invoke-Native 'stop production task' { & $global:FixtureRealSchtasks /End /TN $taskName }
+  Wait-FileWritable $daemonDestination
   $taskXml.SelectSingleNode('/t:Task/t:RegistrationInfo/t:URI', $ns).InnerText = $taskName
   $taskXml.SelectSingleNode('/t:Task/t:Actions/t:Exec/t:Command', $ns).InnerText = (Get-Command powershell.exe -CommandType Application).Source
   $exec = $taskXml.SelectSingleNode('/t:Task/t:Actions/t:Exec', $ns)
