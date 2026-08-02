@@ -122,15 +122,16 @@ exit 0
   Assert ((Invoke-Reconciler 'retry') -eq 0) 'repeat reconciliation failed'
   Assert (-not (Test-Path -LiteralPath $legacy)) 'repeat reconciliation recreated the legacy owner'
   $retryCalls = Get-Content -LiteralPath (Join-Path $scratch 'retry.calls')
-  Assert (($retryCalls | Where-Object { $_ -eq 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' }).Count -eq 1) 'retry did not force exactly one haptic install'
-  Assert (($retryCalls | Where-Object { $_ -eq 'plugin enable --scope user mxm4-haptic@h82-dotfiles' }).Count -eq 1) 'retry did not enable exactly one haptic plugin'
+  Assert (@($retryCalls | Where-Object { $_ -eq 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' }).Count -eq 1) 'retry did not force exactly one haptic install'
+  Assert (@($retryCalls | Where-Object { $_ -eq 'plugin enable --scope user mxm4-haptic@h82-dotfiles' }).Count -eq 1) 'retry did not enable exactly one haptic plugin'
 
   $installed = Get-Content -LiteralPath (Join-Path $managedHome '.omp\plugins\installed_plugins.json') -Raw | ConvertFrom-Json
-  Assert ($installed.plugins.'mxm4-haptic@h82-dotfiles'.Count -eq 1) 'installed state is not canonical and singular'
-  Assert ($installed.plugins.'mxm4-haptic@h82-dotfiles'[0].scope -eq 'user') 'installed state is not user scoped'
+  $installedRecords = @($installed.plugins.'mxm4-haptic@h82-dotfiles')
+  Assert ($installedRecords.Count -eq 1) 'installed state is not canonical and singular'
+  Assert ($installedRecords[0].scope -eq 'user') 'installed state is not user scoped'
   $lock = Get-Content -LiteralPath (Join-Path $managedHome '.omp\plugins\omp-plugins.lock.json') -Raw | ConvertFrom-Json
   Assert ($lock.plugins.'@h82/omp-mxm4-haptic'.enabled -eq $true) 'enabled state is absent'
-  $installRoot = $installed.plugins.'mxm4-haptic@h82-dotfiles'[0].installPath
+  $installRoot = $installedRecords[0].installPath
   Assert ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $installRoot 'package.json')).Hash -eq (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $source 'plugins\mxm4-haptic\package.json')).Hash) 'installed package manifest differs from staged payload'
   Assert ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $installRoot 'dist\index.js')).Hash -eq (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $source 'plugins\mxm4-haptic\dist\index.js')).Hash) 'installed extension differs from staged payload'
 
