@@ -192,6 +192,8 @@ function Assert-TaskReady {
   $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', $PipeName, [IO.Pipes.PipeDirection]::Out)
   try {
     $pipe.Connect(5000)
+    $pipe.WriteByte(10)
+    $pipe.Flush()
   } catch {
     Fail 'readiness' "owned pipe did not accept: $($_.Exception.Message)"
   } finally {

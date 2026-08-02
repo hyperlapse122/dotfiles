@@ -358,7 +358,7 @@ try {
   $daemonProcess = Start-Process -FilePath $Daemon -PassThru -WindowStyle Hidden -RedirectStandardError $daemonLog
   $clientScript = Join-Path $fixture 'client.mjs'
   $moduleUri = ([Uri]::new([IO.Path]::GetFullPath($ClientModule))).AbsoluteUri
-  [IO.File]::WriteAllText($clientScript, "import { sendCommand } from '$moduleUri'; await sendCommand('LONG PRESS');`n")
+  [IO.File]::WriteAllText($clientScript, "import { sendCommand } from '$moduleUri'; await sendCommand('RINGING');`n")
   $sent = $false
   $lastClientError = ''
   $deadline = [DateTime]::UtcNow.AddSeconds(15)
