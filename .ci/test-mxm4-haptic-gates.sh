@@ -61,6 +61,7 @@ is_ignored() {
   while IFS= read -r pattern; do
     pattern=${pattern#./}
     [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+    # shellcheck disable=SC2053 # The rendered ignore entry is an intentional glob.
     if [[ "$path" == $pattern || "$path" == "$pattern"/* ]]; then
       return 0
     fi

@@ -17,7 +17,7 @@ stub_state="$scratch/stub-state"
 mkdir -p "$source_dir/.chezmoiscripts/60-build" "$source_dir/.chezmoiscripts/70-agents" \
   "$destination" "$fixture_home/.cache" "$(dirname "$state_db")" "$cache_dir" "$stub_bin" "$stub_state"
 printf '[data]\n' >"$scratch/empty.toml"
-chezmoi_bin=$(command -v chezmoi)
+chezmoi_bin=$(type -P chezmoi)
 
 cat >"$stub_bin/mxm4-phase60" <<'STUB'
 #!/usr/bin/env bash

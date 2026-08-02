@@ -33,7 +33,7 @@ try {
   [IO.File]::WriteAllText((Join-Path $ceSource '.claude-plugin\marketplace.json'), '{"name":"compound-engineering-plugin"}')
 
   $rendered = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Reconciler))
-  $versionMatch = [regex]::Match($rendered, '(?m)^\$expectedOmpVersion = ''([^'']+)''$')
+  $versionMatch = [regex]::Match($rendered, '(?m)^\$expectedOmpVersion = ''([^'']+)''\r?$')
   Assert $versionMatch.Success 'rendered reconciler has no expected OMP version'
   $env:EXPECTED_OMP_VERSION = $versionMatch.Groups[1].Value
   $hapticMatch = [regex]::Match($rendered, "Name = 'mxm4-haptic'; Market = 'h82-dotfiles'; Kind = 'localDir'; Source = '([^']+)'" )
