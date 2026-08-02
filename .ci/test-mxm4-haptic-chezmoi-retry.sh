@@ -17,6 +17,7 @@ stub_state="$scratch/stub-state"
 mkdir -p "$source_dir/.chezmoiscripts/60-build" "$source_dir/.chezmoiscripts/70-agents" \
   "$destination" "$fixture_home/.cache" "$(dirname "$state_db")" "$cache_dir" "$stub_bin" "$stub_state"
 printf '[data]\n' >"$scratch/empty.toml"
+chezmoi_bin=$(command -v chezmoi)
 
 cat >"$stub_bin/mxm4-phase60" <<'STUB'
 #!/usr/bin/env bash
@@ -66,7 +67,7 @@ source_digest_before=$(sha256sum \
 run_apply() {
   env HOME="$fixture_home" PATH="$stub_bin:/usr/bin:/bin" \
     FIXTURE_LOG="$log" FIXTURE_STUB_STATE="$stub_state" CHEZMOI_DEST="$destination" \
-    chezmoi --config "$scratch/empty.toml" --source "$source_dir" \
+    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$source_dir" \
       --destination "$destination" --persistent-state "$state_db" --cache "$cache_dir" \
       --no-tty --force apply
 }
@@ -78,7 +79,7 @@ if run_apply >"$scratch/first.stdout" 2>"$scratch/first.stderr"; then
   exit 1
 fi
 [[ $(grep -c '^phase60-attempt$' "$log") -eq 1 ]]
-! grep -q '^phase70-mutation$' "$log"
+if grep -q '^phase70-mutation$' "$log"; then exit 1; fi
 [[ ! -e "$destination/.local/share/omp-plugins/plugins/mxm4-haptic/dist/index.js" ]]
 [[ ! -e "$destination/.local/state/omp-haptic-reconciled" ]]
 

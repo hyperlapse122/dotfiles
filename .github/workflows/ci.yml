@@ -237,15 +237,17 @@ jobs:
           $override = '{"chezmoi":{"os":"windows"}}'
           $hapticPackage = Join-Path $env:RUNNER_TEMP 'haptic-package'
           New-Item -ItemType Directory -Path (Join-Path $hapticPackage 'dist') -Force | Out-Null
+          $config = Join-Path $env:RUNNER_TEMP 'empty.toml'
+          New-Item -Path $config -ItemType File -Force -ErrorAction SilentlyContinue | Out-Null
           Get-Content -LiteralPath 'dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl' -Raw |
-            chezmoi --config NUL --source $env:GITHUB_WORKSPACE --override-data $override execute-template |
+            chezmoi --config $config --source $env:GITHUB_WORKSPACE --override-data $override execute-template |
             Set-Content -LiteralPath (Join-Path $hapticPackage 'package.json') -Encoding utf8
           if ($LASTEXITCODE -ne 0) { throw "haptic package manifest render exited with code $LASTEXITCODE" }
           Copy-Item -LiteralPath 'packages/mxm4-haptic/dist/omp-plugin/index.js' `
             -Destination (Join-Path $hapticPackage 'dist/index.js')
           $reconciler = Join-Path $env:RUNNER_TEMP 'plugins.ps1'
           Get-Content -LiteralPath '.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.ps1.tmpl' -Raw |
-            chezmoi --config NUL --source $env:GITHUB_WORKSPACE --override-data $override execute-template |
+            chezmoi --config $config --source $env:GITHUB_WORKSPACE --override-data $override execute-template |
             Set-Content -LiteralPath $reconciler -Encoding utf8
           if ($LASTEXITCODE -ne 0) { throw "OMP reconciler render exited with code $LASTEXITCODE" }
       - name: Test PowerShell OMP reconciliation
@@ -270,8 +272,10 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $output = Join-Path $env:RUNNER_TEMP 'build-mxm4-haptic.ps1'
+          $config = Join-Path $env:RUNNER_TEMP 'empty.toml'
+          New-Item -Path $config -ItemType File -Force -ErrorAction SilentlyContinue | Out-Null
           Get-Content -LiteralPath '.chezmoiscripts/60-build/run_after_build-mxm4-haptic.ps1.tmpl' -Raw |
-            chezmoi --config NUL --source $env:GITHUB_WORKSPACE --override-data '{"chezmoi":{"os":"windows"}}' execute-template |
+            chezmoi --config $config --source $env:GITHUB_WORKSPACE --override-data '{"chezmoi":{"os":"windows"}}' execute-template |
             Set-Content -LiteralPath $output -Encoding utf8
           if ($LASTEXITCODE -ne 0) { throw "Windows provisioner render exited with code $LASTEXITCODE" }
       - name: Test task, pipe ownership, and TypeScript transport

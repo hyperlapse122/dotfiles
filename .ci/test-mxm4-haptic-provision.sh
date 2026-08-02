@@ -3,7 +3,8 @@ set -euo pipefail
 
 rendered=${1:?usage: test-mxm4-haptic-provision.sh RENDERED_PROVISIONER}
 scratch_parent=${XDG_RUNTIME_DIR:-"$HOME/.cache"}
-mkdir -p -m 0700 -- "$scratch_parent"
+mkdir -p -- "$scratch_parent"
+chmod 0700 "$scratch_parent"
 scratch=$(mktemp -d "$scratch_parent/mxm4-haptic-provision.XXXXXX")
 chmod 0700 "$scratch"
 trap 'rm -rf -- "$scratch"' EXIT
@@ -299,16 +300,16 @@ run_case linux
 rm -f "$TEST_STATE/systemd-active" "$TEST_STATE/systemd-active-count"
 run_case linux
 grep -F 'systemctl --user start mxm4-hapticd.service' "$TEST_LOG"
-! grep -Eq '^(vp|cargo) ' "$TEST_LOG"
-! grep -F 'systemctl --user daemon-reload' "$TEST_LOG"
-! grep -F 'systemctl --user enable mxm4-hapticd.service' "$TEST_LOG"
+if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
+if grep -F 'systemctl --user daemon-reload' "$TEST_LOG"; then exit 1; fi
+if grep -F 'systemctl --user enable mxm4-hapticd.service' "$TEST_LOG"; then exit 1; fi
 
 : >"$TEST_LOG"
 rm -f "$TEST_STATE/systemd-enabled" "$TEST_STATE/systemd-active-count"
 run_case linux
 grep -F 'systemctl --user enable mxm4-hapticd.service' "$TEST_LOG"
-! grep -Eq 'systemctl --user (start|restart|daemon-reload) mxm4-hapticd.service' "$TEST_LOG"
-! grep -Eq '^(vp|cargo) ' "$TEST_LOG"
+if grep -Eq 'systemctl --user (start|restart|daemon-reload) mxm4-hapticd.service' "$TEST_LOG"; then exit 1; fi
+if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
 
 : >"$TEST_LOG"
 rm -f "$TEST_STATE/systemd-enabled" "$TEST_STATE/systemd-active" \
@@ -316,8 +317,8 @@ rm -f "$TEST_STATE/systemd-enabled" "$TEST_STATE/systemd-active" \
 run_case linux
 grep -F 'systemctl --user enable mxm4-hapticd.service' "$TEST_LOG"
 grep -F 'systemctl --user start mxm4-hapticd.service' "$TEST_LOG"
-! grep -Eq '^(vp|cargo) ' "$TEST_LOG"
-! grep -F 'systemctl --user daemon-reload' "$TEST_LOG"
+if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
+if grep -F 'systemctl --user daemon-reload' "$TEST_LOG"; then exit 1; fi
 
 # Plugin-only drift updates bundle bytes without rebuilding or restarting the daemon.
 plugin_stamp="$test_home/.local/share/omp-plugins/.mxm4-haptic-state/plugin"
@@ -326,8 +327,8 @@ printf 'stale\n' >"$plugin_stamp"
 : >"$TEST_LOG"
 PLUGIN_BYTES='export default function changed() { return { changed: true }; }' run_case linux
 [[ $(<"$test_home/.local/share/omp-plugins/plugins/mxm4-haptic/dist/index.js") == *changed* ]]
-! grep -q '^cargo ' "$TEST_LOG"
-! grep -Eq 'systemctl --user (daemon-reload|start mxm4-hapticd|restart mxm4-hapticd)' "$TEST_LOG"
+if grep -q '^cargo ' "$TEST_LOG"; then exit 1; fi
+if grep -Eq 'systemctl --user (daemon-reload|start mxm4-hapticd|restart mxm4-hapticd)' "$TEST_LOG"; then exit 1; fi
 
 # Daemon/startup-only drift leaves plugin bytes untouched and reconciles the daemon.
 plugin_digest=$(sha256sum "$test_home/.local/share/omp-plugins/plugins/mxm4-haptic/dist/index.js" | cut -d' ' -f1)
@@ -337,10 +338,10 @@ printf 'stale\n' >"$daemon_stamp"
 rm -f "$TEST_STATE/systemd-active-count"
 run_case linux
 [[ $(sha256sum "$test_home/.local/share/omp-plugins/plugins/mxm4-haptic/dist/index.js" | cut -d' ' -f1) == "$plugin_digest" ]]
-! grep -q '^vp ' "$TEST_LOG"
+if grep -q '^vp ' "$TEST_LOG"; then exit 1; fi
 grep -F 'systemctl --user restart mxm4-hapticd.service' "$TEST_LOG"
 grep -F -- '--bin mxm4-hapticd --bin mxm4-haptic' "$TEST_LOG"
-! grep -F -- '--bin mxm4-haptic-notify' "$TEST_LOG"
+if grep -F -- '--bin mxm4-haptic-notify' "$TEST_LOG"; then exit 1; fi
 
 # Notification-only drift rebuilds and reconciles only the optional bridge.
 notify_stamp="$test_home/.local/share/omp-plugins/.mxm4-haptic-state/notify-linux"
@@ -348,11 +349,11 @@ printf 'stale\n' >"$notify_stamp"
 : >"$TEST_LOG"
 run_case linux
 grep -q '^cargo ' "$TEST_LOG"
-! grep -q '^vp ' "$TEST_LOG"
-! grep -Eq 'systemctl --user (start|restart) mxm4-hapticd.service' "$TEST_LOG"
+if grep -q '^vp ' "$TEST_LOG"; then exit 1; fi
+if grep -Eq 'systemctl --user (start|restart) mxm4-hapticd.service' "$TEST_LOG"; then exit 1; fi
 grep -F 'systemctl --user enable mxm4-haptic-notify.service' "$TEST_LOG"
 grep -F -- '--bin mxm4-haptic-notify' "$TEST_LOG"
-! grep -F -- '--bin mxm4-hapticd' "$TEST_LOG"
+if grep -F -- '--bin mxm4-hapticd' "$TEST_LOG"; then exit 1; fi
 
 # Every preflight/build/validation failure is fatal. Preflight and staged
 # failures cannot touch live bytes or mutate either native manager.
@@ -401,16 +402,16 @@ run_case darwin
 rm -f "$TEST_STATE/launch-running" "$TEST_STATE/launch-print-count"
 run_case darwin
 grep -F "launchctl kickstart -k gui/$UID/dev.h82.mxm4-hapticd" "$TEST_LOG"
-! grep -Eq '^launchctl (enable|bootstrap|bootout) ' "$TEST_LOG"
-! grep -Eq '^(vp|cargo) ' "$TEST_LOG"
+if grep -Eq '^launchctl (enable|bootstrap|bootout) ' "$TEST_LOG"; then exit 1; fi
+if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
 
 : >"$TEST_LOG"
 : >"$TEST_STATE/launch-disabled"
 rm -f "$TEST_STATE/launch-print-count"
 run_case darwin
 grep -F "launchctl enable gui/$UID/dev.h82.mxm4-hapticd" "$TEST_LOG"
-! grep -Eq '^launchctl (bootstrap|bootout|kickstart) ' "$TEST_LOG"
-! grep -Eq '^(vp|cargo) ' "$TEST_LOG"
+if grep -Eq '^launchctl (bootstrap|bootout|kickstart) ' "$TEST_LOG"; then exit 1; fi
+if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
 
 : >"$TEST_LOG"
 rm -f "$TEST_STATE/launch-loaded" "$TEST_STATE/launch-running" \
@@ -418,8 +419,8 @@ rm -f "$TEST_STATE/launch-loaded" "$TEST_STATE/launch-running" \
 run_case darwin
 grep -F "launchctl bootstrap gui/$UID $test_home/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist" "$TEST_LOG"
 grep -F "launchctl kickstart -k gui/$UID/dev.h82.mxm4-hapticd" "$TEST_LOG"
-! grep -Eq '^launchctl (enable|bootout) ' "$TEST_LOG"
-! grep -Eq '^(vp|cargo) ' "$TEST_LOG"
+if grep -Eq '^launchctl (enable|bootout) ' "$TEST_LOG"; then exit 1; fi
+if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
 
 for stage in plist-validation gui-domain plugin-build plugin-artifact rust-build rust-artifact; do
   prepare_case "mac-$stage" darwin
