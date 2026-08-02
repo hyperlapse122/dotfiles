@@ -39,7 +39,19 @@ function Resolve-Sid([string]$Value) {
     )
   }
 }
-
+function Wait-FileWritable([string]$Path, [int]$Seconds = 15) {
+  $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
+  do {
+    try {
+      $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+      $stream.Dispose()
+      return
+    } catch {
+      Start-Sleep -Milliseconds 100
+    }
+  } while ([DateTime]::UtcNow -lt $deadline)
+  throw "file $Path did not become writable"
+}
 
 function Wait-TaskState($Folder, [string]$Name, [int]$State, [int]$Seconds = 15) {
   $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
@@ -247,6 +259,7 @@ try {
   $pluginSnapshot = "$(Get-Digest $pluginDestination):$((Get-Content -LiteralPath $pluginStamp -Raw).Trim())"
   Invoke-Native 'stop before daemon drift' { & $global:FixtureRealSchtasks /End /TN $taskName }
   Wait-TaskState $taskFolder $taskName 3 | Out-Null
+  Wait-FileWritable $daemonDestination
   Remove-Item -LiteralPath $daemonDestination -Force
   & $Provisioner
   Assert ((Get-Digest $daemonDestination) -eq (Get-Digest $Daemon)) 'daemon-only drift did not restore exact bytes'
