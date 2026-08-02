@@ -819,7 +819,7 @@ jobs:
           [void][ScriptBlock]::Create($rendered)
           $expectedVersion = (
             (Get-Content -Raw -LiteralPath '.chezmoidata/releases.json' | ConvertFrom-Json).
-              tools.omp.version -replace '^v', ''
+              releases.tools.omp.version -replace '^v', ''
           )
           if ($rendered -notmatch "(?m)^\`$expectedOmpVersion = '$([regex]::Escape($expectedVersion))'\r?$") {
             throw "rendered OMP updater does not use locked version $expectedVersion"

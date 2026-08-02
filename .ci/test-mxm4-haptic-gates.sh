@@ -10,13 +10,14 @@ mkdir -p "$scratch/home" "$scratch/target" "$scratch/bin"
 printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod +x "$scratch/bin/op"
+chezmoi_bin=$(type -P chezmoi)
 
 fail() { printf 'mxm4-haptic gates: %s\n' "$*" >&2; exit 1; }
 require_file() { [[ -f "$repo_root/$1" ]] || fail "missing source surface $1"; }
 render() {
   local os=$1 input=$2 output=$3
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-    chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
       --destination "$scratch/target" --override-data "{\"chezmoi\":{\"os\":\"$os\"}}" \
       execute-template <"$input" >"$output"
 }

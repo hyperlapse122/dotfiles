@@ -115,7 +115,9 @@ exit 0
     [IO.File]::WriteAllBytes($entry, $entryBytes)
   }
 
-  Assert ((Invoke-Reconciler 'success') -eq 0) 'strict reconciliation failed'
+  $successCode = Invoke-Reconciler 'success'
+  $successOutput = Get-Content -Raw -LiteralPath (Join-Path $scratch 'success.out')
+  Assert ($successCode -eq 0) "strict reconciliation failed:`n$successOutput"
   Assert (-not (Test-Path -LiteralPath $legacy)) 'successful final proof retained the legacy owner'
   Assert ((Invoke-Reconciler 'retry') -eq 0) 'repeat reconciliation failed'
   Assert (-not (Test-Path -LiteralPath $legacy)) 'repeat reconciliation recreated the legacy owner'
