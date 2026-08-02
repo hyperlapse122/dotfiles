@@ -111,6 +111,22 @@ function Get-RegisteredTask {
     return $null
   }
 }
+function Test-CurrentUserId([string]$Value) {
+  if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+  try {
+    $sid = [Security.Principal.SecurityIdentifier]::new($Value)
+  } catch {
+    try {
+      $sid = [Security.Principal.NTAccount]::new($Value).Translate(
+        [Security.Principal.SecurityIdentifier]
+      )
+    } catch {
+      return $false
+    }
+  }
+  return $sid.Value -eq $currentSid
+}
+
 
 function Test-TaskRegistration($Task) {
   if ($null -eq $Task -or -not $Task.Enabled) { return $false }
@@ -124,8 +140,8 @@ function Test-TaskRegistration($Task) {
       [IO.Path]::GetFullPath($action.Path) -eq [IO.Path]::GetFullPath($DaemonDestination) -and
       [string]::IsNullOrWhiteSpace($action.Arguments) -and
       [string]::IsNullOrWhiteSpace($action.WorkingDirectory) -and
-      $trigger.Type -eq 9 -and $trigger.Enabled -and $trigger.UserId -eq $currentSid -and
-      $definition.Principal.UserId -eq $currentSid -and
+      $trigger.Type -eq 9 -and $trigger.Enabled -and (Test-CurrentUserId $trigger.UserId) -and
+      (Test-CurrentUserId $definition.Principal.UserId) -and
       $definition.Principal.LogonType -eq 3 -and
       $definition.Principal.RunLevel -eq 0 -and
       $settings.Enabled -and $settings.AllowDemandStart -and
