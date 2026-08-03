@@ -528,35 +528,35 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v17.2.4",
+        "version": "v17.2.5",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-linux-x64",
-            "sha256": "a6e7086f3b807f68a5b08b49597f4349e5ce37365639b7af5e9c8fe359989840"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-linux-x64",
+            "sha256": "fcee480f8c76c840245684dee21d6c6b324bade25b2a7263bc4eb8e846c502d3"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-linux-arm64",
-            "sha256": "ac473cbf61cc1a2607d2883930e641e15e8e79da2cdd42ffec8d701ad85a219c"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-linux-arm64",
+            "sha256": "5404bb609e3c634acd91a19c0c7bbac76c43d80ef157362a7c5430f5595435d2"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-darwin-x64",
-            "sha256": "997bc0c98ac2bd3010bf86fde3b75347832dd5c110bc6c603ace67e70a249f95"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-darwin-x64",
+            "sha256": "f65a90b56cd63b6e3ac5bce680b60287b1edd7477995d7410f40f8c86c05c91d"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-darwin-arm64",
-            "sha256": "f39d256c6b2ece7f2eb85c24fc47ffbe39a1796ea6eea2605ad564fce42c408e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-darwin-arm64",
+            "sha256": "c0395acc09be9d1d6ef1b83c84fa19841bfba2aa6d5481442f66bd0ca01cd329"
           },
           "windows-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-windows-x64.exe",
-            "sha256": "1ae3b28c96a5653af1ef7dd444d570c755501c5526c34d2e81809511f5b6e045"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-windows-x64.exe",
+            "sha256": "0b0afb9d73e911de84f82faf2696a7da0fcf4767ab7b8a0f1c21371019b7d075"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-linux-musl-x64",
-            "sha256": "fd32ae07e1920207369363ee966fc0e032b056ba0ce510d63e2467ab80790f7e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-linux-musl-x64",
+            "sha256": "aabe7d10fc9c435e15a4387902e0485a1e9697ceb2d009f0d4af182cea6639c4"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.4/omp-linux-musl-arm64",
-            "sha256": "9181a09b4ef559ef253044a179227b87f4036ce0090567c716d0ae632b5bf6ad"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.5/omp-linux-musl-arm64",
+            "sha256": "5f5adeb687a0737723810d053e957c3ff37ec7dbd4a95fed432b0a191770996a"
           }
         }
       },
@@ -568,31 +568,31 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-07-27",
+        "version": "2026-08-03",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "769670319df8571dac91b6eab6d3a65b18b69488a6900959f2fb6157181ace9d"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "4cb0ca4675608e8d73a7f4e43ef733d1f69600845d504c35d2f9d9f240bd3486"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "ea5cb460f1532bf3c6f399b079840e968e3c25857669cd65af36dd707ea097e8"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "9d1a60991ead6c27baa9d265fc8fd03bba9c39cf0ec2aaf389e37e6155af7cbb"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "8966f9429085c243817b9d13afa76e98920668c07a9b432901daaf047397c6cb"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "102215ae7e7a41c0dda8f24e910a01e757f58091204863e5e3e6696b743f7e97"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "bba6cd8209643cd781f3ee5474fa232d3ee1b77a57f2e77982806e3c80a65207"
           },
           "windows-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-pc-windows-msvc.zip",
-            "sha256": "7abdf50734026de963b3b25eba7714be8acf43a15ffb7f4f9d8b041e796ce2c9"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-x86_64-pc-windows-msvc.zip",
+            "sha256": "a446ba5482b2a43d4010180031d2033b6761dd295117f3d0277af5777c4d8ee5"
           },
           "windows-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-pc-windows-msvc.zip",
-            "sha256": "ba6da9a8443548e7d6953d4736248019d2f92fa883dad72415a572bbbe4e0e7b"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-aarch64-pc-windows-msvc.zip",
+            "sha256": "c10cde297644fd79ef1c288d96059bb01e345970dd89ac9d673a4e58512330e9"
           }
         }
       },
