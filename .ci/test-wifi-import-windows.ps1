@@ -113,7 +113,7 @@ exit /b 0
         "{ @([pscustomobject]@{ AdapterTypeID = 9; NetConnectionID = '무선랜' }, [pscustomobject]@{ AdapterTypeID = 0; NetConnectionID = '이더넷' }) }"
       }
       $escapedTool = $Tool -replace "'", "''"
-      $argumentText = ($ToolArgs | ForEach-Object { "'$($_ -replace "'", "''")'" }) -join ' '
+      $argumentText = $ToolArgs -join ' '
       & $PwshExe -NoProfile -Command "& '$escapedTool' $argumentText -WirelessInterfaceProvider $provider" > $out 2>&1
       $script:ToolRc = $LASTEXITCODE
     } finally {
