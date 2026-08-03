@@ -141,9 +141,10 @@ try {
   [IO.File]::WriteAllText($ownership, $valid + "`n", [Text.UTF8Encoding]::new($false))
   Remove-Item -LiteralPath (Join-Path $live $skills[0]) -Recurse -Force; [IO.File]::WriteAllText((Join-Path $live $skills[0]), 'file'); Assert-PreflightFailure 'destination file'
   Remove-Item -LiteralPath (Join-Path $live $skills[0]) -Force; Copy-Item -LiteralPath (Join-Path $stage $skills[0]) -Destination (Join-Path $live $skills[0]) -Recurse
-  $ambiguous = $skills[0].ToUpperInvariant(); New-Item -ItemType Directory -Path (Join-Path $stage $ambiguous) -ErrorAction SilentlyContinue | Out-Null
-  if (Test-Path -LiteralPath (Join-Path $stage $ambiguous)) { Assert-PreflightFailure 'case ambiguity'; Remove-Item -LiteralPath (Join-Path $stage $ambiguous) -Recurse -Force -ErrorAction SilentlyContinue }
-  Reset-Stage
+  $caseAmbiguous = @($skills[0], $skills[0].ToUpperInvariant()) | Sort-Object -CaseSensitive
+  $ambiguousManifest = [ordered]@{ schema='figma-skills-ownership/v1'; transactionId='case-ambiguity'; skills=$caseAmbiguous } | ConvertTo-Json -Compress
+  [IO.File]::WriteAllText($ownership, $ambiguousManifest + "`n", [Text.UTF8Encoding]::new($false)); Assert-PreflightFailure 'case ambiguity'
+  [IO.File]::WriteAllText($ownership, $valid + "`n", [Text.UTF8Encoding]::new($false))
   $referent = Join-Path $scratch 'referent'; New-Item -ItemType Directory -Path $referent | Out-Null
   Remove-Item -LiteralPath (Join-Path $live $skills[0]) -Recurse -Force
   $linkType = if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }

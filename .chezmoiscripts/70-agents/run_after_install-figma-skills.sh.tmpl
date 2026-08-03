@@ -255,7 +255,7 @@ mkdir -p -- "$root"
 txn_id="$(date +%s).$$.${RANDOM:-0}"
 txn="$root/.figma-skills-txn-$txn_id"
 mkdir -- "$txn" "$txn/new" "$txn/backups"
-chmod 0700 -- "$txn"
+chmod 0700 "$txn"
 active=true
 txn_phase=preparing
 if [[ $manifest_absent == true ]]; then : >"$txn/ownership.absent"; else cp -p -- "$ownership" "$txn/ownership.before"; fi
