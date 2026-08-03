@@ -40,6 +40,16 @@ export interface LockedTool {
   readonly artifacts?: Readonly<Partial<Record<PlatformKey, LockedArtifact>>>;
 }
 
+/** One immutable upstream skill collection, kept distinct from platform artifacts. */
+export interface LockedSkillCollection extends LockedTool {
+  readonly kind: "githubSkillCollection";
+  /** Immutable selected Git commit. */
+  readonly revision: string;
+  /** Sorted, unique immediate skill directory names. */
+  readonly skills: readonly string[];
+  readonly artifacts?: never;
+}
+
 export interface ReleaseLock {
   /**
    * Nested under `releases` because chezmoi merges every `.chezmoidata` file's
@@ -54,6 +64,7 @@ export interface ReleaseLock {
 export type ResolverKind =
   | "githubRelease"
   | "githubTag"
+  | "githubSkillCollection"
   | "gitlabRelease"
   | "npm"
   | "vendorManifest"

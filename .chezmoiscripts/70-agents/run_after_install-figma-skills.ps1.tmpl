@@ -1,0 +1,272 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $ctx := . -}}
+{{- $collection := index .agents.skills.collections "figma" -}}
+{{- range $field := list "lockKey" "stagingPath" "ownershipStatePath" -}}
+{{-   if not (hasKey $collection $field) -}}{{ fail (printf "install-figma-skills: collection is missing %s" $field) }}{{- end -}}
+{{- end -}}
+{{- $skillsJson := includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $collection.lockKey "field" "skillsJson") -}}
+# Transactionally reconciles the locked official Figma skill collection.
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$schema = 'figma-skills-ownership/v1'
+$desiredSkillsJson = '{{ $skillsJson }}'
+$defaultStage = Join-Path $HOME '{{ $collection.stagingPath }}'
+$defaultRoot = Join-Path $HOME '.agents/skills'
+$defaultOwnership = Join-Path $HOME '{{ $collection.ownershipStatePath }}'
+$stage = if ($env:FIGMA_SKILLS_STAGE) { $env:FIGMA_SKILLS_STAGE } else { $defaultStage }
+$root = if ($env:FIGMA_SKILLS_ROOT) { $env:FIGMA_SKILLS_ROOT } else { $defaultRoot }
+$ownership = if ($env:FIGMA_SKILLS_OWNERSHIP) { $env:FIGMA_SKILLS_OWNERSHIP } else { $defaultOwnership }
+$journal = "$ownership.journal"
+$lockPath = "$ownership.lock"
+$utf8 = [Text.UTF8Encoding]::new($false)
+$lockStream = $null
+$active = $false
+$simulateCrash = $false
+$txn = $null
+$txnId = $null
+[string[]]$touched = @()
+$txnPhase = $null
+
+function Fail([string]$Message) { throw "install-figma-skills: $Message" }
+function Test-SafeName([string]$Name) { return $Name -cmatch '^figma-[a-z0-9]+(-[a-z0-9]+)*$' }
+function Assert-NoReparseComponents([string]$Path) {
+  $current = [IO.Path]::GetFullPath($Path)
+  while ($current) {
+    if (Test-Path -LiteralPath $current) {
+      $item = Get-Item -Force -LiteralPath $current
+      if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail "unsafe reparse path component: $current" }
+    }
+    $parent = Split-Path -Parent $current
+    if (-not $parent -or $parent -eq $current) { break }
+    $current = $parent
+  }
+}
+function Assert-Tree([string]$Path, [string]$Label) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Container)) { Fail "$Label is not a directory: $Path" }
+  $items = @(Get-Item -Force -LiteralPath $Path) + @(Get-ChildItem -Force -LiteralPath $Path -Recurse)
+  foreach ($item in $items) {
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail "$Label contains a reparse point: $($item.FullName)" }
+    if (-not ($item -is [IO.FileInfo]) -and -not ($item -is [IO.DirectoryInfo])) { Fail "$Label contains an unsupported entry: $($item.FullName)" }
+  }
+}
+function Write-Atomic([string]$Path, [string]$Value) {
+  $temporary = "$Path.tmp.$txnId"
+  $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try {
+    $bytes = $utf8.GetBytes($Value + "`n")
+    $stream.Write($bytes, 0, $bytes.Length)
+    $stream.Flush($true)
+  } finally { $stream.Dispose() }
+  if (Test-Path -LiteralPath $Path) {
+    $replaceBackup = "$Path.replace-backup.$txnId"
+    [IO.File]::Replace($temporary, $Path, $replaceBackup, $true)
+    Remove-Item -LiteralPath $replaceBackup -Force
+  } else {
+    [IO.File]::Move($temporary, $Path)
+  }
+}
+function Convert-StrictJson([string]$Path, [string]$Label) {
+  try { return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json } catch { Fail "invalid $Label JSON: $Path" }
+}
+function Assert-SortedUniqueSafe([object[]]$Names, [bool]$AllowEmpty = $false) {
+  if (-not $AllowEmpty -and $Names.Count -eq 0) { Fail 'skill inventory is empty' }
+  [string[]]$actual = @($Names | ForEach-Object { if ($_ -isnot [string] -or -not (Test-SafeName ([string]$_))) { Fail "unsafe skill name: $_" }; [string]$_ })
+  [string[]]$sorted = @($actual | Sort-Object -CaseSensitive)
+  if (($actual -join "`n") -cne ($sorted -join "`n")) { Fail 'skill inventory is not sorted' }
+  if (@($actual | Sort-Object -Unique -CaseSensitive).Count -ne $actual.Count) { Fail 'skill inventory contains duplicates' }
+  $folded = @($actual | Group-Object { $_.ToUpperInvariant() } | Where-Object Count -gt 1)
+  if ($folded.Count -gt 0) { Fail 'skill inventory is case-ambiguous' }
+  return $actual
+}
+function Assert-Manifest([string]$Path) {
+  $manifest = Convert-StrictJson $Path 'ownership manifest'
+  [string[]]$keys = @($manifest.PSObject.Properties.Name | Sort-Object)
+  if (($keys -join ',') -cne 'schema,skills,transactionId') { Fail "invalid ownership manifest shape: $Path" }
+  if ($manifest.schema -cne $schema -or $manifest.transactionId -isnot [string] -or $manifest.transactionId -cnotmatch '^[A-Za-z0-9._-]+$') { Fail "invalid ownership manifest contract: $Path" }
+  [void](Assert-SortedUniqueSafe @($manifest.skills))
+  return $manifest
+}
+function Write-Journal([string]$Phase) {
+  $value = [ordered]@{ schema=$schema; transactionId=$txnId; phase=$Phase; transactionDir=$txn; touched=@($touched) } | ConvertTo-Json -Compress
+  Write-Atomic $journal $value
+  $script:txnPhase = $Phase
+}
+function Read-Journal {
+  $value = Convert-StrictJson $journal 'transaction journal'
+  [string[]]$keys = @($value.PSObject.Properties.Name | Sort-Object)
+  if (($keys -join ',') -cne 'phase,schema,touched,transactionDir,transactionId') { Fail 'invalid transaction journal shape' }
+  if ($value.schema -cne $schema -or $value.transactionId -isnot [string] -or $value.transactionId -cnotmatch '^[A-Za-z0-9._-]+$') { Fail 'invalid transaction journal contract' }
+  if ([string]$value.phase -notin @('prepared','backed-up','installed','verified','committed')) { Fail 'invalid transaction journal phase' }
+  $expectedTxn = [IO.Path]::GetFullPath((Join-Path $root ".figma-skills-txn-$($value.transactionId)"))
+  $actualTxn = [IO.Path]::GetFullPath([string]$value.transactionDir)
+  if (-not $actualTxn.Equals($expectedTxn, [StringComparison]::OrdinalIgnoreCase)) { Fail 'transaction journal does not name its private transaction directory' }
+  [void](Assert-SortedUniqueSafe @($value.touched))
+  return $value
+}
+function Restore-Transaction {
+  if (-not $txn -or -not (Test-Path -LiteralPath $txn -PathType Container)) { Fail "cannot roll back missing transaction directory: $txn" }
+  $backups = Join-Path $txn 'backups'
+  $restored = 0
+  foreach ($name in $touched) {
+    $backup = Join-Path $backups $name
+    $destination = Join-Path $root $name
+    if (Test-Path -LiteralPath $backup -PathType Container) {
+      $restore = Join-Path $txn "restore.$name"
+      Remove-Item -LiteralPath $restore -Recurse -Force -ErrorAction SilentlyContinue
+      Copy-Item -LiteralPath $backup -Destination $restore -Recurse
+      Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
+      Move-Item -LiteralPath $restore -Destination $destination
+      $restored++
+      if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'rollback-hard-crash' -and $restored -eq 1) {
+        $script:simulateCrash = $true
+        Stop-Process -Id $PID -Force
+      }
+    } elseif ($txnPhase -cne 'prepared') {
+      Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  $before = Join-Path $txn 'ownership.before'
+  $absent = Join-Path $txn 'ownership.absent'
+  if (Test-Path -LiteralPath $before -PathType Leaf) {
+    $rollback = "$ownership.rollback.$txnId"
+    Copy-Item -LiteralPath $before -Destination $rollback
+    if (Test-Path -LiteralPath $ownership) {
+      $replaceBackup = "$ownership.replace-backup.$txnId"
+      [IO.File]::Replace($rollback, $ownership, $replaceBackup, $true)
+      Remove-Item -LiteralPath $replaceBackup -Force
+    } else { [IO.File]::Move($rollback, $ownership) }
+  } elseif (Test-Path -LiteralPath $absent -PathType Leaf) {
+    Remove-Item -LiteralPath $ownership -Force -ErrorAction SilentlyContinue
+  } else { Fail 'transaction lacks prior ownership evidence' }
+  Remove-Item -LiteralPath $txn -Recurse -Force
+  Remove-Item -LiteralPath $journal -Force
+}
+function Recover-Transaction {
+  if (-not (Test-Path -LiteralPath $journal)) { return }
+  $journalItem = Get-Item -Force -LiteralPath $journal
+  if (($journalItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $journalItem -isnot [IO.FileInfo]) { Fail 'unsafe transaction journal' }
+  $record = Read-Journal
+  $script:txnId = [string]$record.transactionId
+  $script:txn = [string]$record.transactionDir
+  [string[]]$script:touched = @($record.touched)
+  $script:txnPhase = [string]$record.phase
+  $manifestId = $null
+  if (Test-Path -LiteralPath $ownership) { $manifestId = (Assert-Manifest $ownership).transactionId }
+  if ([string]$record.phase -ceq 'committed' -or $manifestId -ceq $txnId) {
+    Remove-Item -LiteralPath $txn -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $journal -Force
+  } else { Restore-Transaction }
+  $script:txn=$null; $script:txnId=$null; $script:txnPhase=$null; [string[]]$script:touched=@()
+}
+function Get-TreeSignature([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return $null }
+  $base = [IO.Path]::GetFullPath($Path).TrimEnd([IO.Path]::DirectorySeparatorChar)
+  $rows = foreach ($item in @(Get-ChildItem -Force -LiteralPath $Path -Recurse | Sort-Object FullName)) {
+    $relative = $item.FullName.Substring($base.Length + 1).Replace([IO.Path]::DirectorySeparatorChar, '/')
+    if ($item -is [IO.DirectoryInfo]) { "D:$relative" } else { "F:${relative}:$((Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash)" }
+  }
+  return $rows -join "`n"
+}
+
+try {
+  Assert-NoReparseComponents $stage
+  Assert-NoReparseComponents $root
+  Assert-NoReparseComponents $ownership
+  $stateDirectory = Split-Path -Parent $ownership
+  New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
+  Assert-NoReparseComponents $stateDirectory
+  if (Test-Path -LiteralPath $lockPath) {
+    $lockItem = Get-Item -Force -LiteralPath $lockPath
+    if ($lockItem -isnot [IO.FileInfo] -or ($lockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail "unsafe reconciler lock: $lockPath" }
+  }
+  try { $lockStream = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) } catch { Fail "another reconciler holds the root lock: $root" }
+  $lockItem = Get-Item -Force -LiteralPath $lockPath
+  if ($lockItem -isnot [IO.FileInfo] -or ($lockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    $lockStream.Dispose()
+    $lockStream = $null
+    Fail "unsafe reconciler lock: $lockPath"
+  }
+  if ($env:FIGMA_SKILLS_HOLD_LOCK_SECONDS) { Start-Sleep -Seconds ([int]$env:FIGMA_SKILLS_HOLD_LOCK_SECONDS) }
+  Recover-Transaction
+
+  Assert-Tree $stage 'staging root'
+  [string[]]$desired = @(Assert-SortedUniqueSafe @($desiredSkillsJson | ConvertFrom-Json))
+  [string[]]$staged = @(Get-ChildItem -Force -LiteralPath $stage | ForEach-Object Name | Sort-Object -CaseSensitive)
+  if (($staged -join "`n") -cne ($desired -join "`n")) { Fail 'staging direct children differ from locked inventory' }
+  foreach ($name in $desired) {
+    $skill = Join-Path $stage $name
+    Assert-Tree $skill "staged skill $name"
+    if (-not (Test-Path -LiteralPath (Join-Path $skill 'SKILL.md') -PathType Leaf)) { Fail "$name lacks a regular SKILL.md" }
+  }
+  if (Test-Path -LiteralPath $root) {
+    $rootItem = Get-Item -Force -LiteralPath $root
+    if ($rootItem -isnot [IO.DirectoryInfo] -or ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail "unsafe skills root: $root" }
+    $ambiguous = @(Get-ChildItem -Force -LiteralPath $root | Group-Object { $_.Name.ToUpperInvariant() } | Where-Object Count -gt 1)
+    if ($ambiguous.Count -gt 0) { Fail 'case-ambiguous destination children' }
+  }
+  [string[]]$prior = @()
+  $manifestAbsent = $true
+  if (Test-Path -LiteralPath $ownership) {
+    $ownershipItem = Get-Item -Force -LiteralPath $ownership
+    if (($ownershipItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $ownershipItem -isnot [IO.FileInfo]) { Fail 'unsafe ownership manifest' }
+    $prior = @((Assert-Manifest $ownership).skills)
+    $manifestAbsent = $false
+  } else {
+    foreach ($name in $desired) { if (Test-Path -LiteralPath (Join-Path $root $name)) { Fail 'ownership manifest is missing alongside managed-looking destinations' } }
+  }
+  [string[]]$touchedCandidate = @(($prior + $desired) | Sort-Object -Unique -CaseSensitive)
+  foreach ($name in $touchedCandidate) {
+    $destination = Join-Path $root $name
+    if (Test-Path -LiteralPath $destination) { Assert-Tree $destination "destination $name" }
+  }
+
+  $matches = (($prior -join "`n") -ceq ($desired -join "`n"))
+  if ($matches) { foreach ($name in $desired) { if ((Get-TreeSignature (Join-Path $stage $name)) -cne (Get-TreeSignature (Join-Path $root $name))) { $matches=$false; break } } }
+  if ($matches) { return }
+
+  New-Item -ItemType Directory -Force -Path $root | Out-Null
+  Assert-NoReparseComponents $root
+  $txnId = '{0}.{1}.{2}' -f [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(), $PID, [guid]::NewGuid().ToString('N')
+  $txn = Join-Path $root ".figma-skills-txn-$txnId"
+  New-Item -ItemType Directory -Path $txn | Out-Null
+  $active = $true
+  $txnPhase = 'preparing'
+  New-Item -ItemType Directory -Path (Join-Path $txn 'new'), (Join-Path $txn 'backups') | Out-Null
+  if ($manifestAbsent) { [IO.File]::WriteAllText((Join-Path $txn 'ownership.absent'), '', $utf8) } else { Copy-Item -LiteralPath $ownership -Destination (Join-Path $txn 'ownership.before') }
+  foreach ($name in $desired) { Copy-Item -LiteralPath (Join-Path $stage $name) -Destination (Join-Path $txn "new/$name") -Recurse }
+  [string[]]$touched = $touchedCandidate
+  Write-Journal 'prepared'
+
+  foreach ($name in $touched) { $destination=Join-Path $root $name; if (Test-Path -LiteralPath $destination) { Move-Item -LiteralPath $destination -Destination (Join-Path $txn "backups/$name") } }
+  Write-Journal 'backed-up'
+  $count=0
+  foreach ($name in $desired) {
+    Move-Item -LiteralPath (Join-Path $txn "new/$name") -Destination (Join-Path $root $name)
+    $count++
+    if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'after-first-replacement' -and $count -eq 1) { Fail 'injected failure after first replacement' }
+    if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'hard-crash-after-first-replacement' -and $count -eq 1) {
+      $simulateCrash=$true
+      Stop-Process -Id $PID -Force
+    }
+  }
+  Write-Journal 'installed'
+  if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'pre-commit-crash') { $simulateCrash=$true; Fail 'injected pre-commit crash' }
+  foreach ($name in $desired) { if ((Get-TreeSignature (Join-Path $stage $name)) -cne (Get-TreeSignature (Join-Path $root $name))) { Fail "verification failed for $name" } }
+  Write-Journal 'verified'
+  $nextManifest = [ordered]@{ schema=$schema; transactionId=$txnId; skills=@($desired) } | ConvertTo-Json -Compress
+  Write-Atomic $ownership $nextManifest
+  Write-Journal 'committed'
+  if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'post-commit-crash') { $simulateCrash=$true; Fail 'injected post-commit crash' }
+  Remove-Item -LiteralPath $txn -Recurse -Force
+  Remove-Item -LiteralPath $journal -Force
+  $active=$false
+} finally {
+  if ($active -and -not $simulateCrash) {
+    if ($txnPhase -ceq 'preparing') {
+      Remove-Item -LiteralPath $txn -Recurse -Force -ErrorAction SilentlyContinue
+      Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+    } else { Restore-Transaction }
+  }
+  if ($lockStream) { $lockStream.Dispose() }
+}
+{{ end -}}

@@ -5,9 +5,9 @@ artifact lock (.chezmoidata/releases.json, exposed to templates as .releases).
 Input (dict):
   ctx       required; root chezmoi context (carries .releases and .chezmoi)
   tool      required; lock key under .releases.tools
-  field     optional; "version" (default), "url", "sha256", "size",
-            "emulated", or "imageRef" (ociImage only: composes
-            "source:version@digest" platform-free, no platform argument)
+  field     optional; "version" (default), "revision", "skillsJson", "url",
+            "sha256", "size", "emulated", or "imageRef" (ociImage only:
+            composes "source:version@digest" platform-free, no platform argument)
   platform  required for artifact fields; an explicit lock platform key
             (e.g. "linux-amd64", "windows-arm64") or "auto" to compose
             "<os>-<arch>" from ctx.chezmoi
@@ -39,7 +39,7 @@ structurally because every consumer reads the same one lock key (R7).
 {{- $tool := .tool -}}
 {{- $field := "version" -}}
 {{- if hasKey . "field" -}}{{- $field = .field -}}{{- end -}}
-{{- if not (or (eq $field "version") (eq $field "url") (eq $field "sha256") (eq $field "size") (eq $field "emulated") (eq $field "imageRef")) -}}
+{{- if not (or (eq $field "version") (eq $field "revision") (eq $field "skillsJson") (eq $field "url") (eq $field "sha256") (eq $field "size") (eq $field "emulated") (eq $field "imageRef")) -}}
 {{-   fail (printf "release-lock-ref.tmpl: unsupported field %q" $field) -}}
 {{- end -}}
 {{- $optional := false -}}
@@ -51,7 +51,32 @@ structurally because every consumer reads the same one lock key (R7).
 {{-   fail (printf "release-lock-ref.tmpl: no lock entry for tool %q — add it to packages/release-lock and refresh .chezmoidata/releases.json; no live fallback exists (R6)" $tool) -}}
 {{- end -}}
 {{- $entry := index $ctx.releases.tools $tool -}}
-{{- if eq $field "imageRef" -}}
+{{- if or (eq $field "revision") (eq $field "skillsJson") -}}
+{{-   if or (not (hasKey $entry "kind")) (ne ($entry.kind | toString) "githubSkillCollection") -}}
+{{-     fail (printf "release-lock-ref.tmpl: lock entry %q must have kind githubSkillCollection for field %q" $tool $field) -}}
+{{-   end -}}
+{{-   if or (not (hasKey $entry "revision")) (not (kindIs "string" $entry.revision)) (not (regexMatch "^[0-9a-f]{40}$" $entry.revision)) -}}
+{{-     fail (printf "release-lock-ref.tmpl: lock entry %q has an invalid immutable revision" $tool) -}}
+{{-   end -}}
+{{-   if or (not (hasKey $entry "skills")) (not (kindIs "slice" $entry.skills)) (eq (len $entry.skills) 0) -}}
+{{-     fail (printf "release-lock-ref.tmpl: lock entry %q must carry a non-empty skills inventory" $tool) -}}
+{{-   end -}}
+{{-   $previous := "" -}}
+{{-   range $name := $entry.skills -}}
+{{-     if or (not (kindIs "string" $name)) (not (regexMatch "^figma-[a-z0-9]+(?:-[a-z0-9]+)*$" $name)) -}}
+{{-       fail (printf "release-lock-ref.tmpl: lock entry %q carries unsafe skill name %q" $tool ($name | toString)) -}}
+{{-     end -}}
+{{-     if and (ne $previous "") (not (lt $previous $name)) -}}
+{{-       fail (printf "release-lock-ref.tmpl: lock entry %q skills must be sorted and unique" $tool) -}}
+{{-     end -}}
+{{-     $previous = $name -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $field "revision" -}}
+{{-   $entry.revision -}}
+{{- else if eq $field "skillsJson" -}}
+{{-   $entry.skills | toJson -}}
+{{- else if eq $field "imageRef" -}}
 {{-   if or (not (hasKey $entry "digest")) (not (hasKey $entry "version")) -}}
 {{-     fail (printf "release-lock-ref.tmpl: lock entry %q carries no digest — only ociImage entries support imageRef" $tool) -}}
 {{-   end -}}

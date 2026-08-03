@@ -5,10 +5,16 @@
   "type": "module",
   "description": "Resolve external tool releases into the static .chezmoidata release lock.",
   "license": "UNLICENSED",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "devDependencies": {
     "@types/node": "24.13.2",
+    "@types/semver": "7.7.1",
     "typescript": "7.0.2",
     "vite-plus": "catalog:"
+  },
+  "dependencies": {
+    "semver": "7.8.5"
   }
 }

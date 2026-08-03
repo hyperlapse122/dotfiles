@@ -5,13 +5,13 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 import { DEFAULT_LOCK_PATH, runCli } from "../src/cli.js";
 import { resolveGitHubRelease } from "../src/github.js";
 import { resolveGitHubTag } from "../src/github-tag.js";
+import { resolveGitHubSkillCollection } from "../src/github-skill-collection.js";
 import { resolveGitLabRelease } from "../src/gitlab.js";
 import { resolveNpmPackage } from "../src/npm.js";
 import { resolveVendorManifest } from "../src/vendor-manifest.js";
 import { resolveOciImage } from "../src/oci-image.js";
 import { RESOLVERS, resolveAll } from "../src/resolve-all.js";
-import type { Registry } from "../src/types.js";
-import type { ReleaseLock } from "../src/types.js";
+import type { LockedSkillCollection, Registry, ReleaseLock } from "../src/types.js";
 
 const realFetch = globalThis.fetch;
 
@@ -27,11 +27,18 @@ async function scratch(): Promise<string> {
 }
 
 function locked(version: string): ReleaseLock {
+  const failed: LockedSkillCollection = {
+    kind: "githubSkillCollection",
+    source: "owner/failed",
+    version: "1.0.0",
+    revision: "f".repeat(40),
+    skills: ["figma-alpha", "figma-zeta"],
+  };
   return {
     releases: {
       tools: {
         good: { kind: "githubRelease", source: "owner/good", version },
-        failed: { kind: "githubRelease", source: "owner/failed", version: "v1" },
+        failed,
         retired: { kind: "githubRelease", source: "owner/retired", version: "v1" },
       },
     },
@@ -85,6 +92,7 @@ describe("RESOLVERS dispatch", () => {
     expect(Object.keys(RESOLVERS).sort()).toEqual([
       "gitRef",
       "githubRelease",
+      "githubSkillCollection",
       "githubTag",
       "gitlabRelease",
       "npm",
@@ -96,6 +104,7 @@ describe("RESOLVERS dispatch", () => {
   test("wires each fetch-based kind to its resolver by identity", () => {
     expect(RESOLVERS.githubRelease).toBe(resolveGitHubRelease);
     expect(RESOLVERS.githubTag).toBe(resolveGitHubTag);
+    expect(RESOLVERS.githubSkillCollection).toBe(resolveGitHubSkillCollection);
     expect(RESOLVERS.gitlabRelease).toBe(resolveGitLabRelease);
     expect(RESOLVERS.npm).toBe(resolveNpmPackage);
     expect(RESOLVERS.vendorManifest).toBe(resolveVendorManifest);
@@ -197,7 +206,13 @@ describe("runCli", () => {
     expect(stderr.values.join("")).toContain("owner/failed");
     const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
     expect(written.releases.tools["good"]?.version).toBe("v2");
-    expect(written.releases.tools["failed"]?.version).toBe("v1");
+    expect(written.releases.tools["failed"]).toEqual({
+      kind: "githubSkillCollection",
+      source: "owner/failed",
+      version: "1.0.0",
+      revision: "f".repeat(40),
+      skills: ["figma-alpha", "figma-zeta"],
+    });
     expect(written.releases.tools["retired"]?.version).toBe("v1");
   });
 
@@ -233,7 +248,7 @@ describe("runCli", () => {
     expect(exit).toBe(1);
     expect(await readFile(path, "utf8")).toBe(before);
     const emitted = JSON.parse(stdout.values.join("")) as ReleaseLock;
-    expect(emitted.releases.tools["failed"]?.version).toBe("v1");
+    expect(emitted.releases.tools["failed"]?.version).toBe("1.0.0");
   });
 
   test("--out refreshes the explicit destination", async () => {
@@ -251,7 +266,7 @@ describe("runCli", () => {
 
     expect(exit).toBe(1);
     const written = JSON.parse(await readFile(destination, "utf8")) as ReleaseLock;
-    expect(written.releases.tools["failed"]?.version).toBe("v1");
+    expect(written.releases.tools["failed"]?.version).toBe("1.0.0");
     expect(await readFile(defaultPath, "utf8")).toContain("default");
   });
 

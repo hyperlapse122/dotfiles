@@ -168,6 +168,54 @@ jobs:
       - run: vp run -r test
       - run: vp check
 
+  figma-skills-native:
+    name: Figma skills staging and reconciliation (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        if: runner.os != 'Windows'
+        run: |
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install locked chezmoi
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lock = Get-Content -LiteralPath '.chezmoidata/releases.json' -Raw | ConvertFrom-Json
+          $artifact = $lock.releases.tools.chezmoi.artifacts.'windows-amd64'
+          $archive = Join-Path $env:RUNNER_TEMP 'chezmoi.zip'
+          $bin = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-WebRequest -Uri $artifact.url -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $artifact.sha256) {
+            throw "chezmoi SHA-256 mismatch: expected $($artifact.sha256), got $actual"
+          }
+          New-Item -ItemType Directory -Path $bin -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $bin -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $bin 'chezmoi.exe'))) {
+            throw 'locked chezmoi archive did not contain chezmoi.exe'
+          }
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Test Figma skills staging and reconciliation
+        if: runner.os != 'Windows'
+        run: |
+          .ci/test-figma-skills-stage.sh "$GITHUB_WORKSPACE"
+          .ci/test-figma-skills-reconcile.sh "$GITHUB_WORKSPACE"
+      - name: Test Figma skills staging and reconciliation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & .ci/test-figma-skills-stage.ps1 -Root $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell Figma staging fixture exited with code $LASTEXITCODE" }
+          & .ci/test-figma-skills-reconcile.ps1 -Root $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell Figma reconcile fixture exited with code $LASTEXITCODE" }
+
   rust-crate:
     name: Rust crate (crates/mxm4-haptic/, ${{ matrix.os }})
     strategy:
