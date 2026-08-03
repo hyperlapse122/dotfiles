@@ -2,7 +2,7 @@
 # Isolated, network-free proof of the exact official Figma collection external.
 set -euo pipefail
 
-root=${1:-$(pwd)}
+root=${1:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}
 scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/figma-skills-stage.XXXXXX")

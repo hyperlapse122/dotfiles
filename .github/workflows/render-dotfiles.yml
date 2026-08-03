@@ -349,6 +349,38 @@ jobs:
           # lookup can legitimately return nothing on the runner's arch. Failures
           # are kept as *.render-error.txt inside the artifact for inspection.
 
+      - name: Assert Figma collection external and paired reconcilers
+        run: |
+          set -euo pipefail
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          external="${out}/.chezmoiexternals/ai-agents.toml"
+          posix="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
+          native_windows="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1"
+          windows="${RUNNER_TEMP}/figma-skills-reconcile.ps1"
+          for rendered in "${external}" "${posix}" "${native_windows}"; do
+            test -f "${rendered}"
+            test ! -e "${rendered}.render-error.txt"
+          done
+
+          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
+            --source "${GITHUB_WORKSPACE}" \
+            --destination "${RUNNER_TEMP}/scratch/target" \
+            --override-data '{"chezmoi":{"os":"windows"}}' \
+            execute-template \
+            < "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1.tmpl" \
+            > "${windows}"
+
+          revision=$(jq -er '.releases.tools["figma/mcp-server-guide"].revision' \
+            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
+          skills=$(jq -cer '.releases.tools["figma/mcp-server-guide"].skills' \
+            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
+          grep -F "archive/${revision}.tar.gz" "${external}"
+          grep -F "readonly DESIRED_SKILLS_JSON='${skills}'" "${posix}"
+          grep -F "\$desiredSkillsJson = '${skills}'" "${windows}"
+          bash -n "${posix}"
+          echo "- Figma external and paired reconcilers (${{ matrix.os }}) use the locked revision and inventory" \
+            >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Assert fact-registry failure contracts
         run: |
           set -euo pipefail
@@ -596,6 +628,38 @@ jobs:
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      - name: Assert Figma collection external and paired reconcilers
+        run: |
+          set -euo pipefail
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          external="${out}/.chezmoiexternals/ai-agents.toml"
+          posix="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
+          native_windows="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1"
+          windows="${RUNNER_TEMP}/figma-skills-reconcile.ps1"
+          for rendered in "${external}" "${posix}" "${native_windows}"; do
+            test -f "${rendered}"
+            test ! -e "${rendered}.render-error.txt"
+          done
+
+          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
+            --source "${GITHUB_WORKSPACE}" \
+            --destination "${RUNNER_TEMP}/scratch/target" \
+            --override-data '{"chezmoi":{"os":"windows"}}' \
+            execute-template \
+            < "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1.tmpl" \
+            > "${windows}"
+
+          revision=$(jq -er '.releases.tools["figma/mcp-server-guide"].revision' \
+            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
+          skills=$(jq -cer '.releases.tools["figma/mcp-server-guide"].skills' \
+            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
+          grep -F "archive/${revision}.tar.gz" "${external}"
+          grep -F "readonly DESIRED_SKILLS_JSON='${skills}'" "${posix}"
+          grep -F "\$desiredSkillsJson = '${skills}'" "${windows}"
+          bash -n "${posix}"
+          echo "- Figma external and paired reconcilers (macos) use the locked revision and inventory" \
+            >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Assert surviving compound-engineering plugin contract
         run: |
           set -euo pipefail
@@ -794,6 +858,55 @@ jobs:
           # Per-template render failures are captured as *.render-error.txt inside
           # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
           exit 0
+
+      - name: Assert Figma collection external and paired reconcilers
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
+          $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
+          $nativePosix = Join-Path $out '.chezmoiscripts\70-agents\run_after_install-figma-skills.sh'
+          $windows = Join-Path $out '.chezmoiscripts\70-agents\run_after_install-figma-skills.ps1'
+          foreach ($rendered in @($external, $nativePosix, $windows)) {
+            if (-not (Test-Path -LiteralPath $rendered -PathType Leaf)) {
+              throw "missing rendered Figma path: $rendered"
+            }
+            if (Test-Path -LiteralPath "$rendered.render-error.txt") {
+              throw "Figma render failed: $rendered"
+            }
+          }
+
+          $scratch = Join-Path $env:RUNNER_TEMP 'scratch'
+          $posix = Join-Path $env:RUNNER_TEMP 'figma-skills-reconcile.sh'
+          Get-Content -Raw -LiteralPath (
+            Join-Path $env:GITHUB_WORKSPACE '.chezmoiscripts\70-agents\run_after_install-figma-skills.sh.tmpl'
+          ) | & chezmoi --config (Join-Path $scratch 'empty.toml') `
+            --source $env:GITHUB_WORKSPACE `
+            --destination (Join-Path $scratch 'target') `
+            --override-data '{"chezmoi":{"os":"linux"}}' `
+            execute-template | Set-Content -LiteralPath $posix -Encoding utf8NoBOM
+          if ($LASTEXITCODE -ne 0) { throw "POSIX Figma reconciler render exited with code $LASTEXITCODE" }
+
+          $entry = (
+            Get-Content -Raw -LiteralPath '.chezmoidata/releases.json' | ConvertFrom-Json
+          ).releases.tools.'figma/mcp-server-guide'
+          [string]$revision = $entry.revision
+          [string]$skills = ConvertTo-Json -InputObject @($entry.skills) -Compress
+          $externalContent = Get-Content -Raw -LiteralPath $external
+          $posixContent = Get-Content -Raw -LiteralPath $posix
+          $windowsContent = Get-Content -Raw -LiteralPath $windows
+          if (-not $externalContent.Contains("archive/$revision.tar.gz")) {
+            throw "Figma external does not use locked revision $revision"
+          }
+          if (-not $posixContent.Contains("readonly DESIRED_SKILLS_JSON='$skills'")) {
+            throw 'POSIX Figma reconciler inventory differs from the lock'
+          }
+          if (-not $windowsContent.Contains("`$desiredSkillsJson = '$skills'")) {
+            throw 'Windows Figma reconciler inventory differs from the lock'
+          }
+          [void][ScriptBlock]::Create($windowsContent)
+          "- Figma external and paired reconcilers (windows) use the locked revision and inventory" |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Assert Windows compound-engineering and omp integration
         run: |

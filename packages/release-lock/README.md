@@ -111,3 +111,22 @@ returning the upstream filename for a platform. Conventions that matter:
 vp test            # unit tests, network stubbed
 vp run typecheck   # tsc --noEmit
 ```
+
+The `githubSkillCollection` contract is also verified at its consumers. From
+the repository root, the isolated staging and transactional reconciliation
+fixtures are:
+
+```sh
+.ci/test-figma-skills-stage.sh
+.ci/test-figma-skills-reconcile.sh
+pwsh -NoProfile -File .ci/test-figma-skills-stage.ps1
+pwsh -NoProfile -File .ci/test-figma-skills-reconcile.ps1
+```
+
+The POSIX entry points run on native Linux and macOS, and the PowerShell entry
+points run on native Windows in `.github/workflows/ci.yml`. They render from the
+committed lock and operate only in scratch directories. The
+`render-dotfiles.yml` Fedora, Ubuntu, macOS, and Windows jobs separately assert
+the Figma collection external plus both reconciler templates use the same
+locked revision and sorted inventory; scripts and externals remain outside the
+managed-file archive comparison.

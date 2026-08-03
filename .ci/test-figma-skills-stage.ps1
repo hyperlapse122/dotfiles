@@ -1,6 +1,6 @@
 # Isolated, network-free proof of the exact official Figma collection external.
 [CmdletBinding()]
-param([string]$Root = (Get-Location).Path)
+param([string]$Root = (Split-Path -Parent $PSScriptRoot))
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest

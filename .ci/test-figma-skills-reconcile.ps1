@@ -16,7 +16,7 @@ try {
     Copy-Item -LiteralPath $RenderedScript -Destination $script
   } else {
     $config = Join-Path $scratch 'empty.toml'; [IO.File]::WriteAllText($config, '')
-    $rendered = & chezmoi --config $config --source $Root execute-template --file (Join-Path $Root '.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1.tmpl')
+    $rendered = & chezmoi --config $config --source $Root --override-data '{"chezmoi":{"os":"windows"}}' execute-template --file (Join-Path $Root '.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1.tmpl')
     if ($LASTEXITCODE -ne 0) { Fail 'PowerShell reconciler did not render' }
     [IO.File]::WriteAllText($script, (($rendered -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
   }
