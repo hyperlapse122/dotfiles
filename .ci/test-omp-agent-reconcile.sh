@@ -194,7 +194,10 @@ for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.
     exit 1
   fi
   grep -F 'preflight: expected omp' "$scratch/version$label.err" >/dev/null
-  ! grep -qF 'plugin marketplace add' "$scratch/version$label.calls"
+  if grep -qF 'plugin marketplace add' "$scratch/version$label.calls"; then
+    printf 'version decoy %s reached marketplace mutation\n' "$decoy" >&2
+    exit 1
+  fi
 done
 run_plugins "$scratch/version-bare.calls" '' "$locked_omp_version"
 # The bare-accept run is a full reconcile and removes the legacy sentinel;
