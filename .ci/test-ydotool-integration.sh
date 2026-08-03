@@ -31,8 +31,8 @@
 #               dispatch at the bottom, driven by the CI job that briefly
 #               creates the real marker with a cleanup trap.
 #
-# Run modes (mirrors .ci/test-cli-proxy-api-render-matrix.sh's
-# CLI_PROXY_API_TEST_EXPECT convention):
+# Run modes (the <TOOL>_TEST_EXPECT convention shared by the CI
+# container-fact render jobs):
 #   YDOTOOL_TEST_EXPECT unset or "host" — full battery, including the
 #     eligible-render assertions, which assume this host is not itself a
 #     container (true for a dev workstation or a GH Actions VM runner).

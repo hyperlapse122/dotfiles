@@ -15,7 +15,7 @@ The plan this package implements is
 
 ## Status
 
-All eight resolver kinds are implemented, and the committed
+All seven resolver kinds are implemented, and the committed
 `.chezmoidata/releases.json` covers every render-time resolution source in the
 repo. The lock is the sole version, immutable revision, inventory, URL, and
 checksum source: every `.chezmoiexternals` file and every version-consuming
@@ -32,7 +32,6 @@ lock.
 | `npm` | implemented |
 | `vendorManifest` | implemented |
 | `gitRef` | implemented |
-| `ociImage` | implemented |
 
 ## Why digests are free
 

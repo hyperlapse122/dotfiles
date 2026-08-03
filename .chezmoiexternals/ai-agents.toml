@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: claude, codex, agent-browser, omp, codegraph, aoe, cli-proxy-api (darwin), and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, codex, agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
@@ -119,27 +119,6 @@ path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
 [aoe.checksum]
 # The sidecar is sha256sum output ("<hash>  <file>"), so take the first field.
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "sha256" "platform" "auto") }}'
-
-{{- end }}
-
-{{- /* ---------- cli-proxy-api (router-for-me/CLIProxyAPI) — macOS runs the binary
-       directly under launchd; linux runs the OCI quadlet instead, so this external
-       is darwin-only. The tar.gz ships the binary as `cli-proxy-api` (lowercase)
-       alongside LICENSE/README/config.example.yaml. ---------- */ -}}
-
-{{- if eq "darwin" .chezmoi.os }}
-
-[cli-proxy-api]
-type = "archive-file"
-url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "cli-proxy-api-binary" "field" "url" "platform" "auto") | quote }}
-executable = true
-private = true
-readonly = true
-targetPath = ".local/bin/cli-proxy-api"
-path = 'cli-proxy-api'
-
-[cli-proxy-api.checksum]
-sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "cli-proxy-api-binary" "field" "sha256" "platform" "auto") }}'
 
 {{- end }}
 

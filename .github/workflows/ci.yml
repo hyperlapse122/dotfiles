@@ -353,47 +353,6 @@ jobs:
       - name: Run Open Design sleep hook
         run: .ci/test-open-design-sleep-hook.sh
 
-  cli-proxy-api-integration:
-    name: CLIProxyAPI quadlet integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run isolated CLIProxyAPI integration
-        run: .ci/test-cli-proxy-api-integration.sh
-      - name: Run CLIProxyAPI sleep hook
-        run: .ci/test-cli-proxy-api-sleep-hook.sh
-      - name: Render ignore gates under the container fact
-        run: |
-          set -euo pipefail
-          sudo touch /run/.containerenv
-          trap 'sudo rm -f /run/.containerenv' EXIT
-          CLI_PROXY_API_TEST_EXPECT=container .ci/test-cli-proxy-api-render-matrix.sh
-
-  cli-proxy-api-render-matrix:
-    name: CLIProxyAPI ignore render matrix (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Render ignore/removal gates
-        run: .ci/test-cli-proxy-api-render-matrix.sh
-
   ydotool-integration:
     name: ydotool provisioning integration
     runs-on: ubuntu-latest

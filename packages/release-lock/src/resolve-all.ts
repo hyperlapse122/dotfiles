@@ -6,7 +6,6 @@ import { resolveGitLabRelease } from "./gitlab.js";
 import { resolveGitRef } from "./git-ref.js";
 import { resolveNpmPackage } from "./npm.js";
 import { resolveVendorManifest } from "./vendor-manifest.js";
-import { resolveOciImage } from "./oci-image.js";
 import { sortTools } from "./lock.js";
 import type { LockedTool, Registry, ReleaseLock, ResolverKind, ToolSpec } from "./types.js";
 
@@ -38,7 +37,6 @@ export const RESOLVERS: Record<ResolverKind, ResolverFn> = {
   npm: resolveNpmPackage,
   vendorManifest: resolveVendorManifest,
   gitRef: (name, spec) => resolveGitRef(name, spec),
-  ociImage: resolveOciImage,
 };
 
 export async function resolveAll(

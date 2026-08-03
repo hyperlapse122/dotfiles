@@ -204,27 +204,6 @@
           }
         }
       },
-      "cli-proxy-api": {
-        "kind": "ociImage",
-        "source": "docker.io/eceasy/cli-proxy-api",
-        "version": "latest",
-        "digest": "sha256:afcdee40b89cf148326e08b76be9c50e9692d009d9e191f8da14f200df94f7b2"
-      },
-      "cli-proxy-api-binary": {
-        "kind": "githubRelease",
-        "source": "router-for-me/CLIProxyAPI",
-        "version": "v7.2.115",
-        "artifacts": {
-          "darwin-amd64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.115/CLIProxyAPI_7.2.115_darwin_amd64.tar.gz",
-            "sha256": "d910f739c74e1a3b177f05f9f8fd8109e8e2ec0928685e90918cc9bf502afdc2"
-          },
-          "darwin-arm64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.115/CLIProxyAPI_7.2.115_darwin_aarch64.tar.gz",
-            "sha256": "d7ef57179e505714025556924b503a6af876367d1998752a16585f49d0604ce5"
-          }
-        }
-      },
       "codegraph": {
         "kind": "githubRelease",
         "source": "colbymchenry/codegraph",
@@ -291,12 +270,6 @@
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
         "version": "compound-engineering-v3.21.0"
-      },
-      "cpa-manager-plus": {
-        "kind": "ociImage",
-        "source": "ghcr.io/seakee/cpa-manager-plus",
-        "version": "latest",
-        "digest": "sha256:bacb51354f9c2bdc8389e18009973ea18925bda5e447ea3a16fa2bbddbd6883a"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",

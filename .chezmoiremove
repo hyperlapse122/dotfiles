@@ -40,18 +40,6 @@
 # already-deployed 0444 copy behind — prune it here.
 .omp/agent/CLAUDE.md
 
-# Leftovers from the removed CLIProxyAPI binary integration (the 2026-07-21
-# removal was source-only). The revival runs as a Podman quadlet on Linux and a
-# launchd agent on macOS, so the old systemd user unit (linux-only) and the old
-# shared launcher (darwin-only now) must not linger: a surviving unit would bind
-# 127.0.0.1:8317 first at login and silently re-adopt stale OAuth credentials.
-{{- if eq .chezmoi.os "linux" }}
-.config/systemd/user/cli-proxy-api.service
-{{- end }}
-{{- if ne .chezmoi.os "darwin" }}
-.local/libexec/cli-proxy-api-launch
-{{- end }}
-
 # The garden project registry moved from ~/src/garden.yaml to
 # ~/.config/garden/garden.yaml so ~/src holds only project trees. Deleting the
 # old source stops managing the old target but leaves the already-deployed 0444
