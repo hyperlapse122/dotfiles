@@ -192,9 +192,9 @@ describe("resolveGitHubSkillCollection", () => {
         ),
       );
 
-      await expect(
-        resolveGitHubSkillCollection("figmaSkills", spec, undefined),
-      ).rejects.toThrow(`unsafe Figma skill name: ${name}`);
+      await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).rejects.toThrow(
+        `unsafe Figma skill name: ${name}`,
+      );
     },
   );
 

@@ -47,7 +47,8 @@ try {
   if ($stanza -notmatch [regex]::Escape("archive/$revision.tar.gz")) { Fail 'external does not use the locked revision' }
   if ($stanza -notmatch '(?m)^exact = true$') { Fail 'external is not exact' }
   if ($stanza -notmatch '(?m)^stripComponents = 2$') { Fail 'external has the wrong archive root stripping' }
-  $archiveUrl = [uri]::new((Resolve-Path -LiteralPath $archive).Path, [UriKind]::Absolute).AbsoluteUri
+  $archivePath = (Resolve-Path -LiteralPath $archive).Path.Replace('\', '/')
+  $archiveUrl = "file://$archivePath"
   $stanza = [regex]::Replace($stanza, '(?m)^url = .*$', "url = '$archiveUrl'")
 
   $sourceDir = Join-Path $scratch 'source'

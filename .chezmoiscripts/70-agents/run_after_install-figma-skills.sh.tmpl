@@ -90,7 +90,7 @@ rollback_txn() {
     if [[ -d $txn/backups/$name && ! -L $txn/backups/$name ]]; then
       rm -rf -- "$restore"
       cp -pR -- "$txn/backups/$name" "$restore"
-      rm -rf -- "$root/$name"
+      rm -rf -- "${root:?}/${name:?}"
       mv -- "$restore" "$root/$name"
       restored=$((restored + 1))
       if [[ ${FIGMA_SKILLS_INJECT_FAILURE:-} == rollback-hard-crash && $restored -eq 1 ]]; then
@@ -98,7 +98,7 @@ rollback_txn() {
         kill -KILL "$$"
       fi
     elif [[ $txn_phase != prepared ]]; then
-      rm -rf -- "$root/$name"
+      rm -rf -- "${root:?}/${name:?}"
     fi
   done < <(jq -r '.[]' <<<"$touched_json")
   if [[ -f $txn/ownership.before ]]; then
@@ -132,7 +132,7 @@ recover() {
   else
     rollback_txn
   fi
-  txn= txn_id= txn_phase= touched_json='[]'
+  txn='' txn_id='' txn_phase='' touched_json='[]'
 }
 lock_owner_is_live() {
   local directory=$1 pid expected_start token actual_start
@@ -238,12 +238,11 @@ if [[ -e $ownership ]]; then
 else
   for name in "${desired[@]}"; do [[ ! -e $root/$name && ! -L $root/$name ]] || die 'ownership manifest is missing alongside managed-looking destinations'; done
 fi
-prior=()
-while IFS= read -r name; do prior[${#prior[@]}]=$name; done < <(jq -r '.[]' <<<"$prior_json")
-for name in "${prior[@]}"; do safe_name "$name" || die "unsafe prior-owned name: $name"; done
-for name in $(printf '%s\n' "${prior[@]}" "${desired[@]}" | sed '/^$/d' | LC_ALL=C sort -u); do
+while IFS= read -r name; do safe_name "$name" || die "unsafe prior-owned name: $name"; done < <(jq -r '.[]' <<<"$prior_json")
+touched_json=$(jq -cn --argjson prior "$prior_json" --argjson desired "$DESIRED_SKILLS_JSON" '$prior + $desired | unique | sort')
+while IFS= read -r name; do
   if [[ -e $root/$name || -L $root/$name ]]; then [[ -d $root/$name && ! -L $root/$name ]] || die "unsafe destination path type: $root/$name"; assert_tree "$root/$name" "destination $name"; fi
-done
+done < <(jq -r '.[]' <<<"$touched_json")
 
 # Matching valid state is a byte- and mtime-preserving no-op.
 match=true
@@ -261,7 +260,6 @@ active=true
 txn_phase=preparing
 if [[ $manifest_absent == true ]]; then : >"$txn/ownership.absent"; else cp -p -- "$ownership" "$txn/ownership.before"; fi
 for name in "${desired[@]}"; do cp -pR -- "$stage/$name" "$txn/new/$name"; done
-touched_json=$(printf '%s\n' "${prior[@]}" "${desired[@]}" | sed '/^$/d' | LC_ALL=C sort -u | jq -Rsc 'split("\n")[:-1]')
 write_journal prepared
 
 while IFS= read -r name; do if [[ -d $root/$name && ! -L $root/$name ]]; then mv -- "$root/$name" "$txn/backups/$name"; fi; done < <(jq -r '.[]' <<<"$touched_json")

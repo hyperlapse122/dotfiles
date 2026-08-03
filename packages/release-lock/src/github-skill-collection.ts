@@ -76,10 +76,7 @@ function parseCandidate(value: unknown): CommitCandidate | null {
   return normalized ? { sha: record["sha"] as string, version: normalized } : null;
 }
 
-async function fetchCandidate(
-  source: string,
-  token: string | undefined,
-): Promise<CommitCandidate> {
+async function fetchCandidate(source: string, token: string | undefined): Promise<CommitCandidate> {
   let url: string | null = `${API_ROOT}/repos/${source}/commits?path=skills%2F&per_page=100`;
   let highest: CommitCandidate | undefined;
   const tiedShas = new Set<string>();

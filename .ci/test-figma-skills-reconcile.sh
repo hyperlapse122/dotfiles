@@ -70,7 +70,7 @@ printf 'tampered\n' >"$live/${skills[0]}/SKILL.md"
 new_skill=${skills[$((${#skills[@]} - 1))]}
 old_skills=$(printf '%s\n' "${skills[@]:0:${#skills[@]}-1}" | jq -Rsc 'split("\n")[:-1]')
 printf '{"schema":"figma-skills-ownership/v1","transactionId":"prior-fixture","skills":%s}\n' "$old_skills" >"$state"
-rm -rf -- "$live/$new_skill"; mkdir -p "$live/$new_skill"; printf 'collision\n' >"$live/$new_skill/user.txt"
+rm -rf -- "${live:?}/${new_skill:?}"; mkdir -p "$live/$new_skill"; printf 'collision\n' >"$live/$new_skill/user.txt"
 mkdir -p "$live/figma-retired-unowned"; printf 'keep\n' >"$live/figma-retired-unowned/file"
 run_reconcile
  grep -q '^# ' "$live/${skills[0]}/SKILL.md" || fail 'drift was not repaired'
@@ -101,11 +101,11 @@ cp -p "$state" "$scratch/ownership.saved"; rm "$state"; expect_preflight_failure
 printf '{bad\n' >"$state"; expect_preflight_failure corrupt-ownership
 printf '{"schema":"figma-skills-ownership/v0","transactionId":"x","skills":[]}\n' >"$state"; expect_preflight_failure schema-ownership
 printf '{"schema":"figma-skills-ownership/v1","transactionId":"reset","skills":%s}\n' "$expected_json" >"$state"
-rm -rf "$live/${skills[0]}"; printf 'file\n' >"$live/${skills[0]}"; expect_preflight_failure destination-file
+rm -rf "${live:?}/${skills[0]:?}"; printf 'file\n' >"$live/${skills[0]}"; expect_preflight_failure destination-file
 rm -f "$live/${skills[0]}"; cp -R "$stage/${skills[0]}" "$live/${skills[0]}"
 upper_name=$(printf '%s' "${skills[0]}" | tr '[:lower:]' '[:upper:]')
-mkdir -p "$live/$upper_name"; expect_preflight_failure case-ambiguity; rm -rf "$live/$upper_name"
-referent="$scratch/referent"; mkdir -p "$referent"; rm -rf "$live/${skills[0]}"; ln -s "$referent" "$live/${skills[0]}"; expect_preflight_failure destination-link
+mkdir -p "$live/$upper_name"; expect_preflight_failure case-ambiguity; rm -rf "${live:?}/${upper_name:?}"
+referent="$scratch/referent"; mkdir -p "$referent"; rm -rf "${live:?}/${skills[0]:?}"; ln -s "$referent" "$live/${skills[0]}"; expect_preflight_failure destination-link
 rm "$live/${skills[0]}"; cp -R "$stage/${skills[0]}" "$live/${skills[0]}"
 
 # Exclusive lock rejects a second entrant.
