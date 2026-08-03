@@ -1,0 +1,27 @@
+# ~/.local/share/applications/wezterm.desktop — managed by chezmoi.
+#
+# G1 CANDIDATE launcher: the explicit, opt-in way to start managed WezTerm for
+# G1b proof. This is an applications/ entry, NOT an xdg-terminals/ provider
+# drop-in — it can never become the resolved default terminal. Kitty keeps the
+# default (dot_local/share/xdg-terminals/kitty.desktop and kdeglobals
+# [General] TerminalApplication=kitty) until G1b opens.
+#
+# Bare `wezterm` Exec/TryExec on purpose: this repo has no managed WezTerm
+# install location to point at (Fedora ownership is unresolved — see the
+# weztermTerminal row in .chezmoidata/packages.yaml). On Windows winget and on
+# macOS the Homebrew cask register their own launch surfaces. Here TryExec
+# keeps the entry hidden until a package manager puts wezterm on PATH, so the
+# launcher can never strand a host on a missing binary.
+[Desktop Entry]
+Type=Application
+Name=WezTerm (candidate)
+GenericName=Terminal emulator
+Comment=GPU-accelerated terminal — opt-in G1 candidate; Kitty remains the default terminal
+Exec=wezterm start --cwd .
+TryExec=wezterm
+Icon=org.wezfurlong.wezterm
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;prompt;command line;wezterm;
+StartupNotify=true
+StartupWMClass=org.wezfurlong.wezterm

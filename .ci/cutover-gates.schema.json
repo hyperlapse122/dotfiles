@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": ".ci/cutover-gates.schema.json",
+  "title": "Cutover gate policy and recorded state (G0/G1a/G1b)",
+  "description": "Strict schema for .ci/cutover-gates.json. This file is AUTHORIZATION POLICY: CI must consume the default-branch copy, never the candidate checkout. It carries the protected device/runner allowlist, trusted collector/evaluator digests, attestation policy, mandatory evidence legs/claims, and the last recorded gate state written by the scheduled refresh. Empty signerWorkflows or trustedCollectors maps fail closed: no evidence can match them. Unknown or missing fields are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repository",
+    "defaultBranch",
+    "protectedEnvironment",
+    "attestation",
+    "trustedCollectors",
+    "trustedEvaluators",
+    "devices",
+    "gates"
+  ],
+  "properties": {
+    "$schema": { "const": "./cutover-gates.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "repository": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/[a-z0-9.-]+$"
+    },
+    "defaultBranch": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9/_-]*$"
+    },
+    "protectedEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "description": "GitHub protected environment that authorizes device evidence collection."
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trustRoot", "issuer", "signerWorkflows"],
+      "properties": {
+        "trustRoot": { "const": "github-sigstore" },
+        "issuer": { "const": "https://token.actions.githubusercontent.com" },
+        "signerWorkflows": {
+          "type": "object",
+          "description": "Immutable default-branch signer workflow identities. Empty fails closed: no evidence attestation can match.",
+          "propertyNames": { "pattern": "^\\.github/workflows/[a-z0-9._-]+\\.yml$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["defaultBranchSha"],
+            "properties": {
+              "defaultBranchSha": { "$ref": "#/$defs/gitSha" }
+            }
+          }
+        }
+      }
+    },
+    "trustedCollectors": {
+      "type": "object",
+      "description": "sha256 of each trusted collector as pinned on the default branch. Empty fails closed.",
+      "propertyNames": { "pattern": "^\\.ci/collect-device-evidence\\.(sh|ps1)$" },
+      "additionalProperties": { "$ref": "#/$defs/digest" }
+    },
+    "trustedEvaluators": {
+      "type": "object",
+      "description": "sha256 of the canonical evaluator/validator. CI must verify file digests against this map BEFORE invoking them.",
+      "propertyNames": { "pattern": "^\\.ci/[a-z0-9-]+\\.mjs$" },
+      "additionalProperties": { "$ref": "#/$defs/digest" }
+    },
+    "devices": {
+      "type": "array",
+      "description": "Positive protected device/runner allowlist. Candidate evidence naming any other identity is rejected; revoked entries are rejected.",
+      "items": { "$ref": "#/$defs/device" }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["G0", "G1a", "G1b"],
+      "properties": {
+        "G0": { "$ref": "#/$defs/gate" },
+        "G1a": { "$ref": "#/$defs/gate" },
+        "G1b": { "$ref": "#/$defs/gate" }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "os", "arch", "runnerClass", "runnerLabels", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]*$"
+        },
+        "os": { "enum": ["fedora", "windows", "macos"] },
+        "arch": { "enum": ["x64", "arm64"] },
+        "runnerClass": { "enum": ["github-hosted", "self-hosted"] },
+        "runnerLabels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]*$"
+          }
+        },
+        "status": { "enum": ["active", "revoked"] }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "os": { "enum": ["fedora", "windows", "macos"] },
+        "arch": { "enum": ["x64", "arm64"] },
+        "runnerClass": { "enum": ["github-hosted", "self-hosted"] }
+      }
+    },
+    "leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "subject", "claims"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "subject": { "$ref": "#/$defs/subject" },
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "status", "reason", "candidateCommit", "supportSnapshot", "evidence", "mandatoryLegs"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "status": {
+          "enum": ["open", "closed"],
+          "description": "Last recorded status from the scheduled refresh. Candidate CI recomputes; this value never authorizes."
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "candidateCommit": { "$ref": "#/$defs/gitSha" },
+        "supportSnapshot": { "$ref": "#/$defs/digest" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "mandatoryLegs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/leg" }
+        }
+      }
+    }
+  }
+}

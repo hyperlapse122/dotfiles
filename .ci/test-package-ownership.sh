@@ -72,8 +72,7 @@ for (const capability of capabilities) {
   if (sentinel && !["external", "releaseLock"].includes(owner) && externals.has(sentinel)) {
     fail(`${capability.id} has both native and alternate owner for PATH sentinel ${sentinel}`);
   }
-  if (["dnf", "flatpak", "dotnet", "directRpm"].includes(owner)) {
-  } else if (owner === "mise") {
+  if (owner === "mise") {
     if (!miseNames.has(identifier)) fail(`${capability.id} says mise owns ${identifier}, but mise does not declare it`);
     if (presentInLegacy(identifier)) fail(`${identifier} is duplicated between mise and the Fedora package manifest`);
   } else if (["external", "releaseLock"].includes(owner)) {
@@ -83,7 +82,7 @@ for (const capability of capabilities) {
     if (presentInLegacy(identifier)) {
       fail(`${identifier} is duplicated between native packages and release-lock/externals`);
     }
-  } else {
+  } else if (!["dnf", "flatpak", "dotnet", "directRpm"].includes(owner)) {
     fail(`${capability.id} uses unsupported Fedora owner ${owner}`);
   }
 }

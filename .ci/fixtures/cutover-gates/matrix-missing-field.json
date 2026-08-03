@@ -1,0 +1,14 @@
+{
+  "$schema": "./support-matrix.schema.json",
+  "schemaVersion": 1,
+  "snapshotDate": "2026-08-04",
+  "targets": [
+    {
+      "os": "fedora",
+      "arch": "x64",
+      "kind": "hosted",
+      "runsOn": "ubuntu-24.04",
+      "container": "fedora:44"
+    }
+  ]
+}

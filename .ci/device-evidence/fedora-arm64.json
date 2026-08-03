@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "device": {
+    "id": "fedora-arm64-01",
+    "os": "fedora",
+    "arch": "arm64",
+    "runnerClass": "self-hosted",
+    "runnerLabels": ["self-hosted", "linux", "arm64", "fedora-arm64-01"]
+  },
+  "collector": { "path": ".ci/collect-device-evidence.sh", "sha256": null },
+  "candidate": { "commit": null },
+  "supportSnapshot": { "path": ".ci/support-matrix.json", "sha256": null },
+  "attestation": null,
+  "measurements": { "runtimeArch": "aarch64", "checks": [] },
+  "collectedAt": null
+}

@@ -8,15 +8,32 @@ trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/bin" "$scratch/home/.config/garden"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
-printf '[data]\n' >"$scratch/empty.toml"
-printf 'trees: {}\n' >"$scratch/home/.config/garden/garden.yaml"
+printf 'encryption = "gpg"\n[data]\n' >"$scratch/empty.toml"
 PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
   --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' execute-template \
   <"$repo_root/.chezmoiscripts/90-src/run_onchange_after_reconcile-garden.ps1.tmpl" >"$scratch/reconcile.ps1"
 
+# End-to-end target-state assertion: render .chezmoiignore through chezmoi,
+# then ask the same target-state engine which path the encrypted source owns.
+# This catches both an accidental Windows ignore and a source name that would
+# deploy garden.yaml.asc instead of the registry path the reconciler consumes.
+ignored=$(PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+  --destination "$scratch/home" --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' ignored)
+if grep -qxF '.config/garden/garden.yaml' <<<"$ignored"; then
+  printf '%s\n' 'windows garden reconciliation: garden registry is ignored on Windows' >&2
+  exit 1
+fi
+managed=$(PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+  --destination "$scratch/home" --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' managed)
+grep -qxF '.config/garden/garden.yaml' <<<"$managed" || {
+  printf '%s\n' 'windows garden reconciliation: encrypted source does not render to .config/garden/garden.yaml' >&2
+  exit 1
+}
+
 RECONCILE_SCRIPT="$scratch/reconcile.ps1" FIXTURE_HOME="$scratch/home" pwsh -NoProfile -Command - <<'PS'
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Set-Variable -Name HOME -Value $env:FIXTURE_HOME -Force
 $env:HOME = $env:FIXTURE_HOME
 $global:Calls = [Collections.Generic.List[string]]::new()
 $global:LASTEXITCODE = 0
@@ -28,6 +45,22 @@ function global:garden {
 }
 function global:aoe { $global:LASTEXITCODE = 0 }
 function global:git { $global:LASTEXITCODE = 0; 'true' }
+
+# The reconciler must fail closed before invoking garden when target
+# application did not materialize the decrypted registry.
+$missingRejected = $false
+try {
+    . $env:RECONCILE_SCRIPT | Out-Null
+} catch {
+    if ($_.Exception.Message -notmatch 'missing') { throw }
+    $missingRejected = $true
+}
+if (-not $missingRejected) {
+    [Console]::Error.WriteLine('missing garden registry was accepted')
+    exit 1
+}
+if ($global:Calls.Count -ne 0) { throw 'garden ran before the registry preflight passed' }
+[IO.File]::WriteAllText((Join-Path $env:HOME '.config/garden/garden.yaml'), "trees: {}`n")
 
 . $env:RECONCILE_SCRIPT | Out-Null
 $expected = @(

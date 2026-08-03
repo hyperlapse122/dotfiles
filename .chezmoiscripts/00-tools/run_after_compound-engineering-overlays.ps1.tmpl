@@ -1,0 +1,99 @@
+{{ if eq .chezmoi.os "windows" -}}
+
+{{- $ctx := . -}}
+{{- $name := "compound-engineering-plugin" -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index .agents.marketplaces $name -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+
+# .chezmoiscripts/00-tools/run_after_compound-engineering-overlays.ps1.tmpl
+#
+# Windows counterpart to run_after_compound-engineering-overlays.sh.tmpl:
+# installs the locally managed ce-sweep GitLab Issues source reference into the
+# currently pinned compound-engineering version directory.
+#
+# The compound-engineering external is ADDITIVE: .chezmoiexternals/ai-agents.toml's
+# localArchive block intentionally omits `exact`, so chezmoi adds/updates archive
+# files but does not remove this archive-absent reference.
+#
+# This script copies only the source reference. It never changes archive-owned
+# files such as skills/ce-sweep/SKILL.md.
+#
+# OWNERSHIP: the reference path is ours, while the directory chain above it is
+# archive-owned. Because the tree is additive, another process can replace the
+# leaf with a link into an unrelated checkout. Following it would overwrite a
+# foreign tracked file. Reclaim the leaf we own; refuse, rather than delete, a
+# directory component that is not a plain directory. On Windows "link" means
+# any reparse point (junction or symlink): reparse points are detected by
+# attribute and deleted as links only, never followed.
+#
+# run_after_ (not run_onchange_): that drift is LIVE state in a third-party-
+# writable tree, so it must be re-asserted after every file phase — a
+# fingerprinted onchange run records a clean skip and never repairs it. Re-running
+# costs a stat plus a hash compare, the reference-only copy is idempotent, and it
+# touches no archive-owned file, so there is no managed target left differing
+# from source state after an apply.
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$baseDir = Join-Path $HOME '{{ $ceAuthority.externalPath }}'
+$current = Join-Path $baseDir '{{ $ceVersion }}'
+$overlays = "$($baseDir)-overlays"
+$relative = 'skills\ce-sweep\references\sources\gitlab-issues.md'
+$source = Join-Path $overlays $relative
+$destination = Join-Path $current $relative
+
+# Both must exist after the file phase. Match the POSIX defensive skip.
+if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $current -PathType Container)) {
+  exit 0
+}
+
+# Archive-owned directory chain: create what is missing, but never traverse a
+# reparse point or a non-directory — the copy would then land outside the
+# version dir. Those components are not ours to replace, so surface the
+# conflict (exit 1, same as POSIX).
+$node = $current
+foreach ($component in @('skills', 'ce-sweep', 'references', 'sources')) {
+  $node = Join-Path $node $component
+  if (Test-Path -LiteralPath $node) {
+    $item = Get-Item -LiteralPath $node -Force
+    if ($item.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint) -or -not $item.PSIsContainer) {
+      [Console]::Error.WriteLine("compound-engineering-overlays: $node is not a plain directory; remove it and re-apply")
+      exit 1
+    }
+  } else {
+    New-Item -ItemType Directory -Path $node | Out-Null
+  }
+}
+
+# The reference leaf is ours: reclaim it instead of writing through a foreign entry.
+if (Test-Path -LiteralPath $destination) {
+  $leaf = Get-Item -LiteralPath $destination -Force
+  if ($leaf.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+    [Console]::Error.WriteLine("compound-engineering-overlays: replaced foreign link $destination -> $($leaf.Target)")
+    # .Delete() removes the reparse point itself, never its target.
+    $leaf.Delete()
+  } elseif ($leaf.PSIsContainer) {
+    # Non-file, non-link entry (a real directory): reclaim like POSIX rm -rf.
+    [Console]::Error.WriteLine("compound-engineering-overlays: replaced non-file entry $destination")
+    Remove-Item -LiteralPath $destination -Recurse -Force
+  }
+}
+
+$sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash
+if ((Test-Path -LiteralPath $destination -PathType Leaf) -and
+    ((Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash -eq $sourceHash)) {
+  exit 0
+}
+
+$temp = "$destination.chezmoi-$PID.tmp"
+try {
+  Copy-Item -LiteralPath $source -Destination $temp -Force
+  Move-Item -LiteralPath $temp -Destination $destination -Force
+} finally {
+  if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
+}
+
+{{ end -}}

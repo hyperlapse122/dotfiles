@@ -1,0 +1,43 @@
+{{- /* wezterm terminal — G1 CANDIDATE, opt-in launch only. Kitty remains the
+   authoritative managed terminal and the default on every host until G1b
+   opens; this file deploys everywhere and is inert unless wezterm is
+   explicitly launched (dot_local/share/applications/wezterm.desktop).
+   A .tmpl for ONE reason, same as kitty.conf.tmpl: the two font values below
+   render from .chezmoidata/fonts.yaml (`fonts.families.mono`,
+   `fonts.sizes.terminal`) — the single font source shared with the KDE/GNOME
+   font scripts, fcitx5, VSCodium and kitty. Everything else is wezterm's own
+   settings surface and stays literal. */ -}}
+-- ~/.config/wezterm/wezterm.lua — managed by chezmoi.
+--
+-- G1 candidate config. Docs: https://wezterm.org/config/files.html
+--
+-- Inline images: wezterm's Kitty graphics protocol support is switched on
+-- below so omp's image path has a protocol to speak. What stable wezterm does
+-- NOT implement is Kitty UNICODE PLACEHOLDERS (wezterm/wezterm#4531, PR
+-- #7924) — the mechanism that lets tmux own the image cells so an image
+-- survives scroll/redraw/resize/split. That gap is exactly the recorded G1a
+-- blocker (.chezmoidata/packages.yaml, weztermTerminal), so this config
+-- deliberately sets no placeholder option: there is none to set. The tmux
+-- transport pair (allow-passthrough + PI_FORCE_IMAGE_PROTOCOL=kitty in
+-- dot_config/tmux/tmux.conf) is untouched and stays the shared path.
+
+local wezterm = require 'wezterm'
+local config = wezterm.config_builder()
+
+-- --- font (renders from fonts.yaml — edit the yaml, not here) ---
+config.font = wezterm.font({{ .fonts.families.mono | quote }})
+config.font_size = {{ .fonts.sizes.terminal }}
+
+-- --- graphics ---
+config.enable_kitty_graphics = true
+
+-- --- parity with the managed kitty.conf surface ---
+config.scrollback_lines = 10000
+config.initial_cols = 128
+config.initial_rows = 24
+config.hide_tab_bar_if_only_one_tab = false
+config.audible_bell = 'Disabled'
+config.default_cursor_style = 'SteadyBar'
+config.check_for_updates = false
+
+return config

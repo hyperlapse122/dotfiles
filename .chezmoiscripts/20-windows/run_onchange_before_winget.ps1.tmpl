@@ -20,10 +20,14 @@ $PackageRows = @(
 )
 
 function Invoke-Winget {
-    param([Parameter(Mandatory = $true)][string[]] $Arguments, [switch] $AllowFailure)
+    param(
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [switch] $AllowFailure,
+        [int[]] $AcceptedExitCodes = @(0)
+    )
     $output = & winget @Arguments 2>&1
     $exitCode = $LASTEXITCODE
-    if ($exitCode -ne 0 -and -not $AllowFailure) {
+    if (-not $AllowFailure -and $exitCode -notin $AcceptedExitCodes) {
         throw "winget $($Arguments[0]) failed with exit code $exitCode"
     }
     [pscustomobject]@{ ExitCode = $exitCode; Output = ($output -join "`n") }
@@ -58,7 +62,10 @@ foreach ($row in $PackageRows) {
     if ($row.Scope -ne 'either') { $mutation += @('--scope', $row.Scope) }
     $mutation += @('--architecture', $row.Architecture)
     if ($listed.ExitCode -eq 0) {
-        Invoke-Winget -Arguments (@('upgrade') + $mutation) | Out-Null
+        # APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (0x8A15002B) is
+        # winget's documented converged result when the installed package has
+        # no applicable upgrade. Every other nonzero result remains fatal.
+        Invoke-Winget -Arguments (@('upgrade') + $mutation) -AcceptedExitCodes @(0, -1978335189) | Out-Null
         Write-Output "RESULT $($row.Id) updated-or-current"
     } else {
         Invoke-Winget -Arguments (@('install') + $mutation) | Out-Null

@@ -1,0 +1,17 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/dev/null",
+  "cwd": "/tmp",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "AskUserQuestion",
+  "tool_input": {
+    "questions": [
+      {
+        "question": "Proceed with the fixture?",
+        "header": "Confirm",
+        "options": [{ "label": "Yes", "description": "fixture" }],
+        "multiSelect": false
+      }
+    ]
+  }
+}

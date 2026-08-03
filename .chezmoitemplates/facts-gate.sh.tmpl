@@ -36,14 +36,14 @@ more, and one caller did not evaluate it at all —
     facts.tmpl's raw `true`/`false`), not the FACT_* variables the installers
     actually branch on — two readings of one registry that could quietly
     drift apart.
-  * The two package installers did not evaluate a gate EXPRESSION at all: each
+  * The package installer did not evaluate a gate EXPRESSION at all: each
     HAS_ / IS_ flag was hand-seeded straight from a FACT_* variable named in
     the installer's own prose, and packages.yaml's `gates:` map was read only
     far enough to validate it, never to DRIVE anything. Editing a `gates:`
     value therefore changed nothing at runtime — see the former "declaration,
     not a switch" header in .chezmoidata/packages.yaml, rewritten now that
     this partial makes the map load-bearing.
-  All four call sites now go through fact_gate() instead.
+  All call sites now go through fact_gate() instead.
 
 WHAT THIS PARTIAL DELIBERATELY DOES NOT DO:
 
@@ -52,13 +52,13 @@ WHAT THIS PARTIAL DELIBERATELY DOES NOT DO:
     compared to a value, a negated dotted form, a `desktop.<typo>` outside the
     fact's declared `values:` — and every caller of fact_gate() below already
     runs its gate expressions through facts-validate.tmpl BEFORE any of them
-    ever reaches a `fact_gate "…"` call site (the two installers validate
+    ever reaches a `fact_gate "…"` call site (the package installer validates
     packages.yaml's `gates:` map, install-system-10-files validates
     system.yaml's `gate:` column, host-facts validates both). A typo is
     therefore still caught at render time, exactly as before — fact_gate()
     only has to PARSE the three grammar shapes at runtime, never police them.
-  * CARRY FORCE_* LOGIC. FORCE_NVIDIA / FORCE_INTEL stay in the two package
-    installers ONLY, layered on top of fact_gate()'s result:
+  * CARRY FORCE_* LOGIC. FORCE_NVIDIA stays in the Fedora package installer
+    ONLY, layered on top of fact_gate()'s result:
 
       HAS_NVIDIA=0; fact_gate "nvidia" && HAS_NVIDIA=1
       [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1

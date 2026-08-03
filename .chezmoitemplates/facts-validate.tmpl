@@ -33,7 +33,7 @@ Usage:
   {{ includeTemplate "facts-validate.tmpl" (dict
        "ctx"    .
        "source" ".chezmoidata/packages.yaml (gates:)"
-       "gates"  (list "nvidia" "intelGpu" "desktop.kde" "!virt")) }}
+       "gates"  (list "nvidia" "desktop.kde" "!virt")) }}
 
   "ctx"    (required) the root template context — the partial needs .factRegistry
            and has to render facts.tmpl.

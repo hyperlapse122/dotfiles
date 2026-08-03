@@ -113,16 +113,17 @@ audit_config_count=$(grep -cF -- '--config "$reg"' "$audit_src" || true)
 [ -f "$ignore_file" ] || fail ".chezmoiignore missing at $ignore_file"
 
 gate_count=$(grep -cF '.config/garden/garden.yaml' "$ignore_file" || true)
-[ "$gate_count" -eq 2 ] \
-  || fail "expected exactly 2 occurrences of '.config/garden/garden.yaml' in .chezmoiignore, found $gate_count"
+[ "$gate_count" -eq 1 ] \
+  || fail "expected only the container gate for '.config/garden/garden.yaml' in .chezmoiignore, found $gate_count"
 if grep -qF 'src/garden.yaml' "$ignore_file"; then
   fail '.chezmoiignore still references the old target literal src/garden.yaml'
 fi
 
 ignore_windows_render="$scratch/chezmoiignore-windows"
 render_os windows '.chezmoiignore' >"$ignore_windows_render"
-grep -qF '.config/garden/garden.yaml' "$ignore_windows_render" \
-  || fail 'windows-rendered .chezmoiignore is missing the new gate literal'
+if grep -qF '.config/garden/garden.yaml' "$ignore_windows_render"; then
+  fail 'windows-rendered .chezmoiignore still withholds the garden registry'
+fi
 
 # The container fact is a live `stat /run/.containerenv` / `stat /.dockerenv`
 # probe in .chezmoitemplates/facts.tmpl, not a `.chezmoi.*` builtin — it is

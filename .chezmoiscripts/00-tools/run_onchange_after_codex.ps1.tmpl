@@ -1,0 +1,107 @@
+{{ if eq .chezmoi.os "windows" -}}
+
+{{- $arch := (replace "amd64" "x86_64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
+
+{{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex")) -}}
+{{- $release := (replace "rust-v" "" $tag) -}}
+{{- $target := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+
+{{- $releasePath := (printf "%s-%s-%s" $release $arch $target) -}}
+
+# .chezmoiscripts/00-tools/run_onchange_after_codex.ps1.tmpl
+#
+# Windows counterpart to run_onchange_after_codex.sh.tmpl: selects the current
+# standalone Codex release and prunes older versions. Chezmoi separately owns
+# the public ~/.local/bin/codex.ps1 wrapper (dot_local/bin/executable_codex.ps1).
+#
+# Link mechanics differ from POSIX because Windows file symlinks require
+# Developer Mode or elevation:
+#   - releases/current is a directory link -> a JUNCTION, which needs no
+#     privilege. A pre-existing junction is deleted as a reparse point only
+#     (never through it); a pre-existing REAL directory at `current` is
+#     undeclared state, so the script fails closed instead of deleting it.
+#   - the package's `codex` shim inside the release dir -> a HARDLINK, falling
+#     back to a copy with a diagnostic if the volume layout forbids one.
+#
+# The entrypoint is read from the extracted codex-package.json with jq (winget
+# package jqlang.jq, per-user). A missing jq is a soft skip like the POSIX
+# container caveat: the release dir and `current` junction are still correct,
+# only the in-package shim link is deferred.
+#
+# onchange trigger: the pinned release path is rendered into the script body
+# below, so a new upstream release changes the rendered content and re-runs
+# current-release selection + prune (same contract as the POSIX half).
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$PSNativeCommandUseErrorActionPreference = $false
+
+$releaseDir = Join-Path $HOME '.codex\packages\standalone\releases'
+$dest = Join-Path $releaseDir '{{ $releasePath }}'
+$current = Join-Path $releaseDir 'current'
+
+# The file phase must have extracted the pinned release already; if not, do
+# nothing rather than nuking the whole tree (same defensive skip as the
+# compound-engineering sibling).
+if (-not (Test-Path -LiteralPath $dest -PathType Container)) {
+  Write-Warning "codex: pinned release $dest is absent; skipping current-release selection and prune"
+  exit 0
+}
+
+# Repoint `current` at the pinned release.
+if (Test-Path -LiteralPath $current) {
+  $currentItem = Get-Item -LiteralPath $current -Force
+  if (-not $currentItem.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+    throw "codex: $current is not a junction; remove the undeclared entry and re-apply"
+  }
+  # DirectoryInfo.Delete() removes the reparse point itself, never its target.
+  $currentItem.Delete()
+}
+New-Item -ItemType Junction -Path $current -Target $dest | Out-Null
+
+# Mirror the POSIX in-package shim link ($dest/codex -> entrypoint) as a
+# hardlink named codex.exe so it is directly invocable on Windows.
+if (-not (Get-Command jq -ErrorAction SilentlyContinue)) {
+  Write-Warning 'codex: skipped entrypoint link (jq not on PATH)'
+} else {
+  $packageJson = Join-Path $dest 'codex-package.json'
+  if (-not (Test-Path -LiteralPath $packageJson -PathType Leaf)) {
+    throw "codex: $packageJson is missing; the extracted release does not match the pinned package layout"
+  }
+  $entrypoint = (& jq -r '.entrypoint' $packageJson)
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($entrypoint) -or $entrypoint -eq 'null') {
+    throw "codex: could not read .entrypoint from $packageJson"
+  }
+  $entrypointPath = $entrypoint
+  if (-not [IO.Path]::IsPathRooted($entrypointPath)) {
+    $entrypointPath = Join-Path $dest $entrypointPath
+  }
+  if (Test-Path -LiteralPath $entrypointPath -PathType Leaf) {
+    $shim = Join-Path $dest 'codex.exe'
+    if (([IO.Path]::GetFullPath($entrypointPath)) -ne ([IO.Path]::GetFullPath($shim))) {
+      if (Test-Path -LiteralPath $shim) { Remove-Item -LiteralPath $shim -Force }
+      try {
+        New-Item -ItemType HardLink -Path $shim -Target $entrypointPath | Out-Null
+      } catch {
+        Copy-Item -LiteralPath $entrypointPath -Destination $shim -Force
+        Write-Warning "codex: hardlink failed ($($_.Exception.Message)); copied the entrypoint to $shim instead"
+      }
+    }
+  } else {
+    Write-Warning "codex: entrypoint $entrypointPath is absent; skipping the in-package shim link"
+  }
+}
+
+# Prune older versions. 'current' is a junction living in this same dir —
+# never prune it (and never follow a reparse point into a target tree).
+if (Test-Path -LiteralPath $releaseDir -PathType Container) {
+  Get-ChildItem -LiteralPath $releaseDir -Force |
+    Where-Object {
+      -not $_.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint) -and
+      $_.PSIsContainer -and
+      $_.FullName -ne $dest
+    } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
+}
+
+{{ end -}}

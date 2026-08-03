@@ -95,8 +95,10 @@ export class HapticTimeoutError extends HapticError<"TIMEOUT"> {
 // nowhere. Node implements local IPC on Windows via named pipes, so a
 // \\.\pipe path connects to the daemon's CreateNamedPipeW server. Security
 // note: this is the machine-global \\.\pipe namespace, not the per-user POSIX
-// runtime dir — the daemon relies on the pipe's default ACL (crate README
-// Windows caveat).
+// runtime dir — the daemon reserves the first pipe instance for its lifetime
+// and binds it with a protected DACL limited to the current-user SID plus
+// LocalSystem (see lib.rs ipc_server), so a different user cannot write
+// commands through it.
 const WINDOWS_PIPE_PATH = "\\\\.\\pipe\\mxm4-haptic";
 
 // POSIX resolver: XDG_RUNTIME_DIR (Linux) -> TMPDIR (macOS launchd's per-user

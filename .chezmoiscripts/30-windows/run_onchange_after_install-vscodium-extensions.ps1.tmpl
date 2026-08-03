@@ -1,0 +1,93 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $extensions := .vscodium.extensions -}}
+{{- if not (kindIs "slice" $extensions) -}}{{- fail (printf "install-vscodium-extensions: vscodium.extensions must be a list, got %s" (kindOf $extensions)) -}}{{- end -}}
+{{- range $index, $ext := $extensions -}}
+{{-   if not (kindIs "string" $ext) -}}{{- fail (printf "install-vscodium-extensions: vscodium.extensions[%d] must be a string, got %s" $index (kindOf $ext)) -}}{{- end -}}
+{{-   if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._-]*\\.[A-Za-z0-9][A-Za-z0-9._-]*$" $ext) -}}{{- fail (printf "install-vscodium-extensions: vscodium.extensions[%d] %q is not a publisher.name gallery ID" $index $ext) -}}{{- end -}}
+{{- end -}}
+# install-vscodium-extensions.ps1
+#
+# Windows half of the VSCodium extension reconciler — native PowerShell, no
+# POSIX emulation. The POSIX half (30-linux, runs on Linux and macOS) carries
+# the full rationale; the halves share no rendered block: each re-derives the
+# SAME declared set from .chezmoidata/vscodium.yaml (vscodium.extensions)
+# behind its own OS gate, so the managed set is identical by construction.
+#
+# Behavior contract (mirrors the POSIX half exactly):
+#   - Every declared extension gets `codium --install-extension --force`: a
+#     missing one is installed, an installed one is updated to the newest
+#     version its gallery offers (a no-op when already current).
+#   - ADDITIVE ONLY: extensions the user installed by hand are never touched
+#     or removed — there is deliberately no --uninstall-extension anywhere
+#     here. Drop an entry from vscodium.yaml to stop managing it and
+#     uninstall by hand.
+#   - run_onchange trigger: the $extensions array below is RENDERED from
+#     vscodium.yaml, so editing the data changes this script's rendered
+#     content and re-triggers it.
+#   - Soft-skips when `codium` is not on PATH (VSCodium not installed yet).
+#     Same onchange trade-off as POSIX: the skip is recorded as success, so
+#     after installing VSCodium later, re-run with `chezmoi apply --force`.
+#   - Fail-closed: the authority is validated TWICE — at render (above,
+#     `fail` aborts the apply before any script runs) and again at runtime
+#     below BEFORE any mutation — and any failed install throws, so chezmoi
+#     records no success and retries on the next apply.
+$ErrorActionPreference = 'Stop'
+
+$extensions = @(
+{{- range $extensions }}
+  {{ . | quote }}
+{{- end }}
+)
+
+# Runtime re-validation before ANY mutation (defense in depth behind the
+# render-time `fail` guards above): a malformed authority dies here, not
+# halfway through a gallery session.
+foreach ($ext in $extensions) {
+  if ($ext -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$') {
+    throw "install-vscodium-extensions: '$ext' is not a publisher.name gallery ID"
+  }
+}
+
+$codiumCommand = Get-Command codium -ErrorAction SilentlyContinue
+if (-not $codiumCommand) {
+  Write-Warning 'install-vscodium-extensions: codium not on PATH; skipping'
+  return
+}
+
+if ($extensions.Count -eq 0) {
+  Write-Host 'install-vscodium-extensions: no extensions declared; nothing to do'
+  return
+}
+
+# Extension IDs are case-insensitive; --list-extensions prints the publisher's
+# canonical casing, so compare lowercased to report install vs update right.
+# Invoke by NAME (`& codium`), not via $codiumCommand.Source: .Source is empty
+# for function/alias resolutions and the bare name re-resolves to the exact
+# command the probe above verified — codium.cmd on a real Windows install.
+$installed = @()
+try {
+  $installed = @(& codium --list-extensions 2>$null | ForEach-Object { "$_".ToLowerInvariant() })
+} catch {
+  $installed = @()
+}
+
+$failures = 0
+foreach ($ext in $extensions) {
+  if ($installed -contains $ext.ToLowerInvariant()) {
+    $action = 'update'
+  } else {
+    $action = 'install'
+  }
+  & codium --install-extension $ext --force | Out-Null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "install-vscodium-extensions: $action ok: $ext"
+  } else {
+    Write-Warning "install-vscodium-extensions: $action FAILED: $ext"
+    $failures++
+  }
+}
+
+if ($failures -gt 0) {
+  throw "install-vscodium-extensions: $failures extension(s) failed; will retry on next apply"
+}
+{{ end -}}

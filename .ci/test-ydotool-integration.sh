@@ -106,7 +106,6 @@ mkdir -p "$scratch/cache-desktop/chezmoi" "$scratch/cache-headless/chezmoi"
 cat >"$scratch/cache-desktop/chezmoi/facts.yaml" <<'EOF'
 # fabricated hook cache: a non-headless desktop host
 nvidia: false
-intelGpu: false
 vm: false
 virt: false
 headless: false

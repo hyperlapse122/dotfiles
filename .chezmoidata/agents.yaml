@@ -166,12 +166,12 @@ agents:
     dotfiles:
       kind: localDir
       path: .local/share/claude-plugins   # relative to $HOME
-      os: [linux]
+      os: [linux, darwin, windows]
       container: skip
     dotfiles-codex:
       kind: localDir
       path: .local/share/codex-plugins    # relative to $HOME; codex reads its .claude-plugin/marketplace.json
-      os: [linux]
+      os: [linux, darwin, windows]
       container: skip
     h82-dotfiles:
       kind: localDir

@@ -395,6 +395,8 @@ install_macos() (
   scratch=$(mktemp -d "${scratch_root%/}/chezmoi-bootstrap.XXXXXX")
   trap 'rm -rf -- "$scratch"' EXIT HUP INT TERM
   if ! command -v brew >/dev/null 2>&1; then
+    # Keep this URL and digest in sync with
+    # .chezmoiscripts/20-darwin/run_onchange_before_homebrew.sh.tmpl.
     installer="$scratch/homebrew-install.sh"
     curl -fsSL 'https://raw.githubusercontent.com/Homebrew/install/39a0c068274254a7658fd9761d59bce9d0e2151f/install.sh' -o "$installer"
     printf '%s  %s\n' '8ff338091a5e10bb5fc040b38316648110f42feff057ecf9feaab51fd0a13ef9' "$installer" |

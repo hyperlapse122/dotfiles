@@ -204,4 +204,125 @@ if grep -qiE 'glab mr\b|glab mr list|merge request list' "$persona"; then
   echo "persona fetches merge requests" >&2; exit 1
 fi
 
+# --- Windows PowerShell halves ------------------------------------------------
+# The overlay install and the sibling-version prune have Windows counterparts
+# behind `eq windows` render guards. pwsh runs the same .NET file APIs on every
+# OS, so the rendered scripts execute here against a scratch HOME and prove the
+# same contracts as the POSIX runs above: inject + merge + byte-identical,
+# second-run convergence, foreign-link reclaim, chain refusal, and prune
+# boundaries (stale removed, current kept, reparse points and stray files
+# preserved, missing current a no-op).
+command -v pwsh >/dev/null 2>&1 || {
+  echo "pwsh is required for the Windows overlay/prune checks" >&2; exit 1;
+}
+
+prov_ps1="$scratch/provisioner.ps1"
+prune_ps1="$scratch/prune.ps1"
+win_override='{"chezmoi":{"os":"windows","arch":"amd64"}}'
+env PATH="$bin:$PATH" chezmoi \
+  --config "$scratch/empty.toml" \
+  --source "$root" \
+  --override-data "$win_override" \
+  execute-template \
+  < "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.ps1.tmpl" \
+  > "$prov_ps1"
+env PATH="$bin:$PATH" chezmoi \
+  --config "$scratch/empty.toml" \
+  --source "$root" \
+  --override-data "$win_override" \
+  execute-template \
+  < "$root/.chezmoiscripts/00-tools/run_onchange_after_compound-engineering.ps1.tmpl" \
+  > "$prune_ps1"
+
+ps1_version=$(grep -oE "Join-Path \\\$baseDir 'v[0-9][0-9.]+'" "$prov_ps1" | grep -oE 'v[0-9][0-9.]+')
+[ -n "$ps1_version" ] || { echo "could not resolve CE version from rendered ps1" >&2; exit 1; }
+[ "$ps1_version" = "$version" ] \
+  || { echo "POSIX and Windows halves pin different CE versions ($version vs $ps1_version)" >&2; exit 1; }
+
+run_ps1() { env HOME="$home" pwsh -NoProfile -File "$1"; }
+
+# --- happy path: inject + merge + byte-identical, then second-run convergence ---
+build_fake_ce
+run_ps1 "$prov_ps1"
+cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
+  || { echo "ps1: injected persona differs from overlay source" >&2; exit 1; }
+cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
+  || { echo "ps1: ce-sweep skill changed on first run" >&2; exit 1; }
+cp "$src" "$scratch/persona-after-first.md"
+run_ps1 "$prov_ps1"
+cmp -s "$scratch/persona-after-first.md" "$src" \
+  || { echo "ps1: persona changed on second run" >&2; exit 1; }
+cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
+  || { echo "ps1: ce-sweep skill changed on second run" >&2; exit 1; }
+
+# --- skip when overlays dir absent / CE version dir absent ---
+build_fake_ce
+rm -rf "$overlays"
+run_ps1 "$prov_ps1"
+[ ! -e "$current/skills/ce-sweep/references/sources/gitlab-issues.md" ] \
+  || { echo "ps1: persona created when overlay source was absent" >&2; exit 1; }
+build_fake_ce
+rm -rf "$current"
+run_ps1 "$prov_ps1"
+[ ! -e "$current" ] || { echo "ps1: CE version dir recreated when absent" >&2; exit 1; }
+
+# --- foreign link at the reference path: reclaim it, never write through it ---
+build_fake_ce
+mkdir -p "$foreign"
+ln -sfn "$foreign/gitlab-issues.md" "$current/skills/ce-sweep/references/sources/gitlab-issues.md"
+run_ps1 "$prov_ps1" 2>"$scratch/ps1-reclaim.err"
+[ ! -L "$current/skills/ce-sweep/references/sources/gitlab-issues.md" ] \
+  || { echo "ps1: foreign symlink survived the provisioner" >&2; exit 1; }
+cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" \
+  "$current/skills/ce-sweep/references/sources/gitlab-issues.md" \
+  || { echo "ps1: persona not reinstalled over the foreign symlink" >&2; exit 1; }
+cmp -s "$scratch/expected-foreign.md" "$foreign/gitlab-issues.md" \
+  || { echo "ps1: provisioner wrote through the foreign symlink" >&2; exit 1; }
+grep -q 'replaced foreign link' "$scratch/ps1-reclaim.err" \
+  || { echo "ps1: foreign-link reclaim not reported" >&2; exit 1; }
+
+# --- foreign symlink in the archive-owned directory chain: refuse, do not delete ---
+build_fake_ce
+rm -rf "$current/skills/ce-sweep/references/sources"
+ln -sfn "$foreign_dir" "$current/skills/ce-sweep/references/sources"
+if run_ps1 "$prov_ps1" 2>"$scratch/ps1-chain.err"; then
+  echo "ps1: provisioner accepted a symlinked directory component" >&2; exit 1
+fi
+grep -q 'is not a plain directory' "$scratch/ps1-chain.err" \
+  || { echo "ps1: directory-chain conflict not reported" >&2; exit 1; }
+[ -L "$current/skills/ce-sweep/references/sources" ] \
+  || { echo "ps1: provisioner deleted an archive-owned directory component" >&2; exit 1; }
+[ ! -e "$foreign_dir/gitlab-issues.md" ] \
+  || { echo "ps1: provisioner wrote through the symlinked directory" >&2; exit 1; }
+cmp -s "$foreign_dir/keep.md" <(printf 'outside\n') \
+  || { echo "ps1: provisioner disturbed the symlinked directory contents" >&2; exit 1; }
+
+# --- prune: stale version removed, current kept, reparse points and stray
+#     files preserved (undeclared state), missing current a no-op ---
+build_fake_ce
+stale="$ce_base/v0.0.0-stale"
+mkdir -p "$stale/skills"
+printf 'stale\n' > "$stale/skills/keep.md"
+stray="$ce_base/notes.txt"
+printf 'stray\n' > "$stray"
+linked_dir="$scratch/linked-version"
+mkdir -p "$linked_dir"
+ln -sfn "$linked_dir" "$ce_base/v9.9.9-link"
+run_ps1 "$prune_ps1" >"$scratch/ps1-prune.err" 2>&1
+[ ! -e "$stale" ] || { echo "ps1: prune kept a stale version dir" >&2; exit 1; }
+[ -d "$current" ] || { echo "ps1: prune removed the current version" >&2; exit 1; }
+[ -L "$ce_base/v9.9.9-link" ] || { echo "ps1: prune removed an undeclared reparse point" >&2; exit 1; }
+[ -f "$stray" ] || { echo "ps1: prune removed an undeclared stray file" >&2; exit 1; }
+grep -q 'preserved reparse point' "$scratch/ps1-prune.err" \
+  || { echo "ps1: reparse-point preservation not reported" >&2; exit 1; }
+# Second run converges to a no-op.
+run_ps1 "$prune_ps1"
+[ -d "$current" ] || { echo "ps1: second prune removed the current version" >&2; exit 1; }
+[ -L "$ce_base/v9.9.9-link" ] || { echo "ps1: second prune removed the reparse point" >&2; exit 1; }
+# Missing current version: defensive no-op (never nukes the tree).
+rm -rf "$current"
+run_ps1 "$prune_ps1"
+[ -L "$ce_base/v9.9.9-link" ] || { echo "ps1: prune without current removed the reparse point" >&2; exit 1; }
+[ -f "$stray" ] || { echo "ps1: prune without current removed the stray file" >&2; exit 1; }
+
 echo "compound-engineering overlays: ok"

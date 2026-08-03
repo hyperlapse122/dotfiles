@@ -25,6 +25,43 @@ render windows arm64 .chezmoiscripts/20-windows/run_onchange_before_winget.ps1.t
 render darwin arm64 .chezmoiscripts/20-darwin/run_onchange_before_homebrew.sh.tmpl "$scratch/homebrew.sh"
 bash -n "$scratch/homebrew.sh"
 SCRIPT_PATH="$scratch/winget-x64.ps1" pwsh -NoProfile -Command '[void][scriptblock]::Create([IO.File]::ReadAllText($env:SCRIPT_PATH))'
+# Exercise the native Invoke-Winget contract without touching App Installer:
+# extract only that rendered function, inject a PowerShell winget function,
+# and prove repeated no-update applies converge while an unrelated failure
+# remains fatal.
+WINGET_SCRIPT="$scratch/winget-x64.ps1" pwsh -NoProfile -Command - <<'PS'
+$ErrorActionPreference = 'Stop'
+$source = [IO.File]::ReadAllText($env:WINGET_SCRIPT)
+$tokens = $null
+$errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
+if ($errors.Count -ne 0) { throw "rendered winget script has parse errors: $errors" }
+$functionAst = $ast.Find({
+    param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-Winget'
+}, $true)
+if ($null -eq $functionAst) { throw 'Invoke-Winget was not rendered' }
+. ([scriptblock]::Create($functionAst.Extent.Text))
+
+$global:FixtureWingetExit = -1978335189
+function global:winget {
+    $global:LASTEXITCODE = $global:FixtureWingetExit
+}
+1..2 | ForEach-Object {
+    $result = Invoke-Winget -Arguments @('upgrade', '--id', 'Fixture.Package') `
+        -AcceptedExitCodes @(0, -1978335189)
+    if ($result.ExitCode -ne -1978335189) { throw "apply $_ did not preserve the converged HRESULT" }
+}
+$global:FixtureWingetExit = 42
+try {
+    Invoke-Winget -Arguments @('upgrade', '--id', 'Fixture.Package') `
+        -AcceptedExitCodes @(0, -1978335189) | Out-Null
+    throw 'unrelated nonzero winget exit was accepted'
+} catch {
+    if ($_.Exception.Message -eq 'unrelated nonzero winget exit was accepted') { throw }
+    if ($_.Exception.Message -notmatch 'exit code 42') { throw }
+}
+PS
 
 requires "$scratch/winget-x64.ps1" "'--exact', '--id', \$row.Id, '--source', 'winget'"
 requires "$scratch/winget-x64.ps1" "--accept-package-agreements"

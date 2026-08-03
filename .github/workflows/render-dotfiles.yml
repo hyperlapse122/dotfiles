@@ -4,7 +4,7 @@ name: Render dotfiles
 # platforms and capture what chezmoi renders, so a reviewer can eyeball the real
 # output of any template change without a local checkout:
 #   * Fedora         — a slim container image (`apply` / `render-internals`).
-#   * macOS          — a native `macos-latest` runner (`apply-macos`); a
+#   * macOS          — a native `macos-26` arm64 runner (`apply-macos`); a
 #                      container cannot provide a `darwin` chezmoi, and darwin-only
 #                      templates (e.g. the mxm4-haptic build) render only here.
 #   * Windows         — a native `windows-latest` runner (`apply-windows`); needed
@@ -64,10 +64,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: fedora, image: "fedora:latest" }
+          - { os: fedora, image: "fedora:44" }
     container:
       image: ${{ matrix.image }}
     steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          # Canonical matrix: fedora x64 renders in a fedora:44 container on the
+          # ubuntu-24.04-class x64 hosted fleet. Fail closed on arch drift.
+          [ "$(uname -m)" = "x86_64" ]
+          . /etc/os-release
+          [ "${ID}" = "fedora" ]
+
       - name: Install base tooling (${{ matrix.os }})
         run: |
           set -euxo pipefail
@@ -259,10 +268,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: fedora, image: "fedora:latest" }
+          - { os: fedora, image: "fedora:44" }
     container:
       image: ${{ matrix.image }}
     steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          [ "$(uname -m)" = "x86_64" ]
+          . /etc/os-release
+          [ "${ID}" = "fedora" ]
+
       - name: Install base tooling (${{ matrix.os }})
         run: |
           set -euxo pipefail
@@ -502,8 +518,16 @@ jobs:
   # ---------------------------------------------------------------------------
   apply-macos:
     name: apply --init + internals (macos)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          # Canonical matrix: the macOS leg is arm64-only on the exact macos-26
+          # hosted label (never a moving alias). Fail closed on arch drift.
+          [ "$(uname -m)" = "arm64" ]
+          [ "$(uname -s)" = "Darwin" ]
+
       - uses: actions/checkout@v7
 
       - name: Install chezmoi + dummy op/mise
@@ -702,6 +726,14 @@ jobs:
       run:
         shell: pwsh
     steps:
+      - name: Assert runtime architecture
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Canonical matrix: the hosted Windows leg is x64. Fail closed on arch drift.
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
+            throw "runtime architecture $env:PROCESSOR_ARCHITECTURE != AMD64 (canonical hosted Windows leg is x64)"
+          }
+
       - uses: actions/checkout@v7
 
       - name: Install chezmoi + dummy op/mise

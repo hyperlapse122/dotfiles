@@ -23,3 +23,12 @@
 host-facts
 import-wifi-1password
 {{- end }}
+
+# import-wifi-1password-macos provisions macOS Wi-Fi networks via profiles(1)
+# (macOS-only) and likewise bakes render-time-resolved op:// PSKs into its body
+# (private_ 0700), so it is gated to darwin for the same reason. The Windows
+# counterpart (import-wifi-1password.ps1) needs no entry here: the generic
+# *.ps1 / !*.ps1 OS split above already gates it to Windows.
+{{- if ne .chezmoi.os "darwin" }}
+import-wifi-1password-macos
+{{- end }}

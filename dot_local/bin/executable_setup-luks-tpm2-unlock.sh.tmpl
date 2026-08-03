@@ -15,15 +15,11 @@
 # CROSS-DISTRO via a chezmoi-included backend: the enrollment "backend" is factored
 # into a separate fragment that chezmoi inlines here at apply time with
 # `{{ "{{ include }}" }}` — the same "diverging fragment" pattern
-# dot_config/git/config.tmpl uses to pull in .config_<os>. Fedora and Ubuntu now
-# share ONE backend: dracut + systemd-cryptenroll. dracut builds a systemd-based
-# initramfs whose systemd-cryptsetup honours the `tpm2-device=auto` crypttab option,
-# so a single mechanism works on both (Ubuntu 26.04 switched its initramfs generator
-# to dracut; the old initramfs-tools stack ignored `tpm2-device=auto`, Launchpad
-# #1980018, which is why earlier revisions used clevis on Ubuntu — no longer needed).
-# The backend defines four hooks the shared core below calls: backend_preflight,
-# backend_enroll, backend_crypttab_opts and backend_finalize. On any other host
-# (macOS, a non-Fedora/Ubuntu Linux) a no-op backend exits cleanly up front.
+# dot_config/git/config.tmpl uses to pull in .config_<os>. Fedora uses the
+# dracut + systemd-cryptenroll backend. The backend defines four hooks the
+# shared core below calls: backend_preflight, backend_enroll,
+# backend_crypttab_opts and backend_finalize. On any other host (macOS or a
+# non-Fedora Linux) a no-op backend exits cleanly up front.
 #
 # PASSPHRASE HANDLING (two modes):
 #
@@ -165,9 +161,8 @@ usage() {
 Usage: setup-luks-tpm2-unlock.sh [OPTIONS]
 
 TPM2-enroll every LUKS device on this running system for automated unlock at
-boot. Prompts interactively for each device's existing passphrase. Fedora and
-Ubuntu share one mechanism (dracut + systemd-cryptenroll), inlined at chezmoi
-apply time.
+boot. Prompts interactively for each device's existing passphrase. Fedora uses
+dracut + systemd-cryptenroll, inlined at chezmoi apply time.
 
 Options:
   --dry-run            Print intended actions; change nothing.
@@ -289,15 +284,15 @@ update_crypttab() {
 # helper/state above (SUDO, DRY_RUN, CHANGED, TPM2_PCRS, WITH_RECOVERY_KEY,
 # log_*, err, require_cmd, update_crypttab, ...).
 # ---------------------------------------------------------------------------
-{{ if or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{ if eq .chezmoi.osRelease.id "fedora" -}}
 {{ include (joinPath .chezmoi.sourceFile ".." ".setup-luks-tpm2-unlock_dracut.sh") -}}
 {{ else -}}
-# No supported backend on this host (not Fedora/Ubuntu). Define no-op hooks so
+# No supported backend on this host (not Fedora). Define no-op hooks so
 # the shared flow exits cleanly at backend_preflight before any TTY/sudo prompt.
 BACKEND_LABEL="unsupported host"
 backend_preflight() {
   log_info "setup-luks-tpm2-unlock.sh has no TPM2 auto-unlock backend for this host"
-  log_info "(only Fedora and Ubuntu are supported). Nothing to do; exiting."
+  log_info "(only Fedora is supported). Nothing to do; exiting."
   exit 0
 }
 backend_enroll()        { :; }

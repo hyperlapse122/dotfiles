@@ -49,7 +49,7 @@ no runtime OS/container guard. Net-identical to the old whole-script
 {{- $marketplaces := .agents.marketplaces -}}
 {{- $kinds := list "localDir" "localArchive" "github" -}}
 {{- $containerVals := list "skip" "keep" -}}
-{{- $osVals := list "linux" "darwin" -}}
+{{- $osVals := list "linux" "darwin" "windows" -}}
 {{- /* Bare-identifier allowlist for plugin + marketplace names and the localDir
    path: no colon (the row delimiter), no shell metacharacter. Rejects `@` so an
    unresolved placeholder cannot slip through as a literal name. */ -}}
@@ -118,13 +118,13 @@ no runtime OS/container guard. Net-identical to the old whole-script
 
 {{- /* --- marketplace.os (coerce to strings for `has`) --- */ -}}
 {{-     if not (hasKey $mkt "os") -}}
-{{-       fail (printf "install-agent-plugins: marketplace %q is missing `os` (a list of: linux, darwin)" $mktName) -}}
+{{-       fail (printf "install-agent-plugins: marketplace %q is missing `os` (a list of: linux, darwin, windows)" $mktName) -}}
 {{-     end -}}
 {{-     $osStr := list -}}
 {{-     range $o := (index $mkt "os") -}}
 {{-       $ov := printf "%v" $o -}}
 {{-       if not (has $ov $osVals) -}}
-{{-         fail (printf "install-agent-plugins: marketplace %q lists invalid os %q; valid: linux, darwin" $mktName $ov) -}}
+{{-         fail (printf "install-agent-plugins: marketplace %q lists invalid os %q; valid: linux, darwin, windows" $mktName $ov) -}}
 {{-       end -}}
 {{-       $osStr = append $osStr $ov -}}
 {{-     end -}}

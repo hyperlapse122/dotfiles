@@ -26,6 +26,32 @@
 ./AppData
 {{- end }}
 
+# Read-only disk-encryption status tools are per-OS (U8): the FileVault query
+# deploys only to macOS and the BitLocker query only to Windows. Linux keeps its
+# existing LUKS/TPM2 path and receives neither. Enablement stays a manual
+# operator step — these tools only query.
+{{- if ne .chezmoi.os "darwin" }}
+.local/bin/encryption-status
+{{- end }}
+{{- if ne .chezmoi.os "windows" }}
+.local/bin/encryption-status.ps1
+{{- end }}
+
+# VSCodium user state deploys to the NATIVE per-OS location: the XDG path on
+# Linux (dot_config/VSCodium), %APPDATA%\VSCodium on Windows and
+# ~/Library/Application Support/VSCodium on macOS — both covered by the
+# AppData/Library gates above. The XDG path is therefore Linux-only: keep it
+# off Windows/macOS targets. The PowerShell extension reconciler is
+# Windows-only (the POSIX half in 30-linux renders for Linux AND macOS) and
+# mirrors the haptic ps1 pattern below: its own template guard is defense in
+# depth, this ignore keeps it out of non-Windows target state.
+{{- if ne .chezmoi.os "linux" }}
+.config/VSCodium
+{{- end }}
+{{- if ne .chezmoi.os "windows" }}
+.chezmoiscripts/30-windows/*.ps1
+{{- end }}
+
 # The Windows daemon provisioner is source-only on POSIX hosts. Its own
 # template guard is defense in depth; the ignore keeps it out of target state.
 {{- if ne .chezmoi.os "windows" }}
@@ -38,14 +64,6 @@
 .config/systemd/user/mxm4-haptic*.service
 {{- end }}
 
-# The GPG key is provisioned only on POSIX hosts (.chezmoiscripts/80-keys/
-# is a bash script with no .ps1 counterpart), so Windows can never decrypt the
-# encrypted ~/src project registry — skip it there. (The 90-src reconcile
-# script OS-gates itself out on Windows via its own render guard, like
-# config-solaar, so it needs no entry here.)
-{{- if eq .chezmoi.os "windows" }}
-.config/garden/garden.yaml
-{{- end }}
 
 # kitty is provisioned from the upstream bundle by
 # .chezmoiscripts/00-tools/run_onchange_before_kitty.sh (the distro package no
@@ -54,9 +72,13 @@
 # host with a graphical session: a headless or non-KDE/GNOME host has no use for
 # a GPU terminal and no menu to show it in. The managed kitty.conf itself is NOT
 # gated here — it deploys everywhere and is inert without kitty.
+# The opt-in WezTerm candidate launcher rides the same gate: a headless or
+# non-desktop host has no menu for it either. wezterm.lua is likewise NOT gated
+# — it deploys everywhere and is inert unless wezterm is launched.
 {{- if or (ne .chezmoi.os "linux") (not (or (eq $f.desktop "kde") (eq $f.desktop "gnome"))) }}
 .chezmoiscripts/00-tools/*kitty.sh
 .local/share/applications/kitty.desktop
+.local/share/applications/wezterm.desktop
 {{- end }}
 
 # ydotool (KTD2, KTD5, KTD7): a managed graphical-session user unit, its
@@ -78,14 +100,11 @@
 ./crates
 ./packages
 
-# The mxm4-haptic Claude Code / Codex plugins drive the Linux-only
-# mxm4-hapticd daemon (it owns Linux hidraw for the MX Master 4), so there is
-# nothing to pulse on macOS/Windows. Skipping the deployed trees also strands
-# nothing: the installer rows below are gated on linux too.
-{{- if ne .chezmoi.os "linux" }}
-.local/share/claude-plugins
-.local/share/codex-plugins
-{{- end }}
+# The mxm4-haptic Claude Code / Codex plugins pulse the cross-platform
+# mxm4-hapticd daemon (Linux hidraw, macOS IOKit, Windows native HID), so the
+# deployed trees ship on every desktop OS. The POSIX hook wrapper covers
+# Linux/macOS; the Windows hooks render PowerShell counterparts. Containers
+# still skip the trees below (no MX Master 4 inside a container).
 
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
@@ -125,9 +144,11 @@ Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .omp/agent/extensions/mxm4-haptic.ts
 # No graphical session in a container, so the kitty bundle has nothing to draw
 # on. 00-tools is not wildcarded here (unlike the distro/desktop dirs above),
-# so this provisioner needs its own line.
+# so this provisioner needs its own line. The opt-in WezTerm candidate
+# launcher has nothing to launch here either.
 .chezmoiscripts/00-tools/*kitty.sh
 .local/share/applications/kitty.desktop
+.local/share/applications/wezterm.desktop
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude/Codex haptic plugins have nothing to pulse — skip the deployed
 # plugin trees. The generic 70-agents/install-agent-plugins.sh script is

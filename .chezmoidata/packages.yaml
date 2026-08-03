@@ -26,7 +26,7 @@
 # Gate-expression grammar — the same one system.yaml's `gate:` uses, checked by
 # the same partial (.chezmoitemplates/facts-validate.tmpl):
 #
-#   <fact>          boolean fact is true       nvidia, intelGpu, virt
+#   <fact>          boolean fact is true       nvidia, virt
 #   !<fact>         boolean fact is false      "!virt"  — MUST be YAML-quoted:
 #                                              a bare `!` opens a YAML tag
 #   <fact>.<value>  string fact equals value   desktop.kde, desktop.gnome
@@ -547,8 +547,8 @@ packages:
       - id: koreanInput
         sentinel: fcitx5
         fedora: { disposition: managed, owner: dnf, identifier: fcitx5-hangul, source: fedora, architectures: { amd64: native, arm64: native } }
-        windows: { disposition: notApplicable, reason: native Windows Korean IME, architectures: { amd64: notApplicable, arm64: notApplicable } }
-        macos: { disposition: notApplicable, reason: native macOS Korean input source, architectures: { arm64: notApplicable } }
+        windows: { disposition: manual, reason: native Windows Korean IME is an OS language component added in Settings > Time & language > Language & region; no package manager owns OS components, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: manual, reason: native macOS Korean input source is built in and added in System Settings > Keyboard > Input Sources; no package manager owns it, architectures: { arm64: manual } }
       - id: logitechGestures
         sentinel: solaar
         fedora: { disposition: managed, owner: dnf, identifier: solaar, source: fedora, architectures: { amd64: native, arm64: native } }
@@ -567,3 +567,44 @@ packages:
         fedora: { disposition: managed, owner: releaseLock, identifier: kitty, architectures: { amd64: native, arm64: native } }
         windows: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { amd64: unresolved, arm64: unresolved } }
         macos: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { arm64: unresolved } }
+      # U8 native desktop/hardware completions. logitechGestures (Logi Options+,
+      # manual profile) and koreanInput (native Windows/macOS IMEs, manual
+      # prerequisite steps) above already carry their U8 dispositions; the rows
+      # below close the remaining retained desktop-app, pinentry, and
+      # default-app helper gaps. None of them close G0 — only chrome, cider,
+      # and edge carry gateClosing: g0.
+      - id: weasis
+        sentinel: weasis
+        fedora: { disposition: managed, owner: flatpak, identifier: io.github.nroduit.Weasis, source: flathub, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: not published in the predefined winget source; operator installs the vendor-native Weasis installer, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: weasis, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: kdenlive
+        sentinel: kdenlive
+        fedora: { disposition: managed, owner: dnf, identifier: kdenlive, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: KDE.Kdenlive, source: winget, scope: user, elevation: none, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: kdenlive, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      # One GPG pinentry capability, per-OS delivery: Fedora KDE hosts install
+      # pinentry-qt and GNOME hosts pinentry-gnome3 (gated legacy groups above;
+      # private_dot_gnupg/.gpg-agent.linux.conf picks the matching program from
+      # the desktop fact), macOS installs pinentry-mac and .gpg-agent.darwin.conf
+      # names it, and Windows gets pinentry inside the Gpg4win bundle.
+      - id: pinentry
+        fedora: { disposition: managed, owner: dnf, identifier: pinentry-qt, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: notApplicable, reason: Gpg4win (gpgSuite capability) bundles pinentry; no separate package owner exists, architectures: { amd64: notApplicable, arm64: notApplicable } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: pinentry-mac, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: defaultApps
+        sentinel: defaultbrowser
+        fedora: { disposition: managed, owner: dnf, identifier: xdg-terminal-exec, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: default apps are a Windows Settings consent flow with no supported CLI; the handoff is documented rather than emulated, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: defaultbrowser, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      # G1 CANDIDATE — opt-in launch only. Kitty (kittyTerminal above) stays the
+      # authoritative Fedora terminal and the default on every host until G1b
+      # opens; nothing here may switch a default or remove a Kitty source.
+      # Ownership is native-manager only: winget on Windows, Homebrew on macOS —
+      # a release-lock entry beside those would duplicate authority, and the
+      # Fedora RPM path has no lockable artifact today (see the reason below).
+      - id: weztermTerminal
+        sentinel: wezterm
+        fedora: { disposition: unresolved, reason: "G1a closed: upstream stable 20240203-110809-5046fc22 predates Kitty Unicode placeholder support and publishes no RPM for the current Fedora release (newest is fedora39) and no aarch64 RPM at all; only an upstream stable RPM for the current Fedora release, installed through DNF, is acceptable", architectures: { amd64: unresolved, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: wez.wezterm, source: winget, scope: machine, elevation: admin, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: wezterm, source: homebrewCask, elevation: appManagement, greedy: false, architectures: { arm64: native } }

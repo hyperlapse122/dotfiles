@@ -1,0 +1,5 @@
+{
+  "session_id": "fixture-session",
+  "cwd": "/tmp",
+  "hook_event_name": "Stop"
+}

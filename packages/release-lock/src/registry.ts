@@ -75,7 +75,6 @@ export const REGISTRY: Registry = {
     },
   },
 
-
   shellcheck: {
     kind: "githubRelease",
     source: "koalaman/shellcheck",
