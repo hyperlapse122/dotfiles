@@ -207,8 +207,8 @@ exit /b 0
   try { Invoke-Tool 'noifaceapply' @('-FromApply') } finally { Remove-Item Env:WIFI_FAKE_NO_INTERFACE }
   if ($script:ToolRc -ne 0) { Fail "no-interface -FromApply exit $($script:ToolRc), expected 0 (clean skip)" }
 
-  # --- scenario 6: cancellation — runspace Stop during a blocked add --------
-  # The fake netsh parks on `add`; Stop() unwinds the pipeline
+  # --- scenario 6: cancellation — runspace Stop during blocked profile order
+  # The fake netsh parks on `set`; Stop() unwinds the pipeline
   # (PipelineStoppedException) through the tool's single finally path.
   $cancelTmp = Join-Path $Scratch 'tmp-cancel'
   $cancelState = Join-Path $Scratch 'state-cancel'
@@ -222,7 +222,7 @@ exit /b 0
   $env:TMP = $cancelTmp; $env:TEMP = $cancelTmp
   $env:TEST_LOG = Join-Path $Scratch 'log-cancel'
   $env:TEST_STATE_DIR = $cancelState
-  $env:WIFI_FAKE_BLOCK = 'add'
+  $env:WIFI_FAKE_BLOCK = 'set'
   $env:PATH = "$toolBin;" + $savedCancel['PATH']
   $runspace = [runspacefactory]::CreateRunspace()
   $runspace.Open()
