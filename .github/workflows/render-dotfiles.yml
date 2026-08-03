@@ -1018,11 +1018,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download rendered artifacts
+      - name: Download Fedora rendered artifacts
         uses: actions/download-artifact@v8
         with:
           path: _rendered
-          pattern: rendered-*
+          pattern: rendered-*-fedora
+
+      - name: Download macOS rendered artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: _rendered
+          pattern: rendered-*-macos
 
       - name: shellcheck
         run: |

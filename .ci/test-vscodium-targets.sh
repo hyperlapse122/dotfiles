@@ -29,13 +29,13 @@ override_data() { # override_data <os> <arch>
 }
 
 render() { # render <os> <arch> <file-relative-path> — execute-template from the real source
-  chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+  chezmoi --config "$scratch/empty.toml" --source "$repo_root" --refresh-externals=never \
     --override-data "$(override_data "$1" "$2")" execute-template \
     <"$repo_root/$3"
 }
 
 managed() { # managed <os> <arch>
-  chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+  chezmoi --config "$scratch/empty.toml" --source "$repo_root" --refresh-externals=never \
     --override-data "$(override_data "$1" "$2")" managed
 }
 

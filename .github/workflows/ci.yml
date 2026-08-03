@@ -470,7 +470,7 @@ jobs:
       GIT_CONFIG_VALUE_0: ${{ github.workspace }}
     steps:
       - name: Install base tooling
-        run: dnf install -y --setopt=install_weak_deps=False git jq tar gzip curl nodejs tmux util-linux >/dev/null
+        run: dnf install -y --setopt=install_weak_deps=False git jq tar gzip curl nodejs tmux util-linux util-linux-script >/dev/null
       - uses: actions/checkout@v7
       - name: Assert runtime architecture against the support matrix
         run: |

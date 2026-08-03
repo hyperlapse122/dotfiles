@@ -27,7 +27,7 @@ check_root() {
 const fs = require("node:fs");
 const path = require("node:path");
 const [root, inventoryPath] = process.argv.slice(2);
-const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
+const read = relative => fs.readFileSync(path.join(root, relative), "utf8").replace(/\r\n/g, "\n");
 const capabilities = JSON.parse(fs.readFileSync(inventoryPath, "utf8"));
 const packages = read(".chezmoidata/packages.yaml");
 const miseText = read("dot_config/mise/config.toml");
@@ -108,7 +108,7 @@ make_fixture "$fixture"
 node - "$fixture/dot_config/mise/config.toml" <<'JS'
 const fs = require("node:fs");
 const path = process.argv[2];
-const text = fs.readFileSync(path, "utf8");
+const text = fs.readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 const temporaryPath = `${path}.fixture`;
 fs.writeFileSync(temporaryPath, text.replace("[tools]\n", '[tools]\ngh = "latest"\n'));
 fs.renameSync(temporaryPath, path);
