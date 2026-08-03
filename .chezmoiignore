@@ -28,8 +28,8 @@
 .chezmoiscripts/60-build/*open-design.sh
 .config/systemd/user/open-design.service
 .local/libexec/open-design
-.local/bin/od
 .local/bin/open-design
+.local/bin/open-design-desktop
 .local/share/applications/open-design.desktop
 {{- end }}
 
@@ -170,8 +170,8 @@ Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .config/containers/systemd
 .config/systemd/user/open-design.service
 .local/libexec/open-design
-.local/bin/od
 .local/bin/open-design
+.local/bin/open-design-desktop
 .local/share/applications/open-design.desktop
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude/Codex haptic plugins have nothing to pulse — skip the deployed

@@ -60,8 +60,8 @@ render <"$repo_root/dot_config/systemd/user/open-design.service.tmpl" \
 bash -n "$rendered_provision"
 bash -n "$repo_root/dot_local/libexec/open-design/executable_service"
 bash -n "$repo_root/dot_local/libexec/open-design/executable_ensure-service"
-bash -n "$repo_root/dot_local/bin/executable_od"
 bash -n "$repo_root/dot_local/bin/executable_open-design"
+bash -n "$repo_root/dot_local/bin/executable_open-design-desktop"
 
 "$repo_root/.ci/test-open-design-mcp-render.sh"
 "$repo_root/.ci/test-open-design-provision.sh" "$rendered_provision"
