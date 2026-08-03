@@ -143,11 +143,14 @@ rendered_ce=${rendered_ce%%\\t*}
 sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
 chmod 0700 "$test_plugin"
 
+# The stub answers --version in the real binary's omp/<version> format so the
+# reconciler's preflight is tested against reality, not a shape omp never prints.
+# OMP_STUB_VERSION replaces the whole emitted string for reject coverage.
 cat >"$fake_bin/omp" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$OMP_CALLS"
-[[ ${1-} == --version ]] && { printf '%s\n' "${EXPECTED_OMP_VERSION:?}"; exit 0; }
+[[ ${1-} == --version ]] && { printf '%s\n' "${OMP_STUB_VERSION:-omp/${EXPECTED_OMP_VERSION:?}}"; exit 0; }
 if [[ -n ${OMP_FAIL_MATCH:-} && "$*" == *"$OMP_FAIL_MATCH"* ]]; then exit 72; fi
 root="$HOME/.omp/plugins"
 mkdir -p "$root"
@@ -170,7 +173,7 @@ EOF
 chmod 0755 "$fake_bin/omp"
 
 run_plugins() {
-  OMP_CALLS="$1" OMP_FAIL_MATCH="${2-}" EXPECTED_OMP_VERSION="$locked_omp_version" \
+  OMP_CALLS="$1" OMP_FAIL_MATCH="${2-}" OMP_STUB_VERSION="${3-}" EXPECTED_OMP_VERSION="$locked_omp_version" \
     env HOME="$home" PATH="$fake_bin:$PATH" bash "$test_plugin"
 }
 legacy="$home/.omp/agent/extensions/mxm4-haptic.ts"
@@ -181,6 +184,26 @@ if run_plugins "$scratch/fail.calls" 'plugin enable --scope user mxm4-haptic@h82
   exit 1
 fi
 [[ -f $legacy ]]
+
+# The version gate rejects mismatched, digit-adjacent, and suffixed decoys
+# before any marketplace mutation, and still accepts the bare version form.
+for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.1" "omp/${locked_omp_version}9"; do
+  label=${decoy//[^a-z0-9]/-}
+  if run_plugins "$scratch/version$label.calls" '' "$decoy" >"$scratch/version$label.out" 2>"$scratch/version$label.err"; then
+    printf 'version decoy %s unexpectedly passed preflight\n' "$decoy" >&2
+    exit 1
+  fi
+  grep -F 'preflight: expected omp' "$scratch/version$label.err" >/dev/null
+  if grep -qF 'plugin marketplace add' "$scratch/version$label.calls"; then
+    printf 'version decoy %s reached marketplace mutation\n' "$decoy" >&2
+    exit 1
+  fi
+done
+run_plugins "$scratch/version-bare.calls" '' "$locked_omp_version"
+# The bare-accept run is a full reconcile and removes the legacy sentinel;
+# recreate it so the success runs below still prove their own removal.
+printf 'legacy owner\n' >"$legacy"
+
 run_plugins "$scratch/omp.calls"
 [[ ! -e $legacy ]]
 run_plugins "$scratch/repeat.calls"

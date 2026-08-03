@@ -48,7 +48,7 @@ if (-not $HOME -or -not (Test-Path -LiteralPath $HOME -PathType Container)) { Fa
 if (-not (Get-Command omp -ErrorAction SilentlyContinue)) { Fail 'preflight: omp is not on PATH' }
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { Fail 'preflight: bun loader/hash tool is not on PATH' }
 $ompVersion = (& omp --version 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $ompVersion -notmatch "(^|\s)$([regex]::Escape($expectedOmpVersion))(\s|$)") { Fail "preflight: expected omp $expectedOmpVersion, got $ompVersion" }
+if ($LASTEXITCODE -ne 0 -or $ompVersion -notmatch "(^|[^\d])$([regex]::Escape($expectedOmpVersion))([^\d-]|$)") { Fail "preflight: expected omp $expectedOmpVersion, got $ompVersion" }
 $ompRoot = Join-Path $HOME '.omp'
 $pluginRoot = Join-Path $ompRoot 'plugins'
 $extensionRoot = Split-Path -Parent $legacyExtension

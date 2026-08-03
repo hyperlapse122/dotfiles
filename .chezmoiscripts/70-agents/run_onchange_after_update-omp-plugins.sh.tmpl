@@ -81,7 +81,8 @@ die() { printf 'update-omp-plugins: %s\n' "$*" >&2; exit 1; }
 command -v omp >/dev/null 2>&1 || die 'preflight: omp is not on PATH'
 command -v bun >/dev/null 2>&1 || die 'preflight: bun loader/hash tool is not on PATH'
 omp_version=$(omp --version 2>/dev/null) || die 'preflight: omp --version failed'
-[[ $omp_version =~ (^|[[:space:]])${EXPECTED_OMP_VERSION}([[:space:]]|$) ]] ||
+expected_omp_version_re=${EXPECTED_OMP_VERSION//./\\.}
+[[ $omp_version =~ (^|[^[:digit:]])${expected_omp_version_re}([^[:digit:]-]|$) ]] ||
   die "preflight: expected omp ${EXPECTED_OMP_VERSION}, got ${omp_version}"
 for parent in "$HOME/.omp" "$HOME/.omp/plugins" "$HOME/.omp/agent/extensions"; do
   if [[ -e $parent ]]; then
