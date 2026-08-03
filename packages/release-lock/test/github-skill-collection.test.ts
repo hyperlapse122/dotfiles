@@ -161,8 +161,8 @@ describe("resolveGitHubSkillCollection", () => {
       routes(
         [commit(SHA_1, "Skills v1.0.0 (#1)")],
         tree([
-          { path: "skills/figma-good", mode: "040000", type: "tree" },
-          { path: "skills/figma-good/SKILL.md", mode: "100755", type: "blob" },
+          { path: "skills/figma-good-guide", mode: "040000", type: "tree" },
+          { path: "skills/figma-good-guide/SKILL.md", mode: "100755", type: "blob" },
           { path: "skills/figma-file", mode: "100644", type: "blob" },
           { path: "skills/group", mode: "040000", type: "tree" },
           { path: "skills/group/figma-nested", mode: "040000", type: "tree" },
@@ -175,9 +175,28 @@ describe("resolveGitHubSkillCollection", () => {
     await expect(
       resolveGitHubSkillCollection("figmaSkills", spec, undefined),
     ).resolves.toMatchObject({
-      skills: ["figma-good"],
+      skills: ["figma-good-guide"],
     });
   });
+
+  test.each(["figma--guide", "figma-use--guide"])(
+    "rejects %s because each hyphen must separate non-empty segments",
+    async (name) => {
+      stubGitHub(
+        routes(
+          [commit(SHA_1, "Skills v1.0.0 (#1)")],
+          tree([
+            { path: `skills/${name}`, mode: "040000", type: "tree" },
+            { path: `skills/${name}/SKILL.md`, mode: "100644", type: "blob" },
+          ]),
+        ),
+      );
+
+      await expect(
+        resolveGitHubSkillCollection("figmaSkills", spec, undefined),
+      ).rejects.toThrow(`unsafe Figma skill name: ${name}`);
+    },
+  );
 
   test.each([
     ["missing regular SKILL.md", [{ path: "skills/figma-bad", mode: "040000", type: "tree" }]],

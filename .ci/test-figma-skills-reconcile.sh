@@ -120,7 +120,28 @@ rollback_before=$(snapshot)
 if run_reconcile FIGMA_SKILLS_INJECT_FAILURE=after-first-replacement >"$scratch/rollback.out" 2>"$scratch/rollback.err"; then fail 'rollback injection succeeded'; fi
 [[ $(snapshot) == "$rollback_before" ]] || fail 'handled failure did not restore prior state'
 
+# A hard-killed writer leaves a reclaimable lock and recoverable journal. A
+# second hard kill during rollback must leave every original backup reusable.
+printf 'rollback-original-one\n' >"$live/${skills[0]}/SKILL.md"
+printf 'rollback-original-two\n' >"$live/${skills[1]}/SKILL.md"
+if run_reconcile FIGMA_SKILLS_INJECT_FAILURE=hard-crash-after-first-replacement >"$scratch/hard-crash.out" 2>"$scratch/hard-crash.err"; then
+  fail 'hard-crash injection succeeded'
+fi
+[[ -d $state.lock && -f $state.journal ]] || fail 'hard crash did not preserve lock and journal'
+crash_txn=$(jq -er '.transactionDir' "$state.journal")
+[[ -f $crash_txn/backups/${skills[0]}/SKILL.md && -f $crash_txn/backups/${skills[1]}/SKILL.md ]] || fail 'hard crash did not preserve rollback backups'
+if run_reconcile FIGMA_SKILLS_INJECT_FAILURE=rollback-hard-crash >"$scratch/rollback-crash.out" 2>"$scratch/rollback-crash.err"; then
+  fail 'rollback hard-crash injection succeeded'
+fi
+[[ -d $state.lock && -f $state.journal ]] || fail 'interrupted rollback did not preserve lock and journal'
+[[ -f $crash_txn/backups/${skills[0]}/SKILL.md && -f $crash_txn/backups/${skills[1]}/SKILL.md ]] || fail 'interrupted rollback consumed a backup'
+[[ $(<"$live/${skills[0]}/SKILL.md") == rollback-original-one ]] || fail 'interrupted rollback did not restore its first destination'
+run_reconcile
+[[ ! -e $state.lock && ! -e $state.journal && ! -e $crash_txn ]] || fail 'restartable rollback recovery left transaction metadata'
+grep -q '^# ' "$live/${skills[0]}/SKILL.md" || fail 'post-rollback reconciliation did not converge'
+
 # Pre-commit interruption is rolled back by the next run; post-commit interruption completes cleanup forward.
+printf 'pre-commit drift\n' >"$live/${skills[0]}/SKILL.md"
 if run_reconcile FIGMA_SKILLS_INJECT_FAILURE=pre-commit-crash >"$scratch/pre-crash.out" 2>"$scratch/pre-crash.err"; then fail 'pre-commit crash injection succeeded'; fi
 [[ -f $state.journal ]] || fail 'pre-commit crash left no journal'
 run_reconcile

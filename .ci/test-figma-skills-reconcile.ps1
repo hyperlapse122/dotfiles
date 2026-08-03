@@ -52,6 +52,23 @@ try {
     foreach ($entry in $values.GetEnumerator()) { $saved[$entry.Key] = [Environment]::GetEnvironmentVariable($entry.Key, 'Process'); [Environment]::SetEnvironmentVariable($entry.Key, [string]$entry.Value, 'Process') }
     try { & $script } finally { foreach ($entry in $saved.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') } }
   }
+  function Invoke-CrashedChild([string]$Injection) {
+    $names = @('HOME','FIGMA_SKILLS_ROOT','FIGMA_SKILLS_STAGE','FIGMA_SKILLS_OWNERSHIP','FIGMA_SKILLS_INJECT_FAILURE')
+    $saved = @{}
+    foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+    try {
+      $env:HOME=$fixtureHome
+      $env:FIGMA_SKILLS_ROOT=$live
+      $env:FIGMA_SKILLS_STAGE=$stage
+      $env:FIGMA_SKILLS_OWNERSHIP=$ownership
+      $env:FIGMA_SKILLS_INJECT_FAILURE=$Injection
+      $process = Start-Process -FilePath (Get-Command pwsh -CommandType Application).Source -ArgumentList @('-NoProfile','-NonInteractive','-File',$script) -PassThru
+      $process.WaitForExit()
+      return $process.ExitCode
+    } finally {
+      foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
+    }
+  }
   function Get-Snapshot {
     $rows = foreach ($basePath in @($fixtureHome, (Split-Path -Parent $ownership))) {
       if (Test-Path -LiteralPath $basePath) {
@@ -138,7 +155,16 @@ try {
   $env:HOME=$fixtureHome; $env:FIGMA_SKILLS_ROOT=$live; $env:FIGMA_SKILLS_STAGE=$stage; $env:FIGMA_SKILLS_OWNERSHIP=$ownership; $env:FIGMA_SKILLS_HOLD_LOCK_SECONDS='2'
   $holder = Start-Process -FilePath (Get-Command pwsh -CommandType Application).Source -ArgumentList @('-NoProfile','-NonInteractive','-File',$script) -PassThru
   try {
-    $deadline=[DateTime]::UtcNow.AddSeconds(5); while (-not (Test-Path -LiteralPath "$ownership.lock") -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
+    $observedLock = $false
+    $deadline=[DateTime]::UtcNow.AddSeconds(5)
+    while (-not $observedLock -and [DateTime]::UtcNow -lt $deadline) {
+      try {
+        $probe = [IO.File]::Open("$ownership.lock", [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $probe.Dispose()
+        Start-Sleep -Milliseconds 50
+      } catch { $observedLock = $true }
+    }
+    Assert $observedLock 'lock holder did not acquire the process-lifetime lock'
     $failed=$false; try { Invoke-Reconcile } catch { $failed=$true }; Assert $failed 'exclusive lock admitted a contender'
   } finally { $holder.WaitForExit(); $env:HOME=$oldHome; $env:FIGMA_SKILLS_ROOT=$oldRoot; $env:FIGMA_SKILLS_STAGE=$oldStage; $env:FIGMA_SKILLS_OWNERSHIP=$oldOwnership; $env:FIGMA_SKILLS_HOLD_LOCK_SECONDS=$oldHold }
   Assert ($holder.ExitCode -eq 0) 'lock holder failed'
@@ -146,6 +172,27 @@ try {
   # Handled rollback and phase-aware crash recovery.
   [IO.File]::WriteAllText((Join-Path $live "$($skills[0])/SKILL.md"), 'old-live')
   $rollbackBefore=Get-Snapshot; $failed=$false; try { Invoke-Reconcile @{FIGMA_SKILLS_INJECT_FAILURE='after-first-replacement'} } catch { $failed=$true }; Assert $failed 'rollback injection succeeded'; Assert ((Get-Snapshot) -ceq $rollbackBefore) 'handled failure did not restore prior state'
+
+  # Hard process termination leaves an unlockable journal, and rollback can
+  # itself be interrupted without consuming any sole backup.
+  [IO.File]::WriteAllText((Join-Path $live "$($skills[0])/SKILL.md"), 'rollback-original-one')
+  [IO.File]::WriteAllText((Join-Path $live "$($skills[1])/SKILL.md"), 'rollback-original-two')
+  Assert ((Invoke-CrashedChild 'hard-crash-after-first-replacement') -ne 0) 'hard-crash injection succeeded'
+  Assert (Test-Path -LiteralPath "$ownership.lock" -PathType Leaf) 'hard crash left no persistent lock file'
+  Assert (Test-Path -LiteralPath "$ownership.journal" -PathType Leaf) 'hard crash left no recovery journal'
+  $crashTxn = [string](Get-Content -Raw -LiteralPath "$ownership.journal" | ConvertFrom-Json).transactionDir
+  Assert (Test-Path -LiteralPath (Join-Path $crashTxn "backups/$($skills[0])/SKILL.md") -PathType Leaf) 'hard crash lost first rollback backup'
+  Assert (Test-Path -LiteralPath (Join-Path $crashTxn "backups/$($skills[1])/SKILL.md") -PathType Leaf) 'hard crash lost second rollback backup'
+  Assert ((Invoke-CrashedChild 'rollback-hard-crash') -ne 0) 'rollback hard-crash injection succeeded'
+  Assert (Test-Path -LiteralPath "$ownership.journal" -PathType Leaf) 'interrupted rollback lost recovery journal'
+  Assert (Test-Path -LiteralPath (Join-Path $crashTxn "backups/$($skills[0])/SKILL.md") -PathType Leaf) 'interrupted rollback consumed first backup'
+  Assert (Test-Path -LiteralPath (Join-Path $crashTxn "backups/$($skills[1])/SKILL.md") -PathType Leaf) 'interrupted rollback consumed second backup'
+  Assert ((Get-Content -Raw -LiteralPath (Join-Path $live "$($skills[0])/SKILL.md")) -ceq 'rollback-original-one') 'interrupted rollback did not restore its first destination'
+  Invoke-Reconcile
+  Assert (-not (Test-Path -LiteralPath "$ownership.journal")) 'restartable rollback recovery left a journal'
+  Assert (-not (Test-Path -LiteralPath $crashTxn)) 'restartable rollback recovery left its transaction directory'
+  Assert ((Get-Content -Raw -LiteralPath (Join-Path $live "$($skills[0])/SKILL.md")).StartsWith('# ')) 'post-rollback reconciliation did not converge'
+  [IO.File]::WriteAllText((Join-Path $live "$($skills[0])/SKILL.md"), 'pre-commit drift')
   $failed=$false; try { Invoke-Reconcile @{FIGMA_SKILLS_INJECT_FAILURE='pre-commit-crash'} } catch { $failed=$true }; Assert $failed 'pre-commit crash injection succeeded'; Assert (Test-Path -LiteralPath "$ownership.journal") 'pre-commit crash left no journal'
   Invoke-Reconcile; Assert (-not (Test-Path -LiteralPath "$ownership.journal")) 'pre-commit recovery left a journal'
   [IO.File]::WriteAllText((Join-Path $live "$($skills[0])/SKILL.md"), 'post-commit drift')

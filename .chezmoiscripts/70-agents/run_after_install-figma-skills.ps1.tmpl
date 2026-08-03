@@ -105,14 +105,24 @@ function Read-Journal {
 }
 function Restore-Transaction {
   if (-not $txn -or -not (Test-Path -LiteralPath $txn -PathType Container)) { Fail "cannot roll back missing transaction directory: $txn" }
-  if ($txnPhase -cne 'prepared') {
-    foreach ($name in $touched) { Remove-Item -LiteralPath (Join-Path $root $name) -Recurse -Force -ErrorAction SilentlyContinue }
-  }
   $backups = Join-Path $txn 'backups'
-  if (Test-Path -LiteralPath $backups) {
-    foreach ($backup in @(Get-ChildItem -LiteralPath $backups -Directory | Sort-Object Name)) {
-      Remove-Item -LiteralPath (Join-Path $root $backup.Name) -Recurse -Force -ErrorAction SilentlyContinue
-      Move-Item -LiteralPath $backup.FullName -Destination (Join-Path $root $backup.Name)
+  $restored = 0
+  foreach ($name in $touched) {
+    $backup = Join-Path $backups $name
+    $destination = Join-Path $root $name
+    if (Test-Path -LiteralPath $backup -PathType Container) {
+      $restore = Join-Path $txn "restore.$name"
+      Remove-Item -LiteralPath $restore -Recurse -Force -ErrorAction SilentlyContinue
+      Copy-Item -LiteralPath $backup -Destination $restore -Recurse
+      Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
+      Move-Item -LiteralPath $restore -Destination $destination
+      $restored++
+      if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'rollback-hard-crash' -and $restored -eq 1) {
+        $script:simulateCrash = $true
+        Stop-Process -Id $PID -Force
+      }
+    } elseif ($txnPhase -cne 'prepared') {
+      Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
     }
   }
   $before = Join-Path $txn 'ownership.before'
@@ -165,7 +175,17 @@ try {
   $stateDirectory = Split-Path -Parent $ownership
   New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
   Assert-NoReparseComponents $stateDirectory
-  try { $lockStream = [IO.File]::Open($lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) } catch { Fail "another reconciler holds the root lock: $root" }
+  if (Test-Path -LiteralPath $lockPath) {
+    $lockItem = Get-Item -Force -LiteralPath $lockPath
+    if ($lockItem -isnot [IO.FileInfo] -or ($lockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail "unsafe reconciler lock: $lockPath" }
+  }
+  try { $lockStream = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) } catch { Fail "another reconciler holds the root lock: $root" }
+  $lockItem = Get-Item -Force -LiteralPath $lockPath
+  if ($lockItem -isnot [IO.FileInfo] -or ($lockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    $lockStream.Dispose()
+    $lockStream = $null
+    Fail "unsafe reconciler lock: $lockPath"
+  }
   if ($env:FIGMA_SKILLS_HOLD_LOCK_SECONDS) { Start-Sleep -Seconds ([int]$env:FIGMA_SKILLS_HOLD_LOCK_SECONDS) }
   Recover-Transaction
 
@@ -224,6 +244,10 @@ try {
     Move-Item -LiteralPath (Join-Path $txn "new/$name") -Destination (Join-Path $root $name)
     $count++
     if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'after-first-replacement' -and $count -eq 1) { Fail 'injected failure after first replacement' }
+    if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'hard-crash-after-first-replacement' -and $count -eq 1) {
+      $simulateCrash=$true
+      Stop-Process -Id $PID -Force
+    }
   }
   Write-Journal 'installed'
   if ($env:FIGMA_SKILLS_INJECT_FAILURE -ceq 'pre-commit-crash') { $simulateCrash=$true; Fail 'injected pre-commit crash' }
@@ -243,6 +267,6 @@ try {
       Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
     } else { Restore-Transaction }
   }
-  if ($lockStream) { $lockStream.Dispose(); Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue }
+  if ($lockStream) { $lockStream.Dispose() }
 }
 {{ end -}}

@@ -20,6 +20,7 @@ ownership=${FIGMA_SKILLS_OWNERSHIP:-$DEFAULT_OWNERSHIP}
 journal="$ownership.journal"
 lock="$ownership.lock"
 lock_held=false
+lock_token=
 active=false
 simulate_crash=false
 txn=
@@ -38,7 +39,6 @@ assert_no_symlink_components() {
     [[ -n $part ]] || continue
     current=${current%/}/$part
     [[ ! -L $current ]] || die "unsafe linked path component: $current"
-    [[ ! -e $current || -d $current || $current == "$ownership" ]] || true
   done
 }
 assert_tree() {
@@ -83,17 +83,24 @@ validate_journal_file() {
     die "invalid transaction journal: $journal"
 }
 rollback_txn() {
-  local name
+  local name restore restored=0
   [[ -d $txn && ! -L $txn ]] || die "cannot roll back missing transaction directory: $txn"
-  if [[ $txn_phase != prepared ]]; then
-    while IFS= read -r name; do rm -rf -- "$root/$name"; done < <(jq -r '.[]' <<<"$touched_json")
-  fi
-  if [[ -d $txn/backups ]]; then
-    while IFS= read -r name; do
+  while IFS= read -r name; do
+    restore="$txn/restore.$name"
+    if [[ -d $txn/backups/$name && ! -L $txn/backups/$name ]]; then
+      rm -rf -- "$restore"
+      cp -pR -- "$txn/backups/$name" "$restore"
       rm -rf -- "$root/$name"
-      mv -- "$txn/backups/$name" "$root/$name"
-    done < <(find "$txn/backups" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | LC_ALL=C sort)
-  fi
+      mv -- "$restore" "$root/$name"
+      restored=$((restored + 1))
+      if [[ ${FIGMA_SKILLS_INJECT_FAILURE:-} == rollback-hard-crash && $restored -eq 1 ]]; then
+        simulate_crash=true
+        kill -KILL "$$"
+      fi
+    elif [[ $txn_phase != prepared ]]; then
+      rm -rf -- "$root/$name"
+    fi
+  done < <(jq -r '.[]' <<<"$touched_json")
   if [[ -f $txn/ownership.before ]]; then
     cp -p -- "$txn/ownership.before" "$ownership.rollback.$txn_id"
     mv -f -- "$ownership.rollback.$txn_id" "$ownership"
@@ -127,13 +134,70 @@ recover() {
   fi
   txn= txn_id= txn_phase= touched_json='[]'
 }
+lock_owner_is_live() {
+  local directory=$1 pid expected_start token actual_start
+  [[ -f $directory/owner && ! -L $directory/owner ]] || return 1
+  {
+    IFS= read -r pid
+    IFS= read -r expected_start
+    IFS= read -r token
+  } <"$directory/owner" || return 1
+  [[ $pid =~ ^[0-9]+$ && -n $expected_start && -n $token ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  actual_start=$(ps -p "$pid" -o lstart= 2>/dev/null) || return 1
+  [[ $actual_start == "$expected_start" ]]
+}
+acquire_lock() {
+  local owner_tmp stale marker attempts=0
+  lock_token="$$.${RANDOM:-0}.$(date +%s)"
+  while true; do
+    set -- "$lock".reclaim.*
+    marker=$1
+    if [[ ! -e $lock && -e $marker ]]; then
+      mv -- "$marker" "$lock" 2>/dev/null || true
+      continue
+    fi
+    if mkdir -- "$lock" 2>/dev/null; then
+      set -- "$lock".reclaim.*
+      if [[ -e $1 ]]; then
+        rm -rf -- "$lock"
+        sleep .05
+        continue
+      fi
+      owner_tmp="$lock/owner.tmp.$$"
+      printf '%s\n%s\n%s\n' "$$" "$(ps -p $$ -o lstart=)" "$lock_token" >"$owner_tmp"
+      mv -f -- "$owner_tmp" "$lock/owner"
+      lock_held=true
+      return
+    fi
+    [[ -d $lock && ! -L $lock ]] || die "unsafe reconciler lock: $lock"
+    if lock_owner_is_live "$lock"; then die "another reconciler holds the root lock: $root"; fi
+    if [[ ! -f $lock/owner && $attempts -lt 20 ]]; then
+      attempts=$((attempts + 1))
+      sleep .05
+      continue
+    fi
+    attempts=0
+    stale="$lock.reclaim.$$.$RANDOM"
+    if mv -- "$lock" "$stale" 2>/dev/null; then
+      if lock_owner_is_live "$stale"; then
+        mv -- "$stale" "$lock" 2>/dev/null || die 'lost a live reconciler lock during stale-lock arbitration'
+        die "another reconciler holds the root lock: $root"
+      fi
+      rm -rf -- "$stale"
+    fi
+  done
+}
 cleanup() {
-  local status=$?
+  local status=$? owner_token=
   trap - EXIT ERR INT TERM
   if [[ $active == true && $simulate_crash == false ]]; then
     if [[ $txn_phase == preparing ]]; then rm -rf -- "$txn"; rm -f -- "$journal"; else rollback_txn || status=$?; fi
   fi
-  if [[ $lock_held == true ]]; then rm -rf -- "$lock"; fi
+  if [[ $lock_held == true && -f $lock/owner ]]; then
+    owner_token=$(sed -n '3p' "$lock/owner")
+    if [[ $owner_token == "$lock_token" ]]; then rm -rf -- "$lock"; fi
+  fi
   exit "$status"
 }
 trap cleanup EXIT ERR INT TERM
@@ -144,8 +208,7 @@ assert_no_symlink_components "$root"
 assert_no_symlink_components "$ownership"
 mkdir -p -- "$(dirname -- "$ownership")"
 [[ -d $(dirname -- "$ownership") && ! -L $(dirname -- "$ownership") ]] || die 'unsafe ownership state directory'
-if ! mkdir -- "$lock" 2>/dev/null; then die "another reconciler holds the root lock: $root"; fi
-lock_held=true
+acquire_lock
 if [[ -n ${FIGMA_SKILLS_HOLD_LOCK_SECONDS:-} ]]; then sleep "$FIGMA_SKILLS_HOLD_LOCK_SECONDS"; fi
 recover
 
@@ -208,6 +271,10 @@ for name in "${desired[@]}"; do
   mv -- "$txn/new/$name" "$root/$name"
   count=$((count + 1))
   if [[ ${FIGMA_SKILLS_INJECT_FAILURE:-} == after-first-replacement && $count -eq 1 ]]; then die 'injected failure after first replacement'; fi
+  if [[ ${FIGMA_SKILLS_INJECT_FAILURE:-} == hard-crash-after-first-replacement && $count -eq 1 ]]; then
+    simulate_crash=true
+    kill -KILL "$$"
+  fi
 done
 write_journal installed
 if [[ ${FIGMA_SKILLS_INJECT_FAILURE:-} == pre-commit-crash ]]; then simulate_crash=true; exit 86; fi

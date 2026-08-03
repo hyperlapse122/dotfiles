@@ -69,6 +69,7 @@ expect_rejected empty-inventory "$(jq -c '.releases.tools["figma/mcp-server-guid
 expect_rejected duplicate-inventory "$(jq -c '.releases.tools["figma/mcp-server-guide"].skills=["figma-use","figma-use"]' <<<"$valid_override")"
 expect_rejected unsorted-inventory "$(jq -c '.releases.tools["figma/mcp-server-guide"].skills=["figma-use-motion","figma-use"]' <<<"$valid_override")"
 expect_rejected unsafe-name "$(jq -c '.releases.tools["figma/mcp-server-guide"].skills=["../figma-use"]' <<<"$valid_override")"
+expect_rejected empty-name-segment "$(jq -c '.releases.tools["figma/mcp-server-guide"].skills=["figma-use--guide"]' <<<"$valid_override")"
 
 stanza="$scratch/figma.toml"
 sed -n '/^\["\.local\/share\/figma-skills-stage"\]$/,/^$/p' "$rendered" > "$stanza"

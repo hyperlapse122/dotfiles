@@ -8,7 +8,7 @@ export { ResolutionError };
 const API_ROOT = "https://api.github.com";
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const RELEASE_SUBJECT = /^Skills v([^\s]+) \(#\d+\)$/;
-const SKILL_NAME = /^figma-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const SKILL_NAME = /^figma-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const REGULAR_BLOB_MODES: Readonly<Record<string, true>> = { "100644": true, "100755": true };
 const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com(?:[1-9¹²³])|lpt(?:[1-9¹²³]))(?:\..*)?$/iu;
 const WINDOWS_INVALID = /[<>:"\\|?*\u0000-\u001f\uD800-\uDFFF]/u;
@@ -76,12 +76,13 @@ function parseCandidate(value: unknown): CommitCandidate | null {
   return normalized ? { sha: record["sha"] as string, version: normalized } : null;
 }
 
-async function fetchCandidates(
+async function fetchCandidate(
   source: string,
   token: string | undefined,
-): Promise<CommitCandidate[]> {
+): Promise<CommitCandidate> {
   let url: string | null = `${API_ROOT}/repos/${source}/commits?path=skills%2F&per_page=100`;
-  const candidates: CommitCandidate[] = [];
+  let highest: CommitCandidate | undefined;
+  const tiedShas = new Set<string>();
   const visited = new Set<string>();
   while (url) {
     if (visited.has(url)) throw new ResolutionError(source, "commit pagination contains a cycle");
@@ -92,36 +93,33 @@ async function fetchCandidates(
     }
     for (const value of page.value) {
       const candidate = parseCandidate(value);
-      if (candidate) candidates.push(candidate);
+      if (!candidate) continue;
+
+      const precedence = highest ? compare(candidate.version, highest.version) : 1;
+      if (precedence > 0) {
+        highest = candidate;
+        tiedShas.clear();
+        tiedShas.add(candidate.sha);
+      } else if (precedence === 0) {
+        tiedShas.add(candidate.sha);
+      }
     }
     url = nextPage(page.response.headers.get("link"));
   }
-  return candidates;
-}
 
-function selectCandidate(source: string, evidence: readonly CommitCandidate[]): CommitCandidate {
-  if (evidence.length === 0) {
+  if (!highest) {
     throw new ResolutionError(
       source,
       "no commit has an exact valid Skills v<semver> (#<number>) subject",
     );
   }
-
-  let highest = evidence[0]!;
-  for (const candidate of evidence.slice(1)) {
-    if (compare(candidate.version, highest.version) > 0) highest = candidate;
-  }
-
-  const tied = evidence.filter((candidate) => compare(candidate.version, highest.version) === 0);
-  const distinctShas = [...new Set(tied.map((candidate) => candidate.sha))];
-  if (distinctShas.length > 1) {
+  if (tiedShas.size > 1) {
     throw new ResolutionError(
       source,
       `ambiguous highest semantic version ${highest.version} appears on distinct commits`,
     );
   }
-
-  return tied.find((candidate) => candidate.sha === distinctShas[0])!;
+  return highest;
 }
 
 function parseTreeEntry(source: string, value: unknown): GitHubTreeEntry {
@@ -182,24 +180,24 @@ function inventorySkills(source: string, values: readonly unknown[]): string[] {
     if (entry.type === "tree" && entry.mode === "040000") skills.push(name);
   }
 
-  const sortedSkills = [...skills].sort((a, b) => a.localeCompare(b));
-  if (sortedSkills.length === 0) {
+  skills.sort((a, b) => a.localeCompare(b));
+  if (skills.length === 0) {
     throw new ResolutionError(
       source,
       "selected tree contains no valid immediate figma-* skill directories",
     );
   }
-  if (new Set(sortedSkills).size !== sortedSkills.length) {
+  if (new Set(skills).size !== skills.length) {
     throw new ResolutionError(source, "selected tree contains duplicate Figma skill directories");
   }
 
   const selectedPaths = new Map<string, string>();
   const hasSkillFile = new Set<string>();
+  const skillNames = new Set(skills);
   for (const entry of entries) {
-    const skill = sortedSkills.find(
-      (name) => entry.path === `skills/${name}` || entry.path.startsWith(`skills/${name}/`),
-    );
-    if (!skill) continue;
+    const match = /^skills\/([^/]+)(?:\/|$)/.exec(entry.path);
+    const skill = match?.[1];
+    if (!skill || !skillNames.has(skill)) continue;
 
     validateSelectedPath(source, entry.path);
     const folded = entry.path.toLowerCase();
@@ -222,12 +220,12 @@ function inventorySkills(source: string, values: readonly unknown[]): string[] {
     }
   }
 
-  for (const skill of sortedSkills) {
+  for (const skill of skills) {
     if (!hasSkillFile.has(skill)) {
       throw new ResolutionError(source, `${skill} is missing a regular SKILL.md file`);
     }
   }
-  return sortedSkills;
+  return skills;
 }
 
 async function fetchInventory(
@@ -260,7 +258,7 @@ export async function resolveGitHubSkillCollection(
   spec: ToolSpec,
   token: string | undefined,
 ): Promise<LockedSkillCollection> {
-  const selected = selectCandidate(spec.source, await fetchCandidates(spec.source, token));
+  const selected = await fetchCandidate(spec.source, token);
   const skills = await fetchInventory(spec.source, selected.sha, token);
   return {
     kind: "githubSkillCollection",
