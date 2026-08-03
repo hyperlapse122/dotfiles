@@ -22,15 +22,21 @@ scratch=$(mktemp -d "$scratch_root/vscodium-targets.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 printf '[data]\n' >"$scratch/empty.toml"
 
+override_data() { # override_data <os> <arch>
+  local os_release=
+  [ "$1" != linux ] || os_release=fedora
+  printf '{"chezmoi":{"os":"%s","arch":"%s","osRelease":{"id":"%s"}}}' "$1" "$2" "$os_release"
+}
+
 render() { # render <os> <arch> <file-relative-path> — execute-template from the real source
   chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
-    --override-data "{\"chezmoi\":{\"os\":\"$1\",\"arch\":\"$2\"}}" execute-template \
+    --override-data "$(override_data "$1" "$2")" execute-template \
     <"$repo_root/$3"
 }
 
 managed() { # managed <os> <arch>
   chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
-    --override-data "{\"chezmoi\":{\"os\":\"$1\",\"arch\":\"$2\"}}" managed
+    --override-data "$(override_data "$1" "$2")" managed
 }
 
 expect_line() { # expect_line <haystack-file> <exact-line> <what>
