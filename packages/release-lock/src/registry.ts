@@ -75,12 +75,6 @@ export const REGISTRY: Registry = {
     },
   },
 
-  // Installed on darwin only; every other platform gets jq from a package manager.
-  jq: {
-    kind: "githubRelease",
-    source: "jqlang/jq",
-    asset: ({ os, arch }) => (os === "darwin" ? `jq-macos-${arch}` : null),
-  },
 
   shellcheck: {
     kind: "githubRelease",

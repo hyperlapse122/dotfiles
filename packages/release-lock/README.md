@@ -76,7 +76,7 @@ its source, and — for tools with downloadable artifacts — an `asset` selecto
 returning the upstream filename for a platform. Conventions that matter:
 
 - A selector returns `null` for a platform the tool deliberately does not
-  target (jq is darwin-only here; kitty and aoe skip unsupported platforms).
+  target.
 - `emulatedPlatforms` declares targets upstream genuinely does not build,
   served by the amd64 artifact under emulation and marked `emulated: true` in
   the lock, so an `x86_64` URL under an `arm64` key is deliberate. This is

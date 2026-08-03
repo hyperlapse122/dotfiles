@@ -207,6 +207,7 @@ packages:
         - fd-find  # fast, user-friendly find alternative (fd)
         - jq  # JSON processor for live agent config overlays
         - yq  # YAML/JSON processor (general YAML editing; sibling of jq)
+        - gnupg2  # OpenPGP implementation used for signing and the encrypted secrets cache
         # kdotool: managed by mise (cargo:kdotool — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
@@ -457,6 +458,16 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: 1password-cli, source: onePassword, architectures: { amd64: native, arm64: native } }
         windows: { disposition: managed, owner: winget, identifier: AgileBits.1Password.CLI, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password-cli, source: homebrewCask, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: gpgSuite
+        sentinel: gpg
+        fedora: { disposition: managed, owner: dnf, identifier: gnupg2, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: GnuPG.Gpg4win, source: winget, scope: machine, elevation: admin, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: gnupg, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: jq
+        sentinel: jq
+        fedora: { disposition: managed, owner: dnf, identifier: jq, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: jqlang.jq, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: jq, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
       - id: chrome
         sentinel: google-chrome
         gateClosing: g0

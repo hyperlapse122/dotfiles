@@ -72,7 +72,7 @@ export type VendorName = "claude" | "winbox";
  * Asset selection for one tool.
  *
  * Returns the upstream asset filename for a platform, or null when the tool
- * publishes nothing for it (jq is darwin-only, for example).
+ * publishes nothing for it.
  */
 export type AssetSelector = (platform: Platform, tag: string) => string | null;
 
