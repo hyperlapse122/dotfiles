@@ -124,7 +124,7 @@ exit /b 0
   }
 
   function Count-Calls([string]$Label, [string]$Verb) {
-    $content = Get-Content -LiteralPath (Join-Path $Scratch "log-$Label") -Raw
+    $content = [string](Get-Content -LiteralPath (Join-Path $Scratch "log-$Label") -Raw)
     $matches = [regex]::Matches($content, "(?m)^netsh wlan $Verb ")
     return $matches.Count
   }
