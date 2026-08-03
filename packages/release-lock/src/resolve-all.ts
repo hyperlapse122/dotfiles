@@ -1,6 +1,7 @@
 import { REGISTRY } from "./registry.js";
 import { resolveGitHubRelease } from "./github.js";
 import { resolveGitHubTag } from "./github-tag.js";
+import { resolveGitHubSkillCollection } from "./github-skill-collection.js";
 import { resolveGitLabRelease } from "./gitlab.js";
 import { resolveGitRef } from "./git-ref.js";
 import { resolveNpmPackage } from "./npm.js";
@@ -32,6 +33,7 @@ export type ResolverFn = (
 export const RESOLVERS: Record<ResolverKind, ResolverFn> = {
   githubRelease: resolveGitHubRelease,
   githubTag: resolveGitHubTag,
+  githubSkillCollection: resolveGitHubSkillCollection,
   gitlabRelease: resolveGitLabRelease,
   npm: resolveNpmPackage,
   vendorManifest: resolveVendorManifest,
