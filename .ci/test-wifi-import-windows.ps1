@@ -233,7 +233,9 @@ exit /b 0
     $async = $pipeline.BeginInvoke()
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
     while (-not (Test-Path -LiteralPath (Join-Path $cancelState 'blocked'))) {
-      if ([DateTime]::UtcNow -gt $deadline) { Fail 'cancellation fixture never reached the blocking add' }
+      if ([DateTime]::UtcNow -gt $deadline) {
+        Fail "cancellation fixture never reached the blocking add: state=$($pipeline.InvocationStateInfo.State); log=$(Get-Content "$Scratch/log-cancel" -Raw); errors=$($pipeline.Streams.Error -join ' | ')"
+      }
       Start-Sleep -Milliseconds 100
     }
     $pipeline.Stop()
