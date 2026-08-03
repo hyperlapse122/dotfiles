@@ -441,6 +441,18 @@ agents:
       symbolPreset: nerd
       setupVersion: 1
       defaultThinkingLevel: xhigh
+      # Assert the preferred progress display and tmux scrollback behavior.
+      display.shimmer: 'kitt'
+      display.showTokenUsage: true
+      terminal.showProgress: true
+      tui.scrollbackRebuild: true
+      # Use the native agents skill roots without duplicate compatibility scans.
+      skills.enableCodexUser: false
+      skills.enableClaudeUser: false
+      skills.enableClaudeProject: false
+      # Keep structural search and host desktop control available.
+      astGrep.enabled: true
+      computer.enabled: true
     # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
     # openai-codex, google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
     # via omp /login and are never declared here. This is a TOOL/PROVIDER

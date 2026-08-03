@@ -256,6 +256,13 @@ This repository manages only **Claude**, **Codex**, and **omp**. Removing the
 Pi, Kimi Code, OpenCode, oh-my-openagent, and AGY sources does not delete
 already-deployed host files, installed binaries, or provider-side OAuth grants.
 
+OMP settings are asserted per key from `.chezmoidata/agents.yaml`. The declared
+policy keeps progress, token usage, and tmux scrollback behavior stable. It
+also enables structural search and computer control. Codex-user and
+Claude-user/project compatibility skill scans stay disabled so OMP uses the
+canonical `~/.agents/skills/` and repository `.agents/skills/` roots without
+duplicate discovery.
+
 The following cleanup is optional. Remove only the listed Figma data if the
 retired harnesses are no longer in use:
 

@@ -56,6 +56,8 @@ An agent config file moves to per-key assertion when its vendor writes it during
 
 Repo-scoped agent tooling is a separate category from those user-scoped skills. `.agents/skills/<name>/SKILL.md` at the repository root is a PROJECT skill for agents working in this checkout, discovered by omp's native `agents` provider (`enableAgentsProject`, oh-my-pi `docs/skills.md`). It is dot-prefixed, so chezmoi treats it as internal source and never deploys it; it MUST NOT be confused with `dot_agents/skills/<name>/`, the user-scoped personal-skill source that DOES deploy to `~/.agents/skills/<name>`. `sync-omp-models` is the first such skill: it owns the procedure for changing `agents.omp.settings` model roles, subagent overrides, and fallback chains against omp's role taxonomy and bundled agent frontmatter, and MUST be read before any such edit.
 
+OMP keeps the Codex-user and Claude-user/project compatibility skill providers disabled so they do not duplicate the canonical `~/.agents/skills/` and repository `.agents/skills/` roots. Its structural-search and computer-control tools stay explicitly enabled in `agents.omp.settings`; do not rely on upstream defaults for either capability.
+
 Managed instruction targets are one file per harness, named for the native filename: `CLAUDE.md` for Claude (`dot_claude/`) and `AGENTS.md` for Codex and omp (`dot_codex/`, `dot_omp/private_agent/`). The sibling-`CLAUDE.md` mirror rule does NOT apply to managed files: a managed `AGENTS.md` source MUST NOT gain a `CLAUDE.md` sibling. Deleting a managed source stops management but does not prune an already-deployed target; pruning is a separate explicit decision.
 
 Open Design is a Linux non-container, execution-only integration. The
