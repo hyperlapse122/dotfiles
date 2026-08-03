@@ -387,24 +387,26 @@ EOF
   fi
 }
 
-# macOS: install via Homebrew, bootstrapping Homebrew itself when it is missing
-# (it is the package manager the macOS side of this config assumes — see the
-# /opt/homebrew PATH wiring in dot_config/zsh/dot_zprofile).
-install_macos() {
+# macOS bootstrap is intentionally narrow: Homebrew plus 1Password. The package
+# authority reconciler owns every other formula and cask.
+install_macos() (
+  set -euo pipefail
+  scratch_root=${TMPDIR:-"$HOME/Library/Caches"}
+  scratch=$(mktemp -d "${scratch_root%/}/chezmoi-bootstrap.XXXXXX")
+  trap 'rm -rf -- "$scratch"' EXIT HUP INT TERM
   if ! command -v brew >/dev/null 2>&1; then
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    installer="$scratch/homebrew-install.sh"
+    curl -fsSL 'https://raw.githubusercontent.com/Homebrew/install/39a0c068274254a7658fd9761d59bce9d0e2151f/install.sh' -o "$installer"
+    printf '%s  %s\n' '8ff338091a5e10bb5fc040b38316648110f42feff057ecf9feaab51fd0a13ef9' "$installer" |
+      shasum -a 256 -c - >/dev/null
+    NONINTERACTIVE=1 /bin/bash "$installer"
   fi
-  # Make `brew` usable in this non-login shell for the installs below.
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -x /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
   fi
-
   brew list --cask 1password >/dev/null 2>&1 || brew install --cask 1password
   brew list --cask 1password-cli >/dev/null 2>&1 || brew install --cask 1password-cli
-  brew list mise >/dev/null 2>&1 || brew install mise
-}
+)
 
 case "$(uname -s)" in
   Darwin) install_macos ;;

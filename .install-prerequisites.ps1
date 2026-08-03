@@ -253,9 +253,8 @@ function Install-WingetPackage {
     }
 }
 
-# Windows install path, all via winget: the 1Password desktop app + CLI; Git for
-# Windows + GitHub CLI + Git LFS (chezmoi drives git to fetch .chezmoiexternals);
-# then mise. zsh from the Linux script stays omitted — it is Unix-only.
+# Windows bootstrap is intentionally narrow: native 1Password and its CLI.
+# The package authority reconciler owns every other winget package.
 function Install-Prerequisites {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Stderr 'install-prerequisites.ps1: winget (App Installer) not found on PATH.'
@@ -265,12 +264,6 @@ function Install-Prerequisites {
 
     Install-WingetPackage -Id 'AgileBits.1Password'
     Install-WingetPackage -Id 'AgileBits.1Password.CLI'
-    # Git.Git before GitHub.GitLFS: the Git LFS installer runs `git lfs install`,
-    # which needs git on PATH.
-    Install-WingetPackage -Id 'Git.Git'
-    Install-WingetPackage -Id 'GitHub.cli'
-    Install-WingetPackage -Id 'GitHub.GitLFS'
-    Install-WingetPackage -Id 'jdx.mise'
 
     # winget wrote PATH to the registry but not to this process; re-read it so the
     # tools we just installed resolve for the auth checks below.
