@@ -144,7 +144,7 @@ exit /b 0
   if ((Count-Calls 'dry' 'add') -ne 0) { Fail 'dry-run must not add profiles' }
   if ((Count-Calls 'dry' 'delete') -ne 0) { Fail 'dry-run must not delete profiles' }
   if (-not (Select-String -LiteralPath "$Scratch/out-dry" -SimpleMatch 'would add/update "fixture-ssid-home"' -Quiet)) {
-    Fail 'dry-run must plan the KT HomeHub network'
+    Fail "dry-run must plan the KT HomeHub network: $(Get-Content "$Scratch/out-dry" -Raw)"
   }
   if (-not (Select-String -LiteralPath "$Scratch/out-dry" -SimpleMatch 'cannot carry DNS' -Quiet)) {
     Fail 'dry-run must warn that manifest DNS is ignored on Windows'
