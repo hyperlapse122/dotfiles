@@ -22,6 +22,7 @@ if [[ $(uname -s) != Darwin ]]; then
   exit 0
 fi
 command -v chezmoi >/dev/null 2>&1 || fail "chezmoi not found on PATH"
+chezmoi_bin=$(type -P chezmoi)
 command -v plutil >/dev/null 2>&1 || fail "plutil not found"
 [[ -x /usr/libexec/PlistBuddy ]] || fail "PlistBuddy not found"
 
@@ -55,7 +56,7 @@ chmod 0755 "$scratch/bin/id"
 # Render the deployed-mode tool (os=darwin) with fixture secrets resolved.
 tool="$scratch/import-wifi-1password-macos"
 env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-  chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+  "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
     --destination "$scratch/target" --override-data '{"chezmoi":{"os":"darwin"}}' \
     execute-template \
   <"$repo_root/dot_local/bin/private_executable_import-wifi-1password-macos.sh.tmpl" \
