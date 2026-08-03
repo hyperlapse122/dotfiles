@@ -47,7 +47,7 @@ try {
 $ErrorActionPreference = 'Stop'
 $argsText = $args -join ' '
 Add-Content -LiteralPath $env:OMP_CALLS -Value $argsText
-if ($args.Count -eq 1 -and $args[0] -eq '--version') { Write-Output $env:EXPECTED_OMP_VERSION; exit 0 }
+if ($args.Count -eq 1 -and $args[0] -eq '--version') { if ($env:OMP_STUB_VERSION) { Write-Output $env:OMP_STUB_VERSION } else { Write-Output "omp/$env:EXPECTED_OMP_VERSION" }; exit 0 }
 if ($env:OMP_FAIL_MATCH -and $argsText.Contains($env:OMP_FAIL_MATCH)) { exit 72 }
 $pluginRoot = Join-Path $HOME '.omp\plugins'
 New-Item -ItemType Directory -Force -Path $pluginRoot | Out-Null
@@ -89,10 +89,11 @@ exit 0
   $legacy = Join-Path $managedHome '.omp\agent\extensions\mxm4-haptic.ts'
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacy) | Out-Null
 
-  function Invoke-Reconciler([string]$Label, [string]$FailMatch = '', [bool]$Tamper = $false) {
+  function Invoke-Reconciler([string]$Label, [string]$FailMatch = '', [bool]$Tamper = $false, [string]$StubVersion = '') {
     $env:OMP_CALLS = Join-Path $scratch "$Label.calls"
     $env:OMP_FAIL_MATCH = $FailMatch
     $env:OMP_TAMPER_PAYLOAD = if ($Tamper) { '1' } else { '' }
+    $env:OMP_STUB_VERSION = $StubVersion
     $output = Join-Path $scratch "$Label.out"
     & $hostExe -NoProfile -File $testReconciler *> $output
     return $LASTEXITCODE
@@ -114,6 +115,18 @@ exit 0
   } finally {
     [IO.File]::WriteAllBytes($entry, $entryBytes)
   }
+
+  # The version gate rejects mismatched, digit-adjacent, and suffixed decoys
+  # before any marketplace mutation, and still accepts the bare version form.
+  foreach ($decoy in @('omp/0.0.0', "omp/9$env:EXPECTED_OMP_VERSION", "omp/$env:EXPECTED_OMP_VERSION-rc.1")) {
+    $code = Invoke-Reconciler 'version-reject' '' $false $decoy
+    Assert ($code -ne 0) "version decoy $decoy unexpectedly passed preflight"
+    $rejectOut = Get-Content -Raw -LiteralPath (Join-Path $scratch 'version-reject.out')
+    Assert ($rejectOut -match 'preflight: expected omp') "version decoy $decoy failed for the wrong reason:`n$rejectOut"
+    $rejectCalls = Get-Content -LiteralPath (Join-Path $scratch 'version-reject.calls')
+    Assert ((@($rejectCalls | Where-Object { $_ -match 'plugin marketplace add' })).Count -eq 0) "version decoy $decoy reached marketplace mutation"
+  }
+  Assert ((Invoke-Reconciler 'version-bare' '' $false $env:EXPECTED_OMP_VERSION) -eq 0) 'bare version output failed preflight'
 
   $successCode = Invoke-Reconciler 'success'
   $successOutput = Get-Content -Raw -LiteralPath (Join-Path $scratch 'success.out')
@@ -140,6 +153,6 @@ exit 0
   $env:PATH = $oldPath
   $env:HOME = $oldHome
   $env:USERPROFILE = $oldProfile
-  Remove-Item Env:OMP_CALLS, Env:OMP_FAIL_MATCH, Env:OMP_TAMPER_PAYLOAD, Env:EXPECTED_OMP_VERSION -ErrorAction SilentlyContinue
+  Remove-Item Env:OMP_CALLS, Env:OMP_FAIL_MATCH, Env:OMP_TAMPER_PAYLOAD, Env:EXPECTED_OMP_VERSION, Env:OMP_STUB_VERSION -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
 }
