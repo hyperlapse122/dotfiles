@@ -73,6 +73,14 @@ function Get-PipeAcl([int]$Seconds = 5) {
     } catch [IO.IOException] {
       $lastError = $_.Exception
       Start-Sleep -Milliseconds 100
+    } catch [InvalidOperationException] {
+      # ERROR_PIPE_BUSY (231): every pipe instance is momentarily connected right
+      # after a transport round trip, so the security-descriptor query cannot open
+      # one. The window clears as soon as a client releases; keep polling within
+      # the deadline. Anything else is a real failure and escapes immediately.
+      if ($_.Exception.Message -notmatch 'error code 231\b') { throw }
+      $lastError = $_.Exception
+      Start-Sleep -Milliseconds 100
     }
   } while ([DateTime]::UtcNow -lt $deadline)
   throw $lastError

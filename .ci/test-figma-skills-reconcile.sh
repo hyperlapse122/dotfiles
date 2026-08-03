@@ -45,6 +45,8 @@ run_reconcile() {
     FIGMA_SKILLS_OWNERSHIP="$state" "$@" "$script"
 }
 manifest_skills() { jq -c '.skills' "$state"; }
+# GNU stat (Linux) and BSD stat (macOS) share no mtime flag; try GNU first.
+stat_mtime() { stat -c '%Y:%n' "$@" 2>/dev/null || stat -f '%m:%N' "$@"; }
 snapshot() {
   (cd "$case_root" && find home state -type f -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 sha256sum) 2>/dev/null || true
 }
@@ -60,10 +62,10 @@ done
 
 # True no-op preserves representative mtimes and manifest bytes.
 manifest_before=$(sha256sum "$state")
-mtime_before=$(stat -c '%Y:%n' "$state" "$live/${skills[0]}/SKILL.md")
+mtime_before=$(stat_mtime "$state" "$live/${skills[0]}/SKILL.md")
 run_reconcile
 [[ $(sha256sum "$state") == "$manifest_before" ]] || fail 'no-op rewrote ownership'
-[[ $(stat -c '%Y:%n' "$state" "$live/${skills[0]}/SKILL.md") == "$mtime_before" ]] || fail 'no-op changed mtimes'
+[[ $(stat_mtime "$state" "$live/${skills[0]}/SKILL.md") == "$mtime_before" ]] || fail 'no-op changed mtimes'
 
 # Drift is repaired. A newly desired collision is adopted, and prior-manifest-only retirement removes no unrelated figma-* sibling.
 printf 'tampered\n' >"$live/${skills[0]}/SKILL.md"
