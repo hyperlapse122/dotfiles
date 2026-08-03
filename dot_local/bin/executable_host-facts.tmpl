@@ -318,12 +318,10 @@ printf '  (none — the /etc installer is Linux-only; this host is os={{ $facts.
 # this command exists to prevent.
 printf '## FORCE_* overrides in this environment\n\n'
 any_force=0
-for force in FORCE_NVIDIA; do
-  if [[ "${!force:-0}" == 1 ]]; then
-    printf '  %s=1\n' "$force"
-    any_force=1
-  fi
-done
+if [[ "${FORCE_NVIDIA:-0}" == 1 ]]; then
+  printf '  FORCE_NVIDIA=1\n'
+  any_force=1
+fi
 if [[ "$any_force" -eq 0 ]]; then
   printf '  (none set)\n'
 fi

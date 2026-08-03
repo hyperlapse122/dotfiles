@@ -89,6 +89,7 @@ run_tool() {
 }
 
 count_calls() { # count_calls <label> <verb>
+  local verb=$2
   grep -c "^profiles $verb " "$scratch/log-$1" 2>/dev/null || true
 }
 

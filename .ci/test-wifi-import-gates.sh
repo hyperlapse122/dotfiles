@@ -33,6 +33,7 @@ chmod 0755 "$scratch/bin/op"
 
 render() {
   local os=$1 input=$2 output=$3
+  mkdir -p "$scratch/target-$os"
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
       --destination "$scratch/target-$os" --override-data "{\"chezmoi\":{\"os\":\"$os\"}}" \
@@ -45,36 +46,36 @@ linux_tool=dot_local/bin/private_executable_import-wifi-1password.tmpl
 macos_tool=dot_local/bin/private_executable_import-wifi-1password-macos.sh.tmpl
 windows_tool=dot_local/bin/private_executable_import-wifi-1password.ps1.tmpl
 for path in "$linux_tool" "$macos_tool" "$windows_tool" \
-  dot_local/bin/.chezmoiignore .chezmoidata/networking.yaml \
+  .chezmoiignore .chezmoidata/networking.yaml \
   .ci/fixtures/wifi-secret-handoff/profiles .ci/fixtures/wifi-secret-handoff/netsh.cmd; do
   [[ -f "$repo_root/$path" ]] || fail "missing source surface $path"
 done
 
-# --- platform gates: render dot_local/bin/.chezmoiignore per OS ----------
+# --- platform gates: render the source-root .chezmoiignore per OS --------
 for os in linux darwin windows; do
-  render "$os" "$repo_root/dot_local/bin/.chezmoiignore" "$scratch/ignore-$os"
+  render "$os" "$repo_root/.chezmoiignore" "$scratch/ignore-$os"
 done
 
 # linux: NetworkManager tool deploys; macOS tool and every .ps1 gated out.
-grep -qFx 'import-wifi-1password-macos' "$scratch/ignore-linux" \
+grep -qFx '.local/bin/import-wifi-1password-macos.sh' "$scratch/ignore-linux" \
   || fail "linux ignore must gate import-wifi-1password-macos"
-grep -qFx '*.ps1' "$scratch/ignore-linux" || fail "linux ignore must gate *.ps1"
-grep -qFx 'import-wifi-1password' "$scratch/ignore-linux" \
+grep -qFx '.local/bin/*.ps1' "$scratch/ignore-linux" || fail "linux ignore must gate *.ps1"
+grep -qFx '.local/bin/import-wifi-1password' "$scratch/ignore-linux" \
   && fail "linux ignore must NOT gate import-wifi-1password"
 
 # darwin: macOS tool deploys; Linux tool and every .ps1 gated out.
-grep -qFx 'import-wifi-1password' "$scratch/ignore-darwin" \
+grep -qFx '.local/bin/import-wifi-1password' "$scratch/ignore-darwin" \
   || fail "darwin ignore must gate import-wifi-1password"
-grep -qFx '*.ps1' "$scratch/ignore-darwin" || fail "darwin ignore must gate *.ps1"
-grep -qFx 'import-wifi-1password-macos' "$scratch/ignore-darwin" \
+grep -qFx '.local/bin/*.ps1' "$scratch/ignore-darwin" || fail "darwin ignore must gate *.ps1"
+grep -qFx '.local/bin/import-wifi-1password-macos.sh' "$scratch/ignore-darwin" \
   && fail "darwin ignore must NOT gate import-wifi-1password-macos"
 
 # windows: only .ps1 deploys; both POSIX tools gated out.
-grep -qFx '*' "$scratch/ignore-windows" || fail "windows ignore must gate *"
-grep -qFx '!*.ps1' "$scratch/ignore-windows" || fail "windows ignore must un-gate !*.ps1"
-grep -qFx 'import-wifi-1password' "$scratch/ignore-windows" \
+grep -qFx '.local/bin/*' "$scratch/ignore-windows" || fail "windows ignore must gate *"
+grep -qFx '!.local/bin/*.ps1' "$scratch/ignore-windows" || fail "windows ignore must un-gate !*.ps1"
+grep -qFx '.local/bin/import-wifi-1password' "$scratch/ignore-windows" \
   || fail "windows ignore must gate import-wifi-1password"
-grep -qFx 'import-wifi-1password-macos' "$scratch/ignore-windows" \
+grep -qFx '.local/bin/import-wifi-1password-macos.sh' "$scratch/ignore-windows" \
   || fail "windows ignore must gate import-wifi-1password-macos"
 
 # --- renderability + platform-command identity per OS --------------------

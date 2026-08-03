@@ -161,9 +161,14 @@ done
 # The candidate must not register a default-terminal provider: xdg-terminals/
 # is the resolver path that makes kitty the default, and KDE's
 # TerminalApplication must keep pointing at kitty.
-if ls "$repo_root"/dot_local/share/xdg-terminals/ | grep -qi wezterm; then
-  fail "wezterm entered dot_local/share/xdg-terminals — that path resolves the DEFAULT terminal"
-fi
+for terminal_entry in "$repo_root"/dot_local/share/xdg-terminals/*; do
+  [[ -e "$terminal_entry" ]] || continue
+  case "${terminal_entry##*/}" in
+    *[Ww][Ee][Zz][Tt][Ee][Rr][Mm]*)
+      fail "wezterm entered dot_local/share/xdg-terminals — that path resolves the DEFAULT terminal"
+      ;;
+  esac
+done
 has 'key: TerminalApplication, type: string, value: kitty' "$repo_root/.chezmoidata/kde.yaml" \
   "KDE default terminal no longer points at kitty"
 

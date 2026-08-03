@@ -37,6 +37,23 @@
 .local/bin/encryption-status.ps1
 {{- end }}
 
+# Native ~/.local/bin helpers deploy only where their runtime exists. Keep the
+# gate in this root file: chezmoi reads only the source-root .chezmoiignore.
+{{- if eq .chezmoi.os "windows" }}
+.local/bin/*
+!.local/bin/*.ps1
+{{- else }}
+.local/bin/*.ps1
+{{- end }}
+{{- if ne .chezmoi.os "linux" }}
+.local/bin/host-facts
+.local/bin/import-wifi-1password
+.local/bin/setup-luks-tpm2-unlock.sh
+{{- end }}
+{{- if ne .chezmoi.os "darwin" }}
+.local/bin/import-wifi-1password-macos.sh
+{{- end }}
+
 # VSCodium user state deploys to the NATIVE per-OS location: the XDG path on
 # Linux (dot_config/VSCodium), %APPDATA%\VSCodium on Windows and
 # ~/Library/Application Support/VSCodium on macOS — both covered by the

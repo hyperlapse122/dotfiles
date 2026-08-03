@@ -219,8 +219,9 @@ probe_claim() {
       result=pass; detail="isolated execute-template of $probe_template rendered valid bash; live HOME untouched"
       ;;
     chrome-native-arm64-available|edge-native-arm64-available|onepassword-native-arm64-available)
-      [ "$os" = fedora ] && [ "$arch" = arm64 ] ||
+      if [ "$os" != fedora ] || [ "$arch" != arm64 ]; then
         fail "claim '$claim' is not applicable to $os/$arch"
+      fi
       case "$claim" in
         chrome-*) package=google-chrome-stable ;;
         edge-*) package=microsoft-edge-stable ;;
@@ -237,8 +238,9 @@ probe_claim() {
       fi
       ;;
     cider-native-arm64-available)
-      [ "$os" = fedora ] && [ "$arch" = arm64 ] ||
+      if [ "$os" != fedora ] || [ "$arch" != arm64 ]; then
         fail "claim '$claim' is not applicable to $os/$arch"
+      fi
       if command -v curl >/dev/null 2>&1 &&
           curl -fsSL --max-time 30 https://api.github.com/repos/ciderapp/Cider/releases/latest \
             >"$probe_scratch/cider-release.json" 2>/dev/null &&
@@ -339,8 +341,9 @@ for claim in "${claims[@]}"; do
   esac
 done
 if $has_visual; then
-  [ -n "$proof_file" ] && [ -f "$proof_file" ] ||
+  if [ -z "$proof_file" ] || [ ! -f "$proof_file" ]; then
     fail "requested visual claims require --proof-file"
+  fi
   proof_dir=$(cd -- "$(dirname -- "$proof_file")" && pwd -P) ||
     fail "cannot resolve proof file directory"
   proof_abs="$proof_dir/$(basename -- "$proof_file")"

@@ -20,6 +20,12 @@ scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/vscodium-targets.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
+mkdir -p "$scratch/source/dot_config" "$scratch/source/AppData/Roaming" "$scratch/source/Library/Application Support" "$scratch/source/.chezmoiscripts"
+cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/.chezmoiignore" "$scratch/source/"
+cp -a "$repo_root/dot_config/VSCodium" "$scratch/source/dot_config/"
+cp -a "$repo_root/AppData/Roaming/VSCodium" "$scratch/source/AppData/Roaming/"
+cp -a "$repo_root/Library/Application Support/VSCodium" "$scratch/source/Library/Application Support/"
+cp -a "$repo_root/.chezmoiscripts/30-linux" "$repo_root/.chezmoiscripts/30-windows" "$scratch/source/.chezmoiscripts/"
 printf '[data]\n' >"$scratch/empty.toml"
 
 override_data() { # override_data <os> <arch>
@@ -35,7 +41,7 @@ render() { # render <os> <arch> <file-relative-path> — execute-template from t
 }
 
 managed() { # managed <os> <arch>
-  chezmoi --config "$scratch/empty.toml" --source "$repo_root" --refresh-externals=never \
+  chezmoi --config "$scratch/empty.toml" --source "$scratch/source" --refresh-externals=never \
     --override-data "$(override_data "$1" "$2")" managed
 }
 
@@ -100,16 +106,16 @@ reject_match "$scratch/ignore-darwin" './Library' 'darwin must keep Library'
 # Every OS target must render byte-identical settings (shared template) and
 # keybindings (literal include), under every OS context.
 for os_arch in 'linux amd64' 'windows amd64' 'darwin arm64'; do
-  set -- $os_arch
-  render "$1" "$2" dot_config/VSCodium/User/settings.json.tmpl >"$scratch/settings-ref"
-  render "$1" "$2" AppData/Roaming/VSCodium/User/settings.json.tmpl >"$scratch/settings-win"
-  render "$1" "$2" 'Library/Application Support/VSCodium/User/settings.json.tmpl' >"$scratch/settings-mac"
-  cmp "$scratch/settings-ref" "$scratch/settings-win" || { echo "settings drift: windows wrapper ($1)" >&2; exit 1; }
-  cmp "$scratch/settings-ref" "$scratch/settings-mac" || { echo "settings drift: darwin wrapper ($1)" >&2; exit 1; }
-  render "$1" "$2" AppData/Roaming/VSCodium/User/keybindings.json.tmpl >"$scratch/keys-win"
-  render "$1" "$2" 'Library/Application Support/VSCodium/User/keybindings.json.tmpl' >"$scratch/keys-mac"
-  cmp "$repo_root/dot_config/VSCodium/User/keybindings.json" "$scratch/keys-win" || { echo "keybindings drift: windows wrapper ($1)" >&2; exit 1; }
-  cmp "$repo_root/dot_config/VSCodium/User/keybindings.json" "$scratch/keys-mac" || { echo "keybindings drift: darwin wrapper ($1)" >&2; exit 1; }
+  read -r os arch <<<"$os_arch"
+  render "$os" "$arch" dot_config/VSCodium/User/settings.json.tmpl >"$scratch/settings-ref"
+  render "$os" "$arch" AppData/Roaming/VSCodium/User/settings.json.tmpl >"$scratch/settings-win"
+  render "$os" "$arch" 'Library/Application Support/VSCodium/User/settings.json.tmpl' >"$scratch/settings-mac"
+  cmp "$scratch/settings-ref" "$scratch/settings-win" || { echo "settings drift: windows wrapper ($os)" >&2; exit 1; }
+  cmp "$scratch/settings-ref" "$scratch/settings-mac" || { echo "settings drift: darwin wrapper ($os)" >&2; exit 1; }
+  render "$os" "$arch" AppData/Roaming/VSCodium/User/keybindings.json.tmpl >"$scratch/keys-win"
+  render "$os" "$arch" 'Library/Application Support/VSCodium/User/keybindings.json.tmpl' >"$scratch/keys-mac"
+  cmp "$repo_root/dot_config/VSCodium/User/keybindings.json" "$scratch/keys-win" || { echo "keybindings drift: windows wrapper ($os)" >&2; exit 1; }
+  cmp "$repo_root/dot_config/VSCodium/User/keybindings.json" "$scratch/keys-mac" || { echo "keybindings drift: darwin wrapper ($os)" >&2; exit 1; }
 done
 # The rendered settings stay valid JSON.
 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$scratch/settings-ref"
