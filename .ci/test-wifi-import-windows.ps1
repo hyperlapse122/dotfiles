@@ -114,7 +114,7 @@ exit /b 0
       }
       $escapedTool = $Tool -replace "'", "''"
       $argumentText = $ToolArgs -join ' '
-      & $PwshExe -NoProfile -Command "& '$escapedTool' $argumentText -WirelessInterfaceProvider $provider" > $out 2>&1
+      & $PwshExe -NoProfile -Command "& '$escapedTool' $argumentText -WirelessInterfaceProvider $provider" *> $out
       $script:ToolRc = $LASTEXITCODE
     } finally {
       foreach ($name in $saved.Keys) {
