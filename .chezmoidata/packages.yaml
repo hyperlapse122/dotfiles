@@ -62,6 +62,7 @@
 # driver repos and package set). See the closing note in
 # .chezmoidata/facts.yaml for why it must never move into the shared partial.
 packages:
+  schemaVersion: 2
   linux:
     # ------------------------------------------------------------------------
     # Distro-independent shared package lists. flatpaks and dotnetTools are NOT
@@ -204,7 +205,6 @@ packages:
         - btop  # interactive resource/process monitor
         - chezmoi  # declarative dotfiles manager (manages this repo)
         - fd-find  # fast, user-friendly find alternative (fd)
-        - gh  # GitHub CLI
         - jq  # JSON processor for live agent config overlays
         - yq  # YAML/JSON processor (general YAML editing; sibling of jq)
         # kdotool: managed by mise (cargo:kdotool — see dot_config/mise/config.toml)
@@ -386,3 +386,173 @@ packages:
           rpms:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
             aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
+
+  # Package authority v2. The Fedora installer continues to consume the legacy
+  # lists above; this inventory is the validated cross-platform ownership ledger
+  # that U5's native emitters will consume. Architecture names are normalized to
+  # the values chezmoi exposes rather than manager-specific spellings.
+  authority:
+    supportedArchitectures:
+      fedora: [amd64, arm64]
+      windows: [amd64, arm64]
+      macos: [arm64]
+    releaseGates:
+      g0: closed
+    sources:
+      - name: fedora
+        backend: dnf
+        origin: https://mirrors.fedoraproject.org/metalink
+        trusted: true
+      - name: onePassword
+        backend: dnf
+        origin: https://downloads.1password.com/linux/rpm/stable/$basearch
+        trusted: true
+      - name: vscodium
+        backend: dnf
+        origin: https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
+        trusted: true
+      - name: googleChrome
+        backend: dnf
+        origin: https://dl.google.com/linux/chrome/rpm/stable/x86_64
+        trusted: true
+      - name: cider
+        backend: dnf
+        origin: https://repo.cider.sh/rpm/RPMS
+        trusted: true
+      - name: microsoftEdge
+        backend: dnf
+        origin: https://packages.microsoft.com/yumrepos/edge
+        trusted: true
+      - name: flathub
+        backend: flatpak
+        origin: https://dl.flathub.org/repo/flathub.flatpakrepo
+        trusted: true
+      - name: winget
+        backend: winget
+        sourceType: predefined
+        origin: https://cdn.winget.microsoft.com/cache
+        trusted: true
+      - name: homebrewCore
+        backend: homebrew
+        origin: https://github.com/Homebrew/homebrew-core.git
+        trusted: true
+      - name: homebrewCask
+        backend: homebrew
+        origin: https://github.com/Homebrew/homebrew-cask.git
+        trusted: true
+
+    # A capability has exactly one delivery owner on each OS. Non-managed
+    # dispositions still carry complete architecture coverage so absence cannot
+    # silently masquerade as support.
+    capabilities:
+      - id: onePasswordDesktop
+        sentinel: 1password
+        bootstrap: true
+        fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: AgileBits.1Password, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: onePasswordCli
+        sentinel: op
+        bootstrap: true
+        fedora: { disposition: managed, owner: dnf, identifier: 1password-cli, source: onePassword, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: AgileBits.1Password.CLI, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password-cli, source: homebrewCask, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: chrome
+        sentinel: google-chrome
+        gateClosing: g0
+        fedora: { disposition: managed, owner: dnf, identifier: google-chrome-stable, source: googleChrome, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: Google.Chrome, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: google-chrome, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: cider
+        sentinel: cider
+        gateClosing: g0
+        fedora: { disposition: managed, owner: dnf, identifier: Cider, source: cider, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: CiderCollective.Cider, source: winget, scope: user, elevation: none, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: cider, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: edge
+        sentinel: microsoft-edge
+        gateClosing: g0
+        fedora: { disposition: managed, owner: dnf, identifier: microsoft-edge-stable, source: microsoftEdge, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: Microsoft.Edge, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: microsoft-edge, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: vscodium
+        sentinel: codium
+        fedora: { disposition: managed, owner: dnf, identifier: codium, source: vscodium, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: VSCodium.VSCodium, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: vscodium, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: githubCli
+        sentinel: gh
+        integrity: checksum
+        fedora: { disposition: managed, owner: external, identifier: gh, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: external, identifier: gh, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: external, identifier: gh, architectures: { arm64: native } }
+      - id: powershell
+        sentinel: pwsh
+        fedora: { disposition: managed, owner: dotnet, identifier: powershell, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Microsoft.PowerShell, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: powershell, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: discord
+        sentinel: discord
+        fedora: { disposition: managed, owner: flatpak, identifier: com.discordapp.Discord, source: flathub, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Discord.Discord, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: discord, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: telegram
+        sentinel: telegram-desktop
+        fedora: { disposition: managed, owner: flatpak, identifier: org.telegram.desktop, source: flathub, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Telegram.TelegramDesktop, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: telegram, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: teamviewer
+        sentinel: teamviewer
+        fedora: { disposition: managed, owner: directRpm, identifier: teamviewer, integrity: signature, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: TeamViewer.TeamViewer, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: teamviewer, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: tailscale
+        sentinel: tailscale
+        fedora: { disposition: managed, owner: dnf, identifier: tailscale, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Tailscale.Tailscale, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: tailscale-app, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: virtualBox
+        sentinel: VBoxManage
+        fedora: { disposition: managed, owner: dnf, identifier: VirtualBox-7.2, source: fedora, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: Oracle.VirtualBox, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: virtualbox, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: obsStudio
+        sentinel: obs
+        fedora: { disposition: managed, owner: dnf, identifier: obs-studio, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: OBSProject.OBSStudio, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: obs, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: containerRuntime
+        sentinel: podman
+        fedora: { disposition: managed, owner: dnf, identifier: podman, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: RedHat.Podman, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: podman, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: steam
+        sentinel: steam
+        legacyGroup: bareMetalPackages
+        gate: "!virt"
+        fedora: { disposition: managed, owner: dnf, identifier: steam, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Valve.Steam, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: steam, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: koreanInput
+        sentinel: fcitx5
+        fedora: { disposition: managed, owner: dnf, identifier: fcitx5-hangul, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: notApplicable, reason: native Windows Korean IME, architectures: { amd64: notApplicable, arm64: notApplicable } }
+        macos: { disposition: notApplicable, reason: native macOS Korean input source, architectures: { arm64: notApplicable } }
+      - id: logitechGestures
+        sentinel: solaar
+        fedora: { disposition: managed, owner: dnf, identifier: solaar, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Logitech.OptionsPlus, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64, manual: profile }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: logi-options-plus, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native }, manual: profile }
+      - id: nvidiaCompute
+        sentinel: nvidia-smi
+        legacyGroup: nvidiaPackages
+        gate: nvidia
+        fedora: { disposition: managed, owner: dnf, identifier: cuda-drivers, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: vendor driver is hardware-specific, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: notApplicable, reason: supported Apple silicon has no NVIDIA GPU, architectures: { arm64: notApplicable } }
+      - id: kittyTerminal
+        sentinel: kitty
+        integrity: checksum
+        fedora: { disposition: managed, owner: releaseLock, identifier: kitty, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { amd64: unresolved, arm64: unresolved } }
+        macos: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { arm64: unresolved } }

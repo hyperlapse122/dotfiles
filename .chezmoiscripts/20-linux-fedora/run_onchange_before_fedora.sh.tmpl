@@ -9,6 +9,9 @@
       "ctx"    .
       "source" ".chezmoidata/packages.yaml (packages.linux.fedora.gates)"
       "gates"  (values .packages.linux.fedora.gates)) -}}
+{{- /* Validate the complete cross-platform authority before any manager body
+   can render. U5's native emitters reuse this same partial. */ -}}
+{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
 {{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
 #!/usr/bin/env bash
 
