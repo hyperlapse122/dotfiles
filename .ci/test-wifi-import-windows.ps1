@@ -84,6 +84,21 @@ exit /b 0
   if ($rendered -notmatch [regex]::Escape('fixture-psk-home')) { Fail 'render did not resolve op:// password refs' }
   if ($rendered -notmatch [regex]::Escape('fixture-ssid-home')) { Fail 'render did not resolve op:// ssid refs' }
 
+  # The production manifest currently declares no Windows priority. Add
+  # fixture-only ranks to the rendered copy so typed, localized interface
+  # discovery and profile-order calls stay covered without changing user data.
+  $rendered = [regex]::Replace(
+    $rendered,
+    '("ssid"\s*:\s*"fixture-ssid-home"\s*,)',
+    '$1' + "`n      `"priority`": 10,"
+  )
+  $rendered = [regex]::Replace(
+    $rendered,
+    '("ssid"\s*:\s*"fixture-ssid-cps"\s*,)',
+    '$1' + "`n      `"priority`": 5,"
+  )
+  [IO.File]::WriteAllText($Tool, $rendered)
+
   # Fake netsh shadows the real one on PATH for every tool run below.
   Copy-Item -LiteralPath (Join-Path $Fixtures 'netsh.cmd') -Destination (Join-Path $Scratch 'bin/netsh.cmd')
   $toolBin = Join-Path $Scratch 'bin'
