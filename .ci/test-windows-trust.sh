@@ -42,6 +42,8 @@ function global:icacls { $global:LASTEXITCODE = 0 }
 function global:op {
     $index = [Array]::IndexOf($args, '--out-file')
     [IO.File]::WriteAllText($args[$index + 1], 'PRIVATE TEST FIXTURE')
+    if ($env:OP_FAILURE -eq 'interrupt') { throw [Management.Automation.PipelineStoppedException]::new() }
+    if ($env:OP_FAILURE -eq 'cancel') { throw [OperationCanceledException]::new('fixture cancellation') }
     $global:LASTEXITCODE = 0
 }
 function global:gpg {
@@ -63,6 +65,15 @@ $env:FIXTURE_FINGERPRINT = 'BADFINGERPRINT'
 try { . $env:GPG_SCRIPT; throw 'fingerprint mismatch was accepted' }
 catch { if ($_.Exception.Message -notmatch 'fingerprint mismatch') { throw } }
 Assert-Clean
+$env:OP_FAILURE = 'interrupt'
+try { . $env:GPG_SCRIPT; throw 'interruption was accepted' }
+catch { if ($_ -isnot [Management.Automation.PipelineStoppedException]) { throw } }
+Assert-Clean
+$env:OP_FAILURE = 'cancel'
+try { . $env:GPG_SCRIPT; throw 'cancellation was accepted' }
+catch { if ($_ -isnot [OperationCanceledException]) { throw } }
+Assert-Clean
+$env:OP_FAILURE = ''
 $env:FIXTURE_FINGERPRINT = $expected
 $env:FAIL_IMPORT = '1'
 try { . $env:GPG_SCRIPT; throw 'GPG import failure was accepted' }
