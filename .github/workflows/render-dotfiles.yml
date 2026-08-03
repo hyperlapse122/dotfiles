@@ -685,16 +685,13 @@ jobs:
           "${GITHUB_WORKSPACE}/.ci/smoke-agent-plugin-installer.sh" \
             "${rendered}" "${RUNNER_TEMP}/agent-plugin-smoke"
 
-      - name: Assert mxm4-haptic rows are linux-only (absent on macos)
+      - name: Assert mxm4-haptic plugin rows render on macos
         run: |
           set -euo pipefail
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
           test -f "${rendered}"
-          # The mxm4-haptic marketplaces are os:[linux]; their rows must NOT render on macos.
-          if grep -qE '"(claude|codex):mxm4-haptic:' "${rendered}"; then
-            echo "mxm4-haptic plugin row leaked into the macos render (marketplace is os:[linux])" >&2
-            exit 1
-          fi
+          grep -qE '"claude:mxm4-haptic:dotfiles:localDir:' "${rendered}"
+          grep -qE '"codex:mxm4-haptic:dotfiles-codex:localDir:' "${rendered}"
 
       - name: Upload rendered internals
         if: always()

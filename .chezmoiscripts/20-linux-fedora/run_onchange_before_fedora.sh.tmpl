@@ -12,7 +12,7 @@
 {{- /* Validate the complete cross-platform authority before any manager body
    can render. U5's native emitters reuse this same partial. */ -}}
 {{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
-{{ if eq (printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id) "linux-fedora" -}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 #!/usr/bin/env bash
 
 set -euo pipefail

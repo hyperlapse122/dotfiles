@@ -209,3 +209,4 @@ Write-Output 'ok'
 } finally {
   Remove-Item -Recurse -Force $scratch -ErrorAction SilentlyContinue
 }
+exit 0

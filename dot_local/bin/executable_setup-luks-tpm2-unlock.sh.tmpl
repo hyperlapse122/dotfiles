@@ -284,7 +284,7 @@ update_crypttab() {
 # helper/state above (SUDO, DRY_RUN, CHANGED, TPM2_PCRS, WITH_RECOVERY_KEY,
 # log_*, err, require_cmd, update_crypttab, ...).
 # ---------------------------------------------------------------------------
-{{ if eq .chezmoi.osRelease.id "fedora" -}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{ include (joinPath .chezmoi.sourceFile ".." ".setup-luks-tpm2-unlock_dracut.sh") -}}
 {{ else -}}
 # No supported backend on this host (not Fedora). Define no-op hooks so
