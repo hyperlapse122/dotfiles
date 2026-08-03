@@ -176,7 +176,7 @@ exit /b 0
   }
   Assert-NoLeak 'real'
   if ((Count-Calls 'real' 'set') -ne 2) {
-    Fail 'localized typed wireless interface discovery must apply both profile priorities'
+    Fail "localized typed wireless interface discovery must apply both profile priorities: $(Get-Content "$Scratch/log-real" -Raw)"
   }
 
   # --- scenario 3: --force deletes before adding ---------------------------
