@@ -19,7 +19,10 @@ printf '[data]\n' >"$scratch/empty.toml"
 mkdir -p "$scratch/bin" "$scratch/nobin"
 
 # The declared managed set, straight from the authority.
-mapfile -t DECLARED < <(sed -n 's/^    - //p' "$repo_root/.chezmoidata/vscodium.yaml")
+DECLARED=()
+while IFS= read -r extension; do
+  DECLARED+=("$extension")
+done < <(sed -n 's/^    - //p' "$repo_root/.chezmoidata/vscodium.yaml")
 ((${#DECLARED[@]} > 0)) || { echo 'no extensions parsed from vscodium.yaml' >&2; exit 1; }
 
 # A codium-less PATH for the soft-skip case (only the tools the scripts need).
