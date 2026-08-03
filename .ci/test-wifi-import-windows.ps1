@@ -89,13 +89,13 @@ exit /b 0
   # discovery and profile-order calls stay covered without changing user data.
   $rendered = [regex]::Replace(
     $rendered,
-    '("ssid"\s*:\s*"fixture-ssid-home"\s*,)',
-    '$1' + "`n      `"priority`": 10,"
+    '("ssid"\s*:\s*"fixture-ssid-home")',
+    '$1' + ', "priority": 10'
   )
   $rendered = [regex]::Replace(
     $rendered,
-    '("ssid"\s*:\s*"fixture-ssid-cps"\s*,)',
-    '$1' + "`n      `"priority`": 5,"
+    '("ssid"\s*:\s*"fixture-ssid-cps")',
+    '$1' + ', "priority": 5'
   )
   [IO.File]::WriteAllText($Tool, $rendered)
 
