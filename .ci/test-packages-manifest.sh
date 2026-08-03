@@ -30,7 +30,7 @@ mutate() {
   node - "$root/.chezmoidata/packages.yaml" "$old" "$new" "$count" <<'JS'
 const fs = require("node:fs");
 const [path, oldText, newText, rawCount] = process.argv.slice(2);
-let text = fs.readFileSync(path, "utf8");
+let text = fs.readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 if (!text.includes(oldText)) throw new Error(`fixture text not found: ${JSON.stringify(oldText)}`);
 let count = Number(rawCount);
 while (count-- > 0) text = text.replace(oldText, newText);
