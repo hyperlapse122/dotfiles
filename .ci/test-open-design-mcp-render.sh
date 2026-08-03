@@ -58,7 +58,7 @@ harness_fixture='{"agents":{"mcp":{"servers":[
 assert_names "$(render_servers linux false claude "$harness_fixture")" everywhere not-omp
 assert_names "$(render_servers linux false omp "$harness_fixture")" everywhere
 
-# The real inventory declares Open Design only after its managed `od` wrapper
+# The real inventory declares Open Design only after its managed `open-design` wrapper
 # exists, and the common gate omits it outside a Linux host runtime.
 render_real() {
   local os=$1
@@ -72,7 +72,7 @@ real_linux=$(render_real linux false)
 jq -e '.[] | select(
   .name == "open-design" and
   .transport == "stdio" and
-  .command == "od" and
+  .command == "open-design" and
   .args == ["mcp"] and
   .os == ["linux"] and
   .container == "skip"
@@ -129,7 +129,7 @@ for entry in "${consumers[@]}"; do
   if [[ $consumer_name == agents.toml ]]; then
     if [[ $open_design_eligible == true ]]; then
       grep -F 'name = "open-design"' "$output" >/dev/null
-      grep -F 'command = "od"' "$output" >/dev/null
+      grep -F 'command = "open-design"' "$output" >/dev/null
       grep -F 'args = ["mcp"]' "$output" >/dev/null
     elif grep -F 'name = "open-design"' "$output" >/dev/null; then
       printf 'Open Design MCP rendered in ineligible agents.toml\n' >&2
@@ -147,8 +147,8 @@ for entry in "${consumers[@]}"; do
       ] as $servers
       | ($servers | length) == 1
         and (
-          ($servers[0].command == "od" and $servers[0].args == ["mcp"])
-          or $servers[0].command == ["od", "mcp"]
+          ($servers[0].command == "open-design" and $servers[0].args == ["mcp"])
+          or $servers[0].command == ["open-design", "mcp"]
         )
     ' "$output" >/dev/null
   elif jq -e '

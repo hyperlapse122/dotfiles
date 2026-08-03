@@ -76,7 +76,7 @@ agents:
       - all
     - name: open-design
       transport: stdio
-      command: od
+      command: open-design
       args:
       - mcp
       os:

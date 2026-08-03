@@ -5,7 +5,7 @@ launcher=${1:?usage: test-open-design-activation.sh SERVICE_LAUNCHER RENDERED_UN
 unit=${2:?usage: test-open-design-activation.sh SERVICE_LAUNCHER RENDERED_UNIT [ENSURE_SERVICE OD_WRAPPER]}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 ensure_source=${3:-"$repo_root/dot_local/libexec/open-design/executable_ensure-service"}
-wrapper_source=${4:-"$repo_root/dot_local/bin/executable_od"}
+wrapper_source=${4:-"$repo_root/dot_local/bin/executable_open-design"}
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/open-design-activation.XXXXXX")
@@ -21,8 +21,8 @@ mkdir -p "$fake_bin" "$source_dir/.git" \
   "$test_home/.local/libexec/open-design" "$test_home/.local/bin" "$scratch/runtime"
 chmod 0700 "$scratch/runtime"
 cp "$ensure_source" "$test_home/.local/libexec/open-design/ensure-service"
-cp "$wrapper_source" "$test_home/.local/bin/od"
-chmod 0755 "$test_home/.local/libexec/open-design/ensure-service" "$test_home/.local/bin/od"
+cp "$wrapper_source" "$test_home/.local/bin/open-design"
+chmod 0755 "$test_home/.local/libexec/open-design/ensure-service" "$test_home/.local/bin/open-design"
 printf '%s\n' v0.15.1 >"$root/successful-release"
 printf '%s\n' v0.15.1 >"$source_dir/.fake-head"
 printf '%s\n' 'https://github.com/nexu-io/open-design.git' >"$source_dir/.fake-origin"
@@ -264,7 +264,7 @@ set -e
 [[ $status -ne 0 ]]
 grep -F 'runtime directory is missing or unsafe' "$scratch/runtime.err"
 
-# The od wrapper captures the preflight's sole stdout line, exports the exact
+# The open-design wrapper captures the preflight's sole stdout line, exports the exact
 # daemon/data/IPC contract, and execs the upstream Node CLI without consuming
 # stdin or adding bytes to stdout.
 : >"$log"
@@ -273,8 +273,8 @@ tool_call='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_s
 printf '%s\n%s\n' "$initialize" "$tool_call" |
   env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
     PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" DAEMON_READY=false \
-    "$test_home/.local/bin/od" mcp --example \
-    >"$scratch/od.out" 2>"$scratch/od.err"
+    "$test_home/.local/bin/open-design" mcp --example \
+    >"$scratch/open-design.out" 2>"$scratch/open-design.err"
 jq -se '
   length == 2 and
   .[0].jsonrpc == "2.0" and
@@ -284,8 +284,8 @@ jq -se '
   .[1].id == 2 and
   .[1].result.isError == true and
   (.[1].result.content[0].text | contains("daemon is unreachable"))
-' "$scratch/od.out" >/dev/null
-grep -Fx 'upstream-stderr' "$scratch/od.err"
+' "$scratch/open-design.out" >/dev/null
+grep -Fx 'upstream-stderr' "$scratch/open-design.err"
 grep -F 'node@24 -- node' "$log"
 grep -F 'apps/daemon/bin/od.mjs mcp --example ' "$log"
 grep -F "OD_DATA_DIR=$test_home/.od" "$log"
@@ -293,7 +293,7 @@ grep -F 'OD_DAEMON_URL=http://127.0.0.1:43909' "$log"
 grep -F "OD_SIDECAR_IPC_BASE=$scratch/runtime/open-design/ipc" "$log"
 grep -F "OD_SIDECAR_IPC_PATH=$scratch/runtime/open-design/ipc/default/daemon.sock" "$log"
 if grep -E '^(curl|sleep) ' "$log"; then
-  printf 'od mcp waited for daemon readiness before initialize\n' >&2
+  printf 'open-design mcp waited for daemon readiness before initialize\n' >&2
   exit 1
 fi
 
@@ -302,7 +302,7 @@ fi
 set +e
 env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
   PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" UPSTREAM_EXIT=23 \
-  "$test_home/.local/bin/od" --version \
+  "$test_home/.local/bin/open-design" --version \
   </dev/null >"$scratch/exit.out" 2>"$scratch/exit.err"
 status=$?
 set -e
@@ -317,7 +317,7 @@ upstream_line=$(grep -n -m1 '^argv=.*apps/daemon/bin/od.mjs' "$log" | cut -d: -f
 set +e
 env HOME="$test_home" XDG_RUNTIME_DIR="$scratch/runtime" \
   PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" SYSTEMCTL_START_FAIL=1 \
-  "$test_home/.local/bin/od" mcp \
+  "$test_home/.local/bin/open-design" mcp \
   </dev/null >"$scratch/start-fail.out" 2>"$scratch/start-fail.err"
 status=$?
 set -e

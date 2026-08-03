@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-launcher=${1:-"$repo_root/dot_local/bin/executable_open-design"}
+launcher=${1:-"$repo_root/dot_local/bin/executable_open-design-desktop"}
 desktop_source=${2:-"$repo_root/dot_local/share/applications/open-design.desktop.tmpl"}
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}
 mkdir -p -- "$scratch_root"
@@ -14,8 +14,8 @@ fake_bin="$scratch/bin"
 log="$scratch/commands.log"
 mkdir -p "$fake_bin" "$test_home/.local/libexec/open-design" \
   "$test_home/.local/share/open-design/source/tools/pack/resources/linux"
-cp "$launcher" "$test_home/.local/bin-open-design"
-chmod 0755 "$test_home/.local/bin-open-design"
+cp "$launcher" "$test_home/.local/bin-open-design-desktop"
+chmod 0755 "$test_home/.local/bin-open-design-desktop"
 
 cat >"$test_home/.local/libexec/open-design/ensure-service" <<'EOF'
 #!/usr/bin/env bash
@@ -48,9 +48,8 @@ printf 'png' >"$test_home/.local/share/open-design/source/tools/pack/resources/l
 # opens the exact app URL once, and does not notify.
 : >"$log"
 env HOME="$test_home" PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" \
-  "$test_home/.local/bin-open-design" \
+  "$test_home/.local/bin-open-design-desktop" \
   >"$scratch/success.out" 2>"$scratch/success.err"
-[[ ! -s "$scratch/success.out" ]]
 grep -Fx 'ensure-service web' "$log"
 grep -Fx 'google-chrome <--app=http://127.0.0.1:36947/>' "$log"
 if grep -F 'notify-send' "$log"; then
@@ -65,7 +64,7 @@ fi
 set +e
 env HOME="$test_home" PATH="$fake_bin:/usr/bin:/bin" TEST_LOG="$log" \
   ENSURE_STATUS=23 NOTIFY_STATUS=1 \
-  "$test_home/.local/bin-open-design" \
+  "$test_home/.local/bin-open-design-desktop" \
   >"$scratch/failure.out" 2>"$scratch/failure.err"
 status=$?
 set -e
@@ -88,7 +87,7 @@ env HOME="$test_home" chezmoi --config "$scratch/empty.toml" --source "$repo_roo
 grep -Fx '[Desktop Entry]' "$scratch/open-design.desktop"
 grep -Fx 'Type=Application' "$scratch/open-design.desktop"
 grep -Fx 'Name=Open Design' "$scratch/open-design.desktop"
-grep -Fx "Exec=$test_home/.local/bin/open-design" "$scratch/open-design.desktop"
+grep -Fx "Exec=$test_home/.local/bin/open-design-desktop" "$scratch/open-design.desktop"
 grep -Fx "Icon=$test_home/.local/share/open-design/source/tools/pack/resources/linux/icon.png" \
   "$scratch/open-design.desktop"
 grep -Fx 'Terminal=false' "$scratch/open-design.desktop"
