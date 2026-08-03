@@ -399,7 +399,7 @@ done
 if command -v systemd-analyze >/dev/null 2>&1; then
   # %h resolves to the real $HOME, where nothing is deployed under this
   # policy — substitute only the deployed path systemd-analyze would try to
-  # stat, exactly as .ci/test-open-design-integration.sh does for its unit.
+  # stat before verifying the unit.
   sed 's|^ExecStart=.*|ExecStart=/bin/true|' "$unit_file" >"$scratch/ydotool-verify.service"
   systemd-analyze --user verify "$scratch/ydotool-verify.service" || fail "systemd-analyze --user verify rejected the unit"
 fi

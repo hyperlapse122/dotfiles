@@ -533,11 +533,6 @@
           }
         }
       },
-      "open-design": {
-        "kind": "githubRelease",
-        "source": "nexu-io/open-design",
-        "version": "open-design-v0.17.0"
-      },
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",

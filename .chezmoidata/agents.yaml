@@ -74,14 +74,6 @@ agents:
       - mcp
       - "--tools"
       - all
-    - name: open-design
-      transport: stdio
-      command: open-design
-      args:
-      - mcp
-      os:
-      - linux
-      container: skip
     - name: figma
       transport: http
       url: https://mcp.figma.com/mcp

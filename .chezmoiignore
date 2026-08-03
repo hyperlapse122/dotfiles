@@ -21,18 +21,6 @@
 ./Library
 {{- end }}
 
-# Open Design is a Linux user-service integration. Keep all of its managed
-# entry points together under this one platform gate so unsupported hosts never
-# receive a launcher whose provisioner/service cannot exist.
-{{- if ne .chezmoi.os "linux" }}
-.chezmoiscripts/60-build/*open-design.sh
-.config/systemd/user/open-design.service
-.local/libexec/open-design
-.local/bin/open-design
-.local/bin/open-design-desktop
-.local/share/applications/open-design.desktop
-{{- end }}
-
 # Windows-only
 {{- if ne .chezmoi.os "windows" }}
 ./AppData
@@ -57,13 +45,6 @@
 # config-solaar, so it needs no entry here.)
 {{- if eq .chezmoi.os "windows" }}
 .config/garden/garden.yaml
-{{- end }}
-
-# The service, CLI, and MCP provider also belong on eligible headless Linux
-# hosts. Only the graphical launcher requires a known KDE or GNOME session.
-{{- if and (eq .chezmoi.os "linux") (not (or (eq $f.desktop "kde") (eq $f.desktop "gnome"))) }}
-.local/bin/open-design
-.local/share/applications/open-design.desktop
 {{- end }}
 
 # kitty is provisioned from the upstream bundle by
@@ -143,17 +124,11 @@
 Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .local/share/omp-plugins
 .omp/agent/extensions/mxm4-haptic.ts
-.chezmoiscripts/60-build/*open-design.sh
 # No graphical session in a container, so the kitty bundle has nothing to draw
 # on. 00-tools is not wildcarded here (unlike the distro/desktop dirs above),
 # so this provisioner needs its own line.
 .chezmoiscripts/00-tools/*kitty.sh
 .local/share/applications/kitty.desktop
-.config/systemd/user/open-design.service
-.local/libexec/open-design
-.local/bin/open-design
-.local/bin/open-design-desktop
-.local/share/applications/open-design.desktop
 # No MX Master 4 in a container, and the haptic build is skipped just above, so
 # the Claude/Codex haptic plugins have nothing to pulse — skip the deployed
 # plugin trees. The generic 70-agents/install-agent-plugins.sh script is

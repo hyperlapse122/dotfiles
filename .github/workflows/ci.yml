@@ -336,23 +336,6 @@ jobs:
             -ClientModule (Join-Path $env:GITHUB_WORKSPACE 'packages\mxm4-haptic\dist\index.js')
           if ($LASTEXITCODE -ne 0) { throw "Windows haptic fixture exited with code $LASTEXITCODE" }
 
-  open-design-integration:
-    name: Open Design integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run isolated Open Design integration
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: .ci/test-open-design-integration.sh
-      - name: Run Open Design sleep hook
-        run: .ci/test-open-design-sleep-hook.sh
-
   ydotool-integration:
     name: ydotool provisioning integration
     runs-on: ubuntu-latest

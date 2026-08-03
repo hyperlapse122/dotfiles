@@ -81,13 +81,6 @@ system:
       # rpm-owned polkit-1 includes system-auth and must not be overwritten.
       - path: etc/pam.d/polkit-1
         gate: fprintdPam
-      # systemd system-sleep hook: stop the per-user open-design.service
-      # before hibernation / hybrid-sleep so its daemon and IPC sockets do
-      # not outlive the power cycle. Mode 0755 — systemd executes system-sleep
-      # hooks directly. No gate: install-system-10-files is already Linux-only
-      # and container-skipped, matching Open Design's own provisioning scope.
-      - path: etc/systemd/system-sleep/open-design.sh
-        mode: "755"
 
     # Absolute /etc paths that the installer previously shipped but that no
     # longer exist in system/linux/etc/. Listed explicitly so every machine —
@@ -105,6 +98,10 @@ system:
       # stack. Deployed on Linux hosts without a distro gate, so the
       # reclamation is likewise unscoped.
       - path: /etc/systemd/system-sleep/cli-proxy-api.sh
+      # systemd system-sleep hook that stopped the per-user open-design
+      # service before hibernation. Also deployed ungated on Linux hosts,
+      # so the reclamation is likewise unscoped.
+      - path: /etc/systemd/system-sleep/open-design.sh
       - path: /etc/udev/rules.d/logitech-receiver.rules
       # Ubuntu Studio pro-audio realtime limits — removed with Ubuntu Studio
       # support. Ubuntu-scoped: this drop-in was only ever deployed there.

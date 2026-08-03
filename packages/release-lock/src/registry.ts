@@ -238,9 +238,6 @@ export const REGISTRY: Registry = {
     tagPrefix: "compound-engineering-",
   },
 
-  // Version-only tag for the build-open-design script's onchange trigger.
-  "open-design": { kind: "githubRelease", source: "nexu-io/open-design" },
-
   /* ---------- githubSkillCollection ---------- */
 
   "figma/mcp-server-guide": {

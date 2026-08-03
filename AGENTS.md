@@ -59,18 +59,6 @@ OMP keeps the Codex-user and Claude-user/project compatibility skill providers d
 
 Managed instruction targets are one file per harness, named for the native filename: `CLAUDE.md` for Claude (`dot_claude/`) and `AGENTS.md` for Codex and omp (`dot_codex/`, `dot_omp/private_agent/`). The sibling-`CLAUDE.md` mirror rule does NOT apply to managed files: a managed `AGENTS.md` source MUST NOT gain a `CLAUDE.md` sibling. Deleting a managed source stops management but does not prune an already-deployed target; pruning is a separate explicit decision.
 
-Open Design is a Linux non-container, execution-only integration. The
-`run_onchange_after_build-open-design` provisioner exclusively owns
-`~/.local/share/open-design`, and may reset tracked files only in its validated
-`source/` checkout; it never adopts or changes `~/src/github.com/nexu-io/open-design`.
-Release lookup, checkout validation, install, bootstrap, and build failures are
-hard apply failures. The user service stays unenabled and every desktop/CLI/MCP
-entry point must pass the shared marker/lock guard before using the checkout.
-All Open Design verification runs through `.ci/test-open-design-integration.sh`
-with an isolated destination, stubbed runtime commands, and per-user scratch.
-MUST NOT run a live `chezmoi apply`, start the real user service, or perform a
-real Open Design clone/build as part of verification.
-
 `dot_config/tmux/tmux.conf` is the repository's only tmux target, and it exists for omp's inline images inside aoe-managed sessions. Its `allow-passthrough on` and its `set-environment -g PI_FORCE_IMAGE_PROTOCOL kitty` are a PAIR: tmux carries no Kitty-graphics handling, so passthrough is what stops it discarding omp's graphics escape, and the forced protocol is what turns on the Unicode placeholders that let tmux own the image cells — with only one of the two, images either never appear or die on the first redraw. The protocol value MUST NOT move to `dot_config/environment.d/` (a systemd user-environment entry would force the Kitty protocol in bare Kitty, editor terminals, and ssh, where it is wrong) and MUST NOT move to `agents.omp.auth.env`, which is a credential surface. Passthrough stays at `on` and MUST NOT be widened to `all`, which would also permit invisible panes; the accepted residual risk is that a visible pane can send arbitrary escape sequences to Kitty, bounded only by Kitty's remote-control API staying disabled. The Windows exclusion is the existing bare `tmux` entry in `dot_config/.chezmoiignore`, so the target needs no new ignore rule. Verification is `.ci/test-tmux-kitty-passthrough.sh`, which drives an isolated tmux server on a scratch-scoped `-S` socket, asserts the forced protocol from inside a pane rather than through `show-environment -t` (a session listing does not show a global), and proves the transport by asserting the passthrough payload reaches a pty client with the setting on and does not with it off; pixels stay a manual Kitty check.
 
 One trap is worth stating because it makes the tmux fix look unnecessary: tmux forwards a BARE Kitty graphics APC regardless of `allow-passthrough` and gates only the DCS-wrapped form, and `kitten icat` falls back to the bare form. So icat still draws images inside tmux with passthrough off, while omp — which wraps every graphics emission whenever `TMUX` is set — draws nothing. MUST NOT use `kitten icat` as the probe for this behavior; the committed test probes the wrapped form for exactly that reason.

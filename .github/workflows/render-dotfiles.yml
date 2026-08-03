@@ -481,14 +481,6 @@ jobs:
           done
           "${GITHUB_WORKSPACE}/.ci/smoke-fedora-virtualbox-signing.sh" "${rendered}" "${rendered_etc}"
 
-      - name: Assert Open Design integration
-        run: |
-          set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/60-build/run_onchange_after_build-open-design.sh"
-          test -f "${rendered}"
-          test ! -e "${rendered}.render-error.txt"
-          "${GITHUB_WORKSPACE}/.ci/test-open-design-integration.sh" "${rendered}"
-
       - name: Upload rendered internals
         if: always()
         uses: actions/upload-artifact@v7
