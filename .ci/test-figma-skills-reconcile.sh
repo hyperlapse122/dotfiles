@@ -106,7 +106,22 @@ printf '{"schema":"figma-skills-ownership/v1","transactionId":"reset","skills":%
 rm -rf "${live:?}/${skills[0]:?}"; printf 'file\n' >"$live/${skills[0]}"; expect_preflight_failure destination-file
 rm -f "$live/${skills[0]}"; cp -R "$stage/${skills[0]}" "$live/${skills[0]}"
 upper_name=$(printf '%s' "${skills[0]}" | tr '[:lower:]' '[:upper:]')
-mkdir -p "$live/$upper_name"; expect_preflight_failure case-ambiguity; rm -rf "${live:?}/${upper_name:?}"
+# Case-colliding skill names are rejected from the ownership inventory on every
+# filesystem: the manifest is the naming authority, so an ambiguous inventory
+# must fail preflight before any managed mutation.
+ambiguous_json=$(printf '%s\n%s\n' "${skills[0]}" "$upper_name" | LC_ALL=C sort | jq -Rsc 'split("\n")[:-1]')
+printf '{"schema":"figma-skills-ownership/v1","transactionId":"case-ambiguity","skills":%s}\n' "$ambiguous_json" >"$state"
+expect_preflight_failure case-ambiguity-inventory
+printf '{"schema":"figma-skills-ownership/v1","transactionId":"reset","skills":%s}\n' "$expected_json" >"$state"
+# A live-root child pair differing only by case is representable only on a
+# case-sensitive filesystem; on case-insensitive APFS/NTFS the second name
+# resolves to the first, so staging the pair would silently stage nothing.
+case_probe="$case_root/.figma-case-probe"
+mkdir -- "$case_probe"
+if [[ ! -e $case_root/.FIGMA-CASE-PROBE ]]; then
+  mkdir -p "$live/$upper_name"; expect_preflight_failure case-ambiguity; rm -rf "${live:?}/${upper_name:?}"
+fi
+rm -rf -- "$case_probe"
 referent="$scratch/referent"; mkdir -p "$referent"; rm -rf "${live:?}/${skills[0]:?}"; ln -s "$referent" "$live/${skills[0]}"; expect_preflight_failure destination-link
 rm "$live/${skills[0]}"; cp -R "$stage/${skills[0]}" "$live/${skills[0]}"
 
