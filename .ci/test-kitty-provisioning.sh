@@ -104,10 +104,9 @@ lacks '^MimeType=' "$scratch/kitty.desktop" \
 packages="$repo_root/.chezmoidata/packages.yaml"
 lacks '^ +- kitty(\s|#|$)' "$packages" "a package group still installs kitty"
 xdg_rows=$(grep -cE '^ +- xdg-terminal-exec' "$packages" || true)
-[[ "$xdg_rows" -eq 3 ]] \
-  || fail "expected 3 xdg-terminal-exec rows (the provider entry still needs it), found $xdg_rows"
+[[ "$xdg_rows" -eq 2 ]] \
+  || fail "expected 2 xdg-terminal-exec rows (the provider entry still needs it), found $xdg_rows"
 has 'dnf remove kitty' "$packages" "the one-time Fedora uninstall is not documented"
-has 'apt remove kitty' "$packages" "the one-time Ubuntu uninstall is not documented"
 
 # --- host gating lives in .chezmoiignore ------------------------------------
 # Block membership is asserted, not just line presence: a kitty line that drifted

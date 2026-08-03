@@ -62,12 +62,12 @@
 # ydotool (KTD2, KTD5, KTD7): a managed graphical-session user unit, its
 # active-seat /dev/uinput wrapper, and the reconciler script that
 # enables/reloads/restarts it. All three make sense only on a supported
-# Fedora/Ubuntu KDE/GNOME desktop that actually reaches
+# Fedora KDE/GNOME desktop that actually reaches
 # graphical-session.target — never on a headless server, a non-Linux host,
 # an unsupported distro/desktop, or a container (no graphical session, no
 # seat to grant /dev/uinput). Gate all three together so an ineligible
 # target never ends up with an orphaned unit, wrapper, or reconciler.
-{{- if not (and (eq .chezmoi.os "linux") (or (eq $f.distro "fedora") (eq $f.distro "ubuntu")) (or (eq $f.desktop "kde") (eq $f.desktop "gnome")) (not $f.headless) (not $f.container)) }}
+{{- if not (and (eq .chezmoi.os "linux") (eq $f.distro "fedora") (or (eq $f.desktop "kde") (eq $f.desktop "gnome")) (not $f.headless) (not $f.container)) }}
 .config/systemd/user/ydotool.service
 .local/libexec/ydotoold-active-seat
 .chezmoiscripts/30-linux/*config-ydotool.sh
@@ -113,7 +113,6 @@
 {{- if $f.container }}
 .chezmoiscripts/30-linux/*.sh
 .chezmoiscripts/20-linux-fedora/*.sh
-.chezmoiscripts/40-linux-ubuntu/*.sh
 .chezmoiscripts/50-linux-kde/*.sh
 .chezmoiscripts/50-linux-gnome/*.sh
 .chezmoiscripts/10-auth/*.sh

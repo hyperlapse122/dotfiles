@@ -25,7 +25,7 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 |---|---|
 | `00-tools` | trust repo mise; link/prune versioned CLIs; prune old compound-engineering trees |
 | `10-auth` | GitHub/GitLab/Docker auth and Tailscale login |
-| `20-linux-fedora`, `40-linux-ubuntu` | data-driven dnf/apt provisioning, repos, Secure Boot/NVIDIA |
+| `20-linux-fedora` | data-driven DNF provisioning, repositories, and Secure Boot/NVIDIA |
 | `30-linux` | `/etc` manifest, host/network, chsh, Solaar, TPM2, Wi-Fi, browser, Podman, VSCodium |
 | `50-linux-kde`, `50-linux-gnome` | desktop configuration |
 | `60-build` | Rust haptic and Vite+ helper/CLI builds |
@@ -89,7 +89,7 @@ Edit data, not generated scripts or rendered targets:
 | Data | Consumers |
 |---|---|
 | `.chezmoidata/facts.yaml` | host identity, `gate:`/`gates:` decisions, probes and fail-safe direction |
-| `.chezmoidata/packages.yaml` | Fedora/Ubuntu packages, repos, COPRs/PPAs, flatpaks, dotnet, direct packages, services/groups |
+| `.chezmoidata/packages.yaml` | Fedora packages, repos, COPRs, flatpaks, dotnet, direct packages, services/groups |
 | `.chezmoidata/fonts.yaml` | font archives, families, sizes and fallbacks for KDE/GNOME/fcitx/VSCodium/kitty |
 | `.chezmoidata/vscodium.yaml` | additive VSCodium extension installer |
 | `.chezmoidata/solaar.yaml` | device settings/rules and restart fingerprint |
@@ -109,7 +109,7 @@ External release resolution lives in the generated `.chezmoidata/releases.json` 
 
 ## OS, desktop, and containers
 
-Branch templates on `.chezmoi.os` and distro on `.chezmoi.osRelease.id`; keep POSIX scripts and Windows `.ps1` counterparts aligned. KDE/GNOME scripts use the desktop fact and soft-skip missing runtime/session tools. GNOME remains stock except data-driven listed exceptions, fonts, fcitx5, and password-only GDM. Ubuntu and Fedora have separate package mechanisms but share facts. Do not turn runtime tool presence into a host fact.
+Branch templates on `.chezmoi.os`; Fedora is the only managed Linux distribution. Keep POSIX scripts and Windows `.ps1` counterparts aligned. KDE/GNOME scripts use the desktop fact and soft-skip missing runtime/session tools. GNOME remains stock except data-driven listed exceptions, fonts, fcitx5, and password-only GDM. Do not turn runtime tool presence into a host fact.
 
 A real container is `/run/.containerenv` or `/.dockerenv` without `/run/.toolboxenv`; the `facts.tmpl` and `.install-prerequisites.sh` `is_container`/`is_devbox` predicates MUST stay in lockstep. Containers skip package/system/auth/desktop/haptic provisioning, garden, and the GPG key, but keep CLI dotfiles, `00-tools`, Claude/Codex dotagents, compound-engineering, and omp. No package installation occurs in a container. Change container skips only in the single gated `.chezmoiignore` block, never by editing scripts. `OP_SERVICE_ACCOUNT_TOKEN` is the CI secret path.
 

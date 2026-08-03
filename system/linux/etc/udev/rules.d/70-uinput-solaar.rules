@@ -15,12 +15,11 @@
 #     which needs the same write access to inject keyboard and pointer
 #     input for the active desktop user.
 #
-# Stock Ubuntu/Fedora grant no user access to the node. TAG+="uaccess" has
+# Fedora grants no user access to the node by default. TAG+="uaccess" has
 # systemd-logind maintain a per-session ACL for the active seat user —
 # granted on login, revoked on seat change — instead of a permanent
-# group/mode widening. This is the ONLY positive /dev/uinput grant in this
-# repository; see the neighboring 80-uinput.rules for why Ubuntu's own
-# broader vendor rule does not add a second one.
+# group/mode widening. This is the repository's only positive /dev/uinput
+# grant.
 #
 # ORDERING: the filename number MUST stay < 73 — the uaccess tag is
 # processed by systemd's /usr/lib/udev/rules.d/73-seat-late.rules, and a tag

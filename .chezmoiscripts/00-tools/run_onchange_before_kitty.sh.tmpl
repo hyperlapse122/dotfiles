@@ -7,11 +7,9 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/00-tools/run_onchange_before_kitty.sh.tmpl
 #
-# Provisions the locked upstream kitty app bundle. kitty is this repo's default
 # Linux terminal and is NO LONGER installed from the distro package (see the
 # kitty note in .chezmoidata/packages.yaml): the vertical tab bar the managed
-# config asks for needs kitty >= 0.48, and the Fedora stream skipped 0.44-0.46
-# and has not submitted 0.48 at all.
+# config asks for needs kitty >= 0.48.
 #
 # Layout mirrors the versioned-payload lane beside this script (codegraph,
 # codex): versions/<version> holds one immutable tree, `current` points at the
@@ -21,12 +19,11 @@
 # (dot_local/share/applications/kitty.desktop.tmpl) points Exec/Icon at.
 #
 # `before_` IS LOAD-BEARING, unlike the `after_` siblings in this directory.
-# The distro package installers are `run_onchange_before_fedora.sh` and
-# `run_onchange_before_ubuntu.sh`, and chezmoi's phase wins over the directory
-# number: an `after_` script here would run AFTER those installers had already
-# finished without installing kitty, so a failed download on a fresh host would
-# leave it with no terminal at all. Running in the same phase puts `00-tools`
-# ahead of `20-linux-fedora`/`40-linux-ubuntu` by path order.
+# The distro package installer is `run_onchange_before_fedora.sh`, and chezmoi's
+# phase wins over the directory number: an `after_` script here would run AFTER
+# that installer had already finished without installing kitty, so a failed
+# download on a fresh host would leave it with no terminal at all. Running in
+# the same phase puts `00-tools` ahead of `20-linux-fedora` by path order.
 #
 # This script HARD-FAILS on every error path, which aborts the apply before
 # those installers run. A soft skip would hand a fresh host the same

@@ -3,10 +3,10 @@ name: Render dotfiles
 # On every pull request and push to main, actually run `chezmoi apply --init` on all four target
 # platforms and capture what chezmoi renders, so a reviewer can eyeball the real
 # output of any template change without a local checkout:
-#   * Fedora + Ubuntu — slim container images (`apply` / `render-internals`).
-#   * macOS           — a native `macos-latest` runner (`apply-macos`); a
-#                       container cannot provide a `darwin` chezmoi, and darwin-only
-#                       templates (e.g. the mxm4-haptic build) render only here.
+#   * Fedora         — a slim container image (`apply` / `render-internals`).
+#   * macOS          — a native `macos-latest` runner (`apply-macos`); a
+#                      container cannot provide a `darwin` chezmoi, and darwin-only
+#                      templates (e.g. the mxm4-haptic build) render only here.
 #   * Windows         — a native `windows-latest` runner (`apply-windows`); needed
 #                       so `.chezmoi.os == "windows"` and the `.ps1` read-source
 #                       hook path exercise, and to feed the PowerShell lint.
@@ -20,7 +20,7 @@ name: Render dotfiles
 #                                to be rendered explicitly to be inspected).
 #
 # The rendered scripts then flow into two lint gates: `shellcheck` lints every
-# rendered bash/sh script across Fedora, Ubuntu AND macOS, and `lint-powershell`
+# rendered bash/sh script across Fedora and macOS, and `lint-powershell`
 # runs PSScriptAnalyzer over the Windows `.ps1` files.
 #
 # No real 1Password or GitHub PAT is used. A PATH-local dummy `op` satisfies
@@ -65,7 +65,6 @@ jobs:
       matrix:
         include:
           - { os: fedora, image: "fedora:latest" }
-          - { os: ubuntu, image: "ubuntu:latest" }
     container:
       image: ${{ matrix.image }}
     steps:
@@ -138,14 +137,12 @@ jobs:
           # fail the job here — targeted assertion steps below are the
           # authoritative gates for templates changed by a PR.
           #
-          # Feed blank lines on stdin with --no-tty: the Fedora/Ubuntu config template
-          # calls promptString for the LUKS passphrase (and, on Ubuntu, for the
-          # Secure Boot MOK enrollment password), and newer chezmoi ERRORS trying to
-          # open /dev/tty in a non-interactive container instead of using the default —
-          # blank lines answer them (empty = skip; a blank answer stores an empty
-          # *Cipher value, so the keyring-encryption path in .chezmoi.toml.tmpl is
-          # never entered here and no keyring daemon is needed). Extra lines are
-          # harmless.
+          # Feed a blank line on stdin with --no-tty: the Fedora config template
+          # calls promptString for the LUKS passphrase, and newer chezmoi errors
+          # when it tries to open /dev/tty in a non-interactive container instead
+          # of using the default. A blank answer skips the per-host secret, so
+          # the keyring-encryption path in .chezmoi.toml.tmpl is never entered
+          # here and no keyring daemon is needed. Extra lines are harmless.
           set +e
           printf '\n\n\n' | chezmoi apply --init \
             --exclude=scripts,externals \
@@ -185,9 +182,9 @@ jobs:
         run: |
           set -euxo pipefail
           # The deployed tool (dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl)
-          # inlines the enrollment backend at apply time via {{ include }}. Fedora and
-          # Ubuntu now share ONE dracut + systemd-cryptenroll backend; assert the rendered
-          # tool actually carries it so a regression in the include/backend is caught here
+          # inlines the enrollment backend at apply time via {{ include }}. Assert
+          # the rendered tool carries the Fedora dracut + systemd-cryptenroll
+          # backend so a regression is caught here
           # rather than at a reboot on a real host.
           tool="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.local/bin/setup-luks-tpm2-unlock.sh"
           test -f "${tool}"
@@ -263,7 +260,6 @@ jobs:
       matrix:
         include:
           - { os: fedora, image: "fedora:latest" }
-          - { os: ubuntu, image: "ubuntu:latest" }
     container:
       image: ${{ matrix.image }}
     steps:
@@ -976,7 +972,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Task 6: shellcheck the RENDERED scripts (not the raw *.tmpl, which shellcheck
-  # cannot parse). Runs only after the Fedora, Ubuntu AND macOS render jobs so it
+  # cannot parse). Runs only after the Fedora and macOS render jobs so it
   # lints the real output of every provisioning script on every POSIX target —
   # the `.chezmoiscripts/**` templates that the source-level lint could never
   # reach, including darwin-only scripts that render on macOS alone. OS-gated

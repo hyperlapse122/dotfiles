@@ -1,5 +1,5 @@
 {{- $f := includeTemplate "facts.tmpl" . | fromYaml -}}
-{{- $eligible := and (eq .chezmoi.os "linux") (or (eq $f.distro "fedora") (eq $f.distro "ubuntu")) (or (eq $f.desktop "kde") (eq $f.desktop "gnome")) (not $f.headless) (not $f.container) -}}
+{{- $eligible := and (eq .chezmoi.os "linux") (eq $f.distro "fedora") (or (eq $f.desktop "kde") (eq $f.desktop "gnome")) (not $f.headless) (not $f.container) -}}
 {{ if $eligible -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl
@@ -11,15 +11,14 @@
 # Rendered-fact gate above repeats, defensively, the same eligibility test
 # that keeps this script (and the unit + wrapper it reconciles) out of the
 # source tree entirely on an ineligible host — see the ydotool block in
-# .chezmoiignore. Both checks encode the same predicate: Linux, Fedora or
-# Ubuntu, KDE or GNOME, not headless, not a container. Belt-and-suspenders:
+# .chezmoiignore. Both checks encode the same predicate: Fedora Linux,
+# KDE or GNOME, not headless, not a container. Belt-and-suspenders:
 # an ignore-gate miss must not leave a live systemctl call reachable here.
 #
 # Deliberately a plain `run_after_` script, NOT `run_onchange_after_` with a
 # source-fingerprint block: nothing about ITS OWN content needs to change for
 # rerunning to matter. The package it depends on
-# (.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl,
-# .chezmoiscripts/40-linux-ubuntu/run_onchange_before_ubuntu.sh.tmpl) and the
+# (.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl) and the
 # user bus it needs can each recover between applies with no change to this
 # script's rendered text — a `run_onchange_` guard would then skip the very
 # retry this script exists to provide. Unconditional means every eligible

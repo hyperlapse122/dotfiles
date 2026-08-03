@@ -82,11 +82,10 @@ system/linux/etc/locale.conf
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
-| `etc/pam.d/polkit-1` | fingerprint at polkit prompts (`fprintdPam` gate): overrides the vendor `/usr/lib/pam.d/polkit-1` with the same stack plus a `sufficient pam_fprintd` line, so a polkit dialog takes a finger and still falls back to the password entry. Scoped to polkit on purpose — putting fprintd in `common-auth` would give the GDM greeter fingerprint auth back and re-lock the login keyring |
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreeze` gate skips it when the theme is not installed |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
-| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access, active-seat `/dev/uinput` grant shared by Solaar and ydotoold (`70-uinput-solaar.rules`, the sole positive `TAG+="uaccess"` grant), comment-only `80-uinput.rules` that shadows Ubuntu's broader vendor rule by basename |
+| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access, and the active-seat `/dev/uinput` grant shared by Solaar and ydotoold (`70-uinput-solaar.rules`) |
 
 ## The install-system script set (10-files → 20-host → 30-network)
 
@@ -98,8 +97,8 @@ the old monolithic `install-system-config` script did:
 
 | Script | Does | Re-runs when |
 |---|---|---|
-| `run_onchange_after_install-system-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, Ubuntu `locale-gen`, reload systemd/udev/sysctl/gdm-dconf for what it installed | any tracked file or manifest entry changes |
-| `run_onchange_after_install-system-20-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable (Fedora `systemd-zram-setup@` + Ubuntu `zramswap.service`, separate distro-guarded blocks) | its own content changes |
+| `run_onchange_after_install-system-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, reload systemd/udev/sysctl/gdm-dconf for what it installed | any tracked file or manifest entry changes |
+| `run_onchange_after_install-system-20-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable (Fedora `systemd-zram-setup@`) | its own content changes |
 | `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld (masquerade, `tailscale0` → trusted zone, WireGuard/STUN ports), `/etc/resolv.conf` → systemd-resolved, systemd-resolved/NetworkManager/tailscaled restarts, NetworkManager conf.d hygiene + reload | its own content changes |
 
 The `10-`/`20-`/`30-` filename prefixes order execution (chezmoi runs scripts

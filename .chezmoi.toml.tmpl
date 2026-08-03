@@ -51,7 +51,7 @@ encryption = "gpg"
    rather than silently discarding what was typed; a blank answer (also what
    non-interactive/CI init gets) stores "" and keeps the skip path. Consumers
    decrypt at apply-render time with the read-only config-secrets-key.tmpl. */}}
-{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{-   $luksPassphraseCipher := "" -}}
 {{-   if hasKey . "luksPassphraseCipher" -}}
 {{-     $luksPassphraseCipher = .luksPassphraseCipher -}}
@@ -67,22 +67,6 @@ encryption = "gpg"
 {{-   end -}}
     luksPassphraseCipher = {{ $luksPassphraseCipher | quote }}
 {{ end -}}
-{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "ubuntu") -}}
-{{-   $mokPasswordCipher := "" -}}
-{{-   if hasKey . "mokPasswordCipher" -}}
-{{-     $mokPasswordCipher = .mokPasswordCipher -}}
-{{-   else -}}
-{{-     $plain := promptString "MOK enrollment password for Secure Boot NVIDIA DKMS module signing (8-16 chars; leave blank to skip)" "" -}}
-{{-     if ne $plain "" -}}
-{{-       $secretsKey := includeTemplate "config-secrets-key-ensure.tmpl" . -}}
-{{-       if eq $secretsKey "" -}}
-{{-         fail "config-secrets key unavailable (user keyring locked or unreachable); re-run `chezmoi init` from a desktop session, or leave the prompt blank to skip" -}}
-{{-       end -}}
-{{-       $mokPasswordCipher = encryptAES $secretsKey $plain -}}
-{{-     end -}}
-{{-   end -}}
-    mokPasswordCipher = {{ $mokPasswordCipher | quote }}
-{{ end }}
 
 [hooks.read-source-state.pre]
     # `script` (not `command`): chezmoi applies the per-extension interpreter to a

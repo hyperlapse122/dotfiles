@@ -2,7 +2,7 @@
    nothing, and deliberately sits OUTSIDE the OS gate below: a typo in
    packages.yaml's fedora gates must abort the apply on EVERY host, not only on
    the one distro whose installer body renders — otherwise a bad gate name would
-   sit unnoticed on the maintainer's Ubuntu machine until CI rendered the Fedora
+   sit unnoticed on the maintainer's machine until CI rendered the Fedora container.
    container. `values` hands the partial the gate expressions; the keys are the
    package-group names, which it has no opinion about. */ -}}
 {{- includeTemplate "facts-validate.tmpl" (dict
@@ -22,18 +22,16 @@ set -euo pipefail
 # package sets (kdePackages/gnomePackages) gated on the named `desktop` host
 # fact; packages.yaml's `gates:` map says which fact gates which group.
 #
-# Structured to parallel the Ubuntu installer (.chezmoiscripts/40-linux-ubuntu/
-# run_onchange_before_ubuntu.sh.tmpl): a single command wrapper (DNF, mirroring
-# APT), dedicated setup_*_repos() functions split out from the install
+# Structured as a single command wrapper (DNF), dedicated setup_*_repos() functions split out from the install
 # orchestration, an enable_unit() helper that skips absent units, MOK enrollment
 # kept in its own function rather than folded into enable_services(), and a main
-# flow whose ordering matches Ubuntu's (repos+packages → NVIDIA support → direct
-# installs → flatpak/dotnet → time → module signing/MOK/services → groups). The
-# genuinely Fedora-specific pieces have no Ubuntu counterpart and stay
+# flow. The genuine Fedora-specific pieces stay
+# (KR mirrorlists, COPRs, RPM Fusion, the /var/lib/dkms MOK + VirtualBox module
+# signing).
 # (KR mirrorlists, COPRs, RPM Fusion, the /var/lib/dkms MOK + VirtualBox module
 # signing, and the KR firewall/ufw split, which for Fedora lives in
 # 30-linux/install-system-30-network — firewalld, not ufw — so this folder needs
-# no `after_` companion to Ubuntu's tailscale-ufw script).
+# no `after_` companion script).
 #
 # The gates are resolved at RENDER time, not at runtime: the fact values are
 # baked into this script by facts-sh.tmpl below. That is the point — one probe
@@ -79,8 +77,7 @@ HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "install-fedora.sh" -}}
 
-# All dnf invocations go through one sudo wrapper, mirroring the Ubuntu
-# installer's APT array. Fedora needs no env-var payload (there is no
+# All dnf invocations go through one sudo wrapper. Fedora needs no env-var payload, so this is a thin ("${SUDO[@]}" dnf) alias kept
 # DEBIAN_FRONTEND equivalent), so this is a thin ("${SUDO[@]}" dnf) alias kept
 # for symmetry with that script; every other command (rpm, flatpak, systemctl,
 # mokutil, openssl, ...) still calls "${SUDO[@]}" directly.
@@ -148,8 +145,7 @@ nvidia_rpmfusion_excludes=(
 
 # Point Fedora's base repos at Korea-country metalinks, but only on desktop-class
 # hardware (SMBIOS chassis type). Laptops/servers/VMs keep upstream defaults so a
-# portable machine is not pinned to KR mirrors. Fedora-only; there is no Ubuntu
-# counterpart.
+# portable machine is not pinned to KR mirrors. Fedora-only.
 configure_kr_mirrorlists() {
   local chassis_type=''
   if [[ -r /sys/class/dmi/id/chassis_type ]]; then
@@ -198,20 +194,17 @@ configure_nvidia_repo_policy() {
 }
 
 # Add the NVIDIA CUDA + container-toolkit repositories. Split out so it reads as
-# one NVIDIA unit — mirrors the Ubuntu installer's setup_nvidia_repos — and
-# called from setup_fedora_repos under the HAS_NVIDIA gate; the driver/container
+# one NVIDIA unit — and called from setup_fedora_repos under the HAS_NVIDIA gate; the driver/container
 # packages are appended to the install set under the same gate.
 setup_nvidia_repos() {
   "${DNF[@]}" config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo --overwrite
   "${DNF[@]}" config-manager addrepo --from-repofile https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo --overwrite
 }
 
-# Configure every third-party repository this host needs, mirroring the Ubuntu
-# installer's setup_apt_repos. Called from install_fedora_packages ONLY on the
+# Configure every third-party repository this host needs. Called from install_fedora_packages ONLY on the
 # install path (when a package is actually missing), so a no-op apply where
 # everything is already present never touches the network or the repo config —
-# an optimization Fedora keeps, that the Ubuntu installer (whose per-repo .list
-# writes are individually change-guarded) does not need.
+# an optimization.
 setup_fedora_repos() {
   # Install the repository manager only when missing — dnf would otherwise hit
   # the network just to discover the package is already installed.
@@ -325,8 +318,7 @@ configure_ydotool_package_service() {
 # RPMs installed directly from a vendor URL (no repo). For each entry: skip when
 # already installed — or, for an entry pinning a `version` in the data, when the
 # installed rpm VERSION already matches the pin, so bumping the pin re-runs
-# `dnf install` as an in-place upgrade (mirrors the Ubuntu installer's
-# install_direct_debs). Then import its GPG key(s) and install the URL matching
+# `dnf install` as an in-place upgrade. Then import its GPG key(s) and install the URL matching
 # the host architecture. Runs after install_fedora_packages so the
 # repos/metadata needed for dependency resolution already exist.
 install_direct_rpms() {
@@ -394,12 +386,12 @@ install_dotnet_tools() {
 # NVIDIA post-install setup: emit the CDI spec so containers can use the GPU and
 # let SELinux allow it. The driver itself installs as part of the main dnf
 # transaction (kmod-nvidia-latest-dkms in the HAS_NVIDIA package set), so — unlike
-# the Ubuntu install_nvidia_support, which drives the whole driver install — this
+# the install_nvidia_support, which drives the whole driver install — this
 # one only does the container-toolkit follow-up. It keeps the name and the
-# post-package slot for symmetry with that script. `nvidia-ctk cdi generate` can
+# post-package slot. `nvidia-ctk cdi generate` can
 # fail on first boot before the freshly built driver module is loaded, so a
 # failure here is tolerated (|| true); it regenerates cleanly once the module is
-# up — same rationale, and now the same tolerance, as Ubuntu.
+# up.
 install_nvidia_support() {
   if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
     return 0
@@ -419,8 +411,7 @@ install_nvidia_support() {
 #   - Oracle's own vboxdrv.sh signs the non-DKMS vbox modules with it too, via
 #     the shim-signed symlinks provision_vbox_module_signing() installs
 # So one mokutil enrollment covers both stacks — no per-package MOK. Idempotent.
-# (Fedora's /var/lib/dkms MOK is the counterpart of Ubuntu's shim-signed MOK at
-# /var/lib/shim-signed/mok/; the mechanisms differ per distro, so the enrollment
+# (Fedora's /var/lib/dkms MOK is the counterpart of other distros; the mechanisms differ per distro, so the enrollment
 # functions do not share code.)
 #
 # On a Fedora host that installs VirtualBox WITHOUT NVIDIA, no DKMS build ever
@@ -586,8 +577,7 @@ provision_vbox_module_signing() {
 
 # Point one of Oracle's expected Debian key paths at the DKMS MOK. Idempotent:
 # a correct link is left alone, a wrong link is replaced. A pre-existing regular
-# file is host state we did not create (a hand-rolled key, or an Ubuntu-shaped
-# shim-signed install), so warn and refuse rather than clobber a private key.
+# file is host state we did not create (a hand-rolled key), so warn and refuse rather than clobber a private key.
 link_vbox_signing_key() {
   local target="$1" link="$2"
 
@@ -640,7 +630,7 @@ activate_vbox_driver() {
 # Secure Boot — it covers both NVIDIA's DKMS-signed modules AND the VirtualBox
 # modules Oracle signs against the same key. Kept in its own function (rather
 # than folded into enable_services, as it once was) so that function only
-# enables units, mirroring the Ubuntu installer where MOK enrollment lives in
+# enables units. Runs after provision_vbox_module_signing, which (via
 # dedicated functions. Runs after provision_vbox_module_signing, which (via
 # ensure_dkms_mok_generated) seeds the key when VirtualBox is present.
 #
@@ -693,7 +683,7 @@ enroll_dkms_mok() {
 # Enable a systemd unit only when its unit file exists, so a host missing an
 # optional package (e.g. nvidia-persistenced without the NVIDIA driver) is
 # skipped rather than failing under set -e. The second argument selects "now"
-# (enable --now) or "later" (enable only). Mirrors the Ubuntu installer.
+# (enable --now) or "later" (enable only).
 enable_unit() {
   local svc="$1" when="${2:-now}"
   systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}" || return 0
@@ -722,7 +712,7 @@ enable_services() {
 }
 
 # Use the hardware clock as UTC and enable NTP synchronisation. Guarded so a
-# systemd-less environment is skipped cleanly (parallel to the Ubuntu installer).
+# systemd-less environment is skipped cleanly).
 configure_time() {
   command -v timedatectl >/dev/null 2>&1 || return 0
   "${SUDO[@]}" timedatectl set-local-rtc 0 2>/dev/null || true

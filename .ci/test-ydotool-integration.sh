@@ -115,20 +115,17 @@ EOF
 # back to its registry absentDefault (true), the documented fail-safe.
 
 fedora_ov='{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}'
-ubuntu_ov='{"chezmoi":{"os":"linux","osRelease":{"id":"ubuntu"}}}'
 
 fedora_installer="$repo_root/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl"
-ubuntu_installer="$repo_root/.chezmoiscripts/40-linux-ubuntu/run_onchange_before_ubuntu.sh.tmpl"
 reconciler_tmpl="$repo_root/.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl"
 unit_file="$repo_root/dot_config/systemd/user/ydotool.service"
 wrapper_src="$repo_root/dot_local/libexec/executable_ydotoold-active-seat"
 ignore_file="$repo_root/.chezmoiignore"
 rules_70="$repo_root/system/linux/etc/udev/rules.d/70-uinput-solaar.rules"
-rules_80="$repo_root/system/linux/etc/udev/rules.d/80-uinput.rules"
 packages_yaml="$repo_root/.chezmoidata/packages.yaml"
 
-for f in "$fedora_installer" "$ubuntu_installer" "$reconciler_tmpl" "$unit_file" \
-  "$wrapper_src" "$ignore_file" "$rules_70" "$rules_80" "$packages_yaml"; do
+for f in "$fedora_installer" "$reconciler_tmpl" "$unit_file" "$wrapper_src" \
+  "$ignore_file" "$rules_70" "$packages_yaml"; do
   [[ -f "$f" ]] || fail "expected managed source file is missing: $f"
 done
 ignore_hit_count() {
@@ -189,20 +186,13 @@ group_block() {  # stdin = one distro's section text, $1 = list key
     grab { print }
   '
 }
-for group in fedora:kdePackages fedora:gnomePackages ubuntu:kdePackages ubuntu:gnomePackages; do
-  distro=${group%%:*}; key=${group#*:}
-  case "$distro" in
-    fedora) section=$(sed -n '/^    fedora:$/,/^    ubuntu:$/p' "$packages_yaml") ;;
-    ubuntu) section=$(sed -n '/^    ubuntu:$/,$p' "$packages_yaml") ;;
-  esac
+section=$(sed -n '/^    fedora:$/,$p' "$packages_yaml")
+for key in kdePackages gnomePackages; do
   n=$(printf '%s\n' "$section" | group_block "$key" | grep -cE '^\s+- ydotool(\s|#|$)' || true)
-  [[ "$n" -eq 1 ]] || fail "expected exactly 1 ydotool entry in $distro.$key, found $n"
+  [[ "$n" -eq 1 ]] || fail "expected exactly 1 ydotool entry in fedora.$key, found $n"
 done
 total=$(grep -cE '^\s+- ydotool(\s|#|$)' "$packages_yaml" || true)
-# The 4 per-group checks above already prove each of the 4 gated groups
-# carries exactly one; a 5th anywhere would mean an unconditional list (e.g.
-# packages/corePackages/bareMetalPackages/nvidiaPackages) also carries it.
-[[ "$total" -eq 4 ]] || fail "expected exactly 4 total ydotool package entries, found $total"
+[[ "$total" -eq 2 ]] || fail "expected exactly 2 total ydotool package entries, found $total"
 
 # The desktop fact correctly seeds HAS_KDE/HAS_GNOME at execution time:
 # fact_gate() reads FACT_DESKTOP, baked by facts-sh.tmpl from the `lookPath`
@@ -244,22 +234,10 @@ bash -n "$fedora_none"
 # HAS_KDE/HAS_GNOME-guarded packages+=() blocks, and this run proves those
 # guards both evaluate false when desktop=none.
 
-ubuntu_kde="$scratch/ubuntu-kde.sh"
-PATH="$scratch/path-kde" XDG_CACHE_HOME="$scratch/cache-headless" \
-  render --override-data "$ubuntu_ov" <"$ubuntu_installer" >"$ubuntu_kde"
-[[ -s "$ubuntu_kde" ]] || fail "ubuntu installer rendered empty"
-bash -n "$ubuntu_kde"
 
-ubuntu_gnome="$scratch/ubuntu-gnome.sh"
-PATH="$scratch/path-gnome" XDG_CACHE_HOME="$scratch/cache-headless" \
-  render --override-data "$ubuntu_ov" <"$ubuntu_installer" >"$ubuntu_gnome"
-bash -n "$ubuntu_gnome"
-
-# unsupported target gate: neither installer renders on a non-Linux host.
+# unsupported target gate: the Fedora installer renders empty on non-Linux hosts.
 darwin_fedora=$(render --override-data '{"chezmoi":{"os":"darwin"}}' <"$fedora_installer")
 [[ -z "${darwin_fedora//[$' \t\n']/}" ]] || fail "fedora installer must render empty on darwin"
-darwin_ubuntu=$(render --override-data '{"chezmoi":{"os":"darwin"}}' <"$ubuntu_installer")
-[[ -z "${darwin_ubuntu//[$' \t\n']/}" ]] || fail "ubuntu installer must render empty on darwin"
 
 # configure_ydotool_package_service: exact guard + body, call-site ordering,
 # and no `input` group membership.
@@ -279,13 +257,6 @@ has '^\s*"\$\{SUDO\[@\]\}" systemctl stop ydotool\.service$' "$fedora_fn" "Fedor
 has '^\s*"\$\{SUDO\[@\]\}" systemctl mask ydotool\.service$' "$fedora_fn" "Fedora helper does not mask the package unit"
 lacks '--now|--global|--user' "$fedora_fn" "Fedora helper must only stop+mask the root system unit"
 
-ubuntu_fn="$scratch/ubuntu-fn.sh"
-extract_function "$ubuntu_kde" configure_ydotool_package_service >"$ubuntu_fn"
-[[ -s "$ubuntu_fn" ]] || fail "configure_ydotool_package_service not found in the rendered Ubuntu installer"
-has '^\s*\[\[ -x /usr/bin/ydotoold \]\] \|\| return 0$' "$ubuntu_fn" "Ubuntu helper is missing the daemon-presence guard"
-has '^\s*\{ \[\[ "\$\{HAS_KDE\}" -eq 1 \]\] \|\| \[\[ "\$\{HAS_GNOME\}" -eq 1 \]\]; \} \|\| return 0$' "$ubuntu_fn" "Ubuntu helper is missing the KDE/GNOME eligibility guard"
-has '^\s*"\$\{SUDO\[@\]\}" systemctl --global disable ydotool\.service$' "$ubuntu_fn" "Ubuntu helper does not globally disable the vendor unit"
-lacks '--now|systemctl stop|systemctl mask' "$ubuntu_fn" "Ubuntu helper must only globally disable the vendor unit, never stop/mask a system unit"
 
 call_site_line() {  # $1 = file, $2 = bare identifier
   grep -nx -- "$2" "$1" | head -1 | cut -d: -f1 || true
@@ -295,15 +266,9 @@ fedora_svc_line=$(call_site_line "$fedora_kde" configure_ydotool_package_service
 [[ -n "$fedora_pkg_line" && -n "$fedora_svc_line" && "$fedora_pkg_line" -lt "$fedora_svc_line" ]] \
   || fail "Fedora must call configure_ydotool_package_service AFTER install_fedora_packages ($fedora_pkg_line vs $fedora_svc_line)"
 
-ubuntu_pkg_line=$(grep -nFx 'install_ubuntu_packages "${packages[@]}"' "$ubuntu_kde" | head -1 | cut -d: -f1 || true)
-ubuntu_svc_line=$(call_site_line "$ubuntu_kde" configure_ydotool_package_service)
-[[ -n "$ubuntu_pkg_line" && -n "$ubuntu_svc_line" && "$ubuntu_pkg_line" -lt "$ubuntu_svc_line" ]] \
-  || fail "Ubuntu must call configure_ydotool_package_service AFTER install_ubuntu_packages ($ubuntu_pkg_line vs $ubuntu_svc_line)"
 
-for f in "$fedora_kde" "$ubuntu_kde"; do
-  has 'groups=\(keyd vboxusers\)' "$f" "expected the unchanged group membership list (in $f)"
-  lacks 'groups=\([^)]*\<input\>[^)]*\)' "$f" "no installer may add the managed user to the input group (in $f)"
-done
+has 'groups=\(keyd vboxusers\)' "$fedora_kde" "expected the unchanged group membership list"
+lacks 'groups=\([^)]*\<input\>[^)]*\)' "$fedora_kde" "the installer must not add the managed user to the input group"
 
 # BEHAVIORAL proof against a strict, call-logging systemctl stub. The one
 # hardcoded absolute path (/usr/bin/ydotoold) is substituted to a scratch
@@ -353,14 +318,6 @@ run_pkg_service() {  # $1=fn-file $2=has_kde $3=has_gnome $4=daemon(present|abse
 [[ "$(run_pkg_service "$fedora_fn" 0 1 present)" == 'stop ydotool.service|mask ydotool.service|' ]] \
   || fail "Fedora helper must stop then mask ydotool.service on GNOME"
 
-[[ "$(run_pkg_service "$ubuntu_fn" 1 0 absent)" == '' ]] \
-  || fail "Ubuntu helper must call nothing when ydotoold is absent"
-[[ "$(run_pkg_service "$ubuntu_fn" 0 0 present)" == '' ]] \
-  || fail "Ubuntu helper must call nothing on desktop=none"
-[[ "$(run_pkg_service "$ubuntu_fn" 1 0 present)" == '--global disable ydotool.service|' ]] \
-  || fail "Ubuntu helper must globally disable ydotool.service on KDE"
-[[ "$(run_pkg_service "$ubuntu_fn" 0 1 present)" == '--global disable ydotool.service|' ]] \
-  || fail "Ubuntu helper must globally disable ydotool.service on GNOME"
 
 echo "U1: OK"
 
@@ -371,12 +328,9 @@ echo "=== U2: udev least privilege ==="
 has_line 'KERNEL=="uinput", SUBSYSTEM=="misc", OPTIONS+="static_node=uinput", TAG+="uaccess"' \
   "$rules_70" "70-uinput-solaar.rules lost its exact active-seat uaccess grant"
 lacks 'GROUP=|OWNER=|MODE=' "$rules_70" "70-uinput-solaar.rules must not declare a persistent group/owner/mode grant"
-rules_80_active=$(grep -vE '^\s*(#.*)?$' "$rules_80" || true)
-[[ -z "$rules_80_active" ]] || fail "80-uinput.rules must be comment-only (found: $rules_80_active)"
-[[ "$(basename -- "$rules_80")" == "80-uinput.rules" ]] || fail "the override must keep Ubuntu's exact vendor basename"
 
 if command -v udevadm >/dev/null 2>&1; then
-  udevadm verify "$rules_70" "$rules_80" || fail "udevadm verify rejected the managed udev rules"
+  udevadm verify "$rules_70" || fail "udevadm verify rejected the managed udev rule"
 fi
 echo "U2: OK"
 
@@ -618,8 +572,6 @@ echo "reconciler: OK"
 echo "=== U3: eligibility render matrix (host mode) ==="
 eligibility_positive "$fedora_ov" "$scratch/path-kde" fedora-kde
 eligibility_positive "$fedora_ov" "$scratch/path-gnome" fedora-gnome
-eligibility_positive "$ubuntu_ov" "$scratch/path-kde" ubuntu-kde
-eligibility_positive "$ubuntu_ov" "$scratch/path-gnome" ubuntu-gnome
 eligibility_negative "$fedora_ov" "$scratch/path-kde" "$scratch/cache-headless" headless
 eligibility_negative '{"chezmoi":{"os":"darwin"}}' "$scratch/path-kde" "$scratch/cache-desktop" nonlinux
 eligibility_negative '{"chezmoi":{"os":"linux","osRelease":{"id":"debian"}}}' \

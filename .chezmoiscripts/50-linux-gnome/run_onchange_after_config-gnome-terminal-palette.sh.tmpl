@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-terminal-palette.sh.tmpl
 #
-# GNOME hosts (Fedora Workstation, Ubuntu Desktop 26.04). Sets the color palette
+# GNOME hosts. Sets the color palette
 # of Ptyxis — the GNOME terminal both targets ship as their default — on its
 # DEFAULT profile:
 #
@@ -15,9 +15,7 @@
 # automatically.
 #
 # WHY gnome (the shipped value): Ptyxis's upstream schema default IS `gnome`,
-# but Ubuntu overrides it distro-wide in
-# /usr/share/glib-2.0/schemas/10_ptyxis.gschema.override with
-# `[org.gnome.Ptyxis.Profile] palette='Ubuntu'` — which is why an Ubuntu host's
+# but users might override it distro-wide.
 # terminal comes up purple while a Fedora host comes up stock. A schema override
 # can only be beaten at USER scope (GLib reads overrides from the system data
 # dirs only, and a dconf system-db default cannot target the per-host random

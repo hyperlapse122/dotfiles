@@ -6,9 +6,8 @@
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
 # `sudo install -D -m <mode>`, removes orphaned /etc paths this repo used to
 # ship, and reloads exactly what it installed (systemd units, udev rules,
-# sysctl drop-ins, Ubuntu locale generation, the gdm dconf db). chezmoi
+# sysctl drop-ins, and the gdm dconf db). chezmoi
 # manages $HOME and cannot own root-owned /etc targets, so this ships as a
-# script rather than managed files.
 #
 # MANIFEST-DRIVEN: per-path install modes, host gates, source checks, and the
 # removed-path list all live in .chezmoidata/system.yaml (single source of
@@ -200,44 +199,6 @@ else
   printf '  -- thinkpad_acpi: skipped (not a ThinkPad system)\n'
 fi
 
-# On Ubuntu, the LANG/LC_* values in /etc/locale.conf (installed above, and read
-# by systemd-localed on every distro) only take effect once the referenced locale
-# is compiled: Fedora ships ko_KR.UTF-8 precompiled via glibc-langpack-ko, but
-# Ubuntu generates locales on demand from the `locales` package. Drive locale-gen
-# and update-locale straight from the installed /etc/locale.conf so this stays in
-# lockstep with that single source of truth, plus the extra_locales baseline
-# below — generated but never selected as a LANG/LC_* default.
-if [[ "$os_id" == ubuntu && -f /etc/locale.conf ]] \
-  && command -v locale-gen >/dev/null 2>&1 \
-  && command -v update-locale >/dev/null 2>&1; then
-  locale_vars=()
-  while IFS='=' read -r locale_key locale_value; do
-    [[ "$locale_key" =~ ^[A-Z][A-Z_]*$ ]] || continue
-    locale_value="${locale_value%\"}"
-    locale_value="${locale_value#\"}"
-    [[ -n "$locale_value" ]] || continue
-    locale_vars+=("${locale_key}=${locale_value}")
-  done < /etc/locale.conf
-
-  # Extra locales to GENERATE beyond the locale.conf selection (never handed to
-  # update-locale, so LANG/LC_* stay whatever locale.conf picks): en_US.UTF-8 is
-  # the baseline many tools assume exists. Fedora needs no counterpart —
-  # glibc-langpack-en is effectively always installed there.
-  extra_locales=(en_US.UTF-8)
-
-  if [[ ${#locale_vars[@]} -gt 0 ]]; then
-    mapfile -t locale_values < <(
-      {
-        printf '%s\n' "${locale_vars[@]}" | cut -d= -f2
-        printf '%s\n' "${extra_locales[@]}"
-      } | sort -u
-    )
-    printf '  -> locale-gen %s\n' "${locale_values[*]}"
-    "${SUDO[@]}" locale-gen "${locale_values[@]}"
-    printf '  -> update-locale %s\n' "${locale_vars[*]}"
-    "${SUDO[@]}" update-locale "${locale_vars[@]}"
-  fi
-fi
 
 # --- Remove orphaned /etc paths (rendered from system.yaml `removed`) -------
 REMOVED_ETC_PATHS=()

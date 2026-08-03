@@ -52,7 +52,7 @@
 #
 #   <fact>          boolean fact is true          nvidia, thinkpad, gdm
 #   !<fact>         boolean fact is false         !virt   (bareMetalPackages)
-#   <fact>.<value>  string fact equals value      desktop.kde, distro.ubuntu
+#   <fact>.<value>  string fact equals value      desktop.kde, distro.fedora
 #
 # facts-validate.tmpl checks the fact half of every expression against this
 # registry and FAILS THE APPLY on an unknown name, listing the valid ones — the
@@ -108,12 +108,12 @@ factRegistry:
   distro:
     type: string
     probe: builtin
-    values: [fedora, ubuntu, ""]
+    values: [fedora, ""]
     source: .chezmoi.osRelease.id (empty on darwin/windows — no /etc/os-release)
     gates: >-
-      The two package installers (20-linux-fedora vs 40-linux-ubuntu), the
-      Ubuntu-only locale-gen / MOK / ufw paths, and system.yaml's per-distro
-      `removed:` entries.
+      The Fedora package installer (20-linux-fedora), the LUKS TPM2 path, and
+      system.yaml's per-distro `removed:` entries. Fedora is the only managed
+      Linux distribution.
     whenFalse: >-
       Empty (non-Linux): every distro-gated script renders to nothing on that OS.
   desktop:
@@ -144,29 +144,15 @@ factRegistry:
     absentDefault: false
     source: PCI vendor 0x10de anywhere under /sys/bus/pci/devices/*/vendor.
     gates: >-
-      nvidiaPackages (both distros — the CUDA/libnvidia-container repos on Ubuntu,
-      RPM Fusion's akmod on Fedora), the nvidia-persistenced service, and the
-      Ubuntu Secure Boot MOK enrollment path that exists only to sign the DKMS
-      module. FORCE_NVIDIA=1 overrides it IN THE INSTALLERS ONLY (see the
+      nvidiaPackages (RPM Fusion's akmod driver stack plus the
+      CUDA/libnvidia-container repos on Fedora), the nvidia-persistenced
+      service, and the Fedora MOK enrollment path that signs the DKMS module.
+      FORCE_NVIDIA=1 overrides it IN THE INSTALLER ONLY (see the
       FORCE_* note at the bottom).
     whenFalse: >-
       No driver, no CUDA repo, no container toolkit, no MOK enrollment. This is
       the fact the plan's AE5 turns on: a template-only PCI probe reports false on
       this host, whose GPU sits behind a PCIe bridge — the hook's grep does not.
-  intelGpu:
-    type: bool
-    probe: hook
-    absentDefault: false
-    source: >-
-      PCI vendor 0x8086 AND class 0x03xxxx (display controller). The class half is
-      load-bearing: 0x8086 is Intel's vendor id for every Intel part, so vendor
-      alone trips on an Intel NIC or chipset.
-    gates: >-
-      Ubuntu only: intelPackages + intelHweKernel from the kobuk-team/intel-graphics
-      PPA, and the GRUB_FLAVOUR_ORDER=generic drop-in that makes the HWE kernel the
-      default boot entry. No Fedora counterpart. FORCE_INTEL=1 overrides in the
-      installer only.
-    whenFalse: No kobuk PPA, no Intel graphics stack, no HWE kernel pin.
   thinkpad:
     type: bool
     probe: template
@@ -200,9 +186,9 @@ factRegistry:
     absentDefault: true
     source: >-
       systemd-detect-virt --quiet, bare — true for a VM AND for a container. Not the
-      same probe as `vm`, and not a superset by accident: both installers' IS_VIRT
+      same probe as `vm`, and not a superset by accident: the installer's IS_VIRT
       has always been the bare form.
-    gates: bareMetalPackages (both distros) — inverted, so the gate expression is `!virt`.
+    gates: bareMetalPackages — inverted, so the gate expression is `!virt`.
     whenFalse: >-
       Inverted gate: virt=false is what INSTALLS the bare-metal set (firmware tools,
       power management, hardware daemons). virt=true skips it — the direction that
@@ -281,9 +267,9 @@ factRegistry:
 # ---------------------------------------------------------------------------
 # FORCE_* overrides are NOT facts and never enter this registry.
 #
-# FORCE_NVIDIA / FORCE_INTEL exist so a GPU-less test container can still
-# exercise the driver package sets. They layer on TOP of a fact, in the package
-# installers ONLY:
+# FORCE_NVIDIA exists so a GPU-less test container can still
+# exercise the driver package set. It layers on TOP of a fact, in the package
+# installer ONLY:
 #
 #   HAS_NVIDIA="$FACT_NVIDIA"; [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 #

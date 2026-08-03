@@ -22,9 +22,7 @@
 # default zone on Fedora Workstation); (2) binding tailscale0 to the
 # `trusted` zone, per Tailscale's recommendation for firewalld hosts; and
 # (3) opening UDP 41641 (WireGuard) + UDP 3478 (STUN) on the `public` zone
-# so direct peer connections work behind a host firewall. The whole
-# firewalld block is a no-op on hosts where firewalld is not the active
-# backend (Ubuntu's ufw path is linux-ubuntu/run_onchange_after_ubuntu-tailscale-ufw).
+# so direct peer connections work behind a host firewall.
 #
 # Skip behaviour: soft-skips (exit 0) on headless/server installs and when
 # sudo would have to prompt but can't — see the shared guards inlined below

@@ -410,6 +410,6 @@ jobs:
         run: .ci/test-kitty-provisioning.sh
 
   # NOTE: shellcheck moved to the `render-dotfiles` workflow's `shellcheck` job,
-  # which runs after the Fedora/Ubuntu render so it can lint the REAL rendered
+  # which runs after the Fedora and macOS renders so it can lint the REAL rendered
   # scripts (including the `.chezmoiscripts/**` templates shellcheck cannot parse
   # in `.tmpl` form) plus the repo-meta scripts. It is therefore PR-only.

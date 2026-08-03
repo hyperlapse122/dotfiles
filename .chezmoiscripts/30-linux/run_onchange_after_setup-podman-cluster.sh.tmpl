@@ -1,4 +1,4 @@
-{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 #!/usr/bin/env bash
 # .chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl
 #
@@ -6,7 +6,7 @@
 # Kubernetes dev cluster on the Linux desktop targets. Every piece is
 # already INSTALLED elsewhere; this script only performs the runtime
 # *activation* that cannot be expressed as a managed file:
-#   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf/apt)
+#   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf)
 #   - minikube ........................ .chezmoiexternals/k8s.toml (~/.local/bin)
 #   - DOCKER_HOST + MINIKUBE_ROOTLESS . dot_config/environment.d/65-containers.conf
 #   - user lingering + rootful
@@ -44,7 +44,7 @@
 # session bus) skips them cleanly and a later apply from the desktop session
 # completes them. Every step is idempotent, so re-running is a no-op once done.
 #
-# Desktop-target gated (fedora|ubuntu) and container-skipped: the root
+# Fedora desktop-gated and container-skipped: the root
 # .chezmoiignore drops .chezmoiscripts/30-linux/*.sh inside a real (non-toolbox)
 # container, where nesting a cluster is neither wanted nor reliable.
 
