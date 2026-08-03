@@ -252,6 +252,13 @@ export const REGISTRY: Registry = {
   // Version-only tag for the build-open-design script's onchange trigger.
   "open-design": { kind: "githubRelease", source: "nexu-io/open-design" },
 
+  /* ---------- githubSkillCollection ---------- */
+
+  "figma/mcp-server-guide": {
+    kind: "githubSkillCollection",
+    source: "figma/mcp-server-guide",
+  },
+
   /* ---------- gitlabRelease ---------- */
 
   // One key serves the vcs.toml binary and both bundled skills (AE5).

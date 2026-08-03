@@ -15,17 +15,19 @@ The plan this package implements is
 
 ## Status
 
-All seven resolver kinds are implemented, the committed
+All eight resolver kinds are implemented, and the committed
 `.chezmoidata/releases.json` covers every render-time resolution source in the
-repo, and the lock is now the sole version/URL/checksum source: every
-`.chezmoiexternals` file and every version-consuming script template reads it
-through `.chezmoitemplates/release-lock-ref.tmpl`. A source-state read performs
-no network I/O; re-run this package to refresh the lock.
+repo. The lock is the sole version, immutable revision, inventory, URL, and
+checksum source: every `.chezmoiexternals` file and every version-consuming
+script template reads it through `.chezmoitemplates/release-lock-ref.tmpl`.
+A source-state read performs no network I/O; re-run this package to refresh the
+lock.
 
 | Resolver kind | State |
 |---|---|
 | `githubRelease` | implemented |
 | `githubTag` | implemented |
+| `githubSkillCollection` | implemented |
 | `gitlabRelease` | implemented |
 | `npm` | implemented |
 | `vendorManifest` | implemented |
@@ -62,6 +64,12 @@ The shell truncates a redirection target before the CLI starts, so the process
 cannot recover that prior content. Use plain invocation or `--out` to refresh a
 lock safely.
 
+The hourly refresh uses this same CLI and updates a changed generated lock
+without a separate approval step. The lock diff remains review-visible for
+audit and reproducibility; it is not an approval gate. A resolver failure exits
+non-zero and preserves the prior whole entry, so incomplete upstream evidence
+cannot silently shrink the desired collection.
+
 ## Adding a tool
 
 Add an entry to [`src/registry.ts`](src/registry.ts) naming its resolver kind,
@@ -88,6 +96,11 @@ returning the upstream filename for a platform. Conventions that matter:
 - A tool whose binary is not a GitHub asset — `kubectl` from `dl.k8s.io`,
   `helm` from `get.helm.sh` — takes only its tag from the release and carries
   no `asset` selector, so the lock holds a version and no artifacts block.
+- `githubSkillCollection` scans the complete commit history for exact
+  `Skills v<semver> (#<number>)` subjects, selects the highest semantic
+  version, and records its immutable commit plus a sorted inventory of all
+  portable immediate `skills/figma-*` trees. Collection entries do not carry
+  platform artifacts.
 - npm entries record `dist.integrity` as published. It is informational only:
   chezmoi externals verify sha256, so npm entries stay version-only for
   consumers.
