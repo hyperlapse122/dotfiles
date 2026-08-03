@@ -46,7 +46,10 @@ function stubGitHub(routes: Record<string, StubResponse>, requests: Request[] = 
   return requests;
 }
 
-function routes(commits: readonly unknown[], selectedTree: unknown = tree()): Record<string, StubResponse> {
+function routes(
+  commits: readonly unknown[],
+  selectedTree: unknown = tree(),
+): Record<string, StubResponse> {
   return {
     "/repos/owner/repo/commits?path=skills%2F&per_page=100": { body: commits },
     [`/repos/owner/repo/git/trees/${SHA_1}?recursive=1`]: { body: selectedTree },
@@ -64,10 +67,7 @@ describe("resolveGitHubSkillCollection", () => {
 
   test("selects the highest SemVer and emits a deterministic typed collection", async () => {
     stubGitHub(
-      routes([
-        commit(SHA_1, "Skills v2.0.0 (#20)"),
-        commit(SHA_2, "Skills v1.5.0 (#21)"),
-      ]),
+      routes([commit(SHA_1, "Skills v2.0.0 (#20)"), commit(SHA_2, "Skills v1.5.0 (#21)")]),
     );
 
     await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).resolves.toEqual({
@@ -104,7 +104,9 @@ describe("resolveGitHubSkillCollection", () => {
         commit(SHA_2, "Skills v2.0.0-beta.2 (#2)"),
       ]),
     );
-    await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).resolves.toMatchObject({
+    await expect(
+      resolveGitHubSkillCollection("figmaSkills", spec, undefined),
+    ).resolves.toMatchObject({
       version: "2.0.0-beta.11",
       revision: SHA_1,
     });
@@ -121,23 +123,15 @@ describe("resolveGitHubSkillCollection", () => {
   });
 
   test("rejects distinct commits tied at highest precedence but deduplicates the same SHA", async () => {
-    stubGitHub(
-      routes([
-        commit(SHA_1, "Skills v2.0.0 (#1)"),
-        commit(SHA_2, "Skills v2.0.0 (#2)"),
-      ]),
-    );
+    stubGitHub(routes([commit(SHA_1, "Skills v2.0.0 (#1)"), commit(SHA_2, "Skills v2.0.0 (#2)")]));
     await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).rejects.toThrow(
       /ambiguous.*2\.0\.0/i,
     );
 
-    stubGitHub(
-      routes([
-        commit(SHA_1, "Skills v2.0.0 (#1)"),
-        commit(SHA_1, "Skills v2.0.0 (#1)"),
-      ]),
-    );
-    await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).resolves.toMatchObject({
+    stubGitHub(routes([commit(SHA_1, "Skills v2.0.0 (#1)"), commit(SHA_1, "Skills v2.0.0 (#1)")]));
+    await expect(
+      resolveGitHubSkillCollection("figmaSkills", spec, undefined),
+    ).resolves.toMatchObject({
       version: "2.0.0",
       revision: SHA_1,
     });
@@ -154,7 +148,9 @@ describe("resolveGitHubSkillCollection", () => {
       ]),
     );
 
-    await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).resolves.toMatchObject({
+    await expect(
+      resolveGitHubSkillCollection("figmaSkills", spec, undefined),
+    ).resolves.toMatchObject({
       version: "1.2.3",
       revision: SHA_2,
     });
@@ -176,37 +172,54 @@ describe("resolveGitHubSkillCollection", () => {
       ),
     );
 
-    await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).resolves.toMatchObject({
+    await expect(
+      resolveGitHubSkillCollection("figmaSkills", spec, undefined),
+    ).resolves.toMatchObject({
       skills: ["figma-good"],
     });
   });
 
   test.each([
     ["missing regular SKILL.md", [{ path: "skills/figma-bad", mode: "040000", type: "tree" }]],
-    ["symlinked SKILL.md", [
-      { path: "skills/figma-bad", mode: "040000", type: "tree" },
-      { path: "skills/figma-bad/SKILL.md", mode: "120000", type: "blob" },
-    ]],
-    ["unsafe relative path", [
-      { path: "skills/figma-bad", mode: "040000", type: "tree" },
-      { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
-      { path: "skills/figma-bad/../escape", mode: "100644", type: "blob" },
-    ]],
-    ["Windows reserved path", [
-      { path: "skills/figma-bad", mode: "040000", type: "tree" },
-      { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
-      { path: "skills/figma-bad/references/CON.md", mode: "100644", type: "blob" },
-    ]],
-    ["case collision", [
-      { path: "skills/figma-bad", mode: "040000", type: "tree" },
-      { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
-      { path: "skills/figma-bad/skill.md", mode: "100644", type: "blob" },
-    ]],
-    ["unsupported submodule", [
-      { path: "skills/figma-bad", mode: "040000", type: "tree" },
-      { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
-      { path: "skills/figma-bad/vendor", mode: "160000", type: "commit" },
-    ]],
+    [
+      "symlinked SKILL.md",
+      [
+        { path: "skills/figma-bad", mode: "040000", type: "tree" },
+        { path: "skills/figma-bad/SKILL.md", mode: "120000", type: "blob" },
+      ],
+    ],
+    [
+      "unsafe relative path",
+      [
+        { path: "skills/figma-bad", mode: "040000", type: "tree" },
+        { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
+        { path: "skills/figma-bad/../escape", mode: "100644", type: "blob" },
+      ],
+    ],
+    [
+      "Windows reserved path",
+      [
+        { path: "skills/figma-bad", mode: "040000", type: "tree" },
+        { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
+        { path: "skills/figma-bad/references/CON.md", mode: "100644", type: "blob" },
+      ],
+    ],
+    [
+      "case collision",
+      [
+        { path: "skills/figma-bad", mode: "040000", type: "tree" },
+        { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
+        { path: "skills/figma-bad/skill.md", mode: "100644", type: "blob" },
+      ],
+    ],
+    [
+      "unsupported submodule",
+      [
+        { path: "skills/figma-bad", mode: "040000", type: "tree" },
+        { path: "skills/figma-bad/SKILL.md", mode: "100644", type: "blob" },
+        { path: "skills/figma-bad/vendor", mode: "160000", type: "commit" },
+      ],
+    ],
   ])("rejects a selected subtree with %s", async (_label, entries) => {
     stubGitHub(routes([commit(SHA_1, "Skills v1.0.0 (#1)")], tree(entries)));
     await expect(resolveGitHubSkillCollection("figmaSkills", spec, undefined)).rejects.toThrow(

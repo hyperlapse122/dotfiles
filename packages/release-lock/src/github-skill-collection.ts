@@ -10,8 +10,7 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const RELEASE_SUBJECT = /^Skills v([^\s]+) \(#\d+\)$/;
 const SKILL_NAME = /^figma-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const REGULAR_BLOB_MODES: Readonly<Record<string, true>> = { "100644": true, "100755": true };
-const WINDOWS_RESERVED =
-  /^(?:con|prn|aux|nul|com(?:[1-9¹²³])|lpt(?:[1-9¹²³]))(?:\..*)?$/iu;
+const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com(?:[1-9¹²³])|lpt(?:[1-9¹²³]))(?:\..*)?$/iu;
 const WINDOWS_INVALID = /[<>:"\\|?*\u0000-\u001f\uD800-\uDFFF]/u;
 
 interface CommitCandidate {
@@ -53,7 +52,6 @@ async function fetchJson(
   }
 }
 
-
 function nextPage(link: string | null): string | null {
   if (!link) return null;
   for (const part of link.split(",")) {
@@ -78,7 +76,10 @@ function parseCandidate(value: unknown): CommitCandidate | null {
   return normalized ? { sha: record["sha"] as string, version: normalized } : null;
 }
 
-async function fetchCandidates(source: string, token: string | undefined): Promise<CommitCandidate[]> {
+async function fetchCandidates(
+  source: string,
+  token: string | undefined,
+): Promise<CommitCandidate[]> {
   let url: string | null = `${API_ROOT}/repos/${source}/commits?path=skills%2F&per_page=100`;
   const candidates: CommitCandidate[] = [];
   const visited = new Set<string>();
@@ -100,7 +101,10 @@ async function fetchCandidates(source: string, token: string | undefined): Promi
 
 function selectCandidate(source: string, evidence: readonly CommitCandidate[]): CommitCandidate {
   if (evidence.length === 0) {
-    throw new ResolutionError(source, "no commit has an exact valid Skills v<semver> (#<number>) subject");
+    throw new ResolutionError(
+      source,
+      "no commit has an exact valid Skills v<semver> (#<number>) subject",
+    );
   }
 
   let highest = evidence[0]!;
@@ -180,7 +184,10 @@ function inventorySkills(source: string, values: readonly unknown[]): string[] {
 
   const sortedSkills = [...skills].sort((a, b) => a.localeCompare(b));
   if (sortedSkills.length === 0) {
-    throw new ResolutionError(source, "selected tree contains no valid immediate figma-* skill directories");
+    throw new ResolutionError(
+      source,
+      "selected tree contains no valid immediate figma-* skill directories",
+    );
   }
   if (new Set(sortedSkills).size !== sortedSkills.length) {
     throw new ResolutionError(source, "selected tree contains duplicate Figma skill directories");

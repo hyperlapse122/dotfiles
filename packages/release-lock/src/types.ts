@@ -50,7 +50,6 @@ export interface LockedSkillCollection extends LockedTool {
   readonly artifacts?: never;
 }
 
-
 export interface ReleaseLock {
   /**
    * Nested under `releases` because chezmoi merges every `.chezmoidata` file's
