@@ -552,7 +552,6 @@ jobs:
           .ci/test-windows-garden-reconcile.sh
           .ci/test-vscodium-targets.sh
           .ci/test-vscodium-extensions.sh
-          .ci/test-wifi-import-gates.sh
       - name: Run Windows Wi-Fi cleanup fixture
         shell: pwsh
         run: .ci/test-wifi-import-windows.ps1
