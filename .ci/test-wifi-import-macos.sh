@@ -161,7 +161,7 @@ grep -q 'failed to install' "$scratch/out-fail" \
   || fail "failing run must report the failures"
 assert_no_leak fail
 
-# --- scenario 6: interruption — INT while profiles(1) is blocked ----------
+# --- scenario 6: interruption — TERM while profiles(1) is blocked ---------
 mkdir -p "$scratch/tmp-int" "$scratch/state-int"
 : >"$scratch/log-int"
 env -i HOME="$scratch/home" TMPDIR="$scratch/tmp-int" \
@@ -172,15 +172,15 @@ tool_pid=$!
 deadline=$((SECONDS + 15))
 until [[ -f "$scratch/state-int/blocked" || $SECONDS -ge $deadline ]]; do sleep 0.05; done
 [[ -f "$scratch/state-int/blocked" ]] || fail "interruption fixture never reached the blocking install"
-kill -INT "$tool_pid"
-# The tool's bash defers the INT trap until the blocked profiles(1) returns;
-# unblock it, then the single EXIT-trap path must run (exit 130).
+kill -TERM "$tool_pid"
+# The tool's bash defers the TERM trap until the blocked profiles(1) returns;
+# unblock it, then the single EXIT-trap path must run (exit 143).
 : >"$scratch/state-int/unblock"
 set +e
 wait "$tool_pid"
 TOOL_RC=$?
 set -e
-[[ "$TOOL_RC" -eq 130 ]] || fail "interrupted run exit $TOOL_RC, expected 130"
+[[ "$TOOL_RC" -eq 143 ]] || fail "interrupted run exit $TOOL_RC, expected 143"
 assert_no_leak int
 
 # --- scenario 7: non-root real run is an environment bail ------------------
