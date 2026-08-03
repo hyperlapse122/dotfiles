@@ -365,24 +365,37 @@ agents:
       # of it. Resolution is override -> agent frontmatter -> session fallback
       # (oh-my-pi docs/task-agent-discovery.md), so an omitted agent lands on its
       # OWN declared model, not on the `task` role. `omp agents unpack` reports
-      # the v17.2.1 bundled defaults as designer/@designer, librarian/@smol,
-      # reviewer/@slow, scout/@smol, sonic/@smol, task/@task; re-read them after
-      # an omp upgrade with the sync-omp-models skill.
+      # the v17.2.4 bundled defaults as designer/@designer, librarian/@smol
+      # (thinkingLevel minimal), reviewer/@slow, scout/@smol (medium),
+      # security-reviewer/<none>, sonic/@smol (medium), task/@task (auto);
+      # re-read them after an omp upgrade with the sync-omp-models skill.
       #   - `task` and `librarian` are absent because their frontmatter already
       #     names the wanted role (@task, @smol); an entry would be a no-op that
       #     only drifts. `designer` is absent for the same reason - upstream, not
       #     this data, is what binds that agent to its same-named role.
-      #   - `scout` IS declared, and must be: on this host every
-      #     compound-engineering persona - code review, doc review, simplification
-      #     - dispatches as agent type `scout`, whose frontmatter pins @smol. Left
-      #     undeclared it runs deep-judgment work on the light floor, so it is
-      #     lifted to the default-subagent tier instead.
+      #   - `security-reviewer` (new in v17.2.4) is absent on purpose: it ships
+      #     NO frontmatter model, so omission lands it on the parent session
+      #     model. That is exactly the ceiling tier compound-engineering
+      #     reserves for its correctness/security/adversarial personas ("if the
+      #     user is on Opus, these get Opus"); pinning a role here would demote
+      #     the highest-stakes review seat to a fixed line.
+      #   - `scout` IS declared, and must be. compound-engineering dispatches
+      #     every persona as a GENERIC subagent (no typed agent names), which
+      #     under omp is the `task` agent (@task) for writable work and `scout`
+      #     for read-only research - and scout's frontmatter pins @smol. Left
+      #     undeclared, the review fleet's read-only dispatches (code review,
+      #     doc review, simplification) run deep-judgment work on the light
+      #     floor. The override lands both dispatch paths on the same mid tier,
+      #     which is the tier compound-engineering's model tiering assigns them.
       #   - `sonic` points at the `bulk` role rather than a literal so it picks
-      #     up that role's Haiku-then-GPT recovery order.
+      #     up that role's Haiku-then-GPT recovery order. It doubles as the
+      #     compound-engineering EXTRACTION tier: grounding scouts and other
+      #     retrieval-and-quoting dispatches can ride `sonic` to Flash-Lite
+      #     instead of the persona fleet's Sonnet.
       task.agentModelOverrides:
-        scout: "@task"                              # CE personas, not an explorer
+        scout: "@task"                              # CE fleet read-only path -> mid tier
         reviewer: "@advisor"                        # same critic model as turn review
-        sonic: "@bulk"                              # mechanical bulk
+        sonic: "@bulk"                              # mechanical bulk + CE extraction tier
       task.showResolvedModelBadge: true
       retry.usageAwareFallback: true
       # Keyed by role only. A role with no chain of its own falls to `default`,
@@ -407,11 +420,40 @@ agents:
       # prompts (oh-my-openagent's tested finding), and Sol changes working
       # style rather than degrading gracefully, so it sits last as the
       # different-brain option rather than the first retry.
+      #
+      # `task` backs the compound-engineering persona fleet - every generic
+      # subagent spawn plus the `scout` alias above - so its recovery order is
+      # a FLEET order, and it needs one of its own: with no declared chain it
+      # inherited `default`, where the zai hop can be quota-dead and the Sol
+      # hop escalates mid-tier fleet work to the deliberation line. The first
+      # hop keeps the Sonnet FAMILY on the Antigravity plan (a separate daily
+      # quota that is typically untouched), so a persona prompt tuned on Sonnet
+      # keeps its behavior through an Anthropic wall; Terra is the
+      # openai-codex anchor on the worker tier; Kimi then GLM close it in
+      # oh-my-openagent's tested Kimi-first order, both kept late because the
+      # Kimi membership quota is shared across every client and the zai weekly
+      # window spends early.
+      #
+      # `advisor` is the critic seat (turn review plus the `reviewer` agent).
+      # Its inherited path never reached an anthropic hop at all, and its last
+      # hop sat on the same openai-codex plan as its primary - a codex wall
+      # would have stranded it. The declared chain adds the anthropic anchor on
+      # the SONNET line, not Opus: the critic must stay off the doer's own
+      # line, or it reviews with the doer's blind spots. Kimi leads because
+      # the Anthropic weekly window runs hot on this host.
       retry.fallbackChains:
         default:
         - kimi-code/k3:high
         - zai/glm-5.2:max
         - openai-codex/gpt-5.6-sol:medium
+        task:
+        - google-antigravity/claude-sonnet-4-6
+        - openai-codex/gpt-5.6-terra
+        - kimi-code/k3:high
+        - zai/glm-5.2:max
+        advisor:
+        - kimi-code/k3:high
+        - anthropic/claude-sonnet-5
         smol:
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5

@@ -407,7 +407,17 @@ Two traps make a naive local run wrong, so use this recipe verbatim:
 set -euo pipefail
 scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch/omp-sync"
 mkdir -p "$scratch/bin" "$scratch/target" "$scratch/home"; : > "$scratch/empty.toml"
-printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' > "$scratch/bin/op"
+# The stub must answer per-reference secrets: the reconcile test asserts
+# distinct OPENROUTER/OPENCODE values, so a flat dummy-secret stub fails step 3.
+cat > "$scratch/bin/op" <<'OPSTUB'
+#!/usr/bin/env bash
+case "$*" in
+  *"op://Private/OpenRouter/API Key"*) printf openrouter-test-secret ;;
+  *"op://Private/Opencode/API Key"*) printf opencode-test-secret ;;
+  whoami) printf dummy@example.invalid ;;
+  *) printf dummy-secret ;;
+esac
+OPSTUB
 chmod 700 "$scratch/bin/op"
 render() {
   env HOME="$scratch/home" PATH="$scratch/bin:$PATH" chezmoi \

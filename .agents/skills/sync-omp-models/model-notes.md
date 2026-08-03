@@ -105,8 +105,8 @@ checked: 2026-07-29
   https://platform.claude.com/docs/en/build-with-claude/thinking
 
 ### Claude Sonnet
-ids: `anthropic/claude-sonnet-*`
-checked: 2026-07-29
+ids: `anthropic/claude-sonnet-*`, `google-antigravity/claude-sonnet-*`
+checked: 2026-08-03
 - **built for** balanced daily coding and agentic execution — speed and
   judgment in one loop.
 - **strong at** code generation, data analysis, visual understanding and tool
@@ -115,7 +115,11 @@ checked: 2026-07-29
 - **weak at / watch** low effort under-thinks on harder problems; follows
   instructions literally and can miss implied scope; manual extended thinking is
   gone in favour of adaptive thinking plus effort; non-default sampling settings
-  are rejected outright.
+  are rejected outright. The Antigravity transport serves the same line from a
+  separate daily quota, but exposes a smaller context and a shorter effort list
+  than the native transport — read the catalog before assuming parity; it is
+  the same-weights fallback when the Anthropic plan is spent, never an
+  upgrade.
 - src: https://code.claude.com/docs/en/model-config ·
   https://platform.claude.com/docs/en/build-with-claude/thinking ·
   https://www.anthropic.com/news/claude-sonnet-5
@@ -335,9 +339,10 @@ this table moving with it, the check fails.
 | `tiny` | titles, memory, background triage | Gemini Flash-Lite | latency and volume are the job; judgment is not |
 | `bulk` | mechanical edits at volume — the one custom role | Gemini Flash-Lite | same tier as background work, but it owns a role so it can own a recovery order |
 | `commit` | commit messages | GPT Luna | bounded transformation with a clear success test still benefits from reliable reasoning |
-| `scout` | read-only exploration — and, on this host, every compound-engineering persona | Claude Sonnet | dispatched work is deep-judgment, not exploration; the light floor would demote it |
+| `scout` | read-only exploration — and the read-only half of the compound-engineering persona fleet | Claude Sonnet | via `@task`; dispatched review work is deep-judgment, not exploration, and the light floor would demote it |
 | `reviewer` | code review subagent | GPT Terra | same critic model as turn review, so the two cannot disagree by accident |
-| `sonic` | mechanical bulk | Gemini Flash-Lite | via `@bulk`; routine edits where latency beats depth, stepping down through Claude then GPT |
+| `security-reviewer` | security review subagent | session fallback (the doer's line) | ships no frontmatter model, so omission inherits the session model — the ceiling tier compound-engineering reserves for its highest-stakes personas |
+| `sonic` | mechanical bulk and extraction-tier retrieval | Gemini Flash-Lite | via `@bulk`; routine edits and grounding-scout retrieval where latency beats depth, stepping down through Claude then GPT |
 
 ---
 
@@ -356,7 +361,7 @@ omo's published agent and category provider chains.
 | momus — critic | GPT Terra, high | `advisor`, `reviewer` | agree: same line AND same effort, arrived at independently |
 | prometheus — planning | Claude Fable, xhigh | `plan` | agree: same line and tier |
 | metis — pre-plan gap analysis | Claude Opus, high | `designer` shares that tier | agree on the tier; omp has no gap-analysis role |
-| atlas, sisyphus-junior — workers | Claude Sonnet | `task` | agree, once the always-latest float lands Sonnet 5 |
+| atlas, sisyphus-junior — workers | Claude Sonnet | `task` | agree: same line |
 | librarian, explore — utility | GPT mini (fast variant) | `smol` | **diverge** — this host deliberately selects Luna's stronger bounded-work reasoning |
 | visual-engineering category | Claude Opus, max | `designer` | agree: same line |
 | multimodal-looker | GPT Sol low → Kimi K → GLM vision | `vision` | **diverge** — see below |
@@ -415,6 +420,7 @@ anchoring never escalates background work to a deliberation line.
 | If you lose… | Swap to, in order | Avoid |
 |---|---|---|
 | Claude Opus (main loop) | Kimi K → GLM main text → GPT Sol | GLM Flash; any image-only line |
+| Claude Sonnet (subagent fleet) | Claude Sonnet via the Antigravity transport → GPT Terra → Kimi K → GLM main text | Claude Opus or GPT Sol — a deliberation line is wasted on fleet work; any image-only line |
 | Claude Fable (planning) | Claude Opus → Kimi K | GLM Flash; Claude Haiku |
 | GPT Sol (deliberation) | Claude Opus → Kimi K → GLM main text | GPT Luna; any Flash-Lite line |
 | GPT Terra (review) | GPT Sol → Claude Opus | the same family as the model being reviewed |
