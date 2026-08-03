@@ -563,7 +563,7 @@
       "open-design": {
         "kind": "githubRelease",
         "source": "nexu-io/open-design",
-        "version": "open-design-v0.16.1"
+        "version": "open-design-v0.17.0"
       },
       "rust-analyzer": {
         "kind": "githubRelease",
