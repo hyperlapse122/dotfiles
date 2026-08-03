@@ -26,7 +26,7 @@ done < <(sed -n 's/^    - //p' "$repo_root/.chezmoidata/vscodium.yaml")
 ((${#DECLARED[@]} > 0)) || { echo 'no extensions parsed from vscodium.yaml' >&2; exit 1; }
 
 # A codium-less PATH for the soft-skip case (only the tools the scripts need).
-for tool in tr grep printf; do ln -s "$(command -v "$tool")" "$scratch/nobin/"; done
+for tool in tr grep; do cp "$(command -v "$tool")" "$scratch/nobin/"; done
 
 # --- POSIX half (rendered for darwin) ---------------------------------------
 chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
