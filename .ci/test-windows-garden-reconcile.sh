@@ -6,6 +6,9 @@ mkdir -p "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/windows-garden.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/bin" "$scratch/home/.config/garden"
+mkdir -p "$scratch/source/dot_config"
+cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/.chezmoiignore" "$scratch/source/"
+cp -a "$repo_root/dot_config/garden" "$scratch/source/dot_config/"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
 printf 'encryption = "gpg"\n[data]\n' >"$scratch/empty.toml"
@@ -17,13 +20,13 @@ PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo
 # then ask the same target-state engine which path the encrypted source owns.
 # This catches both an accidental Windows ignore and a source name that would
 # deploy garden.yaml.asc instead of the registry path the reconciler consumes.
-ignored=$(PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --refresh-externals=never \
+ignored=$(PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$scratch/source" --refresh-externals=never \
   --destination "$scratch/home" --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' ignored)
 if grep -qxF '.config/garden/garden.yaml' <<<"$ignored"; then
   printf '%s\n' 'windows garden reconciliation: garden registry is ignored on Windows' >&2
   exit 1
 fi
-managed=$(PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --refresh-externals=never \
+managed=$(PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$scratch/source" --refresh-externals=never \
   --destination "$scratch/home" --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' managed)
 grep -qxF '.config/garden/garden.yaml' <<<"$managed" || {
   printf '%s\n' 'windows garden reconciliation: encrypted source does not render to .config/garden/garden.yaml' >&2
