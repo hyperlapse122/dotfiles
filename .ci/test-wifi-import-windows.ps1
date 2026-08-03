@@ -55,6 +55,7 @@ echo %args%| findstr /C:"KT HomeHub 5G/password" >nul && (<nul set /p=fixture-ps
 echo %args%| findstr /C:"CPS-01/name" >nul && (<nul set /p=fixture-ssid-cps & exit /b 0)
 echo %args%| findstr /C:"CPS-01/password" >nul && (<nul set /p=fixture-psk-cps & exit /b 0)
 <nul set /p=fixture-dummy
+exit /b 0
 '@)
 
   # Render the deployed-mode tool (os=windows) with fixture secrets resolved.
