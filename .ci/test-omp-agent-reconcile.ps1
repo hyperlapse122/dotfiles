@@ -118,15 +118,19 @@ exit 0
 
   # The version gate rejects mismatched, digit-adjacent, and suffixed decoys
   # before any marketplace mutation, and still accepts the bare version form.
-  foreach ($decoy in @('omp/0.0.0', "omp/9$env:EXPECTED_OMP_VERSION", "omp/$env:EXPECTED_OMP_VERSION-rc.1")) {
-    $code = Invoke-Reconciler 'version-reject' '' $false $decoy
+  foreach ($decoy in @('omp/0.0.0', "omp/9$env:EXPECTED_OMP_VERSION", "omp/$env:EXPECTED_OMP_VERSION-rc.1", "omp/${env:EXPECTED_OMP_VERSION}9")) {
+    $decoyLabel = 'version-reject-' + ($decoy -replace '[^a-z0-9]', '-')
+    $code = Invoke-Reconciler $decoyLabel '' $false $decoy
     Assert ($code -ne 0) "version decoy $decoy unexpectedly passed preflight"
-    $rejectOut = Get-Content -Raw -LiteralPath (Join-Path $scratch 'version-reject.out')
+    $rejectOut = Get-Content -Raw -LiteralPath (Join-Path $scratch "$decoyLabel.out")
     Assert ($rejectOut -match 'preflight: expected omp') "version decoy $decoy failed for the wrong reason:`n$rejectOut"
-    $rejectCalls = Get-Content -LiteralPath (Join-Path $scratch 'version-reject.calls')
+    $rejectCalls = Get-Content -LiteralPath (Join-Path $scratch "$decoyLabel.calls")
     Assert ((@($rejectCalls | Where-Object { $_ -match 'plugin marketplace add' })).Count -eq 0) "version decoy $decoy reached marketplace mutation"
   }
   Assert ((Invoke-Reconciler 'version-bare' '' $false $env:EXPECTED_OMP_VERSION) -eq 0) 'bare version output failed preflight'
+  # The bare-accept run is a full reconcile and removes the legacy sentinel;
+  # recreate it so the success runs below still prove their own removal.
+  [IO.File]::WriteAllText($legacy, 'legacy owner')
 
   $successCode = Invoke-Reconciler 'success'
   $successOutput = Get-Content -Raw -LiteralPath (Join-Path $scratch 'success.out')

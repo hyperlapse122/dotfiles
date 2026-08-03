@@ -187,7 +187,7 @@ fi
 
 # The version gate rejects mismatched, digit-adjacent, and suffixed decoys
 # before any marketplace mutation, and still accepts the bare version form.
-for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.1"; do
+for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.1" "omp/${locked_omp_version}9"; do
   label=${decoy//[^a-z0-9]/-}
   if run_plugins "$scratch/version$label.calls" '' "$decoy" >"$scratch/version$label.out" 2>"$scratch/version$label.err"; then
     printf 'version decoy %s unexpectedly passed preflight\n' "$decoy" >&2
@@ -197,6 +197,9 @@ for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.
   ! grep -qF 'plugin marketplace add' "$scratch/version$label.calls"
 done
 run_plugins "$scratch/version-bare.calls" '' "$locked_omp_version"
+# The bare-accept run is a full reconcile and removes the legacy sentinel;
+# recreate it so the success runs below still prove their own removal.
+printf 'legacy owner\n' >"$legacy"
 
 run_plugins "$scratch/omp.calls"
 [[ ! -e $legacy ]]
