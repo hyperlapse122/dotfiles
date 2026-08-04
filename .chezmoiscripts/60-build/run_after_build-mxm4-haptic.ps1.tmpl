@@ -58,6 +58,30 @@ function Invoke-Native([string]$Stage, [scriptblock]$Command) {
   }
 }
 
+# Build-toolchain resolution. chezmoi runs this provisioner with the invoking
+# shell's PATH, and on a freshly provisioned host that shell has never activated
+# mise, so vp and cargo are invisible even though their pins are already
+# trusted. Prefer an activated command; otherwise run it through `mise exec`
+# from the repository directory that owns the pin. Resolution stays fatal: this
+# provisioner never soft-skips.
+function Resolve-BuildCommand([string]$Name) {
+  if (Get-Command $Name -ErrorAction SilentlyContinue) { return $false }
+  if (-not (Get-Command 'mise' -ErrorAction SilentlyContinue)) {
+    Fail 'preflight' "required command is unavailable: $Name (not on PATH and mise cannot provide it)"
+  }
+  return $true
+}
+
+function Invoke-BuildCommand([string]$Stage, [string]$Name, [bool]$ViaMise, [string]$Directory, [string[]]$Arguments) {
+  if ($ViaMise) {
+    $miseArguments = @('-C', $Directory, 'exec', '--', $Name) + $Arguments
+    Invoke-Native $Stage { & 'mise' @miseArguments }
+  } else {
+    Push-Location $Directory
+    try { Invoke-Native $Stage { & $Name @Arguments } } finally { Pop-Location }
+  }
+}
+
 function Get-ComponentDigest([string]$Inputs, [string]$Config) {
   $bytes = [Text.Encoding]::UTF8.GetBytes($Inputs + "`n" + $Config)
   $hash = [Security.Cryptography.SHA256]::HashData($bytes)
@@ -211,9 +235,11 @@ function Assert-TaskReady {
 }
 
 # Complete preflight: no script-owned path or Task Scheduler state has changed.
-foreach ($command in @('vp', 'cargo', 'schtasks.exe')) { Require-Command $command }
+Require-Command 'schtasks.exe'
 if (-not (Test-Path -LiteralPath $PluginSource -PathType Container)) { Fail 'preflight' 'plugin source is missing' }
 if (-not (Test-Path -LiteralPath $CrateSource -PathType Container)) { Fail 'preflight' 'Rust crate source is missing' }
+$VpViaMise = Resolve-BuildCommand 'vp'
+$CargoViaMise = Resolve-BuildCommand 'cargo'
 if (-not (Test-Path -LiteralPath $ManagedHome -PathType Container)) { Fail 'preflight' 'managed home is not a directory' }
 if (-not (Test-Path -LiteralPath $PluginManifest -PathType Leaf)) { Fail 'preflight' 'rendered OMP package manifest is missing' }
 try {
@@ -310,8 +336,11 @@ try {
   [IO.File]::WriteAllText($taskCandidate, $taskXml, [Text.Encoding]::Unicode)
 
   if ($pluginChanged) {
-    Push-Location $PluginSource
-    try { Invoke-Native 'plugin-build' { & vp run 'build:omp-plugin' } } finally { Pop-Location }
+    # The member's Vite+ config imports vite-plus from the workspace, so the
+    # workspace install is part of the build on a host whose
+    # packages\node_modules has never been populated.
+    Invoke-BuildCommand 'plugin-deps' 'vp' $VpViaMise (Join-Path $SourceRoot 'packages') @('install', '--frozen-lockfile')
+    Invoke-BuildCommand 'plugin-build' 'vp' $VpViaMise $PluginSource @('run', 'build:omp-plugin')
     $builtPlugin = Join-Path $PluginSource 'dist\omp-plugin\index.js'
     if (-not (Test-Path -LiteralPath $builtPlugin -PathType Leaf) -or (Get-Item -LiteralPath $builtPlugin).Length -eq 0) {
       Fail 'plugin-validate' 'bundle output is missing or empty'
@@ -327,9 +356,10 @@ try {
     $cargoTarget = Join-Path $stage 'cargo-target'
     $oldCargoTarget = $env:CARGO_TARGET_DIR
     $env:CARGO_TARGET_DIR = $cargoTarget
-    Push-Location $CrateSource
-    try { Invoke-Native 'daemon-build' { & cargo build --release --locked --bin mxm4-hapticd --bin mxm4-haptic } } finally {
-      Pop-Location
+    try {
+      Invoke-BuildCommand 'daemon-build' 'cargo' $CargoViaMise $CrateSource `
+        @('build', '--release', '--locked', '--bin', 'mxm4-hapticd', '--bin', 'mxm4-haptic')
+    } finally {
       $env:CARGO_TARGET_DIR = $oldCargoTarget
     }
     $builtDaemon = Join-Path $cargoTarget 'release\mxm4-hapticd.exe'

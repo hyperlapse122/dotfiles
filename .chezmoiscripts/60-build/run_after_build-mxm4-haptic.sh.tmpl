@@ -68,6 +68,42 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "preflight: $1 is required"
 }
 
+# Build-toolchain resolution. `chezmoi apply` inherits the invoking shell's
+# PATH, and on a freshly provisioned host that shell has never sourced
+# `mise activate`, so vp (the global mise viteplus tool), node, and cargo (this
+# repo's mise.toml rust pin) are invisible even though 00-tools already trusted
+# the config — the provisioner then died with `preflight: vp is required` and
+# only a mise-activated re-run could recover it. Resolve every build command
+# the way the sibling phase-60 builders do: use an already-activated command
+# when there is one, otherwise run it through `mise exec` from the repository
+# directory that owns the pin. Resolution stays fatal; this provisioner never
+# soft-skips.
+BUILD_COMMAND_VIA_MISE=0
+VP_VIA_MISE=0
+NODE_VIA_MISE=0
+CARGO_VIA_MISE=0
+
+resolve_build_command() {
+  local name=$1
+  if command -v "$name" >/dev/null 2>&1; then
+    BUILD_COMMAND_VIA_MISE=0
+    return 0
+  fi
+  command -v mise >/dev/null 2>&1 ||
+    fail "preflight: $name is required (not on PATH and mise cannot provide it)"
+  BUILD_COMMAND_VIA_MISE=1
+}
+
+run_build_command() {
+  local via_mise=$1 directory=$2
+  shift 2
+  if [[ "$via_mise" -eq 1 ]]; then
+    mise -C "$directory" exec -- "$@"
+  else
+    (cd "$directory" && "$@")
+  fi
+}
+
 require_writable_directory() {
   local path=$1
   [[ -d "$path" && ! -L "$path" && -w "$path" ]] ||
@@ -81,7 +117,7 @@ stamp_matches() {
 }
 
 validate_plugin_manifest() {
-  node - "$PLUGIN_MANIFEST" manifest <<'NODE'
+  run_build_command "$NODE_VIA_MISE" "$SOURCE_ROOT" node - "$PLUGIN_MANIFEST" manifest <<'NODE'
 const fs = require("node:fs");
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (manifest.name !== "@h82/omp-mxm4-haptic" || manifest.type !== "module") throw new Error("unexpected managed plugin identity");
@@ -93,7 +129,7 @@ validate_plugin_artifact() {
   local bundle=$1
   [[ -s "$bundle" && -f "$bundle" && ! -L "$bundle" ]] ||
     fail "artifact validation: plugin bundle is missing"
-  node - "$bundle" artifact <<'NODE'
+  run_build_command "$NODE_VIA_MISE" "$SOURCE_ROOT" node - "$bundle" artifact <<'NODE'
 const fs = require("node:fs");
 const source = fs.readFileSync(process.argv[2], "utf8");
 const imports = [];
@@ -167,6 +203,12 @@ sys.exit(1)
 PY
 }
 
+validate_unit() {
+  local unit_path=$1 unit_name=$2
+  systemd-analyze --user verify "$unit_path" >/dev/null ||
+    fail "unit validation: $unit_name is invalid"
+}
+
 mac_service_loaded() {
   launchctl print "gui/$UID/$LABEL" >/dev/null 2>&1
 }
@@ -208,14 +250,17 @@ for managed_path in "$PLUGIN_ROOT/dist" "$STATE_DIR"; do
   [[ ! -e "$managed_path" ]] || require_writable_directory "$managed_path"
 done
 if [[ "$plugin_needed" -eq 1 ]]; then
-  require_command vp
-  require_command node
+  resolve_build_command vp
+  VP_VIA_MISE=$BUILD_COMMAND_VIA_MISE
+  resolve_build_command node
+  NODE_VIA_MISE=$BUILD_COMMAND_VIA_MISE
   [[ -d "$PLUGIN_SOURCE" && ! -L "$PLUGIN_SOURCE" ]] || fail "preflight: plugin source is unavailable"
   [[ -f "$PLUGIN_MANIFEST" && ! -L "$PLUGIN_MANIFEST" ]] || fail "preflight: managed plugin manifest is unavailable"
   validate_plugin_manifest || fail "preflight: managed plugin manifest is invalid"
 fi
 if [[ "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
-  require_command cargo
+  resolve_build_command cargo
+  CARGO_VIA_MISE=$BUILD_COMMAND_VIA_MISE
   [[ -f "$SOURCE_ROOT/crates/mxm4-haptic/Cargo.toml" ]] || fail "preflight: Rust source is unavailable"
 fi
 require_command python3
@@ -228,7 +273,6 @@ if [[ "$PLATFORM" == linux ]]; then
   SYSTEMD_UNIT="$HOME/.config/systemd/user/$UNIT"
   [[ -f "$SYSTEMD_UNIT" && ! -L "$SYSTEMD_UNIT" ]] || fail "preflight: managed systemd unit is unavailable"
   systemctl --user show-environment >/dev/null || fail "preflight: systemd user manager is unreachable"
-  systemd-analyze --user verify "$SYSTEMD_UNIT" >/dev/null || fail "unit validation: $UNIT is invalid"
 else
   require_command launchctl
   require_command plutil
@@ -256,8 +300,6 @@ if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
     fail "preflight: managed notification bridge unit is unavailable"
   systemctl --user show-environment >/dev/null ||
     fail "preflight: systemd user manager is unreachable"
-  systemd-analyze --user verify "$NOTIFY_UNIT" >/dev/null ||
-    fail "unit validation: mxm4-haptic-notify.service is invalid"
 fi
 
 if [[ "$plugin_needed" -eq 1 || "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
@@ -280,7 +322,13 @@ fi
 
 if [[ "$plugin_needed" -eq 1 ]]; then
   rm -f -- "$PLUGIN_SOURCE/dist/omp-plugin/index.js"
-  (cd "$PLUGIN_SOURCE" && vp run build:omp-plugin) || fail "plugin build failed"
+  # The bundle's Vite+ config imports vite-plus from the workspace, so the
+  # workspace install is part of the build on a host whose packages/node_modules
+  # has never been populated.
+  run_build_command "$VP_VIA_MISE" "$SOURCE_ROOT/packages" vp install --frozen-lockfile ||
+    fail "plugin dependency install failed"
+  run_build_command "$VP_VIA_MISE" "$PLUGIN_SOURCE" vp run build:omp-plugin ||
+    fail "plugin build failed"
   [[ -s "$PLUGIN_SOURCE/dist/omp-plugin/index.js" ]] ||
     fail "artifact validation: plugin build output is missing"
   atomic_install "$PLUGIN_MANIFEST" "$STAGE/plugin/package.json" 0644
@@ -296,14 +344,16 @@ if [[ "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
   if [[ "$notify_needed" -eq 1 ]]; then
     rust_bins+=(--bin mxm4-haptic-notify)
   fi
-  cargo build --locked --release \
+  run_build_command "$CARGO_VIA_MISE" "$SOURCE_ROOT/crates/mxm4-haptic" \
+    cargo build --locked --release \
     --manifest-path "$SOURCE_ROOT/crates/mxm4-haptic/Cargo.toml" \
     --target-dir "$STAGE/rust-target" "${rust_bins[@]}" || fail "Rust build failed"
   validate_daemon_artifacts "$STAGE/rust-target"
 fi
 
 # No live install or manager mutation occurs until every requested build and
-# artifact/startup-definition validation above has succeeded.
+# staged-artifact validation above has succeeded. The startup definitions are
+# verified below, between the install and the first manager mutation.
 if [[ "$plugin_needed" -eq 1 || "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
   mkdir -p -- "$STATE_DIR" || fail "install: cannot create component state directory"
 fi
@@ -318,6 +368,20 @@ if [[ "$daemon_needed" -eq 1 ]]; then
 fi
 if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
   atomic_install "$STAGE/rust-target/release/mxm4-haptic-notify" "$BIN_DIR/mxm4-haptic-notify" 0755
+fi
+
+# Startup-definition validation sits here, after the install and before every
+# manager mutation, because `systemd-analyze verify` resolves ExecStart against
+# the filesystem: on a first apply the managed binary does not exist yet, so
+# verifying in preflight rejected a perfectly valid unit and no apply could ever
+# reach the install that would satisfy it. Verification still gates the manager,
+# which is the property that matters; a rejected unit leaves the freshly
+# installed (inert) binaries in place and mutates nothing.
+if [[ "$PLATFORM" == linux ]]; then
+  validate_unit "$SYSTEMD_UNIT" "$UNIT"
+  if [[ "$notify_needed" -eq 1 ]]; then
+    validate_unit "$NOTIFY_UNIT" mxm4-haptic-notify.service
+  fi
 fi
 
 if [[ "$PLATFORM" == linux &&

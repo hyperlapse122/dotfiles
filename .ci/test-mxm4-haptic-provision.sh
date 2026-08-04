@@ -24,10 +24,19 @@ make_stubs() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'vp %s\n' "$*" >>"$TEST_LOG"
-[[ ${FAIL_STAGE:-} != plugin-build ]] || exit 31
-[[ $* == 'run build:omp-plugin' ]] || exit 32
-mkdir -p dist/omp-plugin
-printf '%s\n' "${PLUGIN_BYTES:-export default function plugin() { return {}; }}" >dist/omp-plugin/index.js
+case "$*" in
+  'install --frozen-lockfile')
+    # The workspace install must run from the workspace root, never the member.
+    [[ ${PWD##*/} == packages ]] || exit 30
+    [[ ${FAIL_STAGE:-} != plugin-deps ]] || exit 31
+    ;;
+  'run build:omp-plugin')
+    [[ ${FAIL_STAGE:-} != plugin-build ]] || exit 31
+    mkdir -p dist/omp-plugin
+    printf '%s\n' "${PLUGIN_BYTES:-export default function plugin() { return {}; }}" >dist/omp-plugin/index.js
+    ;;
+  *) exit 32 ;;
+esac
 EOF
 
   make_stub "$bin/node" <<'EOF'
@@ -88,7 +97,20 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'systemd-analyze %s\n' "$*" >>"$TEST_LOG"
-[[ ${FAIL_STAGE:-} != unit-validation ]]
+[[ ${FAIL_STAGE:-} != unit-validation ]] || exit 1
+# Real `systemd-analyze verify` resolves ExecStart against the filesystem and
+# rejects the unit when the program is absent, so a fresh host can only pass
+# this check after the daemon binary has been installed.
+unit=${!#}
+while IFS= read -r line; do
+  [[ $line == ExecStart=* ]] || continue
+  program=${line#ExecStart=}
+  program=${program//%h/$HOME}
+  [[ -x $program ]] || {
+    printf 'Command %s is not executable: No such file or directory\n' "$program" >&2
+    exit 1
+  }
+done <"$unit"
 EOF
 
   make_stub "$bin/systemctl" <<'EOF'
@@ -126,6 +148,21 @@ case "$*" in
   '--user is-active --quiet mxm4-haptic-notify.service') exit 1 ;;
   *) exit 65 ;;
 esac
+EOF
+
+  # Stands in for an unactivated shell's mise: the build toolchain lives only
+  # under `mise exec`, which also changes into the requested directory.
+  make_stub "$bin/mise" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${1-} == -C ]] || exit 90
+directory=$2
+shift 2
+[[ ${1-} == exec && ${2-} == -- ]] || exit 91
+shift 2
+printf 'mise %s %s\n' "$directory" "$1" >>"$TEST_LOG"
+cd "$directory"
+exec "${MISE_TOOL_DIR:?mise tool directory is required}/$1" "${@:2}"
 EOF
 
   make_stub "$bin/plutil" <<'EOF'
@@ -204,8 +241,12 @@ prepare_case() {
     "$runtime" "$TEST_STATE"
   printf '%s\n' '{"name":"@h82/omp-mxm4-haptic","type":"module","omp":{"extensions":["./dist/index.js"]}}' \
     >"$test_home/.local/share/omp-plugins/plugins/mxm4-haptic/package.json"
-  printf '%s\n' '[Service]' 'Type=exec' >"$test_home/.config/systemd/user/mxm4-hapticd.service"
-  printf '%s\n' '[Service]' 'Type=exec' >"$test_home/.config/systemd/user/mxm4-haptic-notify.service"
+  # Managed unit shape, including the %h-relative ExecStart that only resolves
+  # once the provisioner has installed the binary.
+  printf '%s\n' '[Service]' 'Type=exec' 'ExecStart=%h/.local/bin/mxm4-hapticd' \
+    >"$test_home/.config/systemd/user/mxm4-hapticd.service"
+  printf '%s\n' '[Service]' 'Type=simple' 'ExecStart=%h/.local/bin/mxm4-haptic-notify' \
+    >"$test_home/.config/systemd/user/mxm4-haptic-notify.service"
   printf '%s\n' '<?xml version="1.0"?><plist version="1.0"><dict/></plist>' \
     >"$test_home/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist"
   printf '%s\n' '[package]' 'name="mxm4-haptic"' 'version="0.0.0"' \
@@ -236,6 +277,7 @@ run_case() {
     MXM4_HAPTIC_SOURCE_ROOT="$test_source" MXM4_HAPTIC_PLATFORM="$platform" \
     MXM4_HAPTIC_READINESS_ATTEMPTS=1 XDG_RUNTIME_DIR="$runtime" TMPDIR="$runtime" \
     FAIL_STAGE="${FAIL_STAGE:-}" PLUGIN_BYTES="${PLUGIN_BYTES:-}" \
+    MISE_TOOL_DIR="${MISE_TOOL_DIR:-}" \
     bash "$case_dir/provision.sh"; then
     status=0
   else
@@ -276,15 +318,22 @@ assert_no_live_install() {
   done < <(grep '^install ' "$TEST_LOG" || true)
 }
 
-# Linux first convergence validates both staged artifacts before any manager
-# mutation, uses the exact managed endpoint, and performs only read-only manager
+# Linux first convergence starts from a bare host, so the managed unit's
+# ExecStart cannot resolve until the daemon binary exists. The provisioner must
+# still validate both staged artifacts before installing anything, then verify
+# the startup definition between the install and the first manager mutation —
+# verifying it in preflight deadlocked a fresh host permanently (issue #158).
+# It must also use the exact managed endpoint and perform only read-only manager
 # checks plus readiness on a converged repeat.
 prepare_case linux-success linux
 run_case linux
-artifact_line=$(grep -n 'node .* artifact$' "$TEST_LOG" | cut -d: -f1)
-rust_line=$(grep -n '^cargo ' "$TEST_LOG" | cut -d: -f1)
-reload_line=$(grep -n 'systemctl --user daemon-reload' "$TEST_LOG" | cut -d: -f1)
-(( artifact_line < reload_line && rust_line < reload_line ))
+artifact_line=$(grep -n 'node .* artifact$' "$TEST_LOG" | head -1 | cut -d: -f1)
+rust_line=$(grep -n '^cargo ' "$TEST_LOG" | head -1 | cut -d: -f1)
+daemon_install_line=$(grep -n "^install .*$test_home/.local/bin/mxm4-hapticd.new." "$TEST_LOG" | head -1 | cut -d: -f1)
+verify_line=$(grep -n '^systemd-analyze .*mxm4-hapticd.service$' "$TEST_LOG" | head -1 | cut -d: -f1)
+reload_line=$(grep -n 'systemctl --user daemon-reload' "$TEST_LOG" | head -1 | cut -d: -f1)
+(( artifact_line < daemon_install_line && rust_line < daemon_install_line ))
+(( daemon_install_line < verify_line && verify_line < reload_line ))
 grep -F "readiness $runtime/mxm4-haptic.sock" "$TEST_LOG"
 manager_count=$(grep -Ec 'systemctl --user (daemon-reload|enable mxm4-hapticd|start mxm4-hapticd|restart mxm4-hapticd)' "$TEST_LOG")
 vp_count=$(grep -c '^vp ' "$TEST_LOG")
@@ -357,27 +406,47 @@ if grep -F -- '--bin mxm4-hapticd' "$TEST_LOG"; then exit 1; fi
 
 # Every preflight/build/validation failure is fatal. Preflight and staged
 # failures cannot touch live bytes or mutate either native manager.
-for stage in manifest plugin-build plugin-artifact rust-build rust-artifact unit-validation manager-domain; do
+for stage in manifest plugin-deps plugin-build plugin-artifact rust-build rust-artifact manager-domain; do
   prepare_case "linux-$stage" linux
   assert_failed linux "$stage"
   assert_no_manager_mutation
   assert_no_live_install
 done
+
+# An unactivated shell exposes the build toolchain only through mise. The
+# provisioner must fall back to it and converge; without it and without mise the
+# failure is fatal and touches nothing.
+prepare_case linux-mise linux
+mkdir -p "$case_dir/mise-tools"
+for tool in vp cargo node; do mv "$fake_bin/$tool" "$case_dir/mise-tools/$tool"; done
+MISE_TOOL_DIR="$case_dir/mise-tools"
+run_case linux
+MISE_TOOL_DIR=
+grep -F "mise $test_source/packages vp" "$TEST_LOG"
+grep -F "mise $test_source/packages/mxm4-haptic vp" "$TEST_LOG"
+grep -F "mise $test_source/crates/mxm4-haptic cargo" "$TEST_LOG"
+grep -F "mise $test_source node" "$TEST_LOG"
+[[ -s "$test_home/.local/share/omp-plugins/plugins/mxm4-haptic/dist/index.js" ]]
+[[ -x "$test_home/.local/bin/mxm4-hapticd" ]]
+
 prepare_case linux-missing-vp linux
-rm -f "$fake_bin/vp"
+rm -f "$fake_bin/vp" "$fake_bin/mise"
 set +e
 run_case linux >"$case_dir/missing-vp.out" 2>"$case_dir/missing-vp.err"
 status=$?
 set -e
 [[ $status -ne 0 ]]
+grep -F 'preflight: vp is required' "$case_dir/missing-vp.err"
 assert_no_manager_mutation
 assert_no_live_install
 
-# Post-validation failures remain fatal at their exact commit boundary.
-for stage in atomic-install daemon-reload enable start enabled-state first-state readiness second-state; do
+# Post-validation failures remain fatal at their exact commit boundary. Unit
+# validation now sits after the install, so it may replace inert binaries, but
+# it must still precede every manager mutation.
+for stage in atomic-install unit-validation daemon-reload enable start enabled-state first-state readiness second-state; do
   prepare_case "linux-$stage" linux
   assert_failed linux "$stage"
-  if [[ $stage == atomic-install ]]; then assert_no_manager_mutation; fi
+  if [[ $stage == atomic-install || $stage == unit-validation ]]; then assert_no_manager_mutation; fi
 done
 
 # macOS validates the plist and staged daemon before bootout, uses gui/$UID
@@ -422,7 +491,7 @@ grep -F "launchctl kickstart -k gui/$UID/dev.h82.mxm4-hapticd" "$TEST_LOG"
 if grep -Eq '^launchctl (enable|bootout) ' "$TEST_LOG"; then exit 1; fi
 if grep -Eq '^(vp|cargo) ' "$TEST_LOG"; then exit 1; fi
 
-for stage in plist-validation gui-domain plugin-build plugin-artifact rust-build rust-artifact; do
+for stage in plist-validation gui-domain plugin-deps plugin-build plugin-artifact rust-build rust-artifact; do
   prepare_case "mac-$stage" darwin
   assert_failed darwin "$stage"
   assert_no_manager_mutation

@@ -126,8 +126,17 @@ $global:FixtureSourceRoot = $null
 
 function global:vp {
   $global:FixtureVpCount++
+  if ($global:FixtureBuildMode -in @('forbid-vp', 'forbid-all')) { throw 'vp unexpectedly invoked' }
+  # The provisioner installs workspace dependencies before bundling, so only the
+  # build call carries the fixture's plugin build modes.
+  if ($args.Count -gt 0 -and [string]$args[0] -eq 'install') {
+    if ((Get-Location).Path -ne [IO.Path]::GetFullPath((Join-Path $global:FixtureSourceRoot 'packages'))) {
+      throw 'workspace install did not run from the workspace root'
+    }
+    $global:LASTEXITCODE = 0
+    return
+  }
   switch ($global:FixtureBuildMode) {
-    { $_ -in @('forbid-vp', 'forbid-all') } { throw 'vp unexpectedly invoked' }
     'build-fail' { $global:LASTEXITCODE = 41; return }
     'invalid-plugin' {
       $output = Join-Path $global:FixtureSourceRoot 'packages\mxm4-haptic\dist\omp-plugin\index.js'
