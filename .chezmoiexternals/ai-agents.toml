@@ -93,11 +93,23 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" 
 
 {{- $codegraphTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph") }}
 
+{{- $codegraphWindowsTarget := "" -}}
+{{- if eq .chezmoi.os "windows" -}}
+  {{- $homeDir := trimSuffix "/" (replace "\\" "/" .chezmoi.homeDir) -}}
+  {{- $localAppData := trimSuffix "/" (replace "\\" "/" (env "LOCALAPPDATA")) -}}
+  {{- $homePrefix := lower (printf "%s/" $homeDir) -}}
+  {{- $localAppDataLower := lower $localAppData -}}
+  {{- if not (hasPrefix $homePrefix $localAppDataLower) -}}
+    {{- fail (printf "codegraph: LOCALAPPDATA %q must be inside home directory %q" $localAppData $homeDir) -}}
+  {{- end -}}
+  {{- $codegraphWindowsTarget = printf "%s/codegraph/current" (trimPrefix $homePrefix $localAppDataLower) -}}
+{{- end }}
+
 [codegraph]
 {{ if ne .chezmoi.os "windows" }}
 targetPath = '{{ printf ".codegraph/versions/%s" $codegraphTag }}'
 {{ else }}
-targetPath = '{{ joinPath (env "LOCALAPPDATA") "codegraph" "current" }}'
+targetPath = '{{ $codegraphWindowsTarget }}'
 {{ end }}
 type = "archive"
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph" "field" "url" "platform" "auto") }}'

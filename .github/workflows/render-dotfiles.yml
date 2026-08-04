@@ -876,6 +876,50 @@ jobs:
           # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
           exit 0
 
+      - name: Assert Windows Codegraph external target
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $external = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals\.chezmoiexternals\ai-agents.toml'
+          if (-not (Test-Path -LiteralPath $external -PathType Leaf)) {
+            throw "missing rendered Codegraph external: $external"
+          }
+          if (Test-Path -LiteralPath "$external.render-error.txt") {
+            throw "Codegraph external render failed: $external"
+          }
+
+          $content = Get-Content -Raw -LiteralPath $external
+          $stanza = [regex]::Match($content, '(?ms)^\[codegraph\]\r?\n.*?(?=\r?\n\r?\n|\z)')
+          if (-not $stanza.Success) {
+            throw 'rendered Codegraph external stanza is missing'
+          }
+          $targetMatch = [regex]::Match($stanza.Value, "(?m)^targetPath = '([^']+)'$")
+          if (-not $targetMatch.Success) {
+            throw 'rendered Codegraph targetPath is missing'
+          }
+
+          function Test-CodegraphTarget {
+            param([Parameter(Mandatory)][string]$Target)
+            if ([IO.Path]::IsPathRooted($Target)) {
+              return $false
+            }
+            $actual = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE ($Target -replace '/', '\')))
+            $expected = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'codegraph\current'))
+            return $actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)
+          }
+
+          $target = $targetMatch.Groups[1].Value
+          if (-not (Test-CodegraphTarget -Target $target)) {
+            throw "rendered Codegraph targetPath is not profile-relative Local AppData: $target"
+          }
+          if (Test-CodegraphTarget -Target 'C:\Users\runneradmin\AppData\Local\codegraph\current') {
+            throw 'Codegraph target assertion accepted an absolute path fixture'
+          }
+          if (Test-CodegraphTarget -Target 'AppData\Local\wrong\current') {
+            throw 'Codegraph target assertion accepted a wrong relative path fixture'
+          }
+          "- Codegraph external target is profile-relative and resolves to Local AppData" |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
       - name: Assert Figma collection external and paired reconcilers
         run: |
           $ErrorActionPreference = 'Stop'
