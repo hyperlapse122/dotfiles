@@ -29,14 +29,14 @@ is_container() {
   ! is_devbox
 }
 
-# `op` can resolve secrets. `op whoami` succeeds for BOTH a desktop-app
-# integration and a service-account token (OP_SERVICE_ACCOUNT_TOKEN) — the
-# latter is how containers/CI authenticate. `op user get --me` is the legacy
-# fallback: it works for a signed-in human account but NOT a service account.
+# `op vault list` is 1Password's documented desktop-app integration probe and
+# also works with OP_SERVICE_ACCOUNT_TOKEN. Unlike `op whoami`, it does not
+# require a separately configured CLI account. Discard all output because vault
+# metadata is not part of the bootstrap log. Exact secret authorization remains
+# the later `onepasswordRead` calls' responsibility.
 op_ready() {
   command -v op >/dev/null 2>&1 || return 1
-  op whoami >/dev/null 2>&1 && return 0
-  op user get --me >/dev/null 2>&1
+  op vault list >/dev/null 2>&1
 }
 
 # Human-facing instructions for enabling the 1Password CLI. Printed once before

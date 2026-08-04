@@ -97,7 +97,7 @@ jobs:
           sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
           chezmoi --version
 
-          # Dummy `op`: satisfies op_ready() (`op whoami`), onepasswordRead
+          # Dummy `op`: satisfies op_ready() (`op vault list`), onepasswordRead
           # (`op read`) and onepassword (`op item get --format json`) with
           # placeholders — no real 1Password is contacted. The secret-read /
           # resolve-op-refs cache shims fall back to onepasswordRead here (no GPG
@@ -751,8 +751,8 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $bindir -Force
           & (Join-Path $bindir 'chezmoi.exe') --version
 
-          # Dummy `op.cmd`: `whoami` exits 0 (Test-OpReady), `read op://...` and any
-          # other verb print a placeholder secret so onepasswordRead resolves. A
+          # Dummy `op.cmd`: `vault list` exits 0 (Test-OpReady), while `read
+          # op://...` and other verbs print placeholders for onepasswordRead. A
           # .cmd is resolved by both Get-Command (PATHEXT) and chezmoi's exec.
           # (An array joined by CRLF, not a here-string — a here-string's closing
           # "@ must sit in column 1, which would break this YAML block scalar.)
