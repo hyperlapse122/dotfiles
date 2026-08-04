@@ -15,7 +15,6 @@
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
 #
-# Modelled on .ci/smoke-agent-plugin-installer.sh and the codex-wrapper ci.yml job.
 set -euo pipefail
 
 root=${1:-$(pwd)}

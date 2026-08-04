@@ -5,35 +5,6 @@ on:
   pull_request:
 
 jobs:
-  codex-wrapper:
-    name: Codex Tokscale wrapper
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Render Tokscale wrapper
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/op-stub"
-          printf '#!/usr/bin/env bash\nprintf dummy-secret\n' > "$RUNNER_TEMP/op-stub/op"
-          chmod 700 "$RUNNER_TEMP/op-stub/op"
-          : > "$RUNNER_TEMP/empty.toml"
-          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
-            --config "$RUNNER_TEMP/empty.toml" \
-            --source "$GITHUB_WORKSPACE" \
-            execute-template \
-            < dot_local/bin/private_executable_tokscale.tmpl \
-            > "$RUNNER_TEMP/tokscale"
-          chmod 700 "$RUNNER_TEMP/tokscale"
-      - name: Test Codex wrapper
-        env:
-          TOKSCALE_WRAPPER_UNDER_TEST: ${{ runner.temp }}/tokscale
-        run: .ci/test-codex-tokscale-wrapper.sh
-
   omp-agent-integration:
     name: oh-my-pi agent integration
     runs-on: ubuntu-latest
@@ -71,8 +42,7 @@ jobs:
           for item in \
             ".chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl:auth.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
-            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
-            ".chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl:agent-plugins.sh"
+            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh"
           do
             source_path=${item%%:*}
             output_name=${item#*:}
@@ -121,7 +91,7 @@ jobs:
             < ".chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl" \
             > "$RUNNER_TEMP/build-mxm4-haptic.sh"
           chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
-            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/agent-plugins.sh" \
+            "$RUNNER_TEMP/settings.sh" \
             "$RUNNER_TEMP/build-mxm4-haptic.sh"
       - name: Install locked OMP
         run: |
@@ -131,7 +101,7 @@ jobs:
           curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/bin/omp"
           printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/bin/omp" | sha256sum --check -
           chmod 700 "$RUNNER_TEMP/bin/omp"
-      - name: Test OMP reconciliation, haptics, and plugin installer
+      - name: Test OMP reconciliation, haptics, and real plugin
         run: |
           set -euo pipefail
           .ci/test-omp-agent-reconcile.sh \
@@ -143,9 +113,6 @@ jobs:
             "$RUNNER_TEMP/settings.sh" \
             "$RUNNER_TEMP/settings.ps1"
           .ci/test-omp-real-plugin.sh "$RUNNER_TEMP/haptic-package"
-          .ci/smoke-agent-plugin-installer.sh \
-            "$RUNNER_TEMP/agent-plugins.sh" \
-            "$RUNNER_TEMP/agent-plugin-smoke"
           .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"
           .ci/test-mxm4-haptic-gates.sh
           .ci/test-mxm4-haptic-chezmoi-retry.sh
@@ -751,7 +718,6 @@ jobs:
     if: always()
     needs:
       [
-        codex-wrapper,
         omp-agent-integration,
         ts-workspace,
         figma-skills-native,
@@ -772,7 +738,6 @@ jobs:
     steps:
       - name: Require every job to succeed
         env:
-          CODEX_WRAPPER_RESULT: ${{ needs.codex-wrapper.result }}
           OMP_AGENT_INTEGRATION_RESULT: ${{ needs.omp-agent-integration.result }}
           TS_WORKSPACE_RESULT: ${{ needs.ts-workspace.result }}
           FIGMA_SKILLS_NATIVE_RESULT: ${{ needs.figma-skills-native.result }}
@@ -792,7 +757,6 @@ jobs:
           set -euo pipefail
           failed=0
           for result in \
-            "codex-wrapper=${CODEX_WRAPPER_RESULT}" \
             "omp-agent-integration=${OMP_AGENT_INTEGRATION_RESULT}" \
             "ts-workspace=${TS_WORKSPACE_RESULT}" \
             "figma-skills-native=${FIGMA_SKILLS_NATIVE_RESULT}" \

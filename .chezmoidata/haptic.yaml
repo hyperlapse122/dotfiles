@@ -46,32 +46,6 @@
 #                  as 1/0: the binary treats "0" or "false" as off, any other
 #                  value as on.
 #
-# haptic.claude — Claude Code hook event -> waveform, for the mxm4-haptic
-# Claude Code PLUGIN. Unlike the knobs above (which are env vars), these render
-# into the plugin's hook manifest:
-#   dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl
-# and the plugin is installed by the generic
-#   .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl
-# Tune a waveform HERE, not in the manifest (same rule as solaar.rules
-# .gestureConfirmWaveform). Each value MUST be one of the 16 waveform names in
-# crates/mxm4-haptic/src/lib.rs (WAVEFORMS) — the plugin's hook command passes
-# it through verbatim, and an unknown name makes mxm4-haptic exit 2 (a silent
-# no-op, since the hook wrapper always exits 0).
-#
-# The plugin deploys on every desktop OS (the daemon is cross-platform):
-# POSIX renders invoke bin/pulse (sh), Windows renders invoke bin/pulse.ps1
-# (PowerShell) — both wrappers share the always-exit-0, always-silent
-# contract. Containers still skip the plugin entirely.
-#
-# Claude maps native hooks to waveforms:
-#
-#   stop         <- Stop               : the root turn finished.
-#   stopFailure  <- StopFailure        : the root turn failed.
-#   notification <- Notification       : the user must decide.
-#   question     <- AskUserQuestion    : the user must answer.
-#
-# Claude Code fires Stop and StopFailure for the root agent only. A subagent
-# fires SubagentStop, which this plugin deliberately leaves unhooked.
 haptic:
   daemon:
     pacingMs: 180
@@ -82,11 +56,6 @@ haptic:
     skipReplaces: true
     denyApps: []
     battery: true
-  claude:
-    stop: COMPLETED
-    stopFailure: MAD
-    notification: RINGING
-    question: RINGING
   # haptic.omp — oh-my-pi (OMP) plugin event -> waveform. These values render
   # into the package-local mxm4Haptic.waveforms configuration at
   # dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl. The
@@ -99,28 +68,4 @@ haptic:
   omp:
     settled: COMPLETED
     failed: MAD
-    question: RINGING
-  # haptic.codex — OpenAI Codex (codex) hook event -> waveform, for the mxm4-haptic
-  # codex PLUGIN (dot_local/share/codex-plugins/mxm4-haptic/, installed by the same
-  # generic runner). codex's hooks component is hooks/hooks.json (Claude-shape), and
-  # plugin hooks MERGE with the aoe-managed ~/.codex/hooks.json rather than
-  # overwriting it. Each value MUST be one of the 16 WAVEFORMS names.
-  #
-  # Like the Claude plugin, the codex plugin deploys on every desktop OS: POSIX
-  # renders a self-contained sh -c command, Windows renders the equivalent inline
-  # PowerShell. Both drain the event from stdin, fire the client best-effort, and
-  # always exit 0 with empty stdout.
-  #
-  #   settled  <- Stop hook            : the turn finished. SubagentStop is a separate
-  #                                      event left UNHOOKED, so Stop fires for the
-  #                                      root turn only (free sub-agent gating).
-  #   question <- PermissionRequest    : the agent is waiting on YOU to approve.
-  #
-  # codex has no failed waveform: the Stop payload carries no error/status field, so
-  # a failed turn is indistinguishable from a clean one here. The hooks fire the
-  # buzz then exit 0 with empty stdout — the codex-verified no-op that neither blocks
-  # the turn (Stop) nor alters the permission decision (PermissionRequest defers to
-  # the normal approval flow when no `decision` field is emitted).
-  codex:
-    settled: COMPLETED
     question: RINGING

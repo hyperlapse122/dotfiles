@@ -30,7 +30,7 @@ CURRENT="$BASE_DIR/{{ $ceVersion }}"
 
 # The file phase must have extracted the current version already; if not, do
 # nothing rather than nuking the whole tree. Same defensive skip as the
-# install-agent-plugins sibling.
+# omp plugin updater.
 [ -d "$CURRENT" ] || exit 0
 
 for d in "$BASE_DIR"/*; do

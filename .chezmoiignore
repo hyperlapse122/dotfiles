@@ -1,7 +1,6 @@
 # Repository files
 ./AGENTS.md
 ./agents.lock
-./CLAUDE.md
 ./mise.toml
 ./mise.lock
 ./README.md
@@ -166,17 +165,6 @@ Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .chezmoiscripts/00-tools/*kitty.sh
 .local/share/applications/kitty.desktop
 .local/share/applications/wezterm.desktop
-# No MX Master 4 in a container, and the haptic build is skipped just above, so
-# the Claude/Codex haptic plugins have nothing to pulse — skip the deployed
-# plugin trees. The generic 70-agents/install-agent-plugins.sh script is
-# deliberately KEPT (like the dotagents skills install beside it): it still
-# registers compound-engineering (marketplace container: keep), while the
-# mxm4-haptic rows are filtered out at RENDER time because their marketplaces
-# are container: skip — so there is no whole-script skip to make here (the
-# merged basename intentionally does not match the former *claude-plugins.sh
-# glob).
-.local/share/claude-plugins
-.local/share/codex-plugins
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the
 # 90-src reconcile script (grow/bootstrap/aoe) would have nothing to provision

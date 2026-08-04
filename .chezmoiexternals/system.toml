@@ -59,8 +59,8 @@ refreshPeriod = "8760h"
 
 {{- /* ---------- winbox (MikroTik RouterOS GUI; vendor version endpoint, not GitHub) ---------- */ -}}
 {{- /*
-  WinBox is not published on GitHub, so — like the claude/codex externals in
-  ai-agents.toml — the version comes from MikroTik's LATEST.4 endpoint (returns
+  WinBox is not published on GitHub, so the version comes from MikroTik's
+  LATEST.4 endpoint (returns
   the bare current version, e.g. "4.3"), resolved at refresh time into the
   release lock by packages/release-lock rather than pinned. Every platform lands
   the app in the SAME ~/.local/share/winbox folder:

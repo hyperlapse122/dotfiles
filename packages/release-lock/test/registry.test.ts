@@ -131,14 +131,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": "minikube-windows-amd64.tar.gz",
     "windows-arm64": "minikube-windows-arm64.tar.gz",
   },
-  codex: {
-    "linux-amd64": "codex-package-x86_64-unknown-linux-musl.tar.zst",
-    "linux-arm64": "codex-package-aarch64-unknown-linux-musl.tar.zst",
-    "darwin-amd64": "codex-package-x86_64-apple-darwin.tar.zst",
-    "darwin-arm64": "codex-package-aarch64-apple-darwin.tar.zst",
-    "windows-amd64": "codex-package-x86_64-pc-windows-msvc.tar.zst",
-    "windows-arm64": "codex-package-aarch64-pc-windows-msvc.tar.zst",
-  },
   "agent-browser": {
     "linux-amd64": "agent-browser-linux-x64",
     "linux-arm64": "agent-browser-linux-arm64",

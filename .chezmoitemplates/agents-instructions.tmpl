@@ -16,8 +16,6 @@ Do not add mandatory `ce-work`/`ce-debug` routing here; use the available workfl
 
 During `lfg` pipeline execution, MUST run fully autonomously — MUST NOT pause to ask the user questions or seek confirmations, and MUST drive every stage (plan, implement, review and fix, commit, push, PR, CI watch) to completion itself. Per the skill's purpose, MUST open the MR/PR itself rather than surfacing a command for the user, and merge it itself once CI is green and the change is mergeable — never stop at an unmerged PR. This autopilot overrides the general ask-before-ambiguous/irreversible-action guidance for the duration of the run; the secrets and CI-weakening guards are separate prohibitions, not confirmations, and still hold.
 
-Every directory containing `AGENTS.md` MUST have a sibling `CLAUDE.md` whose entire content is `@AGENTS.md`. MUST create it in the same turn when creating `AGENTS.md`, and MUST repair it whenever it is missing or contains anything else. Edit `AGENTS.md` only; never let the mirror drift.
-
 ## Secrets, destructive actions, and runtime
 
 - MUST NOT commit `.env`/`.env.*` except examples, private keys, age/GPG/SSH keys, tokens, OAuth/webhook/deploy secrets, cloud credentials, or password-bearing connection strings. If one is committed, STOP, notify the user, treat it as compromised, and rotate it; never rewrite history without approval.

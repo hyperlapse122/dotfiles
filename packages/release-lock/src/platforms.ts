@@ -34,7 +34,7 @@ export const ALL_PLATFORMS: readonly Platform[] = OPERATING_SYSTEMS.flatMap((os)
 /**
  * The linux static-musl targets, resolved only for tools that opt in via
  * `linuxMusl` — upstreams that publish a distinct musl build next to the glibc
- * one (claude, agent-browser) get their own lock keys (KTD11).
+ * one (agent-browser) get their own lock keys (KTD11).
  */
 export const MUSL_PLATFORMS: readonly Platform[] = ARCHITECTURES.map((arch) => ({
   os: "linux" as const,

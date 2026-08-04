@@ -2,14 +2,11 @@
 #
 # Consumer map:
 #   agents.mcp.servers
-#     -> dotagents (Claude Code + Codex) and omp mcp.json
+#     -> omp mcp.json (dot_omp/private_agent/private_readonly_mcp.json.tmpl)
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
-#   agents.marketplaces + agents.{claude,codex}.plugins
-#     -> .chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh
-#        (the generic Claude Code + Codex plugin installer)
-#   agents.claude.settings
-#     -> read-merge-write of the live ~/.claude/settings.json (config-claude-settings)
+#   agents.marketplaces + agents.omp.plugins
+#     -> .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.{sh,ps1}.tmpl
 #   agents.aoe
 #     -> ~/.config/agent-of-empires/config.toml, deep-merged by
 #        run_after_config-aoe.sh.tmpl via the kimi-reconcile binary
@@ -30,14 +27,13 @@
 # field-independent and therefore works for provider options, nested headers,
 # and MCP headers without secret-key-specific template branches.
 #
-# install-dotagents-skills hashes only the unresolved agents.mcp data alongside
-# the raw agents.toml template, so an MCP edit re-triggers dotagents without
-# coupling other harness-only changes to it. Rendered secrets are not
-# fingerprinted; secret rotation alone follows each consumer's documented
+# The omp MCP render hashes the unresolved agents.mcp data, so an MCP edit
+# re-triggers it without coupling unrelated changes. Rendered secrets are not
+# fingerprinted; secret rotation alone follows the consumer's documented
 # onchange behavior.
 
 agents:
-  # MCP servers consumed by dotagents (Claude Code + Codex) and omp.
+  # MCP servers consumed by omp's native MCP runtime.
   # `transport` is the discriminator: stdio uses command/args; http uses url plus
   # optional headers. Each consumer maps that neutral shape into its native
   # schema.
@@ -48,9 +44,8 @@ agents:
   #   container: keep | skip        (omitted means keep)
   #   harnessSkip: [<harness id>]   (omitted means every harness)
   # harnessSkip is an EXCLUSION list, so a new harness inherits every server
-  # unless it is named. Valid ids: claude, codex, omp;
-  # dot_agents renders one file for Claude AND Codex and identifies as claude,
-  # so a codex-only exclusion is not expressible.
+  # unless it is named. omp is the sole managed harness and sole caller; a
+  # harnessSkip entry naming any other id fails as unknown.
   # agent-mcp-servers-json.tmpl validates and filters these fields before any
   # target-specific formatter sees the record.
   mcp:
@@ -131,48 +126,24 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
-  # Claude Code and Codex plugins, single-sourced here (the Claude/Codex
-  # declarations were previously
-  # hardcoded across two install scripts). The generic runner
-  # run_onchange_after_install-agent-plugins.sh.tmpl ranges over the per-agent
-  # `plugins` lists below and, per entry, registers the marketplace and installs
-  # the plugin with the matching CLI (`claude` / `codex`). MCP is single-sourced
-  # separately (agents.mcp.servers -> dotagents); plugins are per-agent because
-  # applicability differs (mxm4-haptic ships to Claude AND Codex — each as its
-  # own plugin with the right hook shape; the official LSP plugins are Claude-only).
-  #
-  # `marketplaces` is the shared registry keyed by each marketplace's registered
-  # name (matching its .claude-plugin/marketplace.json `name`). Gating and kind
-  # belong to the MARKETPLACE, not the plugin, so compound-engineering — which
-  # appears in both per-agent lists — declares them once here:
-  #   - kind: how the installer resolves the marketplace source path.
+  # omp plugin marketplaces, single-sourced here. omp's plugin updater
+  # (run_onchange_after_update-omp-plugins.{sh,ps1}.tmpl) ranges over
+  # agents.omp.plugins and, per entry, looks up its marketplace here to resolve
+  # the source path and OS/container eligibility. `marketplaces` is the shared
+  # registry keyed by each marketplace's registered name.
+  #   - kind: how the updater resolves the marketplace source path.
+  #       localDir      -> a host directory OMP scans natively (h82-dotfiles).
   #       localArchive  -> the versioned tree chezmoi extracts from a GitHub
-  #                        release. `source`, `externalPath`, and
-  #                        `versionSource` live on the marketplace row because
-  #                        the archive is shared by Claude, Codex, and omp.
-  #                        Per-agent plugin entries name only the marketplace.
-  #       github        -> a remote owner/repo marketplace the CLI fetches (no
-  #                        local tree); the `source` (owner/repo) is stored here.
-  #                        Constant source, so add + install with no `remove`.
-  #   - os: the OSes where the generic Claude/Codex installer emits a plugin
-  #     row. Platform-neutral archive and omp consumers read the named row
-  #     independently, including on Windows.
-  #   - container: `skip` filters the row out when the `container` fact is true
-  #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in
-  #     (compound-engineering skills are wanted in a devbox too). This replaces
-  #     the former whole-script .chezmoiignore container exclusion — same net
-  #     behavior, decided per row at render time.
+  #                        release (compound-engineering-plugin). `source`,
+  #                        `externalPath`, and `versionSource` live here because
+  #                        the archive is shared across OSes; omp reads the
+  #                        extracted path on every desktop OS.
+  #   - os: the OSes where omp emits the plugin row. compound-engineering-plugin
+  #     also carries a Windows special-case in the omp updater, so its
+  #     [linux, darwin] list plus that clause covers every desktop OS.
+  #   - container: `skip` filters the row when the `container` fact is true
+  #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in.
   marketplaces:
-    dotfiles:
-      kind: localDir
-      path: .local/share/claude-plugins   # relative to $HOME
-      os: [linux, darwin, windows]
-      container: skip
-    dotfiles-codex:
-      kind: localDir
-      path: .local/share/codex-plugins    # relative to $HOME; codex reads its .claude-plugin/marketplace.json
-      os: [linux, darwin, windows]
-      container: skip
     h82-dotfiles:
       kind: localDir
       path: .local/share/omp-plugins     # relative to $HOME; OMP-native catalog
@@ -185,59 +156,6 @@ agents:
       versionSource: compoundEngineeringRelease
       os: [linux, darwin]
       container: keep
-    claude-plugins-official:
-      kind: github                         # anthropics' official plugin marketplace
-      source: anthropics/claude-plugins-official
-      os: [linux, darwin]
-      container: keep
-  # `agents.claude` carries two independent things: `settings` (Claude Code
-  # setting VALUES, read-merge-written into the live settings.json by
-  # config-claude-settings) and `plugins` (registered by install-agent-plugins,
-  # see the marketplaces comment above). They share no mechanism beyond the key.
-  claude:
-    # Claude Code settings VALUES (not capabilities) merged into the live
-    # ~/.claude/settings.json by
-    # .chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.sh.tmpl.
-    # settings.json is NOT a chezmoi-managed target — Claude Code live-writes it
-    # (theme, effortLevel, tui), aoe injects session-tracking hooks, and `claude
-    # plugin install` writes enabledPlugins/extraKnownMarketplaces — so this is a
-    # read-merge-WRITE (top-level jq `+`) that (re)asserts ONLY the keys below and
-    # preserves every other key byte-identical. AGENTS.md "Claude Code plugins" carves this
-    # out from the "ship a plugin, not settings" rule: a plugin registers
-    # hooks/commands but cannot set a settings VALUE like effortLevel.
-    #
-    # No secrets, so the rendered values are baked straight into the script as its
-    # onchange trigger (no resolve-op-refs-json.tmpl, no fingerprint block): editing
-    # a value here re-runs the merge on the next apply. Always-assert, no
-    # value-signature stamp — a `/effort` or `/model` UI change to an UNCHANGED
-    # value is NOT reverted by a routine apply (the standard onchange trade-off),
-    # but a data edit or `chezmoi apply --force` re-asserts it. Keys must match
-    # Claude Code's settings.json schema; values are seeded from this host today.
-    settings:
-      # Reasoning effort tier.
-      effortLevel: xhigh
-      # Quoted so YAML does not read the `[1m]` suffix as a flow sequence.
-      model: "opus[1m]"
-      # Auto-skip the bypass/dangerous-mode confirmation. Undocumented in Claude's
-      # public settings schema but present in the live file; renders on EVERY host
-      # — scope per-host if any host should keep the confirmation guardrail.
-      skipDangerousModePermissionPrompt: true
-      disableClaudeAiConnectors: true
-    # Plugins for Claude Code, registered by the generic install-agent-plugins
-    # runner (marketplace + kind + gating live in `marketplaces` above).
-    plugins:
-    - { name: mxm4-haptic, marketplace: dotfiles }
-    - { name: compound-engineering, marketplace: compound-engineering-plugin }
-    - { name: frontend-design, marketplace: claude-plugins-official }
-    - { name: rust-analyzer-lsp, marketplace: claude-plugins-official }
-    - { name: typescript-lsp, marketplace: claude-plugins-official }
-    - { name: csharp-lsp, marketplace: claude-plugins-official }
-  codex:
-    plugins:
-    # mxm4-haptic: codex plugin with a hooks/hooks.json (Stop -> settled,
-    # PermissionRequest -> question); merges with the aoe-managed ~/.codex/hooks.json.
-    - { name: mxm4-haptic, marketplace: dotfiles-codex }
-    - { name: compound-engineering, marketplace: compound-engineering-plugin }
   # aoe (agent-of-empires) launches custom agents declared here. Apply
   # reconciles ONLY these declared leaves into aoe's live global
   # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile

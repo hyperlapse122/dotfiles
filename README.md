@@ -253,7 +253,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 - [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
   domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
   `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (claude-code, codex, codegraph, gh, glab, kubectl, helm,
+  `~/.local/bin` (codegraph, gh, glab, kubectl, helm,
   macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
   declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
   into `~/.agents/skills/`.
@@ -285,9 +285,10 @@ The source-only trees are also excluded from taplo formatting via
 
 ## Managed agent harnesses
 
-This repository manages only **Claude**, **Codex**, and **omp**. Removing the
-Pi, Kimi Code, OpenCode, oh-my-openagent, and AGY sources does not delete
-already-deployed host files, installed binaries, or provider-side OAuth grants.
+This repository manages only **omp**. Retired harness sources (Claude Code,
+Codex, and the earlier Pi, Kimi Code, OpenCode, oh-my-openagent, and AGY) are
+removed from source state; that does not delete already-deployed host files,
+installed binaries, or provider-side OAuth grants.
 
 OMP settings are asserted per key from `.chezmoidata/agents.yaml`. The declared
 policy keeps progress, token usage, and tmux scrollback behavior stable. It
@@ -319,6 +320,23 @@ revocation rather than invalidate the current omp authorization.
 
 Do not remove omp's Figma row from `~/.omp/agent/agent.db`. The surviving
 `figma-auth omp` command owns that row.
+
+## Host cleanup (one-time, this host)
+
+Claude Code and Codex are now unmanaged. chezmoi does not prune retired
+targets — deleting a source stops management but leaves deployed files in
+place — so on hosts where the retired harnesses are no longer wanted, remove:
+
+- `~/.claude/` and `~/.codex/` — deployed configuration trees.
+- `~/.local/bin/claude` and `~/.local/bin/codex` — the installed CLI
+  binaries and symlinks (and any claude/codex shims under `~/.local/bin/`).
+- `~/.local/share/claude/versions/` and `~/.codex/packages/standalone/` —
+  downloaded external payloads.
+- `~/.local/share/claude-plugins/` and `~/.local/share/codex-plugins/` —
+  deployed plugin trees.
+
+This touches nothing belonging to omp; fresh hosts never receive the two
+harnesses. Do not add a `.chezmoiremove` entry for these paths.
 
 ## License
 

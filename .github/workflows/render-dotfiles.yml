@@ -441,35 +441,6 @@ jobs:
             exit 1
           fi
 
-      - name: Assert surviving compound-engineering plugin contract
-        run: |
-          set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
-          test -f "${rendered}"
-          test ! -e "${rendered}.render-error.txt"
-          grep -E '"claude:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
-          grep -E '"codex:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
-          ! grep -qE '"(agy|pi|opencode|kimi|omo):compound-engineering:' "${rendered}"
-          bash -n "${rendered}"
-          "${GITHUB_WORKSPACE}/.ci/smoke-agent-plugin-installer.sh" \
-            "${rendered}" "${RUNNER_TEMP}/agent-plugin-smoke"
-
-      - name: Assert mxm4-haptic plugin rows are container-filtered
-        run: |
-          set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
-          test -f "${rendered}"
-          # These jobs render inside a real container (/.dockerenv present -> `container`
-          # fact true), and the mxm4-haptic marketplaces are container: skip -> their rows
-          # MUST be filtered out here (no MX Master 4 in a container). This proves the
-          # container gate; the compound-engineering row above (container: keep) proves
-          # rows still render. The Linux-host positive path runs in ci.yml's
-          # native omp-agent-integration job.
-          if grep -qE '"(claude|codex):mxm4-haptic:' "${rendered}"; then
-            echo "mxm4-haptic plugin row rendered in a container (marketplace is container: skip)" >&2
-            exit 1
-          fi
-
       - name: Assert Fedora NVIDIA repository ownership
         if: matrix.os == 'fedora'
         run: |
@@ -671,27 +642,6 @@ jobs:
           bash -n "${posix}"
           echo "- Figma external and paired reconcilers (macos) use the locked revision and inventory" \
             >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Assert surviving compound-engineering plugin contract
-        run: |
-          set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
-          test -f "${rendered}"
-          test ! -e "${rendered}.render-error.txt"
-          grep -E '"claude:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
-          grep -E '"codex:compound-engineering:compound-engineering-plugin:localArchive:.*/\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+"' "${rendered}"
-          ! grep -qE '"(agy|pi|opencode|kimi|omo):compound-engineering:' "${rendered}"
-          bash -n "${rendered}"
-          "${GITHUB_WORKSPACE}/.ci/smoke-agent-plugin-installer.sh" \
-            "${rendered}" "${RUNNER_TEMP}/agent-plugin-smoke"
-
-      - name: Assert mxm4-haptic plugin rows render on macos
-        run: |
-          set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
-          test -f "${rendered}"
-          grep -qE '"claude:mxm4-haptic:dotfiles:localDir:' "${rendered}"
-          grep -qE '"codex:mxm4-haptic:dotfiles-codex:localDir:' "${rendered}"
 
       - name: Upload rendered internals
         if: always()
