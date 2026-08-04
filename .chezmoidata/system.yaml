@@ -99,9 +99,9 @@ system:
       # VirtualBox modules on every new kernel install. It never worked: it
       # scanned /lib/modules/<ver>/updates while Oracle installs to misc/, and
       # no vboxconfig entry point can build for a non-running kernel anyway.
-      # Oracle's own vboxdrv.sh now signs during its build — the Fedora
-      # installer links the DKMS MOK into the shim-signed paths vboxdrv.sh
-      # reads — and vboxdrv.service covers new kernels at boot. Fedora-scoped:
-      # the hook was only ever deployed there.
+      # VirtualBox itself has since been dropped from the managed package set,
+      # so nothing signs vbox modules any more — but the reclamation stays so a
+      # host that once deployed the hook still loses it. Fedora-scoped: the hook
+      # was only ever deployed there.
       - path: /etc/kernel/install.d/50-vbox-sign.install
         distro: fedora

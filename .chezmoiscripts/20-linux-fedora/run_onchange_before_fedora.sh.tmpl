@@ -29,10 +29,8 @@ set -euo pipefail
 # orchestration, an enable_unit() helper that skips absent units, MOK enrollment
 # kept in its own function rather than folded into enable_services(), and a main
 # flow. The genuine Fedora-specific pieces stay
-# (KR mirrorlists, COPRs, RPM Fusion, the /var/lib/dkms MOK + VirtualBox module
-# signing).
-# (KR mirrorlists, COPRs, RPM Fusion, the /var/lib/dkms MOK + VirtualBox module
-# signing, and the KR firewall/ufw split, which for Fedora lives in
+# (KR mirrorlists, COPRs, RPM Fusion, the /var/lib/dkms MOK behind the NVIDIA
+# DKMS driver, and the KR firewall/ufw split, which for Fedora lives in
 # 30-linux/install-system-30-network — firewalld, not ufw — so this folder needs
 # no `after_` companion script).
 #
@@ -407,21 +405,19 @@ install_nvidia_support() {
   "${SUDO[@]}" setsebool -P container_use_devices on
 }
 
-# Generate the DKMS MOK signing keypair if missing. This ONE keypair is the
-# trust anchor for every out-of-tree module signed on this host:
-#   - kmod-nvidia-latest-dkms's postinst signs each NVIDIA .ko with it
-#     (the DKMS default when a key exists at /var/lib/dkms/mok.{pub,key})
-#   - Oracle's own vboxdrv.sh signs the non-DKMS vbox modules with it too, via
-#     the shim-signed symlinks provision_vbox_module_signing() installs
-# So one mokutil enrollment covers both stacks — no per-package MOK. Idempotent.
+# Generate the DKMS MOK signing keypair if missing. This keypair is the trust
+# anchor for the out-of-tree modules signed on this host: kmod-nvidia-latest-dkms's
+# postinst signs each NVIDIA .ko with it, which is the DKMS default when a key
+# exists at /var/lib/dkms/mok.{pub,key}. One mokutil enrollment covers the
+# stack — no per-package MOK. Idempotent.
 # (Fedora's /var/lib/dkms MOK is the counterpart of other distros; the mechanisms differ per distro, so the enrollment
 # functions do not share code.)
 #
-# On a Fedora host that installs VirtualBox WITHOUT NVIDIA, no DKMS build ever
-# fires, so dkms's own /usr/lib/dkms/mok_signing_setup (called from the DKMS
-# postinst) never runs and the key file never appears. We call that script
-# ourselves when present, and fall back to `openssl req` when it isn't — either
-# path lands the pair at the paths mokutil enrollment reads below.
+# The DKMS postinst normally seeds the pair through its own
+# /usr/lib/dkms/mok_signing_setup, but that only fires when a DKMS build runs.
+# Seeding it here keeps enrollment self-sufficient: we call that script when
+# present and fall back to `openssl req` when it isn't — either path lands the
+# pair at the paths mokutil enrollment reads below.
 #
 # Returns non-zero when no usable keypair is present afterwards, so callers act
 # on the return code instead of re-testing the files themselves.
@@ -478,8 +474,8 @@ ensure_dkms_mok_generated() {
 # key is missing and when sudo itself fails to authenticate. Reading the second
 # case as "missing" makes the caller mint a fresh keypair over the enrolled one:
 # the old certificate stays enrolled in MOK but its private key is destroyed, so
-# every module signed from then on is rejected by the kernel — breaking both
-# VirtualBox and the NVIDIA DKMS driver until a new enrollment and reboot. One
+# every module signed from then on is rejected by the kernel — breaking the
+# NVIDIA DKMS driver until a new enrollment and reboot. One
 # probe that must succeed on its own terms is what keeps that failure impossible.
 dkms_mok_state() {
   "${SUDO[@]}" sh -c '
@@ -489,153 +485,12 @@ dkms_mok_state() {
     fi' sh /var/lib/dkms/mok.pub /var/lib/dkms/mok.key
 }
 
-# Make Oracle's VirtualBox build sign its own modules under Secure Boot, then
-# prove it did and load them.
-#
-# Oracle's Fedora RPM uses neither DKMS nor akmods: /sbin/vboxconfig runs
-# vboxdrv.sh, which builds vbox*.ko and then signs them itself. On Fedora that
-# signing step HARD-FAILS, for exactly one reason — vboxdrv.sh reads its key
-# material only from the Debian paths /var/lib/shim-signed/mok/MOK.{der,priv},
-# which nothing on Fedora creates, so its key-presence test calls `failure` and
-# `vboxdrv.sh setup` exits 1. That is why vboxdrv.service fails at every boot
-# and leaves unsigned, unloadable modules behind.
-#
-# Everything past that test is distro-neutral: vboxdrv.sh resolves its signing
-# tool from /lib/modules/$(uname -r)/build/scripts/sign-file (present via
-# kernel-devel-matched), takes the hash algorithm from the running kernel's
-# config, and signs the modules at their real /lib/modules/*/misc path. So we
-# only have to satisfy the precondition and let Oracle do the work — one fixed
-# precondition instead of a sign-file loop duplicated at every trigger.
-#
-# Symlinks, not copies: `test -f` follows them, so the private key exists once,
-# and `mokutil --test-key` on the link reports the enrolled key — which also
-# sets vboxdrv.sh's DEB_KEY_ENROLLED and silences its spurious "you must sign
-# these kernel modules" boot warning.
-#
-# Delegating also retires the kernel-update problem. `vboxdrv.service` runs
-# vboxdrv.sh `start`, which does `setup_complete || setup`, so a newly booted
-# kernel gets its modules built AND signed with no chezmoi apply. (The old
-# /etc/kernel/install.d/50-vbox-sign.install hook could never do this: no
-# vboxconfig entry point builds for a non-running kernel, and the one that
-# accepts a version wipes vbox modules from every /lib/modules/*/misc.)
-#
-# Runs unconditionally (no HAS_NVIDIA-style gate) — VirtualBox is a base
-# package on both distros.
-provision_vbox_module_signing() {
-  rpm -q VirtualBox-7.2 >/dev/null 2>&1 || return 0
-
-  # Off Secure Boot the kernel loads unsigned modules, and vboxdrv.sh skips its
-  # signing block entirely, so there is no precondition to satisfy.
-  [[ -d /sys/firmware/efi ]] || return 0
-  mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled' || return 0
-
-  # Act on the return code: ensure_dkms_mok_generated tells the difference
-  # between "no key" and "could not look", and never overwrites an enrolled one.
-  if ! ensure_dkms_mok_generated; then
-    printf 'install-fedora.sh: no usable DKMS MOK at /var/lib/dkms/mok.{pub,key}; VirtualBox modules cannot be signed and VMs will fail with VERR_VM_DRIVER_NOT_INSTALLED.\n' >&2
-    return 0
-  fi
-
-  local mok_pub=/var/lib/dkms/mok.pub
-  local mok_key=/var/lib/dkms/mok.key
-
-  local shim_dir=/var/lib/shim-signed/mok
-  link_vbox_signing_key "${mok_pub}" "${shim_dir}/MOK.der" || return 0
-  link_vbox_signing_key "${mok_key}" "${shim_dir}/MOK.priv" || return 0
-
-  # Oracle installs its modules at a fixed convention — /lib/modules/*/misc is
-  # "ours" per vboxdrv.sh — so resolve the directory directly instead of asking
-  # `modinfo -n`, whose answer comes from a depmod index that is briefly absent
-  # while vboxdrv.sh rebuilds.
-  local module_dir
-  module_dir="/lib/modules/$(uname -r)/misc"
-
-  # Only rebuild when there is something to fix. A converged host would
-  # otherwise pay a ~30s module build on every fingerprint change.
-  if vbox_modules_signed "${module_dir}"; then
-    activate_vbox_driver
-    return 0
-  fi
-
-  if [[ ! -x /sbin/vboxconfig ]]; then
-    printf 'install-fedora.sh: /sbin/vboxconfig missing though VirtualBox-7.2 is installed; cannot build or sign the vbox modules.\n' >&2
-    return 0
-  fi
-
-  # vboxconfig builds for the running kernel and now signs with the linked MOK.
-  # Keep its output: a build or signing failure here is exactly the silent skip
-  # this function exists to expose.
-  if ! "${SUDO[@]}" /sbin/vboxconfig; then
-    printf 'install-fedora.sh: /sbin/vboxconfig failed; see /var/log/vbox-setup.log. VirtualBox will fail with VERR_VM_DRIVER_NOT_INSTALLED until this is resolved.\n' >&2
-    return 0
-  fi
-
-  if ! vbox_modules_signed "${module_dir}"; then
-    printf 'install-fedora.sh: vbox modules in %s are still unsigned after vboxconfig. VirtualBox will fail with VERR_VM_DRIVER_NOT_INSTALLED.\n' "${module_dir}" >&2
-    return 0
-  fi
-
-  activate_vbox_driver
-}
-
-# Point one of Oracle's expected Debian key paths at the DKMS MOK. Idempotent:
-# a correct link is left alone, a wrong link is replaced. A pre-existing regular
-# file is host state we did not create (a hand-rolled key), so warn and refuse rather than clobber a private key.
-link_vbox_signing_key() {
-  local target="$1" link="$2"
-
-  "${SUDO[@]}" mkdir -p -m 0700 "$(dirname "${link}")"
-
-  if "${SUDO[@]}" test -L "${link}"; then
-    [[ "$("${SUDO[@]}" readlink "${link}")" == "${target}" ]] && return 0
-    "${SUDO[@]}" ln -sfn "${target}" "${link}"
-    return 0
-  fi
-
-  if "${SUDO[@]}" test -e "${link}"; then
-    printf 'install-fedora.sh: %s already exists as a regular file; leaving it alone. Remove it if you want VirtualBox signed with the DKMS MOK at %s.\n' "${link}" "${target}" >&2
-    return 1
-  fi
-
-  "${SUDO[@]}" ln -s "${target}" "${link}"
-}
-
-# True when the given directory holds at least one vbox module and every one of
-# them carries a signature. `modinfo` reports `signer:` only for a signed module
-# (and transparently decompresses .ko.xz/.ko.zst), so an unsigned set fails the
-# test and triggers a rebuild. vboxpci is absent in VirtualBox 7.2, so the module
-# list is discovered by glob rather than enumerated.
-#
-# A missing, empty, or unreadable directory needs no separate guard: the glob
-# then matches nothing, `found` stays 0, and the result is "unsigned" — which is
-# the answer that makes the caller rebuild.
-vbox_modules_signed() {
-  local module_dir="$1" modfile found=0
-  for modfile in "${module_dir}"/vbox*.ko*; do
-    [[ -f "${modfile}" ]] || continue
-    found=1
-    modinfo "${modfile}" 2>/dev/null | grep -q '^signer:' || return 1
-  done
-  [[ "${found}" -eq 1 ]]
-}
-
-# Load the freshly signed driver so this run leaves VirtualBox usable without a
-# reboot. vboxdrv.service owns the module lifecycle (it is what fails when the
-# modules are unsigned), so restart it rather than modprobe by hand.
-activate_vbox_driver() {
-  "${SUDO[@]}" systemctl restart vboxdrv.service || {
-    printf 'install-fedora.sh: vboxdrv.service failed to start with signed modules; run `systemctl status vboxdrv.service` and `dmesg` to see why.\n' >&2
-    return 0
-  }
-}
-
 # Enroll the DKMS MOK signing key at /var/lib/dkms/mok.pub when booted with
-# Secure Boot — it covers both NVIDIA's DKMS-signed modules AND the VirtualBox
-# modules Oracle signs against the same key. Kept in its own function (rather
-# than folded into enable_services, as it once was) so that function only
-# enables units. Runs after provision_vbox_module_signing, which (via
-# dedicated functions. Runs after provision_vbox_module_signing, which (via
-# ensure_dkms_mok_generated) seeds the key when VirtualBox is present.
+# Secure Boot — it is what makes NVIDIA's DKMS-signed modules loadable. Kept in
+# its own function (rather than folded into enable_services, as it once was) so
+# that function only enables units. Seeds the keypair first via
+# ensure_dkms_mok_generated on NVIDIA hosts, so enrollment does not depend on a
+# DKMS build having already fired.
 #
 # Skipped unless booted via UEFI with Secure Boot on — otherwise unsigned modules
 # load fine and `mokutil --import` would queue a pointless MOK Manager prompt on
@@ -652,6 +507,12 @@ enroll_dkms_mok() {
   else
     local -a certs=() to_import=()
     local cert fp mok_state
+    # Only an NVIDIA host has an out-of-tree module to sign, so only there is a
+    # missing keypair worth minting. The failure is reported by the state probe
+    # below, which is the single place that decides whether enrollment proceeds.
+    if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
+      ensure_dkms_mok_generated || true
+    fi
     # Keep the probe's three outcomes distinct in the skip message: "absent" is a
     # host that never seeded a key, "unreadable" is a sudo problem to fix.
     mok_state="$(dkms_mok_state)" || mok_state=unreadable
@@ -659,7 +520,7 @@ enroll_dkms_mok() {
       certs+=(/var/lib/dkms/mok.pub)
     fi
     if [[ ${#certs[@]} -eq 0 ]]; then
-      printf 'install-fedora.sh: no enrollable DKMS MOK (keypair %s); skipping MOK import. provision_vbox_module_signing seeds one when VirtualBox is installed.\n' "${mok_state}"
+      printf 'install-fedora.sh: no enrollable DKMS MOK (keypair %s); skipping MOK import. One is seeded on NVIDIA hosts, which are the only hosts with a module to sign.\n' "${mok_state}"
     else
       for cert in "${certs[@]}"; do
         if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
@@ -675,7 +536,7 @@ enroll_dkms_mok() {
       done
       if [[ ${#to_import[@]} -gt 0 ]]; then
         "${SUDO[@]}" mokutil --import "${to_import[@]}"
-        printf 'install-fedora.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the one-time password entered above; NVIDIA and VirtualBox modules stay unloadable until then.\n' >&2
+        printf 'install-fedora.sh: MOK enrollment queued. At next boot choose "Enroll MOK" in the MokManager menu and enter the one-time password entered above; NVIDIA modules stay unloadable until then.\n' >&2
       else
         printf 'install-fedora.sh: DKMS MOK key already enrolled or queued.\n'
       fi
@@ -722,14 +583,17 @@ configure_time() {
   "${SUDO[@]}" timedatectl set-ntp true 2>/dev/null || true
 }
 
-# Add the user to the device/virtualization groups and allocate rootless-Podman
-# subordinate id ranges. Group changes only take effect on next login.
+# Add the user to the device groups and allocate rootless-Podman subordinate id
+# ranges. Group changes only take effect on next login.
 configure_user_groups() {
   local target_user grp
   target_user="${SUDO_USER:-$USER}"
-  local -a groups=(keyd vboxusers)
+  # `vboxusers` was dropped along with VirtualBox. An existing member keeps the
+  # stale membership until it is removed by hand, which grants nothing once the
+  # package and its device nodes are gone.
+  local -a groups=(keyd)
 
-  # Add the user to each device/virtualization group only when it exists.
+  # Add the user to each device group only when it exists.
   for grp in "${groups[@]}"; do
     if getent group "${grp}" >/dev/null 2>&1; then
       "${SUDO[@]}" usermod -aG "${grp}" "${target_user}" 2>/dev/null || true
@@ -749,9 +613,9 @@ configure_user_groups() {
 
   # Notify when the current shell is missing a just-added group; silent on re-runs
   # after re-login.
-  if ! id -nG | grep -qw keyd || ! id -nG | grep -qw vboxusers; then
+  if ! id -nG | grep -qw keyd; then
     printf '\n'
-    printf 'NOTE: Added "%s" to groups: keyd, vboxusers\n' "${target_user}"
+    printf 'NOTE: Added "%s" to groups: keyd\n' "${target_user}"
     printf '      Log out and back in (or reboot) for group membership to take effect.\n'
   fi
 }
@@ -767,12 +631,9 @@ install_direct_rpms
 install_flatpak_packages
 install_dotnet_tools
 configure_time
-# Provision Oracle's VirtualBox module signing and enroll the DKMS MOK BEFORE
-# enable_services. provision_vbox_module_signing seeds the MOK (via
-# ensure_dkms_mok_generated) that enroll_dkms_mok then imports, and it restarts
-# vboxdrv.service itself once the modules are signed. Both are no-ops when
-# VirtualBox isn't installed or Secure Boot is off; safe on every host.
-provision_vbox_module_signing
+# Enroll the DKMS MOK BEFORE enable_services, so the units that depend on a
+# signed out-of-tree module see the enrollment already queued. A no-op when
+# Secure Boot is off or no keypair is enrollable; safe on every host.
 enroll_dkms_mok
 enable_services
 configure_user_groups
