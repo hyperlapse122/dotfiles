@@ -160,7 +160,7 @@ installs the 1Password app and CLI but cannot yet resolve secrets. So:
    chezmoi apply
    ```
 
-The apply completes once `op` can resolve secrets (`op whoami` succeeds).
+The prerequisite hook continues once `op vault list` confirms desktop-app or service-account authentication. The later `onepasswordRead` calls still verify access to each exact secret reference, and the apply fails with that lookup error if the account lacks access.
 
 ## GitHub API token (important)
 

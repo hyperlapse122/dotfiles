@@ -498,6 +498,7 @@ jobs:
           .ci/test-native-desktop-outcomes.sh
           .ci/test-wifi-import-gates.sh
           .ci/test-mxm4-haptic-hook-events.sh
+          .ci/test-install-prerequisites-op-auth.sh
           .ci/test-wezterm-candidate.sh
 
   native-windows-x64:
@@ -538,11 +539,13 @@ jobs:
           New-Item -ItemType Directory -Path $bin -Force | Out-Null
           Expand-Archive -LiteralPath $archive -DestinationPath $bin -Force
           $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Run Windows device collector fixtures
+      - name: Run Windows device collector and prerequisite fixtures
         shell: pwsh
         run: |
           & .ci/test-device-collectors.ps1
           if ($LASTEXITCODE -ne 0) { throw "Windows device collector fixtures exited with code $LASTEXITCODE" }
+          & .ci/test-install-prerequisites-op-auth.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Windows prerequisite fixtures exited with code $LASTEXITCODE" }
       - name: Run Windows package, trust, editor, Wi-Fi, and garden parity fixtures
         shell: bash
         run: |

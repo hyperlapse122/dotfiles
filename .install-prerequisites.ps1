@@ -39,7 +39,7 @@ function Write-Stderr {
 # Run a native command, swallow its output, and return its exit code WITHOUT
 # letting a non-zero exit raise a terminating error: PowerShell 7.4+ turns native
 # failures into throws under $ErrorActionPreference='Stop', and several checks
-# below (`op whoami`, `winget list`) treat a non-zero exit as expected signal.
+# below (`op vault list`, `winget list`) treat a non-zero exit as expected signal.
 function Invoke-NativeExitCode {
     param(
         [Parameter(Mandatory = $true)][string] $FilePath,
@@ -68,14 +68,14 @@ function Update-SessionPath {
     $env:Path = ($parts | Where-Object { $_ }) -join ';'
 }
 
-# `op` can resolve secrets. `op whoami` succeeds for BOTH a desktop-app
-# integration and a service-account token (OP_SERVICE_ACCOUNT_TOKEN) — the latter
-# is how CI authenticates. `op user get --me` is the legacy fallback: it works for
-# a signed-in human account but NOT a service account.
+# `op vault list` is 1Password's documented desktop-app integration probe and
+# also works with OP_SERVICE_ACCOUNT_TOKEN. Unlike `op whoami`, it does not
+# require a separately configured CLI account. Discard all output because vault
+# metadata is not part of the bootstrap log. Exact secret authorization remains
+# the later `onepasswordRead` calls' responsibility.
 function Test-OpReady {
     if (-not (Get-Command op -ErrorAction SilentlyContinue)) { return $false }
-    if ((Invoke-NativeExitCode -FilePath 'op' -Arguments @('whoami')) -eq 0) { return $true }
-    return ((Invoke-NativeExitCode -FilePath 'op' -Arguments @('user', 'get', '--me')) -eq 0)
+    return ((Invoke-NativeExitCode -FilePath 'op' -Arguments @('vault', 'list')) -eq 0)
 }
 
 # Human-facing instructions for enabling the 1Password CLI. Printed once before
