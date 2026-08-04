@@ -162,7 +162,7 @@ for os in linux darwin windows; do
     grep -F '<RunLevel>LeastPrivilege</RunLevel>' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows task least-privilege run level is absent'
     grep -F '<LogonType>InteractiveToken</LogonType>' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows task interactive-token logon is absent'
     grep -F '.local\bin\mxm4-haptic.exe' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows hook client install is absent'
-    grep -F -- '--bin mxm4-hapticd --bin mxm4-haptic' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows build does not compile the hook client'
+    grep -F -- "'--bin', 'mxm4-hapticd', '--bin', 'mxm4-haptic'" "$scratch/build-$os.ps1" >/dev/null || fail 'Windows build does not compile the hook client'
     grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-$os.ps1" >/dev/null || fail 'Windows migration is absent'
     grep -F "Name = 'mxm4-haptic'; Market = 'h82-dotfiles'" "$scratch/reconcile-$os.ps1" >/dev/null || fail 'Windows OMP haptic row is absent'
   else
