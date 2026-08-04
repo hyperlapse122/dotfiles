@@ -204,7 +204,6 @@
           }
         }
       },
-
       "codegraph": {
         "kind": "githubRelease",
         "source": "colbymchenry/codegraph",
@@ -487,35 +486,35 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v17.2.6",
+        "version": "v17.2.7",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-linux-x64",
-            "sha256": "a491f0f44cb444c01305c23b70592a6e6c20edb48a382bc7be92b06cb5895224"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-linux-x64",
+            "sha256": "6e382c80b0af58016b0f537b604a3a29f1e9104abb498705295341e38fbdc774"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-linux-arm64",
-            "sha256": "65cd7f5e7d537b0b41f277191c1b95b53d509f8147c3d1bd508503dc048f1453"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-linux-arm64",
+            "sha256": "12c9659c033f190655f9530379de5542590fe03dd6aac3d023c152c83922f2a1"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-darwin-x64",
-            "sha256": "4c65be450539173666abfaa41bd94b9918053646ac90b0350b76e76a6e6fddf2"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-darwin-x64",
+            "sha256": "940a8a46a35fb3f9aa874b12f66dd6a473066b54a6efc68aa8e0b2116bc65764"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-darwin-arm64",
-            "sha256": "2a58e75aef6564043cc710e405be9de9d3689f2c1cbb918197de891deed27abb"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-darwin-arm64",
+            "sha256": "cd2f47545cb3f8eb5e15c91bc9054d73967774652e020b432e294803d1b71ea0"
           },
           "windows-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-windows-x64.exe",
-            "sha256": "67374d9472e551f2304ff7d089af049465fdaa30a3e612fc1d381237267983ea"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-windows-x64.exe",
+            "sha256": "be0fad104e160ae2ef6ffb7e6eeeff51f8b2de0fecaca6fc0c15e9ce1ce94575"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-linux-musl-x64",
-            "sha256": "6d86d03397f1e1967c8c69b79f54cfc59e20b79eb0a756448251b524781f54e4"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-linux-musl-x64",
+            "sha256": "8406ac67c3a3df6b23ee4f371493cb53155f39dfeedb76a725ad1b68339a6e2c"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.6/omp-linux-musl-arm64",
-            "sha256": "d6fba8c9841cf29da177b375891a84084018321a57ddd201b678ac1e656e0cd4"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.7/omp-linux-musl-arm64",
+            "sha256": "8382372b2e5eaae1e2737f9abb8f3e3675e194e914317365a099522bea82deaa"
           }
         }
       },
