@@ -96,9 +96,6 @@ if (!registry.has("kitty") || presentInLegacy("kitty")) {
 if (!miseNames.has("kdotool") || presentInLegacy("kdotool")) {
   fail("kdotool must be mise owned and absent from Fedora native packages");
 }
-if (!registry.has("codex") || !externals.has("codex") || miseNames.has("codex")) {
-  fail("codex must be one locked external chain and absent from mise");
-}
 JS
 }
 

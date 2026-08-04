@@ -157,13 +157,6 @@ export const REGISTRY: Registry = {
 
   /* ---------- ai-agents.toml tools ---------- */
 
-  codex: {
-    kind: "githubRelease",
-    source: "openai/codex",
-    // Tags carry a `rust-v` prefix; the linux build is static musl.
-    asset: ({ os, arch }) => `codex-package-${rustArch(arch)}-${muslTarget(os)}.tar.zst`,
-  },
-
   "agent-browser": {
     kind: "githubRelease",
     source: "vercel-labs/agent-browser",
@@ -244,12 +237,6 @@ export const REGISTRY: Registry = {
   glab: { kind: "gitlabRelease", source: "https://gitlab.com/api/v4/projects/34675721" },
 
   /* ---------- vendorManifest ---------- */
-
-  claude: {
-    kind: "vendorManifest",
-    vendor: "claude",
-    source: "https://downloads.claude.ai/claude-code-releases",
-  },
 
   winbox: {
     kind: "vendorManifest",

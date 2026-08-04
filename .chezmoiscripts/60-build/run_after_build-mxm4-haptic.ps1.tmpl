@@ -20,9 +20,9 @@ $PluginRoot = Join-Path $ManagedHome '.local\share\omp-plugins\plugins\mxm4-hapt
 $PluginManifest = Join-Path $PluginRoot 'package.json'
 $PluginDestination = Join-Path $PluginRoot 'dist\index.js'
 $DaemonDestination = Join-Path $ManagedHome '.local\bin\mxm4-hapticd.exe'
-# The one-shot client the Claude/Codex Windows hooks (pulse.ps1 and the codex
-# inline PowerShell) invoke to reach the daemon's named pipe. Deployed beside
-# the daemon from the same daemon-component fingerprint and build.
+# One-shot client shim that reaches the daemon's named pipe (retained Rust
+# parity binary; omp's bundled extension talks to the daemon directly). Deployed
+# beside the daemon from the same daemon-component fingerprint and build.
 $ClientDestination = Join-Path $ManagedHome '.local\bin\mxm4-haptic.exe'
 $StateRoot = Join-Path $ManagedHome '.local\state\mxm4-haptic'
 $PluginStamp = Join-Path $StateRoot 'plugin.sha256'

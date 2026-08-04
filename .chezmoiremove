@@ -22,13 +22,12 @@
 # here.
 .agents/skills/playwright-cli
 
-# Removed hub + its @AGENTS.md mirror. The user-scoped instruction core is now
-# composed per harness by .chezmoitemplates/agents-instructions.tmpl and rendered
-# straight into each managed harness wrapper (`~/.claude/CLAUDE.md`,
-# `~/.codex/AGENTS.md`, and `~/.omp/agent/AGENTS.md`), so
-# the shared ~/.agents/AGENTS.md hub and its ~/.agents/CLAUDE.md mirror no longer
-# have a source. Deleting the dot_agents source files stops managing them but
-# does not delete the already-deployed copies — prune them here.
+# Removed shared hub + its @AGENTS.md mirror. The user-scoped instruction core
+# is composed by .chezmoitemplates/agents-instructions.tmpl and rendered into
+# the managed omp wrapper (~/.omp/agent/AGENTS.md), so the legacy shared
+# ~/.agents/AGENTS.md hub and its ~/.agents/CLAUDE.md mirror no longer have a
+# source. Deleting the dot_agents source files stopped managing them but did
+# not delete the already-deployed copies — prune them here.
 .agents/AGENTS.md
 .agents/CLAUDE.md
 

@@ -29,12 +29,6 @@ windows_reconcile=.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugin
 for path in "$posix_build" "$windows_build" "$posix_reconcile" "$windows_reconcile" \
   dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json \
   dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl \
-  dot_local/share/claude-plugins/dot_claude-plugin/marketplace.json \
-  dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl \
-  dot_local/share/claude-plugins/mxm4-haptic/bin/executable_pulse \
-  dot_local/share/claude-plugins/mxm4-haptic/bin/executable_pulse.ps1 \
-  dot_local/share/codex-plugins/dot_claude-plugin/marketplace.json \
-  dot_local/share/codex-plugins/mxm4-haptic/hooks/hooks.json.tmpl \
   dot_config/systemd/user/mxm4-hapticd.service.tmpl \
   dot_config/systemd/user/mxm4-haptic-notify.service.tmpl \
   Library/LaunchAgents/dev.h82.mxm4-hapticd.plist; do
@@ -82,24 +76,18 @@ assert_gate() {
 
 omp_market=.local/share/omp-plugins/dot_omp-plugin/marketplace.json
 omp_plugin=.local/share/omp-plugins/plugins/mxm4-haptic/package.json
-claude_market=.local/share/claude-plugins/dot_claude-plugin/marketplace.json
-claude_plugin=.local/share/claude-plugins/mxm4-haptic/hooks/hooks.json
-claude_pulse=.local/share/claude-plugins/mxm4-haptic/bin/pulse
-claude_pulse_ps1=.local/share/claude-plugins/mxm4-haptic/bin/pulse.ps1
-codex_market=.local/share/codex-plugins/dot_claude-plugin/marketplace.json
-codex_plugin=.local/share/codex-plugins/mxm4-haptic/hooks/hooks.json
 linux_daemon=.config/systemd/user/mxm4-hapticd.service
 linux_notify=.config/systemd/user/mxm4-haptic-notify.service
 mac_daemon=Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 
-# The daemon is cross-platform, so the Claude/Codex haptic plugins deploy on
-# every desktop OS; only the startup definitions stay OS-specific (systemd on
-# Linux, launchd on macOS, the Task Scheduler task rendered by the ps1 build
-# on Windows).
+# The daemon is cross-platform, so the OMP haptic plugin and the daemon manifest
+# deploy on every desktop OS; only the startup definitions stay OS-specific
+# (systemd on Linux, launchd on macOS, the Task Scheduler task rendered by the
+# ps1 build on Windows).
 for os in linux darwin windows; do
   rendered_ignore="$scratch/ignore-$os-host"
   render_ignore "$os" false "$rendered_ignore"
-  for path in "$omp_market" "$omp_plugin" "$claude_market" "$claude_plugin" "$claude_pulse" "$claude_pulse_ps1" "$codex_market" "$codex_plugin"; do
+  for path in "$omp_market" "$omp_plugin"; do
     assert_gate "$rendered_ignore" eligible "$path" "$os host"
   done
   if [[ "$os" == linux ]]; then
@@ -124,11 +112,11 @@ grep -F '"$HOME/.local/bin/mxm4-hapticd"' "$plist" >/dev/null || fail 'macOS Lau
 
 container_ignore="$scratch/ignore-linux-container"
 render_ignore linux true "$container_ignore"
-for path in "$omp_market" "$omp_plugin" "$claude_market" "$claude_plugin" "$claude_pulse" "$claude_pulse_ps1" "$codex_market" "$codex_plugin" "$linux_daemon" "$linux_notify" "$mac_daemon"; do
+for path in "$omp_market" "$omp_plugin" "$linux_daemon" "$linux_notify" "$mac_daemon"; do
   assert_gate "$container_ignore" ignored "$path" 'linux container'
 done
 assert_gate "$container_ignore" ignored .chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh 'linux container'
-# The generic phase-70 reconciler remains eligible in containers to maintain
+# The phase-70 omp reconciler remains eligible in containers to maintain
 # keep-marked marketplaces and remove the retired legacy extension.
 assert_gate "$container_ignore" eligible .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh 'linux container migration'
 
@@ -182,31 +170,6 @@ render_reconciler linux true "$posix_reconcile" "$scratch/reconcile-linux-contai
 ! grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container rendered the OMP haptic row'
 grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container migration is absent'
 
-# Per-OS hook commands: POSIX renders invoke the sh wrapper / sh one-liner,
-# Windows renders invoke the PowerShell wrapper / inline PowerShell. Rendered
-# waveforms must come from haptic.yaml (defaults: COMPLETED settled, RINGING
-# question, MAD failure).
-for os in linux darwin windows; do
-  render "$os" "$repo_root/dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl" "$scratch/hooks-claude-$os.json"
-  render "$os" "$repo_root/dot_local/share/codex-plugins/mxm4-haptic/hooks/hooks.json.tmpl" "$scratch/hooks-codex-$os.json"
-  if [[ "$os" == windows ]]; then
-    grep -F 'powershell -NoProfile -File' "$scratch/hooks-claude-$os.json" >/dev/null || fail 'Windows Claude hook does not invoke PowerShell'
-    grep -F 'pulse.ps1' "$scratch/hooks-claude-$os.json" >/dev/null || fail 'Windows Claude hook does not invoke pulse.ps1'
-    ! grep -F "bin/pulse '" "$scratch/hooks-claude-$os.json" >/dev/null || fail 'Windows Claude hook still invokes the sh wrapper'
-    grep -F 'powershell -NoProfile -Command' "$scratch/hooks-codex-$os.json" >/dev/null || fail 'Windows codex hook is not inline PowerShell'
-    grep -F 'mxm4-haptic.exe' "$scratch/hooks-codex-$os.json" >/dev/null || fail 'Windows codex hook does not resolve the client'
-    ! grep -F "sh -c 'cat >/dev/null" "$scratch/hooks-codex-$os.json" >/dev/null || fail 'Windows codex hook still renders the sh one-liner'
-  else
-    grep -F '${CLAUDE_PLUGIN_ROOT}/bin/pulse' "$scratch/hooks-claude-$os.json" >/dev/null || fail "$os Claude hook does not invoke pulse"
-    ! grep -F 'pulse.ps1' "$scratch/hooks-claude-$os.json" >/dev/null || fail "$os Claude hook unexpectedly invokes PowerShell"
-    grep -F "sh -c 'cat >/dev/null" "$scratch/hooks-codex-$os.json" >/dev/null || fail "$os codex hook is not the sh one-liner"
-    ! grep -F 'powershell' "$scratch/hooks-codex-$os.json" >/dev/null || fail "$os codex hook unexpectedly renders PowerShell"
-  fi
-  grep -F 'COMPLETED' "$scratch/hooks-claude-$os.json" >/dev/null || fail "$os Claude hook lost its settled waveform"
-  grep -F 'MAD' "$scratch/hooks-claude-$os.json" >/dev/null || fail "$os Claude hook lost its failure waveform"
-  grep -F 'RINGING' "$scratch/hooks-codex-$os.json" >/dev/null || fail "$os codex hook lost its question waveform"
-done
-
 # Every deployed manifest must reject a real invalid value during rendering.
 # Its observable rejection whitelist must exactly match both implementations.
 invalid=NOT_A_REAL_WAVEFORM
@@ -221,11 +184,9 @@ render_invalid() {
   grep -F "$invalid" "$scratch/$name.invalid.err" >/dev/null || fail "$name rejection did not identify invalid value"
   grep -F 'valid names' "$scratch/$name.invalid.err" >/dev/null || fail "$name rejection omitted its whitelist"
 }
-render_invalid claude dot_local/share/claude-plugins/mxm4-haptic/hooks/hooks.json.tmpl "{\"haptic\":{\"claude\":{\"stop\":\"$invalid\"}}}"
-render_invalid codex dot_local/share/codex-plugins/mxm4-haptic/hooks/hooks.json.tmpl "{\"haptic\":{\"codex\":{\"settled\":\"$invalid\"}}}"
 render_invalid omp dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl "{\"haptic\":{\"omp\":{\"settled\":\"$invalid\"}}}"
 
-node - "$repo_root/packages/mxm4-haptic/src/index.ts" "$repo_root/crates/mxm4-haptic/src/lib.rs" "$scratch/claude.invalid.err" "$scratch/codex.invalid.err" "$scratch/omp.invalid.err" <<'NODE'
+node - "$repo_root/packages/mxm4-haptic/src/index.ts" "$repo_root/crates/mxm4-haptic/src/lib.rs" "$scratch/omp.invalid.err" <<'NODE'
 const fs = require('node:fs');
 const [tsPath, rustPath, ...errors] = process.argv.slice(2);
 const ts = [...fs.readFileSync(tsPath, 'utf8').matchAll(/\["([A-Z][A-Z ]+)",\s*\d+\]/g)].map((m) => m[1]);

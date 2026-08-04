@@ -13,7 +13,7 @@ export interface LockedArtifact {
   readonly url: string;
   /** Lowercase hex sha256, or null when the source publishes no digest. */
   readonly sha256: string | null;
-  /** Byte size of the artifact, where the source publishes one (claude). */
+  /** Byte size of the artifact, where the source publishes one. */
   readonly size?: number;
   /** Present when this target borrows the amd64 build and runs it emulated. */
   readonly emulated?: true;
@@ -66,7 +66,7 @@ export type ResolverKind =
   | "gitRef";
 
 /** The vendor endpoints the vendorManifest kind knows how to read. */
-export type VendorName = "claude" | "winbox";
+export type VendorName = "winbox";
 
 /**
  * Asset selection for one tool.

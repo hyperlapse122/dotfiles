@@ -3,14 +3,13 @@
        The repo interleaves several tag trains (marketplace-*, cursor-marketplace-*,
        cli-*), so the release lock filters for compound-engineering-* at refresh.
        Every consumer validates the neutral marketplace row before reading that
-       resolved tag. The row is platform-neutral even though its `os` list gates
-       only the generic Claude/Codex installer.
+       resolved tag. The row is platform-neutral; omp reads it on every desktop
+       OS (the omp updater carries a Windows special-case for this marketplace).
 
        The extracted archive path is
        ~/.local/share/compound-engineering/v<semver>/ on every OS:
          - .chezmoiexternals/ai-agents.toml emits one archive external.
          - the 00-tools scripts prune versions and install overlays on POSIX.
-         - install-agent-plugins registers the path with Claude and Codex.
          - both omp updater variants register the same path with omp.
     */ -}}
 {{- $name := "compound-engineering-plugin" -}}

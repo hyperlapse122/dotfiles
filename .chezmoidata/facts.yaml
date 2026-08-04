@@ -259,9 +259,8 @@ factRegistry:
       Podman/Docker marker WITHOUT the toolbox marker — is one.
     gates: >-
       The root .chezmoiignore container block: every provisioning script, the
-      mxm4-haptic build, the Claude Code plugin tree, and
-      .config/garden/garden.yaml (whose GPG key the skipped 80-keys import would
-      have provided).
+      mxm4-haptic build, and .config/garden/garden.yaml (whose GPG key the
+      skipped 80-keys import would have provided).
     whenFalse: A normal host — everything deploys.
 
 # ---------------------------------------------------------------------------

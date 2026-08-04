@@ -1,9 +1,9 @@
-{{- /* AI coding agents and adjacent tooling: claude, codex, agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
-       static-musl build. Shared by the claude and agent-browser externals below so the
+       static-musl build. Shared by the agent-browser and omp externals below so the
        `ldd` subprocess runs once per render rather than once per consumer. */ -}}
 {{- $isMuslLinux := false -}}
 {{- if eq .chezmoi.os "linux" -}}
@@ -12,50 +12,9 @@
   {{- end -}}
 {{- end -}}
 
-{{- /* ---------- claude-code (anthropic downloads manifest, not a GitHub release) ---------- */ -}}
-
-{{- /* Version, URL, sha256 and size are resolved at refresh time by
-       packages/release-lock from the downloads.claude.ai latest + manifest.json
-       pair; the lock carries per-platform artifacts with distinct musl keys
-       (KTD11), so the render only reads the locked values. */ -}}
-{{- $latestReleaseVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "claude") -}}
-{{- $claudeLockArtifact := dict "ctx" . "tool" "claude" "platform" "auto" "musl" $isMuslLinux -}}
-
-[claude]
-type = "file"
-targetPath = '{{ printf ".local/share/claude/versions/%s%s" $latestReleaseVersion $executableExtension }}'
-url = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "url")) }}'
-executable = true
-# 0500: the binary is not rewritable in place, only replaceable by a chezmoi apply
-# that fetches a new version dir.
-private = true
-readonly = true
-
-[claude.checksum]
-sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "sha256")) }}'
-size = {{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "size")) }}
-
-{{- /* ---------- codex ---------- */ -}}
-
-{{- $codexArch := (replace "amd64" "x86_64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
-
-{{- $codexTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex") -}}
-{{- $codexRelease := (replace "rust-v" "" $codexTag) -}}
-{{- $codexTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
-
-{{- $codexReleasePath := (printf "%s-%s-%s" $codexRelease $codexArch $codexTarget) -}}
-
-{{- $codexInstallationPath := (joinPath ".codex" "packages" "standalone" "releases" $codexReleasePath) }}
-
-[codex]
-type = "archive"
-url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex" "field" "url" "platform" "auto") }}'
-stripComponents = 0
-targetPath = '{{ $codexInstallationPath }}'
-
 {{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
-       ("Browser automation CLI for AI agents"), tracked at the newest release like
-       claude/codex. The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
+       ("Browser automation CLI for AI agents"), tracked at the newest release.
+       The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
        the linux fork split glibc vs static musl, windows carrying .exe) and NO checksums
        sidecar; the tag, per-platform download URL, and each asset's GitHub-computed
        sha256 digest are resolved at refresh time by packages/release-lock (distinct musl
@@ -194,12 +153,8 @@ include = {{ $figmaIncludes | toJson }}
        packages/release-lock (repos with no releases/tags, e.g.
        shadcn/improve). In every case the resolved ref sits in the URL, so both the URL and
        chezmoi's refresh key stay immutable for one render and a release bump re-fetches on
-       the next apply. dotagents runs for the MCP servers only now
-       (no path: skills any more) and still owns the ~/.claude/skills -> ~/.agents/skills
-       symlink; its `install` never prunes an UNDECLARED dir (prune is sync-only, which the
-       apply never runs), so these externals coexist with the symlink and with any
-       locally-authored chezmoi-managed skill under dot_agents/skills/<name>/. POSIX only,
-       matching the install-dotagents-skills linux+darwin gate. Every ref in this
+       the next apply. These externals coexist with any locally-authored
+       chezmoi-managed skill under dot_agents/skills/<name>/. POSIX only. Every ref in this
        file now resolves from the release lock at render time, so the render
        performs no GitHub API calls. ---------- */ -}}
 
