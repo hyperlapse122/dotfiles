@@ -92,6 +92,7 @@ Edit data, not generated scripts or rendered targets:
 | `.chezmoidata/packages.yaml` | Fedora packages, repos, COPRs, flatpaks, dotnet, direct packages, services/groups |
 | `.chezmoidata/fonts.yaml` | font archives, families, sizes and fallbacks for KDE/GNOME/fcitx/VSCodium/kitty |
 | `.chezmoidata/vscodium.yaml` | additive VSCodium extension installer |
+| `.chezmoidata/visualstudio.yaml` | Visual Studio 2026 Community identity, workloads, and components for `run_onchange_after_install-visual-studio.ps1.tmpl`; Visual Studio is owned here, not in `packages.yaml` |
 | `.chezmoidata/solaar.yaml` | device settings/rules and restart fingerprint |
 | `.chezmoidata/networking.yaml` | Wi-Fi importer, DNS defaults/overrides, unresolved-ref fingerprint |
 | `.chezmoidata/kde.yaml`, `.chezmoidata/gnome.yaml` | desktop manifests and tunables |

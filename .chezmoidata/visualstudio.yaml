@@ -1,0 +1,19 @@
+# .chezmoidata/visualstudio.yaml — single source of truth for Visual Studio.
+#
+# The Windows provisioner renders this data inline, so edits re-trigger its
+# run_onchange:
+#   .chezmoiscripts/30-windows/
+#     run_onchange_after_install-visual-studio.ps1.tmpl
+# Visual Studio is owned here, not in .chezmoidata/packages.yaml.
+visualstudio:
+  product: Microsoft.VisualStudio.Product.Community
+  versionRange: "[18.0,19.0)"
+  bootstrapperUrl: https://aka.ms/vs/stable/vs_community.exe
+  workloads:
+    - Microsoft.VisualStudio.Workload.NativeDesktop
+    - Microsoft.VisualStudio.Workload.ManagedDesktop
+  components:
+    - Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+    - Microsoft.VisualStudio.Component.Windows11SDK.26100
+    - Microsoft.VisualStudio.Component.VC.CMake.Project
+    - Microsoft.Net.Component.4.8.TargetingPack
