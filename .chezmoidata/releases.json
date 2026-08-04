@@ -160,47 +160,47 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.220",
+        "version": "2.1.221",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/linux-x64/claude",
-            "sha256": "674f61f20ff306f3100cf9200e4c36c4b70278b5bef2884549819b942a89c863",
-            "size": 275012592
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/linux-x64/claude",
+            "sha256": "60db8e88d42c24b5199c92cfd56ec88370c510c3789c6f364af748354f087ada",
+            "size": 288705544
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/linux-arm64/claude",
-            "sha256": "159e4a51d796f3bf14677577100f7efb845611b1ceaf0c30cbd8d4650d942185",
-            "size": 271825824
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/linux-arm64/claude",
+            "sha256": "d3c59d6bcc4adcf4cd85abca3bc13fa1131a34cb32f982bdf030d83a3b11e700",
+            "size": 285457336
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/linux-x64-musl/claude",
-            "sha256": "f1c20514a3571cdf9982e25c490042d740ed7cfed3f00c64ba92dc7ec47c3c5b",
-            "size": 269636176
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/linux-x64-musl/claude",
+            "sha256": "15b068e06eafff9b64583b46cdc065ac18b0d0d13950c2a83c6ee854f301a32f",
+            "size": 283312720
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/linux-arm64-musl/claude",
-            "sha256": "5eb2697a1500c1b8736e53fd696392196dc6758cf1d470c64d8d2a2fd1629eeb",
-            "size": 265074024
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/linux-arm64-musl/claude",
+            "sha256": "85985afd58d33578efd217788dd9e5cbbc0177ad00e638d9316c6fd89640f3ff",
+            "size": 278771048
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/darwin-x64/claude",
-            "sha256": "dca7be0aa7d3d924836d440e0c6d8e3d47ef3c8e61fa5809b54b9017170ce2f3",
-            "size": 266397712
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/darwin-x64/claude",
+            "sha256": "f408b9f7e46439f6e34a3687ff67433fc6bc189f40220ce4f0a1e829e58f0a52",
+            "size": 280087584
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/darwin-arm64/claude",
-            "sha256": "8addc857f3fe64d5a0368af9ee50321b50afb4a6918ba3ef018ab84f5dbbe081",
-            "size": 256908272
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/darwin-arm64/claude",
+            "sha256": "7a181f36ed0fc4fbac6cee4ecf2b615eff93d8b434221fff5d7c878dc5ebf380",
+            "size": 270518240
           },
           "windows-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/win32-x64/claude.exe",
-            "sha256": "af5bf1f1b2aadffc768eccd787084c6fdf9ba81624cbe96c1c6d9ac1a1550231",
-            "size": 265720480
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/win32-x64/claude.exe",
+            "sha256": "0f73196359a07f9ad435a8c83ca7c741b9f2adbc0ad9b05f71a0c2f4aabe906a",
+            "size": 278279328
           },
           "windows-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.220/win32-arm64/claude.exe",
-            "sha256": "07343ace8a2e9ba87eed716e9c0261ce4bda8954c316695e4cb26fd0605de13c",
-            "size": 260095648
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.221/win32-arm64/claude.exe",
+            "sha256": "1407585e0c33a70061d6ea7cb873b8582dcedbe928d2118982676f1951576a58",
+            "size": 272952480
           }
         }
       },
