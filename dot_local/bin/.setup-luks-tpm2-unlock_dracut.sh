@@ -1,13 +1,8 @@
 # Shared dracut backend for setup-luks-tpm2-unlock.sh — dracut + systemd-cryptenroll.
 #
-# Used on BOTH Fedora and Ubuntu. dracut builds a systemd-based initramfs whose
-# systemd-cryptsetup honours the `tpm2-device=auto` crypttab option, so enrollment
-# is `systemd-cryptenroll` and the crypttab carries `tpm2-device=auto` on either
-# distro — one mechanism, no per-distro divergence. (Ubuntu 26.04 switched its
-# initramfs generator from initramfs-tools to dracut; on the old initramfs-tools
-# stack systemd-cryptsetup was absent and `tpm2-device=auto` was silently ignored,
-# Launchpad #1980018, which is why earlier revisions used clevis on Ubuntu. With
-# dracut that workaround is unnecessary and Ubuntu uses the Fedora path verbatim.)
+# Fedora backend. dracut builds a systemd-based initramfs whose
+# systemd-cryptsetup honours the `tpm2-device=auto` crypttab option, so
+# enrollment uses `systemd-cryptenroll`.
 #
 # This fragment is NOT deployed on its own (its source name is dot-prefixed, so
 # chezmoi ignores it). It is inlined into the deployed script at apply time by

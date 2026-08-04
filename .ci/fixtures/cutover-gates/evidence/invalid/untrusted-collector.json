@@ -1,0 +1,62 @@
+{
+  "$schema": "./device-evidence.schema.json",
+  "schemaVersion": 1,
+  "device": {
+    "id": "fedora-arm64-01",
+    "os": "fedora",
+    "arch": "arm64",
+    "runnerClass": "self-hosted",
+    "runnerLabels": [
+      "self-hosted",
+      "linux",
+      "arm64",
+      "fedora-arm64-01"
+    ]
+  },
+  "collector": {
+    "path": ".ci/collect-device-evidence.sh",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "candidate": {
+    "commit": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "supportSnapshot": {
+    "path": ".ci/support-matrix.json",
+    "sha256": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9"
+  },
+  "attestation": {
+    "kind": "github-artifact-attestation",
+    "bundlePath": "attestation.sigstore.json",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "repository": "hyperlapse122/dotfiles",
+    "workflowRef": "hyperlapse122/dotfiles/.github/workflows/device-smoke.yml@refs/heads/main",
+    "workflowSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "environment": "device-evidence"
+  },
+  "measurements": {
+    "runtimeArch": "aarch64",
+    "checks": [
+      {
+        "name": "chrome-native-arm64-available",
+        "status": "pass",
+        "detail": "measured"
+      },
+      {
+        "name": "cider-native-arm64-available",
+        "status": "pass",
+        "detail": "measured"
+      },
+      {
+        "name": "edge-native-arm64-available",
+        "status": "pass",
+        "detail": "measured"
+      },
+      {
+        "name": "onepassword-native-arm64-available",
+        "status": "pass",
+        "detail": "measured"
+      }
+    ]
+  },
+  "collectedAt": "2026-08-04T00:00:00Z"
+}

@@ -1,0 +1,12 @@
+{
+  "description": "Negative matrix/policy fixtures. Each is passed as --support-matrix or as both --gates and --measured-gates to the evaluator; every case must exit 1 with an error containing the fragment. matrix-macos-latest also fails the ci.yml moving-alias check.",
+  "exit": 1,
+  "matrix": {
+    "matrix-macos-latest.json": "must match exactly one allowed form",
+    "matrix-unknown-arch.json": "must match exactly one allowed form",
+    "matrix-missing-field.json": "must match exactly one allowed form"
+  },
+  "policy": {
+    "policy-weakened-g1b.json": "policy floor"
+  }
+}

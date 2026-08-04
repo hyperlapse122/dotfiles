@@ -4,6 +4,11 @@ param(
   [Parameter(Mandatory = $true)][string]$ClientModule
 )
 
+if ($env:OS -ne 'Windows_NT') {
+  Write-Output 'test-mxm4-haptic-provision: skipped on non-Windows host'
+  exit 0
+}
+
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -147,6 +152,8 @@ function global:cargo {
   $output = Join-Path $env:CARGO_TARGET_DIR 'release\mxm4-hapticd.exe'
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
   Copy-Item -LiteralPath $global:FixtureDaemon -Destination $output -Force
+  # The provisioner also builds and installs the one-shot hook client.
+  Copy-Item -LiteralPath $global:FixtureDaemon -Destination (Join-Path $env:CARGO_TARGET_DIR 'release\mxm4-haptic.exe') -Force
   $global:LASTEXITCODE = 0
 }
 
@@ -190,7 +197,8 @@ try {
     (Join-Path $pluginRoot 'dist\index.js'),
     (Join-Path $managedHome '.local\bin\mxm4-hapticd.exe'),
     (Join-Path $managedHome '.local\state\mxm4-haptic\plugin.sha256'),
-    (Join-Path $managedHome '.local\state\mxm4-haptic\daemon.sha256')
+    (Join-Path $managedHome '.local\state\mxm4-haptic\daemon.sha256'),
+    (Join-Path $managedHome '.local\bin\mxm4-haptic.exe')
   )
   $managedBefore = $managedPaths | ForEach-Object { Test-Path -LiteralPath $_ }
   $failedXml = Join-Path $fixture 'failed-task.xml'
@@ -238,8 +246,10 @@ try {
   $daemonDestination = $managedPaths[1]
   $pluginStamp = $managedPaths[2]
   $daemonStamp = $managedPaths[3]
+  $clientDestination = $managedPaths[4]
   Assert ((Get-Digest $pluginDestination) -eq (Get-Digest $global:FixturePlugin)) 'installed plugin bytes differ from validated build output'
   Assert ((Get-Digest $daemonDestination) -eq (Get-Digest $Daemon)) 'installed daemon bytes differ from validated release output'
+  Assert ((Get-Digest $clientDestination) -eq (Get-Digest $Daemon)) 'installed client bytes differ from validated release output'
   Assert ((Get-Content -LiteralPath $pluginStamp -Raw).Trim() -match '^[0-9a-f]{64}$') 'plugin stamp is not a component digest'
   Assert ((Get-Content -LiteralPath $daemonStamp -Raw).Trim() -match '^[0-9a-f]{64}$') 'daemon stamp is not a component digest'
 

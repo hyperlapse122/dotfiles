@@ -1,14 +1,14 @@
-# Package manifest for the two distro installers
-# (.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl and
-# .chezmoiscripts/40-linux-ubuntu/run_onchange_before_ubuntu.sh.tmpl).
+# Package manifest for the Fedora installer
+# (.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl).
+# Fedora is the only managed Linux distribution.
 #
 # Single source of truth (like system.yaml): add a package, repo, flatpak, or
 # dotnet tool HERE, not in the installer. Every list is rendered into the
 # installer, so an edit re-triggers the run_onchange_ script automatically.
 #
 # NAMING — every key this repo owns is camelCase, across all of .chezmoidata.
-# The ONE exception here is the arch keys of a directRpms/directDebs entry's
-# `rpms:`/`debs:` map (`x86_64`, `aarch64`): those are kernel arch identifiers,
+# The ONE exception here is the arch keys of a directRpms entry's
+# `rpms:` map (`x86_64`, `aarch64`): those are kernel arch identifiers,
 # matched verbatim against `uname -m` output by the installer. They are upstream
 # spellings, not schema keys — camelCasing them would simply break the lookup.
 #
@@ -16,25 +16,23 @@
 # `gates:` — which named host fact decides each CONDITIONAL package group.
 #
 # Most keys below install unconditionally. The ones that do not are listed in
-# the per-distro `gates:` map, which binds the KEY to a fact from the host-fact
+# the `gates:` map, which binds the KEY to a fact from the host-fact
 # registry (.chezmoidata/facts.yaml). Until now the gate lived in the key NAME
 # and nowhere else: `nvidiaPackages` installs — when? The answer was a sysfs
-# grep buried in each installer, and the two installers had already drifted
-# apart on the very same question (both spelled `IS_VIRT` as a bare
-# systemd-detect-virt while the /etc manifest's `vm` gate used --vm). Now the
+# grep buried in the installer. Now the
 # data names the fact, one probe answers it for the whole repo, and a typo
 # aborts the apply instead of silently evaluating false.
 #
 # Gate-expression grammar — the same one system.yaml's `gate:` uses, checked by
 # the same partial (.chezmoitemplates/facts-validate.tmpl):
 #
-#   <fact>          boolean fact is true       nvidia, intelGpu, virt
+#   <fact>          boolean fact is true       nvidia, virt
 #   !<fact>         boolean fact is false      "!virt"  — MUST be YAML-quoted:
 #                                              a bare `!` opens a YAML tag
 #   <fact>.<value>  string fact equals value   desktop.kde, desktop.gnome
 #
 # THE MAP IS NOW LOAD-BEARING — it drives the flag, not just names it.
-# Each installer renders the whole fact set into bash (FACT_* via
+# The installer renders the whole fact set into bash (FACT_* via
 # .chezmoitemplates/facts-sh.tmpl), then seeds its HAS_* / IS_* flags by
 # running EACH KEY'S OWN VALUE from this map through the shared fact_gate()
 # dispatcher (.chezmoitemplates/facts-gate.sh.tmpl):
@@ -58,36 +56,28 @@
 # name can never quietly mean nothing, and now it can never quietly mean
 # nothing to the INSTALLER either.
 #
-# The map is PER DISTRO rather than global because the conditional key sets
-# genuinely differ: intelPackages / intelHweKernel exist only
-# under `ubuntu`. One global map would have to name keys that half of it does
-# not have, and each installer would then need to filter the map before handing
-# it to the validator instead of passing its own distro's values straight
-# through.
-#
-# FORCE_NVIDIA / FORCE_INTEL are NOT facts and are NOT
-# gates: they are env-var escape hatches layered on top of the seeded flag
+# FORCE_NVIDIA is NOT a fact and is NOT a
+# gate: it is an env-var escape hatch layered on top of the seeded flag
 # inside the installer (so a GPU-less test container can still exercise the
-# driver repos and package sets). See the closing note in
-# .chezmoidata/facts.yaml for why they must never move into the shared partial.
+# driver repos and package set). See the closing note in
+# .chezmoidata/facts.yaml for why it must never move into the shared partial.
 packages:
+  schemaVersion: 2
   linux:
     # ------------------------------------------------------------------------
     # Distro-independent shared package lists. flatpaks and dotnetTools are NOT
-    # a per-distro concern: Flatpak apps come from Flathub (`flatpak install`)
+    # a distro concern: Flatpak apps come from Flathub (`flatpak install`)
     # and .NET global tools from `dotnet tool install -g` — both distro-agnostic
     # delivery mechanisms. They live HERE, as direct siblings of the
-    # fedora:/ubuntu: maps (not nested under a distro), so there is ONE copy to
-    # edit and no way for the two to drift apart. Both installers read these
-    # shared keys (.packages.linux.flatpaks / .packages.linux.dotnetTools);
-    # every OTHER key below is genuinely per-distro and stays under its distro.
-    # Do NOT re-add flatpaks:/dotnetTools: under fedora:/ubuntu: — the installers
-    # now read only these shared keys, so a per-distro copy would be silently
+    # fedora: map (not nested under it), and the installer reads these
+    # shared keys (.packages.linux.flatpaks / .packages.linux.dotnetTools).
+    # Do NOT re-add flatpaks:/dotnetTools: under fedora: — the installer
+    # now reads only these shared keys, so a per-distro copy would be silently
     # ignored (install nothing) rather than merged.
     #
-    # Safe as list-typed siblings of the distro sub-maps because NO consumer
-    # iterates the key SET of .packages.linux — the two installers and
-    # dot_local/bin/executable_host-facts.tmpl all index it by explicit distro
+    # Safe as list-typed siblings of the distro sub-map because NO consumer
+    # iterates the key SET of .packages.linux — the installer and
+    # dot_local/bin/executable_host-facts.tmpl both index it by explicit distro
     # name (`.packages.linux.fedora.*`, `index .packages.linux $distro`) — so
     # extra siblings here are inert to every reader.
 
@@ -96,10 +86,7 @@ packages:
       - com.discordapp.Discord  # Discord voice/text chat client
       - org.telegram.desktop
       - io.github.nroduit.Weasis
-    # Global .NET tools installed via `dotnet tool install -g`. Union of the two
-    # lists that were previously per-distro (csharp-ls used to be Fedora-only).
-    # Order preserved from Fedora's list so its rendered dotnet_tools array is
-    # byte-identical and its installer does not needlessly re-run.
+    # Global .NET tools installed via `dotnet tool install -g`.
     dotnetTools:
       - git-credential-manager  # cross-platform Git credential helper (GCM)
       - powershell  # PowerShell (pwsh) cross-platform shell
@@ -108,8 +95,7 @@ packages:
     fedora:
       # Conditional package groups → the fact that gates each. Grammar and the
       # declaration-not-a-switch rule are in the file header above; every other
-      # key under `fedora:` installs unconditionally. Shorter than ubuntu's map
-      # by design — Fedora has no Intel-graphics stack.
+      # key under `fedora:` installs unconditionally.
       gates:
         nvidiaPackages: nvidia  # an NVIDIA GPU is present (PCI vendor 0x10de)
         kdePackages: desktop.kde  # Fedora KDE Spin (plasmashell shipped by the ISO)
@@ -117,17 +103,13 @@ packages:
         bareMetalPackages: "!virt"  # neither a VM nor a container
       # COPR (community) repositories enabled via `dnf copr enable`. Fedora-only
       # mechanism: `copr enable <owner/project>` resolves the whole repo from one
-      # token. Ubuntu's nearest equivalent, a PPA, is an ordinary `deb ` source
-      # line, so PPAs live as plain `aptRepos` entries (mise, dotnet-backports) and
-      # need no key of their own.
+      # token.
       coprs:
         - alternateved/keyd  # COPR hosting the keyd keyboard remapper
         - jdxcode/mise  # COPR hosting mise (runtime/tool version manager)
       # GPG keys imported (rpm --import) to verify third-party repo packages.
       # Fedora-only mechanism: rpm has ONE global keyring, so a key is declared once
-      # and stands apart from the repos that use it. apt has no global keyring — every
-      # source line names its own `signed-by=` — so on ubuntu the key is a FIELD of an
-      # aptRepos entry (`keyringUrl`) and never a standalone list.
+      # and stands apart from the repos that use it.
       keys:
         - https://downloads.1password.com/linux/keys/1password.asc  # 1Password package signing key
         - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
@@ -135,10 +117,9 @@ packages:
         - https://repo.cider.sh/RPM-GPG-KEY  # Cider Collective repo signing key
         - https://www.virtualbox.org/download/oracle_vbox_2016.asc  # Oracle VirtualBox package signing key (2016-, current)
       # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
-      # Counterpart of ubuntu's `aptRepos` — named for the artifact, like
-      # directRpms/directDebs, because the entry SHAPE is the mechanism: dnf reads a
-      # whole .repo ini (so the entry is one `content` blob, gpgkey and all), while
-      # apt reads a one-line `deb ` source plus a separate keyring.
+      # Named for the artifact, like directRpms, because the entry SHAPE is the
+      # mechanism: dnf reads a whole .repo ini (so the entry is one `content`
+      # blob, gpgkey and all).
       dnfRepos:
         # 1Password desktop app + CLI stable RPM repo
         - id: 1password
@@ -181,16 +162,13 @@ packages:
             gpgkey=https://repo.cider.sh/RPM-GPG-KEY
       # Remote .repo files added via `dnf config-manager addrepo`. Fedora-only
       # mechanism: dnf can fetch a vendor-authored .repo file whole and adopt it.
-      # apt has no "download the vendor's source list" verb — you transcribe the
-      # `deb ` line yourself — so on ubuntu tailscale is a hand-written aptRepos entry.
       repoFiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
         - https://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo  # Oracle VirtualBox stable RPM repo (fetched over HTTPS; the .repo file's own baseurl stays as Oracle publishes it — http:// with gpgcheck=1 + repo_gpgcheck=1, signed by oracle_vbox_2016.asc)
       # Fedora enables RPM Fusion for Steam and other nonfree packages while the
       # CUDA repository owns the NVIDIA driver stack below. These package-name
       # globs become repository-scoped DNF exclusions so RPM Fusion cannot offer
-      # its incompatible driver layout into the same transaction. Ubuntu has no
-      # counterpart because it does not enable RPM Fusion.
+      # its incompatible driver layout into the same transaction.
       nvidiaRpmFusionExcludes:
         - akmod-nvidia*
         - kmod-nvidia*
@@ -201,8 +179,7 @@ packages:
         - xorg-x11-drv-nvidia*
       # dnf groups installed via `dnf group install` (own transaction, separate
       # from the individual packages below). Fedora-only mechanism: dnf comps groups
-      # are first-class install targets. apt has no group verb (its task metapackages
-      # are just packages), so the ubuntu equivalents sit in `packages` unwrapped.
+      # are first-class install targets.
       groups:
         - development-tools  # core build toolchain (gcc, make, autotools, git, ...)
         - c-development  # C headers/libraries for building against system libs
@@ -228,10 +205,10 @@ packages:
         - btop  # interactive resource/process monitor
         - chezmoi  # declarative dotfiles manager (manages this repo)
         - fd-find  # fast, user-friendly find alternative (fd)
-        - gh  # GitHub CLI
         - jq  # JSON processor for live agent config overlays
         - yq  # YAML/JSON processor (general YAML editing; sibling of jq)
-        # kdotool: managed by mise (cargo:kdotool, same as Ubuntu — see dot_config/mise/config.toml)
+        - gnupg2  # OpenPGP implementation used for signing and the encrypted secrets cache
+        # kdotool: managed by mise (cargo:kdotool — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
         - tmux  # terminal multiplexer
@@ -397,8 +374,8 @@ packages:
       # key(s), then install the link matching the host arch (skipped when `id`
       # is already an installed package). An entry with a pinned `version` is
       # instead converged to that exact rpm VERSION (bumping the pin re-runs
-      # `dnf install` as an in-place upgrade). Counterpart of ubuntu's `directDebs`;
-      # the pair is named for the artifact because the artifact IS the difference.
+      # `dnf install` as an in-place upgrade). Named for the artifact because
+      # the artifact IS the mechanism.
       # The `rpms:` map is keyed by `uname -m` output (x86_64, aarch64) — those are
       # kernel arch identifiers matched verbatim by the installer, not schema keys,
       # so they keep their upstream spelling (see the exceptions note in the header).
@@ -410,386 +387,224 @@ packages:
           rpms:
             x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
             aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
-    ubuntu:
-      # Conditional package groups → the fact that gates each. Grammar and the
-      # declaration-not-a-switch rule are in the file header above; every other
-      # key under `ubuntu:` installs unconditionally.
-      gates:
-        nvidiaPackages: nvidia  # an NVIDIA GPU is present (PCI vendor 0x10de); FORCE_NVIDIA=1 overrides in the installer
-        intelPackages: intelGpu  # an Intel GPU is present (vendor 0x8086 + display-controller class 0x03); FORCE_INTEL=1 overrides
-        # intelHweKernel is a SCALAR, not a list — but it is still a key whose
-        # delivery depends on a fact: install_intel_support() installs it behind
-        # the very same gate as intelPackages. Declared so the map stays a
-        # COMPLETE index of the conditional keys; a conditional key with no gate
-        # entry is precisely the "the gate lives in the key name and nowhere
-        # else" problem this map exists to end.
-        intelHweKernel: intelGpu
-        kdePackages: desktop.kde  # a KDE Plasma desktop on Ubuntu (Kubuntu, or a manually installed Plasma session)
-        gnomePackages: desktop.gnome  # Ubuntu Desktop (gnome-shell shipped by the ISO)
-        bareMetalPackages: "!virt"  # neither a VM nor a container
-      # Counterpart of fedora's `dnfRepos` — same job (declare a third-party repo
-      # inline), different shape, because apt reads a one-line `deb ` source plus a
-      # per-source keyring where dnf reads one .repo ini. Each entry: `id` (becomes
-      # /etc/apt/sources.list.d/<id>.list), `keyringUrl` (GPG armored key, dearmored
-      # to /usr/share/keyrings/<id>.gpg), and `sourcesListLines` (a list of
-      # `deb [signed-by=...] ...` entries written verbatim, one per line — NOT a
-      # deb822 .sources file). The key is a FIELD here, not fedora's standalone
-      # `keys:` list, because apt has no global keyring to import into.
-      aptRepos:
-        # The 1password repo is deliberately NOT managed here: the 1password deb's
-        # postinst owns the repo definition — it writes the deb822
-        # /etc/apt/sources.list.d/1password.sources (Signed-By
-        # /usr/share/keyrings/1password-archive-keyring.gpg) and comments out any
-        # 1password.list it finds. A managed .list here gets resurrected by
-        # setup_apt_repos with a different signed-by=, and apt then rejects the
-        # ENTIRE source list ("Conflicting values set for option Signed-By"),
-        # breaking every apt operation. .install-prerequisites.sh bootstraps the
-        # repo before the first install; the Ubuntu installer only cleans up the
-        # legacy .list left behind by earlier revisions of this entry.
-        - id: vscodium
-          # arch pinned: the repo publishes no i386 index, and the installer
-          # enables i386 as a foreign arch (Steam), so an unpinned line makes
-          # every `apt update` warn "doesn't support architecture 'i386'".
-          keyringUrl: https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
-          sourcesListLines:
-            - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/vscodium.gpg] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main"
-        - id: google-chrome
-          keyringUrl: https://dl.google.com/linux/linux_signing_key.pub
-          sourcesListLines:
-            - "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb stable main"
-        - id: cider
-          # Cider (Apple Music client). Per https://repo.cider.sh the docs dearmor the key to
-          # /usr/share/keyrings/cider-archive-keyring.gpg, but the generic aptRepos loop dearmors
-          # every key to /usr/share/keyrings/<id>.gpg, which apt accepts identically. arch=amd64
-          # pinned: the repo ships only linux-x64 debs (binary-arm64/armhf/i386 indexes are empty),
-          # so an unpinned line would fail to resolve on non-amd64 hosts.
-          keyringUrl: https://repo.cider.sh/APT-GPG-KEY
-          sourcesListLines:
-            - "deb [arch=amd64 signed-by=/usr/share/keyrings/cider.gpg] https://repo.cider.sh/apt stable main"
-        - id: claude-desktop
-          # Claude desktop app (Linux beta — Debian-based only; Anthropic ships no RPM,
-          # so there is no Fedora counterpart). Per
-          # https://code.claude.com/docs/en/desktop-linux — the docs keep the armored key at
-          # /usr/share/keyrings/claude-desktop-archive-keyring.asc, but the generic aptRepos
-          # loop dearmors every key to /usr/share/keyrings/<id>.gpg, which apt accepts
-          # identically. Key fingerprint: 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE.
-          keyringUrl: https://downloads.claude.ai/claude-desktop/key.asc
-          sourcesListLines:
-            - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop.gpg] https://downloads.claude.ai/claude-desktop/apt/stable stable main"
-        - id: mise
-          # PPA per https://mise.jdx.dev/installing-mise.html#apt — the docs' recommended
-          # source for Ubuntu 26.04+, but effectively amd64-only (its arm64/i386/... indexes
-          # are published empty). .install-prerequisites.sh bootstraps mise from the
-          # distro-agnostic multi-arch mise.jdx.dev/deb repo instead; on Ubuntu,
-          # setup_apt_repos then converges mise.list (and its keyring) to this PPA.
-          keyringUrl: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x38A097C0CCE691795E4B15BE23997D3EEE1EDC52
-          sourcesListLines:
-            - "deb [signed-by=/usr/share/keyrings/mise.gpg] https://ppa.launchpadcontent.net/jdxcode/mise/ubuntu resolute main"
-        - id: tailscale
-          keyringUrl: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
-          sourcesListLines:
-            - "deb [signed-by=/usr/share/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu resolute main"
-        - id: dotnet-backports
-          # ppa:dotnet/backports — Canonical (not Microsoft) now owns .NET packaging on
-          # Ubuntu 22.04+. Ubuntu's own archive only carries the current SDK (10.0), so
-          # older non-default SDKs (8.0, 9.0) come from this PPA instead of Microsoft's
-          # repo. https://launchpad.net/~dotnet/+archive/ubuntu/backports
-          keyringUrl: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x45A3F127159BE9E5017811C62125B164E8E5D3FA
-          sourcesListLines:
-            - "deb [signed-by=/usr/share/keyrings/dotnet-backports.gpg] https://ppa.launchpadcontent.net/dotnet/backports/ubuntu resolute main"
-        - id: microsoft-prod
-          # Microsoft PMC prod repo for Ubuntu 26.04 — carries intune-portal (+ deps).
-          # Layout per Microsoft's Intune installer (shell-intune-samples): suite is the
-          # release CODENAME (resolute), component is main. Ubuntu 26.04+ PMC repos are
-          # signed with the NEWER microsoft-2025 key, not the legacy microsoft.asc one.
-          # arch pinned: the repo publishes no i386 index and the installer enables i386
-          # as a foreign arch (Steam), so an unpinned line would warn on every apt update.
-          keyringUrl: https://packages.microsoft.com/keys/microsoft-2025.asc
-          sourcesListLines:
-            - "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/26.04/prod resolute main"
-        - id: microsoft-edge
-          # Microsoft Edge repo — intune-portal needs Edge for Entra ID sign-in /
-          # conditional access. Unlike the 26.04 PMC repo above, the Edge repo is still
-          # signed with the LEGACY microsoft.asc key on every release (per the upstream
-          # installer's 2026-05-06 fix — do not point this at microsoft-2025). Only the
-          # amd64 index has packages (arm64/armhf are published empty; Edge ships no
-          # Linux arm64 build), so pin amd64 like google-chrome above.
-          keyringUrl: https://packages.microsoft.com/keys/microsoft.asc
-          sourcesListLines:
-            - "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-edge.gpg] https://packages.microsoft.com/repos/edge stable main"
-        - id: virtualbox
-          # Oracle VirtualBox stable Debian repo — the .repo suite matches the Ubuntu
-          # codename (resolute for 26.04), component is `contrib`, arch amd64 only
-          # (Oracle publishes no arm64 index). oracle_vbox_2016.asc is Oracle's current
-          # signing key. Suite bumps track the LTS codename — update alongside a
-          # release upgrade.
-          keyringUrl: https://www.virtualbox.org/download/oracle_vbox_2016.asc
-          sourcesListLines:
-            - "deb [arch=amd64 signed-by=/usr/share/keyrings/virtualbox.gpg] http://download.virtualbox.org/virtualbox/debian resolute contrib"
-      # Foundational packages installed before the main set (build headers needed
-      # for DKMS module builds).
-      corePackages:
-        - linux-headers-generic  # kernel build headers for out-of-tree (DKMS) modules
-      packages:
-        # Build tooling
-        - clang  # LLVM C/C++/Obj-C compiler
-        - clangd
-        - g++  # GNU C++ compiler
-        - pkg-config  # query compile/link flags for installed libraries
-        - libsystemd-dev  # libsystemd headers (systemd-devel equivalent)
-        - libudev-dev  # libudev headers
-        - build-essential  # gcc, make, autotools, git (covers development-tools + c-development groups)
-        - libc6-dev  # C library headers
 
-        # CLI utilities
-        - btop  # interactive resource/process monitor
-        # chezmoi: managed by mise
-        - fd-find  # fast find alternative (binary: fdfind)
-        - gh  # GitHub CLI
-        - jq  # JSON processor for live agent config overlays
-        - yq  # YAML/JSON processor (general YAML editing; sibling of jq)
-        # kdotool: managed by mise (cargo:kdotool — no native Ubuntu package)
-        - nvtop  # GPU process/usage monitor
-        - ripgrep  # fast recursive regex code search (rg)
-        - tmux  # terminal multiplexer
-        - unzip  # zip extractor (required by the Nerd Fonts installer; Fedora pulls it in transitively)
-        - xxd  # hex dump / reverse utility
-        - yp-tools  # NIS/YP client utilities
-        - locales  # locale-gen/update-locale tooling — compiles ko_KR.UTF-8 and writes /etc/default/locale on Ubuntu (Fedora glibc ships it prebuilt)
+  # Package authority v2. The Fedora installer continues to consume the legacy
+  # lists above; this inventory is the validated cross-platform ownership ledger
+  # that U5's native emitters will consume. Architecture names are normalized to
+  # the values chezmoi exposes rather than manager-specific spellings.
+  authority:
+    supportedArchitectures:
+      fedora: [amd64, arm64]
+      windows: [amd64, arm64]
+      macos: [arm64]
+    releaseGates:
+      g0: closed
+    sources:
+      - name: fedora
+        backend: dnf
+        origin: https://mirrors.fedoraproject.org/metalink
+        trusted: true
+      - name: onePassword
+        backend: dnf
+        origin: https://downloads.1password.com/linux/rpm/stable/$basearch
+        trusted: true
+      - name: vscodium
+        backend: dnf
+        origin: https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
+        trusted: true
+      - name: googleChrome
+        backend: dnf
+        origin: https://dl.google.com/linux/chrome/rpm/stable/x86_64
+        trusted: true
+      - name: cider
+        backend: dnf
+        origin: https://repo.cider.sh/rpm/RPMS
+        trusted: true
+      - name: microsoftEdge
+        backend: dnf
+        origin: https://packages.microsoft.com/yumrepos/edge
+        trusted: true
+      - name: flathub
+        backend: flatpak
+        origin: https://dl.flathub.org/repo/flathub.flatpakrepo
+        trusted: true
+      - name: winget
+        backend: winget
+        sourceType: predefined
+        origin: https://cdn.winget.microsoft.com/cache
+        trusted: true
+      - name: homebrewCore
+        backend: homebrew
+        origin: https://github.com/Homebrew/homebrew-core.git
+        trusted: true
+      - name: homebrewCask
+        backend: homebrew
+        origin: https://github.com/Homebrew/homebrew-cask.git
+        trusted: true
 
-        # Input method — fcitx5 is the unified Korean IME, installed as a baseline
-        # package on every Ubuntu host (desktop-independent). GNOME autostart +
-        # Kimpanel wiring lives in gnome.yaml / .chezmoiscripts/50-linux-gnome/.
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
-
-        # Keyboard remapper
-        - keyd  # key remapping daemon (native apt package since Ubuntu 25.04 "plucky"; noble/24.04 needs the keyd-team PPA instead)
-
-        # Language toolchains + version manager
-        - dotnet-sdk-10.0  # .NET SDK 10.0 (Ubuntu's own default archive; Canonical owns .NET packaging on 22.04+)
-        - dotnet-sdk-8.0  # .NET SDK 8.0 (from the dotnet-backports PPA; EOL 2026-11-10)
-        - dotnet-sdk-9.0  # .NET SDK 9.0 (from the dotnet-backports PPA; EOL 2026-11-10)
-        - mise  # polyglot runtime/tool version manager (from mise apt repo)
-
-        # Ruby build dependencies
-        - libffi-dev  # FFI headers (libffi-devel equivalent)
-        - libyaml-dev  # YAML headers (libyaml-devel equivalent)
-
-        # Hardware sensors / fan control
-        - lm-sensors  # hardware temperature/voltage/fan sensor readouts
-
-        # Logitech device manager
-        - solaar  # Logitech HID++ device manager
-
-        # Smartcard / code signing — Authenticode signing with the certificate held on
-        # a SafeNet eToken 5110 (Gemalto IDPrime 940). Mirrors the Fedora block; Debian
-        # splits the PKCS#11 module out of the tools package, hence one extra entry.
-        - pcscd  # PC/SC smartcard daemon (pcsc-lite equivalent)
-        - libccid  # USB CCID reader driver (pcsc-lite-ccid equivalent)
-        - opensc  # OpenSC probes: pkcs11-tool / pkcs15-tool
-        - opensc-pkcs11  # the PKCS#11 module itself; Fedora bundles it in opensc
-        - pkcs11-provider  # OpenSSL 3 PKCS#11 provider; osslsigncode loads it per invocation, so openssl.cnf stays untouched
-        - osslsigncode  # Authenticode signer for PE/MSI (the signtool replacement)
-        - pcsc-tools  # pcsc_scan, the reader-level probe that opensc's tools sit above
-
-        # Password manager
-        - 1password  # 1Password desktop app (from 1password apt repo)
-        - 1password-cli  # 1Password CLI (op) — package name is 1password-cli, binary is op
-
-        # Editor
-        - codium  # VSCodium (telemetry-free VS Code, from vscodium apt repo)
-
-        # AI desktop app (Linux beta: Chat/Cowork/Code tabs; no self-update — updates
-        # arrive via apt. Binary: claude-desktop. Ubuntu-only; Anthropic ships no RPM.)
-        - claude-desktop  # Claude desktop app (from claude-desktop apt repo)
-
-        # Web browser
-        - google-chrome-stable  # Google Chrome (from google-chrome apt repo)
-
-        # Device management (Microsoft Intune, Ubuntu-only — the upstream installer
-        # supports only Ubuntu and RHEL/AlmaLinux, so there is no Fedora counterpart).
-        # Edge is a hard prerequisite: intune-portal uses it for Entra ID sign-in and
-        # conditional-access compliance checks.
-        - microsoft-edge-stable  # Microsoft Edge (from microsoft-edge apt repo)
-        - intune-portal  # Microsoft Intune company portal (from microsoft-prod apt repo)
-
-        # Music player (Apple Music client; requires a purchased license)
-        - cider  # Cider Apple Music client (from the Cider apt repo)
-
-        # Container runtime (rootless Podman + tooling)
-        - podman  # daemonless OCI container engine
-        - podman-docker  # docker CLI shim that forwards to podman
-        - podman-compose  # Compose implementation for podman
-        - buildah  # OCI/Docker image builder
-        - golang-github-containers-common  # shared container registries/policy config
-        - passt  # user-mode networking (pasta) for rootless containers
-        - fuse-overlayfs  # rootless overlay filesystem driver
-        - slirp4netns  # user-mode networking for rootless network namespaces
-
-        # Screen recording / streaming / video editing
-        - kdenlive  # non-linear video editor
-        - obs-studio  # screen recording / live streaming
-
-        # Mesh networking
-        - tailscale  # WireGuard-based mesh VPN client (from tailscale apt repo)
-
-        # Wayland clipboard management
-        - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
-
-        # Desktop notifications
-        - libnotify-bin  # notify-send CLI (used by dot_local/bin/kde-color-picker; Fedora bundles it in libnotify)
-
-        # Virtualization — Oracle VirtualBox (KVM/QEMU/libvirt/virt-manager dropped in
-        # favor of VirtualBox for its stronger cross-platform Windows guest tooling).
-        # The `virtualbox-7.2` postinst builds the vboxdrv/vboxnetflt/vboxnetadp
-        # kernel modules via DKMS (via the virtualbox-dkms dependency);
-        # configure_user_groups adds the user to `vboxusers` (USB passthrough needs
-        # it). On Secure Boot, DKMS module signing reuses shim-signed's MOK — the
-        # ensure_shim_mok_enrolled() function in this installer sets it up ONCE at
-        # the top of the run (before the base-packages install, so virtualbox-dkms
-        # can sign against it during its postinst) and NVIDIA's later DKMS build
-        # signs against the SAME MOK. The Extension Pack (USB 2.0/3.0, VRDE, PXE
-        # via Intel NIC) is PUEL-licensed and NOT installed here — download
-        # separately if the license fits the use case. fuse3 + ntfs-3g keep
-        # working for read-only ReFS/NTFS access to Windows Dev Drive vhdx mounts
-        # on the guest side.
-        - virtualbox-7.2  # Oracle VirtualBox 7.2 (from the Oracle apt repo added in aptRepos above)
-        - fuse3  # FUSE 3 userspace filesystem support
-        - libfuse3-dev  # FUSE 3 headers (fuse3-devel equivalent)
-        - ntfs-3g  # NTFS read/write driver (FUSE)
-        - systemd-container  # systemd-nspawn / machinectl container tooling
-        - dkms  # builds/signs out-of-tree kernel modules (VirtualBox, NVIDIA)
-
-        # Tauri development
-        - curl  # HTTP client / file downloader
-        - file  # file-type detection utility
-        - libayatana-appindicator3-dev  # AppIndicator headers (libappindicator-gtk3-devel equivalent)
-        - librsvg2-dev  # SVG rendering headers (librsvg2-devel equivalent)
-        - libxdo-dev  # libxdo headers (libxdo-devel equivalent)
-        - libssl-dev  # OpenSSL headers (openssl-devel equivalent)
-        - libwebkit2gtk-4.1-dev  # WebKitGTK headers (webkit2gtk4.1-devel equivalent)
-        - wget  # HTTP/HTTPS file downloader
-
-        - expect  # automate interactive CLI prompts
-
-        # LUKS TPM2 auto-unlock (dot_local/bin/setup-luks-tpm2-unlock.sh, shared dracut
-        # backend). Ubuntu 26.04 switched its initramfs generator to dracut, which builds
-        # a systemd-based initramfs whose systemd-cryptsetup honours crypttab
-        # `tpm2-device=auto` — so Ubuntu uses the same systemd-cryptenroll + dracut path as
-        # Fedora (no clevis). Fedora needs no equivalent packages (dracut + systemd ship in
-        # base); on Ubuntu install dracut + the tpm2 userspace the dracut tpm2-tss module needs.
-        - dracut  # initramfs generator (Ubuntu 26.04 default); its systemd-cryptsetup wires tpm2-device=auto at early boot
-        - tpm2-tools  # TPM2 userspace + libtss2 the dracut tpm2-tss module bundles (systemd-cryptenroll TPM2 unlock)
-
-      # Gate `desktop.kde` — a KDE Plasma desktop on Ubuntu (Kubuntu, or a
-      # manually installed Plasma session). Ubuntu ships no first-party KDE
-      # spin, so this group carries only the packages whose eligibility
-      # genuinely tracks KDE/GNOME parity rather than an Ubuntu-native KDE
-      # package set — see gnomePackages below for the GNOME counterpart.
-      kdePackages:
-        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service disables the package's global ydotool.service user-unit enablement in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
-      # Gate `desktop.gnome` — Ubuntu Desktop 26.04. Only the GNOME-specific
-      # pinentry is desktop-gated here; the fcitx5 input method is a baseline
-      # package (see `packages:` above) so it installs regardless of desktop.
-      # GNOME has no built-in KWin virtualkeyboard, so fcitx5 autostarts from a
-      # per-user XDG autostart entry
-      # (dot_config/autostart/org.fcitx.Fcitx5.desktop, NotShowIn=KDE), the
-      # ibus source is REMOVED from org.gnome.desktop.input-sources on existing
-      # hosts, and Kimpanel is installed so the candidate popup renders inside
-      # GNOME Shell (mutter has no wlr-layer-shell) — see gnome.yaml
-      # shellExtensions.kimpanel and .chezmoiscripts/50-linux-gnome/.
-      gnomePackages:
-        - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
-        # kitty is NOT installed from the distro package any more — it is
-        # provisioned from the locked upstream bundle by
-        # .chezmoiscripts/00-tools/run_onchange_before_kitty.sh (the managed
-        # config's vertical tab bar needs kitty >= 0.48, which no apt release
-        # carries). ONE-TIME MANUAL STEP on a host that still carries the distro
-        # package: sudo apt remove kitty
-        - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
-        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service disables the package's global ydotool.service user-unit enablement in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
-
-      # Gate `!virt` — installed only when the host is neither a VM nor a
-      # container (bare `systemd-detect-virt`, which is what this installer has
-      # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
-      bareMetalPackages:
-        - steam  # Steam game client (needs i386 + multiverse; skip in VMs)
-
-      # Gate `nvidia` — an NVIDIA GPU is present (PCI vendor id 0x10de). The
-      # driver is cuda-drivers (the proprietary-module metapackage from the
-      # NVIDIA driver installation guide's Ubuntu network-repo procedure —
-      # matching the Fedora installer's choice), built via DKMS and pulled from
-      # NVIDIA's CUDA apt repo (repo path ubuntu2604). install_nvidia_support()
-      # in run_onchange_before_ubuntu.sh.tmpl installs the running kernel's
-      # headers first (the guide's prerequisite) and adds the CUDA repo (via
-      # the cuda-keyring package) and the libnvidia-container repo on-demand
-      # under the same HAS_NVIDIA gate as the Fedora installer. Under Secure
-      # Boot the DKMS modules need a MOK enrolled: with the shim-signed MOK
-      # already enrolled the install just proceeds (dkms signs every build with
-      # it); otherwise the installer preseeds shim-signed's debconf questions
-      # with the MOK password prompted at `chezmoi init` (stored
-      # keyring-encrypted as mokPasswordCipher, decrypted at render time;
-      # 8-16 chars per update-secureboot-policy; cleared again via an EXIT
-      # trap) and queues
-      # the enrollment for the next boot's MokManager. Secure Boot on with
-      # neither an enrolled MOK nor a password skips the NVIDIA stack entirely
-      # rather than half-installing an unloadable driver.
-      nvidiaPackages:
-        - cuda-drivers  # NVIDIA proprietary driver metapackage (DKMS, from CUDA apt repo)
-        - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries; from NVIDIA's CUDA apt repo)
-        - nvidia-container-toolkit  # NVIDIA container runtime integration (from libnvidia-container apt repo)
-        - nvidia-container-toolkit-base  # base components for the container toolkit
-        - libnvidia-container-tools  # CLI tools for the NVIDIA container library
-        - libnvidia-container1  # NVIDIA container runtime library
-
-      # Gate `intelGpu` — an Intel GPU is present (PCI vendor 0x8086 + display
-      # controller class 0x03). No fedora counterpart, and not an oversight: this is
-      # Canonical's out-of-archive early-enablement PPA, a distro mechanism Fedora
-      # has no analogue for — Fedora ships the Intel stack (mesa, intel-media-driver)
-      # in-distro on a fast release cadence, so those packages need no gate and no
-      # key of their own.
-      # Canonical's intel-graphics-preview stack for early
-      # enablement of newer Intel GPUs (Arc / Xe / Battlemage / Lunar Lake). The
-      # kobuk-team/intel-graphics PPA (resolute) is added on-demand by
-      # setup_intel_repos() in run_onchange_before_ubuntu.sh.tmpl under the same
-      # HAS_INTEL_GPU gate; this list mirrors Canonical's setup-intel-graphics.sh.
-      intelPackages:
-        - intel-gsc                       # Intel Graphics System Controller firmware interface
-        - libigdgmm12                     # Intel Graphics Memory Management library
-        - libigc2                         # Intel Graphics Compiler runtime
-        - libze-intel-gpu-raytracing      # Level Zero Intel GPU raytracing support
-        - intel-media-va-driver-non-free  # VA-API media driver (full, non-free features)
-        - libze1                          # oneAPI Level Zero loader
-        - vainfo                          # VA-API capability probe (verifies HW video accel)
-        - libvpl2                         # oneVPL dispatcher runtime (video processing library)
-        - libvpl-tools                    # oneVPL command-line tools
-        - intel-metrics-discovery         # GPU metrics discovery library
-        - intel-metrics-library           # GPU performance metrics library
-        - libmfx-gen1                     # Media SDK / oneVPL GPU runtime
-        - xpu-smi                         # Intel XPU system management interface (GPU telemetry)
-        - intel-opencl-icd                # Intel OpenCL runtime (compute)
-        - libze-intel-gpu1                # Level Zero Intel GPU driver
-      # Gate `intelGpu` (same as intelPackages — a scalar, not a list, but still
-      # a conditional key; see the gates map above). No fedora counterpart: the HWE
-      # kernel train is an LTS-only Ubuntu mechanism (a stable release carrying a
-      # newer kernel), and Fedora's whole release model makes it meaningless.
-      # Hardware-enablement (HWE) kernel installed alongside the Intel graphics
-      # stack (--install-recommends) and made the default boot entry via a
-      # GRUB_FLAVOUR_ORDER=generic drop-in (see install_intel_support). resolute
-      # (26.04) is LTS, so linux-generic-hwe-26.04 tracks the rolling HWE generic
-      # kernel; the flavour-order drop-in keeps that generic kernel the boot default.
-      intelHweKernel: linux-generic-hwe-26.04
-
-      # .deb packages installed directly from a vendor URL (no repo): download
-      # the matching arch .deb and install with dpkg -i. An entry with a pinned
-      # `version` is converged to that exact version (bumping the pin re-runs
-      # dpkg -i as an upgrade); an entry without one installs only when absent —
-      # right for self-updating packages whose postinst registers its own repo.
-      # Counterpart of fedora's `directRpms`; the `debs:` map is likewise keyed by
-      # `uname -m` output (x86_64, aarch64), not by schema keys.
-      directDebs:
-        - id: teamviewer  # remote desktop / remote support client
-          debs:
-            x86_64: https://download.teamviewer.com/download/linux/teamviewer_amd64.deb
-            aarch64: https://download.teamviewer.com/download/linux/teamviewer_arm64.deb
+    # A capability has exactly one delivery owner on each OS. Non-managed
+    # dispositions still carry complete architecture coverage so absence cannot
+    # silently masquerade as support.
+    capabilities:
+      - id: onePasswordDesktop
+        sentinel: 1password
+        bootstrap: true
+        fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: AgileBits.1Password, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: onePasswordCli
+        sentinel: op
+        bootstrap: true
+        fedora: { disposition: managed, owner: dnf, identifier: 1password-cli, source: onePassword, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: AgileBits.1Password.CLI, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password-cli, source: homebrewCask, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: gpgSuite
+        sentinel: gpg
+        fedora: { disposition: managed, owner: dnf, identifier: gnupg2, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: GnuPG.Gpg4win, source: winget, scope: machine, elevation: admin, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: gnupg, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: jq
+        sentinel: jq
+        fedora: { disposition: managed, owner: dnf, identifier: jq, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: jqlang.jq, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: jq, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: chrome
+        sentinel: google-chrome
+        gateClosing: g0
+        fedora: { disposition: managed, owner: dnf, identifier: google-chrome-stable, source: googleChrome, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: Google.Chrome, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: google-chrome, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: cider
+        sentinel: cider
+        gateClosing: g0
+        fedora: { disposition: managed, owner: dnf, identifier: Cider, source: cider, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: CiderCollective.Cider, source: winget, scope: user, elevation: none, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: cider, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: edge
+        sentinel: microsoft-edge
+        gateClosing: g0
+        fedora: { disposition: managed, owner: dnf, identifier: microsoft-edge-stable, source: microsoftEdge, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: Microsoft.Edge, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: microsoft-edge, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: vscodium
+        sentinel: codium
+        fedora: { disposition: managed, owner: dnf, identifier: codium, source: vscodium, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: VSCodium.VSCodium, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: vscodium, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: githubCli
+        sentinel: gh
+        integrity: checksum
+        fedora: { disposition: managed, owner: external, identifier: gh, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: external, identifier: gh, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: external, identifier: gh, architectures: { arm64: native } }
+      - id: powershell
+        sentinel: pwsh
+        fedora: { disposition: managed, owner: dotnet, identifier: powershell, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Microsoft.PowerShell, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: powershell, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: discord
+        sentinel: discord
+        fedora: { disposition: managed, owner: flatpak, identifier: com.discordapp.Discord, source: flathub, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Discord.Discord, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: discord, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: telegram
+        sentinel: telegram-desktop
+        fedora: { disposition: managed, owner: flatpak, identifier: org.telegram.desktop, source: flathub, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Telegram.TelegramDesktop, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: telegram, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: teamviewer
+        sentinel: teamviewer
+        fedora: { disposition: managed, owner: directRpm, identifier: teamviewer, integrity: signature, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: TeamViewer.TeamViewer, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: teamviewer, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: tailscale
+        sentinel: tailscale
+        fedora: { disposition: managed, owner: dnf, identifier: tailscale, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Tailscale.Tailscale, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: tailscale-app, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: virtualBox
+        sentinel: VBoxManage
+        fedora: { disposition: managed, owner: dnf, identifier: VirtualBox-7.2, source: fedora, architectures: { amd64: native, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: Oracle.VirtualBox, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: virtualbox, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: obsStudio
+        sentinel: obs
+        fedora: { disposition: managed, owner: dnf, identifier: obs-studio, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: OBSProject.OBSStudio, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: obs, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: containerRuntime
+        sentinel: podman
+        fedora: { disposition: managed, owner: dnf, identifier: podman, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: RedHat.Podman, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: podman, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: steam
+        sentinel: steam
+        legacyGroup: bareMetalPackages
+        gate: "!virt"
+        fedora: { disposition: managed, owner: dnf, identifier: steam, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Valve.Steam, source: winget, scope: user, elevation: none, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: steam, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: koreanInput
+        sentinel: fcitx5
+        fedora: { disposition: managed, owner: dnf, identifier: fcitx5-hangul, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: native Windows Korean IME is an OS language component added in Settings > Time & language > Language & region; no package manager owns OS components, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: manual, reason: native macOS Korean input source is built in and added in System Settings > Keyboard > Input Sources; no package manager owns it, architectures: { arm64: manual } }
+      - id: logitechGestures
+        sentinel: solaar
+        fedora: { disposition: managed, owner: dnf, identifier: solaar, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: Logitech.OptionsPlus, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64, manual: profile }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: logi-options-plus, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native }, manual: profile }
+      - id: nvidiaCompute
+        sentinel: nvidia-smi
+        legacyGroup: nvidiaPackages
+        gate: nvidia
+        fedora: { disposition: managed, owner: dnf, identifier: cuda-drivers, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: vendor driver is hardware-specific, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: notApplicable, reason: supported Apple silicon has no NVIDIA GPU, architectures: { arm64: notApplicable } }
+      - id: kittyTerminal
+        sentinel: kitty
+        integrity: checksum
+        fedora: { disposition: managed, owner: releaseLock, identifier: kitty, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { amd64: unresolved, arm64: unresolved } }
+        macos: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { arm64: unresolved } }
+      # U8 native desktop/hardware completions. logitechGestures (Logi Options+,
+      # manual profile) and koreanInput (native Windows/macOS IMEs, manual
+      # prerequisite steps) above already carry their U8 dispositions; the rows
+      # below close the remaining retained desktop-app, pinentry, and
+      # default-app helper gaps. None of them close G0 — only chrome, cider,
+      # and edge carry gateClosing: g0.
+      - id: weasis
+        sentinel: weasis
+        fedora: { disposition: managed, owner: flatpak, identifier: io.github.nroduit.Weasis, source: flathub, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: not published in the predefined winget source; operator installs the vendor-native Weasis installer, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: weasis, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      - id: kdenlive
+        sentinel: kdenlive
+        fedora: { disposition: managed, owner: dnf, identifier: kdenlive, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: managed, owner: winget, identifier: KDE.Kdenlive, source: winget, scope: user, elevation: none, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: kdenlive, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+      # One GPG pinentry capability, per-OS delivery: Fedora KDE hosts install
+      # pinentry-qt and GNOME hosts pinentry-gnome3 (gated legacy groups above;
+      # private_dot_gnupg/.gpg-agent.linux.conf picks the matching program from
+      # the desktop fact), macOS installs pinentry-mac and .gpg-agent.darwin.conf
+      # names it, and Windows gets pinentry inside the Gpg4win bundle.
+      - id: pinentry
+        fedora: { disposition: managed, owner: dnf, identifier: pinentry-qt, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: notApplicable, reason: Gpg4win (gpgSuite capability) bundles pinentry; no separate package owner exists, architectures: { amd64: notApplicable, arm64: notApplicable } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: pinentry-mac, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      - id: defaultApps
+        sentinel: defaultbrowser
+        fedora: { disposition: managed, owner: dnf, identifier: xdg-terminal-exec, source: fedora, architectures: { amd64: native, arm64: native } }
+        windows: { disposition: manual, reason: default apps are a Windows Settings consent flow with no supported CLI; the handoff is documented rather than emulated, architectures: { amd64: manual, arm64: manual } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: defaultbrowser, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+      # G1 CANDIDATE — opt-in launch only. Kitty (kittyTerminal above) stays the
+      # authoritative Fedora terminal and the default on every host until G1b
+      # opens; nothing here may switch a default or remove a Kitty source.
+      # Ownership is native-manager only: winget on Windows, Homebrew on macOS —
+      # a release-lock entry beside those would duplicate authority, and the
+      # Fedora RPM path has no lockable artifact today (see the reason below).
+      - id: weztermTerminal
+        sentinel: wezterm
+        fedora: { disposition: unresolved, reason: "G1a closed: upstream stable 20240203-110809-5046fc22 predates Kitty Unicode placeholder support and publishes no RPM for the current Fedora release (newest is fedora39) and no aarch64 RPM at all; only an upstream stable RPM for the current Fedora release, installed through DNF, is acceptable", architectures: { amd64: unresolved, arm64: unresolved } }
+        windows: { disposition: managed, owner: winget, identifier: wez.wezterm, source: winget, scope: machine, elevation: admin, emulation: x64, architectures: { amd64: native, arm64: emulated } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: wezterm, source: homebrewCask, elevation: appManagement, greedy: false, architectures: { arm64: native } }

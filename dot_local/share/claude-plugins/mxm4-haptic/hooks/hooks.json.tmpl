@@ -26,8 +26,14 @@
 {{- end -}}
 {{- end -}}
 {{- /* `pulse` takes the waveform as a single argument. Names contain spaces
-       ("HAPPY ALERT"), so single-quote it for the sh -c the hook runs in. */ -}}
+       ("HAPPY ALERT"), so quote it for the shell the hook runs in: POSIX
+       renders the sh wrapper (single quotes), Windows renders the PowerShell
+       wrapper through cmd's hook shell (double quotes). Claude Code expands
+       ${CLAUDE_PLUGIN_ROOT} in hook commands on every supported OS. */ -}}
 {{- $cmd := "${CLAUDE_PLUGIN_ROOT}/bin/pulse '%s'" -}}
+{{- if eq .chezmoi.os "windows" -}}
+{{- $cmd = `powershell -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/bin/pulse.ps1" "%s"` -}}
+{{- end -}}
 {
   "hooks": {
     "Stop": [

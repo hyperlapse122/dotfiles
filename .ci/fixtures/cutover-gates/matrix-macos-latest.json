@@ -1,0 +1,43 @@
+{
+  "$schema": "./support-matrix.schema.json",
+  "schemaVersion": 1,
+  "snapshotDate": "2026-08-04",
+  "targets": [
+    {
+      "os": "fedora",
+      "arch": "x64",
+      "kind": "hosted",
+      "runsOn": "ubuntu-24.04",
+      "container": "fedora:44",
+      "runtimeArch": "x86_64"
+    },
+    {
+      "os": "fedora",
+      "arch": "arm64",
+      "kind": "device",
+      "deviceId": "fedora-arm64",
+      "runtimeArch": "aarch64"
+    },
+    {
+      "os": "windows",
+      "arch": "x64",
+      "kind": "hosted",
+      "runsOn": "windows-2025",
+      "runtimeArch": "AMD64"
+    },
+    {
+      "os": "windows",
+      "arch": "arm64",
+      "kind": "device",
+      "deviceId": "windows-arm64",
+      "runtimeArch": "ARM64"
+    },
+    {
+      "os": "macos",
+      "arch": "arm64",
+      "kind": "hosted",
+      "runsOn": "macos-latest",
+      "runtimeArch": "arm64"
+    }
+  ]
+}

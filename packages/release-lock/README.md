@@ -15,7 +15,7 @@ The plan this package implements is
 
 ## Status
 
-All eight resolver kinds are implemented, and the committed
+All seven resolver kinds are implemented, and the committed
 `.chezmoidata/releases.json` covers every render-time resolution source in the
 repo. The lock is the sole version, immutable revision, inventory, URL, and
 checksum source: every `.chezmoiexternals` file and every version-consuming
@@ -32,7 +32,6 @@ lock.
 | `npm` | implemented |
 | `vendorManifest` | implemented |
 | `gitRef` | implemented |
-| `ociImage` | implemented |
 
 ## Why digests are free
 
@@ -77,7 +76,7 @@ its source, and — for tools with downloadable artifacts — an `asset` selecto
 returning the upstream filename for a platform. Conventions that matter:
 
 - A selector returns `null` for a platform the tool deliberately does not
-  target (jq is darwin-only here; kitty and aoe skip unsupported platforms).
+  target.
 - `emulatedPlatforms` declares targets upstream genuinely does not build,
   served by the amd64 artifact under emulation and marked `emulated: true` in
   the lock, so an `x86_64` URL under an `arm64` key is deliberate. This is

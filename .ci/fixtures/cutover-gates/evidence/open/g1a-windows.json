@@ -1,0 +1,54 @@
+{
+  "$schema": "./device-evidence.schema.json",
+  "schemaVersion": 1,
+  "device": {
+    "id": "windows-2025",
+    "os": "windows",
+    "arch": "x64",
+    "runnerClass": "github-hosted",
+    "runnerLabels": [
+      "windows-2025"
+    ]
+  },
+  "collector": {
+    "path": ".ci/collect-device-evidence.ps1",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "candidate": {
+    "commit": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "supportSnapshot": {
+    "path": ".ci/support-matrix.json",
+    "sha256": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9"
+  },
+  "attestation": {
+    "kind": "github-artifact-attestation",
+    "bundlePath": "attestation.sigstore.json",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "repository": "hyperlapse122/dotfiles",
+    "workflowRef": "hyperlapse122/dotfiles/.github/workflows/device-smoke.yml@refs/heads/main",
+    "workflowSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "environment": "device-evidence"
+  },
+  "measurements": {
+    "runtimeArch": "AMD64",
+    "checks": [
+      {
+        "name": "wezterm-stable-release-published",
+        "status": "pass",
+        "detail": "measured"
+      },
+      {
+        "name": "wezterm-kitty-unicode-placeholders-in-stable",
+        "status": "pass",
+        "detail": "measured"
+      },
+      {
+        "name": "wezterm-stable-winget-package",
+        "status": "pass",
+        "detail": "measured"
+      }
+    ]
+  },
+  "collectedAt": "2026-08-04T02:01:00Z"
+}

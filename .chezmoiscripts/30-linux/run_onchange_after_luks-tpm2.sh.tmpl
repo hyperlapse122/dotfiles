@@ -1,4 +1,4 @@
-{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "fedora") (eq .chezmoi.osRelease.id "ubuntu")) -}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{-   $luksPassphrase := "" -}}
 {{-   if and (hasKey . "luksPassphraseCipher") (ne .luksPassphraseCipher "") -}}
 {{-     $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
@@ -8,10 +8,9 @@
 #!/usr/bin/env bash
 # .chezmoiscripts/30-linux/run_onchange_after_luks-tpm2.sh.tmpl
 #
-# Wrapper — Fedora + Ubuntu — that enrolls this host's LUKS devices for TPM2
-# auto-unlock on `chezmoi apply`, by driving the deployed
-# ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively. Both distros use the
-# same dracut + systemd-cryptenroll backend, so this wrapper is backend-neutral.
+# Wrapper that enrolls Fedora LUKS devices for TPM2 auto-unlock on
+# `chezmoi apply`, by driving the deployed
+# ~/.local/bin/setup-luks-tpm2-unlock.sh non-interactively.
 #
 # PASSPHRASE from the chezmoi config: `chezmoi init` prompts once for the
 # existing LUKS passphrase and stores it AES-ENCRYPTED (luksPassphraseCipher in

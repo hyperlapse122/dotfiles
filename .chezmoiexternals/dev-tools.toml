@@ -1,5 +1,5 @@
 {{- /*
-  Developer CLIs & language servers: ast-grep, buf, marksman, jq (macOS),
+  Developer CLIs & language servers: ast-grep, buf, marksman,
   shellcheck, wasm-pack, rust-analyzer, uv/uvx.
 */ -}}
 
@@ -101,23 +101,6 @@ executable = true
 
 {{- end }}
 
-{{- /* ---------- jq ---------- */ -}}
-
-{{- if eq .chezmoi.os "darwin" }}
-{{- /* The tag, per-asset URL and sha256 (upstream publishes one sha256sum.txt
-       sidecar) are resolved at refresh time by packages/release-lock; the
-       render reads the locked values. */ -}}
-{{- $jqUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "jq" "field" "url" "platform" "auto") }}
-{{- $jqSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "jq" "field" "sha256" "platform" "auto") }}
-[jq]
-type = "file"
-targetPath = '.local/bin/jq'
-url = {{ $jqUrl | quote }}
-executable = true
-
-[jq.checksum]
-sha256 = '{{ $jqSha }}'
-{{- end }}
 
 {{- /* ---------- shellcheck ---------- */ -}}
 {{- /*

@@ -1,4 +1,0 @@
-# Dedicated network for the CLIProxyAPI stack: container-name DNS between
-# cli-proxy-api and cpa-manager-plus requires a user-defined network (the
-# default podman network has no inter-container DNS).
-[Network]

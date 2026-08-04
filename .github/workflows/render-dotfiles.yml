@@ -3,10 +3,10 @@ name: Render dotfiles
 # On every pull request and push to main, actually run `chezmoi apply --init` on all four target
 # platforms and capture what chezmoi renders, so a reviewer can eyeball the real
 # output of any template change without a local checkout:
-#   * Fedora + Ubuntu — slim container images (`apply` / `render-internals`).
-#   * macOS           — a native `macos-latest` runner (`apply-macos`); a
-#                       container cannot provide a `darwin` chezmoi, and darwin-only
-#                       templates (e.g. the mxm4-haptic build) render only here.
+#   * Fedora         — a slim container image (`apply` / `render-internals`).
+#   * macOS          — a native `macos-26` arm64 runner (`apply-macos`); a
+#                      container cannot provide a `darwin` chezmoi, and darwin-only
+#                      templates (e.g. the mxm4-haptic build) render only here.
 #   * Windows         — a native `windows-latest` runner (`apply-windows`); needed
 #                       so `.chezmoi.os == "windows"` and the `.ps1` read-source
 #                       hook path exercise, and to feed the PowerShell lint.
@@ -20,7 +20,7 @@ name: Render dotfiles
 #                                to be rendered explicitly to be inspected).
 #
 # The rendered scripts then flow into two lint gates: `shellcheck` lints every
-# rendered bash/sh script across Fedora, Ubuntu AND macOS, and `lint-powershell`
+# rendered bash/sh script across Fedora and macOS, and `lint-powershell`
 # runs PSScriptAnalyzer over the Windows `.ps1` files.
 #
 # No real 1Password or GitHub PAT is used. A PATH-local dummy `op` satisfies
@@ -64,11 +64,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: fedora, image: "fedora:latest" }
-          - { os: ubuntu, image: "ubuntu:latest" }
+          - { os: fedora, image: "fedora:44" }
     container:
       image: ${{ matrix.image }}
     steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          # Canonical matrix: fedora x64 renders in a fedora:44 container on the
+          # ubuntu-24.04-class x64 hosted fleet. Fail closed on arch drift.
+          [ "$(uname -m)" = "x86_64" ]
+          . /etc/os-release
+          [ "${ID}" = "fedora" ]
+
       - name: Install base tooling (${{ matrix.os }})
         run: |
           set -euxo pipefail
@@ -138,14 +146,12 @@ jobs:
           # fail the job here — targeted assertion steps below are the
           # authoritative gates for templates changed by a PR.
           #
-          # Feed blank lines on stdin with --no-tty: the Fedora/Ubuntu config template
-          # calls promptString for the LUKS passphrase (and, on Ubuntu, for the
-          # Secure Boot MOK enrollment password), and newer chezmoi ERRORS trying to
-          # open /dev/tty in a non-interactive container instead of using the default —
-          # blank lines answer them (empty = skip; a blank answer stores an empty
-          # *Cipher value, so the keyring-encryption path in .chezmoi.toml.tmpl is
-          # never entered here and no keyring daemon is needed). Extra lines are
-          # harmless.
+          # Feed a blank line on stdin with --no-tty: the Fedora config template
+          # calls promptString for the LUKS passphrase, and newer chezmoi errors
+          # when it tries to open /dev/tty in a non-interactive container instead
+          # of using the default. A blank answer skips the per-host secret, so
+          # the keyring-encryption path in .chezmoi.toml.tmpl is never entered
+          # here and no keyring daemon is needed. Extra lines are harmless.
           set +e
           printf '\n\n\n' | chezmoi apply --init \
             --exclude=scripts,externals \
@@ -185,9 +191,9 @@ jobs:
         run: |
           set -euxo pipefail
           # The deployed tool (dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl)
-          # inlines the enrollment backend at apply time via {{ include }}. Fedora and
-          # Ubuntu now share ONE dracut + systemd-cryptenroll backend; assert the rendered
-          # tool actually carries it so a regression in the include/backend is caught here
+          # inlines the enrollment backend at apply time via {{ include }}. Assert
+          # the rendered tool carries the Fedora dracut + systemd-cryptenroll
+          # backend so a regression is caught here
           # rather than at a reboot on a real host.
           tool="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.local/bin/setup-luks-tpm2-unlock.sh"
           test -f "${tool}"
@@ -262,11 +268,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: fedora, image: "fedora:latest" }
-          - { os: ubuntu, image: "ubuntu:latest" }
+          - { os: fedora, image: "fedora:44" }
     container:
       image: ${{ matrix.image }}
     steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          [ "$(uname -m)" = "x86_64" ]
+          . /etc/os-release
+          [ "${ID}" = "fedora" ]
+
       - name: Install base tooling (${{ matrix.os }})
         run: |
           set -euxo pipefail
@@ -481,14 +493,6 @@ jobs:
           done
           "${GITHUB_WORKSPACE}/.ci/smoke-fedora-virtualbox-signing.sh" "${rendered}" "${rendered_etc}"
 
-      - name: Assert Open Design integration
-        run: |
-          set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/60-build/run_onchange_after_build-open-design.sh"
-          test -f "${rendered}"
-          test ! -e "${rendered}.render-error.txt"
-          "${GITHUB_WORKSPACE}/.ci/test-open-design-integration.sh" "${rendered}"
-
       - name: Upload rendered internals
         if: always()
         uses: actions/upload-artifact@v7
@@ -514,8 +518,16 @@ jobs:
   # ---------------------------------------------------------------------------
   apply-macos:
     name: apply --init + internals (macos)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          # Canonical matrix: the macOS leg is arm64-only on the exact macos-26
+          # hosted label (never a moving alias). Fail closed on arch drift.
+          [ "$(uname -m)" = "arm64" ]
+          [ "$(uname -s)" = "Darwin" ]
+
       - uses: actions/checkout@v7
 
       - name: Install chezmoi + dummy op/mise
@@ -673,16 +685,13 @@ jobs:
           "${GITHUB_WORKSPACE}/.ci/smoke-agent-plugin-installer.sh" \
             "${rendered}" "${RUNNER_TEMP}/agent-plugin-smoke"
 
-      - name: Assert mxm4-haptic rows are linux-only (absent on macos)
+      - name: Assert mxm4-haptic plugin rows render on macos
         run: |
           set -euo pipefail
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh"
           test -f "${rendered}"
-          # The mxm4-haptic marketplaces are os:[linux]; their rows must NOT render on macos.
-          if grep -qE '"(claude|codex):mxm4-haptic:' "${rendered}"; then
-            echo "mxm4-haptic plugin row leaked into the macos render (marketplace is os:[linux])" >&2
-            exit 1
-          fi
+          grep -qE '"claude:mxm4-haptic:dotfiles:localDir:' "${rendered}"
+          grep -qE '"codex:mxm4-haptic:dotfiles-codex:localDir:' "${rendered}"
 
       - name: Upload rendered internals
         if: always()
@@ -714,6 +723,14 @@ jobs:
       run:
         shell: pwsh
     steps:
+      - name: Assert runtime architecture
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Canonical matrix: the hosted Windows leg is x64. Fail closed on arch drift.
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
+            throw "runtime architecture $env:PROCESSOR_ARCHITECTURE != AMD64 (canonical hosted Windows leg is x64)"
+          }
+
       - uses: actions/checkout@v7
 
       - name: Install chezmoi + dummy op/mise
@@ -984,7 +1001,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Task 6: shellcheck the RENDERED scripts (not the raw *.tmpl, which shellcheck
-  # cannot parse). Runs only after the Fedora, Ubuntu AND macOS render jobs so it
+  # cannot parse). Runs only after the Fedora and macOS render jobs so it
   # lints the real output of every provisioning script on every POSIX target —
   # the `.chezmoiscripts/**` templates that the source-level lint could never
   # reach, including darwin-only scripts that render on macOS alone. OS-gated
@@ -1001,11 +1018,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download rendered artifacts
+      - name: Download Fedora rendered artifacts
         uses: actions/download-artifact@v8
         with:
           path: _rendered
-          pattern: rendered-*
+          pattern: rendered-*-fedora
+
+      - name: Download macOS rendered artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: _rendered
+          pattern: rendered-*-macos
 
       - name: shellcheck
         run: |

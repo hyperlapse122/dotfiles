@@ -15,7 +15,8 @@
 # defaults, kept in lockstep; the units render every knob explicitly (even at
 # its default) so the effective value is always visible in the unit, and the
 # source defaults are only the fallback for a binary running OUTSIDE the units
-# (invoked by hand, or the macOS launchd plist, which renders no env).
+# (invoked by hand, the macOS launchd plist, or the Windows scheduled task —
+# neither of which renders env).
 #
 # haptic.daemon — mxm4-hapticd (src/bin/mxm4-hapticd.rs):
 #   pacingMs   : MXM4D_PACING_MS. Minimum gap held AFTER a pulse so the motor
@@ -56,6 +57,11 @@
 # crates/mxm4-haptic/src/lib.rs (WAVEFORMS) — the plugin's hook command passes
 # it through verbatim, and an unknown name makes mxm4-haptic exit 2 (a silent
 # no-op, since the hook wrapper always exits 0).
+#
+# The plugin deploys on every desktop OS (the daemon is cross-platform):
+# POSIX renders invoke bin/pulse (sh), Windows renders invoke bin/pulse.ps1
+# (PowerShell) — both wrappers share the always-exit-0, always-silent
+# contract. Containers still skip the plugin entirely.
 #
 # Claude maps native hooks to waveforms:
 #
@@ -99,6 +105,11 @@ haptic:
   # generic runner). codex's hooks component is hooks/hooks.json (Claude-shape), and
   # plugin hooks MERGE with the aoe-managed ~/.codex/hooks.json rather than
   # overwriting it. Each value MUST be one of the 16 WAVEFORMS names.
+  #
+  # Like the Claude plugin, the codex plugin deploys on every desktop OS: POSIX
+  # renders a self-contained sh -c command, Windows renders the equivalent inline
+  # PowerShell. Both drain the event from stdin, fire the client best-effort, and
+  # always exit 0 with empty stdout.
   #
   #   settled  <- Stop hook            : the turn finished. SubagentStop is a separate
   #                                      event left UNHOOKED, so Stop fires for the

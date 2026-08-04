@@ -173,7 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-26, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -221,7 +221,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-26, windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -336,64 +336,6 @@ jobs:
             -ClientModule (Join-Path $env:GITHUB_WORKSPACE 'packages\mxm4-haptic\dist\index.js')
           if ($LASTEXITCODE -ne 0) { throw "Windows haptic fixture exited with code $LASTEXITCODE" }
 
-  open-design-integration:
-    name: Open Design integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run isolated Open Design integration
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: .ci/test-open-design-integration.sh
-      - name: Run Open Design sleep hook
-        run: .ci/test-open-design-sleep-hook.sh
-
-  cli-proxy-api-integration:
-    name: CLIProxyAPI quadlet integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run isolated CLIProxyAPI integration
-        run: .ci/test-cli-proxy-api-integration.sh
-      - name: Run CLIProxyAPI sleep hook
-        run: .ci/test-cli-proxy-api-sleep-hook.sh
-      - name: Render ignore gates under the container fact
-        run: |
-          set -euo pipefail
-          sudo touch /run/.containerenv
-          trap 'sudo rm -f /run/.containerenv' EXIT
-          CLI_PROXY_API_TEST_EXPECT=container .ci/test-cli-proxy-api-render-matrix.sh
-
-  cli-proxy-api-render-matrix:
-    name: CLIProxyAPI ignore render matrix (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          set -euo pipefail
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Render ignore/removal gates
-        run: .ci/test-cli-proxy-api-render-matrix.sh
-
   ydotool-integration:
     name: ydotool provisioning integration
     runs-on: ubuntu-latest
@@ -467,7 +409,409 @@ jobs:
       - name: Run kitty provisioning render test
         run: .ci/test-kitty-provisioning.sh
 
+  # ---------------------------------------------------------------------------
+  # U9: canonical support matrix, native hosted legs, gate evaluation, and the
+  # final delivery aggregate. The support-matrix snapshot is the sole source of
+  # supported OS/arch targets and exact hosted runner labels; every native leg
+  # asserts its runtime architecture against it. The evaluator-gates job runs
+  # the canonical cutover-gate evaluator (G0/G1b required for delivery) and
+  # fails closed when protected policy or evidence is absent, untrusted, or a
+  # required gate is closed. None of these jobs apply the source to a live
+  # HOME or change device state.
+  # ---------------------------------------------------------------------------
+  support-matrix:
+    name: Support matrix snapshot
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate canonical targets and exact runner labels
+        run: |
+          set -euo pipefail
+          snapshot=.ci/support-matrix.json
+          [ -f "${snapshot}" ] || {
+            echo "::error::canonical support matrix snapshot is absent: ${snapshot}"
+            exit 1
+          }
+          jq -e '
+            (.targets | type == "array") and
+            (([.targets[] | .os + "/" + .arch + "/" + .kind] | sort)
+              == ["fedora/arm64/device", "fedora/x64/hosted", "macos/arm64/hosted",
+                  "windows/arm64/device", "windows/x64/hosted"]) and
+            (([.targets[] | select(.kind == "device")]
+              | length == 2 and all(.deviceId | type == "string"))) and
+            (([.targets[] | select(.kind == "hosted")]
+              | length == 3 and all(.runsOn | type == "string" and (contains("latest") | not)))) and
+            (([.targets[] | select(.os == "fedora" and .arch == "x64" and .kind == "hosted")]
+              | length == 1 and all(
+                  .runsOn == "ubuntu-24.04" and .container == "fedora:44" and .runtimeArch == "x86_64"))) and
+            (([.targets[] | select(.os == "windows" and .arch == "x64" and .kind == "hosted")]
+              | length == 1 and all(.runsOn == "windows-2025" and .runtimeArch == "AMD64"))) and
+            (([.targets[] | select(.os == "macos" and .arch == "arm64" and .kind == "hosted")]
+              | length == 1 and all(.runsOn == "macos-26" and .runtimeArch == "arm64"))) and
+            (([.targets[] | select(.os == "fedora" and .arch == "arm64" and .kind == "device")]
+              | length == 1 and all(.deviceId == "fedora-arm64" and .runtimeArch == "aarch64"))) and
+            (([.targets[] | select(.os == "windows" and .arch == "arm64" and .kind == "device")]
+              | length == 1 and all(.deviceId == "windows-arm64" and .runtimeArch == "ARM64")))
+          ' "${snapshot}" >/dev/null || {
+            echo "::error::support matrix must cover exactly the five canonical targets with unique exact runner labels, containers, runtime arches, and device ids"
+            exit 1
+          }
+
+  native-fedora-x64:
+    name: Native Fedora container (x64)
+    needs: support-matrix
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    env:
+      EXPECTED_RUNS_ON: ubuntu-24.04
+      EXPECTED_CONTAINER: fedora:44
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: ${{ github.workspace }}
+    steps:
+      - name: Install base tooling
+        run: dnf install -y --setopt=install_weak_deps=False git jq tar gzip curl nodejs tmux util-linux util-linux-script >/dev/null
+      - uses: actions/checkout@v7
+      - name: Assert runtime architecture against the support matrix
+        run: |
+          set -euo pipefail
+          entry_count=$(jq '[.targets[] | select(.os == "fedora" and .arch == "x64" and .kind == "hosted")] | length' .ci/support-matrix.json)
+          [ "${entry_count}" -eq 1 ] || { echo "::error::support matrix must carry exactly one fedora/x64 hosted target"; exit 1; }
+          entry=$(jq -c '.targets[] | select(.os == "fedora" and .arch == "x64" and .kind == "hosted")' .ci/support-matrix.json)
+          [ "$(jq -r '.runsOn' <<<"${entry}")" = "${EXPECTED_RUNS_ON}" ] || {
+            echo "::error::support matrix runsOn drifted from this job's runner (${EXPECTED_RUNS_ON})"; exit 1; }
+          [ "$(jq -r '.container' <<<"${entry}")" = "${EXPECTED_CONTAINER}" ] || {
+            echo "::error::support matrix container drifted from this job's image (${EXPECTED_CONTAINER})"; exit 1; }
+          [ "$(uname -m)" = "$(jq -r '.runtimeArch' <<<"${entry}")" ] || {
+            echo "::error::runtime arch $(uname -m) != support matrix $(jq -r '.runtimeArch' <<<"${entry}")"; exit 1; }
+          . /etc/os-release
+          [ "${ID}" = fedora ] || { echo "::error::container os-release ID is ${ID}, expected fedora"; exit 1; }
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
+      - name: Run POSIX device collector fixtures
+        run: DEVICE_TEST_OS=fedora DEVICE_TEST_ARCH=x64 .ci/test-device-collectors.sh
+      - name: Run portable workstation parity fixtures
+        run: |
+          set -euo pipefail
+          .ci/test-native-desktop-outcomes.sh
+          .ci/test-wifi-import-gates.sh
+          .ci/test-mxm4-haptic-hook-events.sh
+          .ci/test-wezterm-candidate.sh
+
+  native-windows-x64:
+    name: Native Windows (x64)
+    needs: support-matrix
+    runs-on: windows-2025
+    env:
+      EXPECTED_RUNS_ON: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert runtime architecture against the support matrix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $entries = @((Get-Content -LiteralPath '.ci/support-matrix.json' -Raw | ConvertFrom-Json).targets |
+            Where-Object { $_.os -eq 'windows' -and $_.arch -eq 'x64' -and $_.kind -eq 'hosted' })
+          if ($entries.Count -ne 1) { throw "support matrix must carry exactly one windows/x64 hosted target; found $($entries.Count)" }
+          $entry = $entries[0]
+          if ($entry.runsOn -ne $env:EXPECTED_RUNS_ON) {
+            throw "support matrix runsOn $($entry.runsOn) drifted from this job's runner ($env:EXPECTED_RUNS_ON)"
+          }
+          if ($env:PROCESSOR_ARCHITECTURE -ne $entry.runtimeArch) {
+            throw "runtime arch $env:PROCESSOR_ARCHITECTURE != support matrix $($entry.runtimeArch)"
+          }
+      - name: Install locked chezmoi
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lock = Get-Content -LiteralPath '.chezmoidata/releases.json' -Raw | ConvertFrom-Json
+          $artifact = $lock.releases.tools.chezmoi.artifacts.'windows-amd64'
+          $archive = Join-Path $env:RUNNER_TEMP 'chezmoi.zip'
+          $bin = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-WebRequest -Uri $artifact.url -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $artifact.sha256) {
+            throw "chezmoi SHA-256 mismatch: expected $($artifact.sha256), got $actual"
+          }
+          New-Item -ItemType Directory -Path $bin -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $bin -Force
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Run Windows device collector fixtures
+        shell: pwsh
+        run: |
+          & .ci/test-device-collectors.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Windows device collector fixtures exited with code $LASTEXITCODE" }
+      - name: Run Windows package, trust, editor, Wi-Fi, and garden parity fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          .ci/test-native-package-reconcilers.sh
+          .ci/test-windows-trust.sh
+          .ci/test-windows-garden-reconcile.sh
+          .ci/test-vscodium-targets.sh
+          .ci/test-vscodium-extensions.sh
+      - name: Run Windows Wi-Fi cleanup fixture
+        shell: pwsh
+        run: .ci/test-wifi-import-windows.ps1
+
+  native-macos-arm64:
+    name: Native macOS (arm64)
+    needs: support-matrix
+    runs-on: macos-26
+    env:
+      EXPECTED_RUNS_ON: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert runtime architecture against the support matrix
+        run: |
+          set -euo pipefail
+          entry_count=$(jq '[.targets[] | select(.os == "macos" and .arch == "arm64" and .kind == "hosted")] | length' .ci/support-matrix.json)
+          [ "${entry_count}" -eq 1 ] || { echo "::error::support matrix must carry exactly one macos/arm64 hosted target"; exit 1; }
+          entry=$(jq -c '.targets[] | select(.os == "macos" and .arch == "arm64" and .kind == "hosted")' .ci/support-matrix.json)
+          [ "$(jq -r '.runsOn' <<<"${entry}")" = "${EXPECTED_RUNS_ON}" ] || {
+            echo "::error::support matrix runsOn drifted from this job's runner (${EXPECTED_RUNS_ON})"; exit 1; }
+          [ "$(uname -m)" = "$(jq -r '.runtimeArch' <<<"${entry}")" ] || {
+            echo "::error::runtime arch $(uname -m) != support matrix $(jq -r '.runtimeArch' <<<"${entry}")"; exit 1; }
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          bindir="${RUNNER_TEMP}/bin"
+          mkdir -p "${bindir}"
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "${bindir}"
+          echo "${bindir}" >> "${GITHUB_PATH}"
+      - name: Run POSIX device collector fixtures
+        run: DEVICE_TEST_OS=macos DEVICE_TEST_ARCH=arm64 .ci/test-device-collectors.sh
+      - name: Run macOS editor, Wi-Fi, and haptic parity fixtures
+        run: |
+          set -euo pipefail
+          .ci/test-vscodium-targets.sh
+          .ci/test-vscodium-extensions.sh
+          .ci/test-wifi-import-gates.sh
+          .ci/test-wifi-import-macos.sh
+          .ci/test-mxm4-haptic-hook-events.sh
+
+  evaluator-gates:
+    name: Cutover gate evaluation (G0/G1a/G1b)
+    needs: [support-matrix, native-fedora-x64, native-windows-x64, native-macos-arm64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+      - name: Run deterministic cutover gate fixtures
+        run: .ci/test-cutover-gates.sh
+      - name: Materialize and verify the protected evaluator
+        run: |
+          set -euo pipefail
+          default_branch='${{ github.event.repository.default_branch }}'
+          protected_ref="refs/remotes/origin/${default_branch}"
+          protected_root="${RUNNER_TEMP}/protected"
+          git fetch --no-tags origin \
+            "+refs/heads/${default_branch}:${protected_ref}"
+          source_ref="${protected_ref}"
+          if ! git cat-file -e "${protected_ref}:.ci/cutover-gates.json" 2>/dev/null; then
+            # One-time bootstrap: the default branch cannot authorize files
+            # that do not exist there yet. Candidate trust roots are accepted
+            # only while every delivery gate is closed and Kitty remains the
+            # authoritative terminal. After this lands, the default-branch
+            # branch above is mandatory.
+            source_ref="${GITHUB_SHA}"
+            : >"${RUNNER_TEMP}/protected-bootstrap"
+          fi
+          mkdir -p "${protected_root}/.ci"
+          for path in \
+            .ci/cutover-gates.json \
+            .ci/support-matrix.schema.json \
+            .ci/cutover-gates.schema.json \
+            .ci/device-evidence.schema.json
+          do
+            git show "${source_ref}:${path}" >"${protected_root}/${path}" || {
+              echo "::error::protected source ${source_ref} carries no ${path}"
+              exit 1
+            }
+          done
+          policy="${protected_root}/.ci/cutover-gates.json"
+          if [ -f "${RUNNER_TEMP}/protected-bootstrap" ]; then
+            jq -e '
+              (.gates | all(.[]; .status == "closed" and (.evidence | length == 0))) and
+              (.trustedCollectors | type == "object" and length > 0) and
+              (.attestation.signerWorkflows | type == "object" and length > 0)
+            ' "${policy}" >/dev/null || {
+              echo "::error::bootstrap policy must keep every gate closed with no evidence and must pin collectors and signer workflows"
+              exit 1
+            }
+          fi
+          jq -e '
+            (.trustedEvaluators | type == "object") and
+            (.trustedEvaluators | length > 0) and
+            (.trustedEvaluators | all(to_entries[];
+              (.key | test("^\\.ci/[a-z0-9-]+\\.mjs$")) and
+              (.value | type == "string" and test("^[0-9a-f]{64}$"))))
+          ' "${policy}" >/dev/null || {
+            echo "::error::protected policy trustedEvaluators must be a non-empty map of canonical paths to SHA-256 digests"
+            exit 1
+          }
+          while IFS=$'\t' read -r evaluator pinned; do
+            mkdir -p "$(dirname -- "${protected_root}/${evaluator}")"
+            git show "${source_ref}:${evaluator}" >"${protected_root}/${evaluator}" || {
+              echo "::error::protected policy pins missing evaluator ${evaluator}"
+              exit 1
+            }
+            actual=$(sha256sum -- "${protected_root}/${evaluator}")
+            actual=${actual%% *}
+            [ "${actual}" = "${pinned}" ] || {
+              echo "::error::protected evaluator ${evaluator} digest ${actual} != policy pin ${pinned}"
+              exit 1
+            }
+          done < <(jq -r '.trustedEvaluators | to_entries[] | [.key, .value] | @tsv' "${policy}")
+      - name: Bind evidence to an unchanged measured ancestor
+        id: measured
+        run: |
+          set -euo pipefail
+          policy=.ci/cutover-gates.json
+          jq -e '
+            ([.gates[] | .candidateCommit] | unique) as $commits |
+            ($commits | length == 1) and
+            ($commits[0] | type == "string" and test("^[0-9a-f]{40}$"))
+          ' "${policy}" >/dev/null || {
+            echo "::error::all gate outcomes must bind to exactly one measured 40-hex commit"
+            exit 1
+          }
+          measured_commit=$(jq -r '[.gates[] | .candidateCommit] | unique[0]' "${policy}")
+          git merge-base --is-ancestor "${measured_commit}" "${GITHUB_SHA}" || {
+            echo "::error::measured commit ${measured_commit} is not an ancestor of ${GITHUB_SHA}"
+            exit 1
+          }
+          .ci/test-cutover-gates.sh --assert-allowed-source-diff \
+            < <(git diff --name-only "${measured_commit}..${GITHUB_SHA}") || {
+            echo "::error::only protected policy/evidence records may change after measurement"
+            exit 1
+          }
+          git show "${measured_commit}:.ci/support-matrix.json" >"${RUNNER_TEMP}/measured-support-matrix.json" || {
+            echo "::error::measured commit carries no protected support matrix"
+            exit 1
+          }
+          git show "${measured_commit}:.ci/cutover-gates.json" >"${RUNNER_TEMP}/measured-cutover-gates.json" || {
+            echo "::error::measured commit carries no protected cutover policy"
+            exit 1
+          }
+          echo "commit=${measured_commit}" >>"${GITHUB_OUTPUT}"
+      - name: Evaluate cutover gates against committed evidence
+        run: |
+          set -euo pipefail
+          # Closed gates are valid during the preparatory state while every
+          # Kitty authority source remains. Removing any one of those sources
+          # is a delivery cutover and makes G0/G1b blocking.
+          required=none
+          for path in \
+            .chezmoiscripts/00-tools/run_onchange_before_kitty.sh.tmpl \
+            dot_config/kitty/kitty.conf.tmpl \
+            dot_local/share/applications/kitty.desktop.tmpl
+          do
+            [ -e "${path}" ] || required=G0,G1b
+          done
+          if [ -f "${RUNNER_TEMP}/protected-bootstrap" ] && [ "${required}" != none ]; then
+            echo "::error::the one-time trust bootstrap cannot authorize a terminal cutover"
+            exit 1
+          fi
+          # Exit 1 always means invalid/absent/drifted policy or evidence.
+          # Exit 2 blocks only when the source has entered the delivery state.
+          node "${RUNNER_TEMP}/protected/.ci/evaluate-cutover-gates.mjs" \
+            --support-matrix "${RUNNER_TEMP}/measured-support-matrix.json" \
+            --gates "${RUNNER_TEMP}/protected/.ci/cutover-gates.json" \
+            --measured-gates "${RUNNER_TEMP}/measured-cutover-gates.json" \
+            --evidence-dir .ci/device-evidence \
+            --candidate-commit "${{ steps.measured.outputs.commit }}" \
+            --require "${required}" | tee gate-evaluation.json
+      - name: Upload gate evaluation
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-evaluation
+          path: gate-evaluation.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # Every quality gate above must actually RUN. GitHub skips a job whose
+  # `needs:` dependency fails, so checking only named jobs can mistake grey
+  # for green. This always-running aggregate turns failure, cancellation, and
+  # skip in any non-quarantined native/render job — and in the evaluator gates
+  # — into one stable red required check.
+  delivery:
+    name: Final delivery
+    if: always()
+    needs:
+      [
+        codex-wrapper,
+        omp-agent-integration,
+        ts-workspace,
+        figma-skills-native,
+        rust-crate,
+        mxm4-haptic-windows,
+        ydotool-integration,
+        compound-engineering-overlays,
+        garden-registry-relocation,
+        tmux-kitty-passthrough,
+        kitty-provisioning,
+        support-matrix,
+        native-fedora-x64,
+        native-windows-x64,
+        native-macos-arm64,
+        evaluator-gates,
+      ]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every job to succeed
+        env:
+          CODEX_WRAPPER_RESULT: ${{ needs.codex-wrapper.result }}
+          OMP_AGENT_INTEGRATION_RESULT: ${{ needs.omp-agent-integration.result }}
+          TS_WORKSPACE_RESULT: ${{ needs.ts-workspace.result }}
+          FIGMA_SKILLS_NATIVE_RESULT: ${{ needs.figma-skills-native.result }}
+          RUST_CRATE_RESULT: ${{ needs.rust-crate.result }}
+          MXM4_HAPTIC_WINDOWS_RESULT: ${{ needs.mxm4-haptic-windows.result }}
+          YDOTOOL_INTEGRATION_RESULT: ${{ needs.ydotool-integration.result }}
+          COMPOUND_ENGINEERING_OVERLAYS_RESULT: ${{ needs.compound-engineering-overlays.result }}
+          GARDEN_REGISTRY_RELOCATION_RESULT: ${{ needs.garden-registry-relocation.result }}
+          TMUX_KITTY_PASSTHROUGH_RESULT: ${{ needs.tmux-kitty-passthrough.result }}
+          KITTY_PROVISIONING_RESULT: ${{ needs.kitty-provisioning.result }}
+          SUPPORT_MATRIX_RESULT: ${{ needs.support-matrix.result }}
+          NATIVE_FEDORA_X64_RESULT: ${{ needs.native-fedora-x64.result }}
+          NATIVE_WINDOWS_X64_RESULT: ${{ needs.native-windows-x64.result }}
+          NATIVE_MACOS_ARM64_RESULT: ${{ needs.native-macos-arm64.result }}
+          EVALUATOR_GATES_RESULT: ${{ needs.evaluator-gates.result }}
+        run: |
+          set -euo pipefail
+          failed=0
+          for result in \
+            "codex-wrapper=${CODEX_WRAPPER_RESULT}" \
+            "omp-agent-integration=${OMP_AGENT_INTEGRATION_RESULT}" \
+            "ts-workspace=${TS_WORKSPACE_RESULT}" \
+            "figma-skills-native=${FIGMA_SKILLS_NATIVE_RESULT}" \
+            "rust-crate=${RUST_CRATE_RESULT}" \
+            "mxm4-haptic-windows=${MXM4_HAPTIC_WINDOWS_RESULT}" \
+            "ydotool-integration=${YDOTOOL_INTEGRATION_RESULT}" \
+            "compound-engineering-overlays=${COMPOUND_ENGINEERING_OVERLAYS_RESULT}" \
+            "garden-registry-relocation=${GARDEN_REGISTRY_RELOCATION_RESULT}" \
+            "tmux-kitty-passthrough=${TMUX_KITTY_PASSTHROUGH_RESULT}" \
+            "kitty-provisioning=${KITTY_PROVISIONING_RESULT}" \
+            "support-matrix=${SUPPORT_MATRIX_RESULT}" \
+            "native-fedora-x64=${NATIVE_FEDORA_X64_RESULT}" \
+            "native-windows-x64=${NATIVE_WINDOWS_X64_RESULT}" \
+            "native-macos-arm64=${NATIVE_MACOS_ARM64_RESULT}" \
+            "evaluator-gates=${EVALUATOR_GATES_RESULT}"; do
+            echo "${result}"
+            if [[ "${result#*=}" != success ]]; then
+              failed=1
+            fi
+          done
+          exit "${failed}"
+
   # NOTE: shellcheck moved to the `render-dotfiles` workflow's `shellcheck` job,
-  # which runs after the Fedora/Ubuntu render so it can lint the REAL rendered
+  # which runs after the Fedora and macOS renders so it can lint the REAL rendered
   # scripts (including the `.chezmoiscripts/**` templates shellcheck cannot parse
   # in `.tmpl` form) plus the repo-meta scripts. It is therefore PR-only.

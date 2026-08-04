@@ -52,24 +52,32 @@ This directory is **chezmoi source state**, deployed to
 
 ## Prerequisites
 
-The `mxm4-hapticd` user daemon must be running — it owns the AF_UNIX socket at
-`$XDG_RUNTIME_DIR/mxm4-haptic.sock` that the CLI writes to:
+The `mxm4-hapticd` user daemon must be running — it owns the per-user IPC
+endpoint the CLI writes to (AF_UNIX at `$XDG_RUNTIME_DIR/mxm4-haptic.sock` on
+Linux, `$TMPDIR/mxm4-haptic.sock` on macOS, the `\\.\pipe\mxm4-haptic` named
+pipe on Windows):
 
 ```sh
-systemctl --user status mxm4-hapticd.service
+systemctl --user status mxm4-hapticd.service   # Linux
+launchctl print "gui/$UID/dev.h82.mxm4-hapticd" # macOS
+schtasks /Query /TN '\mxm4-hapticd'             # Windows
 ```
 
 If it's down, pulses are silently skipped. Both the daemon and the `mxm4-haptic`
 client are built from [`crates/mxm4-haptic/`](../../../../crates/mxm4-haptic/)
 into `~/.local/bin/` by `.chezmoiscripts/60-build/`.
 
-Hardware: a Logitech **MX Master 4** paired (HID++ feature `0x19B0`). Linux only —
-the daemon owns Linux `hidraw`, so the plugin is not deployed on macOS/Windows.
+Hardware: a Logitech **MX Master 4** paired (HID++ feature `0x19B0`). The
+daemon is cross-platform (Linux hidraw, macOS IOKit, Windows native HID), so
+the plugin deploys on every desktop OS: POSIX hooks invoke `bin/pulse`,
+Windows hooks invoke `bin/pulse.ps1`. Containers are excluded.
 
 ## Install
 
-**chezmoi does it automatically on Linux.** The generic data-driven installer
+**chezmoi does it automatically on every desktop OS.** The generic data-driven
+installer
 `.chezmoiscripts/70-agents/run_onchange_after_install-agent-plugins.sh.tmpl`
+(and its PowerShell counterpart on Windows)
 (ranging over `agents.claude.plugins` in `.chezmoidata/agents.yaml`)
 registers the deployed tree as a local marketplace and installs the plugin:
 

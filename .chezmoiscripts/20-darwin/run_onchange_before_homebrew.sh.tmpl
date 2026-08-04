@@ -1,0 +1,76 @@
+{{- if eq .chezmoi.os "darwin" -}}
+{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
+{{- $arch := .chezmoi.arch -}}
+{{- $needsSudo := false -}}
+{{- $needsAppManagement := false -}}
+{{- range $capability := .packages.authority.capabilities -}}
+{{-   $delivery := $capability.macos -}}
+{{-   if and (eq $delivery.disposition "managed") (eq $delivery.owner "homebrew") -}}
+{{-     $state := index $delivery.architectures $arch -}}
+{{-     if or (eq $state "native") (eq $state "emulated") -}}
+{{-       if eq $delivery.elevation "sudo" -}}{{- $needsSudo = true -}}{{- end -}}
+{{-       if eq $delivery.elevation "appManagement" -}}{{- $needsAppManagement = true -}}{{- end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve every required authorization before Homebrew or package mutation.
+needs_sudo={{ ternary "1" "0" $needsSudo }}
+needs_app_management={{ ternary "1" "0" $needsAppManagement }}
+if (( needs_sudo )) && ! sudo -n true 2>/dev/null; then
+  printf '%s\n' 'homebrew preflight: named human step required: grant non-interactive sudo for the declared package operation, then re-run.' >&2
+  exit 1
+fi
+if (( needs_app_management )) && [[ ! -w /Applications ]]; then
+  printf '%s\n' 'homebrew preflight: named human step required: grant terminal App Management access for /Applications, then re-run.' >&2
+  exit 1
+fi
+
+scratch_root=${TMPDIR:-"$HOME/Library/Caches"}
+scratch=$(mktemp -d "${scratch_root%/}/chezmoi-homebrew.XXXXXX")
+cleanup() { rm -rf -- "$scratch"; }
+trap cleanup EXIT HUP INT TERM
+
+if ! command -v brew >/dev/null 2>&1; then
+  # Keep this URL and digest in sync with .install-prerequisites.sh.
+  installer="$scratch/install.sh"
+  curl -fsSL 'https://raw.githubusercontent.com/Homebrew/install/39a0c068274254a7658fd9761d59bce9d0e2151f/install.sh' -o "$installer"
+  printf '%s  %s\n' '8ff338091a5e10bb5fc040b38316648110f42feff057ecf9feaab51fd0a13ef9' "$installer" | shasum -a 256 -c - >/dev/null
+  NONINTERACTIVE=1 /bin/bash "$installer"
+fi
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+command -v brew >/dev/null 2>&1 || { printf '%s\n' 'homebrew preflight: brew is unavailable after bootstrap.' >&2; exit 1; }
+[[ "$(brew --prefix)" == /opt/homebrew ]] || { printf '%s\n' 'homebrew preflight: unexpected prefix; Apple silicon requires /opt/homebrew.' >&2; exit 1; }
+brew_origin=$(git -C "$(brew --repository)" remote get-url origin)
+case "$brew_origin" in
+  https://github.com/Homebrew/brew|https://github.com/Homebrew/brew.git) ;;
+  *) printf 'homebrew preflight: spoofed manager origin: %s\n' "$brew_origin" >&2; exit 1 ;;
+esac
+
+brewfile="$scratch/Brewfile"
+cat >"$brewfile" <<'BREWFILE'
+{{- range $capability := .packages.authority.capabilities -}}
+{{-   $delivery := $capability.macos -}}
+{{-   if and (eq $delivery.disposition "managed") (eq $delivery.owner "homebrew") -}}
+{{-     $state := index $delivery.architectures $arch -}}
+{{-     if or (eq $state "native") (eq $state "emulated") -}}
+{{-       if eq $delivery.kind "tap" }}
+tap "{{ $delivery.identifier }}"
+{{-       else if eq $delivery.kind "formula" }}
+brew "{{ $delivery.identifier }}"
+{{-       else if eq $delivery.kind "cask" }}
+cask "{{ $delivery.identifier }}"{{ if $delivery.greedy }}, greedy: true{{ end }}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end }}
+BREWFILE
+
+HOMEBREW_NO_ANALYTICS=1 brew bundle --file="$brewfile"
+HOMEBREW_NO_ANALYTICS=1 brew bundle check --verbose --file="$brewfile"
+printf '%s\n' 'RESULT homebrew converged'
+{{- end -}}

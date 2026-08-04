@@ -37,8 +37,14 @@
 {{- end -}}
 {{- /* Drain the complete event first so Codex never writes into a pipe closed by
        an early no-op exit. Then resolve the client (absolute path, then PATH),
-       pulse it, and ALWAYS exit 0 with no output. %s is the waveform. */ -}}
+       pulse it, and ALWAYS exit 0 with no output. %s is the waveform.
+       POSIX renders the self-contained sh -c; Windows renders the equivalent
+       inline PowerShell for cmd's hook shell (single-quoted waveform: names
+       contain spaces but never a single quote). */ -}}
 {{- $cmd := `sh -c 'cat >/dev/null; h="$HOME/.local/bin/mxm4-haptic"; [ -x "$h" ] || h="$(command -v mxm4-haptic 2>/dev/null)" || exit 0; [ -n "$h" ] && "$h" "%s" >/dev/null 2>&1; exit 0'` -}}
+{{- if eq .chezmoi.os "windows" -}}
+{{- $cmd = `powershell -NoProfile -Command "try { [Console]::In.ReadToEnd() | Out-Null; $h = Join-Path $env:USERPROFILE '.local\bin\mxm4-haptic.exe'; if (-not (Test-Path -LiteralPath $h -PathType Leaf)) { $h = (Get-Command mxm4-haptic -ErrorAction SilentlyContinue).Source }; if ($h) { & $h '%s' *>$null } } catch {}; exit 0"` -}}
+{{- end -}}
 {
   "hooks": {
     "Stop": [

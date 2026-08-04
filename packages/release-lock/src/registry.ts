@@ -75,13 +75,6 @@ export const REGISTRY: Registry = {
     },
   },
 
-  // Installed on darwin only; every other platform gets jq from a package manager.
-  jq: {
-    kind: "githubRelease",
-    source: "jqlang/jq",
-    asset: ({ os, arch }) => (os === "darwin" ? `jq-macos-${arch}` : null),
-  },
-
   shellcheck: {
     kind: "githubRelease",
     source: "koalaman/shellcheck",
@@ -228,17 +221,6 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => (os === "windows" ? null : `aoe-${os}-${arch}.tar.gz`),
   },
 
-  // macOS runs the CLIProxyAPI binary directly under launchd (linux uses the
-  // ociImage quadlet); darwin assets spell arm64 as aarch64.
-  "cli-proxy-api-binary": {
-    kind: "githubRelease",
-    source: "router-for-me/CLIProxyAPI",
-    asset: ({ os, arch }, tag) =>
-      os === "darwin"
-        ? `CLIProxyAPI_${versionFromTag(tag)}_darwin_${arch === "arm64" ? "aarch64" : "amd64"}.tar.gz`
-        : null,
-  },
-
   /* ---------- version-only githubRelease entries ---------- */
 
   "compound-engineering": {
@@ -248,9 +230,6 @@ export const REGISTRY: Registry = {
     // `releases/latest` would eventually resolve to the wrong one (KTD10).
     tagPrefix: "compound-engineering-",
   },
-
-  // Version-only tag for the build-open-design script's onchange trigger.
-  "open-design": { kind: "githubRelease", source: "nexu-io/open-design" },
 
   /* ---------- githubSkillCollection ---------- */
 
@@ -283,23 +262,4 @@ export const REGISTRY: Registry = {
   // The improve skill has no releases/tags; agents.skills.external pins its
   // `ref: main` branch head to a commit.
   improve: { kind: "gitRef", source: "shadcn/improve", ref: "refs/heads/main" },
-
-  /* ---------- ociImage: the cli-proxy-api quadlet images ---------- */
-
-  // eceasy/cli-proxy-api is a third-party Docker Hub republisher of
-  // router-for-me/CLIProxyAPI, not an upstream-owned namespace. The digest
-  // pin mitigates tag mutation, not provenance — this trust boundary is
-  // deliberate (Risks & Dependencies in the quadlet plan).
-  "cli-proxy-api": {
-    kind: "ociImage",
-    source: "docker.io/eceasy/cli-proxy-api",
-    tag: "latest",
-  },
-
-  // CPA-Manager-Plus admin panel, published by its author on GHCR.
-  "cpa-manager-plus": {
-    kind: "ociImage",
-    source: "ghcr.io/seakee/cpa-manager-plus",
-    tag: "latest",
-  },
 };

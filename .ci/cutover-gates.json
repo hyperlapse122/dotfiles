@@ -1,0 +1,177 @@
+{
+  "$schema": "./cutover-gates.schema.json",
+  "schemaVersion": 1,
+  "repository": "hyperlapse122/dotfiles",
+  "defaultBranch": "main",
+  "protectedEnvironment": "device-evidence",
+  "attestation": {
+    "trustRoot": "github-sigstore",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "signerWorkflows": {
+      ".github/workflows/device-smoke.yml": {
+        "defaultBranchSha": "e11b4fe4ad44d1a998d5a4f393465d9ad85efcca"
+      }
+    }
+  },
+  "trustedCollectors": {
+    ".ci/collect-device-evidence.ps1": "cbc7eaa673e33308d523a23b863d68c96e6584e332b9fca6dd1312e6d5df5b96",
+    ".ci/collect-device-evidence.sh": "8e50afbc35e6ab362f042dcab501c948ada80dc5fe44389ad0f848f1ca08678e"
+  },
+  "trustedEvaluators": {
+    ".ci/evaluate-cutover-gates.mjs": "5d8b94d1e7e0fda23e6989def42abe081f6d2e9c84d734bbbc99aabfeaf7b2d2",
+    ".ci/validate-device-evidence.mjs": "3ed29bdd1ab6176682f3028bed10b253c60619740e3aa4474069e41d9fb6a832"
+  },
+  "devices": [
+    {
+      "id": "fedora-arm64-01",
+      "os": "fedora",
+      "arch": "arm64",
+      "runnerClass": "self-hosted",
+      "runnerLabels": ["self-hosted", "linux", "arm64", "fedora-arm64-01"],
+      "status": "active"
+    },
+    {
+      "id": "windows-arm64-01",
+      "os": "windows",
+      "arch": "arm64",
+      "runnerClass": "self-hosted",
+      "runnerLabels": ["self-hosted", "windows", "arm64", "windows-arm64-01"],
+      "status": "active"
+    },
+    {
+      "id": "macos-arm64-01",
+      "os": "macos",
+      "arch": "arm64",
+      "runnerClass": "self-hosted",
+      "runnerLabels": ["self-hosted", "macos", "arm64", "macos-arm64-01"],
+      "status": "active"
+    },
+    {
+      "id": "ubuntu-24.04",
+      "os": "fedora",
+      "arch": "x64",
+      "runnerClass": "github-hosted",
+      "runnerLabels": ["ubuntu-24.04"],
+      "status": "active"
+    },
+    {
+      "id": "windows-2025",
+      "os": "windows",
+      "arch": "x64",
+      "runnerClass": "github-hosted",
+      "runnerLabels": ["windows-2025"],
+      "status": "active"
+    },
+    {
+      "id": "macos-26",
+      "os": "macos",
+      "arch": "arm64",
+      "runnerClass": "github-hosted",
+      "runnerLabels": ["macos-26"],
+      "status": "active"
+    }
+  ],
+  "gates": {
+    "G0": {
+      "summary": "Native Fedora arm64 availability of required applications (Chrome, Cider, Edge, 1Password); substitutes, exclusions, and emulation never satisfy this gate.",
+      "status": "closed",
+      "reason": "Native Fedora arm64 Chrome, Cider, and Edge packages are not published; no trusted device evidence exists.",
+      "candidateCommit": "1d65824c8c187b604fd36b5d2b7448dc98f1da19",
+      "supportSnapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
+      "evidence": [],
+      "mandatoryLegs": [
+        {
+          "id": "fedora-arm64-required-applications",
+          "subject": { "os": "fedora", "arch": "arm64" },
+          "claims": [
+            "chrome-native-arm64-available",
+            "cider-native-arm64-available",
+            "edge-native-arm64-available",
+            "onepassword-native-arm64-available"
+          ]
+        }
+      ]
+    },
+    "G1a": {
+      "summary": "An installable stable WezTerm candidate exists on every native channel: upstream stable RPM for the current Fedora release, stable winget package, stable Homebrew cask, with Kitty Unicode placeholders in a stable release.",
+      "status": "closed",
+      "reason": "Released WezTerm builds lack Kitty Unicode placeholders and Fedora lacks a current stable channel; no trusted evidence exists.",
+      "candidateCommit": "1d65824c8c187b604fd36b5d2b7448dc98f1da19",
+      "supportSnapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
+      "evidence": [],
+      "mandatoryLegs": [
+        {
+          "id": "wezterm-stable-channel-fedora",
+          "subject": { "os": "fedora" },
+          "claims": [
+            "wezterm-stable-release-published",
+            "wezterm-kitty-unicode-placeholders-in-stable",
+            "wezterm-upstream-stable-rpm-for-current-fedora"
+          ]
+        },
+        {
+          "id": "wezterm-stable-channel-windows",
+          "subject": { "os": "windows" },
+          "claims": [
+            "wezterm-stable-release-published",
+            "wezterm-kitty-unicode-placeholders-in-stable",
+            "wezterm-stable-winget-package"
+          ]
+        },
+        {
+          "id": "wezterm-stable-channel-macos",
+          "subject": { "os": "macos" },
+          "claims": [
+            "wezterm-stable-release-published",
+            "wezterm-kitty-unicode-placeholders-in-stable",
+            "wezterm-stable-homebrew-cask"
+          ]
+        }
+      ]
+    },
+    "G1b": {
+      "summary": "Managed-path WezTerm proof on all three OSes: omp inline images inside tmux render and survive scroll, redraw, resize, and split, including Windows over SSH to the Fedora VM; Kitty remains managed until this opens.",
+      "status": "closed",
+      "reason": "U11 managed-path proof has not run; no trusted three-OS device evidence exists.",
+      "candidateCommit": "1d65824c8c187b604fd36b5d2b7448dc98f1da19",
+      "supportSnapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
+      "evidence": [],
+      "mandatoryLegs": [
+        {
+          "id": "managed-wezterm-fedora",
+          "subject": { "os": "fedora", "runnerClass": "self-hosted" },
+          "claims": [
+            "inline-image-renders-in-tmux",
+            "inline-image-survives-scroll",
+            "inline-image-survives-redraw",
+            "inline-image-survives-resize",
+            "inline-image-survives-split"
+          ]
+        },
+        {
+          "id": "managed-wezterm-windows",
+          "subject": { "os": "windows", "runnerClass": "self-hosted" },
+          "claims": [
+            "inline-image-renders-in-tmux",
+            "inline-image-survives-scroll",
+            "inline-image-survives-redraw",
+            "inline-image-survives-resize",
+            "inline-image-survives-split",
+            "inline-image-over-ssh-to-fedora-vm"
+          ]
+        },
+        {
+          "id": "managed-wezterm-macos",
+          "subject": { "os": "macos" },
+          "claims": [
+            "inline-image-renders-in-tmux",
+            "inline-image-survives-scroll",
+            "inline-image-survives-redraw",
+            "inline-image-survives-resize",
+            "inline-image-survives-split"
+          ]
+        }
+      ]
+    }
+  }
+}

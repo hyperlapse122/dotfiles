@@ -95,7 +95,7 @@ ensure_op_authenticated() {
 }
 
 # config-secrets key: the chezmoi config template (.chezmoi.toml.tmpl) stores
-# its prompted secrets (LUKS passphrase, MOK password) AES-encrypted in
+# its prompted secrets (LUKS passphrase) AES-encrypted in
 # ~/.config/chezmoi/chezmoi.toml instead of plaintext. The AES key lives ONLY
 # in the user keyring (Secret Service) under service=chezmoi-config-secrets /
 # user=<username>.
@@ -103,7 +103,7 @@ ensure_op_authenticated() {
 # This hook is an EARLY BEST-EFFORT seed, NOT the thing the first-init prompt
 # depends on: chezmoi renders (and prompts on) the config template BEFORE it
 # runs this read-source-state.pre hook, so on a fresh machine's first `chezmoi
-# init` the key does not exist yet when the LUKS/MOK prompt fires. The prompt
+# init` the key does not exist yet when the LUKS prompt fires. The prompt
 # path in .chezmoi.toml.tmpl therefore resolves the key GET-OR-CREATE via
 # .chezmoitemplates/config-secrets-key-ensure.tmpl, seeding it inside that same
 # render. Seeding it here too keeps it present for later commands and mirrors
@@ -113,13 +113,13 @@ ensure_op_authenticated() {
 # keyring (headless/TTY/container) the templates behave as if no secret was
 # entered.
 #
-# LINUX-ONLY, deliberately: both encrypted config secrets are Linux-gated, and
+# LINUX-ONLY, deliberately: the encrypted config secret is Linux-gated, and
 # macOS's keyring backend (go-keyring drives /usr/bin/security) can escalate
 # to a BLOCKING SecurityAgent dialog on a locked keychain — which wedges a
 # headless apply forever (observed hanging the render-dotfiles macos CI job).
 # Revisit the guard if a darwin template ever consumes the key. The `timeout`
 # wrappers are the same insurance on Linux (coreutils is a base package on
-# both target distros): a Secret Service prompter that never answers turns
+# the target distro): a Secret Service prompter that never answers turns
 # into a soft-skip, not a stuck chezmoi run. Keep in sync with
 # Confirm-ConfigSecretsKey in .install-prerequisites.ps1 (Windows Credential
 # Manager works headless, same service/user names).
@@ -140,7 +140,7 @@ ensure_config_secrets_key() {
 # --- Host-fact cache — layer 1 of the named-fact registry -------------------
 #
 # The registry's SHELL layer (names declared in .chezmoidata/facts.yaml; merged
-# entry point .chezmoitemplates/facts.tmpl). These five facts live here — and not
+# entry point .chezmoitemplates/facts.tmpl). These four facts live here — and not
 # in a template — because the template functions cannot express them:
 #
 #   * `output` propagates a non-zero exit as a template error that ABORTS the
@@ -164,7 +164,7 @@ ensure_config_secrets_key() {
 #   1. Every probe ALWAYS exits 0 and prints a bare `true` / `false`. A host
 #      that lacks the probe's mechanism (no systemd-detect-virt, no /sys, no
 #      dpkg — macOS, a minimal container) prints `false`, which is the
-#      conservative direction for all five: skip NVIDIA, skip Intel, skip the
+#      conservative direction for all four: skip NVIDIA, skip the
 #      bare-metal package set, skip ThinkPad ACPI, treat the host as a desktop
 #      rather than a server.
 #   2. It NEVER fails the hook. A read-only or full $HOME must not take down
@@ -192,27 +192,6 @@ fact_bool() {
 # and the fact is false.
 fact_nvidia() {
   grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null
-}
-
-# Intel GPU: vendor 0x8086 AND PCI class 0x03xxxx (display controller). The
-# class check is load-bearing — 0x8086 is Intel's vendor id for every Intel
-# part, so vendor alone trips on an Intel NIC or chipset. Mirrors the Ubuntu
-# installer's loop (install_intel_support / HAS_INTEL_GPU).
-#
-# Narrow with ONE grep over the whole glob (as fact_nvidia does), then read only
-# the matched devices' class files with the `read` builtin. The obvious shape —
-# looping every PCI device and `$(cat)`-ing its vendor — forks a subprocess per
-# device: measured ~85ms against ~4ms here, and this runs on EVERY chezmoi
-# command, `chezmoi diff` included. Keep it fork-free.
-fact_intel_gpu() {
-  local vendor class value
-  while IFS= read -r vendor; do
-    class="${vendor%/vendor}/class"
-    [[ -r "$class" ]] || continue
-    read -r value < "$class" || continue
-    [[ "$value" == 0x03* ]] && return 0
-  done < <(grep -lx '0x8086' /sys/bus/pci/devices/*/vendor 2>/dev/null)
-  return 1
 }
 
 # Headless / server install. Mirrors .chezmoitemplates/headless-guard.sh.tmpl
@@ -274,7 +253,6 @@ write_facts_cache() {
     printf '# Rewritten once per chezmoi command; read by .chezmoitemplates/facts.tmpl.\n'
     printf '# Do NOT edit — every value here is a probe result, not a setting.\n'
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
-    printf 'intelGpu: %s\n'     "$(fact_bool fact_intel_gpu)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
@@ -354,7 +332,7 @@ fi
 # Inside a container we NEVER install packages or the 1Password desktop app —
 # the base image plus mise are expected to provide `op` and `mise`, and secrets
 # come from a service-account token. Fail fast with guidance instead of trying
-# to dnf/apt/brew inside the container.
+# to dnf/brew inside the container.
 if is_container; then
   missing=()
   command -v op   >/dev/null 2>&1 || missing+=("op (1Password CLI)")
@@ -409,111 +387,28 @@ EOF
   fi
 }
 
-# Ubuntu/Debian: install via apt. Ordered to install transport tools and
-# 1Password keyring before the package installs.
-install_ubuntu() {
-  # Fail fast if no sudo (needed for apt-get and keyring writes).
-  if [[ "${EUID}" -ne 0 ]]; then
-    if ! command -v sudo >/dev/null 2>&1; then
-      printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
-      exit 1
-    fi
-    sudo -v || { printf 'install-prerequisites.sh: sudo failed; aborting.\n' >&2; exit 1; }
-  fi
-  local -a SUDO
-  if [[ "${EUID}" -eq 0 ]]; then SUDO=(); else SUDO=(sudo); fi
-
-  export DEBIAN_FRONTEND=noninteractive
-
-  # Self-heal before the FIRST apt invocation, mirroring setup_apt_repos in
-  # .chezmoiscripts/40-linux-ubuntu/run_onchange_before_ubuntu.sh.tmpl (keep the
-  # two sites in lockstep): a retired aptRepos revision left an active legacy
-  # /etc/apt/sources.list.d/1password.list whose signed-by= disagrees with the
-  # package-managed 1password.sources, and apt rejects the entire source list on
-  # that conflict — which would abort this hook right here on `apt-get update`.
-  # The run_onchange cleanup alone can't cover this path: it runs only after the
-  # hook, and the hook only reaches this function when its mise+op fast path
-  # misses.
-  if [[ -f /etc/apt/sources.list.d/1password.sources && -f /etc/apt/sources.list.d/1password.list ]]; then
-    "${SUDO[@]}" rm -f /etc/apt/sources.list.d/1password.list /usr/share/keyrings/1password.gpg
-  fi
-
-  # Bootstrap transport tools needed to add the 1Password repo.
-  "${SUDO[@]}" apt-get update -qq
-  for pkg in ca-certificates curl gnupg lsb-release; do
-    dpkg -s "$pkg" >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y "$pkg"
-  done
-
-  # Add 1Password apt repo + GPG keyring (idempotent), per
-  # https://support.1password.com/install-linux/#debian-or-ubuntu — the repo is
-  # arch-partitioned (amd64 at /linux/debian/amd64, arm64 at /linux/debian/arm64),
-  # so the `deb` line pins the native arch; the old /linux/apt/debian path 404s.
-  # This bootstrap .list only has to survive until the install below: the
-  # 1password deb's postinst takes over the repo definition — it writes the
-  # deb822 /etc/apt/sources.list.d/1password.sources signed by the SAME
-  # /usr/share/keyrings/1password-archive-keyring.gpg and comments out this
-  # .list — so nothing else may manage this repo (apt rejects the entire source
-  # list when one source carries two different Signed-By values; the chezmoi
-  # Ubuntu installer only cleans the neutralized .list up).
-  if ! dpkg -s 1password 1password-cli >/dev/null 2>&1; then
-    local arch
-    arch="$(dpkg --print-architecture)"
-    "${SUDO[@]}" mkdir -p /usr/share/keyrings
-    curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
-      | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
-    printf '%s\n' \
-      "deb [arch=${arch} signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/${arch} stable main" \
-      | "${SUDO[@]}" tee /etc/apt/sources.list.d/1password.list >/dev/null
-    "${SUDO[@]}" apt-get update -qq
-    "${SUDO[@]}" apt-get install -y 1password 1password-cli
-  fi
-
-  # GitHub CLI.
-  dpkg -s gh >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y gh
-
-  # git-lfs.
-  dpkg -s git-lfs >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y git-lfs
-
-  # zsh.
-  dpkg -s zsh >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y zsh
-
-  # mise via its distro-agnostic apt repo: mise.jdx.dev/deb serves real
-  # amd64 AND arm64 indexes and works on debian too (this function handles
-  # ubuntu|debian), whereas the jdxcode Launchpad PPA that
-  # .chezmoidata/packages.yaml uses publishes mise only for Ubuntu 26.04
-  # amd64 (its other arch indexes are empty) — on Ubuntu, setup_apt_repos in
-  # the chezmoi installer later converges mise.list + keyring to that PPA.
-  # arch pinned so apt never asks this repo for an i386 index once the
-  # installer enables i386 as a foreign arch for Steam (the repo publishes
-  # none, and an unpinned line made every `apt update` warn).
-  if ! command -v mise >/dev/null 2>&1; then
-    curl -fsSL https://mise.jdx.dev/gpg-key.pub \
-      | "${SUDO[@]}" gpg --yes --dearmor -o /usr/share/keyrings/mise.gpg
-    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mise.gpg] https://mise.jdx.dev/deb stable main" \
-      | "${SUDO[@]}" tee /etc/apt/sources.list.d/mise.list >/dev/null
-    "${SUDO[@]}" apt-get update -qq
-    "${SUDO[@]}" apt-get install -y mise
-  fi
-}
-
-# macOS: install via Homebrew, bootstrapping Homebrew itself when it is missing
-# (it is the package manager the macOS side of this config assumes — see the
-# /opt/homebrew PATH wiring in dot_config/zsh/dot_zprofile).
-install_macos() {
+# macOS bootstrap is intentionally narrow: Homebrew plus 1Password. The package
+# authority reconciler owns every other formula and cask.
+install_macos() (
+  set -euo pipefail
+  scratch_root=${TMPDIR:-"$HOME/Library/Caches"}
+  scratch=$(mktemp -d "${scratch_root%/}/chezmoi-bootstrap.XXXXXX")
+  trap 'rm -rf -- "$scratch"' EXIT HUP INT TERM
   if ! command -v brew >/dev/null 2>&1; then
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Keep this URL and digest in sync with
+    # .chezmoiscripts/20-darwin/run_onchange_before_homebrew.sh.tmpl.
+    installer="$scratch/homebrew-install.sh"
+    curl -fsSL 'https://raw.githubusercontent.com/Homebrew/install/39a0c068274254a7658fd9761d59bce9d0e2151f/install.sh' -o "$installer"
+    printf '%s  %s\n' '8ff338091a5e10bb5fc040b38316648110f42feff057ecf9feaab51fd0a13ef9' "$installer" |
+      shasum -a 256 -c - >/dev/null
+    NONINTERACTIVE=1 /bin/bash "$installer"
   fi
-  # Make `brew` usable in this non-login shell for the installs below.
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -x /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
   fi
-
   brew list --cask 1password >/dev/null 2>&1 || brew install --cask 1password
   brew list --cask 1password-cli >/dev/null 2>&1 || brew install --cask 1password-cli
-  brew list mise >/dev/null 2>&1 || brew install mise
-}
+)
 
 case "$(uname -s)" in
   Darwin) install_macos ;;
@@ -526,7 +421,6 @@ case "$(uname -s)" in
     fi
     case "$distro_id" in
       fedora) install_fedora ;;
-      ubuntu|debian) install_ubuntu ;;
       *)
         printf 'install-prerequisites.sh: unsupported Linux distro: %s.\n' "${distro_id:-unknown}" >&2
         exit 1

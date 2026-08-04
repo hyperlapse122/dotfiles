@@ -1,0 +1,15 @@
+{{- if eq .chezmoi.os "windows" -}}
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$marker = Join-Path $HOME '.config/chezmoi/gpg-cache-ready'
+$bundle = '{{ .chezmoi.sourceDir | replace "'" "''" }}/.chezmoitemplates/secrets-bundle.json.asc'
+New-Item -ItemType Directory -Path (Split-Path -Parent $marker) -Force | Out-Null
+if (Test-Path -LiteralPath $bundle) {
+    & gpg '--batch' '--no-tty' '--decrypt' $bundle *> $null
+    if ($LASTEXITCODE -eq 0) {
+        [IO.File]::WriteAllText($marker, '')
+        exit 0
+    }
+}
+Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+{{- end -}}

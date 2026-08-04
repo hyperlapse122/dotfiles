@@ -74,12 +74,10 @@ set -uo pipefail
    distro that reads it. Emits nothing on success. */ -}}
 {{- /* `$.` — inside a range, `.` is the loop element, not the root context. */ -}}
 {{- $pkgGates := list -}}
-{{- range $d := (list "fedora" "ubuntu") -}}
-{{-   $spec := index $.packages.linux $d -}}
-{{-   if hasKey $spec "gates" -}}
-{{-     range $gate := (values $spec.gates) -}}
-{{-       $pkgGates = append $pkgGates $gate -}}
-{{-     end -}}
+{{- $spec := index $.packages.linux "fedora" -}}
+{{- if hasKey $spec "gates" -}}
+{{-   range $gate := (values $spec.gates) -}}
+{{-     $pkgGates = append $pkgGates $gate -}}
 {{-   end -}}
 {{- end -}}
 {{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/packages.yaml (gates:)" "gates" $pkgGates) -}}
@@ -140,7 +138,7 @@ fact_value() {
 # a thin wrapper over the ONE shared dispatcher, fact_gate()
 # (.chezmoitemplates/facts-gate.sh.tmpl), which reads the FACT_* variables
 # facts-sh.tmpl assigns (the installers' `1`/`0` convention) — so this report
-# evaluates a gate exactly the way `run_onchange_before_fedora`/`_ubuntu` and
+# evaluates a gate exactly the way `run_onchange_before_fedora` and
 # install-system-10-files do, not a parallel implementation of the same idea.
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
@@ -182,28 +180,25 @@ printf '    builtin   chezmoi'\''s own template data (os, osRelease.id, lookPath
 printf '\n'
 
 # --- 2. Package groups ------------------------------------------------------
-# Rendered from THIS host's distro map only. The `gates:` maps are per-distro
-# (Fedora has no Intel-graphics stack), and the two
-# installers are mutually exclusive at runtime — printing the other distro's map
-# would be noise that never runs here.
+# Rendered from the Fedora package map only. Fedora is the sole managed Linux
+# distribution, so printing a package map for any other distro would be noise
+# that never runs here.
 printf '## package groups  (.chezmoidata/packages.yaml, gates:)\n\n'
 {{- $pkgSpec := dict -}}
-{{- if and (eq $facts.os "linux") (or (eq $distro "fedora") (eq $distro "ubuntu")) -}}
-{{-   $pkgSpec = index .packages.linux $distro -}}
+{{- if and (eq $facts.os "linux") (eq $distro "fedora") -}}
+{{-   $pkgSpec = .packages.linux.fedora -}}
 {{- end -}}
 {{- if hasKey $pkgSpec "gates" }}
-printf '  distro: {{ $distro }} → .chezmoiscripts/{{ if eq $distro "fedora" }}20-linux-fedora/run_onchange_before_fedora{{ else }}40-linux-ubuntu/run_onchange_before_ubuntu{{ end }}.sh.tmpl\n'
+printf '  distro: {{ $distro }} → .chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl\n'
 printf '  Every other package key in that map installs unconditionally.\n\n'
 # Row: <package key>:<gate expression>:<FORCE_* var that can override it, if any>
 #
-# The FORCE_* column is EMPTY on Fedora even for nvidiaPackages: only the Ubuntu
-# installer honours the escape hatches today (`HAS_NVIDIA="$FACT_NVIDIA";
-# [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1`) — the Fedora installer seeds
-# its flags straight from the facts with no override line at all. Reporting a
-# FORCE_* here that the Fedora installer would ignore would be a lie about what
-# the host does.
+# FORCE_NVIDIA is the Fedora installer's sole package override. Reporting it
+# here mirrors the installer's behavior: a GPU-less test container can exercise
+# the NVIDIA repository and package path without turning the override into a
+# host fact.
 PKG_GATES=(
-{{- $forceVars := dict "nvidia" "FORCE_NVIDIA" "intelGpu" "FORCE_INTEL" -}}
+{{- $forceVars := dict "nvidia" "FORCE_NVIDIA" -}}
 {{- range $key := (keys $pkgSpec.gates | sortAlpha) }}
 {{- $gate := index $pkgSpec.gates $key }}
 {{- /* The gate's FACT half — strip the `!` of a negation and the `.<value>` of a
@@ -213,10 +208,8 @@ PKG_GATES=(
 {{-   $factName = (splitn "." 2 $factName)._0 }}
 {{- end }}
 {{- $force := "" }}
-{{- if eq $distro "ubuntu" }}
-{{-   if hasKey $forceVars $factName }}
-{{-     $force = index $forceVars $factName }}
-{{-   end }}
+{{- if hasKey $forceVars $factName }}
+{{-   $force = index $forceVars $factName }}
 {{- end }}
   "{{ $key }}:{{ $gate }}:{{ $force }}"
 {{- end }}
@@ -246,7 +239,7 @@ for row in "${PKG_GATES[@]}"; do
   fi
 done
 {{- else }}
-printf '  (none — the package installers are Linux + fedora/ubuntu only; this host is\n'
+printf '  (none — the package installer is Linux + Fedora only; this host is\n'
 printf '  os={{ $facts.os }}, distro={{ if eq $distro "" }}<none>{{ else }}{{ $distro }}{{ end }})\n'
 {{- end }}
 printf '\n'
@@ -317,26 +310,23 @@ printf '  (none — the /etc installer is Linux-only; this host is os={{ $facts.
 {{- end }}
 
 # --- 4. FORCE_* overrides ---------------------------------------------------
-# NOT facts, and never in the registry: they layer on top of a fact inside the
-# package installers so a GPU-less test container can still exercise the driver
-# package sets. Reported here even when they change nothing on this host,
+# NOT a fact, and never in the registry: FORCE_NVIDIA layers on top of the
+# `nvidia` fact inside the package installer so a GPU-less test container can
+# still exercise the driver package set. Reported here even when it changes
+# nothing on this host,
 # because an override that is silently ignored is exactly the kind of surprise
 # this command exists to prevent.
 printf '## FORCE_* overrides in this environment\n\n'
 any_force=0
-for force in FORCE_NVIDIA FORCE_INTEL; do
-  if [[ "${!force:-0}" == 1 ]]; then
-    printf '  %s=1\n' "$force"
-    any_force=1
-  fi
-done
+if [[ "${FORCE_NVIDIA:-0}" == 1 ]]; then
+  printf '  FORCE_NVIDIA=1\n'
+  any_force=1
+fi
 if [[ "$any_force" -eq 0 ]]; then
   printf '  (none set)\n'
 fi
 printf '\n'
-printf '  Honoured by the UBUNTU installer only. The Fedora installer has no FORCE_*\n'
-printf '  path at all — it seeds its flags straight from the facts — so a FORCE_* set\n'
-printf '  on a Fedora host changes nothing.\n'
+printf '  Honoured by the Fedora package installer only.\n'
 printf '  They never reach the /etc manifest either, and that asymmetry is deliberate:\n'
 printf '  a FORCE_* must not layer a privilege-granting /etc drop-in onto a host whose\n'
 printf '  fact is false. Package sets are testable; a privilege grant is not.\n'

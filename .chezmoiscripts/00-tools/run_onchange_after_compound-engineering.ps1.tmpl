@@ -1,0 +1,56 @@
+{{ if eq .chezmoi.os "windows" -}}
+
+{{- $ctx := . -}}
+{{- $name := "compound-engineering-plugin" -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index .agents.marketplaces $name -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+
+# .chezmoiscripts/00-tools/run_onchange_after_compound-engineering.ps1.tmpl
+#
+# Windows counterpart to run_onchange_after_compound-engineering.sh.tmpl:
+# prunes older extracted versions under ~/<externalPath>/, keeping only the
+# release currently pinned by the neutral
+# agents.marketplaces.compound-engineering-plugin authority. The archive
+# external is emitted on every OS (omp consumes the same versioned marketplace
+# path on Windows), so sibling version directories accumulate here exactly as
+# they do on POSIX.
+#
+# There is no ~/.local/bin symlink to repoint. Claude, Codex, and omp consume
+# the fully rendered versioned marketplace path. A version bump re-registers
+# the path through the surviving agent-plugin and omp updater scripts.
+#
+# Safety delta from POSIX `rm -rf`: reparse points (junctions/symlinks) are
+# NEVER removed or followed — a junction in this tree is undeclared third-party
+# state, and recursing through one would delete a foreign target. They are
+# preserved with a diagnostic instead.
+#
+# onchange trigger: the rendered $ceVersion below IS the trigger — a new
+# upstream compound-engineering-* release changes this script's content and
+# re-runs the prune after the file phase has extracted the new version.
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$baseDir = Join-Path $HOME '{{ $ceAuthority.externalPath }}'
+$current = Join-Path $baseDir '{{ $ceVersion }}'
+
+# The file phase must have extracted the current version already; if not, do
+# nothing rather than nuking the whole tree (same defensive skip as POSIX).
+if (-not (Test-Path -LiteralPath $current -PathType Container)) {
+  exit 0
+}
+
+Get-ChildItem -LiteralPath $baseDir -Force |
+  Where-Object { $_.FullName -ne $current } |
+  ForEach-Object {
+    if ($_.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+      Write-Warning "compound-engineering: preserved reparse point $($_.FullName) (undeclared state)"
+      return
+    }
+    if ($_.PSIsContainer) {
+      Remove-Item -LiteralPath $_.FullName -Recurse -Force
+    }
+  }
+
+{{ end -}}

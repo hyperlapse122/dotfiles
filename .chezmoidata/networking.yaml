@@ -1,37 +1,66 @@
-# Manifest of networking config provisioned into NetworkManager by
-#   ~/.local/bin/import-wifi-1password (rendered from
-#   dot_local/bin/private_executable_import-wifi-1password.tmpl), driven on apply
-#   by .chezmoiscripts/30-linux/run_onchange_after_import-wifi-1password.sh.tmpl.
+# Manifest of networking config provisioned onto every desktop OS from
+# .chezmoidata/networking.yaml (`networking.wifi`), by the OS-native
+# import-wifi-1password tools in dot_local/bin:
+#
+#   Linux   ~/.local/bin/import-wifi-1password (NetworkManager, nmcli/polkit,
+#           rendered from private_executable_import-wifi-1password.tmpl), driven
+#           on apply by .chezmoiscripts/30-linux/run_onchange_after_import-wifi-1password.sh.tmpl.
+#   macOS   ~/.local/bin/import-wifi-1password-macos (user-scope configuration
+#           profiles via profiles(1); rendered from
+#           private_executable_import-wifi-1password-macos.sh.tmpl). Real runs
+#           need sudo (profiles(1) requirement); --dry-run does not.
+#   Windows ~/.local/bin/import-wifi-1password.ps1 (netsh wlan profiles;
+#           rendered from private_executable_import-wifi-1password.ps1.tmpl).
 #
 # Currently a single top-level key `wifi`; the file is named `networking` (not
 # `wifi`) to leave room for future ethernet/dns/vpn siblings without another
 # .chezmoidata file rename.
 #
 # Single source of truth (like packages.yaml / solaar.yaml): declare every Wi-Fi
-# network HERE, not by editing 1Password items or the script. This REPLACES the
+# network HERE, not by editing 1Password items or the scripts. This REPLACES the
 # former "list every 1Password Wireless Router item" discovery model — only the
-# networks enumerated below are provisioned, add/overwriting NetworkManager
-# connections to match this file (a missing network is added; an existing one is
-# overwritten in place; --force recreates it from scratch).
+# networks enumerated below are provisioned, each tool add/overwriting its OS
+# profile store to match this file (a missing network is added; an existing one
+# is overwritten; --force recreates it from scratch).
+#
+# PLATFORM SUPPORT MATRIX (per manifest field):
+#   ssid / psk / open      : all three tools.
+#   priority               : Linux — connection.autoconnect-priority (-999..999).
+#                            Windows — networks with a priority are ranked
+#                            (highest first) into `netsh wlan set profileorder`
+#                            positions 1..k on the single wireless interface.
+#                            macOS — NOT expressible in a Wi-Fi payload;
+#                            warned about and ignored.
+#   ipv4.dns / ipv6.dns /  : Linux — per-family connection DNS, fully applied.
+#   ignoreAutoDns            Windows/macOS — NOT expressible in a native Wi-Fi
+#                            profile (per-interface/service DNS is live state,
+#                            not per-network profile state); warned about and
+#                            ignored. The defaults below therefore apply to
+#                            Linux only.
 #
 # SECRETS — op:// references, resolved at chezmoi RENDER time. Any string VALUE
-# that begins exactly with `op://` is passed to onepasswordRead when the tool is
-# rendered; every other string is used verbatim. So `ssid` and `psk` may each be
-# EITHER a literal ("MyHome_5G") OR a 1Password reference
+# that begins exactly with `op://` is passed to onepasswordRead when the tools
+# are rendered; every other string is used verbatim. So `ssid` and `psk` may
+# each be EITHER a literal ("MyHome_5G") OR a 1Password reference
 # ("op://Private/Home Wi-Fi/password"). This is the resolve-op-refs-json.tmpl
 # rule (the same one used by agent configs), applied to this whole
 # structure — so a per-network DNS entry could even be an op:// ref too.
 #
-# Because secrets are resolved at RENDER time, the rendered tool CONTAINS the real
-# PSKs — which is exactly why its source carries the `private_` attribute
-# (deployed 0700, owner-only), NOT the world-readable 0755 of an ordinary
-# ~/.local/bin tool, and why it is Linux-gated in dot_local/bin/.chezmoiignore so
-# secrets are never baked into a macOS/Windows copy. The run_onchange fingerprint
+# Because secrets are resolved at RENDER time, every rendered tool CONTAINS the
+# real PSKs — which is exactly why each source carries the `private_` attribute
+# (owner-only), NOT the world-readable 0755 of an ordinary ~/.local/bin tool,
+# and why each is OS-gated in dot_local/bin/.chezmoiignore so secrets are never
+# baked into the wrong platform's copy. At RUNTIME the native tools never place
+# a PSK on a command line or in a log: macOS/Windows hand the key to the OS
+# through an owner-only TRANSIENT profile file (.mobileconfig / WLAN XML)
+# deleted on every exit path through one shared trap/finally, after which the
+# imported profile is owned by the OS store. The Linux tool's nmcli argv
+# trade-off is documented in its own header. The run_onchange fingerprint
 # hashes THIS file's RAW text (the op:// refs, never the resolved passwords), so
-# no secret enters chezmoi state / `chezmoi diff`. Trade-off (same as agents.toml):
-# rotating a PSK's VALUE in 1Password alone does NOT re-trigger the import — the
-# raw ref is unchanged — so after a rotation re-run `import-wifi-1password` by hand
-# or `chezmoi apply --force`.
+# no secret enters chezmoi state / `chezmoi diff`. Trade-off (same as
+# agents.toml): rotating a PSK's VALUE in 1Password alone does NOT re-trigger
+# the import — the raw ref is unchanged — so after a rotation re-run the
+# platform's import-wifi-1password tool by hand or `chezmoi apply --force`.
 #
 # Shape (networking.wifi):
 #   defaults — applied to every network unless the network overrides that field:
@@ -48,19 +77,21 @@
 #     ssid          : REQUIRED. The network name. Literal or op:// ref.
 #     psk           : the WPA/WPA2/WPA3-personal passphrase. Literal or op:// ref.
 #                     Omit (or leave empty) for an OPEN network (key-mgmt none).
-#     priority      : optional int in -999..999 -> connection.autoconnect-priority.
-#                     NM autoconnects to the highest-priority known network
-#                     (default 0) — e.g. give a dual-band router's 5GHz SSID 10 and
-#                     leave its 2.4GHz sibling unset. Absent = left at NM's default,
-#                     and never clobbered on an existing connection.
+#     priority      : optional int in -999..999. Linux -> connection.autoconnect-
+#                     priority (NM autoconnects to the highest-priority known
+#                     network, default 0) — e.g. give a dual-band router's 5GHz
+#                     SSID 10 and leave its 2.4GHz sibling unset. Absent = left
+#                     at NM's default, and never clobbered on an existing
+#                     connection. Windows -> relative rank for `netsh wlan set
+#                     profileorder`. macOS -> ignored with a warning.
 #     ipv4.dns      : optional per-network override of defaults.ipv4.dns.
 #     ipv6.dns      : optional per-network override of defaults.ipv6.dns.
 #     ignoreAutoDns : optional per-network override of defaults.ignoreAutoDns.
 #
-#   Declarative model: an EXISTING NetworkManager connection is overwritten in
-#   place, so any manual DNS on a family whose overridden list is empty is
-#   CLEARED back to DHCP/RA. Set a family's `dns: []` to explicitly opt that
-#   family out; leave the family absent to inherit the defaults.
+#   Declarative model: an EXISTING profile/connection is overwritten, so on
+#   Linux any manual DNS on a family whose overridden list is empty is CLEARED
+#   back to DHCP/RA. Set a family's `dns: []` to explicitly opt that family
+#   out; leave the family absent to inherit the defaults.
 #
 # Enterprise (802.1x) and WPA3-only SAE networks are out of scope — a plain PSK
 # cannot express them (same limitation as the previous 1Password importer).

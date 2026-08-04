@@ -1,0 +1,51 @@
+{
+  "description": "Valid evidence, closed gates: G0 chrome claim fails, G1a placeholders claim fails, G1b macOS terminal leg has no evidence. Same evaluator command as expected-open.json but --evidence-dir .ci/fixtures/cutover-gates/evidence/closed.",
+  "cases": [
+    {
+      "require": "none",
+      "exit": 0,
+      "gates": [
+        {
+          "gate": "G0",
+          "status": "closed",
+          "reasons": [
+            "leg 'fedora-arm64-required-applications': claim 'chrome-native-arm64-available' status 'fail' in latest trusted evidence (device 'fedora-arm64-01', collected 2026-08-04T00:00:00Z)"
+          ],
+          "evidence_commit": "0123456789abcdef0123456789abcdef01234567",
+          "support_snapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
+          "evidence": []
+        },
+        {
+          "gate": "G1a",
+          "status": "closed",
+          "reasons": [
+            "leg 'wezterm-stable-channel-fedora': claim 'wezterm-kitty-unicode-placeholders-in-stable' status 'fail' in latest trusted evidence (device 'ubuntu-24.04', collected 2026-08-04T02:00:00Z)"
+          ],
+          "evidence_commit": "0123456789abcdef0123456789abcdef01234567",
+          "support_snapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
+          "evidence": ["macos-26@2026-08-04T02:02:00Z", "windows-2025@2026-08-04T02:01:00Z"]
+        },
+        {
+          "gate": "G1b",
+          "status": "closed",
+          "reasons": [
+            "G1a prerequisite is closed",
+            "leg 'managed-wezterm-macos': claim 'inline-image-renders-in-tmux' absent from latest trusted evidence (device 'macos-26', collected 2026-08-04T02:02:00Z)",
+            "leg 'managed-wezterm-macos': claim 'inline-image-survives-scroll' absent from latest trusted evidence (device 'macos-26', collected 2026-08-04T02:02:00Z)",
+            "leg 'managed-wezterm-macos': claim 'inline-image-survives-redraw' absent from latest trusted evidence (device 'macos-26', collected 2026-08-04T02:02:00Z)",
+            "leg 'managed-wezterm-macos': claim 'inline-image-survives-resize' absent from latest trusted evidence (device 'macos-26', collected 2026-08-04T02:02:00Z)",
+            "leg 'managed-wezterm-macos': claim 'inline-image-survives-split' absent from latest trusted evidence (device 'macos-26', collected 2026-08-04T02:02:00Z)"
+          ],
+          "evidence_commit": "0123456789abcdef0123456789abcdef01234567",
+          "support_snapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
+          "evidence": ["fedora-arm64-01@2026-08-04T03:00:00Z", "windows-arm64-01@2026-08-04T03:01:00Z"]
+        }
+      ]
+    },
+    {
+      "require": "G0,G1b",
+      "exit": 2,
+      "note": "default --require is G0,G1b; closed delivery gates exit 2 even though all evidence is valid"
+    }
+  ]
+}

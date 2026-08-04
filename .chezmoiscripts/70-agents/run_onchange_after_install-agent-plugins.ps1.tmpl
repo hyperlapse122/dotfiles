@@ -1,0 +1,234 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- /*
+run_onchange_after_install-agent-plugins.ps1.tmpl — Windows counterpart to
+run_onchange_after_install-agent-plugins.sh.tmpl, the generic Claude Code and
+Codex plugin installer. The POSIX half carries the full design rationale; the
+data source (.chezmoidata/agents.yaml: agents.{claude,codex}.plugins +
+agents.marketplaces), the render-time validation (KTD6), the render-time
+gating (KTD3), and the per-kind install sequence (R7) are IDENTICAL here,
+re-derived behind this half's OS gate so neither half imports the other.
+
+Differences are mechanical only:
+  - rows are pscustomobjects, not colon-delimited strings (a Windows $HOME
+    contains a drive-letter colon and backslashes, which the POSIX row
+    delimiter and bare-path allowlist cannot carry; the RELATIVE marketplace
+    path is validated with the same allowlist before the $HOME prefix);
+  - ~/.local/bin is prepended to PATH because chezmoi's script environment
+    does not carry it and nothing on Windows puts it there — without it the
+    freshly linked claude.exe / codex.ps1 are invisible (same trap the
+    config-omp-settings counterpart documents);
+  - soft-skip semantics are unchanged: a missing CLI, an absent marketplace
+    path, or a failed step warns and continues, never fails the apply.
+
+onchange trigger: rendered rows carry the resolved compound-engineering
+version. The fingerprint additionally hashes the surviving Claude and Codex
+plugin source trees plus haptic data (same globs as POSIX).
+*/ -}}
+{{- $ctx := . -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $home := .chezmoi.homeDir -}}
+{{- $os := .chezmoi.os -}}
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $marketplaces := .agents.marketplaces -}}
+{{- $kinds := list "localDir" "localArchive" "github" -}}
+{{- $containerVals := list "skip" "keep" -}}
+{{- $osVals := list "linux" "darwin" "windows" -}}
+{{- $nameRe := "^[A-Za-z0-9_.-]+$" -}}
+{{- $pathRe := "^[A-Za-z0-9_./-]+$" -}}
+{{- $ghSourceRe := "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" -}}
+
+{{- $ceName := "compound-engineering-plugin" -}}
+{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceAuthority := index $marketplaces $ceName -}}
+{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
+{{- $ceBase := printf "%s/%s/%s" $home $ceAuthority.externalPath $ceVersion -}}
+
+{{- $rows := list -}}
+{{- range $agent := (list "claude" "codex") -}}
+{{-   $agentCfg := index $ctx.agents $agent -}}
+{{-   $plugins := list -}}
+{{-   if $agentCfg -}}{{- if hasKey $agentCfg "plugins" -}}{{- $plugins = index $agentCfg "plugins" -}}{{- end -}}{{- end -}}
+{{-   range $i, $p := $plugins -}}
+{{-     $where := printf "agents.%s.plugins[%d] (%v)" $agent $i $p -}}
+
+{{-     if not (hasKey $p "name") -}}
+{{-       fail (printf "install-agent-plugins: %s is missing the `name` field; an entry is exactly {name, marketplace}" $where) -}}
+{{-     end -}}
+{{-     $name := printf "%v" (index $p "name") -}}
+{{-     if not (regexMatch $nameRe $name) -}}
+{{-       fail (printf "install-agent-plugins: %s has plugin name %q, which is not a bare identifier (allowed: A-Za-z0-9_.-); the name is interpolated into PowerShell" $where $name) -}}
+{{-     end -}}
+
+{{-     if not (hasKey $p "marketplace") -}}
+{{-       fail (printf "install-agent-plugins: %s is missing the `marketplace` field; an entry is exactly {name, marketplace}" $where) -}}
+{{-     end -}}
+{{-     $mktName := printf "%v" (index $p "marketplace") -}}
+{{-     if not (regexMatch $nameRe $mktName) -}}
+{{-       fail (printf "install-agent-plugins: %s has marketplace name %q, which is not a bare identifier (allowed: A-Za-z0-9_.-)" $where $mktName) -}}
+{{-     end -}}
+{{-     if not (hasKey $marketplaces $mktName) -}}
+{{-       fail (printf "install-agent-plugins: %s references marketplace %q, which is not defined in agents.marketplaces" $where $mktName) -}}
+{{-     end -}}
+{{-     $mkt := index $marketplaces $mktName -}}
+
+{{-     if not (hasKey $mkt "kind") -}}
+{{-       fail (printf "install-agent-plugins: marketplace %q is missing `kind` (valid: localDir, localArchive)" $mktName) -}}
+{{-     end -}}
+{{-     $kind := printf "%v" (index $mkt "kind") -}}
+{{-     if not (has $kind $kinds) -}}
+{{-       fail (printf "install-agent-plugins: marketplace %q has unknown kind %q; valid: localDir, localArchive" $mktName $kind) -}}
+{{-     end -}}
+
+{{-     if not (hasKey $mkt "container") -}}
+{{-       fail (printf "install-agent-plugins: marketplace %q is missing `container` (valid: skip, keep)" $mktName) -}}
+{{-     end -}}
+{{-     $container := printf "%v" (index $mkt "container") -}}
+{{-     if not (has $container $containerVals) -}}
+{{-       fail (printf "install-agent-plugins: marketplace %q has container %q; valid: skip, keep" $mktName $container) -}}
+{{-     end -}}
+
+{{-     if not (hasKey $mkt "os") -}}
+{{-       fail (printf "install-agent-plugins: marketplace %q is missing `os` (a list of: linux, darwin, windows)" $mktName) -}}
+{{-     end -}}
+{{-     $osStr := list -}}
+{{-     range $o := (index $mkt "os") -}}
+{{-       $ov := printf "%v" $o -}}
+{{-       if not (has $ov $osVals) -}}
+{{-         fail (printf "install-agent-plugins: marketplace %q lists invalid os %q; valid: linux, darwin, windows" $mktName $ov) -}}
+{{-       end -}}
+{{-       $osStr = append $osStr $ov -}}
+{{-     end -}}
+
+{{- /* --- path resolution by kind (unconditional: bad data fails on every host,
+       KTD6; only the ROW EMISSION below is host-gated). The RELATIVE path is
+       validated against the same bare-path allowlist as POSIX before the $HOME
+       prefix is baked in. */ -}}
+{{-     $path := "" -}}
+{{-     if eq $kind "localDir" -}}
+{{-       if not (hasKey $mkt "path") -}}
+{{-         fail (printf "install-agent-plugins: localDir marketplace %q is missing `path` (relative to $HOME)" $mktName) -}}
+{{-       end -}}
+{{-       $rel := printf "%v" (index $mkt "path") -}}
+{{-       if not (regexMatch $pathRe $rel) -}}
+{{-         fail (printf "install-agent-plugins: localDir marketplace %q has path %q outside the allowed set (A-Za-z0-9_./-)" $mktName $rel) -}}
+{{-       end -}}
+{{-       $path = printf "%s/%s" $home $rel -}}
+{{-     else if eq $kind "localArchive" -}}
+{{-       $path = $ceBase -}}
+{{-     else if eq $kind "github" -}}
+{{-       if not (hasKey $mkt "source") -}}
+{{-         fail (printf "install-agent-plugins: github marketplace %q is missing `source` (owner/repo)" $mktName) -}}
+{{-       end -}}
+{{-       $src := printf "%v" (index $mkt "source") -}}
+{{-       if not (regexMatch $ghSourceRe $src) -}}
+{{-         fail (printf "install-agent-plugins: github marketplace %q has source %q, which is not owner/repo (bare identifiers, one slash)" $mktName $src) -}}
+{{-       end -}}
+{{-       $path = $src -}}
+{{-     end -}}
+
+{{- /* --- render-time gate: emit the row only when applicable to this host --- */ -}}
+{{-     $osOk := has $os $osStr -}}
+{{-     $containerSkip := and $f.container (eq $container "skip") -}}
+{{-     if and $osOk (not $containerSkip) -}}
+{{-       $rows = append $rows (dict "agent" $agent "plugin" $name "market" $mktName "kind" $kind "path" $path) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+# The generic Claude Code + Codex plugin installer (Windows half). Registers
+# every plugin row rendered from .chezmoidata/agents.yaml with the matching
+# CLI. Rows are validated + host-gated at RENDER time, so this script trusts
+# its array. See the template header for the shared contract.
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$PSNativeCommandUseErrorActionPreference = $false
+
+# Plugin-source fingerprint: every surviving mxm4-haptic plugin tree plus the
+# data file that feeds their hook templates (same globs as the POSIX half).
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_local/share/claude-plugins/**" "dot_local/share/codex-plugins/**" ".chezmoidata/haptic.yaml")) }}
+
+$plugins = @(
+{{- range $row := $rows }}
+  [pscustomobject]@{ Agent = '{{ $row.agent }}'; Plugin = '{{ $row.plugin }}'; Market = '{{ $row.market }}'; Kind = '{{ $row.kind }}'; Path = '{{ $row.path }}' }
+{{- end }}
+)
+
+function Write-PluginWarn([string]$Message) { [Console]::Error.WriteLine("install-agent-plugins: $Message") }
+
+# chezmoi's script environment does not carry ~/.local/bin, where the claude
+# hardlink and the codex.ps1 wrapper land, and nothing on Windows puts that
+# directory on PATH. Without this the CLI probes below find nothing and the
+# skips are PERMANENT until the next fingerprint change (same trap the
+# config-omp-settings counterpart documents).
+$localBin = Join-Path $HOME '.local\bin'
+if (($env:Path -split ';') -notcontains $localBin) {
+  $env:Path = "$localBin;$env:Path"
+}
+
+# Neither ~/.claude nor ~/.codex is guaranteed on a fresh machine: Claude Code
+# and Codex only create their config dir on first run, so the CLIs' --scope user
+# writes fail with ENOENT otherwise. New-Item -Force is idempotent.
+New-Item -ItemType Directory -Force -Path (Join-Path $HOME '.claude'), (Join-Path $HOME '.codex') | Out-Null
+
+foreach ($row in $plugins) {
+  $agent = $row.Agent
+  $plugin = $row.Plugin
+  $market = $row.Market
+  $kind = $row.Kind
+  $path = $row.Path
+
+  # The CLI is fetched by .chezmoiexternals/ during the file phase and linked
+  # by .chezmoiscripts/00-tools/, so it normally exists by this after-phase
+  # script. Absent (first bootstrap, fetch failed) -> nothing to do.
+  if (-not (Get-Command $agent -ErrorAction SilentlyContinue)) {
+    Write-PluginWarn "${agent}: skipped $plugin ($agent not on PATH)"
+    continue
+  }
+
+  # Claude and Codex consume marketplace manifests.
+  if ($kind -ne 'github' -and -not (Test-Path -LiteralPath (Join-Path $path '.claude-plugin\marketplace.json') -PathType Leaf)) {
+    Write-PluginWarn "${agent}: skipped $plugin (no marketplace at $path)"
+    continue
+  }
+
+  switch ($agent) {
+    'claude' {
+      # localArchive path changes per ref bump: drop the stale name-keyed
+      # registration first. localDir is constant-path: no remove (R7).
+      if ($kind -eq 'localArchive') {
+        & claude plugin marketplace remove $market --scope user 2>$null | Out-Null
+        $global:LASTEXITCODE = 0
+      }
+      & claude plugin marketplace add $path --scope user | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-PluginWarn "claude: skipped $plugin (marketplace add failed for $market)"
+        continue
+      }
+      & claude plugin install "$plugin@$market" --scope user | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-PluginWarn "claude: skipped (install of $plugin@$market failed)"
+        continue
+      }
+    }
+    'codex' {
+      if ($kind -eq 'localArchive') {
+        & codex plugin marketplace remove $market 2>$null | Out-Null
+        $global:LASTEXITCODE = 0
+      }
+      & codex plugin marketplace add $path | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-PluginWarn "codex: skipped $plugin (marketplace add failed for $market)"
+        continue
+      }
+      & codex plugin add "$plugin@$market" | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-PluginWarn "codex: skipped (add of $plugin@$market failed)"
+        continue
+      }
+    }
+    default {
+      Write-PluginWarn "skipped (unknown agent $agent for $plugin)"
+      continue
+    }
+  }
+}
+{{ end -}}

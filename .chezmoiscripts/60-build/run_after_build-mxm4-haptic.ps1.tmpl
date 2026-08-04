@@ -20,6 +20,10 @@ $PluginRoot = Join-Path $ManagedHome '.local\share\omp-plugins\plugins\mxm4-hapt
 $PluginManifest = Join-Path $PluginRoot 'package.json'
 $PluginDestination = Join-Path $PluginRoot 'dist\index.js'
 $DaemonDestination = Join-Path $ManagedHome '.local\bin\mxm4-hapticd.exe'
+# The one-shot client the Claude/Codex Windows hooks (pulse.ps1 and the codex
+# inline PowerShell) invoke to reach the daemon's named pipe. Deployed beside
+# the daemon from the same daemon-component fingerprint and build.
+$ClientDestination = Join-Path $ManagedHome '.local\bin\mxm4-haptic.exe'
 $StateRoot = Join-Path $ManagedHome '.local\state\mxm4-haptic'
 $PluginStamp = Join-Path $StateRoot 'plugin.sha256'
 $DaemonStamp = Join-Path $StateRoot 'daemon.sha256'
@@ -224,7 +228,7 @@ if ($manifest.name -ne '@h82/omp-mxm4-haptic' -or $manifest.type -ne 'module' -o
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentSid = $currentIdentity.User.Value
 if ([string]::IsNullOrWhiteSpace($currentSid)) { Fail 'preflight' 'current-user SID is unavailable' }
-foreach ($destination in @($PluginDestination, $DaemonDestination, $PluginStamp, $DaemonStamp)) {
+foreach ($destination in @($PluginDestination, $DaemonDestination, $ClientDestination, $PluginStamp, $DaemonStamp)) {
   Assert-WritableDestination $destination
 }
 try {
@@ -294,13 +298,14 @@ if (-not [string]::IsNullOrWhiteSpace($env:MXM4_HAPTIC_PREFLIGHT_XML_OUT)) {
 $pluginDigest = Get-ComponentDigest $PluginInputsFingerprint $PluginConfigFingerprint
 $daemonDigest = Get-ComponentDigest $DaemonInputsFingerprint $taskXml
 $pluginChanged = (Read-Stamp $PluginStamp) -ne $pluginDigest -or -not (Test-Path -LiteralPath $PluginDestination -PathType Leaf)
-$daemonChanged = (Read-Stamp $DaemonStamp) -ne $daemonDigest -or -not (Test-Path -LiteralPath $DaemonDestination -PathType Leaf)
+$daemonChanged = (Read-Stamp $DaemonStamp) -ne $daemonDigest -or -not (Test-Path -LiteralPath $DaemonDestination -PathType Leaf) -or -not (Test-Path -LiteralPath $ClientDestination -PathType Leaf)
 
 $stage = Join-Path $StateRoot ('stage-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 try {
   $pluginCandidate = Join-Path $stage 'index.js'
   $daemonCandidate = Join-Path $stage 'mxm4-hapticd.exe'
+  $clientCandidate = Join-Path $stage 'mxm4-haptic.exe'
   $taskCandidate = Join-Path $stage 'mxm4-hapticd.xml'
   [IO.File]::WriteAllText($taskCandidate, $taskXml, [Text.Encoding]::Unicode)
 
@@ -323,7 +328,7 @@ try {
     $oldCargoTarget = $env:CARGO_TARGET_DIR
     $env:CARGO_TARGET_DIR = $cargoTarget
     Push-Location $CrateSource
-    try { Invoke-Native 'daemon-build' { & cargo build --release --locked --bin mxm4-hapticd } } finally {
+    try { Invoke-Native 'daemon-build' { & cargo build --release --locked --bin mxm4-hapticd --bin mxm4-haptic } } finally {
       Pop-Location
       $env:CARGO_TARGET_DIR = $oldCargoTarget
     }
@@ -334,6 +339,13 @@ try {
     $header = [IO.File]::ReadAllBytes($builtDaemon)[0..1]
     if ($header[0] -ne 0x4d -or $header[1] -ne 0x5a) { Fail 'daemon-validate' 'staged daemon is not a PE executable' }
     Copy-Item -LiteralPath $builtDaemon -Destination $daemonCandidate
+    $builtClient = Join-Path $cargoTarget 'release\mxm4-haptic.exe'
+    if (-not (Test-Path -LiteralPath $builtClient -PathType Leaf) -or (Get-Item -LiteralPath $builtClient).Length -lt 2) {
+      Fail 'daemon-validate' 'staged client is missing or empty'
+    }
+    $header = [IO.File]::ReadAllBytes($builtClient)[0..1]
+    if ($header[0] -ne 0x4d -or $header[1] -ne 0x5a) { Fail 'daemon-validate' 'staged client is not a PE executable' }
+    Copy-Item -LiteralPath $builtClient -Destination $clientCandidate
   }
 
   if ($pluginChanged) {
@@ -343,8 +355,10 @@ try {
 
   if ($daemonChanged) {
     # Do not race executable replacement with Task Scheduler process teardown.
+    # The client is transient (one-shot hook invocation), so it needs no stop.
     Stop-TaskForReplacement
     Replace-Atomically $daemonCandidate $DaemonDestination
+    Replace-Atomically $clientCandidate $ClientDestination
   }
 
   # This reconciliation is intentionally unconditional: source stamps decide

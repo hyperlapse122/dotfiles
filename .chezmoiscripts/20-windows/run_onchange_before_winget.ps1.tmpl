@@ -1,0 +1,75 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
+{{- $arch := .chezmoi.arch -}}
+{{- $wingetOrigin := "" -}}
+{{- range $source := .packages.authority.sources -}}{{- if eq $source.name "winget" -}}{{- $wingetOrigin = $source.origin -}}{{- end -}}{{- end -}}
+# Package authority v2 winget reconciler. Resolve trust and elevation before mutation.
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$PackageRows = @(
+{{- range $capability := .packages.authority.capabilities -}}
+{{-   $delivery := $capability.windows -}}
+{{-   if and (eq $delivery.disposition "managed") (eq $delivery.owner "winget") -}}
+{{-     $state := index $delivery.architectures $arch -}}
+{{-     if or (eq $state "native") (eq $state "emulated") }}
+    [pscustomobject]@{ Id = '{{ $delivery.identifier }}'; Scope = '{{ $delivery.scope }}'; Elevation = '{{ $delivery.elevation }}'; Architecture = '{{ if eq $state "emulated" }}x64{{ else if eq $arch "arm64" }}arm64{{ else }}x64{{ end }}' }
+{{-     end -}}
+{{-   end -}}
+{{- end }}
+)
+
+function Invoke-Winget {
+    param(
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [switch] $AllowFailure,
+        [int[]] $AcceptedExitCodes = @(0)
+    )
+    $output = & winget @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    if (-not $AllowFailure -and $exitCode -notin $AcceptedExitCodes) {
+        throw "winget $($Arguments[0]) failed with exit code $exitCode"
+    }
+    [pscustomobject]@{ ExitCode = $exitCode; Output = ($output -join "`n") }
+}
+
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    $installer = Get-AppxPackage -AllUsers -Name Microsoft.DesktopAppInstaller -ErrorAction SilentlyContinue |
+        Sort-Object Version -Descending | Select-Object -First 1
+    if ($installer -and (Test-Path (Join-Path $installer.InstallLocation 'AppxManifest.xml'))) {
+        Add-AppxPackage -DisableDevelopmentMode -Register (Join-Path $installer.InstallLocation 'AppxManifest.xml')
+    }
+}
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    throw 'winget preflight: App Installer is unavailable; install or repair Microsoft App Installer, then re-run chezmoi apply.'
+}
+
+$source = Invoke-Winget -Arguments @('source', 'list', '--name', 'winget', '--accept-source-agreements', '--disable-interactivity')
+if ($source.Output -notmatch [regex]::Escape('{{ $wingetOrigin }}')) {
+    throw 'winget preflight: the winget source origin is missing or spoofed; repair the predefined source before apply.'
+}
+$needsAdmin = $PackageRows | Where-Object { $_.Elevation -eq 'admin' -or $_.Scope -eq 'machine' }
+if ($needsAdmin) {
+    $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'winget preflight: machine-scope packages require an elevated PowerShell session; no packages were changed.'
+    }
+}
+
+foreach ($row in $PackageRows) {
+    $listed = Invoke-Winget -Arguments @('list', '--exact', '--id', $row.Id, '--source', 'winget', '--accept-source-agreements', '--disable-interactivity') -AllowFailure
+    $mutation = @('--exact', '--id', $row.Id, '--source', 'winget', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+    if ($row.Scope -ne 'either') { $mutation += @('--scope', $row.Scope) }
+    $mutation += @('--architecture', $row.Architecture)
+    if ($listed.ExitCode -eq 0) {
+        # APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (0x8A15002B) is
+        # winget's documented converged result when the installed package has
+        # no applicable upgrade. Every other nonzero result remains fatal.
+        Invoke-Winget -Arguments (@('upgrade') + $mutation) -AcceptedExitCodes @(0, -1978335189) | Out-Null
+        Write-Output "RESULT $($row.Id) updated-or-current"
+    } else {
+        Invoke-Winget -Arguments (@('install') + $mutation) | Out-Null
+        Write-Output "RESULT $($row.Id) installed"
+    }
+}
+{{- end -}}

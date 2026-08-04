@@ -54,15 +54,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "windows-amd64": "marksman.exe",
     "windows-arm64": "marksman.exe",
   },
-  jq: {
-    // darwin-only here; every other platform gets jq from a package manager.
-    "linux-amd64": null,
-    "linux-arm64": null,
-    "darwin-amd64": "jq-macos-amd64",
-    "darwin-arm64": "jq-macos-arm64",
-    "windows-amd64": null,
-    "windows-arm64": null,
-  },
   shellcheck: {
     "linux-amd64": "shellcheck-v0.0.0.linux.x86_64.tar.gz",
     "linux-arm64": "shellcheck-v0.0.0.linux.aarch64.tar.gz",
@@ -197,16 +188,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "aoe-darwin-amd64.tar.gz",
     "darwin-arm64": "aoe-darwin-arm64.tar.gz",
     // No windows build upstream; the external is gated the same way.
-    "windows-amd64": null,
-    "windows-arm64": null,
-  },
-  "cli-proxy-api-binary": {
-    // darwin-only: linux runs the ociImage quadlet, windows is out of scope.
-    // darwin assets spell arm64 as aarch64; the leading `v` is stripped.
-    "linux-amd64": null,
-    "linux-arm64": null,
-    "darwin-amd64": "CLIProxyAPI_0.0.0_darwin_amd64.tar.gz",
-    "darwin-arm64": "CLIProxyAPI_0.0.0_darwin_aarch64.tar.gz",
     "windows-amd64": null,
     "windows-arm64": null,
   },

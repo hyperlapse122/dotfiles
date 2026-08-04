@@ -4,8 +4,7 @@ resolved from the fact registry.
 
 Everything gated behind this configures a graphical desktop (desktop firewalld
 zones, zram-swap disable, ThinkPad ACPI, DNS/NetworkManager reloads, …), none of
-which belongs on a headless server (Ubuntu Server, RHEL server, minimal cloud
-image, …).
+which belongs on a headless server (minimal cloud image, …).
 
 `headless` is a named host fact (.chezmoidata/facts.yaml), probed once per
 chezmoi command by write_facts_cache in .install-prerequisites.sh and baked in

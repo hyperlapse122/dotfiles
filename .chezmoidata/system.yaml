@@ -70,32 +70,6 @@ system:
         gate: gdm
       - path: "etc/dconf/db/gdm.d/*"
         gate: gdm
-      # Fingerprint at polkit prompts. Neither distro puts pam_fprintd in the
-      # generic auth stack (Ubuntu's pam-auth-update `fprintd` profile is
-      # Default: no; only GDM's standalone gdm-fingerprint service hardcodes the
-      # module), so polkit stays password-only until this file overrides the
-      # vendor /usr/lib/pam.d/polkit-1. Enabling fprintd in common-auth instead
-      # would hand the GDM greeter fingerprint auth back and re-lock the login
-      # keyring — see the dconf entries above. The file is Debian-shaped
-      # (@include common-auth), which is what the gate checks: Fedora's
-      # rpm-owned polkit-1 includes system-auth and must not be overwritten.
-      - path: etc/pam.d/polkit-1
-        gate: fprintdPam
-      # systemd system-sleep hook: stop the per-user open-design.service
-      # before hibernation / hybrid-sleep so its daemon and IPC sockets do
-      # not outlive the power cycle. Mode 0755 — systemd executes system-sleep
-      # hooks directly. No gate: install-system-10-files is already Linux-only
-      # and container-skipped, matching Open Design's own provisioning scope.
-      - path: etc/systemd/system-sleep/open-design.sh
-        mode: "755"
-      # systemd system-sleep hook: stop the per-user CLIProxyAPI quadlet
-      # services (proxy + CPA-Manager-Plus panel) before hibernation /
-      # hybrid-sleep / the hibernate leg of suspend-then-hibernate, and
-      # restart exactly the stopped units on resume — a hibernating laptop
-      # must not carry the containers' state across the power cycle. Mode
-      # 0755 like the Open Design hook; no gate, same provisioning scope.
-      - path: etc/systemd/system-sleep/cli-proxy-api.sh
-        mode: "755"
 
     # Absolute /etc paths that the installer previously shipped but that no
     # longer exist in system/linux/etc/. Listed explicitly so every machine —
@@ -109,11 +83,18 @@ system:
     # paths only ever deployed there, so a native/user file elsewhere is
     # never deleted.
     removed:
+      # systemd system-sleep hook for the removed per-user container proxy
+      # stack. Deployed on Linux hosts without a distro gate, so the
+      # reclamation is likewise unscoped.
+      - path: /etc/systemd/system-sleep/cli-proxy-api.sh
+      # systemd system-sleep hook that stopped the per-user open-design
+      # service before hibernation. Also deployed ungated on Linux hosts,
+      # so the reclamation is likewise unscoped.
+      - path: /etc/systemd/system-sleep/open-design.sh
+      # Retired ydotool package basename override. The file was deployed
+      # without a distro gate, so reclaim it on supported Fedora hosts.
+      - path: /etc/udev/rules.d/80-uinput.rules
       - path: /etc/udev/rules.d/logitech-receiver.rules
-      # Ubuntu Studio pro-audio realtime limits — removed with Ubuntu Studio
-      # support. Ubuntu-scoped: this drop-in was only ever deployed there.
-      - path: /etc/security/limits.d/95-ubuntustudio-audio.conf
-        distro: ubuntu
       # Retired kernel-install(8) drop-in that tried to re-sign Oracle
       # VirtualBox modules on every new kernel install. It never worked: it
       # scanned /lib/modules/<ver>/updates while Oracle installs to misc/, and

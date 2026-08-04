@@ -1,11 +1,7 @@
 # dotfiles
 
-Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Three Linux targets are
-supported across two distros and two desktops — **Ubuntu 26.04 LTS** (GNOME,
-primary), **Fedora 44 Workstation** (GNOME), and **Fedora 44 KDE Spin** (KDE
-Plasma 6); macOS and Windows are supported as secondary targets.
-
-## Set up a new device
+Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Supported Linux targets
+are Fedora Workstation and KDE; Windows/macOS are secondary targets.
 
 Run the one-liner below. It downloads chezmoi, clones this repo, and applies it:
 
@@ -26,8 +22,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs these with `dnf`; **Ubuntu** uses `apt`
-     (1Password apt repo + mise apt repo); macOS uses Homebrew (bootstrapping
+   - **Fedora** installs these with `dnf`; macOS uses Homebrew (bootstrapping
      Homebrew first if needed).
 
    The same hook then refuses to continue until `op` is authenticated, so a
@@ -38,8 +33,9 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 
 4. Renders every template and applies it to `$HOME`, then runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
-   [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf,
-   Ubuntu via apt), fonts, importing the GPG key, authenticating GitHub /
+   [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf),
+   fonts, importing the GPG key, authenticating GitHub / Tailscale, switching the
+   login shell to zsh, and writing desktop (KDE or GNOME) / Solaar / system config.
    Tailscale, switching the login shell to zsh, and writing desktop (KDE or
    GNOME) / Solaar / system config. It also fetches pinned standalone CLI
    binaries into `~/.local/bin` and coding-agent skills into `~/.agents/skills/`
@@ -56,7 +52,7 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    input sources and installs the Kimpanel Shell extension so the candidate
    popup renders inside GNOME Shell. KDE hosts additionally get the Breeze
    de-branding scripts, while GNOME hosts otherwise stay on GNOME defaults.
-   On Ubuntu, Tailscale egress-NAT via ufw is enabled.
+   Tailscale egress-NAT via ufw is enabled on Linux.
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
@@ -69,11 +65,8 @@ sessions.
 
 ### Encrypted host prompts (keyring — LUKS passphrase / MOK password)
 
-During `chezmoi init`, Linux hosts are prompted for two per-host secrets that
-have no 1Password item — the existing **LUKS passphrase** (Fedora + Ubuntu, for
-TPM2 auto-unlock enrollment) and, on Ubuntu, the **MOK password** (Secure Boot
-signing of the NVIDIA DKMS modules). Both are optional; **leave a prompt blank to
-skip** it (no full-disk encryption, no NVIDIA / Secure Boot, or a headless host).
+   TPM2 auto-unlock enrollment). Both are optional; **leave a prompt blank to
+   skip** it (no full-disk encryption, no NVIDIA, or a headless host).
 
 These are never written in plaintext. Each is stored in
 `~/.config/chezmoi/chezmoi.toml` as AES ciphertext under a random 256-bit key
@@ -97,12 +90,11 @@ a non-blank answer, so:
 
 ## Prerequisites
 
-- **Ubuntu 26.04 LTS**, **Fedora 44 Workstation**, or **Fedora 44 KDE Spin**
-  for the full experience. Detection is implicit — `osRelease.id` (`fedora` or
-  `ubuntu`) plus a runtime guard for the desktop (`plasmashell` vs
-  `gnome-shell`); no interactive prompt. fcitx5 is the unified input method on
-  every Linux target (a baseline package on Ubuntu, `kdePackages` /
-  `gnomePackages` on Fedora); KDE hosts additionally get the Breeze
+- **Fedora 44 Workstation** or **Fedora 44 KDE Spin**
+  for the full experience. Detection is implicit — `osRelease.id` (`fedora`)
+  plus a runtime guard for the desktop (`plasmashell` vs `gnome-shell`); no
+  interactive prompt. fcitx5 is the unified input method on
+  every Linux target; KDE hosts additionally get the Breeze
   de-branding, while GNOME hosts otherwise keep GNOME defaults.
 - macOS and Windows get the cross-platform dotfiles only.
 - **`sudo` access** — installing packages and writing `/etc` config needs root.
@@ -205,15 +197,15 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 (`AGENTS.md`, `LICENSE`, `mise.toml`, …).
 
 - [`.chezmoidata/`](.chezmoidata) — template data, the single source of truth
-  for packages ([`packages.yaml`](.chezmoidata/packages.yaml): dnf + apt,
-  flatpaks, services, groups), fonts (`fonts.yaml`), the root-owned `/etc`
+  for packages ([`packages.yaml`](.chezmoidata/packages.yaml): dnf, flatpaks,
+  services, groups), fonts (`fonts.yaml`), the root-owned `/etc`
   install manifest ([`system.yaml`](.chezmoidata/system.yaml): per-path
   modes/gates + removed-path cleanup), and user identity (`user.yaml`).
 - [`.chezmoiscripts/`](.chezmoiscripts) — provisioning scripts run on apply,
   grouped by area with numeric prefixes fixing cross-group execution order
   (chezmoi runs each phase's scripts alphabetically by target path):
-  `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `40-linux-ubuntu/`,
-  `50-linux-kde/`, `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`.
+  `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `50-linux-kde/`,
+  `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`.
 - [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
   into scripts via `includeTemplate`: the `run_onchange_` dependency
   fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.

@@ -1,0 +1,91 @@
+{{ if eq .chezmoi.os "windows" -}}
+# .chezmoiscripts/70-agents/run_onchange_after_config-claude-settings.ps1.tmpl
+#
+# Windows counterpart to run_onchange_after_config-claude-settings.sh.tmpl:
+# merges the declared Claude Code settings VALUES (source:
+# .chezmoidata/agents.yaml, .agents.claude.settings) into
+# ~\.claude\settings.json — the file Claude Code LIVE-WRITES. The POSIX half
+# carries the full rationale (vendor-owned live file, per-key assertion
+# boundary, standard onchange trade-off); only the mechanics differ here.
+#
+# Same merge contract: a top-level jq `+` overlay — the declared keys REPLACE
+# their same-named top-level entries wholesale, and every other top-level key
+# (hooks, enabledPlugins/extraKnownMarketplaces, theme, tui, ...) passes
+# through untouched. jq does the merge on both platforms, so undeclared
+# vendor state is preserved by the SAME tool with the SAME semantics; no
+# PowerShell JSON round-trip (ConvertFrom-Json/ConvertTo-Json) ever touches
+# the file, which is what keeps undeclared formatting and values intact
+# (KTD8). jq is the per-user winget package jqlang.jq.
+#
+# Soft-skip: missing `jq` exits 0 with a diagnostic, and that clean exit-0 is
+# recorded as a successful run — a skipped merge is NOT retried until the
+# rendered content changes (re-run by hand or `chezmoi apply --force`).
+#
+# Mode: POSIX chmods the temp file 0644 for its co-writers; Windows ACLs are
+# inherited from the directory, which already grants the owning user full
+# control, so there is no mode step here.
+#
+# onchange trigger: the declared values below (baked in via `toJson`) ARE the
+# trigger — no secrets, no source-dir dependency beyond .chezmoidata/agents.yaml.
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$PSNativeCommandUseErrorActionPreference = $false
+
+$settings = if ($env:CLAUDE_SETTINGS) { $env:CLAUDE_SETTINGS } else { Join-Path $HOME '.claude\settings.json' }
+
+if (-not (Get-Command jq -ErrorAction SilentlyContinue)) {
+  Write-Warning 'config-claude-settings: skipped (jq not on PATH)'
+  exit 0
+}
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $settings) | Out-Null
+
+$scratch = Join-Path ([IO.Path]::GetTempPath()) ('chezmoi-claude-settings-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $scratch | Out-Null
+try {
+  # Declared settings values, rendered as compact JSON (deterministic across
+  # renders for unchanged data). Passed to jq THROUGH A FILE (--slurpfile),
+  # never as an argument: Windows PowerShell 5.1 — chezmoi's documented
+  # fallback when pwsh is absent — cannot pass embedded quotes to a native
+  # command intact. --slurpfile (not --argfile) because it is the file-based
+  # form every jq implementation supports (jqlang.jq on the host; gojq in
+  # some fixture environments), at the cost of a [0] unwrap in the filter.
+  $declaredPath = Join-Path $scratch 'declared.json'
+  [IO.File]::WriteAllText($declaredPath, @'
+{{ .agents.claude.settings | toJson }}
+'@, [Text.UTF8Encoding]::new($false))
+
+  $merged = Join-Path $scratch 'settings.json'
+  $jqErr = Join-Path $scratch 'jq.err'
+
+  $valid = $false
+  if (Test-Path -LiteralPath $settings -PathType Leaf) {
+    $probeOut = Join-Path $scratch 'probe.out'
+    $probe = Start-Process -FilePath 'jq' -ArgumentList ('-e', '.', ('"{0}"' -f $settings)) `
+      -RedirectStandardOutput $probeOut -RedirectStandardError $jqErr -NoNewWindow -Wait -PassThru
+    $valid = ($probe.ExitCode -eq 0)
+  }
+
+  if ($valid) {
+    $merge = Start-Process -FilePath 'jq' `
+      -ArgumentList ('--slurpfile', 'declared', ('"{0}"' -f $declaredPath), '.+$declared[0]', ('"{0}"' -f $settings)) `
+      -RedirectStandardOutput $merged -RedirectStandardError $jqErr -NoNewWindow -Wait -PassThru
+    if ($merge.ExitCode -ne 0) {
+      throw "config-claude-settings: jq merge failed: $(Get-Content -Raw -LiteralPath $jqErr)"
+    }
+  } else {
+    if (Test-Path -LiteralPath $settings -PathType Leaf) {
+      Write-Warning "config-claude-settings: $settings is not valid JSON — backing up to $settings.bak and rewriting from declared values"
+      Copy-Item -LiteralPath $settings -Destination "$settings.bak" -Force
+    }
+    Copy-Item -LiteralPath $declaredPath -Destination $merged -Force
+  }
+
+  Move-Item -LiteralPath $merged -Destination $settings -Force
+} finally {
+  Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "config-claude-settings: merged declared settings values into $settings"
+{{ end -}}

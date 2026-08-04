@@ -204,27 +204,7 @@
           }
         }
       },
-      "cli-proxy-api": {
-        "kind": "ociImage",
-        "source": "docker.io/eceasy/cli-proxy-api",
-        "version": "latest",
-        "digest": "sha256:d63dc0a11690470ac7ab2f06adf67aecc62c7c52a580a4fa516459141303aeeb"
-      },
-      "cli-proxy-api-binary": {
-        "kind": "githubRelease",
-        "source": "router-for-me/CLIProxyAPI",
-        "version": "v7.2.116",
-        "artifacts": {
-          "darwin-amd64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.116/CLIProxyAPI_7.2.116_darwin_amd64.tar.gz",
-            "sha256": "b51b96029a93582d97098271659f6dec5487f0465c013e38cba80cd6519bb1e6"
-          },
-          "darwin-arm64": {
-            "url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v7.2.116/CLIProxyAPI_7.2.116_darwin_aarch64.tar.gz",
-            "sha256": "8c4763e092efff7b2734b4eff0d967571ca69304c03a2ea9a420ca63c3e7471c"
-          }
-        }
-      },
+
       "codegraph": {
         "kind": "githubRelease",
         "source": "colbymchenry/codegraph",
@@ -291,12 +271,6 @@
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
         "version": "compound-engineering-v3.21.0"
-      },
-      "cpa-manager-plus": {
-        "kind": "ociImage",
-        "source": "ghcr.io/seakee/cpa-manager-plus",
-        "version": "latest",
-        "digest": "sha256:bacb51354f9c2bdc8389e18009973ea18925bda5e447ea3a16fa2bbddbd6883a"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -427,21 +401,6 @@
         "source": "shadcn/improve",
         "version": "03369ee6d7cafbfcecc4346539b05b3dc0a603bb"
       },
-      "jq": {
-        "kind": "githubRelease",
-        "source": "jqlang/jq",
-        "version": "jq-1.8.2",
-        "artifacts": {
-          "darwin-amd64": {
-            "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-amd64",
-            "sha256": "e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0"
-          },
-          "darwin-arm64": {
-            "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-arm64",
-            "sha256": "2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e"
-          }
-        }
-      },
       "kitty": {
         "kind": "githubRelease",
         "source": "kovidgoyal/kitty",
@@ -559,11 +518,6 @@
             "sha256": "d6fba8c9841cf29da177b375891a84084018321a57ddd201b678ac1e656e0cd4"
           }
         }
-      },
-      "open-design": {
-        "kind": "githubRelease",
-        "source": "nexu-io/open-design",
-        "version": "open-design-v0.17.0"
       },
       "rust-analyzer": {
         "kind": "githubRelease",

@@ -31,11 +31,6 @@ export interface LockedTool {
    * subresource integrity string.
    */
   readonly integrity?: string | null;
-  /**
-   * ociImage only: the manifest digest of the tracked tag (`sha256:<hex>`),
-   * platform-free — a multi-arch manifest list digest covers every platform.
-   */
-  readonly digest?: string;
   /** Absent for tools whose consumers only need a version. */
   readonly artifacts?: Readonly<Partial<Record<PlatformKey, LockedArtifact>>>;
 }
@@ -68,8 +63,7 @@ export type ResolverKind =
   | "gitlabRelease"
   | "npm"
   | "vendorManifest"
-  | "gitRef"
-  | "ociImage";
+  | "gitRef";
 
 /** The vendor endpoints the vendorManifest kind knows how to read. */
 export type VendorName = "claude" | "winbox";
@@ -78,7 +72,7 @@ export type VendorName = "claude" | "winbox";
  * Asset selection for one tool.
  *
  * Returns the upstream asset filename for a platform, or null when the tool
- * publishes nothing for it (jq is darwin-only, for example).
+ * publishes nothing for it.
  */
 export type AssetSelector = (platform: Platform, tag: string) => string | null;
 
@@ -108,11 +102,6 @@ export interface ToolSpec {
   readonly vendor?: VendorName;
   /** gitRef only: the ref to resolve, e.g. `refs/heads/main` or `HEAD`. */
   readonly ref?: string;
-  /**
-   * ociImage only: the image tag to track, e.g. `latest`. `source` carries
-   * the full `registry/repository` path (`docker.io/eceasy/cli-proxy-api`).
-   */
-  readonly tag?: string;
   /**
    * KTD10 tag-shape transform applied to the resolved tag before it is
    * recorded (e.g. stripping the leading `v` for an npm-pinned plugin), so

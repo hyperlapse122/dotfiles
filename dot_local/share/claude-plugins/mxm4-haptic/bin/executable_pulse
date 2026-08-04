@@ -13,11 +13,12 @@
 # neither. Every failure path here is a silent no-op. Do not "improve" this by
 # letting an error escape.
 #
-# Linux-only: mxm4-hapticd owns Linux hidraw for the MX Master 4 (HID++ 0x19B0),
-# so there is nothing to pulse anywhere else. The plugin only deploys on Linux
-# (root .chezmoiignore), but the guard keeps the script honest on its own.
-
-[ "$(uname -s)" = "Linux" ] || exit 0
+# POSIX (Linux + macOS): the cross-platform mxm4-hapticd daemon owns the MX
+# Master 4 (HID++ 0x19B0) on every desktop OS; this wrapper is the POSIX hook
+# entry. Windows renders the sibling PowerShell wrapper (pulse.ps1) instead —
+# see hooks/hooks.json.tmpl. The plugin no longer deploys Linux-only, so there
+# is no uname guard here; a host without the daemon simply hits the
+# client-missing silent no-op below.
 
 waveform="${1-}"
 [ -n "$waveform" ] || exit 0
