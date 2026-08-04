@@ -76,7 +76,7 @@
       "summary": "Native Fedora arm64 availability of required applications (Chrome, Cider, Edge, 1Password); substitutes, exclusions, and emulation never satisfy this gate.",
       "status": "closed",
       "reason": "Native Fedora arm64 Chrome, Cider, and Edge packages are not published; no trusted device evidence exists.",
-      "candidateCommit": "d67cfb2c73c2b0aee6e7b7c1f45e6cfd77685569",
+      "candidateCommit": "3c7d3e252e944bf0aef57f5afbc2ac2dd1de3612",
       "supportSnapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
       "evidence": [],
       "mandatoryLegs": [
@@ -96,7 +96,7 @@
       "summary": "An installable stable WezTerm candidate exists on every native channel: upstream stable RPM for the current Fedora release, stable winget package, stable Homebrew cask, with Kitty Unicode placeholders in a stable release.",
       "status": "closed",
       "reason": "Released WezTerm builds lack Kitty Unicode placeholders and Fedora lacks a current stable channel; no trusted evidence exists.",
-      "candidateCommit": "d67cfb2c73c2b0aee6e7b7c1f45e6cfd77685569",
+      "candidateCommit": "3c7d3e252e944bf0aef57f5afbc2ac2dd1de3612",
       "supportSnapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
       "evidence": [],
       "mandatoryLegs": [
@@ -133,7 +133,7 @@
       "summary": "Managed-path WezTerm proof on all three OSes: omp inline images inside tmux render and survive scroll, redraw, resize, and split, including Windows over SSH to the Fedora VM; Kitty remains managed until this opens.",
       "status": "closed",
       "reason": "U11 managed-path proof has not run; no trusted three-OS device evidence exists.",
-      "candidateCommit": "d67cfb2c73c2b0aee6e7b7c1f45e6cfd77685569",
+      "candidateCommit": "3c7d3e252e944bf0aef57f5afbc2ac2dd1de3612",
       "supportSnapshot": "b2ab3e5071c15188a2ed2c7692b05de554f88525113696dca4fa8d16eadf33c9",
       "evidence": [],
       "mandatoryLegs": [
