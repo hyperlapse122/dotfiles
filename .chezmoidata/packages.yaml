@@ -115,7 +115,6 @@ packages:
         - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
         - https://dl.google.com/linux/linux_signing_key.pub  # Google Chrome repo signing key
         - https://repo.cider.sh/RPM-GPG-KEY  # Cider Collective repo signing key
-        - https://www.virtualbox.org/download/oracle_vbox_2016.asc  # Oracle VirtualBox package signing key (2016-, current)
       # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
       # Named for the artifact, like directRpms, because the entry SHAPE is the
       # mechanism: dnf reads a whole .repo ini (so the entry is one `content`
@@ -164,7 +163,6 @@ packages:
       # mechanism: dnf can fetch a vendor-authored .repo file whole and adopt it.
       repoFiles:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
-        - https://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo  # Oracle VirtualBox stable RPM repo (fetched over HTTPS; the .repo file's own baseurl stays as Oracle publishes it — http:// with gpgcheck=1 + repo_gpgcheck=1, signed by oracle_vbox_2016.asc)
       # Fedora enables RPM Fusion for Steam and other nonfree packages while the
       # CUDA repository owns the NVIDIA driver stack below. These package-name
       # globs become repository-scoped DNF exclusions so RPM Fusion cannot offer
@@ -280,24 +278,14 @@ packages:
         # Wayland clipboard management
         - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
 
-        # Virtualization — Oracle VirtualBox (KVM/QEMU/libvirt/virt-manager dropped in
-        # favor of VirtualBox for its stronger cross-platform Windows guest tooling).
-        # Kernel modules build via /sbin/vboxconfig (Oracle's Fedora RPM does NOT
-        # use DKMS or akmods — the postinst runs vboxconfig once for the running
-        # kernel). configure_user_groups adds the user to `vboxusers` so USB
-        # passthrough works. On Secure Boot: Oracle's own vboxdrv.sh signs the
-        # modules it builds, but only reads key material from the Debian paths
-        # /var/lib/shim-signed/mok/MOK.{der,priv}, so provision_vbox_module_signing()
-        # in this installer links those at the DKMS MOK (seeded by
-        # ensure_dkms_mok_generated if missing — same key NVIDIA's kmod-nvidia-latest-dkms
-        # uses, so one mokutil enrollment covers both stacks). Kernel updates need
-        # nothing extra: vboxdrv.service runs `setup_complete || setup` at boot,
-        # which rebuilds AND signs for the newly booted kernel. The
-        # Extension Pack (USB 2.0/3.0, VRDE, PXE via Intel NIC) is PUEL-licensed
-        # and NOT installed here — download separately if the license fits the
-        # use case. fuse3 + ntfs-3g keep working for read-only ReFS/NTFS access to
-        # Windows Dev Drive vhdx mounts on the guest side.
-        - VirtualBox-7.2  # Oracle VirtualBox 7.2 (from the Oracle repo added in repoFiles above)
+        # Filesystem access and OS-level containers. No hypervisor is managed here:
+        # Oracle VirtualBox was retired along with its Oracle repo, its signing key,
+        # the `vboxusers` group membership, and the whole Secure Boot module-signing
+        # path in the Fedora installer (KVM/QEMU/libvirt/virt-manager had been
+        # dropped earlier in its favor and were not brought back). fuse3 + ntfs-3g
+        # stay for read-only ReFS/NTFS access to Windows Dev Drive vhdx images, and
+        # fuse3-devel is the refs-fuse / refsprogs build dependency, so none of them
+        # depended on the hypervisor.
         - fuse3  # FUSE 3 userspace filesystem support
         - fuse3-devel  # FUSE 3 headers (refs-fuse / refsprogs build dependency)
         - ntfs-3g  # NTFS read/write driver (FUSE)
@@ -522,11 +510,6 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: tailscale, source: fedora, architectures: { amd64: native, arm64: native } }
         windows: { disposition: managed, owner: winget, identifier: Tailscale.Tailscale, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: tailscale-app, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
-      - id: virtualBox
-        sentinel: VBoxManage
-        fedora: { disposition: managed, owner: dnf, identifier: VirtualBox-7.2, source: fedora, architectures: { amd64: native, arm64: unresolved } }
-        windows: { disposition: managed, owner: winget, identifier: Oracle.VirtualBox, source: winget, scope: machine, elevation: admin, architectures: { amd64: native, arm64: emulated }, emulation: x64 }
-        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: virtualbox, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
       - id: obsStudio
         sentinel: obs
         fedora: { disposition: managed, owner: dnf, identifier: obs-studio, source: fedora, architectures: { amd64: native, arm64: native } }

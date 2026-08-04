@@ -266,7 +266,7 @@ fedora_svc_line=$(call_site_line "$fedora_kde" configure_ydotool_package_service
   || fail "Fedora must call configure_ydotool_package_service AFTER install_fedora_packages ($fedora_pkg_line vs $fedora_svc_line)"
 
 
-has 'groups=\(keyd vboxusers\)' "$fedora_kde" "expected the unchanged group membership list"
+has 'groups=\(keyd\)' "$fedora_kde" "expected the unchanged group membership list"
 lacks 'groups=\([^)]*\<input\>[^)]*\)' "$fedora_kde" "the installer must not add the managed user to the input group"
 
 # BEHAVIORAL proof against a strict, call-logging systemctl stub. The one
