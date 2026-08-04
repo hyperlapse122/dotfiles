@@ -1,0 +1,377 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $authority := .visualstudio -}}
+{{- if not (kindIs "map" $authority) -}}{{- fail (printf "install-visual-studio: visualstudio must be a map, got %s" (kindOf $authority)) -}}{{- end -}}
+{{- if ne (len $authority) 5 -}}{{- fail (printf "install-visual-studio: visualstudio must contain exactly product, versionRange, bootstrapperUrl, workloads, and components; got %d keys" (len $authority)) -}}{{- end -}}
+{{- range $key, $_ := $authority -}}{{- if not (or (eq $key "product") (eq $key "versionRange") (eq $key "bootstrapperUrl") (eq $key "workloads") (eq $key "components")) -}}{{- fail (printf "install-visual-studio: visualstudio contains unsupported key %q; the authority plan must be refreshed" $key) -}}{{- end -}}{{- end -}}
+{{- range $key := list "product" "versionRange" "bootstrapperUrl" "workloads" "components" -}}{{- if not (hasKey $authority $key) -}}{{- fail (printf "install-visual-studio: visualstudio.%s is required" $key) -}}{{- end -}}{{- end -}}
+{{- $product := index $authority "product" -}}
+{{- $versionRange := index $authority "versionRange" -}}
+{{- $bootstrapperUrl := index $authority "bootstrapperUrl" -}}
+{{- $workloads := index $authority "workloads" -}}
+{{- $components := index $authority "components" -}}
+{{- if not (kindIs "string" $product) -}}{{- fail (printf "install-visual-studio: visualstudio.product must be a string, got %s" (kindOf $product)) -}}{{- end -}}
+{{- if ne $product "Microsoft.VisualStudio.Product.Community" -}}{{- fail (printf "install-visual-studio: visualstudio.product must be Microsoft.VisualStudio.Product.Community, got %q" $product) -}}{{- end -}}
+{{- if not (kindIs "string" $versionRange) -}}{{- fail (printf "install-visual-studio: visualstudio.versionRange must be a string, got %s" (kindOf $versionRange)) -}}{{- end -}}
+{{- if ne $versionRange "[18.0,19.0)" -}}{{- fail (printf "install-visual-studio: visualstudio.versionRange must be [18.0,19.0); a different generation requires a plan refresh, got %q" $versionRange) -}}{{- end -}}
+{{- if not (kindIs "string" $bootstrapperUrl) -}}{{- fail (printf "install-visual-studio: visualstudio.bootstrapperUrl must be a string, got %s" (kindOf $bootstrapperUrl)) -}}{{- end -}}
+{{- if ne $bootstrapperUrl "https://aka.ms/vs/stable/vs_community.exe" -}}{{- fail (printf "install-visual-studio: visualstudio.bootstrapperUrl must be the approved HTTPS Community bootstrapper URL, got %q" $bootstrapperUrl) -}}{{- end -}}
+{{- if not (kindIs "slice" $workloads) -}}{{- fail (printf "install-visual-studio: visualstudio.workloads must be a list, got %s" (kindOf $workloads)) -}}{{- end -}}
+{{- if eq (len $workloads) 0 -}}{{- fail "install-visual-studio: visualstudio.workloads must not be empty" -}}{{- end -}}
+{{- if not (kindIs "slice" $components) -}}{{- fail (printf "install-visual-studio: visualstudio.components must be a list, got %s" (kindOf $components)) -}}{{- end -}}
+{{- if eq (len $components) 0 -}}{{- fail "install-visual-studio: visualstudio.components must not be empty" -}}{{- end -}}
+{{- range $listName, $ids := dict "workloads" $workloads "components" $components -}}
+{{-   range $index, $id := $ids -}}
+{{-     if not (kindIs "string" $id) -}}{{- fail (printf "install-visual-studio: visualstudio.%s[%d] must be a string, got %s" $listName $index (kindOf $id)) -}}{{- end -}}
+{{-     if not (regexMatch "^Microsoft\\.[A-Za-z0-9]+(?:\\.[A-Za-z0-9]+)*$" $id) -}}{{- fail (printf "install-visual-studio: visualstudio.%s[%d] %q is not a valid Visual Studio component ID" $listName $index $id) -}}{{- end -}}
+{{-   end -}}
+{{- end -}}
+# install-visual-studio.ps1
+#
+# Behavior contract: converge Visual Studio 2026 Community to the declared
+# additive workload/component set. Validate authority before mutation, never
+# remove packages, verify Microsoft's bootstrapper signature, and verify the
+# complete declared set after install or modify.
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$VisualStudioProduct = {{ $product | quote }}
+$VisualStudioVersionRange = {{ $versionRange | quote }}
+$VisualStudioBootstrapperUrl = {{ $bootstrapperUrl | quote }}
+$VisualStudioWorkloads = @(
+{{- range $workloads }}
+    {{ . | quote }}
+{{- end }}
+)
+$VisualStudioComponents = @(
+{{- range $components }}
+    {{ . | quote }}
+{{- end }}
+)
+
+function Assert-VisualStudioAuthority {
+    param(
+        [Parameter(Mandatory = $true)][string] $Product,
+        [Parameter(Mandatory = $true)][string] $VersionRange,
+        [Parameter(Mandatory = $true)][string] $BootstrapperUrl,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]] $Workloads,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]] $Components
+    )
+
+    if ($Product -ne 'Microsoft.VisualStudio.Product.Community') {
+        throw "install-visual-studio: invalid product '$Product'; only Visual Studio Community is authorized"
+    }
+    if ($VersionRange -ne '[18.0,19.0)') {
+        throw "install-visual-studio: invalid version range '$VersionRange'; changing generations requires a visualstudio authority plan refresh"
+    }
+    $expectedUrl = 'https://aka.ms/vs/stable/vs_community.exe'
+    $parsedUrl = $null
+    if (-not [uri]::TryCreate($BootstrapperUrl, [UriKind]::Absolute, [ref] $parsedUrl) -or
+        $parsedUrl.Scheme -ne [Uri]::UriSchemeHttps -or $BootstrapperUrl -cne $expectedUrl) {
+        throw "install-visual-studio: invalid bootstrapper URL '$BootstrapperUrl'"
+    }
+    if ($Workloads.Count -eq 0 -or $Components.Count -eq 0) {
+        throw 'install-visual-studio: workloads and components must both be non-empty'
+    }
+
+    $seen = @{}
+    foreach ($entry in @(
+        [pscustomobject]@{ Name = 'workloads'; Values = $Workloads }
+        [pscustomobject]@{ Name = 'components'; Values = $Components }
+    )) {
+        for ($index = 0; $index -lt $entry.Values.Count; $index++) {
+            $id = $entry.Values[$index]
+            if ([string]::IsNullOrWhiteSpace($id) -or $id -cnotmatch '^Microsoft\.[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*$') {
+                throw "install-visual-studio: $($entry.Name)[$index] '$id' is not a valid Visual Studio component ID"
+            }
+            $normalized = $id.ToLowerInvariant()
+            if ($seen.ContainsKey($normalized)) {
+                throw "install-visual-studio: duplicate declared component ID '$id'"
+            }
+            $seen[$normalized] = $true
+        }
+    }
+}
+
+function Test-VisualStudioAdministrator {
+    $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Test-VisualStudioPendingReboot {
+    $pendingKeys = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+    )
+    foreach ($key in $pendingKeys) {
+        if (Test-Path -LiteralPath $key) { return $true }
+    }
+    $sessionManager = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue
+    return $null -ne $sessionManager
+}
+
+function Get-VisualStudioInstances {
+    param(
+        [Parameter(Mandatory = $true)][string] $Product,
+        [Parameter(Mandatory = $true)][string] $VersionRange,
+        [string[]] $RequiredIds = @()
+    )
+
+    $installerRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
+    $vswherePath = Join-Path $installerRoot 'vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswherePath -PathType Leaf)) {
+        return [pscustomobject]@{ Instances = @() }
+    }
+
+    $arguments = @('-products', $Product, '-version', $VersionRange, '-format', 'json', '-utf8')
+    if ($RequiredIds.Count -gt 0) {
+        $arguments += '-requires'
+        $arguments += $RequiredIds
+    }
+    $output = @(& $vswherePath @arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        throw "install-visual-studio: vswhere failed with exit code $exitCode"
+    }
+    $json = ($output | ForEach-Object { "$_" }) -join "`n"
+    if ([string]::IsNullOrWhiteSpace($json)) {
+        return [pscustomobject]@{ Instances = @() }
+    }
+    try {
+        $parsed = ConvertFrom-Json -InputObject $json -ErrorAction Stop
+    } catch {
+        throw "install-visual-studio: vswhere returned invalid JSON: $($_.Exception.Message)"
+    }
+    if ($null -eq $parsed) {
+        $instances = @()
+    } else {
+        $instances = @($parsed)
+    }
+    return [pscustomobject]@{ Instances = $instances }
+}
+
+function Invoke-VisualStudioBootstrapperDownload {
+    param(
+        [Parameter(Mandatory = $true)][string] $Uri,
+        [Parameter(Mandatory = $true)][string] $Destination,
+        [ValidateRange(1, 10)][int] $MaximumAttempts = 3,
+        [ValidateRange(1, 600)][int] $TimeoutSeconds = 120
+    )
+
+    for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
+        try {
+            Remove-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+            $response = Invoke-WebRequest -Uri $Uri -OutFile $Destination -UseBasicParsing -MaximumRedirection 10 -TimeoutSec $TimeoutSeconds
+            if (-not (Test-Path -LiteralPath $Destination -PathType Leaf) -or (Get-Item -LiteralPath $Destination).Length -le 0) {
+                throw 'download produced an empty file'
+            }
+            $resolvedUri = $Uri
+            if ($response -and $response.BaseResponse) {
+                if ($response.BaseResponse.ResponseUri) {
+                    $resolvedUri = $response.BaseResponse.ResponseUri.AbsoluteUri
+                } elseif ($response.BaseResponse.RequestMessage -and $response.BaseResponse.RequestMessage.RequestUri) {
+                    $resolvedUri = $response.BaseResponse.RequestMessage.RequestUri.AbsoluteUri
+                }
+            }
+            $parsedResolvedUri = $null
+            if (-not [uri]::TryCreate($resolvedUri, [UriKind]::Absolute, [ref] $parsedResolvedUri) -or
+                $parsedResolvedUri.Scheme -ne [Uri]::UriSchemeHttps) {
+                throw "bootstrapper resolved to a non-HTTPS URI '$resolvedUri'"
+            }
+            return [pscustomobject]@{ ResolvedUri = $resolvedUri; Attempts = $attempt }
+        } catch {
+            if ($attempt -eq $MaximumAttempts) {
+                throw "install-visual-studio: bootstrapper download failed after $MaximumAttempts attempts: $($_.Exception.Message)"
+            }
+            Start-Sleep -Seconds ([Math]::Min(5, $attempt * 2))
+        }
+    }
+}
+
+function Assert-VisualStudioBootstrapperAuthenticode {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $signature = Get-AuthenticodeSignature -FilePath $Path
+    if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or -not $signature.SignerCertificate) {
+        throw "install-visual-studio: bootstrapper Authenticode signature is not valid (status: $($signature.Status))"
+    }
+    if ($signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)(?:CN|O)=Microsoft Corporation(?:,|$)') {
+        throw "install-visual-studio: bootstrapper signer is not Microsoft Corporation: $($signature.SignerCertificate.Subject)"
+    }
+    return $signature
+}
+
+function Invoke-VisualStudioSetup {
+    param(
+        [Parameter(Mandatory = $true)][string] $ExecutablePath,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]] $Arguments
+    )
+
+    & $ExecutablePath @Arguments 2>&1 | Out-Null
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE }
+}
+
+function Assert-VisualStudioBootstrapperIdentity {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $versionInfo = (Get-Item -LiteralPath $Path).VersionInfo
+    $productVersion = "$($versionInfo.ProductVersion)"
+    $isVisualStudio2026 = $productVersion -match '(?:^|\s)Visual Studio 2026(?:\s|$)'
+    $isStable18 = $productVersion -match '(?:^|\D)18(?:\.\d+)*(?:\D|$)'
+    if (-not $isVisualStudio2026 -and -not $isStable18) {
+        throw "install-visual-studio: signed bootstrapper does not identify Visual Studio 2026 Community / 18.x; a visualstudio authority plan refresh is required before changing generations"
+    }
+}
+
+function Assert-VisualStudioInstanceGeneration {
+    param(
+        [Parameter(Mandatory = $true)] $Instance,
+        [Parameter(Mandatory = $true)][string] $Product
+    )
+
+    if ([string]::IsNullOrWhiteSpace("$($Instance.installationVersion)")) {
+        throw 'install-visual-studio: vswhere instance is missing installationVersion'
+    }
+    try {
+        $version = [version] "$($Instance.installationVersion)"
+    } catch {
+        throw "install-visual-studio: vswhere returned invalid installationVersion '$($Instance.installationVersion)'"
+    }
+    if ($version.Major -ge 19) {
+        throw "install-visual-studio: found future Visual Studio generation $version; a visualstudio authority plan refresh is required"
+    }
+    if ($version.Major -ne 18 -or "$($Instance.productId)" -cne $Product) {
+        throw "install-visual-studio: vswhere returned an instance outside the authorized Community 18.x plan"
+    }
+}
+
+function Complete-VisualStudioSetupResult {
+    param([Parameter(Mandatory = $true)] $Result)
+
+    switch ([int] $Result.ExitCode) {
+        0 { return }
+        1641 {
+            Write-Warning 'install-visual-studio: setup succeeded and initiated a restart'
+            return
+        }
+        3010 {
+            Write-Warning 'install-visual-studio: setup succeeded; a restart is required'
+            return
+        }
+        1003 { throw 'install-visual-studio: setup is blocked because Visual Studio is in use; close it and retry chezmoi apply' }
+        8006 { throw 'install-visual-studio: setup is blocked because Visual Studio is in use; close it and retry chezmoi apply' }
+        1618 { throw 'install-visual-studio: another installation is in progress; retry chezmoi apply later' }
+        default {
+            $logLocation = Join-Path $env:TEMP 'dd_*'
+            throw "install-visual-studio: setup failed with exit code $($Result.ExitCode); inspect logs at $logLocation"
+        }
+    }
+}
+function New-VisualStudioBootstrapperStaging {
+    $programData = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+    if ([string]::IsNullOrWhiteSpace($programData)) {
+        throw 'install-visual-studio: ProgramData could not be resolved for secure bootstrapper staging'
+    }
+    $stagingDirectory = Join-Path (Join-Path $programData 'chezmoi-visual-studio') ([Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
+
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $aclArguments = @($stagingDirectory, '/inheritance:r', '/grant:r', "*$currentSid`:(OI)(CI)F", '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F')
+    & "$env:SystemRoot\System32\icacls.exe" @aclArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        throw "install-visual-studio: failed to protect staging directory ACL (icacls exit $LASTEXITCODE)"
+    }
+
+    return [pscustomobject]@{
+        Directory = $stagingDirectory
+        BootstrapperPath = (Join-Path $stagingDirectory 'vs_community.exe')
+    }
+}
+
+function Remove-VisualStudioBootstrapperStaging {
+    param([Parameter(Mandatory = $true)][string] $Directory)
+
+    if (Test-Path -LiteralPath $Directory) {
+        Remove-Item -LiteralPath $Directory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+
+function Invoke-VisualStudioConvergence {
+    Assert-VisualStudioAuthority -Product $VisualStudioProduct -VersionRange $VisualStudioVersionRange -BootstrapperUrl $VisualStudioBootstrapperUrl -Workloads $VisualStudioWorkloads -Components $VisualStudioComponents
+
+    if (-not (Test-VisualStudioAdministrator)) {
+        throw 'install-visual-studio: Visual Studio requires an elevated PowerShell session; nothing was changed'
+    }
+    if (Test-VisualStudioPendingReboot) {
+        throw 'install-visual-studio: Windows has a pending reboot; restart Windows and retry chezmoi apply'
+    }
+
+    $declaredIds = @($VisualStudioWorkloads) + @($VisualStudioComponents)
+    $compliant = Get-VisualStudioInstances -Product $VisualStudioProduct -VersionRange $VisualStudioVersionRange -RequiredIds $declaredIds
+    foreach ($instance in $compliant.Instances) {
+        Assert-VisualStudioInstanceGeneration -Instance $instance -Product $VisualStudioProduct
+    }
+    if ($compliant.Instances.Count -gt 0) {
+        Write-Output 'RESULT Microsoft.VisualStudio.Product.Community current'
+        return
+    }
+
+    $installed = Get-VisualStudioInstances -Product $VisualStudioProduct -VersionRange $VisualStudioVersionRange
+    foreach ($instance in $installed.Instances) {
+        Assert-VisualStudioInstanceGeneration -Instance $instance -Product $VisualStudioProduct
+    }
+
+    $addArguments = @()
+    foreach ($id in $declaredIds) { $addArguments += @('--add', $id) }
+
+    if ($installed.Instances.Count -gt 0) {
+        $selected = @($installed.Instances | Sort-Object -Property installationVersion -Descending)[0]
+        $installationPath = "$($selected.installationPath)"
+        $channelId = "$($selected.channelId)"
+        if ([string]::IsNullOrWhiteSpace($installationPath) -or -not (Test-Path -LiteralPath $installationPath -PathType Container)) {
+            throw 'install-visual-studio: selected Community 18.x instance has no valid installationPath'
+        }
+        if ([string]::IsNullOrWhiteSpace($channelId)) {
+            throw 'install-visual-studio: selected Community 18.x instance has no channelId'
+        }
+        $installerRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
+        $setupPath = Join-Path $installerRoot 'setup.exe'
+        if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
+            throw "install-visual-studio: Visual Studio Installer setup.exe is missing at '$setupPath'"
+        }
+        $modifyArguments = @('modify', '--installPath', $installationPath, '--channelId', $channelId) + $addArguments + @('--includeRecommended', '--passive', '--norestart')
+        $result = Invoke-VisualStudioSetup -ExecutablePath $setupPath -Arguments $modifyArguments
+        Complete-VisualStudioSetupResult -Result $result
+        Write-Output 'RESULT Microsoft.VisualStudio.Product.Community modified'
+    } else {
+        $staging = New-VisualStudioBootstrapperStaging
+        try {
+            $download = Invoke-VisualStudioBootstrapperDownload -Uri $VisualStudioBootstrapperUrl -Destination $staging.BootstrapperPath
+            $signature = Assert-VisualStudioBootstrapperAuthenticode -Path $staging.BootstrapperPath
+            Assert-VisualStudioBootstrapperIdentity -Path $staging.BootstrapperPath
+            $hash = (Get-FileHash -LiteralPath $staging.BootstrapperPath -Algorithm SHA256).Hash
+            Write-Verbose "install-visual-studio: bootstrapper resolved URI: $($download.ResolvedUri)"
+            Write-Verbose "install-visual-studio: bootstrapper SHA256: $hash"
+            Write-Verbose "install-visual-studio: bootstrapper signer thumbprint: $($signature.SignerCertificate.Thumbprint)"
+
+            $installArguments = @('--passive', '--wait', '--norestart', '--includeRecommended') + $addArguments
+            $result = Invoke-VisualStudioSetup -ExecutablePath $staging.BootstrapperPath -Arguments $installArguments
+            Complete-VisualStudioSetupResult -Result $result
+            Write-Output 'RESULT Microsoft.VisualStudio.Product.Community installed'
+        } finally {
+            Remove-VisualStudioBootstrapperStaging -Directory $staging.Directory
+        }
+    }
+
+    $postcondition = Get-VisualStudioInstances -Product $VisualStudioProduct -VersionRange $VisualStudioVersionRange -RequiredIds $declaredIds
+    foreach ($instance in $postcondition.Instances) {
+        Assert-VisualStudioInstanceGeneration -Instance $instance -Product $VisualStudioProduct
+    }
+    if ($postcondition.Instances.Count -eq 0) {
+        throw 'install-visual-studio: postcondition failed; Community 18.x does not contain every declared workload/component ID'
+    }
+}
+
+Invoke-VisualStudioConvergence
+{{- end }}

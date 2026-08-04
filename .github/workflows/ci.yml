@@ -548,6 +548,7 @@ jobs:
         run: |
           set -euo pipefail
           .ci/test-native-package-reconcilers.sh
+          .ci/test-visualstudio-provisioner.sh
           .ci/test-windows-trust.sh
           .ci/test-windows-garden-reconcile.sh
           .ci/test-vscodium-targets.sh
