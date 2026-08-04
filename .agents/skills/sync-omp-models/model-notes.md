@@ -149,6 +149,10 @@ checked: 2026-07-29
   evaluation pressure it has been observed gaming a leaky harness rather than
   solving the task; safeguards can slow legitimate dual-use work; more model is
   not the right trade for routine chores.
+  Unreachable on this host since 2026-08-05: `openai-codex` was removed and
+  `opencode-zen`, the only other provider that served this line, is in
+  `disabledProviders`. The entry stays for the day a reachable provider carries
+  it again; no role may name it until then.
 - src: https://openai.com/index/gpt-5-6/ ·
   https://developers.openai.com/api/docs/models/gpt-5.6-sol.md ·
   https://metr.org/blog/2026-06-26-gpt-5-6-sol/
@@ -166,12 +170,16 @@ checked: 2026-07-29
   analysis found the mid tier solving FEWER tasks per attempt than Sol, so a
   lighter tier does not automatically mean less total work — it can mean more
   attempts.
+  Unreachable on this host since 2026-08-05, for the same reason as the Sol
+  entry above — `openai-codex` removed, `opencode-zen` disabled. `advisor` and
+  `reviewer` moved to the GLM main text line, which is where omo's own critic
+  chains land once the GPT hops are gone.
 - src: https://developers.openai.com/api/docs/models/gpt-5.6-terra.md ·
   https://openai.com/index/gpt-5-6/ ·
   https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained
 
 ### GPT Luna
-ids: `openai-codex/gpt-*-luna`
+ids: `openai-codex/gpt-*-luna`, `opencode-go/gpt-*-luna`
 checked: 2026-07-29
 - **built for** bounded high-volume work that still benefits from real reasoning
   and tool use.
@@ -194,6 +202,9 @@ checked: 2026-07-29
 - **weak at / watch** brittle on open-ended or underspecified asks; needs
   explicit instructions and follow-up verification; not a place to spend
   deliberation budget.
+  Unreachable on this host since 2026-08-05 — unlike the Luna line above, which
+  survived on `opencode-go`: `openai-codex` was removed, and the aggregators
+  that carry this id (`openrouter`, `opencode-zen`) are in `disabledProviders`.
 - src: https://developers.openai.com/api/docs/models/gpt-5.4-mini.md ·
   https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
 
@@ -248,7 +259,7 @@ checked: 2026-07-29
   https://ai.google.dev/gemini-api/docs/image-generation
 
 ### Kimi K series
-ids: `kimi-code/k*`, `kimi-code/kimi-k*`
+ids: `kimi-code/k*`, `kimi-code/kimi-k*`, `opencode-go/kimi-k*`
 checked: 2026-07-29
 - **built for** agentic real work: long-horizon coding, tool use, visual
   understanding, and end-to-end delivery.
@@ -280,7 +291,7 @@ checked: 2026-07-29
   https://www.kimi.com/code/docs/en/kimi-code/membership.html
 
 ### GLM main text line
-ids: `zai/glm-4.7`, `zai/glm-5`, `zai/glm-5.1`, `zai/glm-5.2`, `zai/glm-5-turbo`
+ids: `zai/glm-4.7`, `zai/glm-5`, `zai/glm-5.1`, `zai/glm-5.2`, `zai/glm-5-turbo`, `opencode-go/glm-5*`
 checked: 2026-07-29
 - **built for** the text-only engineering lane: hard coding, long-horizon agent
   work, and structured writing. `-turbo` marks an agent-optimized rung of the
@@ -318,6 +329,30 @@ checked: 2026-07-29
   the main text line, never an upgrade of it.
 - src: https://docs.z.ai/guides/vlm/glm-5v-turbo · https://docs.z.ai/guides/vlm/glm-4.6v
 
+### DeepSeek Pro
+ids: `opencode-go/deepseek-*-pro`
+checked: 2026-08-05
+- **built for** the open-weight deliberation ceiling: agentic coding plus
+  math/STEM and world-knowledge reasoning, with the chain of thought exposed as
+  a first-class response field.
+- **strong at** autonomous multi-step exploration in unfamiliar code — this is
+  the GPT-family character that survives when a GPT plan goes away, and omo
+  names it the one endorsed substitute for that departed deep line; issuing tool
+  calls from inside its own reasoning pass.
+- **weak at / watch** **deliberation is effectively mandatory** — the pro rung
+  silently promotes a lighter reasoning request up to its heavier one, so there
+  is no cheap setting on this line and it is the wrong home for routine chores;
+  a tool-calling turn MUST round-trip the model's own reasoning field or the
+  follow-up request is rejected; **no image input**, so it can never stand in
+  for `vision`; the vendor's newer Responses transport does not carry the pro
+  rung yet; and omo approves it only as a LIMITED alternative, explicitly not a
+  substitute for a Sol-only job shape — a tested limitation, not a hedge.
+- src: https://api-docs.deepseek.com/news/news260424 ·
+  https://api-docs.deepseek.com/api/create-chat-completion ·
+  https://api-docs.deepseek.com/guides/thinking_mode/ ·
+  https://api-docs.deepseek.com/guides/responses_api/ ·
+  https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/guide/agent-model-matching.md
+
 ---
 
 ## Role → family matching
@@ -329,18 +364,18 @@ this table moving with it, the check fails.
 | Role | Job shape | Family | Why this family |
 |---|---|---|---|
 | `default` | main coding and editing loop | Claude Opus | carries a plan across many tool calls and self-checks without scaffolding |
-| `slow` | deliberation ceiling | GPT Sol | left alone on a hard problem it explores further than a steered model |
+| `slow` | deliberation ceiling | DeepSeek Pro | keeps the autonomous exploration character of the departed GPT deep line, on the plan with the most untouched headroom |
 | `plan` | architecture against a huge context | Claude Fable/Mythos | built for long-horizon planning and delegation; overplanning is acceptable here |
 | `designer` | UI and visual work | Claude Opus | same line as the main loop, one effort step down; vision-capable |
 | `vision` | image input | Gemini Pro | image-and-text agent turns with real tool use, which the image-specialist line cannot do |
-| `advisor` | passive turn review | GPT Terra | a critic from a different vendor than the doer; review is its stated job shape |
+| `advisor` | passive turn review | GLM main text line | a critic from a different vendor than the doer, and where omo's own Momus/Oracle chains land once the GPT hops are gone |
 | `task` | default subagent | Claude Sonnet | agentic by default and narrates progress, which is what a parent reads back |
 | `smol` | light floor that still calls tools | GPT Luna | bounded high-volume tool loops retain real reasoning without entering a deliberation tier |
 | `tiny` | titles, memory, background triage | Gemini Flash-Lite | latency and volume are the job; judgment is not |
 | `bulk` | mechanical edits at volume — the one custom role | Gemini Flash-Lite | same tier as background work, but it owns a role so it can own a recovery order |
 | `commit` | commit messages | GPT Luna | bounded transformation with a clear success test still benefits from reliable reasoning |
 | `scout` | read-only exploration — and the read-only half of the compound-engineering persona fleet | Claude Sonnet | via `@task`; dispatched review work is deep-judgment, not exploration, and the light floor would demote it |
-| `reviewer` | code review subagent | GPT Terra | same critic model as turn review, so the two cannot disagree by accident |
+| `reviewer` | code review subagent | GLM main text line | same critic model as turn review, so the two cannot disagree by accident |
 | `security-reviewer` | security review subagent | session fallback (the doer's line) | ships no frontmatter model, so omission inherits the session model — the ceiling tier compound-engineering reserves for its highest-stakes personas |
 | `sonic` | mechanical bulk and extraction-tier retrieval | Gemini Flash-Lite | via `@bulk`; routine edits and grounding-scout retrieval where latency beats depth, stepping down through Claude then GPT |
 

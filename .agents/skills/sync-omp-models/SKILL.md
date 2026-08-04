@@ -87,7 +87,7 @@ ver="$(omp --version | cut -d/ -f2)"          # e.g. 17.1.8; release tags are v<
    curl -fsSL "https://raw.githubusercontent.com/can1357/oh-my-pi/v$ver/packages/coding-agent/src/config/model-roles.ts" -o "$ref/model-roles.ts"
    ```
 
-   Read `ModelRole` and `MODEL_ROLES` out of it. As of v17.1.8 the built-ins are
+   Read `ModelRole` and `MODEL_ROLES` out of it. As of v17.2.7 the built-ins are
    `default`, `smol`, `slow`, `vision`, `plan`, `designer`, `commit`, `tiny`,
    `task`, `advisor`.
 
@@ -99,18 +99,24 @@ ver="$(omp --version | cut -d/ -f2)"          # e.g. 17.1.8; release tags are v<
    head -20 "$ref"/agents/*.md          # frontmatter: name, model, thinkingLevel
    ```
 
-   As of v17.1.8: `designer: "@designer"`, `librarian: "@smol"`,
-   `reviewer: "@slow"`, `scout: "@smol"` (thinkingLevel `medium`),
-   `sonic: "@smol"` (thinkingLevel `medium`), `task: "@task"` (thinkingLevel
-   `auto`). Re-read them; do not trust this list.
+   As of v17.2.7: `designer: "@designer"`, `librarian: "@smol"` (thinkingLevel
+   `minimal`), `reviewer: "@slow"`, `scout: "@smol"` (thinkingLevel `medium`),
+   `security-reviewer` (no `model` field at all), `sonic: "@smol"` (thinkingLevel
+   `medium`), `task: "@task"` (thinkingLevel `auto`). Re-read them; do not trust
+   this list.
 
 3. **Local catalog — the availability gate.** `omp models --json` returns only
-   models under a provider omp can actually authenticate, so catalog presence
-   IS the auth check: a listed selector is reachable, and a provider missing
-   entirely means "unauthenticated on this host", not "delisted". Unlike the
-   OpenCode sibling, no separate liveness probe is warranted — inputs 3 and 4
-   settle availability between them, and a transient provider error is exactly
-   what `retry.fallbackChains` exists to absorb.
+   models under a provider omp can actually authenticate AND has not disabled,
+   so catalog presence IS both the auth check and the policy check: a listed
+   selector is reachable, a provider missing entirely means either
+   "unauthenticated on this host" or "listed in `disabledProviders`", and
+   neither means "delisted upstream". Read the declared `disabledProviders`
+   before concluding anything from an absence — `openrouter` and `opencode-zen`
+   are deliberately off, so their ids MUST NOT come back into the data through
+   any role, override, or chain hop. Unlike the OpenCode sibling, no separate
+   liveness probe is warranted — inputs 3 and 4 settle availability between
+   them, and a transient provider error is exactly what `retry.fallbackChains`
+   exists to absorb.
 
    ```sh
    omp models --json | jq -r '.models[] | "\(.selector)\tctx=\(.contextWindow)\tthink=\(.thinking // "-")\timg=\(.input | index("image") != null)"'
@@ -213,12 +219,16 @@ If any input is empty or errors, STOP and report it — never guess from memory.
    `tiny` each carry one even though both alias a role that already has one.
    **Anchor providers.** Every role's RESOLUTION PATH — its own selector plus
    its chain — MUST reach at least one `anthropic` hop and at least one
-   `openai-codex` hop. Those are the two plans with real headroom on this host,
+   `opencode-go` hop. Those are the two plans with real headroom on this host
+   (`opencode-go` replaced `openai-codex` in this rule when that provider was
+   removed from the host on 2026-08-05; it is the plan that now carries the
+   `gpt-5.6-luna` id, Kimi K3, GLM 5.2, and DeepSeek Pro),
    so a path that reaches neither can strand its role once the plan-served
    providers are spent. A role whose own selector already sits on an anchor
    provider satisfies that half from its primary, which frees its chain to spend
    every hop on a different provider. Anchor on the role's OWN tier — the
-   deliberation path anchors on Opus and Sol, the light paths on Haiku and Luna
+   deliberation path anchors on Opus and the opencode-go ceiling, the light
+   paths on Haiku and Luna
    — because anchoring must never escalate background work to a deliberation
    line. The Verify section enforces this.
 7. **Provider spread and quota order.** After any change, the coding loop,
@@ -363,7 +373,8 @@ those is read live from `omp models --json`, and a copy here is a second
 source of truth that silently drifts. It also drifts in a way that is hard to
 notice, because a vendor doc is not wrong — it is just describing a different
 transport: OpenAI documents the mini line at a 400,000-token context while the
-`openai-codex` transport exposes 272,000. Both are true; only the catalog is
+`openai-codex` transport exposed 272,000 (a transport this host no longer
+carries — the trap outlives it). Both are true; only the catalog is
 true HERE. Recording no number at all removes the whole failure mode. A note
 that states a number is a bug: delete the number.
 
@@ -467,7 +478,7 @@ jq -r '. as $s | ($s.modelRoles // {}) as $r
   | . as $c
   | (($r[$c.key] // "") | if startswith("@") then ($r[.[1:]] // "") else . end) as $own
   | ([$own] + $c.value) as $path
-  | ["anthropic","openai-codex"]
+  | ["anthropic","opencode-go"]
   | map(select(. as $p | ($path | map(startswith($p + "/")) | any) | not))
   | if length > 0 then "UNANCHORED PATH \($c.key): missing \(join(", "))" else empty end' \
   "$scratch/omp-settings.json"     # must print nothing
