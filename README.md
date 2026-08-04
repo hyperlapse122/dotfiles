@@ -1,12 +1,31 @@
 # dotfiles
 
-Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Supported Linux targets
-are Fedora Workstation and KDE; Windows/macOS are secondary targets.
+Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Fedora Workstation
+and KDE are the primary Linux targets; macOS and Windows are secondary targets
+that receive the cross-platform dotfiles plus a narrower, OS-native provision
+set (see [What the command does](#what-the-command-does)).
 
-Run the one-liner below. It downloads chezmoi, clones this repo, and applies it:
+### Bootstrap
+
+Each command downloads chezmoi, clones this repo into
+`~/.local/share/chezmoi` (the source state), and applies it. Pick your OS:
+
+**Linux & macOS** — curl:
 
 ```sh
 sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
+```
+
+**Linux & macOS** — wget (if `curl` is absent):
+
+```sh
+sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
+```
+
+**Windows** — PowerShell:
+
+```powershell
+iex "&{$(irm 'https://get.chezmoi.io/ps1')} init --apply hyperlapse122"
 ```
 
 `hyperlapse122` is the GitHub username, which chezmoi expands to
@@ -16,14 +35,19 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 
 1. Installs the chezmoi binary into a temporary location.
 2. Clones this repo into `~/.local/share/chezmoi` (the source state).
-3. Runs the [`.install-prerequisites.sh`](.install-prerequisites.sh)
-   `read-source-state.pre` hook, which installs the tooling chezmoi itself
-   depends on **before** it reads the source state:
+3. Runs the `read-source-state.pre` hook —
+   [`.install-prerequisites.sh`](.install-prerequisites.sh) on Linux/macOS,
+   [`.install-prerequisites.ps1`](.install-prerequisites.ps1) on Windows —
+   which installs the tooling chezmoi itself depends on **before** it reads the
+   source state:
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs these with `dnf`; macOS uses Homebrew (bootstrapping
-     Homebrew first if needed).
+   - **Fedora** installs 1Password / `op` / `mise` via `dnf` (the 1Password RPM
+     repo + the `jdxcode/mise` COPR); **macOS** via Homebrew (bootstrapping
+     Homebrew first if needed); **Windows** via `winget`. The remaining
+     formulas/casks (macOS) and winget packages (Windows) are installed later by
+     their own package-authority reconcilers, not by this hook.
 
    The same hook then refuses to continue until `op` is authenticated, so a
    fresh apply stops with clear guidance here rather than stalling on a
@@ -31,28 +55,41 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    A missing **GitHub API token** only prints an advisory — renders no longer
    call the GitHub API.
 
-4. Renders every template and applies it to `$HOME`, then runs the provisioning
-   scripts under [`.chezmoiscripts/`](.chezmoiscripts) — installing packages from
-   [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) (Fedora via dnf),
-   fonts, importing the GPG key, authenticating GitHub / Tailscale, switching the
-   login shell to zsh, and writing desktop (KDE or GNOME) / Solaar / system config.
-   Tailscale, switching the login shell to zsh, and writing desktop (KDE or
-   GNOME) / Solaar / system config. It also fetches pinned standalone CLI
-   binaries into `~/.local/bin` and coding-agent skills into `~/.agents/skills/`
+4. Renders every template, applies it to `$HOME`, and runs the provisioning
+   scripts under [`.chezmoiscripts/`](.chezmoiscripts). What lands is OS-gated
+   in [`.chezmoiignore`](.chezmoiignore), so the scope depends on the host:
+
+   - **Fedora** (full): packages from
+     [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) via dnf, fonts,
+     GPG key import, GitHub / GitLab / Tailscale / Docker auth, the zsh login
+     shell, and desktop config (KDE or GNOME, detected at apply time via
+     `plasmashell` vs `gnome-shell`). KDE hosts additionally get the Breeze
+     de-branding scripts; GNOME hosts otherwise keep GNOME defaults. fcitx5
+     (`fcitx5` + `fcitx5-hangul`) is the unified Korean input method on every
+     Linux target — KDE routes it through KWin's Wayland input-method socket,
+     GNOME through a per-user XDG autostart entry, with a one-shot migration
+     that strips any legacy `('ibus', …)` entry from GNOME's input sources and
+     installs the Kimpanel Shell extension so the candidate popup renders inside
+     GNOME Shell. Root-owned `/etc` system config (NVIDIA / Secure Boot / TPM2,
+     firewalld, resolved, …) is installed from
+     [`.chezmoidata/system.yaml`](.chezmoidata/system.yaml), and Tailscale
+     egress-NAT via ufw is enabled.
+   - **macOS**: the cross-platform dotfiles, Homebrew-managed tools (installed
+     by the [`20-darwin`](.chezmoiscripts/20-darwin) Homebrew reconciler), the
+     `mxm4-hapticd` LaunchAgent ([`Library/`](Library)), VSCodium user state,
+     and the Winbox-from-1Password importer.
+   - **Windows**: the cross-platform dotfiles, winget-managed tools, Visual
+     Studio ([`.chezmoidata/visualstudio.yaml`](.chezmoidata/visualstudio.yaml)),
+     VSCodium extensions ([`30-windows`](.chezmoiscripts/30-windows)), the
+     Task-Scheduler haptic daemon, and PowerShell counterparts of the Linux
+     agent/auth scripts.
+
+   Every OS fetches pinned standalone CLI binaries into `~/.local/bin` and
+   coding-agent skills into `~/.agents/skills/`
    (via [`.chezmoiexternals/`](.chezmoiexternals)), and provisions MCP servers
-   via `dotagents` into `~/.agents/` from the pinned
-   set in
+   via `dotagents` into `~/.agents/` from the pinned set in
    [`dot_agents/private_readonly_agents.toml.tmpl`](dot_agents/private_readonly_agents.toml.tmpl)
    (rendered to `~/.agents/agents.toml`).
-   The desktop is detected at apply time (`plasmashell` vs `gnome-shell`).
-   fcitx5 (`fcitx5` + `fcitx5-hangul`) is installed on every Linux target as
-   the unified Korean input method — KDE routes it through KWin's Wayland
-   input-method socket, GNOME through a per-user XDG autostart entry, with a
-   one-shot migration that strips any legacy `('ibus', …)` entry from GNOME's
-   input sources and installs the Kimpanel Shell extension so the candidate
-   popup renders inside GNOME Shell. KDE hosts additionally get the Breeze
-   de-branding scripts, while GNOME hosts otherwise stay on GNOME defaults.
-   Tailscale egress-NAT via ufw is enabled on Linux.
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
@@ -63,12 +100,14 @@ on-demand OAuth **fallback** — for a host without a PAT, a revoked session, or
 host you want on OAuth: browser flow by default, `--device` for headless
 sessions.
 
-### Encrypted host prompts (keyring — LUKS passphrase / MOK password)
+### Encrypted host prompt (keyring — LUKS passphrase)
 
-   TPM2 auto-unlock enrollment). Both are optional; **leave a prompt blank to
-   skip** it (no full-disk encryption, no NVIDIA, or a headless host).
+The `chezmoi init` prompt on a **Fedora** host asks for your existing LUKS
+passphrase (for TPM2 auto-unlock enrollment). It is optional — **leave it blank
+to skip** (no full-disk encryption, or a headless host). macOS and Windows never
+see this prompt.
 
-These are never written in plaintext. Each is stored in
+It is never written in plaintext. It is stored in
 `~/.config/chezmoi/chezmoi.toml` as AES ciphertext under a random 256-bit key
 that lives **only in your user keyring** (the Secret Service — GNOME Keyring on
 GNOME, KWallet's Secret Service on KDE), under
@@ -84,7 +123,7 @@ a non-blank answer, so:
   simply skips that feature.
 - **Re-prompt / recover** later — e.g. to set a passphrase you skipped, or if the
   keyring entry was lost or rotated (a lost key can no longer decrypt the stored
-  ciphertext) — by deleting the `luksPassphraseCipher` / `mokPasswordCipher` keys
+  ciphertext) — by deleting the `luksPassphraseCipher` key
   from `~/.config/chezmoi/chezmoi.toml` and re-running `chezmoi init`
   (or `chezmoi init --data=false`).
 
@@ -96,8 +135,10 @@ a non-blank answer, so:
   interactive prompt. fcitx5 is the unified input method on
   every Linux target; KDE hosts additionally get the Breeze
   de-branding, while GNOME hosts otherwise keep GNOME defaults.
-- macOS and Windows get the cross-platform dotfiles only.
-- **`sudo` access** — installing packages and writing `/etc` config needs root.
+- **macOS** (Homebrew) and **Windows** (winget / "App Installer") get the
+  cross-platform dotfiles plus their OS-native provision set (see above).
+- **`sudo` access on Linux** — installing Fedora packages and writing `/etc`
+  config needs root. macOS uses Homebrew; Windows uses winget (no `sudo`).
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
   at apply time through the 1Password CLI.
 
