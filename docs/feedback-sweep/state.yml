@@ -1,8 +1,4 @@
 schema_version: 1
-lease:
-  writer: "sweep-ThinkPad-E14-Gen-7-omp7f3a-2026-08-05"
-  timestamp: "2026-08-05T15:05:35.024954+00:00"
-  ttl_minutes: 60
 sources:
   gh-issues:
     cursor: "2026-08-05T14:46:10Z"
@@ -122,3 +118,16 @@ items:
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/177"
     updated_at: "2026-08-05T14:42:36Z"
+last_run:
+  timestamp: "2026-08-06T00:10:45+09:00"
+  outcome: "completed"
+  writer: "sweep-ThinkPad-E14-Gen-7-omp7f3a-2026-08-05"
+  counts:
+    gh-issues:
+      ack_deferred: 0
+      acknowledged: 7
+      closed: 0
+      fix_pending: 1
+      ingested: 8
+      media_analyzed: 0
+      needs_attention: 0
