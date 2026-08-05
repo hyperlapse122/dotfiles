@@ -117,11 +117,20 @@ function operatorLength(s: string, i: number): number {
  *
  * Tracks quote and heredoc state so an operator inside a quoted string or a
  * heredoc body never splits.
+ *
+ * Two invariants a maintainer editing this state machine must preserve:
+ * - Backslash escapes are honored outside quotes, inside double-quoted
+ *   strings, and inside ANSI-C `$'...'` strings, but never inside plain
+ *   single-quoted strings — matching bash exactly.
+ * - Command substitution (`$(...)` and backticks) is deliberately not parsed
+ *   here. `argvHead`'s `opaque` check detects it and routes the whole
+ *   command to `fallbackScan` via `classifyBash`, so handling it here too
+ *   would duplicate that responsibility.
  */
 export function splitCommand(command: string): SplitResult {
   const segments: Segment[] = [];
   let current: Segment = { text: "", bodies: [] };
-  let quote: '"' | "'" | null = null;
+  let quote: '"' | "'" | "$'" | null = null;
   let unparseable = false;
 
   // Heredocs opened on the current line, consumed at the next newline. Each
@@ -139,18 +148,25 @@ export function splitCommand(command: string): SplitResult {
     const c = command[i] as string;
 
     if (quote) {
-      if (c === "\\" && quote === '"' && i + 1 < command.length) {
+      if (c === "\\" && (quote === '"' || quote === "$'") && i + 1 < command.length) {
         current.text += c + command[i + 1];
         i += 2;
         continue;
       }
-      if (c === quote) quote = null;
+      if (c === (quote === "$'" ? "'" : quote)) quote = null;
       current.text += c;
       i += 1;
       continue;
     }
 
     if (c === "\\" && i + 1 < command.length) {
+      current.text += c + command[i + 1];
+      i += 2;
+      continue;
+    }
+
+    if (c === "$" && command[i + 1] === "'") {
+      quote = "$'";
       current.text += c + command[i + 1];
       i += 2;
       continue;

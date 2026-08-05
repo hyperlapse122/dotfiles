@@ -110,6 +110,22 @@ export function createProber(options: ProberOptions) {
     }
   }
 
+  /**
+   * The identity comes from the host's own JSON, so it is encoded rather than
+   * interpolated raw: an identity containing the delimiter must not be able
+   * to collide with another identity's cache entry (plan R16). The key still
+   * carries `ref.hostKind`, `ref.host`, and `ref.path` directly, so a hit can
+   * never answer for the wrong repository or host.
+   *
+   * Cost (plan KTD8): `probeOne`'s fast path below serves a still-fresh
+   * verdict from a peeked, possibly-expired identity-map entry without
+   * re-probing identity, so an identity change is now bounded by the
+   * *verdict* TTL rather than the *identity* TTL. `cacheTtlMs` must stay
+   * short for that window to stay small.
+   */
+  const verdictKey = (identity: string | null, ref: RepoRef) =>
+    `${encodeURIComponent(identity ?? "anonymous")}|${ref.hostKind}|${ref.host}|${ref.path}`;
+
   /** Verdict for one repository, plus the fork parent to probe next, if any. */
   async function probeOne(ref: RepoRef): Promise<{ outcome: ProbeOutcome; parent: RepoRef | null }> {
     const cli = ref.hostKind === "github" ? "gh" : "glab";
@@ -118,11 +134,23 @@ export function createProber(options: ProberOptions) {
       parent: null,
     });
 
+    // Fast path (plan R5/KTD8): peek the identity-map entry for this host —
+    // fresh or expired — and try the verdict cache with its value before
+    // paying an identity subprocess. Neither map is written here, so an
+    // expired identity entry stays expired for the next miss to re-bind.
+    const peekedIdentity = identities.get(`${ref.hostKind}|${ref.host}`);
+    if (peekedIdentity !== undefined) {
+      const fastCached = verdicts.get(verdictKey(peekedIdentity.value, ref));
+      if (fastCached && fastCached.expiresAt > now()) {
+        return {
+          outcome: { verdict: fastCached.verdict, detail: fastCached.detail, repo: ref.path },
+          parent: null,
+        };
+      }
+    }
+
     const identity = await identityFor(ref);
-    // The identity comes from the host's own JSON, so it is encoded rather than
-    // interpolated raw: an identity containing the delimiter must not be able
-    // to collide with another identity's cache entry (plan R16).
-    const key = `${encodeURIComponent(identity ?? "anonymous")}|${ref.hostKind}|${ref.host}|${ref.path}`;
+    const key = verdictKey(identity, ref);
     const cached = verdicts.get(key);
     if (cached && cached.expiresAt > now()) {
       return {

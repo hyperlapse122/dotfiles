@@ -3,13 +3,16 @@
  * In-process behavior suite for the unmanaged-repo-guard omp extension.
  *
  * Covers plan units U1-U5 of
- * docs/plans/2026-08-05-006-feat-unmanaged-repo-issue-guard-plan.md.
+ * docs/plans/2026-08-05-006-feat-unmanaged-repo-issue-guard-plan.md, plus
+ * R3-R6 of docs/plans/feedback-sweep-plan.md (ANSI-C quoting, its invariant
+ * docs, the cheap verdict-cache hit, and the block-path audit log).
  * No network, no real `gh`/`glab`, no real git: every subprocess is stubbed.
  *
  * Run: bun .ci/test-unmanaged-repo-guard.ts
  */
 
-import { createGuard, readConfig } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/index.ts";
+import unmanagedRepoGuard, { createGuard, readConfig } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/index.ts";
+import { createAuditLog } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/audit.ts";
 import type {
   BoundedExec,
   Exec,
@@ -22,11 +25,11 @@ import {
   resolveCandidates,
 } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts";
 import type { RepoRef } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts";
-import { classify } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
+import { classify, splitCommand } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 120;
+const EXPECTED_MIN_CHECKS = 191;
 
 let passed = 0;
 const failures: string[] = [];
@@ -219,6 +222,60 @@ eq(
   asWrite(bash("cd \"$T\" && gh issue create --repo o/r"))?.repo,
   "o/r",
 );
+
+// ------------------------------------------- R3: ANSI-C $'...' quoting (KTD6)
+
+check(
+  "R3 chained create after a $'...' search string classifies the real segment",
+  asWrite(bash(`gh issue list --repo o/r --search $'it\\'s' ; gh issue create --repo other/repo`))?.repo ===
+    "other/repo",
+);
+{
+  const result = splitCommand(`echo $'a;b'`);
+  eq("R3 a ; inside $'...' does not split the command", result.segments.length, 1);
+}
+{
+  const result = splitCommand(`echo start $'a ; gh issue create --repo o/r`);
+  eq("R3 unterminated $'...' sets unparseable", result.unparseable, true);
+}
+check(
+  "R3 unterminated $'...' routes to fallbackScan",
+  asWrite(bash(`echo start $'a ; gh issue create --repo o/r`))?.repo === "o/r",
+);
+{
+  const result = splitCommand(`gh issue create --repo o/r -t 'a\\'; echo no`);
+  eq("R3 backslash inside plain '...' stays literal (bash-matching)", result.unparseable, false);
+  eq("R3 plain '...' still splits at the real ; that follows it", result.segments.length, 2);
+}
+check(
+  "R3 $' inside a double-quoted string does not enter the ANSI-C state",
+  asWrite(bash(`echo "abc$'def" ; gh issue create --repo o/r`))?.repo === "o/r",
+);
+{
+  const result = splitCommand(`gh issue create --repo o/r -t $'\\\\' ; echo no`);
+  eq("R3 an escaped backslash inside $'...' is consumed before the closing quote", result.unparseable, false);
+  eq("R3 ...and the command still splits at the real ; that follows it", result.segments.length, 2);
+}
+{
+  const cmd = `gh issue create --repo o/r -t $'it\\'s a test'`;
+  const result = splitCommand(cmd);
+  eq("R3 a properly-closed $'...' does not leave a quote open at EOF", result.unparseable, false);
+  eq("R3 a properly-closed $'...' yields exactly one segment", result.segments.length, 1);
+  eq("R3 the single segment's text is the whole command", result.segments[0]?.text, cmd);
+}
+
+// --------------------------------------- R6: splitCommand invariant docs
+
+{
+  const source = await Bun.file(`${import.meta.dir}/../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts`).text();
+  const match = /\/\*\*([\s\S]*?)\*\/\s*export function splitCommand/.exec(source);
+  const doc = match?.[1] ?? "";
+  check(
+    "R6 splitCommand JSDoc documents the single-quote backslash invariant",
+    /single-quoted strings/.test(doc) && /never inside plain/.test(doc),
+  );
+  check("R6 splitCommand JSDoc documents the argvHead substitution split", /argvHead/.test(doc));
+}
 
 // ------------------------------------------------------- U2: target resolution
 
@@ -413,6 +470,105 @@ eq(
   check("U3 stderr in the detail is bounded", outcome.detail.length < 200, `len=${outcome.detail.length}`);
 }
 
+// ---------------------------------------- R5: cheap verdict-cache hit (KTD8)
+
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: 1000 });
+  const repoA = { host: "github.com", hostKind: "github" as const, path: "o/r5-a" };
+  const repoB = { host: "github.com", hostKind: "github" as const, path: "o/r5-b" };
+  await prober.evaluate([repoA]); // t=0: identity + verdictA cached, both expire at 1000
+  clock = 500;
+  await prober.evaluate([repoB]); // t=500: identity cache hit, verdictB set, expires at 1500
+  clock = 1200; // identity entry (expiry 1000) now expired; verdictB (expiry 1500) still fresh
+  const identityCallsBefore = exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length;
+  const repoCallsBefore = exec.calls.filter((c) => c.command === "gh" && c.args[0] === "repo").length;
+  const outcome = await prober.evaluate([repoB]);
+  eq("R5 expired identity + fresh verdict returns the cached verdict", outcome.verdict, "managed");
+  eq(
+    "R5 expired identity + fresh verdict spawns no identity subprocess",
+    exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length,
+    identityCallsBefore,
+  );
+  eq(
+    "R5 expired identity + fresh verdict spawns no repo-view subprocess",
+    exec.calls.filter((c) => c.command === "gh" && c.args[0] === "repo").length,
+    repoCallsBefore,
+  );
+}
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: 1000 });
+  const ref = { host: "github.com", hostKind: "github" as const, path: "o/r5-c" };
+  await prober.evaluate([ref]);
+  clock = 5000; // both identity and verdict TTLs (1000ms) have elapsed
+  const identityCallsBefore = exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length;
+  await prober.evaluate([ref]);
+  check(
+    "R5 identity and verdict both expired re-runs the identity subprocess",
+    exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length > identityCallsBefore,
+  );
+}
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  const outcome = await verdictFor({ host: "github.com", hostKind: "github", path: "o/r5-cold" }, exec);
+  eq("R5 cold cache still probes identity then repo", outcome.verdict, "managed");
+  eq("R5 cold cache spawns exactly one identity subprocess", exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length, 1);
+  eq("R5 cold cache spawns exactly one repo subprocess", exec.calls.filter((c) => c.command === "gh" && c.args[0] === "repo").length, 1);
+}
+{
+  let login = "alice";
+  const exec = boundedStub((command, args) => {
+    if (command === "gh" && args[0] === "api") return execResult({ stdout: `${login}\n` });
+    return execResult({ stdout: JSON.stringify({ viewerPermission: login === "alice" ? "WRITE" : "READ", isFork: false }) });
+  });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: 1000 });
+  const repoA = { host: "github.com", hostKind: "github" as const, path: "o/r5-d1" };
+  const repoB = { host: "github.com", hostKind: "github" as const, path: "o/r5-d2" };
+  await prober.evaluate([repoA]); // t=0, alice, managed; identity+verdictA expire at 1000
+  clock = 500;
+  await prober.evaluate([repoB]); // t=500, identity cache hit (alice), verdictB managed, expires at 1500
+  clock = 1200; // identity (expiry 1000) now expired
+  login = "bob"; // host access actually changed
+  const identityCallsBefore = exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length;
+  const repoCallsBefore = exec.calls.filter((c) => c.command === "gh" && c.args[0] === "repo").length;
+  const stale = await prober.evaluate([repoB]);
+  eq("R5 identity change while verdict fresh still serves the old identity's verdict (KTD8 cost)", stale.verdict, "managed");
+  eq(
+    "R5 identity change while verdict fresh spawns no identity subprocess",
+    exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length,
+    identityCallsBefore,
+  );
+  eq(
+    "R5 identity change while verdict fresh spawns no repo-view subprocess",
+    exec.calls.filter((c) => c.command === "gh" && c.args[0] === "repo").length,
+    repoCallsBefore,
+  );
+
+  clock = 1600; // > repoB's own verdict expiry (1500): the stale slot is finally gone
+  const fresh = await prober.evaluate([repoB]);
+  eq("R5 two different identities on one host do not share a verdict slot", fresh.verdict, "unmanaged");
+  check(
+    "R5 the new identity gets its own probe once the stale verdict truly expires",
+    exec.calls.filter((c) => c.command === "gh" && c.args[0] === "api").length > identityCallsBefore,
+  );
+}
+{
+  const exec = ghBounded({}, { repoFailure: { code: 1, stderr: "boom" } });
+  const prober = createProber({ exec, now: () => 0, cacheTtlMs: 1000 });
+  const ref = { host: "github.com", hostKind: "github" as const, path: "o/r5-e" };
+  await prober.evaluate([ref]);
+  const first = exec.calls.filter((c) => c.args[0] === "repo").length;
+  await prober.evaluate([ref]);
+  check(
+    "R5 an indeterminate outcome is never served by the fast path either (guard plan KTD3)",
+    exec.calls.filter((c) => c.args[0] === "repo").length > first,
+  );
+}
+
 // ------------------------------------------------------------------ U4: reason
 
 {
@@ -533,6 +689,276 @@ for (const [label, call] of [
     check(`U5 readConfig rejects ${label}`, threw);
   }
   await Bun.$`rm -rf ${tmp}`.quiet();
+}
+
+// -------------------------------------------------------- R4: audit log (KTD7)
+
+const GUARD_SRC_DIR = `${import.meta.dir}/../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src`;
+const GUARD_PLUGIN_DIR = `${import.meta.dir}/../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard`;
+
+/** Points XDG_STATE_HOME at a fresh scratch dir for the duration of `fn`. */
+async function withScratchStateHome<T>(fn: (stateHome: string) => Promise<T>): Promise<T> {
+  const dir = `${process.env.XDG_RUNTIME_DIR ?? "."}/urg-audit-test-${Math.random().toString(36).slice(2)}`;
+  await Bun.$`mkdir -p ${dir}`.quiet();
+  const prev = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = dir;
+  try {
+    return await fn(dir);
+  } finally {
+    process.env.XDG_STATE_HOME = prev;
+    await Bun.$`rm -rf ${dir}`.quiet();
+  }
+}
+
+function auditLines(text: string): string[] {
+  return text
+    .trim()
+    .split("\n")
+    .filter((l) => l.length > 0);
+}
+
+// A non-issue-write tool call never touches the audit seam (pass-through
+// path stays allocation-free, plan KTD7).
+{
+  const calls: unknown[] = [];
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "READ", isFork: false }),
+    now: () => 0,
+    config: CONFIG,
+    auditAppend: (entry) => calls.push(entry),
+  });
+  await handler({ toolName: "computer", input: { code: "click(1,2)" } }, { hasUI: false });
+  eq("R4 a non-issue-write tool call writes no audit entry", calls.length, 0);
+}
+
+// An unmanaged verdict writes exactly one JSON line with the expected keys.
+await withScratchStateHome(async (stateHome) => {
+  const blocked = await runGuard("gh issue create --repo other/repo -t x", ghStub({ viewerPermission: "READ", isFork: false }));
+  check("R4 unmanaged verdict blocks", blocked?.block === true);
+  const text = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).text();
+  const lines = auditLines(text);
+  eq("R4 unmanaged verdict writes exactly one audit line", lines.length, 1);
+  const entry = JSON.parse(lines[0] ?? "{}");
+  check(
+    "R4 the audit line carries the expected keys",
+    typeof entry.timestamp === "string" &&
+      entry.tool === "bash" &&
+      entry.path === "unmanaged-verdict" &&
+      entry.verdict === "unmanaged" &&
+      entry.repo === "other/repo" &&
+      entry.hostKind === "github" &&
+      entry.cli === "gh",
+    JSON.stringify(entry),
+  );
+});
+
+// A managed verdict writes nothing.
+await withScratchStateHome(async (stateHome) => {
+  const passed = await runGuard("gh issue create --repo other/repo -t x", ghStub({ viewerPermission: "WRITE", isFork: false }));
+  eq("R4 managed verdict passes", passed, undefined);
+  const exists = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).exists();
+  check("R4 managed verdict writes no audit file", !exists);
+});
+
+// The unresolvable-target block writes a line tagged with that path.
+await withScratchStateHome(async (stateHome) => {
+  const blocked = await runGuard("gh issue create -t x -b y", ghStub({}));
+  check("R4 unresolvable-target blocks", blocked?.block === true);
+  const text = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).text();
+  const entry = JSON.parse(auditLines(text)[0] ?? "{}");
+  eq("R4 the unresolvable-target audit line is tagged with that path", entry.path, "unresolvable-target");
+});
+
+// The config-failure fail-closed handler writes a line: no rendered
+// package.json exists in the raw source tree (only package.json.tmpl), so
+// the real default export deterministically takes its catch branch.
+await withScratchStateHome(async (stateHome) => {
+  const errors: string[] = [];
+  let handler: ((event: unknown, context?: unknown) => Promise<unknown>) | undefined;
+  const pi = {
+    exec: ghStub({ viewerPermission: "READ", isFork: false }),
+    on: (_event: "tool_call", h: NonNullable<typeof handler>) => {
+      handler = h;
+    },
+    logger: { error: (message: string) => errors.push(message) },
+  };
+  unmanagedRepoGuard(pi as never);
+  check("R4 config-failure handler registered", handler !== undefined);
+  const result = (await handler?.(
+    { toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } },
+    { hasUI: false },
+  )) as { block?: boolean } | undefined;
+  check("R4 config-failure fail-closed handler blocks", result?.block === true);
+  check(
+    "R4 config-failure logs the configuration error",
+    errors.some((m) => m.includes("disabled by configuration error")),
+  );
+  const text = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).text();
+  const entry = JSON.parse(auditLines(text)[0] ?? "{}");
+  eq("R4 the config-failure handler writes a line tagged with that path", entry.path, "config-failure");
+});
+
+// The unwritable log location does not change the verdict: the block is
+// still returned with its reason, and the failure is reported to the
+// logger. The parent of XDG_STATE_HOME is a regular file, so directory
+// creation fails on permissions-independent grounds (also fails for root).
+{
+  const scratchParent = `${process.env.XDG_RUNTIME_DIR ?? "."}/urg-audit-unwritable-${Math.random().toString(36).slice(2)}`;
+  await Bun.$`mkdir -p ${scratchParent}`.quiet();
+  const regularFile = `${scratchParent}/not-a-dir`;
+  await Bun.write(regularFile, "not a directory");
+  const prevXdg = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = `${regularFile}/state`;
+  try {
+    const errors: string[] = [];
+    const handler = createGuard({
+      exec: ghStub({ viewerPermission: "READ", isFork: false }),
+      now: () => 0,
+      config: CONFIG,
+      logger: { error: (m) => errors.push(m) },
+    });
+    const blocked = await handler(
+      { toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } },
+      { hasUI: false },
+    );
+    check(
+      "R4 an unwritable log location still returns the block with its reason",
+      blocked?.block === true && typeof blocked.reason === "string" && blocked.reason.length > 0,
+    );
+    check(
+      "R4 an unwritable log location reports the failure to the logger",
+      errors.some((m) => m.includes("audit log append failed")),
+    );
+  } finally {
+    process.env.XDG_STATE_HOME = prevXdg;
+    await Bun.$`rm -rf ${scratchParent}`.quiet();
+  }
+}
+
+// The production call site (index.ts's default export) supplies the logger:
+// an audit-append failure reaches a logger the deployed wiring provides, not
+// only one a test injects. A valid manifest is written temporarily so
+// `createGuard` is reached with a real config, exercising the true
+// production call site rather than the config-failure fallback above.
+{
+  const packageJsonPath = `${GUARD_PLUGIN_DIR}/package.json`;
+  await Bun.write(packageJsonPath, JSON.stringify({ unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000 } }));
+  try {
+    const scratchParent = `${process.env.XDG_RUNTIME_DIR ?? "."}/urg-audit-prod-${Math.random().toString(36).slice(2)}`;
+    await Bun.$`mkdir -p ${scratchParent}`.quiet();
+    const regularFile = `${scratchParent}/not-a-dir`;
+    await Bun.write(regularFile, "not a directory");
+    const prevXdg = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = `${regularFile}/state`;
+    try {
+      const errors: string[] = [];
+      let handler: ((event: unknown, context?: unknown) => Promise<unknown>) | undefined;
+      const pi = {
+        exec: ghStub({ viewerPermission: "READ", isFork: false }),
+        on: (_event: "tool_call", h: NonNullable<typeof handler>) => {
+          handler = h;
+        },
+        logger: { error: (message: string) => errors.push(message) },
+      };
+      unmanagedRepoGuard(pi as never);
+      check("R4 production wiring registered a handler with a valid manifest", handler !== undefined);
+      const result = (await handler?.(
+        { toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } },
+        { hasUI: false },
+      )) as { block?: boolean } | undefined;
+      check("R4 the production call site still blocks when the audit append fails", result?.block === true);
+      check(
+        "R4 the production call site's audit-append failure reaches the deployed logger",
+        errors.some((m) => m.includes("audit log append failed")),
+      );
+    } finally {
+      process.env.XDG_STATE_HOME = prevXdg;
+      await Bun.$`rm -rf ${scratchParent}`.quiet();
+    }
+  } finally {
+    await Bun.$`rm -f ${packageJsonPath}`.quiet();
+  }
+}
+
+// Two separate appender instances writing to the same file both land.
+await withScratchStateHome(async (stateHome) => {
+  createAuditLog({}).block(
+    { tool: "bash", path: "unmanaged-verdict", verdict: "unmanaged", repo: "o/r-a", host: "github.com", hostKind: "github", cli: "gh" },
+    "reason a",
+  );
+  createAuditLog({}).block(
+    { tool: "bash", path: "unmanaged-verdict", verdict: "unmanaged", repo: "o/r-b", host: "github.com", hostKind: "github", cli: "gh" },
+    "reason b",
+  );
+  const text = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).text();
+  const lines = auditLines(text);
+  eq("R4 two separate appender instances both land without truncation", lines.length, 2);
+  check(
+    "R4 both lines from separate instances parse as JSON",
+    lines.every((l) => {
+      try {
+        JSON.parse(l);
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+  );
+});
+
+// Two sequential blocks append two lines rather than truncating the file.
+await withScratchStateHome(async (stateHome) => {
+  await runGuard("gh issue create --repo other/repo1 -t x", ghStub({ viewerPermission: "READ", isFork: false }));
+  await runGuard("gh issue create --repo other/repo2 -t x", ghStub({ viewerPermission: "READ", isFork: false }));
+  const text = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).text();
+  eq("R4 two sequential blocks append two lines rather than truncating", auditLines(text).length, 2);
+});
+
+// A long field value is truncated so the emitted line stays under the bound.
+await withScratchStateHome(async (stateHome) => {
+  const longValue = "r".repeat(5000);
+  createAuditLog({}).block(
+    { tool: "bash", path: "unmanaged-verdict", verdict: "unmanaged", repo: longValue, host: longValue, hostKind: "github", cli: "gh" },
+    "reason",
+  );
+  const text = await Bun.file(`${stateHome}/unmanaged-repo-guard/audit.jsonl`).text();
+  const line = auditLines(text)[0] ?? "";
+  check("R4 a long field value keeps the emitted line well under the 4KB bound", line.length < 4096, `len=${line.length}`);
+  const entry = JSON.parse(line);
+  check("R4 the long repo value was truncated", entry.repo.length < longValue.length);
+});
+
+// The seam is the only constructor: introduce a stray block construction
+// outside audit.ts, confirm both gates (typecheck, literal grep) catch it,
+// then restore and confirm both gates are clean again.
+{
+  const strayPath = `${GUARD_SRC_DIR}/_stray_block_test.ts`;
+  const includeTs = "--include=*.ts";
+  await Bun.write(
+    strayPath,
+    'import type { BlockResult } from "./audit.ts";\n\nexport const bogus: BlockResult = { block: true, reason: "nope" };\n',
+  );
+  try {
+    const grepWithStray = await Bun.$`grep -rn "block: true" ${GUARD_SRC_DIR} ${includeTs}`.quiet().nothrow();
+    const strayLines = grepWithStray.stdout.toString().split("\n").filter((l) => l.includes("_stray_block_test.ts"));
+    check("R4 the literal grep finds the injected out-of-seam block", strayLines.length > 0);
+
+    const tscResult = await Bun.$`packages/node_modules/.bin/tsc --noEmit -p .ci/tsconfig.unmanaged-repo-guard.json`.quiet().nothrow();
+    check("R4 the nominal type rejects a block constructed outside audit.ts", tscResult.exitCode !== 0);
+  } finally {
+    await Bun.$`rm -f ${strayPath}`.quiet();
+  }
+
+  const grepClean = await Bun.$`grep -rln "block: true" ${GUARD_SRC_DIR} ${includeTs}`.quiet().nothrow();
+  const cleanFiles = grepClean.stdout.toString().split("\n").filter((l) => l.trim() !== "");
+  eq(
+    "R4 no block: true literal remains outside audit.ts once restored",
+    cleanFiles.filter((f) => !f.endsWith("/audit.ts")).length,
+    0,
+  );
+
+  const tscClean = await Bun.$`packages/node_modules/.bin/tsc --noEmit -p .ci/tsconfig.unmanaged-repo-guard.json`.quiet().nothrow();
+  check("R4 the tree typechecks cleanly again once restored", tscClean.exitCode === 0);
 }
 
 // ------------------------------------------------------------------- report

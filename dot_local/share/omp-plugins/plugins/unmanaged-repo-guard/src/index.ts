@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createAuditLog } from "./audit.ts";
+import type { AuditAppend, BlockResult, Logger } from "./audit.ts";
 import { createBoundedExec } from "./exec.ts";
 import type { Exec } from "./exec.ts";
 import { createProber } from "./probe.ts";
@@ -20,7 +22,7 @@ import { classify } from "./triggers.ts";
 
 type ToolCallEvent = { toolName: string; input: Record<string, unknown> };
 type ToolCallContext = { hasUI?: boolean; cwd?: string };
-type ToolCallResult = { block: true; reason: string } | undefined;
+type ToolCallResult = BlockResult | undefined;
 type ToolCallHandler = (event: ToolCallEvent, context?: ToolCallContext) => Promise<ToolCallResult>;
 
 export type GuardConfig = { probeTimeoutMs: number; cacheTtlMs: number };
@@ -29,6 +31,9 @@ export type GuardDeps = {
   exec: Exec;
   now?: () => number;
   config: GuardConfig;
+  logger?: Logger;
+  /** Injectable for tests: a recording fake that never touches the filesystem. */
+  auditAppend?: AuditAppend;
 };
 
 const MIN_MS = 1;
@@ -45,6 +50,7 @@ export function createGuard(deps: GuardDeps): ToolCallHandler {
     now: deps.now ?? Date.now,
     cacheTtlMs: deps.config.cacheTtlMs,
   });
+  const auditLog = createAuditLog({ logger: deps.logger, append: deps.auditAppend });
 
   return async function onToolCall(event, context) {
     const classification = classify(event.toolName, event.input ?? {});
@@ -55,23 +61,43 @@ export function createGuard(deps: GuardDeps): ToolCallHandler {
 
     const { candidates, invalid } = await resolveCandidates(classification, cwd, exec);
     if (invalid) {
-      return {
-        block: true,
-        reason: composeReason(
+      const repo = classification.repo ?? "an unresolved repository";
+      return auditLog.block(
+        {
+          tool: event.toolName,
+          path: "unresolvable-target",
+          verdict: "indeterminate",
+          repo,
+          host: classification.host ?? "unknown",
+          hostKind: classification.hostKind ?? "unknown",
+          cli: classification.cli ?? "mcp",
+        },
+        composeReason(
           {
             verdict: "indeterminate",
             detail: "the target repository could not be resolved or failed validation",
-            repo: classification.repo ?? "an unresolved repository",
+            repo,
           },
           context?.hasUI === true,
         ),
-      };
+      );
     }
 
     const outcome = await prober.evaluate(candidates);
     if (outcome.verdict === "managed") return undefined;
 
-    return { block: true, reason: composeReason(outcome, context?.hasUI === true) };
+    return auditLog.block(
+      {
+        tool: event.toolName,
+        path: "unmanaged-verdict",
+        verdict: outcome.verdict,
+        repo: outcome.repo,
+        host: candidates[0]?.host ?? classification.host ?? "unknown",
+        hostKind: candidates[0]?.hostKind ?? classification.hostKind ?? "unknown",
+        cli: classification.cli ?? "mcp",
+      },
+      composeReason(outcome, context?.hasUI === true),
+    );
   };
 }
 
@@ -101,7 +127,7 @@ export function readConfig(manifestPath: string): GuardConfig {
 type OmpExtensionApi = {
   exec: Exec;
   on: (event: "tool_call", handler: ToolCallHandler) => void;
-  logger?: { error?: (message: string) => void };
+  logger?: Logger;
 };
 
 export default function unmanagedRepoGuard(pi: OmpExtensionApi): void {
@@ -109,7 +135,7 @@ export default function unmanagedRepoGuard(pi: OmpExtensionApi): void {
 
   let handler: ToolCallHandler;
   try {
-    handler = createGuard({ exec: pi.exec.bind(pi), config: readConfig(manifestPath) });
+    handler = createGuard({ exec: pi.exec.bind(pi), config: readConfig(manifestPath), logger: pi.logger });
   } catch (error) {
     // omp isolates a factory throw per extension: it would simply mean this
     // extension registers nothing, leaving every issue write unguarded with no
@@ -117,16 +143,26 @@ export default function unmanagedRepoGuard(pi: OmpExtensionApi): void {
     // register a handler that blocks every recognised issue write outright.
     const detail = error instanceof Error ? error.message : String(error);
     pi.logger?.error?.(`unmanaged-repo-guard: disabled by configuration error: ${detail}`);
+    const auditLog = createAuditLog({ logger: pi.logger });
     handler = async (event, context) => {
-      if (classify(event.toolName, event.input ?? {}).kind !== "issue-write") return undefined;
-      return {
-        block: true,
-        reason: `Blocked: the unmanaged-repository guard could not load its configuration (${detail}), so it cannot verify whether the user manages this repository. This gate is fail-closed. ${
+      const classification = classify(event.toolName, event.input ?? {});
+      if (classification.kind !== "issue-write") return undefined;
+      return auditLog.block(
+        {
+          tool: event.toolName,
+          path: "config-failure",
+          verdict: "indeterminate",
+          repo: classification.repo ?? "unknown",
+          host: classification.host ?? "unknown",
+          hostKind: classification.hostKind ?? "unknown",
+          cli: classification.cli ?? "mcp",
+        },
+        `Blocked: the unmanaged-repository guard could not load its configuration (${detail}), so it cannot verify whether the user manages this repository. This gate is fail-closed. ${
           context?.hasUI === true
             ? "Tell the user the guard is misconfigured and let them decide; do not retry."
             : "Do not file. Record the finding in the committed residual-record file and report the misconfiguration."
         }`,
-      };
+      );
     };
   }
 
