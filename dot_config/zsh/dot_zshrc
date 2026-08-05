@@ -5,6 +5,16 @@
 #   Sorin Ionescu <sorin.ionescu@gmail.com>
 #
 
+# Make the chezmoi-managed completion directory loadable. This MUST stay above
+# the prezto init below: prezto's `completion` module is what calls `compinit`,
+# and compinit only scans $fpath as it stands at that moment. It lives here
+# rather than in .zprofile because fpath is a shell array, not an exported
+# variable — .zprofile is skipped for a nested interactive shell (SHLVL > 1,
+# the common tmux and subshell case), which would silently lose the entry.
+# Prepended so a repo-managed completion wins over a system one of the same
+# name; the (N) qualifier drops the entry when the directory is absent.
+fpath=($HOME/.local/share/zsh/site-functions(N) $fpath)
+
 # Source Prezto.
 if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
   source "${ZDOTDIR:-$HOME}/.zprezto/init.zsh"

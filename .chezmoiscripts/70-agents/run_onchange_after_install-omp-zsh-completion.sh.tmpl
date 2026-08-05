@@ -1,0 +1,136 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $ompVersion := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp")) -}}
+#!/usr/bin/env bash
+# Installs omp's zsh completion as ~/.local/share/zsh/site-functions/_omp.
+#
+# Why generate instead of `source <(omp completions zsh)` in .zshrc: measured on
+# this host over 5 warm trials, `omp completions zsh` costs a median 0.711s
+# against kubectl 0.033s / minikube 0.062s / helm 0.034s, and a warm
+# `zsh -ic exit` is 0.766s-0.802s — a fourth source line would roughly DOUBLE
+# interactive shell startup. An $fpath function is autoloaded lazily and costs
+# nothing per shell. dot_config/zsh/dot_zshrc puts that directory on $fpath
+# above the prezto init; without it this file is written and never read.
+#
+# Why generate instead of committing a static _omp: nothing would bind the
+# snapshot to the installed binary. refresh-release-lock.yml re-resolves the
+# lock hourly and commits on change, so omp bumps land automatically while a
+# committed completion would drift until a human remembered to regenerate it.
+#
+# after phase: omp is a chezmoi `file` external landing at ~/.local/bin/omp, so
+# it exists only once the FILE phase has run. Windows-gated out because the zsh
+# config and the prezto external are themselves POSIX-only.
+#
+# Dependency fingerprint: chezmoi hashes this rendered script to decide whether
+# to re-run it, so the two comment lines below ARE the trigger. Mirrors
+# run_onchange_after_winbox-macos.sh.tmpl. Do NOT switch to fingerprint.tmpl
+# over .chezmoidata/releases.json: that hashes the whole lock and would
+# regenerate on every unrelated hourly refresh.
+#
+# The availability flag is the second half of the trigger and exists because a
+# clean exit-0 skip below is recorded by chezmoi as a SUCCESSFUL run and never
+# retried until the fingerprint changes (AGENTS.md). Without the flag, a host
+# that skipped once because omp was briefly unresolvable would stay without a
+# completion until the next version bump. `lookPath` re-evaluates every render,
+# so the apply after omp appears changes this line and re-triggers the install.
+# On a first apply the flag is 0 (the external has not landed at render time)
+# while the runtime check below still succeeds, so the install happens anyway
+# and the following apply merely re-runs an idempotent script.
+# omp version: {{ $ompVersion }}
+# omp available at render: {{ if lookPath "omp" }}1{{ else }}0{{ end }}
+set -euo pipefail
+
+# chezmoi's non-interactive script environment omits ~/.local/bin, where omp lands.
+# Prepend rather than append so this omp wins over any other on PATH.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+if ! command -v omp >/dev/null 2>&1; then
+  printf '%s\n' 'install-omp-zsh-completion: omp is unavailable; skipping completion install.' >&2
+  exit 0
+fi
+
+readonly TARGET_DIR="$HOME/.local/share/zsh/site-functions"
+readonly TARGET="$TARGET_DIR/_omp"
+mkdir -p "$TARGET_DIR"
+
+# Staged inside the target directory so the install below is a same-filesystem
+# rename. No suffix after the X run: BSD mktemp(1) only substitutes trailing X's.
+staged="$(mktemp "$TARGET_DIR/.omp-completion.XXXXXX")"
+# EXIT owns the cleanup so it runs exactly once on every path. Each signal trap
+# only `exit`s, which then fires EXIT: a bare `trap cleanup INT` would clean up
+# and then RESUME the script, because a trap handler that does not exit returns
+# control to the interrupted statement. Exit codes follow the 128+signum
+# convention so a supervising process can tell which signal ended the run.
+cleanup() { rm -f -- "$staged"; }
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Plain redirect, never a pipe: omp mishandles a closed stdout and dumps its own
+# bundled JavaScript source into the stream when a reader (e.g. `head`) exits
+# early. A `>` redirect never closes early, so that path is not reached here.
+if ! omp completions zsh >"$staged"; then
+  printf '%s\n' 'install-omp-zsh-completion: omp completions zsh failed; leaving any existing _omp in place.' >&2
+  exit 1
+fi
+
+# Three distinct guards, each covering something the others do not.
+#
+# (a) Non-empty and a `#compdef omp` first line — rejects an empty file, an
+#     error page, or a source dump. This is the observed hazard: omp mishandles
+#     a closed stdout and emits its own bundled JavaScript when a reader exits
+#     early (see the redirect note above).
+# (b) `zsh -n` parses the WHOLE file — a valid header followed by a truncated or
+#     corrupt body passes (a), and only a real parse catches it. A broken
+#     completion is loaded by compinit in every new shell, so this is the guard
+#     that keeps the worst failure mode out. Skipped when zsh is absent, because
+#     the file is inert there anyway and a missing linter must not fail an apply.
+# (c) The atomic rename below — guards an INTERRUPTED write (process kill, full
+#     disk), which no content check can see.
+if [[ ! -s $staged ]]; then
+  printf '%s\n' 'install-omp-zsh-completion: omp completions zsh produced no output; leaving any existing _omp in place.' >&2
+  exit 1
+fi
+if [[ $(head -n 1 -- "$staged") != '#compdef omp' ]]; then
+  printf '%s\n' 'install-omp-zsh-completion: generated completion does not start with "#compdef omp"; leaving any existing _omp in place.' >&2
+  exit 1
+fi
+if command -v zsh >/dev/null 2>&1 && ! zsh -n -- "$staged" 2>/dev/null; then
+  printf '%s\n' 'install-omp-zsh-completion: generated completion is not valid zsh; leaving any existing _omp in place.' >&2
+  exit 1
+fi
+
+# `mv` moves INTO a directory at the destination rather than replacing it, which
+# would silently park the file at _omp/.omp-completion.XXXXXX and report success.
+# GNU `mv -T` would refuse that, but BSD/macOS mv has no -T, so check explicitly.
+if [[ -d $TARGET ]]; then
+  printf '%s\n' "install-omp-zsh-completion: $TARGET is a directory; refusing to install over it." >&2
+  exit 1
+fi
+
+chmod 0644 "$staged"
+mv -f -- "$staged" "$TARGET"
+trap - EXIT
+
+# Invalidate prezto's completion dump, but only now that the install succeeded.
+# prezto's completion module calls `compinit -C` whenever the dump is under 20
+# hours old, and -C skips the $fpath function scan — so a fresh _omp would stay
+# invisible until the dump aged out. Deleting (rather than backdating the mtime)
+# is deliberate: dot_config/zsh/dot_zlogin recompiles the .zwc only when the dump
+# is NEWER than it, so a backdated dump would leave a stale compiled cache in
+# place. The cost is one regenerated dump on the next shell.
+# Cleanup failure must NOT fail this script. The install already succeeded by
+# this point, and `70-agents/` runs before `80-keys/` and `90-src/` — an
+# ordinary `chezmoi apply` is not --keep-going, so a non-zero exit here would
+# block GPG key import and the ~/src garden over a cosmetic cache file.
+zcompdump="${XDG_CACHE_HOME:-$HOME/.cache}/prezto/zcompdump"
+rm -f -- "$zcompdump" "$zcompdump.zwc" || {
+  printf '%s\n' "install-omp-zsh-completion: warning: could not invalidate $zcompdump; run 'rm -f $zcompdump $zcompdump.zwc' by hand so the new completion is picked up." >&2
+}
+
+printf 'install-omp-zsh-completion: installed %s for omp %s\n' "$TARGET" '{{ $ompVersion }}'
+{{- end }}
