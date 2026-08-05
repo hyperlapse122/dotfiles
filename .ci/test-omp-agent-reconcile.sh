@@ -396,9 +396,9 @@ PINS
 render_config="$scratch/render.toml"
 : >"$render_config"
 # A guard that fires AFTER a credential field is resolved (the duplicate check is
-# one) still walks the op:// shim first, so isolate the render from host secret
-# state: a HOME with no gpg-cache-ready marker takes the live-op fallback, which
-# this stub answers with a newline-free value.
+# one) still performs a live op read, so isolate the render from host secret
+# state: a scratch HOME and a stub op answering with a newline-free value keep
+# that read off the host without changing what the guard observes.
 neg_home="$scratch/neg-home"
 neg_bin="$scratch/neg-bin"
 mkdir -p "$neg_home" "$neg_bin"

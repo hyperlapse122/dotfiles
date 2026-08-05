@@ -12,7 +12,7 @@
 {{-   if not (has $entry.variable $required) -}}{{- fail (printf "config-omp-auth: %s declares unsupported variable %q; the closed set is %s" $where $entry.variable (join ", " $required)) -}}{{- end -}}
 {{-   if has $entry.variable $names -}}{{- fail (printf "config-omp-auth: %s duplicates variable %q" $where $entry.variable) -}}{{- end -}}
 {{-   if not (hasKey $entry "key") -}}{{- fail (printf "config-omp-auth: %s is missing the `key` field" $where) -}}{{- end -}}
-{{-   $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $entry.key "ctx" $) | fromJson -}}
+{{-   $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $entry.key) | fromJson -}}
 {{-   if not (kindIs "string" $resolved) -}}{{- fail (printf "config-omp-auth: %s field `key` must resolve to a string" $where) -}}{{- end -}}
 {{-   if eq $resolved "" -}}{{- fail (printf "config-omp-auth: %s resolved to an empty value" $where) -}}{{- end -}}
 {{-   $names = append $names $entry.variable -}}

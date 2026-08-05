@@ -205,7 +205,7 @@ packages:
         - fd-find  # fast, user-friendly find alternative (fd)
         - jq  # JSON processor for live agent config overlays
         - yq  # YAML/JSON processor (general YAML editing; sibling of jq)
-        - gnupg2  # OpenPGP implementation used for signing and the encrypted secrets cache
+        - gnupg2  # OpenPGP implementation used for signing and the encrypted garden registry
         # kdotool: managed by mise (cargo:kdotool — see dot_config/mise/config.toml)
         - nvtop  # GPU process/usage monitor
         - ripgrep  # fast recursive regex code search (rg)
