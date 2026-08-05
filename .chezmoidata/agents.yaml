@@ -449,6 +449,30 @@ agents:
       # Keep structural search and host desktop control available.
       astGrep.enabled: true
       computer.enabled: true
+      # Local long-term memory. ONLY the backend selector is declared: `mnemopi`
+      # itself is not a settable path (`omp config set mnemopi` is rejected as an
+      # unknown setting), every knob under it is its own leaf, and the defaults
+      # already suit this host — `mnemopi.scoping: per-project` isolates memory
+      # per working directory, `autoRecall`/`autoRetain` are on, and
+      # `llmMode: smol` resolves the `tiny` role declared above before `smol`.
+      # Restating a default here would only hide a future upstream change. The
+      # absence of `mnemopi.*` keys is therefore deliberate, not an oversight.
+      #
+      # Privacy note, in two parts. STORAGE is local: this backend retains
+      # completed conversation turns to a local SQLite store and, unlike the
+      # `local` backend, documents no secret/token redaction and no retention
+      # limit, so content accumulates unredacted until `/memory clear`. Keep the
+      # agent memories directory out of backups and sync tooling.
+      # PROCESSING is not local: mnemopi's default `llmMode: smol` resolves the
+      # `tiny` role declared above, so LLM-backed extraction and consolidation
+      # send retained transcript content to that cloud model. "Local" here means
+      # local STORAGE (as opposed to the remote `hindsight` server backend), not
+      # local compute. This reuses the same provider trust boundary ordinary
+      # turns already cross, but it re-sends PAST transcripts, including ones
+      # whose original session ran on a different provider. Set
+      # `mnemopi.llmMode: none` to keep processing on-device at the cost of
+      # LLM-backed consolidation.
+      memory.backend: mnemopi
     # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
     # google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
