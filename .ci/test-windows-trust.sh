@@ -14,7 +14,6 @@ render() {
     --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' execute-template <"$repo_root/$1" >"$2"
 }
 render .chezmoiscripts/80-keys/run_once_before_import-gpg-key.ps1.tmpl "$scratch/import-gpg.ps1"
-render .chezmoiscripts/80-keys/run_before_probe-gpg-cache-ready.ps1.tmpl "$scratch/probe-gpg.ps1"
 render .chezmoiscripts/10-auth/run_onchange_after_auth-github.ps1.tmpl "$scratch/auth-github.ps1"
 render .chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.ps1.tmpl "$scratch/auth-gitlab.ps1"
 for script in "$scratch"/*.ps1; do
