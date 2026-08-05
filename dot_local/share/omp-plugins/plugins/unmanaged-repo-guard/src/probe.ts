@@ -134,6 +134,11 @@ export function createProber(options: ProberOptions) {
       parent: null,
     });
 
+    const serve = (cached: CacheEntry) => ({
+      outcome: { verdict: cached.verdict, detail: cached.detail, repo: ref.path },
+      parent: null,
+    });
+
     // Fast path (plan R5/KTD8): peek the identity-map entry for this host —
     // fresh or expired — and try the verdict cache with its value before
     // paying an identity subprocess. Neither map is written here, so an
@@ -141,23 +146,13 @@ export function createProber(options: ProberOptions) {
     const peekedIdentity = identities.get(`${ref.hostKind}|${ref.host}`);
     if (peekedIdentity !== undefined) {
       const fastCached = verdicts.get(verdictKey(peekedIdentity.value, ref));
-      if (fastCached && fastCached.expiresAt > now()) {
-        return {
-          outcome: { verdict: fastCached.verdict, detail: fastCached.detail, repo: ref.path },
-          parent: null,
-        };
-      }
+      if (fastCached && fastCached.expiresAt > now()) return serve(fastCached);
     }
 
     const identity = await identityFor(ref);
     const key = verdictKey(identity, ref);
     const cached = verdicts.get(key);
-    if (cached && cached.expiresAt > now()) {
-      return {
-        outcome: { verdict: cached.verdict, detail: cached.detail, repo: ref.path },
-        parent: null,
-      };
-    }
+    if (cached && cached.expiresAt > now()) return serve(cached);
 
     const raw = await rawProbe(ref);
     if (!raw.ok) return undecided(raw.detail);

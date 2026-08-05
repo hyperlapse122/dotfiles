@@ -12,9 +12,10 @@
  * site written `return { block: someBoolean, reason }`.
  */
 
-import { appendFileSync, mkdirSync } from "node:fs";
+import { closeSync, constants, lstatSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+const { O_APPEND, O_CREAT, O_NOFOLLOW, O_WRONLY } = constants;
 
 export type Logger = { error?: (message: string) => void };
 
@@ -63,6 +64,16 @@ function defaultAppend(logger?: Logger): AuditAppend {
     try {
       const path = auditLogPath();
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      // Refuse a planted symlink leaf: the guard constrains an LLM-driven
+      // agent with bash access, so a co-resident process pre-creating
+      // ~/.local/state/.../audit.jsonl as a symlink must not redirect the
+      // audit write. O_NOFOLLOW also makes the open itself reject a link.
+      try {
+        const st = lstatSync(path);
+        if (st.isSymbolicLink()) return;
+      } catch {
+        // No existing entry — the open below creates it.
+      }
       const line = `${JSON.stringify({
         timestamp: new Date().toISOString(),
         tool: truncate(entry.tool),
@@ -73,13 +84,24 @@ function defaultAppend(logger?: Logger): AuditAppend {
         hostKind: truncate(entry.hostKind),
         cli: truncate(entry.cli),
       })}\n`;
-      // Append mode, creating the file 0600 if it does not exist yet. A
-      // failed append must never change the verdict — the caller already
+      // O_NOFOLLOW rejects a symlink target at open; mode 0o600 on create.
+      // A failed append must never change the verdict — the caller already
       // has its block result before this runs.
-      appendFileSync(path, line, { mode: 0o600 });
+      const fd = openSync(path, O_APPEND | O_CREAT | O_WRONLY | O_NOFOLLOW, 0o600);
+      try {
+        writeSync(fd, line);
+      } finally {
+        closeSync(fd);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      logger?.error?.(`unmanaged-repo-guard: audit log append failed: ${detail}`);
+      // A broken logger must never turn an already-handled append failure
+      // into an unhandled throw that escapes the block path.
+      try {
+        logger?.error?.(`unmanaged-repo-guard: audit log append failed: ${detail}`);
+      } catch {
+        /* swallow: logging must never escape the audit append */
+      }
     }
   };
 }

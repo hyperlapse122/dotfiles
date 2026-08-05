@@ -330,7 +330,7 @@ run_omp_prompt() {
         HOME="$home" USERPROFILE="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" XDG_STATE_HOME="$home/.local/state" \
         PATH="$cli_stub:$PATH" GH_LOG="${1:-/dev/null}" GH_REPO_VIEW_JSON="${2:-}" GH_LOGIN='ci-test-user' \
         GLAB_LOGIN='{"username":"ci-test-user"}' GLAB_PROJECT_JSON="${3:-}" \
-        omp -p "$4" --model stub/stub-model --auto-approve --no-session --max-time 30
+        timeout --kill-after=10s 45s omp -p "$4" --model stub/stub-model --auto-approve --no-session --max-time 30
   )
 }
 
@@ -422,9 +422,18 @@ grep -qF 'issue create' "$managed_log" ||
 # touch the audit log, or step 5's own before/after counts below would be
 # thrown off by a block this throwaway run caused.
 : >"$stub_mcp_log"
+prewarm_audit_before=$(audit_count)
+prewarm_model_before=$(model_log_line_count)
 prewarm_out=$(run_omp_prompt '' '' '{"permissions":{"project_access":{"access_level":40}}}' "$prompt_subagent" 2>&1) ||
   fail "step 5 pre-warm run failed: $prewarm_out"
-
+# The pre-warm is a real dispatch through the guard, not a no-op: assert it
+# passed through (an audit entry would mean the guard spuriously blocked a
+# managed call) and that the MCP tool actually ran (tools/call reached the
+# server), so a silent block or skip cannot hide behind "belt-and-braces".
+[[ $(audit_count) -eq $prewarm_audit_before ]] ||
+  fail "step 5 pre-warm: audit log gained an entry on what must be a pass-through call"
+grep -qF '"event":"tools/call"' "$stub_mcp_log" ||
+  fail "step 5 pre-warm: the MCP tool never executed (no tools/call) — registration or dispatch failed silently"
 : >"$stub_mcp_log"
 before=$(model_log_line_count)
 audit_before=$(audit_count)

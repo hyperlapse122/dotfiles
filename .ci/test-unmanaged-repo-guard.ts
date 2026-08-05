@@ -25,11 +25,11 @@ import {
   resolveCandidates,
 } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts";
 import type { RepoRef } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts";
-import { classify, splitCommand } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
+import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 191;
+const EXPECTED_MIN_CHECKS = 193;
 
 let passed = 0;
 const failures: string[] = [];
@@ -264,6 +264,14 @@ check(
   eq("R3 the single segment's text is the whole command", result.segments[0]?.text, cmd);
 }
 
+// R3 regression: toArgv must agree with splitCommand's ANSI-C model. An
+// earlier fix taught splitCommand `$'...'` but left toArgv on the 2-state
+
+{
+  const argv = toArgv(`gh issue create -t $'it\\'s a title'`);
+  eq("R3 toArgv keeps an ANSI-C-quoted title as one token", argv.length, 5);
+  eq("R3 toArgv does not split the ANSI-C string at the escaped quote or inner spaces", argv[4], "it's a title");
+}
 // --------------------------------------- R6: splitCommand invariant docs
 
 {
@@ -880,7 +888,10 @@ await withScratchStateHome(async (stateHome) => {
   }
 }
 
-// Two separate appender instances writing to the same file both land.
+// Two sequential appends from separate appender instances both land without
+// truncation (append mode). This is NOT a multi-process atomicity test — the
+// 4 KB single-line bound that guards real concurrent omp processes is a
+// design property of audit.ts, not something this in-process suite exercises.
 await withScratchStateHome(async (stateHome) => {
   createAuditLog({}).block(
     { tool: "bash", path: "unmanaged-verdict", verdict: "unmanaged", repo: "o/r-a", host: "github.com", hostKind: "github", cli: "gh" },

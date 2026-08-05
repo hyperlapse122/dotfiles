@@ -284,7 +284,7 @@ export function toArgv(text: string): string[] {
   const argv: string[] = [];
   let token = "";
   let started = false;
-  let quote: '"' | "'" | null = null;
+  let quote: '"' | "'" | "$'" | null = null;
 
   const flush = () => {
     if (started) argv.push(token);
@@ -295,12 +295,12 @@ export function toArgv(text: string): string[] {
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i] as string;
     if (quote) {
-      if (c === "\\" && quote === '"' && i + 1 < text.length) {
+      if (c === "\\" && (quote === '"' || quote === "$'") && i + 1 < text.length) {
         token += text[i + 1];
         i += 1;
         continue;
       }
-      if (c === quote) {
+      if (c === (quote === "$'" ? "'" : quote)) {
         quote = null;
         continue;
       }
@@ -310,6 +310,12 @@ export function toArgv(text: string): string[] {
     }
     if (c === "\\" && i + 1 < text.length) {
       token += text[i + 1];
+      started = true;
+      i += 1;
+      continue;
+    }
+    if (c === "$" && text[i + 1] === "'") {
+      quote = "$'";
       started = true;
       i += 1;
       continue;

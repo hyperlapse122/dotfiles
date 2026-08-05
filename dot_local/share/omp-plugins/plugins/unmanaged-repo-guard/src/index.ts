@@ -142,7 +142,13 @@ export default function unmanagedRepoGuard(pi: OmpExtensionApi): void {
     // signal. A guard that cannot configure itself must still refuse, so
     // register a handler that blocks every recognised issue write outright.
     const detail = error instanceof Error ? error.message : String(error);
-    pi.logger?.error?.(`unmanaged-repo-guard: disabled by configuration error: ${detail}`);
+    try {
+      pi.logger?.error?.(`unmanaged-repo-guard: disabled by configuration error: ${detail}`);
+    } catch {
+      // A broken logger must never prevent the fail-closed fallback below
+      // from registering — that would silently leave every issue write
+      // unguarded, the exact failure this catch block exists to prevent.
+    }
     const auditLog = createAuditLog({ logger: pi.logger });
     handler = async (event, context) => {
       const classification = classify(event.toolName, event.input ?? {});
