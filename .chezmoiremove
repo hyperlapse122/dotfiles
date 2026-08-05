@@ -46,30 +46,18 @@
 # registry is visible to the 90-src reconcile script that runs last.
 #
 # GATED to the platforms that actually received the old target. The encrypted
-# registry was chezmoiignored on Windows (no GPG key: 80-keys is bash-only) and
-# in containers, so chezmoi never deployed ~/src/garden.yaml there. An ungated
-# prune would delete a same-named file those hosts own, which chezmoi did not
-# put there — a destructive removal of user data, not a cleanup.
-{{- if and (ne .chezmoi.os "windows") (not $f.container) }}
+# registry was chezmoiignored in containers (no GPG key: 80-keys is bash-only),
+# so chezmoi never deployed ~/src/garden.yaml there. An ungated prune would
+# delete a same-named file those hosts own, which chezmoi did not put there — a
+# destructive removal of user data, not a cleanup.
+{{- if not $f.container }}
 src/garden.yaml
 {{- end }}
 
 # The GPG secrets cache was removed, so
 # dot_local/bin/executable_chezmoi-secrets-sync.tmpl no longer has a source.
 # Deleting that source stopped chezmoi managing it but left the
-# already-deployed ~/.local/bin/chezmoi-secrets-sync executable behind —
-# prune it here.
-#
-# GATED to the non-Windows hosts that received the binary, but only as DEFENSE
-# IN DEPTH, not a correctness requirement. .chezmoiignore already ignores
-# .local/bin/* on Windows (except *.ps1), and chezmoi skips ignored targets
-# when generating removals, so an ungated entry would already be inert there.
-# The gate keeps the platform intent legible at the entry and survives a future
-# narrowing of that ignore rule.
-#
-# Unlike the src/garden.yaml block above there is NO container gate: the
-# container ignore rules do not exclude .local/bin, so containers did receive
-# this binary and must prune it too.
-{{- if ne .chezmoi.os "windows" }}
+# already-deployed ~/.local/bin/chezmoi-secrets-sync executable behind — prune
+# it here. There is NO container gate: the container ignore rules do not exclude
+# .local/bin, so containers received this binary too and must prune it.
 .local/bin/chezmoi-secrets-sync
-{{- end }}

@@ -1,4 +1,3 @@
-{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- $ctx := . -}}
 {{- $os := .chezmoi.os -}}
 {{- $home := .chezmoi.homeDir -}}
@@ -133,4 +132,3 @@ if [[ -n $strict_source ]]; then
   rm -f -- "$LEGACY_EXTENSION" || die 'migration: failed to remove legacy haptic extension'
   bun "$helper" final "$strict_source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'final postcheck: fresh haptic loader proof failed'
 fi
-{{ end -}}

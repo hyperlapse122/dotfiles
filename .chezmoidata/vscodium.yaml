@@ -4,13 +4,8 @@
 # missing ones and force-update the declared ones:
 #   - POSIX (Linux AND macOS): .chezmoiscripts/30-linux/
 #     run_onchange_after_install-vscodium-extensions.sh.tmpl
-#   - Windows: .chezmoiscripts/30-windows/
-#     run_onchange_after_install-vscodium-extensions.ps1.tmpl (native
-#     PowerShell; validates this authority at render AND at runtime before
-#     any mutation, and fails closed)
 # Each list is rendered into its script body, so editing it re-triggers the
-# run_onchange — add/bump extensions HERE, not in the scripts. Both renderers
-# produce the SAME managed set by construction.
+# run_onchange — add/bump extensions HERE, not in the scripts.
 #
 # Additive only: extensions installed by hand are never uninstalled, and
 # removing an entry here merely stops managing it — uninstall by hand

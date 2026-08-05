@@ -1,4 +1,3 @@
-{{ if ne .chezmoi.os "windows" -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 # scripts/src/reconcile-garden.sh
@@ -135,4 +134,3 @@ echo "reconcile-garden: garden cmd '*' setup-gitdir setup-upstream aoe-session"
 garden --config "$reg" cmd '*' setup-gitdir setup-upstream aoe-session
 
 echo "reconcile-garden: done"
-{{ end -}}

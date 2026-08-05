@@ -55,7 +55,7 @@ After every push opening/updating a PR/MR, wait for terminal green CI with one n
 
 Figma URLs MUST use the `figma` MCP. Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
 
-The shared `/tmp`, `/var/tmp`, and `/dev/shm` are denied. Use a task-scoped `$XDG_RUNTIME_DIR` directory on Linux (when unset, fall back to `~/.cache`, never `/tmp`), `$TMPDIR` on macOS, or `%TEMP%` on Windows; prefer ignored workspace paths and clean scratch. New scripting/tooling/codegen uses Node/Deno/Bun or shell for OS glue, not Python (except established Python tooling).
+The shared `/tmp`, `/var/tmp`, and `/dev/shm` are denied. Use a task-scoped `$XDG_RUNTIME_DIR` directory on Linux (when unset, fall back to `~/.cache`, never `/tmp`), `$TMPDIR` on macOS; prefer ignored workspace paths and clean scratch. New scripting/tooling/codegen uses Node/Deno/Bun or shell for OS glue, not Python (except established Python tooling).
 
 ## JavaScript, mise, and GitLab
 

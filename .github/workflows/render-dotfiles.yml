@@ -1,15 +1,12 @@
 name: Render dotfiles
 
-# On every pull request and push to main, actually run `chezmoi apply --init` on all four target
+# On every pull request and push to main, actually run `chezmoi apply --init` on the target
 # platforms and capture what chezmoi renders, so a reviewer can eyeball the real
 # output of any template change without a local checkout:
 #   * Fedora         — a slim container image (`apply` / `render-internals`).
 #   * macOS          — a native `macos-26` arm64 runner (`apply-macos`); a
 #                      container cannot provide a `darwin` chezmoi, and darwin-only
 #                      templates (e.g. the mxm4-haptic build) render only here.
-#   * Windows         — a native `windows-latest` runner (`apply-windows`); needed
-#                       so `.chezmoi.os == "windows"` and the `.ps1` read-source
-#                       hook path exercise, and to feed the PowerShell lint.
 #
 # Two independent artifacts are produced per OS:
 #   1. rendered-files-<os>     — the dotfiles `chezmoi apply --init` writes into
@@ -19,9 +16,8 @@ name: Render dotfiles
 #                                (these are never linked into $HOME, so they have
 #                                to be rendered explicitly to be inspected).
 #
-# The rendered scripts then flow into two lint gates: `shellcheck` lints every
-# rendered bash/sh script across Fedora and macOS, and `lint-powershell`
-# runs PSScriptAnalyzer over the Windows `.ps1` files.
+# The rendered scripts then flow into the `shellcheck` lint gate, which lints every
+# rendered bash/sh script across Fedora and macOS.
 #
 # No real 1Password or GitHub PAT is used. A PATH-local dummy `op` satisfies
 # `onepasswordRead` / `onepassword`, and a dummy `mise` satisfies the container
@@ -365,20 +361,10 @@ jobs:
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           posix="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
-          native_windows="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1"
-          windows="${RUNNER_TEMP}/figma-skills-reconcile.ps1"
-          for rendered in "${external}" "${posix}" "${native_windows}"; do
+          for rendered in "${external}" "${posix}"; do
             test -f "${rendered}"
             test ! -e "${rendered}.render-error.txt"
           done
-
-          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" \
-            --destination "${RUNNER_TEMP}/scratch/target" \
-            --override-data '{"chezmoi":{"os":"windows"}}' \
-            execute-template \
-            < "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1.tmpl" \
-            > "${windows}"
 
           revision=$(jq -er '.releases.tools["figma/mcp-server-guide"].revision' \
             "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
@@ -386,7 +372,6 @@ jobs:
             "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
           grep -F "archive/${revision}.tar.gz" "${external}"
           grep -F "readonly DESIRED_SKILLS_JSON='${skills}'" "${posix}"
-          grep -F "\$desiredSkillsJson = '${skills}'" "${windows}"
           bash -n "${posix}"
           echo "- Figma external and paired reconcilers (${{ matrix.os }}) use the locked revision and inventory" \
             >> "${GITHUB_STEP_SUMMARY}"
@@ -615,20 +600,10 @@ jobs:
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           posix="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
-          native_windows="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1"
-          windows="${RUNNER_TEMP}/figma-skills-reconcile.ps1"
-          for rendered in "${external}" "${posix}" "${native_windows}"; do
+          for rendered in "${external}" "${posix}"; do
             test -f "${rendered}"
             test ! -e "${rendered}.render-error.txt"
           done
-
-          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" \
-            --destination "${RUNNER_TEMP}/scratch/target" \
-            --override-data '{"chezmoi":{"os":"windows"}}' \
-            execute-template \
-            < "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.ps1.tmpl" \
-            > "${windows}"
 
           revision=$(jq -er '.releases.tools["figma/mcp-server-guide"].revision' \
             "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
@@ -636,7 +611,6 @@ jobs:
             "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
           grep -F "archive/${revision}.tar.gz" "${external}"
           grep -F "readonly DESIRED_SKILLS_JSON='${skills}'" "${posix}"
-          grep -F "\$desiredSkillsJson = '${skills}'" "${windows}"
           bash -n "${posix}"
           echo "- Figma external and paired reconcilers (macos) use the locked revision and inventory" \
             >> "${GITHUB_STEP_SUMMARY}"
@@ -646,346 +620,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: rendered-internals-macos
-          path: _artifacts/rendered-internals
-          retention-days: 3
-          include-hidden-files: true
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Task 5: Windows — real `chezmoi apply --init` + internals render on a native
-  # runner. Only here does `.chezmoi.os == "windows"` hold, so the Windows
-  # `.chezmoiignore` branch (keep `./AppData`, deploy `dot_local/bin/*.ps1` only)
-  # and the `.ps1` read-source-state.pre hook path in `.chezmoi.toml.tmpl` are
-  # actually exercised. The rendered Windows `.ps1` output feeds the
-  # `lint-powershell` gate below.
-  #
-  # A dummy `op.cmd` / `mise.cmd` on PATH makes the `.install-prerequisites.ps1`
-  # hook take its `mise present && Test-OpReady` fast path (exit 0) — no winget,
-  # no real 1Password. The apply itself is non-fatal (mirrors the Linux jobs);
-  # PSScriptAnalyzer is the authoritative Windows gate.
-  # ---------------------------------------------------------------------------
-  apply-windows:
-    name: apply --init + internals (windows)
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - name: Assert runtime architecture
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # Canonical matrix: the hosted Windows leg is x64. Fail closed on arch drift.
-          if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
-            throw "runtime architecture $env:PROCESSOR_ARCHITECTURE != AMD64 (canonical hosted Windows leg is x64)"
-          }
-
-      - uses: actions/checkout@v7
-
-      - name: Install chezmoi + dummy op/mise
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $bindir = Join-Path $env:RUNNER_TEMP 'bin'
-          New-Item -ItemType Directory -Force -Path $bindir | Out-Null
-
-          # Use the current chezmoi release to exercise current render behavior.
-          # browser_download_url is public, so authentication is optional.
-          $hdr = @{ 'User-Agent' = 'gh-actions' }
-          if ($env:GITHUB_TOKEN) { $hdr['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
-          $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/twpayne/chezmoi/releases/latest' -Headers $hdr
-          $asset = $rel.assets | Where-Object { $_.name -match 'windows_amd64\.zip$' } | Select-Object -First 1
-          if (-not $asset) { throw 'no chezmoi windows_amd64 release asset found' }
-          $zip = Join-Path $env:RUNNER_TEMP 'chezmoi.zip'
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers @{ 'User-Agent' = 'gh-actions' }
-          Expand-Archive -Path $zip -DestinationPath $bindir -Force
-          & (Join-Path $bindir 'chezmoi.exe') --version
-
-          # Dummy `op.cmd`: `vault list` exits 0 (Test-OpReady), while `read
-          # op://...` and other verbs print placeholders for onepasswordRead. A
-          # .cmd is resolved by both Get-Command (PATHEXT) and chezmoi's exec.
-          # (An array joined by CRLF, not a here-string — a here-string's closing
-          # "@ must sit in column 1, which would break this YAML block scalar.)
-          $op = @(
-            '@echo off',
-            'if /I "%~1"=="whoami" (echo dummy@example.invalid & exit /b 0)',
-            'if /I "%~1"=="--version" (echo 2.0.0 & exit /b 0)',
-            '<nul set /p "=dummy-secret"',
-            'exit /b 0'
-          ) -join "`r`n"
-          Set-Content -Path (Join-Path $bindir 'op.cmd') -Value $op -Encoding Ascii
-
-          # Dummy `mise.cmd`: only needs to exist on PATH for the hook fast path.
-          $mise = @('@echo off', 'exit /b 0') -join "`r`n"
-          Set-Content -Path (Join-Path $bindir 'mise.cmd') -Value $mise -Encoding Ascii
-
-          Add-Content -Path $env:GITHUB_PATH -Value $bindir
-
-      - name: chezmoi apply --init into an isolated HOME
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # robocopy exits 1 on a *successful* copy and chezmoi --keep-going may
-          # exit non-zero by design; without this, pwsh 7.4+ turns any native
-          # non-zero exit into a throw (killing the step before the rc checks).
-          $PSNativeCommandUseErrorActionPreference = $false
-          $fakehome = Join-Path $env:RUNNER_TEMP 'fakehome'
-          $src = Join-Path $fakehome '.local\share\chezmoi'
-          New-Item -ItemType Directory -Force -Path $src | Out-Null
-
-          # robocopy (not Copy-Item */-Recurse, which skips dot-prefixed dirs like
-          # .chezmoidata/.chezmoiscripts) mirrors the checkout, hidden files and
-          # all. Exit codes 0-7 are success; >=8 is a real failure.
-          $null = robocopy $env:GITHUB_WORKSPACE $src /E /NFL /NDL /NJH /NJS /NC /NS /NP
-          if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
-          Remove-Item -Recurse -Force (Join-Path $src '.git') -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force (Join-Path $src '.chezmoiexternals') -ErrorAction SilentlyContinue
-
-          # chezmoi derives the home (and thus the default source dir + the
-          # home-relative hook path) from USERPROFILE on Windows; point both it and
-          # HOME at the throwaway profile and run from there.
-          $env:USERPROFILE = $fakehome
-          $env:HOME = $fakehome
-          Set-Location $fakehome
-
-          chezmoi apply --init --exclude=scripts,externals --keep-going --verbose
-          $rc = $LASTEXITCODE
-          Write-Host "chezmoi apply --init exit code: $rc"
-          "- ``chezmoi apply --init`` (windows) exit code: $rc" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          # Non-fatal like the Linux jobs: a tolerated non-zero chezmoi rc (or the
-          # robocopy exit 1 above) must not become this step's exit code. Reset to
-          # 0 explicitly — a real failure already threw above.
-          exit 0
-
-      - name: Stage rendered files
-        if: always()
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # robocopy exits 1 on a successful copy — keep that from throwing.
-          $PSNativeCommandUseErrorActionPreference = $false
-          $src = Join-Path $env:RUNNER_TEMP 'fakehome'
-          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-files'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          if (-not (Test-Path $src)) { exit 0 }
-          $null = robocopy $src $out /E /NFL /NDL /NJH /NJS /NC /NS /NP
-          if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
-          # Drop the source copy + chezmoi's own state so only rendered targets remain.
-          Remove-Item -Recurse -Force (Join-Path $out '.local\share\chezmoi') -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force (Join-Path $out '.config\chezmoi') -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force (Join-Path $out '.cache') -ErrorAction SilentlyContinue
-          # robocopy's exit 1 (success) must not fail the step.
-          exit 0
-
-      - name: Upload rendered files
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: rendered-files-windows
-          path: _artifacts/rendered-files
-          retention-days: 3
-          include-hidden-files: true
-          if-no-files-found: error
-
-      - name: Render .chezmoiscripts and .chezmoiexternals
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # A template that fails to render must set $LASTEXITCODE, not throw.
-          $PSNativeCommandUseErrorActionPreference = $false
-          $scratch = Join-Path $env:RUNNER_TEMP 'scratch'
-          New-Item -ItemType Directory -Force -Path (Join-Path $scratch 'target') | Out-Null
-          $empty = Join-Path $scratch 'empty.toml'
-          New-Item -ItemType File -Force -Path $empty | Out-Null
-          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-
-          $roots = @('.chezmoiscripts', '.chezmoiexternals') |
-            ForEach-Object { Join-Path $env:GITHUB_WORKSPACE $_ } |
-            Where-Object { Test-Path $_ }
-          $files = Get-ChildItem -Path $roots -Recurse -File -Force
-          $prefix = $env:GITHUB_WORKSPACE.TrimEnd('\') + '\'
-          $total = 0; $failed = 0
-          foreach ($f in $files) {
-            $rel = $f.FullName.Substring($prefix.Length)
-            $dest = Join-Path $out ($rel -replace '\.tmpl$', '')
-            New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-            $total++
-            $err = "$dest.render-error.txt"
-            Get-Content -Raw -LiteralPath $f.FullName |
-              & chezmoi --config $empty --source $env:GITHUB_WORKSPACE --destination (Join-Path $scratch 'target') execute-template `
-              1> $dest 2> $err
-            if ($LASTEXITCODE -eq 0) {
-              Remove-Item -Force $err -ErrorAction SilentlyContinue
-            } else {
-              $failed++
-              Write-Host "::warning file=$rel::failed to render $rel"
-            }
-          }
-          Write-Host "rendered $total template(s), $failed error(s)"
-          "### rendered internals (windows)`n`n- rendered $total template(s), $failed error(s)" |
-            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          # Per-template render failures are captured as *.render-error.txt inside
-          # the artifact (never hard-fail); chezmoi's non-zero rc must not fail here.
-          exit 0
-
-      - name: Assert Windows Codegraph external target
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $external = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals\.chezmoiexternals\ai-agents.toml'
-          if (-not (Test-Path -LiteralPath $external -PathType Leaf)) {
-            throw "missing rendered Codegraph external: $external"
-          }
-          if (Test-Path -LiteralPath "$external.render-error.txt") {
-            throw "Codegraph external render failed: $external"
-          }
-
-          $content = Get-Content -Raw -LiteralPath $external
-          $stanza = [regex]::Match($content, '(?ms)^\[codegraph\]\r?\n.*?(?=\r?\n\r?\n|\z)')
-          if (-not $stanza.Success) {
-            throw 'rendered Codegraph external stanza is missing'
-          }
-          $targetMatch = [regex]::Match($stanza.Value, "(?m)^targetPath = '([^']+)'$")
-          if (-not $targetMatch.Success) {
-            throw 'rendered Codegraph targetPath is missing'
-          }
-
-          function Test-CodegraphTarget {
-            param([Parameter(Mandatory)][string]$Target)
-            if ([IO.Path]::IsPathRooted($Target)) {
-              return $false
-            }
-            $actual = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE ($Target -replace '/', '\')))
-            $expected = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'codegraph\current'))
-            return $actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)
-          }
-
-          $target = $targetMatch.Groups[1].Value
-          if (-not (Test-CodegraphTarget -Target $target)) {
-            throw "rendered Codegraph targetPath is not profile-relative Local AppData: $target"
-          }
-          if (Test-CodegraphTarget -Target 'C:\Users\runneradmin\AppData\Local\codegraph\current') {
-            throw 'Codegraph target assertion accepted an absolute path fixture'
-          }
-          if (Test-CodegraphTarget -Target 'AppData\Local\wrong\current') {
-            throw 'Codegraph target assertion accepted a wrong relative path fixture'
-          }
-          "- Codegraph external target is profile-relative and resolves to Local AppData" |
-            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-
-      - name: Assert Figma collection external and paired reconcilers
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $false
-          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
-          $external = Join-Path $out '.chezmoiexternals\ai-agents.toml'
-          $nativePosix = Join-Path $out '.chezmoiscripts\70-agents\run_after_install-figma-skills.sh'
-          $windows = Join-Path $out '.chezmoiscripts\70-agents\run_after_install-figma-skills.ps1'
-          foreach ($rendered in @($external, $nativePosix, $windows)) {
-            if (-not (Test-Path -LiteralPath $rendered -PathType Leaf)) {
-              throw "missing rendered Figma path: $rendered"
-            }
-            if (Test-Path -LiteralPath "$rendered.render-error.txt") {
-              throw "Figma render failed: $rendered"
-            }
-          }
-
-          $scratch = Join-Path $env:RUNNER_TEMP 'scratch'
-          $posix = Join-Path $env:RUNNER_TEMP 'figma-skills-reconcile.sh'
-          Get-Content -Raw -LiteralPath (
-            Join-Path $env:GITHUB_WORKSPACE '.chezmoiscripts\70-agents\run_after_install-figma-skills.sh.tmpl'
-          ) | & chezmoi --config (Join-Path $scratch 'empty.toml') `
-            --source $env:GITHUB_WORKSPACE `
-            --destination (Join-Path $scratch 'target') `
-            --override-data '{"chezmoi":{"os":"linux"}}' `
-            execute-template | Set-Content -LiteralPath $posix -Encoding utf8NoBOM
-          if ($LASTEXITCODE -ne 0) { throw "POSIX Figma reconciler render exited with code $LASTEXITCODE" }
-
-          $entry = (
-            Get-Content -Raw -LiteralPath '.chezmoidata/releases.json' | ConvertFrom-Json
-          ).releases.tools.'figma/mcp-server-guide'
-          [string]$revision = $entry.revision
-          [string]$skills = ConvertTo-Json -InputObject @($entry.skills) -Compress
-          $externalContent = Get-Content -Raw -LiteralPath $external
-          $posixContent = Get-Content -Raw -LiteralPath $posix
-          $windowsContent = Get-Content -Raw -LiteralPath $windows
-          if (-not $externalContent.Contains("archive/$revision.tar.gz")) {
-            throw "Figma external does not use locked revision $revision"
-          }
-          if (-not $posixContent.Contains("readonly DESIRED_SKILLS_JSON='$skills'")) {
-            throw 'POSIX Figma reconciler inventory differs from the lock'
-          }
-          if (-not $windowsContent.Contains("`$desiredSkillsJson = '$skills'")) {
-            throw 'Windows Figma reconciler inventory differs from the lock'
-          }
-          [void][ScriptBlock]::Create($windowsContent)
-          "- Figma external and paired reconcilers (windows) use the locked revision and inventory" |
-            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-
-      - name: Assert Windows compound-engineering and omp integration
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $false
-          $out = Join-Path $env:GITHUB_WORKSPACE '_artifacts\rendered-internals'
-          $externals = Join-Path $out '.chezmoiexternals\ai-agents.toml'
-          $updater = Join-Path $out '.chezmoiscripts\70-agents\run_onchange_after_update-omp-plugins.ps1'
-          $settings = Join-Path $out '.chezmoiscripts\70-agents\run_after_config-omp-settings.ps1'
-          $auth = Join-Path $out '.chezmoiscripts\70-agents\run_after_config-omp-auth.ps1'
-          foreach ($path in @($externals, $updater, $settings, $auth)) {
-            if (-not (Test-Path $path)) { throw "missing rendered survivor path: $path" }
-            if (Test-Path "$path.render-error.txt") { throw "render failed: $path" }
-          }
-
-          $match = [regex]::Match(
-            (Get-Content -Raw $externals),
-            '\["(?<relative>\.local/share/compound-engineering/v[0-9]+\.[0-9]+\.[0-9]+)"\]'
-          )
-          if (-not $match.Success) { throw 'compound-engineering external missing on Windows' }
-
-          $rendered = Get-Content -Raw -LiteralPath $updater
-          [void][ScriptBlock]::Create($rendered)
-          $expectedVersion = (
-            (Get-Content -Raw -LiteralPath '.chezmoidata/releases.json' | ConvertFrom-Json).
-              releases.tools.omp.version -replace '^v', ''
-          )
-          if ($rendered -notmatch "(?m)^\`$expectedOmpVersion = '$([regex]::Escape($expectedVersion))'\r?$") {
-            throw "rendered OMP updater does not use locked version $expectedVersion"
-          }
-          if ($rendered -notmatch "Name = 'mxm4-haptic'; Market = 'h82-dotfiles'; Kind = 'localDir'") {
-            throw 'rendered OMP updater is missing the Windows haptic plugin row'
-          }
-          if ($rendered -notmatch "Name = 'compound-engineering'; Market = 'compound-engineering-plugin'; Kind = 'localArchive'") {
-            throw 'rendered OMP updater is missing the Windows compound-engineering row'
-          }
-          $authHome = Join-Path $env:RUNNER_TEMP 'omp-auth-home'
-          $authEnv = Join-Path $authHome '.omp\agent\.env'
-          New-Item -ItemType Directory -Force -Path (Split-Path $authEnv) | Out-Null
-          @(
-            '# user-owned values stay byte-identical'
-            "OTHER_TOKEN='keep me'"
-            'ZAI_API_KEY=stale'
-            'ZAI_API_KEY="duplicate"'
-            'OPENROUTER_API_KEY=stale'
-            'OPENCODE_API_KEY="duplicate"'
-          ) | Set-Content -LiteralPath $authEnv -Encoding utf8NoBOM
-          $env:OMP_AGENT_ENV = $authEnv
-          & pwsh -NoProfile -File $auth
-          if ($LASTEXITCODE -ne 0) { throw "omp auth reconcile failed ($LASTEXITCODE)" }
-          $authLines = @(Get-Content -LiteralPath $authEnv)
-          foreach ($name in @('ZAI_API_KEY', 'EXA_API_KEY', 'OPENROUTER_API_KEY', 'OPENCODE_API_KEY')) {
-            $assignments = @($authLines | Where-Object { $_ -match "^$name=" })
-            if ($assignments.Count -ne 1) { throw "expected one $name assignment, got $($assignments.Count)" }
-            if ($assignments[0] -ne "$name=`"dummy-secret`"") { throw "unexpected $name value: $($assignments[0])" }
-          }
-          if (-not ($authLines -contains "OTHER_TOKEN='keep me'")) { throw 'unmanaged dotenv line was not preserved' }
-          Set-Content -LiteralPath $authEnv -Value 'NOT A DOTENV ASSIGNMENT' -NoNewline -Encoding utf8NoBOM
-          & pwsh -NoProfile -File $auth *> (Join-Path $env:RUNNER_TEMP 'omp-auth-malformed.log')
-          if ($LASTEXITCODE -eq 0) { throw 'omp auth accepted malformed dotenv input' }
-          if ((Get-Content -Raw -LiteralPath $authEnv) -ne 'NOT A DOTENV ASSIGNMENT') {
-            throw 'omp auth changed malformed dotenv input'
-          }
-          exit 0
-
-      - name: Upload rendered internals
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: rendered-internals-windows
           path: _artifacts/rendered-internals
           retention-days: 3
           include-hidden-files: true
@@ -1071,101 +705,6 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
-  # ---------------------------------------------------------------------------
-  # Task 7: PSScriptAnalyzer over the Windows PowerShell scripts — the `.ps1`
-  # analogue of the shellcheck gate. Runs after apply-windows so it lints the
-  # REAL rendered `.ps1` output chezmoi wrote into $HOME (today only
-  # dot_local/bin/executable_code.ps1 -> code.ps1, which is a verbatim copy, but
-  # a future templated `.ps1` would be caught here in its rendered form). The
-  # repo-meta `.install-prerequisites.ps1` hook is never deployed/rendered, so it
-  # is linted from the checkout — mirroring how shellcheck lints
-  # .install-prerequisites.sh. PSScriptAnalyzer is cross-platform (pwsh ships on
-  # the ubuntu runner), so this needs no Windows runner.
-  #
-  # The gate FAILS on Error-severity findings (parse errors, genuine defects) and
-  # REPORTS Warning-severity ones without failing: PSSA's default rule set flags
-  # stylistic conventions this repo's scripts deliberately don't follow (e.g.
-  # PSUseSingularNouns on `Install-Prerequisites`, PSUseShouldProcessForStateChanging
-  # Functions on the internal `Update-SessionPath`/`Install-*` helpers), and those
-  # should not block a PR. Every Warning + Error is still captured in the
-  # `psscriptanalyzer-report` artifact and the step summary for review.
-  lint-powershell:
-    name: PSScriptAnalyzer (rendered .ps1 + repo-meta)
-    needs: [apply-windows]
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Download rendered Windows artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: _rendered
-          pattern: rendered-*-windows
-
-      - name: Install PSScriptAnalyzer
-        run: |
-          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
-
-      - name: Invoke-ScriptAnalyzer
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $targets = [System.Collections.Generic.List[string]]::new()
-
-          # Repo-meta hook that chezmoi never deploys/renders — lint the source.
-          if (Test-Path '.install-prerequisites.ps1') {
-            $targets.Add((Resolve-Path '.install-prerequisites.ps1').Path)
-          }
-
-          # Every rendered .ps1 from the Windows apply/internals artifacts.
-          if (Test-Path '_rendered') {
-            Get-ChildItem -Path '_rendered' -Recurse -File -Filter '*.ps1' |
-              ForEach-Object { $targets.Add($_.FullName) }
-          }
-
-          if ($targets.Count -eq 0) {
-            Write-Error 'no PowerShell scripts found to lint'
-            exit 1
-          }
-
-          Write-Host "PSScriptAnalyzer targets ($($targets.Count)):"
-          $targets | ForEach-Object { Write-Host "  $_" }
-
-          # Collect Warning + Error findings for reporting; only Error fails the job.
-          $results = foreach ($t in $targets) {
-            Invoke-ScriptAnalyzer -Path $t -Severity @('Warning', 'Error')
-          }
-
-          if ($results) {
-            $results | Format-Table -AutoSize RuleName, Severity, ScriptName, Line, Message |
-              Out-String -Width 200 | Tee-Object -FilePath psscriptanalyzer-report.txt
-          } else {
-            'PSScriptAnalyzer: no Warning/Error findings.' |
-              Tee-Object -FilePath psscriptanalyzer-report.txt
-          }
-
-          $errors   = @($results | Where-Object { $_.Severity -eq 'Error' }).Count
-          $warnings = @($results | Where-Object { $_.Severity -eq 'Warning' }).Count
-          "### PSScriptAnalyzer (rendered .ps1 + repo-meta)`n`n- linted $($targets.Count) script(s); $errors error(s), $warnings warning(s) (errors fail the job; warnings are advisory)" |
-            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-
-          if ($errors -gt 0) {
-            Write-Error "PSScriptAnalyzer found $errors error-severity finding(s)."
-            exit 1
-          }
-
-      - name: Upload PSScriptAnalyzer report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: psscriptanalyzer-report
-          path: psscriptanalyzer-report.txt
-          retention-days: 3
-          if-no-files-found: ignore
-
   # Every quality gate above must actually RUN. GitHub skips a job whose `needs:`
   # dependency fails, so checking only the named lint job can mistake grey for
   # green. This always-running aggregate turns failure, cancellation, and skip in
@@ -1178,9 +717,7 @@ jobs:
         apply,
         render-internals,
         apply-macos,
-        apply-windows,
         shellcheck,
-        lint-powershell,
       ]
     runs-on: ubuntu-latest
     steps:
@@ -1189,9 +726,7 @@ jobs:
           APPLY_RESULT: ${{ needs.apply.result }}
           RENDER_INTERNALS_RESULT: ${{ needs.render-internals.result }}
           APPLY_MACOS_RESULT: ${{ needs.apply-macos.result }}
-          APPLY_WINDOWS_RESULT: ${{ needs.apply-windows.result }}
           SHELLCHECK_RESULT: ${{ needs.shellcheck.result }}
-          LINT_POWERSHELL_RESULT: ${{ needs.lint-powershell.result }}
         run: |
           set -euo pipefail
           failed=0
@@ -1199,9 +734,7 @@ jobs:
             "apply=${APPLY_RESULT}" \
             "render-internals=${RENDER_INTERNALS_RESULT}" \
             "apply-macos=${APPLY_MACOS_RESULT}" \
-            "apply-windows=${APPLY_WINDOWS_RESULT}" \
-            "shellcheck=${SHELLCHECK_RESULT}" \
-            "lint-powershell=${LINT_POWERSHELL_RESULT}"; do
+            "shellcheck=${SHELLCHECK_RESULT}"; do
             echo "${result}"
             if [[ "${result#*=}" != success ]]; then
               failed=1

@@ -23,10 +23,8 @@ render() {
 }
 
 posix_build=.chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl
-windows_build=.chezmoiscripts/60-build/run_after_build-mxm4-haptic.ps1.tmpl
 posix_reconcile=.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
-windows_reconcile=.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.ps1.tmpl
-for path in "$posix_build" "$windows_build" "$posix_reconcile" "$windows_reconcile" \
+for path in "$posix_build" "$posix_reconcile" \
   dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json \
   dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl \
   dot_config/systemd/user/mxm4-hapticd.service.tmpl \
@@ -82,9 +80,8 @@ mac_daemon=Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 
 # The daemon is cross-platform, so the OMP haptic plugin and the daemon manifest
 # deploy on every desktop OS; only the startup definitions stay OS-specific
-# (systemd on Linux, launchd on macOS, the Task Scheduler task rendered by the
-# ps1 build on Windows).
-for os in linux darwin windows; do
+# (systemd on Linux, launchd on macOS).
+for os in linux darwin; do
   rendered_ignore="$scratch/ignore-$os-host"
   render_ignore "$os" false "$rendered_ignore"
   for path in "$omp_market" "$omp_plugin"; do
@@ -93,18 +90,14 @@ for os in linux darwin windows; do
   if [[ "$os" == linux ]]; then
     for path in "$linux_daemon" "$linux_notify"; do assert_gate "$rendered_ignore" eligible "$path" "$os host"; done
     assert_gate "$rendered_ignore" ignored "$mac_daemon" "$os host"
-  elif [[ "$os" == darwin ]]; then
+  else
     for path in "$linux_daemon" "$linux_notify"; do assert_gate "$rendered_ignore" ignored "$path" "$os host"; done
     assert_gate "$rendered_ignore" eligible "$mac_daemon" "$os host"
-  else
-    for path in "$linux_daemon" "$linux_notify" "$mac_daemon"; do assert_gate "$rendered_ignore" ignored "$path" "$os host"; done
   fi
 done
 
 # Native autostart/launch definitions: the macOS LaunchAgent must keep its
-# login autostart + keepalive semantics, and the Windows render must register
-# a current-user logon task at least privilege and install the hook client
-# beside the daemon.
+# login autostart + keepalive semantics.
 plist="$repo_root/Library/LaunchAgents/dev.h82.mxm4-hapticd.plist"
 grep -A1 '<key>RunAtLoad</key>' "$plist" | grep -q '<true/>' || fail 'macOS LaunchAgent lost RunAtLoad autostart'
 grep -A1 '<key>KeepAlive</key>' "$plist" | grep -q '<true/>' || fail 'macOS LaunchAgent lost KeepAlive'
@@ -137,32 +130,17 @@ render_reconciler() {
 
 # Template guards are a second line of defense: exactly one native build and
 # one reconciliation implementation renders on each host OS.
-for os in linux darwin windows; do
+for os in linux darwin; do
   render "$os" "$repo_root/$posix_build" "$scratch/build-$os.sh"
-  render "$os" "$repo_root/$windows_build" "$scratch/build-$os.ps1"
   render_reconciler "$os" false "$posix_reconcile" "$scratch/reconcile-$os.sh"
-  render_reconciler "$os" false "$windows_reconcile" "$scratch/reconcile-$os.ps1"
-  if [[ "$os" == windows ]]; then
-    [[ ! -s "$scratch/build-$os.sh" && -s "$scratch/build-$os.ps1" ]] || fail 'Windows build guard mismatch'
-    [[ ! -s "$scratch/reconcile-$os.sh" && -s "$scratch/reconcile-$os.ps1" ]] || fail 'Windows reconcile guard mismatch'
-    grep -F 'schtasks.exe /Create' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows startup task is absent'
-    grep -F '<LogonTrigger>' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows autostart logon trigger is absent'
-    grep -F '<RunLevel>LeastPrivilege</RunLevel>' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows task least-privilege run level is absent'
-    grep -F '<LogonType>InteractiveToken</LogonType>' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows task interactive-token logon is absent'
-    grep -F '.local\bin\mxm4-haptic.exe' "$scratch/build-$os.ps1" >/dev/null || fail 'Windows hook client install is absent'
-    grep -F -- "'--bin', 'mxm4-hapticd', '--bin', 'mxm4-haptic'" "$scratch/build-$os.ps1" >/dev/null || fail 'Windows build does not compile the hook client'
-    grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-$os.ps1" >/dev/null || fail 'Windows migration is absent'
-    grep -F "Name = 'mxm4-haptic'; Market = 'h82-dotfiles'" "$scratch/reconcile-$os.ps1" >/dev/null || fail 'Windows OMP haptic row is absent'
+  [[ -s "$scratch/build-$os.sh" ]] || fail "$os build guard mismatch"
+  [[ -s "$scratch/reconcile-$os.sh" ]] || fail "$os reconcile guard mismatch"
+  grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-$os.sh" >/dev/null || fail "$os migration is absent"
+  grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-$os.sh" >/dev/null || fail "$os OMP haptic row is absent"
+  if [[ "$os" == linux ]]; then
+    grep -F 'systemctl --user' "$scratch/build-$os.sh" >/dev/null || fail 'Linux systemd startup is absent'
   else
-    [[ -s "$scratch/build-$os.sh" && ! -s "$scratch/build-$os.ps1" ]] || fail "$os build guard mismatch"
-    [[ -s "$scratch/reconcile-$os.sh" && ! -s "$scratch/reconcile-$os.ps1" ]] || fail "$os reconcile guard mismatch"
-    grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-$os.sh" >/dev/null || fail "$os migration is absent"
-    grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-$os.sh" >/dev/null || fail "$os OMP haptic row is absent"
-    if [[ "$os" == linux ]]; then
-      grep -F 'systemctl --user' "$scratch/build-$os.sh" >/dev/null || fail 'Linux systemd startup is absent'
-    else
-      grep -F 'launchctl bootstrap' "$scratch/build-$os.sh" >/dev/null || fail 'macOS launchd startup is absent'
-    fi
+    grep -F 'launchctl bootstrap' "$scratch/build-$os.sh" >/dev/null || fail 'macOS launchd startup is absent'
   fi
 done
 

@@ -99,7 +99,7 @@ factRegistry:
   os:
     type: string
     probe: builtin
-    values: [linux, darwin, windows]
+    values: [linux, darwin]
     source: .chezmoi.os
     gates: >-
       Everything OS-specific: the .chezmoiignore per-OS blocks, every script's
@@ -109,7 +109,7 @@ factRegistry:
     type: string
     probe: builtin
     values: [fedora, ""]
-    source: .chezmoi.osRelease.id (empty on darwin/windows — no /etc/os-release)
+    source: .chezmoi.osRelease.id (empty on darwin — no /etc/os-release)
     gates: >-
       The Fedora package installer (20-linux-fedora), the LUKS TPM2 path, and
       system.yaml's per-distro `removed:` entries. Fedora is the only managed

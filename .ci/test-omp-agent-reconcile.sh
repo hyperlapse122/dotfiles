@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT AUTH_PS1 PLUGIN_SCRIPT PLUGIN_PS1 HAPTIC_PACKAGE SETTINGS_SH SETTINGS_PS1'
+usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_PACKAGE SETTINGS_SH'
 auth_script=${1:?$usage}
-auth_ps1=${2:?$usage}
-plugin_script=${3:?$usage}
-plugin_ps1=${4:?$usage}
-haptic_package=${5:?$usage}
-settings_script=${6:?$usage}
-settings_ps1=${7:?$usage}
+plugin_script=${2:?$usage}
+haptic_package=${3:?$usage}
+settings_script=${4:?$usage}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 locked_omp_version=$(jq -er '.releases.tools.omp.version | sub("^v"; "")' "$repo_root/.chezmoidata/releases.json")
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-agent-reconcile-fixtures
@@ -56,17 +53,13 @@ printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
 OMP_AGENT_ENV="$ambient" run_auth
 [[ $(cat "$ambient") == 'AMBIENT_TOKEN=keep' ]]
 
-# The rendered POSIX and PowerShell scripts must enforce the same ordered set.
+# The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
 printf '%s\n' ZAI_API_KEY EXA_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
   grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names"
-ps1_names="$scratch/ps1-managed-names"
-grep -m1 '^\$managedNames = ' "$auth_ps1" |
-  grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$ps1_names"
 diff -u "$expected_names" "$posix_names"
-diff -u "$expected_names" "$ps1_names"
 
 printf 'NOT A DOTENV ASSIGNMENT\n' >"$auth"
 if run_auth >"$scratch/malformed.out" 2>"$scratch/malformed.err"; then
@@ -87,9 +80,9 @@ fi
 [[ $(cat "$referent") == 'do not overwrite' ]]
 grep -F 'unsafe target' "$scratch/auth.err" >/dev/null
 
-# Both rendered platform scripts must carry the same data rows, fail-closed
-# lifecycle calls, digest/loader checks, migration boundary, locked OMP
-# version, and raw-input fingerprint set.
+# The rendered POSIX script must carry the data rows, fail-closed lifecycle
+# calls, digest/loader checks, migration boundary, locked OMP version, and
+# raw-input fingerprint set.
 for needle in \
   'mxm4-haptic@h82-dotfiles' \
   'compound-engineering' \
@@ -100,16 +93,11 @@ for needle in \
   'loader health' \
   'legacy'; do
   grep -F "$needle" "$plugin_script" >/dev/null
-  grep -F "$needle" "$plugin_ps1" >/dev/null
 done
 grep -F "readonly EXPECTED_OMP_VERSION='$locked_omp_version'" "$plugin_script" >/dev/null
-grep -F "\$expectedOmpVersion = '$locked_omp_version'" "$plugin_ps1" >/dev/null
 posix_fingerprints="$scratch/posix-plugin-fingerprints"
-ps1_fingerprints="$scratch/ps1-plugin-fingerprints"
 grep '^#   ' "$plugin_script" >"$posix_fingerprints"
-grep '^#   ' "$plugin_ps1" >"$ps1_fingerprints"
 [[ -s $posix_fingerprints ]]
-diff -u "$posix_fingerprints" "$ps1_fingerprints"
 for raw_input in \
   '.chezmoidata/agents.yaml' \
   '.chezmoidata/haptic.yaml' \
@@ -118,9 +106,6 @@ for raw_input in \
   'packages/mxm4-haptic/src/omp-plugin.ts'; do
   grep -F "#   $raw_input  " "$posix_fingerprints" >/dev/null
 done
-posix_ids=$(grep -oE '[a-z0-9.-]+@[a-z0-9.-]+' "$plugin_script" | sort -u)
-ps_ids=$(grep -oE '[a-z0-9.-]+@[a-z0-9.-]+' "$plugin_ps1" | sort -u)
-[[ $posix_ids == "$ps_ids" ]]
 [[ -f $haptic_package/package.json && -f $haptic_package/dist/index.js ]]
 source="$home/.local/share/omp-plugins"
 mkdir -p "$source/.omp-plugin" "$source/plugins" "$home/.local/share/compound-engineering/v-test/.claude-plugin"
@@ -342,17 +327,6 @@ env HOME="$settings_home" PATH="/usr/bin:/bin" bash "$settings_script" \
   >"$scratch/noomp.out" 2>"$scratch/noomp.err"
 grep -F 'omp is unavailable' "$scratch/noomp.err" >/dev/null
 
-# Both platform halves must derive the same declared path set.
-ps_declared="$scratch/declared-ps1.json"
-awk "/^\\\$declaredJson = @'\$/{flag=1;next}/^'@\$/{flag=0}flag" "$settings_ps1" >"$ps_declared"
-jq -e 'type == "object"' "$ps_declared" >/dev/null
-if ! diff -u \
-  <(jq -r 'keys[]' "$declared_json") \
-  <(jq -r 'keys[]' "$ps_declared"); then
-  printf 'POSIX and Windows settings halves declare different paths\n' >&2
-  exit 1
-fi
-
 # A live-catalog freshness probe is not possible here: the job installs no omp
 # and holds no provider credentials. This shape check is the feasible
 # substitute — it catches a typo in a provider, a model id, or a thinking level
@@ -369,23 +343,6 @@ for selector in "${declared_selectors[@]}"; do
     exit 1
   fi
 done
-
-# The parity diff above compares KEY SETS only, so it cannot see a value-rendering
-# divergence, and CI cannot execute the Windows half at all. Pin every rule that
-# decides what actually reaches the CLI there; each one has a POSIX counterpart the
-# value assertion above already proves behaviorally.
-while IFS='|' read -r pattern why; do
-  [[ -n $pattern ]] || continue
-  grep -F -e "$pattern" -- "$settings_ps1" >/dev/null || {
-    printf 'the Windows half must %s\n' "$why" >&2
-    exit 1
-  }
-done <<'PINS'
-ConvertTo-Json -InputObject $value|pass -InputObject, so a single-element array is not enumerated into a bare scalar
--Depth 20|serialize nested fallback chains rather than System.Object[] below depth 2
-$value -is [string]|store a string verbatim rather than JSON-quoted
-$1$1\"|escape embedded quotes where the Windows PowerShell 5.1 argument binder does not
-PINS
 
 # Render-time guards are structurally invisible to every test above, which receives
 # already-rendered scripts. These cases fail the RENDER, the only layer that can
@@ -420,11 +377,8 @@ assert_render_fails() {
 }
 
 auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
-auth_ps1='.chezmoiscripts/70-agents/run_after_config-omp-auth.ps1.tmpl'
 settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
-settings_win='.chezmoiscripts/70-agents/run_after_config-omp-settings.ps1.tmpl'
 linux='"chezmoi":{"os":"linux"}'
-windows='"chezmoi":{"os":"windows"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
 closed_set='ZAI_API_KEY, EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
 
@@ -434,40 +388,22 @@ closed_set='ZAI_API_KEY, EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
 assert_render_fails auth-outside-closed-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"NODE_OPTIONS\",\"key\":\"x\"}]}}}}" \
   "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
-assert_render_fails auth-outside-closed-set-windows "$auth_ps1" \
-  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"NODE_OPTIONS\",\"key\":\"x\"}]}}}}" \
-  "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
 assert_render_fails auth-emptied-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
-  'must declare ZAI_API_KEY'
-assert_render_fails auth-emptied-set-windows "$auth_ps1" \
-  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
   'must declare ZAI_API_KEY'
 assert_render_fails auth-duplicate-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"a\"},{\"variable\":\"ZAI_API_KEY\",\"key\":\"b\"}]}}}}" \
   'duplicates variable "ZAI_API_KEY"'
-assert_render_fails auth-duplicate-windows "$auth_ps1" \
-  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"a\"},{\"variable\":\"ZAI_API_KEY\",\"key\":\"b\"}]}}}}" \
-  'duplicates variable "ZAI_API_KEY"'
 assert_render_fails auth-empty-key-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"\"}]}}}}" \
   'resolved to an empty value'
-assert_render_fails auth-empty-key-windows "$auth_ps1" \
-  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"\"}]}}}}" \
-  'resolved to an empty value'
 assert_render_fails auth-non-string-key-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
-  'field `key` must resolve to a string'
-assert_render_fails auth-non-string-key-windows "$auth_ps1" \
-  "{$windows,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
   'field `key` must resolve to a string'
 
 # Role indirection is the one value shape no later layer validates.
 assert_render_fails settings-dangling-alias "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":{\"commit\":\"@no-such-role\"}}}}}" \
-  'names role alias @no-such-role'
-assert_render_fails settings-dangling-alias-windows "$settings_win" \
-  "{$windows,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":{\"commit\":\"@no-such-role\"}}}}}" \
   'names role alias @no-such-role'
 assert_render_fails settings-orphan-chain "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"ghost\":[\"anthropic/claude-opus-5:xhigh\"]}}}}}" \

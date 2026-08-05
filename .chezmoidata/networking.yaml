@@ -9,8 +9,6 @@
 #           profiles via profiles(1); rendered from
 #           private_executable_import-wifi-1password-macos.sh.tmpl). Real runs
 #           need sudo (profiles(1) requirement); --dry-run does not.
-#   Windows ~/.local/bin/import-wifi-1password.ps1 (netsh wlan profiles;
-#           rendered from private_executable_import-wifi-1password.ps1.tmpl).
 #
 # Currently a single top-level key `wifi`; the file is named `networking` (not
 # `wifi`) to leave room for future ethernet/dns/vpn siblings without another
