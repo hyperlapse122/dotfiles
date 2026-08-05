@@ -54,7 +54,7 @@ fi
 # The token is rendered at apply time from 1Password via secret-read.tmpl.
 # A rotation changes the rendered content, so the onchange hash changes and
 # chezmoi re-runs this script on the next apply.
-TOKEN="{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/Tokscale/API Token") }}"
+TOKEN='{{ onepasswordRead "op://Private/Tokscale/API Token" }}'
 
 if ! env -u TOKSCALE_API_TOKEN tokscale login --token "$TOKEN"; then
   printf 'auth-tokscale: `tokscale login --token` failed (invalid or revoked token? network issue?).\n' >&2
