@@ -73,15 +73,13 @@ rejects missing-disposition 'fedora: { disposition: managed, owner: dnf, identif
 rejects_gate_value unknown-fact madeUpFact 'unknown fact'
 rejects_gate_value malformed-comparison nvidia.true 'BOOLEAN fact'
 rejects duplicate-source '    capabilities:' $'      - name: fedora\n        backend: dnf\n        origin: https://mirrors.fedoraproject.org/metalink\n        trusted: true\n    capabilities:' 'duplicate source'
-rejects spoofed-winget-alias 'source: winget, scope: user' 'source: msstore, scope: user' 'spoofed source alias'
 rejects changed-homebrew-origin 'https://github.com/Homebrew/homebrew-cask.git' 'https://github.com/attacker/homebrew-cask.git' 'canonical origin mismatch'
 rejects dnf-origin-mismatch 'https://dl.google.com/linux/chrome/rpm/stable/x86_64' 'https://mirror.invalid/chrome' 'canonical origin mismatch' 2
 rejects unsafe-field '        bootstrap: true' $'        bootstrap: true\n        shell: sh' 'unsafe/unknown field'
-rejects unsupported-id 'identifier: Google.Chrome' 'identifier: Google Chrome;calc' 'unsupported identifier'
+rejects unsupported-id 'identifier: google-chrome-stable' 'identifier: google chrome;calc' 'unsupported identifier'
 rejects untrusted-tap $'        backend: homebrew\n        origin: https://github.com/Homebrew/homebrew-cask.git\n        trusted: true' $'        backend: homebrew\n        origin: https://github.com/Homebrew/homebrew-cask.git\n        trusted: false' 'is not trusted'
 rejects unavailable-bootstrap 'fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: native } }' 'fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: unresolved } }' 'bootstrap capability onePasswordDesktop unavailable'
 rejects resolved-g0 'arm64: unresolved' 'arm64: native' 'G0 is closed but no gate-closing architecture remains unresolved' 3
-rejects missing-emulation 'emulation: x64, architectures: { amd64: native, arm64: emulated }' 'architectures: { amd64: native, arm64: emulated }' 'must declare emulation: x64'
 rejects gate-mismatch 'gate: "!virt"' 'gate: nvidia' 'gate mismatch'
 rejects checksum-omission '        integrity: checksum
         fedora: { disposition: managed, owner: external, identifier: gh' '        fedora: { disposition: managed, owner: external, identifier: gh' 'omits checksum integrity'

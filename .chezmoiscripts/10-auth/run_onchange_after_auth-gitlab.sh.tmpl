@@ -1,4 +1,3 @@
-{{ if ne .chezmoi.os "windows" -}}
 #!/usr/bin/env bash
 #
 # auth-gitlab — provision the GitLab CLI (`glab`) credentials for every GitLab
@@ -145,5 +144,3 @@ if [[ "$status" -ne 0 ]]; then
 fi
 
 exit "$status"
-
-{{ end -}}

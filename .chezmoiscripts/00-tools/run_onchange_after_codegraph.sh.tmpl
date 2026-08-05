@@ -1,4 +1,3 @@
-{{ if ne .chezmoi.os "windows" -}}
 
 {{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph")) -}}
 
@@ -36,5 +35,3 @@ fi
 # if [ "$pruned" -gt 0 ]; then
 #   echo "Removed    $pruned older version(s)"
 # fi
-
-{{ end -}}

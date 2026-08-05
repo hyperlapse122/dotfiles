@@ -1,4 +1,3 @@
-{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{- $settings := .agents.omp.settings -}}
 {{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 #!/usr/bin/env bash
@@ -140,4 +139,3 @@ if [[ $asserted -ne {{ len $settings }} ]]; then
   exit 1
 fi
 printf 'config-omp-settings: asserted %d declared omp settings paths\n' "$asserted"
-{{ end -}}

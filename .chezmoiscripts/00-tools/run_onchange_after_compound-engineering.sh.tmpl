@@ -1,4 +1,3 @@
-{{ if ne .chezmoi.os "windows" -}}
 
 {{- $ctx := . -}}
 {{- $name := "compound-engineering-plugin" -}}
@@ -38,5 +37,3 @@ for d in "$BASE_DIR"/*; do
   [ "$d" = "$CURRENT" ] && continue
   rm -rf -- "$d" || true
 done
-
-{{ end -}}

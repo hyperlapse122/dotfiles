@@ -8,36 +8,35 @@
 {{- $authorityKeys := list "supportedArchitectures" "releaseGates" "sources" "capabilities" -}}
 {{- range $key := keys $authority -}}{{- if not (has $key $authorityKeys) -}}{{- fail (printf "packages.yaml: unknown authority field %q" $key) -}}{{- end -}}{{- end -}}
 {{- range $required := $authorityKeys -}}{{- if not (hasKey $authority $required) -}}{{- fail (printf "packages.yaml: authority.%s is required" $required) -}}{{- end -}}{{- end -}}
-{{- $expectedArchitectures := dict "fedora" (list "amd64" "arm64") "windows" (list "amd64" "arm64") "macos" (list "arm64") -}}
-{{- range $platform := list "fedora" "windows" "macos" -}}
+{{- $expectedArchitectures := dict "fedora" (list "amd64" "arm64") "macos" (list "arm64") -}}
+{{- range $platform := list "fedora" "macos" -}}
 {{-   if not (hasKey $authority.supportedArchitectures $platform) -}}{{- fail (printf "packages.yaml: supportedArchitectures.%s is required" $platform) -}}{{- end -}}
 {{-   $declared := index $authority.supportedArchitectures $platform -}}
 {{-   range $arch := index $expectedArchitectures $platform -}}{{- if not (has $arch $declared) -}}{{- fail (printf "packages.yaml: supportedArchitectures.%s is missing %s" $platform $arch) -}}{{- end -}}{{- end -}}
 {{-   range $arch := $declared -}}{{- if not (has $arch (index $expectedArchitectures $platform)) -}}{{- fail (printf "packages.yaml: unsupported architecture %s.%s" $platform $arch) -}}{{- end -}}{{- end -}}
 {{- end -}}
-{{- $canonicalOrigins := dict "fedora" "https://mirrors.fedoraproject.org/metalink" "onePassword" "https://downloads.1password.com/linux/rpm/stable/$basearch" "vscodium" "https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/" "googleChrome" "https://dl.google.com/linux/chrome/rpm/stable/x86_64" "cider" "https://repo.cider.sh/rpm/RPMS" "microsoftEdge" "https://packages.microsoft.com/yumrepos/edge" "flathub" "https://dl.flathub.org/repo/flathub.flatpakrepo" "winget" "https://cdn.winget.microsoft.com/cache" "homebrewCore" "https://github.com/Homebrew/homebrew-core.git" "homebrewCask" "https://github.com/Homebrew/homebrew-cask.git" -}}
+{{- $canonicalOrigins := dict "fedora" "https://mirrors.fedoraproject.org/metalink" "onePassword" "https://downloads.1password.com/linux/rpm/stable/$basearch" "vscodium" "https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/" "googleChrome" "https://dl.google.com/linux/chrome/rpm/stable/x86_64" "cider" "https://repo.cider.sh/rpm/RPMS" "microsoftEdge" "https://packages.microsoft.com/yumrepos/edge" "flathub" "https://dl.flathub.org/repo/flathub.flatpakrepo" "homebrewCore" "https://github.com/Homebrew/homebrew-core.git" "homebrewCask" "https://github.com/Homebrew/homebrew-cask.git" -}}
 {{- $sources := dict -}}
 {{- range $source := $authority.sources -}}
 {{-   range $required := list "name" "backend" "origin" "trusted" -}}{{- if not (hasKey $source $required) -}}{{- fail (printf "packages.yaml: source is missing %s" $required) -}}{{- end -}}{{- end -}}
 {{-   range $key := keys $source -}}{{- if not (has $key (list "name" "backend" "sourceType" "origin" "trusted")) -}}{{- fail (printf "packages.yaml: source %v has unsafe/unknown field %q" $source.name $key) -}}{{- end -}}{{- end -}}
 {{-   if not (regexMatch "^[A-Za-z][A-Za-z0-9]*$" $source.name) -}}{{- fail (printf "packages.yaml: unsafe source name %q" $source.name) -}}{{- end -}}
 {{-   if hasKey $sources $source.name -}}{{- fail (printf "packages.yaml: duplicate source %q" $source.name) -}}{{- end -}}
-{{-   if not (has $source.backend (list "dnf" "flatpak" "winget" "homebrew")) -}}{{- fail (printf "packages.yaml: source %s has unsupported backend %q" $source.name $source.backend) -}}{{- end -}}
+{{-   if not (has $source.backend (list "dnf" "flatpak" "homebrew")) -}}{{- fail (printf "packages.yaml: source %s has unsupported backend %q" $source.name $source.backend) -}}{{- end -}}
 {{-   if not (hasKey $canonicalOrigins $source.name) -}}{{- fail (printf "packages.yaml: undeclared third-party source %q" $source.name) -}}{{- end -}}
 {{-   if ne $source.origin (index $canonicalOrigins $source.name) -}}{{- fail (printf "packages.yaml: canonical origin mismatch for %s: got %q" $source.name $source.origin) -}}{{- end -}}
 {{-   if not $source.trusted -}}{{- fail (printf "packages.yaml: source %s is not trusted" $source.name) -}}{{- end -}}
 {{-   if not (regexMatch "^https://[^[:space:];|&]+$" $source.origin) -}}{{- fail (printf "packages.yaml: source %s has unsafe origin %q" $source.name $source.origin) -}}{{- end -}}
-{{-   if and (eq $source.backend "winget") (or (not (hasKey $source "sourceType")) (ne $source.sourceType "predefined")) -}}{{- fail "packages.yaml: winget source must have sourceType predefined (aliases are not accepted)" -}}{{- end -}}
 {{-   $_ := set $sources $source.name $source -}}
 {{- end -}}
 {{- $capabilities := dict -}}{{- $owners := dict -}}{{- $gates := list -}}{{- $g0Unresolved := 0 -}}
 {{- range $capability := $authority.capabilities -}}
-{{-   range $key := keys $capability -}}{{- if not (has $key (list "id" "sentinel" "bootstrap" "gateClosing" "legacyGroup" "gate" "integrity" "fedora" "windows" "macos")) -}}{{- fail (printf "packages.yaml: capability %v has unsafe/unknown field %q" $capability.id $key) -}}{{- end -}}{{- end -}}
+{{-   range $key := keys $capability -}}{{- if not (has $key (list "id" "sentinel" "bootstrap" "gateClosing" "legacyGroup" "gate" "integrity" "fedora" "macos")) -}}{{- fail (printf "packages.yaml: capability %v has unsafe/unknown field %q" $capability.id $key) -}}{{- end -}}{{- end -}}
 {{-   if or (not (hasKey $capability "id")) (not (regexMatch "^[A-Za-z][A-Za-z0-9]*$" $capability.id)) -}}{{- fail "packages.yaml: every capability requires a safe camelCase id" -}}{{- end -}}
 {{-   if hasKey $capabilities $capability.id -}}{{- fail (printf "packages.yaml: duplicate capability %q" $capability.id) -}}{{- end -}}{{- $_ := set $capabilities $capability.id true -}}
 {{-   if and (hasKey $capability "sentinel") (not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._+-]*$" $capability.sentinel)) -}}{{- fail (printf "packages.yaml: capability %s has unsafe PATH sentinel %q" $capability.id $capability.sentinel) -}}{{- end -}}
 {{-   if hasKey $capability "gate" -}}{{- $gates = append $gates $capability.gate -}}{{- if or (not (hasKey $capability "legacyGroup")) (not (hasKey $packages.linux.fedora.gates $capability.legacyGroup)) -}}{{- fail (printf "packages.yaml: capability %s has unknown legacy gate group" $capability.id) -}}{{- end -}}{{- if ne $capability.gate (index $packages.linux.fedora.gates $capability.legacyGroup) -}}{{- fail (printf "packages.yaml: capability %s gate mismatch" $capability.id) -}}{{- end -}}{{- else if hasKey $capability "legacyGroup" -}}{{- fail (printf "packages.yaml: capability %s has legacyGroup without gate" $capability.id) -}}{{- end -}}
-{{-   range $platform := list "fedora" "windows" "macos" -}}
+{{-   range $platform := list "fedora" "macos" -}}
 {{-     if not (hasKey $capability $platform) -}}{{- fail (printf "packages.yaml: capability %s is missing %s disposition" $capability.id $platform) -}}{{- end -}}
 {{-     $delivery := index $capability $platform -}}
 {{-     range $key := keys $delivery -}}{{- if not (has $key (list "disposition" "owner" "identifier" "source" "kind" "scope" "elevation" "greedy" "version" "emulation" "architectures" "reason" "integrity" "manual")) -}}{{- fail (printf "packages.yaml: capability %s.%s has unsafe/unknown field %q" $capability.id $platform $key) -}}{{- end -}}{{- end -}}
@@ -49,7 +48,7 @@
 {{-       if not (hasKey $delivery.architectures $arch) -}}{{- fail (printf "packages.yaml: capability %s.%s is missing architecture %s" $capability.id $platform $arch) -}}{{- end -}}
 {{-       $state := index $delivery.architectures $arch -}}
 {{-       if not (has $state (list "native" "emulated" "manual" "notApplicable" "unresolved")) -}}{{- fail (printf "packages.yaml: capability %s.%s.%s has unsupported architecture state %q" $capability.id $platform $arch $state) -}}{{- end -}}
-{{-       if and (eq $state "emulated") (ne $platform "windows") -}}{{- fail (printf "packages.yaml: emulation is supported only on Windows, not %s.%s" $capability.id $platform) -}}{{- end -}}
+{{-       if eq $state "emulated" -}}{{- fail "packages.yaml: emulation is no longer supported (Windows dropped)" -}}{{- end -}}
 {{-       if and (hasKey $capability "bootstrap") $capability.bootstrap (ne $state "native") (ne $state "emulated") -}}{{- fail (printf "packages.yaml: bootstrap capability %s unavailable on %s.%s" $capability.id $platform $arch) -}}{{- end -}}
 {{-       if and (hasKey $capability "gateClosing") (eq $capability.gateClosing "g0") (eq $state "unresolved") -}}{{- $g0Unresolved = add1 $g0Unresolved -}}{{- end -}}
 {{-     end -}}
@@ -58,11 +57,7 @@
 {{-       range $required := list "owner" "identifier" -}}{{- if not (hasKey $delivery $required) -}}{{- fail (printf "packages.yaml: managed capability %s.%s is missing %s" $capability.id $platform $required) -}}{{- end -}}{{- end -}}
 {{-       if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$" $delivery.identifier) -}}{{- fail (printf "packages.yaml: capability %s.%s has unsupported identifier %q" $capability.id $platform $delivery.identifier) -}}{{- end -}}
 {{-       $ownerKey := printf "%s:%s:%s" $platform $delivery.owner (lower $delivery.identifier) -}}{{- if hasKey $owners $ownerKey -}}{{- fail (printf "packages.yaml: duplicate owner/source %s" $ownerKey) -}}{{- end -}}{{- $_ := set $owners $ownerKey $capability.id -}}
-{{-       if eq $platform "windows" -}}
-{{-         if not (has $delivery.owner (list "winget" "external" "releaseLock" "mise")) -}}{{- fail (printf "packages.yaml: unsupported Windows owner %q" $delivery.owner) -}}{{- end -}}
-{{-         if eq $delivery.owner "winget" -}}{{- range $required := list "source" "scope" "elevation" -}}{{- if not (hasKey $delivery $required) -}}{{- fail (printf "packages.yaml: winget capability %s is missing %s" $capability.id $required) -}}{{- end -}}{{- end -}}{{- if ne $delivery.source "winget" -}}{{- fail (printf "packages.yaml: winget capability %s uses a spoofed source alias" $capability.id) -}}{{- end -}}{{- if not (has $delivery.scope (list "user" "machine" "either")) -}}{{- fail (printf "packages.yaml: winget capability %s has unsafe scope" $capability.id) -}}{{- end -}}{{- if not (has $delivery.elevation (list "none" "admin")) -}}{{- fail (printf "packages.yaml: winget capability %s has unsafe elevation" $capability.id) -}}{{- end -}}{{- end -}}
-{{-         $armState := index $delivery.architectures "arm64" -}}{{- if and (eq $armState "emulated") (or (not (hasKey $delivery "emulation")) (ne $delivery.emulation "x64")) -}}{{- fail (printf "packages.yaml: Windows arm64 capability %s must declare emulation: x64" $capability.id) -}}{{- end -}}{{- if and (ne $armState "emulated") (hasKey $delivery "emulation") -}}{{- fail (printf "packages.yaml: capability %s declares emulation without an emulated architecture" $capability.id) -}}{{- end -}}
-{{-       else if eq $platform "macos" -}}
+{{-       if eq $platform "macos" -}}
 {{-         if not (has $delivery.owner (list "homebrew" "external" "releaseLock" "mise")) -}}{{- fail (printf "packages.yaml: unsupported macOS owner %q" $delivery.owner) -}}{{- end -}}
 {{-         if eq $delivery.owner "homebrew" -}}{{- range $required := list "kind" "source" "elevation" "greedy" -}}{{- if not (hasKey $delivery $required) -}}{{- fail (printf "packages.yaml: Homebrew capability %s is missing %s" $capability.id $required) -}}{{- end -}}{{- end -}}{{- if not (has $delivery.kind (list "tap" "formula" "cask")) -}}{{- fail (printf "packages.yaml: Homebrew capability %s has unsupported kind" $capability.id) -}}{{- end -}}{{- if or (not (hasKey $sources $delivery.source)) (ne (index $sources $delivery.source).backend "homebrew") -}}{{- fail (printf "packages.yaml: Homebrew capability %s uses an untrusted tap" $capability.id) -}}{{- end -}}{{- if not (has $delivery.elevation (list "none" "sudo" "appManagement")) -}}{{- fail (printf "packages.yaml: Homebrew capability %s has unsafe elevation" $capability.id) -}}{{- end -}}{{- end -}}
 {{-       else -}}{{- if not (has $delivery.owner (list "dnf" "flatpak" "dotnet" "directRpm" "external" "releaseLock" "mise")) -}}{{- fail (printf "packages.yaml: unsupported Fedora owner %q" $delivery.owner) -}}{{- end -}}{{- if has $delivery.owner (list "dnf" "flatpak") -}}{{- if or (not (hasKey $delivery "source")) (not (hasKey $sources $delivery.source)) -}}{{- fail (printf "packages.yaml: Fedora capability %s has missing source" $capability.id) -}}{{- end -}}{{- end -}}{{- end -}}

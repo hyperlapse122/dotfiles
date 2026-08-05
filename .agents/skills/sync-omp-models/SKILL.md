@@ -437,12 +437,6 @@ for item in "run_after_config-omp-auth.sh.tmpl:auth.sh" \
             "run_after_config-omp-settings.sh.tmpl:settings.sh"; do
   render < ".chezmoiscripts/70-agents/${item%%:*}" > "$scratch/${item#*:}"
 done
-for item in "run_after_config-omp-auth.ps1.tmpl:auth.ps1" \
-            "run_onchange_after_update-omp-plugins.ps1.tmpl:plugins.ps1" \
-            "run_after_config-omp-settings.ps1.tmpl:settings.ps1"; do
-  render --override-data '{"chezmoi":{"os":"windows"}}' \
-    < ".chezmoiscripts/70-agents/${item%%:*}" > "$scratch/${item#*:}"
-done
 mkdir -p "$scratch/haptic-package/dist"
 render < "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" \
   > "$scratch/haptic-package/package.json"
@@ -476,11 +470,11 @@ jq -r '. as $s | ($s.modelRoles // {}) as $r
   | if length > 0 then "UNANCHORED PATH \($c.key): missing \(join(", "))" else empty end' \
   "$scratch/omp-settings.json"     # must print nothing
 
-# 3. Both platform halves must assert the same declared key set and plugin state.
+# 3. The rendered artifacts must assert the declared key set and plugin state.
 .ci/test-omp-agent-reconcile.sh \
-  "$scratch/auth.sh" "$scratch/auth.ps1" \
-  "$scratch/plugins.sh" "$scratch/plugins.ps1" \
-  "$scratch/haptic-package" "$scratch/settings.sh" "$scratch/settings.ps1"
+  "$scratch/auth.sh" \
+  "$scratch/plugins.sh" \
+  "$scratch/haptic-package" "$scratch/settings.sh"
 
 # 4. model-notes.md must (a) carry no specs, (b) cover every declared
 #    selector's family, and (c) agree with agents.yaml on role -> family.

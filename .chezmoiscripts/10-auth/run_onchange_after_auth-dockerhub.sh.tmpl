@@ -1,4 +1,3 @@
-{{ if ne .chezmoi.os "windows" -}}
 #!/usr/bin/env bash
 #
 # auth-dockerhub — populate the Docker Hub credential into the OS-native
@@ -69,6 +68,4 @@ then
 else
   printf 'auth-dockerhub: could not store credential for %s (Secret Service unavailable/locked?); skipping. Re-run chezmoi apply in an unlocked desktop session.\n' '{{ $server }}' >&2
 fi
-{{ end -}}
-
 {{ end -}}

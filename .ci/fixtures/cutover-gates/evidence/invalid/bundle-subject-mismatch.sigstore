@@ -1,8 +1,0 @@
-{
-  "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
-  "dsseEnvelope": {
-    "payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoiZXZpZGVuY2UuanNvbiIsImRpZ2VzdCI6eyJzaGEyNTYiOiI0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0In19XSwicHJlZGljYXRlVHlwZSI6Imh0dHBzOi8vc2lnc3RvcmUuZGV2L2F0dGVzdGF0aW9uL3YxIiwicHJlZGljYXRlIjp7fX0=",
-    "payloadType": "application/vnd.in-toto+json",
-    "signatures": []
-  }
-}
