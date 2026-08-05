@@ -8,6 +8,6 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 
 exec mise --no-config --no-env --no-hooks exec -y node -- env \
-  ZAI_API_KEY="{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/Z.ai/API Key") }}" \
+  ZAI_API_KEY="{{ onepasswordRead "op://Private/Z.ai/API Key" }}" \
   TOKSCALE_DEVICE_NAME="{{ if eq .chezmoi.os "darwin" }}$(sysctl -n hw.model){{ else }}$(cat /sys/devices/virtual/dmi/id/product_name){{ end }}" \
   npx -y tokscale "$@"
