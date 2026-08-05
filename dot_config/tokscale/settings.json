@@ -6,11 +6,30 @@
   "nativeTimeoutMs": 300000,
   "scanner": {
     "opencodeDbPaths": [],
-    "extraScanPaths": {}
+    "extraScanPaths": {},
+    "bucketTimezone": "Asia/Seoul"
   },
   "defaultClients": [],
   "light": {
     "writeCache": false
   },
-  "minutelyTabEnabled": false
+  "minutelyTabEnabled": false,
+  "autosubmit": {
+    "enabled": false,
+    "intervalMinutes": 1440,
+    "clients": [],
+    "since": null,
+    "until": null,
+    "year": null,
+    "today": false,
+    "yesterday": false,
+    "week": false,
+    "month": false,
+    "scheduler": null,
+    "managedExecutable": null,
+    "managedExecutableVersion": null,
+    "lastRunAtMs": null,
+    "lastError": null
+  },
+  "modelAliases": {}
 }
