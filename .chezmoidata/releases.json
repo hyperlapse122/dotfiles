@@ -44,23 +44,23 @@
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",
-        "version": "v1.13.2",
+        "version": "v1.14.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-linux-amd64.tar.gz",
-            "sha256": "6117e8470732b5c47f42ae47df135216cf8e7aadcb37727497897f8b164eb83f"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-linux-amd64.tar.gz",
+            "sha256": "220b27d7a7d021451cda9ba15f02fbba3cd16071ee0df3e029a84cd75af19de0"
           },
           "linux-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-linux-arm64.tar.gz",
-            "sha256": "8ee957f75daa2284aa377aebc51ac73a221064d68e88670117d6c0c8d6fdc303"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-linux-arm64.tar.gz",
+            "sha256": "aa01e2b9e83b927e20764c639ac55064a5a122d9dd934cd47ef5490bed82d9d7"
           },
           "darwin-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-darwin-amd64.tar.gz",
-            "sha256": "80a82fb3a64d20f24cfe20ba77050ddef66e7fbc9995d4038eb5e8b650d7663c"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-darwin-amd64.tar.gz",
+            "sha256": "58b8a722d106849d7797f1c5e2a2d9bceb06358416d5bf2f98b61f4443dd3dfa"
           },
           "darwin-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.13.2/aoe-darwin-arm64.tar.gz",
-            "sha256": "fc58fb10a2fe970e915da85f9dc24346348f6d47855cf3c8b9890c10e9cff3c3"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-darwin-arm64.tar.gz",
+            "sha256": "8c2febf3e6a116aaba6931c6b5d24e150876360744c9743c84645906915b4031"
           }
         }
       },
