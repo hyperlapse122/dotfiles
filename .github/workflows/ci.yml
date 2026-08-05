@@ -466,6 +466,7 @@ jobs:
           .ci/test-wifi-import-gates.sh
           .ci/test-mxm4-haptic-hook-events.sh
           .ci/test-install-prerequisites-op-auth.sh
+          .ci/test-tokscale-auth.sh
           .ci/test-wezterm-candidate.sh
 
   native-windows-x64:

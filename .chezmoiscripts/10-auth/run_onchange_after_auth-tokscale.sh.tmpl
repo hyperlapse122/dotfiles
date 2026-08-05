@@ -1,0 +1,70 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+#
+# auth-tokscale — provision the Tokscale API token from 1Password via
+# `tokscale login --token`, persisting it to ~/.config/tokscale/credentials.json.
+#
+# Mirrors the auth-gitlab / auth-github onchange pattern: the rendered token IS
+# the fingerprint trigger, so a token rotation in 1Password changes the rendered
+# script content, its hash changes, and chezmoi re-runs this script on the next
+# apply (`tokscale login --token` for an already-authenticated account is an
+# idempotent upsert — it overwrites the stored token and refreshes the profile).
+#
+# At-rest posture: tokscale persists the token to a PLAINTEXT JSON file at
+# ~/.config/tokscale/credentials.json (mode 0600, tokscale-enforced), NOT the
+# OS keyring (unlike `glab auth login --use-keyring`, which stores encrypted in
+# KWallet / GNOME Keyring / login keychain). This weaker at-rest posture is an
+# inherent tool limitation, not a choice this script can change.
+#
+# argv exposure: tokscale offers no `--stdin` path for `login` (unlike glab's
+# `--stdin`), so the token appears in the tokscale process's argv during the
+# brief login window. The rendered script also contains the token (as the
+# auth-gitlab rendered script contains the PAT). The additional argv exposure
+# is bounded to a single-user workstation and documented here as accepted.
+#
+# run_onchange_after (NOT before): the tokscale wrapper
+# (dot_local/bin/private_executable_tokscale.tmpl) deploys during chezmoi's FILE
+# phase. A before_ script would not find it on first apply, soft-skip, and —
+# per AGENTS.md — be recorded as a SUCCESSFUL run and never retried until the
+# fingerprint changes or `chezmoi apply --force` is used. The after phase
+# guarantees the wrapper is on disk before this script runs.
+#
+# No `mise exec` fallback: the tokscale wrapper at ~/.local/bin/tokscale is a
+# chezmoi-managed file always deployed on POSIX hosts (no .chezmoiignore entry),
+# so `command -v tokscale` always succeeds wherever the render guard passes.
+# The only host where the soft-skip fires is one where the wrapper was manually
+# removed. (auth-gitlab has a genuine mise-exec fallback because `glab` is an
+# external binary that may be absent; the deployment mechanisms differ.)
+
+set -euo pipefail
+
+# The wrapper may not be on PATH under a non-login shell; fall back to ~/.local/bin
+# instead of missing it, matching auth-github / auth-gitlab.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$PATH:$HOME/.local/bin" ;;
+esac
+export PATH
+
+if ! command -v tokscale >/dev/null 2>&1; then
+  printf 'auth-tokscale: `tokscale` not on PATH or in ~/.local/bin; skipping token login.\n' >&2
+  exit 0
+fi
+
+# The token is rendered at apply time from 1Password via secret-read.tmpl.
+# A rotation changes the rendered content, so the onchange hash changes and
+# chezmoi re-runs this script on the next apply.
+TOKEN="{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/Tokscale/API Token") }}"
+
+if ! env -u TOKSCALE_API_TOKEN tokscale login --token "$TOKEN"; then
+  printf 'auth-tokscale: `tokscale login --token` failed (invalid or revoked token? network issue?).\n' >&2
+  exit 1
+fi
+
+# Defensive: ensure the credentials file is mode 0600 (tokscale already sets this,
+# but this guards against a foreign file that pre-existed at the path).
+chmod 600 "$HOME/.config/tokscale/credentials.json" 2>/dev/null || true
+
+printf 'auth-tokscale: authenticated from the 1Password API token.\n'
+
+{{ end -}}
