@@ -58,10 +58,14 @@ render_remove --override-data '{"chezmoi":{"os":"windows","arch":"amd64"}}' >"$s
 grep -qxF '.local/bin/chezmoi-secrets-sync' "$scratch/windows.out" \
   && fail '.chezmoiremove prunes chezmoi-secrets-sync on Windows, where chezmoi never deployed it'
 
-# The garden entry must survive both renders unchanged — this test must fail if
-# the new block was appended in a way that swallowed its neighbour.
-grep -qxF 'src/garden.yaml' "$scratch/linux.out" \
-  || fail '.chezmoiremove lost its src/garden.yaml entry on the linux render'
+# A pre-existing entry must survive both renders — this test must fail if the
+# new block was appended in a way that swallowed its neighbour. Deliberately
+# asserted against the omp mirror entry rather than the garden one: Check 7 of
+# test-garden-registry-relocation.sh sweeps the repo for that old target
+# literal and allows it only in .chezmoiremove and docs/, so naming it here
+# would turn this guard into a cross-test failure.
+grep -qxF '.omp/agent/CLAUDE.md' "$scratch/linux.out" \
+  || fail '.chezmoiremove lost a pre-existing prune entry on the linux render'
 
 # --- Check 3: no live source still describes the removed cache ---------------
 # docs/plans/ is the historical record of the decision and its reversal, so it
