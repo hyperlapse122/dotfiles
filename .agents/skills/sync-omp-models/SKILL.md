@@ -15,9 +15,9 @@ description: >
   selection policy that decides WHICH model fills a role (series pinning,
   always-latest version floats, and the evidence ranking that keeps vendor
   marketing out of the data), the cited `model-notes.md` companion that holds
-  the researched per-model characteristics, and the two traps that make a naive
-  local verification either bake real secrets into a rendered script or refuse
-  to run the reconcile test.
+  the researched per-model characteristics, and the trap that makes a naive
+  local verification refuse to run the reconcile test (the verbatim recipe
+  stubs `op` so no real key reaches a render).
 ---
 
 # Sync omp model roles
@@ -150,7 +150,7 @@ ver="$(omp --version | cut -d/ -f2)"          # e.g. 17.1.8; release tags are v<
    tested negative result, not an opinion.
 
 6. **Declared state**, rendered the way CI renders it — see the Verify section
-   for the full recipe, including the mandatory scratch `HOME`.
+   for the full recipe.
 
 If any input is empty or errors, STOP and report it — never guess from memory.
 
@@ -401,15 +401,8 @@ recorded in the `weak at` lines, which is the most expensive content in it.
 
 ## Verify before finishing (required)
 
-Two traps make a naive local run wrong, so use this recipe verbatim:
+One trap makes a naive local run wrong, so use this recipe verbatim:
 
-- **`HOME` MUST point at a scratch dir.** `secrets-bundle.tmpl` keys the GPG
-  cache path on `<homeDir>/.config/chezmoi/gpg-cache-ready`, which exists on
-  this host. With the real `HOME`, `chezmoi execute-template` decrypts the
-  committed bundle and bakes **real API keys** into the rendered auth script —
-  and the reconcile test then fails on its `dummy-secret` assertion. A scratch
-  `HOME` has no marker, so the shim falls back to live `op` and the stub
-  answers. CI gets this for free because the marker never exists there.
 - **`.ci/test-omp-agent-reconcile.sh` takes seven rendered artifacts**, matching
   `.github/workflows/ci.yml` `omp-agent-integration`. Render both OS-specific
   script halves plus the bundled haptic package, or the test refuses to run.
@@ -417,7 +410,7 @@ Two traps make a naive local run wrong, so use this recipe verbatim:
 ```sh
 set -euo pipefail
 scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch/omp-sync"
-mkdir -p "$scratch/bin" "$scratch/target" "$scratch/home"; : > "$scratch/empty.toml"
+mkdir -p "$scratch/bin" "$scratch/target"; : > "$scratch/empty.toml"
 # The stub must answer per-reference secrets: the reconcile test asserts
 # distinct OPENROUTER/OPENCODE values, so a flat dummy-secret stub fails step 3.
 cat > "$scratch/bin/op" <<'OPSTUB'
@@ -431,7 +424,7 @@ esac
 OPSTUB
 chmod 700 "$scratch/bin/op"
 render() {
-  env HOME="$scratch/home" PATH="$scratch/bin:$PATH" chezmoi \
+  env PATH="$scratch/bin:$PATH" chezmoi \
     --config "$scratch/empty.toml" --source "$PWD" --destination "$scratch/target" \
     "$@" execute-template
 }

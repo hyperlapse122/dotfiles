@@ -13,7 +13,7 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
 umask = 0o022
 {{ end }}
 # GPG encryption for `encrypted_` source files (the ~/src garden project
-# registry and the secrets cache — kept ciphertext-only in this public repo).
+# registry — kept ciphertext-only in this public repo).
 # The recipient below is the PUBLIC key fingerprint (safe to commit); the
 # private key is provisioned from 1Password and imported by
 # .chezmoiscripts/80-keys/run_once_before_import-gpg-key.sh.tmpl, which runs in
@@ -21,7 +21,7 @@ umask = 0o022
 # and containers never decrypt: .config/garden/garden.yaml is chezmoiignored there.
 encryption = "gpg"
 [gpg]
-    # Same key as .chezmoidata/user.yaml gpgPubKey (used by chezmoi-secrets-sync and the
+    # Same key as .chezmoidata/user.yaml gpgPubKey (used by the
     # 80-keys import). Kept as a literal because this config template renders BEFORE
     # .chezmoidata loads; on key rotation, update both.
     recipient = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"
