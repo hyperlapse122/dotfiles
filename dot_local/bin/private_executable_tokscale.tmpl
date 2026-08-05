@@ -7,8 +7,7 @@ if ! command -v mise >/dev/null 2>&1; then
   exit 127
 fi
 
-# TODO: make `TOKSCALE_DEVICE_NAME` works on macOS too
 exec mise --no-config --no-env --no-hooks exec -y node -- env \
   ZAI_API_KEY="{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/Z.ai/API Key") }}" \
-  TOKSCALE_DEVICE_NAME="$(cat /sys/devices/virtual/dmi/id/product_name)" \
+  TOKSCALE_DEVICE_NAME="{{ if eq .chezmoi.os "darwin" }}$(sysctl -n hw.model){{ else }}$(cat /sys/devices/virtual/dmi/id/product_name){{ end }}" \
   npx -y tokscale "$@"
