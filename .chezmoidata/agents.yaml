@@ -172,6 +172,21 @@ agents:
   #     point aoe's default sessions (e.g. default-branch worktrees) at this
   #     plain-shell agent instead of a coding agent; that default wiring is not
   #     done here yet.
+  # The `tmux` leaves exist because aoe's `auto` modes step aside for a user
+  # tmux config, and this repo deploys one (`dot_config/tmux/tmux.conf`):
+  #   - status_bar: `auto` defers on the mere EXISTENCE of ~/.tmux.conf,
+  #     $XDG_CONFIG_HOME/tmux/tmux.conf, or ~/.config/tmux/tmux.conf, so aoe
+  #     unset its own status* session options and every aoe session fell back to
+  #     tmux's stock green bar. `enabled` restores the themed bar (session name,
+  #     title, branch, detach hint) without weakening the deployed tmux.conf.
+  #   - clipboard: `auto` defers when the user config sets `set-clipboard` OR
+  #     `allow-passthrough`; ours sets the latter for omp's inline images, so
+  #     aoe silently stopped writing `set -s set-clipboard on` and OSC 52 from a
+  #     wrapped agent died inside tmux. `enabled` writes both; passthrough is
+  #     already on, so set-clipboard is the only effective change. aoe appends
+  #     it to `new-session`, so it lands on newly created sessions.
+  # `mouse` stays undeclared: its `auto` defers only when the user config sets
+  # `mouse`, which ours does not, so aoe already applies `mouse on`.
   aoe:
     config.toml:
       session:
@@ -183,6 +198,9 @@ agents:
         agent_detect_as:
           omp: pi
           claude-glm: claude
+      tmux:
+        status_bar: enabled
+        clipboard: enabled
   # oh-my-pi (can1357/oh-my-pi) — a fork of pi (badlogic/pi-mono).
   #
   # config.yml is NOT a chezmoi target. omp rewrites it itself through /model,
