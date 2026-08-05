@@ -663,10 +663,12 @@ jobs:
 
           # Repo-meta scripts that chezmoi never deploys/renders (dot-prefixed /
           # .ci), so they are absent from the rendered artifacts — lint the source.
+          # maxdepth 2 also reaches sourced-only libraries one level down, e.g.
+          # .ci/lib/*.sh, which maxdepth 1 would silently miss (R2/KTD5).
           [ -f .install-prerequisites.sh ] && targets+=(.install-prerequisites.sh)
           while IFS= read -r -d '' s; do
             targets+=("$s")
-          done < <(find .ci -maxdepth 1 -type f -name '*.sh' -print0)
+          done < <(find .ci -maxdepth 2 -type f -name '*.sh' -print0)
 
           # Every rendered file carrying a bash/sh shebang. The shebang test skips
           # empty renders (OS-gated-out templates) and non-shell files alike.
@@ -678,6 +680,23 @@ jobs:
 
           if [ "${#targets[@]}" -eq 0 ]; then
             echo "no shell scripts found to lint" >&2
+            exit 1
+          fi
+
+          # Completeness gate for the widened discovery above (KTD5): printing
+          # the list is not a gate, so assert the sourced-only library is
+          # actually in it — a future narrowing back to maxdepth 1 must fail
+          # here rather than silently escaping shellcheck coverage again.
+          required_lib=.ci/lib/render-gate-helpers.sh
+          found_required_lib=0
+          for t in "${targets[@]}"; do
+            if [ "$t" = "$required_lib" ]; then
+              found_required_lib=1
+              break
+            fi
+          done
+          if [ "$found_required_lib" -ne 1 ]; then
+            echo "shellcheck target discovery did not collect ${required_lib}" >&2
             exit 1
           fi
 
