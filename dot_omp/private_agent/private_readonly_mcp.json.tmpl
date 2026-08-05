@@ -24,7 +24,7 @@
 {{- $entry = set $entry "type" "http" -}}
 {{- $entry = set $entry "url" .url -}}
 {{- if hasKey . "headers" -}}
-{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers") "ctx" $) | fromJson -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson -}}
 {{- $entry = set $entry "headers" $headers -}}
 {{- end -}}
 {{- end -}}
