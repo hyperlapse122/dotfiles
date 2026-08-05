@@ -143,6 +143,10 @@ agents:
   #     [linux, darwin] list plus that clause covers every desktop OS.
   #   - container: `skip` filters the row when the `container` fact is true
   #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in.
+  #     This is the DEFAULT for every plugin filed under the marketplace. An
+  #     individual agents.omp.plugins row may carry its own optional `container`
+  #     key that overrides it, which is how unmanaged-repo-guard stays eligible
+  #     inside a container even though h82-dotfiles defaults to skip.
   marketplaces:
     h82-dotfiles:
       kind: localDir
@@ -220,6 +224,7 @@ agents:
     plugins:
     - { name: mxm4-haptic, marketplace: h82-dotfiles }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    - { name: unmanaged-repo-guard, marketplace: h82-dotfiles, container: keep }
     models:
       providers: {}
     # Every key below is a LITERAL omp settings path as `omp config list` spells
@@ -516,3 +521,18 @@ agents:
         key: op://Private/OpenRouter/API Key
       - variable: OPENCODE_API_KEY
         key: op://Private/Opencode/API Key
+  # unmanaged-repo-guard tunables. These values render into the plugin's own
+  # manifest at
+  # dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/package.json.tmpl,
+  # which fails rendering unless both keys are present, numeric, and within
+  # 1..3600000 milliseconds — never a bare number is deployed unvalidated.
+  #   probeTimeoutMs : bounds the gh/glab access probe (KTD8) — the guard
+  #                    races it against an AbortController timer and treats
+  #                    expiry as indeterminate, which blocks under R3.
+  #   cacheTtlMs     : bounds how long a managed/unmanaged verdict is cached
+  #                    before re-probing (R16, KTD3), so a permission revoked
+  #                    mid-session cannot be waved through for the rest of a
+  #                    long unattended run.
+  unmanagedRepoGuard:
+    probeTimeoutMs: 5000
+    cacheTtlMs: 300000

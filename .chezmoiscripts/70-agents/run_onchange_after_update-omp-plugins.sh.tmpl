@@ -2,7 +2,7 @@
 {{- $os := .chezmoi.os -}}
 {{- $home := .chezmoi.homeDir -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" "dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/package.json.tmpl" "dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/**" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
 {{- $ompVersion := trimPrefix "v" (includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" "omp")) -}}
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $marketplaces := .agents.marketplaces -}}
@@ -17,8 +17,14 @@
 {{- $seen := dict -}}
 {{- range $i, $plugin := $plugins -}}
 {{-   $where := printf "agents.omp.plugins[%d]" $i -}}
-{{-   if ne (len $plugin) 2 -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
-{{-   if not (and (hasKey $plugin "name") (hasKey $plugin "marketplace")) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
+{{-   if not (has (len $plugin) (list 2 3)) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace} or {name, marketplace, container}" $where) }}{{- end -}}
+{{-   if not (and (hasKey $plugin "name") (hasKey $plugin "marketplace")) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace} or {name, marketplace, container}" $where) }}{{- end -}}
+{{-   if and (eq (len $plugin) 3) (not (hasKey $plugin "container")) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace} or {name, marketplace, container}" $where) }}{{- end -}}
+{{-   $rowContainer := "" -}}
+{{-   if hasKey $plugin "container" -}}
+{{-     $rowContainer = printf "%v" (index $plugin "container") -}}
+{{-     if not (has $rowContainer $validContainers) -}}{{ fail (printf "update-omp-plugins: %s has invalid container value %q" $where $rowContainer) }}{{- end -}}
+{{-   end -}}
 {{-   $name := printf "%v" (index $plugin "name") -}}
 {{-   $market := printf "%v" (index $plugin "marketplace") -}}
 {{-   if not (regexMatch $nameRe $name) -}}{{ fail (printf "update-omp-plugins: %s has invalid plugin name %q" $where $name) }}{{- end -}}
@@ -58,7 +64,9 @@
 {{-   $strict := eq $id "mxm4-haptic@h82-dotfiles" -}}
 {{-   if and (eq $name "mxm4-haptic") (not $strict) -}}{{ fail "update-omp-plugins: mxm4-haptic must use marketplace h82-dotfiles" }}{{- end -}}
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
-{{-   if and (or (has $os $marketOS) (and (eq $os "windows") (eq $market "compound-engineering-plugin"))) (not (and $facts.container (eq $container "skip"))) -}}
+{{-   $effectiveContainer := $container -}}
+{{-   if ne $rowContainer "" -}}{{ $effectiveContainer = $rowContainer -}}{{- end -}}
+{{-   if and (or (has $os $marketOS) (and (eq $os "windows") (eq $market "compound-engineering-plugin"))) (not (and $facts.container (eq $effectiveContainer "skip"))) -}}
 {{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t" $name $market $kind $source $strict)) -}}
 {{-   end -}}
 {{- end -}}
