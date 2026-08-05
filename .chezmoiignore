@@ -127,7 +127,7 @@
 .chezmoiscripts/60-build/*mxm4-haptic.ps1
 .config/systemd/user/mxm4-haptic*.service
 Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
-.local/share/omp-plugins
+.local/share/omp-plugins/plugins/mxm4-haptic
 .omp/agent/extensions/mxm4-haptic.ts
 # No graphical session in a container, so the kitty bundle has nothing to draw
 # on. 00-tools is not wildcarded here (unlike the distro/desktop dirs above),

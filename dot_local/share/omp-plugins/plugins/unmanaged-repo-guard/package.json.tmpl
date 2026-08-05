@@ -1,0 +1,31 @@
+{{- $guard := .agents.unmanagedRepoGuard -}}
+{{- range $key := list "probeTimeoutMs" "cacheTtlMs" -}}
+{{- if not (hasKey $guard $key) -}}
+{{- fail (printf "agents.unmanagedRepoGuard is missing %s" $key) -}}
+{{- end -}}
+{{- $value := index $guard $key -}}
+{{- if not (has (kindOf $value) (list "int" "int64" "uint" "uint64" "float64")) -}}
+{{- fail (printf "agents.unmanagedRepoGuard.%s = %v must be a number of milliseconds, not %s" $key $value (kindOf $value)) -}}
+{{- end -}}
+{{- $ms := int64 $value -}}
+{{- if or (le $ms 0) (gt $ms 3600000) -}}
+{{- fail (printf "agents.unmanagedRepoGuard.%s = %v is out of range; expected 1..3600000 milliseconds" $key $value) -}}
+{{- end -}}
+{{- end -}}
+{
+  "name": "@h82/omp-unmanaged-repo-guard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Blocks issue-filing tool calls targeting a repository the user does not manage.",
+  "license": "UNLICENSED",
+  "omp": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "unmanagedRepoGuard": {
+    "probeTimeoutMs": {{ $guard.probeTimeoutMs | int }},
+    "cacheTtlMs": {{ $guard.cacheTtlMs | int }}
+  }
+}
