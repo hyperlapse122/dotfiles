@@ -1,0 +1,124 @@
+schema_version: 1
+lease:
+  writer: "sweep-ThinkPad-E14-Gen-7-omp7f3a-2026-08-05"
+  timestamp: "2026-08-05T15:05:35.024954+00:00"
+  ttl_minutes: 60
+sources:
+  gh-issues:
+    cursor: "2026-08-05T14:46:10Z"
+items:
+  "gh-issues:hyperlapse122/dotfiles#168":
+    source: "gh-issues"
+    status: "fix_pending"
+    sensitive: false
+    body: "tracker-defer fallback chain has no repository-management probe — P0 residual (`autofix_class: manual`, owner `human`), converged across the security and adversarial review lenses: the instructions assert the unmanaged-repo gate precedes any skill-level fallback chain, but `tracker-defer`'s own chain performs a reachability-only probe with no repository-management check."
+    fix_ref: "170"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    fix_claim_note: "PR #170 (merge commit 51cba06fbcfe7be5de695f1cda7309bc29f9e580, merged to main 2026-08-05T14:45:49Z) landed the repo-owned half only: a bundled omp tool_call extension running the fail-closed viewerPermission/access_level probe. The issue remains open at source for the upstream half, so this claim does NOT resolve the item and no close-out is performed."
+    fix_partial_merge_sha: "51cba06fbcfe7be5de695f1cda7309bc29f9e580"
+    id: "hyperlapse122/dotfiles#168"
+    issue_number: 168
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/168"
+    updated_at: "2026-08-05T14:46:10Z"
+  "gh-issues:hyperlapse122/dotfiles#171":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "CI never exercises omp's own extension resolution for the repo guard — the only real-runtime proof that the guard's `{ block: true }` stops execution (`.ci/test-unmanaged-repo-guard-real.sh` step 4) needs a live model turn, and `ci.yml`'s `omp-agent-integration` job configures no model credentials, so it is skipped on every CI run."
+    author_class: "teammate"
+    category: "test-gap"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#171"
+    issue_number: 171
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/171"
+    updated_at: "2026-08-05T14:42:28Z"
+  "gh-issues:hyperlapse122/dotfiles#172":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Extract duplicated render-gate bash helpers into a shared .ci lib — six byte-identical helpers (~80 lines) are duplicated between `.ci/test-unmanaged-repo-guard-gates.sh` and `.ci/test-mxm4-haptic-gates.sh`; the proposed fix extracts them into `.ci/lib/render-gate-helpers.sh` with explicit `repo_root`/`scratch` parameters."
+    author_class: "teammate"
+    category: "refactor"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#172"
+    issue_number: 172
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/172"
+    updated_at: "2026-08-05T14:42:29Z"
+  "gh-issues:hyperlapse122/dotfiles#173":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard tokenizer mis-models ANSI-C $'...' quoting — `splitCommand`'s quote tracker in the unmanaged-repo-guard treats an escaped quote inside `$'...'` as closing the quote, which can leave a phantom quote open through end of input; currently masked by the `fallbackScan` regex safety net, with no confirmed exploit."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#173"
+    issue_number: 173
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/173"
+    updated_at: "2026-08-05T14:42:31Z"
+  "gh-issues:hyperlapse122/dotfiles#174":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard emits no durable audit trail when it blocks — the block path has no logging outside the config-failure branch, so a block's only trace is that session's own transcript; an operator cannot detect a fail-open `MCP_ISSUE_WRITE_PATTERN` miss or audit block frequency across a workstation."
+    author_class: "teammate"
+    category: "observability"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#174"
+    issue_number: 174
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/174"
+    updated_at: "2026-08-05T14:42:32Z"
+  "gh-issues:hyperlapse122/dotfiles#175":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard identity lookup runs before the verdict cache is consulted — `probeOne` calls `identityFor(ref)` to build the cache key before checking the verdict cache, so a verdict cache hit still costs one bounded identity subprocess."
+    author_class: "teammate"
+    category: "performance"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#175"
+    issue_number: 175
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/175"
+    updated_at: "2026-08-05T14:42:33Z"
+  "gh-issues:hyperlapse122/dotfiles#176":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Document splitCommand's load-bearing invariants in the repo guard — two unstated invariants need recording: backslashes are honored inside double quotes but not single quotes (matching bash), and command-substitution handling is deliberately split across functions rather than living in `splitCommand`."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#176"
+    issue_number: 176
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/176"
+    updated_at: "2026-08-05T14:42:35Z"
+  "gh-issues:hyperlapse122/dotfiles#177":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "No runtime test for a subagent's own MCP-tool call through the repo guard — no CI tier exercises a `task`-spawned subagent's own MCP-tool call (e.g. an issue-create tool) against the guard, though bash re-firing and MCP `toolName` arrival were each verified independently."
+    author_class: "teammate"
+    category: "test-gap"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#177"
+    issue_number: 177
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/177"
+    updated_at: "2026-08-05T14:42:36Z"
