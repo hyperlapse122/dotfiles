@@ -175,6 +175,44 @@ jobs:
       - name: Run isolated tmux passthrough test
         run: .ci/test-tmux-kitty-passthrough.sh
 
+  omp-zsh-completion:
+    name: omp zsh completion install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install locked chezmoi
+        run: |
+          set -euo pipefail
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          chmod 700 "$RUNNER_TEMP/bin/chezmoi"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # The test drives a real zsh so the $fpath prepend is proven to make
+      # compinit resolve _omp, and proven NOT to without it.
+      - name: Install zsh
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zsh
+      # Same render shape as the omp-agent-integration job's three call sites:
+      # an empty config so no user state leaks in, and no --destination, which
+      # execute-template does not need (it reads stdin and writes stdout).
+      - name: Render the completion generator
+        run: |
+          set -euo pipefail
+          : > "$RUNNER_TEMP/empty.toml"
+          chezmoi --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            execute-template \
+            < .chezmoiscripts/70-agents/run_onchange_after_install-omp-zsh-completion.sh.tmpl \
+            > "$RUNNER_TEMP/omp-zsh-completion.sh"
+      - name: Run isolated completion install test
+        run: .ci/test-omp-zsh-completion.sh "$RUNNER_TEMP/omp-zsh-completion.sh"
+
   # Every quality gate above must actually RUN. GitHub skips a job whose
   # `needs:` dependency fails, so checking only named jobs can mistake grey
   # for green. This always-running aggregate turns failure, cancellation, and
@@ -189,6 +227,7 @@ jobs:
         figma-skills-native,
         rust-crate,
         tmux-kitty-passthrough,
+        omp-zsh-completion,
         compound-engineering-overlays,
       ]
     runs-on: ubuntu-24.04
@@ -200,6 +239,7 @@ jobs:
           FIGMA_SKILLS_NATIVE_RESULT: ${{ needs.figma-skills-native.result }}
           RUST_CRATE_RESULT: ${{ needs.rust-crate.result }}
           TMUX_KITTY_PASSTHROUGH_RESULT: ${{ needs.tmux-kitty-passthrough.result }}
+          OMP_ZSH_COMPLETION_RESULT: ${{ needs.omp-zsh-completion.result }}
           COMPOUND_ENGINEERING_OVERLAYS_RESULT: ${{ needs.compound-engineering-overlays.result }}
         run: |
           set -euo pipefail
@@ -210,6 +250,7 @@ jobs:
             "figma-skills-native=${FIGMA_SKILLS_NATIVE_RESULT}" \
             "rust-crate=${RUST_CRATE_RESULT}" \
             "tmux-kitty-passthrough=${TMUX_KITTY_PASSTHROUGH_RESULT}" \
+            "omp-zsh-completion=${OMP_ZSH_COMPLETION_RESULT}" \
             "compound-engineering-overlays=${COMPOUND_ENGINEERING_OVERLAYS_RESULT}"; do
             echo "${result}"
             if [[ "${result#*=}" != success ]]; then
