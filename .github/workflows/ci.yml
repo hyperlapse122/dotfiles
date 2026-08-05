@@ -348,6 +348,19 @@ jobs:
       - name: Run garden registry relocation checks
         run: .ci/test-garden-registry-relocation.sh "$GITHUB_WORKSPACE"
 
+  secrets-cache-removal:
+    name: secrets cache removal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run secrets cache removal checks
+        run: .ci/test-secrets-cache-removal.sh "$GITHUB_WORKSPACE"
+
   tmux-kitty-passthrough:
     name: tmux Kitty image passthrough
     runs-on: ubuntu-latest
@@ -726,6 +739,7 @@ jobs:
         ydotool-integration,
         compound-engineering-overlays,
         garden-registry-relocation,
+        secrets-cache-removal,
         tmux-kitty-passthrough,
         kitty-provisioning,
         support-matrix,
