@@ -65,14 +65,12 @@ describe("resolveGitHubRelease", () => {
       asset("tool-linux-arm64", `sha256:${SHA}`),
       asset("tool-darwin-amd64", `sha256:${SHA}`),
       asset("tool-darwin-arm64", `sha256:${SHA}`),
-      asset("tool-windows-amd64", `sha256:${SHA}`),
-      asset("tool-windows-arm64", `sha256:${SHA}`),
     ]);
 
     const locked = await resolveGitHubRelease("tool", spec(), undefined);
 
     expect(locked.version).toBe("v1.2.3");
-    expect(Object.keys(locked.artifacts ?? {})).toHaveLength(6);
+    expect(Object.keys(locked.artifacts ?? {})).toHaveLength(4);
     expect(locked.artifacts?.["darwin-arm64"]).toEqual({
       url: "https://example.invalid/download/tool-darwin-arm64",
       sha256: SHA,
@@ -109,23 +107,23 @@ describe("resolveGitHubRelease", () => {
   });
 
   test("a declared emulated platform borrows the amd64 artifact and is marked", async () => {
-    stubRelease("v1", [asset("tool-windows-amd64", `sha256:${SHA}`)]);
+    stubRelease("v1", [asset("tool-darwin-amd64", `sha256:${SHA}`)]);
 
     const locked = await resolveGitHubRelease(
       "tool",
       spec({
-        asset: ({ os, arch }) => (os === "windows" ? `tool-${os}-${arch}` : null),
-        emulatedPlatforms: ["windows-arm64"],
+        asset: ({ os, arch }) => (os === "darwin" ? `tool-${os}-${arch}` : null),
+        emulatedPlatforms: ["darwin-arm64"],
       }),
       undefined,
     );
 
-    expect(locked.artifacts?.["windows-arm64"]).toEqual({
-      url: "https://example.invalid/download/tool-windows-amd64",
+    expect(locked.artifacts?.["darwin-arm64"]).toEqual({
+      url: "https://example.invalid/download/tool-darwin-amd64",
       sha256: SHA,
       emulated: true,
     });
-    expect(locked.artifacts?.["windows-amd64"]?.emulated).toBeUndefined();
+    expect(locked.artifacts?.["darwin-amd64"]?.emulated).toBeUndefined();
   });
 
   test("a named asset the release does not publish is a hard error, not a silent skip", async () => {
