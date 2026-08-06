@@ -342,7 +342,6 @@
           "darwin-arm64": {
             "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.10/omp-darwin-arm64",
             "sha256": "e37fa3d4d3eeb15b71d5b464fde51f913e390978a48dc33b4c527b8eed7237c6"
-
           },
           "linux-amd64-musl": {
             "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.10/omp-linux-musl-x64",
