@@ -43,7 +43,11 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{- if eq (len $settings) 0 -}}
 {{-   fail "config-omp-settings: agents.omp.settings declares no paths" -}}
 {{- end -}}
-{{- $pathRe := "^[A-Za-z][A-Za-z0-9]*([.][A-Za-z][A-Za-z0-9]*)*$" -}}
+{{- /* Segments allow underscore: omp itself uses snake_case category names
+   (generate_image.enabled, inspect_image.mode, web_search.enabled per
+   `omp config list`), so a path-grammar check that only widens to match
+   reality, not a policy restriction we are choosing to loosen. */ -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9_]*([.][A-Za-z][A-Za-z0-9_]*)*$" -}}
 {{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
