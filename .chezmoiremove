@@ -70,3 +70,12 @@ src/garden.yaml
 # for the same reason as chezmoi-secrets-sync above: the container ignore rules
 # do not exclude .local/bin, so containers received this wrapper too.
 .local/bin/claude-glm
+
+# Windows-only VSCodium user-config templates (AppData/Roaming/VSCodium/User/)
+# lost their .chezmoiignore gate when Windows was dropped as a managed target
+# (b632a8e) — the ignore block was deleted instead of made unconditional, so
+# chezmoi started deploying them to ~/AppData on every OS. Deleting the source
+# stops managing them but leaves the already-deployed files behind — prune
+# them here.
+AppData/Roaming/VSCodium/User/settings.json
+AppData/Roaming/VSCodium/User/keybindings.json
