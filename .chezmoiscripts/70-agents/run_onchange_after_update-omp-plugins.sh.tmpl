@@ -8,7 +8,7 @@
 {{- $marketplaces := .agents.marketplaces -}}
 {{- $plugins := .agents.omp.plugins -}}
 {{- $nameRe := "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" -}}
-{{- $validOS := list "linux" "darwin" "windows" -}}
+{{- $validOS := list "linux" "darwin" -}}
 {{- $validKinds := list "localDir" "localArchive" -}}
 {{- $validContainers := list "skip" "keep" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
@@ -66,7 +66,7 @@
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
 {{-   $effectiveContainer := $container -}}
 {{-   if ne $rowContainer "" -}}{{ $effectiveContainer = $rowContainer -}}{{- end -}}
-{{-   if and (or (has $os $marketOS) (and (eq $os "windows") (eq $market "compound-engineering-plugin"))) (not (and $facts.container (eq $effectiveContainer "skip"))) -}}
+{{-   if and (has $os $marketOS) (not (and $facts.container (eq $effectiveContainer "skip"))) -}}
 {{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t" $name $market $kind $source $strict)) -}}
 {{-   end -}}
 {{- end -}}

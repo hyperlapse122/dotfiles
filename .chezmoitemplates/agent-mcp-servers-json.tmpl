@@ -13,7 +13,7 @@ transport/auth formatting. `harness` is required so a consumer that forgets it
 fails loudly instead of silently receiving every server.
 
 Optional server applicability fields in .chezmoidata/agents.yaml:
-  os: [linux, darwin, windows]  omitted means every OS
+  os: [linux, darwin]  omitted means every OS
   container: keep | skip        omitted means keep
   harnessSkip: [<harness id>]   omitted means every harness
 
@@ -52,7 +52,7 @@ harness and the sole caller; a harnessSkip entry naming a retired harness
 {{-   $facts := includeTemplate "facts.tmpl" $ctx | fromYaml -}}
 {{-   $container = $facts.container -}}
 {{- end -}}
-{{- $validOS := list "linux" "darwin" "windows" -}}
+{{- $validOS := list "linux" "darwin" -}}
 {{- $validContainers := list "keep" "skip" -}}
 {{- $validHarness := list "omp" -}}
 {{- $skippableHarness := $validHarness -}}
@@ -95,7 +95,7 @@ harness and the sole caller; a harnessSkip entry naming a retired harness
 {{-         fail (printf "agent mcp: server %q os entries must be strings, got %s" $name (kindOf $entry)) -}}
 {{-       end -}}
 {{-       if not (has $entry $validOS) -}}
-{{-         fail (printf "agent mcp: server %q has unknown os %q; valid values: linux, darwin, windows" $name $entry) -}}
+{{-         fail (printf "agent mcp: server %q has unknown os %q; valid values: linux, darwin" $name $entry) -}}
 {{-       end -}}
 {{-       $serverOS = append $serverOS $entry -}}
 {{-     end -}}
