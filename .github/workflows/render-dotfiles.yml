@@ -636,13 +636,56 @@ jobs:
   # linted in each variant (their rendered bodies can differ per OS). The two
   # repo-meta scripts that are never deployed/rendered (.install-prerequisites.sh
   # and the .ci smoke test) are linted from the checkout so their coverage is not
-  # lost. Findings are also uploaded as a `shellcheck-report` artifact.
+  # lost. Findings are also uploaded as a `shellcheck-report` artifact. A
+  # source-tree grep guard runs first in the same job, PR-facing and
+  # independent of the rendered artifacts, to fail closed on a reintroduced
+  # Windows conditional or PlatformKey literal.
   shellcheck:
     name: Shellcheck (rendered scripts + repo-meta)
     needs: [apply, render-internals, apply-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Guard against reintroduced Windows support
+        run: |
+          set -uo pipefail
+          failed=0
+
+          # R14: a .chezmoi.os "windows" conditional (either eq/ne token
+          # order) reappearing in a template that gated Windows before the
+          # 2026-08-05 drop and this pass's leftover-gate cleanup.
+          if grep -rEn '(eq|ne)[[:space:]]+\.chezmoi\.os[[:space:]]+"windows"|(eq|ne)[[:space:]]+"windows"[[:space:]]+\.chezmoi\.os' \
+               .chezmoiexternals/*.toml .chezmoiscripts .chezmoi.toml.tmpl; then
+            echo "::error::a .chezmoi.os \"windows\" conditional has reappeared"
+            failed=1
+          fi
+
+          # R14: windows reappearing as an os:/validOS list value in the omp
+          # plugin / MCP-server catalog's OS-eligibility validation.
+          if grep -qi windows .chezmoidata/agents.yaml .chezmoitemplates/agent-mcp-servers-json.tmpl \
+               .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl; then
+            echo "::error::windows has reappeared in the omp plugin/MCP os validation"
+            failed=1
+          fi
+
+          # R16: a windows-amd64/windows-arm64 PlatformKey literal
+          # reappearing in release-lock production code or the committed
+          # lock. github-skill-collection.ts's WINDOWS_RESERVED/
+          # WINDOWS_INVALID are unrelated filename-portability guards, and
+          # packages/release-lock/test/ legitimately fixtures retired
+          # windows-* keys to prove the pruning behavior removes them.
+          if grep -rEn 'windows-(amd64|arm64)' packages/release-lock/src \
+               --exclude=github-skill-collection.ts; then
+            echo "::error::a windows PlatformKey literal has reappeared in release-lock src"
+            failed=1
+          fi
+          if grep -Eq 'windows-(amd64|arm64)' .chezmoidata/releases.json; then
+            echo "::error::a windows PlatformKey literal has reappeared in the committed lock"
+            failed=1
+          fi
+
+          exit "${failed}"
 
       - name: Download Fedora rendered artifacts
         uses: actions/download-artifact@v8
