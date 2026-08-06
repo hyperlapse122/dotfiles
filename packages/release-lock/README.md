@@ -53,8 +53,10 @@ A source that fails to resolve is reported on stderr and omitted from the
 fresh resolution, and the process exits non-zero. Plain invocation and `--out`
 overlay a partial resolution onto the file already at the destination, so an
 omitted entry keeps its last good value rather than being blanked. A clean run
-replaces the tool set, which prunes entries removed from the registry. Writes
-replace the destination atomically.
+replaces the tool set, which prunes entries removed from the registry. Every
+run, clean or partial, also drops any `artifacts` key outside today's
+`PlatformKey` vocabulary from each surviving tool -- a retired platform never
+lingers in a kept entry. Writes replace the destination atomically.
 
 `--stdout` reads the repository lock and prints the same complete merged JSON
 without modifying it. It is for inspection only: do not redirect any invocation

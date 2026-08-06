@@ -84,6 +84,19 @@ describe("pruneRetiredPlatforms", () => {
     expect(pruned.releases.tools["foo"]).toEqual(tool("v1"));
   });
 
+  test("a tool whose entire artifacts map is retired collapses to the same no-artifacts shape as covers AE2, not artifacts: {}", () => {
+    const existing = lock({
+      foo: toolWithArtifacts("v1", {
+        "windows-amd64": { url: "https://example.com/foo/windows-amd64", sha256: "a".repeat(64) },
+      }),
+    });
+
+    const pruned = pruneRetiredPlatforms(mergeLocks(existing, lock({})));
+
+    expect(pruned.releases.tools["foo"]).toEqual(tool("v1"));
+    expect(Object.keys(pruned.releases.tools["foo"] ?? {})).not.toContain("artifacts");
+  });
+
   test("a stale key carrying emulated: true is dropped identically to a non-emulated stale key", () => {
     const existing = lock({
       foo: toolWithArtifacts("v1", {

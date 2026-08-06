@@ -43,10 +43,12 @@ const CANONICAL_PLATFORM_KEYS = Object.fromEntries(
 function pruneToolArtifacts(tool: LockedTool): LockedTool {
   if (!tool.artifacts) return tool;
   const entries = Object.entries(tool.artifacts) as [PlatformKey, LockedArtifact][];
-  return {
-    ...tool,
-    artifacts: Object.fromEntries(entries.filter(([key]) => CANONICAL_PLATFORM_KEYS[key] === true)),
-  };
+  const survivors = entries.filter(([key]) => CANONICAL_PLATFORM_KEYS[key] === true);
+  if (survivors.length === 0) {
+    const { artifacts: _artifacts, ...rest } = tool;
+    return rest;
+  }
+  return { ...tool, artifacts: Object.fromEntries(survivors) };
 }
 
 /**
@@ -57,8 +59,10 @@ function pruneToolArtifacts(tool: LockedTool): LockedTool {
  * retirement needs no repeat patch here (KTD1). A single post-merge pass:
  * call once on the run's already-computed `complete` value (clean or
  * partial), not per-tool inside `mergeLocks` (KTD2). A tool with no
- * `artifacts` field is returned untouched — `artifacts: {}` is never
- * synthesized — and `version`/`kind`/`source`/`integrity` are never touched.
+ * `artifacts` field is returned untouched, and a tool whose entire
+ * `artifacts` map is retired collapses to that same no-`artifacts` shape —
+ * `artifacts: {}` is never synthesized in either case — and
+ * `version`/`kind`/`source`/`integrity` are never touched.
  */
 export function pruneRetiredPlatforms(lock: ReleaseLock): ReleaseLock {
   const tools: Record<string, LockedTool> = Object.fromEntries(
