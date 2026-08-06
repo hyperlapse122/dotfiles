@@ -426,7 +426,7 @@ agents:
       # Provider availability gate. It is applied BEFORE any credential check,
       # so it is the only knob that keeps a backend out of every AUTOMATIC
       # selection path. `retry.fallbackChains` above was never the exposure -
-      # retry walks declared chains only, and no chain names these two - but
+      # retry walks declared chains only, and no chain names anything here - but
       # omp also has catalog-wide scans that no chain governs, each firing
       # wherever a declared selector does not resolve: its built-in
       # priority.json role chains carry BARE patterns (`gpt-5.5`, `codex`,
@@ -434,20 +434,34 @@ agents:
       # "first image-capable available", the smol/slow finders end at
       # availableModels[0], and providers.imageOrder's built-in tail names
       # openrouter. Every one of those ranks by CATALOG ORDER, which is
-      # incidental: these two aggregators served 473 of the 562 available ids
-      # on this host (openrouter 413, opencode-zen 60), so a bare-id scan was
-      # one catalog reshuffle away from spending token-metered capacity instead
-      # of a plan. The trade is that a disabled provider also leaves `/model`,
-      # so neither can be chosen by hand either; re-enabling one is a delete
-      # from this list. Both keys stay declared under auth.env - provisioning a
-      # credential is independent of this gate, and OPENCODE_API_KEY still
-      # serves opencode-go, which is plan-metered and stays available. No
-      # declared selector names either provider, and none may: a disabled
-      # provider leaves `omp models --json`, so the catalog gate in both
-      # provisioner halves fails the apply on one.
+      # incidental: openrouter and opencode-zen served 473 of the 562 available
+      # ids on this host (openrouter 413, opencode-zen 60), so a bare-id scan
+      # was one catalog reshuffle away from spending token-metered capacity
+      # instead of a plan. The trade is that a disabled provider also leaves
+      # `/model`, so it cannot be chosen by hand either; re-enabling one is a
+      # delete from this list. Both aggregator keys stay declared under auth.env
+      # - provisioning a credential is independent of this gate, and
+      # OPENCODE_API_KEY still serves opencode-go, which is plan-metered and
+      # stays available. No declared selector names any provider on this list,
+      # and none may: a disabled provider leaves `omp models --json`, so the
+      # catalog gate in the provisioner fails the apply on one.
+      #
+      # `zai` is here for the opposite reason, and it is TEMPORARY. Its plan
+      # expired on 2026-08-06 and its credential left auth.env below, which is
+      # what DURABLY removes the provider from `omp models --json`. But the
+      # dotenv reconciler preserves every UNDECLARED entry byte-identically, so
+      # an already-provisioned host keeps its stale `ZAI_API_KEY=` line until
+      # that line is hand-deleted - and until then the key is still PRESENT, so
+      # the catalog-wide scans above can still select a provider that cannot
+      # answer, exactly when a scan fires because something else failed. This
+      # entry closes that window from the repo side instead of depending on the
+      # operator acting first. Delete this entry and the stale dotenv line
+      # together: once the line is gone the credential gate excludes `zai` on
+      # its own and this entry is dead data.
       disabledProviders:
       - openrouter
       - opencode-zen
+      - zai
       # Exa first; unlisted providers keep their built-in relative order after
       # it. The deep-research surfaces are pinned off rather than left to a
       # default that could change upstream.

@@ -21,13 +21,16 @@ home="$scratch/home"
 fake_bin="$scratch/bin"
 mkdir -p "$home/.omp/agent" "$fake_bin"
 
+# One managed variable per reconcile property: EXA twice (collapse duplicates),
+# OPENROUTER once (overwrite a single stale value), OPENCODE absent (insert when
+# missing). Keep all three shapes represented whenever the managed set changes —
+# the per-name `-eq 1` counts below are what turn each shape into an assertion.
 cat >"$home/.omp/agent/.env" <<'EOF'
 # user-owned values stay byte-identical
 OTHER_TOKEN='keep me'
 EXA_API_KEY=stale
 EXA_API_KEY="duplicate"
 OPENROUTER_API_KEY=stale
-OPENCODE_API_KEY="duplicate"
 EOF
 chmod 0644 "$home/.omp/agent/.env"
 

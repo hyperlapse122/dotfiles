@@ -44,6 +44,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 - R2. No `modelRoles` value and no `task.agentModelOverrides` value names a `zai/` selector, and no role is left without a primary.
 - R3. No role's anchor status is made worse by this removal. Every role that reached both an `anthropic` hop and an `opencode-go` hop before the removal still reaches both after it, walking its own selector plus its chain — and, for a role with no declared chain, the `default` chain it inherits. `vision` is a **pre-existing exception this removal does not change**: its selector is `google-antigravity/gemini-3.1-pro` and its inherited `default` chain reached no `anthropic` hop before the removal and still reaches none after. No chain is left empty.
 - R4. Each rationale comment in the omp settings block that named a `zai`/GLM hop describes the surviving order instead, and the block records the `zai` provider removal in the same shape as the existing `openai-codex` removal note.
+- R4b. `agents.omp.settings.disabledProviders` gains a **temporary** `zai` entry whose comment states why it exists and names its removal trigger: the entry and the stale `~/.omp/agent/.env` line are deleted together, because once that line is gone the credential gate excludes `zai` on its own. This closes the residue window from the repo side rather than depending on the operator acting first (KTD1).
 
 **Credential**
 
@@ -70,7 +71,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 **Residue and credential lifecycle**
 
 - R15. Every residue this repository cannot prune is reported to the operator, in this plan and in the run's closing summary, with the exact action for each. The reported set is:
-  1. The unmanaged `ZAI_API_KEY=` line in `~/.omp/agent/.env`. Until it is deleted, `zai` stays in `omp models --json` on this host and remains reachable by the catalog-wide scans described in KTD1.
+  1. The unmanaged `ZAI_API_KEY=` line in `~/.omp/agent/.env`. Until it is deleted, the key stays PRESENT, so `zai` stays in `omp models --json` on this host. R4b's `disabledProviders` entry is what keeps that from reaching an automatic selection path in the meantime. Delete the dotenv line and the R4b entry together.
   2. The `claude-glm` keys already written into `~/.config/agent-of-empires/config.toml`.
   3. The credential's own lifecycle: the `Private/Z.ai/API Key` 1Password item, which R7 makes safe to delete because no source file resolves it any more; and the key at Z.ai itself, which an expired **subscription** does not revoke.
 
@@ -86,7 +87,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 
 ### Scope Boundaries
 
-- **`agents.omp.settings.disabledProviders`** — untouched. See KTD1, which also states the window this leaves open and why it is accepted.
+- **`agents.omp.settings.disabledProviders`** — changed, and deliberately so. R4b adds a temporary `zai` entry. See KTD1: leaving it untouched was the original plan and the review overturned it.
 - **`opencode-go/glm-5.2`** — kept. It is the `advisor` role primary and the `reviewer` subagent target through `"@advisor"`. Only `zai/`-served GLM ids leave.
 - **`vision`'s missing `anthropic` anchor** — pre-existing and out of scope. R3 records it; fixing it is a provider move, which the sync skill makes a separate human decision.
 - **`dot_config/tokscale/custom-pricing.json`** — untouched. Its GLM entries still price `opencode-go` GLM usage.
@@ -109,8 +110,8 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 
 ### Key Technical Decisions
 
-- KTD1. **Remove the credential; do not add `zai` to `disabledProviders`.** Deleting the key is the *durable* removal: it takes the provider out of `omp models --json`, which is the availability gate every role, override, and chain hop is checked against, and it leaves no permanent dead data behind. Chosen over listing `zai` in `agents.omp.settings.disabledProviders`, whose recorded rationale covers token-metered aggregators *whose keys stay provisioned*; once the key is gone that entry would be dead data forever, and re-adding a provider would then need two edits instead of one.
-  **The cost, stated plainly:** deletion is *not* stronger than `disabledProviders` while the unmanaged `ZAI_API_KEY=` line survives on an already-provisioned host. `disabledProviders` applies before any credential check, and `.chezmoidata/agents.yaml:428-448` enumerates catalog-wide scans that no fallback chain governs — the text-only-model vision fallback ending at "first image-capable available", the `smol`/`slow` finders ending at `availableModels[0]`, and the built-in `priority.json` bare-pattern role chains. During that window `zai` is exactly the provisioned-key case the setting exists to cover, so a scan can still select it. The window is closed by the R15 operator step, not by this repository, and R15 plus the closing summary are what make it a named action rather than a silent gap. Governs R5, R6, R15.
+- KTD1. **Remove the credential AND add a temporary `disabledProviders` entry.** Deleting the key is the *durable* removal: it takes the provider out of `omp models --json`, which is the availability gate every role, override, and chain hop is checked against. But deletion alone is **not** sufficient on an already-provisioned host, and the original form of this decision — credential removal only, window accepted — was internally inconsistent and is overturned. The reason: `.chezmoidata/agents.yaml` enumerates catalog-wide scans that no fallback chain governs — the text-only-model vision fallback ending at "first image-capable available", the `smol`/`slow` finders ending at `availableModels[0]`, and the built-in `priority.json` bare-pattern role chains. Those scans rank by incidental catalog order and fire precisely *because* a declared selector failed to resolve. Meanwhile the dotenv reconciler preserves every undeclared entry byte-identically, so the stale `ZAI_API_KEY=` line survives and the key stays PRESENT. `disabledProviders` is applied before any credential check, which makes it the only mechanism that removes `zai` from those scans during that window — and the setting's own recorded rationale, "a backend whose key stays provisioned", is exactly the state the host is in until the operator acts. Declining it would have left the repository correct only *conditionally on a manual step*.
+  The entry is therefore scoped, not permanent: its comment names the removal trigger, and R15.1 couples deleting it to deleting the dotenv line. Chosen over two alternatives — credential removal alone (leaves the scan window open, and makes the branch's correctness depend on an operator step) and a permanent `disabledProviders` entry (dead data once the key is gone, and a second edit needed to ever re-enable the provider). Governs R4b, R5, R6, R15.
 - KTD2. **No teardown script; the unprunable residue is reported, not automated.** The root `AGENTS.md` forbids teardown/revert scripts and sanctions exactly three alternatives: delete the managed source, use `.chezmoidata/system.yaml` `removed:`, or document a one-time manual reversal. The mechanical reason the third applies here is that neither reconciler can be asked to delete a *line*: both preserve undeclared entries by design, and `system.yaml` `removed:` accepts only absolute `/etc` **file** paths for `rm -f`, so it cannot reach inside `~/.omp/agent/.env` or `~/.config/agent-of-empires/config.toml`. Chosen over adding a prune step to either provisioner. Governs R15.
 - KTD3. **The deployed `claude-glm` binary is pruned through `.chezmoiremove`, ungated.** The asymmetry with KTD2 is mechanical, not a preference: `claude-glm` is a whole **file** chezmoi itself deployed, which is exactly what `.chezmoiremove` deletes, whereas the dotenv secret is a **line inside a file omp writes and owns**. `.local/bin/chezmoi-secrets-sync` is the same shape as `claude-glm`: a `dot_local/bin/executable_*.tmpl` wrapper, pruned with no container gate because the container ignore rules do not exclude `.local/bin`. A prune entry is a target-state declaration, not a teardown script, so KTD2 does not cover it. Governs R10.
 - KTD4. **Purge the tokscale `ZAI_API_KEY` too.** (session-settled: user-approved — chosen over leaving `dot_local/bin/private_executable_tokscale.tmpl` untouched: it is the last `op://Private/Z.ai/API Key` reference, so deleting the now-useless 1Password item would otherwise fail every `chezmoi apply`.) This is what makes R15's 1Password step safe. Governs R7.
@@ -155,7 +156,7 @@ graph LR
 ### U1. Drop the `zai` fallback hops and refresh the model-policy rationale
 
 - **Goal:** No `zai` hop remains in any omp fallback chain, and every rationale comment that explained a `zai`/GLM hop describes the surviving order.
-- **Requirements:** R1, R2, R3, R4.
+- **Requirements:** R1, R2, R3, R4, R4b. Implements KTD1.
 - **Dependencies:** none.
 - **Files:** `.chezmoidata/agents.yaml`.
 - **Approach:**
@@ -163,6 +164,7 @@ graph LR
   2. Rewrite the `default`, `slow`, and `task` chain comments so each describes its surviving order; the `advisor` comment is unaffected because its GLM primary is `opencode-go`-served.
   3. Rewrite the provider-spread comment's `vision` clause: the inherited `default` chain now ends on `opencode-go/deepseek-v4-pro`, which has no image input, while its first hop `kimi-code/k3` does.
   4. Add a provider-removal note in the same shape as the existing `openai-codex` note: date, that no role primary was affected, which chains lost a hop, that no role's anchor status got worse, and that the GLM main text line survives on `opencode-go` while the Flash and vision lines do not.
+  5. Add the temporary `zai` entry to `disabledProviders` with a comment that states why a credential-removal-only cutover is insufficient during the residue window and names the removal trigger. Scope the existing aggregator paragraph so its "both keys stay declared under auth.env" reasoning is not read as covering `zai`, whose key is being removed.
 - **Patterns to follow:** the `openai-codex` removal paragraph already in the omp settings block; sync rule 9 (a value change and its comment change land together).
 - **Test scenarios:**
   - Covers AE1. Every `retry.fallbackChains` role key is still a declared `modelRoles` key, no chain is empty, and no chain entry matches `zai/`.
@@ -213,7 +215,7 @@ graph LR
 - **Dependencies:** none (they assert against freshly rendered scripts, so they may be edited alongside U2).
 - **Files:** `.ci/test-omp-agent-reconcile.sh`, `.ci/test-unmanaged-repo-guard-real.sh`.
 - **Approach:**
-  1. Move the fixture's duplicate-assignment pair from `ZAI_API_KEY` onto a still-managed variable so duplicate-collapse coverage is preserved rather than deleted.
+  1. Move the fixture's duplicate-assignment pair from `ZAI_API_KEY` onto a still-managed variable so duplicate-collapse coverage is preserved rather than deleted. Keep one managed variable per reconcile property — one duplicated (collapse), one single-valued (overwrite), one **absent** (insert-when-missing) — because the absent case is the one a name-for-name swap silently drops.
   2. Drop the `ZAI_API_KEY` count and value assertions, and narrow the expected ordered managed-name list to three.
   3. Update the `closed_set` diagnostic string and switch each auth render negative onto a declared variable name, including the emptied-set case whose expected diagnostic is now the first required name. Leave the `NODE_OPTIONS` negative in place.
   4. Remove `ZAI_API_KEY` from the guard test's separate model-credential probe list, so an expired key cannot make the host look capable of a real-agent run. This is a different assertion from the reconcile test's managed set — do not conflate them.
@@ -268,7 +270,7 @@ Run every check from the worktree root with an isolated destination. Never apply
 - **Manifest gating.** Render `.chezmoiremove` on Linux and with the container fact true; `.local/bin/claude-glm` must appear in both, with no change to existing entries.
 - **Shell syntax.** `bash -n` on each rendered POSIX script.
 - **Reconciliation coverage.** `.ci/test-omp-agent-reconcile.sh <rendered-auth> <rendered-plugins> <built-haptic-package> <rendered-settings>`, matching the argument order in `.github/workflows/ci.yml`.
-- **Absence proof.** Search the worktree excluding `docs/plans/**` for `zai`, `ZAI_API_KEY`, `op://Private/Z.ai`, `api.z.ai`, and `claude-glm`. The only permitted matches are the past-tense removal notes in `.chezmoidata/agents.yaml` and the self-marked unreachable family entries in `model-notes.md`.
+- **Absence proof.** Search the worktree excluding `docs/plans/**` for `zai`, `ZAI_API_KEY`, `op://Private/Z.ai`, `api.z.ai`, and `claude-glm`. Permitted matches: the past-tense removal notes and the R4b `disabledProviders` entry and comment in `.chezmoidata/agents.yaml`, the self-marked unreachable family entries in `model-notes.md`, the R10 prune entry and its comment in `.chezmoiremove`, and the base64 substring false positive in `packages/bun.lock`. Anything else is a miss.
 - **Repository hygiene.** `git diff --check`, `git status`, and a diff limited to the requested scope.
 
 **Apply-time side effects.** None of the changed scripts restart a network or system service, so no console-only apply is required. `run_after_config-omp-auth` already retries on every apply because its rendered secrets are not a safe fingerprint input; `.chezmoiremove` acts in the target-application phase.
@@ -281,16 +283,16 @@ Run every check from the worktree root with an isolated destination. Never apply
 
 **Global**
 
-- Every requirement R1 through R15 is satisfied.
+- Every requirement R1 through R15, including R4b, is satisfied.
 - Every Verification Contract check passes.
 - No teardown or revert script was added, no live credential file was edited, and no scaffolding or dead-end edit remains in the diff.
 - The commit subject is a lowercase Conventional Commit, and the branch carries a Git Flow prefix with a work-descriptive slug.
 
 **Per unit**
 
-- U1: no chain names `zai`; no role's anchor status is worse than before, with `vision` recorded as the unchanged pre-existing exception; every touched comment describes the surviving order.
+- U1: no chain names `zai`; no role's anchor status is worse than before, with `vision` recorded as the unchanged pre-existing exception; `disabledProviders` carries the temporary `zai` entry with its removal trigger named; every touched comment describes the surviving order.
 - U2: the closed set is three names in the data, the template, and the comment; the allowlist stays a strict membership test; no `op://Private/Z.ai` reference remains.
 - U3: the wrapper source is gone, neither aoe map names `claude-glm`, and `.chezmoiremove` prunes `.local/bin/claude-glm` in both gate states.
-- U4: the reconcile test asserts the three-name managed set and keeps duplicate-collapse and `NODE_OPTIONS` coverage; separately, the guard test's model-credential probe no longer names `ZAI_API_KEY`.
+- U4: the reconcile test asserts the three-name managed set and keeps `NODE_OPTIONS` coverage plus one managed variable per reconcile property (collapse, overwrite, insert-when-missing); separately, the guard test's model-credential probe no longer names `ZAI_API_KEY`.
 - U5: GLM main text lists only `opencode-go/glm-5*`; the Flash and vision entries carry a dated unreachable note; no live example names an unreachable id.
-- U6: all gates green, and the closing summary reports all three R15 residue actions — the dotenv line, the aoe TOML keys, and the 1Password item plus the key at Z.ai — with the exact step for each and an explicit note that `zai` stays catalog-reachable on this host until the dotenv line is deleted.
+- U6: all gates green, and the closing summary reports all three R15 residue actions — the dotenv line (deleted together with the R4b entry), the aoe TOML keys, and the 1Password item plus the key at Z.ai — with the exact step for each.
