@@ -6,16 +6,21 @@
 #   agents.skills.external
 #     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
 #   agents.marketplaces + agents.omp.plugins
-#     -> .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.{sh,ps1}.tmpl
+#     -> .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
 #   agents.aoe
 #     -> ~/.config/agent-of-empires/config.toml, deep-merged by
 #        run_after_config-aoe.sh.tmpl via the kimi-reconcile binary
 #   agents.omp.settings
-#     -> run_after_config-omp-settings.{sh,ps1}.tmpl, which asserts each
-#        declared omp settings PATH into the omp-owned ~/.omp/agent/config.yml
+#     -> run_after_config-omp-settings.sh.tmpl, which asserts each declared omp
+#        settings PATH into the omp-owned ~/.omp/agent/config.yml. Also READ by
+#        the models target below, whose shared validator proves every model
+#        override is named by a declared selector here.
+#   agents.omp.models
+#     -> dot_omp/private_agent/readonly_models.yml.tmpl (~/.omp/agent/models.yml).
+#        Override-only providers adjusting metadata on models omp already serves.
 #   agents.omp.auth.env
-#     -> run_after_config-omp-auth.{sh,ps1}.tmpl, which reconciles the
-#        declared credentials in the live ~/.omp/agent/.env
+#     -> run_after_config-omp-auth.sh.tmpl, which reconciles the declared
+#        credentials in the live ~/.omp/agent/.env
 #
 # Add or change agent configuration HERE, not in the consuming templates. Those
 # templates retain only target-specific FORMAT and live-file merge mechanics.
