@@ -472,6 +472,10 @@ agents:
       # Keep structural search and host desktop control available.
       astGrep.enabled: true
       computer.enabled: true
+      generate_image.enabled: true
+      github.enabled: true
+      steeringMode: one-at-a-time
+      followUpMode: one-at-a-time
       # Local long-term memory. ONLY the backend selector is declared: `mnemopi`
       # itself is not a settable path (`omp config set mnemopi` is rejected as an
       # unknown setting), every knob under it is its own leaf, and the defaults
