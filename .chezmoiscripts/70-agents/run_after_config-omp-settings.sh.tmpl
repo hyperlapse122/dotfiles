@@ -1,5 +1,5 @@
 {{- $settings := .agents.omp.settings -}}
-{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
+{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings "models" .agents.omp.models) -}}
 #!/usr/bin/env bash
 # Asserts the declared omp settings paths (agents.omp.settings in
 # .chezmoidata/agents.yaml) into omp's own ~/.omp/agent/config.yml on every apply.

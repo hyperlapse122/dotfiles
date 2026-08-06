@@ -34,8 +34,15 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
      level omp does not match on, so that chain would never fire. Both shapes are
      invisible later — the catalog gate strips suffixes before comparing — so
      only this render-time check can see them.
+  8. MODEL METADATA IS PARASITIC ON THE SETTINGS. Every id under
+     agents.omp.models overrides a model that must already be named by a declared
+     selector, or the override is dead data omp silently ignores; only that map
+     may appear under a provider; and the same credential-free and
+     transport-safety rules apply to it. These checks name agents.omp.models in
+     their own diagnostics, because a config-omp-settings prefix would send a
+     reader to the wrong data.
 
-  {{ includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
+  {{ includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings "models" $models) }}
 */ -}}
 {{- $ctx := .ctx -}}
 {{- if not $ctx -}}{{- fail "omp-settings-validate.tmpl: ctx is required" -}}{{- end -}}
@@ -115,6 +122,49 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   if hasPrefix "@" $sel -}}
 {{-     if not (hasKey $roles (trimPrefix "@" $sel)) -}}
 {{-       fail (printf "config-omp-settings: %s names role alias %s, which modelRoles does not declare; no later layer can catch this because the catalog gate skips aliases and omp stores a dangling one silently" $where $sel) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Model metadata. Absent or empty is inert: the map is optional and this
+   whole pass no-ops until a provider is declared under it. */ -}}
+{{- $declared := dict -}}
+{{- range $_, $sel := $aliasSites -}}
+{{-   if not (hasPrefix "@" $sel) -}}
+{{-     $_ := set $declared (regexReplaceAll $thinkRe $sel "") $sel -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey $settings "retry.fallbackChains" -}}
+{{-   range $key, $_ := index $settings "retry.fallbackChains" -}}
+{{-     if contains "/" $key -}}
+{{-       $_ := set $declared (regexReplaceAll $thinkRe $key "") $key -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $models := .models -}}
+{{- if kindIs "map" $models -}}
+{{-   $providers := dig "providers" dict $models -}}
+{{-   if not (kindIs "map" $providers) -}}
+{{-     fail (printf "config-omp-models: providers must be a map of provider id to configuration, got %s" (kindOf $providers)) -}}
+{{-   end -}}
+{{-   range $provider, $config := $providers -}}
+{{-     $json := $config | toJson -}}
+{{-     if contains "op://" $json -}}
+{{-       fail (printf "config-omp-models: provider %s carries an op:// reference; models.yml is rendered without secret resolution, so the reference would deploy as an inert literal. Declare the credential under agents.omp.auth.env instead" $provider) -}}
+{{-     end -}}
+{{-     range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
+{{-       if contains $escape $json -}}
+{{-         fail (printf "config-omp-models: provider %s carries a control character or backslash somewhere in its configuration" $provider) -}}
+{{-       end -}}
+{{-     end -}}
+{{-     range $field, $_ := $config -}}
+{{-       if ne $field "modelOverrides" -}}
+{{-         fail (printf "config-omp-models: provider %s declares %q, but only modelOverrides is permitted here; a full custom provider or model list would replace omp's own catalog entry rather than adjust it" $provider $field) -}}
+{{-       end -}}
+{{-     end -}}
+{{-     range $id, $_ := dig "modelOverrides" dict $config -}}
+{{-       if not (hasKey $declared (printf "%s/%s" $provider $id)) -}}
+{{-         fail (printf "config-omp-models: provider %s overrides %q, which no declared agents.omp.settings selector names; the override would be dead data omp silently ignores" $provider $id) -}}
+{{-       end -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}
