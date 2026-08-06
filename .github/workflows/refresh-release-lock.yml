@@ -40,15 +40,14 @@ jobs:
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       # Strict platform-vocabulary and source validation, fail-closed BEFORE
-      # any commit: every artifact must use one of the resolver's eight
-      # PlatformKey values, carry an https source URL and a 64-hex SHA-256,
-      # and never mark a Linux or macOS resolution as emulated (emulation is
-      # only ever an explicit Windows resolution).
+      # any commit: every artifact must use one of the resolver's six
+      # PlatformKey values, and carry an https source URL and a 64-hex
+      # SHA-256.
       - name: Validate lock architecture and sources
         run: |
           set -euo pipefail
           lock=.chezmoidata/releases.json
-          supported='["linux-amd64","linux-arm64","linux-amd64-musl","linux-arm64-musl","darwin-amd64","darwin-arm64","windows-amd64","windows-arm64"]'
+          supported='["linux-amd64","linux-arm64","linux-amd64-musl","linux-arm64-musl","darwin-amd64","darwin-arm64"]'
 
           bad_keys=$(jq -r --argjson supported "${supported}" '
             [.releases.tools[].artifacts // {} | keys[]] - $supported | .[]' "${lock}")
@@ -66,15 +65,6 @@ jobs:
             echo "::error::lock carries an artifact without an https source URL and 64-hex SHA-256"
             exit 1
           }
-
-          emulated=$(jq -r '
-            [paths(objects | select(.emulated == true)) as $p | ($p | map(tostring) | join("."))]
-            | .[]' "${lock}")
-          if [ -n "${emulated}" ] && grep -qE '\.artifacts\.(linux|darwin)-' <<<"${emulated}"; then
-            echo "::error::emulated resolution is never valid on Linux or macOS:"
-            grep -E '\.artifacts\.(linux|darwin)-' <<<"${emulated}"
-            exit 1
-          fi
 
       - name: Commit the lock when it changed
         run: |

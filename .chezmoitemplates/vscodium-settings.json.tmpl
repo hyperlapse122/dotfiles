@@ -1,7 +1,7 @@
-{{- /* VSCodium user settings — the SHARED body behind all three per-OS targets
-   (dot_config/VSCodium on Linux, AppData/Roaming/VSCodium on Windows,
-   Library/Application Support/VSCodium on macOS); each target file is a one-line
-   includeTemplate wrapper so the settings can never drift across OSes.
+{{- /* VSCodium user settings — the SHARED body behind both per-OS targets
+   (dot_config/VSCodium on Linux, Library/Application Support/VSCodium on macOS);
+   each target file is a one-line includeTemplate wrapper so the settings can
+   never drift across OSes.
    A template for ONE reason: `editor.fontFamily` below.
    The first family in that CSS-style stack is the managed mono face from
    .chezmoidata/fonts.yaml (`fonts.families.mono`) — the same source the KDE/GNOME

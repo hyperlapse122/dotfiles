@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { rename, readFile, unlink, writeFile } from "node:fs/promises";
-import type { LockedTool, ReleaseLock } from "./types.js";
+import { ALL_PLATFORMS_WITH_MUSL, platformKey, type PlatformKey } from "./platforms.js";
+import type { LockedArtifact, LockedTool, ReleaseLock } from "./types.js";
 
 interface LockFileSystem {
   writeFile: typeof writeFile;
@@ -27,6 +28,50 @@ export function mergeLocks(existing: ReleaseLock | null, resolved: ReleaseLock):
       tools: sortTools({ ...existing?.releases.tools, ...resolved.releases.tools }),
     },
   };
+}
+
+/**
+ * The current `PlatformKey` vocabulary, as a lookup table.
+ *
+ * Enumerated from `ALL_PLATFORMS_WITH_MUSL`, so "in the vocabulary" means
+ * the same thing everywhere it is checked.
+ */
+const CANONICAL_PLATFORM_KEYS = Object.fromEntries(
+  ALL_PLATFORMS_WITH_MUSL.map((platform) => [platformKey(platform), true]),
+) as Readonly<Record<PlatformKey, true>>;
+
+function pruneToolArtifacts(tool: LockedTool): LockedTool {
+  if (!tool.artifacts) return tool;
+  const entries = Object.entries(tool.artifacts) as [PlatformKey, LockedArtifact][];
+  const survivors = entries.filter(([key]) => CANONICAL_PLATFORM_KEYS[key] === true);
+  if (survivors.length === 0) {
+    const { artifacts: _artifacts, ...rest } = tool;
+    return rest;
+  }
+  return { ...tool, artifacts: Object.fromEntries(survivors) };
+}
+
+/**
+ * Drop retired platform keys from every tool's `artifacts` map.
+ *
+ * A key survives only if it is still in today's `PlatformKey` vocabulary —
+ * not by pattern-matching a retired OS's name — so a future platform
+ * retirement needs no repeat patch here (KTD1). A single post-merge pass:
+ * call once on the run's already-computed `complete` value (clean or
+ * partial), not per-tool inside `mergeLocks` (KTD2). A tool with no
+ * `artifacts` field is returned untouched, and a tool whose entire
+ * `artifacts` map is retired collapses to that same no-`artifacts` shape —
+ * `artifacts: {}` is never synthesized in either case — and
+ * `version`/`kind`/`source`/`integrity` are never touched.
+ */
+export function pruneRetiredPlatforms(lock: ReleaseLock): ReleaseLock {
+  const tools: Record<string, LockedTool> = Object.fromEntries(
+    Object.entries(lock.releases.tools).map(([name, tool]): [string, LockedTool] => [
+      name,
+      pruneToolArtifacts(tool),
+    ]),
+  );
+  return { releases: { tools } };
 }
 
 export function serializeLock(lock: ReleaseLock): string {

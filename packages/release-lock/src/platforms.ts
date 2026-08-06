@@ -6,7 +6,7 @@
  * a migrated external resolves byte-identical URLs to the pre-migration render.
  */
 
-export const OPERATING_SYSTEMS = ["linux", "darwin", "windows"] as const;
+export const OPERATING_SYSTEMS = ["linux", "darwin"] as const;
 export const ARCHITECTURES = ["amd64", "arm64"] as const;
 
 export type OperatingSystem = (typeof OPERATING_SYSTEMS)[number];
@@ -42,15 +42,13 @@ export const MUSL_PLATFORMS: readonly Platform[] = ARCHITECTURES.map((arch) => (
   libc: "musl" as const,
 }));
 
-/** `""` on unix, `".exe"` on windows. */
-export function executableExtension(os: OperatingSystem): string {
-  return os === "windows" ? ".exe" : "";
-}
-
-/** `.tar.gz` on unix, `.zip` on windows — the majority convention. */
-export function archiveExtension(os: OperatingSystem): string {
-  return os === "windows" ? ".zip" : ".tar.gz";
-}
+/**
+ * Every platform a `linuxMusl` tool targets — `ALL_PLATFORMS` plus the musl
+ * pair. The single source for "every currently-valid platform, musl
+ * included" so `lock.ts`, `github.ts`, and `registry.test.ts` derive the
+ * same union instead of each re-deriving `[...ALL_PLATFORMS, ...MUSL_PLATFORMS]`.
+ */
+export const ALL_PLATFORMS_WITH_MUSL: readonly Platform[] = [...ALL_PLATFORMS, ...MUSL_PLATFORMS];
 
 /** Rust target-triple arch component. */
 export function rustArch(arch: Architecture): string {
@@ -64,8 +62,6 @@ export function rustTarget(os: OperatingSystem): string {
       return "unknown-linux-gnu";
     case "darwin":
       return "apple-darwin";
-    case "windows":
-      return "pc-windows-msvc";
   }
 }
 

@@ -1,14 +1,14 @@
 # dotfiles
 
 Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Fedora Workstation
-and KDE are the primary Linux targets; macOS and Windows are secondary targets
-that receive the cross-platform dotfiles plus a narrower, OS-native provision
-set (see [What the command does](#what-the-command-does)).
+and KDE are the primary Linux targets; macOS is a secondary target that
+receives the cross-platform dotfiles plus a narrower, OS-native provision set
+(see [What the command does](#what-the-command-does)).
 
 ### Bootstrap
 
 Each command downloads chezmoi, clones this repo into
-`~/.local/share/chezmoi` (the source state), and applies it. Pick your OS:
+`~/.local/share/chezmoi` (the source state), and applies it.
 
 **Linux & macOS** — curl:
 
@@ -22,12 +22,6 @@ sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 ```
 
-**Windows** — PowerShell:
-
-```powershell
-iex "&{$(irm 'https://get.chezmoi.io/ps1')} init --apply hyperlapse122"
-```
-
 `hyperlapse122` is the GitHub username, which chezmoi expands to
 `https://github.com/hyperlapse122/dotfiles.git`.
 
@@ -36,8 +30,7 @@ iex "&{$(irm 'https://get.chezmoi.io/ps1')} init --apply hyperlapse122"
 1. Installs the chezmoi binary into a temporary location.
 2. Clones this repo into `~/.local/share/chezmoi` (the source state).
 3. Runs the `read-source-state.pre` hook —
-   [`.install-prerequisites.sh`](.install-prerequisites.sh) on Linux/macOS,
-   [`.install-prerequisites.ps1`](.install-prerequisites.ps1) on Windows —
+   [`.install-prerequisites.sh`](.install-prerequisites.sh) on Linux/macOS —
    which installs the tooling chezmoi itself depends on **before** it reads the
    source state:
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
@@ -45,9 +38,9 @@ iex "&{$(irm 'https://get.chezmoi.io/ps1')} init --apply hyperlapse122"
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
    - **Fedora** installs 1Password / `op` / `mise` via `dnf` (the 1Password RPM
      repo + the `jdxcode/mise` COPR); **macOS** via Homebrew (bootstrapping
-     Homebrew first if needed); **Windows** via `winget`. The remaining
-     formulas/casks (macOS) and winget packages (Windows) are installed later by
-     their own package-authority reconcilers, not by this hook.
+     Homebrew first if needed). The remaining formulas/casks (macOS) are
+     installed later by their own package-authority reconciler, not by this
+     hook.
 
    The same hook then refuses to continue until `op` is authenticated, so a
    fresh apply stops with clear guidance here rather than stalling on a
@@ -78,11 +71,6 @@ iex "&{$(irm 'https://get.chezmoi.io/ps1')} init --apply hyperlapse122"
      by the [`20-darwin`](.chezmoiscripts/20-darwin) Homebrew reconciler), the
      `mxm4-hapticd` LaunchAgent ([`Library/`](Library)), VSCodium user state,
      and the Winbox-from-1Password importer.
-   - **Windows**: the cross-platform dotfiles, winget-managed tools, Visual
-     Studio ([`.chezmoidata/visualstudio.yaml`](.chezmoidata/visualstudio.yaml)),
-     VSCodium extensions ([`30-windows`](.chezmoiscripts/30-windows)), the
-     Task-Scheduler haptic daemon, and PowerShell counterparts of the Linux
-     agent/auth scripts.
 
    Every OS fetches pinned standalone CLI binaries into `~/.local/bin` and
    coding-agent skills into `~/.agents/skills/`
@@ -104,8 +92,8 @@ sessions.
 
 The `chezmoi init` prompt on a **Fedora** host asks for your existing LUKS
 passphrase (for TPM2 auto-unlock enrollment). It is optional — **leave it blank
-to skip** (no full-disk encryption, or a headless host). macOS and Windows never
-see this prompt.
+to skip** (no full-disk encryption, or a headless host). macOS never sees
+this prompt.
 
 It is never written in plaintext. It is stored in
 `~/.config/chezmoi/chezmoi.toml` as AES ciphertext under a random 256-bit key
@@ -135,10 +123,10 @@ a non-blank answer, so:
   interactive prompt. fcitx5 is the unified input method on
   every Linux target; KDE hosts additionally get the Breeze
   de-branding, while GNOME hosts otherwise keep GNOME defaults.
-- **macOS** (Homebrew) and **Windows** (winget / "App Installer") get the
-  cross-platform dotfiles plus their OS-native provision set (see above).
+- **macOS** (Homebrew) gets the cross-platform dotfiles plus its
+  OS-native provision set (see above).
 - **`sudo` access on Linux** — installing Fedora packages and writing `/etc`
-  config needs root. macOS uses Homebrew; Windows uses winget (no `sudo`).
+  config needs root. macOS uses Homebrew (no `sudo`).
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
   at apply time through the 1Password CLI.
 

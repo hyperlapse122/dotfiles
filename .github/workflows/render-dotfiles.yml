@@ -636,13 +636,24 @@ jobs:
   # linted in each variant (their rendered bodies can differ per OS). The two
   # repo-meta scripts that are never deployed/rendered (.install-prerequisites.sh
   # and the .ci smoke test) are linted from the checkout so their coverage is not
-  # lost. Findings are also uploaded as a `shellcheck-report` artifact.
+  # lost. Findings are also uploaded as a `shellcheck-report` artifact. A
+  # source-tree grep guard (extracted to .ci/check-windows-references.sh, so
+  # .ci/test-windows-references-gates.sh can prove it against synthetic
+  # fixtures first) runs before both, PR-facing and independent of the
+  # rendered artifacts, to fail closed on a reintroduced Windows conditional
+  # or PlatformKey literal.
   shellcheck:
     name: Shellcheck (rendered scripts + repo-meta)
     needs: [apply, render-internals, apply-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Test the Windows-reference guard against synthetic fixtures
+        run: .ci/test-windows-references-gates.sh
+
+      - name: Guard against reintroduced Windows support
+        run: .ci/check-windows-references.sh
 
       - name: Download Fedora rendered artifacts
         uses: actions/download-artifact@v8

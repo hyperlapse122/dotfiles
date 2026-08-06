@@ -2,9 +2,9 @@
        bundled skills are agent-skill externals in ai-agents.toml, pinned to
        the same release via glab-release-ref.tmpl. */ -}}
 
-{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
-{{- /* tar.gz on unix, zip on windows (glab). */ -}}
-{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $executableExtension := "" -}}
+{{- /* Archive extension for glab's release download. */ -}}
+{{- $archiveExtension := ".tar.gz" -}}
 
 {{- /* ---------- gh ---------- */ -}}
 {{- /* The per-platform URL is resolved at refresh time by packages/release-lock;
@@ -16,7 +16,7 @@ targetPath = '{{ printf ".local/bin/gh%s" $executableExtension }}'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "gh" "field" "url" "platform" "auto") }}'
 path = '{{ printf "bin/gh%s" $executableExtension }}'
 executable = true
-stripComponents = {{ replace "linux" "1" (replace "darwin" "1" (replace "windows" "0" .chezmoi.os)) }}
+stripComponents = 1
 
 {{- /* ---------- glab (GitLab-hosted release, not GitHub) ---------- */ -}}
 
@@ -38,14 +38,14 @@ executable = true
 
 {{- $gardenTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden") -}}
 {{- $gardenVersion := trimPrefix "v" $gardenTag -}}
-{{- /* windows-arm64 borrows the amd64 build (lock marks it emulated), so the
+{{- /* An emulated arch borrows the amd64 build (lock marks it emulated), so the
        archive-internal path composes from the SERVED arch, not the host's. */ -}}
 {{- $gardenPathArch := .chezmoi.arch -}}
 {{- if eq (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden" "field" "emulated" "platform" "auto" "optional" true)) "true" -}}
 {{-   $gardenPathArch = "amd64" -}}
 {{- end -}}
 {{- $gardenArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" $gardenPathArch)) -}}
-{{- $gardenOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "darwin" "apple-darwin" (replace "windows" "pc-windows-msvc" .chezmoi.os))) -}}
+{{- $gardenOperatingSystem := (replace "linux" "unknown-linux-gnu" (replace "darwin" "apple-darwin" .chezmoi.os)) -}}
 {{- $gardenStem := (printf "garden-%s-%s-%s" $gardenVersion $gardenArch $gardenOperatingSystem) }}
 
 [garden]

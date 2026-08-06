@@ -8,7 +8,7 @@ Input (dict):
   field     optional; "version" (default), "revision", "skillsJson", "url",
             "sha256", "size", or "emulated"
   platform  required for artifact fields; an explicit lock platform key
-            (e.g. "linux-amd64", "windows-arm64") or "auto" to compose
+            (e.g. "linux-amd64", "darwin-arm64") or "auto" to compose
             "<os>-<arch>" from ctx.chezmoi
   musl      optional bool; with platform "auto", append "-musl" — pass the
             caller's musl-linux probe result verbatim (KTD11: distinct glibc

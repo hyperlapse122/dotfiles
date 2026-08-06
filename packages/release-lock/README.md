@@ -37,7 +37,7 @@ lock.
 
 GitHub's `releases/latest` response carries a `digest` field on every asset, so
 one call per repository yields the tag, each platform's asset URL, **and** its
-sha256. A Linux runner can therefore lock darwin and windows artifacts without
+sha256. A Linux runner can therefore lock darwin artifacts without
 downloading them — verified by hashing a real `darwin-arm64` artifact and
 comparing it to the recorded digest.
 
@@ -53,8 +53,10 @@ A source that fails to resolve is reported on stderr and omitted from the
 fresh resolution, and the process exits non-zero. Plain invocation and `--out`
 overlay a partial resolution onto the file already at the destination, so an
 omitted entry keeps its last good value rather than being blanked. A clean run
-replaces the tool set, which prunes entries removed from the registry. Writes
-replace the destination atomically.
+replaces the tool set, which prunes entries removed from the registry. Every
+run, clean or partial, also drops any `artifacts` key outside today's
+`PlatformKey` vocabulary from each surviving tool -- a retired platform never
+lingers in a kept entry. Writes replace the destination atomically.
 
 `--stdout` reads the repository lock and prints the same complete merged JSON
 without modifying it. It is for inspection only: do not redirect any invocation
@@ -83,7 +85,7 @@ returning the upstream filename for a platform. Conventions that matter:
   declared rather than inferred on purpose: any *other* missing asset is a
   hard error, so a stale asset pattern cannot hide behind a silent skip. That
   strictness is what surfaced `buf` naming its linux arm64 build `aarch64`
-  while darwin and windows use `arm64`.
+  while darwin uses `arm64`.
 - `tagPrefix` (githubRelease) resolves the newest release whose tag carries
   the prefix instead of `releases/latest`, for repos that interleave several
   tag trains (compound-engineering next to marketplace-*/cli-*).
@@ -117,14 +119,11 @@ fixtures are:
 ```sh
 .ci/test-figma-skills-stage.sh
 .ci/test-figma-skills-reconcile.sh
-pwsh -NoProfile -File .ci/test-figma-skills-stage.ps1
-pwsh -NoProfile -File .ci/test-figma-skills-reconcile.ps1
 ```
 
-The POSIX entry points run on native Linux and macOS, and the PowerShell entry
-points run on native Windows in `.github/workflows/ci.yml`. They render from the
-committed lock and operate only in scratch directories. The
-`render-dotfiles.yml` Fedora, Ubuntu, macOS, and Windows jobs separately assert
-the Figma collection external plus both reconciler templates use the same
-locked revision and sorted inventory; scripts and externals remain outside the
-managed-file archive comparison.
+The POSIX entry points run on native Linux and macOS in
+`.github/workflows/ci.yml`. They render from the committed lock and operate
+only in scratch directories. The `render-dotfiles.yml` Fedora, Ubuntu, and
+macOS jobs separately assert the Figma collection external plus both
+reconciler templates use the same locked revision and sorted inventory;
+scripts and externals remain outside the managed-file archive comparison.

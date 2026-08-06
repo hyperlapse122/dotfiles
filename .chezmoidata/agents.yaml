@@ -20,6 +20,10 @@
 #        Override-only providers adjusting metadata on models omp already serves.
 #        Also the validator's second caller: it renders the same shared partial,
 #        so a model override here is cross-checked against the selectors above.
+#   agents.validOS
+#     -> shared os: applicability vocabulary for agents.mcp.servers and
+#        agents.marketplaces, read by both consuming templates instead of each
+#        hand-declaring the same list.
 #   agents.omp.auth.env
 #     -> run_after_config-omp-auth.sh.tmpl, which reconciles the declared
 #        credentials in the live ~/.omp/agent/.env
@@ -40,6 +44,9 @@
 # onchange behavior.
 
 agents:
+  # Shared os: applicability vocabulary — every os: field below (mcp.servers,
+  # marketplaces) is validated against this list by its consuming template.
+  validOS: [linux, darwin]
   # MCP servers consumed by omp's native MCP runtime.
   # `transport` is the discriminator: stdio uses command/args; http uses url plus
   # optional headers. Each consumer maps that neutral shape into its native
@@ -47,7 +54,7 @@ agents:
   # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
   # native OAuth store; credentials and refresh tokens never enter source data.
   # Optional applicability is shared across every consumer:
-  #   os: [linux, darwin, windows]  (omitted means every OS)
+  #   os: [linux, darwin]  (omitted means every OS)
   #   container: keep | skip        (omitted means keep)
   #   harnessSkip: [<harness id>]   (omitted means every harness)
   # harnessSkip is an EXCLUSION list, so a new harness inherits every server
@@ -145,9 +152,8 @@ agents:
   #                        `externalPath`, and `versionSource` live here because
   #                        the archive is shared across OSes; omp reads the
   #                        extracted path on every desktop OS.
-  #   - os: the OSes where omp emits the plugin row. compound-engineering-plugin
-  #     also carries a Windows special-case in the omp updater, so its
-  #     [linux, darwin] list plus that clause covers every desktop OS.
+  #   - os: the OSes where omp emits the plugin row, taken directly from each
+  #     marketplace's declared list (no special-casing).
   #   - container: `skip` filters the row when the `container` fact is true
   #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in.
   #     This is the DEFAULT for every plugin filed under the marketplace. An
@@ -158,7 +164,7 @@ agents:
     h82-dotfiles:
       kind: localDir
       path: .local/share/omp-plugins     # relative to $HOME; OMP-native catalog
-      os: [linux, darwin, windows]
+      os: [linux, darwin]
       container: skip
     compound-engineering-plugin:
       kind: localArchive
@@ -223,8 +229,8 @@ agents:
   # batteries-included (built-in MCP runtime and native Anthropic OAuth), so the
   # upstream pi-mcp-extension and pi-anthropic-auth packages are not carried.
   # Compound-engineering is delivered through omp's marketplace, so this
-  # settings block carries no `packages` key. omp is cross-platform and ships
-  # omp-windows-x64.exe, so both provisioners have Windows counterparts.
+  # settings block carries no `packages` key. omp is cross-platform across
+  # every OS chezmoi manages, so no OS-specific branching is needed here.
   omp:
     plugins:
     - { name: mxm4-haptic, marketplace: h82-dotfiles }
