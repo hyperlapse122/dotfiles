@@ -8,7 +8,7 @@
 {{- $marketplaces := .agents.marketplaces -}}
 {{- $plugins := .agents.omp.plugins -}}
 {{- $nameRe := "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" -}}
-{{- $validOS := list "linux" "darwin" -}}
+{{- $validOS := .agents.validOS -}}
 {{- $validKinds := list "localDir" "localArchive" -}}
 {{- $validContainers := list "skip" "keep" -}}
 {{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}

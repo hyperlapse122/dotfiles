@@ -20,6 +20,10 @@
 #        Override-only providers adjusting metadata on models omp already serves.
 #        Also the validator's second caller: it renders the same shared partial,
 #        so a model override here is cross-checked against the selectors above.
+#   agents.validOS
+#     -> shared os: applicability vocabulary for agents.mcp.servers and
+#        agents.marketplaces, read by both consuming templates instead of each
+#        hand-declaring the same list.
 #   agents.omp.auth.env
 #     -> run_after_config-omp-auth.sh.tmpl, which reconciles the declared
 #        credentials in the live ~/.omp/agent/.env
@@ -40,6 +44,9 @@
 # onchange behavior.
 
 agents:
+  # Shared os: applicability vocabulary — every os: field below (mcp.servers,
+  # marketplaces) is validated against this list by its consuming template.
+  validOS: [linux, darwin]
   # MCP servers consumed by omp's native MCP runtime.
   # `transport` is the discriminator: stdio uses command/args; http uses url plus
   # optional headers. Each consumer maps that neutral shape into its native

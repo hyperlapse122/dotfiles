@@ -52,7 +52,7 @@ harness and the sole caller; a harnessSkip entry naming a retired harness
 {{-   $facts := includeTemplate "facts.tmpl" $ctx | fromYaml -}}
 {{-   $container = $facts.container -}}
 {{- end -}}
-{{- $validOS := list "linux" "darwin" -}}
+{{- $validOS := $ctx.agents.validOS -}}
 {{- $validContainers := list "keep" "skip" -}}
 {{- $validHarness := list "omp" -}}
 {{- $skippableHarness := $validHarness -}}
@@ -95,7 +95,7 @@ harness and the sole caller; a harnessSkip entry naming a retired harness
 {{-         fail (printf "agent mcp: server %q os entries must be strings, got %s" $name (kindOf $entry)) -}}
 {{-       end -}}
 {{-       if not (has $entry $validOS) -}}
-{{-         fail (printf "agent mcp: server %q has unknown os %q; valid values: linux, darwin" $name $entry) -}}
+{{-         fail (printf "agent mcp: server %q has unknown os %q; valid values: %s" $name $entry (join ", " $validOS)) -}}
 {{-       end -}}
 {{-       $serverOS = append $serverOS $entry -}}
 {{-     end -}}

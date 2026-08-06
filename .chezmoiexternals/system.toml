@@ -45,7 +45,6 @@ url = "https://github.com/sorin-ionescu/prezto.git"
 clone.args = ["--recursive"]
 refreshPeriod = "8760h"
 
-
 {{- /* ---------- winbox (MikroTik RouterOS GUI; vendor version endpoint, not GitHub) ---------- */ -}}
 {{- /*
   WinBox is not published on GitHub, so the version comes from MikroTik's
