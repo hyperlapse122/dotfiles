@@ -132,6 +132,15 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-     fail (printf "config-omp-settings: %s has a value outside the safe charset; keep a selector to letters, digits, space and ._:/@*+-" $where) -}}
 {{-   end -}}
 {{- end -}}
+{{- /* advisor.enabled and modelRoles.advisor are paired only by convention, and
+   the provisioner's readiness diagnostic can only report an UNREACHABLE advisor
+   provider — with no advisor role at all there is no selector to report on, so
+   the critic seat goes inert with nothing on any surface saying why. */ -}}
+{{- if and (hasKey $settings "advisor.enabled") (eq (index $settings "advisor.enabled") true) -}}
+{{-   if not (hasKey $roles "advisor") -}}
+{{-     fail "config-omp-settings: advisor.enabled is true but modelRoles declares no advisor role, so the critic seat has no model to resolve and omp reports it inert without naming a cause" -}}
+{{-   end -}}
+{{- end -}}
 {{- /* Model metadata. Absent or empty is inert: the map is optional and this
    whole pass no-ops until a provider is declared under it. */ -}}
 {{- $declared := dict -}}

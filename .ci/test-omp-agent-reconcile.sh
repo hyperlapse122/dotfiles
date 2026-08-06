@@ -450,10 +450,10 @@ assert_render_fails models-non-override-key "$models_yml" \
   'but only modelOverrides is permitted here'
 assert_render_fails models-credential-reference "$models_yml" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k3\":{\"headers\":{\"X\":\"op://Private/x/y\"}}}}}}}}}" \
-  'carries an op:// reference'
+  'provider opencode-go carries an op:// reference'
 assert_render_fails models-credential-provider-key "$models_yml" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"op://Private/x/y\":{}}}}}}" \
-  'carries an op:// reference'
+  'agents.omp.models carries an op:// reference'
 # A selector never reaches the shell as a word or a script fragment, but the
 # top-level charset check cannot see one: it is gated on a string-typed top-level
 # value, and every selector lives inside a record. These two prove the nested
@@ -464,6 +464,11 @@ assert_render_fails settings-unsafe-role-selector "$settings_sh" \
 assert_render_fails settings-unsafe-chain-hop "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"default\":[\"a';id;'/b\"]}}}}}" \
   'has a value outside the safe charset'
+# advisor.enabled and modelRoles.advisor are paired by convention only; without
+# an advisor role the seat goes inert with nothing naming a cause.
+assert_render_fails settings-advisor-without-role "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"advisor.enabled\":true}}}}" \
+  'modelRoles declares no advisor role'
 # A control character anywhere in the value breaks the tab-separated transport.
 assert_render_fails settings-nested-control-char "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":{\"default\":\"anthropic/claude-opus-5\txhigh\"}}}}}" \
