@@ -256,6 +256,35 @@ jq -r "$harvest_selectors
 " "$declared_json" >"$scratch/catalog-full.json"
 jq -e '(.models | length) > 0' "$scratch/catalog-full.json" >/dev/null
 
+# Chain reachability, asserted against the SHIPPED data rather than a fixture.
+# omp looks a chain up by the failing model's id, so a model-keyed chain whose
+# model no role, agent override, or hop ever produces is dead data — the symptom
+# is a tier that silently loses its recovery path after a retune.
+#
+# This cannot be a render-time check in the validator, and that is not a style
+# choice: `--override-data` DEEP-MERGES, so every fixture that retunes one role
+# inherits the real chains and manufactures an orphan the validator would then
+# reject. The invariant is global over one complete policy, so it is checked once
+# here, over exactly the data that ships. A key naming a HOP is legitimate: that
+# hop can fail and own a chain in turn.
+unnamed=$(jq -r '
+  def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
+  ([ (.modelRoles // {} | to_entries[].value),
+     (."task.agentModelOverrides" // {} | to_entries[].value),
+     (."retry.fallbackChains" // {} | to_entries[].value[])
+   ] | map(select(type == "string") | select(startswith("@") | not) | strip_thinking) | unique) as $named
+  | (."retry.fallbackChains" // {} | keys | map(select(contains("/"))))
+  | map(select(strip_thinking as $k | ($named | index($k)) == null))
+  | .[]
+' "$declared_json")
+if [[ -n $unnamed ]]; then
+  while IFS= read -r key; do
+    [[ -n $key ]] || continue
+    printf 'chain-reachability: retry.fallbackChains is keyed on %s, which no modelRoles selector, task.agentModelOverrides value, or chain hop names; omp looks a chain up by the failing model id, so it can never be consulted\n' "$key" >&2
+  done <<<"$unnamed"
+  exit 1
+fi
+
 declared_count=$(jq -r 'keys | length' "$declared_json")
 
 run_settings() {
@@ -453,11 +482,6 @@ assert_render_fails settings-wildcard-chain-key "$settings_sh" \
 assert_render_fails settings-suffixed-chain-key "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5:max\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
   'carries a thinking suffix'
-# A model-keyed chain whose model nothing else names can never be consulted: omp
-# looks a chain up by the failing model's id.
-assert_render_fails settings-unnamed-chain-key "$settings_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/nobody-names-this\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
-  'or chain hop names'
 assert_render_ok settings-model-keyed-chain "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\"]}}}}}"
 # agents.omp.models is parasitic on the settings: an override nothing declares is

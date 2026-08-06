@@ -149,20 +149,10 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-     $_ := set $declared (regexReplaceAll $thinkRe $sel "") $sel -}}
 {{-   end -}}
 {{- end -}}
-{{- /* An orphaned chain: a model-keyed chain whose model appears NOWHERE else in
-   the policy. omp consults a chain by the failing model's id, so a chain keyed
-   on a model no role, override, or hop can ever produce is dead data — the
-   symptom is a tier that silently loses its recovery path after a retune. A key
-   naming a HOP is legitimate: that hop can fail and own a chain in turn, which
-   is why this tests $aliasSites rather than role primaries only. */ -}}
 {{- if hasKey $settings "retry.fallbackChains" -}}
 {{-   range $key, $_ := index $settings "retry.fallbackChains" -}}
 {{-     if contains "/" $key -}}
-{{-       $stripped := regexReplaceAll $thinkRe $key "" -}}
-{{-       if not (hasKey $declared $stripped) -}}
-{{-         fail (printf "config-omp-settings: retry.fallbackChains is keyed on %s, which no modelRoles selector, task.agentModelOverrides value, or chain hop names; omp looks a chain up by the failing model's id, so this one can never be consulted" $key) -}}
-{{-       end -}}
-{{-       $_ := set $declared $stripped $key -}}
+{{-       $_ := set $declared (regexReplaceAll $thinkRe $key "") $key -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}
