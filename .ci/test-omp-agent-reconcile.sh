@@ -453,6 +453,11 @@ assert_render_fails settings-wildcard-chain-key "$settings_sh" \
 assert_render_fails settings-suffixed-chain-key "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5:max\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
   'carries a thinking suffix'
+# A model-keyed chain whose model nothing else names can never be consulted: omp
+# looks a chain up by the failing model's id.
+assert_render_fails settings-unnamed-chain-key "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/nobody-names-this\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
+  'or chain hop names'
 assert_render_ok settings-model-keyed-chain "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\"]}}}}}"
 # agents.omp.models is parasitic on the settings: an override nothing declares is
