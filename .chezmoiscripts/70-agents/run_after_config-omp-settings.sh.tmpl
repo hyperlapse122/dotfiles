@@ -101,7 +101,11 @@ if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >
       ((.modelRoles // {}) | to_entries[] | {where: ("modelRoles." + .key), sel: .value}),
       ((."task.agentModelOverrides" // {}) | to_entries[] | {where: ("task.agentModelOverrides." + .key), sel: .value}),
       ((."retry.fallbackChains" // {}) | to_entries[] as $chain | ($chain.value | to_entries[]) |
-        {where: ("retry.fallbackChains." + $chain.key + "[" + (.key | tostring) + "]"), sel: .value})
+        {where: ("retry.fallbackChains." + $chain.key + "[" + (.key | tostring) + "]"), sel: .value}),
+      # A model-oriented chain key IS a selector, so it needs the same catalog
+      # proof its hops get. A role-keyed chain contributes nothing here: the
+      # contains("/") filter below drops it, exactly as it drops an alias value.
+      ((."retry.fallbackChains" // {}) | to_entries[] | {where: ("retry.fallbackChains." + .key), sel: .key})
     ]
     | map(select((.sel | type) == "string"))
     | map(select(.sel | startswith("@") | not))
@@ -110,6 +114,24 @@ if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >
     | map(select(.sel | contains("/")))
     | .[] | [.where, .sel] | @tsv
   ' "$declared")
+{{ if and (hasKey $settings "advisor.enabled") (eq (index $settings "advisor.enabled") true) -}}
+{{-   $advisor := "" -}}
+{{-   if hasKey $settings "modelRoles" -}}
+{{-     $advisor = index $settings "modelRoles" | dig "advisor" "" -}}
+{{-   end -}}
+{{-   if and (kindIs "string" $advisor) (contains "/" $advisor) (not (hasPrefix "@" $advisor)) }}
+  # advisor.enabled is declared true, so an unreachable advisor provider is not a
+  # skipped check but an inert critic seat: omp reports the runtime as no_model
+  # and never errors. The generic per-selector loop above only says it could not
+  # validate the selector; this says what that costs.
+  case "$covered" in
+    *" {{ $advisor | splitList "/" | first }} "*) ;;
+    *)
+      printf 'config-omp-settings: advisor.enabled is true but the catalog serves no %s models, so modelRoles.advisor cannot resolve and the critic seat stays inert until that provider is authenticated.\n' '{{ $advisor | splitList "/" | first }}' >&2
+      ;;
+  esac
+{{- end -}}
+{{- end }}
 else
   printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
 fi
