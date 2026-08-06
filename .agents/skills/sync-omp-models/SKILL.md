@@ -293,7 +293,6 @@ highest-number rule wrecks real ids in this catalog:
 | `gemini-3.1-pro` → `gemini-3.6-flash` | different tier; the `pro` line has no 3.6 |
 | `gemini-3.1-flash-lite` → `gemini-3.1-flash-image` | image-output specialist, no tool calling |
 | `kimi-code/k3` → `k3-256k` | a context-capped variant, not a newer version |
-| `zai/glm-5.2` → `glm-5v-turbo` | `v` is a vision variant, `turbo` a speed variant |
 | `claude-haiku-4-5` → `claude-haiku-4-5-20251001` | dated pin of the same weights |
 | `claude-opus-5` → `claude-opus-4-8` | identical on every reported axis; only the version orders them |
 

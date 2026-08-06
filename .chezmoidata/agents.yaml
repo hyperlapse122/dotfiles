@@ -196,12 +196,10 @@ agents:
       session:
         custom_agents:
           omp: omp
-          'claude-glm': "claude-glm"
           # Bare on-PATH shell agent; key is the aoe agent name, value the command.
           zsh: zsh
         agent_detect_as:
           omp: pi
-          claude-glm: claude
       tmux:
         status_bar: enabled
         clipboard: enabled
@@ -252,10 +250,11 @@ agents:
     # different provider at its FIRST chain hop (bulk -> anthropic, vision ->
     # kimi-code via the inherited `default` chain). Two consequences to keep in
     # view: an Antigravity wall hits vision and bulk together, and vision's
-    # inherited chain passes through zai/glm-5.2, which has no image input and
-    # therefore cannot serve an image turn. Splitting the two is a provider
-    # move, which the sync-omp-models series rule makes a human decision rather
-    # than a sync action.
+    # inherited chain ends on opencode-go/deepseek-v4-pro, which has no image
+    # input - only its first hop (kimi-code/k3) can serve an image turn, so a
+    # second wall strands vision. Splitting the two is a provider move, which
+    # the sync-omp-models series rule makes a human decision rather than a sync
+    # action.
     #
     # opencode-go took over the deliberation seat when openai-codex was
     # removed from this host (2026-08-05, user-directed) - that removal IS
@@ -277,6 +276,15 @@ agents:
     # separate decision this edit does not make. opencode-go is also the
     # second anchor, and its sibling opencode-zen stays disabled, so the one
     # OPENCODE_API_KEY serves exactly one selectable provider.
+    #
+    # zai left this host on 2026-08-06 (user-directed): the Z.ai coding plan
+    # expired, so its credential is gone from auth.env below and the provider
+    # drops out of `omp models --json` once the stale dotenv line is removed.
+    # It held no role primary - only fallback hops on `default`, `slow`, `task`,
+    # `smol`, and `tiny` - and each of those roles still reaches both anchor
+    # providers without it, so no role needed a new primary. The GLM main text
+    # line survives on opencode-go (the `advisor` primary); the GLM Flash and
+    # GLM vision lines had no other provider and are now unreachable.
     #
     # No provider/* chain is declared: a provider wildcard outranks the role
     # chain by specificity, and google-antigravity serves no claude-opus-5 or
@@ -364,31 +372,30 @@ agents:
       # Haiku and Luna, never on a deliberation line, so anchoring cannot
       # escalate background work.
       #
-      # `default` walks the communicator alternatives before the deep
-      # specialist: Kimi holds up better than GLM under nested delegation
-      # prompts (oh-my-openagent's tested finding), and DeepSeek Pro is the one
-      # substitute omo endorses for the departed GPT deep line, so it sits last
-      # as the different-brain option rather than the first retry.
+      # `default` walks the communicator alternative before the deep
+      # specialist: Kimi is the non-Claude communicator omo ranks highest under
+      # nested delegation prompts, and DeepSeek Pro is the one substitute omo
+      # endorses for the departed GPT deep line, so it sits last as the
+      # different-brain option rather than the first retry.
       #
       # `slow` needs a chain of its own now that its own model is the last hop
       # of `default`: inheriting that chain would end on itself. The order is
       # omo's Oracle chain with the GPT hops removed - Gemini Pro is its first
-      # non-GPT deliberation hop, Opus at `max` follows, GLM closes. Opus here
-      # is deliberate: `slow` is a second brain for the SAME job, not a critic,
-      # so reaching the doer's line is recovery, not a shared blind spot.
+      # non-GPT deliberation hop and Opus at `max` closes. Opus here is
+      # deliberate: `slow` is a second brain for the SAME job, not a critic, so
+      # reaching the doer's line is recovery, not a shared blind spot.
       #
       # `task` backs the compound-engineering persona fleet - every generic
       # subagent spawn plus the `scout` alias above - so its recovery order is
       # a FLEET order, and it needs one of its own: with no declared chain it
-      # inherited `default`, where the zai hop can be quota-dead and the last
-      # hop escalates mid-tier fleet work to the deliberation line. The first
-      # hop keeps the Sonnet FAMILY on the Antigravity plan (a separate daily
-      # quota that is typically untouched), so a persona prompt tuned on Sonnet
-      # keeps its behavior through an Anthropic wall; Kimi K3 on opencode-go is
-      # both the worker-tier anchor and omo's own next hop after Sonnet 5 for
-      # its fleet agents; the kimi-code and zai hops close it, kept late
-      # because that membership quota is shared across every client and the zai
-      # weekly window spends early.
+      # inherited `default`, whose last hop escalates mid-tier fleet work to
+      # the deliberation line. The first hop keeps the Sonnet FAMILY on the
+      # Antigravity plan (a separate daily quota that is typically untouched),
+      # so a persona prompt tuned on Sonnet keeps its behavior through an
+      # Anthropic wall; Kimi K3 on opencode-go is both the worker-tier anchor
+      # and omo's own next hop after Sonnet 5 for its fleet agents; the
+      # kimi-code hop closes it, kept last because that membership quota is
+      # shared across every client and spends early.
       #
       # `advisor` is the critic seat (turn review plus the `reviewer` agent).
       # Its inherited path never reached an anthropic hop at all, and its last
@@ -402,17 +409,14 @@ agents:
       retry.fallbackChains:
         default:
         - kimi-code/k3:high
-        - zai/glm-5.2:max
         - opencode-go/deepseek-v4-pro:high
         slow:
         - google-antigravity/gemini-3.1-pro:high
         - anthropic/claude-opus-5:max
-        - zai/glm-5.2:max
         task:
         - google-antigravity/claude-sonnet-4-6
         - opencode-go/kimi-k3
         - kimi-code/k3:high
-        - zai/glm-5.2:max
         advisor:
         - kimi-code/k3:high
         - anthropic/claude-sonnet-5
@@ -420,7 +424,6 @@ agents:
         - opencode-go/gpt-5.6-luna
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
-        - zai/glm-4.7-flash
         commit:
         - opencode-go/gpt-5.6-luna
         - google-antigravity/gemini-3.6-flash
@@ -429,14 +432,13 @@ agents:
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
         - opencode-go/gpt-5.6-luna
-        - zai/glm-4.7-flash
         bulk:
         - anthropic/claude-haiku-4-5
         - opencode-go/gpt-5.6-luna
       # Provider availability gate. It is applied BEFORE any credential check,
       # so it is the only knob that keeps a backend out of every AUTOMATIC
       # selection path. `retry.fallbackChains` above was never the exposure -
-      # retry walks declared chains only, and no chain names these two - but
+      # retry walks declared chains only, and no chain names anything here - but
       # omp also has catalog-wide scans that no chain governs, each firing
       # wherever a declared selector does not resolve: its built-in
       # priority.json role chains carry BARE patterns (`gpt-5.5`, `codex`,
@@ -444,20 +446,34 @@ agents:
       # "first image-capable available", the smol/slow finders end at
       # availableModels[0], and providers.imageOrder's built-in tail names
       # openrouter. Every one of those ranks by CATALOG ORDER, which is
-      # incidental: these two aggregators served 473 of the 562 available ids
-      # on this host (openrouter 413, opencode-zen 60), so a bare-id scan was
-      # one catalog reshuffle away from spending token-metered capacity instead
-      # of a plan. The trade is that a disabled provider also leaves `/model`,
-      # so neither can be chosen by hand either; re-enabling one is a delete
-      # from this list. Both keys stay declared under auth.env - provisioning a
-      # credential is independent of this gate, and OPENCODE_API_KEY still
-      # serves opencode-go, which is plan-metered and stays available. No
-      # declared selector names either provider, and none may: a disabled
-      # provider leaves `omp models --json`, so the catalog gate in both
-      # provisioner halves fails the apply on one.
+      # incidental: openrouter and opencode-zen served 473 of the 562 available
+      # ids on this host (openrouter 413, opencode-zen 60), so a bare-id scan
+      # was one catalog reshuffle away from spending token-metered capacity
+      # instead of a plan. The trade is that a disabled provider also leaves
+      # `/model`, so it cannot be chosen by hand either; re-enabling one is a
+      # delete from this list. Both aggregator keys stay declared under auth.env
+      # - provisioning a credential is independent of this gate, and
+      # OPENCODE_API_KEY still serves opencode-go, which is plan-metered and
+      # stays available. No declared selector names any provider on this list,
+      # and none may: a disabled provider leaves `omp models --json`, so the
+      # catalog gate in the provisioner fails the apply on one.
+      #
+      # `zai` is here for the opposite reason, and it is TEMPORARY. Its plan
+      # expired on 2026-08-06 and its credential left auth.env below, which is
+      # what DURABLY removes the provider from `omp models --json`. But the
+      # dotenv reconciler preserves every UNDECLARED entry byte-identically, so
+      # an already-provisioned host keeps its stale `ZAI_API_KEY=` line until
+      # that line is hand-deleted - and until then the key is still PRESENT, so
+      # the catalog-wide scans above can still select a provider that cannot
+      # answer, exactly when a scan fires because something else failed. This
+      # entry closes that window from the repo side instead of depending on the
+      # operator acting first. Delete this entry and the stale dotenv line
+      # together: once the line is gone the credential gate excludes `zai` on
+      # its own and this entry is dead data.
       disabledProviders:
       - openrouter
       - opencode-zen
+      - zai
       # Exa first; unlisted providers keep their built-in relative order after
       # it. The deep-research surfaces are pinned off rather than left to a
       # default that could change upstream.
@@ -525,8 +541,12 @@ agents:
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
     # credential map keyed by environment variable, not a model-provider auth
     # shape. Exa is a search tool, not a model provider.
-    # run_after_config-omp-auth requires exactly this four-variable closed set:
-    # ZAI_API_KEY, EXA_API_KEY, OPENROUTER_API_KEY, and OPENCODE_API_KEY.
+    # run_after_config-omp-auth requires exactly this three-variable closed
+    # set: EXA_API_KEY, OPENROUTER_API_KEY, and OPENCODE_API_KEY. ZAI_API_KEY
+    # left the set on 2026-08-06 when the Z.ai coding plan expired; because the
+    # reconciler preserves every UNDECLARED dotenv entry, the already-deployed
+    # line survives in ~/.omp/agent/.env and must be deleted by hand once, or
+    # omp keeps offering a dead `zai` provider.
     # OPENCODE_API_KEY enables both OpenCode providers, of which
     # settings.disabledProviders keeps only opencode-go selectable, and
     # OPENROUTER_API_KEY stays provisioned although that backend is disabled
@@ -537,8 +557,6 @@ agents:
     # silently delete a key.
     auth:
       env:
-      - variable: ZAI_API_KEY
-        key: op://Private/Z.ai/API Key
       - variable: EXA_API_KEY
         key: op://Private/Exa/API Key
       - variable: OPENROUTER_API_KEY

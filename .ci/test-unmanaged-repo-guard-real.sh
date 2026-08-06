@@ -138,7 +138,7 @@ BUN
 # once against a managed one (must not). This needs a real model turn, so it
 # is the one assertion gated on model credentials being present; every
 # assertion above and the real-HOME-untouched check below always run.
-credential_vars=(ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY OPENROUTER_API_KEY ZAI_API_KEY OPENCODE_API_KEY GEMINI_API_KEY)
+credential_vars=(ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY GEMINI_API_KEY)
 have_model_credentials=0
 for var in "${credential_vars[@]}"; do
   if [[ -n ${!var:-} ]]; then

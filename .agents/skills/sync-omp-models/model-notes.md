@@ -291,7 +291,7 @@ checked: 2026-07-29
   https://www.kimi.com/code/docs/en/kimi-code/membership.html
 
 ### GLM main text line
-ids: `zai/glm-4.7`, `zai/glm-5`, `zai/glm-5.1`, `zai/glm-5.2`, `zai/glm-5-turbo`, `opencode-go/glm-5*`
+ids: `opencode-go/glm-5*`
 checked: 2026-07-29
 - **built for** the text-only engineering lane: hard coding, long-horizon agent
   work, and structured writing. `-turbo` marks an agent-optimized rung of the
@@ -315,6 +315,9 @@ checked: 2026-07-29
 - **weak at / watch** falls down on deep debugging, broad refactors, and careful
   end-to-end verification; not a planner. Keep it as the last hop, never a
   primary.
+  Unreachable on this host since 2026-08-06: `zai` was the only provider that
+  served this line, and the Z.ai coding plan expired. The entry stays for the
+  day a reachable provider carries it again; no role may name it until then.
 - src: https://docs.z.ai/guides/llm/glm-4.7 · https://docs.z.ai/release-notes/new-released
 
 ### GLM vision line
@@ -327,6 +330,10 @@ checked: 2026-07-29
   document and chart reading; visual grounding and image-based debugging.
 - **weak at / watch** wasteful for pure text engineering; a sibling variant of
   the main text line, never an upgrade of it.
+  Unreachable on this host since 2026-08-06, for the same reason as the GLM
+  Flash entry above — `zai` was its only provider. It stays documented because
+  the `vision` substitution order still names it for the day a reachable
+  provider carries it again.
 - src: https://docs.z.ai/guides/vlm/glm-5v-turbo · https://docs.z.ai/guides/vlm/glm-4.6v
 
 ### DeepSeek Pro
@@ -411,11 +418,12 @@ as corroboration, not as coincidence.
 
 - **Kimi ≻ GLM** as the non-Claude communicator fallback. omo states Kimi holds
   up better than GLM under nested delegation prompts and orders its chains that
-  way; the `default` chain here is `Kimi K → GLM main → GPT Sol`, which keeps
-  that ordering. It differs from omo in one place: omo puts Sol between Kimi and
-  GLM, while this repo puts Sol last, because Sol changes working style rather
-  than degrading gracefully — it is the different-brain option, not the next
-  retry.
+  way; the `default` chain here leads with Kimi K for that reason. GLM main text
+  left that chain on 2026-08-06 with the `zai` provider, so the rule now only
+  governs where a GLM hop is reintroduced. The deep specialist stays last —
+  DeepSeek Pro closes the chain, where omo would put its GPT deep line between
+  Kimi and GLM, because a different working style is the different-brain option,
+  not the next retry.
 - **Never put a utility line on an orchestrator.** omo tested this and reports
   it as a hard negative, not a preference.
 - **Spend a scarce premium allocation on a low-frequency, high-leverage role,**
