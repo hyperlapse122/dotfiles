@@ -283,6 +283,8 @@ agents:
         reviewer: "@advisor"                        # critic, not doer
         security-reviewer: "@slow"                  # highest-stakes review seat
       task.showResolvedModelBadge: true
+      task.enableEffort: true
+      task.maxEffort: xhigh
       retry.usageAwareFallback: true
       # Keyed by MODEL, not role. An exact provider/model-id key outranks a role
       # chain by specificity (oh-my-pi docs/settings.md), so every role using that
