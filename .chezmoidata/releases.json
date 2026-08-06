@@ -22,15 +22,6 @@
             "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.2/agent-browser-darwin-arm64",
             "sha256": "cbb517902bcaa3b7a6384fd9f25dd274da3df2bb6a3ba9c3e85806d78213c26b"
           },
-          "windows-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.2/agent-browser-win32-x64.exe",
-            "sha256": "291f0c33c2fbcbf159b5868065ab412dfd8722d6299821e010cf0715964f2cba"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.2/agent-browser-win32-x64.exe",
-            "sha256": "291f0c33c2fbcbf159b5868065ab412dfd8722d6299821e010cf0715964f2cba",
-            "emulated": true
-          },
           "linux-amd64-musl": {
             "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.33.2/agent-browser-linux-musl-x64",
             "sha256": "ca7e6589158fd9276897ec66367105704a215f95b1df4c4abb193244d0260eda"
@@ -84,14 +75,6 @@
           "darwin-arm64": {
             "url": "https://github.com/ast-grep/ast-grep/releases/download/0.45.0/app-aarch64-apple-darwin.zip",
             "sha256": "ec2e3680f4f84c68b48420bcca01d21389787c7318b52083dde6f46ac12ad946"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/ast-grep/ast-grep/releases/download/0.45.0/app-x86_64-pc-windows-msvc.zip",
-            "sha256": "a1b5b7c06994992755d4cd0b9cf10c2f4a6e7b4a82d2810edee5985a59f67ac5"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/ast-grep/ast-grep/releases/download/0.45.0/app-aarch64-pc-windows-msvc.zip",
-            "sha256": "0c0ec11916d77002ddff86f3f43cabd03d2d63189d54a1aedc5141592e7ac23d"
           }
         }
       },
@@ -115,14 +98,6 @@
           "darwin-arm64": {
             "url": "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Darwin-arm64.tar.gz",
             "sha256": "be040ae0ca381103dfda68a36738695c4db3e48de8e91412acdc3d991f39b91e"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Windows-x86_64.zip",
-            "sha256": "0332d8d1bf062c95a0418081b7e574551032ee72064af05e304e3a1454f8cf11"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Windows-arm64.zip",
-            "sha256": "79d7a18bddde96c248e5a606ba280708e71887a35939dee82cd49749740b77dc"
           }
         }
       },
@@ -146,14 +121,6 @@
           "darwin-arm64": {
             "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_darwin_arm64.tar.gz",
             "sha256": "53e576042afba703290bbc320e64d0b6bdf1082a8fb9f0d13b97e68a6e6c059f"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_windows_amd64.zip",
-            "sha256": "b01b6d449db1e4ca62694482d53ab8395c891cade237c404defc1701ebd2bf66"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.72.0/chezmoi_2.72.0_windows_arm64.zip",
-            "sha256": "b5236c1cf266232bbfbca9d7ebf287a2a82c8c578908978ef274b6ed6aa29309"
           }
         }
       },
@@ -177,14 +144,6 @@
           "darwin-arm64": {
             "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-darwin-arm64.tar.gz",
             "sha256": "cf5ee435a6e44d097b2f98f2b7b8b9422bb1094844404efed82519c5da1af2cf"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-win32-x64.zip",
-            "sha256": "d6798622b4f44ee6757c94335f437ee27a9ff7d3537b554cb6a2b3baf11bc4a1"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-win32-arm64.zip",
-            "sha256": "de125e792b5eed7dee8def2ab9bd7e762f372012f75f595e59d3b0c8714b0d55"
           }
         }
       },
@@ -213,14 +172,6 @@
           "darwin-arm64": {
             "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-osxkeychain-v0.9.8.darwin-arm64",
             "sha256": "6fae515ffbc74f395af1b51c6f079ddb57895ed9e428e0bea3f6aff64e916b22"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-wincred-v0.9.8.windows-amd64.exe",
-            "sha256": "fec0aa06335bbefc7f515630c9368afaa1423fa9fa585112f123b6625f72d560"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-wincred-v0.9.8.windows-arm64.exe",
-            "sha256": "34fc52a556c2703d9b307cd5a9d1ec9cd6f8554d7f50210e3bc4fb93aceca45a"
           }
         }
       },
@@ -264,15 +215,6 @@
           "darwin-arm64": {
             "url": "https://github.com/garden-rs/garden/releases/download/v2.6.1/garden-2.6.1-aarch64-apple-darwin.tar.gz",
             "sha256": "532e1ce6a1107fc5b4932e2907a8098eb0adbaba9f6455baa63b86ae66bd3b4b"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/garden-rs/garden/releases/download/v2.6.1/garden-2.6.1-x86_64-pc-windows-msvc.zip",
-            "sha256": "2ff929033dfeac21d76d8b6458b0b31239517fb99ffa4111a22e85876e7b898d"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/garden-rs/garden/releases/download/v2.6.1/garden-2.6.1-x86_64-pc-windows-msvc.zip",
-            "sha256": "2ff929033dfeac21d76d8b6458b0b31239517fb99ffa4111a22e85876e7b898d",
-            "emulated": true
           }
         }
       },
@@ -296,14 +238,6 @@
           "darwin-arm64": {
             "url": "https://github.com/cli/cli/releases/download/v2.97.0/gh_2.97.0_macOS_arm64.zip",
             "sha256": "a58b8fd77b417a38f47a0b54d1370c59b0fcdb324ccc9ca002b0998f7c4c999e"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.97.0/gh_2.97.0_windows_amd64.zip",
-            "sha256": "35d7fe05c4dd1411ffda1e73dfc7c6f44b75c936ca51fa6595c657fdc0350cec"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.97.0/gh_2.97.0_windows_arm64.zip",
-            "sha256": "3e2d4a166da4ee5020c592737b65eec0e724946d5d5b962f5fe59d99116dc4bf"
           }
         }
       },
@@ -362,14 +296,6 @@
           "darwin-arm64": {
             "url": "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-macos",
             "sha256": "6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman.exe",
-            "sha256": "a6d05beb08ebe41b0a9f09c98a438540421436fa5531424c22e0bb1d22529705"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman.exe",
-            "sha256": "a6d05beb08ebe41b0a9f09c98a438540421436fa5531424c22e0bb1d22529705"
           }
         }
       },
@@ -393,15 +319,6 @@
           "darwin-arm64": {
             "url": "https://github.com/kubernetes/minikube/releases/download/v1.38.1/minikube-darwin-arm64.tar.gz",
             "sha256": "fc524f257cef1fc09a50701bb9309c7ae44c0aa7994c4fc0808a232f8c100528"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/kubernetes/minikube/releases/download/v1.38.1/minikube-windows-amd64.tar.gz",
-            "sha256": "eb196db9eb9f682275a335eed242753cda76516be4aaf7f9372f58863ff3587a"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/kubernetes/minikube/releases/download/v1.38.1/minikube-windows-amd64.tar.gz",
-            "sha256": "eb196db9eb9f682275a335eed242753cda76516be4aaf7f9372f58863ff3587a",
-            "emulated": true
           }
         }
       },
@@ -425,10 +342,7 @@
           "darwin-arm64": {
             "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.10/omp-darwin-arm64",
             "sha256": "e37fa3d4d3eeb15b71d5b464fde51f913e390978a48dc33b4c527b8eed7237c6"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.10/omp-windows-x64.exe",
-            "sha256": "1525122bc49a6e5f79fb1c58b6b1916cecfcffaf2e82080769f7f0fa296bc8a6"
+
           },
           "linux-amd64-musl": {
             "url": "https://github.com/can1357/oh-my-pi/releases/download/v17.2.10/omp-linux-musl-x64",
@@ -460,14 +374,6 @@
           "darwin-arm64": {
             "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-aarch64-apple-darwin.gz",
             "sha256": "bba6cd8209643cd781f3ee5474fa232d3ee1b77a57f2e77982806e3c80a65207"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-x86_64-pc-windows-msvc.zip",
-            "sha256": "a446ba5482b2a43d4010180031d2033b6761dd295117f3d0277af5777c4d8ee5"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-03/rust-analyzer-aarch64-pc-windows-msvc.zip",
-            "sha256": "c10cde297644fd79ef1c288d96059bb01e345970dd89ac9d673a4e58512330e9"
           }
         }
       },
@@ -491,14 +397,6 @@
           "darwin-arm64": {
             "url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.gz",
             "sha256": "339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip",
-            "sha256": "8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip",
-            "sha256": "8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
           }
         }
       },
@@ -522,14 +420,6 @@
           "darwin-arm64": {
             "url": "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-aarch64-apple-darwin.tar.gz",
             "sha256": "fa909fea3bc06f460db79017030a221fdbc43ec4478f089cb554d8335c090817"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-x86_64-pc-windows-msvc.zip",
-            "sha256": "01442d8ce5c7124151a73e697c836d252c6da853c18c73206d3cc4c2378a91d2"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-aarch64-pc-windows-msvc.zip",
-            "sha256": "dccc2bb7724c015f2a82467dee5bf4b2353a3fcdbfdfb30e0f93cdf5db2dd1df"
           }
         }
       },
@@ -553,14 +443,6 @@
           "darwin-arm64": {
             "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-darwin-arm64.zip",
             "sha256": "86ac480e1c3db294564e5b53574415399ae1bf0a3fec4e5046913eab63c555b4"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-windows-amd64.zip",
-            "sha256": "a221c8ca82d624b473a93cbaef932de6990ed3a7b5fba6b56feccae72e31e951"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-windows-arm64.zip",
-            "sha256": "9425e0b42df07212112f16af16c797b087341cce21d3537c1d5e83cbe2913a1d"
           }
         }
       },
@@ -584,15 +466,6 @@
           "darwin-arm64": {
             "url": "https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-aarch64-apple-darwin.tar.gz",
             "sha256": "0abff4a03d670b6c00ea31d0e1608a72407e355f3d3765e9c30eb45cd5b7e318"
-          },
-          "windows-amd64": {
-            "url": "https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-pc-windows-msvc.tar.gz",
-            "sha256": "518dc51180c7bc864699c9279b3bc99025bc109123e0249a34ba34d130a509bf"
-          },
-          "windows-arm64": {
-            "url": "https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-pc-windows-msvc.tar.gz",
-            "sha256": "518dc51180c7bc864699c9279b3bc99025bc109123e0249a34ba34d130a509bf",
-            "emulated": true
           }
         }
       },
