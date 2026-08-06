@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { rename, readFile, unlink, writeFile } from "node:fs/promises";
-import { ALL_PLATFORMS, MUSL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
+import { ALL_PLATFORMS_WITH_MUSL, platformKey, type PlatformKey } from "./platforms.js";
 import type { LockedArtifact, LockedTool, ReleaseLock } from "./types.js";
 
 interface LockFileSystem {
@@ -33,12 +33,11 @@ export function mergeLocks(existing: ReleaseLock | null, resolved: ReleaseLock):
 /**
  * The current `PlatformKey` vocabulary, as a lookup table.
  *
- * Enumerated from `ALL_PLATFORMS`/`MUSL_PLATFORMS` the same way
- * `registry.test.ts` enumerates its own canonical key set, so "in the
- * vocabulary" means the same thing everywhere it is checked.
+ * Enumerated from `ALL_PLATFORMS_WITH_MUSL`, so "in the vocabulary" means
+ * the same thing everywhere it is checked.
  */
 const CANONICAL_PLATFORM_KEYS = Object.fromEntries(
-  [...ALL_PLATFORMS, ...MUSL_PLATFORMS].map((platform) => [platformKey(platform), true]),
+  ALL_PLATFORMS_WITH_MUSL.map((platform) => [platformKey(platform), true]),
 ) as Readonly<Record<PlatformKey, true>>;
 
 function pruneToolArtifacts(tool: LockedTool): LockedTool {

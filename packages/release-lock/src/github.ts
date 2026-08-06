@@ -1,4 +1,9 @@
-import { ALL_PLATFORMS, MUSL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
+import {
+  ALL_PLATFORMS,
+  ALL_PLATFORMS_WITH_MUSL,
+  platformKey,
+  type PlatformKey,
+} from "./platforms.js";
 import { ResolutionError } from "./types.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
 
@@ -130,7 +135,7 @@ export async function resolveGitHubRelease(
   const byName = new Map(release.assets.map((asset) => [asset.name, asset]));
   const artifacts: Partial<Record<PlatformKey, LockedArtifact>> = {};
   const emulated = new Set(spec.emulatedPlatforms ?? []);
-  const platforms = spec.linuxMusl ? [...ALL_PLATFORMS, ...MUSL_PLATFORMS] : ALL_PLATFORMS;
+  const platforms = spec.linuxMusl ? ALL_PLATFORMS_WITH_MUSL : ALL_PLATFORMS;
 
   for (const platform of platforms) {
     const key = platformKey(platform);

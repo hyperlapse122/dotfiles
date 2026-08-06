@@ -42,6 +42,14 @@ export const MUSL_PLATFORMS: readonly Platform[] = ARCHITECTURES.map((arch) => (
   libc: "musl" as const,
 }));
 
+/**
+ * Every platform a `linuxMusl` tool targets — `ALL_PLATFORMS` plus the musl
+ * pair. The single source for "every currently-valid platform, musl
+ * included" so `lock.ts`, `github.ts`, and `registry.test.ts` derive the
+ * same union instead of each re-deriving `[...ALL_PLATFORMS, ...MUSL_PLATFORMS]`.
+ */
+export const ALL_PLATFORMS_WITH_MUSL: readonly Platform[] = [...ALL_PLATFORMS, ...MUSL_PLATFORMS];
+
 /** Rust target-triple arch component. */
 export function rustArch(arch: Architecture): string {
   return arch === "amd64" ? "x86_64" : "aarch64";

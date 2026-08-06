@@ -29,7 +29,7 @@ function tool(version: string): LockedTool {
  * persisted to disk (KTD4 legitimately fixtures this as test input).
  */
 function toolWithArtifacts(version: string, artifacts: Record<string, LockedArtifact>): LockedTool {
-  return { kind: "githubRelease", source: "owner/repo", version, artifacts };
+  return { ...tool(version), artifacts };
 }
 
 function lock(tools: Record<string, LockedTool>): ReleaseLock {
