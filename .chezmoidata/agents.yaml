@@ -262,7 +262,7 @@ agents:
       # Three tiers. A role names a tier; a chain hangs on the tier's model
       # (see retry.fallbackChains below), so grade is a property of the model.
       modelRoles:
-        slow: anthropic/claude-opus-5:max           # deliberation ceiling
+        slow: anthropic/claude-opus-5:xhigh         # deliberation ceiling
         default: kimi-code/k3-256k:high             # main coding and editing loop
         smol: kimi-code/kimi-for-coding:high        # light floor that still follows tools
         advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; third vendor, off the doer's lines
@@ -293,14 +293,13 @@ agents:
       retry.fallbackChains:
         # Ceiling: the only other 1520+ coding-Elo line, then Kimi at 256k.
         anthropic/claude-opus-5:
-        - anthropic/claude-fable-5:max
         - kimi-code/k3-256k:max
         - opencode-go/kimi-k3:max
         # Mid: Kimi's own plan spends early and is shared across clients, so the
         # first hop leaves it entirely; the last keeps the Sonnet family on the
         # plan with the most headroom.
         kimi-code/k3-256k: &mid_tier
-        - anthropic/claude-sonnet-5:max
+        - anthropic/claude-sonnet-5:xhigh
         - opencode-go/kimi-k3:high
         - google-antigravity/claude-sonnet-4-6:high
         # Light: four plans, one per hop.
@@ -311,8 +310,7 @@ agents:
         # Critic: stays off Kimi entirely and reaches Claude only last, so a
         # review never shares the doer's line until nothing else is left.
         openai-codex/gpt-5.6-sol:
-        - opencode-go/grok-4.5:xhigh
-        - anthropic/claude-sonnet-5:max
+        - anthropic/claude-sonnet-5:xhigh
         default: *mid_tier
       # Turn review plus the `reviewer` agent. Enabling it starts a continuous
       # flow of each turn's transcript delta to the critic; advisor.subagents
