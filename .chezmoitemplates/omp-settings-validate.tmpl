@@ -124,6 +124,13 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-       fail (printf "config-omp-settings: %s names role alias %s, which modelRoles does not declare; no later layer can catch this because the catalog gate skips aliases and omp stores a dangling one silently" $where $sel) -}}
 {{-     end -}}
 {{-   end -}}
+{{- /* The top-level charset check cannot see a selector: it is gated on a
+     string-typed top-level value, and every one of these lives inside a record.
+     Check them here, because a selector reaching a rendered script or a shell
+     word needs only one quote to stop being data. */ -}}
+{{-   if not (regexMatch $valueRe $sel) -}}
+{{-     fail (printf "config-omp-settings: %s has a value outside the safe charset; keep a selector to letters, digits, space and ._:/@*+-" $where) -}}
+{{-   end -}}
 {{- end -}}
 {{- /* Model metadata. Absent or empty is inert: the map is optional and this
    whole pass no-ops until a provider is declared under it. */ -}}
@@ -145,6 +152,23 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   $providers := dig "providers" dict $models -}}
 {{-   if not (kindIs "map" $providers) -}}
 {{-     fail (printf "config-omp-models: providers must be a map of provider id to configuration, got %s" (kindOf $providers)) -}}
+{{-   end -}}
+{{- /* Scan the whole map FIRST, keys included. A per-provider scan of the
+     value alone leaves the provider id itself unscreened, and that id is
+     interpolated into the diagnostics below. */ -}}
+{{-   $allJson := $providers | toJson -}}
+{{-   if contains "op://" $allJson -}}
+{{-     fail "config-omp-models: agents.omp.models carries an op:// reference; models.yml is rendered without secret resolution, so the reference would deploy as an inert literal. Declare the credential under agents.omp.auth.env instead" -}}
+{{-   end -}}
+{{-   range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
+{{-     if contains $escape $allJson -}}
+{{-       fail "config-omp-models: agents.omp.models carries a control character or backslash somewhere under it" -}}
+{{-     end -}}
+{{-   end -}}
+{{-   range $provider, $_ := $providers -}}
+{{-     if not (regexMatch $valueRe $provider) -}}
+{{-       fail "config-omp-models: a declared provider id is outside the safe charset; keep it to letters, digits, space and ._:/@*+-" -}}
+{{-     end -}}
 {{-   end -}}
 {{-   range $provider, $config := $providers -}}
 {{-     $json := $config | toJson -}}

@@ -114,23 +114,29 @@ if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >
     | map(select(.sel | contains("/")))
     | .[] | [.where, .sel] | @tsv
   ' "$declared")
-{{ if and (hasKey $settings "advisor.enabled") (eq (index $settings "advisor.enabled") true) -}}
-{{-   $advisor := "" -}}
-{{-   if hasKey $settings "modelRoles" -}}
-{{-     $advisor = index $settings "modelRoles" | dig "advisor" "" -}}
-{{-   end -}}
-{{-   if and (kindIs "string" $advisor) (contains "/" $advisor) (not (hasPrefix "@" $advisor)) }}
+{{ if and (hasKey $settings "advisor.enabled") (eq (index $settings "advisor.enabled") true) }}
   # advisor.enabled is declared true, so an unreachable advisor provider is not a
   # skipped check but an inert critic seat: omp reports the runtime as no_model
   # and never errors. The generic per-selector loop above only says it could not
   # validate the selector; this says what that costs.
-  case "$covered" in
-    *" {{ $advisor | splitList "/" | first }} "*) ;;
-    *)
-      printf 'config-omp-settings: advisor.enabled is true but the catalog serves no %s models, so modelRoles.advisor cannot resolve and the critic seat stays inert until that provider is authenticated.\n' '{{ $advisor | splitList "/" | first }}' >&2
+  #
+  # The selector is read from the declared JSON at RUNTIME, never spliced into
+  # this script at render time. Every other value in this file reaches the shell
+  # the same way — through the quoted heredoc and jq — because a value embedded
+  # in script source would only need one quote to become a statement.
+  advisor_selector=$(jq -r '.modelRoles.advisor // "" | select(type == "string")' "$declared")
+  case "$advisor_selector" in
+    '' | @* | */*/* | */) ;;
+    */*)
+      advisor_provider=${advisor_selector%%/*}
+      case "$covered" in
+        *" $advisor_provider "*) ;;
+        *)
+          printf 'config-omp-settings: advisor.enabled is true but the catalog serves no %s models, so modelRoles.advisor cannot resolve and the critic seat stays inert until that provider is authenticated.\n' "$advisor_provider" >&2
+          ;;
+      esac
       ;;
   esac
-{{- end -}}
 {{- end }}
 else
   printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2

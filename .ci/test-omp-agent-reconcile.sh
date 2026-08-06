@@ -451,6 +451,19 @@ assert_render_fails models-non-override-key "$models_yml" \
 assert_render_fails models-credential-reference "$models_yml" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k3\":{\"headers\":{\"X\":\"op://Private/x/y\"}}}}}}}}}" \
   'carries an op:// reference'
+assert_render_fails models-credential-provider-key "$models_yml" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"op://Private/x/y\":{}}}}}}" \
+  'carries an op:// reference'
+# A selector never reaches the shell as a word or a script fragment, but the
+# top-level charset check cannot see one: it is gated on a string-typed top-level
+# value, and every selector lives inside a record. These two prove the nested
+# check that closes that gap — one quote in a selector must not survive a render.
+assert_render_fails settings-unsafe-role-selector "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":{\"default\":\"anthropic/claude-opus-5:xhigh\",\"advisor\":\"evil'; touch /tmp/x #/y\"},\"advisor.enabled\":true}}}}" \
+  'has a value outside the safe charset'
+assert_render_fails settings-unsafe-chain-hop "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"default\":[\"a';id;'/b\"]}}}}}" \
+  'has a value outside the safe charset'
 # A control character anywhere in the value breaks the tab-separated transport.
 assert_render_fails settings-nested-control-char "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":{\"default\":\"anthropic/claude-opus-5\txhigh\"}}}}}" \

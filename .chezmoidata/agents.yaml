@@ -18,6 +18,8 @@
 #   agents.omp.models
 #     -> dot_omp/private_agent/readonly_models.yml.tmpl (~/.omp/agent/models.yml).
 #        Override-only providers adjusting metadata on models omp already serves.
+#        Also the validator's second caller: it renders the same shared partial,
+#        so a model override here is cross-checked against the selectors above.
 #   agents.omp.auth.env
 #     -> run_after_config-omp-auth.sh.tmpl, which reconciles the declared
 #        credentials in the live ~/.omp/agent/.env
@@ -132,7 +134,7 @@ agents:
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
   # omp plugin marketplaces, single-sourced here. omp's plugin updater
-  # (run_onchange_after_update-omp-plugins.{sh,ps1}.tmpl) ranges over
+  # (run_onchange_after_update-omp-plugins.sh.tmpl) ranges over
   # agents.omp.plugins and, per entry, looks up its marketplace here to resolve
   # the source path and OS/container eligibility. `marketplaces` is the shared
   # registry keyed by each marketplace's registered name.
