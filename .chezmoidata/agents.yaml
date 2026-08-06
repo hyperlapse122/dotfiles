@@ -257,16 +257,26 @@ agents:
     # move, which the sync-omp-models series rule makes a human decision rather
     # than a sync action.
     #
-    # opencode-go holds the deliberation seat because openai-codex was removed
-    # from this host (2026-08-05, user-directed) - that removal IS the human
-    # decision the series rule demands for a provider move. It took over every
-    # codex seat wholesale: `slow`, `advisor`, `smol`, and all four codex chain
-    # hops. `smol` is a near-identity move, because opencode-go serves the SAME
-    # `gpt-5.6-luna` id and the family is unchanged; Sol and Terra exist on no
-    # reachable provider, so `slow` and `advisor` had to change family and each
-    # records its own reason below. opencode-go is also the second anchor now,
-    # and its sibling opencode-zen stays disabled, so the one OPENCODE_API_KEY
-    # serves exactly one selectable provider.
+    # opencode-go took over the deliberation seat when openai-codex was
+    # removed from this host (2026-08-05, user-directed) - that removal IS
+    # the human decision the series rule demands for a provider move. It took
+    # over every codex seat wholesale: `slow`, `advisor`, `smol`, and all
+    # four codex chain hops (still opencode-go below: default's third hop,
+    # task's second hop, tiny's third hop, bulk's last hop).
+    #
+    # `smol` moved back to openai-codex on 2026-08-06 (user re-authenticated
+    # the account) - a second human-directed provider move, mirroring the
+    # first. opencode-go is demoted to smol's immediate fallback hop rather
+    # than dropped, since both plans serve the SAME `gpt-5.6-luna` id.
+    # `commit` aliases `smol`, so its own chain gets the same opencode-go hop
+    # to keep its resolution path anchored (rule 6) now that its dereferenced
+    # primary is no longer opencode-go. `slow` and `advisor` stay on
+    # opencode-go for now: the original "Sol and Terra unreachable" reasoning
+    # no longer holds now that openai-codex is back (`gpt-5.6-sol` and
+    # `gpt-5.6-terra` are in the catalog again), but reverting those two is a
+    # separate decision this edit does not make. opencode-go is also the
+    # second anchor, and its sibling opencode-zen stays disabled, so the one
+    # OPENCODE_API_KEY serves exactly one selectable provider.
     #
     # No provider/* chain is declared: a provider wildcard outranks the role
     # chain by specificity, and google-antigravity serves no claude-opus-5 or
@@ -293,7 +303,7 @@ agents:
         vision: google-antigravity/gemini-3.1-pro   # image input
         advisor: opencode-go/glm-5.2:high           # turn review; runtime stays off
         task: anthropic/claude-sonnet-5             # default subagent
-        smol: opencode-go/gpt-5.6-luna              # light floor that still follows tools
+        smol: openai-codex/gpt-5.6-luna             # light floor that still follows tools
         # `bulk` is the one custom role. It exists because a fallback chain is
         # keyed by ROLE, so mechanical bulk work can only get its own recovery
         # order by owning a role; `tiny` aliases it so the selector is named once.
@@ -407,10 +417,12 @@ agents:
         - kimi-code/k3:high
         - anthropic/claude-sonnet-5
         smol:
+        - opencode-go/gpt-5.6-luna
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
         - zai/glm-4.7-flash
         commit:
+        - opencode-go/gpt-5.6-luna
         - google-antigravity/gemini-3.6-flash
         - anthropic/claude-haiku-4-5
         tiny:
