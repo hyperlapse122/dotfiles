@@ -227,8 +227,8 @@
       "figma/mcp-server-guide": {
         "kind": "githubSkillCollection",
         "source": "figma/mcp-server-guide",
-        "version": "2.2.90",
-        "revision": "c80480bbd84bf1ff24d7f27b3fda33a26ba88830",
+        "version": "2.2.91",
+        "revision": "22b2c566d98880ebdb5a8e48eb2c66c596a6d990",
         "skills": [
           "figma-code-connect",
           "figma-create-new-file",
