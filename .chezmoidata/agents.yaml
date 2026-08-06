@@ -224,7 +224,16 @@ agents:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     - { name: unmanaged-repo-guard, marketplace: h82-dotfiles, container: keep }
     models:
-      providers: {}
+      # Override-only providers: a modelOverrides map adjusting metadata on a
+      # model omp's built-in catalog already serves. opencode-go publishes no
+      # 256k Kimi variant the way kimi-code does, so the cap is bought here to
+      # keep every Kimi hop on one context budget. Under-reporting a real limit
+      # cannot error; it only makes compaction fire earlier.
+      providers:
+        opencode-go:
+          modelOverrides:
+            kimi-k3:
+              contextWindow: 262144
     # Every key below is a LITERAL omp settings path as `omp config list` spells
     # it — this is a flat path->value map, NOT a nested config.yml document. The
     # provisioner runs one `omp config set <path> <json>` per entry, because a
@@ -237,204 +246,71 @@ agents:
     # process arguments, so declared settings are credential-free by contract
     # and secrets reach omp through auth.env below.
     #
-    # Model policy: a model selector is named on a role, and a subagent that
-    # needs an already-named model points at that role with a "@role" alias
-    # (quoted so YAML does not read it as a tag) rather than repeating the id.
-    # Retuning a role therefore propagates to its referents.
-    #
-    # Provider spread, as actually declared: anthropic carries the coding loop,
-    # opencode-go deliberation, and google-antigravity BOTH vision and
-    # mechanical bulk - three plans for those four job shapes, not four. That
-    # sharing is a known trade, not an oversight: Antigravity holds the most
-    # headroom of any plan on this host, and each of the two recovers onto a
-    # different provider at its FIRST chain hop (bulk -> anthropic, vision ->
-    # kimi-code via the inherited `default` chain). Two consequences to keep in
-    # view: an Antigravity wall hits vision and bulk together, and vision's
-    # inherited chain ends on opencode-go/deepseek-v4-pro, which has no image
-    # input - only its first hop (kimi-code/k3) can serve an image turn, so a
-    # second wall strands vision. Splitting the two is a provider move, which
-    # the sync-omp-models series rule makes a human decision rather than a sync
-    # action.
-    #
-    # opencode-go took over the deliberation seat when openai-codex was
-    # removed from this host (2026-08-05, user-directed) - that removal IS
-    # the human decision the series rule demands for a provider move. It took
-    # over every codex seat wholesale: `slow`, `advisor`, `smol`, and all
-    # four codex chain hops (still opencode-go below: default's third hop,
-    # task's second hop, tiny's third hop, bulk's last hop).
-    #
-    # `smol` moved back to openai-codex on 2026-08-06 (user re-authenticated
-    # the account) - a second human-directed provider move, mirroring the
-    # first. opencode-go is demoted to smol's immediate fallback hop rather
-    # than dropped, since both plans serve the SAME `gpt-5.6-luna` id.
-    # `commit` aliases `smol`, so its own chain gets the same opencode-go hop
-    # to keep its resolution path anchored (rule 6) now that its dereferenced
-    # primary is no longer opencode-go. `slow` and `advisor` stay on
-    # opencode-go for now: the original "Sol and Terra unreachable" reasoning
-    # no longer holds now that openai-codex is back (`gpt-5.6-sol` and
-    # `gpt-5.6-terra` are in the catalog again), but reverting those two is a
-    # separate decision this edit does not make. opencode-go is also the
-    # second anchor, and its sibling opencode-zen stays disabled, so the one
-    # OPENCODE_API_KEY serves exactly one selectable provider.
-    #
-    # zai left this host on 2026-08-06 (user-directed): the Z.ai coding plan
-    # expired, so its credential is gone from auth.env below and the provider
-    # drops out of `omp models --json` once the stale dotenv line is removed.
-    # It held no role primary - only fallback hops on `default`, `slow`, `task`,
-    # `smol`, and `tiny` - and each of those roles still reaches both anchor
-    # providers without it, so no role needed a new primary. The GLM main text
-    # line survives on opencode-go (the `advisor` primary); the GLM Flash and
-    # GLM vision lines had no other provider and are now unreachable.
-    #
-    # No provider/* chain is declared: a provider wildcard outranks the role
-    # chain by specificity, and google-antigravity serves no claude-opus-5 or
-    # claude-fable-5 id, so such a chain would preempt these provider-diverse
-    # chains with hops that may all be skipped.
-    #
-    # >>> DO NOT HAND-EDIT THE MODEL SECTION <<<
-    # `modelRoles`, `task.agentModelOverrides`, and `retry.fallbackChains` below
-    # are owned by the repo-scoped skill `.agents/skills/sync-omp-models/SKILL.md`
-    # (`skill://sync-omp-models`). Read it BEFORE touching any of those three
-    # keys, and follow it - it carries the series/always-latest rules, the
-    # subagent-override diff rule, the anchor-provider rule, the capability
-    # gates, and a Verify recipe whose checks fail on a violation. Its companion
-    # `model-notes.md` records which model family suits which job shape and why.
-    # A change made without it will look fine here and break in one of those
-    # gates, or worse, silently place deep-judgment work on a light tier.
-    # Every other key under `settings:` is ordinary data and needs no skill.
+    # Tier basis: the ceiling/mid boundary follows LMArena's coding and agent
+    # leaderboards (text category=coding and agent category=overall, snapshot
+    # 2026-08-03). The light tier sits OUTSIDE that basis - it is chosen for
+    # latency, and `omp bench` is its check. Everything else here is enforced by
+    # `.chezmoitemplates/omp-settings-validate.tmpl`, not by prose.
     settings:
+      # Three tiers. A role names a tier; a chain hangs on the tier's model
+      # (see retry.fallbackChains below), so grade is a property of the model.
       modelRoles:
-        default: anthropic/claude-opus-5:xhigh      # main coding and editing loop
-        slow: opencode-go/deepseek-v4-pro:high      # deliberation ceiling
-        plan: anthropic/claude-fable-5:xhigh        # planning against a 1M context
-        designer: anthropic/claude-opus-5:high      # UI and visual work
-        vision: google-antigravity/gemini-3.1-pro   # image input
-        advisor: opencode-go/glm-5.2:high           # turn review; runtime stays off
-        task: anthropic/claude-sonnet-5             # default subagent
-        smol: openai-codex/gpt-5.6-luna             # light floor that still follows tools
-        # `bulk` is the one custom role. It exists because a fallback chain is
-        # keyed by ROLE, so mechanical bulk work can only get its own recovery
-        # order by owning a role; `tiny` aliases it so the selector is named once.
-        bulk: google-antigravity/gemini-3.1-flash-lite  # mechanical bulk, titles, memory
-        tiny: "@bulk"                               # background classification
-        commit: "@smol"                             # commit messages
-      # A DIFF against each bundled agent's own frontmatter, never a restatement
-      # of it. Resolution is override -> agent frontmatter -> session fallback
-      # (oh-my-pi docs/task-agent-discovery.md), so an omitted agent lands on its
-      # OWN declared model, not on the `task` role. `omp agents unpack` reports
-      # the v17.2.7 bundled defaults as designer/@designer, librarian/@smol
-      # (thinkingLevel minimal), reviewer/@slow, scout/@smol (medium),
-      # security-reviewer/<none>, sonic/@smol (medium), task/@task (auto);
-      # re-read them after an omp upgrade with the sync-omp-models skill.
-      #   - `task` and `librarian` are absent because their frontmatter already
-      #     names the wanted role (@task, @smol); an entry would be a no-op that
-      #     only drifts. `designer` is absent for the same reason - upstream, not
-      #     this data, is what binds that agent to its same-named role.
-      #   - `security-reviewer` (new in v17.2.4) is absent on purpose: it ships
-      #     NO frontmatter model, so omission lands it on the parent session
-      #     model. That is exactly the ceiling tier compound-engineering
-      #     reserves for its correctness/security/adversarial personas ("if the
-      #     user is on Opus, these get Opus"); pinning a role here would demote
-      #     the highest-stakes review seat to a fixed line.
-      #   - `scout` IS declared, and must be. compound-engineering dispatches
-      #     every persona as a GENERIC subagent (no typed agent names), which
-      #     under omp is the `task` agent (@task) for writable work and `scout`
-      #     for read-only research - and scout's frontmatter pins @smol. Left
-      #     undeclared, the review fleet's read-only dispatches (code review,
-      #     doc review, simplification) run deep-judgment work on the light
-      #     floor. The override lands both dispatch paths on the same mid tier,
-      #     which is the tier compound-engineering's model tiering assigns them.
-      #   - `sonic` points at the `bulk` role rather than a literal so it picks
-      #     up that role's Haiku-then-GPT recovery order. It doubles as the
-      #     compound-engineering EXTRACTION tier: grounding scouts and other
-      #     retrieval-and-quoting dispatches can ride `sonic` to Flash-Lite
-      #     instead of the persona fleet's Sonnet.
+        slow: anthropic/claude-opus-5:max           # deliberation ceiling
+        default: kimi-code/k3-256k:high             # main coding and editing loop
+        smol: kimi-code/kimi-for-coding:high        # light floor that still follows tools
+        advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; third vendor, off the doer's lines
+        plan: "@slow"                               # default is 256k; planning needs the 1M line
+        commit: "@smol"                             # else commit messages ride the session model
+      # EXHAUSTIVE over `omp agents unpack`, not a diff against frontmatter. An
+      # omitted agent lands on its own frontmatter (override -> frontmatter ->
+      # task role/session, oh-my-pi docs/task-agent-discovery.md), so silence is
+      # never neutrality - and frontmatter moves between releases. Naming all
+      # seven makes the mapping immune to that drift; `.ci/check-omp-agent-roster.sh`
+      # fails the build when omp's roster and this key set diverge.
       task.agentModelOverrides:
-        scout: "@task"                              # CE fleet read-only path -> mid tier
-        reviewer: "@advisor"                        # same critic model as turn review
-        sonic: "@bulk"                              # mechanical bulk + CE extraction tier
+        task: "@default"                            # generic writable subagent
+        scout: "@default"                           # read-only research; CE dispatches its personas here
+        designer: "@default"                        # UI and visual work
+        librarian: "@smol"                           # external library lookup
+        sonic: "@smol"                              # strictly mechanical work
+        reviewer: "@advisor"                        # critic, not doer
+        security-reviewer: "@slow"                  # highest-stakes review seat
       task.showResolvedModelBadge: true
       retry.usageAwareFallback: true
-      # Keyed by role only. A role with no chain of its own falls to `default`,
-      # which is the deliberation chain - so any LIGHT role must declare one.
-      # That is doubly true for a role whose value is a `@role` alias: omp does
-      # not document whether the active role for chain lookup is the referring
-      # role or its target, so an alias without its own chain can silently land
-      # on `default`. `commit` and `tiny` each declare one to remove that
-      # ambiguity; whichever reading omp uses, they stay on a light chain.
-      #
-      # ANCHOR RULE: each role's RESOLUTION PATH - its own selector plus its
-      # chain - reaches at least one `anthropic` and one `opencode-go` hop.
-      # Those two plans hold the most headroom on this host, so a path that
-      # reaches neither can strand the role once the plan-served providers are
-      # spent. `default` satisfies it through its own Opus selector, so its chain
-      # spends every hop on a different provider. The light chains anchor on
-      # Haiku and Luna, never on a deliberation line, so anchoring cannot
-      # escalate background work.
-      #
-      # `default` walks the communicator alternative before the deep
-      # specialist: Kimi is the non-Claude communicator omo ranks highest under
-      # nested delegation prompts, and DeepSeek Pro is the one substitute omo
-      # endorses for the departed GPT deep line, so it sits last as the
-      # different-brain option rather than the first retry.
-      #
-      # `slow` needs a chain of its own now that its own model is the last hop
-      # of `default`: inheriting that chain would end on itself. The order is
-      # omo's Oracle chain with the GPT hops removed - Gemini Pro is its first
-      # non-GPT deliberation hop and Opus at `max` closes. Opus here is
-      # deliberate: `slow` is a second brain for the SAME job, not a critic, so
-      # reaching the doer's line is recovery, not a shared blind spot.
-      #
-      # `task` backs the compound-engineering persona fleet - every generic
-      # subagent spawn plus the `scout` alias above - so its recovery order is
-      # a FLEET order, and it needs one of its own: with no declared chain it
-      # inherited `default`, whose last hop escalates mid-tier fleet work to
-      # the deliberation line. The first hop keeps the Sonnet FAMILY on the
-      # Antigravity plan (a separate daily quota that is typically untouched),
-      # so a persona prompt tuned on Sonnet keeps its behavior through an
-      # Anthropic wall; Kimi K3 on opencode-go is both the worker-tier anchor
-      # and omo's own next hop after Sonnet 5 for its fleet agents; the
-      # kimi-code hop closes it, kept last because that membership quota is
-      # shared across every client and spends early.
-      #
-      # `advisor` is the critic seat (turn review plus the `reviewer` agent).
-      # Its inherited path never reached an anthropic hop at all, and its last
-      # hop sat on the same plan as its primary - one provider wall would have
-      # stranded it. The declared chain adds the anthropic anchor on the SONNET
-      # line, not Opus: the critic must stay off the doer's own line, or it
-      # reviews with the doer's blind spots. GLM 5.2 is the primary because it
-      # is where omo's own critic chains (Momus and Oracle) land once the GPT
-      # hops are gone. Kimi leads the chain because the Anthropic weekly window
-      # runs hot on this host.
+      # Keyed by MODEL, not role. An exact provider/model-id key outranks a role
+      # chain by specificity (oh-my-pi docs/settings.md), so every role using that
+      # model recovers within its own grade and no role needs a chain of its own.
+      # `default` is the floor for anything no key names - a hand-picked /model.
+      # A provider/* key is rejected at render: it would span the whole provider
+      # and catch another tier's model, and anthropic backs three tiers here.
       retry.fallbackChains:
-        default:
-        - kimi-code/k3:high
-        - opencode-go/deepseek-v4-pro:high
-        slow:
-        - google-antigravity/gemini-3.1-pro:high
-        - anthropic/claude-opus-5:max
-        task:
-        - google-antigravity/claude-sonnet-4-6
-        - opencode-go/kimi-k3
-        - kimi-code/k3:high
-        advisor:
-        - kimi-code/k3:high
-        - anthropic/claude-sonnet-5
-        smol:
-        - opencode-go/gpt-5.6-luna
-        - google-antigravity/gemini-3.6-flash
-        - anthropic/claude-haiku-4-5
-        commit:
-        - opencode-go/gpt-5.6-luna
-        - google-antigravity/gemini-3.6-flash
-        - anthropic/claude-haiku-4-5
-        tiny:
-        - google-antigravity/gemini-3.6-flash
-        - anthropic/claude-haiku-4-5
-        - opencode-go/gpt-5.6-luna
-        bulk:
-        - anthropic/claude-haiku-4-5
-        - opencode-go/gpt-5.6-luna
+        # Ceiling: the only other 1520+ coding-Elo line, then Kimi at 256k.
+        anthropic/claude-opus-5:
+        - anthropic/claude-fable-5:max
+        - kimi-code/k3-256k:max
+        - opencode-go/kimi-k3:max
+        # Mid: Kimi's own plan spends early and is shared across clients, so the
+        # first hop leaves it entirely; the last keeps the Sonnet family on the
+        # plan with the most headroom.
+        kimi-code/k3-256k: &mid_tier
+        - anthropic/claude-sonnet-5:max
+        - opencode-go/kimi-k3:high
+        - google-antigravity/claude-sonnet-4-6:high
+        # Light: four plans, one per hop.
+        kimi-code/kimi-for-coding:
+        - google-antigravity/gemini-3.6-flash:high
+        - openai-codex/gpt-5.6-luna:max
+        - anthropic/claude-haiku-4-5:xhigh
+        # Critic: stays off Kimi entirely and reaches Claude only last, so a
+        # review never shares the doer's line until nothing else is left.
+        openai-codex/gpt-5.6-sol:
+        - opencode-go/grok-4.5:xhigh
+        - anthropic/claude-sonnet-5:max
+        default: *mid_tier
+      # Turn review plus the `reviewer` agent. Enabling it starts a continuous
+      # flow of each turn's transcript delta to the critic; advisor.subagents
+      # stays undeclared so its false default keeps subagent turns out of it.
+      advisor.enabled: true
       # Provider availability gate. It is applied BEFORE any credential check,
       # so it is the only knob that keeps a backend out of every AUTOMATIC
       # selection path. `retry.fallbackChains` above was never the exposure -
@@ -517,7 +393,8 @@ agents:
       # unknown setting), every knob under it is its own leaf, and the defaults
       # already suit this host — `mnemopi.scoping: per-project` isolates memory
       # per working directory, `autoRecall`/`autoRetain` are on, and
-      # `llmMode: smol` resolves the `tiny` role declared above before `smol`.
+      # `llmMode: smol` lands on the declared `smol` role, since `tiny` is not
+      # declared and omp documents that unset `tiny` falls through to `@smol`.
       # Restating a default here would only hide a future upstream change. The
       # absence of `mnemopi.*` keys is therefore deliberate, not an oversight.
       #
@@ -526,8 +403,8 @@ agents:
       # `local` backend, documents no secret/token redaction and no retention
       # limit, so content accumulates unredacted until `/memory clear`. Keep the
       # agent memories directory out of backups and sync tooling.
-      # PROCESSING is not local: mnemopi's default `llmMode: smol` resolves the
-      # `tiny` role declared above, so LLM-backed extraction and consolidation
+      # PROCESSING is not local: mnemopi's default `llmMode: smol` lands on the
+      # declared `smol` role, so LLM-backed extraction and consolidation
       # send retained transcript content to that cloud model. "Local" here means
       # local STORAGE (as opposed to the remote `hindsight` server backend), not
       # local compute. This reuses the same provider trust boundary ordinary
