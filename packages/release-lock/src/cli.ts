@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { resolveAll } from "./resolve-all.js";
-import { mergeLocks, readLock, serializeLock, writeLock } from "./lock.js";
+import { mergeLocks, pruneRetiredPlatforms, readLock, serializeLock, writeLock } from "./lock.js";
 import type { ReleaseLock } from "./types.js";
 
 /**
@@ -9,7 +9,8 @@ import type { ReleaseLock } from "./types.js";
  * Plain invocation atomically refreshes the repository lock. `--out <path>`
  * refreshes another destination, while `--stdout` prints a merged inspection
  * result without writing. A partial resolution overlays the prior lock; a clean
- * resolution is authoritative and prunes retired tools.
+ * resolution is authoritative and prunes retired tools. Every run also drops
+ * retired platform keys from each surviving tool's `artifacts` map.
  */
 
 export const DEFAULT_LOCK_PATH = fileURLToPath(
@@ -57,7 +58,8 @@ export async function runCli(argv: readonly string[], options: CliOptions = {}):
 
   const existing = await readLock(output.path);
   const { lock, failures } = await (options.resolve ?? resolveAll)(githubToken());
-  const complete = failures.length === 0 ? lock : mergeLocks(existing, lock);
+  const merged = failures.length === 0 ? lock : mergeLocks(existing, lock);
+  const complete = pruneRetiredPlatforms(merged);
 
   for (const failure of failures) stderr.write(`release-lock: ${failure}\n`);
 

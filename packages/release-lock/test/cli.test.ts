@@ -10,7 +10,7 @@ import { resolveGitLabRelease } from "../src/gitlab.js";
 import { resolveNpmPackage } from "../src/npm.js";
 import { resolveVendorManifest } from "../src/vendor-manifest.js";
 import { RESOLVERS, resolveAll } from "../src/resolve-all.js";
-import type { LockedSkillCollection, Registry, ReleaseLock } from "../src/types.js";
+import type { LockedArtifact, LockedSkillCollection, Registry, ReleaseLock } from "../src/types.js";
 
 const realFetch = globalThis.fetch;
 
@@ -227,6 +227,51 @@ describe("runCli", () => {
 
     const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
     expect(Object.keys(written.releases.tools)).toEqual(["good"]);
+  });
+
+  test("covers AE1: a stubbed fetch failure prunes that tool's stale windows-amd64 key while its other artifacts and the succeeding tool's fresh data survive", async () => {
+    const path = join(await scratch(), "releases.json");
+    const flakyArtifacts: Record<string, LockedArtifact> = {
+      "linux-amd64": { url: "https://example.com/flaky/linux-amd64", sha256: "a".repeat(64) },
+      "darwin-arm64": { url: "https://example.com/flaky/darwin-arm64", sha256: "b".repeat(64) },
+      "windows-amd64": { url: "https://example.com/flaky/windows-amd64", sha256: "c".repeat(64) },
+    };
+    const committed: ReleaseLock = {
+      releases: {
+        tools: {
+          flaky: {
+            kind: "githubRelease",
+            source: "owner/flaky",
+            version: "v1",
+            artifacts: flakyArtifacts,
+          },
+          steady: { kind: "githubRelease", source: "owner/steady", version: "v1" },
+        },
+      },
+    };
+    await writeFile(path, `${JSON.stringify(committed)}\n`);
+
+    const exit = await runCli([], {
+      defaultPath: path,
+      stderr: capture(),
+      resolve: async () => ({
+        lock: {
+          releases: {
+            tools: { steady: { kind: "githubRelease", source: "owner/steady", version: "v2" } },
+          },
+        },
+        failures: ["owner/flaky: rate limited"],
+      }),
+    });
+
+    expect(exit).toBe(1);
+    const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
+    expect(written.releases.tools["flaky"]?.artifacts).toEqual({
+      "linux-amd64": { url: "https://example.com/flaky/linux-amd64", sha256: "a".repeat(64) },
+      "darwin-arm64": { url: "https://example.com/flaky/darwin-arm64", sha256: "b".repeat(64) },
+    });
+    expect(written.releases.tools["flaky"]?.version).toBe("v1");
+    expect(written.releases.tools["steady"]?.version).toBe("v2");
   });
 
   test("--stdout emits a merged lock without modifying the input", async () => {
