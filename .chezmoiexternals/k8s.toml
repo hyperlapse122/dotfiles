@@ -1,7 +1,7 @@
 {{- /* Kubernetes CLIs: kubectl (+ kubectl-convert), helm, minikube. */ -}}
 
-{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
-{{- $archiveExtension := (replace "linux" ".tar.gz" (replace "darwin" ".tar.gz" (replace "windows" ".zip" .chezmoi.os))) -}}
+{{- $executableExtension := "" -}}
+{{- $archiveExtension := ".tar.gz" -}}
 
 {{- /* ---------- kubectl (versioned by the kubernetes/kubernetes tag, served from dl.k8s.io) ---------- */ -}}
 
@@ -34,7 +34,7 @@ path = '{{ printf "%s-%s/helm" .chezmoi.os .chezmoi.arch }}'
 executable = true
 
 {{- /* ---------- minikube ---------- */ -}}
-{{- /* windows-arm64 borrows the amd64 tarball (lock marks it emulated), so the
+{{- /* An emulated arch borrows the amd64 tarball (lock marks it emulated), so the
        archive-internal path composes from the SERVED arch, not the host's. */}}
 
 {{- $minikubePathArch := .chezmoi.arch -}}

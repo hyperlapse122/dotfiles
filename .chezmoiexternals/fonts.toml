@@ -1,4 +1,4 @@
-{{- $userFontDir := (replace "linux" ".local/share/fonts" (replace "darwin" "Library/Fonts" (replace "windows" "AppData/Local/Microsoft/Windows/Fonts" .chezmoi.os))) -}}
+{{- $userFontDir := (replace "linux" ".local/share/fonts" (replace "darwin" "Library/Fonts" .chezmoi.os)) -}}
 
 {{/*
   Each release archive is extracted into its OWN subdirectory of the user font

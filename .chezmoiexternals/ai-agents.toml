@@ -1,6 +1,6 @@
 {{- /* AI coding agents and adjacent tooling: agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
-{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
+{{- $executableExtension := "" -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
        static-musl build. Shared by the agent-browser and omp externals below so the
@@ -15,13 +15,13 @@
 {{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
        ("Browser automation CLI for AI agents"), tracked at the newest release.
        The release ships bare per-platform binaries (agent-browser-<os>-<arch>,
-       the linux fork split glibc vs static musl, windows carrying .exe) and NO checksums
+       the linux fork split glibc vs static musl) and NO checksums
        sidecar; the tag, per-platform download URL, and each asset's GitHub-computed
        sha256 digest are resolved at refresh time by packages/release-lock (distinct musl
        lock keys per KTD11), so the render only reads the locked values and performs no
-       network I/O. windows-arm64 is served the x64 binary via the lock's emulated entry,
-       so the URL MUST come from the lock — composing the asset name from the host arch
-       would name a build upstream does not publish. ---------- */}}
+       network I/O. An emulated-arch target would be served the amd64 binary via the
+       lock's emulated entry, so the URL MUST come from the lock — composing the asset
+       name from the host arch would name a build upstream does not publish. ---------- */}}
 
 [agent-browser]
 type = "file"
@@ -32,10 +32,9 @@ executable = true
 [agent-browser.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
 
-{{- /* ---------- omp (oh-my-pi, can1357) — a lone per-platform binary that is a
-       fork of pi: a raw executable (windows .exe), cross-platform (unlike pi it
-       ships a windows build), placed directly at ~/.local/bin/omp via type="file"
-       with executable=true. No pi-style archive extraction or symlink script; the
+{{- /* ---------- omp (oh-my-pi, can1357) — a lone per-platform binary, a raw
+       executable placed directly at ~/.local/bin/omp via type="file" with
+       executable=true. No pi-style archive extraction or symlink script; the
        tag, per-platform URL and sha256 come from the release lock's per-asset
        digest, and musl linux hosts pick the static-musl binary. ---------- */}}
 
@@ -52,31 +51,14 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" 
 
 {{- $codegraphTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph") }}
 
-{{- $codegraphWindowsTarget := "" -}}
-{{- if eq .chezmoi.os "windows" -}}
-  {{- $homeDir := trimSuffix "/" (replace "\\" "/" .chezmoi.homeDir) -}}
-  {{- $localAppData := trimSuffix "/" (replace "\\" "/" (env "LOCALAPPDATA")) -}}
-  {{- $homePrefix := lower (printf "%s/" $homeDir) -}}
-  {{- $localAppDataLower := lower $localAppData -}}
-  {{- if not (hasPrefix $homePrefix $localAppDataLower) -}}
-    {{- fail (printf "codegraph: LOCALAPPDATA %q must be inside home directory %q" $localAppData $homeDir) -}}
-  {{- end -}}
-  {{- $codegraphWindowsTarget = printf "%s/codegraph/current" (trimPrefix $homePrefix $localAppDataLower) -}}
-{{- end }}
-
 [codegraph]
-{{ if ne .chezmoi.os "windows" }}
 targetPath = '{{ printf ".codegraph/versions/%s" $codegraphTag }}'
-{{ else }}
-targetPath = '{{ $codegraphWindowsTarget }}'
-{{ end }}
 type = "archive"
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph" "field" "url" "platform" "auto") }}'
 stripComponents = 1
 
-{{- /* ---------- agent-of-empires (aoe) — the worktree/session orchestrator; no windows build ---------- */ -}}
+{{- /* ---------- agent-of-empires (aoe) — the worktree/session orchestrator ---------- */ -}}
 
-{{- if ne "windows" .chezmoi.os }}
 
 {{- $aoeTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe") }}
 
@@ -91,7 +73,6 @@ path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
 # The sidecar is sha256sum output ("<hash>  <file>"), so take the first field.
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "sha256" "platform" "auto") }}'
 
-{{- end }}
 
 {{- /* ---------- official Figma skill collection ----------
        Static source/staging policy comes from agents.skills.collections.figma.
@@ -158,7 +139,6 @@ include = {{ $figmaIncludes | toJson }}
        file now resolves from the release lock at render time, so the render
        performs no GitHub API calls. ---------- */ -}}
 
-{{- if ne .chezmoi.os "windows" -}}
 {{- $skillsCtx := . -}}
 {{- /* Lazy per-render cache: resolved on the first glabRelease entry, so one
        render pins every glabRelease skill to one atomic tag. */ -}}
@@ -206,7 +186,6 @@ url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
 exact = true
 stripComponents = 3
 include = ["*/skills/{{ .name }}/**"]
-{{- end }}
 {{- end }}
 {{- end }}
 
