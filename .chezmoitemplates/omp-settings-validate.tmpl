@@ -1,13 +1,11 @@
 {{- /*
 omp-settings-validate.tmpl — fail the apply LOUDLY on a bad omp settings
-declaration, before either provisioner half renders a single line of script.
+declaration, before the provisioner renders a single line of script.
 
-The POSIX and PowerShell halves of config-omp-settings deliberately share no
-rendered DATA block: each re-derives the declared map behind its own OS gate, so
-neither can ship a value the other never saw. They DO share this validation,
-because a guard that exists in one half only is a guard that silently does not
-apply on the other platform — the same reason facts-validate.tmpl is one partial
-rather than a copy per installer.
+The config-omp-settings provisioner is this partial's caller. Validation lives
+here rather than inline in that script, so a guard cannot silently exist for one
+consumer only — the same reason facts-validate.tmpl is one partial rather than a
+copy per installer.
 
 Every check here aborts the whole chezmoi command. None of them can be satisfied
 by a runtime skip, because a declaration this file rejects is wrong on every host.
@@ -28,9 +26,14 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
   6. ROLE INDIRECTION RESOLVES. `@name` is the one value shape no later layer can
      check: the catalog gate skips it (an alias is not a selector) and omp itself
      accepts a dangling alias silently. Unresolvable indirection is therefore
-     render-time-fatal or it is never reported at all. Both directions are
-     checked: every `@name` names a declared role, and every fallback-chain key
-     is a declared role whose chain it overrides.
+     render-time-fatal or it is never reported at all.
+  7. CHAIN KEYS ARE A MODEL OR A ROLE, NOTHING ELSE. omp reads a chain key that
+     contains `/` as an exact model selector and one without as a role. A
+     `provider/*` wildcard key would span every model that provider serves and
+     catch another tier's model; a thinking suffix on a key names a per-request
+     level omp does not match on, so that chain would never fire. Both shapes are
+     invisible later — the catalog gate strips suffixes before comparing — so
+     only this render-time check can see them.
 
   {{ includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
 */ -}}
@@ -49,6 +52,7 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
    reality, not a policy restriction we are choosing to loosen. */ -}}
 {{- $pathRe := "^[A-Za-z][A-Za-z0-9_]*([.][A-Za-z][A-Za-z0-9_]*)*$" -}}
 {{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
+{{- $thinkRe := ":(off|minimal|low|medium|high|xhigh|max)$" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
@@ -92,13 +96,17 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   end -}}
 {{- end -}}
 {{- if hasKey $settings "retry.fallbackChains" -}}
-{{-   range $role, $chain := index $settings "retry.fallbackChains" -}}
-{{-     if not (hasKey $roles $role) -}}
-{{-       fail (printf "config-omp-settings: retry.fallbackChains declares a chain for %q, which is not a declared modelRoles role; the chain would never be consulted" $role) -}}
+{{-   range $key, $chain := index $settings "retry.fallbackChains" -}}
+{{-     if hasSuffix "/*" $key -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains key %q is a provider wildcard; such a key spans every model that provider serves and would let one tier's chain catch another tier's model. Key the chain on the exact provider/model-id instead" $key) -}}
+{{-     else if regexMatch $thinkRe $key -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains key %q carries a thinking suffix; a chain key names a model and omp does not match on the per-request level, so this chain would never be consulted. Drop the suffix from the key" $key) -}}
+{{-     else if and (not (contains "/" $key)) (not (hasKey $roles $key)) -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains declares a chain for %q, which is neither a provider/model-id selector nor a declared modelRoles role; the chain would never be consulted" $key) -}}
 {{-     end -}}
 {{-     range $index, $sel := $chain -}}
 {{-       if kindIs "string" $sel -}}
-{{-         $_ := set $aliasSites (printf "retry.fallbackChains.%s[%d]" $role $index) $sel -}}
+{{-         $_ := set $aliasSites (printf "retry.fallbackChains.%s[%d]" $key $index) $sel -}}
 {{-       end -}}
 {{-     end -}}
 {{-   end -}}
