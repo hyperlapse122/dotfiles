@@ -162,18 +162,10 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   if not (kindIs "map" $providers) -}}
 {{-     fail (printf "config-omp-models: providers must be a map of provider id to configuration, got %s" (kindOf $providers)) -}}
 {{-   end -}}
-{{- /* Scan the whole map FIRST, keys included. A per-provider scan of the
-     value alone leaves the provider id itself unscreened, and that id is
-     interpolated into the diagnostics below. */ -}}
-{{-   $allJson := $providers | toJson -}}
-{{-   if contains "op://" $allJson -}}
-{{-     fail "config-omp-models: agents.omp.models carries an op:// reference; models.yml is rendered without secret resolution, so the reference would deploy as an inert literal. Declare the credential under agents.omp.auth.env instead" -}}
-{{-   end -}}
-{{-   range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
-{{-     if contains $escape $allJson -}}
-{{-       fail "config-omp-models: agents.omp.models carries a control character or backslash somewhere under it" -}}
-{{-     end -}}
-{{-   end -}}
+{{- /* Screen every provider id BEFORE the loop below interpolates one into a
+     diagnostic. A credential-shaped id passes this check (it is all letters,
+     colons and slashes), which is why the whole-map scan after the loop still
+     has to run. */ -}}
 {{-   range $provider, $_ := $providers -}}
 {{-     if not (regexMatch $valueRe $provider) -}}
 {{-       fail "config-omp-models: a declared provider id is outside the safe charset; keep it to letters, digits, space and ._:/@*+-" -}}
@@ -198,6 +190,19 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-       if not (hasKey $declared (printf "%s/%s" $provider $id)) -}}
 {{-         fail (printf "config-omp-models: provider %s overrides %q, which no declared agents.omp.settings selector names; the override would be dead data omp silently ignores" $provider $id) -}}
 {{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- /* Whole-map sweep LAST: the per-provider scan above sees only values, so a
+     credential or control character carried by a provider KEY reaches no other
+     check. Running it after the loop keeps the provider-named diagnostics above
+     reachable for the common case. */ -}}
+{{-   $allJson := $providers | toJson -}}
+{{-   if contains "op://" $allJson -}}
+{{-     fail "config-omp-models: agents.omp.models carries an op:// reference; models.yml is rendered without secret resolution, so the reference would deploy as an inert literal. Declare the credential under agents.omp.auth.env instead" -}}
+{{-   end -}}
+{{-   range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
+{{-     if contains $escape $allJson -}}
+{{-       fail "config-omp-models: agents.omp.models carries a control character or backslash somewhere under it" -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}

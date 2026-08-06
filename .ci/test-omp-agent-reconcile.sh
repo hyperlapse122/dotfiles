@@ -381,6 +381,25 @@ assert_render_fails() {
     exit 1
   }
 }
+# `--override-data` DEEP-MERGES into the repo's real agents.yaml, so a fixture can
+# only add a bad value — it can never express an ABSENT key, because the real
+# declaration survives the merge. This renders inline template text that builds
+# its own settings dict, which is the only way to test absence.
+assert_partial_fails() {
+  local label=$1 body=$2 want=$3
+  printf '%s\n' "$body" >"$scratch/partial.tmpl"
+  if env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+    chezmoi --config "$render_config" --source "$repo_root" \
+    execute-template <"$scratch/partial.tmpl" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
+    printf 'render-partial %s: expected a failed render, got exit 0\n' "$label" >&2
+    exit 1
+  fi
+  grep -qF -e "$want" -- "$scratch/neg.err" || {
+    printf 'render-partial %s: render failed without the expected diagnostic %s\n' "$label" "$want" >&2
+    sed 's/^/  /' "$scratch/neg.err" >&2
+    exit 1
+  }
+}
 assert_render_ok() {
   local label=$1 template=$2 data=$3
   env HOME="$neg_home" PATH="$neg_bin:$PATH" \
@@ -465,9 +484,10 @@ assert_render_fails settings-unsafe-chain-hop "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"default\":[\"a';id;'/b\"]}}}}}" \
   'has a value outside the safe charset'
 # advisor.enabled and modelRoles.advisor are paired by convention only; without
-# an advisor role the seat goes inert with nothing naming a cause.
-assert_render_fails settings-advisor-without-role "$settings_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"advisor.enabled\":true}}}}" \
+# an advisor role the seat goes inert with nothing naming a cause. This needs the
+# inline-text helper: an override cannot delete the real advisor role.
+assert_partial_fails settings-advisor-without-role \
+  '{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" (dict "modelRoles" (dict "default" "anthropic/claude-opus-5:xhigh") "advisor.enabled" true) "models" dict) -}}' \
   'modelRoles declares no advisor role'
 # A control character anywhere in the value breaks the tab-separated transport.
 assert_render_fails settings-nested-control-char "$settings_sh" \
