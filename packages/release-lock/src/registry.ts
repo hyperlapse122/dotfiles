@@ -49,8 +49,7 @@ export const REGISTRY: Registry = {
   chezmoi: {
     kind: "githubRelease",
     source: "twpayne/chezmoi",
-    asset: ({ os, arch }, tag) =>
-      `chezmoi_${versionFromTag(tag)}_${os}_${arch}.tar.gz`,
+    asset: ({ os, arch }, tag) => `chezmoi_${versionFromTag(tag)}_${os}_${arch}.tar.gz`,
   },
 
   marksman: {
@@ -155,8 +154,7 @@ export const REGISTRY: Registry = {
     // executable, not pi's whole-dir bundle): linux publishes glibc AND static
     // musl, darwin carries the raw binary.
     linuxMusl: true,
-    asset: ({ os, arch, libc }) =>
-      `omp-${os}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}`,
+    asset: ({ os, arch, libc }) => `omp-${os}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}`,
   },
 
   codegraph: {
