@@ -6,7 +6,7 @@
  * a migrated external resolves byte-identical URLs to the pre-migration render.
  */
 
-export const OPERATING_SYSTEMS = ["linux", "darwin", "windows"] as const;
+export const OPERATING_SYSTEMS = ["linux", "darwin"] as const;
 export const ARCHITECTURES = ["amd64", "arm64"] as const;
 
 export type OperatingSystem = (typeof OPERATING_SYSTEMS)[number];
@@ -42,16 +42,6 @@ export const MUSL_PLATFORMS: readonly Platform[] = ARCHITECTURES.map((arch) => (
   libc: "musl" as const,
 }));
 
-/** `""` on unix, `".exe"` on windows. */
-export function executableExtension(os: OperatingSystem): string {
-  return os === "windows" ? ".exe" : "";
-}
-
-/** `.tar.gz` on unix, `.zip` on windows — the majority convention. */
-export function archiveExtension(os: OperatingSystem): string {
-  return os === "windows" ? ".zip" : ".tar.gz";
-}
-
 /** Rust target-triple arch component. */
 export function rustArch(arch: Architecture): string {
   return arch === "amd64" ? "x86_64" : "aarch64";
@@ -64,8 +54,6 @@ export function rustTarget(os: OperatingSystem): string {
       return "unknown-linux-gnu";
     case "darwin":
       return "apple-darwin";
-    case "windows":
-      return "pc-windows-msvc";
   }
 }
 

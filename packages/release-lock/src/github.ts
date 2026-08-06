@@ -9,8 +9,8 @@ export { ResolutionError };
  *
  * One `releases/latest` call yields the tag and, for every asset, its name,
  * download URL, and sha256 digest. That digest is why the refresh never has to
- * download an artifact to checksum it — a linux runner can lock darwin and
- * windows entries from the same response.
+ * download an artifact to checksum it — a linux runner can lock darwin entries
+ * from the same response.
  */
 
 interface GitHubAsset {
