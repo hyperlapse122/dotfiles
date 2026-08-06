@@ -116,6 +116,11 @@ The cost is paid twice. A reader pays it up front, and an agent that skips the r
 - R33. No `compaction` or `snapcompact` key is declared.
 - R34. A model-oriented chain key carries no thinking suffix, and the validator fails the render on one.
 - R36. Continuous integration compares the declared `task.agentModelOverrides` key set against the bundled agent roster the installed omp reports, and fails when they diverge.
+- R42. `.ci/test-omp-agent-reconcile.sh` asserts, against the shipped rendered settings, that every model-oriented `retry.fallbackChains` key is named by some `modelRoles` selector, `task.agentModelOverrides` value, or chain hop. A key naming only a hop passes: that hop can fail and own a chain in turn.
+- R43. The advisor selector never reaches the rendered provisioner as script source. The readiness diagnostic reads `modelRoles.advisor` from the declared JSON at shell runtime, so a quote in that value cannot become a statement.
+- R44. The safe-charset check covers every nested selector — each `modelRoles` value, each `task.agentModelOverrides` value, and each chain hop — not only string-typed top-level settings values.
+- R45. The `agents.omp.models` credential and control-character scan covers provider KEYS as well as values, and every provider id is charset-screened before any diagnostic interpolates it.
+- R46. `advisor.enabled: true` without a declared `modelRoles.advisor` fails the render. The provisioner's readiness diagnostic can only report an unreachable provider; with no advisor role there is no selector to report on.
 
 ### Key Flows
 
@@ -162,6 +167,10 @@ flowchart TB
 - AE12. **Covers R35.** Given `advisor.enabled` is true and the advisor selector's provider is absent from the probed catalog, when the provisioner runs, then it prints a diagnostic naming the advisor path and continues to assert every declared setting.
 - AE13. **Covers R40.** Given a key under a declared provider in `agents.omp.models` that is not `modelOverrides`, when the models target is rendered, then the render fails rather than ignoring the key.
 - AE14. **Covers R41.** Given an `op://` reference declared anywhere under `agents.omp.models`, when the models target is rendered, then the render fails and names the offending path.
+- AE15. **Covers R42.** Given a tier primary retuned to a model whose old chain key nothing else names, when the reconcile suite runs, then it fails and names the now-unreachable chain key. Given that key is still a hop in another chain, then it passes.
+- AE16. **Covers R43, R44.** Given a `modelRoles` selector carrying a single quote, when the provisioner is rendered, then the render fails on the charset check and no quote reaches the rendered script.
+- AE17. **Covers R45.** Given a provider key under `agents.omp.models` shaped like an `op://` reference, when the models target is rendered, then the render fails even though that key passes the charset screen.
+- AE18. **Covers R46.** Given `advisor.enabled: true` and no `modelRoles.advisor`, when the settings partial is rendered, then the render fails and names the missing role.
 
 ### Scope Boundaries
 
@@ -173,10 +182,13 @@ flowchart TB
 - Deploying the source state. `chezmoi apply` and restarting a running omp session remain separate user actions.
 - Bounding what the advisor may see. Enabling the runtime starts a continuous flow of every turn's transcript delta to a third-vendor reviewer. `advisor.subagents` stays undeclared, so its `false` default keeps the seven mapped subagents out of that flow and only the main session is reviewed. That is the intended posture; no content filter is added.
 - A successor to the retired files' judgment half. The deleted procedure's selection methodology and its per-family capability research are neither machine-checkable nor header material, so they have no successor anywhere. The next placement decision starts from the catalog and a fresh leaderboard read, which R25 and KD3 accept.
+- The retired skill's anchor-provider diversity rule. It required every role's resolution path to reach both an `anthropic` and an `opencode-go` hop, enforced by a jq script in its own Verify recipe. Nothing here reproduces it, and the shipped `smol` path (`kimi-code/kimi-for-coding:high` plus its chain) reaches `anthropic`, `google-antigravity` and `openai-codex` but never `opencode-go` — the only role that misses an anchor. Four distinct vendors, one of them the `anthropic` floor, satisfies the rule's actual purpose, and that chain is user-specified, so it is recorded rather than rewritten.
+- A chain key whose thinking suffix is not one omp defines (`anthropic/claude-opus-5:bogus`). `$thinkRe` does not match it, so the discriminator classifies it as model-oriented and the provisioner's catalog gate rejects it on any host that can reach the catalog. It stays silent only where the catalog is unavailable and every selector check already soft-skips. Tightening this would require asserting that a colon after the last `/` is always a thinking suffix, which a model id containing a colon would then falsely trip.
+- The validator's filename. `omp-settings-validate.tmpl` now also validates `agents.omp.models`. Not worth a rename for one coupled surface; worth revisiting if a third arrives.
 
 #### Deferred to Follow-Up Work
 
-- A cross-check that every `modelRoles` literal selector has a chain keyed on it, and that every model-oriented chain key is still named by some role. Nothing catches an orphaned chain left behind when a tier primary is retuned. Worth doing; not required for this change to be correct.
+- ~~A cross-check that every model-oriented chain key is still named by some role.~~ **Implemented during code review** (R42), but NOT where this plan assumed. It is a global invariant over one complete policy, so it cannot be a render-time validator check: `--override-data` DEEP-MERGES, so every negative fixture that retunes one role inherits the real chains and manufactures an orphan the validator would then reject — four existing fixtures broke on exactly that. It is asserted once in `.ci/test-omp-agent-reconcile.sh` against the shipped rendered settings instead. The other half this line proposed — that every `modelRoles` selector have a chain keyed on it — is deliberately NOT implemented: a role with no own chain legitimately falls through to the `default` floor per F1, so requiring one would reject correct data.
 - Restricting `modelOverrides.<id>` to a closed field set, so no unexpected metadata key can be declared there at all. R40 rejects a wrong shape one level up, at the provider; a per-field allowlist inside the override is stricter than this change needs.
 
 ### Dependencies / Assumptions
@@ -461,6 +473,25 @@ U1 lands first because every later render depends on it. U2 and U4 are safe to l
   - No prune or ignore entry was added for a never-deployed path.
 - **Verification:** The tree is gone, the instruction paragraph reads coherently, and the searches return only historical-plan matches.
 
+### U8. Close the surfaces code review found open
+
+- **Goal:** Fix the defects the review of U1-U7 surfaced, at the layer each one actually belongs to.
+- **Requirements:** R42, R43, R44, R45, R46. Covers AE15, AE16, AE17, AE18.
+- **Dependencies:** U1-U7.
+- **Files:** `.chezmoitemplates/omp-settings-validate.tmpl`, `.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl`, `.ci/test-omp-agent-reconcile.sh`, `.chezmoidata/agents.yaml`.
+- **Approach:**
+  1. Stop splicing the advisor selector into the rendered script. Read `modelRoles.advisor` from the declared JSON at runtime and guard the shape in `case`. The spliced form was exploitable: a single quote in that value closed `printf`'s argument and made the remainder a new statement, which `shellcheck` independently reported as a syntax error in the rendered script.
+  2. Apply the safe-charset check to every alias site, not only string-typed top-level values, so a nested selector cannot carry a quote.
+  3. Sweep the whole `agents.omp.models.providers` map for `op://` and control characters, keys included, and charset-screen each provider id before any diagnostic interpolates it. Order the sweep AFTER the per-provider loop so the provider-named diagnostics stay reachable.
+  4. Fail the render when `advisor.enabled` is true and no `modelRoles.advisor` exists.
+  5. Assert chain reachability over the shipped rendered settings in the reconcile suite, not in the validator.
+  6. Record the `agents.omp.models` row in the consumer map and drop the three stale `{sh,ps1}` references.
+- **Test scenarios:**
+  - `Test expectation: extend .ci/test-omp-agent-reconcile.sh.` Negative fixtures for a quoted selector, a quoted chain hop, and a credential-shaped provider key; a real-data assertion for chain reachability.
+  - `assert_partial_fails` renders inline template text so a fixture can test an ABSENT key. `--override-data` deep-merges, so no override can delete a real declaration — the advisor-pairing case is untestable without it.
+  - Each new fixture is mutation-proven by reverting its own gate and confirming that fixture, and only it, fails.
+- **Verification:** The suite and the roster check pass, both targets render on live data, `shellcheck` is clean on the rendered provisioner, and the reproduction that injected a statement into the rendered script is rejected at render time.
+
 ---
 
 ## Verification Contract
@@ -469,16 +500,17 @@ Run every gate from the source directory with `--source "$PWD"` and a stub `op`,
 
 | Gate | Command | Proves | Units |
 |---|---|---|---|
-| Isolated render | `chezmoi --config <scratch>/empty.toml --source "$PWD" --destination <scratch>/target execute-template` on each changed template and script | Every validator gate; the declared data renders | U1, U2, U3, U4 |
+| Isolated render | `chezmoi --config <scratch>/empty.toml --source "$PWD" --destination <scratch>/target execute-template` on each changed template and script | Every validator gate; the declared data renders | U1, U2, U3, U4, U8 |
 | Catalog difference | Compare harvested selectors, suffixes stripped, against `omp models --json` selectors | R6; no declared selector is unserved | U3 |
 | Thinking-level fit | For each declared suffix, confirm it appears in that model's `thinking` list | R6; a suffix omp would silently ignore | U3 |
-| Reconcile suite | `.ci/test-omp-agent-reconcile.sh <auth.sh> <plugins.sh> <haptic-package> <settings.sh>` | Declared-path delivery, parent-namespace guard, every negative-render fixture | U1, U2, U3, U5 |
+| Reconcile suite | `.ci/test-omp-agent-reconcile.sh <auth.sh> <plugins.sh> <haptic-package> <settings.sh>` | Declared-path delivery, parent-namespace guard, every negative-render fixture, chain reachability over shipped data | U1, U2, U3, U5, U8 |
+| Rendered-script lint | `shellcheck -s bash` on the rendered provisioner | R43; no declared value reaches the script as source | U8 |
 | Roster comparison | The new `.ci/` check against the locked omp | R36 | U6 |
 | Source search | Repository search for the retired skill name outside `docs/plans/` | R22, R23, R27 | U7 |
 | Scope discipline | `git diff --check`, `git status`, and a diff limited to the units above | No unrelated change; preserved comment blocks byte-identical | all |
 | Pull request | `ci.yml` and `render-dotfiles.yml` to terminal success | The integration job and every render job | all |
 
-**Automated coverage stops at the data boundary.** The render, apply, and CI trio proves data shape plus render-time and apply-time acceptance or rejection. It cannot prove omp's live consultation order. Nine acceptance examples are automated: AE5, AE6, AE7, AE9, AE10, AE11, AE12, AE13, AE14.
+**Automated coverage stops at the data boundary.** The render, apply, and CI trio proves data shape plus render-time and apply-time acceptance or rejection. It cannot prove omp's live consultation order. Thirteen acceptance examples are automated: AE5, AE6, AE7, AE9, AE10, AE11, AE12, AE13, AE14, AE15, AE16, AE17, AE18.
 
 **Live-host observations, reported and never performed silently.** These five need a real session and belong to the user after deployment:
 
