@@ -24,8 +24,8 @@ mkdir -p "$home/.omp/agent" "$fake_bin"
 cat >"$home/.omp/agent/.env" <<'EOF'
 # user-owned values stay byte-identical
 OTHER_TOKEN='keep me'
-ZAI_API_KEY=stale
-ZAI_API_KEY="duplicate"
+EXA_API_KEY=stale
+EXA_API_KEY="duplicate"
 OPENROUTER_API_KEY=stale
 OPENCODE_API_KEY="duplicate"
 EOF
@@ -38,13 +38,11 @@ run_auth() {
 run_auth
 
 [[ $(stat -c '%a' "$auth") == 600 ]]
-[[ $(grep -c '^ZAI_API_KEY=' "$auth") -eq 1 ]]
 [[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
 [[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 1 ]]
 [[ $(grep -c '^OPENCODE_API_KEY=' "$auth") -eq 1 ]]
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
-grep -F 'ZAI_API_KEY="dummy-secret"' "$auth" >/dev/null
 grep -F 'EXA_API_KEY="dummy-secret"' "$auth" >/dev/null
 grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
 grep -F 'OPENCODE_API_KEY="opencode-test-secret"' "$auth" >/dev/null
@@ -55,7 +53,7 @@ OMP_AGENT_ENV="$ambient" run_auth
 
 # The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
-printf '%s\n' ZAI_API_KEY EXA_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY >"$expected_names"
+printf '%s\n' EXA_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
   grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names"
@@ -380,7 +378,7 @@ auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
 settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
-closed_set='ZAI_API_KEY, EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
+closed_set='EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a
 # variable into the environment omp loads for every session, nor silently drop
@@ -390,15 +388,15 @@ assert_render_fails auth-outside-closed-set-linux "$auth_sh" \
   "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
 assert_render_fails auth-emptied-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
-  'must declare ZAI_API_KEY'
+  'must declare EXA_API_KEY'
 assert_render_fails auth-duplicate-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"a\"},{\"variable\":\"ZAI_API_KEY\",\"key\":\"b\"}]}}}}" \
-  'duplicates variable "ZAI_API_KEY"'
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"EXA_API_KEY\",\"key\":\"a\"},{\"variable\":\"EXA_API_KEY\",\"key\":\"b\"}]}}}}" \
+  'duplicates variable "EXA_API_KEY"'
 assert_render_fails auth-empty-key-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":\"\"}]}}}}" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"EXA_API_KEY\",\"key\":\"\"}]}}}}" \
   'resolved to an empty value'
 assert_render_fails auth-non-string-key-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"ZAI_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"EXA_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
   'field `key` must resolve to a string'
 
 # Role indirection is the one value shape no later layer validates.

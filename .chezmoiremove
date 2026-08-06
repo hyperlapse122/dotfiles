@@ -61,3 +61,12 @@ src/garden.yaml
 # it here. There is NO container gate: the container ignore rules do not exclude
 # .local/bin, so containers received this binary too and must prune it.
 .local/bin/chezmoi-secrets-sync
+
+# The Z.ai coding plan expired, so dot_local/bin/executable_claude-glm.tmpl —
+# whose only backend was https://api.z.ai/api/anthropic — no longer has a
+# source. Deleting that source stopped chezmoi managing it but left the
+# already-deployed ~/.local/bin/claude-glm executable behind, still on PATH and
+# still pointed at a dead endpoint — prune it here. There is NO container gate,
+# for the same reason as chezmoi-secrets-sync above: the container ignore rules
+# do not exclude .local/bin, so containers received this wrapper too.
+.local/bin/claude-glm
