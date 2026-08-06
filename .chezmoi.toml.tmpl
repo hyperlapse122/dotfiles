@@ -1,7 +1,6 @@
-{{- $executableExtension := (replace "linux" "" (replace "darwin" "" (replace "windows" ".exe" .chezmoi.os))) -}}
-{{- $scriptExtension := (replace "linux" ".sh" (replace "darwin" ".sh" (replace "windows" ".ps1" .chezmoi.os))) -}}
+{{- $executableExtension := "" -}}
+{{- $scriptExtension := ".sh" -}}
 
-{{ if ne .chezmoi.os "windows" -}}
 # Non-interactive pager for `chezmoi diff` / `apply --verbose`: `less` quits when the
 # diff fits one screen (--quit-if-one-screen) and skips the alternate screen
 # (--no-init), so short output prints inline instead of trapping in interactive less;
@@ -11,14 +10,14 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
 # Pin chezmoi-managed normal files/directories to 0644/0755 on POSIX hosts,
 # independent of a distribution's login umask.
 umask = 0o022
-{{ end }}
+
 # GPG encryption for `encrypted_` source files (the ~/src garden project
 # registry — kept ciphertext-only in this public repo).
 # The recipient below is the PUBLIC key fingerprint (safe to commit); the
 # private key is provisioned from 1Password and imported by
 # .chezmoiscripts/80-keys/run_once_before_import-gpg-key.sh.tmpl, which runs in
-# the before phase so the key exists before the file phase decrypts. Windows
-# and containers never decrypt: .config/garden/garden.yaml is chezmoiignored there.
+# the before phase so the key exists before the file phase decrypts. Containers
+# never decrypt: .config/garden/garden.yaml is chezmoiignored there.
 encryption = "gpg"
 [gpg]
     # Same key as .chezmoidata/user.yaml gpgPubKey (used by the
