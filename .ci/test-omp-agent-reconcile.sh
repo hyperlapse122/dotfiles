@@ -236,12 +236,17 @@ declared_json="$scratch/declared.json"
 awk '/^cat >"\$declared"/{flag=1;next}/^JSON$/{flag=0}flag' "$settings_script" >"$declared_json"
 jq -e 'type == "object" and (keys | length) > 0' "$declared_json" >/dev/null
 
-# The three-source harvest is shared by the catalog fixture and the shape check.
+# The harvest is shared by the catalog fixture and the shape check. A chain KEY
+# is a selector too when it is model-oriented, so it must be harvested alongside
+# the hop values. It is filtered HERE rather than downstream because the shape
+# check below consumes this harvest raw: a role-keyed chain key is not a selector
+# and would fail that check as a malformed one.
 harvest_selectors='
   def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
   [ (.modelRoles // {} | to_entries[].value),
     (."task.agentModelOverrides" // {} | to_entries[].value),
-    (."retry.fallbackChains" // {} | to_entries[].value[]) ]
+    (."retry.fallbackChains" // {} | to_entries[].value[]),
+    (."retry.fallbackChains" // {} | to_entries[] | .key | select(contains("/"))) ]
   | map(select(type == "string")) | map(select(startswith("@") | not))'
 
 jq -r "$harvest_selectors
@@ -250,6 +255,35 @@ jq -r "$harvest_selectors
   | {models: map({provider: (split(\"/\")[0]), selector: .})}
 " "$declared_json" >"$scratch/catalog-full.json"
 jq -e '(.models | length) > 0' "$scratch/catalog-full.json" >/dev/null
+
+# Chain reachability, asserted against the SHIPPED data rather than a fixture.
+# omp looks a chain up by the failing model's id, so a model-keyed chain whose
+# model no role, agent override, or hop ever produces is dead data — the symptom
+# is a tier that silently loses its recovery path after a retune.
+#
+# This cannot be a render-time check in the validator, and that is not a style
+# choice: `--override-data` DEEP-MERGES, so every fixture that retunes one role
+# inherits the real chains and manufactures an orphan the validator would then
+# reject. The invariant is global over one complete policy, so it is checked once
+# here, over exactly the data that ships. A key naming a HOP is legitimate: that
+# hop can fail and own a chain in turn.
+unnamed=$(jq -r '
+  def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
+  ([ (.modelRoles // {} | to_entries[].value),
+     (."task.agentModelOverrides" // {} | to_entries[].value),
+     (."retry.fallbackChains" // {} | to_entries[].value[])
+   ] | map(select(type == "string") | select(startswith("@") | not) | strip_thinking) | unique) as $named
+  | (."retry.fallbackChains" // {} | keys | map(select(contains("/"))))
+  | map(select(strip_thinking as $k | ($named | index($k)) == null))
+  | .[]
+' "$declared_json")
+if [[ -n $unnamed ]]; then
+  while IFS= read -r key; do
+    [[ -n $key ]] || continue
+    printf 'chain-reachability: retry.fallbackChains is keyed on %s, which no modelRoles selector, task.agentModelOverrides value, or chain hop names; omp looks a chain up by the failing model id, so it can never be consulted\n' "$key" >&2
+  done <<<"$unnamed"
+  exit 1
+fi
 
 declared_count=$(jq -r 'keys | length' "$declared_json")
 
@@ -376,11 +410,41 @@ assert_render_fails() {
     exit 1
   }
 }
+# `--override-data` DEEP-MERGES into the repo's real agents.yaml, so a fixture can
+# only add a bad value — it can never express an ABSENT key, because the real
+# declaration survives the merge. This renders inline template text that builds
+# its own settings dict, which is the only way to test absence.
+assert_partial_fails() {
+  local label=$1 body=$2 want=$3
+  printf '%s\n' "$body" >"$scratch/partial.tmpl"
+  if env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+    chezmoi --config "$render_config" --source "$repo_root" \
+    execute-template <"$scratch/partial.tmpl" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
+    printf 'render-partial %s: expected a failed render, got exit 0\n' "$label" >&2
+    exit 1
+  fi
+  grep -qF -e "$want" -- "$scratch/neg.err" || {
+    printf 'render-partial %s: render failed without the expected diagnostic %s\n' "$label" "$want" >&2
+    sed 's/^/  /' "$scratch/neg.err" >&2
+    exit 1
+  }
+}
+assert_render_ok() {
+  local label=$1 template=$2 data=$3
+  env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+    chezmoi --config "$render_config" --source "$repo_root" --override-data "$data" \
+    execute-template <"$repo_root/$template" >"$scratch/pos.out" 2>"$scratch/pos.err" || {
+    printf 'render-positive %s: expected a successful render, got a failure\n' "$label" >&2
+    sed 's/^/  /' "$scratch/pos.err" >&2
+    exit 1
+  }
+}
 
 auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
 settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
+models_yml='dot_omp/private_agent/readonly_models.yml.tmpl'
 closed_set='EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a
@@ -406,9 +470,54 @@ assert_render_fails auth-non-string-key-linux "$auth_sh" \
 assert_render_fails settings-dangling-alias "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":{\"commit\":\"@no-such-role\"}}}}}" \
   'names role alias @no-such-role'
+# A chain key means a model when it contains a slash and a role when it does not.
+# Both illegal shapes are invisible to the catalog gate: it strips the thinking
+# suffix before comparing, and it treats a wildcard as routing syntax.
 assert_render_fails settings-orphan-chain "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"ghost\":[\"anthropic/claude-opus-5:xhigh\"]}}}}}" \
-  'is not a declared modelRoles role'
+  'is neither a provider/model-id selector nor a declared modelRoles role'
+assert_render_fails settings-wildcard-chain-key "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/*\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
+  'is a provider wildcard'
+assert_render_fails settings-suffixed-chain-key "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5:max\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
+  'carries a thinking suffix'
+assert_render_ok settings-model-keyed-chain "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\"]}}}}}"
+# agents.omp.models is parasitic on the settings: an override nothing declares is
+# dead data omp ignores, only modelOverrides may appear under a provider, and the
+# credential-free contract applies to it too. Its diagnostics name that surface.
+models_settings="$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"opencode-go/kimi-k3:high\"]}"
+assert_render_ok models-declared-override "$models_yml" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k3\":{\"contextWindow\":262144}}}}}}}}"
+assert_render_fails models-undeclared-override "$models_yml" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k9\":{\"contextWindow\":262144}}}}}}}}" \
+  'which no declared agents.omp.settings selector names'
+assert_render_fails models-non-override-key "$models_yml" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"baseUrl\":\"https://x.invalid\"}}}}}}" \
+  'but only modelOverrides is permitted here'
+assert_render_fails models-credential-reference "$models_yml" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k3\":{\"headers\":{\"X\":\"op://Private/x/y\"}}}}}}}}}" \
+  'provider opencode-go carries an op:// reference'
+assert_render_fails models-credential-provider-key "$models_yml" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"op://Private/x/y\":{}}}}}}" \
+  'agents.omp.models carries an op:// reference'
+# A selector never reaches the shell as a word or a script fragment, but the
+# top-level charset check cannot see one: it is gated on a string-typed top-level
+# value, and every selector lives inside a record. These two prove the nested
+# check that closes that gap — one quote in a selector must not survive a render.
+assert_render_fails settings-unsafe-role-selector "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":{\"default\":\"anthropic/claude-opus-5:xhigh\",\"advisor\":\"evil'; touch /tmp/x #/y\"},\"advisor.enabled\":true}}}}" \
+  'has a value outside the safe charset'
+assert_render_fails settings-unsafe-chain-hop "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"default\":[\"a';id;'/b\"]}}}}}" \
+  'has a value outside the safe charset'
+# advisor.enabled and modelRoles.advisor are paired by convention only; without
+# an advisor role the seat goes inert with nothing naming a cause. This needs the
+# inline-text helper: an override cannot delete the real advisor role.
+assert_partial_fails settings-advisor-without-role \
+  '{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" (dict "modelRoles" (dict "default" "anthropic/claude-opus-5:xhigh") "advisor.enabled" true) "models" dict) -}}' \
+  'modelRoles declares no advisor role'
 # A control character anywhere in the value breaks the tab-separated transport.
 assert_render_fails settings-nested-control-char "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":{\"default\":\"anthropic/claude-opus-5\txhigh\"}}}}}" \

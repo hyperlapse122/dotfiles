@@ -1,6 +1,12 @@
 {{- /* ~/.omp/agent/models.yml — managed direct-provider baseline.
 
-     .agents.omp.models intentionally contains an empty providers map, leaving
-     omp's built-in catalog unchanged. This readonly target does not resolve
-     secrets. agents.omp.models must not contain op:// values. */ -}}
+     .agents.omp.models holds override-only providers: a modelOverrides map that
+     adjusts metadata on a model omp's built-in catalog already serves. This
+     readonly target does not resolve secrets, so agents.omp.models must not
+     contain op:// values — that is enforced, not merely asked, because this
+     target shares omp-settings-validate.tmpl with the settings provisioner.
+     That partial also proves every overridden id is named by a declared
+     settings selector and that nothing but modelOverrides appears under a
+     provider. */ -}}
+{{- includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" .agents.omp.settings "models" .agents.omp.models) -}}
 {{ .agents.omp.models | toYaml }}

@@ -1,13 +1,11 @@
 {{- /*
 omp-settings-validate.tmpl — fail the apply LOUDLY on a bad omp settings
-declaration, before either provisioner half renders a single line of script.
+declaration, before the provisioner renders a single line of script.
 
-The POSIX and PowerShell halves of config-omp-settings deliberately share no
-rendered DATA block: each re-derives the declared map behind its own OS gate, so
-neither can ship a value the other never saw. They DO share this validation,
-because a guard that exists in one half only is a guard that silently does not
-apply on the other platform — the same reason facts-validate.tmpl is one partial
-rather than a copy per installer.
+The config-omp-settings provisioner is this partial's caller. Validation lives
+here rather than inline in that script, so a guard cannot silently exist for one
+consumer only — the same reason facts-validate.tmpl is one partial rather than a
+copy per installer.
 
 Every check here aborts the whole chezmoi command. None of them can be satisfied
 by a runtime skip, because a declaration this file rejects is wrong on every host.
@@ -28,11 +26,23 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
   6. ROLE INDIRECTION RESOLVES. `@name` is the one value shape no later layer can
      check: the catalog gate skips it (an alias is not a selector) and omp itself
      accepts a dangling alias silently. Unresolvable indirection is therefore
-     render-time-fatal or it is never reported at all. Both directions are
-     checked: every `@name` names a declared role, and every fallback-chain key
-     is a declared role whose chain it overrides.
+     render-time-fatal or it is never reported at all.
+  7. CHAIN KEYS ARE A MODEL OR A ROLE, NOTHING ELSE. omp reads a chain key that
+     contains `/` as an exact model selector and one without as a role. A
+     `provider/*` wildcard key would span every model that provider serves and
+     catch another tier's model; a thinking suffix on a key names a per-request
+     level omp does not match on, so that chain would never fire. Both shapes are
+     invisible later — the catalog gate strips suffixes before comparing — so
+     only this render-time check can see them.
+  8. MODEL METADATA IS PARASITIC ON THE SETTINGS. Every id under
+     agents.omp.models overrides a model that must already be named by a declared
+     selector, or the override is dead data omp silently ignores; only that map
+     may appear under a provider; and the same credential-free and
+     transport-safety rules apply to it. These checks name agents.omp.models in
+     their own diagnostics, because a config-omp-settings prefix would send a
+     reader to the wrong data.
 
-  {{ includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
+  {{ includeTemplate "omp-settings-validate.tmpl" (dict "ctx" . "settings" $settings "models" $models) }}
 */ -}}
 {{- $ctx := .ctx -}}
 {{- if not $ctx -}}{{- fail "omp-settings-validate.tmpl: ctx is required" -}}{{- end -}}
@@ -49,6 +59,7 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
    reality, not a policy restriction we are choosing to loosen. */ -}}
 {{- $pathRe := "^[A-Za-z][A-Za-z0-9_]*([.][A-Za-z][A-Za-z0-9_]*)*$" -}}
 {{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
+{{- $thinkRe := ":(off|minimal|low|medium|high|xhigh|max)$" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
@@ -92,13 +103,17 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   end -}}
 {{- end -}}
 {{- if hasKey $settings "retry.fallbackChains" -}}
-{{-   range $role, $chain := index $settings "retry.fallbackChains" -}}
-{{-     if not (hasKey $roles $role) -}}
-{{-       fail (printf "config-omp-settings: retry.fallbackChains declares a chain for %q, which is not a declared modelRoles role; the chain would never be consulted" $role) -}}
+{{-   range $key, $chain := index $settings "retry.fallbackChains" -}}
+{{-     if hasSuffix "/*" $key -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains key %q is a provider wildcard; such a key spans every model that provider serves and would let one tier's chain catch another tier's model. Key the chain on the exact provider/model-id instead" $key) -}}
+{{-     else if regexMatch $thinkRe $key -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains key %q carries a thinking suffix; a chain key names a model and omp does not match on the per-request level, so this chain would never be consulted. Drop the suffix from the key" $key) -}}
+{{-     else if and (not (contains "/" $key)) (not (hasKey $roles $key)) -}}
+{{-       fail (printf "config-omp-settings: retry.fallbackChains declares a chain for %q, which is neither a provider/model-id selector nor a declared modelRoles role; the chain would never be consulted" $key) -}}
 {{-     end -}}
 {{-     range $index, $sel := $chain -}}
 {{-       if kindIs "string" $sel -}}
-{{-         $_ := set $aliasSites (printf "retry.fallbackChains.%s[%d]" $role $index) $sel -}}
+{{-         $_ := set $aliasSites (printf "retry.fallbackChains.%s[%d]" $key $index) $sel -}}
 {{-       end -}}
 {{-     end -}}
 {{-   end -}}
@@ -107,6 +122,87 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   if hasPrefix "@" $sel -}}
 {{-     if not (hasKey $roles (trimPrefix "@" $sel)) -}}
 {{-       fail (printf "config-omp-settings: %s names role alias %s, which modelRoles does not declare; no later layer can catch this because the catalog gate skips aliases and omp stores a dangling one silently" $where $sel) -}}
+{{-     end -}}
+{{-   end -}}
+{{- /* The top-level charset check cannot see a selector: it is gated on a
+     string-typed top-level value, and every one of these lives inside a record.
+     Check them here, because a selector reaching a rendered script or a shell
+     word needs only one quote to stop being data. */ -}}
+{{-   if not (regexMatch $valueRe $sel) -}}
+{{-     fail (printf "config-omp-settings: %s has a value outside the safe charset; keep a selector to letters, digits, space and ._:/@*+-" $where) -}}
+{{-   end -}}
+{{- end -}}
+{{- /* advisor.enabled and modelRoles.advisor are paired only by convention, and
+   the provisioner's readiness diagnostic can only report an UNREACHABLE advisor
+   provider — with no advisor role at all there is no selector to report on, so
+   the critic seat goes inert with nothing on any surface saying why. */ -}}
+{{- if and (hasKey $settings "advisor.enabled") (eq (index $settings "advisor.enabled") true) -}}
+{{-   if not (hasKey $roles "advisor") -}}
+{{-     fail "config-omp-settings: advisor.enabled is true but modelRoles declares no advisor role, so the critic seat has no model to resolve and omp reports it inert without naming a cause" -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Model metadata. Absent or empty is inert: the map is optional and this
+   whole pass no-ops until a provider is declared under it. */ -}}
+{{- $declared := dict -}}
+{{- range $_, $sel := $aliasSites -}}
+{{-   if not (hasPrefix "@" $sel) -}}
+{{-     $_ := set $declared (regexReplaceAll $thinkRe $sel "") $sel -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey $settings "retry.fallbackChains" -}}
+{{-   range $key, $_ := index $settings "retry.fallbackChains" -}}
+{{-     if contains "/" $key -}}
+{{-       $_ := set $declared (regexReplaceAll $thinkRe $key "") $key -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $models := .models -}}
+{{- if kindIs "map" $models -}}
+{{-   $providers := dig "providers" dict $models -}}
+{{-   if not (kindIs "map" $providers) -}}
+{{-     fail (printf "config-omp-models: providers must be a map of provider id to configuration, got %s" (kindOf $providers)) -}}
+{{-   end -}}
+{{- /* Screen every provider id BEFORE the loop below interpolates one into a
+     diagnostic. A credential-shaped id passes this check (it is all letters,
+     colons and slashes), which is why the whole-map scan after the loop still
+     has to run. */ -}}
+{{-   range $provider, $_ := $providers -}}
+{{-     if not (regexMatch $valueRe $provider) -}}
+{{-       fail "config-omp-models: a declared provider id is outside the safe charset; keep it to letters, digits, space and ._:/@*+-" -}}
+{{-     end -}}
+{{-   end -}}
+{{-   range $provider, $config := $providers -}}
+{{-     $json := $config | toJson -}}
+{{-     if contains "op://" $json -}}
+{{-       fail (printf "config-omp-models: provider %s carries an op:// reference; models.yml is rendered without secret resolution, so the reference would deploy as an inert literal. Declare the credential under agents.omp.auth.env instead" $provider) -}}
+{{-     end -}}
+{{-     range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
+{{-       if contains $escape $json -}}
+{{-         fail (printf "config-omp-models: provider %s carries a control character or backslash somewhere in its configuration" $provider) -}}
+{{-       end -}}
+{{-     end -}}
+{{-     range $field, $_ := $config -}}
+{{-       if ne $field "modelOverrides" -}}
+{{-         fail (printf "config-omp-models: provider %s declares %q, but only modelOverrides is permitted here; a full custom provider or model list would replace omp's own catalog entry rather than adjust it" $provider $field) -}}
+{{-       end -}}
+{{-     end -}}
+{{-     range $id, $_ := dig "modelOverrides" dict $config -}}
+{{-       if not (hasKey $declared (printf "%s/%s" $provider $id)) -}}
+{{-         fail (printf "config-omp-models: provider %s overrides %q, which no declared agents.omp.settings selector names; the override would be dead data omp silently ignores" $provider $id) -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- /* Whole-map sweep LAST: the per-provider scan above sees only values, so a
+     credential or control character carried by a provider KEY reaches no other
+     check. Running it after the loop keeps the provider-named diagnostics above
+     reachable for the common case. */ -}}
+{{-   $allJson := $providers | toJson -}}
+{{-   if contains "op://" $allJson -}}
+{{-     fail "config-omp-models: agents.omp.models carries an op:// reference; models.yml is rendered without secret resolution, so the reference would deploy as an inert literal. Declare the credential under agents.omp.auth.env instead" -}}
+{{-   end -}}
+{{-   range $escape := list "\\t" "\\n" "\\r" "\\\\" -}}
+{{-     if contains $escape $allJson -}}
+{{-       fail "config-omp-models: agents.omp.models carries a control character or backslash somewhere under it" -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}

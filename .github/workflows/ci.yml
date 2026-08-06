@@ -99,6 +99,7 @@ jobs:
             "$RUNNER_TEMP/plugins.sh" \
             "$RUNNER_TEMP/haptic-package" \
             "$RUNNER_TEMP/settings.sh"
+          .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
           .ci/test-omp-real-plugin.sh "$RUNNER_TEMP/haptic-package"
           .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"
           .ci/test-mxm4-haptic-gates.sh
