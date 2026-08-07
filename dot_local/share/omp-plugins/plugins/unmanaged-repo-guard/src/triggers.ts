@@ -329,23 +329,44 @@ function decodeAnsiCEscape(text: string, i: number): { out: string; next: number
     }
     return s;
   };
+  // Bash's numeric and control escapes name a BYTE, not a code point: `\777`
+  // is 0xff and `\400` wraps to NUL. Masking keeps this decoder byte-faithful
+  // instead of minting U+01FF, which would encode as two bytes bash never
+  // produces.
+  const byte = (value: number): string => String.fromCharCode(value & 0xff);
 
   if (c === "x") {
     const digits = take(i + 2, 2, /[0-9a-fA-F]/);
-    if (digits !== "") return { out: String.fromCharCode(parseInt(digits, 16)), next: i + 2 + digits.length };
+    if (digits !== "") return { out: byte(parseInt(digits, 16)), next: i + 2 + digits.length };
   }
   if (c === "u" || c === "U") {
     const digits = take(i + 2, c === "u" ? 4 : 8, /[0-9a-fA-F]/);
-    if (digits !== "") return { out: String.fromCodePoint(parseInt(digits, 16)), next: i + 2 + digits.length };
+    if (digits !== "") {
+      const code = parseInt(digits, 16);
+      // Bash DROPS an out-of-Unicode-range code point, producing nothing, and
+      // `String.fromCodePoint` would throw on it. Emitting the literal
+      // spelling instead would be a bypass, not a safe fallback:
+      // `$'iss\UFFFFFFFFue'` is exactly `issue` to bash, so anything but an
+      // empty string here loses the route.
+      return {
+        out: code <= 0x10ffff ? String.fromCodePoint(code) : "",
+        next: i + 2 + digits.length,
+      };
+    }
   }
   if (c >= "0" && c <= "7") {
     const digits = take(i + 1, 3, /[0-7]/);
-    return { out: String.fromCharCode(parseInt(digits, 8)), next: i + 1 + digits.length };
+    return { out: byte(parseInt(digits, 8)), next: i + 1 + digits.length };
   }
   if (c === "c") {
     const target = text[i + 2];
-    if (target !== undefined) {
-      return { out: String.fromCharCode(target.toUpperCase().charCodeAt(0) ^ 0x40), next: i + 3 };
+    // NEVER consume the span's closing quote as a control target. `\c` is the
+    // only escape whose target can be any character, so it is the only one
+    // that could swallow a `'` and leave `toArgv` inside a quote that
+    // `splitCommand` already closed - the exact two-machine desync invariant 3
+    // warns about, and one `splitCommand` would report as parseable.
+    if (target !== undefined && target !== "'") {
+      return { out: byte(target.toUpperCase().charCodeAt(0) ^ 0x40), next: i + 3 };
     }
   }
   // Unrecognised: bash keeps the backslash.
@@ -366,8 +387,13 @@ export function toArgv(text: string): string[] {
   let started = false;
   let quote: '"' | "'" | "$'" | null = null;
 
+  // Bash cannot hold a NUL in an argv word: it truncates the word there. A
+  // decoder that keeps the tail would build `issue\0…` where bash built
+  // `issue`, and the positional compare in `cliIsIssueWrite` would miss the
+  // route entirely. Truncating at flush keeps the word present but ends it
+  // where bash ends it.
   const flush = () => {
-    if (started) argv.push(token);
+    if (started) argv.push(token.split("\0")[0] as string);
     token = "";
     started = false;
   };
@@ -392,7 +418,9 @@ export function toArgv(text: string): string[] {
         continue;
       }
       if (c === "\\" && quote === '"' && i + 1 < text.length) {
-        token += text[i + 1];
+        // Line continuation: bash removes the pair rather than emitting the
+        // newline.
+        if (text[i + 1] !== "\n") token += text[i + 1];
         i += 1;
         continue;
       }
@@ -405,8 +433,13 @@ export function toArgv(text: string): string[] {
       continue;
     }
     if (c === "\\" && i + 1 < text.length) {
-      token += text[i + 1];
-      started = true;
+      // Line continuation, unquoted: the pair vanishes and the word continues
+      // across the break. Emitting a real newline here would split `issue`
+      // into `\nissue` and lose the route.
+      if (text[i + 1] !== "\n") {
+        token += text[i + 1];
+        started = true;
+      }
       i += 1;
       continue;
     }

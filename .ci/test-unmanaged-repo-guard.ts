@@ -26,7 +26,7 @@ import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/p
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 208;
+const EXPECTED_MIN_CHECKS = 223;
 
 let passed = 0;
 const failures: string[] = [];
@@ -204,6 +204,48 @@ eq("U1 ansi-c newline escape decodes", toArgv("echo $'a\\nb'")[1], "a\nb");
 eq("U1 ansi-c tab escape decodes", toArgv("echo $'a\\tb'")[1], "a\tb");
 eq("U1 ansi-c unrecognised escape keeps its backslash, as bash does", toArgv("echo $'a\\qb'")[1], "a\\qb");
 eq("U1 ansi-c escaped backslash decodes to one backslash", toArgv("echo $'a\\\\b'")[1], "a\\b");
+// Adversarial re-review of the decode above found four more shapes bash
+// executes as `gh issue create` while the guard saw something else. All are
+// the same class: the tokenizer must agree with bash BYTE for byte, because
+// fallbackScan cannot rescue an encoded subcommand.
+for (const [label, head] of [
+  // Bash truncates an argv word at a NUL; the guard used to keep the tail.
+  ["nul terminator", "$'issue\\0'"],
+  ["octal wrap to nul", "$'issue\\400x'"],
+  ["control-@ is nul", "$'issue\\c@'"],
+  // Bash DROPS an out-of-range code point, making this exactly `issue`.
+  ["out-of-range \\U vanishes", "$'iss\\UFFFFFFFFue'"],
+] as const) {
+  const c = bash(`gh ${head} create --repo other-owner/other-repo`);
+  eq(`U1 ansi-c ${label} still classifies (R4)`, c.kind, "issue-write");
+  eq(`U1 ansi-c ${label} keeps the repo (R4)`, c.repo, "other-owner/other-repo");
+}
+// Line continuation: bash removes the backslash-newline pair and joins the
+// word. Emitting a literal newline split `issue` and lost the route. Needs no
+// ANSI-C quoting at all.
+{
+  const c = bash("gh iss\\\nue create --repo other-owner/other-repo");
+  eq("U1 line continuation still classifies (R4)", c.kind, "issue-write");
+  eq("U1 line continuation keeps the repo (R4)", c.repo, "other-owner/other-repo");
+}
+// `\c` is the only escape whose target may be any character, so it is the only
+// one that could swallow the span's closing quote and leave toArgv inside a
+// quote splitCommand had already closed. Bash keeps a dangling `\c` literal,
+// so `issue\c` is genuinely not an issue write - but the two machines must
+// still agree on where the span ended.
+eq("U1 ansi-c dangling backslash-c matches bash literally", toArgv("x $'issue\\c'")[1], "issue\\c");
+eq("U1 ansi-c dangling backslash-c does not desync the span", splitCommand("gh $'issue\\c' create").unparseable, false);
+eq("U1 ansi-c control escape decodes to its byte", toArgv("x $'a\\cXb'")[1], "a\x18b");
+eq("U1 ansi-c octal above 0xff wraps to a byte", toArgv("x $'\\777'")[1], "\u00ff");
+// A throw from classify() escapes the guard entirely, including its
+// fail-closed handler, so an unrepresentable escape must degrade, never throw.
+let outOfRangeThrew = false;
+try {
+  classify("bash", { command: "gh issue create --repo o/r --title $'\\UFFFFFFFF'" });
+} catch {
+  outOfRangeThrew = true;
+}
+eq("U1 ansi-c out-of-range \\U does not throw out of classify", outOfRangeThrew, false);
 
 // Recorded accepted residual gaps: asserted so the suite states its boundary.
 // A shell-shaped line inside any interpreter heredoc IS caught (covered above);
