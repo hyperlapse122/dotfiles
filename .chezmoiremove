@@ -79,3 +79,21 @@ src/garden.yaml
 # them here.
 AppData/Roaming/VSCodium/User/settings.json
 AppData/Roaming/VSCodium/User/keybindings.json
+
+# The ydotool capability was removed, so dot_config/systemd/user/ydotool.service
+# and dot_local/libexec/executable_ydotoold-active-seat no longer have sources.
+# Deleting those sources stopped chezmoi managing them but left the
+# already-deployed unit and wrapper behind — prune them here. Removing the unit
+# file does not stop a running ydotoold; docs/decommission/ydotool.md carries the
+# operator steps chezmoi must never perform (stop/disable the unit, unmask the
+# root service, remove the package).
+#
+# GATED to the hosts that actually received the targets, mirroring the
+# .chezmoiignore predicate that deployed them (Fedora Linux, KDE or GNOME, not
+# headless, not a container). An ungated prune would delete a same-named unit or
+# wrapper that a headless, non-Fedora, or container host owns and chezmoi never
+# put there.
+{{- if and (eq .chezmoi.os "linux") (eq $f.distro "fedora") (or (eq $f.desktop "kde") (eq $f.desktop "gnome")) (not $f.headless) (not $f.container) }}
+.config/systemd/user/ydotool.service
+.local/libexec/ydotoold-active-seat
+{{- end }}

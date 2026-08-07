@@ -1,8 +1,8 @@
 # /etc/udev/rules.d/70-uinput-solaar.rules — installed by chezmoi
 # (system/linux/etc/**, .chezmoiscripts/30-linux/install-system-10-files).
 #
-# Grant the ACTIVE SEAT USER write access to /dev/uinput. Two managed
-# consumers share this single grant:
+# Grant the ACTIVE SEAT USER write access to /dev/uinput. One managed
+# consumer needs it:
 #
 #   - Solaar's rule engine, which synthesizes input under Wayland: the MX
 #     Master gesture rules in ~/.config/solaar/rules.yaml use KeyPress
@@ -10,10 +10,6 @@
 #     horizontal scroll), and under Wayland both write through evdev uinput
 #     — "For uinput to work the user must have write access for /dev/uinput"
 #     (logitech_receiver/diversion.py).
-#   - ydotoold, the managed ~/.config/systemd/user/ydotool.service daemon
-#     (started through the ~/.local/libexec/ydotoold-active-seat wrapper),
-#     which needs the same write access to inject keyboard and pointer
-#     input for the active desktop user.
 #
 # Fedora grants no user access to the node by default. TAG+="uaccess" has
 # systemd-logind maintain a per-session ACL for the active seat user —

@@ -323,7 +323,6 @@ packages:
         # (this repo adds no teardown scripts, and this manifest has no removal
         # key): sudo dnf remove kitty
         - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
-        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service masks the package's root ydotool.service in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
       # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
       # framework as the KDE targets (unified input-method policy: ibus is
       # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
@@ -340,7 +339,6 @@ packages:
         # kitty: provisioned from the locked upstream bundle — see the note in
         # kdePackages above, including the one-time `sudo dnf remove kitty`.
         - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
-        - ydotool  # Wayland keyboard/pointer automation (client + daemon); configure_ydotool_package_service masks the package's root ydotool.service in favor of the managed per-user runtime (.chezmoiscripts/30-linux/run_after_config-ydotool.sh.tmpl)
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
       # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
