@@ -26,7 +26,7 @@ import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/p
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 131;
+const EXPECTED_MIN_CHECKS = 165;
 
 let passed = 0;
 const failures: string[] = [];
@@ -409,6 +409,113 @@ eq(
   eq("U3 unmanaged fork parent decides (R10)", outcome.verdict, "unmanaged");
   eq("U3 fork parent is the reported repo", outcome.repo, "them/upstream");
 }
+
+// R9: a cache hit for a fork must still surface its resolved parent, so a
+// second call inside the same TTL window re-checks the parent chain instead
+// of silently trusting a stale "managed" verdict for the fork alone.
+{
+  const exec = boundedStub((command, args) => {
+    if (command === "gh" && args[0] === "api") return execResult({ stdout: "tester\n" });
+    return args[2] === "me/fork"
+      ? execResult({ stdout: JSON.stringify({ viewerPermission: "ADMIN", isFork: true, parent: { name: "upstream", owner: { login: "them" } } }) })
+      : execResult({ stdout: JSON.stringify({ viewerPermission: "READ", isFork: false }) });
+  });
+  const prober = createProber({ exec, now: () => 0, cacheTtlMs: 1000 });
+  const forkRef: RepoRef = { host: "github.com", hostKind: "github", path: "me/fork" };
+
+  const first = await prober.evaluate([forkRef]);
+  eq("U3 fork with unmanaged parent blocks on first evaluate (R9)", first.verdict, "unmanaged");
+  const forkCallsAfterFirst = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "me/fork").length;
+  const parentCallsAfterFirst = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "them/upstream").length;
+
+  // No existing test calls evaluate twice; this is the regression itself —
+  // before the fix, a cache-hit fork always reported parent: null, so the
+  // second call never re-walked the chain and returned "managed" instead.
+  const second = await prober.evaluate([forkRef]);
+  eq("U3 cached fork verdict still blocks on second evaluate (R9)", second.verdict, "unmanaged");
+  eq(
+    "U3 cached fork hop resolves from cache without a subprocess (R9)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "me/fork").length,
+    forkCallsAfterFirst,
+  );
+  eq(
+    "U3 cached fork parent hop resolves from cache without a subprocess (R9)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "them/upstream").length,
+    parentCallsAfterFirst,
+  );
+}
+
+// R9: when the parent's own verdict cannot be cached (indeterminate results
+// are never cached), the fork itself still comes from cache while the
+// parent is re-probed every time — the invocation counts must diverge.
+{
+  const exec = boundedStub((command, args) => {
+    if (command === "gh" && args[0] === "api") return execResult({ stdout: "tester\n" });
+    if (args[2] === "me/fork2") {
+      return execResult({
+        stdout: JSON.stringify({ viewerPermission: "ADMIN", isFork: true, parent: { name: "upstream2", owner: { login: "them" } } }),
+      });
+    }
+    return execResult({ code: 1, stderr: "boom" });
+  });
+  const prober = createProber({ exec, now: () => 0, cacheTtlMs: 1000 });
+  const fork2Ref: RepoRef = { host: "github.com", hostKind: "github", path: "me/fork2" };
+
+  await prober.evaluate([fork2Ref]);
+  const forkFirst = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "me/fork2").length;
+  const parentFirst = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "them/upstream2").length;
+
+  await prober.evaluate([fork2Ref]);
+  eq(
+    "U3 cached fork itself is not re-probed on the second call (R9)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "me/fork2").length,
+    forkFirst,
+  );
+  check(
+    "U3 fork parent is re-probed on the second call because indeterminate is never cached (R9)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "them/upstream2").length > parentFirst,
+  );
+}
+
+// R9: a cached non-fork must never grow a phantom parent — no other repo
+// path is ever probed across repeated evaluate calls.
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  const prober = createProber({ exec, now: () => 0, cacheTtlMs: 1000 });
+  await prober.evaluate([githubRef]);
+  await prober.evaluate([githubRef]);
+  const probedPaths = new Set(exec.calls.filter((c) => c.args[0] === "repo").map((c) => c.args[2]));
+  eq("U3 cached non-fork verdict enqueues no parent probe (R9)", probedPaths.size, 1);
+}
+
+// R9: once the shared cacheTtlMs elapses, both hops are independently stale
+// and both get re-probed.
+{
+  const exec = boundedStub((command, args) => {
+    if (command === "gh" && args[0] === "api") return execResult({ stdout: "tester\n" });
+    return args[2] === "me/fork3"
+      ? execResult({ stdout: JSON.stringify({ viewerPermission: "ADMIN", isFork: true, parent: { name: "upstream3", owner: { login: "them" } } }) })
+      : execResult({ stdout: JSON.stringify({ viewerPermission: "READ", isFork: false }) });
+  });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: 1000 });
+  const fork3Ref: RepoRef = { host: "github.com", hostKind: "github", path: "me/fork3" };
+
+  await prober.evaluate([fork3Ref]);
+  const forkFirst = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "me/fork3").length;
+  const parentFirst = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "them/upstream3").length;
+
+  clock = 1001;
+  await prober.evaluate([fork3Ref]);
+  check(
+    "U3 fork is re-probed after cacheTtlMs elapses (R9)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "me/fork3").length > forkFirst,
+  );
+  check(
+    "U3 fork parent is re-probed after cacheTtlMs elapses (R9)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "them/upstream3").length > parentFirst,
+  );
+}
 eq(
   "U3 fork parent failing validation is indeterminate (R15)",
   (await verdictFor(githubRef, ghBounded({ viewerPermission: "ADMIN", isFork: true, parent: { nameWithOwner: "../../etc" } }))).verdict,
@@ -441,6 +548,12 @@ eq(
   check("U3 cached verdict expires with the TTL (R16)", exec.calls.filter((c) => c.args[0] === "repo").length > first);
 }
 {
+  // R16: once the shared identity entry expires and a re-probe resolves to
+  // a different login, the verdict cached under the old login is
+  // unreachable — the cache key is identity-bound, not merely TTL-bound —
+  // so a fresh probe runs rather than serving a stale answer for the wrong
+  // identity. Under the clamp, identity and a same-call verdict always
+  // share one expiry, so this is what R16 now promises (plan KTD3).
   let login = "alice";
   const exec = boundedStub((command, args) =>
     command === "gh" && args[0] === "api"
@@ -451,10 +564,130 @@ eq(
   const prober = createProber({ exec, now: () => clock, cacheTtlMs: 1000 });
   await prober.evaluate([githubRef]);
   const first = exec.calls.filter((c) => c.args[0] === "repo").length;
-  clock = 5000;
+  clock = 1000; // the shared identity entry has just expired
   login = "bob";
   await prober.evaluate([githubRef]);
-  check("U3 identity change invalidates the cached verdict (R16)", exec.calls.filter((c) => c.args[0] === "repo").length > first);
+  check(
+    "U3 identity change invalidates the cached verdict (R16)",
+    exec.calls.filter((c) => c.args[0] === "repo").length > first,
+  );
+}
+
+// R6: within one verdict TTL window, a second evaluate call for the same
+// repository must not pay a second identity subprocess.
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  const prober = createProber({ exec, now: () => 0, cacheTtlMs: CONFIG.cacheTtlMs });
+  await prober.evaluate([githubRef]);
+  await prober.evaluate([githubRef]);
+  eq(
+    "U3 identity subprocess runs once for two evaluate calls within one verdict TTL (R6)",
+    exec.calls.filter((c) => c.args[0] === "api").length,
+    1,
+  );
+}
+
+// R6, KTD3: two repositories on one host share one identity entry. Probing
+// B after A must not pay a second identity subprocess while that shared
+// entry is still alive. This is the case a naive per-repo verdict TTL
+// misses: the identity cache is keyed per host while the verdict cache is
+// keyed per repository, so B's own verdict, if left unclamped, would
+// outlive the shared identity — and hitting B again in that window would
+// pay a wasted identity subprocess just to serve a now-stale verdict. The
+// clamp forces "a live verdict always has a live identity", so once the
+// shared identity dies, B's verdict dies with it and the next call gets an
+// honest, fresh probe instead of a stale hit riding a refreshed identity.
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: CONFIG.cacheTtlMs });
+  const repoA: RepoRef = { host: "github.com", hostKind: "github", path: "o/repoA" };
+  const repoB: RepoRef = { host: "github.com", hostKind: "github", path: "o/repoB" };
+
+  await prober.evaluate([repoA]);
+  clock = 1000;
+  await prober.evaluate([repoB]);
+  eq(
+    "U3 identity subprocess runs once across two repos on one host (R6, KTD3)",
+    exec.calls.filter((c) => c.args[0] === "api").length,
+    1,
+  );
+
+  // B was written at clock=1000, so an unclamped design would keep it alive
+  // until 1000 + cacheTtlMs. The shared identity (created for A at clock=0)
+  // dies at exactly cacheTtlMs instead — earlier. Hit B here, past the
+  // identity's death but still inside B's own naive window: the clamp must
+  // not serve that stale verdict.
+  const repoBCallsBeforeThird = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "o/repoB").length;
+  clock = CONFIG.cacheTtlMs;
+  await prober.evaluate([repoB]);
+  check(
+    "U3 two repos on one host, load-bearing: B is re-probed once the shared identity expires, even though B's own naive TTL has not (R6, KTD3)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "o/repoB").length > repoBCallsBeforeThird,
+  );
+}
+
+// R6, KTD3: the clamp's deliberate cost, asserted directly. B's verdict,
+// written well after A seeded the shared identity, is clamped to die with
+// that identity rather than living a full cacheTtlMs of its own. It is
+// still served right up to the identity's expiry, and not one tick past it.
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: CONFIG.cacheTtlMs });
+  const repoC: RepoRef = { host: "github.com", hostKind: "github", path: "o/repoC" };
+  const repoD: RepoRef = { host: "github.com", hostKind: "github", path: "o/repoD" };
+
+  await prober.evaluate([repoC]); // seeds the shared identity at clock=0
+  clock = 200_000;
+  await prober.evaluate([repoD]); // D's own naive TTL would run to 500_000
+  const repoDCallsAfterWrite = exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "o/repoD").length;
+
+  clock = CONFIG.cacheTtlMs - 1; // one tick before the shared identity dies
+  await prober.evaluate([repoD]);
+  eq(
+    "U3 clamped verdict is still served right up to the identity's expiry (R6, KTD3)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "o/repoD").length,
+    repoDCallsAfterWrite,
+  );
+
+  clock = CONFIG.cacheTtlMs; // the shared identity's exact expiry
+  await prober.evaluate([repoD]);
+  check(
+    "U3 clamp truncates the verdict at the identity's expiry, short of its own naive cacheTtlMs (R6, KTD3)",
+    exec.calls.filter((c) => c.args[0] === "repo" && c.args[2] === "o/repoD").length > repoDCallsAfterWrite,
+  );
+}
+
+// R6, KTD3: the clamp can only shorten a verdict's life relative to a plain
+// now() + cacheTtlMs, never lengthen it. A repository probed for the first
+// time on a fresh host establishes its own identity in the same call, so
+// the clamp is a no-op there: the verdict lives the full cacheTtlMs, no
+// more and no less — `min(now() + cacheTtlMs, identityEntry.expiresAt)`
+// picks the identity side only when it is strictly earlier.
+{
+  const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });
+  let clock = 0;
+  const prober = createProber({ exec, now: () => clock, cacheTtlMs: CONFIG.cacheTtlMs });
+  const repoE: RepoRef = { host: "github.com", hostKind: "github", path: "o/repoE" };
+
+  await prober.evaluate([repoE]);
+  const callsAfterFirst = exec.calls.filter((c) => c.args[0] === "repo").length;
+
+  clock = CONFIG.cacheTtlMs - 1;
+  await prober.evaluate([repoE]);
+  eq(
+    "U3 clamp does not shorten a verdict below its own cacheTtlMs (R6, KTD3)",
+    exec.calls.filter((c) => c.args[0] === "repo").length,
+    callsAfterFirst,
+  );
+
+  clock = CONFIG.cacheTtlMs;
+  await prober.evaluate([repoE]);
+  check(
+    "U3 verdict is never served past now() + cacheTtlMs either (R6, KTD3)",
+    exec.calls.filter((c) => c.args[0] === "repo").length > callsAfterFirst,
+  );
 }
 {
   const exec = ghBounded({ viewerPermission: "WRITE", isFork: false });

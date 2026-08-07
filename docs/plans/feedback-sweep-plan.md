@@ -161,23 +161,29 @@ aggregate outcome under the original candidate's key — it relocates caching fr
 `evaluate`, invents a new key shape, and collapses the fork's and parent's independent TTLs.
 Governs `R6`, `R9`.
 
-**KTD3 — the identity cache entry is extended on every verdict write so it always outlives every
-verdict keyed from it, bounded by an absolute ceiling; both durations are derived at the composition
-root and injected as internal `ProberOptions` fields.** The wasted subprocess has a precise cause:
-`identities.set` runs before `rawProbe` and `verdicts.set` runs after it, so an identity entry
-expires earlier than the verdict entry it keyed. A one-time widening to `cacheTtlMs +
-probeTimeoutMs` at identity-write time is **not sufficient**, because the identity cache is keyed
-per host while the verdict cache is keyed per repository: a second repository probed on the same
-host later reuses the existing identity entry but writes a verdict expiring after it, reopening the
-window. The fix is therefore a sliding extension performed at each `verdicts.set` — raise that
-host's identity expiry to at least the new verdict's expiry plus `probeTimeoutMs` — capped by a hard
-`identityMaxTtlMs` anchored at the entry's first write, so a busy host cannot keep a stale identity
-alive indefinitely. `src/index.ts` computes both values; `createProber` receives them beside the
-existing `now` and `exec` seams. Chosen over user-facing `unmanagedRepoGuard` tunables, whose only
-correct values are these; and over hardcoding them inside `probe.ts`, which would leave the `R16`
-key binding untestable — under production timing a login change is unobservable, so the suite must
-inject a shorter grant to expire the identity cache while a verdict entry is still live. Governs
-`R6`.
+**KTD3 — a verdict's cache expiry is clamped to its identity entry's expiry, rather than extending
+the identity to cover the verdict.** The wasted subprocess has a precise cause: `identities.set`
+runs before `rawProbe` and `verdicts.set` after it, so an identity entry expires earlier than the
+verdict entry it keyed; and because the identity cache is keyed per host while the verdict cache is
+keyed per repository, a second repository probed later on the same host writes a verdict outliving
+the shared identity entry. The fix is one line at `verdicts.set`:
+`expiresAt = min(now() + cacheTtlMs, identityEntry.expiresAt)`. The invariant "a live verdict always
+has a live identity" then holds **by construction**, so a verdict-cache hit can never pay an
+identity subprocess.
+
+Rejected alternative: extending the identity entry forward on each verdict write, capped by a hard
+ceiling anchored at its first write. It looks equivalent and is not — any verdict written within one
+`cacheTtlMs` of that ceiling is still granted a full `cacheTtlMs` and outlives the capped identity,
+reopening the exact window the change exists to close. Making it airtight would require the ceiling
+to move, which is just an uncapped sliding window and unbounded identity staleness. The clamp needs
+no new `ProberOptions` fields, no sliding state, no ceiling, and no composition-root derivation.
+
+The clamp's cost is that a verdict near its identity's expiry lives less than a full `cacheTtlMs`,
+producing an occasional extra `repo view`. That is the conservative direction for a security
+control: it re-probes sooner, never later. Identity staleness stays exactly as bounded as it is
+today, at `cacheTtlMs`. `R16` is strengthened, not weakened — a cached verdict can no longer be
+served after the identity it was obtained under has expired, so the identity component of the cache
+key becomes belt-and-braces rather than the sole guarantee. Governs `R6`.
 
 **KTD4 — the audit trail writes only on the block path, and a write failure never changes the
 verdict.** Issue #174 records that logging was omitted to keep a handler that runs on every tool
@@ -452,68 +458,49 @@ identity binding intact.
 
 **Files:**
 - `dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/probe.ts` (modify)
-- `dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/index.ts` (modify — derive and pass `identityTtlMs` and `identityMaxTtlMs`)
 - `.ci/test-unmanaged-repo-guard.ts` (modify)
 
 **Approach:**
-1. Add `identityTtlMs: number` and `identityMaxTtlMs: number` to `ProberOptions`. `createProber`
-   already destructures its options, so these are two more fields on an existing seam.
-2. Compute both at the composition root in `src/index.ts`, where the plugin config values are in
-   scope: `identityTtlMs = cacheTtlMs + probeTimeoutMs` and `identityMaxTtlMs = 2 * cacheTtlMs`.
-   `probeOne` never sees `probeTimeoutMs` today and does not need to.
-3. Widen the identity cache entry to carry a hard ceiling alongside its sliding expiry:
-   `{ value, expiresAt, hardExpiresAt }`. Set `hardExpiresAt = now() + identityMaxTtlMs` once, at
-   the entry's first write, and never move it. Set `expiresAt = now() + identityTtlMs` at that same
-   write.
-4. At every `verdicts.set`, extend that host's identity entry:
-   `expiresAt = min(hardExpiresAt, max(expiresAt, now() + identityTtlMs))`. This is the load-bearing
-   step. A one-time widening at identity-write time is not enough, because the identity cache is
-   per host and the verdict cache is per repository: a second repository probed later on the same
-   host would otherwise receive a verdict outliving the identity entry that keyed it, and its next
-   cache hit would pay the subprocess again.
-5. Treat the entry as expired when either bound has passed, so the ceiling genuinely bounds
-   staleness.
-6. Add a short comment at the extension site naming the invariant it enforces: the identity entry
-   outlives every verdict entry keyed from it, up to `identityMaxTtlMs`.
-7. Keep the identity component in the verdict-cache key. Do not reorder the lookup.
-8. Rewrite the existing test `"U3 identity change invalidates the cached verdict (R16)"`. It
+1. At the existing `verdicts.set` call, clamp the new entry's expiry to the identity entry that
+   keyed it: `expiresAt = min(now() + cacheTtlMs, identityEntry.expiresAt)`. `identityFor` has
+   already run and populated that entry, so it is always present.
+2. Change nothing else about either cache. The identity entry keeps its existing
+   `{ value, expiresAt }` shape and its existing `now() + cacheTtlMs` expiry. Add no
+   `ProberOptions` fields, no sliding extension, no hard ceiling, and no composition-root
+   derivation — `src/index.ts` is not touched by this unit.
+3. Add a short comment at the clamp naming the invariant it establishes: a live verdict always has a
+   live identity, so a verdict-cache hit can never pay an identity subprocess.
+4. Keep the identity component in the verdict-cache key. Do not reorder the lookup.
+5. Rewrite the existing test `"U3 identity change invalidates the cached verdict (R16)"`. It
    currently advances the clock past the TTL at the same moment it changes the login, so TTL expiry
-   alone would pass it and it cannot validate anything about identity's role in the key. The
-   injected durations are what make an honest version possible: a test can grant a short
-   `identityTtlMs`, expire the identity cache while a verdict entry is still live, change the stub
-   login, and observe that the previously cached verdict is now unreachable. Without that seam the
-   binding is untestable — under production timing the identity stays cached, so changing the stub
-   login changes nothing and the assertion would silently prove nothing.
+   alone would pass it and it validates nothing. Under the clamp the honest form is different from
+   what a sliding design would need: a verdict can no longer outlive its identity, so re-express the
+   test as *after the identity expires and re-probes to a different login, the previously cached
+   verdict is unreachable and a fresh `repo view` runs* — which is what `R16` actually promises.
 
 **Patterns to follow:** the existing injected `now`/`exec` seams on `ProberOptions`;
-`.chezmoidata/agents.yaml`'s `unmanagedRepoGuard:` block stays the single source of truth for both
-configured timeouts, and both derived durations are computed in `index.ts`, never hardcoded in
-`probe.ts`.
+`.chezmoidata/agents.yaml`'s `unmanagedRepoGuard:` block stays the single source of truth for the
+two configured timeouts, and this unit adds no new tunable.
 
 **Test scenarios:**
-- **R16 key binding, with a short injected `identityTtlMs`** (shorter than `cacheTtlMs`): advance the
-  clock past the identity grant but not past the verdict TTL, change the stub login, and assert the
-  previously cached verdict is unreachable and a fresh `repo view` runs. This is the rewritten,
-  unconfounded `R16` test, and it must fail if identity is dropped from the key.
-- **Same repo, production timing:** two `evaluate` calls inside one verdict TTL window against the
-  same repository run the identity subprocess (`gh api ... user`) exactly once. Count `api`
-  invocations, not just `repo view` — existing cache tests count only the latter and are blind to
-  this.
-- **Two repositories on one host, production timing** — the case the one-time widening misses.
-  Probe repo A at `t=0`, probe repo B at `t = probeTimeoutMs + 1`, then hit B's verdict cache just
-  before B's verdict expires. The identity subprocess must have run exactly once across all three
-  calls.
-- **At `cacheTtlMs + 1`:** the verdict re-probes, and the identity subprocess does **not** run again,
-  because the identity entry is still live. Asserting a re-probe of both would contradict the design.
-- **Hard ceiling:** with continuous activity that keeps extending the entry, the identity subprocess
-  still runs again once `identityMaxTtlMs` has elapsed since the entry's first write. The sliding
-  window must not make a stale identity immortal.
-- A verdict is never served past its own `cacheTtlMs` — extending the identity entry must not extend
-  any verdict's lifetime.
+- **Same repo:** two `evaluate` calls inside one verdict TTL window against the same repository run
+  the identity subprocess (`gh api ... user`) exactly once. Count `api` invocations, not just
+  `repo view` — existing cache tests count only the latter and are blind to this.
+- **Two repositories on one host** — the case that motivated the unit. Probe repo A at `t = 0`,
+  probe repo B later on the same host, then hit B's verdict cache while B's verdict is still live.
+  The identity subprocess must have run exactly once across all three calls. Under the unclamped
+  code B's verdict outlives the shared identity entry and the third call pays a subprocess.
+- **The clamp is observable:** a verdict written close to its identity's expiry is *not* served for
+  a full `cacheTtlMs` — it stops being served when the identity expires. Assert the truncation
+  directly, since it is the deliberate cost of the design.
+- **`R16` after an identity change:** once the identity entry expires and re-probes to a different
+  login, the previously cached verdict is unreachable and a fresh `repo view` runs.
+- **No verdict is ever served past `min(now() + cacheTtlMs, identity.expiresAt)`** — the clamp must
+  shorten a verdict's life, never lengthen it.
+- Identity staleness stays bounded at `cacheTtlMs`, exactly as before this unit.
 
-**Verification:** `bun .ci/test-unmanaged-repo-guard.ts` passes. The rewritten `R16` test fails if
-identity is dropped from the verdict-cache key; the two-repository test fails if the extension at
-`verdicts.set` is omitted; the hard-ceiling test fails if the sliding window is uncapped.
+**Verification:** `bun .ci/test-unmanaged-repo-guard.ts` passes. The two-repository test fails if
+the clamp at `verdicts.set` is omitted.
 
 ### Phase 2 — Guard observability and documentation
 
