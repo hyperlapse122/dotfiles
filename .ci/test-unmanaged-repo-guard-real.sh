@@ -60,7 +60,7 @@ scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-unmanaged-repo-guard-real
 mkdir -p -- "$scratch_root"
 chmod 0700 -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/smoke.XXXXXX")
-trap 'rm -rf -- "$scratch"' EXIT
+trap 'kill "${stub_pid:-}" 2>/dev/null || true; rm -rf -- "$scratch"' EXIT
 home="$scratch/home"
 marketplace="$scratch/marketplace"
 workdir="$scratch/workdir"
@@ -105,8 +105,8 @@ esac
 # Step 3b (unconditional): prove the INSTALLED raw .ts entry parses and
 # registers exactly one tool_call handler under Bun, the same runtime omp
 # embeds. This is a weaker tier than step 4 -- it does not exercise omp's own
-# extension resolution -- but unlike step 4 it needs no model credentials, so
-# it runs on every CI run and is the standing floor for KTD1's no-build claim.
+# extension resolution -- but it runs with no omp runtime turn at all, and is
+# the standing floor for KTD1's no-build claim.
 entry="$install_root/src/index.ts"
 [[ -f $entry ]] || fail "installed plugin has no src/index.ts entry: $entry"
 bun - "$entry" <<'BUN' || fail 'installed raw .ts entry failed to load and register'
@@ -135,27 +135,29 @@ BUN
 
 # Step 4 (load-bearing): drive one real bash tool call through omp's own
 # runtime, twice - once against an unmanaged stub verdict (must block) and
-# once against a managed one (must not). This needs a real model turn, so it
-# is the one assertion gated on model credentials being present; every
-# assertion above and the real-HOME-untouched check below always run.
-credential_vars=(ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY GEMINI_API_KEY)
-have_model_credentials=0
-for var in "${credential_vars[@]}"; do
-  if [[ -n ${!var:-} ]]; then
-    have_model_credentials=1
-    break
-  fi
+# once against a managed one (must not). Model turns are served by a local
+# keyless stub provider (KTD5): a models.yml `auth: none` provider backed by
+# .ci/lib/stub-model-server.ts on 127.0.0.1. This needs no model credential,
+# so the proof runs unconditionally on every CI run.
+# The proof must reach the loopback stub, never a real provider. Rather than
+# refusing to run when the invoking shell happens to carry a provider key - a
+# developer workstation usually does - strip the whole set from the child
+# environment below, so the omp process tree cannot authenticate anywhere even
+# when the caller could. Consumed by run_omp_prompt.
+omp_credential_vars=(ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY GEMINI_API_KEY)
+unset_credentials=()
+for var in "${omp_credential_vars[@]}"; do
+  unset_credentials+=(-u "$var")
 done
 
-if [[ $have_model_credentials -eq 1 ]]; then
-  gh_stub="$scratch/gh-stub"
-  mkdir -p "$gh_stub"
-  # Stubs the two gh shapes probe.ts actually issues: the identity lookup
-  # (`gh api --hostname <host> user --jq .login`) and the access probe
-  # (`gh repo view <target> --json viewerPermission,isFork,parent`). Logs
-  # every invocation so the assertions below can prove `issue create` did or
-  # did not reach the subprocess boundary.
-  cat >"$gh_stub/gh" <<'SH'
+gh_stub="$scratch/gh-stub"
+mkdir -p "$gh_stub"
+# Stubs the two gh shapes probe.ts actually issues: the identity lookup
+# (`gh api --hostname <host> user --jq .login`) and the access probe
+# (`gh repo view <target> --json viewerPermission,isFork,parent`). Logs
+# every invocation so the assertions below can prove `issue create` did or
+# did not reach the subprocess boundary.
+cat >"$gh_stub/gh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 log=${GH_LOG:?GH_LOG unset}
@@ -184,62 +186,92 @@ fi
 printf 'unhandled gh invocation: %s\n' "$*" >&2
 exit 1
 SH
-  chmod +x "$gh_stub/gh"
+chmod +x "$gh_stub/gh"
 
-  prompt='Run exactly one bash tool call: `gh issue create --repo other-owner/other-repo --title "test issue" --body "test body"`. Do not run any other command, and do not retry through a different tool or CLI. Report verbatim whatever output or error that single command produces.'
+gh_command='gh issue create --repo other-owner/other-repo --title "test issue" --body "test body"'
+prompt="Run exactly one bash tool call: \`$gh_command\`. Do not run any other command, and do not retry through a different tool or CLI. Report verbatim whatever output or error that single command produces."
 
-  run_omp_prompt() {
-    (
-      cd "$workdir" &&
-        env -u PI_CODING_AGENT_DIR -u OMP_AGENT_ENV \
-          HOME="$home" USERPROFILE="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
-          PATH="$gh_stub:$PATH" GH_LOG="$1" GH_REPO_VIEW_JSON="$2" GH_LOGIN='ci-test-user' \
-          omp -p "$prompt" --auto-approve --no-session --max-time 120
-    )
-  }
+# Stand up the stub model server that drives omp's own extension resolution
+# (KTD5). It is torn down on any exit, including a failure, by the trap
+# declared above.
+stub_log="$scratch/stub-model-server.log"
+: >"$stub_log"
+stub_port_file="$scratch/stub-model-server.port"
+stub_stderr_file="$scratch/stub-model-server.stderr"
+tool_arguments=$(jq -cn --arg command "$gh_command" '{command: $command}')
+bun "$repo_root/.ci/lib/stub-model-server.ts" "$stub_log" bash "$tool_arguments" \
+  >"$stub_port_file" 2>"$stub_stderr_file" &
+stub_pid=$!
+for _ in $(seq 1 100); do
+  [[ -s $stub_port_file ]] && break
+  kill -0 "$stub_pid" 2>/dev/null ||
+    fail "stub model server exited before printing its port: $(cat "$stub_stderr_file" 2>/dev/null)"
+  sleep 0.1
+done
+[[ -s $stub_port_file ]] || fail 'stub model server never printed its port'
+stub_port=$(<"$stub_port_file")
 
-  unmanaged_log="$scratch/gh-unmanaged.log"
-  set +e
-  unmanaged_out=$(run_omp_prompt "$unmanaged_log" '{"viewerPermission":"READ","isFork":false,"parent":null}' 2>&1)
-  unmanaged_status=$?
-  set -e
-  [[ $unmanaged_status -eq 0 ]] || fail "unmanaged-repo run exited $unmanaged_status: $unmanaged_out"
-  grep -qF 'a repository the user does not manage' <<<"$unmanaged_out" ||
-    fail "blocked reason text missing from output: $unmanaged_out"
-  grep -qF 'other-owner/other-repo' <<<"$unmanaged_out" ||
-    fail "blocked reason did not name the target repository: $unmanaged_out"
-  [[ -f $unmanaged_log ]] || fail 'unmanaged-repo run: gh probe never ran'
-  grep -qF 'issue create' "$unmanaged_log" &&
-    fail 'unmanaged-repo run: gh issue create executed despite the block'
+mkdir -p "$home/.omp/agent"
+cat >"$home/.omp/agent/models.yml" <<YAML
+providers:
+  ci-stub:
+    baseUrl: http://127.0.0.1:$stub_port/v1
+    api: openai-completions
+    auth: none
+    models:
+      - id: stub-1
+        name: CI Stub
+        contextWindow: 128000
+        maxTokens: 4096
+YAML
 
-  managed_log="$scratch/gh-managed.log"
-  set +e
-  managed_out=$(run_omp_prompt "$managed_log" '{"viewerPermission":"WRITE","isFork":false,"parent":null}' 2>&1)
-  managed_status=$?
-  set -e
-  [[ $managed_status -eq 0 ]] || fail "managed-repo run exited $managed_status: $managed_out"
-  grep -qF 'a repository the user does not manage' <<<"$managed_out" &&
-    fail "managed-repo run was unexpectedly blocked: $managed_out"
-  [[ -f $managed_log ]] || fail 'managed-repo run: gh probe never ran'
-  grep -qF 'issue create' "$managed_log" ||
-    fail 'managed-repo run: gh issue create never executed despite a managed verdict'
-else
-  printf 'test-unmanaged-repo-guard-real: SKIP the real-model tool-call block/allow proof (U8 step 4) - no model credentials found in any of: %s. The unconditional step 3b load proof, install, enable, list, lock-shape, and real-HOME-untouched assertions all still ran.\n' \
-    "${credential_vars[*]}" >&2
-  # Surface the gap in the Checks UI rather than burying it in step logs: this
-  # is the one assertion that exercises omp's own extension resolution, so a
-  # green run without it proves strictly less than a green run with it.
-  if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    printf '::warning title=unmanaged-repo-guard::U8 step 4 (real-omp runtime block proof) was skipped: no model credentials in CI. Plugin install/enable/load were verified; omp runtime dispatch through the guard was not.\n'
-  fi
-fi
+run_omp_prompt() {
+  (
+    cd "$workdir" &&
+      env "${unset_credentials[@]}" -u PI_CODING_AGENT_DIR -u OMP_AGENT_ENV \
+        HOME="$home" USERPROFILE="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
+        PATH="$gh_stub:$PATH" GH_LOG="$1" GH_REPO_VIEW_JSON="$2" GH_LOGIN='ci-test-user' \
+        NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
+        omp -p "$prompt" --model ci-stub/stub-1 --auto-approve --no-session --max-time 120
+  )
+}
+
+unmanaged_log="$scratch/gh-unmanaged.log"
+set +e
+unmanaged_out=$(run_omp_prompt "$unmanaged_log" '{"viewerPermission":"READ","isFork":false,"parent":null}' 2>&1)
+unmanaged_status=$?
+set -e
+[[ $unmanaged_status -eq 0 ]] || fail "unmanaged-repo run exited $unmanaged_status: $unmanaged_out"
+grep -qF 'a repository the user does not manage' <<<"$unmanaged_out" ||
+  fail "blocked reason text missing from output: $unmanaged_out"
+grep -qF 'other-owner/other-repo' <<<"$unmanaged_out" ||
+  fail "blocked reason did not name the target repository: $unmanaged_out"
+[[ -f $unmanaged_log ]] || fail 'unmanaged-repo run: gh probe never ran'
+grep -qF 'issue create' "$unmanaged_log" &&
+  fail 'unmanaged-repo run: gh issue create executed despite the block'
+
+managed_log="$scratch/gh-managed.log"
+set +e
+managed_out=$(run_omp_prompt "$managed_log" '{"viewerPermission":"WRITE","isFork":false,"parent":null}' 2>&1)
+managed_status=$?
+set -e
+[[ $managed_status -eq 0 ]] || fail "managed-repo run exited $managed_status: $managed_out"
+grep -qF 'a repository the user does not manage' <<<"$managed_out" &&
+  fail "managed-repo run was unexpectedly blocked: $managed_out"
+[[ -f $managed_log ]] || fail 'managed-repo run: gh probe never ran'
+grep -qF 'issue create' "$managed_log" ||
+  fail 'managed-repo run: gh issue create never executed despite a managed verdict'
+
+# A server that never saw a request would let the steps above pass
+# vacuously, and a request that never offered `bash` would mean the tool
+# list on the wire wasn't omp's own real one.
+[[ -s $stub_log ]] ||
+  fail 'stub model server was never contacted - the omp-runtime proof ran vacuously'
+grep -qF '"bash"' "$stub_log" ||
+  fail "stub model server never saw omp offer the bash tool: $(cat "$stub_log")"
 
 real_lock_after=$(snapshot_real_lock)
 [[ $real_lock_before == "$real_lock_after" ]] ||
   fail "real \$HOME plugin lock changed during the run: $real_lock"
 
-if [[ $have_model_credentials -eq 1 ]]; then
-  printf 'real OMP unmanaged-repo-guard: install, enable, lock, raw-.ts load, and omp-runtime block/allow proof passed\n'
-else
-  printf 'real OMP unmanaged-repo-guard: install, enable, lock, and raw-.ts load passed; omp-runtime block/allow proof SKIPPED (see warning above)\n'
-fi
+printf 'real OMP unmanaged-repo-guard: install, enable, lock, raw-.ts load, and omp-runtime block/allow proof passed\n'
