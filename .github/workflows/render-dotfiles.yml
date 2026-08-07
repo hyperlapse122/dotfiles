@@ -677,7 +677,7 @@ jobs:
           [ -f .install-prerequisites.sh ] && targets+=(.install-prerequisites.sh)
           while IFS= read -r -d '' s; do
             targets+=("$s")
-          done < <(find .ci -maxdepth 1 -type f -name '*.sh' -print0)
+          done < <(find .ci -type f -name '*.sh' -print0)
 
           # Every rendered file carrying a bash/sh shebang. The shebang test skips
           # empty renders (OS-gated-out templates) and non-shell files alike.
