@@ -127,9 +127,16 @@ discovered fact.
 - **A3** — `R10` lowers the light tier to `:high` rather than recording an `omp bench` number.
   Issue #182 offers both; a benchmark costs live billable model turns that an unattended run must
   not spend.
-- **A4** — `R10` keeps `task.maxEffort: xhigh` and accepts that the `security-reviewer` subagent
-  seat is clamped below `slow`'s `:max`. Commit `40570fa` set that cap deliberately one day before
-  #182 was filed; raising it would also raise every ad-hoc `effort: "hi"` spawn.
+- **A4** — `R10` raises `task.maxEffort` from `xhigh` to `max`. Issue #182's constraint 7 offers
+  exactly two resolutions once the clamp is confirmed — move the cap, or do not give `slow` `:max`
+  — and its acceptance criteria pin `slow: anthropic/claude-opus-5:max`, so the cap moves. Keeping
+  both and calling it an accepted exception would be a third option the issue does not authorise,
+  and would leave `slow` and `default` identical inside every subagent, which is exactly the
+  outcome constraint 7 exists to prevent. The cost is real and is accepted: an ad-hoc
+  `effort: "hi"` spawn now reaches the model's own top level instead of stopping at `xhigh`.
+  Commit `40570fa` set the `xhigh` cap one day before #182 was filed, by the same author, who then
+  wrote constraint 7 naming that commit — so this is a correction the author anticipated, not a
+  reversal of a decision they still hold.
 - **A5** — No automated check asserts instruction-template body text today, and this plan does not
   add one. Issue #168 classes that idea as an advisory residual and issue #183 does not ask for it.
 
@@ -828,6 +835,7 @@ collisions, the Kimi dependency, and the two unanswered questions resolved in th
 
 **Files:**
 - `.chezmoidata/agents.yaml` (modify)
+- `.ci/test-omp-agent-reconcile.sh` (modify — one fixture, see step 8)
 
 **Approach:**
 1. Set `slow: anthropic/claude-opus-5:max`, `default: anthropic/claude-opus-5:xhigh`,
@@ -845,10 +853,22 @@ collisions, the Kimi dependency, and the two unanswered questions resolved in th
 6. Rewrite the `plan: "@slow"` rationale. "default is 256k; planning needs the 1M line" becomes false
    once `default` is a 1M-context model; the surviving reason is `:max` effort.
 7. Answer issue #182's items 5 and 7 in the PR body with the evidence recorded in A3 and A4. Item 7's
-   answer is established: omp maps a task item's effort onto the model's supported range and then
-   clamps it to `task.maxEffort`, carrying that ceiling across retry-fallback model switches, so
-   `security-reviewer: "@slow"` is clamped to `xhigh` inside subagents while session-level `slow`
-   keeps `:max`.
+   answer is established and its resolution is A4: omp maps a task item's effort onto the model's
+   supported range and then clamps it to `task.maxEffort`, carrying that ceiling across
+   retry-fallback model switches, so an `xhigh` cap would clamp `security-reviewer: "@slow"` down
+   from `:max` and make `slow` and `default` identical inside subagents. The cap is therefore
+   raised to `max` in the same change.
+8. Keep an `opencode-go/kimi-k3` hop in the `settings-model-keyed-chain` fixture of
+   `.ci/test-omp-agent-reconcile.sh`. This is a consequence of the remap, not incidental churn:
+   after the collapse, the shipped data declares `opencode-go/kimi-k3` in exactly one place — the
+   `anthropic/claude-opus-5` chain — and that fixture REPLACES that chain via `--override-data`
+   while still deep-merge-inheriting the real `agents.omp.models` override. Without the hop the
+   fixture orphans the override and fails on a rule it does not test. The orphan rule keeps its own
+   dedicated coverage in the adjacent `models-declared-override` /
+   `models-undeclared-override` pair, so this does not weaken it. Do **not** instead delete the
+   `agents.omp.models` override: omp's built-in catalog reports `contextWindow: 1048576` for
+   `opencode-go/kimi-k3` against a real 256k model, so the override is load-bearing and dropping it
+   would let context grow past what the provider accepts.
 
 **Patterns to follow:** the already-landed `2026-08-06-002` plan's verification table; the file's
 existing comment style, where every non-obvious value carries its reason inline.
@@ -893,16 +913,15 @@ error at any layer — the render succeeds and one chain is silently gone.
   records that idea as an advisory residual, not an actionable finding, and issue #183 does not ask
   for it. Building it here would let the run appear to resolve `R1` while the actual gap is untouched.
 - Provisioning any model credential as a GitHub Actions secret (KTD5 removes the need).
-- Changing `task.maxEffort` (A4).
+- Lowering the light tier below `:high`, or recording an `omp bench` number for it (A3).
 - `.ci/test-packages-manifest.sh`'s own `render` helper. It is a structurally different function and
   is not part of the proven duplication.
 - Any edit to `target.ts`, `exec.ts`, or `reason.ts`.
 
 ### Deferred to follow-up work
 
-- An `omp bench` measurement for the light tier, which would let `smol` carry a higher effort with
+- An `omp bench` measurement for the light tier, which would justify a different `smol` effort with
   evidence (A3).
-- Raising `task.maxEffort` to `max` so the `security-reviewer` seat can reach `slow`'s ceiling (A4).
 
 ---
 
