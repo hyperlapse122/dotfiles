@@ -83,16 +83,29 @@ AppData/Roaming/VSCodium/User/keybindings.json
 # The ydotool capability was removed, so dot_config/systemd/user/ydotool.service
 # and dot_local/libexec/executable_ydotoold-active-seat no longer have sources.
 # Deleting those sources stopped chezmoi managing them but left the
-# already-deployed unit and wrapper behind — prune them here. Removing the unit
-# file does not stop a running ydotoold; docs/decommission/ydotool.md carries the
-# operator steps chezmoi must never perform (stop/disable the unit, unmask the
-# root service, remove the package).
+# already-deployed unit and wrapper behind — prune them here.
+#
+# ORDER MATTERS on a live host, and docs/decommission/ydotool.md leads with it:
+# the wrapper below is the unit's ExecStart target, so pruning it while the unit
+# is still enabled and running risks a Restart=on-failure re-exec into a missing
+# path and a start-limit-hit failure. Stop and disable the unit BEFORE the first
+# apply. That checklist also owns everything else chezmoi must never do — unmask
+# the root service, remove the package.
 #
 # GATED to the hosts that actually received the targets, mirroring the
 # .chezmoiignore predicate that deployed them (Fedora Linux, KDE or GNOME, not
 # headless, not a container). An ungated prune would delete a same-named unit or
 # wrapper that a headless, non-Fedora, or container host owns and chezmoi never
-# put there.
+# put there — a real risk here, because ~/.config/systemd/user/ydotool.service is
+# the path third-party ydotool guides tell users to hand-author.
+#
+# The gate is deliberately kept this tight even though it costs completeness:
+# `headless` is a hook fact whose absentDefault is true, so a first apply, or a
+# host that went headless after deployment, silently prunes nothing and chezmoi
+# still exits 0. Loosening the predicate would widen a provenance-blind delete
+# onto hosts that never received the files, which is the worse trade. The
+# checklist closes the gap instead: it has the operator confirm both paths are
+# gone after the apply and remove them by hand if not.
 {{- if and (eq .chezmoi.os "linux") (eq $f.distro "fedora") (or (eq $f.desktop "kde") (eq $f.desktop "gnome")) (not $f.headless) (not $f.container) }}
 .config/systemd/user/ydotool.service
 .local/libexec/ydotoold-active-seat

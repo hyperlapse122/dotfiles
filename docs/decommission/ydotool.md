@@ -6,47 +6,51 @@
 > prune, apply never stops a live service, unmasks a unit, or removes a package,
 > and no teardown script exists or may be added.
 
-Apply the updated source first, then work through this checklist by hand on each
-previously provisioned Fedora KDE/GNOME desktop. Deleting the managed sources
-stopped chezmoi from managing the runtime, and `.chezmoiremove` reclaims the two
-deployed files, but a running `ydotoold`, the enabled unit's symlink, the masked
-root service, and the installed package all survive an apply untouched.
+**Ordering IS load-bearing here, unlike the other checklists in this directory.**
+Stop and disable the per-user unit **before** the first apply. The apply prunes
+`~/.local/libexec/ydotoold-active-seat`, which is the unit's own `ExecStart`
+target. Leaving the unit live across that prune risks a restart loop: the
+wrapper exits non-zero whenever its supervised `ydotoold` child dies while
+`/dev/uinput` is still writable — a screen unlock or fast user switch is enough —
+and the unit's `Restart=on-failure` then re-execs a path that no longer exists.
+With no `StartLimitBurst` override, systemd's default five-starts-in-ten-seconds
+limit is exhausted almost immediately and the unit lands in `failed`
+(`Result: start-limit-hit`), with journal noise that does not obviously trace
+back to `chezmoi apply`. Recovering from that needs
+`systemctl --user reset-failed ydotool.service` on top of the steps below.
 
-Ordering is not load-bearing: `systemctl --user disable` removes a dangling
-`.wants` symlink even after the unit file is gone, and a running service stays
-stoppable by name while systemd holds its loaded unit. This checklist uses the
-apply-first order the other decommission documents here use.
+Work through this on each previously provisioned Fedora KDE/GNOME desktop.
 
-## 1. Apply the updated source
+## 0. Before the first apply: check for a hand-authored unit
 
-- Run your normal `chezmoi apply`. It deletes the managed sources and prunes the
-  two deployed targets `~/.config/systemd/user/ydotool.service` and
-  `~/.local/libexec/ydotoold-active-seat`. A missing path is fine.
-- Nothing else changes: the daemon keeps running until step 2, and no service,
-  mask, or package is touched.
+`~/.config/systemd/user/ydotool.service` is the path essentially every
+third-party ydotool setup guide tells users to hand-author. `.chezmoiremove`
+cannot tell a file chezmoi deployed from one you wrote yourself, so on a host
+that never applied this repository's ydotool sources, the prune in step 2 would
+delete your own file.
 
-## 2. Stop the user unit
+- Run `cat ~/.config/systemd/user/ydotool.service`. This repository's version is
+  identifiable by `Description=Active-seat ydotoold wrapper` and
+  `ExecStart=%h/.local/libexec/ydotoold-active-seat`.
+- If it is yours rather than this repository's, back it up before applying, and
+  restore it afterwards — or keep it and skip this checklist entirely.
+
+## 1. Stop and disable the user unit
 
 - `systemctl --user stop ydotool.service`
 - This is what releases the device. The unit's `ExecStart` process is the
   active-seat wrapper, not `ydotoold` directly, and its `EXIT`/`INT`/`TERM` trap
   unlinks `$XDG_RUNTIME_DIR/.ydotool_socket` and then terminates its `ydotoold`
-  child. A running wrapper keeps its open inode after the prune deleted the file,
-  so the cleanup still works. The socket needs no step of its own.
-
-## 3. Disable the user unit
-
+  child. The socket needs no step of its own.
 - `systemctl --user disable ydotool.service`
-- **Expect a non-zero exit and `Unit ydotool.service does not exist`.** The unit
-  file is already gone; systemd still removes the
-  `graphical-session.target.wants/ydotool.service` symlink, which is the point of
-  this step. Do not treat the exit status as failure.
 - `systemctl --user daemon-reload`
-- If a graphical login happened between step 1 and this step, the journal may
-  hold one failed start for a unit that no longer exists. It is cosmetic and
-  stops recurring once the symlink is gone.
+- Doing both before the apply keeps the `graphical-session.target.wants` symlink
+  resolvable and avoids the restart loop described above. (`disable` does still
+  clear a dangling symlink after the unit file is gone — it just exits non-zero
+  with `Unit ydotool.service does not exist` — so a host that already applied is
+  recoverable; it is simply not the order to choose.)
 
-## 4. Verify /dev/uinput is released
+## 2. Confirm /dev/uinput is released
 
 - Confirm no `ydotoold` process survives — for example `pgrep -a ydotoold`, and
   `fuser -v /dev/uinput` or `lsof /dev/uinput` to see who still holds the node.
@@ -55,22 +59,43 @@ apply-first order the other decommission documents here use.
   attribute to this stack — Solaar legitimately opens `/dev/uinput` too, and
   killing it breaks the MX Master gestures.
 
-## 5. Unmask the packaged root service
+## 3. Apply the updated source
 
-- `sudo systemctl unmask ydotool.service`
-- The Fedora installer used to mask this unit so the package's root daemon could
-  not race the per-user runtime. The mask is a
-  `/etc/systemd/system/ydotool.service -> /dev/null` symlink that survives both
-  the source removal and the package removal, so clear it before step 6.
+- Run your normal `chezmoi apply`. It deletes the managed sources and prunes the
+  two deployed targets `~/.config/systemd/user/ydotool.service` and
+  `~/.local/libexec/ydotoold-active-seat`. A missing path is fine.
+- **Verify the prune actually fired:** `ls ~/.config/systemd/user/ydotool.service
+  ~/.local/libexec/ydotoold-active-seat` should report both missing. The prune is
+  gated on the same host facts that deployed the files, and the `headless` fact
+  fails safe to *true* when `~/.cache/chezmoi/facts.yaml` is missing or corrupt —
+  so on a first apply, or on a host that became headless since deployment, the
+  prune silently does not fire and chezmoi still exits 0. If either file is still
+  there, delete it by hand; the leftovers are inert either way.
+- `~/.local/libexec/` may be left behind empty. Removing it is optional.
 
-## 6. Remove the package
+## 4. Remove the package
 
 - `sudo dnf remove ydotool`
 - The package manifest has no removal key and this repository adds no teardown
   scripts, so package removal is a one-time manual step — the same convention the
   `kitty` note in `.chezmoidata/packages.yaml` documents.
+- Removing the package **before** unmasking is deliberate. Unmasking first would
+  leave the root `ydotool.service` startable again — masking never cleared any
+  enablement the RPM's install-time preset may have created — reopening exactly
+  the root-daemon-races-`/dev/uinput` condition the mask existed to prevent, for
+  as long as it takes you to get to this step.
 
-## 7. What stays — do not remove
+## 5. Clear the leftover mask
+
+- `sudo systemctl unmask ydotool.service`
+- `sudo systemctl daemon-reload`
+- The Fedora installer used to mask this unit so the package's root daemon could
+  not race the per-user runtime. The mask is a
+  `/etc/systemd/system/ydotool.service -> /dev/null` symlink that survives both
+  the source removal and the package removal. With the package already gone,
+  clearing it now closes no window and leaves no orphan.
+
+## 6. What stays — do not remove
 
 - `system/linux/etc/udev/rules.d/70-uinput-solaar.rules` and its deployed
   `/etc/udev/rules.d/70-uinput-solaar.rules` **stay**. The active-seat
@@ -80,3 +105,18 @@ apply-first order the other decommission documents here use.
 - `/etc/udev/rules.d/80-uinput.rules`, if a host still carries it, is reclaimed
   automatically by the system installer manifest on the next apply; remove it by
   hand only if the host will not apply again.
+
+## 7. If you ever reinstall ydotool
+
+This repository will not mask the packaged root `ydotool.service` again. That
+protection was removed with the rest of the capability, not preserved elsewhere,
+and nothing here installs or manages ydotool any more. An operator who reinstalls
+the package — deliberately or as another package's dependency — owns the decision
+of whether to mask the root unit by hand.
+
+## 8. Credential boundary — no chezmoi-managed credentials exist
+
+ydotool never had a credential surface: no `op://` reference, no token, no
+key material, and no runtime state beyond the mode-0600 socket in
+`$XDG_RUNTIME_DIR` that step 1 already removed. There is nothing to rotate,
+revoke, or delete in 1Password or anywhere else.
