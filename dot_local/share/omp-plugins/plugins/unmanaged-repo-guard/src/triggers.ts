@@ -121,7 +121,7 @@ function operatorLength(s: string, i: number): number {
 export function splitCommand(command: string): SplitResult {
   const segments: Segment[] = [];
   let current: Segment = { text: "", bodies: [] };
-  let quote: '"' | "'" | null = null;
+  let quote: '"' | "'" | "$'" | null = null;
   let unparseable = false;
 
   // Heredocs opened on the current line, consumed at the next newline. Each
@@ -139,6 +139,17 @@ export function splitCommand(command: string): SplitResult {
     const c = command[i] as string;
 
     if (quote) {
+      if (quote === "$'") {
+        if (c === "\\" && i + 1 < command.length) {
+          current.text += c + command[i + 1];
+          i += 2;
+          continue;
+        }
+        if (c === "'") quote = null;
+        current.text += c;
+        i += 1;
+        continue;
+      }
       if (c === "\\" && quote === '"' && i + 1 < command.length) {
         current.text += c + command[i + 1];
         i += 2;
@@ -152,6 +163,13 @@ export function splitCommand(command: string): SplitResult {
 
     if (c === "\\" && i + 1 < command.length) {
       current.text += c + command[i + 1];
+      i += 2;
+      continue;
+    }
+
+    if (c === "$" && command[i + 1] === "'") {
+      quote = "$'";
+      current.text += "$'";
       i += 2;
       continue;
     }
@@ -268,7 +286,7 @@ export function toArgv(text: string): string[] {
   const argv: string[] = [];
   let token = "";
   let started = false;
-  let quote: '"' | "'" | null = null;
+  let quote: '"' | "'" | "$'" | null = null;
 
   const flush = () => {
     if (started) argv.push(token);
@@ -279,6 +297,20 @@ export function toArgv(text: string): string[] {
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i] as string;
     if (quote) {
+      if (quote === "$'") {
+        if (c === "\\" && i + 1 < text.length) {
+          token += text[i + 1];
+          i += 1;
+          continue;
+        }
+        if (c === "'") {
+          quote = null;
+          continue;
+        }
+        token += c;
+        started = true;
+        continue;
+      }
       if (c === "\\" && quote === '"' && i + 1 < text.length) {
         token += text[i + 1];
         i += 1;
@@ -294,6 +326,17 @@ export function toArgv(text: string): string[] {
     }
     if (c === "\\" && i + 1 < text.length) {
       token += text[i + 1];
+      started = true;
+      i += 1;
+      continue;
+    }
+
+    // ANSI-C `$'...'` quoting: only `\<char>` is decoded to that literal
+    // character; full escape sequences like `\n`/`\t`/`\xNN` are not
+    // interpreted (out of scope — the guard needs correct span boundaries
+    // and argv values, not shell-accurate string interpolation).
+    if (c === "$" && text[i + 1] === "'") {
+      quote = "$'";
       started = true;
       i += 1;
       continue;

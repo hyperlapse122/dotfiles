@@ -22,11 +22,11 @@ import {
   resolveCandidates,
 } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts";
 import type { RepoRef } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts";
-import { classify } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
+import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 120;
+const EXPECTED_MIN_CHECKS = 131;
 
 let passed = 0;
 const failures: string[] = [];
@@ -219,6 +219,66 @@ eq(
   asWrite(bash("cd \"$T\" && gh issue create --repo o/r"))?.repo,
   "o/r",
 );
+
+// ANSI-C `$'...'` quoting (R4): an escaped quote inside the span must not
+// leak quote state past it, in both splitCommand's segment tracker and
+// toArgv's independent argv tracker. A splitCommand-only fix would still
+// mis-split in toArgv, so every case below checks both.
+{
+  const oneEscape = "gh issue create --title $'Don\\'t stop' --repo o/r";
+  eq("U1 ansi-c $'...' escaped quote classifies with the correct repo (R4)", asWrite(bash(oneEscape))?.repo, "o/r");
+  eq("U1 ansi-c $'...' escaped quote leaves splitCommand balanced (R4)", splitCommand(oneEscape).unparseable, false);
+  eq(
+    "U1 toArgv keeps an ansi-c escaped quote as one element, not two (R4)",
+    JSON.stringify(toArgv(oneEscape)),
+    JSON.stringify(["gh", "issue", "create", "--title", "Don't stop", "--repo", "o/r"]),
+  );
+}
+{
+  const twoEscapes = "gh issue create --title $'a\\'b\\'c' --repo o/r";
+  eq("U1 two ansi-c escaped quotes leave splitCommand balanced (R4)", splitCommand(twoEscapes).unparseable, false);
+  eq(
+    "U1 toArgv decodes two ansi-c escaped quotes as one element (R4)",
+    JSON.stringify(toArgv(twoEscapes)),
+    JSON.stringify(["gh", "issue", "create", "--title", "a'b'c", "--repo", "o/r"]),
+  );
+}
+{
+  const semicolon = "gh issue create --title $'a;b' --repo o/r";
+  const sr = splitCommand(semicolon);
+  check("U1 ; inside an ansi-c span does not split the command (R4)", sr.segments.length === 1 && !sr.unparseable);
+  eq(
+    "U1 ; inside an ansi-c span does not split the argv element (R4)",
+    JSON.stringify(toArgv(semicolon)),
+    JSON.stringify(["gh", "issue", "create", "--title", "a;b", "--repo", "o/r"]),
+  );
+}
+{
+  const dollarInDquotes = 'echo "$\'" foo';
+  const sr = splitCommand(dollarInDquotes);
+  check(
+    "U1 $ before ' inside double quotes is not an ansi-c opener in splitCommand (R4)",
+    sr.segments.length === 1 && !sr.unparseable,
+  );
+  eq(
+    "U1 $ before ' inside double quotes is not an ansi-c opener in toArgv (R4)",
+    JSON.stringify(toArgv(dollarInDquotes)),
+    JSON.stringify(["echo", "$'", "foo"]),
+  );
+}
+{
+  const plainSingleQuote = "'don\\'t'";
+  eq(
+    "U1 plain single-quoted backslash-quote still closes at the second quote in splitCommand (R4)",
+    splitCommand(plainSingleQuote).unparseable,
+    true,
+  );
+  eq(
+    "U1 plain single-quoted backslash-quote still closes at the second quote in toArgv (R4)",
+    JSON.stringify(toArgv(plainSingleQuote)),
+    JSON.stringify(["don\\t"]),
+  );
+}
 
 // ------------------------------------------------------- U2: target resolution
 
