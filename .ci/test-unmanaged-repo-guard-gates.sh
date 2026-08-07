@@ -13,15 +13,8 @@ chmod +x "$scratch/bin/op"
 chezmoi_bin=$(type -P chezmoi)
 
 fail() { printf 'unmanaged-repo-guard gates: %s\n' "$*" >&2; exit 1; }
-require_file() { [[ -f "$repo_root/$1" ]] || fail "missing source surface $1"; }
-
-render() {
-  local os=$1 input=$2 output=$3
-  env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
-      --destination "$scratch/target" --override-data "{\"chezmoi\":{\"os\":\"$os\"}}" \
-      execute-template <"$input" >"$output"
-}
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 posix_reconcile=.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
 guard_manifest=dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/package.json.tmpl
@@ -33,47 +26,8 @@ for path in "$posix_reconcile" "$guard_manifest" "$guard_tsconfig" \
   dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/target.ts \
   dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/probe.ts \
   dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/reason.ts; do
-  require_file "$path"
+  require_file "$repo_root" "$scratch" "$chezmoi_bin" "$path"
 done
-
-# Render the production ignore template with only its fact provider replaced by
-# deterministic fixture facts. This exercises the real path gates without
-# consulting this runner's container markers or desktop session.
-render_ignore() {
-  local os=$1 container=$2 output=$3 variant
-  variant="$scratch/ignore-$os-$container.tmpl"
-  node -e '
-    const fs = require("node:fs");
-    const [sourcePath, outputPath, container] = process.argv.slice(1);
-    const source = fs.readFileSync(sourcePath, "utf8");
-    const needle = `{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}`;
-    const replacement = `{{- $f := dict "container" ${container} "desktop" "gnome" "distro" "fedora" "headless" false }}`;
-    if (source.split(needle).length !== 2) throw new Error("facts provider anchor changed");
-    fs.writeFileSync(outputPath, source.replace(needle, replacement));
-  ' "$repo_root/.chezmoiignore" "$variant" "$container"
-  render "$os" "$variant" "$output"
-}
-
-is_ignored() {
-  local rendered=$1 path=${2#./} pattern
-  while IFS= read -r pattern; do
-    pattern=${pattern#./}
-    [[ -z "$pattern" || "$pattern" == \#* ]] && continue
-    # shellcheck disable=SC2053 # The rendered ignore entry is an intentional glob.
-    if [[ "$path" == $pattern || "$path" == "$pattern"/* ]]; then
-      return 0
-    fi
-  done <"$rendered"
-  return 1
-}
-assert_gate() {
-  local rendered=$1 expected=$2 path=$3 label=$4
-  if [[ "$expected" == eligible ]]; then
-    if is_ignored "$rendered" "$path"; then fail "$label unexpectedly ignored $path"; fi
-  elif ! is_ignored "$rendered" "$path"; then
-    fail "$label unexpectedly exposes $path"
-  fi
-}
 
 omp_market=.local/share/omp-plugins/dot_omp-plugin/marketplace.json
 guard_tree=.local/share/omp-plugins/plugins/unmanaged-repo-guard
@@ -82,44 +36,29 @@ haptic_tree=.local/share/omp-plugins/plugins/mxm4-haptic
 # AE8 / R18: in a container the guard tree and the shared catalog stay
 # reachable while the hardware-bound haptic plugin does not.
 container_ignore="$scratch/ignore-linux-container"
-render_ignore linux true "$container_ignore"
-assert_gate "$container_ignore" eligible "$guard_tree" 'linux container'
-assert_gate "$container_ignore" ignored "$haptic_tree" 'linux container'
-assert_gate "$container_ignore" eligible "$omp_market" 'linux container'
-
-render_reconciler() {
-  local os=$1 container=$2 template=$3 output=$4 variant
-  variant="$scratch/reconciler-$os-$container-$(basename "$template")"
-  node -e '
-    const fs = require("node:fs");
-    const [sourcePath, outputPath, container] = process.argv.slice(1);
-    const source = fs.readFileSync(sourcePath, "utf8");
-    const needle = `includeTemplate "facts.tmpl" . | fromYaml`;
-    const replacement = `dict "container" ${container}`;
-    if (source.split(needle).length !== 2) throw new Error("reconciler facts provider anchor changed");
-    fs.writeFileSync(outputPath, source.replace(needle, replacement));
-  ' "$repo_root/$template" "$variant" "$container"
-  render "$os" "$variant" "$output"
-}
+render_ignore "$repo_root" "$scratch" "$chezmoi_bin" linux true "$container_ignore"
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible "$guard_tree" 'linux container'
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored "$haptic_tree" 'linux container'
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible "$omp_market" 'linux container'
 
 row_present() { grep -F "$2\\t$3" "$1" >/dev/null; }
 
 # Container host: the guard row survives while the haptic row is filtered out.
-render_reconciler linux true "$posix_reconcile" "$scratch/reconcile-linux-container.sh"
+render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux true "$posix_reconcile" "$scratch/reconcile-linux-container.sh"
 row_present "$scratch/reconcile-linux-container.sh" unmanaged-repo-guard h82-dotfiles ||
   fail 'container reconciler dropped the unmanaged-repo-guard row'
 ! row_present "$scratch/reconcile-linux-container.sh" mxm4-haptic h82-dotfiles ||
   fail 'container reconciler unexpectedly rendered the mxm4-haptic row'
 
 # Non-container Linux: both rows present.
-render_reconciler linux false "$posix_reconcile" "$scratch/reconcile-linux-host.sh"
+render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux false "$posix_reconcile" "$scratch/reconcile-linux-host.sh"
 row_present "$scratch/reconcile-linux-host.sh" unmanaged-repo-guard h82-dotfiles ||
   fail 'non-container reconciler dropped the unmanaged-repo-guard row'
 row_present "$scratch/reconcile-linux-host.sh" mxm4-haptic h82-dotfiles ||
   fail 'non-container reconciler dropped the mxm4-haptic row'
 
 # macOS: both rows present (the h82-dotfiles marketplace lists darwin).
-render_reconciler darwin false "$posix_reconcile" "$scratch/reconcile-darwin.sh"
+render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" darwin false "$posix_reconcile" "$scratch/reconcile-darwin.sh"
 row_present "$scratch/reconcile-darwin.sh" unmanaged-repo-guard h82-dotfiles ||
   fail 'macOS reconciler dropped the unmanaged-repo-guard row'
 row_present "$scratch/reconcile-darwin.sh" mxm4-haptic h82-dotfiles ||
@@ -131,13 +70,13 @@ row_present "$scratch/reconcile-darwin.sh" mxm4-haptic h82-dotfiles ||
 # the whole agents.omp.plugins list (chezmoi/mergo replaces arrays wholesale
 # rather than merging them) so the fixture is isolated from the real rows.
 render_override() {
-  local os=$1 template=$2 override=$3 output=$4
+  local template=$1 override=$2 output=$3
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
       --destination "$scratch/target" --override-data "$override" \
       execute-template <"$repo_root/$template" >"$output"
 }
-render_override linux "$posix_reconcile" \
+render_override "$posix_reconcile" \
   '{"chezmoi":{"os":"linux"},"agents":{"omp":{"plugins":[{"name":"mxm4-haptic","marketplace":"h82-dotfiles"}]}}}' \
   "$scratch/reconcile-omitted-container.sh"
 node -e '
@@ -172,7 +111,7 @@ grep -F 'maybe' "$scratch/invalid-container.err" >/dev/null ||
   fail 'invalid-container rejection did not name the offending value'
 
 # The rendered plugin manifest has the three required fields.
-render linux "$repo_root/$guard_manifest" "$scratch/manifest.json"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$guard_manifest" "$scratch/manifest.json"
 node -e '
   const fs = require("node:fs");
   const [path] = process.argv.slice(1);
@@ -201,7 +140,7 @@ render_manifest_fixture() {
     if (source.split(needle).length !== 2) throw new Error("manifest guard-data anchor changed");
     fs.writeFileSync(outputPath, source.replace(needle, `{{- $guard := ${guardExpr} -}}`));
   ' "$repo_root/$guard_manifest" "$variant" "$guard_expr"
-  render linux "$variant" "$output" 2>"$output.err"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$variant" "$output" 2>"$output.err"
 }
 if render_manifest_fixture 'dict "cacheTtlMs" 300000' "$scratch/manifest-missing.json"; then
   fail 'manifest render accepted a missing probeTimeoutMs'

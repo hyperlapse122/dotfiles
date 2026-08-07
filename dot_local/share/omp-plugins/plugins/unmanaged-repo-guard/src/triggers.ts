@@ -117,11 +117,27 @@ function operatorLength(s: string, i: number): number {
  *
  * Tracks quote and heredoc state so an operator inside a quoted string or a
  * heredoc body never splits.
+ *
+ * Three invariants here are load-bearing and easy to break:
+ *
+ * 1. **Backslash is bash-asymmetric.** It escapes the next character inside
+ *    double quotes and inside an ANSI-C `$'…'` span, and is an ordinary
+ *    literal inside plain single quotes. That is bash, not an oversight.
+ * 2. **Command substitution is excluded two functions away.** This function
+ *    deliberately does not detect `$(…)` or backticks; `argvHead` does, via
+ *    its `opaque` check, which routes the whole classification to
+ *    `fallbackScan`. Do not add substitution handling here redundantly.
+ * 3. **`splitCommand` and `toArgv` are SEPARATE quote state machines and must
+ *    stay in lockstep.** Teaching one a quoting form and not the other splits
+ *    the tokenizer's model of the same input. Specifically, teaching this
+ *    function a form that stops it setting `unparseable` while `toArgv` still
+ *    mis-splits removes the `fallbackScan` safety net and yields a
+ *    confidently wrong classification instead of a conservative one.
  */
 export function splitCommand(command: string): SplitResult {
   const segments: Segment[] = [];
   let current: Segment = { text: "", bodies: [] };
-  let quote: '"' | "'" | null = null;
+  let quote: '"' | "'" | "$'" | null = null;
   let unparseable = false;
 
   // Heredocs opened on the current line, consumed at the next newline. Each
@@ -138,7 +154,20 @@ export function splitCommand(command: string): SplitResult {
   while (i < command.length) {
     const c = command[i] as string;
 
+    // Backslash is bash-asymmetric: an escape inside `"…"` and `$'…'`, an
+    // ordinary literal inside `'…'`. Keep this in lockstep with `toArgv`.
     if (quote) {
+      if (quote === "$'") {
+        if (c === "\\" && i + 1 < command.length) {
+          current.text += c + command[i + 1];
+          i += 2;
+          continue;
+        }
+        if (c === "'") quote = null;
+        current.text += c;
+        i += 1;
+        continue;
+      }
       if (c === "\\" && quote === '"' && i + 1 < command.length) {
         current.text += c + command[i + 1];
         i += 2;
@@ -152,6 +181,13 @@ export function splitCommand(command: string): SplitResult {
 
     if (c === "\\" && i + 1 < command.length) {
       current.text += c + command[i + 1];
+      i += 2;
+      continue;
+    }
+
+    if (c === "$" && command[i + 1] === "'") {
+      quote = "$'";
+      current.text += "$'";
       i += 2;
       continue;
     }
@@ -263,15 +299,101 @@ export function splitCommand(command: string): SplitResult {
   return { segments, unparseable };
 }
 
-/** Split one simple command into argv, stripping one level of quoting. */
+/**
+ * Decode one ANSI-C (`$'…'`) escape starting at the backslash in `text[i]`.
+ *
+ * This must be a real decode, not a "drop the backslash" approximation.
+ * Bash resolves `$'\x69ssue'` to `issue`, so a tokenizer that yields
+ * `x69ssue` classifies `gh $'\x69ssue' create --repo other/repo` as an
+ * unrelated command and lets the write through with no permission probe.
+ * `fallbackScan` cannot rescue that shape either, because the raw text holds
+ * no literal `issue` for its regex to find.
+ *
+ * Returns the decoded text and the index just past the escape. An escape bash
+ * does not recognise keeps its backslash, exactly as bash does.
+ */
+function decodeAnsiCEscape(text: string, i: number): { out: string; next: number } {
+  const c = text[i + 1];
+  if (c === undefined) return { out: "\\", next: i + 1 };
+  const simple: Record<string, string> = {
+    a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n",
+    r: "\r", t: "\t", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?",
+  };
+  const mapped = simple[c];
+  if (mapped !== undefined) return { out: mapped, next: i + 2 };
+
+  const take = (from: number, max: number, re: RegExp): string => {
+    let s = "";
+    while (s.length < max && from + s.length < text.length && re.test(text[from + s.length] as string)) {
+      s += text[from + s.length] as string;
+    }
+    return s;
+  };
+  // Bash's numeric and control escapes name a BYTE, not a code point: `\777`
+  // is 0xff and `\400` wraps to NUL. Masking keeps this decoder byte-faithful
+  // instead of minting U+01FF, which would encode as two bytes bash never
+  // produces.
+  const byte = (value: number): string => String.fromCharCode(value & 0xff);
+
+  if (c === "x") {
+    const digits = take(i + 2, 2, /[0-9a-fA-F]/);
+    if (digits !== "") return { out: byte(parseInt(digits, 16)), next: i + 2 + digits.length };
+  }
+  if (c === "u" || c === "U") {
+    const digits = take(i + 2, c === "u" ? 4 : 8, /[0-9a-fA-F]/);
+    if (digits !== "") {
+      const code = parseInt(digits, 16);
+      // Bash DROPS an out-of-Unicode-range code point, producing nothing, and
+      // `String.fromCodePoint` would throw on it. Emitting the literal
+      // spelling instead would be a bypass, not a safe fallback:
+      // `$'iss\UFFFFFFFFue'` is exactly `issue` to bash, so anything but an
+      // empty string here loses the route.
+      return {
+        out: code <= 0x10ffff ? String.fromCodePoint(code) : "",
+        next: i + 2 + digits.length,
+      };
+    }
+  }
+  if (c >= "0" && c <= "7") {
+    const digits = take(i + 1, 3, /[0-7]/);
+    return { out: byte(parseInt(digits, 8)), next: i + 1 + digits.length };
+  }
+  if (c === "c") {
+    const target = text[i + 2];
+    // NEVER consume the span's closing quote as a control target. `\c` is the
+    // only escape whose target can be any character, so it is the only one
+    // that could swallow a `'` and leave `toArgv` inside a quote that
+    // `splitCommand` already closed - the exact two-machine desync invariant 3
+    // warns about, and one `splitCommand` would report as parseable.
+    if (target !== undefined && target !== "'") {
+      return { out: byte(target.toUpperCase().charCodeAt(0) ^ 0x40), next: i + 3 };
+    }
+  }
+  // Unrecognised: bash keeps the backslash.
+  return { out: `\\${c}`, next: i + 2 };
+}
+
+/**
+ * Split one simple command into argv, stripping one level of quoting.
+ *
+ * This is the SECOND of the tokenizer's two quote state machines; the first
+ * is `splitCommand`. They are independent and must stay in lockstep — see
+ * invariant 3 on `splitCommand`. Backslash is bash-asymmetric here too: an
+ * escape inside `"…"` and `$'…'`, an ordinary literal inside `'…'`.
+ */
 export function toArgv(text: string): string[] {
   const argv: string[] = [];
   let token = "";
   let started = false;
-  let quote: '"' | "'" | null = null;
+  let quote: '"' | "'" | "$'" | null = null;
 
+  // Bash cannot hold a NUL in an argv word: it truncates the word there. A
+  // decoder that keeps the tail would build `issue\0…` where bash built
+  // `issue`, and the positional compare in `cliIsIssueWrite` would miss the
+  // route entirely. Truncating at flush keeps the word present but ends it
+  // where bash ends it.
   const flush = () => {
-    if (started) argv.push(token);
+    if (started) argv.push(token.split("\0")[0] as string);
     token = "";
     started = false;
   };
@@ -279,8 +401,26 @@ export function toArgv(text: string): string[] {
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i] as string;
     if (quote) {
+      if (quote === "$'") {
+        if (c === "\\" && i + 1 < text.length) {
+          const { out, next } = decodeAnsiCEscape(text, i);
+          token += out;
+          started = true;
+          i = next - 1;
+          continue;
+        }
+        if (c === "'") {
+          quote = null;
+          continue;
+        }
+        token += c;
+        started = true;
+        continue;
+      }
       if (c === "\\" && quote === '"' && i + 1 < text.length) {
-        token += text[i + 1];
+        // Line continuation: bash removes the pair rather than emitting the
+        // newline.
+        if (text[i + 1] !== "\n") token += text[i + 1];
         i += 1;
         continue;
       }
@@ -293,7 +433,23 @@ export function toArgv(text: string): string[] {
       continue;
     }
     if (c === "\\" && i + 1 < text.length) {
-      token += text[i + 1];
+      // Line continuation, unquoted: the pair vanishes and the word continues
+      // across the break. Emitting a real newline here would split `issue`
+      // into `\nissue` and lose the route.
+      if (text[i + 1] !== "\n") {
+        token += text[i + 1];
+        started = true;
+      }
+      i += 1;
+      continue;
+    }
+
+    // ANSI-C `$'...'` quoting. Escapes inside the span are DECODED (see
+    // decodeAnsiCEscape): the argv this produces feeds route classification,
+    // and bash resolves `$'\x69ssue'` to `issue`, so anything less lets an
+    // encoded subcommand slip past `cliIsIssueWrite`.
+    if (c === "$" && text[i + 1] === "'") {
+      quote = "$'";
       started = true;
       i += 1;
       continue;
@@ -344,6 +500,10 @@ function argvHead(argv: string[]): ArgvHead {
       i += 1;
       continue;
     }
+    // THIS is where command substitution is excluded — not `splitCommand`,
+    // which deliberately does not detect `$(…)` or backticks. `opaque` routes
+    // the whole classification to `fallbackScan`, so the boundary lives here
+    // and nowhere else: `gh issue create --title $(cat x)`.
     if (t.includes("$(") || t.includes("`")) {
       return { head: null, rest: [], envHost, opaque: true };
     }

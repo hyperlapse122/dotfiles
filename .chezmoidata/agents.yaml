@@ -261,18 +261,25 @@ agents:
     #
     # Tier basis: the ceiling/mid boundary follows LMArena's coding and agent
     # leaderboards (text category=coding and agent category=overall, snapshot
-    # 2026-08-03). The light tier sits OUTSIDE that basis - it is chosen for
-    # latency, and `omp bench` is its check. Everything else here is enforced by
-    # `.chezmoitemplates/omp-settings-validate.tmpl`, not by prose.
+    # 2026-08-03). All three doer tiers now sit on Anthropic, so the ladder is
+    # effort-graded across two models rather than vendor-graded across three:
+    # opus-5 at :max and :xhigh, sonnet-5 at :high. The light tier is still a
+    # latency choice, which is why it takes :high and not the :xhigh the main
+    # loop uses - `mnemopi.llmMode: smol` runs it on every retained turn, so
+    # maximum deliberation there is the wrong default. `omp bench` remains its
+    # check; no bench number was recorded for this change. Everything else here
+    # is enforced by `.chezmoitemplates/omp-settings-validate.tmpl`, not prose.
     settings:
       # Three tiers. A role names a tier; a chain hangs on the tier's model
       # (see retry.fallbackChains below), so grade is a property of the model.
+      # `slow` and `default` deliberately share one model at two efforts, which
+      # is why they also share one chain - see the collision note there.
       modelRoles:
-        slow: anthropic/claude-opus-5:xhigh         # deliberation ceiling
-        default: kimi-code/k3-256k:high             # main coding and editing loop
-        smol: kimi-code/kimi-for-coding:high        # light floor that still follows tools
-        advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; third vendor, off the doer's lines
-        plan: "@slow"                               # default is 256k; planning needs the 1M line
+        slow: anthropic/claude-opus-5:max           # deliberation ceiling
+        default: anthropic/claude-opus-5:xhigh      # main coding and editing loop
+        smol: anthropic/claude-sonnet-5:high        # light floor that still follows tools
+        advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; the one line no doer tier uses
+        plan: "@slow"                               # both tiers are 1M now; the alias buys :max effort
         commit: "@smol"                             # else commit messages ride the session model
       # EXHAUSTIVE over `omp agents unpack`, not a diff against frontmatter. An
       # omitted agent lands on its own frontmatter (override -> frontmatter ->
@@ -290,7 +297,13 @@ agents:
         security-reviewer: "@slow"                  # highest-stakes review seat
       task.showResolvedModelBadge: true
       task.enableEffort: true
-      task.maxEffort: xhigh
+      # Ceiling on subagent effort. It MUST stay at max while `slow` is :max:
+      # omp maps a task item's effort onto the model's supported range, clamps
+      # it here, and carries that ceiling across retry-fallback switches, so an
+      # xhigh cap would clamp `security-reviewer: "@slow"` down to :xhigh and
+      # make `slow` and `default` identical inside every subagent - collapsing
+      # the top of the ladder exactly where the stakes are highest.
+      task.maxEffort: max
       retry.usageAwareFallback: true
       # Keyed by MODEL, not role. An exact provider/model-id key outranks a role
       # chain by specificity (oh-my-pi docs/settings.md), so every role using that
@@ -299,27 +312,34 @@ agents:
       # A provider/* key is rejected at render: it would span the whole provider
       # and catch another tier's model, and anthropic backs three tiers here.
       retry.fallbackChains:
-        # Ceiling: the only other 1520+ coding-Elo line, then Kimi at 256k.
+        # Ceiling AND main loop: both resolve to this one model id, so they share
+        # one chain by necessity. `omp-settings-validate.tmpl` rejects a thinking
+        # suffix on a chain key, so :max and :xhigh cannot be separated here, and
+        # declaring the key twice would be worse than useless - duplicate keys in
+        # one YAML document collapse silently at decode, upstream of every
+        # validator, so one chain would vanish with no error anywhere.
+        # Both hops leave anthropic, and the last keeps `opencode-go/kimi-k3` a
+        # declared selector, which is what keeps its models override legal.
         anthropic/claude-opus-5:
         - kimi-code/k3-256k:max
         - opencode-go/kimi-k3:max
-        # Mid: Kimi's own plan spends early and is shared across clients, so the
-        # first hop leaves it entirely; the last keeps the Sonnet family on the
-        # plan with the most headroom.
-        kimi-code/k3-256k: &mid_tier
-        - anthropic/claude-sonnet-5:xhigh
-        - opencode-go/kimi-k3:high
-        - google-antigravity/claude-sonnet-4-6:high
-        # Light: four plans, one per hop.
-        kimi-code/kimi-for-coding:
+        # Light: three plans, one per hop, none of them anthropic - so one
+        # Anthropic cap cannot degrade this tier at the same moment it degrades
+        # the two above it.
+        anthropic/claude-sonnet-5:
         - google-antigravity/gemini-3.6-flash:high
         - openai-codex/gpt-5.6-luna:max
-        - anthropic/claude-haiku-4-5:xhigh
-        # Critic: stays off Kimi entirely and reaches Claude only last, so a
-        # review never shares the doer's line until nothing else is left.
+        - kimi-code/kimi-for-coding:high
+        # Critic: reaches neither doer model. It also skips a second
+        # openai-codex line, because usage-aware fallback makes a same-provider
+        # hop useless when the plan cap is what failed.
         openai-codex/gpt-5.6-sol:
-        - anthropic/claude-sonnet-5:xhigh
-        default: *mid_tier
+        - google-antigravity/gemini-3-pro:high
+        - opencode-go/glm-5.2:max
+        # Floor for a hand-picked /model that no key above names.
+        default:
+        - anthropic/claude-opus-5:xhigh
+        - kimi-code/k3-256k:max
       # Turn review plus the `reviewer` agent. Enabling it starts a continuous
       # flow of each turn's transcript delta to the critic; advisor.subagents
       # stays undeclared so its false default keeps subagent turns out of it.
@@ -468,3 +488,16 @@ agents:
   unmanagedRepoGuard:
     probeTimeoutMs: 5000
     cacheTtlMs: 300000
+    # auditLog: a durable, session-independent trace of every block, appended
+    # to $XDG_STATE_HOME/unmanaged-repo-guard/blocks.jsonl (or
+    # ~/.local/state/... when XDG_STATE_HOME is unset). Never written on the
+    # allow path, so the per-call hot path stays allocation-free (KTD4, R5).
+    #   enabled  : must ship true — a disabled audit trail would leave R5
+    #              unfixed. A write failure (full disk, unwritable state
+    #              directory) degrades only the audit trail, never the
+    #              guard's block/allow verdict.
+    #   maxBytes : truncates the log once it exceeds this many bytes, so an
+    #              unattended workstation cannot grow it without bound.
+    auditLog:
+      enabled: true
+      maxBytes: 1048576

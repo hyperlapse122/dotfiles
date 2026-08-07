@@ -33,7 +33,18 @@ const MANAGED_GITHUB_PERMISSIONS: Record<string, true> = {
 
 const GITLAB_MIN_ACCESS_LEVEL = 30;
 
-type CacheEntry = { verdict: Exclude<Verdict, "indeterminate">; detail: string; expiresAt: number };
+type CacheEntry = {
+  verdict: Exclude<Verdict, "indeterminate">;
+  detail: string;
+  expiresAt: number;
+  /** The resolved fork parent, if any, so a cache hit can still re-queue it (plan R9). */
+  parent: RepoRef | null;
+};
+
+type IdentityEntry = {
+  value: string | null;
+  expiresAt: number;
+};
 
 type RawProbe = { ok: true; json: Record<string, unknown> } | { ok: false; detail: string };
 
@@ -42,7 +53,7 @@ export function createProber(options: ProberOptions) {
 
   // Dynamic, runtime-populated collections with expiry: Map, not Record.
   const verdicts = new Map<string, CacheEntry>();
-  const identities = new Map<string, { value: string | null; expiresAt: number }>();
+  const identities = new Map<string, IdentityEntry>();
 
   async function identityFor(ref: RepoRef): Promise<string | null> {
     const key = `${ref.hostKind}|${ref.host}`;
@@ -127,7 +138,7 @@ export function createProber(options: ProberOptions) {
     if (cached && cached.expiresAt > now()) {
       return {
         outcome: { verdict: cached.verdict, detail: cached.detail, repo: ref.path },
-        parent: null,
+        parent: cached.parent,
       };
     }
 
@@ -173,7 +184,18 @@ export function createProber(options: ProberOptions) {
       parent = { host: ref.host, hostKind: ref.hostKind, path: parentPath };
     }
 
-    verdicts.set(key, { verdict, detail, expiresAt: now() + cacheTtlMs });
+    // Clamp the verdict to the identity entry that keyed it. The identity
+    // cache is per host while this one is per repository, so a second repo
+    // probed later on the same host would otherwise outlive the shared
+    // identity and pay a redundant identity subprocess on its own cache hit.
+    // Clamping makes "a live verdict always has a live identity" true by
+    // construction, and can only shorten a verdict's life (plan R6, KTD3).
+    const identityEntry = identities.get(`${ref.hostKind}|${ref.host}`);
+    const expiresAt = Math.min(
+      now() + cacheTtlMs,
+      identityEntry ? identityEntry.expiresAt : now() + cacheTtlMs,
+    );
+    verdicts.set(key, { verdict, detail, expiresAt, parent });
     return { outcome: { verdict, detail, repo: ref.path }, parent };
   }
 

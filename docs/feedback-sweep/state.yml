@@ -1,0 +1,162 @@
+schema_version: 1
+sources:
+  gh-issues:
+    cursor: "2026-08-07T00:04:00Z"
+items:
+  "gh-issues:hyperlapse122/dotfiles#168":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "tracker-defer fallback chain has no repository-management probe - a P0 security/adversarial-review residual: the instruction-core precedence rule over the skill-level tracker-defer fallback chain relies purely on the agent honoring it, since the skill's own filing procedure has no back-reference and never probes repo-management access, only reachability; not fixed in-PR because the referenced fallback doc lives in a read-only plugin cache outside this repo's ownership."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#168"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/168"
+    updated_at: "2026-08-05T15:05:33Z"
+  "gh-issues:hyperlapse122/dotfiles#171":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "CI never exercises omp's own extension resolution for the repo guard - the only test proving the guard's real runtime block actually stops execution needs live model credentials, which CI doesn't configure, so that step is unconditionally skipped on every run; a raw-.ts load step and a CI warning annotation partially mitigate, but a real credentialed run is still needed."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#171"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/171"
+    updated_at: "2026-08-05T15:05:14Z"
+  "gh-issues:hyperlapse122/dotfiles#172":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Extract duplicated render-gate bash helpers into a shared .ci lib - six ~80-line helper functions are byte-identical across two CI gate scripts; deferred from an earlier security-fix PR since it restructures a green test and introduces a new .ci/lib convention, and nothing currently guards the two copies against drift."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#172"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/172"
+    updated_at: "2026-08-05T15:05:16Z"
+  "gh-issues:hyperlapse122/dotfiles#173":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard tokenizer mis-models ANSI-C $'...' quoting - splitCommand's quote tracker doesn't understand $'...' escaping, which can leave a phantom open quote; no confirmed exploit found (it coincidentally triggers the fallbackScan safety net) but the internal quote-state model is objectively wrong."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#173"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/173"
+    updated_at: "2026-08-05T15:05:19Z"
+  "gh-issues:hyperlapse122/dotfiles#174":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard emits no durable audit trail when it blocks - the guard has no logging on its block path, so a block's only trace is that run's own transcript; no session-independent way to detect a fail-open pattern silently missing a new tool or to audit block frequency over time."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#174"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/174"
+    updated_at: "2026-08-05T15:05:22Z"
+  "gh-issues:hyperlapse122/dotfiles#175":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard identity lookup runs before the verdict cache is consulted - probeOne always pays a bounded identity-subprocess cost even on a verdict cache hit, because identity is part of the cache key by design; fix needs a cheaper identity cache check, not a reordering."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#175"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/175"
+    updated_at: "2026-08-05T15:05:25Z"
+  "gh-issues:hyperlapse122/dotfiles#176":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Document splitCommand's load-bearing invariants in the repo guard - two unstated invariants (bash-style backslash handling inside quotes; command-substitution exclusion enforced two functions away) should be documented at the function since it is the guard's security-boundary complexity concentration."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#176"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/176"
+    updated_at: "2026-08-05T15:05:28Z"
+  "gh-issues:hyperlapse122/dotfiles#177":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "No runtime test for a subagent's own MCP-tool call through the repo guard - the repo-guard test suite only exercises a top-level bash gh issue create call, not a subagent's own MCP-tool call (e.g. mcp__glab_issue_create) against the real omp runtime; flagged low risk since both interception dimensions were confirmed separately."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#177"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/177"
+    updated_at: "2026-08-05T15:05:31Z"
+  "gh-issues:hyperlapse122/dotfiles#178":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "verdict-cache hit drops fork-chain re-checks - probeOne's cache-hit path always returns parent:null, so a cached verdict for a fork skips re-walking its parent chain for the rest of the TTL even though the original uncached probe walked it; suggests caching the resolved parent or the fully-resolved chain outcome."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#178"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/178"
+    updated_at: "2026-08-05T18:10:58Z"
+  "gh-issues:hyperlapse122/dotfiles#182":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "refactor omp modelRoles onto a claude-opus-5 / sonnet-5 tier ladder - requests remapping slow/default/smol model roles in agents.yaml to specific Claude models, and flags several render-time/CI blocking constraints (fallback-chain key collisions, a Kimi model dependency) that must be resolved in the same change."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#182"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/182"
+    updated_at: "2026-08-07T00:03:59Z"
+  "gh-issues:hyperlapse122/dotfiles#183":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "allow user-directed issue creation in the agent instruction core - the agent-instructions template's unconditional issue-creation ban blocks an explicit same-turn user request to file an issue, even in a repo the user administers; proposes narrowing the clause to require explicit user direction rather than banning all non-review issue filing."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#183"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/183"
+    updated_at: "2026-08-07T00:04:00Z"
+last_run:
+  timestamp: "2026-08-07T09:21:21+09:00"
+  outcome: "completed"
+  writer: "sweep-JOOSUNGPARK-JPI-omp-2026-08-07"
+  counts:
+    gh-issues:
+      ack_deferred: 0
+      acked_this_run: 3
+      acknowledged: 11
+      already_acked_at_source: 8
+      closed: 0
+      ingested: 11
+      manual_stuck: 0
+      media_analyzed: 0

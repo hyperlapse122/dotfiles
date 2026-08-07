@@ -1,0 +1,15 @@
+# Compound Engineering -- local config
+# Normally gitignored and machine-local. This project tracks it deliberately
+# (see the negation in .gitignore): it holds no secrets, only feedback source
+# ids and sweep tunables, so every checkout shares one configuration.
+# See config.local.example.yaml for every available setting.
+
+# --- Sweep (ce-sweep) ---
+
+feedback_sources:
+  - { type: github-issues, id: gh-issues, target: hyperlapse122/dotfiles, ack_action: "feedback:ack", closeout_action: "feedback:resolved", sensitive: false, approved: true }
+
+sweep_state_path: docs/feedback-sweep/state.yml   # committed state, shared by every checkout
+sweep_ack_cap: 25                                 # max acks per source per run before the circuit breaker
+sweep_lease_ttl_minutes: 60                       # single-writer lease staleness threshold
+sweep_shared_branch: false                        # single checkout committing locally

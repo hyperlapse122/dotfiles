@@ -482,8 +482,14 @@ assert_render_fails settings-wildcard-chain-key "$settings_sh" \
 assert_render_fails settings-suffixed-chain-key "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5:max\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
   'carries a thinking suffix'
+# The kimi-k3 hop is load-bearing, not decoration: --override-data deep-merges,
+# so this fixture REPLACES the shipped anthropic/claude-opus-5 chain while still
+# inheriting the real agents.omp.models override for opencode-go/kimi-k3. That
+# hop is the shipped data's only declaration of it, so dropping it here orphans
+# the override and this positive fixture fails for a reason it does not test.
+# The orphan rule itself is covered by models-declared/undeclared-override below.
 assert_render_ok settings-model-keyed-chain "$settings_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\"]}}}}}"
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\",\"opencode-go/kimi-k3:max\"]}}}}}"
 # agents.omp.models is parasitic on the settings: an override nothing declares is
 # dead data omp ignores, only modelOverrides may appear under a provider, and the
 # credential-free contract applies to it too. Its diagnostics name that surface.
