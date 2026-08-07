@@ -117,6 +117,22 @@ function operatorLength(s: string, i: number): number {
  *
  * Tracks quote and heredoc state so an operator inside a quoted string or a
  * heredoc body never splits.
+ *
+ * Three invariants here are load-bearing and easy to break:
+ *
+ * 1. **Backslash is bash-asymmetric.** It escapes the next character inside
+ *    double quotes and inside an ANSI-C `$'…'` span, and is an ordinary
+ *    literal inside plain single quotes. That is bash, not an oversight.
+ * 2. **Command substitution is excluded two functions away.** This function
+ *    deliberately does not detect `$(…)` or backticks; `argvHead` does, via
+ *    its `opaque` check, which routes the whole classification to
+ *    `fallbackScan`. Do not add substitution handling here redundantly.
+ * 3. **`splitCommand` and `toArgv` are SEPARATE quote state machines and must
+ *    stay in lockstep.** Teaching one a quoting form and not the other splits
+ *    the tokenizer's model of the same input. Specifically, teaching this
+ *    function a form that stops it setting `unparseable` while `toArgv` still
+ *    mis-splits removes the `fallbackScan` safety net and yields a
+ *    confidently wrong classification instead of a conservative one.
  */
 export function splitCommand(command: string): SplitResult {
   const segments: Segment[] = [];
@@ -138,6 +154,8 @@ export function splitCommand(command: string): SplitResult {
   while (i < command.length) {
     const c = command[i] as string;
 
+    // Backslash is bash-asymmetric: an escape inside `"…"` and `$'…'`, an
+    // ordinary literal inside `'…'`. Keep this in lockstep with `toArgv`.
     if (quote) {
       if (quote === "$'") {
         if (c === "\\" && i + 1 < command.length) {
@@ -281,7 +299,14 @@ export function splitCommand(command: string): SplitResult {
   return { segments, unparseable };
 }
 
-/** Split one simple command into argv, stripping one level of quoting. */
+/**
+ * Split one simple command into argv, stripping one level of quoting.
+ *
+ * This is the SECOND of the tokenizer's two quote state machines; the first
+ * is `splitCommand`. They are independent and must stay in lockstep — see
+ * invariant 3 on `splitCommand`. Backslash is bash-asymmetric here too: an
+ * escape inside `"…"` and `$'…'`, an ordinary literal inside `'…'`.
+ */
 export function toArgv(text: string): string[] {
   const argv: string[] = [];
   let token = "";
@@ -387,6 +412,10 @@ function argvHead(argv: string[]): ArgvHead {
       i += 1;
       continue;
     }
+    // THIS is where command substitution is excluded — not `splitCommand`,
+    // which deliberately does not detect `$(…)` or backticks. `opaque` routes
+    // the whole classification to `fallbackScan`, so the boundary lives here
+    // and nowhere else: `gh issue create --title $(cat x)`.
     if (t.includes("$(") || t.includes("`")) {
       return { head: null, rest: [], envHost, opaque: true };
     }
