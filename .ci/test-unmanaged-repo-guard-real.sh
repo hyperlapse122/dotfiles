@@ -2,20 +2,26 @@
 set -euo pipefail
 
 # Real-omp install/enable/runtime proof for the unmanaged-repo-guard plugin
-# (plan U8). Modeled on test-omp-real-plugin.sh: version-pinned omp, a
-# relocated HOME so nothing escapes the real one, and a scratch marketplace
-# built from the already-rendered package this script receives as $1.
+# (plan units U7, U8). Modeled on test-omp-real-plugin.sh: version-pinned
+# omp, a relocated HOME so nothing escapes the real one, and a scratch
+# marketplace built from the already-rendered package this script receives
+# as $1.
 #
-# Step 4 below is the load-bearing assertion (U8's "Execution note"): it
+# Step 4 below is the load-bearing assertion for U7 ("Execution note"): it
 # drives a real tool call through omp's OWN runtime against a stubbed `gh`,
 # proving omp resolves the manifest's raw `./src/index.ts` entry and that the
 # guard's `{ block: true, reason }` return actually stops the bash tool. A
 # `bun` import of the entry file would only prove the module parses, which
-# U8 explicitly forbids substituting here (KTD1's regression detector).
+# U7 explicitly forbids substituting here (KTD1's regression detector).
 #
-# U8's "Detection limit, stated honestly" applies: CI pins the omp version,
-# so this re-confirms known-good raw-.ts resolution and only catches a
-# regression on the run that bumps the pin.
+# Step 5 below is the load-bearing assertion for U8: the same proof, but for
+# an MCP tool call issued by a spawned SUBAGENT's own conversation rather
+# than a top-level bash call, so the guard's interception of a
+# subagent-originated call is proved end to end rather than inferred.
+#
+# The "Detection limit, stated honestly" from U7 applies to both: CI pins
+# the omp version, so this re-confirms known-good behavior and only catches
+# a regression on the run that bumps the pin.
 
 usage='usage: test-unmanaged-repo-guard-real.sh RENDERED_PACKAGE_DIR'
 package_dir=${1:?$usage}
@@ -199,7 +205,7 @@ stub_log="$scratch/stub-model-server.log"
 stub_port_file="$scratch/stub-model-server.port"
 stub_stderr_file="$scratch/stub-model-server.stderr"
 tool_arguments=$(jq -cn --arg command "$gh_command" '{command: $command}')
-bun "$repo_root/.ci/lib/stub-model-server.ts" "$stub_log" bash "$tool_arguments" \
+STUB_SCENARIO=bash bun "$repo_root/.ci/lib/stub-model-server.ts" "$stub_log" bash "$tool_arguments" \
   >"$stub_port_file" 2>"$stub_stderr_file" &
 stub_pid=$!
 for _ in $(seq 1 100); do
@@ -270,8 +276,180 @@ grep -qF 'issue create' "$managed_log" ||
 grep -qF '"bash"' "$stub_log" ||
   fail "stub model server never saw omp offer the bash tool: $(cat "$stub_log")"
 
+# Step 5 (load-bearing, U8): drive one real MCP tool call issued by a
+# SUBAGENT's own conversation through omp's own runtime, twice - once
+# against an unmanaged stub verdict (must block) and once against a managed
+# one (must not). This proves the interception claim for a
+# subagent-originated MCP tool call (e.g. mcp__glab_issue_create) end to
+# end, rather than inferring it from step 4's top-level bash proof plus
+# triggers.ts's in-process classify() unit coverage separately.
+#
+# omp only mounts a connected MCP server's tools directly in a session's
+# own tool list when the `write` tool is unavailable, or when
+# `tools.xdev` is false; otherwise MCP tools are folded behind a generic
+# `xd://` device transport reached through `write`, and never appear as a
+# distinct `mcp__<server>_<tool>` entry a scripted model could name
+# (confirmed empirically against the locked omp version). `tools.xdev` is
+# set to `false` only now, after steps 3b and 4 above have already run and
+# asserted, so their behavior is exactly what it was before this unit.
+kill "$stub_pid" 2>/dev/null || true
+wait "$stub_pid" 2>/dev/null || true
+
+cat >"$home/.omp/agent/config.yml" <<'YAML'
+tools:
+  xdev: false
+YAML
+
+# The stub MCP server (.ci/lib/stub-mcp-issue-server.ts) is registered
+# under the server name "glab", so omp mints the runtime tool name
+# `mcp__glab_issue_create` (confirmed empirically against the locked omp
+# version; see the plan's U8 execution note - the guard's pattern, not
+# this name, is what is actually under test). Every `issue_create`
+# invocation is appended to MCP_ISSUE_LOG, mirroring how the `gh` stub
+# above uses GH_LOG to prove a subprocess boundary was or wasn't crossed.
+mcp_log="$scratch/mcp-issue-server.log"
+: >"$mcp_log"
+cat >"$home/.omp/agent/mcp.json" <<JSON
+{
+  "\$schema": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
+  "mcpServers": {
+    "glab": {
+      "command": "bun",
+      "args": ["$repo_root/.ci/lib/stub-mcp-issue-server.ts"],
+      "env": { "MCP_ISSUE_LOG": "$mcp_log" }
+    }
+  }
+}
+JSON
+
+# Stubs the two `glab` shapes probe.ts issues for a gitlab-hostKind
+# target: the identity lookup (`glab api --hostname <host> user`) and the
+# access probe (`glab api --hostname <host> projects/<path>`). Logs every
+# invocation, mirroring the `gh` stub above.
+cat >"$gh_stub/glab" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+log=${GLAB_LOG:?GLAB_LOG unset}
+printf 'GLAB_INVOKED:' >>"$log"
+printf ' %q' "$@" >>"$log"
+printf '\n' >>"$log"
+
+if [[ ${1-} == api && ${2-} == --hostname ]]; then
+  if [[ ${4-} == user ]]; then
+    printf '%s' "$GLAB_USER_JSON"
+    exit 0
+  fi
+  if [[ ${4-} == projects/* ]]; then
+    printf '%s' "$GLAB_PROJECT_JSON"
+    exit 0
+  fi
+  printf 'unhandled glab api invocation: %s\n' "$*" >&2
+  exit 1
+fi
+printf 'unhandled glab invocation: %s\n' "$*" >&2
+exit 1
+SH
+chmod +x "$gh_stub/glab"
+
+subagent_prompt='Spawn exactly one subagent via the task tool. Do not do the work yourself. Report verbatim whatever the subagent reports back as its result.'
+
+# Same stub-model-server.ts, driving a different scripted conversation
+# (STUB_SCENARIO=subagent): see that file for the parent/child turn
+# sequence and why it matches on the last user message text instead of
+# tool-list containment.
+subagent_stub_log="$scratch/stub-model-server-subagent.log"
+: >"$subagent_stub_log"
+subagent_stub_port_file="$scratch/stub-model-server-subagent.port"
+subagent_stub_stderr_file="$scratch/stub-model-server-subagent.stderr"
+STUB_SCENARIO=subagent bun "$repo_root/.ci/lib/stub-model-server.ts" "$subagent_stub_log" "$subagent_prompt" \
+  >"$subagent_stub_port_file" 2>"$subagent_stub_stderr_file" &
+stub_pid=$!
+for _ in $(seq 1 100); do
+  [[ -s $subagent_stub_port_file ]] && break
+  kill -0 "$stub_pid" 2>/dev/null ||
+    fail "subagent stub model server exited before printing its port: $(cat "$subagent_stub_stderr_file" 2>/dev/null)"
+  sleep 0.1
+done
+[[ -s $subagent_stub_port_file ]] || fail 'subagent stub model server never printed its port'
+subagent_stub_port=$(<"$subagent_stub_port_file")
+
+cat >"$home/.omp/agent/models.yml" <<YAML
+providers:
+  ci-stub:
+    baseUrl: http://127.0.0.1:$subagent_stub_port/v1
+    api: openai-completions
+    auth: none
+    models:
+      - id: stub-1
+        name: CI Stub
+        contextWindow: 128000
+        maxTokens: 4096
+YAML
+
+run_omp_subagent_prompt() {
+  (
+    cd "$workdir" &&
+      env "${unset_credentials[@]}" -u PI_CODING_AGENT_DIR -u OMP_AGENT_ENV \
+        HOME="$home" USERPROFILE="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
+        PATH="$gh_stub:$PATH" GLAB_LOG="$1" GLAB_USER_JSON='{"username":"ci-test-user"}' GLAB_PROJECT_JSON="$2" \
+        NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
+        omp -p "$subagent_prompt" --model ci-stub/stub-1 --auto-approve --no-session --max-time 120
+  )
+}
+
+unmanaged_glab_log="$scratch/glab-unmanaged.log"
+: >"$mcp_log"
+set +e
+unmanaged_subagent_out=$(run_omp_subagent_prompt "$unmanaged_glab_log" '{"permissions":{"project_access":{"access_level":20}}}' 2>&1)
+unmanaged_subagent_status=$?
+set -e
+[[ $unmanaged_subagent_status -eq 0 ]] ||
+  fail "unmanaged subagent run exited $unmanaged_subagent_status: $unmanaged_subagent_out"
+grep -qF 'a repository the user does not manage' <<<"$unmanaged_subagent_out" ||
+  fail "subagent block reason text missing from output: $unmanaged_subagent_out"
+grep -qF 'other-owner/other-repo' <<<"$unmanaged_subagent_out" ||
+  fail "subagent block reason did not name the target repository: $unmanaged_subagent_out"
+[[ ! -s $mcp_log ]] ||
+  fail "unmanaged subagent run: mcp__glab_issue_create executed despite the block: $(cat "$mcp_log")"
+
+managed_glab_log="$scratch/glab-managed.log"
+: >"$mcp_log"
+set +e
+managed_subagent_out=$(run_omp_subagent_prompt "$managed_glab_log" '{"permissions":{"project_access":{"access_level":40}}}' 2>&1)
+managed_subagent_status=$?
+set -e
+[[ $managed_subagent_status -eq 0 ]] ||
+  fail "managed subagent run exited $managed_subagent_status: $managed_subagent_out"
+grep -qF 'a repository the user does not manage' <<<"$managed_subagent_out" &&
+  fail "managed subagent run was unexpectedly blocked: $managed_subagent_out"
+[[ -s $mcp_log ]] ||
+  fail 'managed subagent run: mcp__glab_issue_create never executed despite a managed verdict'
+mcp_invocations=$(wc -l <"$mcp_log")
+[[ $mcp_invocations -eq 1 ]] ||
+  fail "managed subagent run: expected exactly 1 mcp__glab_issue_create invocation, got $mcp_invocations: $(cat "$mcp_log")"
+
+# A server that never saw a request would let the steps above pass
+# vacuously. The ordered request log must show exactly one parent request
+# that issued the `task` call, then one child request that issued the MCP
+# call, for each of the two runs above (unmanaged then managed) - and the
+# child request's own tool list must actually have offered the MCP tool,
+# or the proof shows nothing. A request whose last user message matched
+# neither known text (see stub-model-server.ts) is logged with an "error"
+# key instead of a "tag", which is rejected below too.
+[[ -s $subagent_stub_log ]] ||
+  fail 'subagent stub model server was never contacted - the subagent-runtime proof ran vacuously'
+mismatched=$(jq -s '[.[] | select(has("error"))]' "$subagent_stub_log")
+[[ $(jq 'length' <<<"$mismatched") -eq 0 ]] ||
+  fail "subagent stub model server saw a request matching neither known last-user text: $mismatched"
+tags=$(jq -s -c '[.[] | select(.toolMsgCount == 0) | .tag]' "$subagent_stub_log")
+[[ $tags == '["parent","child","parent","child"]' ]] ||
+  fail "subagent stub model server request sequence was $tags, expected [parent,child,parent,child]"
+jq -e -s 'all(.[] | select(.toolMsgCount == 0 and .tag == "child"); (.tools | index("mcp__glab_issue_create")) != null)' \
+  "$subagent_stub_log" >/dev/null ||
+  fail "a child request's own tool list omitted mcp__glab_issue_create"
+
 real_lock_after=$(snapshot_real_lock)
 [[ $real_lock_before == "$real_lock_after" ]] ||
   fail "real \$HOME plugin lock changed during the run: $real_lock"
 
-printf 'real OMP unmanaged-repo-guard: install, enable, lock, raw-.ts load, and omp-runtime block/allow proof passed\n'
+printf 'real OMP unmanaged-repo-guard: install, enable, lock, raw-.ts load, top-level bash block/allow, and subagent MCP block/allow proof passed\n'
