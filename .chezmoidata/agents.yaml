@@ -323,7 +323,7 @@ agents:
       # Turn review plus the `reviewer` agent. Enabling it starts a continuous
       # flow of each turn's transcript delta to the critic; advisor.subagents
       # stays undeclared so its false default keeps subagent turns out of it.
-      advisor.enabled: true
+      advisor.enabled: false
       # Provider availability gate. It is applied BEFORE any credential check,
       # so it is the only knob that keeps a backend out of every AUTOMATIC
       # selection path. `retry.fallbackChains` above was never the exposure -
