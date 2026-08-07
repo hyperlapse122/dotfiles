@@ -61,6 +61,25 @@ const ARGV_PREFIXES: Record<string, true> = {
   time: true,
 };
 
+/**
+ * Flags whose VALUE is executable text for the interpreter that owns them
+ * (R14). `classifyBash` used to scan only heredoc/here-string bodies, so a
+ * `bash -c` payload was never read at all.
+ */
+const INTERPRETER_CODE_FLAGS: Record<string, string[]> = {
+  bash: ["-c"],
+  sh: ["-c"],
+  dash: ["-c"],
+  zsh: ["-c"],
+  ksh: ["-c"],
+  python: ["-c"],
+  python3: ["-c"],
+  node: ["-e", "--eval", "-p", "--print"],
+  bun: ["-e", "--eval", "-p", "--print"],
+  perl: ["-e", "-E"],
+  ruby: ["-e"],
+};
+
 const WRITE_METHODS: Record<string, true> = { POST: true, PUT: true, PATCH: true, DELETE: true };
 
 /** Any of these as a path segment makes an API write an issue write. */
@@ -205,7 +224,33 @@ export function splitCommand(command: string): SplitResult {
       while (command[i] === " " || command[i] === "\t") i += 1;
       let word = "";
       const q = command[i];
-      if (q === "'" || q === '"') {
+      if (q === "$" && command[i + 1] === "'") {
+        // ANSI-C span. Keep the delimiters in `word` so `toArgv` — the single
+        // decoder — resolves the escapes later. Without this arm the reader
+        // falls to the unquoted branch, stops at the first space, and
+        // truncates the body (R14). Mirrors the main loop's `$'` handling;
+        // that lockstep is invariant 3 above.
+        word += "$'";
+        i += 2;
+        let closed = false;
+        while (i < command.length) {
+          const ch = command[i] as string;
+          if (ch === "\\" && i + 1 < command.length) {
+            word += ch + command[i + 1];
+            i += 2;
+            continue;
+          }
+          word += ch;
+          i += 1;
+          if (ch === "'") {
+            closed = true;
+            break;
+          }
+        }
+        if (!closed) unparseable = true;
+      } else if (q === "'" || q === '"') {
+        // Plain quotes are stripped here because their content is already
+        // literal; the ANSI-C arm above keeps its delimiters on purpose.
         i += 1;
         while (i < command.length && command[i] !== q) {
           word += command[i];
@@ -514,31 +559,158 @@ function argvHead(argv: string[]): ArgvHead {
   return { head: null, rest: [], envHost, opaque: false };
 }
 
-function flagValue(argv: string[], names: string[]): string | null {
-  for (let i = 0; i < argv.length; i += 1) {
-    const t = argv[i] as string;
-    for (const name of names) {
-      if (t === name) return argv[i + 1] ?? null;
-      if (t.startsWith(`${name}=`)) return t.slice(name.length + 1);
-    }
-  }
-  return null;
-}
+/** One flag occurrence, in argv order. Repeats are kept: pflag is last-wins. */
+type ParsedArgs = { positionals: string[]; flags: { name: string; value: string }[] };
 
-/** First argument that is not a flag or a flag's value. */
-function firstPositional(argv: string[], valueFlags: string[]): string | null {
+/**
+ * One consumption-aware pass over an argv, modelling cobra/pflag and the
+ * shells: `--name value`, `--name=value`, `-N value`, `-N=value`, `-Nvalue`,
+ * and a clustered short group where the FIRST value-taking letter takes the
+ * rest of the group — or the next word when the group ends there. Everything
+ * after a bare `--` is positional.
+ *
+ * One pass, deliberately, because two independent readers is how this guard
+ * leaked. A token consumed here as a value can never also be read as a flag or
+ * as a positional, which is the invariant three separate bypasses violated:
+ * `gh api -iX POST …` lost its endpoint to the positional stream,
+ * `gh api -XPATCH …` lost it to a last-character rule that disagreed with the
+ * value lookup, and `gh issue create --title -Revil/x` had the title's own
+ * value read back as a `-R` and aimed the probe at the attacker's repository.
+ *
+ * `valueFlags` is therefore not a detail: a value-taking flag missing from it
+ * turns that flag's value into a positional, which shifts the API path or the
+ * subcommand pair and drops the write.
+ */
+function parseArgs(argv: string[], valueFlags: string[]): ParsedArgs {
+  const positionals: string[] = [];
+  const flags: { name: string; value: string }[] = [];
+  let endOfFlags = false;
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i] as string;
-    if (t.startsWith("-")) {
-      if (!t.includes("=") && valueFlags.includes(t)) i += 1;
+    if (endOfFlags || t === "-" || !t.startsWith("-")) {
+      positionals.push(t);
       continue;
     }
-    return t;
+    if (t === "--") {
+      endOfFlags = true;
+      continue;
+    }
+    if (t.startsWith("--")) {
+      const eq = t.indexOf("=");
+      if (eq > 0) {
+        flags.push({ name: t.slice(0, eq), value: t.slice(eq + 1) });
+        continue;
+      }
+      if (!valueFlags.includes(t)) continue; // boolean long flag
+      const next = argv[i + 1];
+      if (next !== undefined) {
+        flags.push({ name: t, value: next });
+        i += 1;
+      }
+      continue;
+    }
+    // Short group: booleans until the first value-taking letter, which then
+    // swallows whatever is left of the group.
+    const letters = t.slice(1);
+    let at = -1;
+    for (let k = 0; k < letters.length; k += 1) {
+      const ch = letters[k] as string;
+      if (valueFlags.includes(`-${ch}`)) {
+        at = k;
+        break;
+      }
+      if (!/[A-Za-z]/.test(ch)) break;
+    }
+    if (at === -1) continue; // all boolean, or a shape this set does not model
+    const name = `-${letters[at] as string}`;
+    const attached = letters.slice(at + 1);
+    if (attached !== "") {
+      flags.push({ name, value: attached.startsWith("=") ? attached.slice(1) : attached });
+      continue;
+    }
+    const next = argv[i + 1];
+    if (next !== undefined) {
+      flags.push({ name, value: next });
+      i += 1;
+    }
   }
-  return null;
+  return { positionals, flags };
 }
 
-const API_VALUE_FLAGS = ["-X", "--method", "-H", "--header", "-f", "--field", "-F", "--raw-field"];
+/**
+ * The value cobra/pflag would resolve for any of `names`. Last-wins, because
+ * that is what the real CLIs do: `gh issue create --repo mine/ok --repo
+ * victim/x` writes to `victim/x`, and reading the first would hand the probe a
+ * decoy the caller controls.
+ */
+function lastValue(parsed: ParsedArgs, names: string[]): string | null {
+  let out: string | null = null;
+  for (const flag of parsed.flags) if (names.includes(flag.name)) out = flag.value;
+  return out;
+}
+
+/**
+ * Value-taking flags of `gh api` / `glab api`, applied only after the `api`
+ * subcommand is found. Any omission shifts the endpoint onto the flag's value
+ * and the write stops being recognised, so this list tracks the real CLIs
+ * (`gh api --help`, `glab api --help`). Short/long spellings are listed
+ * independently rather than paired, because the two CLIs disagree on which
+ * letter carries which name.
+ */
+const API_VALUE_FLAGS = [
+  "-X",
+  "--method",
+  "-H",
+  "--header",
+  "-f",
+  "-F",
+  "--field",
+  "--raw-field",
+  "--form",
+  "-q",
+  "--jq",
+  "-t",
+  "--template",
+  "-p",
+  "--preview",
+  "--cache",
+  "--input",
+  "--output",
+  "--hostname",
+  "--per-page",
+];
+
+/**
+ * Value-taking flags of a `gh`/`glab` NON-api invocation (R16). Two jobs, and
+ * both are load-bearing. `-R`/`--repo`/`--hostname` are persistent flags that
+ * may precede the SUBCOMMAND, so omitting them made `glab -R g/p issue create`
+ * read `g/p` as the subcommand and miss the write. The `issue create` value
+ * flags are here so their values are consumed rather than re-read as flags:
+ * without `-t`, `gh issue create --title -Revil/x` handed the probe the
+ * repository named in the title instead of the one being written to.
+ */
+const CLI_VALUE_FLAGS = [
+  "-R",
+  "--repo",
+  "--hostname",
+  "-t",
+  "--title",
+  "-b",
+  "--body",
+  "-F",
+  "--body-file",
+  "-d",
+  "--description",
+  "-l",
+  "--label",
+  "-a",
+  "--assignee",
+  "-m",
+  "--milestone",
+  "-p",
+  "--project",
+  "--template",
+];
 
 /** Arguments after the `api` subcommand, so the subcommand is not read as the path. */
 function apiArgs(rest: string[]): string[] {
@@ -546,26 +718,32 @@ function apiArgs(rest: string[]): string[] {
   return at === -1 ? rest : rest.slice(at + 1);
 }
 
-function apiPathIsIssueWrite(argv: string[]): boolean {
-  const method = flagValue(argv, ["-X", "--method"]);
+/**
+ * Every positional is checked, not just the first. A short group whose
+ * value-taking letter is not last leaves a leftover word ahead of the endpoint
+ * (`gh api -qq .id repos/o/r/issues` really does pass `.id` positionally), and
+ * reading only the first would drop the write.
+ */
+function apiPathIsIssueWrite(parsed: ParsedArgs): boolean {
+  const method = lastValue(parsed, ["-X", "--method"]);
   if (!method || WRITE_METHODS[method.toUpperCase()] !== true) return false;
-  const path = firstPositional(argv, API_VALUE_FLAGS);
-  if (!path) return false;
-  const clean = (path.split("?")[0] ?? "").replace(/^\/+/, "");
-  return clean.split("/").some((seg) => ISSUE_PATH_SEGMENTS[seg.toLowerCase()] === true);
+  return parsed.positionals.some((path) => {
+    const clean = (path.split("?")[0] ?? "").replace(/^\/+/, "");
+    return clean.split("/").some((seg) => ISSUE_PATH_SEGMENTS[seg.toLowerCase()] === true);
+  });
 }
 
-function repoFromApiPath(argv: string[], cli: "gh" | "glab"): string | null {
-  const path = firstPositional(argv, API_VALUE_FLAGS);
-  if (!path) return null;
-  const segs = (path.split("?")[0] ?? "").replace(/^\/+/, "").split("/");
-  if (cli === "gh") {
-    const at = segs.indexOf("repos");
-    if (at >= 0 && segs[at + 1] && segs[at + 2]) return `${segs[at + 1]}/${segs[at + 2]}`;
-    return null;
-  }
-  const at = segs.indexOf("projects");
-  if (at >= 0 && segs[at + 1]) {
+function repoFromApiPath(parsed: ParsedArgs, cli: "gh" | "glab"): string | null {
+  for (const path of parsed.positionals) {
+    if (path === "") continue;
+    const segs = (path.split("?")[0] ?? "").replace(/^\/+/, "").split("/");
+    if (cli === "gh") {
+      const at = segs.indexOf("repos");
+      if (at >= 0 && segs[at + 1] && segs[at + 2]) return `${segs[at + 1]}/${segs[at + 2]}`;
+      continue;
+    }
+    const at = segs.indexOf("projects");
+    if (at < 0 || segs[at + 1] === undefined) continue;
     try {
       return decodeURIComponent(segs[at + 1] as string);
     } catch {
@@ -575,10 +753,14 @@ function repoFromApiPath(argv: string[], cli: "gh" | "glab"): string | null {
   return null;
 }
 
-/** Does this `gh`/`glab` argv describe an issue write? `words` is `rest` minus flags. */
-function cliIsIssueWrite(words: string[], rest: string[]): boolean {
-  const [subcommand, verb] = words;
-  if (subcommand === "api") return apiPathIsIssueWrite(apiArgs(rest));
+/**
+ * Does this `gh`/`glab` invocation describe an issue write? `parsed` is the
+ * single consumption-aware pass over `rest`; reading `rest` minus every flag
+ * token kept each value-taking flag's value and shifted the pair (R16).
+ */
+function cliIsIssueWrite(parsed: ParsedArgs, rest: string[]): boolean {
+  const [subcommand, verb] = parsed.positionals;
+  if (subcommand === "api") return apiPathIsIssueWrite(parseArgs(apiArgs(rest), API_VALUE_FLAGS));
   // `pr`/`mr` verbs are out of scope (R7), and `issue update` is the
   // self-assignment carve-out (R6); both fall through to false.
   if (subcommand !== "issue") return false;
@@ -587,12 +769,57 @@ function cliIsIssueWrite(words: string[], rest: string[]): boolean {
 
 /** A `cd` target this classifier can resolve literally, or `null` if it cannot. */
 function literalCdTarget(rest: string[]): string | null {
-  const target = firstPositional(rest, []);
+  const target = parseArgs(rest, []).positionals[0] ?? null;
   if (target === null) return null; // bare `cd` goes $HOME; not resolvable here
   if (target === "-" || target.includes("$") || target.includes("`") || target.startsWith("~")) {
     return null;
   }
   return target;
+}
+
+/**
+ * The argv that names `gh`/`glab`, or `null`. Token-level on purpose (R13,
+ * R15): a quoted prose mention is ONE token whose basename is not `gh`, so
+ * `echo "run gh issue create later"` stays ignored while `xargs gh issue
+ * create` does not. A word-boundary scan of the raw text would flip both.
+ *
+ * Returns the NESTED argv when the match came from a wrapper forwarding a
+ * whole command line as one word (`watch 'gh issue create …'`), so the caller
+ * reads the target from the same tokens bash would.
+ */
+function cliMention(argv: string[]): string[] | null {
+  for (const raw of argv) {
+    const t = raw.replace(/^[({]+/, "").replace(/[)};]+$/, "");
+    const base = t.slice(t.lastIndexOf("/") + 1);
+    if (base === "gh" || base === "glab") return argv;
+    // A whitespace-bearing token is a forwarded command LINE, not prose:
+    // `watch 'gh issue create'` counts, `echo "run gh issue create later"`
+    // does not, because only the first names gh as its head. Resolve it the
+    // same way a real segment is resolved — split into simple commands, then
+    // through `argvHead` — so a leading `cd`, `sudo`, or `VAR=x` inside the
+    // forwarded line cannot hide it (`watch 'cd repo && gh issue create'`).
+    if (!/\s/.test(t)) continue;
+    for (const nested of splitCommand(t).segments) {
+      const inner = toArgv(nested.text);
+      const innerHead = argvHead(inner).head;
+      if (innerHead === "gh" || innerHead === "glab") return inner;
+    }
+  }
+  return null;
+}
+
+/**
+ * Bash re-parses interpreter stdin, so a here-string word whose decoded value
+ * carries whitespace is a command LINE, not one argument:
+ * `bash <<< $'gh\x20issue\x20create'` runs `gh`. Returns the decoded text when
+ * that second pass is needed, else `null` (R14).
+ */
+function expandedBody(body: string): string | null {
+  const argv = toArgv(body);
+  if (argv.length !== 1) return null;
+  const only = argv[0] as string;
+  if (only === body || !/\s/.test(only)) return null;
+  return only;
 }
 
 function classifyBash(command: string): Classification {
@@ -625,36 +852,104 @@ function classifyBash(command: string): Classification {
       continue;
     }
 
-    // Interpreter stdin carries executable text, always: recurse. A body
-    // attached to a gh/glab segment is inert issue data and is never scanned,
-    // because that segment already classifies by its subcommand.
+    // Interpreter stdin and `-c`/`-e` payloads carry executable text, always:
+    // recurse. A body attached to a gh/glab segment is inert issue data and is
+    // never scanned, because that segment already classifies by its subcommand.
+    // `parseArgs` resolves the combined-group form too (`sh -lc CMD`), so no
+    // separate shell table is needed here.
     if (INTERPRETERS[head] === true) {
-      for (const body of segment.bodies) {
-        const inner = classifyBash(body);
-        if (inner.kind === "issue-write") {
-          return { ...inner, cdTarget: inner.cdTarget ?? cdTarget, cwdUnresolvable };
+      // Every code payload is scanned, not just the last: `bash -c A -c B`
+      // runs `A`, so a last-wins read would skip the command that executes.
+      const codeFlags = INTERPRETER_CODE_FLAGS[head];
+      const payloads = [...segment.bodies];
+      if (codeFlags !== undefined) {
+        for (const flag of parseArgs(rest, codeFlags).flags) {
+          if (codeFlags.includes(flag.name)) payloads.push(flag.value);
         }
       }
+      for (const payload of payloads) {
+        // Decoded first: it is strictly more informative when it exists, and
+        // scanning the raw word first would settle for a fallbackScan verdict
+        // that loses the repo.
+        for (const text of [expandedBody(payload), payload]) {
+          if (text === null) continue;
+          const inner = classifyBash(text);
+          if (inner.kind === "issue-write") {
+            return {
+              ...inner,
+              cdTarget: inner.cdTarget ?? cdTarget,
+              // The payload's own cwd uncertainty must survive the merge:
+              // `bash -c 'cd "$D" && gh issue create'` is not resolvable, and
+              // overwriting this with the outer value produced `repo: null`
+              // with `cwdUnresolvable: false` — the state that makes the
+              // caller trust the current checkout's origin.
+              cwdUnresolvable: cwdUnresolvable || inner.cwdUnresolvable,
+            };
+          }
+        }
+      }
+      // Nothing classified: fall through to the fail-closed check below, so an
+      // interpreter flag this table does not model still cannot hide a write.
+    } else if (head === "gh" || head === "glab") {
+      const parsed = parseArgs(rest, CLI_VALUE_FLAGS);
+      if (cliIsIssueWrite(parsed, rest)) {
+        const repo =
+          lastValue(parsed, ["--repo", "-R"]) ??
+          (parsed.positionals[0] === "api"
+            ? repoFromApiPath(parseArgs(apiArgs(rest), API_VALUE_FLAGS), head)
+            : null);
+        const host = envHost ?? lastValue(parsed, ["--hostname"]);
+        return {
+          kind: "issue-write",
+          cli: head,
+          repo,
+          host,
+          hostKind: head === "gh" ? "github" : "gitlab",
+          cdTarget,
+          cwdUnresolvable,
+        };
+      }
+      // A recognised gh/glab read is definitively not a write. Never fail
+      // closed here, or every `gh issue list` becomes a probe candidate.
       continue;
     }
 
-    if (head !== "gh" && head !== "glab") continue;
-    // Skip global flags to find the subcommand pair.
-    const words = rest.filter((t) => !t.startsWith("-"));
-    if (!cliIsIssueWrite(words, rest)) continue;
-
-    const repo =
-      flagValue(rest, ["--repo", "-R"]) ??
-      (words[0] === "api" ? repoFromApiPath(apiArgs(rest), head) : null);
-    const host = envHost ?? flagValue(rest, ["--hostname"]);
+    // R13/R15: an unrecognised head — an argv-forwarding wrapper (`xargs`,
+    // `timeout`, `nice`, `stdbuf`, `setsid`, `parallel`, `watch`, …) or a
+    // recognised prefix's own option (`env -C`, `sudo -u`, which leave
+    // `argvHead` returning a flag) — must not silently drop a segment that
+    // still names gh/glab. One fail-closed rule closes both classes, so
+    // `argvHead` deliberately keeps no per-prefix option grammar and no
+    // wrapper denylist. Cost, accepted: more false candidates reach the probe,
+    // which allows them whenever the repository is managed.
+    const mention = cliMention(argv);
+    if (mention === null) continue;
+    // Scan the DECODED argv, rejoined — not `segment.text`. Two reasons, and
+    // both are bypasses if ignored. Segment-scoped, because a whole-command
+    // scan would pick up `gh` + `issue` from the READ half of
+    // `gh issue view 3 | grep gh`. Decoded, because the mention test matched
+    // argv while `fallbackScan` matches text: `xargs $'\x67h' issue create`
+    // holds no literal `gh` for its regex, so scanning the raw text would let
+    // the mention this branch just proved slip straight back out. Rejoining is
+    // safe only because `cliMention` gated it — prose never reaches this line.
+    const scanned = fallbackScan(mention.join(" "));
+    if (scanned.kind !== "issue-write") continue;
+    // Take the target from a consumption-aware parse of the decoded tokens,
+    // never from `fallbackScan`'s regex. `fallbackScan` cannot tell a real
+    // `--repo` from one that is some other flag's value, so it reads
+    // `--title "--repo evil/x"` and `--title -Revil/x` as targets and aims the
+    // probe at a repository the caller merely named. `fallbackScan` stays the
+    // route detector; the target comes from here.
+    const parsed = parseArgs(mention, CLI_VALUE_FLAGS);
+    const repo = lastValue(parsed, ["--repo", "-R"]);
     return {
-      kind: "issue-write",
-      cli: head,
+      ...scanned,
       repo,
-      host,
-      hostKind: head === "gh" ? "github" : "gitlab",
+      host: envHost ?? lastValue(parsed, ["--hostname"]),
       cdTarget,
-      cwdUnresolvable,
+      // No resolvable target means no assumption. `repo: null` with the cwd
+      // marked unresolvable is the conservative state, not a silent guess.
+      cwdUnresolvable: cwdUnresolvable || repo === null,
     };
   }
 

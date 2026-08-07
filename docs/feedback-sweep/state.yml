@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-08-07T00:04:00Z"
+    cursor: "2026-08-07T04:48:52Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -18,145 +18,246 @@ items:
     updated_at: "2026-08-05T15:05:33Z"
   "gh-issues:hyperlapse122/dotfiles#171":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "CI never exercises omp's own extension resolution for the repo guard - the only test proving the guard's real runtime block actually stops execution needs live model credentials, which CI doesn't configure, so that step is unconditionally skipped on every run; a raw-.ts load step and a CI warning annotation partially mitigate, but a real credentialed run is still needed."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#171"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/171"
-    updated_at: "2026-08-05T15:05:14Z"
+    updated_at: "2026-08-07T04:48:50Z"
   "gh-issues:hyperlapse122/dotfiles#172":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Extract duplicated render-gate bash helpers into a shared .ci lib - six ~80-line helper functions are byte-identical across two CI gate scripts; deferred from an earlier security-fix PR since it restructures a green test and introduces a new .ci/lib convention, and nothing currently guards the two copies against drift."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#172"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/172"
-    updated_at: "2026-08-05T15:05:16Z"
+    updated_at: "2026-08-07T04:48:50Z"
   "gh-issues:hyperlapse122/dotfiles#173":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard tokenizer mis-models ANSI-C $'...' quoting - splitCommand's quote tracker doesn't understand $'...' escaping, which can leave a phantom open quote; no confirmed exploit found (it coincidentally triggers the fallbackScan safety net) but the internal quote-state model is objectively wrong."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#173"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/173"
-    updated_at: "2026-08-05T15:05:19Z"
+    updated_at: "2026-08-07T04:48:50Z"
   "gh-issues:hyperlapse122/dotfiles#174":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard emits no durable audit trail when it blocks - the guard has no logging on its block path, so a block's only trace is that run's own transcript; no session-independent way to detect a fail-open pattern silently missing a new tool or to audit block frequency over time."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "feature"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#174"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/174"
-    updated_at: "2026-08-05T15:05:22Z"
+    updated_at: "2026-08-07T04:48:51Z"
   "gh-issues:hyperlapse122/dotfiles#175":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard identity lookup runs before the verdict cache is consulted - probeOne always pays a bounded identity-subprocess cost even on a verdict cache hit, because identity is part of the cache key by design; fix needs a cheaper identity cache check, not a reordering."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#175"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/175"
-    updated_at: "2026-08-05T15:05:25Z"
+    updated_at: "2026-08-07T04:48:51Z"
   "gh-issues:hyperlapse122/dotfiles#176":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Document splitCommand's load-bearing invariants in the repo guard - two unstated invariants (bash-style backslash handling inside quotes; command-substitution exclusion enforced two functions away) should be documented at the function since it is the guard's security-boundary complexity concentration."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "docs"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#176"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/176"
-    updated_at: "2026-08-05T15:05:28Z"
+    updated_at: "2026-08-07T04:48:52Z"
   "gh-issues:hyperlapse122/dotfiles#177":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "No runtime test for a subagent's own MCP-tool call through the repo guard - the repo-guard test suite only exercises a top-level bash gh issue create call, not a subagent's own MCP-tool call (e.g. mcp__glab_issue_create) against the real omp runtime; flagged low risk since both interception dimensions were confirmed separately."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#177"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/177"
-    updated_at: "2026-08-05T15:05:31Z"
+    updated_at: "2026-08-07T04:48:51Z"
   "gh-issues:hyperlapse122/dotfiles#178":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "verdict-cache hit drops fork-chain re-checks - probeOne's cache-hit path always returns parent:null, so a cached verdict for a fork skips re-walking its parent chain for the rest of the TTL even though the original uncached probe walked it; suggests caching the resolved parent or the fully-resolved chain outcome."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#178"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/178"
-    updated_at: "2026-08-05T18:10:58Z"
+    updated_at: "2026-08-07T04:48:52Z"
   "gh-issues:hyperlapse122/dotfiles#182":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "refactor omp modelRoles onto a claude-opus-5 / sonnet-5 tier ladder - requests remapping slow/default/smol model roles in agents.yaml to specific Claude models, and flags several render-time/CI blocking constraints (fallback-chain key collisions, a Kimi model dependency) that must be resolved in the same change."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: false
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#182"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/182"
-    updated_at: "2026-08-07T00:03:59Z"
+    updated_at: "2026-08-07T04:48:50Z"
   "gh-issues:hyperlapse122/dotfiles#183":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "allow user-directed issue creation in the agent instruction core - the agent-instructions template's unconditional issue-creation ban blocks an explicit same-turn user request to file an issue, even in a repo the user administers; proposes narrowing the clause to require explicit user direction rather than banning all non-review issue filing."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/190"
+    verified_merge_sha: "e44e6e41a20c89ac3a522ab86236eadd0979e0e5"
+    verified_at: "2026-08-07T05:01:17Z"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: true
+    id: "hyperlapse122/dotfiles#183"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/183"
+    updated_at: "2026-08-07T04:48:52Z"
+  "gh-issues:hyperlapse122/dotfiles#184":
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "allow user-directed issue creation in the agent instruction core - the agent-instructions template's unconditional issue-creation ban blocks an explicit same-turn user request to file an issue, even in a repo the user administers; proposes narrowing the clause to require explicit user direction rather than banning all non-review issue filing."
+    body: "remove the agent-initiated issue-creation prohibition - proposes deleting the two-sentence issue-creation prohibition from .chezmoitemplates/agents-instructions.tmpl rather than adding a fourth conditional, citing three false blocks and zero prevented harms, and lists the neighbouring guards that must survive verbatim in meaning; a follow-up comment additionally asks to remove the unmanaged-repo-guard."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#184"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/184"
+    updated_at: "2026-08-07T02:02:29Z"
+  "gh-issues:hyperlapse122/dotfiles#186":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard: ARGV_PREFIXES skips the prefix but not its options - argvHead skips a recognised prefix (env, sudo, command, exec, nohup, time) and then treats the next token as the command name, so a prefix option such as env -C or sudo -u makes the head a flag, classifyBash drops the segment and fallbackScan never runs; P1, needs per-prefix option grammar or fail-closed on an unrecognised prefix option."
     author_class: "teammate"
     category: "bug"
     existing_ack: false
     existing_closeout: false
-    id: "hyperlapse122/dotfiles#183"
+    id: "hyperlapse122/dotfiles#186"
     media: []
-    origin: "https://github.com/hyperlapse122/dotfiles/issues/183"
-    updated_at: "2026-08-07T00:04:00Z"
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/186"
+    severity: "P1"
+    updated_at: "2026-08-07T04:46:56Z"
+  "gh-issues:hyperlapse122/dotfiles#187":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard: interpreter -c bodies are never scanned - classifyBash iterates only segment.bodies (heredoc/here-string), so a bash -c payload is never scanned, and a captured body is not re-split after decoded-whitespace expansion, so an ANSI-C-escaped inner command collapses into one token; P1, both variants classify as ignore."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#187"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/187"
+    severity: "P1"
+    updated_at: "2026-08-07T04:46:57Z"
+  "gh-issues:hyperlapse122/dotfiles#188":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard: argv-forwarding wrappers drop the segment silently - classifyBash continues past any head outside its short recognised set, so xargs, timeout, nice, stdbuf, setsid, parallel and watch hide a real gh/glab issue write; P2, framed as an allowlist problem solved with a denylist, with a proposal to fail closed on an unrecognised head whose argv contains gh or glab."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#188"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/188"
+    severity: "P2"
+    updated_at: "2026-08-07T04:46:58Z"
+  "gh-issues:hyperlapse122/dotfiles#189":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Repo guard: cliIsIssueWrite reads positions from a flag-stripped word list - the words filter strips flag tokens but keeps the value each value-taking flag consumes, so a value flag before the subcommand shifts every positional and misclassifies the verb; P2, the existing firstPositional valueFlags machinery is unused here and end-to-end exploitability was not established."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#189"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/189"
+    severity: "P2"
+    updated_at: "2026-08-07T04:46:59Z"
 last_run:
-  timestamp: "2026-08-07T09:21:21+09:00"
+  timestamp: "2026-08-07T14:06:42+09:00"
   outcome: "completed"
-  writer: "sweep-JOOSUNGPARK-JPI-omp-2026-08-07"
+  writer: "sweep-JOOSUNGPARK-JPI-omp-2026-08-07T1353"
   counts:
     gh-issues:
       ack_deferred: 0
-      acked_this_run: 3
-      acknowledged: 11
-      already_acked_at_source: 8
-      closed: 0
-      ingested: 11
+      acked_this_run: 5
+      acknowledged: 6
+      already_acked_at_source: 10
+      closed: 10
+      closed_this_run: 10
+      ingested: 5
       manual_stuck: 0
       media_analyzed: 0
+      needs_attention: 0
