@@ -425,23 +425,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.23.0",
+        "version": "v2.24.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-linux-amd64.zip",
-            "sha256": "06bc90d3e6fcd6aa0606d1ccfa3fe6a69073ed75916dd7bac0d012fe288f25ab"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.24.0/wakatime-cli-linux-amd64.zip",
+            "sha256": "a4ca5a38904efb0332c4a97925228dcf06cb0bb3ad78b24e200c6b67801f4965"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-linux-arm64.zip",
-            "sha256": "7edc0f02dd9ae900a6df7caf615576d5e6e66e0f1a7a91705469946b51b3393f"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.24.0/wakatime-cli-linux-arm64.zip",
+            "sha256": "db2f4fa14777b5b2e694c7d9ed3c3a4951c407d9b80d32141f0ba85018cadcf1"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-darwin-amd64.zip",
-            "sha256": "cd155c2f5d88ab5fb3e8e1e68c4b8fc7144f97f84fa046895b9caea2c9d3b521"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.24.0/wakatime-cli-darwin-amd64.zip",
+            "sha256": "59555886217522117d60cc9dc63876ec6999d81959e51fee335e507988e236e6"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.23.0/wakatime-cli-darwin-arm64.zip",
-            "sha256": "86ac480e1c3db294564e5b53574415399ae1bf0a3fec4e5046913eab63c555b4"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.24.0/wakatime-cli-darwin-arm64.zip",
+            "sha256": "487fd5ccec4deb46e9e0035a529aafc285f6469ac09c61b24aec1308594e310e"
           }
         }
       },
