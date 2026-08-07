@@ -26,7 +26,7 @@ import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/p
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 196;
+const EXPECTED_MIN_CHECKS = 208;
 
 let passed = 0;
 const failures: string[] = [];
@@ -184,6 +184,26 @@ eq("U1 unknown mcp tool ignored (fail-open route boundary, KTD4)", classify("mcp
 // .ci/test-unmanaged-repo-guard-real.sh proves it end to end.
 eq("U8 outer xd:// device write is not classified; the expanded call is", classify("write", { path: "xd://mcp__glab_issue_create", content: '{"repo":"o/r"}' }).kind, "ignore");
 eq("U8 ordinary file write ignored", classify("write", { path: "notes.txt", content: "hello" }).kind, "ignore");
+
+// ANSI-C escapes must be DECODED, not merely unquoted. Bash resolves
+// `$'\x69ssue'` to `issue`, so a tokenizer that yields `x69ssue` classifies
+// the call as unrelated and the write runs with no permission probe --
+// and fallbackScan cannot rescue it, because the raw text holds no literal
+// `issue` for its regex to match. Surfaced by code review of the U1 change.
+for (const [label, encoded] of [
+  ["hex", "$'\\x69ssue'"],
+  ["octal", "$'\\151ssue'"],
+  ["unicode", "$'\\u0069ssue'"],
+  ["split across escapes", "$'\\x69\\x73sue'"],
+] as const) {
+  const c = bash(`gh ${encoded} create --repo other-owner/other-repo`);
+  eq(`U1 ansi-c ${label} subcommand still classifies (R4)`, c.kind, "issue-write");
+  eq(`U1 ansi-c ${label} subcommand keeps the repo (R4)`, c.repo, "other-owner/other-repo");
+}
+eq("U1 ansi-c newline escape decodes", toArgv("echo $'a\\nb'")[1], "a\nb");
+eq("U1 ansi-c tab escape decodes", toArgv("echo $'a\\tb'")[1], "a\tb");
+eq("U1 ansi-c unrecognised escape keeps its backslash, as bash does", toArgv("echo $'a\\qb'")[1], "a\\qb");
+eq("U1 ansi-c escaped backslash decodes to one backslash", toArgv("echo $'a\\\\b'")[1], "a\\b");
 
 // Recorded accepted residual gaps: asserted so the suite states its boundary.
 // A shell-shaped line inside any interpreter heredoc IS caught (covered above);

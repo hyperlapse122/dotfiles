@@ -300,6 +300,59 @@ export function splitCommand(command: string): SplitResult {
 }
 
 /**
+ * Decode one ANSI-C (`$'…'`) escape starting at the backslash in `text[i]`.
+ *
+ * This must be a real decode, not a "drop the backslash" approximation.
+ * Bash resolves `$'\x69ssue'` to `issue`, so a tokenizer that yields
+ * `x69ssue` classifies `gh $'\x69ssue' create --repo other/repo` as an
+ * unrelated command and lets the write through with no permission probe.
+ * `fallbackScan` cannot rescue that shape either, because the raw text holds
+ * no literal `issue` for its regex to find.
+ *
+ * Returns the decoded text and the index just past the escape. An escape bash
+ * does not recognise keeps its backslash, exactly as bash does.
+ */
+function decodeAnsiCEscape(text: string, i: number): { out: string; next: number } {
+  const c = text[i + 1];
+  if (c === undefined) return { out: "\\", next: i + 1 };
+  const simple: Record<string, string> = {
+    a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n",
+    r: "\r", t: "\t", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?",
+  };
+  const mapped = simple[c];
+  if (mapped !== undefined) return { out: mapped, next: i + 2 };
+
+  const take = (from: number, max: number, re: RegExp): string => {
+    let s = "";
+    while (s.length < max && from + s.length < text.length && re.test(text[from + s.length] as string)) {
+      s += text[from + s.length] as string;
+    }
+    return s;
+  };
+
+  if (c === "x") {
+    const digits = take(i + 2, 2, /[0-9a-fA-F]/);
+    if (digits !== "") return { out: String.fromCharCode(parseInt(digits, 16)), next: i + 2 + digits.length };
+  }
+  if (c === "u" || c === "U") {
+    const digits = take(i + 2, c === "u" ? 4 : 8, /[0-9a-fA-F]/);
+    if (digits !== "") return { out: String.fromCodePoint(parseInt(digits, 16)), next: i + 2 + digits.length };
+  }
+  if (c >= "0" && c <= "7") {
+    const digits = take(i + 1, 3, /[0-7]/);
+    return { out: String.fromCharCode(parseInt(digits, 8)), next: i + 1 + digits.length };
+  }
+  if (c === "c") {
+    const target = text[i + 2];
+    if (target !== undefined) {
+      return { out: String.fromCharCode(target.toUpperCase().charCodeAt(0) ^ 0x40), next: i + 3 };
+    }
+  }
+  // Unrecognised: bash keeps the backslash.
+  return { out: `\\${c}`, next: i + 2 };
+}
+
+/**
  * Split one simple command into argv, stripping one level of quoting.
  *
  * This is the SECOND of the tokenizer's two quote state machines; the first
@@ -324,8 +377,10 @@ export function toArgv(text: string): string[] {
     if (quote) {
       if (quote === "$'") {
         if (c === "\\" && i + 1 < text.length) {
-          token += text[i + 1];
-          i += 1;
+          const { out, next } = decodeAnsiCEscape(text, i);
+          token += out;
+          started = true;
+          i = next - 1;
           continue;
         }
         if (c === "'") {
@@ -356,10 +411,10 @@ export function toArgv(text: string): string[] {
       continue;
     }
 
-    // ANSI-C `$'...'` quoting: only `\<char>` is decoded to that literal
-    // character; full escape sequences like `\n`/`\t`/`\xNN` are not
-    // interpreted (out of scope — the guard needs correct span boundaries
-    // and argv values, not shell-accurate string interpolation).
+    // ANSI-C `$'...'` quoting. Escapes inside the span are DECODED (see
+    // decodeAnsiCEscape): the argv this produces feeds route classification,
+    // and bash resolves `$'\x69ssue'` to `issue`, so anything less lets an
+    // encoded subcommand slip past `cliIsIssueWrite`.
     if (c === "$" && text[i + 1] === "'") {
       quote = "$'";
       started = true;
