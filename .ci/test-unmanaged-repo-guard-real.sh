@@ -197,31 +197,31 @@ chmod +x "$gh_stub/gh"
 gh_command='gh issue create --repo other-owner/other-repo --title "test issue" --body "test body"'
 prompt="Run exactly one bash tool call: \`$gh_command\`. Do not run any other command, and do not retry through a different tool or CLI. Report verbatim whatever output or error that single command produces."
 
-# Stand up the stub model server that drives omp's own extension resolution
-# (KTD5). It is torn down on any exit, including a failure, by the trap
-# declared above.
-stub_log="$scratch/stub-model-server.log"
-: >"$stub_log"
-stub_port_file="$scratch/stub-model-server.port"
-stub_stderr_file="$scratch/stub-model-server.stderr"
-tool_arguments=$(jq -cn --arg command "$gh_command" '{command: $command}')
-STUB_SCENARIO=bash bun "$repo_root/.ci/lib/stub-model-server.ts" "$stub_log" bash "$tool_arguments" \
-  >"$stub_port_file" 2>"$stub_stderr_file" &
-stub_pid=$!
-for _ in $(seq 1 100); do
-  [[ -s $stub_port_file ]] && break
-  kill -0 "$stub_pid" 2>/dev/null ||
-    fail "stub model server exited before printing its port: $(cat "$stub_stderr_file" 2>/dev/null)"
-  sleep 0.1
-done
-[[ -s $stub_port_file ]] || fail 'stub model server never printed its port'
-stub_port=$(<"$stub_port_file")
+# Poll port_file for the stub server's printed port for up to 10s, checking
+# stub_pid liveness so a server that exits early fails fast with its stderr
+# instead of waiting out the full timeout. Shared by the bash-scenario and
+# subagent-scenario stub servers below (both use stub-model-server.ts).
+wait_for_stub_port() {
+  local port_file=$1 stderr_file=$2 label=$3
+  for _ in $(seq 1 100); do
+    [[ -s $port_file ]] && break
+    kill -0 "$stub_pid" 2>/dev/null ||
+      fail "$label exited before printing its port: $(cat "$stderr_file" 2>/dev/null)"
+    sleep 0.1
+  done
+  [[ -s $port_file ]] || fail "$label never printed its port"
+  cat "$port_file"
+}
 
-mkdir -p "$home/.omp/agent"
-cat >"$home/.omp/agent/models.yml" <<YAML
+# Point the ci-stub provider at the given stub-model-server.ts port. Called
+# once per stub server below, overwriting models.yml each time.
+write_stub_models_yml() {
+  local port=$1
+  mkdir -p "$home/.omp/agent"
+  cat >"$home/.omp/agent/models.yml" <<YAML
 providers:
   ci-stub:
-    baseUrl: http://127.0.0.1:$stub_port/v1
+    baseUrl: http://127.0.0.1:$port/v1
     api: openai-completions
     auth: none
     models:
@@ -230,6 +230,21 @@ providers:
         contextWindow: 128000
         maxTokens: 4096
 YAML
+}
+
+# Stand up the stub model server that drives omp's own extension resolution
+# (KTD5). It is torn down on any exit, including a failure, by the trap
+# declared above.
+stub_log="$scratch/stub-model-server.log"
+: >"$stub_log"
+stub_port_file="$scratch/stub-model-server.port"
+stub_stderr_file="$scratch/stub-model-server.stderr"
+tool_arguments=$(jq -cn --arg command "$gh_command" '{command: $command}')
+STUB_SCENARIO=single-tool bun "$repo_root/.ci/lib/stub-model-server.ts" "$stub_log" bash "$tool_arguments" \
+  >"$stub_port_file" 2>"$stub_stderr_file" &
+stub_pid=$!
+stub_port=$(wait_for_stub_port "$stub_port_file" "$stub_stderr_file" 'stub model server')
+write_stub_models_yml "$stub_port"
 
 run_omp_prompt() {
   (
@@ -364,27 +379,8 @@ subagent_stub_stderr_file="$scratch/stub-model-server-subagent.stderr"
 STUB_SCENARIO=subagent bun "$repo_root/.ci/lib/stub-model-server.ts" "$subagent_stub_log" "$subagent_prompt" \
   >"$subagent_stub_port_file" 2>"$subagent_stub_stderr_file" &
 stub_pid=$!
-for _ in $(seq 1 100); do
-  [[ -s $subagent_stub_port_file ]] && break
-  kill -0 "$stub_pid" 2>/dev/null ||
-    fail "subagent stub model server exited before printing its port: $(cat "$subagent_stub_stderr_file" 2>/dev/null)"
-  sleep 0.1
-done
-[[ -s $subagent_stub_port_file ]] || fail 'subagent stub model server never printed its port'
-subagent_stub_port=$(<"$subagent_stub_port_file")
-
-cat >"$home/.omp/agent/models.yml" <<YAML
-providers:
-  ci-stub:
-    baseUrl: http://127.0.0.1:$subagent_stub_port/v1
-    api: openai-completions
-    auth: none
-    models:
-      - id: stub-1
-        name: CI Stub
-        contextWindow: 128000
-        maxTokens: 4096
-YAML
+subagent_stub_port=$(wait_for_stub_port "$subagent_stub_port_file" "$subagent_stub_stderr_file" 'subagent stub model server')
+write_stub_models_yml "$subagent_stub_port"
 
 run_omp_subagent_prompt() {
   (
@@ -448,8 +444,93 @@ jq -e -s 'all(.[] | select(.toolMsgCount == 0 and .tag == "child"); (.tools | in
   "$subagent_stub_log" >/dev/null ||
   fail "a child request's own tool list omitted mcp__glab_issue_create"
 
+# Step 6 (load-bearing, U11): the SAME MCP issue write, but on omp's DEFAULT
+# `tools.xdev`. Step 5 had to set `tools.xdev: false` to make
+# `mcp__glab_issue_create` appear as a distinct tool name at all; with the
+# default, omp mounts every connected MCP tool as an `xd://` device that is
+# absent from the model's tool list and reached only by calling the ordinary
+# `write` tool with the JSON arguments as `content`. That is the shipped
+# configuration, and step 5 never exercises it.
+#
+# What this pins is an omp RUNTIME behaviour the guard silently depends on.
+# Tracing every toolName the handler receives shows omp fires the hook TWICE
+# for a device write: once for the outer `write` (path `xd://<tool>`, arguments
+# as `content`), then again for the expanded `mcp__<server>_<tool>` with its
+# parsed arguments. `classify` deliberately ignores the outer `write` - the
+# expansion is what it matches. So the guard covers the default mounting only
+# because omp re-enters the hook after expanding. If a future omp stopped
+# re-firing, step 5 would still pass and the default configuration would fail
+# open with nothing to catch it; this step is that detector.
+rm -f "$home/.omp/agent/config.yml"
+kill "$stub_pid" 2>/dev/null || true
+wait "$stub_pid" 2>/dev/null || true
+
+device_arguments=$(
+  printf '{"path":"xd://mcp__glab_issue_create","content":%s,"i":"file the issue"}' \
+    "$(printf '{"repo":"other-owner/other-repo","title":"test issue","body":"test body"}' | jq -Rs .)"
+)
+device_stub_log="$scratch/stub-model-server-device.log"
+: >"$device_stub_log"
+device_stub_port_file="$scratch/stub-model-server-device.port"
+device_stub_stderr_file="$scratch/stub-model-server-device.stderr"
+STUB_SCENARIO=single-tool bun "$repo_root/.ci/lib/stub-model-server.ts" "$device_stub_log" write "$device_arguments" \
+  >"$device_stub_port_file" 2>"$device_stub_stderr_file" &
+stub_pid=$!
+device_stub_port=$(wait_for_stub_port "$device_stub_port_file" "$device_stub_stderr_file" 'device stub model server')
+write_stub_models_yml "$device_stub_port"
+
+device_prompt='Write the issue payload to the xd:// device exactly once. Do not use any other tool.'
+run_omp_device_prompt() {
+  (
+    cd "$workdir" &&
+      env "${unset_credentials[@]}" -u PI_CODING_AGENT_DIR -u OMP_AGENT_ENV \
+        HOME="$home" USERPROFILE="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
+        PATH="$gh_stub:$PATH" GLAB_LOG="$1" GLAB_USER_JSON='{"username":"ci-test-user"}' GLAB_PROJECT_JSON="$2" \
+        NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
+        omp -p "$device_prompt" --model ci-stub/stub-1 --auto-approve --no-session --max-time 120
+  )
+}
+
+: >"$mcp_log"
+set +e
+unmanaged_device_out=$(run_omp_device_prompt "$scratch/glab-device-unmanaged.log" '{"permissions":{"project_access":{"access_level":20}}}' 2>&1)
+unmanaged_device_status=$?
+set -e
+[[ $unmanaged_device_status -eq 0 ]] ||
+  fail "unmanaged device run exited $unmanaged_device_status: $unmanaged_device_out"
+grep -qF 'a repository the user does not manage' <<<"$unmanaged_device_out" ||
+  fail "device block reason text missing from output: $unmanaged_device_out"
+grep -qF 'other-owner/other-repo' <<<"$unmanaged_device_out" ||
+  fail "device block reason did not name the target repository: $unmanaged_device_out"
+[[ ! -s $mcp_log ]] ||
+  fail "unmanaged device run: the xd:// device executed despite the block: $(cat "$mcp_log")"
+
+: >"$mcp_log"
+set +e
+managed_device_out=$(run_omp_device_prompt "$scratch/glab-device-managed.log" '{"permissions":{"project_access":{"access_level":40}}}' 2>&1)
+managed_device_status=$?
+set -e
+[[ $managed_device_status -eq 0 ]] ||
+  fail "managed device run exited $managed_device_status: $managed_device_out"
+grep -qF 'a repository the user does not manage' <<<"$managed_device_out" &&
+  fail "managed device run was unexpectedly blocked: $managed_device_out"
+[[ -s $mcp_log ]] ||
+  fail 'managed device run: the xd:// device never executed despite a managed verdict'
+device_invocations=$(wc -l <"$mcp_log")
+[[ $device_invocations -eq 1 ]] ||
+  fail "managed device run: expected exactly 1 device invocation, got $device_invocations: $(cat "$mcp_log")"
+
+# The device route only proves anything if the MCP tool was genuinely absent
+# from the model's own tool list - otherwise the run silently reverted to
+# step 5's direct-name route and this step tested nothing new.
+[[ -s $device_stub_log ]] ||
+  fail 'device stub model server was never contacted - the U11 proof ran vacuously'
+jq -e -s 'all(.[]; (.tools | index("mcp__glab_issue_create")) == null and (.tools | index("write")) != null)' \
+  "$device_stub_log" >/dev/null ||
+  fail "device run's tool list did not match omp's default xd:// mounting: $(cat "$device_stub_log")"
+
 real_lock_after=$(snapshot_real_lock)
 [[ $real_lock_before == "$real_lock_after" ]] ||
   fail "real \$HOME plugin lock changed during the run: $real_lock"
 
-printf 'real OMP unmanaged-repo-guard: install, enable, lock, raw-.ts load, top-level bash block/allow, and subagent MCP block/allow proof passed\n'
+printf 'real OMP unmanaged-repo-guard: install, enable, lock, raw-.ts load, top-level bash block/allow, subagent MCP block/allow, and default-xdev device block/allow proof passed\n'

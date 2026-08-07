@@ -70,13 +70,13 @@ row_present "$scratch/reconcile-darwin.sh" mxm4-haptic h82-dotfiles ||
 # the whole agents.omp.plugins list (chezmoi/mergo replaces arrays wholesale
 # rather than merging them) so the fixture is isolated from the real rows.
 render_override() {
-  local template=$2 override=$3 output=$4
+  local template=$1 override=$2 output=$3
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
       --destination "$scratch/target" --override-data "$override" \
       execute-template <"$repo_root/$template" >"$output"
 }
-render_override linux "$posix_reconcile" \
+render_override "$posix_reconcile" \
   '{"chezmoi":{"os":"linux"},"agents":{"omp":{"plugins":[{"name":"mxm4-haptic","marketplace":"h82-dotfiles"}]}}}' \
   "$scratch/reconcile-omitted-container.sh"
 node -e '

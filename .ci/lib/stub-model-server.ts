@@ -74,7 +74,7 @@
  * empty, which the caller must treat as a failure.
  *
  * Usage:
- *   STUB_SCENARIO=bash      bun stub-model-server.ts LOG_FILE TOOL_NAME TOOL_ARGUMENTS_JSON
+ *   STUB_SCENARIO=single-tool bun stub-model-server.ts LOG_FILE TOOL_NAME TOOL_ARGUMENTS_JSON
  *   STUB_SCENARIO=subagent  bun stub-model-server.ts LOG_FILE PARENT_PROMPT_TEXT
  */
 
@@ -96,8 +96,8 @@ const CHILD_TASK_TEXT =
 const MCP_TOOL_NAME = "mcp__glab_issue_create";
 
 const scenario = process.env.STUB_SCENARIO;
-if (scenario !== "bash" && scenario !== "subagent") {
-  console.error("usage: STUB_SCENARIO=bash|subagent bun stub-model-server.ts ...");
+if (scenario !== "single-tool" && scenario !== "subagent") {
+  console.error("usage: STUB_SCENARIO=single-tool|subagent bun stub-model-server.ts ...");
   process.exit(1);
 }
 
@@ -172,17 +172,31 @@ function chunkBase(): Record<string, unknown> {
   return { id: `chatcmpl-stub-${seq}`, object: "chat.completion.chunk" as const, created: Math.floor(Date.now() / 1000), model: "stub-1" };
 }
 
-async function handleBash(req: Request, logFile: string, toolName: string, toolArguments: string): Promise<Response> {
-  const base = chunkBase();
+type ParsedChatRequest = { payload: ChatCompletionRequest; tools: string[] };
+
+/**
+ * Parse the request body and extract its offered tool names, logging and
+ * returning null on invalid JSON so the caller can respond 400. Shared by
+ * every scenario handler below.
+ */
+async function parseChatRequest(req: Request, logFile: string): Promise<ParsedChatRequest | null> {
   let payload: ChatCompletionRequest;
   try {
     payload = await req.json();
   } catch (error) {
     appendFileSync(logFile, `${JSON.stringify({ seq, error: `invalid JSON body: ${String(error)}` })}\n`);
-    return new Response("stub-model-server: invalid JSON body", { status: 400 });
+    return null;
   }
-
   const tools = (payload.tools ?? []).map((tool) => tool.function?.name).filter((name): name is string => Boolean(name));
+  return { payload, tools };
+}
+
+async function handleSingleTool(req: Request, logFile: string, toolName: string, toolArguments: string): Promise<Response> {
+  const base = chunkBase();
+  const parsed = await parseChatRequest(req, logFile);
+  if (!parsed) return new Response("stub-model-server: invalid JSON body", { status: 400 });
+  const { payload, tools } = parsed;
+
   const toolResult = (payload.messages ?? []).findLast((message) => message.role === "tool");
   appendFileSync(logFile, `${JSON.stringify({ seq, tools, hasToolResult: Boolean(toolResult) })}\n`);
 
@@ -192,16 +206,11 @@ async function handleBash(req: Request, logFile: string, toolName: string, toolA
 
 async function handleSubagent(req: Request, logFile: string, parentPromptText: string): Promise<Response> {
   const base = chunkBase();
-  let payload: ChatCompletionRequest;
-  try {
-    payload = await req.json();
-  } catch (error) {
-    appendFileSync(logFile, `${JSON.stringify({ seq, error: `invalid JSON body: ${String(error)}` })}\n`);
-    return new Response("stub-model-server: invalid JSON body", { status: 400 });
-  }
+  const parsed = await parseChatRequest(req, logFile);
+  if (!parsed) return new Response("stub-model-server: invalid JSON body", { status: 400 });
+  const { payload, tools } = parsed;
 
   const messages = payload.messages ?? [];
-  const tools = (payload.tools ?? []).map((tool) => tool.function?.name).filter((name): name is string => Boolean(name));
   const lastUser = messages.findLast((message) => message.role === "user");
   const lastUserText = userText(lastUser?.content);
   const toolResults = messages.filter((message) => message.role === "tool");
@@ -241,13 +250,13 @@ const server = Bun.serve({
     if (req.method !== "POST" || url.pathname !== "/v1/chat/completions") {
       return new Response("stub-model-server: not found", { status: 404 });
     }
-    if (scenario === "bash") {
+    if (scenario === "single-tool") {
       const [toolName, toolArguments] = rest;
       if (!toolName || !toolArguments) {
-        console.error("usage: STUB_SCENARIO=bash bun stub-model-server.ts LOG_FILE TOOL_NAME TOOL_ARGUMENTS_JSON");
+        console.error("usage: STUB_SCENARIO=single-tool bun stub-model-server.ts LOG_FILE TOOL_NAME TOOL_ARGUMENTS_JSON");
         process.exit(1);
       }
-      return handleBash(req, logFile, toolName, toolArguments);
+      return handleSingleTool(req, logFile, toolName, toolArguments);
     }
     const [parentPromptText] = rest;
     if (!parentPromptText) {

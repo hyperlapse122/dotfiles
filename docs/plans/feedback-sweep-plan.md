@@ -891,71 +891,71 @@ scripts above.
 **Execution note:** check for a duplicate chain key by hand before rendering. A duplicate produces no
 error at any layer — the render succeeds and one chain is silently gone.
 
-### Phase 5 — Close the route U8 uncovered
+### Phase 5 — Pin the route U8 uncovered
 
-#### U11. Classify an MCP issue write reached through an `xd://` device
+#### U11. Prove the guard covers omp's default `xd://` MCP mounting
 
-**Goal:** the guard intercepts an MCP issue write on omp's **default** MCP mounting, not only on the
-direct `mcp__*` tool-name route.
+**Goal:** the real-runtime suite exercises the MCP mounting the shipped configuration actually uses,
+and pins the omp runtime behaviour that makes the guard's coverage of it work.
 
-**Requirements:** none of `R1`-`R11` — this unit exists because implementing `R8` uncovered a
-fail-open bypass of the control the rest of this plan hardens. It is in scope by the same rule that
-puts a defect discovered inside a settled approach in scope: the label never suppresses defect
-evidence.
+**Requirements:** none of `R1`-`R11` — this unit exists because implementing `R8` exposed an
+untested configuration. It is test-only.
 
 **Dependencies:** U8 — the finding and the harness both come from it.
 
 **Files:**
-- `dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts` (modify)
-- `.ci/test-unmanaged-repo-guard.ts` (modify)
+- `.ci/test-unmanaged-repo-guard-real.sh` (modify — add step 6)
+- `.ci/lib/stub-model-server.ts` (modify — rename the `bash` scenario to `single-tool`, since it now
+  drives two different tools)
+- `.ci/test-unmanaged-repo-guard.ts` (modify — record the classifier's real contract for the outer
+  `write`)
+
+**What the investigation actually found — and the claim it retracts.**
+
+U8 had to set `tools.xdev: false` just to make `mcp__glab_issue_create` appear as a distinct tool
+name. That is not the shipped configuration: by default omp mounts every connected MCP tool as an
+`xd://` device, absent from the model's tool list and reached only by calling the ordinary `write`
+tool with the arguments as `content`. Verified directly: with no guard installed, a `write` to
+`xd://mcp__glab_issue_create` really does execute the MCP tool.
+
+The first conclusion drawn from that — that the guard therefore had a fail-open bypass, and needed a
+new `classify` branch for the outer `write` — **was wrong, and the code implementing it has been
+removed.** Tracing every `toolName` the handler receives shows omp fires the hook **twice** for a
+device write: once for the outer `write`, then again for the expanded `mcp__<server>_<tool>` with its
+parsed arguments. The existing `mcp__` branch already catches the second event, so the guard blocks
+the device route with no change at all. The proof is direct: with the new branch disabled the
+end-to-end scenario still passed, and with the `mcp__` branch disabled it failed.
+
+Classifying the outer `write` would have been redundant, and worse than redundant — it added a
+`JSON.parse` of attacker-influenced `content` to a security control for zero behavioural change. It
+is not kept as defence-in-depth: the cost is real, the benefit is speculative, and the duplicate
+route would need to stay in lockstep with `classifyMcp` forever.
 
 **Approach:**
+1. Add step 6 to the real-runtime script: the same MCP issue write as step 5, with `tools.xdev` left
+   at its default, asserting blocked on an unmanaged verdict and allowed on a managed one, and that
+   the stub MCP server saw no invocation in the blocked case.
+2. Assert the tool list actually matched the default mounting — the MCP tool absent, `write` present
+   — so the step cannot silently revert to step 5's direct-name route and test nothing new.
+3. Leave `classify` unchanged. Record the real contract in the unit suite: the outer `write` is
+   deliberately ignored, the expansion is what matches.
+4. Reuse the existing single-tool scenario rather than adding a third; rename it from `bash`, whose
+   name no longer describes what it drives.
 
-What U8 established: by default omp does **not** expose connected MCP tools as distinct named
-functions. It folds them behind a virtual-device transport, reached by calling the ordinary `write`
-tool with `path: "xd://<tool>"` and the JSON argument object as `content`. U8 had to set
-`tools.xdev: false` in its relocated `HOME` just to make `mcp__glab_issue_create` appear as a
-first-class tool name at all. That is not the shipped configuration: this repo's own omp session
-mounts every MCP tool under `xd://`.
-
-`classify` today handles exactly two shapes — `bash`, and a tool name starting `mcp__`. A `write`
-to `xd://mcp__glab_issue_create` matches neither and returns `IGNORE`, so the guard never runs its
-access probe. Verified directly against the current classifier: the direct route returns
-`issue-write` and the `xd://` route returns `ignore`.
-
-1. Add a third branch to `classify`: when the tool name is `write` and `input.path` is a string
-   beginning `xd://`, take the device name after the prefix and route it through the existing
-   `classifyMcp`, using the parsed `content` as the argument object.
-2. Parse `content` defensively. A non-string, or a string that is not valid JSON, must still reach
-   `classifyMcp` with an empty argument object rather than short-circuiting to `IGNORE`: the device
-   name alone already identifies an issue write, and dropping it because the payload was unreadable
-   would be a fail-open on exactly the ambiguous input the guard is supposed to distrust. A missing
-   `repo` then falls through to the existing origin-resolution path, unchanged.
-3. Preserve fail-open on route recognition (KTD4 of the origin plan): a `write` to a path that is
-   not `xd://`, or to an `xd://` device whose name is not an issue-write tool, stays `IGNORE`.
-   Widening `write` in general would block ordinary file writes.
-4. Reuse `classifyMcp` rather than duplicating its allowlist and `MCP_ISSUE_WRITE_PATTERN` fallback,
-   so the two routes cannot drift — the same lockstep argument as `splitCommand`/`toArgv` in KTD1.
-
-**Patterns to follow:** the existing `classify` dispatch shape; `classifyMcp`'s hostKind inference
-from the device name.
+**Patterns to follow:** the existing step-4 and step-5 scenario structure; the `GLAB_LOG` /
+`MCP_ISSUE_LOG` subprocess-boundary proofs.
 
 **Test scenarios:**
-- `write` to `xd://mcp__glab_issue_create` with a JSON `content` naming `other-owner/other-repo`
-  classifies as an issue write against that repository. This case fails against the pre-change
-  classifier and is the regression.
-- The same via `xd://mcp__github_create_issue`, proving the pattern fallback reaches the device
-  route too.
-- `content` that is not valid JSON still classifies as an issue write, with a null repository, so
-  origin resolution and the access probe still run.
-- `write` to an ordinary file path is ignored.
-- `write` to an `xd://` device that is not an issue-write tool (for example a search device) is
-  ignored.
-- `read` of an `xd://` issue-write device is ignored — only `write` executes a device.
-- The direct `mcp__glab_issue_create` route keeps its existing behaviour unchanged.
+- Default `tools.xdev`, unmanaged verdict: the device write is blocked, the reason names the target
+  repository, and the stub MCP server records no invocation.
+- Default `tools.xdev`, managed verdict: the device executes exactly once.
+- Every request in the step's own model-server log offered `write` and did **not** offer
+  `mcp__glab_issue_create`, proving the default mounting was genuinely in force.
+- Unit level: `classify` ignores a `write` to an `xd://` device, and ignores an ordinary file write.
 
-**Verification:** `bun .ci/test-unmanaged-repo-guard.ts` passes, with the new device-route cases
-failing against the pre-change classifier.
+**Verification:** `timeout 600 bash .ci/test-unmanaged-repo-guard-real.sh <rendered-package> </dev/null`
+passes all six steps. Disabling the `mcp__` branch makes it fail, which is what proves the step is
+not vacuous.
 
 ---
 
