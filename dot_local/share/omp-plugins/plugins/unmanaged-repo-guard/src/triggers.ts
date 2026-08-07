@@ -612,6 +612,38 @@ function classifyMcp(toolName: string, input: Record<string, unknown>): Classifi
   };
 }
 
+/**
+ * An MCP tool reached through omp's virtual-device transport rather than as a
+ * first-class tool name. This is omp's DEFAULT MCP mounting: connected MCP
+ * tools are folded behind `xd://<tool>` and invoked by calling the ordinary
+ * `write` tool with the JSON argument object as `content`. Without this route
+ * the guard only sees the direct `mcp__*` shape, which omp exposes only when
+ * `tools.xdev` is false — so the default configuration would fail open.
+ */
+function classifyDeviceWrite(input: Record<string, unknown>): Classification {
+  const path = input["path"];
+  if (typeof path !== "string" || !path.startsWith("xd://")) return IGNORE;
+  const device = path.slice("xd://".length);
+
+  // An unreadable payload must not drop the call: the device name alone
+  // already identifies an issue write, and a missing repo simply falls through
+  // to origin resolution. Bailing to IGNORE here would fail open on exactly
+  // the ambiguous input this guard exists to distrust.
+  let args: Record<string, unknown> = {};
+  const content = input["content"];
+  if (typeof content === "string") {
+    try {
+      const parsed: unknown = JSON.parse(content);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        args = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Keep the empty argument object.
+    }
+  }
+  return classifyMcp(device, args);
+}
+
 export function classify(toolName: string, input: Record<string, unknown>): Classification {
   if (toolName === "bash") {
     const command = input["command"];
@@ -619,5 +651,7 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
     return classifyBash(command);
   }
   if (toolName.startsWith("mcp__")) return classifyMcp(toolName, input);
+  // Only `write` executes a device; reading one is inert.
+  if (toolName === "write") return classifyDeviceWrite(input);
   return IGNORE;
 }

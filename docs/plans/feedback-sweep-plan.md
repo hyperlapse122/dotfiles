@@ -891,6 +891,72 @@ scripts above.
 **Execution note:** check for a duplicate chain key by hand before rendering. A duplicate produces no
 error at any layer — the render succeeds and one chain is silently gone.
 
+### Phase 5 — Close the route U8 uncovered
+
+#### U11. Classify an MCP issue write reached through an `xd://` device
+
+**Goal:** the guard intercepts an MCP issue write on omp's **default** MCP mounting, not only on the
+direct `mcp__*` tool-name route.
+
+**Requirements:** none of `R1`-`R11` — this unit exists because implementing `R8` uncovered a
+fail-open bypass of the control the rest of this plan hardens. It is in scope by the same rule that
+puts a defect discovered inside a settled approach in scope: the label never suppresses defect
+evidence.
+
+**Dependencies:** U8 — the finding and the harness both come from it.
+
+**Files:**
+- `dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts` (modify)
+- `.ci/test-unmanaged-repo-guard.ts` (modify)
+
+**Approach:**
+
+What U8 established: by default omp does **not** expose connected MCP tools as distinct named
+functions. It folds them behind a virtual-device transport, reached by calling the ordinary `write`
+tool with `path: "xd://<tool>"` and the JSON argument object as `content`. U8 had to set
+`tools.xdev: false` in its relocated `HOME` just to make `mcp__glab_issue_create` appear as a
+first-class tool name at all. That is not the shipped configuration: this repo's own omp session
+mounts every MCP tool under `xd://`.
+
+`classify` today handles exactly two shapes — `bash`, and a tool name starting `mcp__`. A `write`
+to `xd://mcp__glab_issue_create` matches neither and returns `IGNORE`, so the guard never runs its
+access probe. Verified directly against the current classifier: the direct route returns
+`issue-write` and the `xd://` route returns `ignore`.
+
+1. Add a third branch to `classify`: when the tool name is `write` and `input.path` is a string
+   beginning `xd://`, take the device name after the prefix and route it through the existing
+   `classifyMcp`, using the parsed `content` as the argument object.
+2. Parse `content` defensively. A non-string, or a string that is not valid JSON, must still reach
+   `classifyMcp` with an empty argument object rather than short-circuiting to `IGNORE`: the device
+   name alone already identifies an issue write, and dropping it because the payload was unreadable
+   would be a fail-open on exactly the ambiguous input the guard is supposed to distrust. A missing
+   `repo` then falls through to the existing origin-resolution path, unchanged.
+3. Preserve fail-open on route recognition (KTD4 of the origin plan): a `write` to a path that is
+   not `xd://`, or to an `xd://` device whose name is not an issue-write tool, stays `IGNORE`.
+   Widening `write` in general would block ordinary file writes.
+4. Reuse `classifyMcp` rather than duplicating its allowlist and `MCP_ISSUE_WRITE_PATTERN` fallback,
+   so the two routes cannot drift — the same lockstep argument as `splitCommand`/`toArgv` in KTD1.
+
+**Patterns to follow:** the existing `classify` dispatch shape; `classifyMcp`'s hostKind inference
+from the device name.
+
+**Test scenarios:**
+- `write` to `xd://mcp__glab_issue_create` with a JSON `content` naming `other-owner/other-repo`
+  classifies as an issue write against that repository. This case fails against the pre-change
+  classifier and is the regression.
+- The same via `xd://mcp__github_create_issue`, proving the pattern fallback reaches the device
+  route too.
+- `content` that is not valid JSON still classifies as an issue write, with a null repository, so
+  origin resolution and the access probe still run.
+- `write` to an ordinary file path is ignored.
+- `write` to an `xd://` device that is not an issue-write tool (for example a search device) is
+  ignored.
+- `read` of an `xd://` issue-write device is ignored — only `write` executes a device.
+- The direct `mcp__glab_issue_create` route keeps its existing behaviour unchanged.
+
+**Verification:** `bun .ci/test-unmanaged-repo-guard.ts` passes, with the new device-route cases
+failing against the pre-change classifier.
+
 ---
 
 ## Scope Boundaries

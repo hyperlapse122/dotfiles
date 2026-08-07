@@ -26,7 +26,7 @@ import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/p
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 194;
+const EXPECTED_MIN_CHECKS = 206;
 
 let passed = 0;
 const failures: string[] = [];
@@ -174,6 +174,37 @@ check("U1 mcp issue create classifies", classify("mcp__glab_issue_create", { tit
 check("U1 mcp issue note classifies (real glab tool name)", classify("mcp__glab_issue_note", { body: "x" }).kind === "issue-write");
 eq("U1 mcp issue list ignored", classify("mcp__glab_issue_list", {}).kind, "ignore");
 eq("U1 unknown mcp tool ignored (fail-open route boundary, KTD4)", classify("mcp__foo_bar", {}).kind, "ignore");
+
+// U11: omp's DEFAULT MCP mounting. Connected MCP tools are folded behind
+// `xd://<tool>` and invoked through the ordinary `write` tool, so the direct
+// `mcp__*` tool name above only appears when `tools.xdev` is false. Without
+// this route the shipped configuration fails open.
+{
+  const dev = (path: unknown, content?: unknown) =>
+    classify("write", content === undefined ? { path } : { path, content });
+  const c = dev("xd://mcp__glab_issue_create", JSON.stringify({ project: "o/r", title: "x" }));
+  eq("U11 xd device issue create classifies (R8 route)", c.kind, "issue-write");
+  eq("U11 xd device issue create carries the repo", c.repo, "o/r");
+  eq("U11 xd device hostKind follows the device name", c.hostKind, "gitlab");
+  eq(
+    "U11 xd device pattern fallback reaches the device route",
+    dev("xd://mcp__gitea_issue_create", JSON.stringify({ repo: "o/r" })).kind,
+    "issue-write",
+  );
+  const bad = dev("xd://mcp__glab_issue_create", "not json{");
+  eq("U11 unparseable device payload still classifies", bad.kind, "issue-write");
+  eq("U11 unparseable device payload leaves the repo unresolved", bad.repo, null);
+  eq("U11 missing device payload still classifies", dev("xd://mcp__glab_issue_create").kind, "issue-write");
+  eq("U11 ordinary file write ignored", dev("notes.txt", "hello").kind, "ignore");
+  eq("U11 non-issue xd device ignored", dev("xd://mcp__glab_issue_list", "{}").kind, "ignore");
+  eq("U11 unknown xd device ignored (fail-open route boundary, KTD4)", dev("xd://ast_grep", "{}").kind, "ignore");
+  eq("U11 non-string write path ignored", dev(42, "{}").kind, "ignore");
+  eq(
+    "U11 reading an issue-write device is inert",
+    classify("read", { path: "xd://mcp__glab_issue_create" }).kind,
+    "ignore",
+  );
+}
 
 // Recorded accepted residual gaps: asserted so the suite states its boundary.
 // A shell-shaped line inside any interpreter heredoc IS caught (covered above);
