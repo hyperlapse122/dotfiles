@@ -468,3 +468,16 @@ agents:
   unmanagedRepoGuard:
     probeTimeoutMs: 5000
     cacheTtlMs: 300000
+    # auditLog: a durable, session-independent trace of every block, appended
+    # to $XDG_STATE_HOME/unmanaged-repo-guard/blocks.jsonl (or
+    # ~/.local/state/... when XDG_STATE_HOME is unset). Never written on the
+    # allow path, so the per-call hot path stays allocation-free (KTD4, R5).
+    #   enabled  : must ship true — a disabled audit trail would leave R5
+    #              unfixed. A write failure (full disk, unwritable state
+    #              directory) degrades only the audit trail, never the
+    #              guard's block/allow verdict.
+    #   maxBytes : truncates the log once it exceeds this many bytes, so an
+    #              unattended workstation cannot grow it without bound.
+    auditLog:
+      enabled: true
+      maxBytes: 1048576

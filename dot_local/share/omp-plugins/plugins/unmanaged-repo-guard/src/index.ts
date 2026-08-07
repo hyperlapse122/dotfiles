@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createAuditLog } from "./audit.ts";
+import type { AuditConfig, AuditFs } from "./audit.ts";
 import { createBoundedExec } from "./exec.ts";
 import type { Exec } from "./exec.ts";
 import { createProber } from "./probe.ts";
@@ -23,16 +25,20 @@ type ToolCallContext = { hasUI?: boolean; cwd?: string };
 type ToolCallResult = { block: true; reason: string } | undefined;
 type ToolCallHandler = (event: ToolCallEvent, context?: ToolCallContext) => Promise<ToolCallResult>;
 
-export type GuardConfig = { probeTimeoutMs: number; cacheTtlMs: number };
+export type GuardConfig = { probeTimeoutMs: number; cacheTtlMs: number; auditLog: AuditConfig };
 
 export type GuardDeps = {
   exec: Exec;
   now?: () => number;
   config: GuardConfig;
+  /** Injected audit filesystem seam; defaults to the real one (plan U4). */
+  auditFs?: AuditFs;
 };
 
 const MIN_MS = 1;
 const MAX_MS = 3_600_000;
+const MIN_AUDIT_BYTES = 1024;
+const MAX_AUDIT_BYTES = 104_857_600;
 
 /**
  * Testable core: everything the handler needs, injected. The exported default
@@ -45,6 +51,7 @@ export function createGuard(deps: GuardDeps): ToolCallHandler {
     now: deps.now ?? Date.now,
     cacheTtlMs: deps.config.cacheTtlMs,
   });
+  const audit = createAuditLog({ config: deps.config.auditLog, now: deps.now, fs: deps.auditFs });
 
   return async function onToolCall(event, context) {
     const classification = classify(event.toolName, event.input ?? {});
@@ -55,13 +62,22 @@ export function createGuard(deps: GuardDeps): ToolCallHandler {
 
     const { candidates, invalid } = await resolveCandidates(classification, cwd, exec);
     if (invalid) {
+      const attempted = classification.repo ?? "an unresolved repository";
+      audit.record({
+        tool: event.toolName,
+        outcome: "invalid-target",
+        attempted,
+        host: null,
+        repo: null,
+        detail: null,
+      });
       return {
         block: true,
         reason: composeReason(
           {
             verdict: "indeterminate",
             detail: "the target repository could not be resolved or failed validation",
-            repo: classification.repo ?? "an unresolved repository",
+            repo: attempted,
           },
           context?.hasUI === true,
         ),
@@ -71,6 +87,14 @@ export function createGuard(deps: GuardDeps): ToolCallHandler {
     const outcome = await prober.evaluate(candidates);
     if (outcome.verdict === "managed") return undefined;
 
+    audit.record({
+      tool: event.toolName,
+      outcome: outcome.verdict,
+      attempted: outcome.repo,
+      host: candidates[0]?.host ?? null,
+      repo: outcome.repo,
+      detail: outcome.detail,
+    });
     return { block: true, reason: composeReason(outcome, context?.hasUI === true) };
   };
 }
@@ -95,7 +119,33 @@ export function readConfig(manifestPath: string): GuardConfig {
       throw new Error(`${name} must be a number of milliseconds in ${MIN_MS}..${MAX_MS}`);
     }
   }
-  return { probeTimeoutMs: probeTimeoutMs as number, cacheTtlMs: cacheTtlMs as number };
+
+  const auditBlock = record["auditLog"];
+  if (typeof auditBlock !== "object" || auditBlock === null) {
+    throw new Error("unmanagedRepoGuard is missing the auditLog block");
+  }
+  const auditRecord = auditBlock as Record<string, unknown>;
+  const enabled = auditRecord["enabled"];
+  if (typeof enabled !== "boolean") {
+    throw new Error("unmanagedRepoGuard.auditLog.enabled must be a boolean");
+  }
+  const maxBytes = auditRecord["maxBytes"];
+  if (
+    typeof maxBytes !== "number" ||
+    !Number.isFinite(maxBytes) ||
+    maxBytes < MIN_AUDIT_BYTES ||
+    maxBytes > MAX_AUDIT_BYTES
+  ) {
+    throw new Error(
+      `unmanagedRepoGuard.auditLog.maxBytes must be a number of bytes in ${MIN_AUDIT_BYTES}..${MAX_AUDIT_BYTES}`,
+    );
+  }
+
+  return {
+    probeTimeoutMs: probeTimeoutMs as number,
+    cacheTtlMs: cacheTtlMs as number,
+    auditLog: { enabled, maxBytes },
+  };
 }
 
 type OmpExtensionApi = {

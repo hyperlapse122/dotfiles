@@ -26,7 +26,7 @@ import { classify, splitCommand, toArgv } from "../dot_local/share/omp-plugins/p
 import type { Classification } from "../dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts";
 
 /** Every scenario below must run; a silently deleted check would lower this. */
-const EXPECTED_MIN_CHECKS = 165;
+const EXPECTED_MIN_CHECKS = 194;
 
 let passed = 0;
 const failures: string[] = [];
@@ -43,7 +43,7 @@ function eq<T>(name: string, actual: T, expected: T): void {
   check(name, Object.is(actual, expected), `expected ${String(expected)}, got ${String(actual)}`);
 }
 
-const CONFIG = { probeTimeoutMs: 5000, cacheTtlMs: 300_000 };
+const CONFIG = { probeTimeoutMs: 5000, cacheTtlMs: 300_000, auditLog: { enabled: false, maxBytes: 1_048_576 } };
 
 function execResult(partial: Partial<ExecResult> = {}): ExecResult {
   return { stdout: "", stderr: "", code: 0, killed: false, ...partial };
@@ -740,6 +740,179 @@ async function runGuard(command: string, exec: Exec, ctx: { hasUI?: boolean } = 
   check("U5 AE1 unmanaged create is blocked", blocked?.block === true);
   check("U5 AE1 reason names the repo", blocked?.reason.includes("other/repo") === true);
 }
+
+// -------------------------------------------------------------- U4: audit (R5)
+
+type FakeAuditFs = {
+  files: Record<string, string>;
+  calls: { size: number; truncate: number; append: number };
+  size: (path: string) => number;
+  truncate: (path: string) => void;
+  append: (path: string, line: string) => void;
+};
+function fakeAuditFs(initial: Record<string, string> = {}): FakeAuditFs {
+  const files: Record<string, string> = { ...initial };
+  const calls = { size: 0, truncate: 0, append: 0 };
+  return {
+    files,
+    calls,
+    size: (path) => {
+      calls.size += 1;
+      return files[path] ? Buffer.byteLength(files[path]) : 0;
+    },
+    truncate: (path) => {
+      calls.truncate += 1;
+      files[path] = "";
+    },
+    append: (path, line) => {
+      calls.append += 1;
+      files[path] = (files[path] ?? "") + line;
+    },
+  };
+}
+function auditLines(fs: FakeAuditFs, path: string): Record<string, unknown>[] {
+  const raw = fs.files[path] ?? "";
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+const AUDIT_ON = { enabled: true, maxBytes: 1_048_576 };
+
+// The audit path is derived from XDG_STATE_HOME at call time, so pin it to a
+// value this suite controls and predict the same join() the production code
+// computes; restored once every audit scenario below has run.
+const previousXdgStateHome = process.env["XDG_STATE_HOME"];
+process.env["XDG_STATE_HOME"] = "/urg-audit-test-state";
+const AUDIT_PATH = "/urg-audit-test-state/unmanaged-repo-guard/blocks.jsonl";
+
+{
+  const auditFs = fakeAuditFs();
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "READ", isFork: false }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: AUDIT_ON },
+    auditFs,
+  });
+  await handler({ toolName: "bash", input: { command: "gh issue create --repo other/repo -t PRIVATE-TITLE-TEXT", cwd: "/work" } });
+  const lines = auditLines(auditFs, AUDIT_PATH);
+  check("U4 unmanaged block appends exactly one audit record (R5)", lines.length === 1, `got ${lines.length} lines`);
+  const record = lines[0];
+  eq("U4 unmanaged record names the tool (R5)", record?.["tool"], "bash");
+  eq("U4 unmanaged record outcome is unmanaged (R5)", record?.["outcome"], "unmanaged");
+  eq("U4 unmanaged record host is resolved (R5)", record?.["host"], "github.com");
+  eq("U4 unmanaged record repo is resolved (R5)", record?.["repo"], "other/repo");
+  check("U4 no record contains the command text (R5)", !JSON.stringify(auditFs.files).includes("PRIVATE-TITLE-TEXT"));
+}
+
+{
+  const auditFs = fakeAuditFs();
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "WRITE", isFork: false }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: AUDIT_ON },
+    auditFs,
+  });
+  await handler({ toolName: "bash", input: { command: 'cd "$T" && gh issue create -t x', cwd: "/work" } });
+  const lines = auditLines(auditFs, AUDIT_PATH);
+  check("U4 invalid-target block appends one audit record (R5)", lines.length === 1, `got ${lines.length} lines`);
+  const record = lines[0];
+  eq("U4 invalid-target record outcome (R5)", record?.["outcome"], "invalid-target");
+  eq("U4 invalid-target record host is null (R5)", record?.["host"], null);
+  eq("U4 invalid-target record repo is null (R5)", record?.["repo"], null);
+  eq("U4 invalid-target record detail is null (R5)", record?.["detail"], null);
+  check(
+    "U4 invalid-target record has a populated attempted field (R5)",
+    typeof record?.["attempted"] === "string" && (record["attempted"] as string).length > 0,
+  );
+}
+
+{
+  const auditFs = fakeAuditFs();
+  const handler = createGuard({
+    exec: ghStub({}, { repoFailure: { code: 1 } }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: AUDIT_ON },
+    auditFs,
+  });
+  await handler({ toolName: "bash", input: { command: "gh issue create --repo other/repo", cwd: "/work" } });
+  const lines = auditLines(auditFs, AUDIT_PATH);
+  check("U4 indeterminate block appends one audit record (R5)", lines.length === 1, `got ${lines.length} lines`);
+  const record = lines[0];
+  eq("U4 indeterminate record outcome (R5)", record?.["outcome"], "indeterminate");
+  check(
+    "U4 indeterminate record carries the probe detail (R5)",
+    typeof record?.["detail"] === "string" && (record["detail"] as string).length > 0,
+  );
+}
+
+{
+  const auditFs = fakeAuditFs();
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "WRITE", isFork: false }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: AUDIT_ON },
+    auditFs,
+  });
+  const result = await handler({ toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } });
+  eq("U4 allowed call appends nothing (R5)", result, undefined);
+  check("U4 allowed call writes no audit line (R5)", auditLines(auditFs, AUDIT_PATH).length === 0);
+}
+
+{
+  const throwingFs: FakeAuditFs = { ...fakeAuditFs(), append: () => {
+    throw new Error("disk full");
+  } };
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "READ", isFork: false }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: AUDIT_ON },
+    auditFs: throwingFs,
+  });
+  const result = await handler({ toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } });
+  check(
+    "U4 a throwing writer does not change the verdict or propagate (R5)",
+    result?.block === true && result.reason.includes("other/repo"),
+  );
+}
+
+{
+  const auditFs = fakeAuditFs();
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "READ", isFork: false }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: { enabled: false, maxBytes: 1_048_576 } },
+    auditFs,
+  });
+  await handler({ toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } });
+  check("U4 disabled audit writes nothing (R5)", Object.keys(auditFs.files).length === 0);
+  check(
+    "U4 disabled audit never touches the filesystem seam, so no path is resolved (R5)",
+    auditFs.calls.size === 0 && auditFs.calls.truncate === 0 && auditFs.calls.append === 0,
+  );
+}
+
+{
+  const maxBytes = 200;
+  const auditFs = fakeAuditFs({ [AUDIT_PATH]: "x".repeat(maxBytes) });
+  const handler = createGuard({
+    exec: ghStub({ viewerPermission: "READ", isFork: false }),
+    now: () => 0,
+    config: { ...CONFIG, auditLog: { enabled: true, maxBytes } },
+    auditFs,
+  });
+  await handler({ toolName: "bash", input: { command: "gh issue create --repo other/repo -t x", cwd: "/work" } });
+  check("U4 a full audit file is truncated before the new record (R5)", auditFs.calls.truncate === 1);
+  const lines = auditLines(auditFs, AUDIT_PATH);
+  check(
+    "U4 the new record survives truncation (R5)",
+    lines.length === 1 && lines[0]?.["outcome"] === "unmanaged",
+  );
+}
+
+process.env["XDG_STATE_HOME"] = previousXdgStateHome;
+
 eq("U5 AE2 managed create passes", await runGuard("gh issue create --repo other/repo -t x", ghStub({ viewerPermission: "WRITE", isFork: false })), undefined);
 check("U5 AE3 probe failure blocks", (await runGuard("gh issue create --repo other/repo", ghStub({}, { repoFailure: { code: 1 } })))?.block === true);
 eq("U5 AE4 read against the same unmanaged repo passes", await runGuard("gh issue list --repo other/repo", ghStub({ viewerPermission: "READ", isFork: false })), undefined);
@@ -809,7 +982,10 @@ for (const [label, call] of [
     await Bun.write(path, JSON.stringify(body));
     return path;
   };
-  eq("U5 readConfig accepts a valid manifest", readConfig(await write({ unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000 } })).probeTimeoutMs, 5000);
+  const validConfig = readConfig(await write({ unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000, auditLog: { enabled: true, maxBytes: 1048576 } } }));
+  eq("U5 readConfig accepts a valid manifest", validConfig.probeTimeoutMs, 5000);
+  eq("U4 readConfig returns auditLog.enabled (R5)", validConfig.auditLog.enabled, true);
+  eq("U4 readConfig returns auditLog.maxBytes (R5)", validConfig.auditLog.maxBytes, 1048576);
   for (const [label, body] of [
     ["missing block", {}],
     ["missing key", { unmanagedRepoGuard: { probeTimeoutMs: 5000 } }],
@@ -824,6 +1000,21 @@ for (const [label, call] of [
       threw = true;
     }
     check(`U5 readConfig rejects ${label}`, threw);
+  }
+  for (const [label, body] of [
+    ["auditLog.maxBytes missing", { unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000, auditLog: { enabled: true } } }],
+    ["auditLog.maxBytes non-numeric", { unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000, auditLog: { enabled: true, maxBytes: "1048576" } } }],
+    ["auditLog.maxBytes out of range", { unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000, auditLog: { enabled: true, maxBytes: 100 } } }],
+    ["auditLog.enabled missing", { unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000, auditLog: { maxBytes: 1048576 } } }],
+    ["auditLog.enabled non-boolean", { unmanagedRepoGuard: { probeTimeoutMs: 5000, cacheTtlMs: 300000, auditLog: { enabled: "true", maxBytes: 1048576 } } }],
+  ] as const) {
+    let threw = false;
+    try {
+      readConfig(await write(body));
+    } catch {
+      threw = true;
+    }
+    check(`U4 readConfig rejects ${label} (R5)`, threw);
   }
   await Bun.$`rm -rf ${tmp}`.quiet();
 }

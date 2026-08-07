@@ -12,6 +12,27 @@
 {{- fail (printf "agents.unmanagedRepoGuard.%s = %v is out of range; expected 1..3600000 milliseconds" $key $value) -}}
 {{- end -}}
 {{- end -}}
+{{- if not (hasKey $guard "auditLog") -}}
+{{- fail "agents.unmanagedRepoGuard is missing auditLog" -}}
+{{- end -}}
+{{- $audit := $guard.auditLog -}}
+{{- if not (hasKey $audit "enabled") -}}
+{{- fail "agents.unmanagedRepoGuard.auditLog is missing enabled" -}}
+{{- end -}}
+{{- if ne (kindOf $audit.enabled) "bool" -}}
+{{- fail (printf "agents.unmanagedRepoGuard.auditLog.enabled = %v must be a boolean, not %s" $audit.enabled (kindOf $audit.enabled)) -}}
+{{- end -}}
+{{- if not (hasKey $audit "maxBytes") -}}
+{{- fail "agents.unmanagedRepoGuard.auditLog is missing maxBytes" -}}
+{{- end -}}
+{{- $auditMaxBytes := $audit.maxBytes -}}
+{{- if not (has (kindOf $auditMaxBytes) (list "int" "int64" "uint" "uint64" "float64")) -}}
+{{- fail (printf "agents.unmanagedRepoGuard.auditLog.maxBytes = %v must be a number of bytes, not %s" $auditMaxBytes (kindOf $auditMaxBytes)) -}}
+{{- end -}}
+{{- $auditMaxBytesInt := int64 $auditMaxBytes -}}
+{{- if or (lt $auditMaxBytesInt 1024) (gt $auditMaxBytesInt 104857600) -}}
+{{- fail (printf "agents.unmanagedRepoGuard.auditLog.maxBytes = %v is out of range; expected 1024..104857600 bytes" $auditMaxBytes) -}}
+{{- end -}}
 {
   "name": "@h82/omp-unmanaged-repo-guard",
   "version": "0.0.0",
@@ -26,6 +47,10 @@
   },
   "unmanagedRepoGuard": {
     "probeTimeoutMs": {{ $guard.probeTimeoutMs | int }},
-    "cacheTtlMs": {{ $guard.cacheTtlMs | int }}
+    "cacheTtlMs": {{ $guard.cacheTtlMs | int }},
+    "auditLog": {
+      "enabled": {{ $audit.enabled }},
+      "maxBytes": {{ $auditMaxBytesInt }}
+    }
   }
 }
