@@ -20,9 +20,14 @@ Usage (from any script template):
 */ -}}
 {{- $sourceDir := .sourceDir -}}
 {{- range $pattern := .globs -}}
+{{- $count := 0 -}}
 {{- range glob (joinPath $sourceDir $pattern) -}}
-{{- if not (stat .).isDir }}
+{{- if not (stat .).isDir -}}
+{{- $count = add $count 1 -}}
 #   {{ . | trimPrefix $sourceDir | trimPrefix "/" }}  {{ include . | sha256sum }}
 {{- end -}}
+{{- end -}}
+{{- if eq $count 0 -}}
+{{- fail (printf "fingerprint.tmpl: glob pattern '%s' matched zero files in %s" $pattern $sourceDir) -}}
 {{- end -}}
 {{- end }}

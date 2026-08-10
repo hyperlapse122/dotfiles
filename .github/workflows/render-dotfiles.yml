@@ -147,51 +147,106 @@ jobs:
           # the keyring-encryption path in .chezmoi.toml.tmpl is never entered
           # here and no keyring daemon is needed. Extra lines are harmless.
 
-          # Seed canaries for the .chezmoiremove gate below. The fake HOME is
+          # Seed canaries for all .chezmoiremove entries. The fake HOME is
           # created fresh each run, so a prune entry would otherwise be a
           # guaranteed no-op here and a wrong path would exit 0 in silence.
-          # The sibling canary proves the recursive delete stays scoped.
-          mkdir -p "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
-                   "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic"
+          # Sibling canaries prove recursive/pattern deletes stay scoped.
+          mkdir -p "${HOME}/.agents/skills/ce-plan" \
+                   "${HOME}/.agents/skills/lfg" \
+                   "${HOME}/.agents/skills/playwright-cli" \
+                   "${HOME}/.agents/skills/daily-report" \
+                   "${HOME}/.agents" \
+                   "${HOME}/.omp/agent" \
+                   "${HOME}/src" \
+                   "${HOME}/.local/bin" \
+                   "${HOME}/AppData/Roaming/VSCodium/User/snippets" \
+                   "${HOME}/.config/systemd/user" \
+                   "${HOME}/.local/libexec" \
+                   "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
+                   "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic" \
+                   "${HOME}/.local/share/omp-plugins/.omp-plugin"
+          : > "${HOME}/.agents/skills/ce-plan/prune-canary"
+          : > "${HOME}/.agents/skills/lfg/prune-canary"
+          : > "${HOME}/.agents/skills/playwright-cli/prune-canary"
+          : > "${HOME}/.agents/skills/daily-report/prune-canary"
+          : > "${HOME}/.agents/AGENTS.md"
+          : > "${HOME}/.agents/CLAUDE.md"
+          : > "${HOME}/.omp/agent/CLAUDE.md"
+          : > "${HOME}/.omp/agent/AGENTS.md"
+          : > "${HOME}/src/garden.yaml"
+          : > "${HOME}/.local/bin/chezmoi-secrets-sync"
+          : > "${HOME}/.local/bin/claude-glm"
+          : > "${HOME}/.local/bin/canary-sibling"
+          : > "${HOME}/AppData/Roaming/VSCodium/User/settings.json"
+          : > "${HOME}/AppData/Roaming/VSCodium/User/keybindings.json"
+          : > "${HOME}/AppData/Roaming/VSCodium/User/snippets/canary-sibling"
+          : > "${HOME}/.config/systemd/user/ydotool.service"
+          : > "${HOME}/.local/libexec/ydotoold-active-seat"
           : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+          : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
           set +e
           printf '\n\n\n' | chezmoi apply --init \
-            --exclude=scripts,externals \
-            --keep-going \
-            --no-tty \
-            --verbose
           rc=$?
           set -e
           echo "chezmoi apply --init exit code: ${rc}"
           echo "- \`chezmoi apply --init\` exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Assert .chezmoiremove prunes the retired guard tree
-        run: |
-          set -euxo pipefail
-          # `.chezmoiremove` is otherwise ungated: a stale or mistyped entry makes
-          # `chezmoi apply` exit 0 with no diagnostic, so nothing else in CI can
-          # tell a successful prune from a no-op. The canaries seeded above make
-          # the removal observable — and prove it stays scoped to the one tree.
-          plugins="${RUNNER_TEMP}/fakehome/.local/share/omp-plugins/plugins"
-          test ! -e "${plugins}/unmanaged-repo-guard"   # retired tree pruned recursively
-          test -f "${plugins}/mxm4-haptic/prune-canary" # sibling untouched
+- name: Assert .chezmoiremove prunes target files
+  run: |
+    set -euxo pipefail
+    home="${RUNNER_TEMP}/fakehome"
+    # `.chezmoiremove` is otherwise ungated: a stale or mistyped entry makes
+    # `chezmoi apply` exit 0 with no diagnostic. The canaries seeded above
+    # make all prune removals observable — and prove globs stay scoped.
 
-      - name: Stage rendered files
-        if: always()
-        run: |
-          set -euxo pipefail
-          src="${RUNNER_TEMP}/fakehome"
-          out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
-          mkdir -p "${out}"
-          [ -d "${src}" ] || exit 0
-          cp -a "${src}/." "${out}/"
-          # Drop the source copy and chezmoi's own state/cache — keep only the
-          # files chezmoi rendered into the target.
-          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
-          # Drop the .chezmoiremove canaries seeded before the apply.
-          rm -f "${out}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+    # Ungated prunes must be removed.
+    test ! -e "${home}/.agents/skills/ce-plan"
+    test ! -e "${home}/.agents/skills/lfg"
+    test ! -e "${home}/.agents/skills/playwright-cli"
+    test ! -e "${home}/.agents/AGENTS.md"
+    test ! -e "${home}/.agents/CLAUDE.md"
+    test ! -e "${home}/.omp/agent/CLAUDE.md"
+    test ! -e "${home}/.local/bin/chezmoi-secrets-sync"
+    test ! -e "${home}/.local/bin/claude-glm"
+    test ! -e "${home}/AppData/Roaming/VSCodium/User/settings.json"
+    test ! -e "${home}/AppData/Roaming/VSCodium/User/keybindings.json"
+    test ! -e "${home}/.local/share/omp-plugins/plugins/unmanaged-repo-guard"
+    test ! -e "${home}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
+    # Sibling files must survive.
+    test -f "${home}/.agents/skills/daily-report/prune-canary"
+    test -f "${home}/.omp/agent/AGENTS.md"
+    test -f "${home}/.local/bin/canary-sibling"
+    test -f "${home}/AppData/Roaming/VSCodium/User/snippets/canary-sibling"
+    test -f "${home}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+
+    # Container / fact-gated entries must survive in container CI.
+    test -f "${home}/src/garden.yaml"
+    test -f "${home}/.config/systemd/user/ydotool.service"
+    test -f "${home}/.local/libexec/ydotoold-active-seat"
+
+- name: Stage rendered files
+  if: always()
+  run: |
+    set -euxo pipefail
+    src="${RUNNER_TEMP}/fakehome"
+    out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
+    mkdir -p "${out}"
+    [ -d "${src}" ] || exit 0
+    cp -a "${src}/." "${out}/"
+    # Drop the source copy and chezmoi's own state/cache — keep only the
+    # files chezmoi rendered into the target.
+    rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+    # Drop the .chezmoiremove canaries seeded before the apply that survived.
+    rm -rf "${out}/.agents/skills/daily-report" \
+           "${out}/.omp/agent/AGENTS.md" \
+           "${out}/.local/bin/canary-sibling" \
+           "${out}/AppData/Roaming/VSCodium/User/snippets" \
+           "${out}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary" \
+           "${out}/src/garden.yaml" \
+           "${out}/.config/systemd/user/ydotool.service" \
+           "${out}/.local/libexec/ydotoold-active-seat"
       - name: Upload rendered files
         if: always()
         uses: actions/upload-artifact@v7
@@ -536,37 +591,108 @@ jobs:
 
           echo "${bindir}" >> "${GITHUB_PATH}"
 
-      - name: chezmoi apply --init into an isolated HOME
-        run: |
-          set -euxo pipefail
-          export HOME="${RUNNER_TEMP}/fakehome"
-          SRC="${HOME}/.local/share/chezmoi"
-          mkdir -p "${SRC}"
-          cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
-          rm -rf "${SRC}/.git" "${SRC}/.chezmoiexternals"
-          cd "${HOME}"
+- name: chezmoi apply --init into an isolated HOME
+  run: |
+    set -euxo pipefail
+    export HOME="${RUNNER_TEMP}/fakehome"
+    SRC="${HOME}/.local/share/chezmoi"
+    mkdir -p "${SRC}"
+    cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
+    rm -rf "${SRC}/.git" "${SRC}/.chezmoiexternals"
+    cd "${HOME}"
 
-          set +e
-          chezmoi apply --init \
-            --exclude=scripts,externals \
-            --keep-going \
-            --verbose
-          rc=$?
-          set -e
-          echo "chezmoi apply --init exit code: ${rc}"
-          echo "- \`chezmoi apply --init\` (macos) exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
+    # Seed canaries for all .chezmoiremove entries.
+    mkdir -p "${HOME}/.agents/skills/ce-plan" \
+             "${HOME}/.agents/skills/lfg" \
+             "${HOME}/.agents/skills/playwright-cli" \
+             "${HOME}/.agents/skills/daily-report" \
+             "${HOME}/.agents" \
+             "${HOME}/.omp/agent" \
+             "${HOME}/src" \
+             "${HOME}/.local/bin" \
+             "${HOME}/AppData/Roaming/VSCodium/User/snippets" \
+             "${HOME}/.config/systemd/user" \
+             "${HOME}/.local/libexec" \
+             "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
+             "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic" \
+             "${HOME}/.local/share/omp-plugins/.omp-plugin"
+    : > "${HOME}/.agents/skills/ce-plan/prune-canary"
+    : > "${HOME}/.agents/skills/lfg/prune-canary"
+    : > "${HOME}/.agents/skills/playwright-cli/prune-canary"
+    : > "${HOME}/.agents/skills/daily-report/prune-canary"
+    : > "${HOME}/.agents/AGENTS.md"
+    : > "${HOME}/.agents/CLAUDE.md"
+    : > "${HOME}/.omp/agent/CLAUDE.md"
+    : > "${HOME}/.omp/agent/AGENTS.md"
+    : > "${HOME}/src/garden.yaml"
+    : > "${HOME}/.local/bin/chezmoi-secrets-sync"
+    : > "${HOME}/.local/bin/claude-glm"
+    : > "${HOME}/.local/bin/canary-sibling"
+    : > "${HOME}/AppData/Roaming/VSCodium/User/settings.json"
+    : > "${HOME}/AppData/Roaming/VSCodium/User/keybindings.json"
+    : > "${HOME}/AppData/Roaming/VSCodium/User/snippets/canary-sibling"
+    : > "${HOME}/.config/systemd/user/ydotool.service"
+    : > "${HOME}/.local/libexec/ydotoold-active-seat"
+    : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
+    : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+    : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
-      - name: Stage rendered files
-        if: always()
-        run: |
-          set -euxo pipefail
-          src="${RUNNER_TEMP}/fakehome"
-          out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
-          mkdir -p "${out}"
-          [ -d "${src}" ] || exit 0
-          cp -a "${src}/." "${out}/"
-          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+    set +e
+    chezmoi apply --init \
+    rc=$?
+    set -e
+    echo "chezmoi apply --init exit code: ${rc}"
+    echo "- \`chezmoi apply --init\` (macos) exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
 
+- name: Assert .chezmoiremove prunes target files
+  run: |
+    set -euxo pipefail
+    home="${RUNNER_TEMP}/fakehome"
+
+    # Ungated prunes must be removed.
+    test ! -e "${home}/.agents/skills/ce-plan"
+    test ! -e "${home}/.agents/skills/lfg"
+    test ! -e "${home}/.agents/skills/playwright-cli"
+    test ! -e "${home}/.agents/AGENTS.md"
+    test ! -e "${home}/.agents/CLAUDE.md"
+    test ! -e "${home}/.omp/agent/CLAUDE.md"
+    test ! -e "${home}/.local/bin/chezmoi-secrets-sync"
+    test ! -e "${home}/.local/bin/claude-glm"
+    test ! -e "${home}/AppData/Roaming/VSCodium/User/settings.json"
+    test ! -e "${home}/AppData/Roaming/VSCodium/User/keybindings.json"
+    test ! -e "${home}/.local/share/omp-plugins/plugins/unmanaged-repo-guard"
+
+    # src/garden.yaml is container-gated (if not $f.container): macOS is not a container, so it MUST be pruned!
+    test ! -e "${home}/src/garden.yaml"
+
+    # Sibling files must survive.
+    test -f "${home}/.agents/skills/daily-report/prune-canary"
+    test -f "${home}/.omp/agent/AGENTS.md"
+    test -f "${home}/.local/bin/canary-sibling"
+    test -f "${home}/AppData/Roaming/VSCodium/User/snippets/canary-sibling"
+    test -f "${home}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+
+    # ydotool is Linux-gated: macOS is not Linux, so it must survive.
+    test -f "${home}/.config/systemd/user/ydotool.service"
+    test -f "${home}/.local/libexec/ydotoold-active-seat"
+
+- name: Stage rendered files
+  if: always()
+  run: |
+    set -euxo pipefail
+    src="${RUNNER_TEMP}/fakehome"
+    out="${GITHUB_WORKSPACE}/_artifacts/rendered-files"
+    mkdir -p "${out}"
+    [ -d "${src}" ] || exit 0
+    cp -a "${src}/." "${out}/"
+    rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+    rm -rf "${out}/.agents/skills/daily-report" \
+           "${out}/.omp/agent/AGENTS.md" \
+           "${out}/.local/bin/canary-sibling" \
+           "${out}/AppData/Roaming/VSCodium/User/snippets" \
+           "${out}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary" \
+           "${out}/.config/systemd/user/ydotool.service" \
+           "${out}/.local/libexec/ydotoold-active-seat"
       - name: Upload rendered files
         if: always()
         uses: actions/upload-artifact@v7
