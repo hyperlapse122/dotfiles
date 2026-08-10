@@ -303,6 +303,8 @@ agents:
       task.showResolvedModelBadge: true
       task.enableEffort: true
       task.maxEffort: xhigh
+      task.enableLsp: true
+      task.isolation.mode: auto
       retry.usageAwareFallback: true
       # Keyed by MODEL, not role. An exact provider/model-id key outranks a role
       # chain by specificity (oh-my-pi docs/settings.md), so every role using that
@@ -398,6 +400,7 @@ agents:
       display.showTokenUsage: true
       terminal.showProgress: true
       tui.scrollbackRebuild: true
+      tui.imeSafeCursor: true
       # Use the native agents skill roots without duplicate compatibility scans.
       skills.enableCodexUser: false
       skills.enableClaudeUser: false
@@ -413,6 +416,7 @@ agents:
       startup.setupWizard: false
       startup.checkUpdate: true
       autolearn.enabled: true
+      mcp.notifications: true
       commands.enableClaudeUser: false
       commands.enableClaudeProject: false
       commands.enableOpencodeUser: false
@@ -442,6 +446,12 @@ agents:
       # `mnemopi.llmMode: none` to keep processing on-device at the cost of
       # LLM-backed consolidation.
       memory.backend: mnemopi
+      mnemopi.embeddingVariant: multilingual
+      mnemopi.autoRecall: true
+      mnemopi.autoRetain: true
+      mnemopi.polyphonicRecall: true
+      mnemopi.enhancedRecall: true
+      mnemopi.proactiveLinking: true
       # Rules keep reminding after their first trigger instead of going silent
       # for the session. The change is global, so bundled rules remind more
       # often too (accepted, KD5 of docs/plans/2026-08-10-002-feat-omp-ttsr-comment-checker-plan.md).
