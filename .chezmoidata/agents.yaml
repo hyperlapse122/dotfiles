@@ -274,7 +274,7 @@ agents:
       modelRoles:
         slow: anthropic/claude-opus-5:max           # deliberation ceiling
         default: anthropic/claude-opus-5:xhigh      # main coding and editing loop
-        smol: anthropic/claude-sonnet-5:high        # light floor that still follows tools
+        smol: kimi-code/kimi-for-coding:high        # light floor that still follows tools
         advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; the one line no doer tier uses
         plan: "@slow"                               # both tiers are 1M now; the alias buys :max effort
         commit: "@smol"                             # else commit messages ride the session model
@@ -294,13 +294,7 @@ agents:
         security-reviewer: "@slow"                  # highest-stakes review seat
       task.showResolvedModelBadge: true
       task.enableEffort: true
-      # Ceiling on subagent effort. It MUST stay at max while `slow` is :max:
-      # omp maps a task item's effort onto the model's supported range, clamps
-      # it here, and carries that ceiling across retry-fallback switches, so an
-      # xhigh cap would clamp `security-reviewer: "@slow"` down to :xhigh and
-      # make `slow` and `default` identical inside every subagent - collapsing
-      # the top of the ladder exactly where the stakes are highest.
-      task.maxEffort: max
+      task.maxEffort: xhigh
       retry.usageAwareFallback: true
       # Keyed by MODEL, not role. An exact provider/model-id key outranks a role
       # chain by specificity (oh-my-pi docs/settings.md), so every role using that
