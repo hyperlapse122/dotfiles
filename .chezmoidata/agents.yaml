@@ -389,9 +389,6 @@ agents:
       providers.webSearchOrder:
       - exa
       exa.enabled: true
-      exa.enableSearch: true
-      exa.enableResearcher: false
-      exa.enableWebsets: false
       theme.dark: titanium
       theme.light: light
       symbolPreset: nerd
