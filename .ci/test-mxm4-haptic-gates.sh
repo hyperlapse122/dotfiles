@@ -63,14 +63,9 @@ render_ignore "$repo_root" "$scratch" "$chezmoi_bin" linux true "$container_igno
 for path in "$omp_plugin" "$linux_daemon" "$linux_notify" "$mac_daemon"; do
   assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored "$path" 'linux container'
 done
-# The container skip is narrowed to the hardware-bound haptic subtree (asserted
-# above) rather than excluding all of .local/share/omp-plugins, so the catalog
-# flips from ignored to eligible here. That narrowing was introduced for the
-# since-removed unmanaged-repo-guard; no container row uses the h82-dotfiles
-# localDir marketplace today, so the deployed catalog is inert there. This
-# assertion pins current behaviour — re-widening the ignore rule is a separate,
-# deliberate change that must flip this to `ignored`.
-assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible "$omp_market" 'linux container shared catalog'
+# The container skip is restored to the whole .local/share/omp-plugins tree
+# now that unmanaged-repo-guard is gone, so the catalog flips back to ignored.
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored "$omp_market" 'linux container shared catalog'
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored .chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh 'linux container'
 # The phase-70 omp reconciler remains eligible in containers to maintain
 # keep-marked marketplaces and remove the retired legacy extension.

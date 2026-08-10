@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-08-07T04:48:52Z"
+    cursor: "2026-08-10T02:55:33Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -263,19 +263,64 @@ items:
     origin: "https://github.com/hyperlapse122/dotfiles/issues/189"
     severity: "P2"
     updated_at: "2026-08-07T04:46:59Z"
+  "gh-issues:hyperlapse122/dotfiles#192":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "chezmoiremove: eight prune entries have no CI assertion - Eight .chezmoiremove prune entries lack CI canary assertions, making typos or stale paths indistinguishable from successful prunes."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#192"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/192"
+    updated_at: "2026-08-10T02:55:33Z"
+  "gh-issues:hyperlapse122/dotfiles#193":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fingerprint.tmpl accepts a zero-match glob in silence - Declared fingerprint globs matching zero files fail silently without warning, masking stale or missing dependencies."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#193"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/193"
+    updated_at: "2026-08-10T02:55:31Z"
+  "gh-issues:hyperlapse122/dotfiles#194":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "chezmoiignore: container narrowing for omp-plugins lost its beneficiary - Container narrowing rule for mxm4-haptic in .chezmoiignore is dangling and dead configuration after unmanaged-repo-guard removal."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#194"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/194"
+    updated_at: "2026-08-10T02:55:29Z"
 last_run:
-  timestamp: "2026-08-07T14:06:42+09:00"
+  timestamp: "2026-08-10T02:58:59Z"
   outcome: "completed"
-  writer: "sweep-JOOSUNGPARK-JPI-omp-2026-08-07T1353"
+  writer: "sweep-JOOSUNGPARK-JPI-20260810115346-318976"
   counts:
     gh-issues:
       ack_deferred: 0
-      acked_this_run: 5
-      acknowledged: 6
-      already_acked_at_source: 10
-      closed: 10
-      closed_this_run: 10
-      ingested: 5
+      acked_this_run: 3
+      acknowledged: 3
+      already_acked_at_source: 0
+      closed: 16
+      closed_this_run: 0
+      ingested: 3
       manual_stuck: 0
       media_analyzed: 0
       needs_attention: 0

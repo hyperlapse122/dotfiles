@@ -314,13 +314,13 @@ agents:
         anthropic/claude-opus-5:
         - kimi-code/k3-256k:max
         - opencode-go/kimi-k3:max
-        # Light: three plans, one per hop, none of them anthropic - so one
-        # Anthropic cap cannot degrade this tier at the same moment it degrades
+        # Light: three plans, one per hop, none of them kimi-code - so one
+        # Kimi cap cannot degrade this tier at the same moment it degrades
         # the two above it.
-        anthropic/claude-sonnet-5:
+        kimi-code/kimi-for-coding:
         - google-antigravity/gemini-3.6-flash:high
         - openai-codex/gpt-5.6-luna:max
-        - kimi-code/kimi-for-coding:high
+        - anthropic/claude-sonnet-5:high
         # Critic: reaches neither doer model. It also skips a second
         # openai-codex line, because usage-aware fallback makes a same-provider
         # hop useless when the plan cap is what failed.

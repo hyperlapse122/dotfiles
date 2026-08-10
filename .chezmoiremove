@@ -131,3 +131,10 @@ AppData/Roaming/VSCodium/User/keybindings.json
 # docs/decommission/unmanaged-repo-guard.md is the operator's checklist for
 # both, and until it is run the installed plugin still blocks.
 .local/share/omp-plugins/plugins/unmanaged-repo-guard
+
+# The mxm4-haptic container skip was restored to the whole .local/share/omp-plugins
+# tree now that unmanaged-repo-guard is gone. Prune any stranded marketplace.json
+# left behind in containers by earlier applies when the skip was narrowed.
+{{- if $f.container }}
+.local/share/omp-plugins/.omp-plugin/marketplace.json
+{{- end }}
