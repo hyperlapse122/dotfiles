@@ -10,7 +10,7 @@ name: Render dotfiles
 #
 # Two independent artifacts are produced per OS:
 #   1. rendered-files-<os>     — the dotfiles `chezmoi apply --init` writes into
-#                                an isolated $HOME (scripts + externals excluded).
+#                                an isolated $HOME (scripts, externals, and encrypted targets excluded).
 #   2. rendered-internals-<os> — the `.chezmoiscripts/**` and `.chezmoiexternals/**`
 #                                templates rendered via `chezmoi execute-template`
 #                                (these are never linked into $HOME, so they have
@@ -186,7 +186,7 @@ jobs:
           : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
           set +e
-          printf '\n\n\n' | chezmoi apply --init --no-tty
+          printf '\n\n\n' | chezmoi apply --init --no-tty --exclude=scripts,encrypted
           rc=$?
           set -e
           echo "chezmoi apply --init exit code: ${rc}"
@@ -638,7 +638,7 @@ jobs:
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
           set +e
-          chezmoi apply --init --no-tty
+          chezmoi apply --init --no-tty --exclude=scripts,encrypted
           rc=$?
           set -e
           echo "chezmoi apply --init exit code: ${rc}"
