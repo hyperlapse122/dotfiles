@@ -63,11 +63,10 @@ render_ignore "$repo_root" "$scratch" "$chezmoi_bin" linux true "$container_igno
 for path in "$omp_plugin" "$linux_daemon" "$linux_notify" "$mac_daemon"; do
   assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored "$path" 'linux container'
 done
-# The shared catalog must stay reachable in a container so container-eligible
-# plugins (the unmanaged-repo-guard, plan U6 step 4) can still install; only the
-# hardware-bound haptic subtree is skipped (asserted above). The wholesale skip
-# of .local/share/omp-plugins was narrowed to plugins/mxm4-haptic, so the
-# catalog deliberately flips from ignored to eligible here.
+# The shared catalog must stay reachable in a container: the container skip is
+# narrowed to the hardware-bound haptic subtree (asserted above) rather than
+# excluding all of .local/share/omp-plugins, so the catalog deliberately flips
+# from ignored to eligible here.
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible "$omp_market" 'linux container shared catalog'
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored .chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh 'linux container'
 # The phase-70 omp reconciler remains eligible in containers to maintain
