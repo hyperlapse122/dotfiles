@@ -29,20 +29,23 @@ Work through this on each previously provisioned host.
 
 The guard wrote a durable record of every block it made. It is the only evidence
 for or against the claim that the guard prevented no harm, and once it is gone
-there is no baseline for judging the replacement rule. The log deliberately
-excludes command text, carrying only tool, outcome, host, repo, and probe
-detail, so it is safe to read and summarize.
+there is no baseline for judging the replacement rule. The log excludes command
+text by design, but it does carry the host and the target repository of every
+block, so treat those two fields as private.
 
 ```sh
 log="${XDG_STATE_HOME:-$HOME/.local/state}/unmanaged-repo-guard/blocks.jsonl"
 [ -f "$log" ] && wc -l "$log"
 [ -f "$log" ] && jq -r '.outcome' "$log" | sort | uniq -c
-[ -f "$log" ] && jq -r '[.host, .repo] | @tsv' "$log" | sort -u
 ```
 
-Record the counts in the reversal note at `docs/plans/feedback-sweep-plan.md:40`
-before continuing. A missing file means the guard never blocked on this host;
-note that instead.
+Record only the aggregate counts — total blocks and the tally by outcome — in
+the `Reversed on 2026-08-10` note under decision 1 of
+`docs/plans/feedback-sweep-plan.md`. Do not commit host or repository names:
+this repository is public, and those fields identify third parties. Read them
+locally if you want them (`jq -r '[.host, .repo] | @tsv' "$log" | sort -u`) and
+leave them out of the note. A missing file means the guard never blocked on this
+host; note that instead.
 
 ## 2. Disable and uninstall the plugin
 
@@ -64,12 +67,17 @@ it, and the phase-70 reconciler re-adds it on every apply.
 omp plugin list --json | jq -r '.marketplace[].id'
 ```
 
-Exactly two ids must remain:
+On a non-container host exactly two ids must remain:
 
 ```text
 mxm4-haptic@h82-dotfiles
 compound-engineering@compound-engineering-plugin
 ```
+
+Inside a container only `compound-engineering@compound-engineering-plugin`
+remains: `marketplaces.h82-dotfiles.container: skip` keeps `mxm4-haptic` out
+there, which is also why step 2's note about the reconciler re-adding the
+marketplace applies only where an `h82-dotfiles` row is eligible.
 
 ## 4. Delete the runtime state directory
 

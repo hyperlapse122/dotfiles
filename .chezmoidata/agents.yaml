@@ -156,7 +156,8 @@ agents:
   #     marketplace's declared list (no special-casing).
   #   - container: `skip` filters the row when the `container` fact is true
   #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in.
-  #     This is the DEFAULT for every plugin filed under the marketplace.
+  #     This applies to every plugin filed under the marketplace; a plugin row
+  #     cannot override it.
   marketplaces:
     h82-dotfiles:
       kind: localDir

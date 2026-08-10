@@ -348,13 +348,16 @@ model (KTD9). Hop selectors are directional guidance: the implementer confirms e
 
 ## Implementation Units
 
-> **Phases 1-3 superseded on 2026-08-10.** Units U1-U8 and U11 hardened,
-> observed, and CI-covered the `unmanaged-repo-guard` plugin. That plugin was
-> deleted outright by
+> **Guard units superseded on 2026-08-10.** Units U1-U5, U7, U8, and U11
+> hardened, observed, and CI-covered the `unmanaged-repo-guard` plugin. That
+> plugin was deleted outright by
 > `docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md`, so
 > the code they shipped no longer exists. They landed as described (PR #190,
-> PR #191) and are retained as history. Phase 4's U9 is **not** superseded — it
-> authored instruction-core text that survives — and U10 is unrelated.
+> PR #191) and are retained as history.
+>
+> Two units are **not** superseded. U6 created `.ci/lib/render-gate-helpers.sh`,
+> which survives and is still sourced by `.ci/test-mxm4-haptic-gates.sh`. U9
+> authored instruction-core text that survives. U10 is unrelated.
 
 ### Phase 1 — Guard correctness
 
@@ -900,6 +903,9 @@ scripts above.
 error at any layer — the render succeeds and one chain is silently gone.
 
 ### Phase 5 — Pin the route U8 uncovered
+
+> **U11 superseded on 2026-08-10** — see the note under `## Implementation
+> Units`. The `unmanaged-repo-guard` coverage it pinned no longer exists.
 
 #### U11. Prove the guard covers omp's default `xd://` MCP mounting
 

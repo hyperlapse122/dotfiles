@@ -59,6 +59,13 @@ This run closes four confirmed `unmanaged-repo-guard` classifier bypasses (R13-R
 2. **`R13` / `R15` strategy — fail closed on `gh`/`glab` anywhere in argv.** An unrecognised head, whether an argv-forwarding wrapper or a prefix's own option, is treated as a candidate write rather than ignored. This closes the whole class in one rule instead of chasing a denylist that #188 itself predicts will keep regressing. Accepted cost: more false candidates reach the probe.
 3. **`R1` re-scoped to a repo-ownable fix.** Instead of waiting on the upstream plugin cache, state the precedence rule where the agent actually reads it: a back-reference in `.chezmoitemplates/agents-instructions.tmpl` making the repository-management probe binding over any skill-level tracker-defer fallback chain.
 
+   > **Reversed on 2026-08-10 by [`docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md`](2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md) (R9).**
+   > That back-reference bound a *permission probe* over the skill-level
+   > tracker-defer fallback chain. The probe is gone, so the sentence went with
+   > it. What replaces it at `.chezmoitemplates/agents-instructions.tmpl:50` is
+   > an ask-first rule resting on ownership judgment, and the same removal also
+   > retired requirement `R1` below.
+
 **Sequencing.** The four tokenizer defects (`R13`, `R14`, `R15`, `R16`) share one file, `triggers.ts`, and one function cluster (`argvHead` / `classifyBash` / `cliIsIssueWrite`); they run as a single batch, severity first: `R13`, `R14` (P1) → `R15`, `R16` (P2). `R13` and `R15` land together because decision 2 gives them one shared rule. `R12` and `R1` both edit the same instruction-template paragraph, so they land as one change after the guard work, in the order `R12` → `R1`.
 
 ### Requirements

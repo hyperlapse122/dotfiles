@@ -466,6 +466,43 @@ Forcing a fact shape locally is done by substituting the facts provider, never b
 
 ---
 
+## Review amendments (post-implementation)
+
+`ce-code-review` found that the instruction-core surgery as specified in U4 lost
+more than R9 authorised. Four clauses were added back or widened; none
+reintroduces a permission probe, so KD2, KTD3, and R10's "names no CLI, API
+field, or access level" constraint all still hold.
+
+| Amendment | Why | Requirement it corrects |
+|---|---|---|
+| Line 17's autopilot survivor list names the ask-first rule | The paragraph disclaims "general ask-before-ambiguous/irreversible-action guidance", and R10's rule is worded as exactly that. Dropping the gate from the list without naming its replacement left an **attended** `lfg` run with no rule against filing into a stranger's tracker — the surviving tie-break sentence is scoped to unattended runs only. | R12 |
+| Line 17's unattended sentence covers commenting, not just filing | The base read "MUST NOT file into or comment on"; the reword restored only filing, while line 50 keeps both the upstream-parent target rule and the key-event commenting rule — so an unattended run in a fork would comment into upstream. | R12 |
+| Line 50 carries an ambiguity default: "when that context does not settle it, treat the repository as not the user's" | R9 deliberately deleted the *probe-result* fail-closed rule, but ownership judgment has its own undecidable case and nothing selected a branch for it. Three separately dispatched reviewers reached this independently. | R10 |
+| Line 52's exception covers comment-only dispositions | Mirrors the line 17 widening so the two paragraphs cannot disagree. | R13 |
+
+Two verification gaps were also closed, both of which the plan's own gates had
+missed:
+
+- `.ci/test-agent-instructions.sh` (new, wired into `ci.yml`) pins the surviving
+  rules and bans the retired probe strings by needle against the rendered
+  target. U4's sentence-multiset comparison was a one-off; this is the committed
+  form. Verified with a negative control.
+- `.github/workflows/render-dotfiles.yml` seeds a canary under the guard tree and
+  a sibling canary under `plugins/mxm4-haptic` before its isolated apply, then
+  asserts the first is gone and the second survives. R16 was otherwise
+  unprovable in CI: a wrong `.chezmoiremove` path exits 0 with no diagnostic, and
+  that job's fake HOME never contained the tree.
+
+Record corrections: the supersession header on
+`docs/plans/feedback-sweep-plan-2026-08-07.md` over-claimed (its U6 created
+`.ci/lib/render-gate-helpers.sh`, which survives, and U11 sits under Phase 5);
+`docs/residual-review-findings/chore-resolve-feedback-sweep-open-items.md` needed
+the same superseded header R19 gave its sibling; and
+`docs/plans/feedback-sweep-plan.md` decision 3 / R1 prescribed the precedence
+back-reference R9 deletes.
+
+---
+
 ## Sources & Research
 
 - `dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/probe.ts:162-164,257-272` — the GitLab verdict path and the null-permissions conversion that produces the false block.

@@ -146,6 +146,15 @@ jobs:
           # of using the default. A blank answer skips the per-host secret, so
           # the keyring-encryption path in .chezmoi.toml.tmpl is never entered
           # here and no keyring daemon is needed. Extra lines are harmless.
+
+          # Seed canaries for the .chezmoiremove gate below. The fake HOME is
+          # created fresh each run, so a prune entry would otherwise be a
+          # guaranteed no-op here and a wrong path would exit 0 in silence.
+          # The sibling canary proves the recursive delete stays scoped.
+          mkdir -p "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
+                   "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic"
+          : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
+          : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
           set +e
           printf '\n\n\n' | chezmoi apply --init \
             --exclude=scripts,externals \
@@ -156,6 +165,17 @@ jobs:
           set -e
           echo "chezmoi apply --init exit code: ${rc}"
           echo "- \`chezmoi apply --init\` exit code: ${rc}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Assert .chezmoiremove prunes the retired guard tree
+        run: |
+          set -euxo pipefail
+          # `.chezmoiremove` is otherwise ungated: a stale or mistyped entry makes
+          # `chezmoi apply` exit 0 with no diagnostic, so nothing else in CI can
+          # tell a successful prune from a no-op. The canaries seeded above make
+          # the removal observable — and prove it stays scoped to the one tree.
+          plugins="${RUNNER_TEMP}/fakehome/.local/share/omp-plugins/plugins"
+          test ! -e "${plugins}/unmanaged-repo-guard"   # retired tree pruned recursively
+          test -f "${plugins}/mxm4-haptic/prune-canary" # sibling untouched
 
       - name: Stage rendered files
         if: always()
@@ -169,6 +189,8 @@ jobs:
           # Drop the source copy and chezmoi's own state/cache — keep only the
           # files chezmoi rendered into the target.
           rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+          # Drop the .chezmoiremove canaries seeded before the apply.
+          rm -f "${out}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
 
       - name: Upload rendered files
         if: always()

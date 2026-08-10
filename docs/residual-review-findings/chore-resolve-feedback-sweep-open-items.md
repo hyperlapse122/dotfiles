@@ -1,3 +1,12 @@
+> **Partly superseded on 2026-08-10.** The four filed defects (#186-#189) cite
+> `dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src/triggers.ts`,
+> which `docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md`
+> deleted; all four were closed by PR #191 before that removal. Present-tense
+> statements below about the guard intercepting `tool_call` no longer describe
+> anything that exists. The "#168 stays open" statement is likewise superseded:
+> PR #191 closed it, and `docs/feedback-sweep/state.yml` now records it as
+> `closed`. Retained as history; the findings are not rewritten.
+
 # Residual Review Findings — feedback sweep resolution
 
 Source run: branch `chore/resolve-feedback-sweep-open-items`, head `316e85f`.

@@ -91,6 +91,7 @@ jobs:
           .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"
           .ci/test-mxm4-haptic-gates.sh
           .ci/test-mxm4-haptic-chezmoi-retry.sh
+          .ci/test-agent-instructions.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
