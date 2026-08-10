@@ -5,7 +5,6 @@
 {{- $sha256 := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "kitty" "field" "sha256" "platform" "auto")) -}}
 
 #!/usr/bin/env bash
-# .chezmoiscripts/00-tools/run_onchange_before_kitty.sh.tmpl
 #
 # Linux terminal and is NO LONGER installed from the distro package (see the
 # kitty note in .chezmoidata/packages.yaml): the vertical tab bar the managed

@@ -1,6 +1,5 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 #!/usr/bin/env bash
-# install-vscodium-extensions.sh
 #
 # POSIX half of the VSCodium extension reconciler: runs on Linux AND macOS
 # (both ship bash and the same `codium` CLI). It lives in 30-linux because it

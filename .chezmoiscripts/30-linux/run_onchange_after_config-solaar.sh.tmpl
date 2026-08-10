@@ -1,7 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# scripts/linux/config-solaar.sh
 #
 # Apply per-device Solaar settings to ~/.config/solaar/config.yaml that
 # CANNOT be expressed via the symlinked rules.yaml. Currently:

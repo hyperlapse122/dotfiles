@@ -1,6 +1,5 @@
 {{- $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
-# scripts/src/reconcile-garden.sh
 #
 # Apply-time garden provisioning + reconcile. Turns the documented manual
 # bootstrap into an automatic step of `chezmoi apply`: whenever the ~/src
@@ -112,9 +111,10 @@ rc=0
 # Heredoc (not a pipe) so the loop runs in THIS shell and rc survives it.
 while IFS= read -r line; do
   [ -n "$line" ] || continue
-  name="${line%% *}"                        # first field = tree name
-  case "$name" in ""|.) continue ;; esac    # skip garden's synthesized "." root
-  tp="${line##* }"                          # last field = resolved TREE_PATH
+  name="${line%% *}"
+  # Skip garden's synthesized "." root.
+  case "$name" in ""|.) continue ;; esac
+  tp="${line##* }"
   check_tree "$name" "$tp" || rc=1
 done <<EOF
 $tree_info

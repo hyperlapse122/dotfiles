@@ -122,7 +122,6 @@ shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
 {{-   $rows = append $rows (printf "  \"%s:%s:%s:%s:%s\"" $file $group $key $type $value) -}}
 {{- end -}}
 #!/usr/bin/env bash
-# .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl
 #
 # The generic KDE settings runner: applies every row of .chezmoidata/kde.yaml
 # with kwriteconfig6. EDIT THE YAML, not the SETTINGS array below — the rows
