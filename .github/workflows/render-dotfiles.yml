@@ -186,7 +186,7 @@ jobs:
           : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
           set +e
-          printf '\n\n\n' | chezmoi apply --init \
+          printf '\n\n\n' | chezmoi apply --init --no-tty
           rc=$?
           set -e
           echo "chezmoi apply --init exit code: ${rc}"
@@ -638,7 +638,7 @@ jobs:
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
           set +e
-          chezmoi apply --init \
+          chezmoi apply --init --no-tty
           rc=$?
           set -e
           echo "chezmoi apply --init exit code: ${rc}"
