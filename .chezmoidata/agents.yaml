@@ -278,6 +278,10 @@ agents:
         advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; the one line no doer tier uses
         plan: "@slow"                               # both tiers are 1M now; the alias buys :max effort
         commit: "@smol"                             # else commit messages ride the session model
+        # Background (titles/memory/auto-thinking), not a tier: no chain hangs on
+        # it because retry chains are session-turn only. Cheapest available lite
+        # and off the kimi plan, so background work never spends coding quota.
+        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
       # EXHAUSTIVE over `omp agents unpack`, not a diff against frontmatter. An
       # omitted agent lands on its own frontmatter (override -> frontmatter ->
       # task role/session, oh-my-pi docs/task-agent-discovery.md), so silence is
