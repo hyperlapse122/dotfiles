@@ -11,11 +11,6 @@
       "name": "mxm4-haptic",
       "description": "Pulses the MX Master 4 haptics through the mxm4-hapticd daemon on OMP lifecycle events.",
       "source": "./plugins/mxm4-haptic"
-    },
-    {
-      "name": "unmanaged-repo-guard",
-      "description": "Blocks issue-filing tool calls targeting a repository the user does not manage.",
-      "source": "./plugins/unmanaged-repo-guard"
     }
   ]
 }
