@@ -336,23 +336,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-08-10",
+        "version": "2026-08-10.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "59a81c66285a6bbbe8a70ed757caaddc99fd2f71f6e74ad2a482063ab612a191"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10.1/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "d42908a7dc7b89250ae881a0919e477296843665c98574ecc8fe16ba60cecefb"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "93d046e8b2a4af850ef30519b53ab6441eae0cb84d9ef0b283dfede898672b28"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10.1/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "a7eb3a97865dd189ad4fff526fbe73559bece876fdbd641e0f50f39271043542"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "a9ab3c1a90988319a1683ef7f3d3da7c0165202a0231fc9124028b4cdfc8d461"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10.1/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "b84eba6670c7e55869d191f23cc23e8953ed18141db41de0834d7b9fb47a0090"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "df4289c77c4505b98d33025a1325146bae35a6a14f4a1d4d8b1f00d19ba3e3dd"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-10.1/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "954c1dce00ab43d5a35caac07aff12a787b006b50dd3f4471bae4b13512343ef"
           }
         }
       },
