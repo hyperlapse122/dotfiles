@@ -81,11 +81,12 @@ jobs:
       - name: Test OMP reconciliation, haptics, and real plugin
         run: |
           set -euo pipefail
-          .ci/test-omp-agent-reconcile.sh \
+          PATH="$RUNNER_TEMP/bin:$PATH" .ci/test-omp-agent-reconcile.sh \
             "$RUNNER_TEMP/auth.sh" \
             "$RUNNER_TEMP/plugins.sh" \
             "$RUNNER_TEMP/haptic-package" \
             "$RUNNER_TEMP/settings.sh"
+          PATH="$RUNNER_TEMP/bin:$PATH" .ci/test-omp-comment-rules.sh
           .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
           .ci/test-omp-real-plugin.sh "$RUNNER_TEMP/haptic-package"
           .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"

@@ -438,6 +438,13 @@ agents:
       # `mnemopi.llmMode: none` to keep processing on-device at the cost of
       # LLM-backed consolidation.
       memory.backend: mnemopi
+      # Rules keep reminding after their first trigger instead of going silent
+      # for the session. The change is global, so bundled rules remind more
+      # often too (accepted, KD5 of docs/plans/2026-08-10-002-feat-omp-ttsr-comment-checker-plan.md).
+      # `ttsr.repeatGap` is intentionally left undeclared per KTD7: the
+      # provisioner owns only declared paths, so the built-in default of 10
+      # stands and any hand-set host value survives an apply.
+      ttsr.repeatMode: after-gap
     # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
     # google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
