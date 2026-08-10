@@ -51,9 +51,9 @@ When an issue is in play — named by the user or the task prompt, carried in a 
 
 After every push opening/updating a PR/MR, wait for terminal green CI with one native blocking watcher (`gh run watch --exit-status`, `gh pr checks --watch`, or `glab ci status --wait`); never poll, weaken, skip, rerun to hide, or `[skip ci]` a failure. A task is complete only when every criterion is implemented and verified. Every actionable code-review finding MUST end the run in one of exactly two states: fixed in the MR/PR under review, or filed as an issue in the project's tracker. A committed markdown record MAY supplement a filed issue and MUST NOT replace it. Advisory or FYI observations are exempt; use the review's own actionable-versus-advisory boundary, which under `ce-code-review` is `gated_auto` or `manual` owned by `downstream-resolver` (actionable) against `advisory` (exempt). A filed issue MUST carry its evidence (`file:line` plus the verbatim quoted finding), its severity, and a link to the originating MR/PR. File only when the project declares an approved tracker, either in its instructions or in `.compound-engineering/config.local.yaml`; read that declaration as guidance for your own judgment, not as a machine-read permission field. With no such declaration, an exception to the two-state rule applies: fall back to the committed record file and report the residual findings to the user. A run that cannot file or comment because the target repository is not the user's is the other exception, on the same fallback. A confirmed tooling/access/destructive/product blocker MUST be surfaced with evidence, a proposed path, and an explicit ask, then wait. A user-acknowledged blocker is the only acceptable incomplete state; never silently defer to TODO/FIXME, “known limitation,” or follow-up.
 
-## Figma, processes, and browser
+## Processes and browser
 
-Figma URLs MUST use the `figma` MCP. Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
+Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
 
 New scripting/tooling/codegen uses Node/Deno/Bun or shell for OS glue, not Python (except established Python tooling).
 

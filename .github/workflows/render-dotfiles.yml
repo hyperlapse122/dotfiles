@@ -432,25 +432,24 @@ jobs:
           # lookup can legitimately return nothing on the runner's arch. Failures
           # are kept as *.render-error.txt inside the artifact for inspection.
 
-      - name: Assert Figma collection external and paired reconcilers
+      - name: Assert retired Figma lifecycle is absent
         run: |
           set -euo pipefail
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
-          posix="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
-          for rendered in "${external}" "${posix}"; do
-            test -f "${rendered}"
-            test ! -e "${rendered}.render-error.txt"
-          done
-
-          revision=$(jq -er '.releases.tools["figma/mcp-server-guide"].revision' \
-            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
-          skills=$(jq -cer '.releases.tools["figma/mcp-server-guide"].skills' \
-            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
-          grep -F "archive/${revision}.tar.gz" "${external}"
-          grep -F "readonly DESIRED_SKILLS_JSON='${skills}'" "${posix}"
-          bash -n "${posix}"
-          echo "- Figma external and paired reconcilers (${{ matrix.os }}) use the locked revision and inventory" \
+          reconciler="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
+          mcp="${out}/omp-mcp.json"
+          test -f "${external}"
+          test ! -e "${external}.render-error.txt"
+          ! grep -RIFq -e "figma/mcp-server-guide" -e "figma-skills-stage" "${out}"
+          test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
+          test ! -e "${reconciler}"
+          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
+            --source "${GITHUB_WORKSPACE}" \
+            --destination "${RUNNER_TEMP}/scratch/target" \
+            execute-template < dot_omp/private_agent/private_readonly_mcp.json.tmpl > "${mcp}"
+          ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
+          echo "- retired global Figma lifecycle remains absent (${{ matrix.os }})" \
             >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Assert fact-registry failure contracts
@@ -742,25 +741,24 @@ jobs:
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Assert Figma collection external and paired reconcilers
+      - name: Assert retired Figma lifecycle is absent
         run: |
           set -euo pipefail
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
-          posix="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
-          for rendered in "${external}" "${posix}"; do
-            test -f "${rendered}"
-            test ! -e "${rendered}.render-error.txt"
-          done
-
-          revision=$(jq -er '.releases.tools["figma/mcp-server-guide"].revision' \
-            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
-          skills=$(jq -cer '.releases.tools["figma/mcp-server-guide"].skills' \
-            "${GITHUB_WORKSPACE}/.chezmoidata/releases.json")
-          grep -F "archive/${revision}.tar.gz" "${external}"
-          grep -F "readonly DESIRED_SKILLS_JSON='${skills}'" "${posix}"
-          bash -n "${posix}"
-          echo "- Figma external and paired reconcilers (macos) use the locked revision and inventory" \
+          reconciler="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
+          mcp="${out}/omp-mcp.json"
+          test -f "${external}"
+          test ! -e "${external}.render-error.txt"
+          ! grep -RIFq -e "figma/mcp-server-guide" -e "figma-skills-stage" "${out}"
+          test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
+          test ! -e "${reconciler}"
+          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
+            --source "${GITHUB_WORKSPACE}" \
+            --destination "${RUNNER_TEMP}/scratch/target" \
+            execute-template < dot_omp/private_agent/private_readonly_mcp.json.tmpl > "${mcp}"
+          ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
+          echo "- retired global Figma lifecycle remains absent (macos)" \
             >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload rendered internals

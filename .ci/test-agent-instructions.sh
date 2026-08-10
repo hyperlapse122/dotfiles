@@ -9,10 +9,8 @@ set -euo pipefail
 # "one changed line" whether an edit is correct or silently drops a neighbouring
 # MUST, so the rules below are asserted by needle against the RENDERED target.
 #
-# Positive needles are rules an agent must still receive. Negative needles are
-# the mechanical repository-management gate retired on 2026-08-10
-# (docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md, R9);
-# they exist so a future edit cannot quietly reintroduce a permission probe.
+# Positive needles are rules an agent must still receive. Negative needles
+# prevent retired instruction mandates from returning.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -37,7 +35,6 @@ rendered="$scratch/AGENTS.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$rendered"
 [[ -s $rendered ]] || fail 'wrapper rendered empty'
 
-# Rules the agent must still receive.
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
   grep -F "$needle" "$rendered" >/dev/null || fail "lost rule: $needle"
@@ -55,19 +52,20 @@ every one of those issue numbers MUST be immediately preceded by its own keyword
 is the sole exception to the assignee rule
 SHOULD tick its checkbox items as the matching sub-tasks land
 SHOULD comment on the issue only at key events
+Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
 NEEDLES
 
-# The retired mechanical gate must not come back.
 while IFS= read -r banned; do
   [[ -z $banned ]] && continue
   if grep -F "$banned" "$rendered" >/dev/null; then
-    fail "retired repository-management gate reintroduced: $banned"
+    fail "retired instruction reintroduced: $banned"
   fi
 done <<'BANNED'
 viewerPermission
 project_access
 group_access
 access_level
+Figma URLs MUST use the `figma` MCP.
 BANNED
 
 printf 'agent instruction gates passed\n'

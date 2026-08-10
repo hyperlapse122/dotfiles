@@ -112,23 +112,6 @@ jobs:
       - run: vp run -r test
       - run: vp check
 
-  figma-skills-native:
-    name: Figma skills staging and reconciliation (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-26]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install chezmoi
-        run: |
-          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Test Figma skills staging and reconciliation
-        run: |
-          .ci/test-figma-skills-stage.sh "$GITHUB_WORKSPACE"
-          .ci/test-figma-skills-reconcile.sh "$GITHUB_WORKSPACE"
 
   rust-crate:
     name: Rust crate (crates/mxm4-haptic/, ${{ matrix.os }})
@@ -227,7 +210,6 @@ jobs:
       [
         omp-agent-integration,
         ts-workspace,
-        figma-skills-native,
         rust-crate,
         tmux-kitty-passthrough,
         omp-zsh-completion,
@@ -239,7 +221,6 @@ jobs:
         env:
           OMP_AGENT_INTEGRATION_RESULT: ${{ needs.omp-agent-integration.result }}
           TS_WORKSPACE_RESULT: ${{ needs.ts-workspace.result }}
-          FIGMA_SKILLS_NATIVE_RESULT: ${{ needs.figma-skills-native.result }}
           RUST_CRATE_RESULT: ${{ needs.rust-crate.result }}
           TMUX_KITTY_PASSTHROUGH_RESULT: ${{ needs.tmux-kitty-passthrough.result }}
           OMP_ZSH_COMPLETION_RESULT: ${{ needs.omp-zsh-completion.result }}
@@ -250,7 +231,6 @@ jobs:
           for result in \
             "omp-agent-integration=${OMP_AGENT_INTEGRATION_RESULT}" \
             "ts-workspace=${TS_WORKSPACE_RESULT}" \
-            "figma-skills-native=${FIGMA_SKILLS_NATIVE_RESULT}" \
             "rust-crate=${RUST_CRATE_RESULT}" \
             "tmux-kitty-passthrough=${TMUX_KITTY_PASSTHROUGH_RESULT}" \
             "omp-zsh-completion=${OMP_ZSH_COMPLETION_RESULT}" \

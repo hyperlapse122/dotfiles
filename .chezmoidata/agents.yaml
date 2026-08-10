@@ -98,25 +98,7 @@ agents:
       # second rendered file. Every other harness keeps this server.
       harnessSkip:
       - omp
-  # Agent skills installed under ~/.agents/skills. `external` carries the
-  # existing independently versioned skills. `collections` carries immutable
-  # multi-skill sources whose revision and inventory live only in the generated
-  # release lock.
-  #
-  # A collection row is static policy:
-  #   source             -> immutable archive repository
-  #   lockKey            -> typed githubSkillCollection entry in releases.json
-  #   stagingPath        -> exact, Figma-only external tree consumed by reconcilers
-  #   ownershipStatePath -> private ledger used to remove only formerly owned skills
-  # The hourly refresh updates lock metadata automatically. The generated diff is
-  # review-visible audit/reproducibility evidence, not an approval gate.
   skills:
-    collections:
-      figma:
-        source: figma/mcp-server-guide
-        lockKey: figma/mcp-server-guide
-        stagingPath: .local/share/figma-skills-stage
-        ownershipStatePath: .local/state/figma-skills/ownership.json
     # Existing individually versioned externals. For host: github, `name` is
     # also the skills/<name>/ subtree in the source repository. GitLab entries
     # fetch one declared SKILL.md from `skillPath`.

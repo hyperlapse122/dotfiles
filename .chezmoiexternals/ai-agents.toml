@@ -72,31 +72,6 @@ path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
 # The sidecar is sha256sum output ("<hash>  <file>"), so take the first field.
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "sha256" "platform" "auto") }}'
 
-{{- /* ---------- official Figma skill collection ----------
-       Static source/staging policy comes from agents.skills.collections.figma.
-       The generated lock is the only revision and inventory authority. One
-       exact archive is staged on every OS; stripComponents=2 removes the
-       GitHub archive root plus skills/, leaving each locked skill as a direct
-       child. The include list admits only locked subtrees, so unrelated source
-       content never enters staging. ---------- */ -}}
-{{- $figmaCollection := index .agents.skills.collections "figma" -}}
-{{- if or (not (hasKey $figmaCollection "source")) (not (hasKey $figmaCollection "lockKey")) (not (hasKey $figmaCollection "stagingPath")) -}}
-{{-   fail "figma collection policy requires source, lockKey, and stagingPath" -}}
-{{- end -}}
-{{- $figmaRevision := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" $figmaCollection.lockKey "field" "revision") -}}
-{{- $figmaSkillsJson := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" $figmaCollection.lockKey "field" "skillsJson") -}}
-{{- $figmaIncludes := list -}}
-{{- range ($figmaSkillsJson | fromJson) -}}
-{{-   $figmaIncludes = append $figmaIncludes (printf "*/skills/%s/**" .) -}}
-{{- end }}
-
-[{{ $figmaCollection.stagingPath | quote }}]
-type = "archive"
-url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" $figmaCollection.source $figmaRevision }}'
-exact = true
-stripComponents = 2
-include = {{ $figmaIncludes | toJson }}
-
 {{- /* ---------- agent skills (~/.agents/skills/<name>) — formerly dotagents remote skills.
        The LIST is data in .chezmoidata/agents.yaml (agents.skills.external); this section
        ranges over it. Now chezmoi externals so each skill's release/branch is pinned by
