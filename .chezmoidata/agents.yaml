@@ -83,10 +83,6 @@ agents:
       - mcp
       - "--tools"
       - all
-    - name: figma
-      transport: http
-      url: https://mcp.figma.com/mcp
-      auth: oauth
     - name: context7
       transport: http
       url: https://mcp.context7.com/mcp
