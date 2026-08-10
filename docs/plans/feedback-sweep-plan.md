@@ -38,6 +38,24 @@ This run closes four confirmed `unmanaged-repo-guard` classifier bypasses (R13-R
 **Decisions taken this run (interactive).**
 
 1. **`R12` scope — delete the prose, keep the guard.** The two prohibition sentences come out of `.chezmoitemplates/agents-instructions.tmpl`; `unmanaged-repo-guard` stays. The prose is what misfires; the plugin is the only mechanical enforcement of the unmanaged-repo boundary, and #186-#189 show its classifier still has open P1 bypasses — removing both at once would leave the gate prose-only at exactly the moment its enforcement is weakest. The follow-up comment's request to delete the plugin is declined.
+
+   > **Reversed on 2026-08-10 by [`docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md`](2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md).**
+   > This decision rested on the guard being the only mechanical enforcement of
+   > the boundary at a moment its classifier still had open P1 bypasses. PR #191
+   > then closed #186-#189, retiring that premise; the user's follow-up verdict
+   > removed the remaining one by rejecting the enforcement itself. The
+   > follow-up comment's request to delete the plugin, declined above, is
+   > fulfilled by that change: the plugin is gone, source through CI, and the
+   > instruction core keeps one plain-language ask-first rule.
+   >
+   > The unattended-`lfg` route survived the removal rather than going with the
+   > gate — issue #184's own "must survive verbatim in meaning" list requires
+   > it — so an autopilot run still declines to file into a repository that is
+   > not the user's.
+   >
+   > Step 1 of `docs/decommission/unmanaged-repo-guard.md` records the guard's
+   > block counts here when an operator runs it, so this decision keeps the
+   > evidence for what the enforcement actually caught.
 2. **`R13` / `R15` strategy — fail closed on `gh`/`glab` anywhere in argv.** An unrecognised head, whether an argv-forwarding wrapper or a prefix's own option, is treated as a candidate write rather than ignored. This closes the whole class in one rule instead of chasing a denylist that #188 itself predicts will keep regressing. Accepted cost: more false candidates reach the probe.
 3. **`R1` re-scoped to a repo-ownable fix.** Instead of waiting on the upstream plugin cache, state the precedence rule where the agent actually reads it: a back-reference in `.chezmoitemplates/agents-instructions.tmpl` making the repository-management probe binding over any skill-level tracker-defer fallback chain.
 

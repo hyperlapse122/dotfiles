@@ -348,6 +348,14 @@ model (KTD9). Hop selectors are directional guidance: the implementer confirms e
 
 ## Implementation Units
 
+> **Phases 1-3 superseded on 2026-08-10.** Units U1-U8 and U11 hardened,
+> observed, and CI-covered the `unmanaged-repo-guard` plugin. That plugin was
+> deleted outright by
+> `docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md`, so
+> the code they shipped no longer exists. They landed as described (PR #190,
+> PR #191) and are retained as history. Phase 4's U9 is **not** superseded — it
+> authored instruction-core text that survives — and U10 is unrelated.
+
 ### Phase 1 — Guard correctness
 
 #### U1. Teach `splitCommand` ANSI-C `$'...'` quoting
