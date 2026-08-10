@@ -193,13 +193,6 @@ export const REGISTRY: Registry = {
     tagPrefix: "compound-engineering-",
   },
 
-  /* ---------- githubSkillCollection ---------- */
-
-  "figma/mcp-server-guide": {
-    kind: "githubSkillCollection",
-    source: "figma/mcp-server-guide",
-  },
-
   /* ---------- gitlabRelease ---------- */
 
   // One key serves the vcs.toml binary and both bundled skills (AE5).

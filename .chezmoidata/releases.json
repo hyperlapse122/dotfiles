@@ -175,26 +175,6 @@
           }
         }
       },
-      "figma/mcp-server-guide": {
-        "kind": "githubSkillCollection",
-        "source": "figma/mcp-server-guide",
-        "version": "2.2.91",
-        "revision": "22b2c566d98880ebdb5a8e48eb2c66c596a6d990",
-        "skills": [
-          "figma-code-connect",
-          "figma-create-new-file",
-          "figma-design-to-code",
-          "figma-generate-design",
-          "figma-generate-diagram",
-          "figma-generate-library",
-          "figma-implement-motion",
-          "figma-swiftui",
-          "figma-use",
-          "figma-use-figjam",
-          "figma-use-motion",
-          "figma-use-slides"
-        ]
-      },
       "garden": {
         "kind": "githubRelease",
         "source": "garden-rs/garden",

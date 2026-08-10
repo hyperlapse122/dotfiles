@@ -110,10 +110,10 @@ edits replay a stale cached build.
 
 `figma-auth` is installed on Linux/macOS by
 `run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
-is never run during apply. The Figma MCP's headerless OAuth entry comes from
-`.chezmoidata/agents.yaml`. Run `figma-auth omp` manually to seed or refresh the
-`https://mcp.figma.com/mcp` row in `~/.omp/agent/agent.db`; the transaction
-preserves every unrelated row. A soft-skipped build preserves the installed
+is never run during apply. This repository declares no Figma MCP server.
+Projects own their Figma MCP configuration. Run `figma-auth omp` manually to
+seed or refresh the `https://mcp.figma.com/mcp` row in `~/.omp/agent/agent.db`;
+the transaction preserves every unrelated row. A soft-skipped build preserves the
 executable and, under `run_onchange` semantics, retries only after an input
 change or `chezmoi apply --force`. The manual compile command above is the
 non-deploying alternative.

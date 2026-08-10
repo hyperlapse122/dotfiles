@@ -52,13 +52,8 @@ scan 'windows has reappeared in the omp plugin/MCP os validation' -qi windows \
   .chezmoidata/agents.yaml .chezmoitemplates/agent-mcp-servers-json.tmpl \
   .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
 
-# R16: a windows-amd64/windows-arm64 PlatformKey literal reappearing in
-# release-lock production code or the committed lock. github-skill-collection.ts's
-# WINDOWS_RESERVED/WINDOWS_INVALID are unrelated filename-portability guards, and
-# packages/release-lock/test/ legitimately fixtures retired windows-* keys to
-# prove the pruning behavior removes them.
 scan 'a windows PlatformKey literal has reappeared in release-lock src' -rEn \
-  'windows-(amd64|arm64)' packages/release-lock/src --exclude=github-skill-collection.ts
+  'windows-(amd64|arm64)' packages/release-lock/src
 
 scan 'a windows PlatformKey literal has reappeared in the committed lock' -Eq \
   'windows-(amd64|arm64)' .chezmoidata/releases.json

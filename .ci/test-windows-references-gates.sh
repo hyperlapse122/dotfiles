@@ -84,28 +84,19 @@ printf '\n// "windows-amd64"\n' >>"$c7/.chezmoidata/releases.json"
 out7=$("$check" "$c7" 2>&1) && fail 'did not reject a windows-amd64 literal in the committed lock'
 grep -qF 'committed lock' <<<"$out7" || fail 'lock-literal rejection did not name the committed lock'
 
-# Negative control: github-skill-collection.ts's WINDOWS_RESERVED/WINDOWS_INVALID
-# filename-portability guards must never trigger the src-literal check --
-# they are unrelated to PlatformKey targeting (Scope Boundaries).
-c8="$scratch/case8"; seed "$c8"
-cat >"$c8/packages/release-lock/src/github-skill-collection.ts" <<'TS'
-const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
-const WINDOWS_INVALID = /[<>:"\\|?*\u0000-\u001f]/u;
-TS
-"$check" "$c8" || fail 'false-positived on github-skill-collection.ts WINDOWS_RESERVED/WINDOWS_INVALID'
 
 # Negative control: packages/release-lock/test/ legitimately fixtures retired
 # windows-amd64 keys to prove pruning removes them (KTD4) -- must never trigger
 # the src-literal check, which scans src/ only.
-c9="$scratch/case9"; seed "$c9"
-printf '\nconst w = "windows-amd64"; // KTD4 legitimate retirement fixture\n' >>"$c9/packages/release-lock/test/lock.test.ts"
-"$check" "$c9" || fail 'false-positived on a KTD4-exempt test/ fixture'
+c8="$scratch/case8"; seed "$c8"
+printf '\nconst w = "windows-amd64"; // KTD4 legitimate retirement fixture\n' >>"$c8/packages/release-lock/test/lock.test.ts"
+"$check" "$c8" || fail 'false-positived on a KTD4-exempt test/ fixture'
 
-# Case 10: a scanned path going missing must fail LOUDLY, not silently pass --
+# Case 9: a scanned path going missing must fail LOUDLY, not silently pass --
 # proves grep's exit status is checked, not just "if grep; then".
-c10="$scratch/case10"; seed "$c10"
-rm -rf "$c10/packages/release-lock/src"
-out10=$("$check" "$c10" 2>&1) && fail 'silently passed with packages/release-lock/src missing entirely'
-grep -qF 'grep failed' <<<"$out10" || fail 'missing-path failure did not report a grep error, not just a clean pass'
+c9="$scratch/case9"; seed "$c9"
+rm -rf "$c9/packages/release-lock/src"
+out9=$("$check" "$c9" 2>&1) && fail 'silently passed with packages/release-lock/src missing entirely'
+grep -qF 'grep failed' <<<"$out9" || fail 'missing-path failure did not report a grep error, not just a clean pass'
 
 printf '%s\n' 'windows-references gates passed'
