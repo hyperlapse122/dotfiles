@@ -161,7 +161,8 @@ agents:
   marketplaces:
     h82-dotfiles:
       kind: localDir
-      path: .local/share/omp-plugins     # relative to $HOME; OMP-native catalog
+      # Relative to $HOME; OMP-native catalog.
+      path: .local/share/omp-plugins
       os: [linux, darwin]
       container: skip
     compound-engineering-plugin:
@@ -272,12 +273,15 @@ agents:
       # `slow` and `default` deliberately share one model at two efforts, which
       # is why they also share one chain - see the collision note there.
       modelRoles:
-        slow: anthropic/claude-opus-5:max           # deliberation ceiling
-        default: anthropic/claude-opus-5:xhigh      # main coding and editing loop
-        smol: kimi-code/kimi-for-coding:high        # light floor that still follows tools
-        advisor: openai-codex/gpt-5.6-sol:xhigh     # critic seat; the one line no doer tier uses
-        plan: "@slow"                               # both tiers are 1M now; the alias buys :max effort
-        commit: "@smol"                             # else commit messages ride the session model
+        slow: anthropic/claude-opus-5:max
+        default: anthropic/claude-opus-5:xhigh
+        smol: kimi-code/kimi-for-coding:high
+        # Critic seat; the one line no doer tier uses.
+        advisor: openai-codex/gpt-5.6-sol:xhigh
+        # Both tiers are 1M now; the alias buys :max effort.
+        plan: "@slow"
+        # Otherwise commit messages use the session model.
+        commit: "@smol"
         # Background (titles/memory/auto-thinking), not a tier: no chain hangs on
         # it because retry chains are session-turn only. Cheapest available lite
         # and off the kimi plan, so background work never spends coding quota.
@@ -289,13 +293,13 @@ agents:
       # seven makes the mapping immune to that drift; `.ci/check-omp-agent-roster.sh`
       # fails the build when omp's roster and this key set diverge.
       task.agentModelOverrides:
-        task: "@default"                            # generic writable subagent
-        scout: "@default"                           # read-only research; CE dispatches its personas here
-        designer: "@default"                        # UI and visual work
-        librarian: "@smol"                           # external library lookup
-        sonic: "@smol"                              # strictly mechanical work
-        reviewer: "@advisor"                        # critic, not doer
-        security-reviewer: "@slow"                  # highest-stakes review seat
+        task: "@default"
+        scout: "@default"
+        designer: "@default"
+        librarian: "@smol"
+        sonic: "@smol"
+        reviewer: "@advisor"
+        security-reviewer: "@slow"
       task.showResolvedModelBadge: true
       task.enableEffort: true
       task.maxEffort: xhigh

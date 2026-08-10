@@ -65,8 +65,13 @@ windows-sys = { version = "=0.61.2", features = [
 # is invoked once per button-hold from a Solaar rule, so startup latency is
 # the metric that matters — not throughput.
 [profile.release]
-opt-level = "z"   # optimize for size (no hot loops; smaller = faster page-in)
-lto = true        # cross-crate inlining; trims dead std paths
-codegen-units = 1 # better optimization at the cost of build parallelism
-panic = "abort"   # no unwinding tables; we never catch panics
-strip = true      # drop symbols; binaries stay ~300 KB instead of ~4 MB
+# No hot loops; smaller binaries page in faster.
+opt-level = "z"
+# Cross-crate inlining trims dead standard-library paths.
+lto = true
+# Better optimization trades build parallelism.
+codegen-units = 1
+# The client never catches panics, so omit unwinding tables.
+panic = "abort"
+# Drop symbols to keep binaries near 300 KB instead of 4 MB.
+strip = true
