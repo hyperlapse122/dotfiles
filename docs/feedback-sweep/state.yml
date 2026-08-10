@@ -5,9 +5,12 @@ sources:
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "tracker-defer fallback chain has no repository-management probe - a P0 security/adversarial-review residual: the instruction-core precedence rule over the skill-level tracker-defer fallback chain relies purely on the agent honoring it, since the skill's own filing procedure has no back-reference and never probes repo-management access, only reachability; not fixed in-PR because the referenced fallback doc lives in a read-only plugin cache outside this repo's ownership."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/191"
+    verified_merge_sha: "f5f0235b052e9efe6da30524767f41eac9469002"
+    verified_at: "2026-08-07T06:55:30Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -178,9 +181,12 @@ items:
     updated_at: "2026-08-07T04:48:52Z"
   "gh-issues:hyperlapse122/dotfiles#184":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "remove the agent-initiated issue-creation prohibition - proposes deleting the two-sentence issue-creation prohibition from .chezmoitemplates/agents-instructions.tmpl rather than adding a fourth conditional, citing three false blocks and zero prevented harms, and lists the neighbouring guards that must survive verbatim in meaning; a follow-up comment additionally asks to remove the unmanaged-repo-guard."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/191"
+    verified_merge_sha: "f5f0235b052e9efe6da30524767f41eac9469002"
+    verified_at: "2026-08-07T06:55:30Z"
     author_class: "teammate"
     category: "docs"
     existing_ack: false
@@ -191,9 +197,12 @@ items:
     updated_at: "2026-08-07T02:02:29Z"
   "gh-issues:hyperlapse122/dotfiles#186":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard: ARGV_PREFIXES skips the prefix but not its options - argvHead skips a recognised prefix (env, sudo, command, exec, nohup, time) and then treats the next token as the command name, so a prefix option such as env -C or sudo -u makes the head a flag, classifyBash drops the segment and fallbackScan never runs; P1, needs per-prefix option grammar or fail-closed on an unrecognised prefix option."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/191"
+    verified_merge_sha: "f5f0235b052e9efe6da30524767f41eac9469002"
+    verified_at: "2026-08-07T06:55:30Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false
@@ -205,9 +214,12 @@ items:
     updated_at: "2026-08-07T04:46:56Z"
   "gh-issues:hyperlapse122/dotfiles#187":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard: interpreter -c bodies are never scanned - classifyBash iterates only segment.bodies (heredoc/here-string), so a bash -c payload is never scanned, and a captured body is not re-split after decoded-whitespace expansion, so an ANSI-C-escaped inner command collapses into one token; P1, both variants classify as ignore."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/191"
+    verified_merge_sha: "f5f0235b052e9efe6da30524767f41eac9469002"
+    verified_at: "2026-08-07T06:55:30Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false
@@ -219,9 +231,12 @@ items:
     updated_at: "2026-08-07T04:46:57Z"
   "gh-issues:hyperlapse122/dotfiles#188":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard: argv-forwarding wrappers drop the segment silently - classifyBash continues past any head outside its short recognised set, so xargs, timeout, nice, stdbuf, setsid, parallel and watch hide a real gh/glab issue write; P2, framed as an allowlist problem solved with a denylist, with a proposal to fail closed on an unrecognised head whose argv contains gh or glab."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/191"
+    verified_merge_sha: "f5f0235b052e9efe6da30524767f41eac9469002"
+    verified_at: "2026-08-07T06:55:30Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false
@@ -233,9 +248,12 @@ items:
     updated_at: "2026-08-07T04:46:58Z"
   "gh-issues:hyperlapse122/dotfiles#189":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Repo guard: cliIsIssueWrite reads positions from a flag-stripped word list - the words filter strips flag tokens but keeps the value each value-taking flag consumes, so a value flag before the subcommand shifts every positional and misclassifies the verb; P2, the existing firstPositional valueFlags machinery is unused here and end-to-end exploitability was not established."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/191"
+    verified_merge_sha: "f5f0235b052e9efe6da30524767f41eac9469002"
+    verified_at: "2026-08-07T06:55:30Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false

@@ -70,19 +70,6 @@ jobs:
           chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
             "$RUNNER_TEMP/settings.sh" \
             "$RUNNER_TEMP/build-mxm4-haptic.sh"
-      - name: Render and typecheck unmanaged-repo-guard package
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/unmanaged-repo-guard-package"
-          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
-            --config "$RUNNER_TEMP/empty.toml" \
-            --source "$GITHUB_WORKSPACE" \
-            execute-template \
-            < "dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/package.json.tmpl" \
-            > "$RUNNER_TEMP/unmanaged-repo-guard-package/package.json"
-          cp -R "dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/src" \
-            "$RUNNER_TEMP/unmanaged-repo-guard-package/src"
-          packages/node_modules/.bin/tsc --noEmit -p .ci/tsconfig.unmanaged-repo-guard.json
       - name: Install locked OMP
         run: |
           set -euo pipefail
@@ -104,9 +91,7 @@ jobs:
           .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"
           .ci/test-mxm4-haptic-gates.sh
           .ci/test-mxm4-haptic-chezmoi-retry.sh
-          bun .ci/test-unmanaged-repo-guard.ts
-          bash .ci/test-unmanaged-repo-guard-gates.sh
-          bash .ci/test-unmanaged-repo-guard-real.sh "$RUNNER_TEMP/unmanaged-repo-guard-package"
+          .ci/test-agent-instructions.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)

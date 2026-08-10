@@ -1,3 +1,9 @@
+> **Superseded on 2026-08-10.** Every finding below cites code that no longer
+> exists: `docs/plans/2026-08-10-001-refactor-remove-unmanaged-repo-guard-plan.md`
+> deleted the `unmanaged-repo-guard` plugin and its CI surface outright. All
+> seven findings (#171-#177) were already closed by PR #190 before that removal,
+> so nothing here is open. Retained as history; the findings are not rewritten.
+
 # Residual review findings — feature/unmanaged-repo-issue-guard
 
 Source run: `lfg` pipeline for [issue #168](https://github.com/hyperlapse122/dotfiles/issues/168).
