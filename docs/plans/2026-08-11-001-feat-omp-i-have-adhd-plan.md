@@ -170,7 +170,7 @@ flowchart TB
   XT --> PR
 ```
 
-Authority schema additions (validated by the ref template and updater): `lockTool` (release-lock key) and `versionSegment` strategy per marketplace kind; compound-engineering declares its existing `versionSource: compoundEngineeringRelease` path unchanged, i-have-adhd declares the gitRef lock key with a full-sha segment. An optional `requiredPaths` list on the authority drives the fail-closed layout-drift preflight (R8): each entry is asserted to exist under the extracted tree, and the tree's `package.json` pi manifest (`pi.extensions`, `pi.skills`) is asserted to declare exactly those same paths, so preflight covers the loadable surface rather than file existence alone.
+Authority schema additions (validated by the ref template and updater): `lockTool` (release-lock key) and `versionSegment` strategy per marketplace kind; compound-engineering declares its existing `versionSource: compoundEngineeringRelease` path unchanged, i-have-adhd declares the gitRef lock key with a full-sha segment. An optional `requiredPaths` list on the authority drives the fail-closed layout-drift preflight (R8): each entry is asserted to exist under the extracted tree, and the tree's `package.json` pi manifest (`pi.extensions`, `pi.skills`) is asserted to declare exactly the loadable surface covering those paths — every declared entry (leading `./` stripped) must equal a required path or be an ancestor directory of one, and every required path must be covered by a declared entry, so upstream declaring an extra extension or dropping the skills declaration both fail closed. The updater rows carry required paths as a sixth tab-separated field (empty for rows without), consumed by the preflight loop and the reconcile helper's `manifest` mode.
 
 ### Assumptions
 
@@ -223,7 +223,7 @@ U1 (lock) → U2 (data + ref template) → U3 (external) → U4 (updater) and U5
 
 **Files:**
 - `.chezmoidata/agents.yaml` (marketplace authority; plugin row appended last per KTD6)
-- `.chezmoitemplates/compound-engineering-ref.tmpl` (generalize or split per KTD1)
+- `.chezmoitemplates/local-archive-ref.tmpl` (the single shared resolver per KTD1; every consumer, including the CE overlays provisioner, resolves through it)
 
 **Approach:**
 1. Add the authority: `kind: localArchive`, `source: ayghri/i-have-adhd`, `externalPath: .local/share/i-have-adhd`, the gitRef lock key and full-sha segment strategy (KTD2), `os: [linux, darwin]`, `container: keep`, and `requiredPaths: [extensions/i-have-adhd.ts, skills/i-have-adhd/SKILL.md]` (R8).
