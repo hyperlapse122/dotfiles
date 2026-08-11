@@ -27,7 +27,8 @@ packages/*/.turbo/
 .agents/*
 
 ### omp ###
-.omp
+.omp/*
+!.omp/mcp.json
 
 ### Compound Engineering ###
 docs/plans/.*.md
