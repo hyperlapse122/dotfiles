@@ -108,6 +108,8 @@ agents:
     - name: improve
       source: shadcn/improve
       ref: main
+    - name: i-have-adhd
+      source: ayghri/i-have-adhd
     - name: glab
       source: gitlab-org/cli
       host: gitlab
@@ -126,20 +128,12 @@ agents:
   #   - kind: how the updater resolves the marketplace source path.
   #       localDir      -> a host directory OMP scans natively (h82-dotfiles).
   #       localArchive  -> the versioned tree chezmoi extracts from a GitHub
-  #                        archive (compound-engineering-plugin, i-have-adhd).
-  #                        `source` and `externalPath` live here because the
-  #                        archive is shared across OSes; omp reads the
-  #                        extracted path on every desktop OS. The version
-  #                        selector is one of two shapes:
-  #                        versionSource -> a GitHub release train resolved
-  #                        through the release lock (compound-engineering);
-  #                        lockTool + versionSegment -> a release-lock gitRef
-  #                        pin whose full sha is the segment (i-have-adhd).
-  #                        Optional `requiredPaths` maps each loadable type to
-  #                        its declared files. The updater validates each pi
-  #                        manifest category independently before mutation.
-  #                        Optional `exact: true` makes the archive external
-  #                        exact (no overlay preserves foreign files).
+  #                        archive (compound-engineering-plugin). `source` and
+  #                        `externalPath` live here because the archive is shared
+  #                        across OSes; omp reads the extracted path on every
+  #                        desktop OS. The version selector is the
+  #                        `compoundEngineeringRelease` GitHub release train
+  #                        resolved through the release lock.
   #   - os: the OSes where omp emits the plugin row, taken directly from each
   #     marketplace's declared list (no special-casing).
   #   - container: `skip` filters the row when the `container` fact is true
@@ -160,19 +154,7 @@ agents:
       versionSource: compoundEngineeringRelease
       os: [linux, darwin]
       container: keep
-    i-have-adhd:
-      kind: localArchive
-      source: ayghri/i-have-adhd
-      externalPath: .local/share/i-have-adhd
-      lockTool: iHaveAdhd
-      versionSegment: full
-      exact: true
-      requiredPaths:
-        extensions: [extensions/i-have-adhd.ts]
-        skills: [skills/i-have-adhd/SKILL.md]
-      os: [linux, darwin]
-      container: keep
-  # aoe (agent-of-empires) launches custom agents declared here. Apply
+    # aoe (agent-of-empires) launches custom agents declared here. Apply
   # reconciles ONLY these declared leaves into aoe's live global
   # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile
   # binary (run_after_config-aoe.sh.tmpl), preserving every undeclared key aoe
@@ -234,6 +216,7 @@ agents:
     plugins:
     - { name: mxm4-haptic, marketplace: h82-dotfiles }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    pluginsRemoved:
     - { name: i-have-adhd, marketplace: i-have-adhd }
     models:
       # Override-only providers: a modelOverrides map adjusting metadata on a
