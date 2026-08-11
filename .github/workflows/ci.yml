@@ -33,7 +33,6 @@ jobs:
             printf '%s\n' '#!/usr/bin/env bash'
             printf '%s\n' 'case "$*" in'
             printf '%s\n' '  *"op://Private/OpenRouter/API Key"*) printf openrouter-test-secret ;;'
-            printf '%s\n' '  *"op://Private/Opencode/API Key"*) printf opencode-test-secret ;;'
             printf '%s\n' '  *) printf dummy-secret ;;'
             printf '%s\n' 'esac'
           } > "$RUNNER_TEMP/op-stub/op"
