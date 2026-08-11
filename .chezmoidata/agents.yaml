@@ -263,7 +263,7 @@ agents:
         # Background (titles/memory/auto-thinking), not a tier: no chain hangs on
         # it because retry chains are session-turn only. Cheapest available lite
         # and off the kimi plan, so background work never spends coding quota.
-        tiny: openai-codex/gpt-5.6-luna:low
+        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
       # EXHAUSTIVE over `omp agents unpack`, not a diff against frontmatter. An
       # omitted agent lands on its own frontmatter (override -> frontmatter ->
       # task role/session, oh-my-pi docs/task-agent-discovery.md), so silence is
