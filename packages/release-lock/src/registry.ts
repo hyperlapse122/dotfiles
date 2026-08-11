@@ -211,4 +211,8 @@ export const REGISTRY: Registry = {
   // The improve skill has no releases/tags; agents.skills.external pins its
   // `ref: main` branch head to a commit.
   improve: { kind: "gitRef", source: "shadcn/improve", ref: "refs/heads/main" },
+
+  // i-have-adhd has no releases/tags; the omp plugin archive pins its
+  // `ref: main` branch head to a commit (full-sha version segment).
+  iHaveAdhd: { kind: "gitRef", source: "ayghri/i-have-adhd", ref: "refs/heads/main" },
 };
