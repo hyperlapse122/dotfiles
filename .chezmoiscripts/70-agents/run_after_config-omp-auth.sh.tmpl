@@ -1,5 +1,5 @@
 {{- $env := .agents.omp.auth.env -}}
-{{- $required := list "EXA_API_KEY" "OPENROUTER_API_KEY" "OPENCODE_API_KEY" -}}
+{{- $required := list "EXA_API_KEY" "OPENROUTER_API_KEY" -}}
 {{- if not (kindIs "slice" $env) -}}{{- fail (printf "config-omp-auth: agents.omp.auth.env must be a list, got %s" (kindOf $env)) -}}{{- end -}}
 {{- $names := list -}}
 {{- $values := list -}}

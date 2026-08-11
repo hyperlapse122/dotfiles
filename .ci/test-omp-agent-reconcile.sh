@@ -22,9 +22,9 @@ fake_bin="$scratch/bin"
 mkdir -p "$home/.omp/agent" "$fake_bin"
 
 # One managed variable per reconcile property: EXA twice (collapse duplicates),
-# OPENROUTER once (overwrite a single stale value), OPENCODE absent (insert when
-# missing). Keep all three shapes represented whenever the managed set changes —
-# the per-name `-eq 1` counts below are what turn each shape into an assertion.
+# OPENROUTER once (overwrite a single stale value). The insertion case runs
+# against a second fixture below, so all three shapes stay covered after the
+# managed set narrows to two names.
 cat >"$home/.omp/agent/.env" <<'EOF'
 # user-owned values stay byte-identical
 OTHER_TOKEN='keep me'
@@ -36,27 +36,37 @@ chmod 0644 "$home/.omp/agent/.env"
 
 auth="$home/.omp/agent/.env"
 run_auth() {
-  env HOME="$home" OMP_AGENT_ENV="$auth" bash "$auth_script"
+  local target=${1:-$auth}
+  env HOME="$home" OMP_AGENT_ENV="$target" bash "$auth_script"
 }
 run_auth
 
 [[ $(stat -c '%a' "$auth") == 600 ]]
 [[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
 [[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 1 ]]
-[[ $(grep -c '^OPENCODE_API_KEY=' "$auth") -eq 1 ]]
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
 grep -F 'EXA_API_KEY="dummy-secret"' "$auth" >/dev/null
 grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
-grep -F 'OPENCODE_API_KEY="opencode-test-secret"' "$auth" >/dev/null
+missing="$scratch/missing.env"
+cat >"$missing" <<'EOF'
+EXA_API_KEY=present
+EOF
+chmod 0644 "$missing"
+run_auth "$missing"
+[[ $(grep -c '^EXA_API_KEY=' "$missing") -eq 1 ]]
+[[ $(grep -c '^OPENROUTER_API_KEY=' "$missing") -eq 1 ]]
+grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$missing" >/dev/null
 ambient="$scratch/ambient.env"
 printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
-OMP_AGENT_ENV="$ambient" run_auth
-[[ $(cat "$ambient") == 'AMBIENT_TOKEN=keep' ]]
+run_auth "$ambient"
+grep -F 'AMBIENT_TOKEN=keep' "$ambient" >/dev/null
+grep -F 'EXA_API_KEY="dummy-secret"' "$ambient" >/dev/null
+grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$ambient" >/dev/null
 
 # The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
-printf '%s\n' EXA_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY >"$expected_names"
+printf '%s\n' EXA_API_KEY OPENROUTER_API_KEY >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
   grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names"
@@ -480,7 +490,7 @@ settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
 models_yml='dot_omp/private_agent/private_readonly_models.yml.tmpl'
-closed_set='EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
+closed_set='EXA_API_KEY, OPENROUTER_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a
 # variable into the environment omp loads for every session, nor silently drop
@@ -517,29 +527,26 @@ assert_render_fails settings-wildcard-chain-key "$settings_sh" \
 assert_render_fails settings-suffixed-chain-key "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5:max\":[\"anthropic/claude-sonnet-5\"]}}}}}" \
   'carries a thinking suffix'
-# The kimi-k3 hop is load-bearing, not decoration: --override-data deep-merges,
-# so this fixture REPLACES the shipped anthropic/claude-opus-5 chain while still
-# inheriting the real agents.omp.models override for opencode-go/kimi-k3. That
-# hop is the shipped data's only declaration of it, so dropping it here orphans
-# the override and this positive fixture fails for a reason it does not test.
-# The orphan rule itself is covered by models-declared/undeclared-override below.
+# The positive fixture uses a surviving Anthropic selector. The model metadata
+# checks below must stay coupled to a declared selector without a retired
+# provider fixture.
 assert_render_ok settings-model-keyed-chain "$settings_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\",\"opencode-go/kimi-k3:max\"]}}}}}"
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\"]}}}}}"
 # agents.omp.models is parasitic on the settings: an override nothing declares is
 # dead data omp ignores, only modelOverrides may appear under a provider, and the
 # credential-free contract applies to it too. Its diagnostics name that surface.
-models_settings="$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"opencode-go/kimi-k3:high\"]}"
+models_settings="$roles,\"retry.fallbackChains\":{\"anthropic/claude-opus-5\":[\"anthropic/claude-sonnet-5\"]}"
 assert_render_ok models-declared-override "$models_yml" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k3\":{\"contextWindow\":262144}}}}}}}}"
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"anthropic\":{\"modelOverrides\":{\"claude-opus-5\":{\"contextWindow\":262144}}}}}}}}"
 assert_render_fails models-undeclared-override "$models_yml" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k9\":{\"contextWindow\":262144}}}}}}}}" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"anthropic\":{\"modelOverrides\":{\"claude-k9\":{\"contextWindow\":262144}}}}}}}}" \
   'which no declared agents.omp.settings selector names'
 assert_render_fails models-non-override-key "$models_yml" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"baseUrl\":\"https://x.invalid\"}}}}}}" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"anthropic\":{\"baseUrl\":\"https://x.invalid\"}}}}}}" \
   'but only modelOverrides is permitted here'
 assert_render_fails models-credential-reference "$models_yml" \
-  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"opencode-go\":{\"modelOverrides\":{\"kimi-k3\":{\"headers\":{\"X\":\"op://Private/x/y\"}}}}}}}}}" \
-  'provider opencode-go carries an op:// reference'
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"anthropic\":{\"modelOverrides\":{\"claude-opus-5\":{\"headers\":{\"X\":\"op://Private/x/y\"}}}}}}}}}" \
+  'provider anthropic carries an op:// reference'
 assert_render_fails models-credential-provider-key "$models_yml" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$models_settings},\"models\":{\"providers\":{\"op://Private/x/y\":{}}}}}}" \
   'agents.omp.models carries an op:// reference'

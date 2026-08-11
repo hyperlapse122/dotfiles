@@ -219,16 +219,9 @@ agents:
     pluginsRemoved:
     - { name: i-have-adhd, marketplace: i-have-adhd }
     models:
-      # Override-only providers: a modelOverrides map adjusting metadata on a
-      # model omp's built-in catalog already serves. opencode-go publishes no
-      # 256k Kimi variant the way kimi-code does, so the cap is bought here to
-      # keep every Kimi hop on one context budget. Under-reporting a real limit
-      # cannot error; it only makes compaction fire earlier.
-      providers:
-        opencode-go:
-          modelOverrides:
-            kimi-k3:
-              contextWindow: 262144
+      # No override-only providers remain after the OpenCode provider removal.
+      # Keep the map explicit so the managed models target stays valid.
+      providers: {}
     # Every key below is a LITERAL omp settings path as `omp config list` spells
     # it — this is a flat path->value map, NOT a nested config.yml document. The
     # provisioner runs one `omp config set <path> <json>` per entry, because a
@@ -303,11 +296,10 @@ agents:
         # declaring the key twice would be worse than useless - duplicate keys in
         # one YAML document collapse silently at decode, upstream of every
         # validator, so one chain would vanish with no error anywhere.
-        # Both hops leave anthropic, and the last keeps `opencode-go/kimi-k3` a
-        # declared selector, which is what keeps its models override legal.
+        # OpenCode was retired on 2026-08-11. The remaining Kimi hop
+        # preserves the existing retry order without a provider replacement.
         anthropic/claude-opus-5:
         - kimi-code/k3-256k:max
-        - opencode-go/kimi-k3:max
         # Light: three plans, one per hop, none of them kimi-code - so one
         # Kimi cap cannot degrade this tier at the same moment it degrades
         # the two above it.
@@ -315,12 +307,11 @@ agents:
         - google-antigravity/gemini-3.6-flash:high
         - openai-codex/gpt-5.6-luna:max
         - anthropic/claude-sonnet-5:high
-        # Critic: reaches neither doer model. It also skips a second
-        # openai-codex line, because usage-aware fallback makes a same-provider
-        # hop useless when the plan cap is what failed.
+        # Critic: the Google fallback is the only remaining alternate. It
+        # avoids a second openai-codex hop because usage-aware fallback makes
+        # a same-provider hop useless when the plan cap is what failed.
         openai-codex/gpt-5.6-sol:
         - google-antigravity/gemini-3.1-pro:high
-        - opencode-go/glm-5.2:max
         # Floor for a hand-picked /model that no key above names.
         default:
         - anthropic/claude-opus-5:xhigh
@@ -332,31 +323,29 @@ agents:
       # Provider availability gate. It is applied BEFORE any credential check,
       # so it is the only knob that keeps a backend out of every AUTOMATIC
       # selection path. `retry.fallbackChains` above was never the exposure -
-      # retry walks declared chains only, and no chain names anything here - but
-      # omp also has catalog-wide scans that no chain governs, each firing
+      # retry walks declared chains only, and no chain names anything here -
+      # but omp also has catalog-wide scans that no chain governs, each firing
       # wherever a declared selector does not resolve: its built-in
       # priority.json role chains carry BARE patterns (`gpt-5.5`, `codex`,
       # `mini`, `haiku`), the vision fallback for a text-only model ends at
       # "first image-capable available", the smol/slow finders end at
       # availableModels[0], and providers.imageOrder's built-in tail names
       # openrouter. Every one of those ranks by CATALOG ORDER, which is
-      # incidental: openrouter and opencode-zen served 473 of the 562 available
-      # ids on this host (openrouter 413, opencode-zen 60), so a bare-id scan
-      # was one catalog reshuffle away from spending token-metered capacity
-      # instead of a plan. The trade is that a disabled provider also leaves
-      # `/model`, so it cannot be chosen by hand either; re-enabling one is a
-      # delete from this list. Both aggregator keys stay declared under auth.env
-      # - provisioning a credential is independent of this gate, and
-      # OPENCODE_API_KEY still serves opencode-go, which is plan-metered and
-      # stays available. No declared selector names any provider on this list,
-      # and none may: a disabled provider leaves `omp models --json`, so the
-      # catalog gate in the provisioner fails the apply on one.
+      # incidental. A disabled provider also leaves `/model`, so it cannot be
+      # chosen by hand either.
+      #
+      # The OpenCode providers are retired. Their selectors, model override,
+      # and auth.env declaration are gone, but the dotenv reconciler preserves
+      # every UNDECLARED entry byte-identically. Keep both IDs temporarily
+      # disabled so an already-provisioned OPENCODE_API_KEY= line cannot reach
+      # a catalog-wide scan. Delete both entries and that stale dotenv line
+      # together after the one-time host cleanup.
       #
       # `zai` is here for the opposite reason, and it is TEMPORARY. Its plan
-      # expired on 2026-08-06 and its credential left auth.env below, which is
-      # what DURABLY removes the provider from `omp models --json`. But the
-      # dotenv reconciler preserves every UNDECLARED entry byte-identically, so
-      # an already-provisioned host keeps its stale `ZAI_API_KEY=` line until
+      # expired on 2026-08-06 and its credential left auth.env below, which
+      # is what DURABLY removes the provider from `omp models --json`. But
+      # the dotenv reconciler preserves every UNDECLARED entry byte-identically,
+      # so an already-provisioned host keeps its stale `ZAI_API_KEY=` line until
       # that line is hand-deleted - and until then the key is still PRESENT, so
       # the catalog-wide scans above can still select a provider that cannot
       # answer, exactly when a scan fires because something else failed. This
@@ -366,6 +355,7 @@ agents:
       # its own and this entry is dead data.
       disabledProviders:
       - openrouter
+      - opencode-go
       - opencode-zen
       - zai
       # Exa first; unlisted providers keep their built-in relative order after
@@ -460,16 +450,17 @@ agents:
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
     # credential map keyed by environment variable, not a model-provider auth
     # shape. Exa is a search tool, not a model provider.
-    # run_after_config-omp-auth requires exactly this three-variable closed
-    # set: EXA_API_KEY, OPENROUTER_API_KEY, and OPENCODE_API_KEY. ZAI_API_KEY
-    # left the set on 2026-08-06 when the Z.ai coding plan expired; because the
-    # reconciler preserves every UNDECLARED dotenv entry, the already-deployed
-    # line survives in ~/.omp/agent/.env and must be deleted by hand once, or
-    # omp keeps offering a dead `zai` provider.
-    # OPENCODE_API_KEY enables both OpenCode providers, of which
-    # settings.disabledProviders keeps only opencode-go selectable, and
+    # run_after_config-omp-auth requires exactly this two-variable closed
+    # set: EXA_API_KEY and OPENROUTER_API_KEY. ZAI_API_KEY left the set on
+    # 2026-08-06 when the Z.ai coding plan expired; because the reconciler
+    # preserves every UNDECLARED dotenv entry, the already-deployed line
+    # survives in ~/.omp/agent/.env and must be deleted by hand once, or omp
+    # keeps offering a dead `zai` provider.
+    # The OpenCode providers were retired on 2026-08-11. Their
+    # OPENCODE_API_KEY declaration left this closed set, but an already-deployed
+    # line survives as unmanaged text until the operator deletes it.
     # OPENROUTER_API_KEY stays provisioned although that backend is disabled
-    # there, so re-enabling either provider is a settings-only change.
+    # above, so re-enabling it remains a settings-only change.
     # A shape-only check would let a data edit inject an arbitrary variable such
     # as HTTP_PROXY or NODE_OPTIONS into the environment omp loads for every
     # session, and dropping the cardinality check would let an emptied map
@@ -480,5 +471,3 @@ agents:
         key: op://Private/Exa/API Key
       - variable: OPENROUTER_API_KEY
         key: op://Private/OpenRouter/API Key
-      - variable: OPENCODE_API_KEY
-        key: op://Private/Opencode/API Key
