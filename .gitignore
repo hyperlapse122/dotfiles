@@ -26,6 +26,9 @@ packages/*/.turbo/
 # which would make every descendant unreachable to a negation.
 .agents/*
 
+### omp ###
+.omp
+
 ### Compound Engineering ###
 docs/plans/.*.md
 .compound-engineering/*.local.yaml
