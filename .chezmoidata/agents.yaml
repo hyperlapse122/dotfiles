@@ -150,6 +150,15 @@ agents:
       versionSource: compoundEngineeringRelease
       os: [linux, darwin]
       container: keep
+    i-have-adhd:
+      kind: localArchive
+      source: ayghri/i-have-adhd
+      externalPath: .local/share/i-have-adhd
+      lockTool: iHaveAdhd
+      versionSegment: full
+      requiredPaths: [extensions/i-have-adhd.ts, skills/i-have-adhd/SKILL.md]
+      os: [linux, darwin]
+      container: keep
   # aoe (agent-of-empires) launches custom agents declared here. Apply
   # reconciles ONLY these declared leaves into aoe's live global
   # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile
@@ -212,6 +221,7 @@ agents:
     plugins:
     - { name: mxm4-haptic, marketplace: h82-dotfiles }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    - { name: i-have-adhd, marketplace: i-have-adhd }
     models:
       # Override-only providers: a modelOverrides map adjusting metadata on a
       # model omp's built-in catalog already serves. opencode-go publishes no

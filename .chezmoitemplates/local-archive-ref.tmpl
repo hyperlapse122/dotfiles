@@ -1,0 +1,81 @@
+{{- /* Validate and resolve a localArchive marketplace's pinned ref or version segment.
+
+       One mechanism serves every local-archive marketplace
+       (compound-engineering-plugin, i-have-adhd). The authority row in
+       agents.marketplaces selects the resolution path:
+         - versionSource: compoundEngineeringRelease -> release-lock tool
+           "compound-engineering"; the segment is v<semver> trimmed from the
+           compound-engineering-v<semver> tag train.
+         - lockTool + versionSegment: full -> the named release-lock gitRef
+           tool; the segment is the full ref verbatim (a 40-character sha).
+       Every consumer validates the neutral marketplace row before reading the
+       resolved value. The extracted archive path is
+       ~/<externalPath>/<segment>/ on every OS.
+
+       Invoke as:
+         includeTemplate "local-archive-ref.tmpl" (dict "ctx" . "marketplace" <name> "field" "ref"|"segment")
+
+       Consumers:
+         - .chezmoiexternals/ai-agents.toml emits one archive external per
+           localArchive marketplace (ref for the URL, segment for the target).
+         - the 00-tools prune and overlays scripts resolve the versioned tree
+           (segment).
+         - the omp updater registers the same path with omp (segment).
+    */ -}}
+{{- $ctx := .ctx -}}
+{{- $name := .marketplace -}}
+{{- $field := .field -}}
+{{- if not (hasKey $ctx.agents.marketplaces $name) -}}
+{{-   fail (printf "local-archive: authority %q is missing from agents.marketplaces" $name) -}}
+{{- end -}}
+{{- $authority := index $ctx.agents.marketplaces $name -}}
+{{- if ne (printf "%v" (index $authority "kind")) "localArchive" -}}
+{{-   fail (printf "local-archive: authority %q must use kind localArchive" $name) -}}
+{{- end -}}
+{{- range $required := (list "kind" "source" "externalPath") -}}
+{{-   if not (hasKey $authority $required) -}}
+{{-     fail (printf "local-archive: authority %q is missing %q" $name $required) -}}
+{{-   end -}}
+{{- end -}}
+{{- $source := printf "%v" (index $authority "source") -}}
+{{- if not (regexMatch "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" $source) -}}
+{{-   fail (printf "local-archive: authority %q has unsafe source %q" $name $source) -}}
+{{- end -}}
+{{- $path := printf "%v" (index $authority "externalPath") -}}
+{{- if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $path)) (hasPrefix "/" $path) (regexMatch "(^|/)\\.\\.(/|$)" $path) -}}
+{{-   fail (printf "local-archive: authority %q has unsafe externalPath %q" $name $path) -}}
+{{- end -}}
+{{- $tool := "" -}}
+{{- $tagPrefix := "" -}}
+{{- if hasKey $authority "versionSource" -}}
+{{-   if ne (printf "%v" (index $authority "versionSource")) "compoundEngineeringRelease" -}}
+{{-     fail (printf "local-archive: authority %q has unsupported versionSource %q" $name (index $authority "versionSource")) -}}
+{{-   end -}}
+{{-   $tool = "compound-engineering" -}}
+{{-   $tagPrefix = "compound-engineering-v" -}}
+{{- else if hasKey $authority "lockTool" -}}
+{{-   $tool = printf "%v" (index $authority "lockTool") -}}
+{{-   if not (regexMatch "^[A-Za-z0-9_.-]+$" $tool) -}}
+{{-     fail (printf "local-archive: authority %q has unsafe lockTool %q" $name $tool) -}}
+{{-   end -}}
+{{-   if ne (printf "%v" (index $authority "versionSegment")) "full" -}}
+{{-     fail (printf "local-archive: authority %q has unsupported versionSegment %q" $name (index $authority "versionSegment")) -}}
+{{-   end -}}
+{{- else -}}
+{{-   fail (printf "local-archive: authority %q declares neither versionSource nor lockTool" $name) -}}
+{{- end -}}
+{{- $ref := includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $tool) -}}
+{{- if eq $field "ref" -}}
+{{-   $ref -}}
+{{- else if eq $field "segment" -}}
+{{-   if ne $tagPrefix "" -}}
+{{-     if not (hasPrefix $tagPrefix $ref) -}}
+{{-       fail (printf "local-archive: %q ref %q lacks the %q prefix" $name $ref $tagPrefix) -}}
+{{-     end -}}
+{{-     printf "v%s" (trimPrefix $tagPrefix $ref) -}}
+{{-   else -}}
+{{-     $ref -}}
+{{-   end -}}
+{{- else -}}
+{{-   fail (printf "local-archive: unsupported field %q for authority %q" $field $name) -}}
+{{- end -}}
