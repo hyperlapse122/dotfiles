@@ -126,10 +126,19 @@ agents:
   #   - kind: how the updater resolves the marketplace source path.
   #       localDir      -> a host directory OMP scans natively (h82-dotfiles).
   #       localArchive  -> the versioned tree chezmoi extracts from a GitHub
-  #                        release (compound-engineering-plugin). `source`,
-  #                        `externalPath`, and `versionSource` live here because
-  #                        the archive is shared across OSes; omp reads the
-  #                        extracted path on every desktop OS.
+  #                        archive (compound-engineering-plugin, i-have-adhd).
+  #                        `source` and `externalPath` live here because the
+  #                        archive is shared across OSes; omp reads the
+  #                        extracted path on every desktop OS. The version
+  #                        selector is one of two shapes:
+  #                        versionSource -> a GitHub release train resolved
+  #                        through the release lock (compound-engineering);
+  #                        lockTool + versionSegment -> a release-lock gitRef
+  #                        pin whose full sha is the segment (i-have-adhd).
+  #                        Optional `requiredPaths` lists the loadable surface
+  #                        the updater's fail-closed preflight asserts.
+  #                        Optional `exact: true` makes the archive external
+  #                        exact (no overlay preserves foreign files).
   #   - os: the OSes where omp emits the plugin row, taken directly from each
   #     marketplace's declared list (no special-casing).
   #   - container: `skip` filters the row when the `container` fact is true

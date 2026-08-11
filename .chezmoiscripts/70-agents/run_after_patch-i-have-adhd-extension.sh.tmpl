@@ -11,9 +11,9 @@
 # Why: pinned omp v17.2.12 lacks sessionManager.buildContextEntries, so the
 # upstream loader throws on every session start. The patch rewrites the single
 # call site to a feature-detect form that prefers the native API once omp
-# ships it and falls back to getBranch() until then (a bounded post-compaction
-# re-injection gap, accepted). skills/ content is never touched: the ruleset
-# stays byte-verbatim upstream.
+# ships it and falls back to getBranch() until then; the fallback can defer
+# ruleset re-injection until the next session start after compaction.
+# skills/ content is never touched: the ruleset stays byte-verbatim upstream.
 #
 # run_after_ (not run_onchange_): chezmoi converges the exact = true external
 # from the cached archive on every apply, restoring the pristine loader

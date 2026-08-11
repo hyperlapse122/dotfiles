@@ -131,7 +131,7 @@ done
 mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
-  IFS=$'\t' read -r name market kind source strict required <<<"$row"
+  IFS=$'\t' read -r name market kind source _rest <<<"$row"
   id="${name}@${market}"
   omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
   omp plugin marketplace add "$source" || die "marketplace add failed for $market"

@@ -1,9 +1,8 @@
 {{- $ctx := . -}}
 {{- $marketplaces := .agents.marketplaces -}}
 {{- $prunes := list -}}
-{{- range $name := keys $marketplaces | sortAlpha -}}
-{{-   $authority := index $marketplaces $name -}}
-{{-   if not (hasKey $authority "kind") -}}{{ fail (printf "compound-engineering prune: marketplace %q is missing kind" $name) }}{{- end -}}
+{{- range $name, $authority := $marketplaces -}}
+{{-   if not (hasKey $authority "kind") -}}{{ fail (printf "local-archive prune: marketplace %q is missing kind" $name) }}{{- end -}}
 {{-   if ne (printf "%v" (index $authority "kind")) "localArchive" -}}{{ continue }}{{ end -}}
 {{-   $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") -}}
 {{-   $prunes = append $prunes (printf "  %q" (printf "%s\t%s" (index $authority "externalPath") $segment)) -}}
