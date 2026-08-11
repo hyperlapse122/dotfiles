@@ -1,4 +1,10 @@
 {{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
+# The i-have-adhd plugin was retired to a skill-only delivery. Deleting the
+# managed source stopped chezmoi managing the extracted archive and the always-on
+# flag, but already-deployed copies survive until pruned here.
+.local/share/i-have-adhd
+.omp/agent/.i-have-adhd-always
+
 # Orphaned compound-engineering skills. They used to be fetched into
 # ~/.agents/skills/ by the dotagents `[[skills]] name = "*"` wildcard entry;
 # that entry is gone, because the plugin is now installed natively per agent

@@ -17,20 +17,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-extract_rules_function() {
-  awk '
-    $0 == "function rulesAreInContext(ctx: ExtensionContext): boolean {" {
-      extracting = 1
-    }
-
-    extracting {
-      print
-      depth += gsub(/\{/, "&") - gsub(/\}/, "&")
-      if (depth == 0) exit
-    }
-  ' "$1"
-}
-
 home="$scratch/home"
 fake_bin="$scratch/bin"
 mkdir -p "$home/.omp/agent" "$fake_bin"
@@ -109,6 +95,17 @@ for needle in \
   'legacy'; do
   grep -F "$needle" "$plugin_script" >/dev/null
 done
+
+# i-have-adhd is retired from the plugin reconciler: removal commands are
+# emitted and no install/enable/marketplace-add commands target it.
+grep -F 'i-have-adhd\ti-have-adhd' "$plugin_script" >/dev/null
+grep -F 'plugin uninstall --scope user' "$plugin_script" >/dev/null
+grep -F 'plugin marketplace remove' "$plugin_script" >/dev/null
+if grep -qE 'plugin (install --scope user --force|enable --scope user|marketplace add) .*i-have-adhd' "$plugin_script"; then
+  printf 'rendered plugin updater still installs or adds i-have-adhd\n' >&2
+  exit 1
+fi
+
 grep -F "readonly EXPECTED_OMP_VERSION='$locked_omp_version'" "$plugin_script" >/dev/null
 posix_fingerprints="$scratch/posix-plugin-fingerprints"
 grep '^#   ' "$plugin_script" >"$posix_fingerprints"
@@ -118,7 +115,6 @@ for raw_input in \
   '.chezmoidata/haptic.yaml' \
   '.chezmoidata/releases.json' \
   'packages/bun.lock' \
-  '.chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl' \
   'packages/mxm4-haptic/src/omp-plugin.ts'; do
   grep -F "#   $raw_input  " "$posix_fingerprints" >/dev/null
 done
@@ -132,16 +128,6 @@ EOF
 cat >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" <<'EOF'
 {"name":"compound-engineering-plugin","plugins":[{"name":"compound-engineering","source":"./"}]}
 EOF
-adhd="$home/.local/share/i-have-adhd/test-sha"
-mkdir -p "$adhd/.claude-plugin" "$adhd/extensions" "$adhd/skills/i-have-adhd"
-cat >"$adhd/.claude-plugin/marketplace.json" <<'EOF'
-{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./"}]}
-EOF
-printf 'extension loader\n' >"$adhd/extensions/i-have-adhd.ts"
-printf 'ruleset\n' >"$adhd/skills/i-have-adhd/SKILL.md"
-cat >"$adhd/package.json" <<'EOF'
-{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}
-EOF
 
 # Rendered local paths are immutable desired state. Relocate them into the
 # isolated HOME without letting the provisioner consult the live HOME.
@@ -153,10 +139,7 @@ rendered_haptic=${rendered_haptic%%\\t*}
 ce_row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$test_plugin")
 rendered_ce=${ce_row#*localArchive\\t}
 rendered_ce=${rendered_ce%%\\t*}
-adhd_row=$(grep -m1 'i-have-adhd\\ti-have-adhd\\tlocalArchive\\t' "$test_plugin")
-rendered_adhd=${adhd_row#*localArchive\\t}
-rendered_adhd=${rendered_adhd%%\\t*}
-sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g; s|$rendered_adhd|$adhd|g" "$test_plugin"
+sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
 chmod 0700 "$test_plugin"
 
 # The stub answers --version in the real binary's omp/<version> format so the
@@ -228,72 +211,15 @@ run_plugins "$scratch/repeat.calls"
 [[ $(grep -c 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
 grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
-grep -F 'plugin install --scope user --force i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
-grep -F 'plugin enable --scope user i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
-grep -F "plugin marketplace add $adhd" "$scratch/omp.calls" >/dev/null
 
-# A removed required path fails the run before any marketplace mutation.
-mv "$adhd/extensions/i-have-adhd.ts" "$adhd/extensions/i-have-adhd.ts.off"
-if run_plugins "$scratch/adhd-path.calls" >"$scratch/adhd-path.out" 2>"$scratch/adhd-path.err"; then
-  printf 'missing i-have-adhd required path unexpectedly succeeded\n' >&2
-  exit 1
-fi
-mv "$adhd/extensions/i-have-adhd.ts.off" "$adhd/extensions/i-have-adhd.ts"
-grep -F 'preflight: required path is missing' "$scratch/adhd-path.err" >/dev/null
-if grep -qF 'plugin marketplace add' "$scratch/adhd-path.calls"; then
-  printf 'missing required path reached marketplace mutation\n' >&2
+# The removal loop runs before install, so a removed plugin is not re-added.
+grep -F 'plugin uninstall --scope user i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin marketplace remove i-have-adhd' "$scratch/omp.calls" >/dev/null
+if grep -qE 'plugin (install --scope user --force|enable --scope user) i-have-adhd@i-have-adhd|plugin marketplace add [^ ]*i-have-adhd' "$scratch/omp.calls"; then
+  printf 'reconciler still installs or adds i-have-adhd\n' >&2
   exit 1
 fi
 
-expect_adhd_manifest_drift() {
-  local label=$1
-  local manifest=$2
-  printf '%s\n' "$manifest" >"$adhd/package.json"
-  if run_plugins "$scratch/adhd-$label.calls" >"$scratch/adhd-$label.out" 2>"$scratch/adhd-$label.err"; then
-    printf 'drifted i-have-adhd pi manifest %s unexpectedly succeeded\n' "$label" >&2
-    exit 1
-  fi
-  grep -F 'preflight: pi manifest drift' "$scratch/adhd-$label.err" >/dev/null
-  if grep -qF 'plugin marketplace add' "$scratch/adhd-$label.calls"; then
-    printf 'pi manifest drift %s reached marketplace mutation\n' "$label" >&2
-    exit 1
-  fi
-}
-
-expect_adhd_manifest_drift extra-extension \
-  '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts","./extensions/sneaky.ts"],"skills":["./skills"]}}'
-expect_adhd_manifest_drift missing-extension \
-  '{"name":"i-have-adhd","pi":{"extensions":[],"skills":["./skills"]}}'
-expect_adhd_manifest_drift broad-extension \
-  '{"name":"i-have-adhd","pi":{"extensions":["./extensions"],"skills":["./skills"]}}'
-expect_adhd_manifest_drift swapped-kinds \
-  '{"name":"i-have-adhd","pi":{"extensions":["./skills"],"skills":["./extensions/i-have-adhd.ts"]}}'
-cat >"$adhd/package.json" <<'EOF'
-{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}
-EOF
-
-expect_adhd_marketplace_drift() {
-  local label=$1
-  local catalog=$2
-  printf '%s\n' "$catalog" >"$adhd/.claude-plugin/marketplace.json"
-  if run_plugins "$scratch/adhd-catalog-$label.calls" >"$scratch/adhd-catalog-$label.out" 2>"$scratch/adhd-catalog-$label.err"; then
-    printf 'drifted i-have-adhd marketplace %s unexpectedly succeeded\n' "$label" >&2
-    exit 1
-  fi
-  grep -F 'preflight: marketplace manifest drift' "$scratch/adhd-catalog-$label.err" >/dev/null
-  if grep -qF 'plugin marketplace add' "$scratch/adhd-catalog-$label.calls"; then
-    printf 'marketplace drift %s reached mutation\n' "$label" >&2
-    exit 1
-  fi
-}
-
-expect_adhd_marketplace_drift renamed \
-  '{"name":"renamed","plugins":[{"name":"i-have-adhd","source":"./"}]}'
-expect_adhd_marketplace_drift source \
-  '{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./elsewhere"}]}'
-cat >"$adhd/.claude-plugin/marketplace.json" <<'EOF'
-{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./"}]}
-EOF
 mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
   "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off"
 if run_plugins "$scratch/ce-manifest.calls" >"$scratch/ce-manifest.out" 2>"$scratch/ce-manifest.err"; then
@@ -307,298 +233,6 @@ if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
   printf 'missing CE manifest reached marketplace mutation\n' >&2
   exit 1
 fi
-
-# i-have-adhd patch: render, convergence, handler behavior, and drift
-printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$fake_bin/op"
-chmod 0755 "$fake_bin/op"
-patch_config="$scratch/patch-empty.toml"
-: >"$patch_config"
-patch_script="$scratch/patch-i-have-adhd.sh"
-env PATH="$fake_bin:$PATH" chezmoi \
-  --config "$patch_config" \
-  --source "$repo_root" \
-  execute-template \
-  < "$repo_root/.chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl" \
-  > "$patch_script"
-adhd_tree="$scratch/adhd-pinned-tree"
-mkdir -p "$adhd_tree/extensions"
-sed -i "s|^TREE=.*|TREE=\"$adhd_tree\"|" "$patch_script"
-loader="$adhd_tree/extensions/i-have-adhd.ts"
-fixture_prefix="$scratch/loader.prefix"
-fixture_upstream="$scratch/loader.upstream"
-fixture_patched="$scratch/loader.patched-function"
-fixture_suffix="$scratch/loader.suffix"
-
-adhd_pin_file="$repo_root/.ci/i-have-adhd-patch-pin"
-adhd_locked_sha=$(jq -er '.releases.tools.iHaveAdhd.version' "$repo_root/.chezmoidata/releases.json")
-adhd_pinned_sha=$(awk -F= '/^sha=/{print $2}' "$adhd_pin_file")
-if [ "$adhd_locked_sha" != "$adhd_pinned_sha" ]; then
-  printf 'i-have-adhd patch: release lock SHA %s differs from pin %s; review the full-function patch and update %s\n' \
-    "$adhd_locked_sha" "$adhd_pinned_sha" "$adhd_pin_file" >&2
-  exit 1
-fi
-
-adhd_archive="$scratch/i-have-adhd.tar.gz"
-adhd_archive_dir="$scratch/i-have-adhd-archive"
-if ! curl -fsSL "https://github.com/ayghri/i-have-adhd/archive/${adhd_locked_sha}.tar.gz" -o "$adhd_archive"; then
-  printf 'i-have-adhd patch: failed to download archive for SHA %s\n' "$adhd_locked_sha" >&2
-  exit 1
-fi
-mkdir -p "$adhd_archive_dir"
-tar -xzf "$adhd_archive" -C "$adhd_archive_dir" --strip-components=1
-adhd_upstream_source="$adhd_archive_dir/extensions/i-have-adhd.ts"
-if [ ! -f "$adhd_upstream_source" ]; then
-  printf 'i-have-adhd patch: upstream archive is missing %s\n' "$adhd_upstream_source" >&2
-  exit 1
-fi
-extract_rules_function "$adhd_upstream_source" >"$fixture_upstream"
-adhd_upstream_digest=$(sha256sum "$fixture_upstream" | awk '{print $1}')
-adhd_expected_digest=$(awk -F= '/^rulesAreInContext_sha256=/{print $2}' "$adhd_pin_file")
-if [ "$adhd_upstream_digest" != "$adhd_expected_digest" ]; then
-  printf 'i-have-adhd patch: upstream function digest %s differs from pin %s; review the full-function patch and update %s\n' \
-    "$adhd_upstream_digest" "$adhd_expected_digest" "$adhd_pin_file" >&2
-  exit 1
-fi
-cat >"$fixture_prefix" <<'EOF'
-type ExtensionAPI = any;
-type ExtensionContext = any;
-type AdhdModeState = { enabled: boolean };
-
-const existsSync = () => false;
-const getAgentDir = () => "/tmp";
-const join = (...parts: string[]) => parts.join("/");
-const STATE_ENTRY_TYPE = "i-have-adhd-state";
-const RULES_MESSAGE_TYPE = "i-have-adhd-rules";
-const DISABLED_MESSAGE_TYPE = "i-have-adhd-disabled";
-const STATUS_KEY = "i-have-adhd";
-const RULES_HEADER = "ADHD MODE ACTIVE.";
-const DISABLED_NOTICE = "ADHD MODE OFF.";
-
-function loadRules(): string {
-  return "fixture rules";
-}
-
-function getSavedState(ctx: ExtensionContext): boolean | undefined {
-  let savedState: boolean | undefined;
-
-  for (const entry of ctx.sessionManager.getBranch()) {
-    if (entry.type !== "custom" || entry.customType !== STATE_ENTRY_TYPE) {
-      continue;
-    }
-
-    const data = entry.data as Partial<AdhdModeState> | undefined;
-    if (typeof data?.enabled === "boolean") {
-      savedState = data.enabled;
-    }
-  }
-
-  return savedState;
-}
-EOF
-cat >"$fixture_patched" <<'EOF'
-function rulesAreInContext(ctx: ExtensionContext): boolean {
-  let active = false;
-  const contextEntries =
-    ctx.sessionManager.buildContextEntries?.() ??
-    ctx.sessionManager.buildSessionContext().messages;
-
-  for (const entry of contextEntries) {
-    if (
-      !("customType" in entry) ||
-      ("type" in entry && entry.type !== "custom_message") ||
-      ("role" in entry && entry.role !== "custom")
-    ) {
-      continue;
-    }
-
-    if (entry.customType === RULES_MESSAGE_TYPE) {
-      active = true;
-    } else if (entry.customType === DISABLED_MESSAGE_TYPE) {
-      active = false;
-    }
-  }
-
-  return active;
-}
-EOF
-cat >"$fixture_suffix" <<'EOF'
-export default function iHaveAdhdExtension(pi: ExtensionAPI) {
-  const rules = loadRules();
-  const alwaysOnFlag = join(getAgentDir(), ".i-have-adhd-always");
-  let enabled = false;
-
-  const updateStatus = (ctx: ExtensionContext): void => {
-    if (!enabled) {
-      ctx.ui.setStatus(STATUS_KEY, undefined);
-      return;
-    }
-
-    const dot = ctx.ui.theme.fg("success", "●");
-    const label = ctx.ui.theme.fg("accent", "ADHD ON");
-    ctx.ui.setStatus(STATUS_KEY, `${dot} ${label}`);
-  };
-
-  const syncContext = (ctx: ExtensionContext): void => {
-    const injected = rulesAreInContext(ctx);
-
-    if (enabled && !injected) {
-      pi.sendMessage(
-        {
-          customType: RULES_MESSAGE_TYPE,
-          content: `${RULES_HEADER}\n\n${rules}`,
-          display: false,
-        },
-        { triggerTurn: false },
-      );
-      return;
-    }
-
-    if (!enabled && injected) {
-      pi.sendMessage(
-        {
-          customType: DISABLED_MESSAGE_TYPE,
-          content: DISABLED_NOTICE,
-          display: false,
-        },
-        { triggerTurn: false },
-      );
-    }
-  };
-
-  const restoreState = (ctx: ExtensionContext): void => {
-    const savedState = getSavedState(ctx);
-    const enabledByDefault =
-      pi.getFlag("adhd") === true || existsSync(alwaysOnFlag);
-
-    enabled = savedState ?? enabledByDefault;
-    updateStatus(ctx);
-    syncContext(ctx);
-  };
-
-  pi.registerFlag("adhd", {
-    description: "Start with ADHD-friendly output enabled",
-    type: "boolean",
-    default: false,
-  });
-  pi.on("session_start", async (_event, ctx) => restoreState(ctx));
-  pi.on("session_compact", async (_event, ctx) => syncContext(ctx));
-}
-EOF
-cat "$fixture_prefix" "$fixture_upstream" "$fixture_suffix" >"$loader"
-cat "$fixture_prefix" "$fixture_patched" "$fixture_suffix" >"$scratch/loader.patched"
-env HOME="$home" bash "$patch_script"
-cmp -s "$scratch/loader.patched" "$loader" || { echo 'first patch run did not produce the expected loader' >&2; exit 1; }
-env HOME="$home" bash "$patch_script"
-cmp -s "$scratch/loader.patched" "$loader" || { echo 'second patch run was not a no-op' >&2; exit 1; }
-cat >"$scratch/test-adhd-compaction.mjs" <<'EOF'
-import { pathToFileURL } from "node:url";
-
-const rulesType = "i-have-adhd-rules";
-const disabledType = "i-have-adhd-disabled";
-const { default: iHaveAdhdExtension } = await import(
-  pathToFileURL(process.env.PATCHED_ADHD_LOADER).href,
-);
-const assert = (condition, message) => {
-  if (!condition) throw new Error(message);
-};
-const custom = customType => ({ role: "custom", customType });
-const staleBranch = [{ type: "custom_message", customType: rulesType }];
-
-const createFixture = ({ contextEntries, initialMessages = [] } = {}) => {
-  let messages = initialMessages;
-  const handlers = new Map();
-  const sent = [];
-  const context = {
-    sessionManager: {
-      getBranch: () => staleBranch,
-      buildContextEntries: contextEntries,
-      buildSessionContext: () => {
-        if (contextEntries) throw new Error("native context path should take precedence");
-        return { messages };
-      },
-    },
-    ui: {
-      setStatus: () => {},
-      theme: { fg: (_color, value) => value },
-    },
-  };
-  const pi = {
-    appendEntry: () => {},
-    getFlag: name => name === "adhd",
-    on: (event, handler) => handlers.set(event, handler),
-    registerFlag: () => {},
-    sendMessage: message => {
-      sent.push(message);
-      messages = [...messages, custom(message.customType)];
-    },
-  };
-
-  iHaveAdhdExtension(pi);
-  return {
-    compact: () => handlers.get("session_compact")({}, context),
-    sent,
-    setMessages: next => {
-      messages = next;
-    },
-    start: () => handlers.get("session_start")({}, context),
-  };
-};
-
-const fallback = createFixture();
-await fallback.start();
-assert(fallback.sent.length === 1, "initial session start did not inject rules");
-await fallback.compact();
-assert(fallback.sent.length === 1, "retained rules marker injected a duplicate");
-fallback.setMessages([]);
-await fallback.compact();
-assert(fallback.sent.length === 2, "compacted-away rules marker did not reinject exactly once");
-await fallback.compact();
-assert(fallback.sent.length === 2, "re-injected rules marker did not stop a second duplicate");
-fallback.setMessages([{ role: "user", customType: rulesType }]);
-await fallback.compact();
-assert(fallback.sent.length === 3, "non-custom model message suppressed reinjection");
-fallback.setMessages([custom(rulesType), custom(disabledType)]);
-await fallback.compact();
-assert(fallback.sent.length === 4, "latest disabled marker did not clear rules state");
-await fallback.compact();
-assert(fallback.sent.length === 4, "rules re-injected after disabled marker did not prevent a duplicate");
-
-const nativeRules = createFixture({
-  contextEntries: () => [{ type: "custom_message", customType: rulesType }],
-});
-await nativeRules.start();
-assert(nativeRules.sent.length === 0, "native context entries did not take precedence");
-const nativeDisabled = createFixture({
-  contextEntries: () => [
-    { type: "custom_message", customType: rulesType },
-    { type: "custom_message", customType: disabledType },
-  ],
-});
-await nativeDisabled.start();
-assert(nativeDisabled.sent.length === 1, "native disabled marker did not clear rules state");
-EOF
-PATCHED_ADHD_LOADER="$loader" bun "$scratch/test-adhd-compaction.mjs"
-cat "$fixture_prefix" "$fixture_upstream" "$fixture_suffix" >"$loader"
-sed -i '/^  let active = false;$/a\  const drift = true;' "$loader"
-cp "$loader" "$scratch/loader.drifted"
-if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-drift.err"; then
-  printf 'body-drifted extension loader unexpectedly patched\n' >&2
-  exit 1
-fi
-cmp -s "$scratch/loader.drifted" "$loader" || { echo 'body-drifted loader was rewritten' >&2; exit 1; }
-grep -F 'drifted' "$scratch/patch-drift.err" >/dev/null
-rm "$loader"
-if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-missing.err"; then
-  printf 'missing extension loader unexpectedly patched\n' >&2
-  exit 1
-fi
-grep -F 'missing from the extracted tree' "$scratch/patch-missing.err" >/dev/null
-printf 'drifted upstream\n' >"$loader"
-if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-drift.err"; then
-  printf 'drifted extension loader unexpectedly patched\n' >&2
-  exit 1
-fi
-grep -F 'drifted' "$scratch/patch-drift.err" >/dev/null
 
 # Same-version package/config changes must replace the full installed payload.
 printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"
@@ -658,7 +292,7 @@ jq -r "$harvest_selectors
 jq -e '(.models | length) > 0' "$scratch/catalog-full.json" >/dev/null
 
 # Chain reachability, asserted against the SHIPPED data rather than a fixture.
-# omp looks a chain up by the failing model's id, so a model-keyed chain whose
+# omp looks a chain up by the failing model id, so a model-keyed chain whose
 # model no role, agent override, or hop ever produces is dead data — the symptom
 # is a tier that silently loses its recovery path after a retune.
 #

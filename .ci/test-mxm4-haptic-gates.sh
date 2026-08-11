@@ -70,11 +70,11 @@ assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored .
 # The phase-70 omp reconciler remains eligible in containers to maintain
 # keep-marked marketplaces and remove the retired legacy extension.
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh 'linux container migration'
-# i-have-adhd is container-eligible end to end: the archive tree, the apply-time
-# patch, and the always-on flag all deploy where omp runs.
-assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .local/share/i-have-adhd 'linux container adhd tree'
-assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh 'linux container adhd patch'
-assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .omp/agent/.i-have-adhd-always 'linux container adhd flag'
+# i-have-adhd is now a skill-only, always-on integration: the skill tree and
+# the APPEND_SYSTEM.md prompt append deploy in containers exactly as they do
+# on managed hosts.
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .agents/skills/i-have-adhd 'linux container adhd skill'
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .omp/agent/APPEND_SYSTEM.md 'linux container adhd always-on prompt'
 
 # Template guards are a second line of defense: exactly one native build and
 # one reconciliation implementation renders on each host OS.
@@ -94,7 +94,7 @@ done
 
 render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux true "$posix_reconcile" "$scratch/reconcile-linux-container.sh"
 ! grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container rendered the OMP haptic row'
-grep -F 'i-have-adhd\ti-have-adhd\tlocalArchive' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container dropped the i-have-adhd row'
+! grep -F 'i-have-adhd\ti-have-adhd\tlocalArchive' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container still renders i-have-adhd plugin row'
 grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container migration is absent'
 
 # Every deployed manifest must reject a real invalid value during rendering.

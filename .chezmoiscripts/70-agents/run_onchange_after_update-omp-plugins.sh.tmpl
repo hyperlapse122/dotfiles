@@ -2,7 +2,7 @@
 {{- $os := .chezmoi.os -}}
 {{- $home := .chezmoi.homeDir -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" ".chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
 {{- $ompVersion := trimPrefix "v" (includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" "omp")) -}}
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $marketplaces := .agents.marketplaces -}}
@@ -71,7 +71,23 @@
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
 {{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) -}}
 {{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t\t%s\t%s" $name $market $kind $source $strict (join " " $requiredExtensions) (join " " $requiredSkills))) -}}
-{{-   end -}}
+{{- end -}}
+{{- end -}}
+{{- $pluginsRemoved := .agents.omp.pluginsRemoved -}}
+{{- $removedRows := list -}}
+{{- $removedSeen := dict -}}
+{{- range $i, $plugin := $pluginsRemoved -}}
+{{-   $where := printf "agents.omp.pluginsRemoved[%d]" $i -}}
+{{-   if not (has (len $plugin) (list 2)) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
+{{-   if not (and (hasKey $plugin "name") (hasKey $plugin "marketplace")) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
+{{-   $name := printf "%v" (index $plugin "name") -}}
+{{-   $market := printf "%v" (index $plugin "marketplace") -}}
+{{-   if not (regexMatch $nameRe $name) -}}{{ fail (printf "update-omp-plugins: %s has invalid plugin name %q" $where $name) }}{{- end -}}
+{{-   if not (regexMatch $nameRe $market) -}}{{ fail (printf "update-omp-plugins: %s has invalid marketplace name %q" $where $market) }}{{- end -}}
+{{-   $id := printf "%s@%s" $name $market -}}
+{{-   if hasKey $removedSeen $id -}}{{ fail (printf "update-omp-plugins: duplicate removed OMP plugin %q" $id) }}{{- end -}}
+{{-   $_ := set $removedSeen $id true -}}
+{{-   $removedRows = append $removedRows (printf "  %q" (printf "%s\t%s" $name $market)) -}}
 {{- end -}}
 #!/usr/bin/env bash
 # Reconciles every eligible agents.omp.plugins row; haptic replacement is proof-gated.
@@ -83,6 +99,9 @@ readonly EXPECTED_OMP_VERSION='{{ $ompVersion }}'
 readonly LEGACY_EXTENSION="$HOME/.omp/agent/extensions/mxm4-haptic.ts"
 PLUGINS=(
 {{ join "\n" $rows }}
+)
+PLUGINS_REMOVED=(
+{{ join "\n" $removedRows }}
 )
 
 die() { printf 'update-omp-plugins: %s\n' "$*" >&2; exit 1; }
@@ -103,6 +122,18 @@ for parent in "$HOME/.omp" "$HOME/.omp/plugins" "$HOME/.omp/agent/extensions"; d
     [[ -d $ancestor && -w $ancestor ]] || die "preflight: cannot create user path below $ancestor"
   fi
 done
+if [[ ${#PLUGINS[@]} -eq 0 && ${#PLUGINS_REMOVED[@]} -eq 0 ]]; then printf '%s\n' 'update-omp-plugins: no eligible plugins or removals'; exit 0; fi
+
+mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
+
+for row in "${PLUGINS_REMOVED[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market <<<"$row"
+  id="${name}@${market}"
+  omp plugin uninstall --scope user "$id" >/dev/null 2>&1 || true
+  omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
+done
+
 if [[ ${#PLUGINS[@]} -eq 0 ]]; then printf '%s\n' 'update-omp-plugins: no eligible plugins'; exit 0; fi
 
 helper_root="${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-haptic-reconcile"
