@@ -367,16 +367,26 @@ agents:
       # default that could change upstream.
       providers.webSearchOrder:
       - exa
+      - gemini
+      providers.imageOrder:
+      - openai-codex
+      - antigravity
+      - openrouter
+      provider.appendOnlyContext: on
+      secrets.enabled: true
       exa.enabled: true
       theme.dark: titanium
       theme.light: light
       symbolPreset: nerd
       setupVersion: 1
+      statusLine.preset: default
+      statusLine.separator: powerline-thin
       defaultThinkingLevel: xhigh
-      # Assert the preferred progress display and tmux scrollback behavior.
-      display.shimmer: 'kitt'
+      display.shimmer: 'classic'
       display.showTokenUsage: true
-      terminal.showProgress: true
+      terminal.showProgress: false
+      tui.textSizing: true
+      tui.codexResetFireworks: true
       tui.scrollbackRebuild: true
       tui.imeSafeCursor: true
       # Use the native agents skill roots without duplicate compatibility scans.
@@ -388,6 +398,7 @@ agents:
       computer.enabled: true
       generate_image.enabled: true
       github.enabled: true
+      security.enabled: true
       steeringMode: one-at-a-time
       followUpMode: one-at-a-time
       power.sleepPrevention: idle
@@ -437,6 +448,7 @@ agents:
       # provisioner owns only declared paths, so the built-in default of 10
       # stands and any hand-set host value survives an apply.
       ttsr.repeatMode: after-gap
+      stt.enabled: true
     # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
     # google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
     # via omp /login and are never declared here. This is a TOOL/PROVIDER
