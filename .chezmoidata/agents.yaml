@@ -156,6 +156,7 @@ agents:
       externalPath: .local/share/i-have-adhd
       lockTool: iHaveAdhd
       versionSegment: full
+      exact: true
       requiredPaths: [extensions/i-have-adhd.ts, skills/i-have-adhd/SKILL.md]
       os: [linux, darwin]
       container: keep
