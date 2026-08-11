@@ -10,18 +10,17 @@
 
 #!/usr/bin/env bash
 #
-# Prunes older extracted versions under ~/<externalPath>/ for every
-# localArchive marketplace, keeping only the segment its authority currently
-# pins. Chezmoi's exact=true only cleans within one target path, so sibling
-# version directories under the same parent accumulate without this.
+# Prunes older extracted localArchive versions only after the patch and updater
+# have succeeded. The phase-70 location is load-bearing: patch- runs first,
+# update-omp-plugins performs the failure-prone reconcile, and this zz-prune
+# script runs last. A pin-bump failure therefore preserves OMP's known-good
+# registered source.
 #
-# There is no ~/.local/bin symlink to repoint. Claude, Codex, and omp consume
-# the fully rendered versioned marketplace path. A version bump re-registers
-# the path through the surviving agent-plugin and omp updater scripts.
+# Chezmoi's exact=true only cleans within one target path, so sibling version
+# directories under the same parent accumulate without this onchange cleanup.
 #
-# onchange trigger: the rendered segments below ARE the trigger — a new
-# upstream release or gitRef move changes this script's content and re-runs
-# the prune after the file phase has extracted the new version.
+# The rendered segments below are the trigger. A new release or gitRef re-runs
+# this script after the new tree is extracted and reconciled.
 
 set -euo pipefail
 

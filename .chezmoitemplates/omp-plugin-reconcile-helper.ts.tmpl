@@ -74,17 +74,21 @@ const inspectPackage = async (root: string, expectedDigest?: string) => {
 };
 
 if (mode === "manifest") {
-  const required = rest;
-  if (required.length === 0) fail("pi manifest", "no required paths given");
+  if (rest.length !== 2) fail("pi manifest", "expected extension and skill requirements");
+  const [extensionInput, skillInput] = rest;
+  const required = {
+    extensions: extensionInput === "" ? [] : extensionInput.split(" "),
+    skills: skillInput === "" ? [] : skillInput.split(" "),
+  };
   const pkg = record(
     await json(resolve(source, "package.json"), "pi manifest"),
     "pi manifest",
   );
   const pi = record(pkg.pi, "pi manifest");
-  const declared: string[] = [];
   for (const key of ["extensions", "skills"] as const) {
     const value = pi[key];
     if (!Array.isArray(value)) fail("pi manifest", `pi.${key} must be an array`);
+    const declared = new Set<string>();
     for (const entry of value) {
       if (typeof entry !== "string") fail("pi manifest", `pi.${key} entries must be strings`);
       const normalized = entry.replace(/^\.\//, "").replace(/\/+$/, "");
@@ -93,22 +97,48 @@ if (mode === "manifest") {
         normalized.split("/").includes("..") ||
         isAbsolute(normalized)
       ) {
-        fail("pi manifest", `unsafe entry ${entry}`);
+        fail("pi manifest", `unsafe ${key} entry ${entry}`);
       }
-      declared.push(normalized);
+      if (declared.has(normalized)) fail("pi manifest", `duplicate pi.${key} entry ${entry}`);
+      declared.add(normalized);
+    }
+    const covers =
+      key === "extensions"
+        ? (entry: string, path: string) => entry === path
+        : (entry: string, path: string) => path === entry || path.startsWith(`${entry}/`);
+    for (const entry of declared) {
+      if (!required[key].some((path) => covers(entry, path))) {
+        fail("pi manifest", `undeclared loadable ${key} entry ${entry}`);
+      }
+    }
+    for (const path of required[key]) {
+      let found = false;
+      for (const entry of declared) {
+        if (covers(entry, path)) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) fail("pi manifest", `required ${key} path not declared: ${path}`);
     }
   }
-  const covers = (entry: string, path: string) =>
-    path === entry || path.startsWith(`${entry}/`);
-  for (const entry of declared) {
-    if (!required.some((path) => covers(entry, path))) {
-      fail("pi manifest", `undeclared loadable entry ${entry}`);
-    }
+} else if (mode === "marketplace") {
+  if (rest.length !== 2) fail("marketplace", "expected marketplace and plugin names");
+  const [marketplace, plugin] = rest;
+  const catalog = record(
+    await json(resolve(source, ".claude-plugin/marketplace.json"), "marketplace"),
+    "marketplace",
+  );
+  if (catalog.name !== marketplace) {
+    fail("marketplace", `unexpected marketplace ${catalog.name}`);
   }
-  for (const path of required) {
-    if (!declared.some((entry) => covers(entry, path))) {
-      fail("pi manifest", `required path not declared: ${path}`);
-    }
+  const matches = Array.isArray(catalog.plugins)
+    ? catalog.plugins.filter(
+        (entry): entry is Record<string, unknown> => isRecord(entry) && entry.name === plugin,
+      )
+    : [];
+  if (matches.length !== 1 || matches[0].source !== "./") {
+    fail("marketplace", `expected one ${plugin} plugin with source ./`);
   }
 } else if (mode === "pre") {
   const catalog = record(

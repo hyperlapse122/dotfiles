@@ -226,7 +226,7 @@ U1 (lock) → U2 (data + ref template) → U3 (external) → U4 (updater) and U5
 - `.chezmoitemplates/local-archive-ref.tmpl` (the single shared resolver per KTD1; every consumer, including the CE overlays provisioner, resolves through it)
 
 **Approach:**
-1. Add the authority: `kind: localArchive`, `source: ayghri/i-have-adhd`, `externalPath: .local/share/i-have-adhd`, the gitRef lock key and full-sha segment strategy (KTD2), `os: [linux, darwin]`, `container: keep`, and `requiredPaths: [extensions/i-have-adhd.ts, skills/i-have-adhd/SKILL.md]` (R8).
+1. Add the authority: `kind: localArchive`, `source: ayghri/i-have-adhd`, `externalPath: .local/share/i-have-adhd`, the gitRef lock key and full-sha segment strategy (KTD2), `os: [linux, darwin]`, `container: keep`, and typed `requiredPaths` for `extensions: [extensions/i-have-adhd.ts]` and `skills: [skills/i-have-adhd/SKILL.md]` (R8).
 2. Append `{ name: i-have-adhd, marketplace: i-have-adhd }` as the last `agents.omp.plugins` row.
 3. Generalize the ref template so each localArchive authority resolves its own ref and segment; compound-engineering's validation and `v<semver>` segment stay byte-identical.
 
@@ -277,7 +277,7 @@ U1 (lock) → U2 (data + ref template) → U3 (external) → U4 (updater) and U5
 **Approach:**
 1. Replace the unconditional `$ceRef`/`$ceVersion` resolution (:14-15) with per-marketplace ref+segment resolution inside the localArchive branch.
 2. Replace the non-CE hard-fail (:51) with generic authority validation; compose `$home/$externalPath/$segment` (:55) per marketplace.
-3. Extend the localArchive preflight (:112): keep the `.claude-plugin/marketplace.json` assertion, assert every authority `requiredPaths` entry exists under `$source`, and assert the tree's `package.json` pi manifest declares exactly those paths as its extension/skill entries (R8).
+3. Extend the localArchive preflight (:112): validate each `.claude-plugin/marketplace.json` against its configured marketplace and plugin source before mutation; assert every typed authority `requiredPaths` entry exists under `$source`; and assert the tree's `package.json` pi manifest declares extension and skill paths in their matching categories (R8).
 4. Keep the preflight-complete-before-mutation structure and the remove/add/install --force/enable reconcile loop unchanged.
 
 **Patterns to follow:** the existing row pipeline (:17-66, :107-129); per-row `kind`/`container`/`os` validation (:12, :33-45).
@@ -326,12 +326,13 @@ U1 (lock) → U2 (data + ref template) → U3 (external) → U4 (updater) and U5
 **Dependencies:** U4
 
 **Files:**
-- `.chezmoiscripts/00-tools/run_onchange_after_compound-engineering.sh.tmpl` (generalize per KTD1)
+- `.chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl` (generalize per KTD1; its phase and `zz-` order place destructive pruning after patch and reconcile success)
 
 **Approach:**
 1. Range over localArchive marketplaces instead of the hardcoded compound-engineering name (:3, :26-27).
-2. Keep only the current segment per marketplace; guard every destructive path at one choke point and `lstat` before existence checks (repo learning: preserve-user-content guards cover every destructive path).
-3. Leave the overlays script compound-engineering-only (ce-sweep-specific).
+2. Run after the phase-70 compatibility patch and updater. A failed new pin therefore preserves OMP's last known-good registered source.
+3. Keep only the current segment per marketplace; guard every destructive path at one choke point and `lstat` before existence checks (repo learning: preserve-user-content guards cover every destructive path).
+4. Leave the overlays script compound-engineering-only (ce-sweep-specific).
 
 **Patterns to follow:** the existing prune logic and its comment (:13-14) on sibling-version accumulation.
 
@@ -378,8 +379,8 @@ U1 (lock) → U2 (data + ref template) → U3 (external) → U4 (updater) and U5
 - `.ci/test-mxm4-haptic-gates.sh` (render-gate expectations if row counts are asserted)
 
 **Approach:**
-1. Extend the reconcile test: stage an i-have-adhd fixture marketplace with `.claude-plugin/marketplace.json`, a `package.json` whose pi manifest declares the expected extension and skill entries, and both `requiredPaths` files; assert the rendered row, the stubbed-omp call shape, and the fail-closed preflight when a required path is removed or the manifest entry set drifts.
-2. Extend the overlays test: assert the i-have-adhd block carries `exact = true` and the CE block still does not.
+1. Extend the reconcile test: stage i-have-adhd and compound-engineering fixture marketplaces with valid `.claude-plugin/marketplace.json` files, a typed `package.json` pi manifest, and every `requiredPaths` file. Assert rows, stubbed-omp call shape, marketplace-routing drift, and typed manifest drift fail before `marketplace add`.
+2. Extend the overlays test: assert the i-have-adhd external uses the lock-derived target and URL, retains `exact = true`, keeps CE additive, and execute generalized prune scenarios in a scratch HOME.
 3. Keep the tests' existing structure: rendered-script grep over hardcoded rows.
 
 **Patterns to follow:** the fixture staging and omp stub at `.ci/test-omp-agent-reconcile.sh:117-206`.

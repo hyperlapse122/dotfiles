@@ -104,6 +104,7 @@ for raw_input in \
   '.chezmoidata/haptic.yaml' \
   '.chezmoidata/releases.json' \
   'packages/bun.lock' \
+  '.chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl' \
   'packages/mxm4-haptic/src/omp-plugin.ts'; do
   grep -F "#   $raw_input  " "$posix_fingerprints" >/dev/null
 done
@@ -114,14 +115,14 @@ cp -R "$haptic_package" "$source/plugins/mxm4-haptic"
 cat >"$source/.omp-plugin/marketplace.json" <<'EOF'
 {"name":"h82-dotfiles","owner":{"name":"test"},"plugins":[{"name":"mxm4-haptic","source":"./plugins/mxm4-haptic"}]}
 EOF
-printf '{"name":"compound-engineering-plugin"}\n' >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json"
-
-# The i-have-adhd fixture mirrors the pinned tree's loadable surface: the pi
-# manifest declares the extension and skills entries the authority's
-# requiredPaths cover, and every required path exists under the tree.
+cat >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"compound-engineering-plugin","plugins":[{"name":"compound-engineering","source":"./"}]}
+EOF
 adhd="$home/.local/share/i-have-adhd/test-sha"
 mkdir -p "$adhd/.claude-plugin" "$adhd/extensions" "$adhd/skills/i-have-adhd"
-printf '{"name":"i-have-adhd"}\n' >"$adhd/.claude-plugin/marketplace.json"
+cat >"$adhd/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./"}]}
+EOF
 printf 'extension loader\n' >"$adhd/extensions/i-have-adhd.ts"
 printf 'ruleset\n' >"$adhd/skills/i-have-adhd/SKILL.md"
 cat >"$adhd/package.json" <<'EOF'
@@ -230,21 +231,55 @@ if grep -qF 'plugin marketplace add' "$scratch/adhd-path.calls"; then
   exit 1
 fi
 
-# A pi manifest declaring more than the authority's loadable surface fails the
-# run identically; so does a missing compound-engineering manifest.
-printf '%s\n' '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts","./extensions/sneaky.ts"],"skills":["./skills"]}}' \
-  >"$adhd/package.json"
-if run_plugins "$scratch/adhd-manifest.calls" >"$scratch/adhd-manifest.out" 2>"$scratch/adhd-manifest.err"; then
-  printf 'drifted i-have-adhd pi manifest unexpectedly succeeded\n' >&2
-  exit 1
-fi
-printf '%s\n' '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}' \
-  >"$adhd/package.json"
-grep -F 'preflight: pi manifest drift' "$scratch/adhd-manifest.err" >/dev/null
-if grep -qF 'plugin marketplace add' "$scratch/adhd-manifest.calls"; then
-  printf 'pi manifest drift reached marketplace mutation\n' >&2
-  exit 1
-fi
+expect_adhd_manifest_drift() {
+  local label=$1
+  local manifest=$2
+  printf '%s\n' "$manifest" >"$adhd/package.json"
+  if run_plugins "$scratch/adhd-$label.calls" >"$scratch/adhd-$label.out" 2>"$scratch/adhd-$label.err"; then
+    printf 'drifted i-have-adhd pi manifest %s unexpectedly succeeded\n' "$label" >&2
+    exit 1
+  fi
+  grep -F 'preflight: pi manifest drift' "$scratch/adhd-$label.err" >/dev/null
+  if grep -qF 'plugin marketplace add' "$scratch/adhd-$label.calls"; then
+    printf 'pi manifest drift %s reached marketplace mutation\n' "$label" >&2
+    exit 1
+  fi
+}
+
+expect_adhd_manifest_drift extra-extension \
+  '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts","./extensions/sneaky.ts"],"skills":["./skills"]}}'
+expect_adhd_manifest_drift missing-extension \
+  '{"name":"i-have-adhd","pi":{"extensions":[],"skills":["./skills"]}}'
+expect_adhd_manifest_drift broad-extension \
+  '{"name":"i-have-adhd","pi":{"extensions":["./extensions"],"skills":["./skills"]}}'
+expect_adhd_manifest_drift swapped-kinds \
+  '{"name":"i-have-adhd","pi":{"extensions":["./skills"],"skills":["./extensions/i-have-adhd.ts"]}}'
+cat >"$adhd/package.json" <<'EOF'
+{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}
+EOF
+
+expect_adhd_marketplace_drift() {
+  local label=$1
+  local catalog=$2
+  printf '%s\n' "$catalog" >"$adhd/.claude-plugin/marketplace.json"
+  if run_plugins "$scratch/adhd-catalog-$label.calls" >"$scratch/adhd-catalog-$label.out" 2>"$scratch/adhd-catalog-$label.err"; then
+    printf 'drifted i-have-adhd marketplace %s unexpectedly succeeded\n' "$label" >&2
+    exit 1
+  fi
+  grep -F 'preflight: marketplace manifest drift' "$scratch/adhd-catalog-$label.err" >/dev/null
+  if grep -qF 'plugin marketplace add' "$scratch/adhd-catalog-$label.calls"; then
+    printf 'marketplace drift %s reached mutation\n' "$label" >&2
+    exit 1
+  fi
+}
+
+expect_adhd_marketplace_drift renamed \
+  '{"name":"renamed","plugins":[{"name":"i-have-adhd","source":"./"}]}'
+expect_adhd_marketplace_drift source \
+  '{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./elsewhere"}]}'
+cat >"$adhd/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./"}]}
+EOF
 mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
   "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off"
 if run_plugins "$scratch/ce-manifest.calls" >"$scratch/ce-manifest.out" 2>"$scratch/ce-manifest.err"; then

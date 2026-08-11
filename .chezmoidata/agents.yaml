@@ -135,8 +135,9 @@ agents:
   #                        through the release lock (compound-engineering);
   #                        lockTool + versionSegment -> a release-lock gitRef
   #                        pin whose full sha is the segment (i-have-adhd).
-  #                        Optional `requiredPaths` lists the loadable surface
-  #                        the updater's fail-closed preflight asserts.
+  #                        Optional `requiredPaths` maps each loadable type to
+  #                        its declared files. The updater validates each pi
+  #                        manifest category independently before mutation.
   #                        Optional `exact: true` makes the archive external
   #                        exact (no overlay preserves foreign files).
   #   - os: the OSes where omp emits the plugin row, taken directly from each
@@ -166,7 +167,9 @@ agents:
       lockTool: iHaveAdhd
       versionSegment: full
       exact: true
-      requiredPaths: [extensions/i-have-adhd.ts, skills/i-have-adhd/SKILL.md]
+      requiredPaths:
+        extensions: [extensions/i-have-adhd.ts]
+        skills: [skills/i-have-adhd/SKILL.md]
       os: [linux, darwin]
       container: keep
   # aoe (agent-of-empires) launches custom agents declared here. Apply
