@@ -319,7 +319,7 @@ agents:
         # openai-codex line, because usage-aware fallback makes a same-provider
         # hop useless when the plan cap is what failed.
         openai-codex/gpt-5.6-sol:
-        - google-antigravity/gemini-3-pro:high
+        - google-antigravity/gemini-3.1-pro:high
         - opencode-go/glm-5.2:max
         # Floor for a hand-picked /model that no key above names.
         default:
