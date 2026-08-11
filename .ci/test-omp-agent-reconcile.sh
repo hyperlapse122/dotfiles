@@ -98,8 +98,9 @@ done
 
 # i-have-adhd is retired from the plugin reconciler: removal commands are
 # emitted and no install/enable/marketplace-add commands target it.
-grep -F 'plugin uninstall --scope user i-have-adhd@i-have-adhd' "$plugin_script" >/dev/null
-grep -F 'plugin marketplace remove i-have-adhd' "$plugin_script" >/dev/null
+grep -F 'i-have-adhd\ti-have-adhd' "$plugin_script" >/dev/null
+grep -F 'plugin uninstall --scope user' "$plugin_script" >/dev/null
+grep -F 'plugin marketplace remove' "$plugin_script" >/dev/null
 if grep -qE 'plugin (install --scope user --force|enable --scope user|marketplace add) .*i-have-adhd' "$plugin_script"; then
   printf 'rendered plugin updater still installs or adds i-have-adhd\n' >&2
   exit 1
@@ -214,7 +215,7 @@ grep -F 'plugin enable --scope user compound-engineering@compound-engineering-pl
 # The removal loop runs before install, so a removed plugin is not re-added.
 grep -F 'plugin uninstall --scope user i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
 grep -F 'plugin marketplace remove i-have-adhd' "$scratch/omp.calls" >/dev/null
-if grep -qE 'plugin (install --scope user --force|enable --scope user|marketplace add [^ ]*i-have-adhd)' "$scratch/omp.calls"; then
+if grep -qE 'plugin (install --scope user --force|enable --scope user) i-have-adhd@i-have-adhd|plugin marketplace add [^ ]*i-have-adhd' "$scratch/omp.calls"; then
   printf 'reconciler still installs or adds i-have-adhd\n' >&2
   exit 1
 fi
