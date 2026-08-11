@@ -479,7 +479,7 @@ auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
 settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
-models_yml='dot_omp/private_agent/readonly_models.yml.tmpl'
+models_yml='dot_omp/private_agent/private_readonly_models.yml.tmpl'
 closed_set='EXA_API_KEY, OPENROUTER_API_KEY, OPENCODE_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a

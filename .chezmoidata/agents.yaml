@@ -16,7 +16,7 @@
 #        the models target below, whose shared validator proves every model
 #        override is named by a declared selector here.
 #   agents.omp.models
-#     -> dot_omp/private_agent/readonly_models.yml.tmpl (~/.omp/agent/models.yml).
+#     -> dot_omp/private_agent/private_readonly_models.yml.tmpl (~/.omp/agent/models.yml).
 #        Override-only providers adjusting metadata on models omp already serves.
 #        Also the validator's second caller: it renders the same shared partial,
 #        so a model override here is cross-checked against the selectors above.
