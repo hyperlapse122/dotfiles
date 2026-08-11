@@ -3,7 +3,7 @@ import { realpath, readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [mode, source, ompRoot, legacy] = process.argv.slice(2);
+const [mode, source, ...rest] = process.argv.slice(2);
 const fail = (stage: string, message: string): never => {
   throw new Error(`${stage}: ${message}`);
 };
@@ -73,7 +73,44 @@ const inspectPackage = async (root: string, expectedDigest?: string) => {
   return { digest, entry, factory: imported.default };
 };
 
-if (mode === "pre") {
+if (mode === "manifest") {
+  const required = rest;
+  if (required.length === 0) fail("pi manifest", "no required paths given");
+  const pkg = record(
+    await json(resolve(source, "package.json"), "pi manifest"),
+    "pi manifest",
+  );
+  const pi = record(pkg.pi, "pi manifest");
+  const declared: string[] = [];
+  for (const key of ["extensions", "skills"] as const) {
+    const value = pi[key];
+    if (!Array.isArray(value)) fail("pi manifest", `pi.${key} must be an array`);
+    for (const entry of value) {
+      if (typeof entry !== "string") fail("pi manifest", `pi.${key} entries must be strings`);
+      const normalized = entry.replace(/^\.\//, "").replace(/\/+$/, "");
+      if (
+        normalized.includes("\\") ||
+        normalized.split("/").includes("..") ||
+        isAbsolute(normalized)
+      ) {
+        fail("pi manifest", `unsafe entry ${entry}`);
+      }
+      declared.push(normalized);
+    }
+  }
+  const covers = (entry: string, path: string) =>
+    path === entry || path.startsWith(`${entry}/`);
+  for (const entry of declared) {
+    if (!required.some((path) => covers(entry, path))) {
+      fail("pi manifest", `undeclared loadable entry ${entry}`);
+    }
+  }
+  for (const path of required) {
+    if (!declared.some((entry) => covers(entry, path))) {
+      fail("pi manifest", `required path not declared: ${path}`);
+    }
+  }
+} else if (mode === "pre") {
   const catalog = record(
     await json(resolve(source, ".omp-plugin/marketplace.json"), "catalog"),
     "catalog",
@@ -97,6 +134,7 @@ if (mode === "pre") {
   if (!inside(sourceReal, root)) fail("catalog", "plugin source escapes marketplace");
   process.stdout.write(`${(await inspectPackage(root)).digest}\n`);
 } else if (mode === "post" || mode === "final") {
+  const [ompRoot, legacy] = rest;
   const staged = await inspectPackage(resolve(source, "plugins/mxm4-haptic"));
   const installed = record(
     await json(resolve(ompRoot, "plugins/installed_plugins.json"), "installed state"),

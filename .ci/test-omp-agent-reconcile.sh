@@ -116,6 +116,18 @@ cat >"$source/.omp-plugin/marketplace.json" <<'EOF'
 EOF
 printf '{"name":"compound-engineering-plugin"}\n' >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json"
 
+# The i-have-adhd fixture mirrors the pinned tree's loadable surface: the pi
+# manifest declares the extension and skills entries the authority's
+# requiredPaths cover, and every required path exists under the tree.
+adhd="$home/.local/share/i-have-adhd/test-sha"
+mkdir -p "$adhd/.claude-plugin" "$adhd/extensions" "$adhd/skills/i-have-adhd"
+printf '{"name":"i-have-adhd"}\n' >"$adhd/.claude-plugin/marketplace.json"
+printf 'extension loader\n' >"$adhd/extensions/i-have-adhd.ts"
+printf 'ruleset\n' >"$adhd/skills/i-have-adhd/SKILL.md"
+cat >"$adhd/package.json" <<'EOF'
+{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}
+EOF
+
 # Rendered local paths are immutable desired state. Relocate them into the
 # isolated HOME without letting the provisioner consult the live HOME.
 test_plugin="$scratch/plugins.sh"
@@ -126,7 +138,10 @@ rendered_haptic=${rendered_haptic%%\\t*}
 ce_row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$test_plugin")
 rendered_ce=${ce_row#*localArchive\\t}
 rendered_ce=${rendered_ce%%\\t*}
-sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
+adhd_row=$(grep -m1 'i-have-adhd\\ti-have-adhd\\tlocalArchive\\t' "$test_plugin")
+rendered_adhd=${adhd_row#*localArchive\\t}
+rendered_adhd=${rendered_adhd%%\\t*}
+sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g; s|$rendered_adhd|$adhd|g" "$test_plugin"
 chmod 0700 "$test_plugin"
 
 # The stub answers --version in the real binary's omp/<version> format so the
@@ -198,6 +213,51 @@ run_plugins "$scratch/repeat.calls"
 [[ $(grep -c 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
 grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin install --scope user --force i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin enable --scope user i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
+grep -F "plugin marketplace add $adhd" "$scratch/omp.calls" >/dev/null
+
+# A removed required path fails the run before any marketplace mutation.
+mv "$adhd/extensions/i-have-adhd.ts" "$adhd/extensions/i-have-adhd.ts.off"
+if run_plugins "$scratch/adhd-path.calls" >"$scratch/adhd-path.out" 2>"$scratch/adhd-path.err"; then
+  printf 'missing i-have-adhd required path unexpectedly succeeded\n' >&2
+  exit 1
+fi
+mv "$adhd/extensions/i-have-adhd.ts.off" "$adhd/extensions/i-have-adhd.ts"
+grep -F 'preflight: required path is missing' "$scratch/adhd-path.err" >/dev/null
+if grep -qF 'plugin marketplace add' "$scratch/adhd-path.calls"; then
+  printf 'missing required path reached marketplace mutation\n' >&2
+  exit 1
+fi
+
+# A pi manifest declaring more than the authority's loadable surface fails the
+# run identically; so does a missing compound-engineering manifest.
+printf '%s\n' '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts","./extensions/sneaky.ts"],"skills":["./skills"]}}' \
+  >"$adhd/package.json"
+if run_plugins "$scratch/adhd-manifest.calls" >"$scratch/adhd-manifest.out" 2>"$scratch/adhd-manifest.err"; then
+  printf 'drifted i-have-adhd pi manifest unexpectedly succeeded\n' >&2
+  exit 1
+fi
+printf '%s\n' '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}' \
+  >"$adhd/package.json"
+grep -F 'preflight: pi manifest drift' "$scratch/adhd-manifest.err" >/dev/null
+if grep -qF 'plugin marketplace add' "$scratch/adhd-manifest.calls"; then
+  printf 'pi manifest drift reached marketplace mutation\n' >&2
+  exit 1
+fi
+mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
+  "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off"
+if run_plugins "$scratch/ce-manifest.calls" >"$scratch/ce-manifest.out" 2>"$scratch/ce-manifest.err"; then
+  printf 'missing compound-engineering manifest unexpectedly succeeded\n' >&2
+  exit 1
+fi
+mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off" \
+  "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json"
+grep -F 'preflight: pinned marketplace is missing' "$scratch/ce-manifest.err" >/dev/null
+if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
+  printf 'missing CE manifest reached marketplace mutation\n' >&2
+  exit 1
+fi
 
 # Same-version package/config changes must replace the full installed payload.
 printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"

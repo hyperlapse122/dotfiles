@@ -11,8 +11,6 @@
 {{- $validOS := .agents.validOS -}}
 {{- $validKinds := list "localDir" "localArchive" -}}
 {{- $validContainers := list "skip" "keep" -}}
-{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
-{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
 {{- $rows := list -}}
 {{- $seen := dict -}}
 {{- range $i, $plugin := $plugins -}}
@@ -48,18 +46,24 @@
 {{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsafe relative path %q" $market $rel) }}{{- end -}}
 {{-     $source = printf "%s/%s" $home $rel -}}
 {{-   else -}}
-{{-     if ne $market "compound-engineering-plugin" -}}{{ fail (printf "update-omp-plugins: localArchive marketplace %q has no supported authority" $market) }}{{- end -}}
-{{-     if not (hasKey $authority "externalPath") -}}{{ fail "update-omp-plugins: compound-engineering marketplace is missing externalPath" }}{{- end -}}
+{{-     $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $market "field" "segment") -}}
 {{-     $rel := printf "%v" (index $authority "externalPath") -}}
-{{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}{{ fail (printf "update-omp-plugins: compound-engineering externalPath is unsafe: %q" $rel) }}{{- end -}}
-{{-     $source = printf "%s/%s/%s" $home $rel $ceVersion -}}
+{{-     $source = printf "%s/%s/%s" $home $rel $segment -}}
+{{-   end -}}
+{{-   $required := list -}}
+{{-   if hasKey $authority "requiredPaths" -}}
+{{-     range $path := index $authority "requiredPaths" -}}
+{{-       $path = printf "%v" $path -}}
+{{-       if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $path)) (hasPrefix "/" $path) (contains ".." $path) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsafe requiredPath %q" $market $path) }}{{- end -}}
+{{-       $required = append $required $path -}}
+{{-     end -}}
 {{-   end -}}
 {{-   if or (contains "\t" $source) (contains "\n" $source) -}}{{ fail (printf "update-omp-plugins: %s resolves to unsafe path %q" $where $source) }}{{- end -}}
 {{-   $strict := eq $id "mxm4-haptic@h82-dotfiles" -}}
 {{-   if and (eq $name "mxm4-haptic") (not $strict) -}}{{ fail "update-omp-plugins: mxm4-haptic must use marketplace h82-dotfiles" }}{{- end -}}
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
 {{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) -}}
-{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t" $name $market $kind $source $strict)) -}}
+{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t\t%s" $name $market $kind $source $strict (join " " $required))) -}}
 {{-   end -}}
 {{- end -}}
 #!/usr/bin/env bash
@@ -105,11 +109,18 @@ BUN
 strict_source=
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
-  IFS=$'\t' read -r name market kind source strict <<<"$row"
+  IFS=$'\t' read -r name market kind source strict required <<<"$row"
   if [[ $kind == localDir ]]; then
     [[ -f $source/.omp-plugin/marketplace.json ]] || die "preflight: marketplace manifest is missing: $source"
   else
     [[ -f $source/.claude-plugin/marketplace.json ]] || die "preflight: pinned marketplace is missing: $source"
+  fi
+  if [[ -n $required ]]; then
+    for rel in $required; do
+      [[ -e $source/$rel ]] || die "preflight: required path is missing: $source/$rel"
+    done
+    # shellcheck disable=SC2086 # required paths are render-validated against a no-space character set
+    bun "$helper" manifest "$source" $required >/dev/null || die "preflight: pi manifest drift: $source"
   fi
   if [[ $strict == true ]]; then
     bun "$helper" pre "$source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'precheck: staged haptic validation failed'
@@ -120,7 +131,7 @@ done
 mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
-  IFS=$'\t' read -r name market kind source strict <<<"$row"
+  IFS=$'\t' read -r name market kind source strict required <<<"$row"
   id="${name}@${market}"
   omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
   omp plugin marketplace add "$source" || die "marketplace add failed for $market"
