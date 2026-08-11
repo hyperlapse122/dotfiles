@@ -12,6 +12,7 @@
 #   - a foreign symlink at the reference path is reclaimed, not written through
 #   - a foreign symlink in the archive-owned directory chain is refused
 #   - the CE external is additive (exact removed from the localArchive block)
+#   - the i-have-adhd external is exact (no overlay to preserve)
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
 #
@@ -177,6 +178,19 @@ if printf '%s\n' "$ce_block" | grep -q '^exact = true$'; then
 fi
 grep -q '^exact = true$' "$rendered_externals" \
   || { echo "agent-skills exact archives unexpectedly changed" >&2; exit 1; }
+
+# --- i-have-adhd external is exact: no overlay preserves anything in its tree ---
+adhd_block=$(awk '
+  /^\["\.local\/share\/i-have-adhd\// { in_adhd=1; first=1 }
+  in_adhd && !first && /^\[/ { exit }
+  in_adhd { print; first=0 }
+' "$rendered_externals")
+printf '%s\n' "$adhd_block" | grep -q '^type = "archive"$' \
+  || { echo "rendered i-have-adhd external block missing" >&2; exit 1; }
+printf '%s\n' "$adhd_block" | grep -q '^exact = true$' \
+  || { echo "rendered i-have-adhd external is not exact" >&2; exit 1; }
+printf '%s\n' "$adhd_block" | grep -q '^stripComponents = 1$' \
+  || { echo "rendered i-have-adhd external lost stripComponents" >&2; exit 1; }
 
 # --- persona content contract ---
 persona="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"

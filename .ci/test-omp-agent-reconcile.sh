@@ -259,6 +259,35 @@ if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
   exit 1
 fi
 
+# --- i-have-adhd extension patch: first-run patch, idempotent no-op, drift fail ---
+printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$fake_bin/op"
+chmod 0755 "$fake_bin/op"
+patch_config="$scratch/patch-empty.toml"
+: >"$patch_config"
+patch_script="$scratch/patch-i-have-adhd.sh"
+env PATH="$fake_bin:$PATH" chezmoi \
+  --config "$patch_config" \
+  --source "$repo_root" \
+  execute-template \
+  < "$repo_root/.chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl" \
+  > "$patch_script"
+adhd_tree="$scratch/adhd-pinned-tree"
+mkdir -p "$adhd_tree/extensions"
+sed -i "s|^TREE=.*|TREE=\"$adhd_tree\"|" "$patch_script"
+loader="$adhd_tree/extensions/i-have-adhd.ts"
+printf '// header\nfor (const entry of ctx.sessionManager.buildContextEntries()) {\n// footer\n' >"$loader"
+printf '// header\nfor (const entry of (ctx.sessionManager.buildContextEntries?.() ?? ctx.sessionManager.getBranch())) {\n// footer\n' >"$scratch/loader.patched"
+env HOME="$home" bash "$patch_script"
+cmp -s "$scratch/loader.patched" "$loader" || { echo 'first patch run did not produce the expected loader' >&2; exit 1; }
+env HOME="$home" bash "$patch_script"
+cmp -s "$scratch/loader.patched" "$loader" || { echo 'second patch run was not a no-op' >&2; exit 1; }
+printf '// drifted upstream\n' >"$loader"
+if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-drift.err"; then
+  printf 'drifted extension loader unexpectedly patched\n' >&2
+  exit 1
+fi
+grep -F 'drifted' "$scratch/patch-drift.err" >/dev/null
+
 # Same-version package/config changes must replace the full installed payload.
 printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"
 run_plugins "$scratch/update.calls"
