@@ -4,63 +4,120 @@
 {{- $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") -}}
 
 #!/usr/bin/env bash
+# OMP v17.2.12 has no buildContextEntries API.
+# When available, the patched loader uses that API.
+# Otherwise, it reads the model context rebuilt after compaction.
+# It does not use durable branch history. Skill content stays upstream.
 #
-# Applies the managed omp-compatibility patch to the pinned i-have-adhd
-# extension loader after every apply's file phase.
+# The exact = true archive restores the pristine loader on every apply.
+# This run_after_ script re-asserts the patch after the file phase.
 #
-# Why: pinned omp v17.2.12 lacks sessionManager.buildContextEntries, so the
-# upstream loader throws on every session start. The patch rewrites the single
-# call site to a feature-detect form that prefers the native API once omp
-# ships it and falls back to getBranch() until then; the fallback can defer
-# ruleset re-injection until the next session start after compaction.
-# skills/ content is never touched: the ruleset stays byte-verbatim upstream.
-#
-# run_after_ (not run_onchange_): chezmoi converges the exact = true external
-# from the cached archive on every apply, restoring the pristine loader
-# underneath an unchanged lock, so the patch must be re-asserted after every
-# file phase — the compound-engineering overlays provisioner is the same
-# pattern. A no-op on an already-patched file costs one byte compare.
-#
-# Fail-closed three-way check on the call site: patched form present -> no-op;
-# exact upstream form present -> substitute; anything else -> the pinned tree
-# drifted from what this patch was written against, so fail and name the drift
-# rather than guess.
+# The script compares the complete function and fails closed.
+# The patched form exits successfully. The exact upstream form is replaced.
+# Every other form is actionable drift.
 
 set -euo pipefail
 
 TREE="$HOME/{{ $authority.externalPath }}/{{ $segment }}"
 TARGET="$TREE/extensions/i-have-adhd.ts"
 
-# Nothing to patch until the file phase has extracted the tree; a tree that
-# should exist but does not is the updater preflight's fail-closed job.
+# The updater preflight owns a missing archive tree after the file phase.
 if [ ! -d "$TREE" ]; then
   exit 0
 fi
 
-UPSTREAM='for (const entry of ctx.sessionManager.buildContextEntries()) {'
-PATCHED='for (const entry of (ctx.sessionManager.buildContextEntries?.() ?? ctx.sessionManager.getBranch())) {'
+UPSTREAM=$(cat <<'EOF'
+function rulesAreInContext(ctx: ExtensionContext): boolean {
+  let active = false;
 
-patched_count=0
-upstream_count=0
-if [ -f "$TARGET" ]; then
-  patched_count=$(grep -cF -- "$PATCHED" "$TARGET" || true)
-  upstream_count=$(grep -cF -- "$UPSTREAM" "$TARGET" || true)
-fi
+  for (const entry of ctx.sessionManager.buildContextEntries()) {
+    if (entry.type !== "custom_message") continue;
 
-if [ "$patched_count" -eq 1 ] && [ "$upstream_count" -eq 0 ]; then
-  exit 0
-fi
+    if (entry.customType === RULES_MESSAGE_TYPE) {
+      active = true;
+    } else if (entry.customType === DISABLED_MESSAGE_TYPE) {
+      active = false;
+    }
+  }
 
-if [ "$patched_count" -ne 0 ] || [ "$upstream_count" -ne 1 ]; then
-  printf 'i-have-adhd patch: %s drifted (patched=%s upstream=%s); refresh the managed patch\n' \
-    "$TARGET" "$patched_count" "$upstream_count" >&2
+  return active;
+}
+EOF
+)
+PATCHED=$(cat <<'EOF'
+function rulesAreInContext(ctx: ExtensionContext): boolean {
+  let active = false;
+  const contextEntries =
+    ctx.sessionManager.buildContextEntries?.() ??
+    ctx.sessionManager.buildSessionContext().messages;
+
+  for (const entry of contextEntries) {
+    if (
+      !("customType" in entry) ||
+      ("type" in entry && entry.type !== "custom_message") ||
+      ("role" in entry && entry.role !== "custom")
+    ) {
+      continue;
+    }
+
+    if (entry.customType === RULES_MESSAGE_TYPE) {
+      active = true;
+    } else if (entry.customType === DISABLED_MESSAGE_TYPE) {
+      active = false;
+    }
+  }
+
+  return active;
+}
+EOF
+)
+TEMP="$TARGET.chezmoi-$$.tmp"
+trap 'rm -f -- "$TEMP"' EXIT
+
+extract_rules_function() {
+  awk '
+    $0 == "function rulesAreInContext(ctx: ExtensionContext): boolean {" {
+      extracting = 1
+    }
+
+    extracting {
+      print
+      depth += gsub(/\{/, "&") - gsub(/\}/, "&")
+      if (depth == 0) exit
+    }
+  ' "$1"
+}
+
+if [ ! -f "$TARGET" ]; then
+  printf 'i-have-adhd patch: %s is missing from the extracted tree\n' "$TARGET" >&2
   exit 1
 fi
 
-TEMP="$TARGET.chezmoi-$$.tmp"
-trap 'rm -f -- "$TEMP"' EXIT
+current=$(extract_rules_function "$TARGET")
+if [ "$current" = "$PATCHED" ]; then
+  exit 0
+fi
+
+if [ "$current" != "$UPSTREAM" ]; then
+  printf 'i-have-adhd patch: %s drifted; refresh the managed patch\n' "$TARGET" >&2
+  exit 1
+fi
+
 cp -p -- "$TARGET" "$TEMP"
-awk -v old="$UPSTREAM" -v new="$PATCHED" '
-  { if ((i = index($0, old)) > 0) { $0 = substr($0, 1, i - 1) new substr($0, i + length(old)) } print }
-' "$TARGET" > "$TEMP"
+awk -v replacement="$PATCHED" '
+  !replaced && $0 == "function rulesAreInContext(ctx: ExtensionContext): boolean {" {
+    replaced = 1
+    replacing = 1
+    print replacement
+  }
+
+  replacing {
+    depth += gsub(/\{/, "&") - gsub(/\}/, "&")
+    if (depth == 0) replacing = 0
+    next
+  }
+
+  { print }
+
+' "$TARGET" >"$TEMP"
 mv -f -- "$TEMP" "$TARGET"

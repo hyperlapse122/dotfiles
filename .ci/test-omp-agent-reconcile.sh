@@ -294,7 +294,7 @@ if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
   exit 1
 fi
 
-# --- i-have-adhd extension patch: first-run patch, idempotent no-op, drift fail ---
+# i-have-adhd patch: render, convergence, handler behavior, and drift
 printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$fake_bin/op"
 chmod 0755 "$fake_bin/op"
 patch_config="$scratch/patch-empty.toml"
@@ -310,13 +310,262 @@ adhd_tree="$scratch/adhd-pinned-tree"
 mkdir -p "$adhd_tree/extensions"
 sed -i "s|^TREE=.*|TREE=\"$adhd_tree\"|" "$patch_script"
 loader="$adhd_tree/extensions/i-have-adhd.ts"
-printf '// header\nfor (const entry of ctx.sessionManager.buildContextEntries()) {\n// footer\n' >"$loader"
-printf '// header\nfor (const entry of (ctx.sessionManager.buildContextEntries?.() ?? ctx.sessionManager.getBranch())) {\n// footer\n' >"$scratch/loader.patched"
+fixture_prefix="$scratch/loader.prefix"
+fixture_upstream="$scratch/loader.upstream"
+fixture_patched="$scratch/loader.patched-function"
+fixture_suffix="$scratch/loader.suffix"
+cat >"$fixture_prefix" <<'EOF'
+type ExtensionAPI = any;
+type ExtensionContext = any;
+type AdhdModeState = { enabled: boolean };
+
+const existsSync = () => false;
+const getAgentDir = () => "/tmp";
+const join = (...parts: string[]) => parts.join("/");
+const STATE_ENTRY_TYPE = "i-have-adhd-state";
+const RULES_MESSAGE_TYPE = "i-have-adhd-rules";
+const DISABLED_MESSAGE_TYPE = "i-have-adhd-disabled";
+const STATUS_KEY = "i-have-adhd";
+const RULES_HEADER = "ADHD MODE ACTIVE.";
+const DISABLED_NOTICE = "ADHD MODE OFF.";
+
+function loadRules(): string {
+  return "fixture rules";
+}
+
+function getSavedState(ctx: ExtensionContext): boolean | undefined {
+  let savedState: boolean | undefined;
+
+  for (const entry of ctx.sessionManager.getBranch()) {
+    if (entry.type !== "custom" || entry.customType !== STATE_ENTRY_TYPE) {
+      continue;
+    }
+
+    const data = entry.data as Partial<AdhdModeState> | undefined;
+    if (typeof data?.enabled === "boolean") {
+      savedState = data.enabled;
+    }
+  }
+
+  return savedState;
+}
+EOF
+cat >"$fixture_upstream" <<'EOF'
+function rulesAreInContext(ctx: ExtensionContext): boolean {
+  let active = false;
+
+  for (const entry of ctx.sessionManager.buildContextEntries()) {
+    if (entry.type !== "custom_message") continue;
+
+    if (entry.customType === RULES_MESSAGE_TYPE) {
+      active = true;
+    } else if (entry.customType === DISABLED_MESSAGE_TYPE) {
+      active = false;
+    }
+  }
+
+  return active;
+}
+EOF
+cat >"$fixture_patched" <<'EOF'
+function rulesAreInContext(ctx: ExtensionContext): boolean {
+  let active = false;
+  const contextEntries =
+    ctx.sessionManager.buildContextEntries?.() ??
+    ctx.sessionManager.buildSessionContext().messages;
+
+  for (const entry of contextEntries) {
+    if (
+      !("customType" in entry) ||
+      ("type" in entry && entry.type !== "custom_message") ||
+      ("role" in entry && entry.role !== "custom")
+    ) {
+      continue;
+    }
+
+    if (entry.customType === RULES_MESSAGE_TYPE) {
+      active = true;
+    } else if (entry.customType === DISABLED_MESSAGE_TYPE) {
+      active = false;
+    }
+  }
+
+  return active;
+}
+EOF
+cat >"$fixture_suffix" <<'EOF'
+export default function iHaveAdhdExtension(pi: ExtensionAPI) {
+  const rules = loadRules();
+  const alwaysOnFlag = join(getAgentDir(), ".i-have-adhd-always");
+  let enabled = false;
+
+  const updateStatus = (ctx: ExtensionContext): void => {
+    if (!enabled) {
+      ctx.ui.setStatus(STATUS_KEY, undefined);
+      return;
+    }
+
+    const dot = ctx.ui.theme.fg("success", "●");
+    const label = ctx.ui.theme.fg("accent", "ADHD ON");
+    ctx.ui.setStatus(STATUS_KEY, `${dot} ${label}`);
+  };
+
+  const syncContext = (ctx: ExtensionContext): void => {
+    const injected = rulesAreInContext(ctx);
+
+    if (enabled && !injected) {
+      pi.sendMessage(
+        {
+          customType: RULES_MESSAGE_TYPE,
+          content: `${RULES_HEADER}\n\n${rules}`,
+          display: false,
+        },
+        { triggerTurn: false },
+      );
+      return;
+    }
+
+    if (!enabled && injected) {
+      pi.sendMessage(
+        {
+          customType: DISABLED_MESSAGE_TYPE,
+          content: DISABLED_NOTICE,
+          display: false,
+        },
+        { triggerTurn: false },
+      );
+    }
+  };
+
+  const restoreState = (ctx: ExtensionContext): void => {
+    const savedState = getSavedState(ctx);
+    const enabledByDefault =
+      pi.getFlag("adhd") === true || existsSync(alwaysOnFlag);
+
+    enabled = savedState ?? enabledByDefault;
+    updateStatus(ctx);
+    syncContext(ctx);
+  };
+
+  pi.registerFlag("adhd", {
+    description: "Start with ADHD-friendly output enabled",
+    type: "boolean",
+    default: false,
+  });
+  pi.on("session_start", async (_event, ctx) => restoreState(ctx));
+  pi.on("session_compact", async (_event, ctx) => syncContext(ctx));
+}
+EOF
+cat "$fixture_prefix" "$fixture_upstream" "$fixture_suffix" >"$loader"
+cat "$fixture_prefix" "$fixture_patched" "$fixture_suffix" >"$scratch/loader.patched"
 env HOME="$home" bash "$patch_script"
 cmp -s "$scratch/loader.patched" "$loader" || { echo 'first patch run did not produce the expected loader' >&2; exit 1; }
 env HOME="$home" bash "$patch_script"
 cmp -s "$scratch/loader.patched" "$loader" || { echo 'second patch run was not a no-op' >&2; exit 1; }
-printf '// drifted upstream\n' >"$loader"
+cat >"$scratch/test-adhd-compaction.mjs" <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const rulesType = "i-have-adhd-rules";
+const disabledType = "i-have-adhd-disabled";
+const { default: iHaveAdhdExtension } = await import(
+  pathToFileURL(process.env.PATCHED_ADHD_LOADER).href,
+);
+const assert = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+const custom = customType => ({ role: "custom", customType });
+const staleBranch = [{ type: "custom_message", customType: rulesType }];
+
+const createFixture = ({ contextEntries, initialMessages = [] } = {}) => {
+  let messages = initialMessages;
+  const handlers = new Map();
+  const sent = [];
+  const context = {
+    sessionManager: {
+      getBranch: () => staleBranch,
+      buildContextEntries: contextEntries,
+      buildSessionContext: () => {
+        if (contextEntries) throw new Error("native context path should take precedence");
+        return { messages };
+      },
+    },
+    ui: {
+      setStatus: () => {},
+      theme: { fg: (_color, value) => value },
+    },
+  };
+  const pi = {
+    appendEntry: () => {},
+    getFlag: name => name === "adhd",
+    on: (event, handler) => handlers.set(event, handler),
+    registerFlag: () => {},
+    sendMessage: message => {
+      sent.push(message);
+      messages = [...messages, custom(message.customType)];
+    },
+  };
+
+  iHaveAdhdExtension(pi);
+  return {
+    compact: () => handlers.get("session_compact")({}, context),
+    sent,
+    setMessages: next => {
+      messages = next;
+    },
+    start: () => handlers.get("session_start")({}, context),
+  };
+};
+
+const fallback = createFixture();
+await fallback.start();
+assert(fallback.sent.length === 1, "initial session start did not inject rules");
+await fallback.compact();
+assert(fallback.sent.length === 1, "retained rules marker injected a duplicate");
+fallback.setMessages([]);
+await fallback.compact();
+assert(fallback.sent.length === 2, "compacted-away rules marker did not reinject exactly once");
+await fallback.compact();
+assert(fallback.sent.length === 2, "re-injected rules marker did not stop a second duplicate");
+fallback.setMessages([{ role: "user", customType: rulesType }]);
+await fallback.compact();
+assert(fallback.sent.length === 3, "non-custom model message suppressed reinjection");
+fallback.setMessages([custom(rulesType), custom(disabledType)]);
+await fallback.compact();
+assert(fallback.sent.length === 4, "latest disabled marker did not clear rules state");
+await fallback.compact();
+assert(fallback.sent.length === 4, "rules re-injected after disabled marker did not prevent a duplicate");
+
+const nativeRules = createFixture({
+  contextEntries: () => [{ type: "custom_message", customType: rulesType }],
+});
+await nativeRules.start();
+assert(nativeRules.sent.length === 0, "native context entries did not take precedence");
+const nativeDisabled = createFixture({
+  contextEntries: () => [
+    { type: "custom_message", customType: rulesType },
+    { type: "custom_message", customType: disabledType },
+  ],
+});
+await nativeDisabled.start();
+assert(nativeDisabled.sent.length === 1, "native disabled marker did not clear rules state");
+EOF
+PATCHED_ADHD_LOADER="$loader" bun "$scratch/test-adhd-compaction.mjs"
+cat "$fixture_prefix" "$fixture_upstream" "$fixture_suffix" >"$loader"
+sed -i '/^  let active = false;$/a\  const drift = true;' "$loader"
+cp "$loader" "$scratch/loader.drifted"
+if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-drift.err"; then
+  printf 'body-drifted extension loader unexpectedly patched\n' >&2
+  exit 1
+fi
+cmp -s "$scratch/loader.drifted" "$loader" || { echo 'body-drifted loader was rewritten' >&2; exit 1; }
+grep -F 'drifted' "$scratch/patch-drift.err" >/dev/null
+rm "$loader"
+if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-missing.err"; then
+  printf 'missing extension loader unexpectedly patched\n' >&2
+  exit 1
+fi
+grep -F 'missing from the extracted tree' "$scratch/patch-missing.err" >/dev/null
+printf 'drifted upstream\n' >"$loader"
 if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-drift.err"; then
   printf 'drifted extension loader unexpectedly patched\n' >&2
   exit 1
