@@ -2,7 +2,7 @@
 # Isolated verification for omp's zsh completion install
 # (U2/U3 of docs/plans/2026-08-05-004-feat-omp-mnemopi-memory-zsh-completion-plan.md).
 #
-# Two halves, both isolated from the invoking user's real HOME:
+# Three isolated contracts:
 #
 #   1. the rendered generator script, driven against a stub `omp` in a scratch
 #      HOME — happy path, idempotence, and every fail-closed case (malformed,
@@ -11,8 +11,9 @@
 #   2. the $fpath wiring in dot_config/zsh/dot_zshrc — a static ordering check
 #      that the fpath line precedes the prezto init source, and a real `zsh -f`
 #      proving compinit resolves _omp WITH the prepend and does NOT resolve it
-#      without. The negative case is what makes the positive one load-bearing
-#      rather than a vacuous pass.
+#      without. The negative case is what makes the positive one load-bearing;
+#   3. external completion generators are skipped when compdef is unavailable
+#      (Prezto's TERM=dumb path), but execute normally after compinit.
 #
 # Never runs chezmoi apply, never writes outside its scratch tree, and never
 # invokes the real omp binary — a stub stands in so failure modes are drivable.
@@ -297,6 +298,72 @@ if command -v zsh >/dev/null 2>&1; then
     || fail 'zsh did not resolve _omp with the site-functions fpath prepend'
   [ -z "$(probe off)" ] \
     || fail 'zsh resolved _omp WITHOUT the fpath prepend — the negative case is vacuous'
+
+  # --- 7. direct generator output requires compdef ---------------------------
+  # Prezto deliberately skips compinit under TERM=dumb. Source the SHIPPED
+  # zshrc against a no-op Prezto init and generators that record execution
+  # before emitting compdef. A missing guard would both execute every stub and
+  # write a command-not-found error; a text-only guard check would miss a source
+  # moved outside its conditional.
+  dumb_home="$scratch/zshrc-dumb-home"
+  dumb_zdotdir="$scratch/zshrc-dumb-zdotdir"
+  dumb_bin="$scratch/zshrc-dumb-bin"
+  dumb_calls="$scratch/zshrc-dumb.calls"
+  mkdir -p -- "$dumb_home/.local/share/zsh/site-functions" \
+    "$dumb_zdotdir/.zprezto" "$dumb_bin"
+  cp -- "$zshrc" "$dumb_zdotdir/.zshrc"
+  : >"$dumb_zdotdir/.zprezto/init.zsh"
+
+  for tool in kubectl minikube helm; do
+    cat >"$dumb_bin/$tool" <<'EOF'
+#!/bin/sh
+printf '%s\n' "${0##*/}" >>"$DUMB_CALLS"
+printf '%s\n' '_completion_stub() { :; }' 'compdef _completion_stub completion-stub'
+EOF
+    chmod 700 "$dumb_bin/$tool"
+  done
+
+  status=0
+  env -i HOME="$dumb_home" ZDOTDIR="$dumb_zdotdir" TERM=dumb \
+    PATH="$dumb_bin:/usr/bin:/bin" DUMB_CALLS="$dumb_calls" \
+    zsh -dfc 'source "$ZDOTDIR/.zshrc"' \
+    >"$scratch/zshrc-dumb.out" 2>"$scratch/zshrc-dumb.err" || status=$?
+  [ "$status" -eq 0 ] \
+    || fail "dumb zshrc source failed: $(cat "$scratch/zshrc-dumb.err")"
+  [ ! -s "$dumb_calls" ] \
+    || fail "dumb zshrc executed compdef generators: $(cat "$dumb_calls")"
+  [ ! -s "$scratch/zshrc-dumb.err" ] \
+    || fail "dumb zshrc wrote stderr: $(cat "$scratch/zshrc-dumb.err")"
+
+  # A false-only guard would pass the dumb-shell case while disabling useful
+  # terminal completions. Initialize compinit in the fake Prezto init, then
+  # require all three shipped generator calls to execute without stderr.
+  terminal_home="$scratch/zshrc-terminal-home"
+  terminal_zdotdir="$scratch/zshrc-terminal-zdotdir"
+  terminal_bin="$scratch/zshrc-terminal-bin"
+  terminal_calls="$scratch/zshrc-terminal.calls"
+  mkdir -p -- "$terminal_home/.local/share/zsh/site-functions" \
+    "$terminal_zdotdir/.zprezto" "$terminal_bin"
+  cp -- "$zshrc" "$terminal_zdotdir/.zshrc"
+  cat >"$terminal_zdotdir/.zprezto/init.zsh" <<'EOF'
+autoload -Uz compinit
+compinit -i -d "$HOME/.zcompdump"
+EOF
+  for tool in kubectl minikube helm; do
+    cp -- "$dumb_bin/$tool" "$terminal_bin/$tool"
+  done
+
+  status=0
+  env -i HOME="$terminal_home" ZDOTDIR="$terminal_zdotdir" TERM=xterm-256color \
+    PATH="$terminal_bin:/usr/bin:/bin" DUMB_CALLS="$terminal_calls" \
+    zsh -dfc 'source "$ZDOTDIR/.zshrc"; (( $+functions[_completion_stub] ))' \
+    >"$scratch/zshrc-terminal.out" 2>"$scratch/zshrc-terminal.err" || status=$?
+  [ "$status" -eq 0 ] \
+    || fail "terminal zshrc source failed: $(cat "$scratch/zshrc-terminal.err")"
+  [ "$(wc -l <"$terminal_calls")" -eq 3 ] \
+    || fail "terminal zshrc ran the wrong generator count: $(cat "$terminal_calls")"
+  [ ! -s "$scratch/zshrc-terminal.err" ] \
+    || fail "terminal zshrc wrote stderr: $(cat "$scratch/zshrc-terminal.err")"
 else
   printf 'omp-zsh-completion: zsh not on PATH; ran the static ordering check only\n' >&2
   fail 'zsh is required for the behavioural fpath proof'

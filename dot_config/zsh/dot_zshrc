@@ -20,16 +20,19 @@ if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
   source "${ZDOTDIR:-$HOME}/.zprezto/init.zsh"
 fi
 
-# Customize to your needs...
-
-# Set up kubectl completions
-source <(kubectl completion zsh)
-
-# Set up minikube completions
-source <(minikube completion zsh)
-
-# Set up helm completions
-source <(helm completion zsh)
+# External generators emit `compdef` registrations. Prezto's completion module
+# normally initializes it above, but deliberately returns before `compinit` in
+# TERM=dumb shells. In that case loading a generator invokes zsh's
+# command-not-found handler; Fedora's PackageKit fallback is a bash program,
+# which produces misleading `bash: compdef: command not found` errors. Gate on
+# the actual prerequisite, not TERM, so a deliberately disabled/failed Prezto
+# completion module is safe too. Dumb shells have no interactive completion
+# UI, so skipping the generators loses no usable behavior.
+if (( $+functions[compdef] )); then
+  source <(kubectl completion zsh)
+  source <(minikube completion zsh)
+  source <(helm completion zsh)
+fi
 
 # Run chezmoi with a GitHub token when one is cheap to get: renders no longer
 # call the GitHub API (the release lock pins every tool), but apply-time
