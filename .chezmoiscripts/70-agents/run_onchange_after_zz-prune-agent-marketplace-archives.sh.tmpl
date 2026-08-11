@@ -1,0 +1,51 @@
+{{- $ctx := . -}}
+{{- $marketplaces := .agents.marketplaces -}}
+{{- $prunes := list -}}
+{{- range $name, $authority := $marketplaces -}}
+{{-   if not (hasKey $authority "kind") -}}{{ fail (printf "local-archive prune: marketplace %q is missing kind" $name) }}{{- end -}}
+{{-   if ne (printf "%v" (index $authority "kind")) "localArchive" -}}{{ continue }}{{ end -}}
+{{-   $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") -}}
+{{-   $prunes = append $prunes (printf "  %q" (printf "%s\t%s" (index $authority "externalPath") $segment)) -}}
+{{- end -}}
+
+#!/usr/bin/env bash
+#
+# Prunes older extracted localArchive versions only after the patch and updater
+# have succeeded. The phase-70 location is load-bearing: patch- runs first,
+# update-omp-plugins performs the failure-prone reconcile, and this zz-prune
+# script runs last. A pin-bump failure therefore preserves OMP's known-good
+# registered source.
+#
+# Chezmoi's exact=true only cleans within one target path, so sibling version
+# directories under the same parent accumulate without this onchange cleanup.
+#
+# The rendered segments below are the trigger. A new release or gitRef re-runs
+# this script after the new tree is extracted and reconciled.
+
+set -euo pipefail
+
+PRUNES=(
+{{ join "\n" $prunes }}
+)
+
+for row in "${PRUNES[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r rel_base segment <<<"$row"
+  base_dir="$HOME/$rel_base"
+  current="$base_dir/$segment"
+
+  # The file phase must have extracted the current version already; if not, do
+  # nothing rather than nuking the whole tree. Same defensive skip as the
+  # omp plugin updater.
+  [ -d "$current" ] || continue
+
+  for d in "$base_dir"/*; do
+    # lstat first: a symlink in the parent is never a prune candidate, so a
+    # foreign checkout linked into the tree is left untouched. Only plain
+    # directories that are not the pinned segment reach the single removal.
+    [ -L "$d" ] && continue
+    [ -d "$d" ] || continue
+    [ "$d" = "$current" ] && continue
+    rm -rf -- "$d" || true
+  done
+done

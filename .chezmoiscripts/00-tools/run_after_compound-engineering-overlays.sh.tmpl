@@ -1,9 +1,8 @@
 
 {{- $ctx := . -}}
 {{- $name := "compound-engineering-plugin" -}}
-{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
+{{- $ceVersion := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") -}}
 {{- $ceAuthority := index .agents.marketplaces $name -}}
-{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
 
 #!/usr/bin/env bash
 #

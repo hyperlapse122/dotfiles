@@ -104,6 +104,7 @@ for raw_input in \
   '.chezmoidata/haptic.yaml' \
   '.chezmoidata/releases.json' \
   'packages/bun.lock' \
+  '.chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl' \
   'packages/mxm4-haptic/src/omp-plugin.ts'; do
   grep -F "#   $raw_input  " "$posix_fingerprints" >/dev/null
 done
@@ -114,7 +115,19 @@ cp -R "$haptic_package" "$source/plugins/mxm4-haptic"
 cat >"$source/.omp-plugin/marketplace.json" <<'EOF'
 {"name":"h82-dotfiles","owner":{"name":"test"},"plugins":[{"name":"mxm4-haptic","source":"./plugins/mxm4-haptic"}]}
 EOF
-printf '{"name":"compound-engineering-plugin"}\n' >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json"
+cat >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"compound-engineering-plugin","plugins":[{"name":"compound-engineering","source":"./"}]}
+EOF
+adhd="$home/.local/share/i-have-adhd/test-sha"
+mkdir -p "$adhd/.claude-plugin" "$adhd/extensions" "$adhd/skills/i-have-adhd"
+cat >"$adhd/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./"}]}
+EOF
+printf 'extension loader\n' >"$adhd/extensions/i-have-adhd.ts"
+printf 'ruleset\n' >"$adhd/skills/i-have-adhd/SKILL.md"
+cat >"$adhd/package.json" <<'EOF'
+{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}
+EOF
 
 # Rendered local paths are immutable desired state. Relocate them into the
 # isolated HOME without letting the provisioner consult the live HOME.
@@ -126,7 +139,10 @@ rendered_haptic=${rendered_haptic%%\\t*}
 ce_row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$test_plugin")
 rendered_ce=${ce_row#*localArchive\\t}
 rendered_ce=${rendered_ce%%\\t*}
-sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
+adhd_row=$(grep -m1 'i-have-adhd\\ti-have-adhd\\tlocalArchive\\t' "$test_plugin")
+rendered_adhd=${adhd_row#*localArchive\\t}
+rendered_adhd=${rendered_adhd%%\\t*}
+sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g; s|$rendered_adhd|$adhd|g" "$test_plugin"
 chmod 0700 "$test_plugin"
 
 # The stub answers --version in the real binary's omp/<version> format so the
@@ -198,6 +214,114 @@ run_plugins "$scratch/repeat.calls"
 [[ $(grep -c 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
 grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin install --scope user --force i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin enable --scope user i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
+grep -F "plugin marketplace add $adhd" "$scratch/omp.calls" >/dev/null
+
+# A removed required path fails the run before any marketplace mutation.
+mv "$adhd/extensions/i-have-adhd.ts" "$adhd/extensions/i-have-adhd.ts.off"
+if run_plugins "$scratch/adhd-path.calls" >"$scratch/adhd-path.out" 2>"$scratch/adhd-path.err"; then
+  printf 'missing i-have-adhd required path unexpectedly succeeded\n' >&2
+  exit 1
+fi
+mv "$adhd/extensions/i-have-adhd.ts.off" "$adhd/extensions/i-have-adhd.ts"
+grep -F 'preflight: required path is missing' "$scratch/adhd-path.err" >/dev/null
+if grep -qF 'plugin marketplace add' "$scratch/adhd-path.calls"; then
+  printf 'missing required path reached marketplace mutation\n' >&2
+  exit 1
+fi
+
+expect_adhd_manifest_drift() {
+  local label=$1
+  local manifest=$2
+  printf '%s\n' "$manifest" >"$adhd/package.json"
+  if run_plugins "$scratch/adhd-$label.calls" >"$scratch/adhd-$label.out" 2>"$scratch/adhd-$label.err"; then
+    printf 'drifted i-have-adhd pi manifest %s unexpectedly succeeded\n' "$label" >&2
+    exit 1
+  fi
+  grep -F 'preflight: pi manifest drift' "$scratch/adhd-$label.err" >/dev/null
+  if grep -qF 'plugin marketplace add' "$scratch/adhd-$label.calls"; then
+    printf 'pi manifest drift %s reached marketplace mutation\n' "$label" >&2
+    exit 1
+  fi
+}
+
+expect_adhd_manifest_drift extra-extension \
+  '{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts","./extensions/sneaky.ts"],"skills":["./skills"]}}'
+expect_adhd_manifest_drift missing-extension \
+  '{"name":"i-have-adhd","pi":{"extensions":[],"skills":["./skills"]}}'
+expect_adhd_manifest_drift broad-extension \
+  '{"name":"i-have-adhd","pi":{"extensions":["./extensions"],"skills":["./skills"]}}'
+expect_adhd_manifest_drift swapped-kinds \
+  '{"name":"i-have-adhd","pi":{"extensions":["./skills"],"skills":["./extensions/i-have-adhd.ts"]}}'
+cat >"$adhd/package.json" <<'EOF'
+{"name":"i-have-adhd","pi":{"extensions":["./extensions/i-have-adhd.ts"],"skills":["./skills"]}}
+EOF
+
+expect_adhd_marketplace_drift() {
+  local label=$1
+  local catalog=$2
+  printf '%s\n' "$catalog" >"$adhd/.claude-plugin/marketplace.json"
+  if run_plugins "$scratch/adhd-catalog-$label.calls" >"$scratch/adhd-catalog-$label.out" 2>"$scratch/adhd-catalog-$label.err"; then
+    printf 'drifted i-have-adhd marketplace %s unexpectedly succeeded\n' "$label" >&2
+    exit 1
+  fi
+  grep -F 'preflight: marketplace manifest drift' "$scratch/adhd-catalog-$label.err" >/dev/null
+  if grep -qF 'plugin marketplace add' "$scratch/adhd-catalog-$label.calls"; then
+    printf 'marketplace drift %s reached mutation\n' "$label" >&2
+    exit 1
+  fi
+}
+
+expect_adhd_marketplace_drift renamed \
+  '{"name":"renamed","plugins":[{"name":"i-have-adhd","source":"./"}]}'
+expect_adhd_marketplace_drift source \
+  '{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./elsewhere"}]}'
+cat >"$adhd/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"i-have-adhd","plugins":[{"name":"i-have-adhd","source":"./"}]}
+EOF
+mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
+  "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off"
+if run_plugins "$scratch/ce-manifest.calls" >"$scratch/ce-manifest.out" 2>"$scratch/ce-manifest.err"; then
+  printf 'missing compound-engineering manifest unexpectedly succeeded\n' >&2
+  exit 1
+fi
+mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off" \
+  "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json"
+grep -F 'preflight: pinned marketplace is missing' "$scratch/ce-manifest.err" >/dev/null
+if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
+  printf 'missing CE manifest reached marketplace mutation\n' >&2
+  exit 1
+fi
+
+# --- i-have-adhd extension patch: first-run patch, idempotent no-op, drift fail ---
+printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$fake_bin/op"
+chmod 0755 "$fake_bin/op"
+patch_config="$scratch/patch-empty.toml"
+: >"$patch_config"
+patch_script="$scratch/patch-i-have-adhd.sh"
+env PATH="$fake_bin:$PATH" chezmoi \
+  --config "$patch_config" \
+  --source "$repo_root" \
+  execute-template \
+  < "$repo_root/.chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl" \
+  > "$patch_script"
+adhd_tree="$scratch/adhd-pinned-tree"
+mkdir -p "$adhd_tree/extensions"
+sed -i "s|^TREE=.*|TREE=\"$adhd_tree\"|" "$patch_script"
+loader="$adhd_tree/extensions/i-have-adhd.ts"
+printf '// header\nfor (const entry of ctx.sessionManager.buildContextEntries()) {\n// footer\n' >"$loader"
+printf '// header\nfor (const entry of (ctx.sessionManager.buildContextEntries?.() ?? ctx.sessionManager.getBranch())) {\n// footer\n' >"$scratch/loader.patched"
+env HOME="$home" bash "$patch_script"
+cmp -s "$scratch/loader.patched" "$loader" || { echo 'first patch run did not produce the expected loader' >&2; exit 1; }
+env HOME="$home" bash "$patch_script"
+cmp -s "$scratch/loader.patched" "$loader" || { echo 'second patch run was not a no-op' >&2; exit 1; }
+printf '// drifted upstream\n' >"$loader"
+if env HOME="$home" bash "$patch_script" 2>"$scratch/patch-drift.err"; then
+  printf 'drifted extension loader unexpectedly patched\n' >&2
+  exit 1
+fi
+grep -F 'drifted' "$scratch/patch-drift.err" >/dev/null
 
 # Same-version package/config changes must replace the full installed payload.
 printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"

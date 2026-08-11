@@ -12,6 +12,7 @@
 #   - a foreign symlink at the reference path is reclaimed, not written through
 #   - a foreign symlink in the archive-owned directory chain is refused
 #   - the CE external is additive (exact removed from the localArchive block)
+#   - the i-have-adhd external is exact (no overlay to preserve)
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
 #
@@ -45,6 +46,13 @@ env PATH="$bin:$PATH" chezmoi \
   execute-template \
   < "$root/.chezmoiexternals/ai-agents.toml" \
   > "$rendered_externals"
+prune="$scratch/prune.sh"
+env PATH="$bin:$PATH" chezmoi \
+  --config "$scratch/empty.toml" \
+  --source "$root" \
+  execute-template \
+  < "$root/.chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl" \
+  > "$prune"
 
 # The rendered script resolves CURRENT="$BASE_DIR/v<semver>" with BASE_DIR under $HOME.
 # Point HOME at a scratch tree and build the matching structure there.
@@ -177,6 +185,47 @@ if printf '%s\n' "$ce_block" | grep -q '^exact = true$'; then
 fi
 grep -q '^exact = true$' "$rendered_externals" \
   || { echo "agent-skills exact archives unexpectedly changed" >&2; exit 1; }
+
+# --- i-have-adhd external is exact: no overlay preserves anything in its tree ---
+adhd_block=$(awk '
+  /^\["\.local\/share\/i-have-adhd\// { in_adhd=1; first=1 }
+  in_adhd && !first && /^\[/ { exit }
+  in_adhd { print; first=0 }
+' "$rendered_externals")
+printf '%s\n' "$adhd_block" | grep -q '^type = "archive"$' \
+  || { echo "rendered i-have-adhd external block missing" >&2; exit 1; }
+printf '%s\n' "$adhd_block" | grep -q '^exact = true$' \
+  || { echo "rendered i-have-adhd external is not exact" >&2; exit 1; }
+printf '%s\n' "$adhd_block" | grep -q '^stripComponents = 1$' \
+  || { echo "rendered i-have-adhd external lost stripComponents" >&2; exit 1; }
+adhd_ref=$(jq -er '.releases.tools.iHaveAdhd.version' "$root/.chezmoidata/releases.json")
+printf '%s\n' "$adhd_block" |
+  grep -Fx "url = 'https://github.com/ayghri/i-have-adhd/archive/$adhd_ref.tar.gz'" >/dev/null ||
+  { echo "rendered i-have-adhd external has wrong URL" >&2; exit 1; }
+printf '%s\n' "$adhd_block" |
+  grep -Fx "[\".local/share/i-have-adhd/$adhd_ref\"]" >/dev/null ||
+  { echo "rendered i-have-adhd external has wrong target" >&2; exit 1; }
+
+prune_home="$scratch/prune-home"
+ce_current="$prune_home/.local/share/compound-engineering/$version"
+adhd_current="$prune_home/.local/share/i-have-adhd/$adhd_ref"
+mkdir -p "$ce_current" "$adhd_current" \
+  "$prune_home/.local/share/compound-engineering/v-stale" \
+  "$prune_home/.local/share/i-have-adhd/stale"
+foreign="$scratch/prune-foreign"
+mkdir -p "$foreign"
+ln -s "$foreign" "$prune_home/.local/share/compound-engineering/foreign"
+touch "$prune_home/.local/share/i-have-adhd/loose-file"
+env HOME="$prune_home" bash "$prune"
+[[ -d $ce_current && -d $adhd_current ]]
+[[ ! -e $prune_home/.local/share/compound-engineering/v-stale ]]
+[[ ! -e $prune_home/.local/share/i-have-adhd/stale ]]
+[[ -L $prune_home/.local/share/compound-engineering/foreign ]]
+[[ -f $prune_home/.local/share/i-have-adhd/loose-file ]]
+mkdir -p "$prune_home/.local/share/i-have-adhd/stale-only"
+rm -rf "$adhd_current"
+env HOME="$prune_home" bash "$prune"
+[[ -d $prune_home/.local/share/i-have-adhd/stale-only ]]
 
 # --- persona content contract ---
 persona="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"

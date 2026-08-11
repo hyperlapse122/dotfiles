@@ -162,24 +162,32 @@ include = ["*/skills/{{ .name }}/**"]
 {{- end }}
 {{- end }}
 
-{{- /* ---------- shared compound-engineering localArchive ----------
-       The platform-neutral authority lives at
-       agents.marketplaces.compound-engineering-plugin. One versioned archive
-       is emitted on every OS so both omp updater variants can consume the same
-       local marketplace. POSIX sibling versions are pruned by the 00-tools
-       onchange script. The archive stays additive because the overlay script
-       installs an archive-absent ce-sweep reference.
+{{- /* ---------- localArchive marketplace archives ----------
+       One archive external per localArchive authority in agents.marketplaces
+       (compound-engineering-plugin, i-have-adhd). Each is emitted on every OS
+       so both omp updater variants can consume the same local marketplace.
+       POSIX sibling versions are pruned by the 00-tools onchange script.
+       compound-engineering stays additive because the overlay script installs
+       an archive-absent ce-sweep reference; i-have-adhd declares exact = true
+       because nothing overlays its tree (its apply-time extension patch is
+       re-asserted by the run_after_ script on every apply).
 
        stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix.
-       compoundEngineeringRelease yields compound-engineering-v<semver>; the
-       target keeps the v<semver> suffix. */ -}}
+       local-archive-ref.tmpl resolves each marketplace's ref and version
+       segment: compound-engineering keeps its v<semver> suffix, i-have-adhd
+       uses the full pinned sha. */ -}}
 {{- $ctx := . -}}
-{{- $name := "compound-engineering-plugin" -}}
-{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
-{{- $authority := index .agents.marketplaces $name -}}
-{{- $verSegment := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) }}
+{{- range $name, $authority := .agents.marketplaces -}}
+{{-   if eq (printf "%v" (index $authority "kind")) "localArchive" -}}
+{{-     $ref := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "ref") -}}
+{{-     $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") }}
 
-[{{ printf "%s/%s" $authority.externalPath $verSegment | quote }}]
+[{{ printf "%s/%s" $authority.externalPath $segment | quote }}]
 type = "archive"
-url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" $authority.source $ceRef }}'
+url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" $authority.source $ref }}'
 stripComponents = 1
+{{-     if index $authority "exact" }}
+exact = true
+{{-     end }}
+{{-   end -}}
+{{- end }}

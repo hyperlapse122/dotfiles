@@ -231,6 +231,11 @@
         "source": "helm/helm",
         "version": "v4.2.3"
       },
+      "iHaveAdhd": {
+        "kind": "gitRef",
+        "source": "ayghri/i-have-adhd",
+        "version": "2ed064090711586e0c97a2fbbf15465fe8f1808b"
+      },
       "improve": {
         "kind": "gitRef",
         "source": "shadcn/improve",

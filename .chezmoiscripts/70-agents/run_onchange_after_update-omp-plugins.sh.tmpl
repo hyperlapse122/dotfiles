@@ -2,7 +2,7 @@
 {{- $os := .chezmoi.os -}}
 {{- $home := .chezmoi.homeDir -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/haptic.yaml" ".chezmoidata/releases.json" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl" ".chezmoiscripts/70-agents/run_after_patch-i-have-adhd-extension.sh.tmpl" "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" -}}
 {{- $ompVersion := trimPrefix "v" (includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" "omp")) -}}
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $marketplaces := .agents.marketplaces -}}
@@ -11,8 +11,6 @@
 {{- $validOS := .agents.validOS -}}
 {{- $validKinds := list "localDir" "localArchive" -}}
 {{- $validContainers := list "skip" "keep" -}}
-{{- $ceRef := includeTemplate "compound-engineering-ref.tmpl" $ctx -}}
-{{- $ceVersion := printf "v%s" (trimPrefix "compound-engineering-v" $ceRef) -}}
 {{- $rows := list -}}
 {{- $seen := dict -}}
 {{- range $i, $plugin := $plugins -}}
@@ -48,18 +46,31 @@
 {{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsafe relative path %q" $market $rel) }}{{- end -}}
 {{-     $source = printf "%s/%s" $home $rel -}}
 {{-   else -}}
-{{-     if ne $market "compound-engineering-plugin" -}}{{ fail (printf "update-omp-plugins: localArchive marketplace %q has no supported authority" $market) }}{{- end -}}
-{{-     if not (hasKey $authority "externalPath") -}}{{ fail "update-omp-plugins: compound-engineering marketplace is missing externalPath" }}{{- end -}}
+{{-     $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $market "field" "segment") -}}
 {{-     $rel := printf "%v" (index $authority "externalPath") -}}
-{{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}{{ fail (printf "update-omp-plugins: compound-engineering externalPath is unsafe: %q" $rel) }}{{- end -}}
-{{-     $source = printf "%s/%s/%s" $home $rel $ceVersion -}}
+{{-     $source = printf "%s/%s/%s" $home $rel $segment -}}
+{{-   end -}}
+{{-   $requiredExtensions := list -}}
+{{-   $requiredSkills := list -}}
+{{-   if hasKey $authority "requiredPaths" -}}
+{{-     $requiredPaths := index $authority "requiredPaths" -}}
+{{-     if not (kindIs "map" $requiredPaths) -}}{{ fail (printf "update-omp-plugins: marketplace %q requiredPaths must be a map, got %s" $market (kindOf $requiredPaths)) }}{{- end -}}
+{{-     range $entryType, $paths := $requiredPaths -}}
+{{-       if not (has $entryType (list "extensions" "skills")) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsupported requiredPaths type %q" $market $entryType) }}{{- end -}}
+{{-       if not (kindIs "slice" $paths) -}}{{ fail (printf "update-omp-plugins: marketplace %q requiredPaths.%s must be a list, got %s" $market $entryType (kindOf $paths)) }}{{- end -}}
+{{-       range $path := $paths -}}
+{{-         if not (kindIs "string" $path) -}}{{ fail (printf "update-omp-plugins: marketplace %q requiredPaths.%s entries must be strings, got %s" $market $entryType (kindOf $path)) }}{{- end -}}
+{{-         if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $path)) (hasPrefix "/" $path) (contains ".." $path) -}}{{ fail (printf "update-omp-plugins: marketplace %q has unsafe requiredPaths.%s path %q" $market $entryType $path) }}{{- end -}}
+{{-         if eq $entryType "extensions" -}}{{ $requiredExtensions = append $requiredExtensions $path }}{{- else -}}{{ $requiredSkills = append $requiredSkills $path }}{{- end -}}
+{{-       end -}}
+{{-     end -}}
 {{-   end -}}
 {{-   if or (contains "\t" $source) (contains "\n" $source) -}}{{ fail (printf "update-omp-plugins: %s resolves to unsafe path %q" $where $source) }}{{- end -}}
 {{-   $strict := eq $id "mxm4-haptic@h82-dotfiles" -}}
 {{-   if and (eq $name "mxm4-haptic") (not $strict) -}}{{ fail "update-omp-plugins: mxm4-haptic must use marketplace h82-dotfiles" }}{{- end -}}
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
 {{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) -}}
-{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t" $name $market $kind $source $strict)) -}}
+{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t\t%s\t%s" $name $market $kind $source $strict (join " " $requiredExtensions) (join " " $requiredSkills))) -}}
 {{-   end -}}
 {{- end -}}
 #!/usr/bin/env bash
@@ -105,11 +116,20 @@ BUN
 strict_source=
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
-  IFS=$'\t' read -r name market kind source strict <<<"$row"
+  IFS=$'\t' read -r name market kind source strict required_extensions required_skills <<<"$row"
   if [[ $kind == localDir ]]; then
     [[ -f $source/.omp-plugin/marketplace.json ]] || die "preflight: marketplace manifest is missing: $source"
   else
     [[ -f $source/.claude-plugin/marketplace.json ]] || die "preflight: pinned marketplace is missing: $source"
+    bun "$helper" marketplace "$source" "$market" "$name" >/dev/null ||
+      die "preflight: marketplace manifest drift: $source"
+  fi
+  if [[ -n $required_extensions || -n $required_skills ]]; then
+    for rel in $required_extensions $required_skills; do
+      [[ -e $source/$rel ]] || die "preflight: required path is missing: $source/$rel"
+    done
+    bun "$helper" manifest "$source" "$required_extensions" "$required_skills" >/dev/null ||
+      die "preflight: pi manifest drift: $source"
   fi
   if [[ $strict == true ]]; then
     bun "$helper" pre "$source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'precheck: staged haptic validation failed'
@@ -120,7 +140,7 @@ done
 mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
-  IFS=$'\t' read -r name market kind source strict <<<"$row"
+  IFS=$'\t' read -r name market kind source _rest <<<"$row"
   id="${name}@${market}"
   omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
   omp plugin marketplace add "$source" || die "marketplace add failed for $market"
