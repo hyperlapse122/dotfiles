@@ -81,12 +81,23 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
 git.jpi.app and gitlab.com are read from 1Password and stored in the OS keyring
-via `glab auth login --use-keyring`, along with the registry→host mapping
-`docker-credential-glab` needs. Rotating a token in 1Password re-runs the login
-on the next apply. `auth-glab` (deployed to `~/.local/bin`) remains as the
-on-demand OAuth **fallback** — for a host without a PAT, a revoked session, or a
-host you want on OAuth: browser flow by default, `--device` for headless
-sessions.
+via `glab auth login`. The script removes `CI`/`GITLAB_CI` for that invocation
+because glab otherwise treats them as an explicit plaintext-storage request; it
+then asserts keyring storage and scrubs/refuses any plaintext fallback. The
+registry→host mapping remains available to `glab auth docker-helper`. Rotating a
+token in 1Password re-runs the login on the next apply. `auth-glab` (deployed to
+`~/.local/bin`) remains as the on-demand OAuth **fallback** — for a host without
+a PAT, a revoked session, or a host you want on OAuth: browser flow by default,
+`--device` for headless sessions.
+
+Container-registry authentication for podman/buildah/skopeo is rendered directly
+into `~/.config/containers/auth.json`
+([`dot_config/containers/private_auth.json.tmpl`](dot_config/containers/private_auth.json.tmpl),
+0600): GitHub- and GitLab-hosted registries (`ghcr.io`, `registry.jpi.app`,
+`registry.gitlab.com`) carry stored base64("user:PAT") keys resolved live from
+1Password on every apply, so a rotated PAT propagates on the next apply. Docker
+Hub (`docker.io`, `dhi.io`) instead uses the keychain-backed `dockerhub`
+credential helper populated by the `auth-dockerhub` script.
 
 ### Encrypted host prompt (keyring — LUKS passphrase)
 

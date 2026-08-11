@@ -111,6 +111,17 @@ AppData/Roaming/VSCodium/User/keybindings.json
 .local/libexec/ydotoold-active-seat
 {{- end }}
 
+# The docker-credential-gh / docker-credential-glab helpers were retired:
+# ~/.config/containers/auth.json now carries stored base64("user:PAT") keys
+# rendered from 1Password (dot_config/containers/private_auth.json.tmpl)
+# instead of delegating to `gh` / `glab auth docker-helper` per pull. Deleting
+# the sources stopped managing them but left the already-deployed executables
+# behind — prune them here. There is NO container gate: the container ignore
+# rules do not exclude .local/bin, so containers received these binaries too
+# and must prune them.
+.local/bin/docker-credential-gh
+.local/bin/docker-credential-glab
+
 # The unmanaged-repo-guard omp plugin was removed, so
 # dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/ no longer has a
 # source. Deleting that source stopped chezmoi managing the tree but left the

@@ -5,11 +5,19 @@
 #
 # The 1Password PAT is the PRIMARY auth source: it is rendered into this script
 # at apply time and handed to `glab auth login --stdin`, which stores it in the
-# OS keyring (`--use-keyring`: KWallet / GNOME Keyring on Linux, the login
-# keychain on macOS). `~/.local/bin/auth-glab` — the semi-interactive OAuth
-# (`--web` / `--device`) command — is KEPT as the on-demand FALLBACK: use it
-# when no PAT is available for a host, when a session/token is revoked, or when
-# a host should deliberately run on OAuth instead.
+# OS keyring (KWallet / GNOME Keyring on Linux, the login keychain on macOS).
+# Keyring storage is glab's DEFAULT now — `--use-keyring` is deprecated and
+# `--insecure-storage` is the plaintext opt-out. glab deliberately overrides
+# that default when `CI=true`: it selects plaintext config storage unless the
+# deprecated flag is present. This provisioning script always requires the
+# keyring, so it removes CI/GITLAB_CI for the login and ASSERTS post-login that
+# storage landed in the keyring (see below). A locked/absent keyring can still
+# fall back to plaintext config storage, which this script refuses.
+#
+# `~/.local/bin/auth-glab` — the semi-interactive OAuth (`--web` / `--device`)
+# command — is KEPT as the on-demand FALLBACK: use it when no PAT is available
+# for a host, when a session/token is revoked, or when a host should
+# deliberately run on OAuth instead.
 #
 # We deliberately do NOT skip a host that is already authenticated. The whole
 # point of provisioning from 1Password is that the PAT takes precedence, so a
@@ -32,7 +40,7 @@
 # unlike `gh`, whose token preflight must precede the installers.
 #
 # Post-login config re-assert: the --stdin / --token branch of `glab auth login`
-# SHORT-CIRCUITS (internal/commands/auth/login/login.go, glab 1.107.0: `if
+# SHORT-CIRCUITS (internal/commands/auth/login/login.go, glab 1.112.0: `if
 # opts.Token != "" { ... return cfg.Write() }`). That branch calls
 # authutils.ClearAuthFields (which CLEARS the host's `user` key), writes the
 # token plus api_host / api_protocol / git_protocol from the flags, and returns
@@ -47,8 +55,10 @@
 #     with the token as the password and GitLab rejects it: "remote: HTTP Basic:
 #     Access denied" on every https clone / fetch / push. The username is looked
 #     up from the API per host — never hardcoded.
-#   * `container_registry_domains` — `docker-credential-glab` cannot resolve a
-#     registry back to its host without that mapping.
+#   * `container_registry_domains` — kept for `glab auth docker-helper` (run
+#     manually). Podman registry auth itself no longer uses it: auth.json
+#     carries stored keys rendered from 1Password
+#     (dot_config/containers/private_auth.json.tmpl).
 #
 # (`config set` host selection is `-g --host`; `-h` would be `--help`.)
 
@@ -85,15 +95,35 @@ export GLAB_NO_PROMPT=1
 login_host() {
   local host="$1" registries="$2" user_json='' username=''
 
-  if ! "${GLAB[@]}" auth login \
+  # glab's InCI() treats a true CI or GITLAB_CI as an explicit request for
+  # plaintext config storage unless --use-keyring is passed. The managed
+  # keyring policy must also hold when chezmoi runs from an agent harness that
+  # exports CI=1, so clear only those selector variables for this invocation.
+  if ! env -u CI -u GITLAB_CI "${GLAB[@]}" auth login \
     --hostname "$host" \
     --api-host "$host" \
     --api-protocol https \
     --git-protocol https \
     --container-registry-domains "$registries" \
-    --use-keyring \
     --stdin; then
-    printf 'auth-gitlab: %s: `glab auth login` failed (locked/absent Secret Service keyring? invalid token?).\n' "$host" >&2
+    printf 'auth-gitlab: %s: `glab auth login` failed (invalid token?).\n' "$host" >&2
+    return 1
+  fi
+
+  # Keyring-storage assertion after removing deprecated --use-keyring: glab
+  # defaults to the keyring when one is available, but falls back to PLAINTEXT
+  # config storage if its keyring probe fails. Refuse that fallback: verify the
+  # host's use_keyring config key (written by the login itself), scrub any
+  # plaintext token, and fail so chezmoi records the failure and retries on the
+  # next apply. The capture uses the same `if !` guard as the user lookup below:
+  # a bare assignment would take the substitution's exit status and abort under
+  # `set -e`/`pipefail` instead of reaching the explicit check.
+  if ! storage="$("${GLAB[@]}" config get use_keyring -g --host "$host" 2>/dev/null | tr -d '[:space:]')"; then
+    storage=''
+  fi
+  if [[ "$storage" != "true" ]]; then
+    "${GLAB[@]}" config set token "" -g --host "$host" >/dev/null 2>&1 || true
+    printf 'auth-gitlab: %s: glab selected plaintext config storage (CI/GITLAB_CI was set or the OS keyring is unavailable) — scrubbed the token and failing so the apply retries. Re-run chezmoi apply in an unlocked desktop session.\n' "$host" >&2
     return 1
   fi
 

@@ -30,12 +30,14 @@
 # authorization itself.
 #
 # The `--container-registry-domains` mapping below is what
-# `glab auth docker-helper` (see docker-credential-glab) uses to resolve
-# registries back to these hosts and mint fresh registry tokens.
+# `glab auth docker-helper` uses to resolve registries back to these hosts and
+# mint fresh registry tokens. Podman registry auth does not depend on it:
+# ~/.config/containers/auth.json carries stored keys rendered from 1Password
+# (dot_config/containers/private_auth.json.tmpl).
 #
-# Single-platform exception (AGENTS.md "script parity"): POSIX-only, like
-# docker-credential-glab; the replaced chezmoi script was gated off Windows
-# too. Ship an `auth-glab.ps1` counterpart if Windows support is added later.
+# Single-platform exception (AGENTS.md "script parity"): POSIX-only; the
+# replaced chezmoi script was gated off Windows too. Ship an `auth-glab.ps1`
+# counterpart if Windows support is added later.
 
 set -euo pipefail
 
@@ -167,17 +169,36 @@ for entry in "${HOSTS[@]}"; do
   # ignores --git-protocol/--api-protocol and resets container_registry_domains
   # to empty, so those keys are (re)applied with `config set` afterwards.
   # (`config set` host selection is `-g --host`; `-h` would be `--help`.)
-  if GLAB_NO_PROMPT=1 "${GLAB[@]}" auth login \
+  # glab's InCI() forces plaintext config storage for a true CI/GITLAB_CI
+  # unless deprecated --use-keyring is passed. OAuth credentials follow the
+  # same mandatory-keyring policy as the apply-time PAT, so clear only those
+  # selector variables for the login invocation.
+  if GLAB_NO_PROMPT=1 env -u CI -u GITLAB_CI "${GLAB[@]}" auth login \
     --hostname "$host" \
     --api-host "$host" \
     --api-protocol https \
     --git-protocol https \
     --container-registry-domains "$registries" \
-    --use-keyring \
     "--$flow" \
     && "${GLAB[@]}" config set git_protocol https -g --host "$host" \
     && "${GLAB[@]}" config set api_protocol https -g --host "$host" \
     && "${GLAB[@]}" config set container_registry_domains "$registries" -g --host "$host"; then
+    # glab deprecated --use-keyring: keyring storage is now the DEFAULT after
+    # CI/GITLAB_CI is removed, but a locked/absent keyring still falls back to
+    # PLAINTEXT config storage with only a warning. Refuse that fallback:
+    # verify the host's use_keyring key (written by the login itself), scrub
+    # the OAuth credentials, and report failure. The `if !` guard keeps a
+    # failed `config get` from aborting the script under `set -e`/`pipefail`.
+    if ! storage="$("${GLAB[@]}" config get use_keyring -g --host "$host" 2>/dev/null | tr -d '[:space:]')"; then
+      storage=''
+    fi
+    if [[ "$storage" != "true" ]]; then
+      "${GLAB[@]}" config set token "" -g --host "$host" >/dev/null 2>&1 || true
+      "${GLAB[@]}" config set oauth2_refresh_token "" -g --host "$host" >/dev/null 2>&1 || true
+      printf 'auth-glab: %s: glab selected plaintext config storage (CI/GITLAB_CI was set or the OS keyring is unavailable) — scrubbed the credentials. Re-run in an unlocked desktop session.\n' "$host" >&2
+      status=1
+      continue
+    fi
     printf 'auth-glab: %s: authenticated.\n' "$host"
   else
     printf 'auth-glab: %s: login failed.\n' "$host" >&2

@@ -11,8 +11,8 @@
 #
 # At-rest posture: tokscale persists the token to a PLAINTEXT JSON file at
 # ~/.config/tokscale/credentials.json (mode 0600, tokscale-enforced), NOT the
-# OS keyring (unlike `glab auth login --use-keyring`, which stores encrypted in
-# KWallet / GNOME Keyring / login keychain). This weaker at-rest posture is an
+# OS keyring (where `glab auth login` stores by default: KWallet / GNOME
+# Keyring / login keychain). This weaker at-rest posture is an
 # inherent tool limitation, not a choice this script can change.
 #
 # argv exposure: tokscale offers no `--stdin` path for `login` (unlike glab's

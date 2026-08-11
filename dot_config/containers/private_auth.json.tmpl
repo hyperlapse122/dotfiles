@@ -1,0 +1,64 @@
+{{- /*
+auth.json — podman/buildah/skopeo registry credentials
+(~/.config/containers/auth.json), 0600 via the `private_` source attribute.
+
+GitHub- and GitLab-hosted registries authenticate with STORED KEYS rendered
+here at apply time: each `auths` entry is the standard base64("user:PAT")
+"auth" field, resolved live from 1Password (onepasswordRead, no cache). This
+replaced the `docker-credential-gh` / `docker-credential-glab` credHelpers,
+which shelled out to `gh` / `glab auth docker-helper` on every pull. The
+format is identical to what `podman login` writes natively.
+
+Token rotation: `chezmoi apply` re-renders this file on every run, so a PAT
+rotated in 1Password propagates on the next apply with no script — a target
+whose rendered content changed is rewritten by chezmoi's normal file phase.
+
+Runtime rewrites: `podman login` / `logout` rewrites this file; any such
+manual change is overwritten by the next apply. Registry credentials are
+managed here — add them as 1Password references, not by hand.
+
+Docker Hub (`docker.io`, `dhi.io`) deliberately stays on the keychain-backed
+`dockerhub` credHelper populated by
+.chezmoiscripts/10-auth/run_onchange_after_auth-dockerhub.sh.tmpl: its PAT is
+long-lived and the native keychain is the better store for it. Podman honors
+`credHelpers` but ignores `credsStore`; the latter only matters to a real
+Docker CLI. The empty index.docker.io keys are Docker CLI legacy entries.
+
+The JPI GitLab item is referenced by UUID (stable across renames), matching
+.chezmoiscripts/10-auth/run_onchange_after_auth-gitlab.sh.tmpl. `trim` guards
+against a trailing newline in `op read` output, and `toJson` quotes the
+composed value.
+*/ -}}
+{{- $ghUser := onepasswordRead "op://Private/GitHub/username" | trim -}}
+{{- $ghPat := onepasswordRead "op://Private/GitHub/PAT" | trim -}}
+{{- $jpiUser := onepasswordRead "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/username" | trim -}}
+{{- $jpiPat := onepasswordRead "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/PAT" | trim -}}
+{{- $glUser := onepasswordRead "op://Private/GitLab/username" | trim -}}
+{{- $glPat := onepasswordRead "op://Private/GitLab/PAT" | trim -}}
+{{- $ghAuth := printf "%s:%s" $ghUser $ghPat | b64enc -}}
+{{- $jpiAuth := printf "%s:%s" $jpiUser $jpiPat | b64enc -}}
+{{- $glAuth := printf "%s:%s" $glUser $glPat | b64enc -}}
+{
+  "auths": {
+    "docker.pkg.github.com": {
+      "auth": {{ $ghAuth | toJson }}
+    },
+    "ghcr.io": {
+      "auth": {{ $ghAuth | toJson }}
+    },
+    "https://index.docker.io/v1/": {},
+    "https://index.docker.io/v1/access-token": {},
+    "https://index.docker.io/v1/refresh-token": {},
+    "registry.gitlab.com": {
+      "auth": {{ $glAuth | toJson }}
+    },
+    "registry.jpi.app": {
+      "auth": {{ $jpiAuth | toJson }}
+    }
+  },
+  "credsStore": "dockerhub",
+  "credHelpers": {
+    "docker.io": "dockerhub",
+    "dhi.io": "dockerhub"
+  }
+}
