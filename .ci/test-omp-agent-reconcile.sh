@@ -17,6 +17,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
+extract_rules_function() {
+  awk '
+    $0 == "function rulesAreInContext(ctx: ExtensionContext): boolean {" {
+      extracting = 1
+    }
+
+    extracting {
+      print
+      depth += gsub(/\{/, "&") - gsub(/\}/, "&")
+      if (depth == 0) exit
+    }
+  ' "$1"
+}
+
 home="$scratch/home"
 fake_bin="$scratch/bin"
 mkdir -p "$home/.omp/agent" "$fake_bin"
@@ -314,6 +328,37 @@ fixture_prefix="$scratch/loader.prefix"
 fixture_upstream="$scratch/loader.upstream"
 fixture_patched="$scratch/loader.patched-function"
 fixture_suffix="$scratch/loader.suffix"
+
+adhd_pin_file="$repo_root/.ci/i-have-adhd-patch-pin"
+adhd_locked_sha=$(jq -er '.releases.tools.iHaveAdhd.version' "$repo_root/.chezmoidata/releases.json")
+adhd_pinned_sha=$(awk -F= '/^sha=/{print $2}' "$adhd_pin_file")
+if [ "$adhd_locked_sha" != "$adhd_pinned_sha" ]; then
+  printf 'i-have-adhd patch: release lock SHA %s differs from pin %s; review the full-function patch and update %s\n' \
+    "$adhd_locked_sha" "$adhd_pinned_sha" "$adhd_pin_file" >&2
+  exit 1
+fi
+
+adhd_archive="$scratch/i-have-adhd.tar.gz"
+adhd_archive_dir="$scratch/i-have-adhd-archive"
+if ! curl -fsSL "https://github.com/ayghri/i-have-adhd/archive/${adhd_locked_sha}.tar.gz" -o "$adhd_archive"; then
+  printf 'i-have-adhd patch: failed to download archive for SHA %s\n' "$adhd_locked_sha" >&2
+  exit 1
+fi
+mkdir -p "$adhd_archive_dir"
+tar -xzf "$adhd_archive" -C "$adhd_archive_dir" --strip-components=1
+adhd_upstream_source="$adhd_archive_dir/extensions/i-have-adhd.ts"
+if [ ! -f "$adhd_upstream_source" ]; then
+  printf 'i-have-adhd patch: upstream archive is missing %s\n' "$adhd_upstream_source" >&2
+  exit 1
+fi
+extract_rules_function "$adhd_upstream_source" >"$fixture_upstream"
+adhd_upstream_digest=$(sha256sum "$fixture_upstream" | awk '{print $1}')
+adhd_expected_digest=$(awk -F= '/^rulesAreInContext_sha256=/{print $2}' "$adhd_pin_file")
+if [ "$adhd_upstream_digest" != "$adhd_expected_digest" ]; then
+  printf 'i-have-adhd patch: upstream function digest %s differs from pin %s; review the full-function patch and update %s\n' \
+    "$adhd_upstream_digest" "$adhd_expected_digest" "$adhd_pin_file" >&2
+  exit 1
+fi
 cat >"$fixture_prefix" <<'EOF'
 type ExtensionAPI = any;
 type ExtensionContext = any;
@@ -348,23 +393,6 @@ function getSavedState(ctx: ExtensionContext): boolean | undefined {
   }
 
   return savedState;
-}
-EOF
-cat >"$fixture_upstream" <<'EOF'
-function rulesAreInContext(ctx: ExtensionContext): boolean {
-  let active = false;
-
-  for (const entry of ctx.sessionManager.buildContextEntries()) {
-    if (entry.type !== "custom_message") continue;
-
-    if (entry.customType === RULES_MESSAGE_TYPE) {
-      active = true;
-    } else if (entry.customType === DISABLED_MESSAGE_TYPE) {
-      active = false;
-    }
-  }
-
-  return active;
 }
 EOF
 cat >"$fixture_patched" <<'EOF'
