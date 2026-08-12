@@ -35,23 +35,23 @@
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",
-        "version": "v1.14.0",
+        "version": "v1.14.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-linux-amd64.tar.gz",
-            "sha256": "220b27d7a7d021451cda9ba15f02fbba3cd16071ee0df3e029a84cd75af19de0"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.1/aoe-linux-amd64.tar.gz",
+            "sha256": "714d216bc749e3bee2ec529ad2ecb907bcab030b361e1b0a3e5afd1528c064a5"
           },
           "linux-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-linux-arm64.tar.gz",
-            "sha256": "aa01e2b9e83b927e20764c639ac55064a5a122d9dd934cd47ef5490bed82d9d7"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.1/aoe-linux-arm64.tar.gz",
+            "sha256": "228cf8158c5f77a060e4693279beab1ea8999e3c2ff1f20063df34b38a91d5e0"
           },
           "darwin-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-darwin-amd64.tar.gz",
-            "sha256": "58b8a722d106849d7797f1c5e2a2d9bceb06358416d5bf2f98b61f4443dd3dfa"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.1/aoe-darwin-amd64.tar.gz",
+            "sha256": "7de1ceb664f9265b74511004cc5d69131e0ae7a4ed35c75b3115041b68dd71ce"
           },
           "darwin-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.0/aoe-darwin-arm64.tar.gz",
-            "sha256": "8c2febf3e6a116aaba6931c6b5d24e150876360744c9743c84645906915b4031"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.14.1/aoe-darwin-arm64.tar.gz",
+            "sha256": "1fb857b11da338f76923e596ae09e29b5d6806f5753a69934468ad929116be54"
           }
         }
       },
