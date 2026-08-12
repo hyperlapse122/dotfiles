@@ -282,7 +282,8 @@ awk '/^cat >"\$declared"/{flag=1;next}/^JSON$/{flag=0}flag' "$settings_script" >
 jq -e 'type == "object" and (keys | length) > 0' "$declared_json" >/dev/null
 jq -e '
   .enabledModels == [
-    "anthropic/*",
+    "anthropic/claude-opus-5",
+    "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",
     "kimi-code/*",
     "openai-codex/gpt-5.6-luna"
