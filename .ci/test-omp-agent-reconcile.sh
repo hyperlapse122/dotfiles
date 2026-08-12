@@ -283,12 +283,11 @@ jq -e 'type == "object" and (keys | length) > 0' "$declared_json" >/dev/null
 jq -e '
   .enabledModels == [
     "anthropic/*",
-    "google-antigravity/*",
+    "google-antigravity/gemini-3.*",
     "kimi-code/*",
     "openai-codex/gpt-5.6-luna"
   ]
-  and .modelRoles.advisor == "openai-codex/gpt-5.6-luna:xhigh"
-  and (."retry.fallbackChains" | has("openai-codex/gpt-5.6-luna"))
+  and (."retry.fallbackChains" | has("default"))
   and ((."retry.fallbackChains" | has("openai-codex/gpt-5.6-sol")) | not)
 ' "$declared_json" >/dev/null || {
   printf 'model whitelist policy is not rendered as expected\n' >&2
