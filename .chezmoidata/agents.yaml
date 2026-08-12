@@ -109,7 +109,7 @@ agents:
       setupVersion: 1
       enabledModels:
       - anthropic/*
-      - google-antigravity/*
+      - google-antigravity/gemini-3.*
       - kimi-code/*
       - openai-codex/gpt-5.6-luna
       disabledProviders:
@@ -117,6 +117,7 @@ agents:
       - opencode-go
       - opencode-zen
       - zai
+      - github-copilot
       modelRoles:
         advisor: openai-codex/gpt-5.6-luna:xhigh
         commit: "@smol"
