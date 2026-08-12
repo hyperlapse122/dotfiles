@@ -388,8 +388,11 @@ absent_selector=$(jq -r 'first(.models[] | select(.provider == "anthropic") | .s
   printf 'fixture found no anthropic selector to withhold; the absent-selector case is not being exercised\n' >&2
   exit 1
 }
-jq --arg s "$absent_selector" '.models |= map(select(.selector != $s))' \
-  "$scratch/catalog-full.json" >"$scratch/catalog-absent.json"
+jq --arg s "$absent_selector" '
+  .models |= (map(select(.selector != $s)) + [
+    {provider: "anthropic", selector: "anthropic/fixture-survivor"}
+  ])
+' "$scratch/catalog-full.json" >"$scratch/catalog-absent.json"
 if run_settings absent "$scratch/catalog-absent.json"; then
   printf 'settings assertion accepted a selector the catalog does not serve\n' >&2
   exit 1
