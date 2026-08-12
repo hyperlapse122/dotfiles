@@ -15,11 +15,10 @@
 # .chezmoidata file rename.
 #
 # Single source of truth (like packages.yaml / solaar.yaml): declare every Wi-Fi
-# network HERE, not by editing 1Password items or the scripts. This REPLACES the
-# former "list every 1Password Wireless Router item" discovery model — only the
-# networks enumerated below are provisioned, each tool add/overwriting its OS
-# profile store to match this file (a missing network is added; an existing one
-# is overwritten; --force recreates it from scratch).
+# network HERE, not by editing 1Password items or the scripts. Only the networks
+# enumerated below are provisioned. Each tool adds or overwrites its OS profile
+# store to match this file: a missing network is added, an existing one is
+# overwritten, and --force recreates it from scratch.
 #
 # PLATFORM SUPPORT MATRIX (per manifest field):
 #   ssid / psk / open      : all three tools.
@@ -91,8 +90,8 @@
 #   back to DHCP/RA. Set a family's `dns: []` to explicitly opt that family
 #   out; leave the family absent to inherit the defaults.
 #
-# Enterprise (802.1x) and WPA3-only SAE networks are out of scope — a plain PSK
-# cannot express them (same limitation as the previous 1Password importer).
+# Enterprise (802.1x) and WPA3-only SAE networks are out of scope because a
+# plain PSK cannot express them.
 networking:
   wifi:
     defaults:
@@ -102,19 +101,20 @@ networking:
       ipv6:
         dns: ["2606:4700:4700::1111", "2606:4700:4700::1001"]
       ignoreAutoDns: true
-    # Add one entry per network. ssid/psk may be an op:// ref OR a literal.
-    # Examples (commented — replace with your own 1Password item paths / SSIDs):
+    # Add one entry per network. `ssid` and `psk` may be an `op://` reference or a
+    # literal.
+    # Examples:
     #   - ssid: "op://Private/Home Wi-Fi/network name"
     #     psk: "op://Private/Home Wi-Fi/password"
-    #     priority: 10                # prefer this 5GHz SSID over its 2.4GHz sibling
-    #   - ssid: "MyHome_2G"           # a literal SSID sharing the same op:// psk
+    #     priority: 10
+    #   - ssid: "MyHome_2G"
     #     psk: "op://Private/Home Wi-Fi/password"
-    #   - ssid: "GuestOpen"           # open network: omit psk
-    #     ipv4: { dns: [] }           # per-network override: keep this network's DHCP DNS
+    #   - ssid: "GuestOpen"
+    #     ipv4: { dns: [] }
     #     ipv6: { dns: [] }
-    #   - ssid: "V6PriorityNet"       # per-family manual override
+    #   - ssid: "V6PriorityNet"
     #     psk: "op://Private/V6/password"
-    #     ipv6: { dns: ["2620:fe::fe"] }   # Quad9 v6 for this network only
+    #     ipv6: { dns: ["2620:fe::fe"] }
     networks:
       - ssid: "op://Private/KT HomeHub 5G/name"
         psk: "op://Private/KT HomeHub 5G/password"

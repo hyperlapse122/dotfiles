@@ -101,7 +101,8 @@ default_uuid="$(unquote "$(gsettings get org.gnome.Ptyxis default-profile-uuid)"
 
 profile_uuids=()
 uuid_list="$(gsettings get org.gnome.Ptyxis profile-uuids)"
-uuid_list="${uuid_list#@as }" # empty-array type annotation
+# gsettings returns `@as []` for an empty array; remove the type annotation.
+uuid_list="${uuid_list#@as }"
 uuid_list="${uuid_list#\[}"
 uuid_list="${uuid_list%\]}"
 while IFS= read -r entry; do

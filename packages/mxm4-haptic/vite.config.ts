@@ -1,7 +1,6 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  // `vp pack` (tsdown) config, inlined from the old tsdown.config.ts.
   pack: {
     entry: ["src/index.ts"],
     format: ["esm"],

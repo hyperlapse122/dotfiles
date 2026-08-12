@@ -9,7 +9,11 @@
 feedback_sources:
   - { type: github-issues, id: gh-issues, target: hyperlapse122/dotfiles, ack_action: "feedback:ack", closeout_action: "feedback:resolved", sensitive: false, approved: true }
 
-sweep_state_path: docs/feedback-sweep/state.yml   # committed state, shared by every checkout
-sweep_ack_cap: 25                                 # max acks per source per run before the circuit breaker
-sweep_lease_ttl_minutes: 60                       # single-writer lease staleness threshold
-sweep_shared_branch: false                        # single checkout committing locally
+# committed state, shared by every checkout
+sweep_state_path: docs/feedback-sweep/state.yml
+# max acks per source per run before the circuit breaker
+sweep_ack_cap: 25
+# single-writer lease staleness threshold
+sweep_lease_ttl_minutes: 60
+# single checkout committing locally
+sweep_shared_branch: false

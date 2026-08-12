@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 #
-# code — VS Codium shim. Runs `codium` so the `code` command keeps working
-# after migrating from VS Code to VS Codium.
+# code — VS Codium shim. Runs `codium` so the `code` command works in
+# interactive and non-interactive shells.
 #
-# Replaces the former `alias code=codium` in ~/.config/zsh/.zshrc: a real
-# executable on PATH also covers non-interactive shells, scripts, and any tool
-# that shells out to `code` (e.g. `git config core.editor`, `$EDITOR`, `$VISUAL`,
-# or another program's "open in editor" feature), none of which a zsh alias can.
+# A real executable on PATH also covers scripts and tools that shell out to
+# `code`, including editor settings and "open in editor" integrations.
 #
 # POSIX counterpart of code.ps1 (Windows).
 #

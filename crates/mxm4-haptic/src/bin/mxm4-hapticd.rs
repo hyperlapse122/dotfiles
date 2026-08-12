@@ -191,7 +191,8 @@ fn handle_play(wf_id: u8, device: &HidDevice, st: &mut PlayState) {
     }
 
     let Some(t) = *st.target else {
-        return; // device absent; a future 0x41 will set dirty + re-discover
+        // device absent; a future 0x41 will set dirty + re-discover
+        return;
     };
 
     let pkt = lib::build_play_packet(t.dev_idx, t.haptic_idx, wf_id);

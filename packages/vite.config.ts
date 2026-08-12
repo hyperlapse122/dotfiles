@@ -10,8 +10,7 @@ export default defineConfig({
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
-      // Port of the old per-member ESLint rule: allow intentionally-unused
-      // identifiers when prefixed with `_`.
+      // Allow intentionally-unused identifiers when prefixed with `_`.
       "no-unused-vars": [
         "error",
         {
@@ -25,13 +24,11 @@ export default defineConfig({
     ignorePatterns: ["**/dist/**"],
   },
   fmt: {
-    // Ported from the old shared .prettierrc.json (printWidth 100, semi true).
     printWidth: 100,
     semi: true,
     sortPackageJson: false,
-    // Ported from the old .prettierignore: format .ts source only. JSON
-    // (tsconfig comments/trailing commas, Bun-managed manifests) and Markdown
-    // are left untouched, as is build output.
+    // Format TypeScript source only. Leave JSON and Markdown untouched, as is
+    // build output.
     ignorePatterns: ["**/dist/**", "**/*.json", "**/*.md"],
   },
   // `vp staged` replaces lint-staged: format + lint + type-check staged sources.

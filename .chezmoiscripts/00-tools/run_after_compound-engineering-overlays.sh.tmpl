@@ -25,9 +25,9 @@
 # run_after_ (not run_onchange_): that drift is LIVE state in a third-party-
 # writable tree, so it must be re-asserted after every file phase — a
 # fingerprinted onchange run records a clean skip and never repairs it. Re-running
-# costs a stat plus a byte compare, the reference-only copy is idempotent, and
-# (unlike the run_after_ form this replaced) it touches no archive-owned file, so
-# there is no managed target left differing from source state after an apply.
+# costs a stat plus a byte compare. The reference-only copy is idempotent and
+# touches no archive-owned file, so no managed target differs from source state
+# after an apply.
 
 set -euo pipefail
 

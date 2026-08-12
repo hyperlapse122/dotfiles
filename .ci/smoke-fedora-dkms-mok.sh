@@ -116,7 +116,8 @@ fi
 
 mokdir=${scratch}/mokstate
 mkdir -p "${mokdir}"
-run_mok_state() { # $1 = sudo stub behavior: ok | fail
+# $1 = sudo stub behavior: ok | fail
+run_mok_state() {
   env MOK_SUDO="${1}" MOK_DIR="${mokdir}" bash -c '
     set -euo pipefail
     # Relocate the root-only paths and model sudo success/failure.

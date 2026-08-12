@@ -11,13 +11,11 @@ import type { Registry } from "./types.js";
 /**
  * Tool registry — the single place a tool is declared.
  *
- * Each `asset` selector reproduces the filename the corresponding chezmoi
- * template builds today, so a migrated external resolves the same URL it
- * resolved before. The selectors stay functions rather than pattern strings
- * because upstream naming genuinely varies per OS (marksman ships two
- * unrelated shapes) and some names embed the tag itself (shellcheck).
+ * Each `asset` selector matches the filename the corresponding chezmoi
+ * template builds. The selectors stay functions rather than pattern strings
+ * because upstream naming varies per OS (marksman ships two unrelated shapes)
+ * and some names embed the tag itself (shellcheck).
  */
-
 /** buf names arm64 `aarch64` on linux but `arm64` on darwin. */
 function bufArch(os: OperatingSystem, arch: Architecture): string {
   if (arch === "amd64") return "x86_64";

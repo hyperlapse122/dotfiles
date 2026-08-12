@@ -5,9 +5,8 @@
 //!
 //! The client and the notification watcher never touch the device: they
 //! send a waveform name to the daemon over a local IPC endpoint, and the daemon
-//! does discovery, debounce, queueing, and paced playback. This
-//! keeps a single owner of the HID++ session and removes the on-disk
-//! cache the old single-shot binary needed.
+//! does discovery, debounce, queueing, and paced playback. The daemon remains
+//! the single owner of the HID++ session.
 //!
 //! Linux + macOS + Windows. Device access goes through the `hidapi` crate
 //! (daemon only). The client<->daemon rendezvous is an AF_UNIX socket on
@@ -435,7 +434,7 @@ pub const BOLT_VID: u16 = 0x046D;
 pub const BOLT_PID: u16 = 0xC548;
 // The receiver's HID++ control endpoint, used to pick the right node out of
 // hidapi's enumeration (a receiver exposes several HID interfaces). On Linux
-// it is USB interface 2 (the old code's `input2`); only this interface
+// it is USB interface 2; only this interface
 // accepts HID++ reports cleanly (others EPIPE or silently discard). macOS and
 // Windows report interface_number as -1 and instead expose the Logitech vendor
 // usage page 0xFF00 on the HID++ collection, so there it is matched by usage

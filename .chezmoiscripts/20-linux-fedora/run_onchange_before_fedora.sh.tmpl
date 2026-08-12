@@ -17,13 +17,12 @@
 
 set -euo pipefail
 
-# Consolidated Fedora provisioning, migrated from the legacy
-# scripts/linux/install-packages.sh: repositories, dnf/flatpak/dotnet packages,
+# Fedora provisioning covers repositories, dnf/flatpak/dotnet packages,
 # direct-URL RPMs, DKMS module signing, system services + MOK enrollment,
-# RTC/NTP time, the NVIDIA container runtime, and user groups. Serves both Fedora
-# editions — Workstation (GNOME) and the KDE Plasma Spin — with the per-desktop
-# package sets (kdePackages/gnomePackages) gated on the named `desktop` host
-# fact; packages.yaml's `gates:` map says which fact gates which group.
+# RTC/NTP time, the NVIDIA container runtime, and user groups. It serves both
+# Fedora editions — Workstation (GNOME) and the KDE Plasma Spin — with the
+# per-desktop package sets gated on the named `desktop` host fact; packages.yaml's
+# `gates:` map says which fact gates which group.
 #
 # Structured as a single command wrapper (DNF), dedicated setup_*_repos() functions split out from the install
 # orchestration, an enable_unit() helper that skips absent units, MOK enrollment
@@ -49,30 +48,25 @@ set -euo pipefail
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
 {{- $gates := .packages.linux.fedora.gates }}
 
-# Host capabilities — SEEDED FROM packages.yaml's `gates:` map via the shared
-# fact_gate() dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), not hand-wired
-# to a FACT_* variable here. This script used to carry its own probes (a sysfs
-# 0x10de scan for the NVIDIA GPU, systemd-detect-virt, and a pair of
-# `command -v` desktop checks), then — once those became registry facts — a
-# stage that still hand-picked which FACT_* answered each flag, bypassing
-# whatever the map itself said. Now the map drives the flag directly: change
-# `gates.kdePackages` from `desktop.kde` to something else and this flag
-# follows it, no script edit required. See the file header in
-# .chezmoidata/packages.yaml.
+# Host capabilities are seeded from packages.yaml's `gates:` map via the shared
+# `fact_gate()` dispatcher (.chezmoitemplates/facts-gate.sh.tmpl), rather than
+# being hand-wired to FACT_* variables. Change `gates.kdePackages` from
+# `desktop.kde` to something else and this flag follows it, so no script edit
+# is required. See the file header in .chezmoidata/packages.yaml.
 #
 # HAS_BARE_METAL is seeded from bareMetalPackages' `!virt` gate — the BARE
 # systemd-detect-virt, true for a container as well as a VM. That is
 # deliberately not the manifest's `vm` fact (systemd-detect-virt --vm), which
 # gates password-less sudo and must stay false in a container.
+#
 HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
 [[ "${FORCE_NVIDIA:-0}" == 1 ]] && HAS_NVIDIA=1
 HAS_BARE_METAL=0; fact_gate {{ index $gates "bareMetalPackages" | quote }} && HAS_BARE_METAL=1
 
 # The desktop is ONE fact with ONE value (kde | gnome | none), so the two flags
-# are mutually exclusive by construction — where the old pair of independent
-# `command -v` probes would have set both on a host that happened to carry both
-# shells. KDE wins that tie (the precedence facts.yaml declares); `none` (a
-# server, a container) installs neither set, as before.
+# are mutually exclusive by construction. KDE wins when both desktop gates
+# would otherwise match, as declared in facts.yaml; `none` (a server or
+# container) installs neither set.
 HAS_KDE=0; fact_gate {{ index $gates "kdePackages" | quote }} && HAS_KDE=1
 HAS_GNOME=0; fact_gate {{ index $gates "gnomePackages" | quote }} && HAS_GNOME=1
 

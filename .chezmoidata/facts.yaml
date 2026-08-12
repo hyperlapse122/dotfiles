@@ -83,8 +83,7 @@
 # skip. `vm` is the one gating a PRIVILEGE GRANT (etc/sudoers.d/* → %wheel NOPASSWD),
 # so its false direction — no password-less sudo — is the only safe one.
 #
-# TWO facts are INVERTED, and a uniform false was a FAIL-OPEN for both (caught in
-# review, not in testing):
+# TWO facts are INVERTED, so a uniform false would FAIL OPEN:
 #   virt      `bareMetalPackages` gates on `!virt`, so false INSTALLS the bare-metal
 #             set. Its safe absent-value is TRUE.
 #   headless  headless-guard SKIPS when the fact is 1, so false lets a headless

@@ -25,25 +25,6 @@ Argument: the root chezmoi context, exactly like facts-sh.tmpl (NOT a dict —
 this partial needs nothing else, so it does not take the "ctx"/"name" dict
 shape .chezmoitemplates/headless-guard.sh.tmpl and its siblings do).
 
-WHY THIS IS THE ONE IMPLEMENTATION, NOT A THIRD (OR FOURTH) COPY OF THE SAME
-THREE LINES: before this partial existed, the grammar was hand-written twice
-more, and one caller did not evaluate it at all —
-  * install-system-10-files' gate_ok() was a `case` ladder, one hand-written
-    arm per fact NAME actually used as a system.yaml `gate:` — correct, but a
-    new gated fact meant a new arm to remember to add.
-  * dot_local/bin/host-facts' private gate_eval() was already generic, but it
-    resolved a gate against ITS OWN report array (built straight from
-    facts.tmpl's raw `true`/`false`), not the FACT_* variables the installers
-    actually branch on — two readings of one registry that could quietly
-    drift apart.
-  * The package installer did not evaluate a gate EXPRESSION at all: each
-    HAS_ / IS_ flag was hand-seeded straight from a FACT_* variable named in
-    the installer's own prose, and packages.yaml's `gates:` map was read only
-    far enough to validate it, never to DRIVE anything. Editing a `gates:`
-    value therefore changed nothing at runtime — see the former "declaration,
-    not a switch" header in .chezmoidata/packages.yaml, rewritten now that
-    this partial makes the map load-bearing.
-  All call sites now go through fact_gate() instead.
 
 WHAT THIS PARTIAL DELIBERATELY DOES NOT DO:
 
@@ -54,9 +35,9 @@ WHAT THIS PARTIAL DELIBERATELY DOES NOT DO:
     runs its gate expressions through facts-validate.tmpl BEFORE any of them
     ever reaches a `fact_gate "…"` call site (the package installer validates
     packages.yaml's `gates:` map, install-system-10-files validates
-    system.yaml's `gate:` column, host-facts validates both). A typo is
-    therefore still caught at render time, exactly as before — fact_gate()
-    only has to PARSE the three grammar shapes at runtime, never police them.
+    system.yaml's `gate:` column, and host-facts validates both). A typo is
+    caught at render time; fact_gate() only has to PARSE the three grammar
+    shapes at runtime, never police them.
   * CARRY FORCE_* LOGIC. FORCE_NVIDIA stays in the Fedora package installer
     ONLY, layered on top of fact_gate()'s result:
 
@@ -75,8 +56,7 @@ arm BY CONSTRUCTION, and the `*)` arm below is unreachable in practice. It
 aborts loudly anyway: an unmatched bash `case` silently falls through with
 exit status 0 (true), and for a gate that GRANTS a package group or an /etc
 file, a silent true is a silent GRANT of the one thing this whole registry
-exists to make impossible — the same footgun install-system-10-files' own
-gate_ok() has warned about since it was written.
+exists to make impossible.
 */ -}}
 {{- $registry := .factRegistry -}}
 {{- $lines := list -}}

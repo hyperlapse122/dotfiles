@@ -129,9 +129,8 @@ shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
 # by itself (the rendered array IS the trigger; there is no fingerprint block).
 #
 # The per-setting rationale — why each of these values, and what re-reads it —
-# lives in the .chezmoidata/kde.yaml header, carried over from the eight scripts
-# this one replaced (autotheme, dimscreen, dolphin, edges, emptysession,
-# killrunner, krunner, spectacle).
+# lives in the .chezmoidata/kde.yaml header so the generic runner stays
+# data-driven while each setting keeps its explanation beside its source value.
 #
 # Each row is "<file>:<group>[/<subgroup>…]:<key>:<type>:<value>":
 #   - the group PATH is split on `/` into repeated --group arguments, because

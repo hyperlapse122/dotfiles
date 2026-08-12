@@ -44,7 +44,9 @@ rgba=${rgba%%[!0-9]*}
 # value is never misread as octal.
 hex=$(printf '#%06X' "$(( (10#$rgba) & 0xFFFFFF ))")
 
-printf '%s' "$hex" | wl-copy          # exact "#RRGGBB", no trailing newline
+# Keep the exact `#RRGGBB` bytes and omit a trailing newline for clipboard use.
+printf '%s' "$hex" | wl-copy
 notify-send --app-name='Color Picker' --icon=color-picker \
   --expire-time=2000 'Color copied' "$hex" 2>/dev/null || true
-printf '%s\n' "$hex"                   # echo for CLI use: c=$(kde-color-picker)
+# Echo the selected color for command-line use.
+printf '%s\n' "$hex"

@@ -1,9 +1,8 @@
 /**
  * Platform vocabulary shared by every resolver.
  *
- * The string maps mirror the `replace` chains the chezmoi templates use today
- * (`.chezmoiexternals/*.toml`). They are reproduced here rather than invented so
- * a migrated external resolves byte-identical URLs to the pre-migration render.
+ * The string maps match the replacement chains used by the chezmoi templates
+ * (`.chezmoiexternals/*.toml`). Selectors preserve the expected asset URLs.
  */
 
 export const OPERATING_SYSTEMS = ["linux", "darwin"] as const;

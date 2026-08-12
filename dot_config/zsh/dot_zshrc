@@ -1,10 +1,3 @@
-#
-# Executes commands at the start of an interactive session.
-#
-# Authors:
-#   Sorin Ionescu <sorin.ionescu@gmail.com>
-#
-
 # Make the chezmoi-managed completion directory loadable. This MUST stay above
 # the prezto init below: prezto's `completion` module is what calls `compinit`,
 # and compinit only scans $fpath as it stands at that moment. It lives here
@@ -15,7 +8,6 @@
 # name; the (N) qualifier drops the entry when the directory is absent.
 fpath=($HOME/.local/share/zsh/site-functions(N) $fpath)
 
-# Source Prezto.
 if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
   source "${ZDOTDIR:-$HOME}/.zprezto/init.zsh"
 fi

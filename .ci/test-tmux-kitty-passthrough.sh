@@ -74,7 +74,8 @@ fi
 # The forced protocol must reach a real pane process. Assert it for a session
 # created after the server was already running and for a new window inside an
 # existing session — the two paths aoe actually uses.
-pane_env() { # $1 = label, $2 = tmux subcommand words
+# $1 = label, $2 = tmux subcommand words
+pane_env() {
   local out="$scratch/paneenv-$1"
   shift
   tmux -S "$sock" "$@" "printenv PI_FORCE_IMAGE_PROTOCOL > '$out' 2>&1 || echo UNSET > '$out'; sleep 30"
@@ -159,7 +160,8 @@ chmod 700 "$emit"
 # between the two runs is the one setting under test.
 printf 'source-file %s\nset -g allow-passthrough off\n' "$config" >"$scratch/off.conf"
 
-pty_run() { # $1 = socket, $2 = config, $3 = capture path
+# $1 = socket, $2 = config, $3 = capture path
+pty_run() {
   local run_sock=$1 run_conf=$2 cap=$3 pane_cmd
   # tmux takes the pane program as ONE shell command string, so quote the words
   # here or a scratch path containing a space would split into bogus arguments.
@@ -197,7 +199,8 @@ count() {
 # read: the capture must be byte-faithful, and the client must be able to receive
 # APC bytes at all. Either precondition failing makes the wrapped-payload verdict
 # meaningless, so each fails loudly with its own cause instead of skewing it.
-capture_case() { # $1 = label, $2 = socket, $3 = config, $4 = capture path
+# $1 = label, $2 = socket, $3 = config, $4 = capture path
+capture_case() {
   pty_run "$2" "$3" "$4"
   [ -s "$4" ] || fail "the $pty_provider capture for the $1 case is empty; the pty run produced nothing"
   [ "$(count "$sgr_marker" "$4")" != '0' ] \
@@ -206,7 +209,8 @@ capture_case() { # $1 = label, $2 = socket, $3 = config, $4 = capture path
     || fail "the $1 case never delivered a BARE Kitty APC to the client, which tmux forwards regardless of allow-passthrough; this environment cannot carry APC bytes to a tmux client, so the wrapped-payload verdict would be meaningless"
 }
 
-diagnose() { # $1 = capture path
+# $1 = capture path
+diagnose() {
   printf 'tmux-kitty-passthrough: capture diagnostics\n' >&2
   printf '  tmux version    : %s\n' "$tmux_version" >&2
   printf '  pty provider    : %s\n' "$pty_provider" >&2

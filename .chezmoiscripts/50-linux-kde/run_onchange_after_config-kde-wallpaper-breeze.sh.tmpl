@@ -12,11 +12,10 @@
 # TWO KINDS OF GATE, and the difference is the whole point of the fact registry:
 #
 #   * WHICH HOST IS THIS — the kde-guard include below (the `desktop` fact,
-#     .chezmoidata/facts.yaml). This replaced a bespoke
-#     `XDG_CURRENT_DESKTOP != *KDE*` test, the last host-desktop probe outside
-#     the registry: XDG_CURRENT_DESKTOP is a SESSION variable, so on a KDE host
-#     it also answered "is a Plasma session running", conflating the two. The
-#     fact answers only the first, exactly as every other 50-linux-kde script.
+#     .chezmoidata/facts.yaml). This fact separates host identity from session
+#     state: XDG_CURRENT_DESKTOP is a SESSION variable, so on a KDE host it also
+#     answers "is a Plasma session running", conflating the two. The fact answers
+#     only the host identity.
 #   * IS A SESSION RUNNING RIGHT NOW — the D-Bus / display-server /
 #     `pgrep plasmashell` checks below. These stay bash: they are runtime state,
 #     not host identity, and plasma-apply-wallpaperimage genuinely needs all

@@ -9,13 +9,8 @@
 # run_onchange_ script by itself — there is no fingerprint block, the rendered
 # array IS the trigger (same mechanism as the VSCodium extension list).
 #
-# WHY THIS FILE EXISTS. Eight KDE scripts used to be nothing but a desktop guard,
-# a `command -v kwriteconfig6` skip, and a flat list of kwriteconfig6 calls — the
-# same 30 lines of ceremony eight times over, with the actual configuration (a
-# file, a group path, a key, a type, a value) buried in it. Those eight collapsed
-# into this manifest plus one generic runner. Their per-setting rationale — which
-# is this repo's design record, and the main thing a collapse like this can lose —
-# is preserved verbatim below, grouped by the script it came from.
+# The per-setting rationale below records why each value exists and which
+# runtime behavior it controls.
 #
 # WHAT DOES **NOT** BELONG HERE. A row is a pure (file, group-path, key, type,
 # value) tuple and nothing else. The row shape gains no conditional field, no
@@ -59,9 +54,9 @@
 #           expansion. An unrecognized `@…@` token fails the render.
 #
 # ---------------------------------------------------------------------------
-# PER-SETTING RATIONALE (carried over verbatim from the eight collapsed scripts)
+# PER-SETTING RATIONALE
 #
-# kdeglobals [KDE] — Global Theme  (was config-kde-autotheme.sh)
+# kdeglobals [KDE] — Global Theme
 #   Fedora KDE Spin. Puts the desktop on Plasma's default Breeze Global
 #   Theme with automatic day/night switching (Plasma 6.5+):
 #     LookAndFeelPackage      = org.kde.breezedark.desktop  (initial theme)
@@ -74,7 +69,7 @@
 #   Breeze Dark -- the priority-2 fallback -- without any extra handling here.
 #   Applies after re-login.
 #
-# powerdevilrc [<profile>][Display] — idle screen dimming  (was config-kde-dimscreen.sh)
+# powerdevilrc [<profile>][Display] — idle screen dimming
 #   Disables PowerDevil's idle screen-dimming action in every power profile:
 #     DimDisplayWhenIdle       = false
 #     DimDisplayIdleTimeoutSec = -1
@@ -83,47 +78,43 @@
 #   value: `kwriteconfig6 --type int -1` would parse -1 as a flag.
 #   Applies after re-login or when powerdevil reloads its config.
 #
-# dolphinrc [General] — startup folder  (was config-kde-dolphin.sh)
+# dolphinrc [General] — startup folder
 #   Makes Dolphin open the home folder on startup instead of restoring tabs:
 #     RememberOpenedTabs = false
 #     HomeUrl            = $HOME   (here: the @homeDir@ placeholder, see above)
 #   Applies on next Dolphin launch.
 #
-# kwinrc [ElectricBorders] / [EdgeBarrier] — screen edges  (was config-kde-edges.sh)
+# kwinrc [ElectricBorders] / [EdgeBarrier] — screen edges
 #   Disables every screen edge/corner action and the Plasma 6 multi-monitor
 #   pointer barrier:
 #     [ElectricBorders] Top/TopRight/Right/BottomRight/Bottom/BottomLeft/Left/TopLeft = None
 #     [EdgeBarrier] CornerBarrier = false
 #     [EdgeBarrier] EdgeBarrier   = 0
-#   The eight corners were a bash `for` loop over the edge names; as data they are
-#   eight rows. The loop WAS the data — that is the point of the collapse.
 #   Applies after restarting KWin or logging out/in.
 #
-# ksmserverrc [General] — session restore  (was config-kde-emptysession.sh)
+# ksmserverrc [General] — session restore
 #   Always start with an empty desktop session (never restore the previous one):
 #     loginMode = emptySession
 #   Applies on next login (ksmserver reads this at session start).
 #
-# krunnerrc [Runners][krunner_kill] — Terminate Applications runner  (was config-kde-killrunner.sh)
+# krunnerrc [Runners][krunner_kill] — Terminate Applications runner
 #   Configures the "Terminate Applications" runner:
 #     useTriggerWord = true
 #     triggerWord    = kill
 #     sorting        = 1    (CPU usage)
-#   NOTE `sorting` is type `string`, not `int`, and that is deliberate fidelity:
-#   the collapsed script wrote it as a bare `--key sorting 1` with no `--type`, so
-#   it lands via KConfig's writeEntry fallback. The stored ini value is `1` either
-#   way; keeping the declared type at `string` preserves the write path
-#   byte-for-byte rather than quietly "correcting" it. Change it to `int` only
-#   deliberately.
+# NOTE `sorting` is `string`, not `int`, because the runner omits `--type` for
+# strings and calls `kwriteconfig6 --key sorting 1`, which uses KConfig's
+# `writeEntry` path. The stored ini value is `1` either way; change it to `int`
+# only deliberately.
 #   Applies on next KRunner launch.
 #
-# krunnerrc [General] — Spotlight-like KRunner  (was config-kde-krunner.sh)
+# krunnerrc [General] — Spotlight-like KRunner
 #   Makes KRunner behave like macOS Spotlight:
 #     FreeFloating    = true
 #     historyBehavior = ImmediateCompletion
 #   Applies on next KRunner launch (kquitapp6 krunner to reload a running instance).
 #
-# spectaclerc [General] — screenshot selection  (was config-kde-spectacle.sh)
+# spectaclerc [General] — screenshot selection
 #   Makes Spectacle not re-use the last captured rectangular region, matching
 #   Windows Snipping Tool and macOS Screenshot behavior:
 #     rememberSelectionRect = Never
@@ -134,13 +125,13 @@
 #   Applies on next Spectacle launch.
 kde:
   settings:
-    # --- kdeglobals: Breeze Global Theme, automatic day/night (ex-autotheme) ---
+    # kdeglobals: Breeze Global Theme, automatic day/night
     - { file: kdeglobals, group: KDE, key: LookAndFeelPackage, type: string, value: org.kde.breezedark.desktop }
     - { file: kdeglobals, group: KDE, key: DefaultLightLookAndFeel, type: string, value: org.kde.breeze.desktop }
     - { file: kdeglobals, group: KDE, key: DefaultDarkLookAndFeel, type: string, value: org.kde.breezedark.desktop }
     - { file: kdeglobals, group: KDE, key: AutomaticLookAndFeel, type: bool, value: true }
 
-    # --- powerdevilrc: no idle screen dimming, in all three profiles (ex-dimscreen) ---
+    # powerdevilrc: no idle screen dimming in all three profiles
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayWhenIdle, type: bool, value: false }
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
     - { file: powerdevilrc, group: Battery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
@@ -148,11 +139,11 @@ kde:
     - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
     - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
 
-    # --- dolphinrc: open home folder on startup, don't restore tabs (ex-dolphin) ---
+    # dolphinrc: open home folder on startup without restoring tabs
     - { file: dolphinrc, group: General, key: RememberOpenedTabs, type: bool, value: false }
     - { file: dolphinrc, group: General, key: HomeUrl, type: string, value: "@homeDir@" }
 
-    # --- kwinrc: every screen edge action off + pointer barrier off (ex-edges) ---
+    # kwinrc: disable screen edge actions and pointer barriers
     - { file: kwinrc, group: ElectricBorders, key: Top, type: string, value: None }
     - { file: kwinrc, group: ElectricBorders, key: TopRight, type: string, value: None }
     - { file: kwinrc, group: ElectricBorders, key: Right, type: string, value: None }
@@ -164,20 +155,20 @@ kde:
     - { file: kwinrc, group: EdgeBarrier, key: CornerBarrier, type: bool, value: false }
     - { file: kwinrc, group: EdgeBarrier, key: EdgeBarrier, type: int, value: 0 }
 
-    # --- ksmserverrc: always start an empty session (ex-emptysession) ---
+    # ksmserverrc: always start an empty session
     - { file: ksmserverrc, group: General, key: loginMode, type: string, value: emptySession }
 
-    # --- krunnerrc: Terminate Applications runner (ex-killrunner) ---
-    #     `sorting` is type string on purpose — see the rationale block above.
+    # krunnerrc: Terminate Applications runner
+    # `sorting` is type string on purpose; see the rationale block above.
     - { file: krunnerrc, group: Runners/krunner_kill, key: useTriggerWord, type: bool, value: true }
     - { file: krunnerrc, group: Runners/krunner_kill, key: triggerWord, type: string, value: kill }
     - { file: krunnerrc, group: Runners/krunner_kill, key: sorting, type: string, value: "1" }
 
-    # --- krunnerrc: Spotlight-like search box (ex-krunner) ---
+    # krunnerrc: Spotlight-like search box
     - { file: krunnerrc, group: General, key: FreeFloating, type: bool, value: true }
     - { file: krunnerrc, group: General, key: historyBehavior, type: string, value: ImmediateCompletion }
 
-    # --- spectaclerc: never remember the last rectangular selection (ex-spectacle) ---
+    # spectaclerc: never reuse the last rectangular selection
     - { file: spectaclerc, group: General, key: rememberSelectionRect, type: string, value: Never }
 
     # --- kdeglobals: default terminal emulator = kitty (defaultterminal) ---

@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# Fails if Windows support regresses back into any surface the 2026-08-05 and
-# 2026-08-06 Windows-purge plans removed it from: a `.chezmoi.os "windows"`
-# conditional -- direct field access or via a local $variable, either eq/ne
-# token order -- in a chezmoi template; `windows` as an os:/validOS list value
-# in the omp plugin/MCP catalog's OS-eligibility validation; or a
-# windows-amd64/windows-arm64 PlatformKey literal in release-lock production
-# code or the committed lock.
+# Fails if Windows support appears in any surface covered by this check:
+# `.chezmoi.os "windows"` conditionals, `windows` os:/validOS values in the
+# omp plugin/MCP catalog, or `windows-amd64`/`windows-arm64` PlatformKey
+# literals in release-lock production code or the committed lock.
 #
 # Extracted from render-dotfiles.yml's shellcheck job so
 # test-windows-references-gates.sh can exercise it against synthetic
@@ -37,11 +34,10 @@ scan() {
   fi
 }
 
-# R14: a .chezmoi.os "windows" conditional -- direct field access
-# (.chezmoi.os) or a local $variable it was assigned to -- reappearing in a
-# template that gated Windows before the 2026-08-05 drop and this pass's
-# leftover-gate cleanup. Scans every .chezmoitemplates/*.tmpl partial too,
-# including release-lock-ref.tmpl, the sole shared lock-lookup entry point.
+# R14: reject a `.chezmoi.os "windows"` conditional — direct field access
+# (`.chezmoi.os`) or a local `$variable` assigned from it — in a template.
+# Scan every `.chezmoitemplates/*.tmpl` partial, including release-lock-ref.tmpl,
+# the sole shared lock-lookup entry point.
 scan 'a .chezmoi.os "windows" conditional has reappeared' -rEn \
   '(eq|ne)[[:space:]]+\.chezmoi\.os[[:space:]]+"windows"|(eq|ne)[[:space:]]+"windows"[[:space:]]+\.chezmoi\.os|(eq|ne)[[:space:]]+\$[A-Za-z_][A-Za-z0-9_]*[[:space:]]+"windows"|(eq|ne)[[:space:]]+"windows"[[:space:]]+\$[A-Za-z_][A-Za-z0-9_]*' \
   .chezmoiexternals/*.toml .chezmoiscripts .chezmoitemplates/*.tmpl .chezmoi.toml.tmpl

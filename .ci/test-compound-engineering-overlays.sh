@@ -131,7 +131,7 @@ done
 # --- skip when CE version dir absent ---
 build_fake_ce
 rm -rf "$current"
-env HOME="$home" bash "$prov"   # exits 0
+env HOME="$home" bash "$prov"
 [ ! -e "$current" ] || { echo "CE version dir recreated when absent" >&2; exit 1; }
 
 # --- foreign symlink at the reference path: reclaim it, never write through it ---

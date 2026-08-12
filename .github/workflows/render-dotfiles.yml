@@ -273,11 +273,16 @@ jobs:
           # The specific backend markers below + `bash -n` prove the include actually
           # resolved: an unresolved `{{ include ... }}` directive yields neither BACKEND_LABEL
           # nor valid bash.
-          grep -q 'BACKEND_LABEL="dracut + systemd-cryptenroll"' "${tool}"  # shared backend inlined
-          grep -q 'systemd-cryptenroll'                          "${tool}"  # TPM2 enrollment tool
-          grep -q 'tpm2-device=auto'                             "${tool}"  # crypttab unlock option
-          grep -q 'dracut -f --regenerate-all'                   "${tool}"  # initramfs rebuild
-          bash -n "${tool}"                                                  # rendered result is valid bash
+          # shared backend inlined
+          grep -q 'BACKEND_LABEL="dracut + systemd-cryptenroll"' "${tool}"
+          # TPM2 enrollment tool
+          grep -q 'systemd-cryptenroll'                          "${tool}"
+          # crypttab unlock option
+          grep -q 'tpm2-device=auto'                             "${tool}"
+          # initramfs rebuild
+          grep -q 'dracut -f --regenerate-all'                   "${tool}"
+          # rendered result is valid bash
+          bash -n "${tool}"
           echo "- LUKS TPM2 tool (${{ matrix.os }}) rendered the shared dracut + systemd-cryptenroll backend" \
             >> "${GITHUB_STEP_SUMMARY}"
 
@@ -410,7 +415,8 @@ jobs:
           # *.tmpl, and every .chezmoiexternals file is an implicit template.
           while IFS= read -r -d '' f; do
             rel="${f#./}"
-            dest="${out}/${rel%.tmpl}"   # foo.sh.tmpl -> foo.sh; externals keep .toml
+            # foo.sh.tmpl -> foo.sh; externals keep .toml
+            dest="${out}/${rel%.tmpl}"
             mkdir -p "$(dirname "${dest}")"
             total=$((total + 1))
             if render_one < "${f}" > "${dest}" 2> "${dest}.stderr"; then

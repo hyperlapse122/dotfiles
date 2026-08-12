@@ -15,13 +15,10 @@
 # ---------------------------------------------------------------------------
 # `gates:` — which named host fact decides each CONDITIONAL package group.
 #
-# Most keys below install unconditionally. The ones that do not are listed in
-# the `gates:` map, which binds the KEY to a fact from the host-fact
-# registry (.chezmoidata/facts.yaml). Until now the gate lived in the key NAME
-# and nowhere else: `nvidiaPackages` installs — when? The answer was a sysfs
-# grep buried in the installer. Now the
-# data names the fact, one probe answers it for the whole repo, and a typo
-# aborts the apply instead of silently evaluating false.
+# Most keys below install unconditionally. Conditional groups are listed in the
+# `gates:` map, which binds each group key to a fact from the host-fact registry
+# (.chezmoidata/facts.yaml). The value is validated before it reaches the
+# installer, so an unknown fact cannot silently evaluate false.
 #
 # Gate-expression grammar — the same one system.yaml's `gate:` uses, checked by
 # the same partial (.chezmoitemplates/facts-validate.tmpl):
@@ -39,22 +36,12 @@
 #
 #   HAS_NVIDIA=0; fact_gate {{ index $gates "nvidiaPackages" | quote }} && HAS_NVIDIA=1
 #
-# and keeps its own `if` around each package array, unchanged. The arrays stay
-# rendered UNCONDITIONALLY on purpose: the CI shellcheck job lints only the
-# RENDERED script, so a template-gated array would quietly drop out of that
-# coverage on every host that does not match the gate. Editing a value HERE —
-# `kdePackages: desktop.kde` to `desktop.gnome`, say — now changes what the
-# installer's HAS_KDE flag resolves to on the very next apply, because the
-# installer reads THIS key's value to seed it; it no longer merely gets
-# validated and then ignored. (Before fact_gate() existed, each installer read
-# a `gates:` value far enough to know a fact NAME and then hand-wired that
-# specific FACT_* into its own flag, bypassing whatever this map actually said
-# — a `gates:` edit changed nothing at runtime. That gap is what fact_gate()
-# closes; see its header in .chezmoitemplates/facts-gate.sh.tmpl for the full
-# history.) facts-validate.tmpl still runs first and still `fail`s on an
-# unknown fact, a boolean compared to a value, or a `desktop.<typo>` — a gate
-# name can never quietly mean nothing, and now it can never quietly mean
-# nothing to the INSTALLER either.
+# Each package array stays rendered unconditionally so the rendered-script
+# shellcheck job covers every package list on every host.
+#
+# facts-validate.tmpl still fails on an unknown fact, a boolean compared to a
+# value, or a `desktop.<typo>`. A gate name cannot quietly mean nothing to the
+# installer.
 #
 # FORCE_NVIDIA is NOT a fact and is NOT a
 # gate: it is an env-var escape hatch layered on top of the seeded flag
@@ -83,38 +70,46 @@ packages:
 
     # Flatpak apps installed system-wide from Flathub via `flatpak install`.
     flatpaks:
-      - com.discordapp.Discord  # Discord voice/text chat client
+      - com.discordapp.Discord
       - org.telegram.desktop
       - io.github.nroduit.Weasis
     # Global .NET tools installed via `dotnet tool install -g`.
     dotnetTools:
-      - git-credential-manager  # cross-platform Git credential helper (GCM)
-      - powershell  # PowerShell (pwsh) cross-platform shell
-      - csharp-ls  # C# language server (LSP)
+      - git-credential-manager
+      - powershell
+      - csharp-ls
 
     fedora:
       # Conditional package groups → the fact that gates each. Grammar and the
       # declaration-not-a-switch rule are in the file header above; every other
       # key under `fedora:` installs unconditionally.
       gates:
-        nvidiaPackages: nvidia  # an NVIDIA GPU is present (PCI vendor 0x10de)
-        kdePackages: desktop.kde  # Fedora KDE Spin (plasmashell shipped by the ISO)
-        gnomePackages: desktop.gnome  # Fedora Workstation (gnome-shell shipped by the ISO)
-        bareMetalPackages: "!virt"  # neither a VM nor a container
+        # An NVIDIA GPU is present (PCI vendor 0x10de).
+        nvidiaPackages: nvidia
+        # Fedora KDE Spin (plasmashell shipped by the ISO).
+        kdePackages: desktop.kde
+        # Fedora Workstation (gnome-shell shipped by the ISO).
+        gnomePackages: desktop.gnome
+        # Neither a VM nor a container.
+        bareMetalPackages: "!virt"
       # COPR (community) repositories enabled via `dnf copr enable`. Fedora-only
       # mechanism: `copr enable <owner/project>` resolves the whole repo from one
       # token.
       coprs:
-        - alternateved/keyd  # COPR hosting the keyd keyboard remapper
-        - jdxcode/mise  # COPR hosting mise (runtime/tool version manager)
+        - alternateved/keyd
+        - jdxcode/mise
       # GPG keys imported (rpm --import) to verify third-party repo packages.
       # Fedora-only mechanism: rpm has ONE global keyring, so a key is declared once
       # and stands apart from the repos that use it.
       keys:
-        - https://downloads.1password.com/linux/keys/1password.asc  # 1Password package signing key
-        - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg  # VSCodium repo signing key
-        - https://dl.google.com/linux/linux_signing_key.pub  # Google Chrome repo signing key
-        - https://repo.cider.sh/RPM-GPG-KEY  # Cider Collective repo signing key
+        # 1Password package signing key.
+        - https://downloads.1password.com/linux/keys/1password.asc
+        # VSCodium repository signing key.
+        - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+        # Google Chrome repository signing key.
+        - https://dl.google.com/linux/linux_signing_key.pub
+        # Cider Collective repository signing key.
+        - https://repo.cider.sh/RPM-GPG-KEY
       # Third-party .repo definitions written verbatim to /etc/yum.repos.d.
       # Named for the artifact, like directRpms, because the entry SHAPE is the
       # mechanism: dnf reads a whole .repo ini (so the entry is one `content`
@@ -162,7 +157,7 @@ packages:
       # Remote .repo files added via `dnf config-manager addrepo`. Fedora-only
       # mechanism: dnf can fetch a vendor-authored .repo file whole and adopt it.
       repoFiles:
-        - https://pkgs.tailscale.com/stable/fedora/tailscale.repo  # Tailscale mesh-VPN stable repo
+        - https://pkgs.tailscale.com/stable/fedora/tailscale.repo
       # Fedora enables RPM Fusion for Steam and other nonfree packages while the
       # CUDA repository owns the NVIDIA driver stack below. These package-name
       # globs become repository-scoped DNF exclusions so RPM Fusion cannot offer
@@ -179,141 +174,137 @@ packages:
       # from the individual packages below). Fedora-only mechanism: dnf comps groups
       # are first-class install targets.
       groups:
-        - development-tools  # core build toolchain (gcc, make, autotools, git, ...)
-        - c-development  # C headers/libraries for building against system libs
+        - development-tools
+        - c-development
       # Foundational packages installed in their own transaction before the main
       # set, so kernel headers/devel are in place when the DKMS packages
       # (kmod-nvidia-latest-dkms, dkms) build their modules.
       corePackages:
-        - clang21-libs  # Clang 21 runtime libraries
-        - kernel  # Linux kernel
-        - kernel-devel  # kernel build headers/Makefiles for out-of-tree modules
-        - kernel-devel-matched  # kernel-devel pinned to the running/latest kernel
-        - kernel-headers  # userspace-facing kernel API headers
+        - clang21-libs
+        - kernel
+        - kernel-devel
+        - kernel-devel-matched
+        - kernel-headers
       packages:
         # Build tooling
-        - clang  # LLVM C/C++/Obj-C compiler
-        - gcc-c++  # GNU C++ compiler
-        - pkg-config  # query compile/link flags for installed libraries
-        - systemd-devel  # libudev/libsystemd headers (libudev.pc for the hidapi backend)
+        - clang
+        - gcc-c++
+        - pkg-config
+        - systemd-devel
         - clang-tools-extra
         - mingw64-gcc
 
         # CLI utilities
-        - btop  # interactive resource/process monitor
-        - chezmoi  # declarative dotfiles manager (manages this repo)
-        - fd-find  # fast, user-friendly find alternative (fd)
-        - jq  # JSON processor for live agent config overlays
-        - yq  # YAML/JSON processor (general YAML editing; sibling of jq)
-        - gnupg2  # OpenPGP implementation used for signing and the encrypted garden registry
+        - btop
+        - chezmoi
+        - fd-find
+        - jq
+        - yq
+        - gnupg2
         # kdotool: managed by mise (cargo:kdotool — see dot_config/mise/config.toml)
-        - nvtop  # GPU process/usage monitor
-        - ripgrep  # fast recursive regex code search (rg)
-        - tmux  # terminal multiplexer
-        - xxd  # hex dump / reverse utility
-        - yp-tools  # NIS/YP client utilities
+        - nvtop
+        - ripgrep
+        - tmux
+        - xxd
+        - yp-tools
 
         # Keyboard remapper
-        - keyd  # key remapping daemon (from the keyd COPR)
+        - keyd
 
         # Language toolchains + version manager
-        - dotnet-sdk-10.0  # .NET SDK 10.0
-        - dotnet-sdk-8.0  # .NET SDK 8.0
-        - mise  # polyglot runtime/tool version manager
+        - dotnet-sdk-10.0
+        - dotnet-sdk-8.0
+        - mise
 
         # Ruby build dependencies (consumed by mise's ruby-build).
         # The runtime libs libffi/libyaml are pulled in transitively.
-        - libffi-devel  # FFI headers (ruby-build dependency)
-        - libyaml-devel  # YAML headers (ruby-build / psych dependency)
+        - libffi-devel
+        - libyaml-devel
 
         # Hardware sensors / fan control
-        - lm_sensors  # hardware temperature/voltage/fan sensor readouts
+        - lm_sensors
 
         # Logitech device manager
-        - solaar  # Logitech HID++ device manager
-        - solaar-udev  # udev rules granting Solaar device access
+        - solaar
+        - solaar-udev
 
         # Smartcard / code signing — Authenticode signing with the certificate held on
         # a SafeNet eToken 5110 (Gemalto IDPrime 940). The signing packages form one
         # chain — osslsigncode -> pkcs11-provider -> opensc -> pcscd -> CCID -> card —
         # and dropping any of them breaks signing; pcsc-tools is diagnostics only.
-        - pcsc-lite  # PC/SC smartcard daemon; pcscd.socket is enabled by the distro preset, so no enablement script belongs here
-        - pcsc-lite-ccid  # USB CCID reader driver the daemon binds the token through
-        - opensc  # PKCS#11 module for the IDPrime card, plus the pkcs11-tool / pkcs15-tool probes
-        - pkcs11-provider  # OpenSSL 3 PKCS#11 provider; osslsigncode loads it per invocation, so openssl.cnf stays untouched
-        - osslsigncode  # Authenticode signer for PE/MSI (the signtool replacement)
-        - pcsc-tools  # pcsc_scan, the reader-level probe that opensc's tools sit above
+        - pcsc-lite
+        - pcsc-lite-ccid
+        - opensc
+        - pkcs11-provider
+        - osslsigncode
+        - pcsc-tools
 
         # Password manager
-        - 1password  # 1Password desktop app
-        - 1password-cli  # 1Password CLI (op)
+        - 1password
+        - 1password-cli
 
         # Editor
-        - codium  # VSCodium (telemetry-free VS Code)
+        - codium
 
         # Web browser
-        - google-chrome-stable  # Google Chrome (stable channel)
+        - google-chrome-stable
 
         # Music player (Apple Music client; requires a purchased license)
-        - Cider  # Cider Apple Music client (from the Cider Collective repo)
+        - Cider
 
         # Container runtime (rootless Podman + tooling)
-        - podman  # daemonless OCI container engine
-        - podman-docker  # docker CLI shim that forwards to podman
-        - podman-compose  # Compose implementation for podman
-        - buildah  # OCI/Docker image builder
-        - containers-common  # shared container registries/policy config
-        - passt  # user-mode networking (pasta) for rootless containers
-        - fuse-overlayfs  # rootless overlay filesystem driver
-        - slirp4netns  # user-mode networking for rootless network namespaces
+        - podman
+        - podman-docker
+        - podman-compose
+        - buildah
+        - containers-common
+        - passt
+        - fuse-overlayfs
+        - slirp4netns
         - kubernetes-client
 
         # Screen recording / streaming / video editing
-        - kdenlive  # non-linear video editor
-        - obs-studio  # screen recording / live streaming
+        - kdenlive
+        - obs-studio
 
         # Mesh networking
-        - tailscale  # WireGuard-based mesh VPN client
+        - tailscale
 
         # Wayland clipboard management
-        - wl-clipboard  # Wayland clipboard CLI (wl-copy / wl-paste)
+        - wl-clipboard
 
-        # Filesystem access and OS-level containers. No hypervisor is managed here:
-        # Oracle VirtualBox was retired along with its Oracle repo, its signing key,
-        # the `vboxusers` group membership, and the whole Secure Boot module-signing
-        # path in the Fedora installer (KVM/QEMU/libvirt/virt-manager had been
-        # dropped earlier in its favor and were not brought back). fuse3 + ntfs-3g
-        # stay for read-only ReFS/NTFS access to Windows Dev Drive vhdx images, and
-        # fuse3-devel is the refs-fuse / refsprogs build dependency, so none of them
-        # depended on the hypervisor.
-        - fuse3  # FUSE 3 userspace filesystem support
-        - fuse3-devel  # FUSE 3 headers (refs-fuse / refsprogs build dependency)
-        - ntfs-3g  # NTFS read/write driver (FUSE)
-        - systemd-container  # systemd-nspawn / machinectl container tooling
+        # Filesystem access and OS-level containers. No hypervisor is managed here.
+        # fuse3 and ntfs-3g provide read-only ReFS/NTFS access to Windows Dev
+        # Drive VHDX images. fuse3-devel supplies the refs-fuse / refsprogs
+        # build dependency.
+        - fuse3
+        - fuse3-devel
+        - ntfs-3g
+        - systemd-container
 
         # Dynamic Kernel Module Support
-        - dkms  # builds/signs out-of-tree kernel modules (e.g. the NVIDIA dkms driver)
+        - dkms
 
         # Tauri development
-        - curl  # HTTP client / file downloader
-        - file  # file-type detection utility
-        - libappindicator-gtk3-devel  # AppIndicator (tray icon) headers for Tauri
-        - librsvg2-devel  # SVG rendering headers (librsvg)
-        - libxdo-devel  # libxdo headers (X automation) for Tauri
-        - openssl-devel  # OpenSSL headers
-        - webkit2gtk4.1-devel  # WebKitGTK headers (Tauri webview)
-        - wget  # HTTP/HTTPS file downloader
+        - curl
+        - file
+        - libappindicator-gtk3-devel
+        - librsvg2-devel
+        - libxdo-devel
+        - openssl-devel
+        - webkit2gtk4.1-devel
+        - wget
 
-        - expect  # automate interactive CLI prompts (TCL expect)
+        - expect
       # Gate `desktop.kde` — Fedora KDE Spin. fcitx5 is the unified input-method
       # framework across both KDE and GNOME (see gnomePackages for the same set
       # under its own gate; the two are mutually exclusive so the packages
       # cannot double-install). The KDE gate additionally pulls the Qt pinentry
       # KDE hosts reference from ~/.gnupg/gpg-agent.conf.
       kdePackages:
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
-        - pinentry-qt  # Qt pinentry, referenced by ~/.gnupg/gpg-agent.conf on KDE hosts
+        - fcitx5
+        - fcitx5-hangul
+        - pinentry-qt
         # kitty is NOT installed from the distro package any more: the managed
         # config's vertical tab bar needs kitty >= 0.48 and the Fedora stream
         # skipped 0.44-0.46 and has not submitted 0.48. It is provisioned from
@@ -322,7 +313,7 @@ packages:
         # ONE-TIME MANUAL STEP on a host that still carries the distro package
         # (this repo adds no teardown scripts, and this manifest has no removal
         # key): sudo dnf remove kitty
-        - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
+        - xdg-terminal-exec
       # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
       # framework as the KDE targets (unified input-method policy: ibus is
       # rejected as too buggy). GNOME has no built-in KWin virtualkeyboard, so
@@ -333,29 +324,29 @@ packages:
       # GNOME Shell (mutter has no wlr-layer-shell) — see gnome.yaml
       # shellExtensions.kimpanel and .chezmoiscripts/50-linux-gnome/.
       gnomePackages:
-        - fcitx5  # input method framework
-        - fcitx5-hangul  # Korean (Hangul) input engine for fcitx5
-        - pinentry-gnome3  # gcr/GTK pinentry, referenced by ~/.gnupg/gpg-agent.conf on GNOME hosts
+        - fcitx5
+        - fcitx5-hangul
+        - pinentry-gnome3
         # kitty: provisioned from the locked upstream bundle — see the note in
         # kdePackages above, including the one-time `sudo dnf remove kitty`.
-        - xdg-terminal-exec  # freedesktop default-terminal resolver (makes kitty the default terminal)
+        - xdg-terminal-exec
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
       # always probed; NOT the /etc manifest's `vm` fact, which is --vm).
       bareMetalPackages:
-        - steam  # Steam game client (needs a real GPU; skipped in VMs)
+        - steam
       # Gate `nvidia` — an NVIDIA GPU is present (PCI vendor id 0x10de). Pulled
       # from the CUDA + nvidia-container repos added during repo setup, under
       # the same gate.
       nvidiaPackages:
-        - cuda-drivers  # NVIDIA CUDA driver metapackage
-        - cuda-toolkit-13-3  # CUDA 13.3 toolkit (nvcc, libraries)
-        - kmod-nvidia-latest-dkms  # NVIDIA kernel module built via DKMS
-        - nvidia-driver  # NVIDIA driver metapackage
-        - nvidia-container-toolkit  # NVIDIA container runtime integration
-        - nvidia-container-toolkit-base  # base components for the container toolkit
-        - libnvidia-container-tools  # CLI tools for the NVIDIA container library
-        - libnvidia-container1  # NVIDIA container runtime library
+        - cuda-drivers
+        - cuda-toolkit-13-3
+        - kmod-nvidia-latest-dkms
+        - nvidia-driver
+        - nvidia-container-toolkit
+        - nvidia-container-toolkit-base
+        - libnvidia-container-tools
+        - libnvidia-container1
       # RPMs installed directly from a vendor URL (no repo): import the GPG
       # key(s), then install the link matching the host arch (skipped when `id`
       # is already an installed package). An entry with a pinned `version` is
@@ -366,13 +357,17 @@ packages:
       # kernel arch identifiers matched verbatim by the installer, not schema keys,
       # so they keep their upstream spelling (see the exceptions note in the header).
       directRpms:
-        - id: teamviewer  # remote desktop / remote support client
+        - id: teamviewer
           keys:
-            - https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc  # TeamViewer 2017 package signing key
-            - https://linux.teamviewer.com/pubkey/currentkey.asc  # TeamViewer current signing key
+            # TeamViewer 2017 package signing key.
+            - https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc
+            # TeamViewer current signing key.
+            - https://linux.teamviewer.com/pubkey/currentkey.asc
           rpms:
-            x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm  # 64-bit Intel/AMD
-            aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm  # 64-bit ARM
+            # 64-bit Intel/AMD.
+            x86_64: https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm
+            # 64-bit ARM.
+            aarch64: https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm
 
   # Package authority v2. The Fedora installer continues to consume the legacy
   # lists above; this inventory is the validated cross-platform ownership ledger
