@@ -113,6 +113,7 @@ agents:
       - google-antigravity/gemini-3.*
       - kimi-code/*
       - openai-codex/gpt-5.6-luna
+      - openai-codex/gpt-5.6-terra
       disabledProviders:
       - openrouter
       - opencode-go
@@ -120,7 +121,7 @@ agents:
       - zai
       - github-copilot
       modelRoles:
-        advisor: openai-codex/gpt-5.6-luna:xhigh
+        advisor: openai-codex/gpt-5.6-terra:xhigh
         commit: "@smol"
         default: anthropic/claude-opus-5:high
         plan: "@slow"
@@ -152,7 +153,7 @@ agents:
       retry.fallbackChains:
         anthropic/claude-opus-5:
         - kimi-code/k3:max
-        - openai-codex/gpt-5.6-luna:max
+        - openai-codex/gpt-5.6-terra:max
         - google-antigravity/gemini-3.6-flash:high
         openai-codex/gpt-5.6-luna:
         - google-antigravity/gemini-3.6-flash:high
@@ -161,7 +162,7 @@ agents:
         default:
         - anthropic/claude-opus-5:high
         - kimi-code/k3:max
-        - openai-codex/gpt-5.6-luna:max
+        - openai-codex/gpt-5.6-terra:max
         - google-antigravity/gemini-3.6-flash:high
       secrets.enabled: true
       providers.webSearchOrder:

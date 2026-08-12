@@ -286,7 +286,8 @@ jq -e '
     "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",
     "kimi-code/*",
-    "openai-codex/gpt-5.6-luna"
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra"
   ]
   and (."retry.fallbackChains" | has("default"))
   and ((."retry.fallbackChains" | has("openai-codex/gpt-5.6-sol")) | not)
