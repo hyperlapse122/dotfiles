@@ -75,7 +75,7 @@ Deploying that target has a second-order cost the file itself does not show: eve
 
 The default check uses a per-user scratch directory, stub `op`, empty config, throwaway destination, and `--source "$PWD"`. The stub must return newline-free secrets when parsing rendered JSON/TOML. Render every changed template/script through `chezmoi execute-template`; scripts are not targets and MUST be compared as rendered text on both sides. Disclose any onchange side effects, especially network/service restarts; the first apply that reruns `install-system-30-network` MUST be performed from a local console, not SSH/Tailscale.
 
-`git diff --check`, `git status`, and a diff limited to the requested scope are required. `chezmoi archive --exclude=encrypted,externals,scripts` may compare extracted target trees, but archive bytes are not comparable by mtime and the archive omits scripts; compare rendered scripts separately and state that blind spot. If local rendering is unavailable, use CI artifacts from `.github/workflows/render-dotfiles.yml` and state the limitation. After a PR receives a `chatgpt-codex-connector` eyes reaction, wait for it to resolve to blocking review comments (address/reply to each) or a thumbs-up before treating review as complete.
+`git diff --check`, `git status`, and a diff limited to the requested scope are required. `chezmoi archive --exclude=encrypted,externals,scripts` may compare extracted target trees, but archive bytes are not comparable by mtime and the archive omits scripts; compare rendered scripts separately and state that blind spot. If local rendering is unavailable, use CI artifacts from `.github/workflows/render-dotfiles.yml` and state the limitation.
 
 ```sh
 scratch="$HOME/.cache/agent-scratch/chezmoi-op-stub"
