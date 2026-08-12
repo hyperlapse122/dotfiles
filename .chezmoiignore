@@ -1,5 +1,6 @@
 # Repository files
 ./AGENTS.md
+./STRATEGY.md
 ./agents.lock
 ./mise.toml
 ./mise.lock
