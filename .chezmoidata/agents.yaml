@@ -1,67 +1,6 @@
-# .chezmoidata/agents.yaml — single source of truth for ALL agent configuration.
-#
-# Consumer map:
-#   agents.mcp.servers
-#     -> omp mcp.json (dot_omp/private_agent/private_readonly_mcp.json.tmpl)
-#   agents.skills.external
-#     -> .chezmoiexternals/ai-agents.toml (agent skills fetched as externals)
-#   agents.marketplaces + agents.omp.plugins
-#     -> .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
-#   agents.aoe
-#     -> ~/.config/agent-of-empires/config.toml, deep-merged by
-#        run_after_config-aoe.sh.tmpl via the kimi-reconcile binary
-#   agents.omp.settings
-#     -> run_after_config-omp-settings.sh.tmpl, which asserts each declared omp
-#        settings PATH into the omp-owned ~/.omp/agent/config.yml. Also READ by
-#        the models target below, whose shared validator proves every model
-#        override is named by a declared selector here.
-#   agents.omp.models
-#     -> dot_omp/private_agent/private_readonly_models.yml.tmpl (~/.omp/agent/models.yml).
-#        Override-only providers adjusting metadata on models omp already serves.
-#        Also the validator's second caller: it renders the same shared partial,
-#        so a model override here is cross-checked against the selectors above.
-#   agents.validOS
-#     -> shared os: applicability vocabulary for agents.mcp.servers and
-#        agents.marketplaces, read by both consuming templates instead of each
-#        hand-declaring the same list.
-#   agents.omp.auth.env
-#     -> run_after_config-omp-auth.sh.tmpl, which reconciles the declared
-#        credentials in the live ~/.omp/agent/.env
-#
-# Add or change agent configuration HERE, not in the consuming templates. Those
-# templates retain only target-specific FORMAT and live-file merge mechanics.
-#
-# Secrets: .chezmoidata files are static, so secret values are stored as op://
-# reference strings. resolve-op-refs-json.tmpl recursively walks maps, slices,
-# and scalars: a string starting exactly with op:// is onepasswordRead-resolved
-# at render time; every other value and type passes through unchanged. This is
-# field-independent and therefore works for provider options, nested headers,
-# and MCP headers without secret-key-specific template branches.
-#
-# The omp MCP render hashes the unresolved agents.mcp data, so an MCP edit
-# re-triggers it without coupling unrelated changes. Rendered secrets are not
-# fingerprinted; secret rotation alone follows the consumer's documented
-# onchange behavior.
 
 agents:
-  # Shared os: applicability vocabulary — every os: field below (mcp.servers,
-  # marketplaces) is validated against this list by its consuming template.
   validOS: [linux, darwin]
-  # MCP servers consumed by omp's native MCP runtime.
-  # `transport` is the discriminator: stdio uses command/args; http uses url plus
-  # optional headers. Each consumer maps that neutral shape into its native
-  # schema.
-  # `auth: oauth` marks an HTTP server whose credentials belong in each harness's
-  # native OAuth store; credentials and refresh tokens never enter source data.
-  # Optional applicability is shared across every consumer:
-  #   os: [linux, darwin]  (omitted means every OS)
-  #   container: keep | skip        (omitted means keep)
-  #   harnessSkip: [<harness id>]   (omitted means every harness)
-  # harnessSkip is an EXCLUSION list, so a new harness inherits every server
-  # unless it is named. omp is the sole managed harness and sole caller; a
-  # harnessSkip entry naming any other id fails as unknown.
-  # agent-mcp-servers-json.tmpl validates and filters these fields before any
-  # target-specific formatter sees the record.
   mcp:
     servers:
     - name: codegraph
@@ -93,15 +32,9 @@ agents:
       url: https://mcp.exa.ai/mcp
       headers:
         x-api-key: op://Private/Exa/API Key
-      # omp has a native Exa search provider fed by EXA_API_KEY from its dotenv,
-      # so the MCP path would duplicate the capability and put the key in a
-      # second rendered file. Every other harness keeps this server.
       harnessSkip:
       - omp
   skills:
-    # Existing individually versioned externals. For host: github, `name` is
-    # also the skills/<name>/ subtree in the source repository. GitLab entries
-    # fetch one declared SKILL.md from `skillPath`.
     external:
     - name: agent-browser
       source: vercel-labs/agent-browser
@@ -120,30 +53,9 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
-  # omp plugin marketplaces, single-sourced here. omp's plugin updater
-  # (run_onchange_after_update-omp-plugins.sh.tmpl) ranges over
-  # agents.omp.plugins and, per entry, looks up its marketplace here to resolve
-  # the source path and OS/container eligibility. `marketplaces` is the shared
-  # registry keyed by each marketplace's registered name.
-  #   - kind: how the updater resolves the marketplace source path.
-  #       localDir      -> a host directory OMP scans natively (h82-dotfiles).
-  #       localArchive  -> the versioned tree chezmoi extracts from a GitHub
-  #                        archive (compound-engineering-plugin). `source` and
-  #                        `externalPath` live here because the archive is shared
-  #                        across OSes; omp reads the extracted path on every
-  #                        desktop OS. The version selector is the
-  #                        `compoundEngineeringRelease` GitHub release train
-  #                        resolved through the release lock.
-  #   - os: the OSes where omp emits the plugin row, taken directly from each
-  #     marketplace's declared list (no special-casing).
-  #   - container: `skip` filters the row when the `container` fact is true
-  #     (mxm4-haptic has nothing to pulse in a container); `keep` leaves it in.
-  #     This applies to every plugin filed under the marketplace; a plugin row
-  #     cannot override it.
   marketplaces:
     h82-dotfiles:
       kind: localDir
-      # Relative to $HOME; OMP-native catalog.
       path: .local/share/omp-plugins
       os: [linux, darwin]
       container: skip
@@ -154,64 +66,17 @@ agents:
       versionSource: compoundEngineeringRelease
       os: [linux, darwin]
       container: keep
-    # aoe (agent-of-empires) launches custom agents declared here. Apply
-  # reconciles ONLY these declared leaves into aoe's live global
-  # ~/.config/agent-of-empires/config.toml via the existing kimi-reconcile
-  # binary (run_after_config-aoe.sh.tmpl), preserving every undeclared key aoe
-  # writes there itself. Each custom_agents.<name> value is the command aoe runs
-  # for that agent; the invoker replaces `~/` with the home dir in the emitted
-  # JSON, so a leading-~/ wrapper path is expanded to absolute while a bare
-  # command name (no ~/) passes through verbatim. agent_detect_as.<name> tells
-  # aoe which known agent's launch flags to emit; a name absent from that map is
-  # launched with no injected flag.
-  #   - zsh: the bare `zsh` command (resolved on PATH, no wrapper, no ~/ to
-  #     expand), with NO agent_detect_as entry, so aoe injects no flag and runs a
-  #     plain interactive shell. Registered ahead of use — the intent is to later
-  #     point aoe's default sessions (e.g. default-branch worktrees) at this
-  #     plain-shell agent instead of a coding agent; that default wiring is not
-  #     done here yet.
-  # The `tmux` leaves exist because aoe's `auto` modes step aside for a user
-  # tmux config, and this repo deploys one (`dot_config/tmux/tmux.conf`):
-  #   - status_bar: `auto` defers on the mere EXISTENCE of ~/.tmux.conf,
-  #     $XDG_CONFIG_HOME/tmux/tmux.conf, or ~/.config/tmux/tmux.conf, so aoe
-  #     unset its own status* session options and every aoe session fell back to
-  #     tmux's stock green bar. `enabled` restores the themed bar (session name,
-  #     title, branch, detach hint) without weakening the deployed tmux.conf.
-  #   - clipboard: `auto` defers when the user config sets `set-clipboard` OR
-  #     `allow-passthrough`; ours sets the latter for omp's inline images, so
-  #     aoe silently stopped writing `set -s set-clipboard on` and OSC 52 from a
-  #     wrapped agent died inside tmux. `enabled` writes both; passthrough is
-  #     already on, so set-clipboard is the only effective change. aoe appends
-  #     it to `new-session`, so it lands on newly created sessions.
-  # `mouse` stays undeclared: its `auto` defers only when the user config sets
-  # `mouse`, which ours does not, so aoe already applies `mouse on`.
   aoe:
     config.toml:
       session:
         custom_agents:
           omp: omp
-          # Bare on-PATH shell agent; key is the aoe agent name, value the command.
           zsh: zsh
         agent_detect_as:
           omp: pi
       tmux:
         status_bar: enabled
         clipboard: enabled
-  # oh-my-pi (can1357/oh-my-pi) — a fork of pi (badlogic/pi-mono).
-  #
-  # config.yml is NOT a chezmoi target. omp rewrites it itself through /model,
-  # /settings, and first-run setup, so a managed-readonly target produced
-  # permanent drift (a deployed 0600 file holding a modelRoles.default present
-  # in no source checkout). Instead `run_after_config-omp-settings` asserts each
-  # declared PATH below on every apply and leaves everything else to omp. Unlike
-  # upstream pi, omp has no auth.json. OAuth credentials (anthropic,
-  # google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
-  # through omp `/login`, so only static API keys are declared here. omp is
-  # batteries-included (built-in MCP runtime and native Anthropic OAuth), so the
-  # upstream pi-mcp-extension and pi-anthropic-auth packages are not carried.
-  # Compound-engineering is delivered through omp's marketplace, so this
-  # settings block carries no `packages` key. omp is cross-platform across
-  # every OS chezmoi manages, so no OS-specific branching is needed here.
   omp:
     plugins:
     - { name: mxm4-haptic, marketplace: h82-dotfiles }
@@ -219,148 +84,75 @@ agents:
     pluginsRemoved:
     - { name: i-have-adhd, marketplace: i-have-adhd }
     models:
-      # No override-only providers remain after the OpenCode provider removal.
-      # Keep the map explicit so the managed models target stays valid.
       providers: {}
-    # Every key below is a LITERAL omp settings path as `omp config list` spells
-    # it — this is a flat path->value map, NOT a nested config.yml document. The
-    # provisioner runs one `omp config set <path> <json>` per entry, because a
-    # path inside a record (modelRoles.default) is not settable while a record
-    # itself (modelRoles) is, and `theme` is the reverse: only theme.dark and
-    # theme.light are real paths. Consequences: a record-typed path is owned
-    # WHOLESALE, so an omp-written member inside it does not survive an apply,
-    # while any path omp writes BESIDE this set is preserved byte-identical.
-    # Values must never contain an op:// reference — the CLI receives them as
-    # process arguments, so declared settings are credential-free by contract
-    # and secrets reach omp through auth.env below.
-    #
-    # Tier basis: the ceiling/mid boundary follows LMArena's coding and agent
-    # leaderboards (text category=coding and agent category=overall, snapshot
-    # 2026-08-03). All three doer tiers now sit on Anthropic, so the ladder is
-    # effort-graded across two models rather than vendor-graded across three:
-    # opus-5 at :max and :xhigh, sonnet-5 at :high. The light tier is still a
-    # latency choice, which is why it takes :high and not the :xhigh the main
-    # loop uses - `mnemopi.llmMode: smol` runs it on every retained turn, so
-    # maximum deliberation there is the wrong default. `omp bench` remains its
-    # check; no bench number was recorded for this change. Everything else here
-    # is enforced by `.chezmoitemplates/omp-settings-validate.tmpl`, not prose.
     settings:
-      # Three tiers. A role names a tier; a chain hangs on the tier's model
-      # (see retry.fallbackChains below), so grade is a property of the model.
-      # `slow` and `default` deliberately share one model at two efforts, which
-      # is why they also share one chain - see the collision note there.
-      modelRoles:
-        slow: anthropic/claude-opus-5:max
-        default: anthropic/claude-opus-5:xhigh
-        smol: kimi-code/kimi-for-coding:high
-        # Critic seat; the one line no doer tier uses.
-        advisor: openai-codex/gpt-5.6-sol:xhigh
-        # Both tiers are 1M now; the alias buys :max effort.
-        plan: "@slow"
-        # Otherwise commit messages use the session model.
-        commit: "@smol"
-        # Background (titles/memory/auto-thinking), not a tier: no chain hangs on
-        # it because retry chains are session-turn only. Cheapest available lite
-        # and off the kimi plan, so background work never spends coding quota.
-        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
-      # EXHAUSTIVE over `omp agents unpack`, not a diff against frontmatter. An
-      # omitted agent lands on its own frontmatter (override -> frontmatter ->
-      # task role/session, oh-my-pi docs/task-agent-discovery.md), so silence is
-      # never neutrality - and frontmatter moves between releases. Naming all
-      # seven makes the mapping immune to that drift; `.ci/check-omp-agent-roster.sh`
-      # fails the build when omp's roster and this key set diverge.
-      task.agentModelOverrides:
-        task: "@default"
-        scout: "@default"
-        designer: "@default"
-        librarian: "@smol"
-        sonic: "@smol"
-        reviewer: "@advisor"
-        security-reviewer: "@slow"
+      theme.dark: titanium
+      theme.light: light
+      symbolPreset: nerd
+      statusLine.preset: default
+      statusLine.separator: powerline-thin
+      terminal.showProgress: false
+      tui.textSizing: true
+      tui.codexResetFireworks: true
+      tui.scrollbackRebuild: true
+      display.shimmer: 'classic'
+      display.showTokenUsage: true
+      tui.imeSafeCursor: true
       task.showResolvedModelBadge: true
-      task.enableEffort: true
-      task.maxEffort: xhigh
-      task.enableLsp: true
-      task.isolation.mode: auto
-      retry.usageAwareFallback: true
-      # Keyed by MODEL, not role. An exact provider/model-id key outranks a role
-      # chain by specificity (oh-my-pi docs/settings.md), so every role using that
-      # model recovers within its own grade and no role needs a chain of its own.
-      # `default` is the floor for anything no key names - a hand-picked /model.
-      # A provider/* key is rejected at render: it would span the whole provider
-      # and catch another tier's model, and anthropic backs three tiers here.
-      retry.fallbackChains:
-        # Ceiling AND main loop: both resolve to this one model id, so they share
-        # one chain by necessity. `omp-settings-validate.tmpl` rejects a thinking
-        # suffix on a chain key, so :max and :xhigh cannot be separated here, and
-        # declaring the key twice would be worse than useless - duplicate keys in
-        # one YAML document collapse silently at decode, upstream of every
-        # validator, so one chain would vanish with no error anywhere.
-        # OpenCode was retired on 2026-08-11. The remaining Kimi hop
-        # preserves the existing retry order without a provider replacement.
-        anthropic/claude-opus-5:
-        - kimi-code/k3-256k:max
-        # Light: three plans, one per hop, none of them kimi-code - so one
-        # Kimi cap cannot degrade this tier at the same moment it degrades
-        # the two above it.
-        kimi-code/kimi-for-coding:
-        - google-antigravity/gemini-3.6-flash:high
-        - openai-codex/gpt-5.6-luna:max
-        - anthropic/claude-sonnet-5:high
-        # Critic: the Google fallback is the only remaining alternate. It
-        # avoids a second openai-codex hop because usage-aware fallback makes
-        # a same-provider hop useless when the plan cap is what failed.
-        openai-codex/gpt-5.6-sol:
-        - google-antigravity/gemini-3.1-pro:high
-        # Floor for a hand-picked /model that no key above names.
-        default:
-        - anthropic/claude-opus-5:xhigh
-        - kimi-code/k3-256k:max
-      # Turn review plus the `reviewer` agent. Enabling it starts a continuous
-      # flow of each turn's transcript delta to the critic; advisor.subagents
-      # stays undeclared so its false default keeps subagent turns out of it.
-      advisor.enabled: false
-      # Provider availability gate. It is applied BEFORE any credential check,
-      # so it is the only knob that keeps a backend out of every AUTOMATIC
-      # selection path. `retry.fallbackChains` above was never the exposure -
-      # retry walks declared chains only, and no chain names anything here -
-      # but omp also has catalog-wide scans that no chain governs, each firing
-      # wherever a declared selector does not resolve: its built-in
-      # priority.json role chains carry BARE patterns (`gpt-5.5`, `codex`,
-      # `mini`, `haiku`), the vision fallback for a text-only model ends at
-      # "first image-capable available", the smol/slow finders end at
-      # availableModels[0], and providers.imageOrder's built-in tail names
-      # openrouter. Every one of those ranks by CATALOG ORDER, which is
-      # incidental. A disabled provider also leaves `/model`, so it cannot be
-      # chosen by hand either.
-      #
-      # The OpenCode providers are retired. Their selectors, model override,
-      # and auth.env declaration are gone, but the dotenv reconciler preserves
-      # every UNDECLARED entry byte-identically. Keep both IDs temporarily
-      # disabled so an already-provisioned OPENCODE_API_KEY= line cannot reach
-      # a catalog-wide scan. Delete both entries and that stale dotenv line
-      # together after the one-time host cleanup.
-      #
-      # `zai` is here for the opposite reason, and it is TEMPORARY. Its plan
-      # expired on 2026-08-06 and its credential left auth.env below, which
-      # is what DURABLY removes the provider from `omp models --json`. But
-      # the dotenv reconciler preserves every UNDECLARED entry byte-identically,
-      # so an already-provisioned host keeps its stale `ZAI_API_KEY=` line until
-      # that line is hand-deleted - and until then the key is still PRESENT, so
-      # the catalog-wide scans above can still select a provider that cannot
-      # answer, exactly when a scan fires because something else failed. This
-      # entry closes that window from the repo side instead of depending on the
-      # operator acting first. Delete this entry and the stale dotenv line
-      # together: once the line is gone the credential gate excludes `zai` on
-      # its own and this entry is dead data.
+      ttsr.repeatMode: after-gap
+      power.sleepPrevention: idle
+      steeringMode: one-at-a-time
+      followUpMode: one-at-a-time
+      startup.setupWizard: false
+      startup.checkUpdate: true
+      stt.enabled: true
+      setupVersion: 1
+      enabledModels:
+      - anthropic/*
+      - google-antigravity/*
+      - kimi-code/*
+      - openai-codex/gpt-5.6-luna
       disabledProviders:
       - openrouter
       - opencode-go
       - opencode-zen
       - zai
-      # Exa first; unlisted providers keep their built-in relative order after
-      # it. The deep-research surfaces are pinned off rather than left to a
-      # default that could change upstream.
+      modelRoles:
+        advisor: openai-codex/gpt-5.6-luna:xhigh
+        commit: "@smol"
+        default: anthropic/claude-opus-5:xhigh
+        plan: "@slow"
+        slow: anthropic/claude-opus-5:max
+        smol: openai-codex/gpt-5.6-luna:max
+        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
+      task.agentModelOverrides:
+        designer: "@default"
+        librarian: "@smol"
+        reviewer: "@advisor"
+        scout: "@default"
+        security-reviewer: "@slow"
+        sonic: "@smol"
+        task: "@default"
+      skills.enableCodexUser: false
+      skills.enableClaudeUser: false
+      skills.enableClaudeProject: false
+      memory.backend: mnemopi
+      autolearn.enabled: true
+      mnemopi.embeddingVariant: multilingual
+      mnemopi.autoRecall: true
+      mnemopi.autoRetain: true
+      mnemopi.polyphonicRecall: true
+      mnemopi.enhancedRecall: true
+      mnemopi.proactiveLinking: true
+      advisor.enabled: false
+      defaultThinkingLevel: xhigh
+      retry.usageAwareFallback: true
+      retry.fallbackChains:
+        default:
+        - anthropic/claude-opus-5:xhigh
+        - kimi-code/k3-256k:high
+        - google-antigravity/gemini-3.6-flash:high
+      secrets.enabled: true
       providers.webSearchOrder:
       - exa
       - gemini
@@ -369,102 +161,21 @@ agents:
       - antigravity
       - openrouter
       provider.appendOnlyContext: on
-      secrets.enabled: true
       exa.enabled: true
-      theme.dark: titanium
-      theme.light: light
-      symbolPreset: nerd
-      setupVersion: 1
-      statusLine.preset: default
-      statusLine.separator: powerline-thin
-      defaultThinkingLevel: xhigh
-      display.shimmer: 'classic'
-      display.showTokenUsage: true
-      terminal.showProgress: false
-      tui.textSizing: true
-      tui.codexResetFireworks: true
-      tui.scrollbackRebuild: true
-      tui.imeSafeCursor: true
-      # Use the native agents skill roots without duplicate compatibility scans.
-      skills.enableCodexUser: false
-      skills.enableClaudeUser: false
-      skills.enableClaudeProject: false
-      # Keep structural search and host desktop control available.
-      astGrep.enabled: true
-      computer.enabled: true
-      generate_image.enabled: true
-      github.enabled: true
-      security.enabled: true
-      steeringMode: one-at-a-time
-      followUpMode: one-at-a-time
-      power.sleepPrevention: idle
-      startup.setupWizard: false
-      startup.checkUpdate: true
-      autolearn.enabled: true
-      mcp.notifications: true
+      task.isolation.mode: auto
+      task.enableEffort: true
+      task.enableLsp: true
+      task.maxEffort: xhigh
       commands.enableClaudeUser: false
       commands.enableClaudeProject: false
       commands.enableOpencodeUser: false
       commands.enableOpencodeProject: false
-      # Local long-term memory. ONLY the backend selector is declared: `mnemopi`
-      # itself is not a settable path (`omp config set mnemopi` is rejected as an
-      # unknown setting), every knob under it is its own leaf, and the defaults
-      # already suit this host — `mnemopi.scoping: per-project` isolates memory
-      # per working directory, `autoRecall`/`autoRetain` are on, and
-      # `llmMode: smol` lands on the declared `smol` role, since `tiny` is not
-      # declared and omp documents that unset `tiny` falls through to `@smol`.
-      # Restating a default here would only hide a future upstream change. The
-      # absence of `mnemopi.*` keys is therefore deliberate, not an oversight.
-      #
-      # Privacy note, in two parts. STORAGE is local: this backend retains
-      # completed conversation turns to a local SQLite store and, unlike the
-      # `local` backend, documents no secret/token redaction and no retention
-      # limit, so content accumulates unredacted until `/memory clear`. Keep the
-      # agent memories directory out of backups and sync tooling.
-      # PROCESSING is not local: mnemopi's default `llmMode: smol` lands on the
-      # declared `smol` role, so LLM-backed extraction and consolidation
-      # send retained transcript content to that cloud model. "Local" here means
-      # local STORAGE (as opposed to the remote `hindsight` server backend), not
-      # local compute. This reuses the same provider trust boundary ordinary
-      # turns already cross, but it re-sends PAST transcripts, including ones
-      # whose original session ran on a different provider. Set
-      # `mnemopi.llmMode: none` to keep processing on-device at the cost of
-      # LLM-backed consolidation.
-      memory.backend: mnemopi
-      mnemopi.embeddingVariant: multilingual
-      mnemopi.autoRecall: true
-      mnemopi.autoRetain: true
-      mnemopi.polyphonicRecall: true
-      mnemopi.enhancedRecall: true
-      mnemopi.proactiveLinking: true
-      # Rules keep reminding after their first trigger instead of going silent
-      # for the session. The change is global, so bundled rules remind more
-      # often too (accepted, KD5 of docs/plans/2026-08-10-002-feat-omp-ttsr-comment-checker-plan.md).
-      # `ttsr.repeatGap` is intentionally left undeclared per KTD7: the
-      # provisioner owns only declared paths, so the built-in default of 10
-      # stands and any hand-set host value survives an apply.
-      ttsr.repeatMode: after-gap
-      stt.enabled: true
-    # Static API keys omp reads from its dotenv. OAuth credentials (anthropic,
-    # google-antigravity, kimi-code) live in ~/.omp/agent/agent.db
-    # via omp /login and are never declared here. This is a TOOL/PROVIDER
-    # credential map keyed by environment variable, not a model-provider auth
-    # shape. Exa is a search tool, not a model provider.
-    # run_after_config-omp-auth requires exactly this two-variable closed
-    # set: EXA_API_KEY and OPENROUTER_API_KEY. ZAI_API_KEY left the set on
-    # 2026-08-06 when the Z.ai coding plan expired; because the reconciler
-    # preserves every UNDECLARED dotenv entry, the already-deployed line
-    # survives in ~/.omp/agent/.env and must be deleted by hand once, or omp
-    # keeps offering a dead `zai` provider.
-    # The OpenCode providers were retired on 2026-08-11. Their
-    # OPENCODE_API_KEY declaration left this closed set, but an already-deployed
-    # line survives as unmanaged text until the operator deletes it.
-    # OPENROUTER_API_KEY stays provisioned although that backend is disabled
-    # above, so re-enabling it remains a settings-only change.
-    # A shape-only check would let a data edit inject an arbitrary variable such
-    # as HTTP_PROXY or NODE_OPTIONS into the environment omp loads for every
-    # session, and dropping the cardinality check would let an emptied map
-    # silently delete a key.
+      astGrep.enabled: true
+      generate_image.enabled: true
+      computer.enabled: true
+      github.enabled: true
+      security.enabled: true
+      mcp.notifications: true
     auth:
       env:
       - variable: EXA_API_KEY

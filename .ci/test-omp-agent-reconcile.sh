@@ -280,6 +280,20 @@ chmod 0755 "$settings_bin/omp"
 declared_json="$scratch/declared.json"
 awk '/^cat >"\$declared"/{flag=1;next}/^JSON$/{flag=0}flag' "$settings_script" >"$declared_json"
 jq -e 'type == "object" and (keys | length) > 0' "$declared_json" >/dev/null
+jq -e '
+  .enabledModels == [
+    "anthropic/*",
+    "google-antigravity/*",
+    "kimi-code/*",
+    "openai-codex/gpt-5.6-luna"
+  ]
+  and .modelRoles.advisor == "openai-codex/gpt-5.6-luna:xhigh"
+  and (."retry.fallbackChains" | has("openai-codex/gpt-5.6-luna"))
+  and ((."retry.fallbackChains" | has("openai-codex/gpt-5.6-sol")) | not)
+' "$declared_json" >/dev/null || {
+  printf 'model whitelist policy is not rendered as expected\n' >&2
+  exit 1
+}
 
 # The harvest is shared by the catalog fixture and the shape check. A chain KEY
 # is a selector too when it is model-oriented, so it must be harvested alongside
