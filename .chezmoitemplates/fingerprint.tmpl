@@ -64,6 +64,17 @@ Usage (from any script template):
 {{- if eq $name "" -}}
 {{- fail (printf "fingerprint.tmpl: a \"values\" entry is missing \"name\" in %s" $sourceDir) -}}
 {{- end -}}
+{{- /* `name` lands verbatim in a generated shell COMMENT, so a newline in it
+   would end the comment and turn the rest into executable script. Restrict it
+   to a single safe token. */ -}}
+{{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._-]*$" $name) -}}
+{{- fail (printf "fingerprint.tmpl: value name %q in %s must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ — it is emitted into a shell comment, so it must be a single line with no shell metacharacters." $name $sourceDir) -}}
+{{- end -}}
+{{- /* Type-check before the emptiness test: `eq` on a bool or number aborts
+   with an unrelated template error and hides the actionable diagnostic. */ -}}
+{{- if not (kindIs "string" $value) -}}
+{{- fail (printf "fingerprint.tmpl: value %q in %s must be a string, got a %s (%v). A capabilities.tmpl probe emits a string token." $name $sourceDir (kindOf $value) $value) -}}
+{{- end -}}
 {{- if eq $value "" -}}
 {{- fail (printf "fingerprint.tmpl: value %q rendered empty in %s. A capabilities.tmpl probe always emits a token; an empty one means the probe was misnamed or failed." $name $sourceDir) -}}
 {{- end }}

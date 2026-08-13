@@ -114,30 +114,68 @@ self-contained — no prelude, no shared function to inline first.
 {{-     fail (printf "skip.sh.tmpl: %s/%s uses form %q, which takes no direction (it is not deferred work). Drop \"direction\", or use skip_here / skip_step." $script $site $form) -}}
 {{-   end -}}
 {{- end -}}
+{{- /* SHELL SAFETY. Every value below is interpolated into generated shell, and
+   two of them into a FILE PATH. Go's `quote` produces a Go double-quoted
+   literal, NOT a shell-safe argument: bash still expands $(...), backticks and
+   $VAR inside double quotes, so `quote` alone lets a call-site string execute
+   commands. Identity fields are therefore restricted to one safe filename
+   component (which also blocks `/` traversal), and free-text fields to a
+   printable set with no quote, dollar, backtick, backslash or newline — which
+   makes single-quoting them provably safe. This is a render-time failure, so a
+   bad call site can never reach a host. */ -}}
+{{- $idRe := "^[A-Za-z0-9][A-Za-z0-9._-]*$" -}}
+{{- $textRe := "^[A-Za-z0-9 ._,;:()/=+-]+$" -}}
+{{- if not (regexMatch $idRe $script) -}}
+{{-   fail (printf "skip.sh.tmpl: script %q is not a safe filename component. It is interpolated into a state-file path, so it must match %s." $script $idRe) -}}
+{{- end -}}
+{{- if not (regexMatch $idRe $site) -}}
+{{-   fail (printf "skip.sh.tmpl: site %q is not a safe filename component (%s/%s). It is interpolated into a state-file path, so it must match %s — no slashes, no spaces, no shell metacharacters." $site $script $site $idRe) -}}
+{{- end -}}
+{{- if not (regexMatch $textRe $reason) -}}
+{{-   fail (printf "skip.sh.tmpl: reason for %s/%s contains a character that is unsafe to emit into shell. Allowed: letters, digits, space, and . _ , ; : ( ) / = + -  — no quotes, $, backticks, backslashes or newlines." $script $site) -}}
+{{- end -}}
+{{- if and (ne $probe "") (not (regexMatch $idRe $probe)) -}}
+{{-   fail (printf "skip.sh.tmpl: probe %q for %s/%s must match %s." $probe $script $site $idRe) -}}
+{{- end -}}
 {{- $dir := "\"${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips\"" -}}
 {{- $file := printf "\"${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/%s__%s\"" $script $site -}}
+{{- /* Single quotes, not Go's `quote`: every value reaching here passed the
+   charset gate above, so no value can contain a single quote and single-quoting
+   is therefore both safe and expansion-proof.
+
+   skip_step returns 0, NOT 1. Its consumers run under `set -euo pipefail` and
+   call their step helpers bare from main(), where a helper returning non-zero
+   aborts the whole script — and, because apply stops at the first script error,
+   every later phase with it. That is strictly worse than the bug this partial
+   fixes. The sites skip_step replaces already `return 0` today; the declaration
+   changes the message and the record, never the control flow. */ -}}
+{{- $exit := "exit 0" -}}
+{{- if eq $form "skip_step" -}}{{- $exit = "return 0" -}}{{- end -}}
 {{- if eq $form "done_here" }}
-printf '%s: %s\n' {{ $script | quote }} {{ printf "%s; nothing to do" $reason | quote }}
+printf '%s: %s\n' '{{ $script }}' '{{ $reason }}; nothing to do'
 rm -f {{ $file }} 2>/dev/null || true
-exit 0
+{{ $exit }}
 {{- else if eq $form "not_applicable" }}
-printf '%s: %s\n' {{ $script | quote }} {{ printf "%s; not applicable on this host" $reason | quote }}
+printf '%s: %s\n' '{{ $script }}' '{{ $reason }}; not applicable on this host'
 rm -f {{ $file }} 2>/dev/null || true
-exit 0
+{{ $exit }}
 {{- else if eq $direction "harmless" }}
-printf '%s: %s\n' {{ $script | quote }} {{ $reason | quote }}
+printf '%s: %s\n' '{{ $script }}' '{{ $reason }}'
 rm -f {{ $file }} 2>/dev/null || true
-{{ if eq $form "skip_here" }}exit 0{{ else }}return 1{{ end }}
+{{ $exit }}
 {{- else if eq $direction "transient-tolerable" }}
-printf '%s: %s. Not recorded as done; the next apply retries it.\n' {{ $script | quote }} {{ $reason | quote }} >&2
+{{- if eq $form "skip_step" -}}
+{{-   fail (printf "skip.sh.tmpl: %s/%s is transient-tolerable with form skip_step, which cannot work. Tolerable relies on a non-zero SCRIPT exit so chezmoi does not record the run; a step return cannot produce that without aborting the caller under set -e. Use skip_here, or reclassify the site as transient-blocking." $script $site) -}}
+{{- end }}
+printf '%s: %s. Not recorded as done; the next apply retries it.\n' '{{ $script }}' '{{ $reason }}' >&2
 mkdir -p {{ $dir }} 2>/dev/null || true
-printf 'v1\t%s\t%s\t%s\t%s\n' {{ $script | quote }} {{ $site | quote }} 'transient-tolerable' {{ $reason | quote }} \
+printf 'v1\t%s\t%s\t%s\t%s\n' '{{ $script }}' '{{ $site }}' 'transient-tolerable' '{{ $reason }}' \
   > {{ $file }} 2>/dev/null || true
-{{ if eq $form "skip_here" }}exit 1{{ else }}return 1{{ end }}
+exit 1
 {{- else }}
-printf '%s: %s. Recorded as done; it re-runs automatically once %s changes.\n' {{ $script | quote }} {{ $reason | quote }} {{ $probe | quote }}
+printf '%s: %s. Recorded as done; it re-runs automatically once %s changes.\n' '{{ $script }}' '{{ $reason }}' '{{ $probe }}'
 mkdir -p {{ $dir }} 2>/dev/null || true
-printf 'v1\t%s\t%s\t%s\t%s\n' {{ $script | quote }} {{ $site | quote }} {{ printf "transient-blocking:%s" $probe | quote }} {{ $reason | quote }} \
+printf 'v1\t%s\t%s\t%s\t%s\n' '{{ $script }}' '{{ $site }}' 'transient-blocking:{{ $probe }}' '{{ $reason }}' \
   > {{ $file }} 2>/dev/null || true
-{{ if eq $form "skip_here" }}exit 0{{ else }}return 1{{ end }}
+{{ $exit }}
 {{- end }}
