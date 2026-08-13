@@ -229,7 +229,7 @@
       "helm": {
         "kind": "githubRelease",
         "source": "helm/helm",
-        "version": "v4.2.3"
+        "version": "v4.2.4"
       },
       "i-have-adhd": {
         "kind": "gitRef",
