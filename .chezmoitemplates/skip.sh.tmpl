@@ -1,0 +1,143 @@
+{{- /*
+skip.sh.tmpl — declared early-exit contract for run_onchange_ / run_once_ scripts.
+
+WHY THIS EXISTS. chezmoi records a script that exits 0 as a SUCCESSFUL run and
+will not re-run it until its rendered content changes. A script that gave up
+because a precondition was missing therefore claims a convergence it never
+reached, permanently. Ten lines across six scripts used to print "retries next
+apply" from exactly such a path. This partial makes the claim explicit, derives
+the behaviour and the message from it, and lets CI reject a site that declares
+nothing.
+
+FOUR CALL FORMS. Every conditional early exit in a run_onchange_/run_once_
+script goes through one of these — including the ones that are NOT skips. That
+total coverage is what makes the guard decidable: after conversion, a bare
+`exit 0` or `return 0` on a conditional path is by definition undeclared.
+
+  skip_here       deferred work; exits the script
+  skip_step       deferred work; returns non-zero so the caller can `return`
+                  and the script continues (fedora's per-function returns,
+                  setup-podman-cluster's substeps)
+  done_here       the work is already done (a completion stamp). Not deferred.
+  not_applicable  deliberately opted out in data, or an all-work-done fast
+                  path. Not deferred.
+
+THREE DIRECTIONS, for the two skip forms only:
+
+  harmless             this host will never satisfy the condition, so not
+                       acting is correct and final. Exits 0. Nothing is
+                       outstanding. Baked host identity (wrong desktop, wrong
+                       distro, container) lives here.
+  transient-tolerable  an eligible host is missing a precondition AND failing
+                       here cannot prevent later work. Exits 1, so chezmoi does
+                       NOT record the run and it retries by itself. Only valid
+                       when nothing later depends on this script: `chezmoi
+                       apply` aborts every subsequent script at the first script
+                       error, and `--keep-going` is flag-only (not settable in
+                       the config file), so an early-phase exit 1 would strand
+                       every later phase.
+  transient-blocking   an eligible host is missing a precondition, but exiting
+                       non-zero here WOULD abort later phases. Exits 0 and
+                       declares a capabilities.tmpl probe, so the rendered
+                       content changes when the precondition appears and chezmoi
+                       re-runs the script on its own.
+
+WHY A PROBE AND NOT A MARKER FILE. Measured on chezmoi v2.71.0 against a scratch
+source and destination: a marker whose content changes on each skip re-runs the
+script on EVERY apply (an always-run script); a marker with stable content ran
+twice, then stalled permanently and did NOT re-run when the precondition
+appeared. Only a render-time probe of the precondition itself is both stable
+while the precondition is absent and different once it is present. A
+transient-blocking site therefore MUST name a probe, and this partial fails the
+render when it does not.
+
+WHY THE DIRECTION IS A RENDER-TIME LITERAL. A template cannot inspect a value a
+shell function receives at runtime, so a runtime-argument API could not reject
+an unknown direction. Passing the direction as template data is what lets this
+partial `fail` the apply on a typo, the same way facts-validate.tmpl does for an
+unknown fact name.
+
+ARGUMENT — a dict, never a bare string:
+
+  {{ includeTemplate "skip.sh.tmpl" (dict
+       "ctx"       .
+       "form"      "skip_here"
+       "script"    "config-gnome-app-grid-order"
+       "site"      "no-session-bus"
+       "direction" "transient-blocking"
+       "probe"     "session-bus-present"
+       "reason"    "no D-Bus session bus") }}
+
+`script` plus `site` is the stable identity dotfiles-skips reports and clears
+on, so `site` must be unique within its script. The emitted shell is
+self-contained — no prelude, no shared function to inline first.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "skip.sh.tmpl: expected a dict, got a %s (%v). Pass the call as data: {{ includeTemplate \"skip.sh.tmpl\" (dict \"ctx\" . \"form\" \"skip_here\" \"script\" \"my-script\" \"site\" \"my-site\" \"direction\" \"harmless\" \"reason\" \"...\") }}" (kindOf .) .) -}}
+{{- end -}}
+{{- /* chezmoi renders with missingkey=error, so an absent key must be tested
+   with hasKey before it is read — `.probe | default ""` errors on the read,
+   before default can substitute. */ -}}
+{{- $form := "" -}}{{- if hasKey . "form" -}}{{- $form = .form -}}{{- end -}}
+{{- $script := "" -}}{{- if hasKey . "script" -}}{{- $script = .script -}}{{- end -}}
+{{- $site := "" -}}{{- if hasKey . "site" -}}{{- $site = .site -}}{{- end -}}
+{{- $reason := "" -}}{{- if hasKey . "reason" -}}{{- $reason = .reason -}}{{- end -}}
+{{- $direction := "" -}}{{- if hasKey . "direction" -}}{{- $direction = .direction -}}{{- end -}}
+{{- $probe := "" -}}{{- if hasKey . "probe" -}}{{- $probe = .probe -}}{{- end -}}
+{{- $forms := list "skip_here" "skip_step" "done_here" "not_applicable" -}}
+{{- if not (has $form $forms) -}}
+{{-   fail (printf "skip.sh.tmpl: unknown form %q for %s/%s. Valid forms: skip_here, skip_step, done_here, not_applicable." $form $script $site) -}}
+{{- end -}}
+{{- if eq $script "" -}}
+{{-   fail (printf "skip.sh.tmpl: %q call is missing \"script\". It is half of the stable identity dotfiles-skips reports on." $form) -}}
+{{- end -}}
+{{- if eq $site "" -}}
+{{-   fail (printf "skip.sh.tmpl: %q call in %s is missing \"site\". It must be unique within the script so a later run can clear exactly this entry." $form $script) -}}
+{{- end -}}
+{{- if eq $reason "" -}}
+{{-   fail (printf "skip.sh.tmpl: %q call %s/%s is missing \"reason\". The operator-facing message is derived from it." $form $script $site) -}}
+{{- end -}}
+{{- $isSkip := or (eq $form "skip_here") (eq $form "skip_step") -}}
+{{- $directions := list "harmless" "transient-tolerable" "transient-blocking" -}}
+{{- if $isSkip -}}
+{{-   if not (has $direction $directions) -}}
+{{-     fail (printf "skip.sh.tmpl: unknown direction %q for %s/%s. Valid directions: harmless, transient-tolerable, transient-blocking." $direction $script $site) -}}
+{{-   end -}}
+{{-   if and (eq $direction "transient-blocking") (eq $probe "") -}}
+{{-     fail (printf "skip.sh.tmpl: %s/%s is transient-blocking but names no \"probe\". Without a capabilities.tmpl probe hashed into this script's fingerprint, the skip is recorded as a successful run and never re-runs. Name a probe, or reclassify the site." $script $site) -}}
+{{-   end -}}
+{{-   if and (ne $direction "transient-blocking") (ne $probe "") -}}
+{{-     fail (printf "skip.sh.tmpl: %s/%s declares probe %q but is %s. Only transient-blocking consumes a probe." $script $site $probe $direction) -}}
+{{-   end -}}
+{{- else -}}
+{{-   if ne $direction "" -}}
+{{-     fail (printf "skip.sh.tmpl: %s/%s uses form %q, which takes no direction (it is not deferred work). Drop \"direction\", or use skip_here / skip_step." $script $site $form) -}}
+{{-   end -}}
+{{- end -}}
+{{- $dir := "\"${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips\"" -}}
+{{- $file := printf "\"${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/%s__%s\"" $script $site -}}
+{{- if eq $form "done_here" }}
+printf '%s: %s\n' {{ $script | quote }} {{ printf "%s; nothing to do" $reason | quote }}
+rm -f {{ $file }} 2>/dev/null || true
+exit 0
+{{- else if eq $form "not_applicable" }}
+printf '%s: %s\n' {{ $script | quote }} {{ printf "%s; not applicable on this host" $reason | quote }}
+rm -f {{ $file }} 2>/dev/null || true
+exit 0
+{{- else if eq $direction "harmless" }}
+printf '%s: %s\n' {{ $script | quote }} {{ $reason | quote }}
+rm -f {{ $file }} 2>/dev/null || true
+{{ if eq $form "skip_here" }}exit 0{{ else }}return 1{{ end }}
+{{- else if eq $direction "transient-tolerable" }}
+printf '%s: %s. Not recorded as done; the next apply retries it.\n' {{ $script | quote }} {{ $reason | quote }} >&2
+mkdir -p {{ $dir }} 2>/dev/null || true
+printf 'v1\t%s\t%s\t%s\t%s\n' {{ $script | quote }} {{ $site | quote }} 'transient-tolerable' {{ $reason | quote }} \
+  > {{ $file }} 2>/dev/null || true
+{{ if eq $form "skip_here" }}exit 1{{ else }}return 1{{ end }}
+{{- else }}
+printf '%s: %s. Recorded as done; it re-runs automatically once %s changes.\n' {{ $script | quote }} {{ $reason | quote }} {{ $probe | quote }}
+mkdir -p {{ $dir }} 2>/dev/null || true
+printf 'v1\t%s\t%s\t%s\t%s\n' {{ $script | quote }} {{ $site | quote }} {{ printf "transient-blocking:%s" $probe | quote }} {{ $reason | quote }} \
+  > {{ $file }} 2>/dev/null || true
+{{ if eq $form "skip_here" }}exit 0{{ else }}return 1{{ end }}
+{{- end }}
