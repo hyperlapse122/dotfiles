@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ideation: dotfiles — open exploration</title>
+<link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|jetbrains-mono:400,500">
+<style>
+:root{
+  --bg:#fbfaf8; --surface:#ffffff; --surface-2:#f4f2ee; --ink:#1c1a17; --ink-2:#57524a;
+  --ink-3:#8a8378; --line:#e3ded5; --line-2:#cfc8bb;
+  --accent:#8a4b1f; --accent-soft:#f7ece2; --accent-line:#e0c3a6; --accent-ink:#6b3a17;
+  --good:#2f6b45; --good-soft:#e9f2ec; --good-ink:#255739;
+  --warn:#8a6a12; --warn-soft:#f7f0dc; --warn-ink:#6b520e;
+  --cool:#2b5a7a; --cool-soft:#e8f0f5; --cool-ink:#22485f;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#161513; --surface:#1e1d1a; --surface-2:#262420; --ink:#eeebe5; --ink-2:#b8b2a7;
+    --ink-3:#8b857a; --line:#332f2a; --line-2:#453f38;
+    --accent:#d99a63; --accent-soft:#2e2419; --accent-line:#5c4224; --accent-ink:#e8b98a;
+    --good:#7cc79a; --good-soft:#1b2620; --good-ink:#96d6ae;
+    --warn:#d9bd6a; --warn-soft:#282314; --warn-ink:#e5cf8c;
+    --cool:#7fb4d4; --cool-soft:#182530; --cool-ink:#9fc9e2;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15.5px;line-height:1.62;font-feature-settings:"kern","liga","cv05";}
+.page{max-width:940px;margin-inline:auto;padding:3rem 1.4rem 5rem}
+p,li{max-width:72ch}
+h1,h2,h3,h4{line-height:1.24;letter-spacing:-0.012em;margin:0}
+h1{font-size:2.05rem;font-weight:700;margin-bottom:.5rem}
+h2{font-size:1.42rem;font-weight:650;margin:3.2rem 0 1rem;padding-bottom:.45rem;border-bottom:2px solid var(--line-2)}
+h3{font-size:1.12rem;font-weight:650;margin:0 0 .1rem}
+h4{font-size:.83rem;font-weight:650;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin:1.3rem 0 .4rem}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
+code{font-family:var(--mono);font-size:.855em;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:4px;padding:.06em .34em}
+.eyebrow{font-size:.74rem;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:.5rem}
+.lede{font-size:1.06rem;color:var(--ink-2);max-width:70ch}
+.meta{display:flex;flex-wrap:wrap;gap:.45rem;margin:1.2rem 0 0}
+.chip{display:inline-flex;align-items:center;gap:.4em;font-size:.775rem;font-weight:500;
+  border-radius:999px;padding:.2em .72em;border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink-2)}
+.chip.k{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-ink);font-weight:600}
+.chip.g{background:var(--good-soft);border-color:var(--good);color:var(--good-ink)}
+.chip.w{background:var(--warn-soft);border-color:var(--warn);color:var(--warn-ink)}
+.chip.c{background:var(--cool-soft);border-color:var(--cool);color:var(--cool-ink)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin:1.8rem 0 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:.75rem .85rem}
+.stat b{display:block;font-size:1.42rem;font-weight:670;letter-spacing:-.02em;line-height:1.15}
+.stat span{display:block;font-size:.735rem;color:var(--ink-3);text-transform:uppercase;letter-spacing:.055em;margin-top:.2rem}
+section{margin-top:.4rem}
+.ground{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:1.15rem 1.35rem;margin-top:1rem}
+.ground h4:first-child{margin-top:0}
+.ground ul{margin:.35rem 0 0;padding-left:1.15rem}
+.ground li{margin:.28rem 0}
+.axisnote{font-style:normal;color:var(--ink-2);background:var(--surface-2);border:1px dashed var(--line-2);
+  border-radius:8px;padding:.6rem .85rem;margin-top:.9rem;font-size:.93rem}
+.jump{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:.9rem 1.1rem;margin:1.1rem 0 2rem}
+.jump ol{margin:.4rem 0 0;padding-left:1.35rem;columns:1}
+.jump li{margin:.24rem 0;max-width:none}
+.jump a{text-decoration:none;font-weight:500}
+.jump a:hover{text-decoration:underline}
+article.idea{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:1.35rem 1.5rem 1.5rem;margin:0 0 1.5rem;scroll-margin-top:1rem}
+.ihead{display:flex;gap:.8rem;align-items:flex-start;flex-wrap:wrap}
+.rank{flex:none;font-family:var(--mono);font-size:.8rem;font-weight:600;background:var(--accent-soft);
+  color:var(--accent-ink);border:1px solid var(--accent-line);border-radius:999px;padding:.24em .7em;margin-top:.15rem}
+.ititle{flex:1 1 22ch;min-width:0}
+.ichips{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.75rem}
+dl.fields{margin:1rem 0 0;display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}
+dl.fields dt{font-size:.735rem;font-weight:660;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);padding-top:.16em}
+dl.fields dd{margin:0;max-width:70ch}
+dl.fields dd p{margin:0 0 .5rem}
+dl.fields dd p:last-child{margin-bottom:0}
+@media (max-width:620px){dl.fields{grid-template-columns:1fr;gap:.15rem .5rem}dl.fields dt{margin-top:.7rem}}
+.basis{background:var(--surface-2);border:1px solid var(--line);border-left-width:1px;border-radius:8px;padding:.6rem .8rem}
+.tag{font-family:var(--mono);font-size:.74rem;font-weight:600;padding:.1em .45em;border-radius:4px;margin-right:.4em}
+.tag.d{background:var(--good-soft);color:var(--good-ink);border:1px solid var(--good)}
+.tag.e{background:var(--cool-soft);color:var(--cool-ink);border:1px solid var(--cool)}
+.tag.r{background:var(--warn-soft);color:var(--warn-ink);border:1px solid var(--warn)}
+figure{margin:1.25rem 0 .2rem;padding:1rem;background:var(--surface-2);border:1px solid var(--line);border-radius:10px}
+figure svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.8rem;color:var(--ink-3);margin-top:.6rem;max-width:70ch}
+table{border-collapse:collapse;width:100%;margin-top:1rem;font-size:.9rem}
+th,td{text-align:left;padding:.5rem .65rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.735rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);border-bottom:2px solid var(--line-2)}
+td:first-child{font-family:var(--mono);font-size:.82rem;color:var(--ink-3);white-space:nowrap}
+tbody tr:hover{background:var(--surface)}
+footer.composition-signal{margin-top:3.5rem;padding-top:1rem;border-top:1px solid var(--line);
+  font-size:.8rem;color:var(--ink-3)}
+.svgtxt{font-family:"Inter",sans-serif;font-size:12px;fill:var(--ink);}
+.svgtxt.sm{font-size:10.5px;fill:var(--ink-2)}
+.svgtxt.lb{font-size:10.5px;font-weight:600;fill:var(--ink-3);letter-spacing:.06em}
+.halo{paint-order:stroke fill;stroke:var(--surface-2);stroke-width:3px;stroke-linejoin:round}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <p class="eyebrow">Ideation &middot; surprise-me</p>
+  <h1>Where this dotfiles repo has the most room left</h1>
+  <p class="lede">Seven directions found by six independent lenses over the chezmoi source state, then
+  cut down by an adversarial verifier that read the repository fresh. Every surviving idea's evidence
+  was checked against the files it cites.</p>
+  <div class="meta">
+    <span class="chip k">2026-08-13</span>
+    <span class="chip">topic: open-ideation</span>
+    <span class="chip">mode: repo-grounded</span>
+    <span class="chip">focus: none &mdash; agent-selected</span>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>47</b><span>raw candidates</span></div>
+    <div class="stat"><b>7</b><span>survivors</span></div>
+    <div class="stat"><b>3</b><span>refuted outright</span></div>
+    <div class="stat"><b>9</b><span>numbers corrected</span></div>
+    <div class="stat"><b>6</b><span>already implemented</span></div>
+  </div>
+</header>
+
+<section id="grounding">
+<h2>Grounding Context</h2>
+<p>The candidates were generated against a scan of the repository, its institutional memory, and external
+research into the surrounding ecosystem, then re-verified file-by-file during filtering.</p>
+
+<div class="ground">
+<h4>Codebase Context</h4>
+<ul>
+<li><b>Shape.</b> chezmoi source state for <code>github.com/hyperlapse122/dotfiles</code>, provisioning a single
+Fedora workstation. Declarative data in <code>.chezmoidata/</code> feeds shared partials in
+<code>.chezmoitemplates/</code>, which render 50 ordered scripts across nine numeric phases
+(<code>00-tools</code> &rarr; <code>90-src</code>). Externals fetch release-locked binaries;
+<code>system/linux/etc</code> mirrors root-owned <code>/etc</code>; <code>crates/</code> holds a Rust haptic
+daemon and <code>packages/</code> a Bun/Vite+ TypeScript workspace.</li>
+<li><b>Measured scale.</b> Scripts 50 files / 6,238 lines &middot; shared templates 22 / 2,008 &middot;
+CI 34 / 3,923 &middot; workflows 3 / 1,239 &middot; <code>.chezmoidata</code> 13 / 2,392 &middot;
+<code>docs/</code> 129 / 28,561 (of which <code>docs/plans/</code> is 112 / 27,287) &middot;
+Rust 1,983 &middot; TypeScript packages 63 / 5,890.</li>
+<li><b>Cadence.</b> 672 human commits and 68 bot commits in 90 days &mdash; one maintainer, heavily
+agent-assisted, no reviewer. Hot: the agent-policy stream (<code>.chezmoidata/agents.yaml</code>,
+<code>releases.json</code>). Cold: KDE, GNOME, Fedora and <code>/etc</code> provisioning.</li>
+<li><b>Strongest existing machinery.</b> Render-time fail-safe gates that abort the apply on an unknown fact
+name; comment-only dependency fingerprints that re-trigger a script when raw source changes; an hourly
+release-lock refresh that preserves last-good entries on partial failure; and behaviour-oriented CI that
+renders artifacts, drives a real tmux transport, and asserts <code>.chezmoiremove</code> canaries.</li>
+<li><b>Recurring friction found.</b> A soft <code>exit 0</code> is recorded as a permanent success, so a
+script that skipped for a missing precondition never retries. Two first-apply defects on record were
+unrecoverable without <code>chezmoi state reset</code>. A build cache replayed stale binaries after a
+source-only change. Nineteen scripts tell the operator to recover with a repo-wide
+<code>chezmoi apply --force</code>.</li>
+</ul>
+
+<h4>Institutional memory</h4>
+<ul>
+<li>No <code>CONCEPTS.md</code> and no <code>docs/solutions/</code>. Durable knowledge lives in 112 dated
+implementation plans plus <code>docs/residual-review-findings/</code>, <code>docs/decommission/</code> and
+<code>docs/feedback-sweep/</code>. Roughly 3.7 plans land per active day.</li>
+<li>Conventions extracted from the newest plans: encrypted registry edits go through protected scratch with a
+byte-compared decrypt round-trip; prefer one existing declarative surface over adding a runtime variant;
+retirement is a clean cutover with isolated rendering and explicit secret-absence assertions; and a plan's
+own &ldquo;Definition of Done&rdquo; is never evidence that it shipped.</li>
+</ul>
+
+<h4>External context</h4>
+<ul>
+<li>chezmoi's <code>run_onchange_</code> reruns on rendered-content change and <code>run_once_</code> records a
+rendered-content SHA-256 in a state database; upstream explicitly warns that scripts break the declarative
+model and must be idempotent. Installed here: v2.71.0.</li>
+<li>Cross-harness agent configuration is an unsettled category &mdash; <code>agent-setup</code>,
+<code>agents-sync</code> and <code>dot-agents</code> all exist, all are small, and none has become a standard.
+Codex layers <code>AGENTS.md</code> with a 32&nbsp;KiB project-guidance cap.</li>
+<li>MCP security guidance requires per-client consent and least privilege: syncing server <em>declarations</em>
+is not sufficient, because tool-approval policy is a separate surface no existing sync tool expresses.</li>
+<li>Ansible contributes check mode, diff mode and Molecule's disposable scenario matrix; <code>ansible-pull</code>
+adds <code>--only-if-changed</code> and <code>--verify-commit</code>. GitOps pull-and-reconcile is the closest
+structural analogue, but a workstation is mutable, interactive, and holds irreplaceable state.</li>
+</ul>
+</div>
+</section>
+
+<section id="axes">
+<h2>Topic Axes</h2>
+<p class="axisnote">Decomposition skipped &mdash; surprise-me mode. With no user-specified subject there is no
+settled surface to decompose; six frames each chose their own subject instead, and the cross-frame convergence
+below (five of six lenses landing independently on the soft-skip lifecycle) is the signal that replaces axis
+coverage.</p>
+</section>
+
+<section id="ideas">
+<h2>Ranked Ideas</h2>
+
+<nav class="jump" aria-label="Ranked ideas">
+<b>Jump to</b>
+<ol>
+<li><a href="#i1">A skip must not lie &mdash; and un-lying it must be cheap</a></li>
+<li><a href="#i2">Finish the data-driven collapse the KDE runner started</a></li>
+<li><a href="#i3">Declare the dependency graphs the apply lifecycle only assumes</a></li>
+<li><a href="#i4">Fetch what CI already built</a></li>
+<li><a href="#i5">Make a check cheap, then make every MUST name one</a></li>
+<li><a href="#i6">Close the pinning boundary</a></li>
+<li><a href="#i7">Give MCP declarations a permission dimension</a></li>
+</ol>
+</nav>
+
+<article class="idea" id="i1">
+<div class="ihead">
+  <span class="rank">1</span>
+  <div class="ititle">
+    <h3>A skip must not lie &mdash; and un-lying it must be cheap</h3>
+    <div class="ichips">
+      <span class="chip g">Confidence 92%</span>
+      <span class="chip">Complexity Medium</span>
+      <span class="chip c">5 of 6 lenses converged</span>
+    </div>
+  </div>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 268" role="img" aria-label="Today a soft skip is recorded as a permanent success; proposed, a skip declares its fail direction, renders a rerun key, and re-triggers">
+  <text x="0" y="14" class="svgtxt lb">TODAY</text>
+  <rect x="0" y="26" width="120" height="46" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="60" y="47" class="svgtxt" text-anchor="middle">precondition</text>
+  <text x="60" y="61" class="svgtxt" text-anchor="middle">missing</text>
+  <path d="M124 49 H186" stroke="var(--ink-3)" stroke-width="1.4" fill="none" marker-end="url(#ar)"/>
+  <text x="155" y="40" class="svgtxt sm halo" text-anchor="middle">exit 0</text>
+  <rect x="190" y="26" width="150" height="46" rx="7" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="265" y="47" class="svgtxt" text-anchor="middle">recorded as a</text>
+  <text x="265" y="61" class="svgtxt" text-anchor="middle">successful run</text>
+  <path d="M344 49 H406" stroke="var(--ink-3)" stroke-width="1.4" fill="none" marker-end="url(#ar)"/>
+  <rect x="410" y="26" width="164" height="46" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="492" y="47" class="svgtxt" text-anchor="middle">precondition appears</text>
+  <text x="492" y="61" class="svgtxt" text-anchor="middle">(session bus, TPM, glab)</text>
+  <path d="M578 49 H640" stroke="var(--ink-3)" stroke-width="1.4" fill="none" marker-end="url(#ar)"/>
+  <rect x="644" y="26" width="150" height="46" rx="7" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="719" y="47" class="svgtxt" text-anchor="middle">still never</text>
+  <text x="719" y="61" class="svgtxt" text-anchor="middle">re-runs</text>
+  <text x="0" y="106" class="svgtxt sm" fill="var(--warn-ink)">&#8226; and the script prints &#8220;retries next apply&#8221; while this happens &mdash; 10 lines across 6 scripts</text>
+
+  <line x1="0" y1="126" x2="860" y2="126" stroke="var(--line-2)" stroke-dasharray="4 4"/>
+
+  <text x="0" y="152" class="svgtxt lb">PROPOSED</text>
+  <rect x="0" y="164" width="120" height="46" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="60" y="185" class="svgtxt" text-anchor="middle">precondition</text>
+  <text x="60" y="199" class="svgtxt" text-anchor="middle">missing</text>
+  <path d="M124 187 H186" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#ara)"/>
+  <rect x="190" y="164" width="150" height="46" rx="7" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="265" y="181" class="svgtxt" text-anchor="middle">declared fail</text>
+  <text x="265" y="195" class="svgtxt" text-anchor="middle">direction:</text>
+  <text x="265" y="207" class="svgtxt sm" text-anchor="middle" fill="var(--accent-ink)">harmless? / transient?</text>
+  <path d="M344 187 H406" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#ara)"/>
+  <rect x="410" y="164" width="164" height="46" rx="7" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="492" y="185" class="svgtxt" text-anchor="middle">rerun key rendered</text>
+  <text x="492" y="199" class="svgtxt" text-anchor="middle">into script content</text>
+  <path d="M578 187 H640" stroke="var(--good)" stroke-width="1.6" fill="none" marker-end="url(#arg)"/>
+  <rect x="644" y="164" width="150" height="46" rx="7" fill="var(--good-soft)" stroke="var(--good)"/>
+  <text x="719" y="185" class="svgtxt" text-anchor="middle">content changes</text>
+  <text x="719" y="199" class="svgtxt" text-anchor="middle">&rarr; re-runs</text>
+  <text x="0" y="244" class="svgtxt sm" fill="var(--good-ink)">&#8226; and when it does not: <tspan font-family="JetBrains Mono, ui-monospace, monospace">chezmoi-rerun &lt;script&gt;</tspan> deletes that one state entry instead of forcing all 50</text>
+  <defs>
+    <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--ink-3)"/></marker>
+    <marker id="ara" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--accent)"/></marker>
+    <marker id="arg" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--good)"/></marker>
+  </defs>
+</svg>
+<figcaption>The defect is not the skip &mdash; a fail-safe skip is correct. The defect is that the skip is
+recorded as convergence and then announced as a retry that never happens.</figcaption>
+</figure>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd>
+<p>Four moves that share one root. <b>Declare the fail direction.</b> <code>facts.yaml</code> already carries a
+worked-out doctrine that every gate needs a per-fact harmless value, and that two facts are inverted so a
+uniform <code>false</code> would fail open. Every soft skip in the repo is an undeclared fail direction; make
+declaring it mandatory, so a script whose skip is <em>not</em> harmless cannot simply <code>exit 0</code>.</p>
+<p><b>Render a rerun key.</b> <code>fingerprint.tmpl</code> hashes file content only, so every non-file rerun
+input is hand-serialised differently &mdash; the phase-60 haptic script already invents one for itself. Extend
+the partial to accept declared <em>value</em> inputs alongside globs, and a transient skip self-heals when the
+value changes.</p>
+<p><b>Stop printing the false promise.</b> Route every skip through a shared partial that renders its own
+retry sentence from the script's filename prefix, and add a CI check banning the literal strings inside any
+<code>run_onchange_</code> or <code>run_once_</code> file.</p>
+<p><b>Make remediation surgical.</b> Ship a helper that resolves a script name to its state key and deletes only
+that entry, plus an optional last phase that re-triggers deferred work whose precondition has since appeared.</p>
+</dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> <code>run_onchange_after_config-gnome-app-grid-order.sh.tmpl</code>
+contradicts itself 29 lines apart &mdash; <code>:44-48</code> warns that &ldquo;that skipped run is recorded as
+done and will NOT re-run on the next apply just because a live GNOME session appeared&rdquo;, while
+<code>:73</code> prints &ldquo;skip (retries next apply)&rdquo;. Verified: 10 such lines across 6 scripts.
+<code>run_onchange_after_auth-gitlab.sh.tmpl:35-37</code> states the same rule a second time, and
+<code>run_onchange_after_luks-tpm2.sh.tmpl:66</code> names the wrong prefix in its own comment.</p>
+<p><span class="tag d">direct:</span> <code>facts.yaml:76-95</code> carries the fail-direction doctrine verbatim,
+including the inverted <code>virt</code>/<code>headless</code> pair and the closing principle that a fact with no
+harmless value does not belong in the registry. <code>facts.yaml:5-9</code> deliberately excludes momentary
+state from identity &mdash; correct for gates, and exactly why the rerun key must be a separate concept.</p>
+<p><span class="tag d">direct:</span> <code>run_after_build-mxm4-haptic.sh.tmpl:3</code> already hand-rolls a
+value-based rerun key consumed at <code>:36-38</code>. The remediation half is a chezmoi builtin:
+<code>chezmoi state delete --bucket=scriptState --key=&lt;sha&gt;</code>, with the entry value carrying the
+script <code>name</code>.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>This is the repository's most-documented failure class and it has already cost design freedom: the
+GitLab script's entire twenty-line argument for <code>run_after_</code> over <code>run_before_</code> exists
+only to dodge it. Fixing the lifecycle turns phase placement back into a performance choice rather than a
+correctness one. The doctrine half matters more than the mechanism &mdash; <code>AGENTS.md:20</code> already
+states the rule, six scripts violate it in their own runtime output, and nothing checks. Remediation is the
+sharpest single number in the run: 19 scripts instruct the operator to recover with
+<code>chezmoi apply --force</code>, which re-fires a 612-line Fedora installer and a 448-line Rust build to fix
+three <code>gsettings</code> calls &mdash; so recovery gets deferred, and that is how a theoretical permanent
+skip becomes a practical one.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>A rerun key makes rendered content depend on something other than source, which sits uneasily beside the
+repo's determinism instincts &mdash; the key must be a declared, enumerable value, never an ambient probe, or
+renders stop being reproducible. The verifier refuted a nearby variant that wrote runtime deferral stamps and
+fed them back through the render: it stalls after two attempts unless a counter makes content change on
+<em>every</em> apply, at which point it is just <code>run_after_</code> with extra machinery. Typing the
+shared guard partials is <em>not</em> the fix either &mdash; all 34 guard inclusions gate on permanent host
+identity, where <code>exit 0</code> is already correct; the dishonest skips are inline below the guard.</p></dd>
+</dl>
+</article>
+
+
+<article class="idea" id="i2">
+<div class="ihead">
+  <span class="rank">2</span>
+  <div class="ititle">
+    <h3>Finish the data-driven collapse the KDE runner started</h3>
+    <div class="ichips">
+      <span class="chip g">Confidence 90%</span>
+      <span class="chip">Complexity Medium</span>
+      <span class="chip c">~1,485 lines removable</span>
+    </div>
+  </div>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 210" role="img" aria-label="Bar chart: eight desktop scripts already collapsed into one runner; twelve remain at 1,280 lines plus a 205-line duplicate extension installer">
+  <text x="0" y="14" class="svgtxt lb">DESKTOP SCRIPT SURFACE</text>
+  <text x="0" y="44" class="svgtxt">already collapsed</text>
+  <rect x="196" y="32" width="120" height="17" rx="3" fill="var(--good-soft)" stroke="var(--good)"/>
+  <text x="326" y="45" class="svgtxt sm">8 scripts &rarr; one 196-line runner</text>
+
+  <text x="0" y="78" class="svgtxt">KDE, still hand-rolled</text>
+  <rect x="196" y="66" width="223" height="17" rx="3" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="429" y="79" class="svgtxt sm">6 scripts &middot; 536 lines &middot; <tspan font-family="JetBrains Mono, ui-monospace, monospace">kwriteconfig6</tspan></text>
+
+  <text x="0" y="112" class="svgtxt">GNOME, still hand-rolled</text>
+  <rect x="196" y="100" width="310" height="17" rx="3" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="516" y="113" class="svgtxt sm">6 scripts &middot; 744 lines &middot; <tspan font-family="JetBrains Mono, ui-monospace, monospace">gsettings</tspan></text>
+
+  <text x="0" y="146" class="svgtxt">extension installers</text>
+  <rect x="196" y="134" width="86" height="17" rx="3" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="292" y="147" class="svgtxt sm">210 + 205 lines &mdash; two semantic hunks apart</text>
+
+  <line x1="196" y1="166" x2="860" y2="166" stroke="var(--line-2)"/>
+  <text x="0" y="186" class="svgtxt">unlocked by</text>
+  <text x="196" y="186" class="svgtxt halo"><tspan font-family="JetBrains Mono, ui-monospace, monospace" font-size="11">requires:</tspan> &nbsp;+&nbsp; <tspan font-family="JetBrains Mono, ui-monospace, monospace" font-size="11">backend:</tspan> &nbsp;+&nbsp; <tspan font-family="JetBrains Mono, ui-monospace, monospace" font-size="11">apply:</tspan> &nbsp;&mdash; three row fields, plus one loop over an existing map</text>
+</svg>
+<figcaption>The collapse already happened once and stopped at the first script whose schema did not fit. Each
+remaining blocker is named in prose inside the script that carries it.</figcaption>
+</figure>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd><p>Add three fields to the desktop settings row schema &mdash; <code>requires:</code> for a file or command
+precondition, <code>backend:</code> to select <code>kwriteconfig6</code> / <code>gsettings</code> /
+<code>dconf</code>, and <code>apply:</code> to distinguish an always-applied row from a once-applied one with a
+value-signature stamp. The existing 196-line runner then absorbs the twelve remaining desktop scripts as rows
+in two tables that already hold their values. Separately, replace the two GNOME Shell extension installers with
+one loop over the <code>shellExtensions</code> map the data file already declares as
+<code>{uuid, egoId}</code>.</p></dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> <code>run_onchange_after_config-kde-settings.sh.tmpl:11-13</code> states
+the precedent verbatim &mdash; it &ldquo;replaces eight scripts &hellip; that were each nothing but a guard, a
+<code>command -v kwriteconfig6</code> skip, and a flat list of <code>kwriteconfig6</code> calls&rdquo;.
+<code>run_onchange_after_config-kde-virtualkeyboard.sh.tmpl:10-11</code> names the exact blocker: &ldquo;The
+file-existence PRECONDITION below stays here; it is why this script is not collapsible into the settings
+manifest.&rdquo; That 52-line script is one <code>requires:</code> field away from being a row.</p>
+<p><span class="tag d">direct:</span> Measured and independently re-verified: 536 KDE + 744 GNOME = 1,280 lines
+across twelve scripts. <code>gnome.yaml:93-104</code> already holds mouse, terminal, app-grid and shortcut
+values purely as data while six scripts spend 744 lines applying them, and its header already names the missing
+semantic (&ldquo;stamps the exact value it applied&rdquo;).</p>
+<p><span class="tag d">direct:</span> The two extension installers are 210 and 205 lines; after name
+substitution the diff reduces to two semantic hunks &mdash; a header paragraph and one closing sentence. The
+kimpanel script's own comment concedes it &ldquo;mirrors&rdquo; its sibling rather than eliminating the
+mirror.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>Two copies of an <code>extensions.gnome.org</code> API client means a shell-compatibility fix lands once
+and silently rots in the other. More broadly, this is the cheapest large reduction available: the architecture
+is already chosen, already validated on eight scripts, and the blockers were each written down as prose by the
+person who hit them. Collapsing turns roughly 2,100 lines of near-duplicate bash across the two coldest
+directories in the repo into validated tables with one injection guard, one render-time validator and one place
+a new setting is added &mdash; which matters precisely <em>because</em> those directories are cold and nobody
+is re-reading them.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>The verifier's caveat is real: the twelve residual scripts are not as flat as the eight already
+collapsed, so the schema will grow beyond three fields or a few scripts will legitimately stay hand-written.
+Decide up front which, rather than contorting the row schema to reach 100%. A generic runner also concentrates
+risk &mdash; the existing one already rejects shell metacharacters, and that guard has to hold for a wider
+input surface. The GNOME extension loop touches a network API client, so the shared version needs the
+compatibility check both copies currently carry.</p></dd>
+</dl>
+</article>
+
+<article class="idea" id="i3">
+<div class="ihead">
+  <span class="rank">3</span>
+  <div class="ititle">
+    <h3>Declare the dependency graphs the apply lifecycle only assumes</h3>
+    <div class="ichips">
+      <span class="chip w">Confidence 75%</span>
+      <span class="chip">Complexity High</span>
+      <span class="chip c">3 lenses converged</span>
+    </div>
+  </div>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 250" role="img" aria-label="One phase number silently encodes both a capability dependency and a failure-isolation boundary; the fingerprint closure is a third undeclared graph">
+  <text x="0" y="14" class="svgtxt lb">ONE INTEGER, TWO UNRELATED RELATIONS</text>
+
+  <rect x="0" y="30" width="112" height="40" rx="6" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="56" y="47" class="svgtxt" text-anchor="middle">00-tools</text>
+  <text x="56" y="61" class="svgtxt sm" text-anchor="middle">mise, externals</text>
+
+  <rect x="146" y="30" width="112" height="40" rx="6" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="202" y="47" class="svgtxt" text-anchor="middle">20-fedora</text>
+  <text x="202" y="61" class="svgtxt sm" text-anchor="middle">dnf, rpm</text>
+
+  <rect x="292" y="30" width="112" height="40" rx="6" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="348" y="47" class="svgtxt" text-anchor="middle">60-build</text>
+  <text x="348" y="61" class="svgtxt sm" text-anchor="middle">needs cargo, vp</text>
+
+  <rect x="438" y="30" width="112" height="40" rx="6" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="494" y="47" class="svgtxt" text-anchor="middle">90-src</text>
+  <text x="494" y="61" class="svgtxt sm" text-anchor="middle">garden</text>
+
+  <path d="M116 50 H142" stroke="var(--ink-3)" stroke-width="1.4" marker-end="url(#ar3)"/>
+  <path d="M262 50 H288" stroke="var(--ink-3)" stroke-width="1.4" marker-end="url(#ar3)"/>
+  <path d="M408 50 H434" stroke="var(--ink-3)" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+  <path d="M56 78 C 56 108, 348 108, 348 82" stroke="var(--accent)" stroke-width="1.5" fill="none" stroke-dasharray="5 3" marker-end="url(#ara3)"/>
+  <text x="202" y="122" class="svgtxt sm halo" text-anchor="middle" fill="var(--accent-ink)">capability dependency &mdash; real, unwritten, and it broke</text>
+
+  <path d="M494 78 C 494 148, 700 148, 700 132" stroke="var(--cool)" stroke-width="1.5" fill="none" stroke-dasharray="5 3" marker-end="url(#arc3)"/>
+  <text x="700" y="152" class="svgtxt sm halo" text-anchor="middle" fill="var(--cool-ink)">failure isolation &mdash; a different relation entirely</text>
+
+  <line x1="0" y1="176" x2="860" y2="176" stroke="var(--line-2)" stroke-dasharray="4 4"/>
+  <text x="0" y="200" class="svgtxt lb">THE THIRD UNDECLARED GRAPH</text>
+  <rect x="0" y="210" width="404" height="32" rx="6" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="12" y="230" class="svgtxt">fingerprint closure: 10 of 42 scripts declare one, by hand</text>
+  <text x="420" y="230" class="svgtxt sm">a glob list that matches files and still misses a new one fails silently</text>
+  <defs>
+    <marker id="ar3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--ink-3)"/></marker>
+    <marker id="ara3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--accent)"/></marker>
+    <marker id="arc3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--cool)"/></marker>
+  </defs>
+</svg>
+<figcaption>Every other authority in this repo is a declarative registry. The three graphs that decide whether
+an apply can run at all are not.</figcaption>
+</figure>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd><p>Three related declarations, shippable independently. <b>The stage-0 seed:</b> name in data the exact set
+of executables and PATH entries that must exist and be invocable before any later phase runs, each attributed
+to the external or installer that provides it, and have <code>00-tools</code> end by verifying the closure it
+claims to establish &mdash; resolving through the PATH a script actually sees, not the operator's activated
+login shell. <b>The phase relations:</b> split the numeric prefix into two declared relations,
+<code>requires:</code> (capability) and <code>isolates:</code> (failure domain), and render the prefix from
+that graph so a script in phase&nbsp;N referencing a tool first provided at phase&nbsp;M&nbsp;&gt;&nbsp;N fails
+the render rather than the host. <b>The fingerprint closure:</b> derive each component's dependency set from
+its component key instead of hand-enumerating globs, and prove completeness by mutation &mdash; perturb a
+source file, re-render, and assert the dependent script's hash moved.</p></dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> <code>run_onchange_after_auth-gitlab.sh.tmpl:32-40</code> is a
+hand-computed topological sort with a correctness argument attached &mdash; it reasons in prose about
+<code>glab</code> arriving in the FILE phase, and about <code>gh</code> needing to precede the installers.
+That analysis is redone from memory for every new script.</p>
+<p><span class="tag d">direct:</span> <code>docs/plans/2026-08-04-003-fix-mxm4-haptic-clean-state-plan.md:28-34</code>
+records the same analysis failing: <code>vp</code>, <code>node</code> and <code>cargo</code> absent from an
+unactivated PATH, unrecoverable on first apply, needing an activated shell plus <code>chezmoi state reset</code>.
+<code>AGENTS.md:52</code> then documents the per-script workaround rather than the structural fix.</p>
+<p><span class="tag d">direct:</span> Fingerprint coverage measured at 10 of 42 <code>run_onchange_</code>
+scripts. The haptic daemon's glob list names three of the crate's four <code>.rs</code> files individually, so a
+new module is silently missed; <code>docs/plans/2026-07-23-002</code> records the realised cost of exactly this
+class, where a tracker that under-reported reads replayed stale binaries.</p>
+<p><span class="tag e">external:</span> Compiler staged bootstrap (GCC / rustc stage0&rarr;1&rarr;2) supplies the
+mechanism: declare an externally-supplied seed that is sufficient by construction, then prove convergence.
+Where it breaks honestly &mdash; this seed involves network fetches and a distro package manager, so the
+assertion can only be &ldquo;resolvable and executable through the phase's own PATH&rdquo;, never the
+compiler's byte-identical stage equality.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>A first apply is the least-observed code path in the repository: it runs once per host, on the host where
+failure hurts most, and container CI cannot reach it because containers skip package, system and desktop
+provisioning by invariant. Every other authority here &mdash; facts, packages, <code>/etc</code>, agents,
+waveforms, release locks &mdash; is a declarative registry with a validator; the dependency graph that makes all
+of them runnable is folklore spread across one phase directory, six externals files and a handful of comments.
+The mutation half is the only technique that decides fingerprint completeness mechanically rather than by the
+author remembering, and the repo already owns both ingredients: deterministic renders and a hermetic
+scratch-destination harness.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>The largest item here by far. Rendering phase prefixes from a graph touches every script's filename,
+which is a wide, mechanical, and genuinely risky change for a benefit that is mostly preventive &mdash;
+consider shipping the declaration and its render-time check <em>without</em> renaming anything first. Mutation
+testing multiplies render count by the number of perturbed files, so it needs scoping to candidate inputs
+rather than the whole tree. And the stage-0 closure can only ever assert resolvability: it will not catch a tool
+that exists but behaves differently, which is a real class here (see idea&nbsp;6's <code>glab</code>
+version pin).</p></dd>
+</dl>
+</article>
+
+
+<article class="idea" id="i4">
+<div class="ihead">
+  <span class="rank">4</span>
+  <div class="ititle">
+    <h3>Fetch what CI already built</h3>
+    <div class="ichips">
+      <span class="chip w">Confidence 80%</span>
+      <span class="chip">Complexity High</span>
+      <span class="chip c">2 lenses converged</span>
+    </div>
+  </div>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 236" role="img" aria-label="Today CI builds and discards while the workstation rebuilds; proposed, CI publishes content-addressed artifacts the host resolves by the fingerprint it already computes">
+  <text x="0" y="14" class="svgtxt lb">TODAY</text>
+  <rect x="0" y="28" width="150" height="42" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="75" y="46" class="svgtxt" text-anchor="middle">CI: cargo build,</text>
+  <text x="75" y="60" class="svgtxt" text-anchor="middle">cargo test</text>
+  <path d="M154 49 H208" stroke="var(--warn)" stroke-width="1.5" marker-end="url(#ar4w)"/>
+  <rect x="212" y="28" width="112" height="42" rx="7" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="268" y="53" class="svgtxt" text-anchor="middle">discarded</text>
+
+  <rect x="430" y="28" width="196" height="42" rx="7" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="528" y="46" class="svgtxt" text-anchor="middle">workstation rebuilds it:</text>
+  <text x="528" y="60" class="svgtxt sm" text-anchor="middle">448-line toolchain resolve, stage, install</text>
+  <path d="M630 49 H684" stroke="var(--warn)" stroke-width="1.5" marker-end="url(#ar4w)"/>
+  <rect x="688" y="28" width="172" height="42" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="774" y="46" class="svgtxt" text-anchor="middle">two recorded defects:</text>
+  <text x="774" y="60" class="svgtxt sm" text-anchor="middle">cold PATH &middot; stale cache replay</text>
+
+  <line x1="0" y1="98" x2="860" y2="98" stroke="var(--line-2)" stroke-dasharray="4 4"/>
+
+  <text x="0" y="124" class="svgtxt lb">PROPOSED</text>
+  <rect x="0" y="138" width="150" height="42" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="75" y="156" class="svgtxt" text-anchor="middle">CI: same build</text>
+  <text x="75" y="170" class="svgtxt sm" text-anchor="middle">already running</text>
+  <path d="M154 159 H208" stroke="var(--good)" stroke-width="1.5" marker-end="url(#ar4g)"/>
+  <rect x="212" y="138" width="196" height="42" rx="7" fill="var(--good-soft)" stroke="var(--good)"/>
+  <text x="310" y="156" class="svgtxt" text-anchor="middle">published, keyed by the</text>
+  <text x="310" y="170" class="svgtxt" text-anchor="middle">fingerprint already computed</text>
+  <path d="M412 159 H466" stroke="var(--good)" stroke-width="1.5" marker-end="url(#ar4g)"/>
+  <rect x="470" y="138" width="172" height="42" rx="7" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="556" y="156" class="svgtxt" text-anchor="middle">host resolves by key,</text>
+  <text x="556" y="170" class="svgtxt sm" text-anchor="middle">local build only on a miss</text>
+  <path d="M646 159 H700" stroke="var(--good)" stroke-width="1.5" marker-end="url(#ar4g)"/>
+  <rect x="704" y="138" width="156" height="42" rx="7" fill="var(--good-soft)" stroke="var(--good)"/>
+  <text x="782" y="156" class="svgtxt" text-anchor="middle">stale is impossible:</text>
+  <text x="782" y="170" class="svgtxt sm" text-anchor="middle">different input = different name</text>
+  <text x="0" y="214" class="svgtxt sm">The fingerprint stops being a local &#8220;did this change?&#8221; stamp and becomes a global content-addressed name.</text>
+  <defs>
+    <marker id="ar4w" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--warn)"/></marker>
+    <marker id="ar4g" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--good)"/></marker>
+  </defs>
+</svg>
+<figcaption>Not a speed argument. A content-addressed artifact cannot be stale by construction, which
+eliminates the defect class rather than patching the tracker that missed it.</figcaption>
+</figure>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd><p>Phase 60 resolves a build toolchain, stages, atomically installs, and validates units on the workstation.
+CI already compiles the same components on every push and throws the output away. Publish those artifacts keyed
+by the same content fingerprint the script already computes, and let phase 60 resolve an artifact by that key
+first, falling back to a local build only on a miss. The pinning machinery this needs &mdash; grouped externals,
+a generated lock with per-asset digests, and an hourly refresh that preserves last-good entries &mdash; is
+already the mechanism the repo has hardened six times over for every other binary it installs.</p></dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> <code>ci.yml:131-133</code> runs <code>cargo build --all-targets</code>
+and <code>cargo test</code> and discards the result. <code>run_after_build-mxm4-haptic.sh.tmpl:36-38</code>
+already computes <code>PLUGIN_FINGERPRINT</code>, <code>DAEMON_FINGERPRINT</code> and
+<code>NOTIFY_FINGERPRINT</code> &mdash; the content-addressed key exists today and is used only as a local
+stamp.</p>
+<p><span class="tag d">direct:</span> <code>run_after_build-mxm4-haptic.sh.tmpl:70-79</code> explains why the
+448-line body is that long: &ldquo;on a freshly provisioned host that shell has never sourced
+<code>mise activate</code>, so <code>vp</code> &hellip; <code>node</code>, and <code>cargo</code> &hellip; are
+invisible &hellip; the provisioner then died with <code>preflight: vp is required</code>.&rdquo; That machinery
+exists only because the build happens on the target.</p>
+<p><span class="tag d">direct:</span> <code>docs/plans/2026-07-23-002-fix-vp-task-cache-stale-builds-plan.md:27-37</code>
+records the second failure of the same category: Vite+ auto-tracking missed reads performed by an external
+<code>bun build --compile</code> and replayed stale Figma and Kimi binaries after a source-only change.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>Both of the repository's documented unrecoverable first-apply defects and the entire stale-artifact class
+are properties of building on the destination host. This does not make them less likely &mdash; it removes the
+conditions under which they can occur: no toolchain resolution on a cold PATH, no staging dance, no independent
+component stamps to keep honest, and no requirement that a fresh Fedora workstation carry a Rust toolchain at
+all. It also reuses rather than invents: the fingerprint is already computed, the CI build already runs, and the
+fetch-a-pinned-artifact path is the single most exercised mechanism in the repo.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>Two real decisions this forces, and neither is small. <b>Signing and provenance</b> &mdash; a fetched
+binary from this repo's own release is a supply-chain edge that a locally-compiled one is not, so it needs the
+same digest discipline as every other external plus a view on attestation (this composes directly with
+idea&nbsp;6). <b>Offline apply</b> &mdash; a host with no network can currently still build; after this it can
+only build on a fallback path that must therefore stay maintained, which partially undoes the deletion. Note
+also that the cold-shell CI job a nearby candidate proposed is <em>already shipped</em> for exactly these two
+defects at <code>.ci/test-mxm4-haptic-provision.sh:416-439</code> &mdash; so the argument here is elimination,
+not detection.</p></dd>
+</dl>
+</article>
+
+<article class="idea" id="i5">
+<div class="ihead">
+  <span class="rank">5</span>
+  <div class="ititle">
+    <h3>Make a check cheap, then make every MUST name one</h3>
+    <div class="ichips">
+      <span class="chip g">Confidence 85%</span>
+      <span class="chip">Complexity Medium</span>
+      <span class="chip c">3 lenses converged</span>
+    </div>
+  </div>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 234" role="img" aria-label="A cycle: a shared test harness makes a check cheap, which lets a prose MUST convert into an enforced rule, which shrinks unenforced prose">
+  <rect x="18" y="34" width="184" height="52" rx="8" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="110" y="55" class="svgtxt" text-anchor="middle">shared test harness</text>
+  <text x="110" y="70" class="svgtxt sm" text-anchor="middle">scratch dest, stub op, --source</text>
+
+  <rect x="338" y="34" width="184" height="52" rx="8" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="430" y="55" class="svgtxt" text-anchor="middle">a new check costs</text>
+  <text x="430" y="70" class="svgtxt sm" text-anchor="middle">assertions, not ~40 lines of scaffold</text>
+
+  <rect x="658" y="34" width="184" height="52" rx="8" fill="var(--good-soft)" stroke="var(--good)"/>
+  <text x="750" y="55" class="svgtxt" text-anchor="middle">a MUST names its</text>
+  <text x="750" y="70" class="svgtxt sm" text-anchor="middle">enforcement site, or says why not</text>
+
+  <path d="M206 60 H334" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar5)"/>
+  <path d="M526 60 H654" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar5)"/>
+  <path d="M750 90 C 750 146, 110 146, 110 90" stroke="var(--good)" stroke-width="1.6" fill="none" marker-end="url(#ar5g)"/>
+  <text x="430" y="140" class="svgtxt sm halo" text-anchor="middle" fill="var(--good-ink)">each converted rule is one fewer invariant defended only by memory</text>
+
+  <line x1="18" y1="166" x2="842" y2="166" stroke="var(--line-2)" stroke-dasharray="4 4"/>
+  <text x="18" y="188" class="svgtxt lb">WHERE IT STANDS</text>
+  <text x="18" y="204" class="svgtxt">17 of 18 CI scripts hand-roll their own <tspan font-family="JetBrains Mono, ui-monospace, monospace" font-size="11">mktemp</tspan> + <tspan font-family="JetBrains Mono, ui-monospace, monospace" font-size="11">trap</tspan> &nbsp;&middot;&nbsp; <tspan font-family="JetBrains Mono, ui-monospace, monospace" font-size="11">.ci/lib/</tspan> holds one 79-line file with two consumers</text>
+  <text x="18" y="220" class="svgtxt">24 MUST / NEVER clauses in the root instruction file &nbsp;&middot;&nbsp; none pinned by any check</text>
+  <defs>
+    <marker id="ar5" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--accent)"/></marker>
+    <marker id="ar5g" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--good)"/></marker>
+  </defs>
+</svg>
+<figcaption>The conversion from prose invariant to executable check happens at whatever price a new test costs.
+That price is the lever.</figcaption>
+</figure>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd><p>Three steps in order. <b>Build the harness</b> the <code>.ci/lib</code> convention was created for and
+then never extended: one file wrapping the verification protocol the repo already mandates &mdash; scratch
+destination, stub <code>op</code>, <code>--source "$PWD"</code> &mdash; plus render and assert helpers, and
+migrate the existing suite onto it. <b>Aim the rule-loss detector at the root file:</b>
+<code>.ci/test-agent-instructions.sh</code> already exists precisely because a line diff hides a silently
+dropped MUST, and it has never been pointed at the repository-root <code>AGENTS.md</code>, which is the file
+carrying every domain invariant. <b>Give each load-bearing rule a stable ID</b> and make every enforcing check
+declare the ID it enforces, failing in both directions: a rule with no check is unenforced prose, and a check
+citing a dead ID is an orphan defending a retired decision.</p></dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> Measured and re-verified: 17 of 18 <code>.ci/*.sh</code> scripts contain
+their own <code>mktemp</code> and <code>trap</code>; <code>.ci/lib/</code> contains only
+<code>render-gate-helpers.sh</code> (79 lines) with exactly two consumers. The convention's origin is recorded
+in <code>docs/feedback-sweep/state.yml:42</code> as work deferred from an earlier PR.</p>
+<p><span class="tag d">direct:</span> <code>.ci/test-agent-instructions.sh:5-13</code> states the failure mode
+verbatim &mdash; &ldquo;A line-granular diff reports 'one changed line' whether an edit is correct or silently
+drops a neighbouring MUST, so the rules below are asserted by needle against the RENDERED target.&rdquo; Its
+target is the deployed omp wrapper; the root <code>AGENTS.md</code> appears in no needle list in any
+<code>.ci</code> script or workflow.</p>
+<p><span class="tag d">direct:</span> The bidirectional-proof pattern already ships for a different domain
+&mdash; <code>facts-validate.tmpl</code> fails the apply on an unknown fact name, on a declared name with no
+probe, and on a probe emitting an undeclared name. A live instance of the gap: <code>AGENTS.md:20</code> states
+the soft-skip rule, six scripts contradict it in their own output, and nothing checks.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>The repository has already executed this conversion once and written down why: model policy was retired
+from prose &ldquo;once its checkable half became render-time and CI failures&rdquo;. What is treated as settled
+is that the conversion was a model-policy event rather than a general mechanism. The harness comes first
+because it is the enabler &mdash; while a new check costs roughly 40 lines of scaffold before its first
+assertion, converting a rule is more expensive than writing another paragraph, and the incentive points the
+wrong way. Flip that price and the default response to &ldquo;this invariant matters&rdquo; becomes a check.
+That matters more here than in a team repo: 672 commits in 90 days with no reviewer means prose invariants are
+enforced entirely by one person's memory, and increasingly by agents reading the file.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>Rule IDs are a maintenance surface of their own &mdash; an ID scheme nobody keeps current is worse than
+no scheme, so the bidirectional check has to land with the IDs, not after. Migrating 17 CI scripts onto a shared
+harness restructures currently-green tests, which is exactly the risk that deferred the original extraction.
+And one framing must be dropped: a nearby candidate argued a byte budget against Codex's 32&nbsp;KiB cap, but
+verification showed the shared instruction core has exactly one consumer &mdash; the omp wrapper &mdash; so
+summing it against a Codex cap counts a file Codex never loads. The root file is 26,390 bytes; treat that as
+context worth watching, not as the driver.</p></dd>
+</dl>
+</article>
+
+
+<article class="idea" id="i6">
+<div class="ihead">
+  <span class="rank">6</span>
+  <div class="ititle">
+    <h3>Close the pinning boundary</h3>
+    <div class="ichips">
+      <span class="chip g">Confidence 85%</span>
+      <span class="chip">Complexity Medium</span>
+      <span class="chip c">2 lenses converged</span>
+    </div>
+  </div>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 214" role="img" aria-label="Two-lane release lock: the bot writes only candidates, a promotion rule admits them to the applied lane, and hosts render only from applied">
+  <text x="0" y="14" class="svgtxt lb">TODAY &mdash; ONE LANE</text>
+  <rect x="0" y="26" width="150" height="40" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="75" y="43" class="svgtxt" text-anchor="middle">hourly bot</text>
+  <text x="75" y="57" class="svgtxt sm" text-anchor="middle">unattended push</text>
+  <path d="M154 46 H214" stroke="var(--warn)" stroke-width="1.5" marker-end="url(#ar6w)"/>
+  <text x="184" y="38" class="svgtxt sm halo" text-anchor="middle">url + sha256 shape only</text>
+  <rect x="218" y="26" width="150" height="40" rx="7" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="293" y="51" class="svgtxt" text-anchor="middle">releases.json</text>
+  <path d="M372 46 H432" stroke="var(--warn)" stroke-width="1.5" marker-end="url(#ar6w)"/>
+  <rect x="436" y="26" width="130" height="40" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="501" y="51" class="svgtxt" text-anchor="middle">workstation</text>
+  <text x="586" y="51" class="svgtxt sm" fill="var(--warn-ink)">&larr; window between publish and host: 0&ndash;60 min</text>
+
+  <line x1="0" y1="90" x2="860" y2="90" stroke="var(--line-2)" stroke-dasharray="4 4"/>
+
+  <text x="0" y="116" class="svgtxt lb">PROPOSED &mdash; TWO LANES</text>
+  <rect x="0" y="128" width="150" height="40" rx="7" fill="var(--surface)" stroke="var(--line-2)"/>
+  <text x="75" y="145" class="svgtxt" text-anchor="middle">hourly bot</text>
+  <text x="75" y="159" class="svgtxt sm" text-anchor="middle">candidates only</text>
+  <path d="M154 148 H214" stroke="var(--cool)" stroke-width="1.5" marker-end="url(#ar6c)"/>
+  <rect x="218" y="128" width="140" height="40" rx="7" fill="var(--cool-soft)" stroke="var(--cool)"/>
+  <text x="288" y="145" class="svgtxt" text-anchor="middle">candidate lane</text>
+  <text x="288" y="159" class="svgtxt sm" text-anchor="middle">digest &middot; first-seen &middot; publisher</text>
+  <path d="M362 148 H422" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar6a)"/>
+  <rect x="426" y="128" width="150" height="40" rx="7" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+  <text x="501" y="145" class="svgtxt" text-anchor="middle">promotion rule</text>
+  <text x="501" y="159" class="svgtxt sm" text-anchor="middle">age &middot; N reconfirmations &middot; human</text>
+  <path d="M580 148 H640" stroke="var(--good)" stroke-width="1.6" marker-end="url(#ar6g)"/>
+  <rect x="644" y="128" width="120" height="40" rx="7" fill="var(--good-soft)" stroke="var(--good)"/>
+  <text x="704" y="153" class="svgtxt" text-anchor="middle">applied lane</text>
+  <path d="M768 148 H812" stroke="var(--good)" stroke-width="1.6" marker-end="url(#ar6g)"/>
+  <text x="836" y="153" class="svgtxt" text-anchor="middle">host</text>
+  <defs>
+    <marker id="ar6w" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--warn)"/></marker>
+    <marker id="ar6c" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--cool)"/></marker>
+    <marker id="ar6a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--accent)"/></marker>
+    <marker id="ar6g" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--good)"/></marker>
+  </defs>
+</svg>
+<figcaption>Pinning proves you fetch the same bytes every time. It does not say anything about the moment those
+bytes were first trusted &mdash; and here that moment is an unattended bot on a one-hour cadence.</figcaption>
+</figure>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd><p>Three moves on one boundary. <b>Split the lock into lanes:</b> the bot may write only candidates,
+recording digest, publisher and a first-seen timestamp; promotion into the applied lane happens by an explicit
+rule &mdash; a cooling-off age, an unchanged digest reconfirmed across N resolutions, or a human commit &mdash;
+and hosts render exclusively from the applied lane. <b>Extend the rail to the unpinned surface:</b> the same
+overlay-with-last-good-preservation machinery should continuously prove that the rolling unversioned TeamViewer
+RPM, the nine unpinned repository <code>baseurl</code>/<code>gpgkey</code> endpoints, and the hand-pinned mise
+toolchains still resolve. <b>Audit the escape hatches:</b> sweep for fallback paths that leave the pinning
+invariant and pin them to the lock the repo already maintains.</p></dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> <code>refresh-release-lock.yml</code> names its own step &ldquo;Strict
+platform-vocabulary and source validation, fail-closed BEFORE any commit&rdquo;, but the assertion at
+<code>:63</code> is that each artifact carries an <code>https://</code> URL and a
+<code>^[0-9a-f]{64}$</code> SHA-256 &mdash; well-formedness, not provenance. It then commits as
+<code>github-actions[bot]</code> and pushes unattended on an hourly cron.</p>
+<p><span class="tag d">direct:</span> <code>run_onchange_after_auth-gitlab.sh.tmpl:82</code> runs
+<code>mise &hellip; exec glab@latest</code>, duplicated in the deployed helper
+<code>dot_local/bin/executable_auth-glab:115</code> &mdash; unpinned, on the first-apply path, inside a repo
+whose entire external story is digest-pinned. The same script's header at <code>:43</code> pins its behavioural
+reasoning to a specific version, and <code>:56-57</code> spells out the consequence of getting it wrong:
+&ldquo;HTTP Basic: Access denied&rdquo; on every clone, fetch and push.</p>
+<p><span class="tag d">direct:</span> <code>packages.yaml:368</code> pins TeamViewer to a rolling unversioned
+RPM URL with no recorded hash, alongside nine unpinned <code>baseurl</code>/<code>gpgkey</code> endpoints.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>This is the sharpest internal tension in the system: the automation that makes an unattended future
+viable is the same automation that makes a hostile-upstream future dangerous, and the two meet at exactly one
+file with nobody staffing the admission control. The lane split resolves both at once as a data-only change,
+without slowing the bot down. The availability half is separate and cheaper &mdash; today an upstream that
+vanishes or silently changes is discovered during a first apply on a real host, which is precisely the situation
+the repo's own incident record describes as unrecoverable. A fallback to an arbitrary future <code>glab</code>
+is a fallback to a version whose documented short-circuit behaviour was never verified, and the failure surfaces
+later as broken git auth, far from the apply that caused it.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>A cooling-off lane delays genuine security patches by exactly the window it protects against compromise
+&mdash; that trade needs a stated position, possibly a fast lane for advisories. Promotion by human commit
+reintroduces the manual step the bot rail exists to remove, so the age-and-reconfirmation rule has to be the
+default path or the lane will silently stop being promoted. And pinning the <code>@latest</code> fallback
+creates a chicken-and-egg on the first apply that the fallback exists to solve &mdash; the fix is likely a
+lock-derived version rather than a removal.</p></dd>
+</dl>
+</article>
+
+
+<article class="idea" id="i7">
+<div class="ihead">
+  <span class="rank">7</span>
+  <div class="ititle">
+    <h3>Give MCP declarations a permission dimension</h3>
+    <div class="ichips">
+      <span class="chip w">Confidence 80%</span>
+      <span class="chip">Complexity Medium</span>
+      <span class="chip c">agent surface</span>
+    </div>
+  </div>
+</div>
+
+<dl class="fields">
+<dt>Description</dt>
+<dd><p>The agent registry declares which MCP servers exist and delegates what they may <em>do</em> to the
+harness &mdash; the component most likely to be swapped. Add a <code>permissions:</code> block per server
+covering tool allow/deny and approval mode, and validate it with the same abort-on-unknown discipline the fact
+registry already uses, so least privilege becomes a render-time, fail-safe property rather than a downstream
+default. The check is bidirectional in the same way: a declared tool that the server does not expose is a typo,
+and a server with no declared policy is an unreviewed grant.</p></dd>
+
+<dt>Basis</dt>
+<dd class="basis">
+<p><span class="tag d">direct:</span> No permission field exists anywhere in the agent registry; verification
+found <code>agent-browser</code> declared with <code>--tools all</code>. By contrast
+<code>facts.yaml:57-62</code> describes a validator that &ldquo;FAILS THE APPLY on an unknown name &hellip;
+also fails when a name declared here has no probe behind it, and when a probe emits a name that is not declared
+here: a fact never silently evaluates false because someone typo'd it.&rdquo;</p>
+<p><span class="tag e">external:</span> MCP security guidance requires per-client consent, exact redirect-URI
+validation and least privilege, and treats server enablement, tool allow/deny lists and per-tool approval mode
+as distinct configuration surfaces. None of the existing cross-harness sync tools
+(<code>agent-setup</code>, <code>agents-sync</code>, <code>dot-agents</code>) expresses a policy such as
+&ldquo;this machine may load the server but never auto-approve write tools&rdquo; &mdash; so there is no
+prior art to adopt, which is an argument for declaring it here rather than waiting.</p>
+</dd>
+
+<dt>Rationale</dt>
+<dd><p>The repository derived a strong safety doctrine &mdash; declare the name, prove the probe, abort on a
+typo, make <code>false</code> mean skip &mdash; and applied it to host identity, where the worst outcome is a
+mis-installed package. It did not apply it to the surface where an over-broad default hands an autonomous agent
+a write-capable tool. That inversion is the point worth naming: registries received validators in the order they
+became painful, not in the order they became dangerous. This is also the only survivor on the agent-configuration
+surface, which is simultaneously the repo's hottest area by commit volume and its least-guarded by render-time
+validation.</p></dd>
+
+<dt>Downsides</dt>
+<dd><p>Expressiveness is bounded by what the harness's own settings surface accepts &mdash; a declared policy
+the harness cannot enforce is theatre, so this needs a concrete mapping before it is worth building, and it may
+cover only a subset of servers. It also adds a second place a new MCP must be described, which cuts against the
+repo's preference for one declarative surface; the mitigation is that the block lives in the same registry row,
+not a new file. Finally, tool inventories change upstream, so a strict allow-list will occasionally fail an
+apply for a benign upstream rename &mdash; that is the fail-safe direction working as designed, but it should
+be a deliberate choice.</p></dd>
+</dl>
+</article>
+</section>
+
+<section id="rejections">
+<h2>Rejection Summary</h2>
+<p>Forty-seven raw candidates were generated before any filtering. A verifier that never saw the generation read
+the repository fresh and returned per-candidate verdicts; the cut below weighs those verdicts, overruling one
+where the evidence in hand contradicted it.</p>
+
+<h4>Refuted on verification</h4>
+<table>
+<thead><tr><th>#</th><th>Idea</th><th>Reason rejected</th></tr></thead>
+<tbody>
+<tr><td>R1</td><td>Generate the mechanical script header from a <code>lifecycle.tmpl</code> partial</td><td>Basis refuted &mdash; no mechanical header exists. Across 1,794 header lines the most-repeated prose line occurs 4 times and roughly 3 lines are genuinely shared; ~95% is bespoke per-script rationale.</td></tr>
+<tr><td>R2</td><td>Instruction byte budget against Codex's 32&nbsp;KiB cap</td><td>Basis refuted &mdash; the shared instruction core has exactly one consumer, the omp wrapper. Summing it against a Codex cap counts a file Codex never loads, and uses source bytes as prompt bytes.</td></tr>
+<tr><td>R3</td><td>Self-poisoning fingerprints: deferral stamps fed back through the render</td><td>Basis refuted &mdash; the loop does not terminate. Attempt 2 leaves the stamp unchanged, so content is unchanged and the script never re-runs; an attempt counter makes content change every apply, i.e. <code>run_after_</code> with extra machinery. The hook slot it needs is already bound.</td></tr>
+</tbody>
+</table>
+
+<h4>Already implemented</h4>
+<table>
+<thead><tr><th>#</th><th>Idea</th><th>Reason rejected</th></tr></thead>
+<tbody>
+<tr><td>R4</td><td>Cold-shell adversarial apply in CI</td><td>Already covered &mdash; <code>.ci/test-mxm4-haptic-provision.sh:416-439</code> already strips <code>vp</code>/<code>cargo</code>/<code>node</code> to a mise-only PATH and asserts the exact preflight failure, for both cited defects.</td></tr>
+<tr><td>R5</td><td><code># earned-by:</code> plan provenance on CI assertions</td><td>Already present informally in two CI scripts; the convention exists, it is just unnamed.</td></tr>
+<tr><td>R6</td><td>Fact-vector sweep for unreached <code>case</code> arms (ASIC fault-coverage analogy)</td><td>Structurally guaranteed already &mdash; the gate dispatch table is rendered from the fact registry, so every valid fact has an arm by construction and the unreachable arm aborts loudly.</td></tr>
+<tr><td>R7</td><td>Escape ledger of everything written outside the target set</td><td>Partly covered &mdash; two of the six named categories already have registries, including <code>/etc</code> removals. The residual is narrower than the idea claims.</td></tr>
+</tbody>
+</table>
+
+<h4>Sound but cut &mdash; dominated, mis-aimed, or deferred</h4>
+<table>
+<thead><tr><th>#</th><th>Idea</th><th>Reason rejected</th></tr></thead>
+<tbody>
+<tr><td>R8</td><td>Typed skip outcomes in the shared guard partials</td><td>Mis-aimed &mdash; all 34 guard inclusions gate on permanent host identity, where <code>exit 0</code> is already correct and honest. The dishonest skips sit inline below the guard and inherit nothing.</td></tr>
+<tr><td>R9</td><td>Read-only convergence probe / declared-vs-actual drift verifier</td><td>Genuinely sound and genuinely missing, but dominated this round: its highest-value slice is the attestation half of idea&nbsp;1, and the rest depends on the declarations idea&nbsp;3 would create. Revisit after either lands.</td></tr>
+<tr><td>R10</td><td>State-DB attestation via per-script effect predicates</td><td>Duplicates a stronger idea &mdash; merged into idea&nbsp;1 as the verification half rather than kept as its own direction.</td></tr>
+<tr><td>R11</td><td>Canary-token taint tracking for <code>op://</code> secrets</td><td>Sound and cheap, but the property it proves is currently defended by a correct hand-written argument with no observed failure; deferred behind ideas that close active defects.</td></tr>
+<tr><td>R12</td><td>Terminating-action predicates for the findings ledger</td><td>Sound &mdash; one real drift confirmed at <code>state.yml:283-285</code>. Cut only for volume: one stale entry out of a ledger that otherwise closes out correctly does not yet justify a new mechanism.</td></tr>
+<tr><td>R13</td><td><code>.chezmoiremove</code> as a data registry with a collision assertion</td><td>Sound &mdash; 119 of 157 lines are comment and the safety argument is prose-only. Deferred: the collision it guards against is hypothetical today, and the same predicate discipline as R12 should land once, for both.</td></tr>
+<tr><td>R14</td><td>Golden rendered-tree fixtures per fact profile</td><td>Folded into idea&nbsp;5 &mdash; the harness is the enabler; whether assertions run against a snapshot or a render is an implementation choice inside it.</td></tr>
+<tr><td>R15</td><td>One ownership reconciler for the 831-line every-apply class</td><td>Class mis-grouped &mdash; 54% of those lines are a build-and-stamp pipeline that shares only the <code>run_after_</code> prefix. The genuine merge class is under 383 lines and too small to justify a reconciler.</td></tr>
+<tr><td>R16</td><td>Agent policy as intent plus a generated lock</td><td>Premise wrong on two counts &mdash; the instruction file changed more often than the agent registry over 90 days, and the <code>agents.lock</code> name is already taken by a different generator.</td></tr>
+<tr><td>R17</td><td>Index <code>docs/plans/</code> by invariant and expose it as a project skill</td><td>Contradicts recorded doctrine &mdash; the project-skill slot is documented as deliberately vacant because its previous occupant was retired once its checkable half became CI failures. Refilling it with prose reverses that.</td></tr>
+<tr><td>R18</td><td>Origin keys on each invariant; retire plans once enforced</td><td>Partly already doctrine, and the &ldquo;read by nothing&rdquo; premise is false &mdash; two CI scripts cite plans today. The useful residue is the enforcement-ID half, which survives inside idea&nbsp;5.</td></tr>
+<tr><td>R19</td><td>Collapse or CI-conformance-test the single-harness seam</td><td>Verified exactly as described &mdash; one conditional, one branch, no else, one caller. Cut on value: resolving it either way changes nothing observable until a second harness is actually in play.</td></tr>
+<tr><td>R20</td><td>Send-ahead wafer rehearsal with recording shims</td><td>Duplicates existing coverage &mdash; per-script stub fixtures already deliver rehearsal-without-effects for the cases that motivated it.</td></tr>
+<tr><td>R21</td><td>Deferral register with aviation MEL expiry categories</td><td>The analogy's stated break removes its own enforcement value &mdash; with no independent authority to ground the aircraft, what remains is a nag list already covered by idea&nbsp;1.</td></tr>
+<tr><td>R22</td><td>Flight-envelope protection over the invariant set</td><td>Below the floor as its own direction &mdash; its honest weakening concedes the load-bearing element (an authority the pilot cannot edit), leaving a restatement of idea&nbsp;5.</td></tr>
+<tr><td>R23</td><td>Retire the plan corpus outright under a deletion rule</td><td>Too aggressive for the evidence &mdash; the corpus is the repo's only narrative memory and its &ldquo;unreferenced&rdquo; premise did not survive checking.</td></tr>
+<tr><td>R24</td><td>Comment-only capability digest feeding fingerprints</td><td>The named tradeoff is a decoy &mdash; the real break is reproducibility, since rendered content would depend on ambient session state. The declared-value form in idea&nbsp;1 gets the same effect without it.</td></tr>
+<tr><td>&mdash;</td><td>axis coverage</td><td>Not applicable &mdash; decomposition was skipped in surprise-me mode; cross-frame convergence is recorded in the ideas instead.</td></tr>
+</tbody>
+</table>
+
+<h4>Measurements corrected during verification</h4>
+<p>Nine figures asserted during generation did not survive checking and were corrected before ranking:
+scripts carrying a fingerprint is 10 of 42, not 12; <code>MUST</code>/<code>NEVER</code> occurrences in the root
+instruction file is 24, not 27; scripts instructing <code>chezmoi apply --force</code> is 19, not 6 &mdash; the
+pain was understated threefold; unpinned repository endpoints is 9, not 8; plans land at ~3.7 per active day,
+not 2.6, and two CI scripts do reference them; <code>.chezmoiremove</code> is 76% pure comment, not 83%; the
+findings ledger has one stale entry, not two; the root instruction file is 80.5% of the 32&nbsp;KiB reference
+cap, not 82%; and the installed chezmoi is v2.71.0, one release behind the v2.72.0 the external research
+described.</p>
+</section>
+
+<footer class="composition-signal">
+Composed 2026-08-13T10:46Z by ce-ideate over <code>github.com/hyperlapse122/dotfiles</code> at <code>73085a9</code> &mdash;
+surprise-me mode, no focus hint. 6 ideation lenses &rarr; 47 candidates &rarr; 1 adversarial verifier &rarr; 7 survivors.
+</footer>
+
+</div>
+</body>
+</html>

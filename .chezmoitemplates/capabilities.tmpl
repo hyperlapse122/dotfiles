@@ -1,0 +1,95 @@
+{{- /*
+capabilities.tmpl — render-time probes of MOMENTARY host state, for
+transient-blocking skip sites only.
+
+WHAT THIS IS FOR. A `transient-blocking` site (see skip.sh.tmpl) exits 0, so
+chezmoi records it as a successful run. It can only re-run on its own if the
+script's RENDERED CONTENT changes when the missing precondition appears. This
+partial emits a two-valued token for exactly that purpose; the caller hashes it
+through fingerprint.tmpl's `values` key, so the token flipping changes the
+script's content and chezmoi re-runs it.
+
+WHY A PROBE AND NOT A MARKER FILE. Measured on chezmoi v2.71.0 against a scratch
+source and destination:
+
+  marker whose content changes on each skip  -> script re-runs on EVERY apply
+                                                (an always-run script)
+  marker with stable content                 -> ran twice, then stalled
+                                                permanently, and did NOT re-run
+                                                when the precondition appeared
+  render-time probe of the precondition      -> ran once, byte-stable across
+                                                three further applies, re-ran
+                                                immediately once the
+                                                precondition appeared
+
+Only the third is both stable while the precondition is absent and different
+once it is present, which is what R6 and AE3 together require.
+
+THIS IS DELIBERATELY NOT THE FACT REGISTRY. `.chezmoidata/facts.yaml:5-9`
+excludes momentary state — a live D-Bus session, a `sudo -n` credential cache —
+from host IDENTITY, and that exclusion stands. A capability here:
+
+  - never appears in a `gates:` expression and never gates anything,
+  - is consumed only as a fingerprint input, so it can only ever change WHEN a
+    script re-runs, never WHETHER it is allowed to act,
+  - therefore cannot fail open, which is the property facts.yaml's per-fact
+    `whenFalse:` doctrine exists to protect.
+
+Adding a capability is not adding a fact. Do not add a `gates:` consumer for
+one; if a decision needs it, that decision belongs in the fact registry with a
+declared fail-safe direction.
+
+EVERY PROBE MUST EXIT 0 AND EMIT ONE OF TWO FIXED TOKENS. A probe that can fail
+the render, or that can emit a third value (a timestamp, a device id, a version
+string), would either break every `chezmoi` command or turn its consumers into
+always-run scripts. Both are worse than the bug this fixes.
+
+COST, STATED PLAINLY — AND A HARD LIMIT ON HOW FAR THIS FORM SCALES. Each call
+here runs one subprocess at RENDER time, which is once per chezmoi command, not
+once per apply: `chezmoi status` and `chezmoi diff` pay it too. `sudo-usable`
+additionally runs `sudo -n true`, so a host that logs failed sudo attempts sees
+more of them than before. That is the price of the sudo consumers self-healing;
+the measured alternative is that they never self-heal at all.
+
+The site inventory found ~47 transient-blocking sites needing roughly 35
+distinct probes. At that count this per-call form is the wrong shape: ~35
+subprocesses on every chezmoi command. BEFORE converting sites in bulk, move
+probe resolution into the `read-source-state.pre` hook that already writes
+${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml, and have this partial read that
+cache through a stat-guarded `include` exactly the way facts.tmpl does. That is
+one subprocess per command regardless of probe count, and it makes rendering
+reproducible within a command rather than per call. This partial's ARGUMENT
+CONTRACT does not change when that happens — only where the value comes from —
+so call sites written against it today stay correct.
+
+Until that rework lands, keep the probe count small and prefer probes with no
+side effect at all.
+
+ARGUMENT — a dict:
+
+  {{ includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") }}
+
+Emits `available` or `unavailable`, with no trailing newline, so it can be used
+directly as a fingerprint value.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "capabilities.tmpl: expected a dict, got a %s (%v). Call it as {{ includeTemplate \"capabilities.tmpl\" (dict \"ctx\" . \"probe\" \"sudo-usable\") }}" (kindOf .) .) -}}
+{{- end -}}
+{{- $probe := "" -}}{{- if hasKey . "probe" -}}{{- $probe = .probe -}}{{- end -}}
+{{- $known := list "sudo-usable" "session-bus-present" -}}
+{{- if not (has $probe $known) -}}
+{{-   fail (printf "capabilities.tmpl: unknown probe %q. Known probes: %s. Add a new probe to this partial rather than inlining a command at the call site, so every render-time probe stays enumerable and reviewable in one place." $probe (join ", " $known)) -}}
+{{- end -}}
+{{- if ne .ctx.chezmoi.os "linux" -}}
+unavailable
+{{- else if eq $probe "sudo-usable" -}}
+{{- /* Root needs no sudo. Otherwise a non-interactive check: succeeds on a
+   cached credential or password-less sudo, fails closed on anything else.
+   `|| true` and the timeout keep a hung or missing sudo from failing the
+   render. */ -}}
+{{- output "sh" "-c" "if [ \"$(id -u)\" = 0 ]; then printf available; elif timeout 5 sudo -n true >/dev/null 2>&1; then printf available; else printf unavailable; fi" | trim -}}
+{{- else if eq $probe "session-bus-present" -}}
+{{- /* Pure environment and socket test — no subprocess side effects. Mirrors
+   the runtime condition its consumers already test. */ -}}
+{{- output "sh" "-c" "if [ -n \"${DBUS_SESSION_BUS_ADDRESS:-}\" ] || [ -S \"${XDG_RUNTIME_DIR:-/nonexistent}/bus\" ]; then printf available; else printf unavailable; fi" | trim -}}
+{{- end -}}
