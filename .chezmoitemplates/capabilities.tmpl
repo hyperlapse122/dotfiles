@@ -85,9 +85,12 @@ unavailable
 {{- else if eq $probe "sudo-usable" -}}
 {{- /* Root needs no sudo. Otherwise a non-interactive check: succeeds on a
    cached credential or password-less sudo, fails closed on anything else.
-   `|| true` and the timeout keep a hung or missing sudo from failing the
-   render. */ -}}
-{{- output "sh" "-c" "if [ \"$(id -u)\" = 0 ]; then printf available; elif timeout 5 sudo -n true >/dev/null 2>&1; then printf available; else printf unavailable; fi" | trim -}}
+   `-N` is load-bearing — without it a successful probe REFRESHES the sudo
+   timestamp, and because this renders for `chezmoi status` and `diff` too,
+   routine read-only commands would keep an expiring authorization alive
+   indefinitely. `|| true` and the timeout keep a hung or missing sudo from
+   failing the render. */ -}}
+{{- output "sh" "-c" "if [ \"$(id -u)\" = 0 ]; then printf available; elif timeout 5 sudo -nN true >/dev/null 2>&1; then printf available; else printf unavailable; fi" | trim -}}
 {{- else if eq $probe "session-bus-present" -}}
 {{- /* Pure environment and socket test — no subprocess side effects. Mirrors
    the runtime condition its consumers already test. */ -}}
