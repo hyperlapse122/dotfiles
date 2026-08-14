@@ -71,7 +71,7 @@
 #
 # gnome.shellExtensions:
 #   solaar        : the GNOME Shell extension installed by
-#                   run_onchange_after_install-gnome-solaar-extension.sh.tmpl —
+#                   run_after_install-gnome-solaar-extension.sh.tmpl —
 #                   `uuid` is upstream's fixed extension id (sanity-checked
 #                   against the extensions.gnome.org response) and `egoId` is its
 #                   numeric extensions.gnome.org primary key, the `pk=` of the
@@ -79,7 +79,7 @@
 #                   shell version. Both identify WHICH extension; the script keeps
 #                   every bit of the download/compat/enable logic (see its header).
 #   kimpanel      : Input-method panel extension installed by
-#                   run_onchange_after_install-gnome-kimpanel-extension.sh.tmpl.
+#                   run_after_install-gnome-kimpanel-extension.sh.tmpl.
 #                   Load-bearing on GNOME Wayland: mutter has no wlr-layer-shell,
 #                   so fcitx5-classicui cannot draw its candidate popup
 #                   as a layer surface — without Kimpanel the popup either

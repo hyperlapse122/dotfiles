@@ -240,17 +240,30 @@ grep -q 'is a directory' "$scratch/dirtarget.err" \
   || fail "dirtarget: stderr lacked the directory notice (got: $(cat "$scratch/dirtarget.err"))"
 
 # --- 5. soft-skip when omp is absent ------------------------------------------
+# The skip runs through .chezmoitemplates/skip.sh.tmpl as a transient-blocking
+# declaration, so it is emphatically NOT a bare exit 0: the derived operator
+# notice goes to stdout (the partial reserves stderr for transient-tolerable,
+# which exits non-zero) and names both the deferral and the capability probe that
+# re-triggers the install, and the skip is recorded under $XDG_STATE_HOME so
+# `dotfiles-skips` can report the outstanding work. Assert all three: a notice
+# that lost its re-run promise, or a skip that recorded nothing, is exactly the
+# silent no-op the declaration contract exists to prevent.
 
 home_skip="$scratch/home-skip"
 mkdir -p -- "$home_skip/.local/share/zsh/site-functions"
 status=0
 env -i PATH="/usr/bin:/bin" HOME="$home_skip" XDG_CACHE_HOME="$scratch/cache-skip" \
-  bash "$generator" >/dev/null 2>"$scratch/skip.err" || status=$?
+  bash "$generator" >"$scratch/skip.out" 2>"$scratch/skip.err" || status=$?
 [ "$status" -eq 0 ] || fail "skip: expected a soft-skip exit 0, got $status"
 [ ! -e "$home_skip/.local/share/zsh/site-functions/_omp" ] \
   || fail 'skip: _omp was installed even though omp is unavailable'
-grep -q 'omp is unavailable' "$scratch/skip.err" \
-  || fail "skip: stderr lacked the unavailable notice (got: $(cat "$scratch/skip.err"))"
+grep -qF 'install-omp-zsh-completion: omp is not installed; zsh completion generation is deferred' \
+  "$scratch/skip.out" \
+  || fail "skip: stdout lacked the deferral notice (got: $(cat "$scratch/skip.out" "$scratch/skip.err"))"
+grep -qF 'it re-runs automatically once omp-present changes' "$scratch/skip.out" \
+  || fail "skip: the skip notice does not promise an automatic re-run (got: $(cat "$scratch/skip.out"))"
+[ -s "$home_skip/.local/state/chezmoi/skips/install-omp-zsh-completion__omp-absent" ] \
+  || fail 'skip: the declared skip left no state record under XDG_STATE_HOME'
 
 # --- 6. $fpath wiring in the managed zshrc ------------------------------------
 # Static ordering first: compinit only scans $fpath as it stands when prezto's

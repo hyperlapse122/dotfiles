@@ -1,5 +1,8 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+{{ $gsettingsPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "gsettings-present") -}}
+{{ $fcMatchPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "fc-match-present") -}}
 #!/usr/bin/env bash
 #
 # GNOME hosts. Brings GNOME's display
@@ -48,11 +51,13 @@
 
 set -euo pipefail
 
-# managed font data content fingerprint — chezmoi hashes this rendered script to
-# decide whether to re-run; embedding fonts.yaml's sha256 forces a re-run on any
-# font bump. `include . | sha256sum` hashes file CONTENT; `(stat .).isDir` skips
-# directories. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoidata/fonts.yaml")) }}
+# Managed font data and capability fingerprints — comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list ".chezmoidata/fonts.yaml")
+      "values" (list
+        (dict "name" "session-bus-present" "value" $sessionBusPresent)
+        (dict "name" "gsettings-present" "value" $gsettingsPresent)
+        (dict "name" "fc-match-present" "value" $fcMatchPresent))) }}
 SANS="{{ .fonts.families.sans }}"
 MONO="{{ .fonts.families.mono }}"
 SANS_SIZE={{ .fonts.sizes.sans }}
@@ -80,8 +85,7 @@ SIG="sans=${SANS}/${SANS_SIZE} mono=${MONO}/${MONO_SIZE} fonts=${FONTS}"
 # Because $SIG embeds the managed font archive set, a font bump falls through
 # here and reaches the cache refresh below (parity with the KDE run_onchange).
 if [[ -f "$STAMP" ]] && [[ "$(cat "$STAMP" 2>/dev/null || true)" == "$SIG" ]]; then
-  echo "config-gnome-fonts: fonts already ensured ($SIG); leaving current fonts alone"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "config-gnome-fonts" "site" "stamp-current" "reason" "the GNOME font stamp already matches the desired signature") | trim | indent 2 }}
 fi
 
 # --- Register externally-installed fonts (same as the KDE script) -----------
@@ -96,20 +100,22 @@ if command -v fc-cache >/dev/null 2>&1; then
     || echo "config-gnome-fonts: fc-cache reported a non-fatal error, continuing." >&2
 fi
 
-# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+# --- Live session / tooling guards ------------------------------------------
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
-  echo "config-gnome-fonts: no D-Bus session bus; skip (retries next apply)"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-fonts" "site" "no-session-bus" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "no D-Bus session bus is available; font configuration is deferred") | trim | indent 2 }}
 fi
-command -v gsettings >/dev/null 2>&1 \
-  || { echo "config-gnome-fonts: gsettings absent; skip"; exit 0; }
+if ! command -v gsettings >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-fonts" "site" "gsettings-absent" "direction" "transient-blocking" "probe" "gsettings-present" "reason" "gsettings is not installed; font configuration is deferred") | trim | indent 2 }}
+fi
 
 # Warn (don't fail) if a family is not installed yet: the externals provision it
 # during this same apply, and gsettings still records the correct name so the
 # font takes effect once it lands.
 _warn_missing_font() {
   local family="$1" matched
-  command -v fc-match >/dev/null 2>&1 || return 0
+  if ! command -v fc-match >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-gnome-fonts" "site" "fc-match-absent" "direction" "transient-blocking" "probe" "fc-match-present" "reason" "fc-match is not installed; font availability checks are deferred") | trim | indent 4 }}
+  fi
   matched="$(fc-match -f '%{family[0]}' "$family" 2>/dev/null || true)"
   if [[ "$matched" != "$family" ]]; then
     echo "config-gnome-fonts: font \"$family\" not installed yet (fc-match -> \"$matched\"); setting anyway." >&2

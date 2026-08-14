@@ -1,3 +1,4 @@
+{{- $helperPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "docker-credential-secretservice-present") -}}
 #!/usr/bin/env bash
 #
 # auth-dockerhub — populate the Docker Hub credential into the OS-native
@@ -30,7 +31,15 @@
 # first. run_onchange: when the token rotates in 1Password the rendered secret
 # changes, so the script re-runs and re-populates (a `store` with the same
 # server+username is an upsert, so re-runs are idempotent).
+#
+# An absent helper binary is a DECLARED transient-blocking skip on the cached
+# `docker-credential-secretservice-present` capability: this repository installs
+# that helper, so the precondition appears later, and the fingerprint value below
+# is what makes chezmoi re-run this script once it does.
 
+# credential-helper capability fingerprint — pairs the transient-blocking helper
+# declaration with the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "docker-credential-secretservice-present" "value" $helperPresent))) }}
 set -euo pipefail
 
 {{ if eq .chezmoi.os "linux" }}
@@ -43,8 +52,7 @@ if ! command -v "$helper" >/dev/null 2>&1; then
   if [[ -x "$HOME/.local/bin/$helper" ]]; then
     helper="$HOME/.local/bin/$helper"
   else
-    printf 'auth-dockerhub: %s not on PATH or in ~/.local/bin; skipping.\n' "$helper" >&2
-    exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "auth-dockerhub" "site" "credential-helper-absent" "direction" "transient-blocking" "probe" "docker-credential-secretservice-present" "reason" "the platform credential helper is not on PATH or in the user bin directory") | trim | indent 4 }}
   fi
 fi
 

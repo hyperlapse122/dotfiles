@@ -1,4 +1,8 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+{{ $graphicalSessionPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "graphical-session-present") -}}
+{{ $plasmashellRunning := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "plasmashell-running") -}}
+{{ $wallpaperToolPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "plasma-apply-wallpaperimage-present") -}}
 #!/usr/bin/env bash
 #
 # Fedora KDE Spin. De-brands the desktop wallpaper to Plasma's default
@@ -27,16 +31,14 @@
 # touches it again -- if the user later picks their own wallpaper, we do NOT keep
 # reverting it on every apply.
 #
-# onchange, no fingerprint block needed: the rendered theme below is part of this
-# script's content, so a kde.yaml edit re-triggers it (the same reason
-# config-gnome-mouse carries none). Live-session only:
-# plasma-apply-wallpaperimage needs a running KDE session (DBus + display server
-# + plasmashell), so on a headless/TTY/first-boot apply this exits 0. NOTE the
-# behavior change from the former run_after: onchange records that skipped run as
-# done and will NOT re-run on the next apply just because a live Plasma session
-# appeared — the wallpaper is applied on the next content change or a manual
-# `chezmoi apply --force`. Once the stamp exists the script is a no-op.
+# Live-session preconditions below are DECLARED transient-blocking and paired
+# with cached capability tokens in the comment-only fingerprint block.
 
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "session-bus-present" "value" $sessionBusPresent)
+      (dict "name" "graphical-session-present" "value" $graphicalSessionPresent)
+      (dict "name" "plasmashell-running" "value" $plasmashellRunning)
+      (dict "name" "plasma-apply-wallpaperimage-present" "value" $wallpaperToolPresent))) }}
 set -euo pipefail
 
 WALLPAPER_THEME={{ .kde.wallpaper.theme | quote }}
@@ -44,29 +46,25 @@ STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/wallpaper-debranded"
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-wallpaper-breeze.sh") -}}
 
-# Already de-branded once -> respect the user's current choice, do nothing.
+# Already de-branded once -> respect the user's current choice.
 if [[ -f "$STAMP" ]]; then
-  echo "wallpaper-breeze: already applied once ($STAMP); leaving user's wallpaper alone"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "config-kde-wallpaper-breeze" "site" "stamp-present" "reason" "the wallpaper migration stamp is already present") | trim | indent 2 }}
 fi
 
-# --- Live KDE session guards (any absent condition => safe exit 0) ---
-# Runtime state only — the host-is-KDE question is already answered by the
-# kde-guard above.
+# --- Live KDE session guards -------------------------------------------------
+# Runtime state only — the host-is-KDE question is already answered by kde-guard.
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
-  echo "wallpaper-breeze: no DBus session bus; skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-kde-wallpaper-breeze" "site" "no-session-bus" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "no D-Bus session bus is available; wallpaper configuration is deferred") | trim | indent 2 }}
 fi
 if [[ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
-  echo "wallpaper-breeze: no display server; skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-kde-wallpaper-breeze" "site" "no-display-server" "direction" "transient-blocking" "probe" "graphical-session-present" "reason" "no graphical display server is available; wallpaper configuration is deferred") | trim | indent 2 }}
 fi
 if ! pgrep -xu "$USER" plasmashell >/dev/null 2>&1; then
-  echo "wallpaper-breeze: plasmashell not running for $USER; skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-kde-wallpaper-breeze" "site" "plasmashell-not-running" "direction" "transient-blocking" "probe" "plasmashell-running" "reason" "plasmashell is not running; wallpaper configuration is deferred") | trim | indent 2 }}
 fi
-command -v plasma-apply-wallpaperimage >/dev/null 2>&1 \
-  || { echo "wallpaper-breeze: plasma-apply-wallpaperimage absent; skip"; exit 0; }
+if ! command -v plasma-apply-wallpaperimage >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-kde-wallpaper-breeze" "site" "wallpaper-tool-absent" "direction" "transient-blocking" "probe" "plasma-apply-wallpaperimage-present" "reason" "the Plasma wallpaper tool is not installed; wallpaper configuration is deferred") | trim | indent 2 }}
+fi
 
 # Resolve the wallpaper package's image, preferring the highest-resolution one it
 # ships. Skip (do NOT stamp) if the package is absent, so a later apply retries
@@ -74,8 +72,7 @@ command -v plasma-apply-wallpaperimage >/dev/null 2>&1 \
 WALL_DIR="/usr/share/wallpapers/${WALLPAPER_THEME}/contents/images"
 img="$(find "$WALL_DIR" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' \) 2>/dev/null | sort -V | tail -n1)"
 if [[ -z "$img" ]]; then
-  echo "wallpaper-breeze: wallpaper $WALLPAPER_THEME not found under $WALL_DIR; skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-kde-wallpaper-breeze" "site" "wallpaper-image-absent" "direction" "harmless" "reason" "the configured wallpaper image is not installed") | trim | indent 2 }}
 fi
 
 plasma-apply-wallpaperimage "$img"

@@ -1,4 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+{{ $gsettingsPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "gsettings-present") -}}
+{{ $ptyxisPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "ptyxis-present") -}}
 #!/usr/bin/env bash
 #
 # GNOME hosts. Sets the color palette
@@ -46,15 +49,13 @@
 # applies. Changing gnome.yaml changes the signature, so the new value is
 # re-asserted exactly once.
 #
-# onchange, no external fingerprint block needed: the rendered palette value IS
-# part of this script's content, so a gnome.yaml edit re-triggers it. Live-
-# session only: gsettings writes go through dconf-service on the session D-Bus,
-# so on a headless/TTY/first-boot apply this exits 0 WITHOUT stamping; note that
-# onchange records that skipped run as done and will NOT re-run on the next
-# apply just because a live GNOME session appeared — the palette lands on the
-# next content change or a manual `chezmoi apply --force`. Once the stamp
-# matches the signature the script is a no-op regardless.
+# Live-session preconditions below are DECLARED transient-blocking and paired
+# with cached capability tokens in the comment-only fingerprint block.
 
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "session-bus-present" "value" $sessionBusPresent)
+      (dict "name" "gsettings-present" "value" $gsettingsPresent)
+      (dict "name" "ptyxis-present" "value" $ptyxisPresent))) }}
 set -euo pipefail
 
 PALETTE="{{ .gnome.terminal.palette }}"
@@ -69,23 +70,20 @@ SIG="palette=${PALETTE}"
 
 # Already applied this exact palette once -> respect the user's current one.
 if [[ -f "$STAMP" ]] && [[ "$(cat "$STAMP" 2>/dev/null || true)" == "$SIG" ]]; then
-  echo "config-gnome-terminal-palette: already ensured ($SIG); leaving palette alone"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "config-gnome-terminal-palette" "site" "stamp-current" "reason" "the GNOME terminal palette stamp already matches the desired signature") | trim | indent 2 }}
 fi
 
-# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+# --- Live session / tooling guards ------------------------------------------
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
-  echo "config-gnome-terminal-palette: no D-Bus session bus; skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-terminal-palette" "site" "no-session-bus" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "no D-Bus session bus is available; terminal palette configuration is deferred") | trim | indent 2 }}
 fi
-command -v gsettings >/dev/null 2>&1 \
-  || { echo "config-gnome-terminal-palette: gsettings absent; skip"; exit 0; }
+if ! command -v gsettings >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-terminal-palette" "site" "gsettings-absent" "direction" "transient-blocking" "probe" "gsettings-present" "reason" "gsettings is not installed; terminal palette configuration is deferred") | trim | indent 2 }}
+fi
 
-# Ptyxis not installed => its schema is absent, and gsettings ABORTS (not just
-# fails) when asked to read/write an unknown schema. Skip instead.
+# Ptyxis not installed => its schema is absent, and gsettings cannot read it.
 if ! gsettings list-schemas | grep -qx 'org.gnome.Ptyxis'; then
-  echo "config-gnome-terminal-palette: org.gnome.Ptyxis schema absent (Ptyxis not installed); skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-terminal-palette" "site" "ptyxis-schema-absent" "direction" "transient-blocking" "probe" "ptyxis-present" "reason" "the Ptyxis schema is not installed; terminal palette configuration is deferred") | trim | indent 2 }}
 fi
 
 # gsettings prints strings quoted ('abc') and string arrays as ['a', 'b'] (or
@@ -120,8 +118,7 @@ if [[ ${#profile_uuids[@]} -eq 0 ]]; then
   # would have created itself (32 lowercase hex chars, g_dbus_generate_guid()
   # shape) — uuidgen is not guaranteed to be installed, the kernel source is.
   if [[ ! -r /proc/sys/kernel/random/uuid ]]; then
-    echo "config-gnome-terminal-palette: no profile and no /proc/sys/kernel/random/uuid to seed one; skip"
-    exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-gnome-terminal-palette" "site" "no-uuid-source" "reason" "no kernel UUID source is available to seed a Ptyxis profile") | trim | indent 4 }}
   fi
   new_uuid="$(tr -d - < /proc/sys/kernel/random/uuid)"
   gsettings set org.gnome.Ptyxis profile-uuids "['${new_uuid}']"

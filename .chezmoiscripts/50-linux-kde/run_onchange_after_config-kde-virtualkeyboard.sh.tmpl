@@ -1,4 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
+{{ $fcitxPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "fcitx5-present") -}}
 #!/usr/bin/env bash
 #
 # Selects the KWin virtual keyboard / input-method launcher:
@@ -13,12 +15,11 @@
 # Uses kwriteconfig6 --type path so KConfig writes the canonical
 # InputMethod[$e]=... form. Skips cleanly when the desktop file isn't installed.
 #
-# onchange, no fingerprint block needed: the rendered path below is part of this
-# script's content, so a kde.yaml edit re-triggers it (the same reason
-# config-gnome-mouse carries none).
-#
-# Applies after restarting KWin (kwin_wayland --replace) or logging out/in.
-
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "kwriteconfig6-present" "value" $kconfigPresent)
+      (dict "name" "fcitx5-present" "value" $fcitxPresent))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-virtualkeyboard.sh") -}}
@@ -30,14 +31,11 @@ configure_virtualkeyboard() {
     "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1; then
-    printf '  kwriteconfig6 not found, skipping.\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-virtualkeyboard" "site" "kwriteconfig6-absent" "direction" "transient-blocking" "probe" "kwriteconfig6-present" "reason" "kwriteconfig6 is not installed; virtual keyboard configuration is deferred") | trim | indent 4 }}
   fi
 
   if [[ ! -f "$VIRTUAL_KEYBOARD_DESKTOP_FILE" ]]; then
-    printf '  %s not installed (install fcitx5 first), skipping.\n' \
-      "$VIRTUAL_KEYBOARD_DESKTOP_FILE"
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-virtualkeyboard" "site" "fcitx5-desktop-absent" "direction" "transient-blocking" "probe" "fcitx5-present" "reason" "the fcitx5 desktop file is not installed; virtual keyboard configuration is deferred") | trim | indent 4 }}
   fi
 
   kwriteconfig6 --file kwinrc \

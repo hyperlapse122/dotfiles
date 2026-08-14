@@ -5,6 +5,7 @@
 {{-     if ne $secretsKey "" }}{{ $luksPassphrase = decryptAES $secretsKey .luksPassphraseCipher }}{{ end -}}
 {{-   end -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 #
 # Wrapper that enrolls Fedora LUKS devices for TPM2 auto-unlock on
@@ -32,13 +33,11 @@
 # changes the onchange hash, so the first apply after init stores one does
 # fire enrollment (and an apply where the keyring is temporarily unreachable
 # renders the skip branch instead — a harmless hash flip that re-fires the
-# idempotent enrollment on the next reachable apply). NOTE the behavior change from the former run_after: a run
-# skipped for a blank passphrase, a not-yet-deployed tool, an absent TPM, or
-# missing sudo is now recorded as "done" and is NOT retried on the next apply
-# unless the fingerprint changes — re-run enrollment with `chezmoi apply --force`
-# (entering the passphrase) or by invoking the tool directly. Enrollment stays a
-# cheap idempotent no-op once every device is enrolled.
-#
+# idempotent enrollment on the next reachable apply). Blank passphrase, a
+# not-yet-deployed tool, an absent TPM, no LUKS device, or missing sudo is
+# classified explicitly below. The cached sudo fingerprint makes its
+# transient-blocking skip recover automatically when sudo becomes usable;
+# permanent hardware and data opt-outs remain final.
 # SECURITY NOTES (inherent to the chezmoi-prompt approach, chosen deliberately):
 #   * promptString does NOT mask input, so the passphrase is echoed on screen as
 #     you type it during an interactive `chezmoi init`.
@@ -54,33 +53,33 @@
 set -euo pipefail
 export LC_ALL=C
 
-# enrollment tool content fingerprint — chezmoi hashes this rendered script to
-# decide whether to re-run; embedding the tool's (and its dracut backend's)
-# sha256 forces a re-run when the enrollment logic changes. The prompted
-# passphrase is never part of this block. `include . | sha256sum` hashes file
-# CONTENT; `(stat .).isDir` skips directories. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl" "dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh")) }}
+# Enrollment tool and capability fingerprints — comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list "dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl" "dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh")
+      "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 {{ if $luksPassphrase -}}
 tool="${HOME}/.local/bin/setup-luks-tpm2-unlock.sh"
 
-# Soft-skip (exit 0) on any unmet precondition; run_after retries next apply.
-[[ -x "$tool" ]] || { echo "luks-tpm2: $tool not deployed yet; will retry next apply"; exit 0; }
+# Every unmet precondition is declared through skip.sh.tmpl.
+if [[ ! -x "$tool" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "luks-tpm2" "site" "tool-not-deployed" "direction" "harmless" "reason" "the TPM2 enrollment tool is not deployed in the user bin directory") | trim | indent 2 }}
+fi
 
 # TPM2 present? (kernel device node — backend-neutral)
 if [[ ! -e /sys/class/tpm/tpm0 && ! -e /dev/tpmrm0 ]]; then
-  echo "luks-tpm2: no TPM2 device on this host; skipping"; exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "luks-tpm2" "site" "no-tpm2-device" "reason" "this host has no TPM2 device") | trim | indent 2 }}
 fi
 
 # Any crypto_LUKS block device to enroll?
 if ! lsblk -rno FSTYPE 2>/dev/null | grep -qx 'crypto_LUKS'; then
-  echo "luks-tpm2: no LUKS devices; skipping"; exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "luks-tpm2" "site" "no-luks-devices" "reason" "this host has no LUKS devices to enroll") | trim | indent 2 }}
 fi
 
 # Enrollment needs root. A non-empty passphrase only ever comes from an
 # interactive promptString, so a terminal is present and the tool can prompt for
 # sudo itself — we only need sudo to exist here.
 if [[ "$EUID" -ne 0 ]] && ! command -v sudo >/dev/null 2>&1; then
-  echo "luks-tpm2: not root and sudo unavailable; will retry next apply"; exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "luks-tpm2" "site" "sudo-unavailable" "direction" "transient-blocking" "probe" "sudo-usable" "reason" "not root and sudo is unavailable; TPM2 enrollment is deferred") | trim | indent 2 }}
 fi
 
 # Hand the prompted passphrase to the tool via env (never argv). base64 keeps any
@@ -89,6 +88,6 @@ fi
 # not-yet-enrolled LUKS device for TPM2 unlock.
 SETUP_LUKS_TPM2_PASSPHRASE="$(printf '%s' {{ $luksPassphrase | b64enc | quote }} | base64 -d)" "$tool"
 {{ else -}}
-echo "luks-tpm2: no stored passphrase (blank at init, or user keyring unavailable); skipping TPM2 enrollment this apply."
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "luks-tpm2" "site" "no-stored-passphrase" "direction" "harmless" "reason" "no stored LUKS passphrase is available for TPM2 enrollment") }}
 {{ end -}}
 {{ end -}}

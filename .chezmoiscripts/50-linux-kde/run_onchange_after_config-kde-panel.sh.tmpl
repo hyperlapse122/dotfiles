@@ -1,4 +1,5 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
 #!/usr/bin/env bash
 #
 # Sets the task manager grouping strategy on every panel-level
@@ -16,12 +17,8 @@
 # after restarting it; otherwise the live process may overwrite the change.
 # The write is idempotent so re-running is safe.
 #
-# onchange, no fingerprint block needed: the rendered GROUPING_STRATEGY below is
-# part of this script's content, so a kde.yaml edit re-triggers it (the same
-# reason config-gnome-mouse carries none).
-#
-# Applies after restarting plasmashell or logging out/in.
-
+# Cached capability fingerprint for the transient-blocking KConfig precondition.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "kwriteconfig6-present" "value" $kconfigPresent))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-panel.sh") -}}
@@ -33,14 +30,12 @@ configure_panel() {
     "$GROUPING_STRATEGY"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
-    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-panel" "site" "kconfig-tools-absent" "direction" "transient-blocking" "probe" "kwriteconfig6-present" "reason" "KConfig tools are not installed; panel configuration is deferred") | trim | indent 4 }}
   fi
 
   local file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
   if [[ ! -f "$file" ]]; then
-    printf '  %s not found (no Plasma session has ever started?), skipping.\n' "$file"
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-panel" "site" "appletsrc-absent" "direction" "harmless" "reason" "the Plasma applet configuration is not present") | trim | indent 4 }}
   fi
 
   local count=0
@@ -66,7 +61,9 @@ configure_panel() {
             | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
 
   if [[ "$count" -eq 0 ]]; then
-    printf '  no icontasks/taskmanager applet found in panel config, skipping.\n'
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-kde-panel" "site" "no-taskmanager-applet" "reason" "no task-manager applet is configured") | trim | indent 6 }}
+    )
     return 0
   fi
 

@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-08-10T02:55:33Z"
+    cursor: "2026-08-13T12:49:55Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -308,19 +308,83 @@ items:
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/194"
     updated_at: "2026-08-10T02:55:29Z"
+  "gh-issues:hyperlapse122/dotfiles#214":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Seven exit-1 skip sites abort every later apply phase — reports that transient extension-install failures stop all subsequent chezmoi phases, and proposes contract-driven zero-exit retry behavior."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#214"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/214"
+    severity: null
+    updated_at: "2026-08-13T12:22:14Z"
+  "gh-issues:hyperlapse122/dotfiles#215":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Complete the skip declaration migration: 130 sites, guard, summary — defines prerequisites and a phased migration for skip declarations, while identifying ten error paths needing an explicit direction."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#215"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/215"
+    severity: null
+    updated_at: "2026-08-13T12:22:36Z"
+  "gh-issues:hyperlapse122/dotfiles#217":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Local branches accumulate after squash merge; nothing prunes them — now re-scoped after merge-only repository settings: implement a small dry-run-first helper using ancestry plus worktree protection, and report stashes without deleting them."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#217"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/217"
+    severity: null
+    updated_at: "2026-08-13T12:49:55Z"
+  "gh-issues:hyperlapse122/dotfiles#218":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "AGENTS.md is silent on merge method; repo now allows merge commits only — asks managed instructions and CI checks to require merge commits and make merge conflict side semantics unambiguous."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: false
+    existing_ack_actor: null
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#218"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/218"
+    severity: null
+    updated_at: "2026-08-13T12:49:44Z"
 last_run:
-  timestamp: "2026-08-10T02:58:59Z"
+  timestamp: "2026-08-13T13:00:29Z"
   outcome: "completed"
-  writer: "sweep-JOOSUNGPARK-JPI-20260810115346-318976"
+  writer: "sweep-JOOSUNGPARK-JPI-20260813125007-byz"
   counts:
     gh-issues:
       ack_deferred: 0
-      acked_this_run: 3
-      acknowledged: 3
+      acked_this_run: 4
+      acknowledged: 7
       already_acked_at_source: 0
       closed: 16
       closed_this_run: 0
-      ingested: 3
+      ingested: 4
       manual_stuck: 0
       media_analyzed: 0
       needs_attention: 0

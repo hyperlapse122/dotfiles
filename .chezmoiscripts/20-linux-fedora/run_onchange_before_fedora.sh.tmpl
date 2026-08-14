@@ -12,8 +12,18 @@
 {{- /* Validate the complete cross-platform authority before any manager body
    can render. U5's native emitters reuse this same partial. */ -}}
 {{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
+{{- $dotnetPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "dotnet-present") -}}
+{{- $nvidiaCtkPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
+{{- $timedatectlPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "timedatectl-present") -}}
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 #!/usr/bin/env bash
+
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "dotnet-present" "value" $dotnetPresent)
+      (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent)
+      (dict "name" "timedatectl-present" "value" $timedatectlPresent))) }}
 
 set -euo pipefail
 
@@ -150,7 +160,9 @@ configure_kr_mirrorlists() {
   case "${chassis_type}" in
     3|4|5|6|7|13|15|16|35) ;;
     *)
-      printf 'install-fedora.sh: chassis type "%s" is not desktop-class; leaving Fedora mirrorlists unchanged.\n' "${chassis_type:-unknown}"
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "chassis-not-desktop-class" "reason" "the chassis is not desktop class; Fedora mirrorlists stay upstream") | trim | indent 8 }}
+      )
       return 0
       ;;
   esac
@@ -176,11 +188,14 @@ configure_kr_mirrorlists() {
 # both before the package fast path on existing hosts and again after RPM Fusion
 # is first installed on a fresh host.
 configure_nvidia_repo_policy() {
-  [[ "${HAS_NVIDIA}" -eq 1 ]] || return 0
-
-  if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
-    printf 'install-fedora.sh: RPM Fusion nonfree repos not present; skipping NVIDIA package exclusions.\n'
+  if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "nvidia-repo-policy-no-nvidia" "reason" "no NVIDIA GPU detected; RPM Fusion exclusions are not needed") | trim | indent 6 }}
+    )
     return 0
+  fi
+  if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "rpmfusion-nonfree-absent" "direction" "harmless" "reason" "RPM Fusion nonfree repositories are not present; NVIDIA package exclusions are not needed") | trim | indent 4 }}
   fi
 
   local IFS=,
@@ -274,8 +289,9 @@ install_fedora_packages() {
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
   if [[ "${#missing[@]}" -eq 0 ]]; then
-    printf 'install-fedora.sh: all %d dnf packages already installed; skipping repo setup and install.\n' \
-      "${#all_packages[@]}"
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-fedora" "site" "packages-already-present" "reason" "all declared dnf packages are already installed") | trim | indent 6 }}
+    )
     return 0
   fi
   printf 'install-fedora.sh: %d of %d dnf packages missing; configuring repositories and installing.\n' \
@@ -319,6 +335,9 @@ install_direct_rpms() {
 # re-runs are safe.
 install_flatpak_packages() {
   if [[ "${#flatpaks[@]}" -eq 0 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "flatpaks-none-declared" "reason" "no Flatpak packages are declared") | trim | indent 6 }}
+    )
     return 0
   fi
 
@@ -339,11 +358,13 @@ install_flatpak_packages() {
 # `dotnet tool list -g` — keeping this idempotent across run_onchange re-runs.
 install_dotnet_tools() {
   if [[ "${#dotnet_tools[@]}" -eq 0 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "dotnet-tools-none-declared" "reason" "no global dotnet tools are declared") | trim | indent 6 }}
+    )
     return 0
   fi
   if ! command -v dotnet >/dev/null 2>&1; then
-    printf 'install-fedora.sh: dotnet not found; skipping global dotnet tools.\n' >&2
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "dotnet-absent" "direction" "transient-blocking" "probe" "dotnet-present" "reason" "dotnet is not installed; global dotnet tools are deferred") | trim | indent 4 }}
   fi
 
   local installed tool
@@ -367,11 +388,13 @@ install_dotnet_tools() {
 # up.
 install_nvidia_support() {
   if [[ "${HAS_NVIDIA}" -ne 1 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "nvidia-support-no-nvidia" "reason" "no NVIDIA GPU detected; CDI setup is not needed") | trim | indent 6 }}
+    )
     return 0
   fi
   if ! command -v nvidia-ctk >/dev/null 2>&1; then
-    printf 'install-fedora.sh: nvidia-ctk not installed; skipping CDI setup.\n' >&2
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "nvidia-ctk-absent" "direction" "transient-blocking" "probe" "nvidia-ctk-present" "reason" "nvidia-ctk is not installed; NVIDIA CDI setup is deferred") | trim | indent 4 }}
   fi
   "${SUDO[@]}" nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml || true
   "${SUDO[@]}" setsebool -P container_use_devices on
@@ -394,9 +417,18 @@ install_nvidia_support() {
 # Returns non-zero when no usable keypair is present afterwards, so callers act
 # on the return code instead of re-testing the files themselves.
 ensure_dkms_mok_generated() {
-  [[ -d /sys/firmware/efi ]] || return 0
-  mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled' || return 0
-
+  if [[ ! -d /sys/firmware/efi ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "mok-generate-no-efi" "reason" "not booted via UEFI; a MOK keypair is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  if ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "mok-generate-secureboot-disabled" "reason" "Secure Boot is disabled; a MOK keypair is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
   local state
   state="$(dkms_mok_state)" || {
     printf 'install-fedora.sh: cannot read /var/lib/dkms to check for the MOK signing key (sudo unavailable?); refusing to touch it.\n' >&2
@@ -404,9 +436,13 @@ ensure_dkms_mok_generated() {
   }
 
   case "${state}" in
-    present) return 0 ;;
+    present)
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-fedora" "site" "mok-keypair-present" "reason" "the DKMS MOK keypair already exists") | trim | indent 8 }}
+      )
+      return 0
+      ;;
     partial)
-      # Half a keypair is host state we did not create. Minting over it would
       # replace an enrolled certificate whose private key is gone — see the
       # warning in dkms_mok_state.
       printf 'install-fedora.sh: /var/lib/dkms holds only one half of the MOK keypair; refusing to overwrite it. Remove both mok.pub and mok.key by hand if you want a fresh key, then re-apply.\n' >&2
@@ -473,9 +509,13 @@ dkms_mok_state() {
 # into one `mokutil --import` so the user enters the one-time password once.
 enroll_dkms_mok() {
   if [[ ! -d /sys/firmware/efi ]]; then
-    printf 'install-fedora.sh: not booted via UEFI; skipping MOK import.\n'
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "mok-enroll-no-efi" "reason" "not booted via UEFI; MOK enrollment is not applicable") | trim | indent 6 }}
+    )
   elif ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
-    printf 'install-fedora.sh: Secure Boot disabled; skipping MOK import.\n'
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "mok-enroll-secureboot-disabled" "reason" "Secure Boot is disabled; MOK enrollment is not applicable") | trim | indent 6 }}
+    )
   else
     local -a certs=() to_import=()
     local cert fp mok_state
@@ -492,7 +532,9 @@ enroll_dkms_mok() {
       certs+=(/var/lib/dkms/mok.pub)
     fi
     if [[ ${#certs[@]} -eq 0 ]]; then
-      printf 'install-fedora.sh: no enrollable DKMS MOK (keypair %s); skipping MOK import. One is seeded on NVIDIA hosts, which are the only hosts with a module to sign.\n' "${mok_state}"
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-fedora" "site" "mok-enroll-no-keypair" "reason" "no enrollable DKMS MOK keypair is present") | trim | indent 8 }}
+      )
     else
       for cert in "${certs[@]}"; do
         if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
@@ -522,7 +564,9 @@ enroll_dkms_mok() {
 # (enable --now) or "later" (enable only).
 enable_unit() {
   local svc="$1" when="${2:-now}"
-  systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}" || return 0
+  if ! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "enable-unit-absent" "direction" "harmless" "reason" "the requested unit file is not installed on this host") | trim | indent 4 }}
+  fi
   if [[ "${when}" == later ]]; then
     "${SUDO[@]}" systemctl enable "${svc}" 2>/dev/null || true
   else
@@ -550,7 +594,9 @@ enable_services() {
 # Use the hardware clock as UTC and enable NTP synchronisation. Guarded so a
 # systemd-less environment is skipped cleanly).
 configure_time() {
-  command -v timedatectl >/dev/null 2>&1 || return 0
+  if ! command -v timedatectl >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "timedatectl-absent" "direction" "transient-blocking" "probe" "timedatectl-present" "reason" "timedatectl is not installed; time configuration is deferred") | trim | indent 4 }}
+  fi
   "${SUDO[@]}" timedatectl set-local-rtc 0 2>/dev/null || true
   "${SUDO[@]}" timedatectl set-ntp true 2>/dev/null || true
 }

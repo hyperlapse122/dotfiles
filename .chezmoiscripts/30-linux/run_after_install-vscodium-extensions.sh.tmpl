@@ -1,0 +1,53 @@
+{{- $signatureConfig := printf "vscodium-extension-retry-v1\n%s\n" (join "\n" .vscodium.extensions) -}}
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+EXTENSIONS=(
+{{- range .vscodium.extensions }}
+  {{ . | quote }}
+{{- end }}
+)
+SIGNATURE={{ $signatureConfig | sha256sum | quote }}
+{{ includeTemplate "extension-signature-stamp.sh.tmpl" (dict "name" "install-vscodium-extensions" "stamp" "vscodium-extensions") }}
+if stamp_matches; then
+  echo "install-vscodium-extensions: already reconciled desired configuration; leaving extensions alone"
+  exit 0
+fi
+clear_safe_stamp || fail "cannot clear stale success signature"
+
+if ! command -v codium >/dev/null 2>&1; then
+  echo "install-vscodium-extensions: codium not on PATH; retrying on a later apply" >&2
+  exit 0
+fi
+
+if [[ ${#EXTENSIONS[@]} -eq 0 ]]; then
+  echo "install-vscodium-extensions: no extensions declared; reconciled"
+  write_stamp || fail "cannot record success signature"
+  exit 0
+fi
+
+installed="$(codium --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]')" || installed=""
+failures=0
+for ext in "${EXTENSIONS[@]}"; do
+  lower="$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')"
+  if printf '%s\n' "$installed" | grep -qxF -- "$lower"; then
+    action="update"
+  else
+    action="install"
+  fi
+  if codium --install-extension "$ext" --force; then
+    echo "install-vscodium-extensions: $action ok: $ext"
+  else
+    echo "install-vscodium-extensions: $action FAILED: $ext" >&2
+    failures=$((failures + 1))
+  fi
+done
+
+if ((failures > 0)); then
+  retry "$failures extension(s) failed"
+fi
+
+write_stamp || fail "cannot record success signature"
+echo "install-vscodium-extensions: reconciled desired configuration"
+{{ end -}}

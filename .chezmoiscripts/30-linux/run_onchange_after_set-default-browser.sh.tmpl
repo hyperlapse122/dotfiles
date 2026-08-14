@@ -1,3 +1,5 @@
+{{- $xdgSettingsPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "xdg-settings-present") -}}
+{{- $xdgMimePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "xdg-mime-present") -}}
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
 #
@@ -42,14 +44,19 @@
 # their own default-app registries, so there is no xdg equivalent to drive and
 # no .ps1 counterpart per the script-parity exception in ../AGENTS.md.
 
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "xdg-settings-present" "value" $xdgSettingsPresent)
+      (dict "name" "xdg-mime-present" "value" $xdgMimePresent))) }}
 set -euo pipefail
 
 BROWSER_DESKTOP="google-chrome.desktop"
 
-# 0. Soft-skip when the freedesktop tooling is absent.
+# 0. xdg-utils is installed by the Fedora package set, so its absence is a
+# DECLARED transient-blocking precondition paired with the cached token above.
 if ! command -v xdg-settings >/dev/null 2>&1; then
-  printf 'set-default-browser: xdg-settings not found (xdg-utils not installed); skipping\n' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "set-default-browser" "site" "xdg-settings-absent" "direction" "transient-blocking" "probe" "xdg-settings-present" "reason" "xdg-settings is not installed; default-browser configuration is deferred") | trim | indent 2 }}
 fi
 
 # 1. Soft-skip when Chrome's .desktop file is not installed. Resolve the same
@@ -67,9 +74,7 @@ for dir in "$data_home" "${data_dirs[@]}"; do
   fi
 done
 if [[ "$desktop_found" != true ]]; then
-  printf 'set-default-browser: %s not found in any applications dir (google-chrome-stable not installed?); skipping\n' \
-    "$BROWSER_DESKTOP" >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "set-default-browser" "site" "chrome-desktop-absent" "direction" "harmless" "reason" "the Google Chrome desktop entry is not installed") | trim | indent 2 }}
 fi
 
 # 2. Default web browser (the xdg-settings entry point). Probe first for
@@ -85,21 +90,25 @@ else
 fi
 
 # 3. URL scheme + HTML content handlers in mimeapps.list (what xdg-open and
-#    most apps actually consult). Each type probed first for idempotency.
-if command -v xdg-mime >/dev/null 2>&1; then
-  for type in x-scheme-handler/http x-scheme-handler/https text/html; do
-    current_handler="$(xdg-mime query default "$type" 2>/dev/null || true)"
-    if [[ "$current_handler" == "$BROWSER_DESKTOP" ]]; then
-      printf 'set-default-browser: %s already -> %s\n' "$type" "$BROWSER_DESKTOP"
-    else
-      xdg-mime default "$BROWSER_DESKTOP" "$type"
-      printf 'set-default-browser: %s -> %s (was %s)\n' \
-        "$type" "$BROWSER_DESKTOP" "${current_handler:-unset}"
-    fi
-  done
-else
-  printf 'set-default-browser: xdg-mime not found; URL/HTML handlers left unchanged\n' >&2
-fi
+# most apps actually consult). An absent xdg-mime is a transient-blocking
+# substep; wrap it so skip_step returns from this step and the script completes.
+configure_mime_handlers() {
+  if command -v xdg-mime >/dev/null 2>&1; then
+    for type in x-scheme-handler/http x-scheme-handler/https text/html; do
+      current_handler="$(xdg-mime query default "$type" 2>/dev/null || true)"
+      if [[ "$current_handler" == "$BROWSER_DESKTOP" ]]; then
+        printf 'set-default-browser: %s already -> %s\n' "$type" "$BROWSER_DESKTOP"
+      else
+        xdg-mime default "$BROWSER_DESKTOP" "$type"
+        printf 'set-default-browser: %s -> %s (was %s)\n' \
+          "$type" "$BROWSER_DESKTOP" "${current_handler:-unset}"
+      fi
+    done
+  else
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "set-default-browser" "site" "xdg-mime-absent" "direction" "transient-blocking" "probe" "xdg-mime-present" "reason" "xdg-mime is not installed; URL and HTML handler configuration is deferred") | trim | indent 4 }}
+  fi
+}
+configure_mime_handlers
 
 exit 0
 {{ end -}}

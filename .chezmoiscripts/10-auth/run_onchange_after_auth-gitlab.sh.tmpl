@@ -1,3 +1,4 @@
+{{- $glabPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "glab-present") -}}
 #!/usr/bin/env bash
 #
 # auth-gitlab — provision the GitLab CLI (`glab`) credentials for every GitLab
@@ -32,12 +33,13 @@
 # run_after (NOT before, unlike the auth-github sibling): `glab` is fetched by
 # .chezmoiexternals/vcs.toml into ~/.local/bin during chezmoi's FILE phase, so
 # on a first apply a before_ script would not find it yet and would take the
-# soft-skip path — and per AGENTS.md a run_onchange exit-0 skip is recorded as a
-# SUCCESSFUL run and is never retried, leaving the host unauthenticated until
-# the fingerprint changes or `chezmoi apply --force`. Running in the after phase
-# guarantees the externals-fetched binary is on disk. Nothing in the before
-# phase (the package installers) needs glab, so there is no ordering cost —
-# unlike `gh`, whose token preflight must precede the installers.
+# skip path. That skip is now DECLARED transient-blocking on the cached
+# `glab-present` capability (see the fingerprint block below), so it recovers on
+# its own — but running in the after phase is still strictly better: it
+# authenticates on the FIRST apply instead of waiting for the token to appear.
+# Nothing in the before phase (the package installers) needs glab, so there is
+# no ordering cost — unlike `gh`, whose token preflight must precede the
+# installers.
 #
 # Post-login config re-assert: the --stdin / --token branch of `glab auth login`
 # SHORT-CIRCUITS (internal/commands/auth/login/login.go, glab 1.112.0: `if
@@ -64,6 +66,9 @@
 
 set -euo pipefail
 
+# glab capability fingerprint — pairs the transient-blocking glab declaration
+# with the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "glab-present" "value" $glabPresent))) }}
 # `glab` may be a mise shim or the .chezmoiexternals/vcs.toml binary in
 # ~/.local/bin. This script can run under a non-login shell, so fall back to
 # ~/.local/bin when it is not already on PATH instead of missing the binary.
@@ -74,15 +79,16 @@ esac
 export PATH
 
 # Prefer a `glab` on PATH; fall back to an ephemeral `mise exec glab@latest`.
-# With neither available there is nothing to authenticate against — warn and
-# soft-skip (exit 0), matching auth-github's behaviour when `gh` is absent.
+# With neither available there is nothing to authenticate against: the exit is
+# DECLARED transient-blocking on the cached `glab-present` capability, so the
+# rendered content changes once the externals-fetched binary lands and chezmoi
+# re-runs the login by itself.
 if command -v glab >/dev/null 2>&1; then
   GLAB=(glab)
 elif command -v mise >/dev/null 2>&1; then
   GLAB=(mise --no-config --no-env --no-hooks exec glab@latest -- glab)
 else
-  printf 'auth-gitlab: `glab` not on PATH or in ~/.local/bin and mise unavailable as fallback; skipping token login.\n' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "auth-gitlab" "site" "glab-and-mise-absent" "direction" "transient-blocking" "probe" "glab-present" "reason" "glab not found on PATH or in the user bin directory and mise unavailable as fallback; token login deferred") | trim | indent 2 }}
 fi
 
 # Force glab's non-interactive path: no API/SSH hostname prompts for

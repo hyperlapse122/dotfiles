@@ -69,6 +69,29 @@ jobs:
           chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
             "$RUNNER_TEMP/settings.sh" \
             "$RUNNER_TEMP/build-mxm4-haptic.sh"
+      # Same locked render shape as the step above: an empty config so no user
+      # state leaks in, and the `op` stub so no template secret read can reach a
+      # real vault. Each fixture rewrites the render-time desktop fact in its own
+      # scratch copy, so this headless runner's Linux render is usable for the
+      # GNOME and KDE sources.
+      - name: Render the fatal-boundary scripts under test
+        run: |
+          set -euo pipefail
+          for item in \
+            ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-1password-shortcut.sh.tmpl:gnome-1password-shortcut.sh" \
+            ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl:gnome-remove-ibus-source.sh" \
+            ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl:kde-calendar.sh" \
+            ".chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl:build-figma-auth.sh" \
+            ".chezmoiscripts/60-build/run_onchange_after_build-kimi-reconcile.sh.tmpl:build-kimi-reconcile.sh"
+          do
+            source_path=${item%%:*}
+            output_name=${item#*:}
+            PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+              --config "$RUNNER_TEMP/empty.toml" \
+              --source "$GITHUB_WORKSPACE" \
+              execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
+            chmod 700 "$RUNNER_TEMP/$output_name"
+          done
       - name: Install locked OMP
         run: |
           set -euo pipefail
@@ -92,6 +115,29 @@ jobs:
           .ci/test-mxm4-haptic-gates.sh
           .ci/test-mxm4-haptic-chezmoi-retry.sh
           .ci/test-agent-instructions.sh
+      # Prerequisites are already in this job: locked chezmoi and the runner's
+      # python3 for the render and matrix gates, bun and jq for the merged-result
+      # audit, git for the prune fixtures. The R6 post-merge workflow itself stays
+      # out of CI — it can only run on a merged pull-request close event — and its
+      # resolver and topology contract is proved before merge by the local gate.
+      - name: Run focused regression gates
+        run: |
+          set -euo pipefail
+          # These fixtures put their disposable trees under $XDG_RUNTIME_DIR or
+          # else $HOME/.cache, which a runner does not necessarily have yet.
+          mkdir -p "$HOME/.cache"
+          .ci/test-fingerprint-gates.sh
+          .ci/test-extension-retry.sh
+          .ci/test-capability-cache.sh
+          .ci/test-skip-declaration-gates.sh
+          .ci/test-gnome-hard-errors.sh \
+            "$RUNNER_TEMP/gnome-1password-shortcut.sh" \
+            "$RUNNER_TEMP/gnome-remove-ibus-source.sh"
+          .ci/test-kde-calendar-hard-error.sh "$RUNNER_TEMP/kde-calendar.sh"
+          .ci/test-build-figma-auth.sh "$RUNNER_TEMP/build-figma-auth.sh"
+          .ci/test-build-kimi-reconcile.sh "$RUNNER_TEMP/build-kimi-reconcile.sh"
+          .ci/test-merge-commit-only-gates.sh
+          .ci/test-git-prune-local-branches.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)

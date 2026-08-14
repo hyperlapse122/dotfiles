@@ -1,0 +1,100 @@
+{{- /*
+extension-signature-stamp.sh.tmpl — the ONE success-signature implementation, shared
+verbatim by the three `run_after_` extension reconcilers (VSCodium, GNOME Solaar,
+GNOME Kimpanel). Each job still owns its OWN signature: this partial only supplies
+the mechanism, and the caller names the state path it writes.
+
+WHY IT IS SHARED. A `run_after_` job runs on every apply, so the signature file is
+the only thing standing between a converged extension and a reconciliation that
+would re-enable one the user disabled. Every property that makes it safe — a
+regular non-symlink file, a private temporary in the same directory, a 0600 mode
+before publication, an atomic rename, and a refusal to write through a symlinked
+parent — has to hold in all three jobs. Three verbatim copies means three places to
+get that wrong.
+
+WHAT STAYS PER JOB. `SIGNATURE` (each job hashes its own desired configuration
+before this partial is included), the state path, the temporary basename, and every
+diagnostic prefix. Signatures therefore remain isolated: one job's corrupt or
+absent signature never suppresses or triggers a sibling's reconciliation.
+
+CONTRACT. Emits `STAMP` plus `fail`, `stamp_matches`, `clear_safe_stamp`,
+`write_stamp`, and `retry`. `SIGNATURE` must already be assigned above the include.
+`stamp_matches` is true only for a matching signature in a safe regular file;
+`write_stamp` and `clear_safe_stamp` return non-zero rather than touching unsafe
+state, so a caller must treat their failure as a hard error. `fail` exits 1;
+`retry` reports a retry-intended failure and exits 0 so later phases continue.
+
+ARGUMENT — a dict:
+
+  {{ includeTemplate "extension-signature-stamp.sh.tmpl" (dict "name" "install-vscodium-extensions" "stamp" "vscodium-extensions") }}
+
+`name` is the diagnostic prefix (the script's own name); `stamp` is the basename
+under `chezmoi/extension-retry/` and of the temporary file beside it. No chezmoi
+context is needed: this partial renders no facts and probes nothing.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "extension-signature-stamp.sh.tmpl: expected a dict, got a %s (%v). Call it as {{ includeTemplate \"extension-signature-stamp.sh.tmpl\" (dict \"name\" \"install-my-job\" \"stamp\" \"my-job\") }}" (kindOf .) .) -}}
+{{- end -}}
+{{- $name := "" -}}{{- if hasKey . "name" -}}{{- $name = .name -}}{{- end -}}
+{{- $stamp := "" -}}{{- if hasKey . "stamp" -}}{{- $stamp = .stamp -}}{{- end -}}
+{{- /* An unset key would render `<no value>` into a state path or a diagnostic and
+   ship a job that can never converge, so both are required outright. */ -}}
+{{- if or (eq $name "") (eq $stamp "") -}}
+{{-   fail (printf "extension-signature-stamp.sh.tmpl: both `name` (diagnostic prefix) and `stamp` (state basename) are required, got name=%q stamp=%q." $name $stamp) -}}
+{{- end -}}
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/extension-retry/{{ $stamp }}"
+
+fail() {
+  printf '{{ $name }}: ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+stamp_matches() {
+  [[ -f "$STAMP" && ! -L "$STAMP" ]] || return 1
+  [[ $(<"$STAMP") == "$SIGNATURE" ]]
+}
+
+clear_safe_stamp() {
+  if [[ -f "$STAMP" && ! -L "$STAMP" ]]; then
+    rm -f -- "$STAMP" || return 1
+  fi
+}
+
+write_stamp() {
+  local parent temporary
+  parent=${STAMP%/*}
+  if [[ -e "$parent" && ( ! -d "$parent" || -L "$parent" ) ]]; then
+    return 1
+  fi
+  mkdir -p -- "$parent" || return 1
+  [[ -d "$parent" && ! -L "$parent" ]] || return 1
+  temporary=$(mktemp "$parent/.{{ $stamp }}.XXXXXX") || return 1
+  if ! printf '%s\n' "$SIGNATURE" >"$temporary"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  chmod 0600 -- "$temporary" || {
+    rm -f -- "$temporary"
+    return 1
+  }
+  if [[ -e "$STAMP" || -L "$STAMP" ]]; then
+    if [[ -L "$STAMP" || ( -f "$STAMP" && ! -L "$STAMP" ) ]]; then
+      rm -f -- "$STAMP" || {
+        rm -f -- "$temporary"
+        return 1
+      }
+    else
+      rm -f -- "$temporary"
+      return 1
+    fi
+  fi
+  mv -f -- "$temporary" "$STAMP" || {
+    rm -f -- "$temporary"
+    return 1
+  }
+}
+
+retry() {
+  printf '{{ $name }}: %s; will retry on next apply\n' "$*" >&2
+  exit 0
+}

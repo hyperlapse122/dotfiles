@@ -12,9 +12,11 @@ set -eu
 dmg="$HOME/.local/share/winbox/WinBox.dmg"
 dest="$HOME/.local/share/winbox"
 
+# The external stages the .dmg before this script runs. When it is absent the
+# fetch was skipped or failed, and nothing in this script can produce it later:
+# a DECLARED harmless skip (skip.sh.tmpl), not a silent exit 0.
 if [ ! -f "$dmg" ]; then
-	echo "winbox: $dmg not staged yet; skipping" >&2
-	exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "winbox-macos" "site" "dmg-not-staged" "direction" "harmless" "reason" "the staged WinBox.dmg is not present") | trim | indent 2 }}
 fi
 
 mnt="$(mktemp -d "${TMPDIR:-/tmp}/winbox-dmg.XXXXXX")"

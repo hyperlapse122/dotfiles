@@ -71,6 +71,30 @@ ARGUMENT — a dict, never a bare string:
 `script` plus `site` is the stable identity dotfiles-skips reports and clears
 on, so `site` must be unique within its script. The emitted shell is
 self-contained — no prelude, no shared function to inline first.
+
+OPTIONAL `owner` — the SOURCE site that owns this declaration, as
+`<source>/<site>`. It defaults to `<script>/<site>`, which is what a phase-local
+call site wants: the script that contains the branch is also the owner. A SHARED
+partial (gnome-guard, kde-guard, headless-guard, sudo-skip-guard) renders one
+declaration into every consumer, so its `script` is the CONSUMER's name while the
+owner is the partial's own site; those four call sites therefore pass `owner`
+explicitly. Nothing here maps a site to an owner — the value is data from the
+call site, exactly like `form` and `direction`.
+
+GENERATED SENTINEL. Every branch below opens with one machine-readable comment
+line, `# skip-declaration-v1 <key>=<value> ...`, carrying the owner, the concrete
+consumer instance (`<script>#<owner>`), script, site, form, direction, probe,
+whether a paired cached fingerprint value is required, and the terminator this
+call emits. That line is what makes the rendered surface decidable for
+.ci/check-skip-declarations.sh: it reconciles each sentinel against the CI-only
+site matrix and against the shell the sentinel sits in, so an undeclared
+conditional `exit 0`/`return 0` is a CI failure. The sentinel deliberately
+carries no condition anchor or digest: the enclosing predicate and the
+continuation are properties of the surrounding script, not of this call, and the
+matrix is a CI oracle that no template may read. The checker recomputes both
+digests from the matrix and validates them against the rendered branch instead.
+A comment is inert shell, and every value in it already passed the identity
+charset gates below.
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "skip.sh.tmpl: expected a dict, got a %s (%v). Pass the call as data: {{ includeTemplate \"skip.sh.tmpl\" (dict \"ctx\" . \"form\" \"skip_here\" \"script\" \"my-script\" \"site\" \"my-site\" \"direction\" \"harmless\" \"reason\" \"...\") }}" (kindOf .) .) -}}
@@ -84,6 +108,7 @@ self-contained — no prelude, no shared function to inline first.
 {{- $reason := "" -}}{{- if hasKey . "reason" -}}{{- $reason = .reason -}}{{- end -}}
 {{- $direction := "" -}}{{- if hasKey . "direction" -}}{{- $direction = .direction -}}{{- end -}}
 {{- $probe := "" -}}{{- if hasKey . "probe" -}}{{- $probe = .probe -}}{{- end -}}
+{{- $owner := "" -}}{{- if hasKey . "owner" -}}{{- $owner = .owner -}}{{- end -}}
 {{- $forms := list "skip_here" "skip_step" "done_here" "not_applicable" -}}
 {{- if not (has $form $forms) -}}
 {{-   fail (printf "skip.sh.tmpl: unknown form %q for %s/%s. Valid forms: skip_here, skip_step, done_here, not_applicable." $form $script $site) -}}
@@ -137,6 +162,15 @@ self-contained — no prelude, no shared function to inline first.
 {{- if and (ne $probe "") (not (regexMatch $idRe $probe)) -}}
 {{-   fail (printf "skip.sh.tmpl: probe %q for %s/%s must match %s." $probe $script $site $idRe) -}}
 {{- end -}}
+{{- /* `owner` is one `<source>/<site>` pair of the same safe components: it is
+   emitted into a generated comment, and the checker splits it on the single
+   slash. Defaulting it here (never mapping a site to an owner) keeps the
+   ownership fact at the call site. */ -}}
+{{- if eq $owner "" -}}{{- $owner = printf "%s/%s" $script $site -}}{{- end -}}
+{{- $ownerRe := "^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$" -}}
+{{- if not (regexMatch $ownerRe $owner) -}}
+{{-   fail (printf "skip.sh.tmpl: owner %q for %s/%s must be one <source>/<site> pair matching %s. A shared partial passes its own owner; a phase-local call site omits the key and gets %s/%s." $owner $script $site $ownerRe $script $site) -}}
+{{- end -}}
 {{- $dir := "\"${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips\"" -}}
 {{- $file := printf "\"${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/%s__%s\"" $script $site -}}
 {{- /* Single quotes, not Go's `quote`: every value reaching here passed the
@@ -150,16 +184,31 @@ self-contained — no prelude, no shared function to inline first.
    fixes. The sites skip_step replaces already `return 0` today; the declaration
    changes the message and the record, never the control flow. */ -}}
 {{- $exit := "exit 0" -}}
-{{- if eq $form "skip_step" -}}{{- $exit = "return 0" -}}{{- end -}}
+{{- $exitToken := "exit-0" -}}
+{{- if eq $form "skip_step" -}}{{- $exit = "return 0" -}}{{- $exitToken = "return-0" -}}
+{{- else if and $isSkip (eq $direction "transient-tolerable") -}}{{- $exitToken = "exit-1" -}}{{- end -}}
+{{- /* The generated sentinel. One line, first line of every branch below, so
+   `indent` puts it at the branch's own indentation and the checker can require
+   it to open the branch it declares. `fingerprint` states whether a matching
+   cached probe value must be hashed into this script — the pairing a
+   transient-blocking site depends on — and `exit` states the terminator this
+   call emits, which the checker combines with the surrounding shell to derive
+   the continuation. */ -}}
+{{- $fingerprint := "none" -}}
+{{- if and $isSkip (eq $direction "transient-blocking") -}}{{- $fingerprint = "required" -}}{{- end -}}
+{{- $sentinel := printf "# skip-declaration-v1 owner=%s instance=%s#%s script=%s site=%s form=%s direction=%s probe=%s fingerprint=%s exit=%s" $owner $script $owner $script $site $form (or $direction "none") (or $probe "none") $fingerprint $exitToken -}}
 {{- if eq $form "done_here" }}
+{{ $sentinel }}
 printf '%s: %s\n' '{{ $script }}' '{{ $reason }}; nothing to do'
 rm -f {{ $file }} 2>/dev/null || true
 {{ $exit }}
 {{- else if eq $form "not_applicable" }}
+{{ $sentinel }}
 printf '%s: %s\n' '{{ $script }}' '{{ $reason }}; not applicable on this host'
 rm -f {{ $file }} 2>/dev/null || true
 {{ $exit }}
 {{- else if eq $direction "harmless" }}
+{{ $sentinel }}
 printf '%s: %s\n' '{{ $script }}' '{{ $reason }}'
 rm -f {{ $file }} 2>/dev/null || true
 {{ $exit }}
@@ -167,12 +216,14 @@ rm -f {{ $file }} 2>/dev/null || true
 {{- if eq $form "skip_step" -}}
 {{-   fail (printf "skip.sh.tmpl: %s/%s is transient-tolerable with form skip_step, which cannot work. Tolerable relies on a non-zero SCRIPT exit so chezmoi does not record the run; a step return cannot produce that without aborting the caller under set -e. Use skip_here, or reclassify the site as transient-blocking." $script $site) -}}
 {{- end }}
+{{ $sentinel }}
 printf '%s: %s. Not recorded as done; the next apply retries it.\n' '{{ $script }}' '{{ $reason }}' >&2
 mkdir -p {{ $dir }} 2>/dev/null || true
 printf 'v1\t%s\t%s\t%s\t%s\n' '{{ $script }}' '{{ $site }}' 'transient-tolerable' '{{ $reason }}' \
   > {{ $file }} 2>/dev/null || true
 exit 1
 {{- else }}
+{{ $sentinel }}
 printf '%s: %s. Recorded as done; it re-runs automatically once %s changes.\n' '{{ $script }}' '{{ $reason }}' '{{ $probe }}'
 mkdir -p {{ $dir }} 2>/dev/null || true
 printf 'v1\t%s\t%s\t%s\t%s\n' '{{ $script }}' '{{ $site }}' 'transient-blocking:{{ $probe }}' '{{ $reason }}' \

@@ -24,13 +24,22 @@ INSTALL_SYSTEM_CONFIG_FORCE=1 still overrides, and still layers ON TOP of the
 fact rather than inside it — the same shape the installers' FORCE_* use (KTD9).
 The registry stays a statement about the HOST; an override is a statement about
 the RUN, and the two must not be conflated in facts-sh.tmpl, which
-install-system-10-files also consumes for its /etc gates. Note chezmoi records a
-clean exit-0 skip as a successful run, so re-run with `chezmoi apply --force`.
+install-system-10-files also consumes for its /etc gates.
+
+The exit is a DECLARED one — skip.sh.tmpl, form skip_here, direction harmless,
+site headless-install. `harmless` is the honest direction: a machine that boots
+to multi-user.target with no display-manager is not a desktop that is merely
+missing something, so not configuring it is correct AND final, and nothing is
+left outstanding. The declaration renders once per call site with that consumer
+as its `script`, so each of the three consumers carries its own
+headless-guard/headless-install instance and clears its own state entry.
 
 The skip MESSAGE is the pre-registry one minus one detail: it used to interpolate
 the probe's own `systemctl get-default` output (`default target=%s`). There is no
 probe here to interpolate, so the parenthetical states what the fact means
-instead. The two override lines are verbatim.
+instead. The force hint is the same two lines folded onto the declaration's single
+derived message line; chezmoi still records a clean exit-0 skip as a successful
+run, so re-running a host you DO want configured still needs `--force`.
 
 ARGUMENT — a dict, NOT the bare display-name string this partial used to take:
 
@@ -57,8 +66,5 @@ again alongside this guard.
 # for the full rationale. Override with INSTALL_SYSTEM_CONFIG_FORCE=1 — the
 # override is checked FIRST, so it wins over a true headless fact.
 if [[ "${INSTALL_SYSTEM_CONFIG_FORCE:-}" != "1" && "$FACT_HEADLESS" -eq 1 ]]; then
-  printf '%s: skipped (headless/server install: default target is not graphical.target, no display-manager).\n' '{{ $name }}'
-  printf '  Force a run on a server you do want configured with:\n'
-  printf '    INSTALL_SYSTEM_CONFIG_FORCE=1 chezmoi apply --force\n'
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" .ctx "owner" "headless-guard/headless-install" "form" "skip_here" "script" $name "site" "headless-install" "direction" "harmless" "reason" "skipped (headless/server install: default target is not graphical.target, no display-manager). Force a run on a server you do want configured with: INSTALL_SYSTEM_CONFIG_FORCE=1 chezmoi apply --force") | trim | indent 2 }}
 fi

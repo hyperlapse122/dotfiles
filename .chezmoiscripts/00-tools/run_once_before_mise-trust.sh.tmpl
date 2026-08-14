@@ -1,18 +1,28 @@
+{{- $misePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "mise-present") -}}
 #!/usr/bin/env bash
 #
 # run_once_before_: runs a single time (ever), before the rest of the target
 # state is applied. Trusts this repo's mise config so mise never prompts (or
 # fails in a non-interactive apply) when a later build/tool script invokes it.
-# Soft-skip: this script must never fail apply; a missing mise or a trust
-# failure exits 0 after a diagnostic message.
+#
+# This script never fails an apply, and every early exit is DECLARED through
+# skip.sh.tmpl instead of a bare `exit 0`:
+#   - mise absent      transient-blocking on the cached `mise-present`
+#                      capability. A run_once_ script re-runs when its rendered
+#                      content changes, so the fingerprint value below is what
+#                      makes the skip recover by itself once mise is installed.
+#   - config absent    harmless: this source tree either carries mise.toml or it
+#                      does not, and nothing here installs it later.
+#   - trust refused    harmless: `mise trust` on a readable config fails for a
+#                      reason waiting cannot change.
 
+# mise capability fingerprint — pairs the transient-blocking mise declaration
+# with the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "mise-present" "value" $misePresent))) }}
 set -euo pipefail
 
-skip() { exit 0; }
-
 if ! command -v mise >/dev/null 2>&1; then
-  echo "mise-trust: skipped (mise not installed)" >&2
-  skip
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "mise-trust" "site" "mise-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "mise not installed") | trim | indent 2 }}
 fi
 
 # The chezmoi source repo's mise.toml carries [hooks] that execute code, so it
@@ -21,11 +31,9 @@ fi
 config="{{ .chezmoi.sourceDir }}/mise.toml"
 
 if [ ! -f "$config" ]; then
-  echo "mise-trust: skipped ($config not found)" >&2
-  skip
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "mise-trust" "site" "config-absent" "direction" "harmless" "reason" "no mise.toml in the chezmoi source directory") | trim | indent 2 }}
 fi
 
 if ! mise trust --quiet "$config"; then
-  echo "mise-trust: skipped (mise trust failed for $config)" >&2
-  skip
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "mise-trust" "site" "trust-failed" "direction" "harmless" "reason" "mise trust refused the source mise.toml") | trim | indent 2 }}
 fi

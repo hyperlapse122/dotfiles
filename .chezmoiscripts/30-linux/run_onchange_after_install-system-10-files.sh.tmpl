@@ -1,5 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 #
 # Installs root-owned config from system/linux/etc/**/* into /etc/* using
@@ -41,10 +42,17 @@
 # chezmoi re-runs this script whenever any of them is added, removed, or
 # modified. Re-running is cheap and idempotent regardless.
 #
-# Skip behaviour: soft-skips (exit 0) on headless/server installs and when
-# sudo would have to prompt but can't — see the shared guards inlined below
-# (.chezmoitemplates/headless-guard.sh.tmpl, sudo-skip-guard.sh.tmpl).
+# Skip behaviour: both shared guards inlined below declare their early exits
+# (.chezmoitemplates/skip.sh.tmpl). A headless/server install is `harmless` —
+# this host is not a desktop and will not become one, so exit 0 is final. A
+# sudo prompt this run cannot answer is `transient-blocking` on the cached
+# `sudo-usable` capability: chezmoi records the exit-0 skip as a successful run,
+# and the sudo fingerprint block below is what re-runs the script by itself once
+# that token flips to available.
 
+# sudo capability fingerprint — pairs the transient-blocking sudo declaration
+# with the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-files") }}
@@ -190,12 +198,16 @@ done
 printf 'install-system-files: %d installed, %d skipped\n' "$count" "$skipped"
 
 # Same fact as the thinkpad `gate:` above, so the module is force-loaded exactly
-# on the hosts that just received its modprobe.d/modules-load.d config.
+# on the hosts that just received its modprobe.d/modules-load.d config. The
+# terminal not_applicable form runs in a subshell so later orphan cleanup and
+# reload work remains reachable on non-ThinkPad hosts.
 if [[ "$FACT_THINKPAD" == 1 ]]; then
   printf '  -> modprobe thinkpad_acpi\n'
   "${SUDO[@]}" modprobe thinkpad_acpi
 else
-  printf '  -- thinkpad_acpi: skipped (not a ThinkPad system)\n'
+  (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-files" "site" "thinkpad-absent" "reason" "this host is not a ThinkPad") | trim | indent 4 }}
+  )
 fi
 
 
