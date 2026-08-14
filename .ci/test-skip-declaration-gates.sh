@@ -336,6 +336,30 @@ expect_pass "$clean" 'clean fixture tree reconciles' \
   '1 of 1 matrix-named hard errors verified nonzero and unclaimed' \
   'rendered declaration surface matches the matrix'
 
+# --- 3b. chezmoi reachable only through PATH -------------------------------- #
+# The checker renders under `env -i` with a sanitized PATH, and `env` resolves
+# the program name against THAT PATH — so a chezmoi that only the caller's PATH
+# can reach must be pinned to its resolved location before the render. CI unpacks
+# the locked build into $RUNNER_TEMP/bin and appends it to $GITHUB_PATH, never
+# into /usr/bin, so a bare command name renders nothing there. The stand-in is
+# named so it cannot be resolved from the sanitized PATH by accident.
+pathbin=$scratch/pathbin
+mkdir -p "$pathbin"
+ln -s -- "$(command -v "${CHEZMOI:-chezmoi}")" "$pathbin/chezmoi-only-on-path"
+rc=0
+out=$(PATH="$pathbin:$PATH" CHEZMOI=chezmoi-only-on-path \
+  "$checker" --fixture "$clean" 2>&1) || rc=$?
+if ((rc != 0)); then
+  printf '%s\n' "$out" >&2
+  fail "a chezmoi reachable only through PATH still renders: expected a clean check, got exit $rc"
+fi
+grep -qF -- 'rendered declaration surface matches the matrix' <<<"$out" || {
+  printf '%s\n' "$out" >&2
+  fail 'a chezmoi reachable only through PATH still renders: no reconciliation reported'
+}
+cases=$((cases + 1))
+ok 'a chezmoi reachable only through PATH still renders'
+
 # --- 4. Bare conditional success exit -------------------------------------- #
 dir=$(variant bare-exit)
 python3 - "$dir/$main" <<'PY'

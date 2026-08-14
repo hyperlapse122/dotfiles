@@ -150,14 +150,30 @@ fi
 
 # The environment guards are asserted structurally, not behaviorally: `[[ -d
 # /sys/firmware/efi ]]` reads an absolute path that cannot be relocated, and a
-# runner where it is absent would make the whole block vacuously pass. Confirm
-# they exist, then strip them so the branch logic runs deterministically.
-grep -Fq '[[ -d /sys/firmware/efi ]] || return 0' "${scratch}/mok_ensure.sh" ||
-  fail 'ensure_dkms_mok_generated must skip on a non-UEFI host'
-grep -Fq 'SecureBoot enabled' "${scratch}/mok_ensure.sh" ||
-  fail 'ensure_dkms_mok_generated must skip when Secure Boot is off'
+# runner where it is absent would make the whole block vacuously pass. Each
+# guard is a declared not-applicable skip spanning a block — the bare
+# `|| return 0` one-liners it replaced are the silent no-op the declaration
+# contract removed — so assert the whole block: its predicate opens it, a
+# declaration sentinel names the site, and a `return 0` leaves the function.
+# Then strip the block so the branch logic below runs deterministically.
+#
+# $1 = sed address matching the guard's opening line, $2 = what it guards.
+assert_guard() {
+  local block
+  block=$(sed -n "${1},/^  fi\$/p" "${scratch}/mok_ensure.sh")
+  [[ -n "${block}" ]] || fail "ensure_dkms_mok_generated must skip ${2}"
+  grep -Fq 'skip-declaration-v1' <<<"${block}" ||
+    fail "ensure_dkms_mok_generated must declare the skip it takes ${2}, not exit silently"
+  grep -qx '    return 0' <<<"${block}" ||
+    fail "ensure_dkms_mok_generated must leave the function when it skips ${2}"
+}
 
-sed -e '/\[\[ -d \/sys\/firmware\/efi \]\]/d' -e '/SecureBoot enabled/d' \
+efi_guard='/^  if \[\[ ! -d \/sys\/firmware\/efi \]\]; then$/'
+secureboot_guard="/^  if ! mokutil --sb-state .*'SecureBoot enabled'; then\$/"
+assert_guard "${efi_guard}" 'on a non-UEFI host'
+assert_guard "${secureboot_guard}" 'when Secure Boot is off'
+
+sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/mok_ensure.sh" > "${scratch}/mok_ensure_nogates.sh"
 
 # $1 = sudo behavior (ok|fail|flaky), $2 = openssl behavior (mint|noop).
@@ -165,9 +181,12 @@ sed -e '/\[\[ -d \/sys\/firmware\/efi \]\]/d' -e '/SecureBoot enabled/d' \
 # privileged call, and the retry the user gets right succeeds — so the probe
 # fails while the mint that follows it works.
 # Returns ensure_dkms_mok_generated's exit status; prints CONTINUED on success.
+# HOME is redirected into the scratch tree because the declared skips this
+# function now takes clear their own state entry under $XDG_STATE_HOME, and a
+# smoke test must not delete the caller's real skip records.
 run_ensure() {
   rm -f "${mokdir}/.sudo_calls"
-  env MOK_DIR="${mokdir}" MOK_SUDO="${1}" MOK_MINT="${2}" bash -c '
+  env HOME="${scratch}/home" MOK_DIR="${mokdir}" MOK_SUDO="${1}" MOK_MINT="${2}" bash -c '
     set -uo pipefail
     fake_sudo() {
       case "${MOK_SUDO}" in

@@ -85,8 +85,12 @@ if [[ ! -f $matrix ]]; then
   exit 2
 fi
 
-chezmoi_bin=${CHEZMOI:-chezmoi}
-if ! command -v "$chezmoi_bin" >/dev/null 2>&1; then
+# Resolved to a PATH, not left as a bare command name: `render` below runs
+# chezmoi under `env -i` with a sanitized PATH, and `env` looks the program up
+# in THAT PATH. A chezmoi installed anywhere but /usr/bin or /bin — CI unpacks
+# the locked build into $RUNNER_TEMP/bin and appends it to $GITHUB_PATH — would
+# resolve here and then vanish at the render.
+if ! chezmoi_bin=$(command -v "${CHEZMOI:-chezmoi}"); then
   err "chezmoi is required to render the scanned surface (set CHEZMOI=/path/to/chezmoi)"
   exit 2
 fi
