@@ -18,15 +18,7 @@ source "$repo_root/.ci/lib/render-gate-helpers.sh"
 render_remove() {
   local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 variant
   variant="$scratch/remove-$os-$container.tmpl"
-  node -e '
-    const fs = require("node:fs");
-    const [sourcePath, outputPath, container] = process.argv.slice(1);
-    const source = fs.readFileSync(sourcePath, "utf8");
-    const needle = `{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}`;
-    const replacement = `{{- $f := dict "container" ${container} "desktop" "gnome" "distro" "fedora" "headless" false }}`;
-    if (source.split(needle).length !== 2) throw new Error("facts provider anchor changed");
-    fs.writeFileSync(outputPath, source.replace(needle, replacement));
-  ' "$repo_root/.chezmoiremove" "$variant" "$container"
+  write_fact_stub "$repo_root/.chezmoiremove" "$variant" "$container"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }
 
