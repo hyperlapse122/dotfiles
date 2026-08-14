@@ -39,10 +39,8 @@ jobs:
           bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
-      # Strict platform-vocabulary and source validation, fail-closed BEFORE
-      # any commit: every artifact must use one of the resolver's six
-      # PlatformKey values, and carry an https source URL and a 64-hex
-      # SHA-256.
+      # 1Password's linux-arm64 vendor manifest is the only artifact source
+      # that publishes no digest.
       - name: Validate lock architecture and sources
         run: |
           set -euo pipefail
@@ -58,11 +56,23 @@ jobs:
           fi
 
           jq -e '
-            [.releases.tools[].artifacts // {} | to_entries[] | .value
-             | select((.url | type == "string" and startswith("https://") | not)
-                      or (.sha256 | type == "string" and test("^[0-9a-f]{64}$") | not))]
+            [.releases.tools | to_entries[] as $tool_entry
+             | $tool_entry.value as $tool
+             | ($tool.artifacts // {}) | to_entries[] as $artifact_entry
+             | $artifact_entry.value
+             | select(
+                 ((.url | type == "string" and startswith("https://")) | not)
+                 or
+                 (((.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+                   or ($tool_entry.key == "1password"
+                       and $tool.kind == "vendorManifest"
+                       and $tool.source == "https://releases.1password.com/linux/stable/index.xml"
+                       and $artifact_entry.key == "linux-arm64"
+                       and has("sha256")
+                       and .sha256 == null)) | not)
+               )]
             | length == 0' "${lock}" >/dev/null || {
-            echo "::error::lock carries an artifact without an https source URL and 64-hex SHA-256"
+            echo "::error::lock carries an artifact without an https source URL or a valid SHA-256"
             exit 1
           }
 
