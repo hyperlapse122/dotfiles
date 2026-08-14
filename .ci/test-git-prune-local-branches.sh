@@ -277,7 +277,7 @@ run_tool() {
     GH_STUB_REPO="$gh_move_repo" GH_STUB_MOVE_BRANCH="$gh_move_branch" \
     GH_STUB_MOVE_START="$gh_move_start" \
     TMPDIR="${tool_tmpdir:-${TMPDIR:-/tmp}}" \
-    GIT_TERMINAL_PROMPT= \
+    GIT_TERMINAL_PROMPT='' \
     GIT_PRUNE_LOCAL_BRANCHES_TIMEOUT_SECONDS="$tool_timeout" \
     GH_TOKEN=fixture-token \
     bash "$tool" "$@" 2>&1) || rc=$?
@@ -429,7 +429,7 @@ GH_STUB_LOG="$gh_stub/argv.log" GH_STUB_ENV_LOG="$gh_stub/env.log" \
 GH_STUB_DEFAULT_REPO="$c/w" GH_STUB_DEFAULT_BRANCH="$proof_default_branch" \
 GH_STUB_REPO="$gh_move_repo" GH_STUB_MOVE_BRANCH="$gh_move_branch" \
 GH_STUB_MOVE_START="$gh_move_start" \
-GIT_TERMINAL_PROMPT= \
+GIT_TERMINAL_PROMPT='' \
 GIT_PRUNE_LOCAL_BRANCHES_TIMEOUT_SECONDS="$tool_timeout" \
 GH_TOKEN=fixture-token \
 bash "$tool" "$c/w" --apply >"$signal_out" 2>&1 &

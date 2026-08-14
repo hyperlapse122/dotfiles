@@ -646,8 +646,10 @@ fetch_github_proof() {
     refuse "GitHub merged-PR proof default branch could not be decoded"
   proof_default_oid=$(jq -er '.[0].data.repository.defaultBranchRef.target.oid' "$tmp_dir/github-proof.json") ||
     refuse "GitHub merged-PR proof default tip could not be decoded"
-  [ "$proof_default_name" = "$def_name" ] && [ "$proof_default_oid" = "$def_oid" ] ||
+  if [ "$proof_default_name" != "$def_name" ] ||
+    [ "$proof_default_oid" != "$def_oid" ]; then
     refuse "GitHub proof default $proof_default_name ($proof_default_oid) does not match origin $def_name ($def_oid)"
+  fi
   proof_rows=$(jq -r -f "$tmp_dir/proof-records.jq" "$tmp_dir/github-proof.json") ||
     refuse "GitHub merged-PR proof could not be decoded"
 }
@@ -660,7 +662,9 @@ proof_status_for() {
   local matches=0 saw_ref=0 saw_head_repo=0 saw_oid_mismatch=0
   while IFS="$tab" read -r number base_repo base_ref head_repo head_ref head_oid; do
     [ -n "$number" ] || continue
-    [ "$base_repo" = "$gh_repo_key" ] && [ "$base_ref" = "$def_name" ] || continue
+    if [ "$base_repo" != "$gh_repo_key" ] || [ "$base_ref" != "$def_name" ]; then
+      continue
+    fi
     [ "$head_ref" = "$name" ] || continue
     saw_ref=1
     [ "$head_repo" = "$gh_repo_key" ] || continue
