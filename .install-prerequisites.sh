@@ -675,7 +675,7 @@ write_facts_cache
 # before the fast path, on every host — but with the opposite failure policy: this
 # one exits non-zero rather than let a template read a record another command
 # published.
-write_capability_cache
+write_capability_cache "${CHEZMOI_SOURCE_DIR:-}"
 
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.

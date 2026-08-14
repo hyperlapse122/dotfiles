@@ -404,6 +404,8 @@ grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$repo_root/$partial" \
   || fail "$partial must pass its direct chezmoi parent's PPID to the identity helper"
 grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$repo_root/$hook" \
   || fail "$hook must pass its direct chezmoi parent's PPID to the identity helper"
+grep -qE '^write_capability_cache "\$\{CHEZMOI_SOURCE_DIR:-\}"$' "$repo_root/$hook" \
+  || fail "$hook must explicitly pass CHEZMOI_SOURCE_DIR to write_capability_cache"
 if grep -vE '^[[:space:]]*#' "$repo_root/$identity_helper" | grep -qE '\$\$|\$PPID|\$BASHPID|\$0'; then
   fail "$identity_helper must derive no PID of its own; the caller supplies CAPABILITY_CACHE_OWNER_PID"
 fi
@@ -640,10 +642,11 @@ reset_cache() {
   mkdir -p -- "$destination"
 }
 
-# --- the hook resolves its source root without an argument ------------------
-# The production call site passes nothing: chezmoi exports CHEZMOI_SOURCE_DIR (which
-# is CWD-independent), and the fallback is this file's own directory. Both paths are
-# exercised here because the fixture hook above always passes an explicit root.
+# --- source-root fallback resolution ----------------------------------------
+# The production call explicitly passes CHEZMOI_SOURCE_DIR when it is available,
+# avoiding ambiguity with the function's positional source-root argument. The
+# function's CWD-independent environment and BASH_SOURCE fallbacks are both
+# independently exercised here.
 resolve_root_case() {
   local label=$1 expected_registry=$2
   shift 2
