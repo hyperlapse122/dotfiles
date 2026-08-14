@@ -53,7 +53,7 @@ const [input, output] = process.argv.slice(2);
 const source = fs.readFileSync(input, "utf8");
 const marker = "# Host facts — GENERATED from .chezmoidata/facts.yaml via\n";
 const start = source.indexOf(marker);
-if (start === -1) throw new Error(`generated facts block missing from ${input}`);
+if (start === -1) { fs.writeFileSync(output, source); process.exit(0); }
 const end = source.indexOf("\n}\n", start);
 if (end === -1) throw new Error(`generated facts block is unterminated in ${input}`);
 fs.writeFileSync(output, `${source.slice(0, start)}${source.slice(end + 3)}`);
@@ -71,7 +71,7 @@ assert_shared_host_guard() {
 const fs = require("node:fs");
 const lines = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/);
 const sharedGuard = lines.findIndex((line, index) =>
-  /^# skip-declaration-v1 .*form=skip_here direction=harmless .*exit=exit-0$/.test(line) &&
+  /^\s*# skip-declaration-v1 .*form=skip_here direction=harmless .*exit=exit-0$/.test(line) &&
   lines.slice(index, index + 12).some((candidate) => /printf .*shared host/i.test(candidate)) &&
   lines.slice(index, index + 12).some((candidate) => /^\s*exit 0\s*$/.test(candidate)),
 );

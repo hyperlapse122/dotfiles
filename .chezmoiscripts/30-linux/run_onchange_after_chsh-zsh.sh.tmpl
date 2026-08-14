@@ -5,6 +5,7 @@
 {{ $sqlite3Present := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sqlite3-present") -}}
 {{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{ $distro := $facts.distro -}}
+{{ $authdAccount := and (eq $distro "ubuntu") (contains "@" .chezmoi.username) -}}
 #!/usr/bin/env bash
 #
 # Set the invoking user's login shell to zsh. The login shell lives in the
@@ -48,7 +49,7 @@
       (dict "name" "sudo-usable" "value" $sudoUsable)
       (dict "name" "zsh-present" "value" $zshPresent)
       (dict "name" "chsh-present" "value" $chshPresent) -}}
-{{- if eq $distro "ubuntu" -}}
+{{- if $authdAccount -}}
 {{-   $fingerprintValues = append $fingerprintValues (dict "name" "sqlite3-present" "value" $sqlite3Present) -}}
 {{- end -}}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" $fingerprintValues) }}
@@ -77,7 +78,7 @@ fi
 # 4. Privilege: prefix privileged calls with sudo unless we are already root.
 {{ includeTemplate "sudo-skip-guard.sh.tmpl" "chsh-zsh" -}}
 
-{{ if eq $distro "ubuntu" -}}
+{{ if $authdAccount -}}
 # 4b. authd-managed account? An authd/Entra account has no /etc/passwd row, so
 # chsh cannot rewrite its shell. The whole branch is gated at TEMPLATE compile
 # time on distro.ubuntu, so a Fedora render never gains this control flow.

@@ -27,6 +27,7 @@
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
 {{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-host" }}
 
 # Enable lingering for the invoking user so their `systemd --user` units
