@@ -39,7 +39,10 @@ function itemField(item: string, field: "title" | "pubDate"): string | undefined
   const match = new RegExp(`<${field}\\b[^>]*>([\\s\\S]*?)<\\/${field}>`, "i").exec(item);
   const value = match?.[1];
   if (value === undefined) return undefined;
-  return value.trim().replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, "$1").trim();
+  return value
+    .trim()
+    .replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, "$1")
+    .trim();
 }
 
 function newestOnePasswordTitle(name: string, source: string, feed: string): string {
@@ -70,7 +73,11 @@ function newestOnePasswordTitle(name: string, source: string, feed: string): str
 }
 
 async function resolveOnePassword(name: string, spec: ToolSpec): Promise<LockedTool> {
-  const title = newestOnePasswordTitle(name, spec.source, await fetchText(spec.source, spec.source));
+  const title = newestOnePasswordTitle(
+    name,
+    spec.source,
+    await fetchText(spec.source, spec.source),
+  );
   const titleMatch = /^1Password for Linux (.+)$/.exec(title);
   if (!titleMatch) {
     throw new ResolutionError(spec.source, `${name}: unexpected release title "${title}"`);

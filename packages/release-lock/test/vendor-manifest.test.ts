@@ -4,15 +4,22 @@ import type { ToolSpec } from "../src/types.js";
 
 const realFetch = globalThis.fetch;
 
-/** URL-prefix routed stub; an unrouted request 404s. */
-function stubRoutes(routes: Record<string, () => Response>): void {
+/**
+ * URL-prefix routed stub; an unrouted request 404s. The returned array records
+ * every requested URL in order, which is how the no-download property is proven:
+ * a resolver that fetched an artifact body would show it here.
+ */
+function stubRoutes(routes: Record<string, () => Response>): string[] {
+  const requests: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
+    requests.push(url);
     for (const [prefix, respond] of Object.entries(routes)) {
       if (url.startsWith(prefix)) return respond();
     }
     return new Response("not stubbed", { status: 404 });
   }) as typeof globalThis.fetch;
+  return requests;
 }
 
 function text(body: string): () => Response {
@@ -85,13 +92,7 @@ describe("resolveVendorManifest winbox", () => {
 
 describe("resolveVendorManifest onePassword", () => {
   test("selects the newest local feed item and records only its arm64 artifact", async () => {
-    const requests: string[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const url = String(input);
-      requests.push(url);
-      if (url === ONE_PASSWORD_SOURCE) return new Response(ONE_PASSWORD_FEED, { status: 200 });
-      return new Response("not stubbed", { status: 404 });
-    }) as typeof globalThis.fetch;
+    const requests = stubRoutes({ [ONE_PASSWORD_SOURCE]: text(ONE_PASSWORD_FEED) });
 
     const locked = await resolveVendorManifest("1password", onePasswordSpec());
 
@@ -114,7 +115,9 @@ describe("resolveVendorManifest onePassword", () => {
       ),
     });
 
-    const error = await resolveVendorManifest("1password", onePasswordSpec()).catch((e: unknown) => e);
+    const error = await resolveVendorManifest("1password", onePasswordSpec()).catch(
+      (e: unknown) => e,
+    );
 
     expect(error).toBeInstanceOf(ResolutionError);
     expect((error as Error).message).toContain(ONE_PASSWORD_SOURCE);
@@ -123,7 +126,9 @@ describe("resolveVendorManifest onePassword", () => {
   test("raises ResolutionError when the feed fetch fails", async () => {
     stubRoutes({ [ONE_PASSWORD_SOURCE]: () => new Response("unavailable", { status: 503 }) });
 
-    const error = await resolveVendorManifest("1password", onePasswordSpec()).catch((e: unknown) => e);
+    const error = await resolveVendorManifest("1password", onePasswordSpec()).catch(
+      (e: unknown) => e,
+    );
 
     expect(error).toBeInstanceOf(ResolutionError);
     expect((error as Error).message).toContain(ONE_PASSWORD_SOURCE);
