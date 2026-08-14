@@ -96,11 +96,12 @@ for template in "${!baseline_hashes[@]}"; do
     "$template changed outside the generated facts-sh block (expected $expected, got $actual)"
 done
 
-# Confirm the permitted generated block contains the two new facts.
-chsh_rendered="$scratch/run_onchange_after_chsh-zsh.sh"
-grep -Fqx '  FACT_JETSON=0' "$chsh_rendered" \
+# The login-shell script consumes capabilities.tmpl and facts.tmpl, so it never
+# carries a FACT_* block; only these two scripts include facts-sh.tmpl.
+facts_consumer="$scratch/run_onchange_after_install-system-10-files.sh"
+grep -Fqx '  FACT_JETSON=0' "$facts_consumer" \
   || fail 'Fedora facts block does not emit FACT_JETSON=0'
-grep -Fqx '  FACT_SHARED_HOST=0' "$chsh_rendered" \
+grep -Fqx '  FACT_SHARED_HOST=0' "$facts_consumer" \
   || fail 'Fedora facts block does not emit FACT_SHARED_HOST=0'
 
 printf '%s\n' 'fedora-fact-block-baseline: Fedora x86_64 differs only in the generated fact block'

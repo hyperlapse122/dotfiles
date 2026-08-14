@@ -44,11 +44,14 @@
 
 # Capability fingerprints pair each transient-blocking declaration below with
 # the cached precondition it names. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+{{- $fingerprintValues := list
       (dict "name" "sudo-usable" "value" $sudoUsable)
       (dict "name" "zsh-present" "value" $zshPresent)
-      (dict "name" "chsh-present" "value" $chshPresent)
-      (dict "name" "sqlite3-present" "value" $sqlite3Present))) }}
+      (dict "name" "chsh-present" "value" $chshPresent) -}}
+{{- if eq $distro "ubuntu" -}}
+{{-   $fingerprintValues = append $fingerprintValues (dict "name" "sqlite3-present" "value" $sqlite3Present) -}}
+{{- end -}}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" $fingerprintValues) }}
 set -euo pipefail
 
 # 1. Nothing to switch to if zsh isn't installed: DECLARED transient-blocking,
