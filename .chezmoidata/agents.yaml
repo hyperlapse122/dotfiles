@@ -59,6 +59,7 @@ agents:
       path: .local/share/omp-plugins
       os: [linux, darwin]
       container: skip
+      jetson: skip
     compound-engineering-plugin:
       kind: localArchive
       source: EveryInc/compound-engineering-plugin

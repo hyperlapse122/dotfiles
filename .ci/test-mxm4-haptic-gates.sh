@@ -80,6 +80,14 @@ assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible 
 # on managed hosts.
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .agents/skills/i-have-adhd 'linux container adhd skill'
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .omp/agent/APPEND_SYSTEM.md 'linux container adhd always-on prompt'
+jetson_ignore="$scratch/ignore-linux-jetson"
+render_ignore "$repo_root" "$scratch" "$chezmoi_bin" linux false "$jetson_ignore" true
+for path in "$omp_plugins" "$omp_market" "$omp_plugin" "$linux_daemon" "$linux_notify"; do
+  assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$jetson_ignore" ignored "$path" 'linux jetson'
+done
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$jetson_ignore" ignored .chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh 'linux jetson'
+assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$jetson_ignore" eligible .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh 'linux jetson updater'
+
 
 host_remove="$scratch/remove-linux-host"
 container_remove="$scratch/remove-linux-container"
@@ -114,6 +122,10 @@ render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux true "$posix_reco
 ! grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container rendered the OMP haptic row'
 ! grep -F 'i-have-adhd\ti-have-adhd\tlocalArchive' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container still renders i-have-adhd plugin row'
 grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-linux-container.sh" >/dev/null || fail 'container migration is absent'
+render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux false "$posix_reconcile" "$scratch/reconcile-linux-jetson.sh" true
+! grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-linux-jetson.sh" >/dev/null || fail 'jetson rendered the OMP haptic row'
+grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-linux-jetson.sh" >/dev/null || fail 'jetson migration is absent'
+
 
 # Every deployed manifest must reject a real invalid value during rendering.
 # Its observable rejection whitelist must exactly match both implementations.

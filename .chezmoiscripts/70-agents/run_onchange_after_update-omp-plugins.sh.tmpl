@@ -11,6 +11,7 @@
 {{- $validOS := .agents.validOS -}}
 {{- $validKinds := list "localDir" "localArchive" -}}
 {{- $validContainers := list "skip" "keep" -}}
+{{- $validJetsons := list "skip" "keep" -}}
 {{- $rows := list -}}
 {{- $seen := dict -}}
 {{- range $i, $plugin := $plugins -}}
@@ -32,6 +33,11 @@
 {{-   if not (hasKey $authority "container") -}}{{ fail (printf "update-omp-plugins: marketplace %q is missing container" $market) }}{{- end -}}
 {{-   $container := printf "%v" (index $authority "container") -}}
 {{-   if not (has $container $validContainers) -}}{{ fail (printf "update-omp-plugins: marketplace %q has invalid container value %q" $market $container) }}{{- end -}}
+{{-   $jetson := "keep" -}}
+{{-   if hasKey $authority "jetson" -}}
+{{-     $jetson = printf "%v" (index $authority "jetson") -}}
+{{-     if not (has $jetson $validJetsons) -}}{{ fail (printf "update-omp-plugins: marketplace %q has invalid jetson value %q" $market $jetson) }}{{- end -}}
+{{-   end -}}
 {{-   if not (hasKey $authority "os") -}}{{ fail (printf "update-omp-plugins: marketplace %q is missing os" $market) }}{{- end -}}
 {{-   $marketOS := list -}}
 {{-   range $value := index $authority "os" -}}
@@ -69,7 +75,7 @@
 {{-   $strict := eq $id "mxm4-haptic@h82-dotfiles" -}}
 {{-   if and (eq $name "mxm4-haptic") (not $strict) -}}{{ fail "update-omp-plugins: mxm4-haptic must use marketplace h82-dotfiles" }}{{- end -}}
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
-{{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) -}}
+{{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) (not (and $facts.jetson (eq $jetson "skip"))) -}}
 {{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t\t%s\t%s" $name $market $kind $source $strict (join " " $requiredExtensions) (join " " $requiredSkills))) -}}
 {{- end -}}
 {{- end -}}
