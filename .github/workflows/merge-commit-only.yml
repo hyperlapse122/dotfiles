@@ -1,0 +1,79 @@
+name: Merge commit only
+
+# Post-merge compliance for the repository's landing method: the commit a merged
+# pull request produced must be a real two-parent merge commit.
+#
+# This guard runs only after a pull request closes as merged, so it reports a
+# squash or rebase landing as a failed compliance run rather than claiming to
+# prevent it. There is deliberately no `push` trigger: a direct push and an
+# unmerged close are not pull-request merge methods and must not enter it.
+#
+# `pull_request_target` runs the base branch's copy of this workflow with the
+# base repository's context. Nothing here checks out, builds, or runs
+# pull-request code: the only checkout is the default (base branch) one, this
+# file carries no `ref:` input at all, and the only permissions are
+# `contents: read` plus `pull-requests: read` -- that pull-request scope exists
+# solely to resolve the landed result commit.
+#
+# GitHub documents `merge_commit_sha` as empty on merged `pull_request`
+# payloads, so the event supplies the pull-request NUMBER only. The read-only
+# REST pull lookup supplies the result commit, and the mutable base tip is never
+# substituted for it: a base commit pushed after the merge cannot change what
+# .ci/check-merge-commit-only.sh inspects.
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: merge-commit-only-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  merged-result:
+    name: merged result is a merge commit
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the base branch, never pull-request code
+        uses: actions/checkout@v7
+
+      - name: Resolve the landed result commit
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # resolver:begin -- .ci/test-merge-commit-only-gates.sh extracts this
+          # block verbatim and runs it against a stubbed read-only pull response.
+          if [[ -z ${PR_NUMBER:-} ]]; then
+            printf '::error::merge-commit-only: the closed event carried no pull-request number\n' >&2
+            exit 1
+          fi
+          if ! merge_sha=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.merge_commit_sha // ""'); then
+            printf '::error::merge-commit-only: the read-only pull lookup for #%s failed\n' "$PR_NUMBER" >&2
+            exit 1
+          fi
+          # A blank or multi-line value is an unusable result, and refusing it
+          # here also keeps it out of the step-output file.
+          if [[ -z $merge_sha || $merge_sha != "${merge_sha//[[:space:]]/}" ]]; then
+            printf '::error::merge-commit-only: pull request #%s reported no usable merge_commit_sha\n' "$PR_NUMBER" >&2
+            exit 1
+          fi
+          printf 'merge_result_sha=%s\n' "$merge_sha" >>"$GITHUB_OUTPUT"
+          # resolver:end
+
+      - name: Check the landed result commit
+        env:
+          MERGE_RESULT_SHA: "${{ steps.resolve.outputs.merge_result_sha }}"
+        run: .ci/check-merge-commit-only.sh

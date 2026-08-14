@@ -1,0 +1,588 @@
+#!/usr/bin/env bash
+# git-prune-local-branches — report-first cleanup of local branches that are
+# provably merged into the branch `origin` names as its default RIGHT NOW.
+#
+# Default mode is a read-only report. It never contacts the remote, never
+# fetches, and never writes a ref, worktree, or stash entry. Everything it can
+# see locally (a cached `origin/HEAD`, a remote-tracking ref) is a snapshot of
+# some earlier fetch, so every candidate it prints is labelled unverified.
+#
+# `--apply` is the only mode that deletes, and it treats the remote as the sole
+# authority. Before classifying, and again immediately before every single
+# deletion, it runs `git ls-remote --symref origin HEAD`, requires exactly one
+# `ref: refs/heads/<name>\tHEAD` symref plus exactly one advertised object ID,
+# and fetches that named ref to that exact tip. A different name, a moved or
+# rewritten tip, or a changed candidate OID restarts classification instead of
+# deleting. `main`/`master` are never inferred, and a cached `origin/HEAD` is
+# never authority. An explicit --default-branch override is rejected outright
+# when the live query names some other branch, and accepted only after being
+# validated against the remote when the live query cannot name one.
+#
+# Deletion is always non-force `git branch -d -- <branch>`, run under a
+# process-scoped upstream override pinned to the freshly fetched default tip, so
+# Git applies its own mergedness and checked-out-worktree checks against that
+# tip at deletion time even when the branch's configured upstream says something
+# else. Never `-D`, never `update-ref`, never a remote branch, worktree, or
+# stash. A lock in the git dir serializes this helper's own instances; it cannot
+# coordinate an unrelated Git client, which can still attach a worktree in the
+# instant after Git's final internal check. That limitation is reported, not
+# papered over: the observed default SHA and query time are printed so the
+# operator can see exactly which remote state authorized each deletion.
+set -euo pipefail
+
+prog=git-prune-local-branches
+tab=$(printf '\t')
+
+# Config subsection used only for the process-scoped upstream override. It must
+# not name a real remote; if it somehow does, the pre-deletion upstream check
+# below catches the difference and the deletion is skipped.
+syn_remote=git-prune-local-branches-upstream
+
+usage() {
+  cat <<'EOF'
+usage: git-prune-local-branches [--apply] [--default-branch <name>] [--] [<repo>]
+
+  (default)                read-only report: no remote query, no ref change
+  --apply                  delete only branches re-proven safe at deletion time
+  --default-branch <name>  default-branch override; rejected when origin's live
+                           HEAD names a different branch, and used only when
+                           that live query cannot name one at all
+  <repo>                   repository path (default: the current directory)
+EOF
+}
+
+say() { printf '%s\n' "$*"; }
+die() {
+  printf '%s: %s\n' "$prog" "$*" >&2
+  exit 2
+}
+# A refusal is a safety stop, never a fallback. It states exactly how much of
+# the run had already happened: a preflight refusal has deleted nothing, and a
+# mid-run refusal stops after the deletions already printed.
+refuse() {
+  printf 'refused: %s\n' "$*" >&2
+  if [ "${deleted_count:-0}" -eq 0 ]; then
+    printf '%s: nothing was deleted\n' "$prog" >&2
+  else
+    printf '%s: stopping; %s branch(es) reported deleted above\n' "$prog" "$deleted_count" >&2
+  fi
+  exit 1
+}
+
+mode=report
+override=
+repo=
+positional_seen=0
+
+set_repo() {
+  [ "$positional_seen" -eq 0 ] || die "only one repository path may be given"
+  positional_seen=1
+  repo=$1
+}
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    --apply) mode=apply ;;
+    --default-branch)
+      [ $# -ge 2 ] || die "--default-branch needs a branch name"
+      override=$2
+      shift
+      ;;
+    --default-branch=*) override=${1#--default-branch=} ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*) die "unknown option: $1 (see --help)" ;;
+    *) set_repo "$1" ;;
+  esac
+  shift
+done
+while [ $# -gt 0 ]; do
+  set_repo "$1"
+  shift
+done
+[ -n "$repo" ] || repo=.
+[ -z "$override" ] || git check-ref-format "refs/heads/$override" ||
+  die "--default-branch is not a valid branch name: $override"
+[ "$override" != HEAD ] || die "--default-branch may not be HEAD"
+
+[ -d "$repo" ] || die "not a directory: $repo"
+cd -- "$repo"
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+  die "not inside a git work tree: $repo"
+repo_root=$(git rev-parse --show-toplevel)
+cd -- "$repo_root"
+common_dir=$(git rev-parse --git-common-dir)
+common_dir=$(cd -- "$common_dir" && pwd)
+
+# True when the short name resolves through more than one of Git's ref-lookup
+# rules, i.e. `git branch -d <name>` and `<name>@{upstream}` could disagree
+# about which ref they mean. Ambiguous names are never deleted.
+ref_ambiguous() {
+  local name=$1 path
+  for path in "refs/$name" "refs/tags/$name" "refs/remotes/$name" \
+    "refs/remotes/$name/HEAD"; do
+    if git show-ref --verify --quiet "$path"; then return 0; fi
+  done
+  # Rule 1 of the lookup order is the bare name inside the git dir, which Git
+  # only honours for all-caps pseudorefs such as HEAD or FETCH_HEAD.
+  case $name in
+    *[!A-Z0-9_]*) ;;
+    *) if [ -e "$common_dir/$name" ]; then return 0; fi ;;
+  esac
+  return 1
+}
+
+# Every branch attached to any worktree, main or linked, one refname per line.
+# Refnames cannot contain whitespace, so a line-oriented list is exact.
+attached_branches() {
+  git worktree list --porcelain | sed -n 's|^branch refs/heads/||p'
+}
+
+is_attached() {
+  local name=$1 line
+  while IFS= read -r line; do
+    [ "$line" != "$name" ] || return 0
+  done <<EOF
+$attached
+EOF
+  return 1
+}
+
+# An in-progress operation in ANY worktree, since each worktree keeps its state
+# in its own admin directory and a half-finished operation elsewhere can still
+# be holding the objects a deletion would orphan.
+operation_in_progress() {
+  local dir
+  for dir in "$common_dir" "$common_dir"/worktrees/*; do
+    [ -d "$dir" ] || continue
+    if [ -e "$dir/MERGE_HEAD" ]; then
+      printf 'merge'
+      return 0
+    fi
+    if [ -e "$dir/rebase-merge" ] || [ -e "$dir/rebase-apply" ]; then
+      printf 'rebase'
+      return 0
+    fi
+    if [ -e "$dir/CHERRY_PICK_HEAD" ]; then
+      printf 'cherry-pick'
+      return 0
+    fi
+    if [ -e "$dir/BISECT_LOG" ] || [ -e "$dir/BISECT_START" ]; then
+      printf 'bisect'
+      return 0
+    fi
+  done
+  return 1
+}
+
+# `git symbolic-ref --short` abbreviates to the shortest UNAMBIGUOUS form, so it
+# silently reports `heads/x` once a tag `x` exists. Everything here reads the
+# full refname and strips the prefix itself.
+current_branch() {
+  local ref
+  ref=$(git symbolic-ref --quiet HEAD 2>/dev/null) || return 0
+  case $ref in
+    refs/heads/?*) printf '%s' "${ref#refs/heads/}" ;;
+  esac
+}
+
+# Refuse deletion outright on any repository state where "merged into the
+# default branch" is not a decidable question.
+preflight() {
+  local op head_ref
+  head_ref=$(git symbolic-ref --quiet HEAD 2>/dev/null || true)
+  [ -n "$head_ref" ] || refuse "HEAD is detached"
+  case $head_ref in
+    refs/heads/?*) ;;
+    *) refuse "HEAD points outside refs/heads/: $head_ref" ;;
+  esac
+  cur_branch=${head_ref#refs/heads/}
+  git rev-parse --verify --quiet "refs/heads/$cur_branch" >/dev/null ||
+    refuse "HEAD points at a missing or unborn branch: $cur_branch"
+  ! ref_ambiguous "$cur_branch" ||
+    refuse "the checked-out branch name is ambiguous: $cur_branch"
+  op=$(operation_in_progress || true)
+  [ -z "$op" ] || refuse "$op in progress"
+}
+
+# Parses `git ls-remote --symref origin HEAD`.
+# 0: live_name/live_oid hold origin's current default branch and advertised tip.
+# 1: query succeeded but HEAD names no branch (detached or dangling remote HEAD).
+# 2: the remote could not be queried at all.
+# 3: the advertisement was not exactly one branch symref plus one object id.
+query_origin_head() {
+  local out line name oid nsym=0 noid=0
+  live_name=
+  live_oid=
+  out=$(git ls-remote --symref origin HEAD 2>/dev/null) || return 2
+  while IFS= read -r line; do
+    case $line in
+      "ref: refs/heads/"*"${tab}HEAD")
+        name=${line#ref: }
+        name=${name%"${tab}HEAD"}
+        name=${name#refs/heads/}
+        [ -n "$name" ] || return 3
+        nsym=$((nsym + 1))
+        live_name=$name
+        ;;
+      "ref: "*"${tab}HEAD") return 3 ;;
+      *"${tab}HEAD")
+        oid=${line%%"${tab}"*}
+        case $oid in
+          '' | *[!0-9a-f]*) return 3 ;;
+        esac
+        noid=$((noid + 1))
+        live_oid=$oid
+        ;;
+      *) ;;
+    esac
+  done <<EOF
+$out
+EOF
+  [ "$nsym" -le 1 ] && [ "$noid" -le 1 ] || return 3
+  if [ "$nsym" -eq 1 ]; then
+    [ "$noid" -eq 1 ] || return 3
+    return 0
+  fi
+  return 1
+}
+
+# The override is usable only as a substitute for a name the remote itself
+# cannot state, and only when the remote actually advertises that branch.
+validate_override() {
+  local out line ref oid hits=0
+  out=$(git ls-remote origin "refs/heads/$override" 2>/dev/null) ||
+    refuse "origin could not be queried for --default-branch $override"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    ref=${line#*"${tab}"}
+    oid=${line%%"${tab}"*}
+    [ "$ref" = "refs/heads/$override" ] || continue
+    case $oid in
+      '' | *[!0-9a-f]*) refuse "origin advertised an unusable id for $override" ;;
+    esac
+    hits=$((hits + 1))
+    res_oid=$oid
+  done <<EOF
+$out
+EOF
+  [ "$hits" -eq 1 ] ||
+    refuse "origin does not advertise exactly one refs/heads/$override"
+  res_name=$override
+  res_source='override-validated'
+}
+
+# Resolves the default branch from the remote, right now. Sets res_name,
+# res_oid, res_source. Refuses on every failure mode rather than degrading to a
+# cached or guessed answer.
+resolve_default() {
+  local rc=0
+  res_name=
+  res_oid=
+  res_source=
+  query_origin_head || rc=$?
+  case $rc in
+    2) refuse "origin could not be queried (git ls-remote --symref origin HEAD failed)" ;;
+    3) refuse "origin advertised an unusable HEAD (need exactly one 'ref: refs/heads/<name>' symref and one object id)" ;;
+  esac
+  if [ "$rc" -eq 0 ]; then
+    if [ -n "$override" ] && [ "$override" != "$live_name" ]; then
+      refuse "--default-branch $override conflicts with origin's live HEAD ($live_name)"
+    fi
+    res_name=$live_name
+    res_oid=$live_oid
+    res_source=live-symref
+  else
+    [ -n "$override" ] ||
+      refuse "origin's HEAD names no branch and no --default-branch override was given"
+    validate_override
+  fi
+  [ "$res_name" != HEAD ] ||
+    refuse "origin's default branch is literally named HEAD; refusing to touch the tracking namespace"
+}
+
+# Brings the named ref to the advertised tip locally. The tracking ref is the
+# ref Git's own deletion-time upstream check will read, so it must equal the
+# advertised id exactly; a forced refspec is what makes a rewritten default tip
+# land instead of failing as a non-fast-forward.
+fetch_default() {
+  local name=$1 oid=$2 out got
+  out=$(git fetch --no-tags --quiet origin \
+    "+refs/heads/$name:refs/remotes/origin/$name" 2>&1) ||
+    refuse "could not fetch refs/heads/$name from origin: $out"
+  got=$(git rev-parse --verify --quiet "refs/remotes/origin/$name") ||
+    refuse "refs/remotes/origin/$name is missing after the fetch"
+  [ "$got" = "$oid" ] ||
+    refuse "origin/$name changed during refresh (advertised $oid, fetched $got)"
+  git rev-parse --verify --quiet "$oid^{commit}" >/dev/null ||
+    refuse "the advertised default tip $oid is not a commit"
+}
+
+# Prints a protection reason, or nothing when the branch is a candidate.
+# def_name/def_tip are the branch name and tip this pass is judging against;
+# def_tip is empty in report mode when nothing local can even hint at one.
+protection_reason() {
+  local name=$1 oid=$2
+  if [ -n "$cur_branch" ] && [ "$name" = "$cur_branch" ]; then
+    printf 'current'
+    return 0
+  fi
+  if [ -n "$def_name" ] && [ "$name" = "$def_name" ]; then
+    printf 'default'
+    return 0
+  fi
+  if is_attached "$name"; then
+    printf 'worktree'
+    return 0
+  fi
+  if ref_ambiguous "$name"; then
+    printf 'ambiguous'
+    return 0
+  fi
+  # The deletion-time upstream override puts the branch name in a config key, so
+  # a name that would split that key is reported instead of interpolated.
+  case $name in
+    *=*)
+      printf 'unsafe-name'
+      return 0
+      ;;
+  esac
+  if [ -z "$def_tip" ]; then
+    printf 'no-default-ref'
+    return 0
+  fi
+  if ! git merge-base --is-ancestor "$oid" "$def_tip"; then
+    printf 'unmerged'
+    return 0
+  fi
+  return 0
+}
+
+classify() {
+  local ref oid name reason
+  cand_name=()
+  cand_oid=()
+  prot_name=()
+  prot_oid=()
+  prot_reason=()
+  cur_branch=$(current_branch)
+  attached=$(attached_branches)
+  while IFS="$tab" read -r ref oid; do
+    name=${ref#refs/heads/}
+    reason=$(protection_reason "$name" "$oid")
+    if [ -n "$reason" ]; then
+      prot_name+=("$name")
+      prot_oid+=("$oid")
+      prot_reason+=("$reason")
+    else
+      cand_name+=("$name")
+      cand_oid+=("$oid")
+    fi
+  done < <(git for-each-ref --format="%(refname)${tab}%(objectname)" refs/heads/)
+}
+
+print_classification() {
+  local i=0
+  while [ "$i" -lt "${#cand_name[@]}" ]; do
+    printf '%s: %s sha=%s\n' "$1" "${cand_name[$i]}" "${cand_oid[$i]}"
+    i=$((i + 1))
+  done
+  i=0
+  while [ "$i" -lt "${#prot_name[@]}" ]; do
+    printf 'protected: %s reason=%s sha=%s\n' \
+      "${prot_name[$i]}" "${prot_reason[$i]}" "${prot_oid[$i]}"
+    i=$((i + 1))
+  done
+}
+
+print_stashes() {
+  local line
+  stash_count=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    printf 'stash: %s\n' "$line"
+    stash_count=$((stash_count + 1))
+  done < <(git stash list --pretty=tformat:'%gd %H %gs' 2>/dev/null || true)
+  printf 'stash-count: %s\n' "$stash_count"
+}
+
+# `git -c branch.<b>.merge=` APPENDS to any repository-local value instead of
+# replacing it, and Git reads the first value, so overriding a configured
+# upstream needs the remote indirection: point the branch at a remote that
+# exists only in this process and map whatever the branch's first merge entry is
+# onto the freshly fetched default tracking ref. The result is verified against
+# the advertised default id before `git branch -d` runs; an override that cannot
+# be proven to resolve to that exact tip means no deletion, never a fallback to
+# whatever predicate Git would have used instead.
+delete_candidate() {
+  local name=$1 first_merge upstream out
+  first_merge=$(git config --get-all "branch.$name.merge" 2>/dev/null | sed -n 1p) || true
+  [ -n "$first_merge" ] || first_merge="refs/heads/$def_name"
+  local cfg=(
+    -c "branch.$name.remote=$syn_remote"
+    -c "branch.$name.merge=refs/heads/$def_name"
+    -c "remote.$syn_remote.fetch=+$first_merge:refs/remotes/origin/$def_name"
+  )
+  upstream=$(git "${cfg[@]}" rev-parse --verify --quiet "$name@{upstream}" 2>/dev/null) || upstream=
+  if [ "$upstream" != "$def_oid" ]; then
+    printf 'kept: %s reason=upstream-override-unverified\n' "$name"
+    return 1
+  fi
+  if out=$(git "${cfg[@]}" branch -d -- "$name" 2>&1); then
+    return 0
+  fi
+  printf 'kept: %s reason=git-refused\n' "$name"
+  printf '%s\n' "$out" | sed 's/^/  git: /'
+  return 1
+}
+
+run_report() {
+  local source hint op
+  if [ -n "$override" ]; then
+    def_name=$override
+    source=override
+  elif hint=$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null); then
+    def_name=${hint#refs/remotes/origin/}
+    source=cached-origin-head
+  else
+    def_name=
+    source=none
+  fi
+  def_tip=
+  if [ -n "$def_name" ]; then
+    def_tip=$(git rev-parse --verify --quiet "refs/remotes/origin/$def_name") ||
+      def_tip=$(git rev-parse --verify --quiet "refs/heads/$def_name") || def_tip=
+  fi
+  printf '%s: mode=report repo=%s\n' "$prog" "$repo_root"
+  printf 'default-unverified: %s source=%s tip=%s\n' \
+    "${def_name:-(none)}" "$source" "${def_tip:-(none)}"
+  cur_branch=$(current_branch)
+  printf 'head: %s\n' "${cur_branch:-(detached)}"
+  op=$(operation_in_progress || true)
+  printf 'state: %s\n' "${op:-clean}"
+  classify
+  print_classification candidate-unverified
+  print_stashes
+  printf 'summary: mode=report default=%s candidates=%s protected=%s deleted=0 stashes=%s\n' \
+    "${def_name:-(none)}" "${#cand_name[@]}" "${#prot_name[@]}" "$stash_count"
+  say 'note: report mode queried no remote and changed no ref, worktree, or stash'
+  say 'note: candidates are unverified — only --apply proves them against the live default tip'
+}
+
+run_apply() {
+  local pass=0 restart i name oid now reason failed=0
+
+  lock="$common_dir/$prog.lock"
+  mkdir "$lock" 2>/dev/null ||
+    refuse "another $prog instance holds $lock"
+  trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+
+  printf '%s: mode=apply repo=%s\n' "$prog" "$repo_root"
+  while :; do
+    pass=$((pass + 1))
+    [ "$pass" -le "$max_pass" ] ||
+      refuse "classification restarted $max_pass times; origin keeps changing under the run"
+    preflight
+    resolve_default
+    def_name=$res_name
+    def_oid=$res_oid
+    def_source=$res_source
+    fetch_default "$def_name" "$def_oid"
+    def_tip=$def_oid
+    printf 'default: %s sha=%s source=%s queried=%s pass=%s\n' \
+      "$def_name" "$def_oid" "$def_source" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$pass"
+    classify
+    print_classification candidate
+
+    restart=0
+    i=0
+    while [ "$i" -lt "${#cand_name[@]}" ]; do
+      name=${cand_name[$i]}
+      oid=${cand_oid[$i]}
+      i=$((i + 1))
+
+      # The whole verdict is re-earned here, immediately before this one
+      # deletion: fresh remote query, fresh fetch, fresh local predicates.
+      preflight
+      resolve_default
+      if [ "$res_name" != "$def_name" ]; then
+        printf 'reclassified: reason=default-renamed was=%s now=%s\n' "$def_name" "$res_name"
+        restart=1
+        break
+      fi
+      if [ "$res_oid" != "$def_oid" ]; then
+        printf 'reclassified: reason=default-moved was=%s now=%s\n' "$def_oid" "$res_oid"
+        restart=1
+        break
+      fi
+      fetch_default "$def_name" "$def_oid"
+      attached=$(attached_branches)
+      cur_branch=$(current_branch)
+
+      now=$(git rev-parse --verify --quiet "refs/heads/$name") || now=
+      if [ -z "$now" ]; then
+        printf 'kept: %s reason=vanished\n' "$name"
+        continue
+      fi
+      if [ "$now" != "$oid" ]; then
+        printf 'reclassified: %s reason=candidate-oid-changed was=%s now=%s\n' "$name" "$oid" "$now"
+        restart=1
+        break
+      fi
+      # A predicate that turned protective between classification and now is a
+      # normal safe outcome, not a run failure.
+      reason=$(protection_reason "$name" "$oid")
+      if [ -n "$reason" ]; then
+        printf 'kept: %s reason=%s\n' "$name" "$reason"
+        continue
+      fi
+      if delete_candidate "$name"; then
+        printf 'deleted: %s sha=%s\n' "$name" "$oid"
+        deleted_count=$((deleted_count + 1))
+      else
+        failed=1
+      fi
+    done
+    if [ "$restart" -eq 0 ]; then break; fi
+    printf 'restart: pass=%s\n' "$pass"
+  done
+
+  print_stashes
+  printf 'summary: mode=apply default=%s candidates=%s protected=%s deleted=%s stashes=%s\n' \
+    "$def_name" "${#cand_name[@]}" "${#prot_name[@]}" "$deleted_count" "$stash_count"
+  say 'note: every deletion was authorized by the default sha printed above, re-queried immediately before it'
+  say "note: $prog serializes only its own instances; an unrelated git client can still attach a worktree after git's final internal check"
+  [ "$failed" -eq 0 ] || exit 1
+}
+
+max_pass=4
+lock=
+deleted_count=0
+cand_name=()
+cand_oid=()
+prot_name=()
+prot_oid=()
+prot_reason=()
+attached=
+cur_branch=
+def_name=
+def_oid=
+def_tip=
+def_source=
+live_name=
+live_oid=
+res_name=
+res_oid=
+res_source=
+stash_count=0
+
+case $mode in
+  report) run_report ;;
+  apply) run_apply ;;
+esac
