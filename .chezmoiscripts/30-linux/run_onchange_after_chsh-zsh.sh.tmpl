@@ -2,6 +2,9 @@
 {{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 {{ $zshPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "zsh-present") -}}
 {{ $chshPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "chsh-present") -}}
+{{ $sqlite3Present := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sqlite3-present") -}}
+{{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ $distro := $facts.distro -}}
 #!/usr/bin/env bash
 #
 # Set the invoking user's login shell to zsh. The login shell lives in the
@@ -44,7 +47,8 @@
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
       (dict "name" "sudo-usable" "value" $sudoUsable)
       (dict "name" "zsh-present" "value" $zshPresent)
-      (dict "name" "chsh-present" "value" $chshPresent))) }}
+      (dict "name" "chsh-present" "value" $chshPresent)
+      (dict "name" "sqlite3-present" "value" $sqlite3Present))) }}
 set -euo pipefail
 
 # 1. Nothing to switch to if zsh isn't installed: DECLARED transient-blocking,
@@ -70,6 +74,60 @@ fi
 # 4. Privilege: prefix privileged calls with sudo unless we are already root.
 {{ includeTemplate "sudo-skip-guard.sh.tmpl" "chsh-zsh" -}}
 
+{{ if eq $distro "ubuntu" -}}
+# 4b. authd-managed account? An authd/Entra account has no /etc/passwd row, so
+# chsh cannot rewrite its shell. The whole branch is gated at TEMPLATE compile
+# time on distro.ubuntu, so a Fedora render never gains this control flow.
+#
+# `@` in the username is the agreed provisional discriminator. A real
+# authd-membership probe is deliberately out of scope.
+if [[ "$USER" == *@* ]]; then
+  authd_db=/var/lib/authd/authd.sqlite3
+
+  # `authctl user set-shell` is the supported interface, but it landed upstream
+  # after release tag v0.6.4, so most installed authd builds do not have it.
+  # Probing the SUBCOMMAND rather than the binary is the whole point: `command -v
+  # authctl` succeeds on an older build, which would then abort under `set -e`
+  # instead of reaching the documented fallback below. This is a branch selector,
+  # not a skip precondition, so it stays a runtime probe with no cached capability.
+  if authctl user set-shell --help >/dev/null 2>&1; then
+    printf 'chsh-zsh: setting authd login shell for %s to %s via authctl\n' "$USER" "$zsh_bin"
+    "${SUDO[@]}" authctl user set-shell "$USER" "$zsh_bin" || true
+  else
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "chsh-zsh" "site" "authd-sqlite3-absent" "direction" "transient-blocking" "probe" "sqlite3-present" "reason" "neither authctl user set-shell nor sqlite3 is available; the authd login-shell change is deferred") | trim | indent 6 }}
+    fi
+
+    # Writing the vendor's database directly is NOT a supported interface, so
+    # every assumption is asserted before the write and any failure is a
+    # diagnostic rather than an abort: schema, column, version row, user row.
+    if [[ ! -r "$authd_db" ]]; then
+      printf 'chsh-zsh: %s is not readable; leaving the authd login shell unchanged.\n' "$authd_db" >&2
+    elif ! "${SUDO[@]}" sqlite3 "$authd_db" 'SELECT shell FROM users LIMIT 0;' >/dev/null 2>&1; then
+      printf 'chsh-zsh: authd schema has no users.shell column; leaving the authd login shell unchanged.\n' >&2
+    elif ! "${SUDO[@]}" sqlite3 "$authd_db" 'SELECT version FROM schema_version LIMIT 1;' >/dev/null 2>&1; then
+      printf 'chsh-zsh: authd schema_version is unreadable; leaving the authd login shell unchanged.\n' >&2
+    elif [[ "$("${SUDO[@]}" sqlite3 "$authd_db" "SELECT count(*) FROM users WHERE name = '${USER//\'/\'\'}';" 2>/dev/null)" != 1 ]]; then
+      printf 'chsh-zsh: authd has no users row for %s; leaving the authd login shell unchanged.\n' "$USER" >&2
+    else
+      printf 'chsh-zsh: setting authd login shell for %s to %s\n' "$USER" "$zsh_bin"
+      "${SUDO[@]}" sqlite3 "$authd_db" \
+        "UPDATE users SET shell = '${zsh_bin//\'/\'\'}' WHERE name = '${USER//\'/\'\'}';" || true
+    fi
+  fi
+
+  # authd re-reads the database per query and its NSS module opens a fresh client
+  # per lookup, so a write is visible immediately: no daemon restart, which on a
+  # shared host would interrupt authentication for everyone.
+  confirmed="$(getent passwd "$USER" 2>/dev/null | awk -F: '{ print $7 }')" || true
+  if [[ "${confirmed##*/}" == "zsh" ]]; then
+    printf 'chsh-zsh: done. Log out and back in for the new login shell to take effect.\n'
+  else
+    printf 'chsh-zsh: authd still reports %s for %s; retrying on the next apply.\n' "${confirmed:-<unset>}" "$USER" >&2
+  fi
+  exit 0
+fi
+{{ end -}}
 # 5. chsh only accepts a shell listed in /etc/shells for non-root callers, and
 #    a login shell belongs there regardless. Register the resolved zsh path if
 #    the package did not already (idempotent: append only when missing).
