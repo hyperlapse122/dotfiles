@@ -1,8 +1,9 @@
 # dotfiles
 
 Personal [chezmoi](https://chezmoi.io)-managed dotfiles. Fedora Workstation
-and KDE are the primary Linux targets; macOS is a secondary target that
-receives the cross-platform dotfiles plus a narrower, OS-native provision set
+and KDE are the primary Linux targets. Ubuntu 24.04 arm64 is managed only on
+an NVIDIA Jetson AGX Thor. macOS is a secondary target that receives the
+cross-platform dotfiles plus a narrower, OS-native provision set
 (see [What the command does](#what-the-command-does)).
 
 ### Bootstrap
@@ -36,11 +37,13 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs 1Password / `op` / `mise` via `dnf` (the 1Password RPM
-     repo + the `jdxcode/mise` COPR); **macOS** via Homebrew (bootstrapping
-     Homebrew first if needed). The remaining formulas/casks (macOS) are
-     installed later by their own package-authority reconciler, not by this
-     hook.
+   - **Fedora** installs 1Password / `op` / `mise` via `dnf` (the 1Password
+     RPM repo + the `jdxcode/mise` COPR).
+   - **Ubuntu arm64 on an NVIDIA Jetson AGX Thor** installs the required
+     bootstrap tools through `apt`. The hook accepts `ubuntu` for this path.
+   - **macOS** uses Homebrew (bootstrapping Homebrew first if needed). The
+     remaining formulas/casks are installed later by their own package-authority
+     reconciler, not by this hook.
 
    The same hook then refuses to continue until `op` is authenticated, so a
    fresh apply stops with clear guidance here rather than stalling on a
@@ -67,10 +70,19 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
      firewalld, resolved, …) is installed from
      [`.chezmoidata/system.yaml`](.chezmoidata/system.yaml), and Tailscale
      egress-NAT via ufw is enabled.
+   - **Ubuntu arm64 on an NVIDIA Jetson AGX Thor**: cross-platform dotfiles,
+     supported Ubuntu packages, JetPack, the 1Password desktop app, and desktop
+     configuration. This is not a generic Ubuntu host path.
    - **macOS**: the cross-platform dotfiles, Homebrew-managed tools (installed
      by the [`20-darwin`](.chezmoiscripts/20-darwin) Homebrew reconciler), the
      `mxm4-hapticd` LaunchAgent ([`Library/`](Library)), VSCodium user state,
      and the Winbox-from-1Password importer.
+
+   Before the first apply on a shared host, create
+   `/etc/dotfiles-shared-host`. The marker declares the host shared and enables
+   the `sharedHost` gate. It blocks system-manifest changes and system-wide
+   daemon configuration. A non-Jetson shared host without the marker and
+   without `@` in its username fails open.
 
    Every OS fetches pinned standalone CLI binaries into `~/.local/bin` and
    coding-agent skills into `~/.agents/skills/`
@@ -134,9 +146,12 @@ a non-blank answer, so:
   interactive prompt. fcitx5 is the unified input method on
   every Linux target; KDE hosts additionally get the Breeze
   de-branding, while GNOME hosts otherwise keep GNOME defaults.
+- **Ubuntu 24.04 arm64 on an NVIDIA Jetson AGX Thor** is supported. This is not
+  a generic Ubuntu host path. Run `chezmoi apply` only from the board's local
+  GUI session. Keyring- and pinentry-backed steps need an unlocked session.
 - **macOS** (Homebrew) gets the cross-platform dotfiles plus its
   OS-native provision set (see above).
-- **`sudo` access on Linux** — installing Fedora packages and writing `/etc`
+- **`sudo` access on Linux** — installing Linux packages and writing `/etc`
   config needs root. macOS uses Homebrew (no `sudo`).
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled
   at apply time through the 1Password CLI.
@@ -158,6 +173,9 @@ installs the 1Password app and CLI but cannot yet resolve secrets. So:
    export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")  # optional
    chezmoi apply
    ```
+4. On a Jetson, after the first apply, run
+   `sudo /opt/1Password/after-install.sh` once. It installs a setuid helper and
+   a polkit policy, so the repository does not run it.
 
 The prerequisite hook continues once `op vault list` confirms desktop-app or service-account authentication. The later `onepasswordRead` calls still verify access to each exact secret reference, and the apply fails with that lookup error if the account lacks access.
 
