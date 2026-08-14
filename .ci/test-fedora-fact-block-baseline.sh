@@ -101,23 +101,53 @@ NODE
 
 # Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=14ac92a18bf15de5da62593405c44d3763d0f3d794046d86d00d788b6c43ddf4
+  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=e5d976a0280d1c422026ec7b4df98b582de4878b1220e6db7748b47f5682faeb
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=ddd39341d7838275d2904f46b3a42067c5b9771a8013139eff1051d96e11fcce
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=de15c7411db35e10f4efb7d9e7d86a9d9528fc0705373ae5afb03efbabcec017
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl]=70a1d313716912bb41e3250248944a346ca9e1dc628ff1d3c1625c5f0313af28
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=dacc42cc1cde77257a658445c618ef2f66a435f6f60baf4fb25dfa68c7864bea
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
 )
 
 for template in "${!baseline_hashes[@]}"; do
   rendered="$scratch/$(basename "${template%.tmpl}")"
   normalized="$rendered.normalized"
   render "$template" "$rendered"
+  if command -v shellcheck >/dev/null 2>&1; then
+    shellcheck -S warning "$rendered" || fail "$template fails shellcheck"
+  fi
+  bash -n "$rendered" || fail "$template does not render valid shell"
   without_facts "$rendered" "$normalized" "$fixture_root"
   actual=$(sha256sum "$normalized" | cut -d ' ' -f1)
   expected=${baseline_hashes[$template]}
   [[ "$actual" == "$expected" ]] || fail \
     "$template changed outside the two generated blocks (expected $expected, got $actual)"
 done
+
+fedora_render="$scratch/run_onchange_before_fedora.sh"
+grep -Fq 'systemctl enable "${svc}"' "$fedora_render" \
+  || fail 'Fedora service enablement no longer uses enable-only activation'
+! grep -Eq 'systemctl[[:space:]]+(start|enable --now)' "$fedora_render" \
+  || fail 'Fedora service enablement still starts units during apply'
+grep -Fq 'NOTE: This installer defers explicit activation for keyd, tailscaled, systemd-timesyncd, and (on NVIDIA hosts) nvidia-persistenced.' "$fedora_render" \
+  || fail 'Fedora render omits affected service names from the deferred activation notice'
+grep -Fq 'Package or time-configuration side effects may still activate services.' "$fedora_render" \
+  || fail 'Fedora render omits the indirect activation boundary'
+grep -Fq 'Restart affected services manually after apply, or reboot the system.' "$fedora_render" \
+  || fail 'Fedora render omits manual restart-or-reboot guidance'
+enable_call_line=$(awk '/^enable_services$/{line=NR} END{print line}' "$fedora_render")
+notice_line=$(awk '/NOTE: This installer defers explicit activation/{print NR; exit}' "$fedora_render")
+[[ -n "$enable_call_line" && -n "$notice_line" && "$notice_line" -gt "$enable_call_line" ]] \
+  || fail 'Fedora deferred activation notice does not follow enable_services'
+
+network_render="$scratch/run_onchange_after_install-system-30-network.sh"
+! grep -Eq 'systemctl[[:space:]]+(start|restart|reload)([[:space:]]|$)' "$network_render" \
+  || fail 'network render still mutates an affected service'
+grep -Fq 'NOTE: This installer defers explicit activation for systemd-resolved, NetworkManager, and tailscaled.' "$network_render" \
+  || fail 'network render omits affected service names from the deferred activation notice'
+grep -Fq 'Restart affected services manually after apply, or reboot the system.' "$network_render" \
+  || fail 'network render omits manual restart-or-reboot guidance'
+grep -Fq 'site=networkmanager-not-running' "$network_render" \
+  || fail 'network render lost the NetworkManager applicability declaration'
 
 # The login-shell script consumes capabilities.tmpl and facts.tmpl, so it never
 # carries a FACT_* block; only these two scripts include facts-sh.tmpl.

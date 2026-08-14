@@ -3,13 +3,13 @@
 #!/usr/bin/env bash
 #
 # Network-path configuration: firewalld for Tailscale/VMware, resolv.conf →
-# systemd-resolved, DNS-path service restarts, and NetworkManager drop-in
-# hygiene + reload. Part 3/3 of the split install-system set (10-files →
-# 20-host → 30-network); splitting keeps re-run scope tight — a tracked /etc
-# file edit re-runs 10-files only, so it no longer restarts
-# systemd-resolved/NetworkManager/tailscaled the way the old monolithic
-# install-system-config did. Those restarts now happen only when THIS
-# script's content changes (or `chezmoi apply --force`).
+# systemd-resolved, and NetworkManager drop-in hygiene. Part 3/3 of the split
+# install-system set (10-files → 20-host → 30-network); splitting keeps re-run
+# scope tight — a tracked /etc file edit re-runs 10-files only.
+#
+# This script does not restart or reload systemd-resolved, NetworkManager, or
+# tailscaled. Those services remain unchanged until the operator restarts any
+# affected service manually after apply or reboots.
 #
 # onchange, no source-tree dependency: everything here asserts fixed
 # firewalld/DNS state derived from nothing in the source tree, so the only
@@ -96,26 +96,17 @@ configure_firewalld() {
 }
 configure_firewalld
 
-# Reference: https://tailscale.com/docs/reference/linux-dns
-# Point resolv.conf at systemd-resolved's stub, then restart each DNS-path
-# service that is currently running so the switch takes effect.
+# Point resolv.conf at systemd-resolved's stub. Service activation is deferred
+# until the operator chooses a manual restart or reboot after apply.
 "${SUDO[@]}" ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-for svc in systemd-resolved NetworkManager tailscaled; do
-  if systemctl is-active --quiet "$svc" 2>/dev/null; then
-    printf '  -> systemctl restart %s\n' "$svc"
-    "${SUDO[@]}" systemctl restart "$svc"
-  else
-    printf '  -- %s reload: skipped (service not running)\n' "$svc"
-  fi
-done
 
 # Remove dangling symlinks under /etc/NetworkManager/conf.d/. A drop-in
 # installed by another tool as a symlink into a store/cache path becomes a
-# broken link once that target is removed; NetworkManager then logs
-# warnings on every reload and `ls -l` flags it red. We only delete
-# symlinks whose targets are missing — regular files and live symlinks are
-# left untouched, so this can't accidentally remove a drop-in placed by
-# another tool.
+# broken link once that target is removed; NetworkManager then logs warnings
+# on every reload and `ls -l` flags it red. We only delete symlinks whose
+# targets are missing — regular files and live symlinks are left untouched,
+# so this can't accidentally remove a drop-in placed by another tool.
+
 if [[ -d /etc/NetworkManager/conf.d ]]; then
   stale=0
   for link in /etc/NetworkManager/conf.d/*; do
@@ -131,24 +122,18 @@ if [[ -d /etc/NetworkManager/conf.d ]]; then
   fi
 fi
 
-# Reload NetworkManager so any freshly-installed drop-ins under
-# /etc/NetworkManager/conf.d/ take effect without a reboot.
-# `systemctl reload` triggers NetworkManager's SIGHUP handler, which
-# re-reads NetworkManager.conf and every conf.d/ drop-in without
-# disrupting active connections (unlike `restart`, which would).
-#
-# Gate: `systemctl is-active --quiet NetworkManager` returns 0 only when
-# the unit exists and is currently running, covering both "service
-# present" and "service running" in a single check. Hosts without
-# NetworkManager (systemd-networkd, netctl, no network stack at all)
-# skip cleanly.
-reload_networkmanager() {
+# Report whether NetworkManager activation is applicable without changing
+# service state.
+networkmanager_notice() {
   if systemctl is-active --quiet NetworkManager 2>/dev/null; then
-    printf '  -> systemctl reload NetworkManager\n'
-    "${SUDO[@]}" systemctl reload NetworkManager
+    printf '  -- NetworkManager is running; its drop-in changes remain pending until manual activation\n'
   else
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-system-network" "site" "networkmanager-not-running" "direction" "harmless" "reason" "NetworkManager is not running; its configuration reload is not applicable") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-system-network" "site" "networkmanager-not-running" "direction" "harmless" "reason" "NetworkManager is not running; its configuration activation is not applicable") | trim | indent 4 }}
   fi
 }
-reload_networkmanager
+networkmanager_notice
+
+printf '\n'
+printf 'NOTE: This installer defers explicit activation for systemd-resolved, NetworkManager, and tailscaled.\n'
+printf '      Restart affected services manually after apply, or reboot the system.\n'
 {{ end -}}
