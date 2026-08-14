@@ -6,6 +6,9 @@
     },
     "agent-browser": {
       "enabled": false
+    },
+    "figma": {
+      "enabled": false
     }
   }
 }
