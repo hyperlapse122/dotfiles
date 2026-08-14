@@ -149,6 +149,7 @@ render() { # bindir override input output
 
 linux_data='{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}'
 darwin_data='{"chezmoi":{"os":"darwin","osRelease":{"id":"macos"}}}'
+ubuntu_data='{"chezmoi":{"os":"linux","arch":"arm64","username":"managed@example.invalid","osRelease":{"id":"ubuntu"}}}'
 
 # The fixture LUKS ciphertext, produced by the same AES implementation the
 # consumer decrypts with, keyed by the string the stub keyring returns.
@@ -1168,9 +1169,10 @@ renders=$scratch/renders.tsv
 n=0
 while IFS=$'\t' read -r cls rel; do
   case $cls in once | onchange) ;; *) continue ;; esac
-  for variant in linux darwin secret; do
+  for variant in linux ubuntu darwin secret; do
     case $variant in
       linux) bindir=$scratch/bin data=$linux_data ;;
+      ubuntu) bindir=$scratch/bin data=$ubuntu_data ;;
       darwin) bindir=$scratch/bin data=$darwin_data ;;
       secret) bindir=$scratch/bin-secret data=$secret_data ;;
     esac

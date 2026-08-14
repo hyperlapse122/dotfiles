@@ -352,21 +352,22 @@ jobs:
   # ---------------------------------------------------------------------------
   render-internals:
     name: render internals (${{ matrix.os }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: fedora, image: "fedora:44" }
+          - { os: fedora, image: "fedora:44", runner: ubuntu-latest, arch: x86_64, distro: fedora }
+          - { os: ubuntu-arm64, image: "ubuntu:24.04", runner: ubuntu-24.04-arm, arch: aarch64, distro: ubuntu }
     container:
       image: ${{ matrix.image }}
     steps:
       - name: Assert runtime architecture
         run: |
           set -euxo pipefail
-          [ "$(uname -m)" = "x86_64" ]
+          [ "$(uname -m)" = "${{ matrix.arch }}" ]
           . /etc/os-release
-          [ "${ID}" = "fedora" ]
+          [ "${ID}" = "${{ matrix.distro }}" ]
 
       - name: Install base tooling (${{ matrix.os }})
         run: |
@@ -376,7 +377,7 @@ jobs:
           else
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip >/dev/null
+            apt-get install -y --no-install-recommends ca-certificates curl git jq nodejs tar gzip >/dev/null
           fi
 
       - uses: actions/checkout@v7
@@ -418,7 +419,7 @@ jobs:
 
           render_one() {
             chezmoi --config "${scratch}/empty.toml" \
-              --source "${GITHUB_WORKSPACE}" \
+              --source "$PWD" \
               --destination "${scratch}/target" \
               execute-template
           }
@@ -447,10 +448,47 @@ jobs:
             echo ""
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
-          # Never hard-fail on a single template: a cross-arch external asset
-          # lookup can legitimately return nothing on the runner's arch. Failures
-          # are kept as *.render-error.txt inside the artifact for inspection.
+          # Fedora retains errors for artifact inspection. The Arm leg rejects
+          # every recorded render error in the assertion below.
 
+
+      - name: Require complete Ubuntu arm64 render
+        if: matrix.os == 'ubuntu-arm64'
+        run: |
+          set -euo pipefail
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          if find "${out}" -type f -name '*.render-error.txt' -print -quit | grep -q .; then
+            find "${out}" -type f -name '*.render-error.txt' -print >&2
+            exit 1
+          fi
+
+      - name: Assert Ubuntu desktop render surface
+        if: matrix.os == 'ubuntu-arm64'
+        run: |
+          set -euo pipefail
+          out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
+          for path in \
+            .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-app-grid-order.sh \
+            .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-fonts.sh \
+            .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh
+          do
+            test -s "${out}/${path}"
+            test ! -e "${out}/${path}.render-error.txt"
+          done
+          editor="${out}/dot_config/VSCodium/User/settings.json"
+          mkdir -p "$(dirname "${editor}")"
+          chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
+            --source "$PWD" \
+            --destination "${RUNNER_TEMP}/scratch/target" \
+            execute-template < dot_config/VSCodium/User/settings.json.tmpl > "${editor}"
+          test -s "${editor}"
+
+      - name: Run Jetson render fixtures
+        if: matrix.os == 'ubuntu-arm64'
+        run: |
+          set -euo pipefail
+          .ci/test-fedora-fact-block-baseline.sh
+          .ci/test-shared-host-authd-flow.sh
       - name: Assert retired Figma lifecycle is absent
         run: |
           set -euo pipefail
@@ -464,7 +502,7 @@ jobs:
           test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
           test ! -e "${reconciler}"
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" \
+            --source "$PWD" \
             --destination "${RUNNER_TEMP}/scratch/target" \
             execute-template < dot_omp/private_agent/private_readonly_mcp.json.tmpl > "${mcp}"
           ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
@@ -839,6 +877,12 @@ jobs:
           path: _rendered
           pattern: rendered-*-fedora
 
+
+      - name: Download Ubuntu arm64 rendered artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: _rendered
+          pattern: rendered-*-ubuntu-arm64
       - name: Download macOS rendered artifacts
         uses: actions/download-artifact@v8
         with:
