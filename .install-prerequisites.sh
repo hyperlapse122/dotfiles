@@ -40,15 +40,30 @@ op_ready() {
 }
 
 # Human-facing instructions for enabling the 1Password CLI. Printed once before
-# waiting and again on timeout. Mirrors the flow documented in README.md and the
-# container branch above, with a headless service-account escape hatch.
+# waiting and again on timeout.
+#
+# The desktop-app integration cannot be the bootstrap path on every host. The
+# vendor ships no arm64 desktop package, so on a Jetson the app arrives from the
+# release-locked tarball in a LATER chezmoi phase — one that cannot run until
+# this hook has already resolved secrets. Leading with "open the app" there would
+# name a step the operator cannot take, so a host without the app installed is
+# told to use a service-account token instead.
 print_op_auth_guidance() {
   printf 'install-prerequisites.sh: 1Password CLI is not authenticated yet.\n' >&2
-  printf 'Let chezmoi resolve secrets by enabling the 1Password CLI:\n' >&2
-  printf '  1. Open the 1Password desktop app and sign in.\n' >&2
-  printf '  2. Enable Settings -> Developer -> Integrate with 1Password CLI.\n' >&2
-  printf '  (Headless host? Export a service-account token instead and re-run:\n' >&2
-  printf '     export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help)\n' >&2
+  if [[ -x /opt/1Password/1password ]] || command -v 1password >/dev/null 2>&1; then
+    printf 'Let chezmoi resolve secrets by enabling the 1Password CLI:\n' >&2
+    printf '  1. Open the 1Password desktop app and sign in.\n' >&2
+    printf '  2. Enable Settings -> Developer -> Integrate with 1Password CLI.\n' >&2
+    printf '  (Headless host? Export a service-account token instead and re-run:\n' >&2
+    printf '     export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help)\n' >&2
+    return 0
+  fi
+  printf 'The 1Password desktop app is not installed on this host, so the CLI has no\n' >&2
+  printf 'app to integrate with. This repository installs it in a later phase, which\n' >&2
+  printf 'runs after this one, so authenticate with a service account and re-run:\n' >&2
+  printf '  export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help\n' >&2
+  printf '(Once the desktop app is installed, Settings -> Developer -> Integrate with\n' >&2
+  printf ' 1Password CLI is the normal path and no token is needed.)\n' >&2
 }
 
 # Poll op_ready() until it succeeds or a bounded deadline elapses. Interval and

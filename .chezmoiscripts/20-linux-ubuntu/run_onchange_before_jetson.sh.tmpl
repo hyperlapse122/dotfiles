@@ -4,9 +4,13 @@
    not only on the one board whose body renders. */ -}}
 {{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if and (eq .chezmoi.os "linux") (eq $facts.distro "ubuntu") $facts.jetson (eq .chezmoi.arch "arm64") -}}
+{{- /* The lock lookups sit INSIDE the gate on purpose. release-lock-ref.tmpl
+   hard-fails on a missing artifact key and this tool publishes only linux-arm64,
+   so evaluating them at template top level would fail the render on Fedora and on
+   any non-arm64 host. */ -}}
 {{- $onePasswordVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "1password" "field" "version") -}}
 {{- $onePasswordUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "1password" "field" "url" "platform" "linux-arm64") -}}
-{{ if and (eq .chezmoi.os "linux") (eq $facts.distro "ubuntu") $facts.jetson (eq .chezmoi.arch "arm64") -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -35,7 +39,12 @@ fi
 
 install_apt() {
   local pkg=$1
-  dpkg-query -W "$pkg" >/dev/null 2>&1 && return 0
+  # `dpkg-query -W` also succeeds for `deinstall ok config-files`, so a purged
+  # package would look installed and never be restored. Require the installed
+  # status explicitly.
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  [[ "$status" == installed ]] && return 0
   "${SUDO[@]}" apt-get install -y "$pkg"
 }
 
@@ -88,12 +97,28 @@ install_onepassword_desktop() {
   curl -fsSL "$onepassword_url.sig" -o "$scratch/1password.tar.gz.sig"
   curl -fsSL "$onepassword_key_url" -o "$scratch/1password.asc"
 
+  # The keyring is built in the scratch dir so the host keyring is never touched,
+  # and the imported key is NOT trusted on its own: the check below is what binds
+  # the signature to the expected fingerprint.
   local keyring="$scratch/keyring.gpg"
   gpg --batch --no-default-keyring --keyring "$keyring" --import "$scratch/1password.asc"
+
+  # Match the VALIDSIG status RECORD by field, never by substring: a key whose
+  # user ID merely contains "VALIDSIG <fingerprint>" would satisfy an unanchored
+  # grep, because GOODSIG echoes the user ID into the same stream. A record is
+  # `[GNUPG:] VALIDSIG <primary-fingerprint> <date> ...`, hence fields 1..3.
+  local status_file="$scratch/gpg-status"
   if ! gpg --batch --no-default-keyring --keyring "$keyring" \
-    --status-fd 1 --verify "$scratch/1password.tar.gz.sig" "$scratch/1password.tar.gz" 2>/dev/null |
-    grep -q "VALIDSIG $onepassword_fingerprint"; then
-    printf 'jetson: the 1Password tarball did not verify against %s. Refusing to unpack.\n' "$onepassword_fingerprint" >&2
+    --status-file "$status_file" --verify \
+    "$scratch/1password.tar.gz.sig" "$scratch/1password.tar.gz" >/dev/null 2>&1; then
+    printf 'jetson: the 1Password tarball signature did not verify. Refusing to unpack.\n' >&2
+    return 1
+  fi
+  if ! awk -v want="$onepassword_fingerprint" '
+      $1 == "[GNUPG:]" && $2 == "VALIDSIG" && $3 == want { found = 1 }
+      END { exit(found ? 0 : 1) }
+    ' "$status_file"; then
+    printf 'jetson: the 1Password tarball is signed, but not by %s. Refusing to unpack.\n' "$onepassword_fingerprint" >&2
     return 1
   fi
 

@@ -103,11 +103,11 @@ totals = matrix.get('totals', {})
 # config-kde-calendar/akonadi-query-failed, a live SQL read failure on an eligible
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 frozen = {
-    'classified_owners': 125,
+    'classified_owners': 127,
     'hard_error_owners': 11,
-    'rendered_instances': 147,
-    'phase_local_instances': 120,
-    'shared_guard_instances': 27,
+    'rendered_instances': 151,
+    'phase_local_instances': 122,
+    'shared_guard_instances': 29,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -144,9 +144,10 @@ DIRECTIONS = {'harmless', 'transient-blocking', 'transient-tolerable'}
 REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
             'predicate_digest', 'continuation', 'continuation_digest',
             'render_profile', 'form', 'instances']
-CONTINUATIONS = {'terminate-script-exit-0', 'abandon-step-return-0',
-                 'abandon-step-inline-notice', 'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 8, 'kde-guard': 9, 'headless-guard': 3, 'sudo-skip-guard': 4, 'shared-host-guard': 3}
+CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
+                 'abandon-step-return-0', 'abandon-step-inline-notice',
+                 'terminate-script-render-branch'}
+SHARED = {'gnome-guard': 8, 'kde-guard': 9, 'headless-guard': 3, 'sudo-skip-guard': 4, 'shared-host-guard': 5}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that
@@ -210,8 +211,12 @@ for row in owners:
     if row['form'] in {'skip_here', 'skip_step'}:
         if row.get('direction') not in DIRECTIONS:
             problems.append(f'{owner}: skip form needs a valid direction, got {row.get("direction")!r}')
-        if row.get('direction') == 'transient-tolerable':
-            problems.append(f'{owner}: transient-tolerable has no site in this repository')
+        # chezmoi records an onchange script that exits 0 as complete and never
+        # reruns it, so a deferred skip MUST leave a nonzero status behind.
+        if row.get('direction') == 'transient-tolerable' \
+                and row['continuation'] != 'terminate-script-exit-1':
+            problems.append(f'{owner}: transient-tolerable must terminate nonzero, '
+                            f'got {row["continuation"]!r}')
     elif 'direction' in row:
         problems.append(f'{owner}: form {row["form"]} takes no direction')
     if row.get('direction') == 'transient-blocking':
@@ -1064,7 +1069,9 @@ mkdir -p -- "$podman_source/.chezmoidata" "$podman_source/.chezmoitemplates" \
   "$podman_destination"
 cp -- "$repo_root/.chezmoidata/.capability-registry.tsv" \
   "$podman_source/.chezmoidata/.capability-registry.tsv"
-for shared in capability-cache-identity.sh capabilities.tmpl fingerprint.tmpl skip.sh.tmpl; do
+cp -- "$repo_root/.chezmoidata/facts.yaml" "$podman_source/.chezmoidata/facts.yaml"
+for shared in capability-cache-identity.sh capabilities.tmpl fingerprint.tmpl skip.sh.tmpl \
+  facts.tmpl facts-sh.tmpl facts-validate.tmpl shared-host-guard.sh.tmpl; do
   cp -- "$repo_root/.chezmoitemplates/$shared" "$podman_source/.chezmoitemplates/$shared"
 done
 cp -- "$repo_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
