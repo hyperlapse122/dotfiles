@@ -1,6 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $busctlPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "busctl-present") -}}
 {{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+{{ $plasmashellRunning := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "plasmashell-running") -}}
 #!/usr/bin/env bash
 #
 # Configures libinput touchpads via KWin's org.kde.KWin.InputDeviceManager:
@@ -23,7 +24,8 @@
 # the cached precondition it names. Comment-only; never executed.
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
       (dict "name" "busctl-present" "value" $busctlPresent)
-      (dict "name" "session-bus-present" "value" $sessionBusPresent))) }}
+      (dict "name" "session-bus-present" "value" $sessionBusPresent)
+      (dict "name" "plasmashell-running" "value" $plasmashellRunning))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-touchpad.sh") -}}
@@ -65,7 +67,7 @@ configure_touchpad() {
 
   local raw
   if ! raw="$(busctl --user get-property "$SERVICE" "$MGR_PATH" "$IFACE_MGR" devicesSysNames 2>/dev/null)"; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-touchpad" "site" "kwin-unreachable" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "KWin is unreachable on the session bus; touchpad configuration is deferred") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-touchpad" "site" "kwin-unreachable" "direction" "transient-blocking" "probe" "plasmashell-running" "reason" "KWin is unreachable on the session bus; touchpad configuration is deferred") | trim | indent 4 }}
   fi
 
   local sysnames=()

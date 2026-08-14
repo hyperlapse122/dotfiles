@@ -870,7 +870,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_set-default-browser.sh.tmpl#set-default-browser/xdg-mime-absent'
   - owner: 'setup-podman-cluster/no-sudo-for-delegation'
     scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl'
+    template: '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl'
     anchor_line: 89
     anchor: 'if [[ "$have_sudo" == true ]]; then'
     predicate: '[[ "$have_sudo" == true ]]'
@@ -883,10 +883,10 @@ owners:
     probe: 'sudo-usable'
     fingerprint_placement: 'new-header-block'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/no-sudo-for-delegation'
+      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/no-sudo-for-delegation'
   - owner: 'setup-podman-cluster/no-user-manager-bus'
     scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl'
+    template: '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl'
     anchor_line: 105
     anchor: 'if systemctl --user show-environment >/dev/null 2>&1; then'
     predicate: 'systemctl --user show-environment >/dev/null 2>&1'
@@ -899,10 +899,10 @@ owners:
     probe: 'user-manager-bus-present'
     fingerprint_placement: 'new-header-block'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/no-user-manager-bus'
+      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/no-user-manager-bus'
   - owner: 'setup-podman-cluster/podman-socket-unit-absent'
     scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl'
+    template: '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl'
     anchor_line: 113
     anchor: '  if systemctl --user cat podman.socket >/dev/null 2>&1; then'
     predicate: 'systemctl --user cat podman.socket >/dev/null 2>&1'
@@ -912,13 +912,13 @@ owners:
     render_profile: 'linux-desktop'
     form: 'skip_step'
     direction: 'transient-blocking'
-    probe: 'podman-present'
+    probe: 'podman-socket-unit-present'
     fingerprint_placement: 'new-header-block'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/podman-socket-unit-absent'
+      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/podman-socket-unit-absent'
   - owner: 'setup-podman-cluster/minikube-absent'
     scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl'
+    template: '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl'
     anchor_line: 162
     anchor: 'if command -v minikube >/dev/null 2>&1; then'
     predicate: 'command -v minikube >/dev/null 2>&1'
@@ -931,7 +931,7 @@ owners:
     probe: 'minikube-present'
     fingerprint_placement: 'new-header-block'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/minikube-absent'
+      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/minikube-absent'
   - owner: 'config-gnome-1password-shortcut/stamp-current'
     scope: '50-linux-gnome'
     template: '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-1password-shortcut.sh.tmpl'
@@ -1654,7 +1654,7 @@ owners:
     render_profile: 'linux-kde-session'
     form: 'skip_step'
     direction: 'transient-blocking'
-    probe: 'session-bus-present'
+    probe: 'plasmashell-running'
     fingerprint_placement: 'new-header-block'
     instances:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl#config-kde-touchpad/kwin-unreachable'
@@ -1940,7 +1940,7 @@ owners:
       - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/enable-unit-absent'
   - owner: 'setup-podman-cluster/prune-timer-unit-absent'
     scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl'
+    template: '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl'
     anchor_line: 124
     anchor: '  if systemctl --user cat podman-prune.timer >/dev/null 2>&1; then'
     predicate: 'systemctl --user cat podman-prune.timer >/dev/null 2>&1'
@@ -1951,7 +1951,7 @@ owners:
     form: 'skip_step'
     direction: 'harmless'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/prune-timer-unit-absent'
+      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/prune-timer-unit-absent'
 
 hard_errors:
   - owner: 'config-gnome-1password-shortcut/gsettings-read-failed'

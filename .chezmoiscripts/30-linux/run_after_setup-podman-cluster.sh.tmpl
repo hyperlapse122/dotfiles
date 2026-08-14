@@ -1,7 +1,7 @@
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 {{ $userManagerBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "user-manager-bus-present") -}}
-{{ $podmanPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "podman-present") -}}
+{{ $podmanSocketUnitPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "podman-socket-unit-present") -}}
 {{ $minikubePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "minikube-present") -}}
 #!/usr/bin/env bash
 #
@@ -56,9 +56,47 @@
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
       (dict "name" "sudo-usable" "value" $sudoUsable)
       (dict "name" "user-manager-bus-present" "value" $userManagerBusPresent)
-      (dict "name" "podman-present" "value" $podmanPresent)
+      (dict "name" "podman-socket-unit-present" "value" $podmanSocketUnitPresent)
       (dict "name" "minikube-present" "value" $minikubePresent))) }}
 set -euo pipefail
+
+# `systemctl --user` can block independently of the session-bus environment.
+# Match the hook's portable bounded-child convention so every-apply recovery
+# remains retryable instead of wedging the whole chezmoi command.
+user_manager_deadline_secs=${CAPABILITY_PROBE_DEADLINE_SECS:-5}
+user_manager_term_grace_secs=${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}
+[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "setup-podman-cluster: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+
+run_user_systemctl() {
+  local pid watchdog_pid sleep_pid rc
+  systemctl --user "$@" >/dev/null 2>&1 &
+  pid=$!
+  (
+    sleep_pid=
+    trap '[ -z "$sleep_pid" ] || kill "$sleep_pid" 2>/dev/null || true; exit 0' HUP INT TERM
+    sleep "$user_manager_deadline_secs" &
+    sleep_pid=$!
+    wait "$sleep_pid" 2>/dev/null || exit 0
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -TERM "$pid" 2>/dev/null || true
+      sleep "$user_manager_term_grace_secs" &
+      sleep_pid=$!
+      wait "$sleep_pid" 2>/dev/null || exit 0
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  ) &
+  watchdog_pid=$!
+  if wait "$pid" 2>/dev/null; then
+    rc=0
+  else
+    rc=$?
+  fi
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  return "$rc"
+}
 
 # minikube comes from .chezmoiexternals/k8s.toml (~/.local/bin). Fall back
 # to that dir when it is not already on PATH (this run_after can execute under a
@@ -113,24 +151,23 @@ configure_cgroup_delegation() {
 configure_cgroup_delegation
 
 # --- 2+3) enable the rootless user podman units ---------------------------
-# `systemctl --user` needs a reachable user-manager bus. `show-environment` is a
-# cheap probe that fails cleanly on a bare TTY / SSH session without one — in
-# which case we skip and let the next apply (run_after_ retries) pick it up.
+# `run_user_systemctl` bounds every user-manager interaction. A missing unit
+# skips only that step, while a later unchanged apply retries it.
 enable_podman_socket() {
-  if systemctl --user cat podman.socket >/dev/null 2>&1; then
-    if systemctl --user enable --now podman.socket >/dev/null 2>&1; then
+  if run_user_systemctl cat podman.socket; then
+    if run_user_systemctl enable --now podman.socket; then
       echo "setup-podman-cluster: enabled --user podman.socket"
     else
       echo "setup-podman-cluster: could not enable --user podman.socket (masked?); skip" >&2
     fi
   else
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "setup-podman-cluster" "site" "podman-socket-unit-absent" "direction" "transient-blocking" "probe" "podman-present" "reason" "the podman user socket unit is absent; socket activation is deferred") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "setup-podman-cluster" "site" "podman-socket-unit-absent" "direction" "transient-blocking" "probe" "podman-socket-unit-present" "reason" "the podman user socket unit is absent; socket activation is deferred") | trim | indent 4 }}
   fi
 }
 
 enable_prune_timer() {
-  if systemctl --user cat podman-prune.timer >/dev/null 2>&1; then
-    if systemctl --user enable --now podman-prune.timer >/dev/null 2>&1; then
+  if run_user_systemctl cat podman-prune.timer; then
+    if run_user_systemctl enable --now podman-prune.timer; then
       echo "setup-podman-cluster: enabled --user podman-prune.timer"
     else
       echo "setup-podman-cluster: could not enable --user podman-prune.timer; skip" >&2
@@ -141,8 +178,8 @@ enable_prune_timer() {
 }
 
 enable_minikube_autostart() {
-  if systemctl --user cat minikube-autostart.service >/dev/null 2>&1; then
-    if systemctl --user enable minikube-autostart.service >/dev/null 2>&1; then
+  if run_user_systemctl cat minikube-autostart.service; then
+    if run_user_systemctl enable minikube-autostart.service; then
       echo "setup-podman-cluster: enabled minikube-autostart.service (reboot persistence)"
     else
       echo "setup-podman-cluster: could not enable minikube-autostart.service; skip" >&2
@@ -153,8 +190,8 @@ enable_minikube_autostart() {
 }
 
 enable_user_podman_units() {
-  if systemctl --user show-environment >/dev/null 2>&1; then
-    systemctl --user daemon-reload || true
+  if run_user_systemctl show-environment; then
+    run_user_systemctl daemon-reload || true
     enable_podman_socket
     enable_prune_timer
     enable_minikube_autostart
