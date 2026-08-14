@@ -72,7 +72,7 @@ refreshPeriod = "8760h"
 */ -}}
 
 {{- $winboxFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
-{{- if not $winboxFacts.container -}}
+{{- if and (not $winboxFacts.container) (or (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64")) (eq .chezmoi.os "darwin")) -}}
 {{- /* The version is resolved at refresh time by packages/release-lock from
        MikroTik's LATEST.4 endpoint; the render reads the locked version. */ -}}
 {{- $winboxVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "winbox") -}}

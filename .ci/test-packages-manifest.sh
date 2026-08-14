@@ -18,6 +18,29 @@ render() {
     --override-data '{"chezmoi":{"os":"linux","arch":"amd64","osRelease":{"id":"fedora"}}}' \
     execute-template <"$root/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl"
 }
+render_ubuntu() {
+  local root=$1
+  PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$root" \
+    --override-data '{"chezmoi":{"os":"linux","arch":"arm64","osRelease":{"id":"ubuntu"}}}' \
+    execute-template <"$root/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl"
+}
+assert_ubuntu_gate_closed() {
+  local root=$1 authority="$scratch/ubuntu-authority.json"
+  printf '%s' '{{ .packages.authority | toJson }}' |
+    PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$root" \
+      --override-data '{"chezmoi":{"os":"linux","arch":"arm64","osRelease":{"id":"ubuntu"}}}' \
+      execute-template >"$authority"
+  node - "$authority" <<'JS'
+const fs = require("node:fs");
+const authority = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (authority.releaseGates.g1 !== "closed") {
+  throw new Error(`expected G1 to be closed, got ${authority.releaseGates.g1}`);
+}
+if (!authority.capabilities.some(({ ubuntu }) => ubuntu.architectures.arm64 === "unresolved")) {
+  throw new Error("expected an unresolved Ubuntu arm64 capability while G1 is closed");
+}
+JS
+}
 make_fixture() {
   local root=$1
   mkdir -p "$root/.chezmoiscripts/20-linux-fedora"
@@ -56,8 +79,8 @@ rejects_gate_value() {
   local label=$1 value=$2 expected=$3
   local root="$scratch/$label"
   make_fixture "$root"
-  mutate "$root" 'nvidiaPackages: nvidia  #' "nvidiaPackages: $value  #"
-  mutate "$root" 'gate: nvidia' "gate: $value"
+  mutate "$root" 'bareMetalPackages: "!virt"' "bareMetalPackages: $value"
+  mutate "$root" 'gate: "!virt"' "gate: $value"
   if render "$root" >"$scratch/$label.out" 2>"$scratch/$label.err"; then
     fail "$label mutation was accepted"
   fi
@@ -69,6 +92,8 @@ rejects_gate_value() {
 
 
 render "$repo_root" >"$scratch/baseline"
+render_ubuntu "$repo_root" >"$scratch/ubuntu-baseline"
+assert_ubuntu_gate_closed "$repo_root"
 rejects missing-disposition 'fedora: { disposition: managed, owner: dnf, identifier: 1password,' 'fedora: { owner: dnf, identifier: 1password,' 'missing disposition'
 rejects_gate_value unknown-fact madeUpFact 'unknown fact'
 rejects_gate_value malformed-comparison nvidia.true 'BOOLEAN fact'
@@ -80,8 +105,9 @@ rejects unsupported-id 'identifier: google-chrome-stable' 'identifier: google ch
 rejects untrusted-tap $'        backend: homebrew\n        origin: https://github.com/Homebrew/homebrew-cask.git\n        trusted: true' $'        backend: homebrew\n        origin: https://github.com/Homebrew/homebrew-cask.git\n        trusted: false' 'is not trusted'
 rejects unavailable-bootstrap 'fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: native } }' 'fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: unresolved } }' 'bootstrap capability onePasswordDesktop unavailable'
 rejects resolved-g0 'arm64: unresolved' 'arm64: native' 'G0 is closed but no gate-closing architecture remains unresolved' 3
+rejects open-g1-with-unresolved 'g1: closed' 'g1: open' 'G1 is open while ubuntu architectures remain unresolved'
 rejects gate-mismatch 'gate: "!virt"' 'gate: nvidia' 'gate mismatch'
 rejects checksum-omission '        integrity: checksum
-        fedora: { disposition: managed, owner: external, identifier: gh' '        fedora: { disposition: managed, owner: external, identifier: gh' 'omits checksum integrity'
+        fedora: { disposition: managed, owner: external, identifier: gh' '        fedora: { disposition: managed, owner: external, identifier: gh' 'omits integrity'
 
 printf '%s\n' 'package manifest validation passed'

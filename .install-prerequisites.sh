@@ -40,15 +40,30 @@ op_ready() {
 }
 
 # Human-facing instructions for enabling the 1Password CLI. Printed once before
-# waiting and again on timeout. Mirrors the flow documented in README.md and the
-# container branch above, with a headless service-account escape hatch.
+# waiting and again on timeout.
+#
+# The desktop-app integration cannot be the bootstrap path on every host. The
+# vendor ships no arm64 desktop package, so on a Jetson the app arrives from the
+# release-locked tarball in a LATER chezmoi phase — one that cannot run until
+# this hook has already resolved secrets. Leading with "open the app" there would
+# name a step the operator cannot take, so a host without the app installed is
+# told to use a service-account token instead.
 print_op_auth_guidance() {
   printf 'install-prerequisites.sh: 1Password CLI is not authenticated yet.\n' >&2
-  printf 'Let chezmoi resolve secrets by enabling the 1Password CLI:\n' >&2
-  printf '  1. Open the 1Password desktop app and sign in.\n' >&2
-  printf '  2. Enable Settings -> Developer -> Integrate with 1Password CLI.\n' >&2
-  printf '  (Headless host? Export a service-account token instead and re-run:\n' >&2
-  printf '     export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help)\n' >&2
+  if [[ -x /opt/1Password/1password ]] || command -v 1password >/dev/null 2>&1; then
+    printf 'Let chezmoi resolve secrets by enabling the 1Password CLI:\n' >&2
+    printf '  1. Open the 1Password desktop app and sign in.\n' >&2
+    printf '  2. Enable Settings -> Developer -> Integrate with 1Password CLI.\n' >&2
+    printf '  (Headless host? Export a service-account token instead and re-run:\n' >&2
+    printf '     export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help)\n' >&2
+    return 0
+  fi
+  printf 'The 1Password desktop app is not installed on this host, so the CLI has no\n' >&2
+  printf 'app to integrate with. This repository installs it in a later phase, which\n' >&2
+  printf 'runs after this one, so authenticate with a service account and re-run:\n' >&2
+  printf '  export OP_SERVICE_ACCOUNT_TOKEN=...   # op service account create --help\n' >&2
+  printf '(Once the desktop app is installed, Settings -> Developer -> Integrate with\n' >&2
+  printf ' 1Password CLI is the normal path and no token is needed.)\n' >&2
 }
 
 # Poll op_ready() until it succeeds or a bounded deadline elapses. Interval and
@@ -795,6 +810,77 @@ EOF
   fi
 }
 
+# Ubuntu: install via apt. Two upstream constraints shape this, neither visible
+# from the code:
+#
+#   * The 1Password DESKTOP app has no arm64 deb or rpm repository — the aarch64
+#     tarball is the only artifact — so the 20-linux-ubuntu phase delivers it from
+#     the release lock. Only the CLI comes from apt; its repo does publish arm64.
+#   * mise comes from `extrepo`, which the vendor documents for Debian 11+ and
+#     Ubuntu 22.04+. The PPA is reserved for Ubuntu 26.04 and later.
+#
+# The package list is the closure of every binary a later phase HARD-FAILS without:
+# kitty's installer needs curl/tar/xz/sha256sum, the WakaTime keyring script needs
+# secret-tool, the GPG import needs gpg + expect, and the authd login-shell
+# fallback needs sqlite3. Dropping one turns a soft skip into an abort.
+install_ubuntu() {
+  local -a SUDO
+  if [[ "${EUID}" -eq 0 ]]; then
+    SUDO=()
+  elif command -v sudo >/dev/null 2>&1; then
+    SUDO=(sudo)
+  else
+    printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+
+  # `dpkg-query -W` also succeeds for a purged package still in `deinstall ok
+  # config-files`, so it would report removed packages as present and never
+  # restore them. Require the installed status field instead.
+  apt_installed() {
+    local status
+    status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
+    [[ "$status" == installed ]]
+  }
+
+  local arch
+  arch="$(dpkg --print-architecture)"
+
+  if ! apt_installed 1password-cli; then
+    "${SUDO[@]}" install -d -m 0755 /usr/share/keyrings
+    curl -sS https://downloads.1password.com/linux/keys/1password.asc |
+      "${SUDO[@]}" gpg --dearmor --yes --output /usr/share/keyrings/1password-archive-keyring.gpg
+    printf 'deb [arch=%s signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/%s stable main\n' \
+      "$arch" "$arch" | "${SUDO[@]}" tee /etc/apt/sources.list.d/1password.list >/dev/null
+    # debsig verification material, per the vendor's documented apt setup.
+    "${SUDO[@]}" install -d -m 0755 /etc/debsig/policies/AC2D62742012EA22 /usr/share/debsig/keyrings/AC2D62742012EA22
+    curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol |
+      "${SUDO[@]}" tee /etc/debsig/policies/AC2D62742012EA22/1password.pol >/dev/null
+    curl -sS https://downloads.1password.com/linux/keys/1password.asc |
+      "${SUDO[@]}" gpg --dearmor --yes --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+    "${SUDO[@]}" apt-get update
+    "${SUDO[@]}" apt-get install -y 1password-cli
+  fi
+
+  local -a base=(zsh curl tar xz-utils coreutils libsecret-tools gnupg expect sqlite3 gh git-lfs)
+  local -a missing_pkgs=()
+  local pkg
+  for pkg in "${base[@]}"; do
+    apt_installed "$pkg" || missing_pkgs+=("$pkg")
+  done
+  if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+    "${SUDO[@]}" apt-get update
+    "${SUDO[@]}" apt-get install -y "${missing_pkgs[@]}"
+  fi
+
+  if ! apt_installed mise; then
+    apt_installed extrepo || "${SUDO[@]}" apt-get install -y extrepo
+    "${SUDO[@]}" extrepo enable mise
+    "${SUDO[@]}" apt-get update
+    "${SUDO[@]}" apt-get install -y mise
+  fi
+}
+
 # macOS bootstrap is intentionally narrow: Homebrew plus 1Password. The package
 # authority reconciler owns every other formula and cask.
 install_macos() (
@@ -829,6 +915,7 @@ case "$(uname -s)" in
     fi
     case "$distro_id" in
       fedora) install_fedora ;;
+      ubuntu) install_ubuntu ;;
       *)
         printf 'install-prerequisites.sh: unsupported Linux distro: %s.\n' "${distro_id:-unknown}" >&2
         exit 1

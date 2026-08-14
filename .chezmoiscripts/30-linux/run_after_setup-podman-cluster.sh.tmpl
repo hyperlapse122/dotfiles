@@ -60,6 +60,9 @@
       (dict "name" "minikube-present" "value" $minikubePresent))) }}
 set -euo pipefail
 
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "setup-podman-cluster") }}
+
 # `systemctl --user` can block independently of the session-bus environment.
 # Match the hook's portable bounded-child convention so every-apply recovery
 # remains retryable instead of wedging the whole chezmoi command.

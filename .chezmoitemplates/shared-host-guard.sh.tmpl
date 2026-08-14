@@ -1,0 +1,52 @@
+{{- /*
+shared-host-guard.sh.tmpl — skip the whole script on a host this operator shares
+with other people, resolved from the fact registry.
+
+Everything gated behind this mutates state that is NOT the invoking user's: the
+/etc manifest, the hostname, user lingering, zram, the resolver and firewall, and
+the enable-or-restart of a system-wide daemon. On a single-owner workstation that
+is exactly right. On a machine other people log into, it is someone else's
+environment, and the repository has no mandate over it.
+
+`sharedHost` is a named host fact (.chezmoidata/facts.yaml). It is a template-layer
+disjunction — an operator-declared /etc/dotfiles-shared-host marker, the `jetson`
+profile, or an authd-managed username containing "@" — so it needs no cache and
+cannot be wrong because one is missing. It FAILS OPEN on a shared host with a
+local username, no Jetson, and no marker; the marker is the fix, and README.md
+documents it.
+
+INSTALL_SYSTEM_CONFIG_FORCE=1 deliberately does NOT override this guard. That
+override exists for the headless fact — "configure this server anyway" — and
+reusing it here would let one environment variable write another person's /etc.
+A shared host that genuinely should be managed declares itself by REMOVING the
+marker, which is a statement about the host and belongs in the fact, not in a
+per-run flag.
+
+Package installation and package-source trust are NOT gated here. Adding an apt
+source or installing a package is additive delivery, and gating it would leave a
+shared host unable to provision itself at all.
+
+The exit is a DECLARED one — skip.sh.tmpl, form skip_here, direction harmless.
+`harmless` is the honest direction: a shared machine does not stop being shared,
+so not writing to it is correct AND final, and nothing is left outstanding. A
+true fact removes nothing already installed; this guard never cleans up, because
+the repository forbids teardown.
+
+ARGUMENT — a dict, like headless-guard.sh.tmpl:
+
+  {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "my-script") }}
+
+Unlike headless-guard.sh.tmpl this partial does NOT inline facts-sh.tmpl. Every
+current consumer already carries the whole FACT_* set from the headless guard
+immediately above it, and rendering the assignment block twice would be a bug.
+Place this guard AFTER the headless guard and BEFORE any sudo acquisition.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "shared-host-guard.sh.tmpl: expected a dict, got a %s (%v). Pass the call as data: {{ includeTemplate \"shared-host-guard.sh.tmpl\" (dict \"ctx\" . \"name\" %q) }}" (kindOf .) . .) -}}
+{{- end -}}
+{{- $name := .name -}}
+# Skip on a shared host; see .chezmoitemplates/shared-host-guard.sh.tmpl for the
+# rationale. INSTALL_SYSTEM_CONFIG_FORCE does NOT override this one.
+if [[ "$FACT_SHARED_HOST" -eq 1 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" .ctx "owner" "shared-host-guard/shared-host" "form" "skip_here" "script" $name "site" "shared-host" "direction" "harmless" "reason" "skipped (shared host: this machine has other users, so its system configuration is not managed from here). Declare a single-owner host by removing /etc/dotfiles-shared-host") | trim | indent 2 }}
+fi

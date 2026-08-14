@@ -56,6 +56,7 @@
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-files") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-files") }}
 # The FACT_* variables gate_ok() reads below are assigned by the headless guard
 # just above: it inlines .chezmoitemplates/facts-sh.tmpl (the guard needs the
 # headless fact itself, and every script that guards on it therefore gets the

@@ -149,6 +149,7 @@ render() { # bindir override input output
 
 linux_data='{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}'
 darwin_data='{"chezmoi":{"os":"darwin","osRelease":{"id":"macos"}}}'
+ubuntu_data='{"chezmoi":{"os":"linux","arch":"arm64","username":"managed@example.invalid","osRelease":{"id":"ubuntu"}}}'
 
 # The fixture LUKS ciphertext, produced by the same AES implementation the
 # consumer decrypts with, keyed by the string the stub keyring returns.
@@ -192,8 +193,8 @@ CONTINUATIONS = ('terminate-script-exit-0', 'terminate-script-exit-1',
 PLACEMENTS = ('new-header-block', 'existing-header-block')
 # The R5 boundary U5 froze and U6/U7 executed against. Asserted literally so a
 # rendered surface cannot be reconciled against a quietly shrunken oracle.
-FROZEN = {'classified_owners': 121, 'rendered_instances': 141,
-          'phase_local_instances': 117, 'shared_guard_instances': 24}
+FROZEN = {'classified_owners': 127, 'rendered_instances': 151,
+          'phase_local_instances': 122, 'shared_guard_instances': 29}
 
 RUN_NAME = re.compile(r'^run_(?:(once|onchange)_)?(?:(?:before|after)_)?.+')
 SKIP_DIRS = {'.git'}
@@ -1168,9 +1169,10 @@ renders=$scratch/renders.tsv
 n=0
 while IFS=$'\t' read -r cls rel; do
   case $cls in once | onchange) ;; *) continue ;; esac
-  for variant in linux darwin secret; do
+  for variant in linux ubuntu darwin secret; do
     case $variant in
       linux) bindir=$scratch/bin data=$linux_data ;;
+      ubuntu) bindir=$scratch/bin data=$ubuntu_data ;;
       darwin) bindir=$scratch/bin data=$darwin_data ;;
       secret) bindir=$scratch/bin-secret data=$secret_data ;;
     esac

@@ -56,6 +56,7 @@ set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-fedora") }}
 {{- $gates := .packages.linux.fedora.gates }}
 
 # Host capabilities are seeded from packages.yaml's `gates:` map via the shared

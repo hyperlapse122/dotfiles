@@ -65,11 +65,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 121
+  classified_owners: 127
   hard_error_owners: 11
-  rendered_instances: 141
-  phase_local_instances: 117
-  shared_guard_instances: 24
+  rendered_instances: 151
+  phase_local_instances: 122
+  shared_guard_instances: 29
 
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -90,21 +90,21 @@ plan_contract_scopes:
   70-agents: 3
 
 audited_forms:
-  skip_here: 52
+  skip_here: 57
   skip_step: 32
-  done_here: 13
+  done_here: 14
   not_applicable: 24
 
 audited_directions:
-  harmless: 26
-  transient-blocking: 58
-  transient-tolerable: 0
+  harmless: 28
+  transient-blocking: 59
+  transient-tolerable: 2
 audited_scopes:
-  guard-partials: 4
+  guard-partials: 5
   00-tools: 4
   10-auth: 5
   20-linux-fedora: 17
-  30-linux: 25
+  30-linux: 30
   50-linux-gnome: 29
   50-linux-kde: 29
   60-build: 5
@@ -115,20 +115,21 @@ shared_guard_fanout:
   kde-guard: 9
   headless-guard: 3
   sudo-skip-guard: 4
+  shared-host-guard: 5
 
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 26
-    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless.'
+    audited: 28
+    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them).'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 58
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
+    audited: 59
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
   - bucket: 'done_here'
     plan: 10
-    audited: 13
-    reason: 'The six GNOME/KDE completion stamps plus seven already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here.'
+    audited: 14
+    reason: 'The six GNOME/KDE completion stamps plus eight already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, a converged authd login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here.'
   - bucket: 'not_applicable'
     plan: 22
     audited: 24
@@ -143,8 +144,8 @@ divergence:
     reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts.'
   - bucket: 'scope:30-linux'
     plan: 19
-    audited: 25
-    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner.'
+    audited: 30
+    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
     audited: 29
@@ -157,8 +158,30 @@ divergence:
     plan: 4
     audited: 5
     reason: 'The two build scripts hold five classified owners (two mise preconditions and three unsafe-target guards) beside their six hard errors; the estimate counted four.'
+  - bucket: 'scope:guard-partials'
+    plan: 4
+    audited: 5
+    reason: 'The shared-host guard is the fifth guard partial. It postdates the plan inventory: the /etc manifest, hostname, lingering, zram, resolver and firewall writes needed one gate that three installers share, and a shared partial is how this repository fans a single classified owner across its consumers.'
 
 owners:
+  - owner: 'shared-host-guard/shared-host'
+    scope: 'guard-partials'
+    template: '.chezmoitemplates/shared-host-guard.sh.tmpl'
+    anchor_line: 50
+    anchor: 'if [[ "$FACT_SHARED_HOST" -eq 1 ]]; then'
+    predicate: '[[ "$FACT_SHARED_HOST" -eq 1 ]]'
+    predicate_digest: 'sha256:d605252f5759544edc4e0d7c2b557020f5117f063e1b33c263ba9d123444ef7c'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-desktop'
+    form: 'skip_here'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
     template: '.chezmoitemplates/gnome-guard.sh.tmpl'
@@ -635,6 +658,77 @@ owners:
     fingerprint_placement: 'new-header-block'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/chsh-absent'
+  - owner: 'chsh-zsh/authd-sqlite3-absent'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl'
+    anchor_line: 100
+    anchor: 'if ! command -v sqlite3 >/dev/null 2>&1; then'
+    predicate: '! command -v sqlite3 >/dev/null 2>&1'
+    predicate_digest: 'sha256:a259f01739ec05d1fbbd1f97a929adf938d062b2c3f7a0d1bc14ee29de2dd939'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-ubuntu-managed-account'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'sqlite3-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/authd-sqlite3-absent'
+  - owner: 'chsh-zsh/authd-schema-unsupported'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl'
+    anchor_line: 115
+    anchor: 'if ! authd_schema_ok; then'
+    predicate: '! authd_schema_ok'
+    predicate_digest: 'sha256:6e5f7052024b9bee22497696f5c0af29a1c9942b0c2358a7234013a953514d3b'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-ubuntu-managed-account'
+    form: 'skip_here'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/authd-schema-unsupported'
+  - owner: 'chsh-zsh/authd-login-shell-set'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl'
+    anchor_line: 131
+    anchor: 'if [[ "${confirmed##*/}" == "zsh" ]]; then'
+    predicate: '[[ "${confirmed##*/}" == "zsh" ]]'
+    predicate_digest: 'sha256:82a3fe9d94d7bc8cfc3005b5390d4580856592d8814298a86797a05fcbcb2adb'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-ubuntu-managed-account'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/authd-login-shell-set'
+  - owner: 'chsh-zsh/authd-write-deferred'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl'
+    anchor_line: 129
+    anchor: 'if ! authd_set_shell; then'
+    predicate: '! authd_set_shell'
+    predicate_digest: 'sha256:4f5931e3dfab23d26abeccf6c0d4f5dfa39df62e4e65c9bb67d8865e04a87b5a'
+    continuation: 'terminate-script-exit-1'
+    continuation_digest: 'sha256:07eeb7c245b07db4755530e5c6504d74d5ecdf4f6efa3287cbf8859bb0239202'
+    render_profile: 'linux-ubuntu-managed-account'
+    form: 'skip_here'
+    direction: 'transient-tolerable'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/authd-write-deferred'
+  - owner: 'chsh-zsh/authd-confirm-deferred'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl'
+    anchor_line: 141
+    anchor: 'if [[ "${confirmed##*/}" != "zsh" ]]; then'
+    predicate: '[[ "${confirmed##*/}" != "zsh" ]]'
+    predicate_digest: 'sha256:03e5434e0895e72b09459a616636b5ac05c7d73347a4265c864cbc12a332ec01'
+    continuation: 'terminate-script-exit-1'
+    continuation_digest: 'sha256:07eeb7c245b07db4755530e5c6504d74d5ecdf4f6efa3287cbf8859bb0239202'
+    render_profile: 'linux-ubuntu-managed-account'
+    form: 'skip_here'
+    direction: 'transient-tolerable'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/authd-confirm-deferred'
   - owner: 'config-solaar/solaar-absent'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl'

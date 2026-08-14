@@ -33,18 +33,11 @@ url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s%s" $helmTag .chezmoi.os .che
 path = '{{ printf "%s-%s/helm" .chezmoi.os .chezmoi.arch }}'
 executable = true
 
-{{- /* ---------- minikube ---------- */ -}}
-{{- /* An emulated arch borrows the amd64 tarball (lock marks it emulated), so the
-       archive-internal path composes from the SERVED arch, not the host's. */}}
-
-{{- $minikubePathArch := .chezmoi.arch -}}
-{{- if eq (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "emulated" "platform" "auto" "optional" true)) "true" -}}
-{{-   $minikubePathArch = "amd64" -}}
-{{- end }}
+{{- /* ---------- minikube ---------- */}}
 
 [minikube]
 type = "archive-file"
 targetPath = '{{ printf ".local/bin/minikube%s" $executableExtension }}'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "url" "platform" "auto") }}'
-path = '{{ printf "out/minikube-%s-%s%s" .chezmoi.os $minikubePathArch $executableExtension }}'
+path = '{{ printf "out/minikube-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
 executable = true

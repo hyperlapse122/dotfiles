@@ -85,6 +85,16 @@
 # on every desktop OS. The POSIX hook wrapper covers Linux/macOS. Containers
 # still skip the trees below (no MX Master 4 inside a container).
 
+# Jetson AGX Thor has no MX Master 4 hardware and intentionally stays off the
+# tailnet. This is a host-profile decision, not a sharedHost gate: dropping
+# the Tailscale script also removes its op:// auth-key read from a Thor render.
+{{- if $f.jetson }}
+.chezmoiscripts/60-build/*mxm4-haptic.sh
+.config/systemd/user/mxm4-haptic*.service
+.omp/agent/extensions/mxm4-haptic.ts
+.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl
+{{- end }}
+
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
 ./plans
@@ -111,6 +121,7 @@
 {{- if $f.container }}
 .chezmoiscripts/30-linux/*.sh
 .chezmoiscripts/20-linux-fedora/*.sh
+.chezmoiscripts/20-linux-ubuntu/*.sh
 .chezmoiscripts/50-linux-kde/*.sh
 .chezmoiscripts/50-linux-gnome/*.sh
 .chezmoiscripts/10-auth/*.sh
