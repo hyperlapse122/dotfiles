@@ -183,6 +183,8 @@ agents:
       commands.enableClaudeProject: false
       commands.enableOpencodeUser: false
       commands.enableOpencodeProject: false
+      tools.approvalMode: yolo
+      tools.approval: {}
       astGrep.enabled: true
       generate_image.enabled: true
       computer.enabled: true
