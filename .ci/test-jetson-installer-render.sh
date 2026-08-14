@@ -75,6 +75,8 @@ fi
 # Thor, so a gate that silently stops emitting them is caught here.
 for needle in \
   'install_apt "nvidia-jetpack"' \
+  'install_apt "libssl-dev"' \
+  'install_apt "libdbus-1-dev"' \
   'nvidia-l4t-apt-source.list' \
   '$2 == "VALIDSIG"' \
   '/opt/1Password/after-install.sh' \
