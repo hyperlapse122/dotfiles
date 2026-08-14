@@ -1,0 +1,128 @@
+{{- /* Validate the complete cross-platform authority before any manager body can
+   render, exactly as the Fedora installer does. Deliberately OUTSIDE the gate
+   below: a typo in the ubuntu authority rows must abort the apply on every host,
+   not only on the one board whose body renders. */ -}}
+{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $onePasswordVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "1password" "field" "version") -}}
+{{- $onePasswordUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "1password" "field" "url" "platform" "linux-arm64") -}}
+{{ if and (eq .chezmoi.os "linux") (eq $facts.distro "ubuntu") $facts.jetson (eq .chezmoi.arch "arm64") -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Jetson provisioning. Gated on Linux + ubuntu + the jetson fact + arm64, all four:
+# a plain Ubuntu host is not in scope, and the release-lock lookups above resolve
+# only a linux-arm64 artifact, so an ungated body would hard-fail the render on any
+# other architecture.
+#
+# What this deliberately omits, because each is a Fedora mechanism with no Jetson
+# equivalent: Secure Boot key enrollment, out-of-tree kernel module signing, COPRs,
+# RPM Fusion, and the Fedora CUDA repository whose URL carries a literal x86_64
+# path segment. On a Jetson the driver and CUDA stack ship inside the vendor BSP,
+# which is why `nvidia` resolves false here and `jetson` is the discriminator.
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+
+SUDO=()
+if [[ "${EUID}" -ne 0 ]]; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'jetson: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+  SUDO=(sudo)
+fi
+
+install_apt() {
+  local pkg=$1
+  dpkg-query -W "$pkg" >/dev/null 2>&1 && return 0
+  "${SUDO[@]}" apt-get install -y "$pkg"
+}
+
+# NVIDIA publishes the L4T apt source on a flashed board. Adding it is
+# package-source trust, which the sharedHost gate deliberately does not cover.
+nvidia_source=/etc/apt/sources.list.d/nvidia-l4t-apt-source.list
+if [[ ! -f "$nvidia_source" ]]; then
+  printf 'jetson: %s is absent; add the L4T apt source for this BSP release before re-applying.\n' "$nvidia_source" >&2
+  exit 1
+fi
+
+{{ range $capability := .packages.authority.capabilities -}}
+{{-   $delivery := index $capability "ubuntu" -}}
+{{-   if and (eq $delivery.disposition "managed") (eq (get $delivery "owner") "apt") -}}
+{{-     if hasKey $capability "gate" }}
+if fact_gate {{ $capability.gate | quote }}; then
+  install_apt {{ $delivery.identifier | quote }}
+fi
+{{-     else }}
+install_apt {{ $delivery.identifier | quote }}
+{{-     end -}}
+{{-   end -}}
+{{- end }}
+
+# 1Password desktop: the vendor publishes no arm64 deb or rpm, so the aarch64
+# tarball is the only artifact. Its version and URL come from the generated lock,
+# never from the vendor's moving latest-release URL. The vendor publishes no
+# checksum either, so the detached signature is the integrity anchor.
+onepassword_version={{ $onePasswordVersion | quote }}
+onepassword_url={{ $onePasswordUrl | quote }}
+onepassword_key_url='https://downloads.1password.com/linux/keys/1password.asc'
+onepassword_fingerprint='3FEF9748469ADBE15DA7CA80AC2D62742012EA22'
+
+install_onepassword_desktop() {
+  local installed=''
+  if [[ -x /opt/1Password/1password ]]; then
+    installed="$(/opt/1Password/1password --version 2>/dev/null | tr -dc '0-9.')" || installed=''
+  fi
+  if [[ "$installed" == "$onepassword_version" ]]; then
+    printf 'jetson: 1Password %s is already installed.\n' "$onepassword_version"
+    return 0
+  fi
+
+  local scratch
+  scratch="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf -- '$scratch'" RETURN
+
+  curl -fsSL "$onepassword_url" -o "$scratch/1password.tar.gz"
+  curl -fsSL "$onepassword_url.sig" -o "$scratch/1password.tar.gz.sig"
+  curl -fsSL "$onepassword_key_url" -o "$scratch/1password.asc"
+
+  local keyring="$scratch/keyring.gpg"
+  gpg --batch --no-default-keyring --keyring "$keyring" --import "$scratch/1password.asc"
+  if ! gpg --batch --no-default-keyring --keyring "$keyring" \
+    --status-fd 1 --verify "$scratch/1password.tar.gz.sig" "$scratch/1password.tar.gz" 2>/dev/null |
+    grep -q "VALIDSIG $onepassword_fingerprint"; then
+    printf 'jetson: the 1Password tarball did not verify against %s. Refusing to unpack.\n' "$onepassword_fingerprint" >&2
+    return 1
+  fi
+
+  # The archive's top-level directory is 1password-<version>.arm64, so a plain
+  # extraction into /opt/1Password would bury the binary one level too deep and
+  # break the desktop entry's Exec path.
+  "${SUDO[@]}" install -d -m 0755 /opt/1Password
+  "${SUDO[@]}" tar -xf "$scratch/1password.tar.gz" -C /opt/1Password --strip-components=1
+  [[ -x /opt/1Password/1password ]] ||
+    { printf 'jetson: /opt/1Password/1password is missing after extraction.\n' >&2; return 1; }
+
+  # The amd64 package ships this entry; the aarch64 tarball does not, so without
+  # it the app has no launcher. This is package delivery, not the /etc manifest.
+  "${SUDO[@]}" install -d -m 0755 /usr/share/applications
+  "${SUDO[@]}" tee /usr/share/applications/1password.desktop >/dev/null <<'DESKTOP'
+[Desktop Entry]
+Name=1Password
+Exec=/opt/1Password/1password %U
+Terminal=false
+Type=Application
+Icon=/opt/1Password/resources/icons/hicolor/256x256/apps/1password.png
+StartupWMClass=1Password
+Comment=Password manager and secure wallet
+MimeType=x-scheme-handler/onepassword;
+Categories=Office;
+DESKTOP
+
+  printf 'jetson: 1Password %s installed. Run `sudo /opt/1Password/after-install.sh` once to finish browser and CLI integration.\n' "$onepassword_version"
+}
+
+install_onepassword_desktop
+{{ end -}}
