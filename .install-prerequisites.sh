@@ -300,6 +300,354 @@ ensure_github_token() {
   return 0
 }
 
+# --- Capability cache — one probe snapshot per chezmoi command ---------------
+#
+# Momentary host state (a live session bus, a cached sudo credential, whether a
+# tool this repo installs is on PATH yet) that transient-blocking skip sites hash
+# through fingerprint.tmpl so they re-run once the precondition appears. Read by
+# .chezmoitemplates/capabilities.tmpl, which performs NO probe of its own.
+#
+# WHY IT LIVES HERE AND NOT IN A TEMPLATE. The converted tree names ~34 distinct
+# probes across ~57 blocking sites. Probing per include ran one subprocess per
+# CALL on every chezmoi command — `status` and `diff` included — and made two
+# renders inside one command disagree. Resolving every registry entry once here
+# is one snapshot per command, and it is taken BEFORE the source state is read.
+#
+# WHY IT IS NOT THE FACT REGISTRY. facts.yaml excludes momentary state from host
+# identity and gates on facts; a capability never appears in a `gates:`
+# expression and is only ever a fingerprint input, so it cannot fail open. Do not
+# merge the two.
+#
+# FAIL-CLOSED, UNLIKE write_facts_cache. A fact cache that cannot be refreshed
+# degrades to declared per-fact fail-safe defaults, so it warns and continues.
+# A capability record cannot do that: a leftover record from an EARLIER command
+# still looks structurally valid to the reader, and publishing last command's
+# `available` would let a blocking site claim convergence it never reached. Every
+# removal, permission, creation, write, rename or validation fault therefore
+# deletes this identity's own record when it safely can and exits non-zero, which
+# stops the command before a single template renders.
+#
+# NO .ps1 COUNTERPART, deliberately: every registry key is a Linux-only condition,
+# and the reader publishes the registry's fixed `unavailable` token wherever no
+# record exists. Windows therefore behaves exactly like a non-Linux host here, so
+# .install-prerequisites.ps1 has nothing to keep in sync.
+CAPABILITY_CACHE_SCHEMA='capability-cache-v1'
+CAPABILITY_REGISTRY_SCHEMA='capability-registry-v1'
+# Hidden basename on purpose: chezmoi discovers .chezmoidata/ recursively and
+# aborts EVERY command with ".tsv: unknown format" on a visible unknown-format
+# data file (verified on v2.71.0), while it skips dot-prefixed entries. The
+# registry is deliberately not chezmoi data — it must never merge into the
+# template data map — so the dot is what keeps it beside the data it belongs
+# with. Keep this path byte-identical to capabilities.tmpl's.
+CAPABILITY_REGISTRY_RELPATH='.chezmoidata/.capability-registry.tsv'
+CAPABILITY_REGISTRY_KINDS=(
+  absolute-executable command-present graphical-session python-module
+  session-bus sudo-nonrefreshing unix-socket user-manager-bus user-process
+)
+CAPABILITY_REGISTRY_SIDE_EFFECTS=(none read-only-subprocess sudo-credential-probe)
+
+capability_cache_fail() {
+  printf 'install-prerequisites.sh: capability cache: %s\n' "$*" >&2
+  printf 'install-prerequisites.sh: refusing to render with a capability record this command did not publish.\n' >&2
+  exit 1
+}
+
+capability_has() {
+  local needle=$1 candidate
+  shift
+  for candidate in "$@"; do
+    [[ "$candidate" != "$needle" ]] || return 0
+  done
+  return 1
+}
+
+# Parse and validate the versioned registry into CAPABILITY_KEYS/KINDS, and record
+# the SHA-256 of its EXACT bytes. Shape violations are refused rather than skipped:
+# the registry is checked-in source, the reader recomputes the same digest over the
+# same bytes, and a row this hook cannot map to reviewed code has no safe reading.
+# Digests through capability_cache_identity_sha256, so the caller must already have
+# sourced .chezmoitemplates/capability-cache-identity.sh.
+read_capability_registry() {
+  local LC_ALL=C path=$1 line_no=0 previous='' key kind side available unavailable rest
+  CAPABILITY_KEYS=()
+  CAPABILITY_KINDS=()
+  [[ -f "$path" && ! -L "$path" ]] || capability_cache_fail "registry $path is missing or not a regular file"
+  CAPABILITY_REGISTRY_DIGEST=$(capability_cache_identity_sha256 <"$path")
+  [[ -n "$CAPABILITY_REGISTRY_DIGEST" ]] || capability_cache_fail 'no sha256sum/shasum available to digest the registry'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_no=$((line_no + 1))
+    if ((line_no == 1)); then
+      [[ "$line" == "$CAPABILITY_REGISTRY_SCHEMA" ]] \
+        || capability_cache_fail "registry $path must start with $CAPABILITY_REGISTRY_SCHEMA, got ${line@Q}"
+      continue
+    fi
+    IFS=$'\t' read -r key kind side available unavailable rest <<<"$line"
+    [[ -z "$rest" ]] || capability_cache_fail "registry line $line_no has more than five columns"
+    [[ "$key" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || capability_cache_fail "registry line $line_no has invalid key ${key@Q}"
+    [[ "$key" > "$previous" ]] || capability_cache_fail "registry line $line_no key $key is out of order or duplicated"
+    capability_has "$kind" "${CAPABILITY_REGISTRY_KINDS[@]}" \
+      || capability_cache_fail "registry key $key declares probe kind ${kind@Q}, which this hook has no reviewed code for"
+    capability_has "$side" "${CAPABILITY_REGISTRY_SIDE_EFFECTS[@]}" \
+      || capability_cache_fail "registry key $key declares side-effect class ${side@Q}"
+    [[ "$available" == available && "$unavailable" == unavailable ]] \
+      || capability_cache_fail "registry key $key must declare the fixed tokens available/unavailable"
+    previous=$key
+    CAPABILITY_KEYS+=("$key")
+    CAPABILITY_KINDS+=("$kind")
+  done <"$path"
+  ((${#CAPABILITY_KEYS[@]} > 0)) || capability_cache_fail "registry $path declares no capability keys"
+}
+
+# The akonadi socket path the KDE consumers themselves resolve: the server's own
+# rc file wins, the per-user runtime default is the fallback.
+capability_akonadi_socket() {
+  local rc="$HOME/.config/akonadi/akonadiserverrc" socket=''
+  if [[ -f "$rc" ]]; then
+    socket=$(grep -E '^Options=' "$rc" 2>/dev/null |
+      sed -nE 's/.*UNIX_SOCKET=([^"]+).*/\1/p' | head -n1)
+  fi
+  [[ -n "$socket" ]] || socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/akonadi/mysql.socket"
+  printf '%s' "$socket"
+}
+
+# The registry supplies the key and the KIND; the code that runs is selected here
+# and nowhere else. Registry text is never evaluated as shell, and a kind whose
+# key this hook does not recognise is a hard failure rather than a guess.
+resolve_capability() {
+  local key=$1 kind=$2 name path
+  case "$kind" in
+    command-present)
+      name=${key%-present}
+      [[ "$name" != "$key" && "$name" =~ ^[a-z][a-z0-9+._-]*$ ]] \
+        || capability_cache_fail "command-present key ${key@Q} does not name a command"
+      command -v -- "$name" >/dev/null 2>&1
+      ;;
+    absolute-executable)
+      case "$key" in
+        usr-bin-python3-present) path=/usr/bin/python3 ;;
+        usr-bin-1password-present) path=/usr/bin/1password ;;
+        *) capability_cache_fail "absolute-executable key ${key@Q} has no reviewed path" ;;
+      esac
+      [[ -x "$path" ]]
+      ;;
+    python-module)
+      case "$key" in
+        python3-yaml-present) /usr/bin/python3 -c 'import yaml' >/dev/null 2>&1 ;;
+        *) capability_cache_fail "python-module key ${key@Q} has no reviewed module" ;;
+      esac
+      ;;
+    sudo-nonrefreshing)
+      # `-N` is load-bearing: without it a successful probe REFRESHES the sudo
+      # timestamp, and because this runs for `status` and `diff` too, read-only
+      # commands would keep an expiring authorization alive indefinitely. The
+      # timeout keeps a wedged sudo from stalling the command.
+      if [[ "$(id -u)" == 0 ]]; then
+        true
+      else
+        timeout 5 sudo -nN true >/dev/null 2>&1
+      fi
+      ;;
+    session-bus)
+      [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || [[ -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]
+      ;;
+    graphical-session)
+      [[ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]
+      ;;
+    user-process)
+      name=${key%-running}
+      [[ "$name" != "$key" && "$name" =~ ^[a-z][a-z0-9+._-]*$ ]] \
+        || capability_cache_fail "user-process key ${key@Q} does not name a process"
+      pgrep -xu "$(id -u)" -- "$name" >/dev/null 2>&1
+      ;;
+    unix-socket)
+      case "$key" in
+        akonadi-socket-present) [[ -S "$(capability_akonadi_socket)" ]] ;;
+        *) capability_cache_fail "unix-socket key ${key@Q} has no reviewed socket" ;;
+      esac
+      ;;
+    user-manager-bus)
+      case "$key" in
+        user-manager-bus-present) systemctl --user show-environment >/dev/null 2>&1 ;;
+        *) capability_cache_fail "user-manager-bus key ${key@Q} has no reviewed probe" ;;
+      esac
+      ;;
+    *)
+      capability_cache_fail "probe kind ${kind@Q} has no reviewed code"
+      ;;
+  esac
+}
+
+# Re-read what was written and check it against the same rules capabilities.tmpl
+# applies, so a truncated or reordered record is caught here rather than becoming
+# a silent `unavailable` for every consumer.
+validate_capability_record() {
+  local path=$1 identity=$2 owner_pid=$3 marker=$4 mode index=0
+  local schema record_identity record_pid record_marker record_digest rest key token
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  mode=$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null) || return 1
+  [[ "$mode" == 600 ]] || return 1
+  {
+    IFS=$'\t' read -r schema record_identity record_pid record_marker record_digest rest || return 1
+    [[ "$schema" == "$CAPABILITY_CACHE_SCHEMA" ]] || return 1
+    [[ -z "$rest" ]] || return 1
+    [[ "$record_identity" == "$identity" ]] || return 1
+    [[ "$record_pid" == "$owner_pid" ]] || return 1
+    [[ "$record_marker" == "$marker" ]] || return 1
+    [[ "$record_digest" == "$CAPABILITY_REGISTRY_DIGEST" ]] || return 1
+    while IFS=$'\t' read -r key token rest; do
+      [[ -z "$rest" ]] || return 1
+      ((index < ${#CAPABILITY_KEYS[@]})) || return 1
+      [[ "$key" == "${CAPABILITY_KEYS[index]}" ]] || return 1
+      [[ "$token" == available || "$token" == unavailable ]] || return 1
+      index=$((index + 1))
+    done
+  } <"$path"
+  ((index == ${#CAPABILITY_KEYS[@]}))
+}
+
+# Remove ONLY this identity's record. A record that cannot be removed is reported
+# as such: never claim an invalidation that did not happen.
+invalidate_capability_record() {
+  local record=$1
+  [[ -e "$record" ]] || return 0
+  rm -f "$record" 2>/dev/null \
+    && printf 'install-prerequisites.sh: capability cache: removed %s so no consumer can read it.\n' "$record" >&2 \
+    || printf 'install-prerequisites.sh: capability cache: could not remove %s; it is STALE and must not be trusted.\n' "$record" >&2
+  return 0
+}
+
+# Every fault after the record path is known takes this path: try to remove the
+# record this identity may already have published, then stop the command. The order
+# matters — invalidate first, fail second — so an exit can never leave a token this
+# command did not resolve where a template would find it.
+capability_cache_abort() {
+  local record=$1
+  shift
+  invalidate_capability_record "$record"
+  capability_cache_fail "$@"
+}
+
+# Records whose owning command has provably ended: the PID is gone, or it exists
+# with a DIFFERENT start marker (recycled). Anything else — a live sibling
+# command, an unreadable name, a marker we cannot compare — is left alone, because
+# deleting another invocation's snapshot mid-render is exactly the corruption this
+# cache exists to prevent.
+prune_dead_capability_records() {
+  local dir=$1 keep=$2 candidate schema record_pid record_marker live
+  for candidate in "$dir"/*.tsv; do
+    [[ -f "$candidate" && ! -L "$candidate" ]] || continue
+    [[ "$candidate" != "$keep" ]] || continue
+    IFS=$'\t' read -r schema _ record_pid record_marker _ <"$candidate" || continue
+    [[ "$schema" == "$CAPABILITY_CACHE_SCHEMA" ]] || continue
+    [[ "$record_pid" =~ ^[0-9]+$ && -n "$record_marker" ]] || continue
+    if live=$(CAPABILITY_CACHE_OWNER_PID="$record_pid" capability_cache_identity_emit 2>/dev/null); then
+      case "$live" in
+        unresolved) rm -f "$candidate" 2>/dev/null || true ;;
+        *)
+          [[ "$(cut -f3 <<<"$live")" == "$record_marker" ]] || rm -f "$candidate" 2>/dev/null || true
+          ;;
+      esac
+    fi
+  done
+}
+
+# The optional argument is the source root; the fixtures pass a scratch tree. In a
+# real hook run chezmoi exports CHEZMOI_SOURCE_DIR, which is authoritative and
+# CWD-independent. The BASH_SOURCE fallback covers a caller that has neither (this
+# file always sits at the source root).
+write_capability_cache() {
+  local source_root=${1:-${CHEZMOI_SOURCE_DIR:-}} helper registry identity_line
+  local schema identity owner_pid marker dir record tmp_record perms index key kind token
+  if [[ -z "$source_root" ]]; then
+    source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) \
+      || capability_cache_fail 'cannot resolve the chezmoi source root'
+  fi
+
+  helper="$source_root/.chezmoitemplates/capability-cache-identity.sh"
+  registry="$source_root/$CAPABILITY_REGISTRY_RELPATH"
+  [[ -f "$helper" ]] || capability_cache_fail "identity helper $helper is missing"
+
+  # shellcheck disable=SC2034 # read by the sourced helper to suppress its emit.
+  CAPABILITY_CACHE_IDENTITY_MAIN=0
+  # shellcheck source=.chezmoitemplates/capability-cache-identity.sh
+  source "$helper"
+  unset CAPABILITY_CACHE_IDENTITY_MAIN
+
+  read_capability_registry "$registry"
+
+  # $PPID here is chezmoi itself — chezmoi execs this hook directly — which is the
+  # same process every template read resolves through its own `output sh -c` child.
+  identity_line=$(CAPABILITY_CACHE_OWNER_PID="$PPID" capability_cache_identity_emit)
+  IFS=$'\t' read -r schema owner_pid marker identity <<<"$identity_line"
+  [[ "$schema" == "$CAPABILITY_CACHE_SCHEMA" && -n "$identity" ]] \
+    || capability_cache_fail "could not derive this command's identity (helper said ${identity_line@Q})"
+
+  dir="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi/capabilities"
+  record="$dir/$identity.tsv"
+
+  if [[ ! -d "$dir" ]]; then
+    mkdir -p "${dir%/*}" 2>/dev/null || capability_cache_abort "$record" "cannot create ${dir%/*}"
+    # A concurrent chezmoi command may win this race; the verification below is the
+    # single arbiter either way, so losing it is not itself a failure.
+    mkdir -m 700 "$dir" 2>/dev/null || true
+  fi
+  [[ -d "$dir" && ! -L "$dir" ]] || capability_cache_abort "$record" "$dir is missing or not a directory"
+  [[ -O "$dir" ]] || capability_cache_abort "$record" "$dir is not owned by this user"
+  perms=$(stat -c '%a' "$dir" 2>/dev/null || stat -f '%Lp' "$dir" 2>/dev/null) \
+    || capability_cache_abort "$record" "cannot read the mode of $dir"
+  # Owner-only is a safety property, so it is VERIFIED, not repaired: chmod-ing the
+  # directory would also paper over an unwritable-directory fault, which must stop
+  # the command instead of being published over.
+  [[ "$perms" == 700 ]] || capability_cache_abort "$record" "$dir must be mode 0700, found 0$perms"
+
+  rm -f "$record" 2>/dev/null || capability_cache_abort "$record" "cannot replace $record"
+
+  tmp_record=$(mktemp "$dir/.tmp-$identity.XXXXXX" 2>/dev/null) \
+    || capability_cache_abort "$record" "cannot create a temporary record in $dir"
+  chmod 600 "$tmp_record" 2>/dev/null || {
+    rm -f "$tmp_record" 2>/dev/null || true
+    capability_cache_abort "$record" "cannot restrict $tmp_record to owner-only"
+  }
+
+  {
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+      "$CAPABILITY_CACHE_SCHEMA" "$identity" "$owner_pid" "$marker" "$CAPABILITY_REGISTRY_DIGEST"
+    for index in "${!CAPABILITY_KEYS[@]}"; do
+      key=${CAPABILITY_KEYS[index]}
+      kind=${CAPABILITY_KINDS[index]}
+      # A non-Linux host publishes the registry's fixed unavailable token without
+      # launching a Linux probe; every consumer of these keys is Linux-only.
+      if [[ "$(uname -s)" != Linux ]]; then
+        token=unavailable
+      elif resolve_capability "$key" "$kind"; then
+        token=available
+      else
+        token=unavailable
+      fi
+      printf '%s\t%s\n' "$key" "$token"
+    done
+  } >"$tmp_record" || {
+    rm -f "$tmp_record" 2>/dev/null || true
+    capability_cache_abort "$record" "cannot write $tmp_record"
+  }
+
+  validate_capability_record "$tmp_record" "$identity" "$owner_pid" "$marker" || {
+    rm -f "$tmp_record" 2>/dev/null || true
+    capability_cache_abort "$record" "the record this command just wrote does not validate"
+  }
+
+  mv -f "$tmp_record" "$record" 2>/dev/null || {
+    rm -f "$tmp_record" 2>/dev/null || true
+    capability_cache_abort "$record" "cannot publish $record"
+  }
+
+  validate_capability_record "$record" "$identity" "$owner_pid" "$marker" \
+    || capability_cache_abort "$record" "the published record at $record does not validate"
+
+  prune_dead_capability_records "$dir" "$record"
+  return 0
+}
+
 # Unit-test seam: let the harness `source` this file for its functions without
 # running the installer below. No-op in normal execution (variable unset).
 if [[ -n "${_INSTALL_PREREQUISITES_TEST_SOURCE:-}" ]]; then
@@ -322,6 +670,12 @@ fi
 # command still needs current facts — and must run in containers too, where the
 # probes simply resolve to container-appropriate values.
 write_facts_cache
+
+# Take this command's capability snapshot. Same placement rule as the fact cache —
+# before the fast path, on every host — but with the opposite failure policy: this
+# one exits non-zero rather than let a template read a record another command
+# published.
+write_capability_cache
 
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.
