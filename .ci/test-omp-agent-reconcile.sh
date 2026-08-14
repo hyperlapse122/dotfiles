@@ -287,7 +287,8 @@ jq -e '
     "google-antigravity/gemini-3.*",
     "kimi-code/*",
     "openai-codex/gpt-5.6-luna",
-    "openai-codex/gpt-5.6-terra"
+    "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-5.6-sol"
   ]
   and (."retry.fallbackChains" | has("default"))
   and ((."retry.fallbackChains" | has("openai-codex/gpt-5.6-sol")) | not)
