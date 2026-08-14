@@ -6,6 +6,7 @@
     "lib": ["ES2022"],
     "types": ["node"],
     "declaration": true,
+    "isolatedDeclarations": true,
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
