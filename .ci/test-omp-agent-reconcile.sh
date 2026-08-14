@@ -152,6 +152,13 @@ rendered_ce=${rendered_ce%%\\t*}
 sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
 chmod 0700 "$test_plugin"
 
+path_guard_line=$(grep -m1 -nF 'case ":$PATH:"' "$test_plugin" | cut -d: -f1)
+omp_probe_line=$(grep -m1 -nF 'command -v omp' "$test_plugin" | cut -d: -f1)
+[[ $path_guard_line -lt $omp_probe_line ]]
+grep -F 'PATH="$HOME/.local/bin:$PATH"' "$test_plugin" >/dev/null
+grep -F 'export PATH' "$test_plugin" >/dev/null
+
+
 # The stub answers --version in the real binary's omp/<version> format so the
 # reconciler's preflight is tested against reality, not a shape omp never prints.
 # OMP_STUB_VERSION replaces the whole emitted string for reject coverage.
@@ -250,6 +257,32 @@ run_plugins "$scratch/update.calls"
 cmp "$source/plugins/mxm4-haptic/package.json" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/package.json"
 cmp "$source/plugins/mxm4-haptic/dist/index.js" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/dist/index.js"
 bun "$(dirname "$0")/test-omp-haptic-plugin.ts" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0"
+
+fallback_bin="$scratch/fallback-bin"
+mkdir -p "$fallback_bin"
+bun_source=$(command -v bun)
+ln -s "$bun_source" "$fallback_bin/bun"
+
+run_fallback() {
+  OMP_CALLS="$1" OMP_FAIL_MATCH="${2-}" OMP_STUB_VERSION="${3-}" EXPECTED_OMP_VERSION="$locked_omp_version" \
+    env HOME="$home" PATH="$fallback_bin:/usr/bin:/bin" bash "$test_plugin"
+}
+
+if run_fallback "$scratch/fallback-noomp.calls" >"$scratch/fallback-noomp.out" 2>"$scratch/fallback-noomp.err"; then
+  printf 'fallback run without local omp unexpectedly succeeded\n' >&2
+  exit 1
+fi
+grep -F 'preflight: omp is not on PATH' "$scratch/fallback-noomp.err" >/dev/null
+
+mkdir -p "$home/.local/bin"
+cp "$fake_bin/omp" "$home/.local/bin/omp"
+printf 'legacy owner\n' >"$legacy"
+run_fallback "$scratch/fallback.calls"
+grep -F 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' "$scratch/fallback.calls" >/dev/null
+grep -F 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/fallback.calls" >/dev/null
+grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/fallback.calls" >/dev/null
+grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/fallback.calls" >/dev/null
+rm -f "$home/.local/bin/omp"
 
 
 # --- declared omp settings assertion ---------------------------------------
