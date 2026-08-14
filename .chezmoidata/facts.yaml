@@ -107,12 +107,14 @@ factRegistry:
   distro:
     type: string
     probe: builtin
-    values: [fedora, ""]
+    values: [fedora, ubuntu, ""]
     source: .chezmoi.osRelease.id (empty on darwin — no /etc/os-release)
     gates: >-
-      The Fedora package installer (20-linux-fedora), the LUKS TPM2 path, and
-      system.yaml's per-distro `removed:` entries. Fedora is the only managed
-      Linux distribution.
+      The Fedora package installer (20-linux-fedora), the Ubuntu/Jetson installer
+      (20-linux-ubuntu), the LUKS TPM2 path, the compile-time gate on the authd
+      login-shell branch, and system.yaml's per-distro `removed:` entries. Fedora
+      and Ubuntu are the managed Linux distributions; Ubuntu is opened only as far
+      as bootstrap, package-source trust, and the Jetson profile require.
     whenFalse: >-
       Empty (non-Linux): every distro-gated script renders to nothing on that OS.
   desktop:

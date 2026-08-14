@@ -795,6 +795,68 @@ EOF
   fi
 }
 
+# Ubuntu: install via apt. Two upstream constraints shape this, neither visible
+# from the code:
+#
+#   * The 1Password DESKTOP app has no arm64 deb or rpm repository — the aarch64
+#     tarball is the only artifact — so the 20-linux-ubuntu phase delivers it from
+#     the release lock. Only the CLI comes from apt; its repo does publish arm64.
+#   * mise comes from `extrepo`, which the vendor documents for Debian 11+ and
+#     Ubuntu 22.04+. The PPA is reserved for Ubuntu 26.04 and later.
+#
+# The package list is the closure of every binary a later phase HARD-FAILS without:
+# kitty's installer needs curl/tar/xz/sha256sum, the WakaTime keyring script needs
+# secret-tool, the GPG import needs gpg + expect, and the authd login-shell
+# fallback needs sqlite3. Dropping one turns a soft skip into an abort.
+install_ubuntu() {
+  local -a SUDO
+  if [[ "${EUID}" -eq 0 ]]; then
+    SUDO=()
+  elif command -v sudo >/dev/null 2>&1; then
+    SUDO=(sudo)
+  else
+    printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+
+  local arch
+  arch="$(dpkg --print-architecture)"
+
+  if ! dpkg-query -W 1password-cli >/dev/null 2>&1; then
+    "${SUDO[@]}" install -d -m 0755 /usr/share/keyrings
+    curl -sS https://downloads.1password.com/linux/keys/1password.asc |
+      "${SUDO[@]}" gpg --dearmor --yes --output /usr/share/keyrings/1password-archive-keyring.gpg
+    printf 'deb [arch=%s signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/%s stable main\n' \
+      "$arch" "$arch" | "${SUDO[@]}" tee /etc/apt/sources.list.d/1password.list >/dev/null
+    # debsig verification material, per the vendor's documented apt setup.
+    "${SUDO[@]}" install -d -m 0755 /etc/debsig/policies/AC2D62742012EA22 /usr/share/debsig/keyrings/AC2D62742012EA22
+    curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol |
+      "${SUDO[@]}" tee /etc/debsig/policies/AC2D62742012EA22/1password.pol >/dev/null
+    curl -sS https://downloads.1password.com/linux/keys/1password.asc |
+      "${SUDO[@]}" gpg --dearmor --yes --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+    "${SUDO[@]}" apt-get update
+    "${SUDO[@]}" apt-get install -y 1password-cli
+  fi
+
+  local -a base=(zsh curl tar xz-utils coreutils libsecret-tools gnupg expect sqlite3 gh git-lfs)
+  local -a missing_pkgs=()
+  local pkg
+  for pkg in "${base[@]}"; do
+    dpkg-query -W "$pkg" >/dev/null 2>&1 || missing_pkgs+=("$pkg")
+  done
+  if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+    "${SUDO[@]}" apt-get update
+    "${SUDO[@]}" apt-get install -y "${missing_pkgs[@]}"
+  fi
+
+  if ! dpkg-query -W mise >/dev/null 2>&1; then
+    dpkg-query -W extrepo >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y extrepo
+    "${SUDO[@]}" extrepo enable mise
+    "${SUDO[@]}" apt-get update
+    "${SUDO[@]}" apt-get install -y mise
+  fi
+}
+
 # macOS bootstrap is intentionally narrow: Homebrew plus 1Password. The package
 # authority reconciler owns every other formula and cask.
 install_macos() (
@@ -829,6 +891,7 @@ case "$(uname -s)" in
     fi
     case "$distro_id" in
       fedora) install_fedora ;;
+      ubuntu) install_ubuntu ;;
       *)
         printf 'install-prerequisites.sh: unsupported Linux distro: %s.\n' "${distro_id:-unknown}" >&2
         exit 1
