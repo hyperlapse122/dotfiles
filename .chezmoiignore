@@ -47,6 +47,11 @@
 .config/VSCodium
 {{- end }}
 
+# Hide Fedora's Latin-only Noto Sans faces from local() matching. Without this,
+# Chromium decomposes Korean webfont text into jamo.
+{{- if ne .chezmoi.os "linux" }}
+.config/fontconfig
+{{- end }}
 # The haptic systemd units are Linux-only. macOS uses launchd, so it must not
 # receive inert systemd targets.
 {{- if ne .chezmoi.os "linux" }}
@@ -113,6 +118,7 @@
 .chezmoiscripts/60-build/*mxm4-haptic.sh
 .chezmoiscripts/60-build/*mxm4-haptic.ps1
 .config/systemd/user/mxm4-haptic*.service
+.config/fontconfig
 Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .local/share/omp-plugins
 .omp/agent/extensions/mxm4-haptic.ts

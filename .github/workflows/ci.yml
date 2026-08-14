@@ -126,6 +126,7 @@ jobs:
           # These fixtures put their disposable trees under $XDG_RUNTIME_DIR or
           # else $HOME/.cache, which a runner does not necessarily have yet.
           mkdir -p "$HOME/.cache"
+          .ci/test-fontconfig-korean-local-font.sh
           .ci/test-fingerprint-gates.sh
           .ci/test-extension-retry.sh
           .ci/test-capability-cache.sh
