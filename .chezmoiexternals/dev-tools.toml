@@ -101,13 +101,7 @@ path = '{{ $shellcheckPath }}'
 */ -}}
 
 {{- $wasmPackTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wasm-pack") -}}
-{{- /* An emulated arch borrows the amd64 build (lock marks it emulated), so the
-       archive-internal path composes from the SERVED arch, not the host's. */ -}}
-{{- $wasmPackPathArch := $rustArch -}}
-{{- if eq (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wasm-pack" "field" "emulated" "platform" "auto" "optional" true)) "true" -}}
-{{-   $wasmPackPathArch = "x86_64" -}}
-{{- end -}}
-{{- $wasmPackStem := (printf "wasm-pack-%s-%s-%s" $wasmPackTag $wasmPackPathArch $muslTarget) }}
+{{- $wasmPackStem := (printf "wasm-pack-%s-%s-%s" $wasmPackTag $rustArch $muslTarget) }}
 
 [wasm-pack]
 type = "archive-file"
