@@ -1,6 +1,6 @@
-# Package manifest for the Fedora installer
+# Package manifest for the native Linux installers.
 # (.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl).
-# Fedora is the only managed Linux distribution.
+# Fedora and Ubuntu are managed Linux distributions.
 #
 # Single source of truth (like system.yaml): add a package, repo, flatpak, or
 # dotnet tool HERE, not in the installer. Every list is rendered into the
@@ -381,8 +381,10 @@ packages:
     supportedArchitectures:
       fedora: [amd64, arm64]
       macos: [arm64]
+      ubuntu: [arm64]
     releaseGates:
       g0: closed
+      g1: closed
     sources:
       - name: fedora
         backend: dnf
@@ -391,6 +393,18 @@ packages:
       - name: onePassword
         backend: dnf
         origin: https://downloads.1password.com/linux/rpm/stable/$basearch
+        trusted: true
+      - name: onePasswordApt
+        backend: apt
+        origin: https://downloads.1password.com/linux/debian/arm64
+        trusted: true
+      - name: ubuntu
+        backend: apt
+        origin: http://ports.ubuntu.com/ubuntu-ports
+        trusted: true
+      - name: nvidiaJetson
+        backend: apt
+        origin: https://repo.download.nvidia.com/jetson
         trusted: true
       - name: vscodium
         backend: dnf
@@ -428,98 +442,119 @@ packages:
       - id: onePasswordDesktop
         sentinel: 1password
         bootstrap: true
+        integrity: signature
         fedora: { disposition: managed, owner: dnf, identifier: 1password, source: onePassword, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: releaseLock, identifier: 1password, architectures: { arm64: native } }
       - id: onePasswordCli
         sentinel: op
         bootstrap: true
         fedora: { disposition: managed, owner: dnf, identifier: 1password-cli, source: onePassword, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: 1password-cli, source: homebrewCask, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: apt, identifier: 1password-cli, source: onePasswordApt, architectures: { arm64: native } }
       - id: gpgSuite
         sentinel: gpg
         fedora: { disposition: managed, owner: dnf, identifier: gnupg2, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: gnupg, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: apt, identifier: gnupg, source: ubuntu, architectures: { arm64: native } }
       - id: jq
         sentinel: jq
         fedora: { disposition: managed, owner: dnf, identifier: jq, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: jq, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: apt, identifier: jq, source: ubuntu, architectures: { arm64: native } }
       - id: chrome
         sentinel: google-chrome
         gateClosing: g0
         fedora: { disposition: managed, owner: dnf, identifier: google-chrome-stable, source: googleChrome, architectures: { amd64: native, arm64: unresolved } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: google-chrome, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not use Chrome and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: cider
         sentinel: cider
         gateClosing: g0
         fedora: { disposition: managed, owner: dnf, identifier: Cider, source: cider, architectures: { amd64: native, arm64: unresolved } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: cider, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not use Cider and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: edge
         sentinel: microsoft-edge
         gateClosing: g0
         fedora: { disposition: managed, owner: dnf, identifier: microsoft-edge-stable, source: microsoftEdge, architectures: { amd64: native, arm64: unresolved } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: microsoft-edge, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not use Edge and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: vscodium
         sentinel: codium
         fedora: { disposition: managed, owner: dnf, identifier: codium, source: vscodium, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: vscodium, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not use VSCodium and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: githubCli
         sentinel: gh
         integrity: checksum
         fedora: { disposition: managed, owner: external, identifier: gh, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: external, identifier: gh, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: apt, identifier: gh, source: ubuntu, architectures: { arm64: native } }
       - id: powershell
         sentinel: pwsh
         fedora: { disposition: managed, owner: dotnet, identifier: powershell, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: powershell, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor has no PowerShell workload and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: discord
         sentinel: discord
         fedora: { disposition: managed, owner: flatpak, identifier: com.discordapp.Discord, source: flathub, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: discord, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Discord is not deployed on Thor and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: telegram
         sentinel: telegram-desktop
         fedora: { disposition: managed, owner: flatpak, identifier: org.telegram.desktop, source: flathub, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: telegram, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Telegram is not deployed on Thor and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: teamviewer
         sentinel: teamviewer
         fedora: { disposition: managed, owner: directRpm, identifier: teamviewer, integrity: signature, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: teamviewer, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor's shared-host support model does not authorize a TeamViewer daemon, architectures: { arm64: notApplicable } }
       - id: tailscale
         sentinel: tailscale
         fedora: { disposition: managed, owner: dnf, identifier: tailscale, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: tailscale-app, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor deliberately stays off the tailnet, architectures: { arm64: notApplicable } }
       - id: obsStudio
         sentinel: obs
         fedora: { disposition: managed, owner: dnf, identifier: obs-studio, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: obs, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not record or stream video and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: containerRuntime
         sentinel: podman
         fedora: { disposition: managed, owner: dnf, identifier: podman, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: podman, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: unresolved, reason: Rootless container-runtime support on Jetson remains unproven, architectures: { arm64: unresolved } }
       - id: steam
         sentinel: steam
         legacyGroup: bareMetalPackages
         gate: "!virt"
         fedora: { disposition: managed, owner: dnf, identifier: steam, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: steam, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Steam has no supported ARM64 delivery and Thor has no gaming role, architectures: { arm64: notApplicable } }
       - id: koreanInput
         sentinel: fcitx5
         fedora: { disposition: managed, owner: dnf, identifier: fcitx5-hangul, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: manual, reason: native macOS Korean input source is built in and added in System Settings > Keyboard > Input Sources; no package manager owns it, architectures: { arm64: manual } }
+        ubuntu: { disposition: managed, owner: apt, identifier: fcitx5-hangul, source: ubuntu, architectures: { arm64: native } }
       - id: logitechGestures
         sentinel: solaar
         fedora: { disposition: managed, owner: dnf, identifier: solaar, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: logi-options-plus, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native }, manual: profile }
+        ubuntu: { disposition: notApplicable, reason: Thor has no Logitech peripherals to manage, architectures: { arm64: notApplicable } }
       - id: nvidiaCompute
         sentinel: nvidia-smi
-        legacyGroup: nvidiaPackages
-        gate: nvidia
+        gate: jetson
         fedora: { disposition: managed, owner: dnf, identifier: cuda-drivers, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: notApplicable, reason: supported Apple silicon has no NVIDIA GPU, architectures: { arm64: notApplicable } }
+        ubuntu: { disposition: managed, owner: apt, identifier: nvidia-jetpack, source: nvidiaJetson, architectures: { arm64: native } }
       - id: kittyTerminal
         sentinel: kitty
         integrity: checksum
         fedora: { disposition: managed, owner: releaseLock, identifier: kitty, architectures: { amd64: native, arm64: native } }
         macos: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { arm64: unresolved } }
+        ubuntu: { disposition: unresolved, reason: Kitty's Ubuntu arm64 package-delivery path has not been proven on Thor, architectures: { arm64: unresolved } }
       # U8 native desktop/hardware completions. logitechGestures (Logi Options+,
       # manual profile) and koreanInput (native Windows/macOS IMEs, manual
       # prerequisite steps) above already carry their U8 dispositions; the rows
@@ -530,10 +565,12 @@ packages:
         sentinel: weasis
         fedora: { disposition: managed, owner: flatpak, identifier: io.github.nroduit.Weasis, source: flathub, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: weasis, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not use Weasis and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       - id: kdenlive
         sentinel: kdenlive
         fedora: { disposition: managed, owner: dnf, identifier: kdenlive, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: kdenlive, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: notApplicable, reason: Thor does not edit video and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
       # One GPG pinentry capability, per-OS delivery: Fedora KDE hosts install
       # pinentry-qt and GNOME hosts pinentry-gnome3 (gated legacy groups above;
       # private_dot_gnupg/.gpg-agent.linux.conf picks the matching program from
@@ -542,10 +579,12 @@ packages:
       - id: pinentry
         fedora: { disposition: managed, owner: dnf, identifier: pinentry-qt, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: pinentry-mac, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: apt, identifier: pinentry-qt, source: ubuntu, architectures: { arm64: native } }
       - id: defaultApps
         sentinel: defaultbrowser
         fedora: { disposition: managed, owner: dnf, identifier: xdg-terminal-exec, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: defaultbrowser, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: unresolved, reason: The Ubuntu default-app helper path has not been proven on Thor, architectures: { arm64: unresolved } }
       # G1 CANDIDATE — opt-in launch only. Kitty (kittyTerminal above) stays the
       # authoritative Fedora terminal and the default on every host until G1b
       # opens; nothing here may switch a default or remove a Kitty source.
@@ -556,3 +595,4 @@ packages:
         sentinel: wezterm
         fedora: { disposition: unresolved, reason: "G1a closed: upstream stable 20240203-110809-5046fc22 predates Kitty Unicode placeholder support and publishes no RPM for the current Fedora release (newest is fedora39) and no aarch64 RPM at all; only an upstream stable RPM for the current Fedora release, installed through DNF, is acceptable", architectures: { amd64: unresolved, arm64: unresolved } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: wezterm, source: homebrewCask, elevation: appManagement, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: unresolved, reason: WezTerm's Ubuntu arm64 package-delivery path has not been proven on Thor, architectures: { arm64: unresolved } }
