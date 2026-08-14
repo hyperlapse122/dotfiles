@@ -30,16 +30,15 @@ TAILSCALE=(tailscale)
 "${SUDO[@]}" systemctl enable --now tailscaled.service
 {{ end -}}
 
-# Skip re-authentication when this node is already logged in to a tailnet:
-# `tailscale up --auth-key` with a single-use key fails on a second apply. Only
-# the NeedsLogin / NoState backend states are unauthenticated, so `up` runs only
-# when the current state is not one of the already-authenticated states below.
+# Completion check: a node already authenticated to a tailnet must not consume
+# the single-use auth key. This is a DECLARED done_here completion, not deferred
+# work and not a bare success exit.
 if "${SUDO[@]}" "${TAILSCALE[@]}" status --json 2>/dev/null \
   | grep -Eq '"BackendState"[[:space:]]*:[[:space:]]*"(Running|Starting|Stopped|NeedsMachineAuth)"'; then
-  printf 'auth-tailscale.sh: already authenticated; skipping tailscale up.\n'
-else
-  if ! "${SUDO[@]}" "${TAILSCALE[@]}" up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key="{{ onepasswordRead "op://Private/Tailscale/Auth Key" }}"; then
-    printf 'auth-tailscale.sh: `tailscale up` failed; node did not join the tailnet. Fix the auth key or connectivity, then re-run `chezmoi apply`.\n' >&2
-    exit 1
-  fi
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "auth-tailscale" "site" "already-authenticated" "reason" "already authenticated to a tailnet") | trim | indent 2 }}
+fi
+
+if ! "${SUDO[@]}" "${TAILSCALE[@]}" up --operator "$USER" --accept-routes --accept-dns --accept-risk=all --auth-key="{{ onepasswordRead "op://Private/Tailscale/Auth Key" }}"; then
+  printf 'auth-tailscale.sh: `tailscale up` failed; node did not join the tailnet. Fix the auth key or connectivity, then re-run `chezmoi apply`.\n' >&2
+  exit 1
 fi

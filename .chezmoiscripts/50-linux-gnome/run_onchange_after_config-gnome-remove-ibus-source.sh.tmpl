@@ -1,4 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+{{ $gsettingsPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "gsettings-present") -}}
+{{ $pythonPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "usr-bin-python3-present") -}}
 #!/usr/bin/env bash
 #
 # GNOME hosts. Migration for the unified
@@ -20,44 +23,41 @@
 # recurring assertion. Once we have run once, we do NOT re-strip on every
 # apply — a user who later re-adds an ibus engine on purpose is not fought.
 #
-# onchange, no fingerprint block needed: nothing external drives the trigger
-# and no data value flows in; the trigger is this script's own rendered
-# content. Live-session only: gsettings writes go through dconf-service on
-# the session D-Bus, so on a headless/TTY/first-boot apply this exits 0
-# WITHOUT stamping. NOTE the onchange trade-off: that skipped run is
-# recorded as done and will NOT re-run on the next apply just because a live
-# GNOME session appears — the strip lands on the next content change or a
-# manual `chezmoi apply --force`. Once the stamp exists this script is a
-# no-op regardless.
+# Live-session preconditions below are DECLARED transient-blocking and paired
+# with cached capability tokens in the comment-only fingerprint block.
 
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "session-bus-present" "value" $sessionBusPresent)
+      (dict "name" "gsettings-present" "value" $gsettingsPresent)
+      (dict "name" "usr-bin-python3-present" "value" $pythonPresent))) }}
 set -euo pipefail
 
 STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-inputsources-strip-ibus"
 
 {{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "config-gnome-remove-ibus-source") -}}
 
-# Already stripped once -> respect the user's current source list, do nothing.
+# Already stripped once -> respect the user's current source list.
 if [[ -f "$STAMP" ]]; then
-  echo "config-gnome-remove-ibus-source: already stripped once ($STAMP); leaving input sources alone"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "config-gnome-remove-ibus-source" "site" "stamp-present" "reason" "the input-source migration stamp is already present") | trim | indent 2 }}
 fi
 
-# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+# --- Live session / tooling guards ------------------------------------------
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
-  echo "config-gnome-remove-ibus-source: no D-Bus session bus; skip (retries next apply)"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-remove-ibus-source" "site" "no-session-bus" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "no D-Bus session bus is available; input-source migration is deferred") | trim | indent 2 }}
 fi
-command -v gsettings >/dev/null 2>&1 \
-  || { echo "config-gnome-remove-ibus-source: gsettings absent; skip"; exit 0; }
+if ! command -v gsettings >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-remove-ibus-source" "site" "gsettings-absent" "direction" "transient-blocking" "probe" "gsettings-present" "reason" "gsettings is not installed; input-source migration is deferred") | trim | indent 2 }}
+fi
 # /usr/bin/python3, NOT bare python3 (mise may shadow it): GVariant text for
 # a(ss) is valid Python literal syntax, so filtering the list parses with
 # ast.literal_eval instead of hand-rolled string munging.
-[[ -x /usr/bin/python3 ]] \
-  || { echo "config-gnome-remove-ibus-source: /usr/bin/python3 absent; skip"; exit 0; }
+if [[ ! -x /usr/bin/python3 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-remove-ibus-source" "site" "python3-absent" "direction" "transient-blocking" "probe" "usr-bin-python3-present" "reason" "system Python is not installed; input-source migration is deferred") | trim | indent 2 }}
+fi
 
 if ! current="$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)"; then
-  echo "config-gnome-remove-ibus-source: cannot read org.gnome.desktop.input-sources sources; skip"
-  exit 0
+  printf '%s\n' 'config-gnome-remove-ibus-source: failed to read input sources with gsettings; verify the GNOME session bus and schema, then re-apply.' >&2
+  exit 1
 fi
 
 # Filter every ('ibus', <engine>) tuple out of the existing list. Output
@@ -90,15 +90,16 @@ PYEOF
 
 case "$filtered" in
   PARSE_ERROR)
-    echo "config-gnome-remove-ibus-source: unexpected sources format (${current}); leaving untouched" >&2
-    exit 0
+    printf '%s\n' 'config-gnome-remove-ibus-source: input sources are not valid GVariant tuple-list text; leave them unchanged, repair the dconf value, then re-apply.' >&2
+    exit 1
     ;;
   NO_IBUS)
-    echo "config-gnome-remove-ibus-source: no ibus entries in input sources; nothing to strip"
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "config-gnome-remove-ibus-source" "site" "no-ibus-entries" "reason" "the input-source list contains no ibus entries") | trim | indent 6 }}
+    )
     ;;
   EMPTY)
-    echo "config-gnome-remove-ibus-source: stripping ibus would leave source list EMPTY (${current}); leaving untouched — add an xkb layout first" >&2
-    exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-remove-ibus-source" "site" "would-empty-source-list" "direction" "harmless" "reason" "removing ibus would leave the input-source list empty") | trim | indent 4 }}
     ;;
   *)
     gsettings set org.gnome.desktop.input-sources sources "$filtered"

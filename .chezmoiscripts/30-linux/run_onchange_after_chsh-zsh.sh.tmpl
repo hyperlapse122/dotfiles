@@ -1,4 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+{{ $zshPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "zsh-present") -}}
+{{ $chshPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "chsh-present") -}}
 #!/usr/bin/env bash
 #
 # Set the invoking user's login shell to zsh. The login shell lives in the
@@ -16,9 +19,10 @@
 #   - chsh is not available (Fedora ships it in util-linux-user)
 #   - not root, stdin is not a TTY, and sudo has no cached credentials — a
 #     non-interactive apply (CI, an agent, a piped run) can't answer a sudo
-#     prompt. NOTE: chezmoi records a clean exit-0 skip as a successful run, so
-#     the script will NOT re-run on the next apply until its content changes —
-#     re-run it by hand on an interactive terminal with `chezmoi apply --force`.
+#     prompt. That skip is DECLARED transient-blocking on the cached
+#     `sudo-usable` capability (see the fingerprint block below), so chezmoi
+#     still records the run as successful, but the token flipping to available
+#     changes this script's content and chezmoi re-runs it on its own.
 #
 # sudo: rewriting the /etc/passwd shell field needs root. The script body runs
 # as the user (so $USER is the real invoking user), and only the privileged
@@ -35,28 +39,32 @@
 # there is nothing equivalent to do on either; no .ps1 counterpart per the
 # script-parity exception in ../AGENTS.md.
 
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "sudo-usable" "value" $sudoUsable)
+      (dict "name" "zsh-present" "value" $zshPresent)
+      (dict "name" "chsh-present" "value" $chshPresent))) }}
 set -euo pipefail
 
-# 1. Nothing to switch to if zsh isn't installed.
+# 1. Nothing to switch to if zsh isn't installed: DECLARED transient-blocking,
+# paired with the cached zsh-present fingerprint above.
 if ! command -v zsh >/dev/null 2>&1; then
-  printf 'chsh-zsh: zsh not installed; skipping (install zsh, then re-run).\n' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "chsh-zsh" "site" "zsh-absent" "direction" "transient-blocking" "probe" "zsh-present" "reason" "zsh is not installed; login-shell change is deferred") | trim | indent 2 }}
 fi
 zsh_bin="$(command -v zsh)"
 
-# 2. Already a zsh login shell? Bail before touching sudo so the steady-state
-#    re-run is a silent no-op. Match on basename so /bin/zsh vs /usr/bin/zsh
-#    (Fedora's /bin -> /usr/bin symlink) does not cause needless churn.
+# 2. Already a zsh login shell? This is a DECLARED done_here completion. Match
+# on basename so /bin/zsh vs /usr/bin/zsh does not cause needless churn.
 current_shell="$(getent passwd "$USER" 2>/dev/null | awk -F: '{ print $7 }')" || true
 if [[ "${current_shell##*/}" == "zsh" ]]; then
-  printf 'chsh-zsh: login shell already zsh (%s); nothing to do.\n' "$current_shell"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "chsh-zsh" "site" "already-zsh-login-shell" "reason" "the login shell is already zsh") | trim | indent 2 }}
 fi
 
-# 3. chsh is what actually rewrites the /etc/passwd shell field.
+# 3. chsh is what actually rewrites the /etc/passwd shell field. Its absence is
+# a DECLARED transient-blocking precondition because Fedora installs it later.
 if ! command -v chsh >/dev/null 2>&1; then
-  printf 'chsh-zsh: chsh not found (Fedora: install util-linux-user); skipping.\n' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "chsh-zsh" "site" "chsh-absent" "direction" "transient-blocking" "probe" "chsh-present" "reason" "chsh is not installed; login-shell change is deferred") | trim | indent 2 }}
 fi
 
 # 4. Privilege: prefix privileged calls with sudo unless we are already root.

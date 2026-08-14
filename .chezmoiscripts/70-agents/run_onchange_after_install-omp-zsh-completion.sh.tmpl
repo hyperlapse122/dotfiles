@@ -1,4 +1,5 @@
 {{- $ompVersion := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp")) -}}
+{{- $ompPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "omp-present") -}}
 #!/usr/bin/env bash
 # Installs omp's zsh completion as ~/.local/share/zsh/site-functions/_omp.
 #
@@ -24,17 +25,12 @@
 # over .chezmoidata/releases.json: that hashes the whole lock and would
 # regenerate on every unrelated hourly refresh.
 #
-# The availability flag is the second half of the trigger and exists because a
-# clean exit-0 skip below is recorded by chezmoi as a SUCCESSFUL run and never
-# retried until the fingerprint changes (AGENTS.md). Without the flag, a host
-# that skipped once because omp was briefly unresolvable would stay without a
-# completion until the next version bump. `lookPath` re-evaluates every render,
-# so the apply after omp appears changes this line and re-triggers the install.
-# On a first apply the flag is 0 (the external has not landed at render time)
-# while the runtime check below still succeeds, so the install happens anyway
-# and the following apply merely re-runs an idempotent script.
+# The availability token is the second half of the trigger. It comes from this
+# command's cached `omp-present` capability, not a template-side command, and
+# is hashed by fingerprint.tmpl so a missing external re-runs automatically
+# once omp becomes available.
 # omp version: {{ $ompVersion }}
-# omp available at render: {{ if lookPath "omp" }}1{{ else }}0{{ end }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "omp-present" "value" $ompPresent))) }}
 set -euo pipefail
 
 # chezmoi's non-interactive script environment omits ~/.local/bin, where omp lands.
@@ -46,8 +42,7 @@ esac
 export PATH
 
 if ! command -v omp >/dev/null 2>&1; then
-  printf '%s\n' 'install-omp-zsh-completion: omp is unavailable; skipping completion install.' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-omp-zsh-completion" "site" "omp-absent" "direction" "transient-blocking" "probe" "omp-present" "reason" "omp is not installed; zsh completion generation is deferred") | trim | indent 2 }}
 fi
 
 readonly TARGET_DIR="$HOME/.local/share/zsh/site-functions"

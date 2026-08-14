@@ -1,5 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $fcCachePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "fc-cache-present") -}}
+{{ $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
 #!/usr/bin/env bash
 #
 # 1. Refreshes the fontconfig cache so fonts installed via chezmoi externals
@@ -42,13 +44,12 @@
 
 set -euo pipefail
 
-# managed font data content fingerprint — chezmoi hashes this rendered script to
-# decide whether to re-run; embedding fonts.yaml's sha256 forces a re-run on any
-# font bump, including one that only moves a `release:` tag. `include . |
-# sha256sum` hashes file CONTENT; `(stat .).isDir` skips directories.
-# Comment-only; never executed. (Parity with the GNOME twin, which has carried
-# this block since it was written.)
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoidata/fonts.yaml")) }}
+# Managed font data and capability fingerprints — comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list ".chezmoidata/fonts.yaml")
+      "values" (list
+        (dict "name" "fc-cache-present" "value" $fcCachePresent)
+        (dict "name" "kwriteconfig6-present" "value" $kconfigPresent))) }}
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-fonts.sh") -}}
 
 SANS="{{ .fonts.families.sans }}"
@@ -63,8 +64,7 @@ FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 # --- 1. Register externally-installed fonts --------------------------------
 refresh_font_cache() {
   if ! command -v fc-cache >/dev/null 2>&1; then
-    printf 'config-kde-fonts.sh: fc-cache not found, skipping cache refresh.\n' >&2
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-fonts" "site" "fc-cache-absent" "direction" "transient-blocking" "probe" "fc-cache-present" "reason" "fc-cache is not installed; font cache refresh is deferred") | trim | indent 4 }}
   fi
   printf 'config-kde-fonts.sh: refreshing fontconfig cache (%s)...\n' "$FONT_DIR"
   # -f: force a rescan even if dir mtimes look unchanged. Never fail the apply
@@ -89,12 +89,10 @@ _font_value() { printf '%s,%d,-1,5,400,0,0,0,0,0,0,0,0,0,0,1' "$1" "$2"; }
 
 configure_kde_fonts() {
   # No plasmashell probe here — the kde-guard include above already left the
-  # script on a non-KDE host. kwriteconfig6 stays a runtime probe: it is TOOL
-  # PRESENCE (this repo's own package list installs it), not host identity, so it
-  # is not a fact.
+  # script on a non-KDE host. kwriteconfig6 is a repository-installed runtime
+  # precondition, so its declared skip is transient-blocking.
   if ! command -v kwriteconfig6 >/dev/null 2>&1; then
-    printf 'config-kde-fonts.sh: kwriteconfig6 not found, skipping KDE config.\n' >&2
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-fonts" "site" "kwriteconfig6-absent" "direction" "transient-blocking" "probe" "kwriteconfig6-present" "reason" "kwriteconfig6 is not installed; KDE font configuration is deferred") | trim | indent 4 }}
   fi
   if ! command -v fc-match >/dev/null 2>&1; then
     printf 'config-kde-fonts.sh: fc-match not found, cannot verify fonts.\n' >&2

@@ -1,4 +1,5 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 #
 # Network-path configuration: firewalld for Tailscale/VMware, resolv.conf →
@@ -10,10 +11,10 @@
 # install-system-config did. Those restarts now happen only when THIS
 # script's content changes (or `chezmoi apply --force`).
 #
-# onchange, no external dependency: everything here asserts fixed
-# firewalld/DNS state derived from nothing in the source tree, so the trigger
-# is this script's own rendered content. (The IPv4/IPv6 forwarding sysctl the
-# masquerade path rides on is installed and applied by 10-files.)
+# onchange, no source-tree dependency: everything here asserts fixed
+# firewalld/DNS state derived from nothing in the source tree, so the only
+# fingerprint below is the sudo capability one. (The IPv4/IPv6 forwarding
+# sysctl the masquerade path rides on is installed and applied by 10-files.)
 #
 # firewalld setup covers three things: (1) IPv4 masquerade on the default
 # zone, required for the Tailscale exit-node and VMware NAT egress paths to
@@ -23,13 +24,17 @@
 # (3) opening UDP 41641 (WireGuard) + UDP 3478 (STUN) on the `public` zone
 # so direct peer connections work behind a host firewall.
 #
-# Skip behaviour: soft-skips (exit 0) on headless/server installs and when
-# sudo would have to prompt but can't — see the shared guards inlined below
-# (.chezmoitemplates/headless-guard.sh.tmpl, sudo-skip-guard.sh.tmpl). NOTE:
-# chezmoi records a clean skip as a successful run, so it will NOT re-run on
-# the next apply until this content changes — re-run by hand with
-# `chezmoi apply --force`.
+# Skip behaviour: both shared guards inlined below declare their early exits
+# (.chezmoitemplates/skip.sh.tmpl). A headless/server install is `harmless` —
+# this host is not a desktop and will not become one, so exit 0 is final. A
+# sudo prompt this run cannot answer is `transient-blocking` on the cached
+# `sudo-usable` capability: chezmoi records the exit-0 skip as a successful run,
+# and the sudo fingerprint block below is what re-runs the script by itself once
+# that token flips to available.
 
+# sudo capability fingerprint — pairs the transient-blocking sudo declaration
+# with the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-network") }}
@@ -48,49 +53,47 @@ set -euo pipefail
 # mutate when something would change. A single `--reload` at the end
 # applies all permanent changes to the runtime without restarting
 # firewalld (https://firewalld.org/documentation/configuration/runtime-versus-permanent.html).
-if "${SUDO[@]}" firewall-cmd --state >/dev/null 2>&1; then
-  fw_changed=0
+configure_firewalld() {
+  if "${SUDO[@]}" firewall-cmd --state >/dev/null 2>&1; then
+    fw_changed=0
 
-  if "${SUDO[@]}" firewall-cmd --permanent --query-masquerade >/dev/null 2>&1; then
-    printf '  -- firewalld masquerade: already enabled (default zone)\n'
-  else
-    printf '  -> firewalld masquerade: enabling on default zone\n'
-    "${SUDO[@]}" firewall-cmd --permanent --add-masquerade >/dev/null
-    fw_changed=1
-  fi
-
-  # Tailscale's own recommendation for hosts running firewalld: the trusted
-  # zone accepts all traffic, which is what we want for the mesh interface
-  # (peer ACLs are enforced at the Tailscale layer, not the host firewall).
-  # https://tailscale.com/kb/1077/secure-server-linux/
-  if "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --query-interface=tailscale0 >/dev/null 2>&1; then
-    printf '  -- firewalld: tailscale0 already bound to trusted zone\n'
-  else
-    printf '  -> firewalld: binding tailscale0 to trusted zone\n'
-    "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 >/dev/null
-    fw_changed=1
-  fi
-
-  # UDP 41641 (Tailscale's WireGuard listener) + UDP 3478 (STUN, NAT
-  # traversal) so direct peer connections work behind a host firewall.
-  # https://tailscale.com/kb/1082/firewall-ports/
-  for port in 41641/udp 3478/udp; do
-    if "${SUDO[@]}" firewall-cmd --permanent --zone=public --query-port="$port" >/dev/null 2>&1; then
-      printf '  -- firewalld: public/%s already open\n' "$port"
+    if "${SUDO[@]}" firewall-cmd --permanent --query-masquerade >/dev/null 2>&1; then
+      printf '  -- firewalld masquerade: already enabled (default zone)\n'
     else
-      printf '  -> firewalld: opening public/%s\n' "$port"
-      "${SUDO[@]}" firewall-cmd --permanent --zone=public --add-port="$port" >/dev/null
+      printf '  -> firewalld masquerade: enabling on default zone\n'
+      "${SUDO[@]}" firewall-cmd --permanent --add-masquerade >/dev/null
       fw_changed=1
     fi
-  done
 
-  if [[ "$fw_changed" -eq 1 ]]; then
-    printf '  -> firewall-cmd --reload\n'
-    "${SUDO[@]}" firewall-cmd --reload >/dev/null
+    # Tailscale's own recommendation for hosts running firewalld: the trusted
+    # zone accepts all traffic, which is what we want for the mesh interface.
+    if "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --query-interface=tailscale0 >/dev/null 2>&1; then
+      printf '  -- firewalld: tailscale0 already bound to trusted zone\n'
+    else
+      printf '  -> firewalld: binding tailscale0 to trusted zone\n'
+      "${SUDO[@]}" firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 >/dev/null
+      fw_changed=1
+    fi
+
+    for port in 41641/udp 3478/udp; do
+      if "${SUDO[@]}" firewall-cmd --permanent --zone=public --query-port="$port" >/dev/null 2>&1; then
+        printf '  -- firewalld: public/%s already open\n' "$port"
+      else
+        printf '  -> firewalld: opening public/%s\n' "$port"
+        "${SUDO[@]}" firewall-cmd --permanent --zone=public --add-port="$port" >/dev/null
+        fw_changed=1
+      fi
+    done
+
+    if [[ "$fw_changed" -eq 1 ]]; then
+      printf '  -> firewall-cmd --reload\n'
+      "${SUDO[@]}" firewall-cmd --reload >/dev/null
+    fi
+  else
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-system-network" "site" "firewalld-not-running" "direction" "harmless" "reason" "firewalld is not running; firewall configuration is not applicable") | trim | indent 4 }}
   fi
-else
-  printf '  -- firewalld: skipped (firewalld not running)\n'
-fi
+}
+configure_firewalld
 
 # Reference: https://tailscale.com/docs/reference/linux-dns
 # Point resolv.conf at systemd-resolved's stub, then restart each DNS-path
@@ -138,10 +141,13 @@ fi
 # present" and "service running" in a single check. Hosts without
 # NetworkManager (systemd-networkd, netctl, no network stack at all)
 # skip cleanly.
-if systemctl is-active --quiet NetworkManager 2>/dev/null; then
-  printf '  -> systemctl reload NetworkManager\n'
-  "${SUDO[@]}" systemctl reload NetworkManager
-else
-  printf '  -- NetworkManager reload: skipped (service not running)\n'
-fi
+reload_networkmanager() {
+  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    printf '  -> systemctl reload NetworkManager\n'
+    "${SUDO[@]}" systemctl reload NetworkManager
+  else
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-system-network" "site" "networkmanager-not-running" "direction" "harmless" "reason" "NetworkManager is not running; its configuration reload is not applicable") | trim | indent 4 }}
+  fi
+}
+reload_networkmanager
 {{ end -}}

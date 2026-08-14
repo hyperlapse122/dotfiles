@@ -1,4 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $busctlPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "busctl-present") -}}
+{{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
 #!/usr/bin/env bash
 #
 # Configures libinput touchpads via KWin's org.kde.KWin.InputDeviceManager:
@@ -17,12 +19,11 @@
 # configured; other touchpads are left untouched. Skips cleanly when busctl is
 # missing or no Plasma session owns org.kde.KWin.
 #
-# onchange, no fingerprint block needed: the rendered device names and values
-# below are part of this script's content, so a kde.yaml edit re-triggers it (the
-# same reason config-gnome-mouse carries none).
-#
-# Applies live via DBus.
-
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "busctl-present" "value" $busctlPresent)
+      (dict "name" "session-bus-present" "value" $sessionBusPresent))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-touchpad.sh") -}}
@@ -42,8 +43,7 @@ configure_touchpad() {
   printf 'config-kde-touchpad.sh: configuring KDE touchpad(s)...\n'
 
   if ! command -v busctl >/dev/null 2>&1; then
-    printf '  busctl not found, skipping.\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-touchpad" "site" "busctl-absent" "direction" "transient-blocking" "probe" "busctl-present" "reason" "busctl is not installed; touchpad configuration is deferred") | trim | indent 4 }}
   fi
 
   local SERVICE='org.kde.KWin'
@@ -65,8 +65,7 @@ configure_touchpad() {
 
   local raw
   if ! raw="$(busctl --user get-property "$SERVICE" "$MGR_PATH" "$IFACE_MGR" devicesSysNames 2>/dev/null)"; then
-    printf '  org.kde.KWin not reachable on session bus (no active Plasma session?), skipping.\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-touchpad" "site" "kwin-unreachable" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "KWin is unreachable on the session bus; touchpad configuration is deferred") | trim | indent 4 }}
   fi
 
   local sysnames=()
@@ -127,7 +126,9 @@ configure_touchpad() {
   done
 
   if [[ "$count" -eq 0 ]]; then
-    printf '  no touchpad in TOUCHPAD_TARGET_NAMES present on this session, skipping.\n'
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-kde-touchpad" "site" "no-target-touchpad" "reason" "no configured target touchpad is present in this session") | trim | indent 6 }}
+    )
     return 0
   fi
 

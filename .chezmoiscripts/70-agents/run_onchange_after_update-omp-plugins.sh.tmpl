@@ -122,7 +122,9 @@ for parent in "$HOME/.omp" "$HOME/.omp/plugins" "$HOME/.omp/agent/extensions"; d
     [[ -d $ancestor && -w $ancestor ]] || die "preflight: cannot create user path below $ancestor"
   fi
 done
-if [[ ${#PLUGINS[@]} -eq 0 && ${#PLUGINS_REMOVED[@]} -eq 0 ]]; then printf '%s\n' 'update-omp-plugins: no eligible plugins or removals'; exit 0; fi
+if [[ ${#PLUGINS[@]} -eq 0 && ${#PLUGINS_REMOVED[@]} -eq 0 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "update-omp-plugins" "site" "no-plugins-or-removals" "reason" "no eligible plugins or removals are declared") | trim | indent 2 }}
+fi
 
 mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
 
@@ -134,7 +136,9 @@ for row in "${PLUGINS_REMOVED[@]}"; do
   omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
 done
 
-if [[ ${#PLUGINS[@]} -eq 0 ]]; then printf '%s\n' 'update-omp-plugins: no eligible plugins'; exit 0; fi
+if [[ ${#PLUGINS[@]} -eq 0 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "update-omp-plugins" "site" "no-eligible-plugins" "reason" "no eligible plugins remain after removals") | trim | indent 2 }}
+fi
 
 helper_root="${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-haptic-reconcile"
 mkdir -p -- "$helper_root" || die 'preflight: cannot create loader helper root'

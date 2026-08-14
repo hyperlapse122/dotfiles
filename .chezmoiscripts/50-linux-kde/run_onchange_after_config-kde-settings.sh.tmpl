@@ -121,6 +121,7 @@ shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
 
 {{-   $rows = append $rows (printf "  \"%s:%s:%s:%s:%s\"" $file $group $key $type $value) -}}
 {{- end -}}
+{{- $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
 #!/usr/bin/env bash
 #
 # The generic KDE settings runner: applies every row of .chezmoidata/kde.yaml
@@ -146,9 +147,8 @@ shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
 # A setting that needs a precondition does NOT belong in the manifest — it stays
 # its own script. config-kde-virtualkeyboard is the standing example.
 #
-# Applies per setting: see the yaml header (re-login, next app launch, or a KWin
-# restart).
-
+# Cached capability fingerprint for the transient-blocking KConfig precondition.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "kwriteconfig6-present" "value" $kconfigPresent))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-settings.sh") -}}
@@ -163,8 +163,7 @@ configure_kde_settings() {
     "${#SETTINGS[@]}"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1; then
-    printf '  kwriteconfig6 not found, skipping.\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-settings" "site" "kwriteconfig6-absent" "direction" "transient-blocking" "probe" "kwriteconfig6-present" "reason" "kwriteconfig6 is not installed; KDE settings configuration is deferred") | trim | indent 4 }}
   fi
 
   local spec file group_path key type value

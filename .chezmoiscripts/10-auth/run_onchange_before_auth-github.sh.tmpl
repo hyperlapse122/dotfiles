@@ -1,5 +1,15 @@
+{{- $ghPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "gh-present") -}}
 #!/usr/bin/env bash
+#
+# `gh` is installed by this repository (dnf or .chezmoiexternals/vcs.toml), so an
+# absent binary is a precondition that appears later, not a permanent host shape:
+# the skip below is DECLARED transient-blocking on the cached `gh-present`
+# capability, and the fingerprint value pairs it with that token so chezmoi
+# re-runs this script by itself once gh exists.
 
+# gh capability fingerprint — pairs the transient-blocking gh declaration with
+# the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "gh-present" "value" $ghPresent))) }}
 set -euo pipefail
 
 # `gh` may come from dnf/apt or from .chezmoiexternals/vcs.toml (~/.local/bin).
@@ -12,8 +22,7 @@ esac
 export PATH
 
 if ! command -v gh >/dev/null 2>&1; then
-  printf 'auth-github: `gh` not on PATH or in ~/.local/bin; skipping token login.\n' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "auth-github" "site" "gh-absent" "direction" "transient-blocking" "probe" "gh-present" "reason" "gh not found on PATH or in the user bin directory; token login deferred") | trim | indent 2 }}
 fi
 
 env -u GITHUB_TOKEN gh auth login --hostname github.com --git-protocol https --with-token <<EOF

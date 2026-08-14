@@ -1,4 +1,5 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 #
 # Host-level service tuning that is independent of the /etc file set: enables
@@ -7,18 +8,22 @@
 # 30-network); splitting keeps re-run scope tight — a tracked /etc
 # file edit re-runs 10-files only, not these host mutations.
 #
-# onchange, no external dependency: every action here asserts a fixed host
-# state derived from nothing in the source tree, so there is nothing to
-# fingerprint — the trigger is this script's own rendered content. Each step
-# is best-effort and idempotent, so a re-run is always safe.
+# onchange, no source-tree dependency: every action here asserts a fixed host
+# state derived from nothing in the source tree, so the only fingerprint below
+# is the sudo capability one. Each step is best-effort and idempotent, so a
+# re-run is always safe.
 #
-# Skip behaviour: soft-skips (exit 0) on headless/server installs and when
-# sudo would have to prompt but can't — see the shared guards inlined below
-# (.chezmoitemplates/headless-guard.sh.tmpl, sudo-skip-guard.sh.tmpl). NOTE:
-# chezmoi records a clean skip as a successful run, so it will NOT re-run on
-# the next apply until this content changes — re-run by hand with
-# `chezmoi apply --force`.
+# Skip behaviour: both shared guards inlined below declare their early exits
+# (.chezmoitemplates/skip.sh.tmpl). A headless/server install is `harmless` —
+# this host is not a desktop and will not become one, so exit 0 is final. A
+# sudo prompt this run cannot answer is `transient-blocking` on the cached
+# `sudo-usable` capability: chezmoi records the exit-0 skip as a successful run,
+# and the sudo fingerprint block below is what re-runs the script by itself once
+# that token flips to available.
 
+# sudo capability fingerprint — pairs the transient-blocking sudo declaration
+# with the cached token it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}

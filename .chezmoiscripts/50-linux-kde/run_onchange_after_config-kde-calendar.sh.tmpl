@@ -1,4 +1,7 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
+{{ $mariadbPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "mariadb-present") -}}
+{{ $akonadiSocketPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "akonadi-socket-present") -}}
 #!/usr/bin/env bash
 #
 # Enables calendar popup features in the Digital Clock:
@@ -15,15 +18,16 @@
 # per-host database rows that can only be discovered at runtime.
 #
 # Sub-step (c) is discovered at runtime by querying Akonadi's local MariaDB.
-# It soft-skips when mariadb is missing, the akonadi socket is absent, or no
-# calendar collections are found.
+# Missing mariadb, an absent socket, and an empty collection set are DECLARED
+# classified outcomes; a failed query on a reachable socket is a hard error,
+# because the calendars key would silently stay unconfigured.
 #
-# onchange, no fingerprint block needed: the rendered PLUGINS/HOLIDAY_REGIONS
-# values below are part of this script's content, so a kde.yaml edit re-triggers
-# it (the same reason config-gnome-mouse carries none).
-#
-# Applies after restarting plasmashell or logging out/in.
-
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "kwriteconfig6-present" "value" $kconfigPresent)
+      (dict "name" "mariadb-present" "value" $mariadbPresent)
+      (dict "name" "akonadi-socket-present" "value" $akonadiSocketPresent))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-calendar.sh") -}}
@@ -38,14 +42,15 @@ configure_calendar() {
     "$PLUGINS" "$HOLIDAY_REGIONS"
 
   if ! command -v kwriteconfig6 >/dev/null 2>&1 || ! command -v kreadconfig6 >/dev/null 2>&1; then
-    printf '  kwriteconfig6/kreadconfig6 not found, skipping.\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-calendar" "site" "kconfig-tools-absent" "direction" "transient-blocking" "probe" "kwriteconfig6-present" "reason" "KConfig tools are not installed; calendar configuration is deferred") | trim | indent 4 }}
   fi
 
-  local applet_file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
-  if [[ ! -f "$applet_file" ]]; then
-    printf '  %s not found (no Plasma session has ever started?), skipping (a).\n' "$applet_file"
-  else
+  configure_digitalclock_plugin() {
+    local applet_file="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+    if [[ ! -f "$applet_file" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-calendar" "site" "appletsrc-absent" "direction" "harmless" "reason" "the Plasma applet configuration is not present") | trim | indent 6 }}
+    fi
+
     local count=0
     local containment applet plugin
     while IFS=':' read -r containment applet; do
@@ -66,11 +71,14 @@ configure_calendar() {
               | sed -E 's/^\[Containments\]\[([0-9]+)\]\[Applets\]\[([0-9]+)\]$/\1:\2/')
 
     if [[ "$count" -eq 0 ]]; then
-      printf '  no digitalclock applet found in panel config, skipping (a).\n'
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-kde-calendar" "site" "no-digitalclock-applet" "reason" "no Digital Clock applet is configured") | trim | indent 8 }}
+      )
     else
       printf '  (a) configured %d digitalclock applet(s).\n' "$count"
     fi
-  fi
+  }
+  configure_digitalclock_plugin
 
   kwriteconfig6 --file plasma_calendar_holiday_regions \
     --group General \
@@ -79,8 +87,7 @@ configure_calendar() {
     "$HOLIDAY_REGIONS"
 
   if ! command -v mariadb >/dev/null 2>&1; then
-    printf '  (c) mariadb client not found, skipping (PIM calendars left unchanged).\n'
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-calendar" "site" "mariadb-absent" "direction" "transient-blocking" "probe" "mariadb-present" "reason" "mariadb is not installed; calendar collection configuration is deferred") | trim | indent 4 }}
   fi
 
   local akonadi_rc="$HOME/.config/akonadi/akonadiserverrc"
@@ -92,8 +99,7 @@ configure_calendar() {
   [[ -n "$socket" ]] || socket="/run/user/$(id -u)/akonadi/mysql.socket"
 
   if [[ ! -S "$socket" ]]; then
-    printf '  (c) akonadi socket %s not found (akonadi not running?), skipping.\n' "$socket"
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-calendar" "site" "akonadi-socket-absent" "direction" "transient-blocking" "probe" "akonadi-socket-present" "reason" "the Akonadi socket is unavailable; calendar collection configuration is deferred") | trim | indent 4 }}
   fi
 
   local ids
@@ -108,15 +114,17 @@ configure_calendar() {
                             'application/x-vnd.akonadi.calendar.todo',
                             'application/x-vnd.akonadi.calendar.journal')
            ORDER BY c.id;" 2>/dev/null)"; then
-    printf '  (c) failed to query akonadi MariaDB on %s, skipping.\n' "$socket"
-    return 0
+    printf 'config-kde-calendar: failed to query the Akonadi MariaDB on %s; verify the Akonadi service, then re-apply.\n' "$socket" >&2
+    return 1
   fi
 
   local csv
   csv="$(printf '%s\n' "$ids" | awk 'NF' | paste -sd, -)"
 
   if [[ -z "$csv" ]]; then
-    printf '  (c) akonadi returned 0 calendar collections (no PIM resources configured?), skipping.\n'
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-kde-calendar" "site" "no-calendar-collections" "reason" "no Akonadi calendar collections are configured") | trim | indent 6 }}
+    )
     return 0
   fi
 

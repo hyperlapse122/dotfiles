@@ -1,4 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
+{{ $sessionBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+{{ $gsettingsPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "gsettings-present") -}}
 #!/usr/bin/env bash
 #
 # GNOME hosts. Sorts the Application
@@ -39,14 +41,12 @@
 # SORT_ALPHABETICALLY below, so a gnome.yaml edit changes this script's own
 # content and re-triggers it (the same reason config-gnome-mouse carries no
 # fingerprint — a data hash would only add re-runs on comment-only yaml edits).
-# Live-session
-# only: gsettings writes go through dconf-service on the session D-Bus, so on a
-# headless/TTY/first-boot apply this exits 0 WITHOUT stamping. NOTE the onchange
-# behavior: that skipped run is recorded as done and will NOT re-run on the next
-# apply just because a live GNOME session appeared — the layout is cleared on
-# the next content change or a manual `chezmoi apply --force`. Once the stamp
-# exists the script is a no-op regardless.
+# Live-session preconditions below are DECLARED transient-blocking and paired
+# with their cached capability tokens in the comment-only fingerprint block.
 
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "session-bus-present" "value" $sessionBusPresent)
+      (dict "name" "gsettings-present" "value" $gsettingsPresent))) }}
 set -euo pipefail
 
 SORT_ALPHABETICALLY={{ .gnome.appGrid.sortAlphabetically | ternary 1 0 }}
@@ -58,29 +58,26 @@ STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/gnome-app-grid-order-alphab
 # Opted out in .chezmoidata/gnome.yaml -> leave the launcher order alone entirely
 # (no stamp either: flipping the flag back to true must still be able to apply).
 if [[ "$SORT_ALPHABETICALLY" -ne 1 ]]; then
-  echo "config-gnome-app-grid-order: gnome.appGrid.sortAlphabetically is false; leaving app-picker-layout alone"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-gnome-app-grid-order" "site" "sort-alphabetically-disabled" "reason" "alphabetical app-grid sorting is disabled in gnome data") | trim | indent 2 }}
 fi
 
-# Already ensured once -> respect the user's current grid arrangement, do nothing.
+# Already ensured once -> respect the user's current grid arrangement.
 if [[ -f "$STAMP" ]]; then
-  echo "config-gnome-app-grid-order: already applied once ($STAMP); leaving app-picker-layout alone"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "config-gnome-app-grid-order" "site" "stamp-present" "reason" "the app-grid ordering stamp is already present") | trim | indent 2 }}
 fi
 
-# --- Live session / tooling guards (any absent condition => safe exit 0) ---
+# --- Live session / tooling guards ------------------------------------------
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
-  echo "config-gnome-app-grid-order: no D-Bus session bus; skip (retries next apply)"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-app-grid-order" "site" "no-session-bus" "direction" "transient-blocking" "probe" "session-bus-present" "reason" "no D-Bus session bus is available; app-grid configuration is deferred") | trim | indent 2 }}
 fi
-command -v gsettings >/dev/null 2>&1 \
-  || { echo "config-gnome-app-grid-order: gsettings absent; skip"; exit 0; }
+if ! command -v gsettings >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-gnome-app-grid-order" "site" "gsettings-absent" "direction" "transient-blocking" "probe" "gsettings-present" "reason" "gsettings is not installed; app-grid configuration is deferred") | trim | indent 2 }}
+fi
 # The key lives in the org.gnome.shell schema (shipped with GNOME Shell); guard
 # on its presence so a stripped host without the schema/key skips cleanly
 # instead of erroring on the write.
 if ! gsettings list-keys org.gnome.shell 2>/dev/null | grep -qx 'app-picker-layout'; then
-  echo "config-gnome-app-grid-order: org.gnome.shell app-picker-layout absent; skip"
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-gnome-app-grid-order" "site" "app-picker-layout-key-absent" "reason" "the GNOME app-picker-layout key is not available") | trim | indent 2 }}
 fi
 
 # Clear the custom layout -> GNOME re-sorts the grid alphabetically (locale

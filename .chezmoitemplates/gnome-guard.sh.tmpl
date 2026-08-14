@@ -10,8 +10,14 @@ IN by facts-sh.tmpl, instead of re-derived by a `command -v` at each of the 7
 include sites.
 
 Deploy-everywhere-and-self-select is unchanged (KTD12): a non-GNOME host exits 0,
-so this stays a runtime skip, not a non-deployment gate. The skip message is the
-pre-registry one, verbatim.
+so this stays a runtime skip, not a non-deployment gate. That exit is now a
+DECLARED one — skip.sh.tmpl, form skip_here, direction harmless, site
+non-gnome-desktop — because a host whose ISO shipped no gnome-shell does not
+acquire one later: nothing is outstanding, so exiting 0 is correct AND final,
+which is exactly what `harmless` means. The declaration renders once per call
+site with that consumer as its `script`, so each of the eight consumers carries
+its own gnome-guard/non-gnome-desktop instance and clears its own state entry.
+The skip message is the pre-registry one, verbatim.
 
 Baking the fact means a desktop swap changes this partial's rendered output, and
 with it the content of every consuming run_onchange_ script — so they all re-run.
@@ -38,6 +44,5 @@ facts-sh.tmpl again alongside this guard.
 {{- $name := .name -}}
 {{ includeTemplate "facts-sh.tmpl" .ctx }}
 if [[ "$FACT_DESKTOP" != gnome ]]; then
-  printf '%s: gnome-shell not found (non-GNOME system), skipping.\n' '{{ $name }}'
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" .ctx "owner" "gnome-guard/non-gnome-desktop" "form" "skip_here" "script" $name "site" "non-gnome-desktop" "direction" "harmless" "reason" "gnome-shell not found (non-GNOME system), skipping.") | trim | indent 2 }}
 fi

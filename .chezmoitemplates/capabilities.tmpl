@@ -1,6 +1,6 @@
 {{- /*
-capabilities.tmpl — render-time probes of MOMENTARY host state, for
-transient-blocking skip sites only.
+capabilities.tmpl — reads THIS chezmoi command's capability snapshot. It probes
+nothing itself.
 
 WHAT THIS IS FOR. A `transient-blocking` site (see skip.sh.tmpl) exits 0, so
 chezmoi records it as a successful run. It can only re-run on its own if the
@@ -17,17 +17,53 @@ source and destination:
   marker with stable content                 -> ran twice, then stalled
                                                 permanently, and did NOT re-run
                                                 when the precondition appeared
-  render-time probe of the precondition      -> ran once, byte-stable across
+  probe of the precondition                  -> ran once, byte-stable across
                                                 three further applies, re-ran
                                                 immediately once the
                                                 precondition appeared
 
-Only the third is both stable while the precondition is absent and different
-once it is present, which is what R6 and AE3 together require.
+WHERE THE VALUE COMES FROM NOW. The probe used to run here, one subprocess per
+CALL, on every chezmoi command. The converted tree names ~34 distinct probes
+across ~57 blocking sites, so that form cost ~57 subprocesses per `status` or
+`diff`, and two renders inside one command could disagree. Resolution moved to
+the `read-source-state.pre` hook (.install-prerequisites.sh,
+`write_capability_cache`), which resolves every registry entry ONCE, before the
+source state is read, and publishes:
 
-THIS IS DELIBERATELY NOT THE FACT REGISTRY. `.chezmoidata/facts.yaml:5-9`
-excludes momentary state — a live D-Bus session, a `sudo -n` credential cache —
-from host IDENTITY, and that exclusion stands. A capability here:
+  ${XDG_CACHE_HOME:-~/.cache}/chezmoi/capabilities/<identity>.tsv   0600, in a 0700 dir
+
+  line 1   capability-cache-v1 <TAB> identity <TAB> owner pid <TAB> start marker <TAB> registry sha256
+  line n   <registry key> <TAB> available|unavailable        (in registry order)
+
+THE ARGUMENT CONTRACT DID NOT CHANGE. Call sites written against the old probe
+form stay correct: a dict with `ctx` and `probe`, `available`/`unavailable` out,
+no trailing newline, safe as a fingerprint.tmpl value.
+
+THE RECORD IS PER COMMAND, NOT PER HOST. `<identity>` is a SHA-256 over the
+NUL-delimited schema, the chezmoi process's PID, and that PID's immutable start
+marker (.chezmoitemplates/capability-cache-identity.sh, shared verbatim with the
+hook). Each read below resolves it through one `output "sh" "-c"` child whose own
+$PPID *is* that chezmoi process, so reader and writer agree while two simultaneous
+`chezmoi apply` runs with identical arguments get different records. That single
+`sh` is not a capability probe: it computes an identity and touches no host state.
+
+WHY A MISSING OR MISMATCHED RECORD IS `unavailable` AND NOT AN ERROR. A render
+with no hook — `chezmoi execute-template` under the AGENTS.md stub-`op` recipe, the
+CI render-internals job, any fixture that bypasses the hook — has no record for its
+identity. `unavailable` is the fail-safe direction: it renders the skip branch, which
+is what those isolated renders want. It cannot fail open, because a capability is
+only ever a fingerprint input. A record that IS present but does not match this
+command (other identity, other registry digest, prior schema, wrong key set, wrong
+token shape) is treated exactly like an absent one, so a stale record can never
+publish a token. When the hook DID run, integrity faults were already fatal there:
+the hook exits non-zero before any template renders.
+
+An unknown probe name is still a hard render failure — that is a call-site bug, and
+the registry is the enumeration of what exists.
+
+THIS IS DELIBERATELY NOT THE FACT REGISTRY. `.chezmoidata/facts.yaml:5-9` excludes
+momentary state — a live D-Bus session, a `sudo -n` credential cache — from host
+IDENTITY, and that exclusion stands. A capability here:
 
   - never appears in a `gates:` expression and never gates anything,
   - is consumed only as a fingerprint input, so it can only ever change WHEN a
@@ -35,64 +71,105 @@ from host IDENTITY, and that exclusion stands. A capability here:
   - therefore cannot fail open, which is the property facts.yaml's per-fact
     `whenFalse:` doctrine exists to protect.
 
-Adding a capability is not adding a fact. Do not add a `gates:` consumer for
-one; if a decision needs it, that decision belongs in the fact registry with a
-declared fail-safe direction.
-
-EVERY PROBE MUST EXIT 0 AND EMIT ONE OF TWO FIXED TOKENS. A probe that can fail
-the render, or that can emit a third value (a timestamp, a device id, a version
-string), would either break every `chezmoi` command or turn its consumers into
-always-run scripts. Both are worse than the bug this fixes.
-
-COST, STATED PLAINLY — AND A HARD LIMIT ON HOW FAR THIS FORM SCALES. Each call
-here runs one subprocess at RENDER time, which is once per chezmoi command, not
-once per apply: `chezmoi status` and `chezmoi diff` pay it too. `sudo-usable`
-additionally runs `sudo -n true`, so a host that logs failed sudo attempts sees
-more of them than before. That is the price of the sudo consumers self-healing;
-the measured alternative is that they never self-heal at all.
-
-The site inventory found ~47 transient-blocking sites needing roughly 35
-distinct probes. At that count this per-call form is the wrong shape: ~35
-subprocesses on every chezmoi command. BEFORE converting sites in bulk, move
-probe resolution into the `read-source-state.pre` hook that already writes
-${XDG_CACHE_HOME:-~/.cache}/chezmoi/facts.yaml, and have this partial read that
-cache through a stat-guarded `include` exactly the way facts.tmpl does. That is
-one subprocess per command regardless of probe count, and it makes rendering
-reproducible within a command rather than per call. This partial's ARGUMENT
-CONTRACT does not change when that happens — only where the value comes from —
-so call sites written against it today stay correct.
-
-Until that rework lands, keep the probe count small and prefer probes with no
-side effect at all.
+Adding a capability is adding a row to .chezmoidata/.capability-registry.tsv plus
+its reviewed resolver kind in the hook — never a `gates:` consumer, and never an
+inline command at a call site.
 
 ARGUMENT — a dict:
 
   {{ includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") }}
-
-Emits `available` or `unavailable`, with no trailing newline, so it can be used
-directly as a fingerprint value.
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "capabilities.tmpl: expected a dict, got a %s (%v). Call it as {{ includeTemplate \"capabilities.tmpl\" (dict \"ctx\" . \"probe\" \"sudo-usable\") }}" (kindOf .) .) -}}
 {{- end -}}
 {{- $probe := "" -}}{{- if hasKey . "probe" -}}{{- $probe = .probe -}}{{- end -}}
-{{- $known := list "sudo-usable" "session-bus-present" -}}
+
+{{- /* The registry is the enumeration of known probes AND the thing the record's
+   digest is taken over. Its basename is dot-prefixed because chezmoi discovers
+   .chezmoidata/ recursively and aborts every command with ".tsv: unknown format"
+   on a visible unknown-format data file (v2.71.0), while dot-prefixed entries are
+   skipped — which is what this file needs: it is read as raw bytes here and in the
+   hook, and must never merge into the template data map. Keep this path
+   byte-identical to CAPABILITY_REGISTRY_RELPATH in .install-prerequisites.sh. */ -}}
+{{- $registryPath := joinPath .ctx.chezmoi.sourceDir ".chezmoidata" ".capability-registry.tsv" -}}
+{{- if not (stat $registryPath) -}}
+{{-   fail (printf "capabilities.tmpl: missing capability registry %s. It is the only runtime source of probe keys; restore it from source control." $registryPath) -}}
+{{- end -}}
+{{- $registryRaw := include $registryPath -}}
+{{- /* SHAPE-CHECK BEFORE TRUSTING IT, exactly as facts.tmpl does with its cache: a
+   truncated registry must produce an actionable diagnostic, not a mis-parsed key
+   set that silently turns every probe into `unavailable`. */ -}}
+{{- if not (regexMatch "^capability-registry-v1\n([a-z0-9][a-z0-9.-]*\t[a-z-]+\t[a-z-]+\tavailable\tunavailable\n)+$" $registryRaw) -}}
+{{-   fail (printf "capabilities.tmpl: capability registry %s is malformed. Expected the capability-registry-v1 header followed by sorted <key>\\t<kind>\\t<side-effect>\\tavailable\\tunavailable rows." $registryPath) -}}
+{{- end -}}
+{{- $registryDigest := $registryRaw | sha256sum -}}
+{{- $known := list -}}
+{{- range $row := splitList "\n" (trimSuffix "\n" $registryRaw) -}}
+{{-   if ne $row "capability-registry-v1" -}}
+{{-     $known = append $known (index (splitList "\t" $row) 0) -}}
+{{-   end -}}
+{{- end -}}
 {{- if not (has $probe $known) -}}
-{{-   fail (printf "capabilities.tmpl: unknown probe %q. Known probes: %s. Add a new probe to this partial rather than inlining a command at the call site, so every render-time probe stays enumerable and reviewable in one place." $probe (join ", " $known)) -}}
+{{-   fail (printf "capabilities.tmpl: unknown probe %q. Known probes: %s. Declare a new probe in %s with its reviewed resolver kind rather than inlining a command at the call site, so every probe stays enumerable in one place." $probe (join ", " $known) $registryPath) -}}
 {{- end -}}
-{{- if ne .ctx.chezmoi.os "linux" -}}
-unavailable
-{{- else if eq $probe "sudo-usable" -}}
-{{- /* Root needs no sudo. Otherwise a non-interactive check: succeeds on a
-   cached credential or password-less sudo, fails closed on anything else.
-   `-N` is load-bearing — without it a successful probe REFRESHES the sudo
-   timestamp, and because this renders for `chezmoi status` and `diff` too,
-   routine read-only commands would keep an expiring authorization alive
-   indefinitely. `|| true` and the timeout keep a hung or missing sudo from
-   failing the render. */ -}}
-{{- output "sh" "-c" "if [ \"$(id -u)\" = 0 ]; then printf available; elif timeout 5 sudo -nN true >/dev/null 2>&1; then printf available; else printf unavailable; fi" | trim -}}
-{{- else if eq $probe "session-bus-present" -}}
-{{- /* Pure environment and socket test — no subprocess side effects. Mirrors
-   the runtime condition its consumers already test. */ -}}
-{{- output "sh" "-c" "if [ -n \"${DBUS_SESSION_BUS_ADDRESS:-}\" ] || [ -S \"${XDG_RUNTIME_DIR:-/nonexistent}/bus\" ]; then printf available; else printf unavailable; fi" | trim -}}
+
+{{- /* Identity of the command doing this render. The `sh` child's $PPID is the
+   chezmoi process; the helper is read as RAW BYTES (not includeTemplate: it is
+   shell, and a brace sequence in it must never be parsed as a template action) and
+   embedded verbatim, so reader and hook cannot drift. The helper always exits 0 (a
+   non-zero `output` child would abort the render) and says `unresolved` when it
+   cannot derive an identity. */ -}}
+{{- $identityHelper := joinPath .ctx.chezmoi.sourceDir ".chezmoitemplates" "capability-cache-identity.sh" -}}
+{{- if not (stat $identityHelper) -}}
+{{-   fail (printf "capabilities.tmpl: missing identity helper %s. The hook and this partial must derive the same identity from the same bytes; restore it from source control." $identityHelper) -}}
 {{- end -}}
+{{- $identityLine := output "sh" "-c" (printf "CAPABILITY_CACHE_OWNER_PID=\"$PPID\"\nexport CAPABILITY_CACHE_OWNER_PID\n%s" (include $identityHelper)) | trim -}}
+{{- $token := "unavailable" -}}
+{{- $identityFields := splitList "\t" $identityLine -}}
+{{- if eq (len $identityFields) 4 -}}
+{{-   $identity := index $identityFields 3 -}}
+{{-   $ownerPid := index $identityFields 1 -}}
+{{-   $marker := index $identityFields 2 -}}
+{{- /* Same path the hook writes. `env` reads the same XDG_CACHE_HOME the hook
+     read, and .chezmoi.homeDir is the same $HOME — no extra subprocess. */ -}}
+{{-   $cacheHome := env "XDG_CACHE_HOME" -}}
+{{-   if eq $cacheHome "" -}}
+{{-     $cacheHome = joinPath .ctx.chezmoi.homeDir ".cache" -}}
+{{-   end -}}
+{{-   $recordPath := joinPath $cacheHome "chezmoi" "capabilities" (printf "%s.tsv" $identity) -}}
+{{-   $recordStat := stat $recordPath -}}
+{{- /* A record must be a regular file whose mode is exactly 0600 — mode 384 with
+     no type bits set. `stat` follows symlinks and cannot report ownership, so the
+     real containment is the hook's owner-only 0700 directory; this rejects the
+     shapes a template CAN see. */ -}}
+{{-   if and $recordStat (eq $recordStat.type "file") (eq (printf "%v" $recordStat.mode) "384") -}}
+{{-     $raw := include $recordPath -}}
+{{-     if regexMatch "^capability-cache-v1\t[0-9a-f]+\t[0-9]+\t[A-Za-z0-9:._-]+\t[0-9a-f]+\n([a-z0-9][a-z0-9.-]*\t(available|unavailable)\n)+$" $raw -}}
+{{-       $rows := splitList "\n" (trimSuffix "\n" $raw) -}}
+{{-       $header := splitList "\t" (index $rows 0) -}}
+{{- /* Provenance: this identity, this command's PID and start marker, and the
+         digest of the registry bytes just validated above. Any mismatch means the
+         record belongs to another command or another registry. */ -}}
+{{-       if and (eq (index $header 1) $identity) (eq (index $header 2) $ownerPid) (eq (index $header 3) $marker) (eq (index $header 4) $registryDigest) -}}
+{{-         $cached := dict -}}
+{{-         range $row := slice $rows 1 (len $rows) -}}
+{{-           $fields := splitList "\t" $row -}}
+{{-           $_ := set $cached (index $fields 0) (index $fields 1) -}}
+{{-         end -}}
+{{- /* EXACT key set, both directions: a record missing a key would hand that
+           consumer a silent default, and an extra key means the record was written
+           against a registry this render did not validate. */ -}}
+{{-         $complete := eq (len (keys $cached)) (len $known) -}}
+{{-         range $key := $known -}}
+{{-           if not (hasKey $cached $key) -}}
+{{-             $complete = false -}}
+{{-           end -}}
+{{-         end -}}
+{{-         if $complete -}}
+{{-           $token = index $cached $probe -}}
+{{-         end -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $token -}}

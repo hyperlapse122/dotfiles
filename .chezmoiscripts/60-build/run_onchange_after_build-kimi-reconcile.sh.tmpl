@@ -1,10 +1,16 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $misePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "mise-present") -}}
 #!/usr/bin/env bash
 # Builds the bounded Kimi mutable-state reconciler. Its source fingerprint is
 # the only dependency; live state is handled by separate run_after wrappers.
+# Missing mise is a DECLARED transient-blocking precondition. Dependency
+# installation, build, and missing output are hard errors even when an older
+# executable exists, because a requested build has not converged.
 set -euo pipefail
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/kimi-reconcile/package.json" "packages/kimi-reconcile/tsconfig.json" "packages/kimi-reconcile/vite.config.ts" "packages/kimi-reconcile/src/**")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/kimi-reconcile/package.json" "packages/kimi-reconcile/tsconfig.json" "packages/kimi-reconcile/vite.config.ts" "packages/kimi-reconcile/src/**")
+      "values" (list (dict "name" "mise-present" "value" $misePresent))) }}
 
 SRC="{{ $sourceDir }}"
 DIST="$SRC/packages/kimi-reconcile/dist/kimi-reconcile"
@@ -12,19 +18,18 @@ BIN_DIR="$HOME/.local/bin"
 TARGET="$BIN_DIR/kimi-reconcile"
 
 if ! command -v mise >/dev/null 2>&1; then
-  printf '%s\n' 'build-kimi-reconcile: skipped (mise not installed); existing executable preserved.' >&2
-  [[ -x "$TARGET" ]] && exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-kimi-reconcile" "site" "mise-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "mise is not installed; kimi-reconcile build is deferred") | trim | indent 2 }}
+fi
+if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
+  printf '%s\n' 'build-kimi-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
   exit 1
 fi
-if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile ||
-   ! mise -C "$SRC/packages/kimi-reconcile" exec -- vp run build; then
-  printf '%s\n' 'build-kimi-reconcile: skipped (dependency install or build failed); existing executable preserved.' >&2
-  [[ -x "$TARGET" ]] && exit 0
+if ! mise -C "$SRC/packages/kimi-reconcile" exec -- vp run build; then
+  printf '%s\n' 'build-kimi-reconcile: build failed; fix the kimi-reconcile build error, then re-apply.' >&2
   exit 1
 fi
 if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
-  printf '%s\n' 'build-kimi-reconcile: skipped (compiled executable missing); existing executable preserved.' >&2
-  [[ -x "$TARGET" ]] && exit 0
+  printf '%s\n' 'build-kimi-reconcile: build completed without an executable dist artifact; inspect the build output, then re-apply.' >&2
   exit 1
 fi
 mkdir -p "$BIN_DIR"
@@ -34,8 +39,7 @@ chmod 0600 "$temporary"
 cp -- "$DIST" "$temporary"
 chmod 0755 "$temporary"
 if [[ -L "$TARGET" || ( -e "$TARGET" && ! -f "$TARGET" ) ]]; then
-  printf '%s\n' 'build-kimi-reconcile: skipped (install target is unsafe); existing target preserved.' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-kimi-reconcile" "site" "install-target-unsafe" "direction" "harmless" "reason" "the kimi-reconcile install target is not a regular file; existing target is preserved") | trim | indent 2 }}
 fi
 mv -f -- "$temporary" "$TARGET"
 temporary=''
