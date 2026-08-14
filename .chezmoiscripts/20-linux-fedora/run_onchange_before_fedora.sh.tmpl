@@ -559,19 +559,17 @@ enroll_dkms_mok() {
   fi
 }
 
-# Enable a systemd unit only when its unit file exists, so a host missing an
-# optional package (e.g. nvidia-persistenced without the NVIDIA driver) is
-# skipped rather than failing under set -e. The second argument selects "now"
-# (enable --now) or "later" (enable only).
+# Enable a systemd unit while preserving the explicit absent-unit skip. Try
+# enable-only first; query unit-file presence only when enabling fails. This
+# avoids an extra systemctl query on the normal path and still skips optional
+# services that are not installed. Activation is deferred until the operator
+# manually restarts the service or reboots after apply.
 enable_unit() {
-  local svc="$1" when="${2:-now}"
-  if ! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}"; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "enable-unit-absent" "direction" "harmless" "reason" "the requested unit file is not installed on this host") | trim | indent 4 }}
-  fi
-  if [[ "${when}" == later ]]; then
-    "${SUDO[@]}" systemctl enable "${svc}" 2>/dev/null || true
-  else
-    "${SUDO[@]}" systemctl enable --now "${svc}" 2>/dev/null || true
+  local svc="$1"
+  if ! "${SUDO[@]}" systemctl enable "${svc}" 2>/dev/null; then
+    if ! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-fedora" "site" "enable-unit-absent" "direction" "harmless" "reason" "the requested unit file is not installed on this host") | trim | indent 6 }}
+    fi
   fi
 }
 
@@ -581,10 +579,9 @@ enable_services() {
   enable_unit tailscaled
 
   # NVIDIA persistence daemon only on NVIDIA hosts (same HAS_NVIDIA gate as the
-  # driver install); it only needs to be up once the driver is loaded, so enable
-  # it for next boot rather than starting it now.
+  # driver install); it only needs to be enabled for the next boot.
   if [[ "${HAS_NVIDIA}" -eq 1 ]]; then
-    enable_unit nvidia-persistenced later
+    enable_unit nvidia-persistenced
   fi
 
   # Time synchronization — unmask before enabling (some images ship it masked).
@@ -654,6 +651,10 @@ configure_time
 # Secure Boot is off or no keypair is enrollable; safe on every host.
 enroll_dkms_mok
 enable_services
+printf '\n'
+printf 'NOTE: This installer defers explicit activation for keyd, tailscaled, systemd-timesyncd, and (on NVIDIA hosts) nvidia-persistenced.\n'
+printf '      Package or time-configuration side effects may still activate services.\n'
+printf '      Restart affected services manually after apply, or reboot the system.\n'
 configure_user_groups
 
 {{ end -}}

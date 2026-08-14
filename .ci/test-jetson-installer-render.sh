@@ -78,11 +78,12 @@ for needle in \
   'nvidia-l4t-apt-source.list' \
   '$2 == "VALIDSIG"' \
   '/opt/1Password/after-install.sh' \
-  '/usr/share/applications/1password.desktop'
+  '/usr/share/applications/1password.desktop' \
+  'NOTE: Jetson package and desktop changes may require service activation.'
 do
   grep -qF -- "$needle" "$scratch/on.sh" || fail "the jetson=true render omits ${needle}"
 done
-for forbidden in nvidia-cuda-toolkit mokutil MOK dkms 1password-latest.tar.gz; do
+for forbidden in nvidia-cuda-toolkit mokutil MOK dkms 1password-latest.tar.gz 'systemctl start' 'systemctl restart' 'systemctl reload' 'systemctl enable --now'; do
   ! grep -qF -- "$forbidden" "$scratch/on.sh" \
     || fail "the jetson=true render names the forbidden ${forbidden}"
 done
