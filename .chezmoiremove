@@ -155,3 +155,7 @@ AppData/Roaming/VSCodium/User/keybindings.json
 {{- if $f.container }}
 .local/share/omp-plugins/.omp-plugin/marketplace.json
 {{- end }}
+
+# Remove unused claude and codex settings file
+.claude.json
+.codex/config.toml
