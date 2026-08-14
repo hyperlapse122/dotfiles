@@ -106,8 +106,8 @@ flowchart TB
 - R14. The login-shell change treats an account whose username contains `@` as authd-managed. The heuristic is deliberate and provisional.
 - R15. For an authd-managed account the shell is changed with `authctl user set-shell` only when that exact subcommand exists, and otherwise by updating the `shell` column of the `users` row in the authd database with the `sqlite3` CLI.
 - R16. The database fallback asserts the schema before it writes: the `users` table, its `shell` column, a `schema_version` row, and a matching user row must all be present. The change is confirmed with `getent passwd`, without restarting the authd daemon.
-- R17. Every failure path in the authd branch prints a diagnostic and exits zero. It never aborts the apply and never leaves a partial write.
-- R34. A confirmation failure is retryable rather than recorded as final, so a transient NSS or daemon fault does not permanently strand the shell change.
+- R17. Every failure path in the authd branch prints a diagnostic and never leaves a partial write. A schema this authd build can never satisfy is a `harmless` skip and exits zero. A write or confirmation that fails on a host whose schema did check out is a `transient-tolerable` skip and exits non-zero, because chezmoi records an `onchange` script that exits zero as complete and would never rerun it. Neither path aborts a later phase's own work.
+- R34. A confirmation failure is retryable rather than recorded as final, so a transient NSS or daemon fault does not permanently strand the shell change. This is what forces the non-zero exit in R17: the two requirements cannot both hold with a uniform exit-zero rule.
 - R27. Every early exit added by this plan declares its skip direction at the site, and `.ci/skip-declaration-site-matrix.yaml` is updated in the same change so `.ci/check-skip-declarations.sh` still passes.
 
 **Desktop and per-host skips**
@@ -286,6 +286,8 @@ The load-bearing corrections:
 - R15 through R17 originally specified a database write plus a conditional daemon restart. The daemon holds no shell cache, and the supported CLI is unreleased, so the mechanism is now subcommand-checked CLI first with a schema-checked database fallback and no restart.
 - R20 originally said an arm64-less external is "skipped without failing the render". The release lock hard-fails on a missing key by contract, so the requirement now demands the gate be evaluated before the lookup.
 - R22 originally demanded byte-identical Fedora scripts. `.chezmoitemplates/facts-sh.tmpl:34-61` emits every registry fact into every consuming script, so adding a fact necessarily changes those bytes. R22 now permits exactly that delta and nothing else.
+- R17 and R34 originally read as a uniform "exits zero". An independent code review of the implementation showed the two cannot both hold: chezmoi records an `onchange` script that exits zero as complete, so an exit-zero deferral is never retried and the shell change is stranded, which is precisely what R34 forbids. R17 now splits by cause — permanent-unsupported exits zero, transient-deferred exits non-zero — and this is the first use of the repository's `transient-tolerable` skip direction, so `.ci/test-capability-cache.sh` gained `terminate-script-exit-1` as an admitted continuation plus an assertion that the direction may not terminate zero.
+- R5's enumeration was implemented only on the three `install-system-*` scripts. The same review found the Fedora package installer and the Podman cluster script perform system-wide mutation with no guard, so both now include `.chezmoitemplates/shared-host-guard.sh.tmpl` and the shared-guard fan-out is five consumers, not three.
 
 ### Key Technical Decisions
 
