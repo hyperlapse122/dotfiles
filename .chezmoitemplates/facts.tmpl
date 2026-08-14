@@ -189,6 +189,35 @@ Three rules hold this file together:
 {{- end -}}
 {{- $_ := set $facts "thinkpad" $thinkpad -}}
 
+{{- /* jetson — /etc/nv_tegra_release, the L4T release stamp apply_binaries.sh
+   copies into every flashed rootfs and the file NVIDIA's own BSP documentation
+   tells you to read. Deliberately NOT the device-tree model: that is hardware
+   identity a custom device tree changes, while this file tracks the BSP. Resolved
+   before sharedHost below, which reuses the value. */ -}}
+{{- $jetson := false -}}
+{{- if stat "/etc/nv_tegra_release" -}}
+{{-   $jetson = true -}}
+{{- end -}}
+{{- $_ := set $facts "jetson" $jetson -}}
+
+{{- /* sharedHost — a disjunction, any one signal sufficient:
+     1. /etc/dotfiles-shared-host  the operator declared it outright;
+     2. $jetson                    the board is shared by construction;
+     3. "@" in .chezmoi.username   an authd/Entra-managed account, which only
+                                   exists on a centrally-managed machine.
+   Template-layer on purpose: every signal is in-process, so this fact needs no
+   cache and cannot go wrong because one is missing. It FAILS OPEN on a shared host
+   with a local username, no Jetson, and no marker — the marker is the fix, and
+   facts.yaml records that residual. */ -}}
+{{- $sharedHost := $jetson -}}
+{{- if stat "/etc/dotfiles-shared-host" -}}
+{{-   $sharedHost = true -}}
+{{- end -}}
+{{- if contains "@" .chezmoi.username -}}
+{{-   $sharedHost = true -}}
+{{- end -}}
+{{- $_ := set $facts "sharedHost" $sharedHost -}}
+
 {{- /* `stat` returns a MAP or nil, so it is used as a truthiness test and never
    compared with eq/ne — text/template's eq/ne reject a map operand outright
    ("incompatible types for comparison"), which would abort the render. */ -}}

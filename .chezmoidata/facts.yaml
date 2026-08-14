@@ -141,7 +141,12 @@ factRegistry:
     type: bool
     probe: hook
     absentDefault: false
-    source: PCI vendor 0x10de anywhere under /sys/bus/pci/devices/*/vendor.
+    source: >-
+      PCI vendor 0x10de anywhere under /sys/bus/pci/devices/*/vendor. The fact
+      therefore means a DISCRETE NVIDIA GPU ON THE PCI BUS, and nothing weaker: an
+      integrated Tegra GPU has no such PCI entry, so a Jetson resolves FALSE here.
+      That is the correct value rather than a defect — every path this fact gates is
+      a Fedora-and-discrete-card path. Use `jetson` to reach a Tegra board.
     gates: >-
       nvidiaPackages (RPM Fusion's akmod driver stack plus the
       CUDA/libnvidia-container repos on Fedora), the nvidia-persistenced
@@ -149,9 +154,9 @@ factRegistry:
       FORCE_NVIDIA=1 overrides it IN THE INSTALLER ONLY (see the
       FORCE_* note at the bottom).
     whenFalse: >-
-      No driver, no CUDA repo, no container toolkit, no MOK enrollment. This is
-      the fact the plan's AE5 turns on: a template-only PCI probe reports false on
-      this host, whose GPU sits behind a PCIe bridge — the hook's grep does not.
+      No driver, no CUDA repo, no container toolkit, no MOK enrollment. On a host
+      whose GPU sits behind a PCIe bridge the hook's grep still finds it, where a
+      template-only glob would not — that is why this one stays a hook probe.
   thinkpad:
     type: bool
     probe: template
@@ -164,6 +169,24 @@ factRegistry:
       two DMI fields — at the cost of a sudo call in a file-install loop.
     gates: etc/modprobe.d/thinkpad_acpi.conf, etc/modules-load.d/thinkpad_acpi.conf.
     whenFalse: The ThinkPad ACPI module is neither configured nor force-loaded.
+  jetson:
+    type: bool
+    probe: template
+    source: >-
+      stat /etc/nv_tegra_release. NVIDIA's own BSP documentation reads that file to
+      identify the L4T release, and apply_binaries.sh copies it into every flashed
+      rootfs, so it is the most stable Jetson marker across JetPack versions. NOT
+      /proc/device-tree/model or .../compatible: those carry the hardware device-tree
+      model, which a custom device tree changes. NOT the `nvidia` fact — a Tegra GPU
+      is integrated and never appears as a PCI vendor 0x10de device.
+    gates: >-
+      The JetPack package delivery in 20-linux-ubuntu (nvidia-jetpack and the
+      Jetson-gated capability rows), the sharedHost disjunction below, and the
+      .chezmoiignore host-profile block that drops the mxm4-haptic build and the
+      Tailscale auth script.
+    whenFalse: >-
+      No JetPack metapackage, no Jetson-gated capability, and the haptic and
+      Tailscale targets deploy normally. A non-Jetson host is unaffected.
 
   # --- Virtualization — TWO facts, deliberately ------------------------------
   vm:
@@ -261,6 +284,34 @@ factRegistry:
       mxm4-haptic build, and .config/garden/garden.yaml (whose GPG key the
       skipped 80-keys import would have provided).
     whenFalse: A normal host — everything deploys.
+  sharedHost:
+    type: bool
+    probe: template
+    source: >-
+      A DISJUNCTION of three independently sufficient signals: stat
+      /etc/dotfiles-shared-host (the operator's explicit declaration), the `jetson`
+      fact above, or `.chezmoi.username` containing "@" (an authd/Entra-managed
+      account, which only exists on a centrally-managed machine). Deliberately a
+      TEMPLATE probe and not a hook one: all three resolve in-process, so the fact
+      needs no cache and therefore declares no `absentDefault` — it cannot be wrong
+      because a cache is missing. A head-count over `getent passwd` was rejected:
+      authd enumeration depends on the daemon's ListUsers and can report only the
+      users who have logged in.
+    gates: >-
+      The system-manifest install set (install-system-10-files, -20-host,
+      -30-network) and every change to a system-wide daemon's identity or
+      configuration — the Tailscale daemon enable, the Fedora CDI descriptor, unit
+      enablement, and group and subid membership. Package installation and
+      package-source trust are NOT gated: adding an apt source is additive delivery,
+      and gating it would make a shared host unable to provision itself.
+      INSTALL_SYSTEM_CONFIG_FORCE=1 overrides the headless guard ONLY and never
+      this fact.
+    whenFalse: >-
+      The pre-existing unconditional behavior: the manifest installs and daemons are
+      reconciled. RESIDUAL, accepted deliberately: a genuinely shared host with a
+      local username, no Jetson, and no marker file resolves FALSE and so FAILS OPEN.
+      The marker file is the fix and README.md documents it; a probe that guessed
+      instead would be less predictable, not safer.
 
 # ---------------------------------------------------------------------------
 # FORCE_* overrides are NOT facts and never enter this registry.
