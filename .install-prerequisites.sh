@@ -834,10 +834,19 @@ install_ubuntu() {
     exit 1
   fi
 
+  # `dpkg-query -W` also succeeds for a purged package still in `deinstall ok
+  # config-files`, so it would report removed packages as present and never
+  # restore them. Require the installed status field instead.
+  apt_installed() {
+    local status
+    status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
+    [[ "$status" == installed ]]
+  }
+
   local arch
   arch="$(dpkg --print-architecture)"
 
-  if ! dpkg-query -W 1password-cli >/dev/null 2>&1; then
+  if ! apt_installed 1password-cli; then
     "${SUDO[@]}" install -d -m 0755 /usr/share/keyrings
     curl -sS https://downloads.1password.com/linux/keys/1password.asc |
       "${SUDO[@]}" gpg --dearmor --yes --output /usr/share/keyrings/1password-archive-keyring.gpg
@@ -857,15 +866,15 @@ install_ubuntu() {
   local -a missing_pkgs=()
   local pkg
   for pkg in "${base[@]}"; do
-    dpkg-query -W "$pkg" >/dev/null 2>&1 || missing_pkgs+=("$pkg")
+    apt_installed "$pkg" || missing_pkgs+=("$pkg")
   done
   if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
     "${SUDO[@]}" apt-get update
     "${SUDO[@]}" apt-get install -y "${missing_pkgs[@]}"
   fi
 
-  if ! dpkg-query -W mise >/dev/null 2>&1; then
-    dpkg-query -W extrepo >/dev/null 2>&1 || "${SUDO[@]}" apt-get install -y extrepo
+  if ! apt_installed mise; then
+    apt_installed extrepo || "${SUDO[@]}" apt-get install -y extrepo
     "${SUDO[@]}" extrepo enable mise
     "${SUDO[@]}" apt-get update
     "${SUDO[@]}" apt-get install -y mise

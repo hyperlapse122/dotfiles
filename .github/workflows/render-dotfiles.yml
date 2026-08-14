@@ -489,6 +489,7 @@ jobs:
           set -euo pipefail
           .ci/test-fedora-fact-block-baseline.sh
           .ci/test-shared-host-authd-flow.sh
+          .ci/test-jetson-installer-render.sh
       - name: Assert retired Figma lifecycle is absent
         run: |
           set -euo pipefail
