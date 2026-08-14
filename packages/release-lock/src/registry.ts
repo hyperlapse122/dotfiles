@@ -198,6 +198,12 @@ export const REGISTRY: Registry = {
 
   /* ---------- vendorManifest ---------- */
 
+  "1password": {
+    kind: "vendorManifest",
+    vendor: "onePassword",
+    source: "https://releases.1password.com/linux/stable/index.xml",
+  },
+
   winbox: {
     kind: "vendorManifest",
     vendor: "winbox",
