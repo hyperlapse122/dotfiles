@@ -103,10 +103,10 @@ totals = matrix.get('totals', {})
 # config-kde-calendar/akonadi-query-failed, a live SQL read failure on an eligible
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 frozen = {
-    'classified_owners': 121,
+    'classified_owners': 124,
     'hard_error_owners': 11,
-    'rendered_instances': 141,
-    'phase_local_instances': 117,
+    'rendered_instances': 144,
+    'phase_local_instances': 120,
     'shared_guard_instances': 24,
 }
 for key, expected in frozen.items():
@@ -365,8 +365,8 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
     kinds[key] = kind
     platforms[key] = platform
 
-if len(keys) != 34:
-    problems.append(f'registry has {len(keys)} probes, expected 34')
+if len(keys) != 35:
+    problems.append(f'registry has {len(keys)} probes, expected 35')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
         'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
     problems.append('only mise-present, gh-present, glab-present, and tokscale-present may be any-platform probes')

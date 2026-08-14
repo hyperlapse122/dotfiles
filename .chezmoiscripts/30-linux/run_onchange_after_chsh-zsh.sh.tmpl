@@ -102,20 +102,25 @@ if [[ "$USER" == *@* ]]; then
     fi
 
     # Writing the vendor's database directly is NOT a supported interface, so
-    # every assumption is asserted before the write and any failure is a
-    # diagnostic rather than an abort: schema, column, version row, user row.
-    if [[ ! -r "$authd_db" ]]; then
-      printf 'chsh-zsh: %s is not readable; leaving the authd login shell unchanged.\n' "$authd_db" >&2
-    elif ! "${SUDO[@]}" sqlite3 "$authd_db" 'SELECT shell FROM users LIMIT 0;' >/dev/null 2>&1; then
-      printf 'chsh-zsh: authd schema has no users.shell column; leaving the authd login shell unchanged.\n' >&2
-    elif ! "${SUDO[@]}" sqlite3 "$authd_db" 'SELECT version FROM schema_version LIMIT 1;' >/dev/null 2>&1; then
-      printf 'chsh-zsh: authd schema_version is unreadable; leaving the authd login shell unchanged.\n' >&2
-    elif [[ "$("${SUDO[@]}" sqlite3 "$authd_db" "SELECT count(*) FROM users WHERE name = '${USER//\'/\'\'}';" 2>/dev/null)" != 1 ]]; then
-      printf 'chsh-zsh: authd has no users row for %s; leaving the authd login shell unchanged.\n' "$USER" >&2
-    else
-      printf 'chsh-zsh: setting authd login shell for %s to %s\n' "$USER" "$zsh_bin"
-      "${SUDO[@]}" sqlite3 "$authd_db" \
-        "UPDATE users SET shell = '${zsh_bin//\'/\'\'}' WHERE name = '${USER//\'/\'\'}';" || true
+    # every assumption is asserted before the write. A schema this authd build
+    # will never satisfy is a HARMLESS skip; a write that fails on a host whose
+    # schema checked out is a HARD ERROR, matching how config-kde-calendar treats
+    # a live query failure on an otherwise eligible host.
+    authd_schema_ok() {
+      [[ -r "$authd_db" ]] \
+        && "${SUDO[@]}" sqlite3 "$authd_db" 'SELECT shell FROM users LIMIT 0;' >/dev/null 2>&1 \
+        && "${SUDO[@]}" sqlite3 "$authd_db" 'SELECT version FROM schema_version LIMIT 1;' >/dev/null 2>&1 \
+        && [[ "$("${SUDO[@]}" sqlite3 "$authd_db" "SELECT count(*) FROM users WHERE name = '${USER//\'/\'\'}';" 2>/dev/null)" == 1 ]]
+    }
+    if ! authd_schema_ok; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "chsh-zsh" "site" "authd-schema-unsupported" "direction" "harmless" "reason" "the authd database does not expose a users.shell column, a schema_version row, and a row for this account; this build will not accept a shell change") | trim | indent 6 }}
+    fi
+
+    printf 'chsh-zsh: setting authd login shell for %s to %s\n' "$USER" "$zsh_bin"
+    if ! "${SUDO[@]}" sqlite3 "$authd_db" \
+      "UPDATE users SET shell = '${zsh_bin//\'/\'\'}' WHERE name = '${USER//\'/\'\'}';"; then
+      printf 'chsh-zsh: the authd shell update failed on a host whose schema checked out. Fix authd or set the shell by hand, then re-apply.\n' >&2
+      exit 1
     fi
   fi
 
@@ -124,11 +129,10 @@ if [[ "$USER" == *@* ]]; then
   # shared host would interrupt authentication for everyone.
   confirmed="$(getent passwd "$USER" 2>/dev/null | awk -F: '{ print $7 }')" || true
   if [[ "${confirmed##*/}" == "zsh" ]]; then
-    printf 'chsh-zsh: done. Log out and back in for the new login shell to take effect.\n'
-  else
-    printf 'chsh-zsh: authd still reports %s for %s; retrying on the next apply.\n' "${confirmed:-<unset>}" "$USER" >&2
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "chsh-zsh" "site" "authd-login-shell-set" "reason" "the authd login shell is now zsh; log out and back in for it to take effect") | trim | indent 4 }}
   fi
-  exit 0
+  printf 'chsh-zsh: authd still reports %s for %s after the change. Fix authd or set the shell by hand, then re-apply.\n' "${confirmed:-<unset>}" "$USER" >&2
+  exit 1
 fi
 {{ end -}}
 # 5. chsh only accepts a shell listed in /etc/shells for non-root callers, and

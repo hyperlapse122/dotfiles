@@ -183,11 +183,11 @@ factRegistry:
       is integrated and never appears as a PCI vendor 0x10de device.
     gates: >-
       The JetPack package delivery in 20-linux-ubuntu (nvidia-jetpack and the
-      Jetson-gated capability rows), the sharedHost disjunction below, and the
+      Jetson-gated package rows), the sharedHost disjunction below, and the
       .chezmoiignore host-profile block that drops the mxm4-haptic build and the
       Tailscale auth script.
     whenFalse: >-
-      No JetPack metapackage, no Jetson-gated capability, and the haptic and
+      No JetPack metapackage, no Jetson-gated package delivery, and the haptic and
       Tailscale targets deploy normally. A non-Jetson host is unaffected.
 
   # --- Virtualization — TWO facts, deliberately ------------------------------
