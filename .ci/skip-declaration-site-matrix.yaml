@@ -5,8 +5,9 @@
 # .chezmoidata/.capability-registry.tsv (the versioned probe registry).
 #
 # WHAT IT FREEZES. The 130-site inventory of docs/plans/2026-08-13-001-feat-skip-
-# declaration-contract-plan.md, re-audited against the post-U4 tree: 120 classified
-# source owners plus the eleven settled hard-error owners. Every field below was read
+# declaration-contract-plan.md, plus the post-inventory WakaTime keyring site
+# present in the current source, is re-audited here: 121 classified source
+# owners plus the eleven settled hard-error owners. Every field below was read
 # out of the named template at the named line; anchors are PRE-CONVERSION snapshots,
 # so U6/U7 edits move the code without invalidating the freeze (CI checks the
 # template path, never that the line still reads the same).
@@ -23,9 +24,9 @@
 #     credential server) are recorded under their step owner, not as owners.
 #   * A helper reached from several call sites is one owner per call site, matching
 #     the legacy inventory rule.
-#   * A phase-local owner declares exactly one rendered instance. Each shared guard
-#     owner declares its complete consumer fan-out (8 GNOME, 9 KDE, 3 headless,
-#     4 sudo), so the rendered total is 116 + 24 = 140 sentinels, never 120.
+#   * Each shared guard owner declares its complete consumer fan-out (8 GNOME, 9
+#     KDE, 3 headless, 4 sudo), so the rendered total is 117 + 24 = 141 sentinels,
+#     never 121.
 #
 # FIELDS. `predicate` is the anchor line normalized (leading if/elif, trailing
 # `; then` and line continuations removed, whitespace collapsed); `*_digest` is
@@ -54,8 +55,9 @@
 # harmless/done_here mass included the three extension jobs U4 has since converted to
 # run_after_ signature lifecycles; those sites left this surface, so the same 120
 # in-scope owners cannot carry that split without re-labelling rows against
-# skip.sh.tmpl's own definitions. The frozen totals — 120 owners, 11 hard errors,
-# 140 instances, 116 + 24 — are unchanged and CI-enforced.
+# skip.sh.tmpl's own definitions. The current source adds one transient-blocking
+# WakaTime keyring site after that inventory. The frozen totals — 121 owners, 11
+# hard errors, 141 instances, 117 + 24 — are CI-enforced.
 
 schema: skip-declaration-site-matrix-v1
 frozen_from: 'docs/plans/2026-08-13-001-feat-skip-declaration-contract-plan.md#site-inventory-and-direction-matrix'
@@ -63,10 +65,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 120
+  classified_owners: 121
   hard_error_owners: 11
-  rendered_instances: 140
-  phase_local_instances: 116
+  rendered_instances: 141
+  phase_local_instances: 117
   shared_guard_instances: 24
 
 plan_contract:
@@ -88,22 +90,21 @@ plan_contract_scopes:
   70-agents: 3
 
 audited_forms:
-  skip_here: 51
+  skip_here: 52
   skip_step: 32
   done_here: 13
   not_applicable: 24
 
 audited_directions:
   harmless: 26
-  transient-blocking: 57
+  transient-blocking: 58
   transient-tolerable: 0
-
 audited_scopes:
   guard-partials: 4
   00-tools: 4
   10-auth: 5
   20-linux-fedora: 17
-  30-linux: 24
+  30-linux: 25
   50-linux-gnome: 29
   50-linux-kde: 29
   60-build: 5
@@ -122,8 +123,8 @@ divergence:
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless.'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 57
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. Each such row names a registry probe, so U6/U7 wiring stays mechanical.'
+    audited: 58
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
   - bucket: 'done_here'
     plan: 10
     audited: 13
@@ -142,8 +143,8 @@ divergence:
     reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts.'
   - bucket: 'scope:30-linux'
     plan: 19
-    audited: 24
-    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts.'
+    audited: 25
+    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
     audited: 29
@@ -694,6 +695,22 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl#config-solaar/service-not-running'
+  - owner: 'config-wakatime-keyring/no-session-bus'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.tmpl'
+    anchor_line: 32
+    anchor: 'if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then'
+    predicate: '[[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]'
+    predicate_digest: 'sha256:0c3e8cbd49698ea261370619e391d49f486429d7482b012e0560ccc3196c3f82'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'session-bus-present'
+    fingerprint_placement: 'existing-header-block'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.tmpl#config-wakatime-keyring/no-session-bus'
   - owner: 'import-wifi-1password/command-not-deployed'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_import-wifi-1password.sh.tmpl'

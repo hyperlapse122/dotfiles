@@ -20,7 +20,7 @@ set -euo pipefail
 # carrying a stale digest.
 #
 # Cases are run with `--fixture`, which suppresses only the frozen production
-# totals (120 owners / 140 instances / 116 + 24); every structural check still
+# totals (121 owners / 141 instances / 117 + 24); every structural check still
 # runs. The last case runs the checker with no flags against the repository.
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)

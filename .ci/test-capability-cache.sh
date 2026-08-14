@@ -103,10 +103,10 @@ totals = matrix.get('totals', {})
 # config-kde-calendar/akonadi-query-failed, a live SQL read failure on an eligible
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 frozen = {
-    'classified_owners': 120,
+    'classified_owners': 121,
     'hard_error_owners': 11,
-    'rendered_instances': 140,
-    'phase_local_instances': 116,
+    'rendered_instances': 141,
+    'phase_local_instances': 117,
     'shared_guard_instances': 24,
 }
 for key, expected in frozen.items():
