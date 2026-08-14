@@ -15,10 +15,24 @@ chezmoi_bin=$(type -P chezmoi)
 fail() { printf 'mxm4-haptic gates: %s\n' "$*" >&2; exit 1; }
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+render_remove() {
+  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 variant
+  variant="$scratch/remove-$os-$container.tmpl"
+  node -e '
+    const fs = require("node:fs");
+    const [sourcePath, outputPath, container] = process.argv.slice(1);
+    const source = fs.readFileSync(sourcePath, "utf8");
+    const needle = `{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}`;
+    const replacement = `{{- $f := dict "container" ${container} "desktop" "gnome" "distro" "fedora" "headless" false }}`;
+    if (source.split(needle).length !== 2) throw new Error("facts provider anchor changed");
+    fs.writeFileSync(outputPath, source.replace(needle, replacement));
+  ' "$repo_root/.chezmoiremove" "$variant" "$container"
+  render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
+}
 
 posix_build=.chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl
 posix_reconcile=.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
-for path in "$posix_build" "$posix_reconcile" \
+for path in .chezmoiignore .chezmoiremove "$posix_build" "$posix_reconcile" \
   dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json \
   dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl \
   dot_config/systemd/user/mxm4-hapticd.service.tmpl \
@@ -27,7 +41,9 @@ for path in "$posix_build" "$posix_reconcile" \
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$path"
 done
 
-omp_market=.local/share/omp-plugins/dot_omp-plugin/marketplace.json
+omp_plugins=.local/share/omp-plugins
+
+omp_market=.local/share/omp-plugins/.omp-plugin/marketplace.json
 omp_plugin=.local/share/omp-plugins/plugins/mxm4-haptic/package.json
 linux_daemon=.config/systemd/user/mxm4-hapticd.service
 linux_notify=.config/systemd/user/mxm4-haptic-notify.service
@@ -60,12 +76,9 @@ grep -F '"$HOME/.local/bin/mxm4-hapticd"' "$plist" >/dev/null || fail 'macOS Lau
 
 container_ignore="$scratch/ignore-linux-container"
 render_ignore "$repo_root" "$scratch" "$chezmoi_bin" linux true "$container_ignore"
-for path in "$omp_plugin" "$linux_daemon" "$linux_notify" "$mac_daemon"; do
+for path in "$omp_plugins" "$omp_market" "$omp_plugin" "$linux_daemon" "$linux_notify" "$mac_daemon"; do
   assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored "$path" 'linux container'
 done
-# The container skip is restored to the whole .local/share/omp-plugins tree
-# now that unmanaged-repo-guard is gone, so the catalog flips back to ignored.
-assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored "$omp_market" 'linux container shared catalog'
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" ignored .chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh 'linux container'
 # The phase-70 omp reconciler remains eligible in containers to maintain
 # keep-marked marketplaces and remove the retired legacy extension.
@@ -75,6 +88,19 @@ assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible 
 # on managed hosts.
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .agents/skills/i-have-adhd 'linux container adhd skill'
 assert_gate "$repo_root" "$scratch" "$chezmoi_bin" "$container_ignore" eligible .omp/agent/APPEND_SYSTEM.md 'linux container adhd always-on prompt'
+
+host_remove="$scratch/remove-linux-host"
+container_remove="$scratch/remove-linux-container"
+render_remove "$repo_root" "$scratch" "$chezmoi_bin" linux false "$host_remove"
+render_remove "$repo_root" "$scratch" "$chezmoi_bin" linux true "$container_remove"
+LC_ALL=C sort "$host_remove" >"$scratch/remove-linux-host.sorted"
+LC_ALL=C sort "$container_remove" >"$scratch/remove-linux-container.sorted"
+comm -13 "$scratch/remove-linux-host.sorted" "$scratch/remove-linux-container.sorted" >"$scratch/container-only-removals"
+printf '%s\n' "$omp_market" >"$scratch/expected-container-only-removals"
+if ! cmp -s "$scratch/expected-container-only-removals" "$scratch/container-only-removals"; then
+  diff -u "$scratch/expected-container-only-removals" "$scratch/container-only-removals" >&2 || true
+  fail 'container removal must add only the stranded OMP marketplace catalog cleanup'
+fi
 
 # Template guards are a second line of defense: exactly one native build and
 # one reconciliation implementation renders on each host OS.

@@ -3,9 +3,10 @@
 # Declare gallery extension IDs (publisher.name) here; the reconcilers install
 # missing ones and force-update the declared ones:
 #   - POSIX (Linux AND macOS): .chezmoiscripts/30-linux/
-#     run_onchange_after_install-vscodium-extensions.sh.tmpl
-# Each list is rendered into its script body, so editing it re-triggers the
-# run_onchange — add/bump extensions HERE, not in the scripts.
+#     run_after_install-vscodium-extensions.sh.tmpl
+# The list is hashed into that job's success signature, so editing it invalidates
+# the signature and the next apply reconciles — add/bump extensions HERE, not in
+# the script.
 #
 # Additive only: extensions installed by hand are never uninstalled, and
 # removing an entry here merely stops managing it — uninstall by hand
