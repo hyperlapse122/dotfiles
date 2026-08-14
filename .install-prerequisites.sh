@@ -327,12 +327,12 @@ ensure_github_token() {
 # deletes this identity's own record when it safely can and exits non-zero, which
 # stops the command before a single template renders.
 #
-# NO .ps1 COUNTERPART, deliberately: every registry key is a Linux-only condition,
-# and the reader publishes the registry's fixed `unavailable` token wherever no
-# record exists. Windows therefore behaves exactly like a non-Linux host here, so
-# .install-prerequisites.ps1 has nothing to keep in sync.
+# NO .ps1 COUNTERPART, deliberately: Windows has no hook counterpart, and its
+# template reader publishes `unavailable` when this POSIX hook did not write an
+# identity-matching record. The four `any` command probes are resolved by this
+# hook on supported POSIX hosts; Linux-only probes never launch off Linux.
 CAPABILITY_CACHE_SCHEMA='capability-cache-v1'
-CAPABILITY_REGISTRY_SCHEMA='capability-registry-v1'
+CAPABILITY_REGISTRY_SCHEMA='capability-registry-v2'
 # Hidden basename on purpose: chezmoi discovers .chezmoidata/ recursively and
 # aborts EVERY command with ".tsv: unknown format" on a visible unknown-format
 # data file (verified on v2.71.0), while it skips dot-prefixed entries. The
@@ -342,8 +342,10 @@ CAPABILITY_REGISTRY_SCHEMA='capability-registry-v1'
 CAPABILITY_REGISTRY_RELPATH='.chezmoidata/.capability-registry.tsv'
 CAPABILITY_REGISTRY_KINDS=(
   absolute-executable command-present graphical-session python-module
-  session-bus sudo-nonrefreshing unix-socket user-manager-bus user-process
+  session-bus sudo-nonrefreshing unix-socket user-manager-bus user-manager-unit
+  user-process
 )
+CAPABILITY_REGISTRY_PLATFORMS=(any linux)
 CAPABILITY_REGISTRY_SIDE_EFFECTS=(none read-only-subprocess sudo-credential-probe)
 
 capability_cache_fail() {
@@ -361,16 +363,17 @@ capability_has() {
   return 1
 }
 
-# Parse and validate the versioned registry into CAPABILITY_KEYS/KINDS, and record
-# the SHA-256 of its EXACT bytes. Shape violations are refused rather than skipped:
-# the registry is checked-in source, the reader recomputes the same digest over the
-# same bytes, and a row this hook cannot map to reviewed code has no safe reading.
-# Digests through capability_cache_identity_sha256, so the caller must already have
-# sourced .chezmoitemplates/capability-cache-identity.sh.
+# Parse and validate the versioned registry into its key, kind, and platform
+# arrays, and record the SHA-256 of its EXACT bytes. Shape violations are refused
+# rather than skipped: the registry is checked-in source, the reader recomputes
+# the same digest over the same bytes, and a row this hook cannot map to reviewed
+# code has no safe reading. Digests through capability_cache_identity_sha256, so
+# the caller must already have sourced .chezmoitemplates/capability-cache-identity.sh.
 read_capability_registry() {
-  local LC_ALL=C path=$1 line_no=0 previous='' key kind side available unavailable rest
+  local LC_ALL=C path=$1 line_no=0 previous='' key kind side platform available unavailable rest
   CAPABILITY_KEYS=()
   CAPABILITY_KINDS=()
+  CAPABILITY_PLATFORMS=()
   [[ -f "$path" && ! -L "$path" ]] || capability_cache_fail "registry $path is missing or not a regular file"
   CAPABILITY_REGISTRY_DIGEST=$(capability_cache_identity_sha256 <"$path")
   [[ -n "$CAPABILITY_REGISTRY_DIGEST" ]] || capability_cache_fail 'no sha256sum/shasum available to digest the registry'
@@ -381,19 +384,22 @@ read_capability_registry() {
         || capability_cache_fail "registry $path must start with $CAPABILITY_REGISTRY_SCHEMA, got ${line@Q}"
       continue
     fi
-    IFS=$'\t' read -r key kind side available unavailable rest <<<"$line"
-    [[ -z "$rest" ]] || capability_cache_fail "registry line $line_no has more than five columns"
+    IFS=$'\t' read -r key kind side platform available unavailable rest <<<"$line"
+    [[ -z "$rest" ]] || capability_cache_fail "registry line $line_no has more than six columns"
     [[ "$key" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || capability_cache_fail "registry line $line_no has invalid key ${key@Q}"
     [[ "$key" > "$previous" ]] || capability_cache_fail "registry line $line_no key $key is out of order or duplicated"
     capability_has "$kind" "${CAPABILITY_REGISTRY_KINDS[@]}" \
       || capability_cache_fail "registry key $key declares probe kind ${kind@Q}, which this hook has no reviewed code for"
     capability_has "$side" "${CAPABILITY_REGISTRY_SIDE_EFFECTS[@]}" \
       || capability_cache_fail "registry key $key declares side-effect class ${side@Q}"
+    capability_has "$platform" "${CAPABILITY_REGISTRY_PLATFORMS[@]}" \
+      || capability_cache_fail "registry key $key declares platform applicability ${platform@Q}"
     [[ "$available" == available && "$unavailable" == unavailable ]] \
       || capability_cache_fail "registry key $key must declare the fixed tokens available/unavailable"
     previous=$key
     CAPABILITY_KEYS+=("$key")
     CAPABILITY_KINDS+=("$kind")
+    CAPABILITY_PLATFORMS+=("$platform")
   done <"$path"
   ((${#CAPABILITY_KEYS[@]} > 0)) || capability_cache_fail "registry $path declares no capability keys"
 }
@@ -408,6 +414,43 @@ capability_akonadi_socket() {
   fi
   [[ -n "$socket" ]] || socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/akonadi/mysql.socket"
   printf '%s' "$socket"
+}
+
+# The `timeout` utility is not portable to every supported POSIX host. Match the
+# repository's bounded child-process convention so an unresponsive user manager
+# returns an unavailable capability instead of wedging the chezmoi command.
+capability_with_deadline() {
+  local deadline_secs="${CAPABILITY_PROBE_DEADLINE_SECS:-5}"
+  local term_grace_secs="${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}"
+  local probe_pid watchdog_pid probe_rc
+  [[ "$deadline_secs" =~ ^[1-9][0-9]*$ && "$term_grace_secs" =~ ^[1-9][0-9]*$ ]] \
+    || capability_cache_fail 'capability probe deadlines must be positive integer seconds'
+
+  "$@" >/dev/null 2>&1 &
+  probe_pid=$!
+  (
+    sleep_pid=
+    trap '[ -z "$sleep_pid" ] || kill "$sleep_pid" 2>/dev/null || true; exit 0' HUP INT TERM
+    sleep "$deadline_secs" &
+    sleep_pid=$!
+    wait "$sleep_pid" 2>/dev/null || exit 0
+    if kill -0 "$probe_pid" 2>/dev/null; then
+      kill -TERM "$probe_pid" 2>/dev/null || true
+      sleep "$term_grace_secs" &
+      sleep_pid=$!
+      wait "$sleep_pid" 2>/dev/null || exit 0
+      kill -KILL "$probe_pid" 2>/dev/null || true
+    fi
+  ) &
+  watchdog_pid=$!
+  if wait "$probe_pid" 2>/dev/null; then
+    probe_rc=0
+  else
+    probe_rc=$?
+  fi
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  [[ "$probe_rc" -eq 0 ]]
 }
 
 # The registry supplies the key and the KIND; the code that runs is selected here
@@ -467,8 +510,14 @@ resolve_capability() {
       ;;
     user-manager-bus)
       case "$key" in
-        user-manager-bus-present) systemctl --user show-environment >/dev/null 2>&1 ;;
+        user-manager-bus-present) capability_with_deadline systemctl --user show-environment ;;
         *) capability_cache_fail "user-manager-bus key ${key@Q} has no reviewed probe" ;;
+      esac
+      ;;
+    user-manager-unit)
+      case "$key" in
+        podman-socket-unit-present) capability_with_deadline systemctl --user cat podman.socket ;;
+        *) capability_cache_fail "user-manager-unit key ${key@Q} has no reviewed unit" ;;
       esac
       ;;
     *)
@@ -557,7 +606,7 @@ prune_dead_capability_records() {
 # file always sits at the source root).
 write_capability_cache() {
   local source_root=${1:-${CHEZMOI_SOURCE_DIR:-}} helper registry identity_line
-  local schema identity owner_pid marker dir record tmp_record perms index key kind token
+  local schema identity owner_pid marker dir record tmp_record perms index key kind platform token host_platform
   if [[ -z "$source_root" ]]; then
     source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) \
       || capability_cache_fail 'cannot resolve the chezmoi source root'
@@ -574,6 +623,11 @@ write_capability_cache() {
   unset CAPABILITY_CACHE_IDENTITY_MAIN
 
   read_capability_registry "$registry"
+
+  case "$(uname -s)" in
+    Linux) host_platform=linux ;;
+    *) host_platform=other ;;
+  esac
 
   # $PPID here is chezmoi itself — chezmoi execs this hook directly — which is the
   # same process every template read resolves through its own `output sh -c` child.
@@ -615,9 +669,9 @@ write_capability_cache() {
     for index in "${!CAPABILITY_KEYS[@]}"; do
       key=${CAPABILITY_KEYS[index]}
       kind=${CAPABILITY_KINDS[index]}
-      # A non-Linux host publishes the registry's fixed unavailable token without
-      # launching a Linux probe; every consumer of these keys is Linux-only.
-      if [[ "$(uname -s)" != Linux ]]; then
+      platform=${CAPABILITY_PLATFORMS[index]}
+      # Inapplicable probes publish unavailable without entering their resolver.
+      if [[ "$platform" != any && "$platform" != "$host_platform" ]]; then
         token=unavailable
       elif resolve_capability "$key" "$kind"; then
         token=available

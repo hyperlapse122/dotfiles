@@ -94,6 +94,9 @@ fx_step() {
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "fx-main" "site" "mode-none" "reason" "no fixture mode is declared") | trim | indent 8 }}
       )
       ;;
+    declared)
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "fx-main" "site" "mode-declared" "reason" "the fixture mode is declared") | trim | indent 6 }};;
+    nonzero) exit 1;;
     broken)
       printf '%s\n' 'fx-main: the fixture parser failed; repair the input, then re-apply.' >&2
       exit 1
@@ -181,11 +184,17 @@ owners = [
          continuation='abandon-step-inline-notice', render_profile='any-host',
          form='not_applicable',
          instances=[f'{FX}/run_onchange_after_fx-main.sh.tmpl#fx-main/mode-none']),
-]
+    dict(owner='fx-main/mode-declared', scope='fixture',
+         template=f'{FX}/run_onchange_after_fx-main.sh.tmpl', anchor_line=31,
+         anchor='    declared)', predicate='declared)',
+         continuation='terminate-script-exit-0', render_profile='any-host',
+         form='not_applicable',
+         instances=[f'{FX}/run_onchange_after_fx-main.sh.tmpl#fx-main/mode-declared']),
 
+]
 hard_errors = [
     dict(owner='fx-main/parser-failed', scope='fixture',
-         template=f'{FX}/run_onchange_after_fx-main.sh.tmpl', anchor_line=31,
+         template=f'{FX}/run_onchange_after_fx-main.sh.tmpl', anchor_line=34,
          anchor='    broken)', predicate='broken)', cause='fixture-parser-failure',
          current_outcome='exit-0-skip', required_outcome='nonzero-exit-with-diagnostic'),
 ]
@@ -330,11 +339,34 @@ matrix=.ci/skip-declaration-site-matrix.yaml
 # error case, and the U4-style always-run exclusion case: all three are part of
 # what a clean tree must accept.
 expect_pass "$clean" 'clean fixture tree reconciles' \
-  '6 matrix owners, 1 hard errors, 8 declared instances' \
-  '7 instances rendered + 1 lifecycle-excluded + 0 missing = 8' \
+  '7 matrix owners, 1 hard errors, 9 declared instances' \
+  '8 instances rendered + 1 lifecycle-excluded + 0 missing = 9' \
   'lifecycle-excluded .chezmoiscripts/fixture/run_after_fx-always.sh.tmpl#fx-guard/ineligible-host' \
   '1 of 1 matrix-named hard errors verified nonzero and unclaimed' \
   'rendered declaration surface matches the matrix'
+
+expect_pass "$(variant one-line-case-arm-clean)" \
+  'declared and nonzero one-line case-arm terminators remain accepted'
+
+dir=$(variant one-line-case-arm-success)
+python3 - "$dir/$main" <<'PY'
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+old = """    broken)
+      printf '%s\\n' 'fx-main: the fixture parser failed; repair the input, then re-apply.' >&2
+      exit 1
+      ;;
+"""
+if old not in text:
+    raise SystemExit('fixture hard-error arm not found')
+path = open(path, 'w')
+path.write(text.replace(old, '    broken) exit 0;;\n'))
+path.close()
+PY
+expect_finding "$dir" 'an undeclared one-line case-arm success exit fails' \
+  'undeclared conditional success exit (exit 0)'
 
 # --- 3b. chezmoi reachable only through PATH -------------------------------- #
 # The checker renders under `env -i` with a sanitized PATH, and `env` resolves

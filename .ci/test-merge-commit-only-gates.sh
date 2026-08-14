@@ -261,6 +261,8 @@ for (const [name, job] of jobs) {
       `the resolver keys its lookup on ${shape(resolver.env?.PR_NUMBER)}, not the event number`);
     want(/gh api "repos\/\$\{GH_REPO\}\/pulls\/\$\{PR_NUMBER\}"/.test(resolver.run),
       "the resolver does not query the read-only pull endpoint by event number");
+    want(/--jq\s+['"]\.merge_commit_sha\s*\/\/\s*""['"]/.test(resolver.run),
+      'the resolver does not select `.merge_commit_sha // ""` from the REST response');
   }
 }
 

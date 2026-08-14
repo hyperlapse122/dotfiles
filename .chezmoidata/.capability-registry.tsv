@@ -1,35 +1,35 @@
-capability-registry-v1
-akonadi-socket-present	unix-socket	none	available	unavailable
-busctl-present	command-present	none	available	unavailable
-chsh-present	command-present	none	available	unavailable
-docker-credential-secretservice-present	command-present	none	available	unavailable
-dotnet-present	command-present	none	available	unavailable
-fc-cache-present	command-present	none	available	unavailable
-fc-match-present	command-present	none	available	unavailable
-fcitx5-present	command-present	none	available	unavailable
-gh-present	command-present	none	available	unavailable
-glab-present	command-present	none	available	unavailable
-graphical-session-present	graphical-session	none	available	unavailable
-gsettings-present	command-present	none	available	unavailable
-kwriteconfig6-present	command-present	none	available	unavailable
-mariadb-present	command-present	none	available	unavailable
-minikube-present	command-present	none	available	unavailable
-mise-present	command-present	none	available	unavailable
-nvidia-ctk-present	command-present	none	available	unavailable
-omp-present	command-present	none	available	unavailable
-plasma-apply-wallpaperimage-present	command-present	none	available	unavailable
-plasmashell-running	user-process	read-only-subprocess	available	unavailable
-podman-present	command-present	none	available	unavailable
-ptyxis-present	command-present	none	available	unavailable
-python3-yaml-present	python-module	read-only-subprocess	available	unavailable
-session-bus-present	session-bus	none	available	unavailable
-solaar-present	command-present	none	available	unavailable
-sudo-usable	sudo-nonrefreshing	sudo-credential-probe	available	unavailable
-timedatectl-present	command-present	none	available	unavailable
-tokscale-present	command-present	none	available	unavailable
-user-manager-bus-present	user-manager-bus	read-only-subprocess	available	unavailable
-usr-bin-1password-present	absolute-executable	none	available	unavailable
-usr-bin-python3-present	absolute-executable	none	available	unavailable
-xdg-mime-present	command-present	none	available	unavailable
-xdg-settings-present	command-present	none	available	unavailable
-zsh-present	command-present	none	available	unavailable
+capability-registry-v2
+akonadi-socket-present	unix-socket	none	linux	available	unavailable
+busctl-present	command-present	none	linux	available	unavailable
+chsh-present	command-present	none	linux	available	unavailable
+docker-credential-secretservice-present	command-present	none	linux	available	unavailable
+dotnet-present	command-present	none	linux	available	unavailable
+fc-cache-present	command-present	none	linux	available	unavailable
+fc-match-present	command-present	none	linux	available	unavailable
+fcitx5-present	command-present	none	linux	available	unavailable
+gh-present	command-present	none	any	available	unavailable
+glab-present	command-present	none	any	available	unavailable
+graphical-session-present	graphical-session	none	linux	available	unavailable
+gsettings-present	command-present	none	linux	available	unavailable
+kwriteconfig6-present	command-present	none	linux	available	unavailable
+mariadb-present	command-present	none	linux	available	unavailable
+minikube-present	command-present	none	linux	available	unavailable
+mise-present	command-present	none	any	available	unavailable
+nvidia-ctk-present	command-present	none	linux	available	unavailable
+omp-present	command-present	none	linux	available	unavailable
+plasma-apply-wallpaperimage-present	command-present	none	linux	available	unavailable
+plasmashell-running	user-process	read-only-subprocess	linux	available	unavailable
+podman-socket-unit-present	user-manager-unit	read-only-subprocess	linux	available	unavailable
+ptyxis-present	command-present	none	linux	available	unavailable
+python3-yaml-present	python-module	read-only-subprocess	linux	available	unavailable
+session-bus-present	session-bus	none	linux	available	unavailable
+solaar-present	command-present	none	linux	available	unavailable
+sudo-usable	sudo-nonrefreshing	sudo-credential-probe	linux	available	unavailable
+timedatectl-present	command-present	none	linux	available	unavailable
+tokscale-present	command-present	none	any	available	unavailable
+user-manager-bus-present	user-manager-bus	read-only-subprocess	linux	available	unavailable
+usr-bin-1password-present	absolute-executable	none	linux	available	unavailable
+usr-bin-python3-present	absolute-executable	none	linux	available	unavailable
+xdg-mime-present	command-present	none	linux	available	unavailable
+xdg-settings-present	command-present	none	linux	available	unavailable
+zsh-present	command-present	none	linux	available	unavailable

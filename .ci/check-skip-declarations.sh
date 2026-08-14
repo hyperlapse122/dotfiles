@@ -340,7 +340,7 @@ def mask(text):
 
 SENTINEL = re.compile(r'^#\s+' + SENTINEL_TOKEN + r'\s+(\S.*)$')
 TERM_PURE = re.compile(r'^(exit|return)(?:\s+(\S+))?$')
-TERM_ANY = re.compile(r'(?:^|[;&|]\s*|\{\s*|\bthen\s+|\belse\s+|\bdo\s+)(exit|return)\b[ \t]*(\S+)?')
+TERM_ANY = re.compile(r'(?:^|[;&|)]\s*|\{\s*|\bthen\s+|\belse\s+|\bdo\s+)(exit|return)\b[ \t]*(\S+)?')
 FUNCDEF = re.compile(r'^(?:function\s+)?[A-Za-z_][A-Za-z0-9_:.-]*\s*(?:\(\))?\s*\{$')
 ARRAY = re.compile(r'^(?:(?:local|declare|readonly|export|typeset)\s+(?:-[a-zA-Z]+\s+)*)?'
                    r'[A-Za-z_][A-Za-z0-9_]*\+?=\(')
@@ -449,23 +449,29 @@ def parse_blocks(text):
             events.append({'kind': 'branch', 'line': idx, 'cond': stack[-1]['cond'],
                            'depth': len(stack)})
             continue
+        case_arm = (CASE_ARM.match(s)
+                    if stack and stack[-1]['kind'] == 'case' else None)
         opened_arm = False
-        if stack and stack[-1]['kind'] == 'case' and CASE_ARM.match(s) and not s.startswith('('):
+        if case_arm and not s.startswith('('):
             stack.append({'kind': 'case-arm', 'line': idx, 'cond': raws[idx - 1],
                           'branch': 'arm', 'branch_line': idx, 'prev': here})
             events.append({'kind': 'branch', 'line': idx, 'cond': raws[idx - 1],
                            'depth': len(stack)})
             opened_arm = True
+        term_text = s[case_arm.end():].strip() if opened_arm else s
         for m in TERM_ANY.finditer(s):
             status, code = status_kind(m.group(2))
             events.append({'kind': 'term', 'line': idx, 'word': m.group(1),
                            'status': status, 'code': code,
-                           'pure': bool(TERM_PURE.match(s)), 'stack': list(stack),
+                           'pure': bool(TERM_PURE.match(term_text)), 'stack': list(stack),
                            'indent': indent, 'text': s, 'prev': here})
+        if s.rstrip().endswith(';;'):
+            if not stack or stack[-1]['kind'] != 'case-arm':
+                raise ParseError(f'line {idx}: ;; closes {stack[-1]["kind"] if stack else "nothing"}')
+            events.append({'kind': 'block-end', 'line': idx, 'frame': stack.pop(),
+                           'depth': len(stack) + 1})
+            continue
         if opened_arm:
-            if s.rstrip().endswith(';;'):
-                events.append({'kind': 'block-end', 'line': idx, 'frame': stack.pop(),
-                               'depth': len(stack) + 1})
             continue
         if s == '(':
             stack.append({'kind': 'subshell', 'line': idx, 'prev': here})

@@ -1,49 +1,43 @@
 #!/usr/bin/env bash
-# git-prune-local-branches — report-first cleanup of local branches that are
-# provably merged into the branch `origin` names as its default RIGHT NOW.
+# git-prune-local-branches — report-first cleanup of local branches with
+# GitHub-confirmed merged-pull-request proof.
 #
-# Default mode is a read-only report. It never contacts the remote, never
-# fetches, and never writes a ref, worktree, or stash entry. Everything it can
-# see locally (a cached `origin/HEAD`, a remote-tracking ref) is a snapshot of
-# some earlier fetch, so every candidate it prints is labelled unverified.
+# Default mode is a read-only report. It never contacts the remote, invokes
+# `gh`, fetches, or writes a ref, worktree, or stash entry. Everything it can
+# see locally is a snapshot, so every candidate it prints is unverified.
 #
-# `--apply` is the only mode that deletes, and it treats the remote as the sole
-# authority. Before classifying, and again immediately before every single
-# deletion, it runs `git ls-remote --symref origin HEAD`, requires exactly one
-# `ref: refs/heads/<name>\tHEAD` symref plus exactly one advertised object ID,
-# and fetches that named ref to that exact tip. A different name, a moved or
-# rewritten tip, or a changed candidate OID restarts classification instead of
-# deleting. `main`/`master` are never inferred, and a cached `origin/HEAD` is
-# never authority. An explicit --default-branch override is rejected outright
-# when the live query names some other branch, and accepted only after being
-# validated against the remote when the live query cannot name one.
+# --apply has two phases. First it acquires complete, bounded, read-only proof:
+# origin must name one GitHub repository; `git ls-remote` and `git fetch` must
+# resolve its live default; and native `gh` must confirm the same default branch
+# and tip before returning a complete, schema-valid merged pull-request inventory.
 #
-# Deletion is always non-force `git branch -d -- <branch>`, run under a
-# process-scoped upstream override pinned to the freshly fetched default tip, so
-# Git applies its own mergedness and checked-out-worktree checks against that
-# tip at deletion time even when the branch's configured upstream says something
-# else. Never `-D`, never `update-ref`, never a remote branch, worktree, or
-# stash. A lock in the git dir serializes this helper's own instances; it cannot
-# coordinate an unrelated Git client, which can still attach a worktree in the
-# instant after Git's final internal check. That limitation is reported, not
-# papered over: the observed default SHA and query time are printed so the
-# operator can see exactly which remote state authorized each deletion.
+# A branch is eligible only when exactly one record names the same repository/ref
+# and exact local tip. Missing, malformed, ambiguous, unauthenticated,
+# unreachable, or timed-out proof refuses safely; there is no local-ancestry
+# fallback.
+#
+# Each deletion rechecks the branch tip and every local protection predicate.
+# `git branch -d` remains deliberately non-force as the last Git backstop for
+# checked-out worktrees and other deletion-time races. Its process-scoped
+# upstream is the candidate itself: GitHub proof, rather than ancestry, is the
+# authority that permits a squash-merged branch to reach that non-force command.
+# Never `-D`, `update-ref`, remote mutation, worktree mutation, or stash change.
+# A lock in the git dir serializes this helper's own instances; it cannot
+# coordinate unrelated Git clients, which can still attach a worktree after
+# Git's final internal check.
 set -euo pipefail
 
 prog=git-prune-local-branches
 tab=$(printf '\t')
-
-# Config subsection used only for the process-scoped upstream override. It must
-# not name a real remote; if it somehow does, the pre-deletion upstream check
-# below catches the difference and the deletion is skipped.
 syn_remote=git-prune-local-branches-upstream
+
 
 usage() {
   cat <<'EOF'
 usage: git-prune-local-branches [--apply] [--default-branch <name>] [--] [<repo>]
 
   (default)                read-only report: no remote query, no ref change
-  --apply                  delete only branches re-proven safe at deletion time
+  --apply                  delete only branches with complete GitHub proof
   --default-branch <name>  default-branch override; rejected when origin's live
                            HEAD names a different branch, and used only when
                            that live query cannot name one at all
@@ -117,6 +111,8 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
   die "not inside a git work tree: $repo"
 repo_root=$(git rev-parse --show-toplevel)
 cd -- "$repo_root"
+unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN
+export GIT_TERMINAL_PROMPT=0
 common_dir=$(git rev-parse --git-common-dir)
 common_dir=$(cd -- "$common_dir" && pwd)
 
@@ -192,8 +188,7 @@ current_branch() {
   esac
 }
 
-# Refuse deletion outright on any repository state where "merged into the
-# default branch" is not a decidable question.
+# Refuse deletions when the local branch/worktree state is not decidable.
 preflight() {
   local op head_ref
   head_ref=$(git symbolic-ref --quiet HEAD 2>/dev/null || true)
@@ -210,17 +205,130 @@ preflight() {
   op=$(operation_in_progress || true)
   [ -z "$op" ] || refuse "$op in progress"
 }
+# Signal a bounded command and every descendant before releasing the proof
+# workspace. This prevents an SSH or native-client child from surviving a
+# timeout or interrupt after the helper has returned.
+kill_process_tree() {
+  local root=$1 signal=$2 child
+  if command -v ps >/dev/null 2>&1 && command -v awk >/dev/null 2>&1; then
+    while IFS= read -r child; do
+      [ -n "$child" ] || continue
+      kill_process_tree "$child" "$signal"
+    done < <(ps -eo pid=,ppid= 2>/dev/null |
+      awk -v parent="$root" '$2 == parent { print $1 }')
+  fi
+  kill "-$signal" "$root" 2>/dev/null || true
+}
 
-# Parses `git ls-remote --symref origin HEAD`.
+
+# Run one child without `timeout` (unavailable on supported BSD/macOS hosts).
+# The command's stdout/stderr are files so no proof output is partially consumed
+# after a timeout. SIGKILL is the last resort because a stuck network client may
+# ignore SIGTERM. Return 124 only for a deadline; all other child statuses pass
+# through to the caller.
+run_bounded() {
+  local stdout=$1 stderr=$2 pid watchdog_pid timeout_marker rc
+  shift 2
+  timeout_marker=$stdout.timeout
+  rm -f -- "$timeout_marker"
+  "$@" >"$stdout" 2>"$stderr" &
+  pid=$!
+  active_pid=$pid
+  (
+    sleep_pid=
+    trap '[ -z "$sleep_pid" ] || kill "$sleep_pid" 2>/dev/null || true; exit 0' HUP INT TERM
+    sleep "$timeout_seconds" &
+    sleep_pid=$!
+    wait "$sleep_pid" 2>/dev/null || exit 0
+    if kill -0 "$pid" 2>/dev/null; then
+      : >"$timeout_marker"
+      kill_process_tree "$pid" TERM
+      sleep 2 &
+      sleep_pid=$!
+      wait "$sleep_pid" 2>/dev/null || exit 0
+      kill_process_tree "$pid" KILL
+    fi
+  ) &
+  watchdog_pid=$!
+  active_watchdog_pid=$watchdog_pid
+  if wait "$pid" 2>/dev/null; then
+    rc=0
+  else
+    rc=$?
+  fi
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  active_pid=
+  active_watchdog_pid=
+  if [ -e "$timeout_marker" ]; then
+    rm -f -- "$timeout_marker"
+    return 124
+  fi
+  return "$rc"
+}
+# GitHub credentials stay inside the native `gh` store. Prompting is disabled
+# even when a host has no usable stored login, so an apply run can only refuse.
+# `exec` makes the bounded runner's PID the native client itself.
+native_gh() {
+  unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN
+  export GH_PROMPT_DISABLED=1 GIT_TERMINAL_PROMPT=0
+  exec gh "$@"
+}
+
+# Accept only conventional GitHub.com clone URLs with one owner/repository
+# component each. Enterprise, arbitrary URL rewriting, and an absent origin are
+# intentionally outside this helper's proof authority.
+validate_github_origin() {
+  local origin path owner name
+  origin=$(git config --get remote.origin.url 2>/dev/null) ||
+    refuse "origin is missing; GitHub proof cannot identify a repository"
+  case $origin in
+    https://github.com/*)
+      path=${origin#*github.com/}
+      ;;
+    git@github.com:*)
+      path=${origin#git@github.com:}
+      ;;
+    ssh://git@github.com/*)
+      path=${origin#ssh://git@github.com/}
+      ;;
+    *)
+      refuse "origin is not a supported GitHub.com repository URL"
+      ;;
+  esac
+  path=${path%.git}
+  case $path in
+    */*)
+      owner=${path%%/*}
+      name=${path#*/}
+      ;;
+    *) refuse "origin does not name a GitHub owner/repository" ;;
+  esac
+  case $owner in '' | *[!A-Za-z0-9_.-]*) refuse "origin has an unsafe GitHub owner" ;; esac
+  case $name in '' | */* | *[!A-Za-z0-9_.-]*) refuse "origin has an unsafe GitHub repository" ;; esac
+  gh_owner=$owner
+  gh_name=$name
+  gh_repo=$owner/$name
+  gh_repo_key=$(printf '%s' "$gh_repo" | tr '[:upper:]' '[:lower:]')
+}
+
+# Parses bounded `git ls-remote --symref origin HEAD`.
 # 0: live_name/live_oid hold origin's current default branch and advertised tip.
 # 1: query succeeded but HEAD names no branch (detached or dangling remote HEAD).
-# 2: the remote could not be queried at all.
-# 3: the advertisement was not exactly one branch symref plus one object id.
+# 2: query failure. 3: unusable advertisement. 4: deadline exceeded.
 query_origin_head() {
-  local out line name oid nsym=0 noid=0
+  local out line name oid nsym=0 noid=0 rc
   live_name=
   live_oid=
-  out=$(git ls-remote --symref origin HEAD 2>/dev/null) || return 2
+  if run_bounded "$tmp_dir/origin-head.out" "$tmp_dir/origin-head.err" \
+    git ls-remote --symref origin HEAD; then
+    :
+  else
+    rc=$?
+    [ "$rc" -eq 124 ] && return 4
+    return 2
+  fi
+  out=$(<"$tmp_dir/origin-head.out")
   while IFS= read -r line; do
     case $line in
       "ref: refs/heads/"*"${tab}HEAD")
@@ -256,9 +364,17 @@ EOF
 # The override is usable only as a substitute for a name the remote itself
 # cannot state, and only when the remote actually advertises that branch.
 validate_override() {
-  local out line ref oid hits=0
-  out=$(git ls-remote origin "refs/heads/$override" 2>/dev/null) ||
+  local out line ref oid hits=0 rc
+  if run_bounded "$tmp_dir/override.out" "$tmp_dir/override.err" \
+    git ls-remote origin "refs/heads/$override"; then
+    :
+  else
+    rc=$?
+    [ "$rc" -eq 124 ] &&
+      refuse "timed out querying origin for --default-branch $override"
     refuse "origin could not be queried for --default-branch $override"
+  fi
+  out=$(<"$tmp_dir/override.out")
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     ref=${line#*"${tab}"}
@@ -290,6 +406,7 @@ resolve_default() {
   case $rc in
     2) refuse "origin could not be queried (git ls-remote --symref origin HEAD failed)" ;;
     3) refuse "origin advertised an unusable HEAD (need exactly one 'ref: refs/heads/<name>' symref and one object id)" ;;
+    4) refuse "timed out querying origin's live HEAD" ;;
   esac
   if [ "$rc" -eq 0 ]; then
     if [ -n "$override" ] && [ "$override" != "$live_name" ]; then
@@ -307,15 +424,19 @@ resolve_default() {
     refuse "origin's default branch is literally named HEAD; refusing to touch the tracking namespace"
 }
 
-# Brings the named ref to the advertised tip locally. The tracking ref is the
-# ref Git's own deletion-time upstream check will read, so it must equal the
-# advertised id exactly; a forced refspec is what makes a rewritten default tip
-# land instead of failing as a non-fast-forward.
+# Brings the named ref to the advertised tip locally. A forced refspec permits
+# a rewritten default tip to replace the stale tracking ref. The exact fetched
+# id is proof input only; it is not a local-ancestry eligibility fallback.
 fetch_default() {
-  local name=$1 oid=$2 out got
-  out=$(git fetch --no-tags --quiet origin \
-    "+refs/heads/$name:refs/remotes/origin/$name" 2>&1) ||
-    refuse "could not fetch refs/heads/$name from origin: $out"
+  local name=$1 oid=$2 got rc
+  if run_bounded "$tmp_dir/fetch.out" "$tmp_dir/fetch.err" git fetch --no-tags --quiet origin \
+    "+refs/heads/$name:refs/remotes/origin/$name"; then
+    :
+  else
+    rc=$?
+    [ "$rc" -eq 124 ] && refuse "timed out fetching refs/heads/$name from origin"
+    refuse "could not fetch refs/heads/$name from origin"
+  fi
   got=$(git rev-parse --verify --quiet "refs/remotes/origin/$name") ||
     refuse "refs/remotes/origin/$name is missing after the fetch"
   [ "$got" = "$oid" ] ||
@@ -324,9 +445,9 @@ fetch_default() {
     refuse "the advertised default tip $oid is not a commit"
 }
 
-# Prints a protection reason, or nothing when the branch is a candidate.
-# def_name/def_tip are the branch name and tip this pass is judging against;
-# def_tip is empty in report mode when nothing local can even hint at one.
+# Prints a local protection reason, or nothing when the branch needs a proof
+# verdict. Report mode additionally labels locally non-ancestral branches as
+# unmerged, but apply mode deliberately does not use that local predicate.
 protection_reason() {
   local name=$1 oid=$2
   if [ -n "$cur_branch" ] && [ "$name" = "$cur_branch" ]; then
@@ -357,7 +478,7 @@ protection_reason() {
     printf 'no-default-ref'
     return 0
   fi
-  if ! git merge-base --is-ancestor "$oid" "$def_tip"; then
+  if [ "$mode" = report ] && ! git merge-base --is-ancestor "$oid" "$def_tip"; then
     printf 'unmerged'
     return 0
   fi
@@ -412,25 +533,214 @@ print_stashes() {
   printf 'stash-count: %s\n' "$stash_count"
 }
 
-# `git -c branch.<b>.merge=` APPENDS to any repository-local value instead of
-# replacing it, and Git reads the first value, so overriding a configured
-# upstream needs the remote indirection: point the branch at a remote that
-# exists only in this process and map whatever the branch's first merge entry is
-# onto the freshly fetched default tracking ref. The result is verified against
-# the advertised default id before `git branch -d` runs; an override that cannot
-# be proven to resolve to that exact tip means no deletion, never a fallback to
-# whatever predicate Git would have used instead.
+# `gh api graphql --paginate --slurp` is the complete inventory boundary. The
+# query uses only the native `gh` credential store; no token is read from this
+# helper's environment or arguments. Every page and every merged-PR node must
+# have the expected GraphQL shape before a branch can be accepted.
+write_proof_filters() {
+  cat >"$tmp_dir/proof-valid.jq" <<'JQ'
+def valid_time:
+  type == "string"
+  and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$")
+  and (try (sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 | type == "number") catch false);
+def valid_repo:
+  type == "string" and test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$");
+def valid_oid:
+  type == "string" and test("^[0-9a-f]{40}$");
+def valid_default_ref:
+  type == "object"
+  and (.name | type == "string" and length > 0)
+  and (.target | type == "object" and (.oid | valid_oid));
+def valid_node:
+  type == "object"
+  and (.id | type == "string" and length > 0)
+  and (.number | type == "number" and . > 0 and floor == .)
+  and (.state == "MERGED")
+  and (.mergedAt | valid_time)
+  and (.baseRefName | type == "string" and length > 0)
+  and (.baseRepository | type == "object" and (.nameWithOwner | valid_repo))
+  and (.headRefName | type == "string" and length > 0)
+  and (.headRefOid | valid_oid)
+  and (.headRepository | type == "object" and (.nameWithOwner | valid_repo));
+def valid_page:
+  type == "object"
+  and ((has("errors") | not) or (.errors == null))
+  and (.data | type == "object")
+  and (.data.repository | type == "object")
+  and (.data.repository.defaultBranchRef | valid_default_ref)
+  and (.data.repository.pullRequests | type == "object")
+  and (.data.repository.pullRequests.nodes | type == "array")
+  and (.data.repository.pullRequests.pageInfo | type == "object")
+  and (.data.repository.pullRequests.pageInfo.hasNextPage | type == "boolean")
+  and (if .data.repository.pullRequests.pageInfo.hasNextPage
+       then (.data.repository.pullRequests.pageInfo.endCursor | type == "string" and length > 0)
+            and (.data.repository.pullRequests.nodes | length > 0)
+       else true
+       end)
+  and all(.data.repository.pullRequests.nodes[]; valid_node);
+(type == "array" and length > 0 and all(.[]; valid_page))
+and ([.[] | .data.repository.defaultBranchRef.name] | unique | length == 1)
+and ([.[] | .data.repository.defaultBranchRef.target.oid] | unique | length == 1)
+and ([.[] | .data.repository.pullRequests.nodes[] | .id] as $ids |
+     ($ids | unique | length) == ($ids | length))
+and ([.[] | .data.repository.pullRequests.nodes[] | .number] as $numbers |
+     ($numbers | unique | length) == ($numbers | length))
+JQ
+  cat >"$tmp_dir/proof-records.jq" <<'JQ'
+.[] | .data.repository.pullRequests.nodes[] |
+[
+  (.number | tostring),
+  (.baseRepository.nameWithOwner | ascii_downcase),
+  .baseRefName,
+  (.headRepository.nameWithOwner | ascii_downcase),
+  .headRefName,
+  .headRefOid
+] | @tsv
+JQ
+  cat >"$tmp_dir/proof.graphql" <<'GRAPHQL'
+query($owner: String!, $name: String!, $endCursor: String) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef {
+      name
+      target { oid }
+    }
+    pullRequests(first: 100, states: MERGED, after: $endCursor) {
+      nodes {
+        id
+        number
+        state
+        mergedAt
+        baseRefName
+        baseRepository { nameWithOwner }
+        headRefName
+        headRefOid
+        headRepository { nameWithOwner }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+GRAPHQL
+}
+
+fetch_github_proof() {
+  local rc proof_default_name proof_default_oid
+  command -v gh >/dev/null 2>&1 ||
+    refuse "native gh is unavailable; GitHub proof cannot be acquired"
+  command -v jq >/dev/null 2>&1 ||
+    refuse "jq is unavailable; GitHub proof cannot be validated"
+  write_proof_filters
+  if run_bounded "$tmp_dir/github-proof.json" "$tmp_dir/github-proof.err" \
+    native_gh api --hostname github.com graphql --paginate --slurp \
+      -F "owner=$gh_owner" -F "name=$gh_name" -f "query=$(<"$tmp_dir/proof.graphql")"; then
+    :
+  else
+    rc=$?
+    [ "$rc" -eq 124 ] &&
+      refuse "timed out acquiring the complete GitHub merged-PR proof"
+    refuse "GitHub merged-PR proof is unavailable (authentication, network, or API failure)"
+  fi
+  jq -e -f "$tmp_dir/proof-valid.jq" "$tmp_dir/github-proof.json" >/dev/null 2>&1 ||
+    refuse "GitHub merged-PR proof is malformed, partial, or duplicated"
+  proof_default_name=$(jq -er '.[0].data.repository.defaultBranchRef.name' "$tmp_dir/github-proof.json") ||
+    refuse "GitHub merged-PR proof default branch could not be decoded"
+  proof_default_oid=$(jq -er '.[0].data.repository.defaultBranchRef.target.oid' "$tmp_dir/github-proof.json") ||
+    refuse "GitHub merged-PR proof default tip could not be decoded"
+  if [ "$proof_default_name" != "$def_name" ] ||
+    [ "$proof_default_oid" != "$def_oid" ]; then
+    refuse "GitHub proof default $proof_default_name ($proof_default_oid) does not match origin $def_name ($def_oid)"
+  fi
+  proof_rows=$(jq -r -f "$tmp_dir/proof-records.jq" "$tmp_dir/github-proof.json") ||
+    refuse "GitHub merged-PR proof could not be decoded"
+}
+
+# Classify all unprotected local branches against the complete inventory before
+# mutation. A duplicate exact proof is ambiguous, so the entire run reports and
+# refuses before any branch reaches `git branch -d`.
+proof_status_for() {
+  local name=$1 oid=$2 number base_repo base_ref head_repo head_ref head_oid
+  local matches=0 saw_ref=0 saw_head_repo=0 saw_oid_mismatch=0
+  while IFS="$tab" read -r number base_repo base_ref head_repo head_ref head_oid; do
+    [ -n "$number" ] || continue
+    if [ "$base_repo" != "$gh_repo_key" ] || [ "$base_ref" != "$def_name" ]; then
+      continue
+    fi
+    [ "$head_ref" = "$name" ] || continue
+    saw_ref=1
+    [ "$head_repo" = "$gh_repo_key" ] || continue
+    saw_head_repo=1
+    if [ "$head_oid" != "$oid" ]; then
+      saw_oid_mismatch=1
+      continue
+    fi
+    matches=$((matches + 1))
+  done <<EOF
+$proof_rows
+EOF
+  if [ "$matches" -gt 1 ]; then
+    proof_status=github-ambiguous
+  elif [ "$matches" -eq 1 ]; then
+    proof_status=confirmed
+  elif [ "$saw_oid_mismatch" -eq 1 ]; then
+    proof_status=github-head-oid-mismatch
+  elif [ "$saw_ref" -eq 1 ] && [ "$saw_head_repo" -eq 0 ]; then
+    proof_status=github-head-repository-mismatch
+  else
+    proof_status=github-unproven
+  fi
+}
+
+filter_github_proof() {
+  local i=0 name oid
+  local raw_name=("${cand_name[@]}")
+  local raw_oid=("${cand_oid[@]}")
+  cand_name=()
+  cand_oid=()
+  proof_kept_name=()
+  proof_kept_oid=()
+  proof_kept_reason=()
+  proof_ambiguous=0
+  while [ "$i" -lt "${#raw_name[@]}" ]; do
+    name=${raw_name[$i]}
+    oid=${raw_oid[$i]}
+    proof_status_for "$name" "$oid"
+    if [ "$proof_status" = confirmed ]; then
+      cand_name+=("$name")
+      cand_oid+=("$oid")
+    else
+      proof_kept_name+=("$name")
+      proof_kept_oid+=("$oid")
+      proof_kept_reason+=("$proof_status")
+      [ "$proof_status" != github-ambiguous ] || proof_ambiguous=1
+    fi
+    i=$((i + 1))
+  done
+}
+
+print_proof_kept() {
+  local i=0
+  while [ "$i" -lt "${#proof_kept_name[@]}" ]; do
+    printf 'kept: %s reason=%s sha=%s\n' \
+      "${proof_kept_name[$i]}" "${proof_kept_reason[$i]}" "${proof_kept_oid[$i]}"
+    i=$((i + 1))
+  done
+}
+
+# GitHub proof is the sole eligibility authority. The synthetic remote maps
+# whichever configured merge ref Git would select to the candidate itself, so
+# non-force `git branch -d` still performs its deletion-time worktree check
+# without restoring local ancestry as an eligibility predicate.
 delete_candidate() {
-  local name=$1 first_merge upstream out
+  local name=$1 oid=$2 first_merge upstream out
   first_merge=$(git config --get-all "branch.$name.merge" 2>/dev/null | sed -n 1p) || true
-  [ -n "$first_merge" ] || first_merge="refs/heads/$def_name"
+  [ -n "$first_merge" ] || first_merge="refs/heads/$name"
   local cfg=(
     -c "branch.$name.remote=$syn_remote"
-    -c "branch.$name.merge=refs/heads/$def_name"
-    -c "remote.$syn_remote.fetch=+$first_merge:refs/remotes/origin/$def_name"
+    -c "branch.$name.merge=refs/heads/$name"
+    -c "remote.$syn_remote.fetch=+$first_merge:refs/heads/$name"
   )
   upstream=$(git "${cfg[@]}" rev-parse --verify --quiet "$name@{upstream}" 2>/dev/null) || upstream=
-  if [ "$upstream" != "$def_oid" ]; then
+  if [ "$upstream" != "$oid" ]; then
     printf 'kept: %s reason=upstream-override-unverified\n' "$name"
     return 1
   fi
@@ -454,6 +764,7 @@ run_report() {
     def_name=
     source=none
   fi
+
   def_tip=
   if [ -n "$def_name" ]; then
     def_tip=$(git rev-parse --verify --quiet "refs/remotes/origin/$def_name") ||
@@ -475,100 +786,130 @@ run_report() {
   say 'note: candidates are unverified — only --apply proves them against the live default tip'
 }
 
+cleanup_apply() {
+  [ -z "$tmp_dir" ] || rm -rf -- "$tmp_dir"
+  [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true
+}
+cancel_active_bounded() {
+  local pid=$active_pid watchdog=$active_watchdog_pid
+  [ -z "$watchdog" ] || kill "$watchdog" 2>/dev/null || true
+  if [ -n "$pid" ]; then
+    kill_process_tree "$pid" TERM
+    sleep 1
+    kill_process_tree "$pid" KILL
+    wait "$pid" 2>/dev/null || true
+  fi
+  active_pid=
+  active_watchdog_pid=
+}
+abort_apply() {
+  local status=$1
+  trap - EXIT HUP INT TERM
+  cancel_active_bounded
+  cleanup_apply
+  exit "$status"
+}
+
 run_apply() {
-  local pass=0 restart i name oid now reason failed=0
+  local i=0 name oid now reason failed=0
 
   lock="$common_dir/$prog.lock"
   mkdir "$lock" 2>/dev/null ||
     refuse "another $prog instance holds $lock"
-  trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+  trap cleanup_apply EXIT
+  trap 'abort_apply 129' HUP
+  trap 'abort_apply 130' INT
+  trap 'abort_apply 143' TERM
+  tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/$prog.XXXXXX") ||
+    refuse "could not create a private proof workspace"
 
   printf '%s: mode=apply repo=%s\n' "$prog" "$repo_root"
-  while :; do
-    pass=$((pass + 1))
-    [ "$pass" -le "$max_pass" ] ||
-      refuse "classification restarted $max_pass times; origin keeps changing under the run"
+  preflight
+  validate_github_origin
+  resolve_default
+  def_name=$res_name
+  def_oid=$res_oid
+  def_source=$res_source
+  fetch_default "$def_name" "$def_oid"
+  def_tip=$def_oid
+  printf 'default: %s sha=%s source=%s queried=%s\n' \
+    "$def_name" "$def_oid" "$def_source" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+  # No deletion can happen until every inventory page has been read, validated,
+  # de-duplicated, and joined to the complete local candidate snapshot.
+  classify
+  fetch_github_proof
+  filter_github_proof
+  print_classification candidate-github-confirmed
+  print_proof_kept
+  [ "$proof_ambiguous" -eq 0 ] ||
+    refuse "GitHub merged-PR proof is ambiguous; nothing may be deleted"
+
+  while [ "$i" -lt "${#cand_name[@]}" ]; do
+    name=${cand_name[$i]}
+    oid=${cand_oid[$i]}
+    i=$((i + 1))
+
+    # Recheck only local state now. Remote/GitHub proof was deliberately
+    # completed before the first mutation, so a later outage cannot turn an
+    # already-complete verdict into a partial deletion run.
     preflight
-    resolve_default
-    def_name=$res_name
-    def_oid=$res_oid
-    def_source=$res_source
-    fetch_default "$def_name" "$def_oid"
-    def_tip=$def_oid
-    printf 'default: %s sha=%s source=%s queried=%s pass=%s\n' \
-      "$def_name" "$def_oid" "$def_source" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$pass"
-    classify
-    print_classification candidate
-
-    restart=0
-    i=0
-    while [ "$i" -lt "${#cand_name[@]}" ]; do
-      name=${cand_name[$i]}
-      oid=${cand_oid[$i]}
-      i=$((i + 1))
-
-      # The whole verdict is re-earned here, immediately before this one
-      # deletion: fresh remote query, fresh fetch, fresh local predicates.
-      preflight
-      resolve_default
-      if [ "$res_name" != "$def_name" ]; then
-        printf 'reclassified: reason=default-renamed was=%s now=%s\n' "$def_name" "$res_name"
-        restart=1
-        break
-      fi
-      if [ "$res_oid" != "$def_oid" ]; then
-        printf 'reclassified: reason=default-moved was=%s now=%s\n' "$def_oid" "$res_oid"
-        restart=1
-        break
-      fi
-      fetch_default "$def_name" "$def_oid"
-      attached=$(attached_branches)
-      cur_branch=$(current_branch)
-
-      now=$(git rev-parse --verify --quiet "refs/heads/$name") || now=
-      if [ -z "$now" ]; then
-        printf 'kept: %s reason=vanished\n' "$name"
-        continue
-      fi
-      if [ "$now" != "$oid" ]; then
-        printf 'reclassified: %s reason=candidate-oid-changed was=%s now=%s\n' "$name" "$oid" "$now"
-        restart=1
-        break
-      fi
-      # A predicate that turned protective between classification and now is a
-      # normal safe outcome, not a run failure.
-      reason=$(protection_reason "$name" "$oid")
-      if [ -n "$reason" ]; then
-        printf 'kept: %s reason=%s\n' "$name" "$reason"
-        continue
-      fi
-      if delete_candidate "$name"; then
-        printf 'deleted: %s sha=%s\n' "$name" "$oid"
-        deleted_count=$((deleted_count + 1))
-      else
-        failed=1
-      fi
-    done
-    if [ "$restart" -eq 0 ]; then break; fi
-    printf 'restart: pass=%s\n' "$pass"
+    attached=$(attached_branches)
+    cur_branch=$(current_branch)
+    now=$(git rev-parse --verify --quiet "refs/heads/$name") || now=
+    if [ -z "$now" ]; then
+      printf 'kept: %s reason=vanished\n' "$name"
+      continue
+    fi
+    if [ "$now" != "$oid" ]; then
+      printf 'kept: %s reason=candidate-oid-changed was=%s now=%s\n' "$name" "$oid" "$now"
+      continue
+    fi
+    reason=$(protection_reason "$name" "$oid")
+    if [ -n "$reason" ]; then
+      printf 'kept: %s reason=%s\n' "$name" "$reason"
+      continue
+    fi
+    if delete_candidate "$name" "$oid"; then
+      printf 'deleted: %s sha=%s\n' "$name" "$oid"
+      deleted_count=$((deleted_count + 1))
+    else
+      failed=1
+    fi
   done
 
   print_stashes
   printf 'summary: mode=apply default=%s candidates=%s protected=%s deleted=%s stashes=%s\n' \
     "$def_name" "${#cand_name[@]}" "${#prot_name[@]}" "$deleted_count" "$stash_count"
-  say 'note: every deletion was authorized by the default sha printed above, re-queried immediately before it'
+  say 'note: every deletion had complete GitHub merged-PR proof before the first mutation'
   say "note: $prog serializes only its own instances; an unrelated git client can still attach a worktree after git's final internal check"
   [ "$failed" -eq 0 ] || exit 1
 }
 
-max_pass=4
+timeout_seconds=${GIT_PRUNE_LOCAL_BRANCHES_TIMEOUT_SECONDS:-15}
+case $timeout_seconds in
+  '' | *[!0-9]*) die "GIT_PRUNE_LOCAL_BRANCHES_TIMEOUT_SECONDS must be a non-negative integer" ;;
+esac
+[ "$timeout_seconds" -le 30 ] ||
+  die "GIT_PRUNE_LOCAL_BRANCHES_TIMEOUT_SECONDS may not exceed 30 seconds"
 lock=
+tmp_dir=
+active_pid=
+active_watchdog_pid=
 deleted_count=0
 cand_name=()
 cand_oid=()
+proof_default_name=
+proof_default_oid=
 prot_name=()
 prot_oid=()
 prot_reason=()
+proof_kept_name=()
+proof_kept_oid=()
+proof_kept_reason=()
+proof_rows=
+proof_status=
+proof_ambiguous=0
 attached=
 cur_branch=
 def_name=
@@ -580,6 +921,10 @@ live_oid=
 res_name=
 res_oid=
 res_source=
+gh_owner=
+gh_name=
+gh_repo=
+gh_repo_key=
 stash_count=0
 
 case $mode in

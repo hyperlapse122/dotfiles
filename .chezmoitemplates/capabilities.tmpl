@@ -98,14 +98,16 @@ ARGUMENT — a dict:
 {{- $registryRaw := include $registryPath -}}
 {{- /* SHAPE-CHECK BEFORE TRUSTING IT, exactly as facts.tmpl does with its cache: a
    truncated registry must produce an actionable diagnostic, not a mis-parsed key
-   set that silently turns every probe into `unavailable`. */ -}}
-{{- if not (regexMatch "^capability-registry-v1\n([a-z0-9][a-z0-9.-]*\t[a-z-]+\t[a-z-]+\tavailable\tunavailable\n)+$" $registryRaw) -}}
-{{-   fail (printf "capabilities.tmpl: capability registry %s is malformed. Expected the capability-registry-v1 header followed by sorted <key>\\t<kind>\\t<side-effect>\\tavailable\\tunavailable rows." $registryPath) -}}
+   set that silently turns every probe into `unavailable`. The platform column is
+   reviewed applicability data for the hook; the cache still stores one fixed
+   available/unavailable token per key. */ -}}
+{{- if not (regexMatch "^capability-registry-v2\n([a-z0-9][a-z0-9.-]*\t[a-z-]+\t[a-z-]+\t(any|linux)\tavailable\tunavailable\n)+$" $registryRaw) -}}
+{{-   fail (printf "capabilities.tmpl: capability registry %s is malformed. Expected the capability-registry-v2 header followed by sorted <key>\\t<kind>\\t<side-effect>\\t<any|linux>\\tavailable\\tunavailable rows." $registryPath) -}}
 {{- end -}}
 {{- $registryDigest := $registryRaw | sha256sum -}}
 {{- $known := list -}}
 {{- range $row := splitList "\n" (trimSuffix "\n" $registryRaw) -}}
-{{-   if ne $row "capability-registry-v1" -}}
+{{-   if ne $row "capability-registry-v2" -}}
 {{-     $known = append $known (index (splitList "\t" $row) 0) -}}
 {{-   end -}}
 {{- end -}}

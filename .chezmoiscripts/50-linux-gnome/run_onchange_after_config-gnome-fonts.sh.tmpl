@@ -37,15 +37,14 @@
 #
 # SESSION-DEPENDENT + user-respecting (same spirit as config-gnome-remove-ibus-source):
 # gsettings writes go through dconf-service on the session D-Bus — on a headless
-# / TTY / first-boot apply this exits 0 WITHOUT stamping. NOTE the behavior
-# change from the former run_after: onchange records that skipped run as done and
-# will NOT re-run on the next apply just because a live GNOME session appeared —
-# the fonts land on the next fingerprint change (a font bump / edit to this
-# script) or a manual `chezmoi apply --force`. The stamp still records the exact
-# font SIGNATURE it last applied: an unchanged signature means "already ensured"
-# and we leave the user's current fonts alone (a user who repicks fonts is not
-# fought), while editing the families/sizes in fonts.yaml changes the signature
-# and re-asserts the new choice — mirroring how the KDE run_onchange behaves.
+# / TTY / first-boot apply this exits 0 WITHOUT stamping. The transient-blocking
+# `session-bus-present` capability fingerprint changes when a session bus appears,
+# causing a later unchanged chezmoi apply to retry automatically. The stamp still
+# records the exact font SIGNATURE it last applied: an unchanged signature means
+# "already ensured" and we leave the user's current fonts alone (a user who
+# repicks fonts is not fought), while editing the families/sizes in fonts.yaml
+# changes the signature and re-asserts the new choice — mirroring how the KDE
+# run_onchange behaves.
 #
 # managed fonts: {{ range $k, $v := .fonts }}{{ if contains "/" $k }}{{ osBase $k }} {{ end }}{{ end }}
 
