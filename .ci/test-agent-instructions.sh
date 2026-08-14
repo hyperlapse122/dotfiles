@@ -52,6 +52,9 @@ every one of those issue numbers MUST be immediately preceded by its own keyword
 is the sole exception to the assignee rule
 SHOULD tick its checkbox items as the matching sub-tasks land
 SHOULD comment on the issue only at key events
+never by spawning another agent as a subprocess
+MUST NOT invoke an agent CLI
+A non-agentic subcommand of an agent CLI stays allowed
 Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
 NEEDLES
 
