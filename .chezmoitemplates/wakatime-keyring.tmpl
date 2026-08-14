@@ -1,0 +1,18 @@
+{{- /*
+wakatime-keyring.tmpl — the Secret Service attribute set that identifies the
+WakaTime API key, emitted as `secret-tool` arguments.
+
+Two consumers must name the SAME entry or the key silently resolves empty:
+
+  dot_wakatime.cfg.tmpl                      api_key_vault_cmd, which
+                                             wakatime-cli and every editor
+                                             plugin resolve through
+  .chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.tmpl
+                                             seeds the entry from 1Password
+
+A mismatch produces "api key not found or empty" with nothing pointing at the
+attribute set, so it lives here rather than being retyped at each site.
+
+Usage:  secret-tool lookup {{ includeTemplate "wakatime-keyring.tmpl" . }}
+*/ -}}
+{{- "service wakatime" -}}

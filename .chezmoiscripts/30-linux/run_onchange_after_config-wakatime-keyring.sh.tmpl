@@ -1,0 +1,65 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sessionBus := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "session-bus-present") -}}
+#!/usr/bin/env bash
+#
+# Seed the WakaTime API key into the Secret Service keyring.
+#
+# WHY. ~/.wakatime.cfg used to carry `api_key` in cleartext at 0644. It now
+# carries only `api_key_vault_cmd`, so wakatime-cli — and through it every editor
+# plugin — reads the key from the desktop's wallet (ksecretd on KDE,
+# gnome-keyring on GNOME) instead of from a world-readable dotfile.
+#
+# WHY 1PASSWORD IS SEEDED HERE AND NOT READ AT RUNTIME. wakatime-cli caps
+# `api_key_vault_cmd` at 2 seconds (pkg/params/params.go
+# readAPIKeyFromCommand). `op read` takes ~19 s on this host, so it can only
+# ever be a provisioning-time source; `secret-tool lookup` answers in ~20 ms.
+#
+# The rendered body carries the 1Password value, so a rotated key changes this
+# script's content and re-seeds by itself. The fingerprint covers the shared
+# attribute set and the cfg that consumes it.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoitemplates/wakatime-keyring.tmpl" "dot_wakatime.cfg.tmpl") "values" (list (dict "name" "session-bus-present" "value" $sessionBus))) }}
+set -euo pipefail
+
+LABEL='WakaTime API key'
+
+fail() {
+  printf 'config-wakatime-keyring: %s\n' "$*" >&2
+  exit 1
+}
+
+# The Secret Service lives on the session bus; without one there is no wallet.
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]; then
+{{- includeTemplate "skip.sh.tmpl" (dict
+      "ctx"       .
+      "form"      "skip_here"
+      "script"    "config-wakatime-keyring"
+      "site"      "no-session-bus"
+      "direction" "transient-blocking"
+      "probe"     "session-bus-present"
+      "reason"    "no D-Bus session bus, so the keyring is unreachable") | nindent 2 }}
+fi
+
+# Fatal, not a skip: libsecret is declared in .chezmoidata/packages.yaml and
+# phase 20 installs it before this phase runs. Absence means provisioning broke.
+command -v secret-tool >/dev/null 2>&1 ||
+  fail 'secret-tool not found (libsecret is declared in .chezmoidata/packages.yaml)'
+
+# `read -r` strips the heredoc's trailing newline, which `secret-tool store`
+# would otherwise keep as part of the secret; `printf` is a shell builtin, so
+# the key never appears in any process argument list.
+IFS= read -r WAKATIME_API_KEY <<'WAKATIME_KEY_EOF'
+{{ onepasswordRead "op://Private/WakaTime/API Key" }}
+WAKATIME_KEY_EOF
+
+[[ -n "$WAKATIME_API_KEY" ]] || fail '1Password returned an empty API key'
+
+if [[ "$(secret-tool lookup {{ includeTemplate "wakatime-keyring.tmpl" . }} 2>/dev/null || true)" == "$WAKATIME_API_KEY" ]]; then
+  echo "config-wakatime-keyring: keyring entry already current"
+else
+  printf '%s' "$WAKATIME_API_KEY" |
+    secret-tool store --label="$LABEL" {{ includeTemplate "wakatime-keyring.tmpl" . }} ||
+    fail 'secret-tool store failed (is the wallet unlocked?)'
+  echo "config-wakatime-keyring: stored the API key in the keyring"
+fi
+{{ end -}}

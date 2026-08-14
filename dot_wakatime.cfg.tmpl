@@ -1,2 +1,21 @@
+{{- /*
+No `api_key` line: the key lives in the Secret Service keyring (ksecretd on KDE,
+gnome-keyring on GNOME), seeded from 1Password by
+.chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.
+
+wakatime-cli runs `api_key_vault_cmd` through `sh -c` with a hard 2 SECOND
+timeout (pkg/params/params.go readAPIKeyFromCommand), and consults it only when
+no `api_key` is set. `secret-tool lookup` answers in ~20 ms against an unlocked
+wallet, so it fits; `op read` does NOT — it takes ~19 s on this host and would
+be killed on every heartbeat. That timeout is why 1Password stays a
+provisioning-time source and never a runtime one.
+
+This file therefore holds no secret and needs no `private_` prefix. Every editor
+plugin inherits the vault command, because they all shell out to wakatime-cli.
+
+Deploys on every OS, including containers: the vault command is inert without a
+wallet, and wakatime-cli reports a missing key itself. Only the seeding script
+is Linux-gated.
+*/ -}}
 [settings]
-api_key = {{ onepasswordRead "op://Private/WakaTime/API Key" }}
+api_key_vault_cmd = secret-tool lookup {{ includeTemplate "wakatime-keyring.tmpl" . }}

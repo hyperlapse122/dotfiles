@@ -224,6 +224,10 @@ packages:
         # Hardware sensors / fan control
         - lm_sensors
 
+        # secret-tool: reads the WakaTime API key that ~/.wakatime.cfg no longer
+        # stores. The backing daemon is the desktop's own (ksecretd / gnome-keyring).
+        - libsecret
+
         # Logitech device manager
         - solaar
         - solaar-udev
