@@ -1078,6 +1078,7 @@ apply_podman_fixture() {
   destination="$podman_destination"
   FIXTURE_PODMAN_UNIT="$unit" run_chezmoi \
     "$scratch/hooked.toml" "$podman_source" unavailable present real \
+    --override-data '{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}' \
     --force apply >"$scratch/podman.stdout" 2>"$scratch/podman.stderr"
   rc=$?
   destination="$previous_destination"
