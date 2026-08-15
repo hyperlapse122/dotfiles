@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-08-14T02:17:27Z"
+    cursor: "2026-08-14T21:20:56Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -265,14 +265,17 @@ items:
     updated_at: "2026-08-07T04:46:59Z"
   "gh-issues:hyperlapse122/dotfiles#192":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "chezmoiremove: eight prune entries have no CI assertion - Eight .chezmoiremove prune entries lack CI canary assertions, making typos or stale paths indistinguishable from successful prunes."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/196"
+    verified_merge_sha: "9900699c8fc00e8410842c664b2bda99c2cdc58b"
+    verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false
     existing_ack_actor: null
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#192"
     media: []
@@ -281,14 +284,17 @@ items:
     updated_at: "2026-08-10T02:55:33Z"
   "gh-issues:hyperlapse122/dotfiles#193":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "fingerprint.tmpl accepts a zero-match glob in silence - Declared fingerprint globs matching zero files fail silently without warning, masking stale or missing dependencies."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/196"
+    verified_merge_sha: "9900699c8fc00e8410842c664b2bda99c2cdc58b"
+    verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: false
     existing_ack_actor: null
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#193"
     media: []
@@ -297,14 +303,17 @@ items:
     updated_at: "2026-08-10T02:55:31Z"
   "gh-issues:hyperlapse122/dotfiles#194":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "chezmoiignore: container narrowing for omp-plugins lost its beneficiary - Container narrowing rule for mxm4-haptic in .chezmoiignore is dangling and dead configuration after unmanaged-repo-guard removal."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/196"
+    verified_merge_sha: "9900699c8fc00e8410842c664b2bda99c2cdc58b"
+    verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: false
     existing_ack_actor: null
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#194"
     media: []
@@ -490,26 +499,77 @@ items:
     requirement_id: "R14"
   "gh-issues:hyperlapse122/dotfiles#227":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Branch pruner can hang on remote auth or network failure — Remote queries can block --apply indefinitely on authentication or network failure before cleanup classification."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/229"
+    verified_merge_sha: "682920e7b4a1699cd8b1eba5d4beac747bd6890d"
+    verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     cursor: "2026-08-14T02:17:27Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#227"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/227"
     requirement_id: "R15"
+  "gh-issues:hyperlapse122/dotfiles#231":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    body: "Record the Jetson AGX Thor board preflight measurements (plan U1) — Six load-bearing hardware and software facts are currently reasoned from vendor documentation rather than measured on the physical Thor board."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#231"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/231"
+    requirement_id: "R16"
+    updated_at: "2026-08-14T13:53:03Z"
+  "gh-issues:hyperlapse122/dotfiles#233":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    body: "remove or rename the obsolete kimi-reconcile helper — The Kimi CLI harness is retired but packages/kimi-reconcile is still built and installed for aoe TOML settings reconciliation."
+    author_class: "teammate"
+    category: "refactor"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#233"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/233"
+    requirement_id: "R17"
+    updated_at: "2026-08-14T20:26:17Z"
+  "gh-issues:hyperlapse122/dotfiles#235":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    body: "audit all rendered script paths in .chezmoiignore — .chezmoiignore must use paths from chezmois rendered source tree rather than source-only metadata prefixes/suffixes like run_after_ or .tmpl."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
+    existing_closeout: false
+    existing_closeout_actor: null
+    id: "hyperlapse122/dotfiles#235"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/235"
+    requirement_id: "R18"
+    updated_at: "2026-08-14T21:20:56Z"
 last_run:
-  timestamp: "2026-08-14T04:58:19Z"
+  timestamp: "2026-08-15T07:51:58Z"
   outcome: "completed"
-  writer: "sweep-omp-JOOSUNGPARK-JPI-20260814T042910Z-3214159"
+  writer: "sweep-ThinkPad-E14-Gen-7-omp-20260815T075158Z"
   counts:
     gh-issues:
-      acknowledged: 12
-      closed: 0
-      fetched: 12
-      new_ack_labels: 8
+      acknowledged: 3
+      closed: 4
+      fetched: 11
+      new_ack_labels: 3
