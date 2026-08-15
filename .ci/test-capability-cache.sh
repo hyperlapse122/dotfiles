@@ -310,9 +310,9 @@ expected_hard = {
     ('build-figma-auth/dependency-install-failed', 'dependency-install-failure'),
     ('build-figma-auth/build-failed', 'build-failure'),
     ('build-figma-auth/missing-dist', 'missing-dist-artifact'),
-    ('build-kimi-reconcile/dependency-install-failed', 'dependency-install-failure'),
-    ('build-kimi-reconcile/build-failed', 'build-failure'),
-    ('build-kimi-reconcile/missing-dist', 'missing-dist-artifact'),
+    ('build-settings-reconcile/dependency-install-failed', 'dependency-install-failure'),
+    ('build-settings-reconcile/build-failed', 'build-failure'),
+    ('build-settings-reconcile/missing-dist', 'missing-dist-artifact'),
     ('config-kde-calendar/akonadi-query-failed', 'akonadi-query-failure'),
 }
 seen_hard = set()

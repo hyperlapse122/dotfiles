@@ -4,16 +4,16 @@ import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse, stringify } from "smol-toml";
 
-export const SETTINGS_CONTRACT = "kimi-settings/v1";
+export const SETTINGS_CONTRACT = "settings-reconcile/v1";
 
 type JsonObject = Record<string, unknown>;
 
 export async function reconcileSettings(
-  kimiHome: string,
+  targetHome: string,
   file: "config.toml" | "tui.toml",
   declared: JsonObject,
 ): Promise<boolean> {
-  const home = await prepareHome(kimiHome);
+  const home = await prepareHome(targetHome);
   const target = contained(home, file);
   const original = await readSafe(target);
   let current: JsonObject = {};

@@ -1,9 +1,9 @@
 {
-  "name": "@h82/kimi-reconcile",
+  "name": "@h82/settings-reconcile",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Target-neutral TOML-leaf settings reconciler consumed by aoe (kimi-historical binary name).",
+  "description": "Target-neutral TOML-leaf settings reconciler consumed by aoe.",
   "license": "UNLICENSED",
   "engines": { "node": ">=24" },
   "dependencies": { "smol-toml": "1.7.0" },

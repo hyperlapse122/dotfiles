@@ -23,18 +23,6 @@
         "vite-plus": "catalog:",
       },
     },
-    "kimi-reconcile": {
-      "name": "@h82/kimi-reconcile",
-      "version": "0.0.0",
-      "dependencies": {
-        "smol-toml": "1.7.0",
-      },
-      "devDependencies": {
-        "@types/node": "24.13.2",
-        "typescript": "7.0.2",
-        "vite-plus": "catalog:",
-      },
-    },
     "mxm4-haptic": {
       "name": "@h82/mxm4-haptic",
       "version": "0.0.0",
@@ -53,6 +41,18 @@
       "devDependencies": {
         "@types/node": "24.13.2",
         "@types/semver": "7.7.1",
+        "typescript": "7.0.2",
+        "vite-plus": "catalog:",
+      },
+    },
+    "settings-reconcile": {
+      "name": "@h82/settings-reconcile",
+      "version": "0.0.0",
+      "dependencies": {
+        "smol-toml": "1.7.0",
+      },
+      "devDependencies": {
+        "@types/node": "24.13.2",
         "typescript": "7.0.2",
         "vite-plus": "catalog:",
       },
@@ -78,11 +78,11 @@
 
     "@h82/figma-auth": ["@h82/figma-auth@workspace:figma-auth"],
 
-    "@h82/kimi-reconcile": ["@h82/kimi-reconcile@workspace:kimi-reconcile"],
-
     "@h82/mxm4-haptic": ["@h82/mxm4-haptic@workspace:mxm4-haptic"],
 
     "@h82/release-lock": ["@h82/release-lock@workspace:release-lock"],
+
+    "@h82/settings-reconcile": ["@h82/settings-reconcile@workspace:settings-reconcile"],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 

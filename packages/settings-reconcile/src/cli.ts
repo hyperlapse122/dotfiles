@@ -20,12 +20,12 @@ try {
   // managed target tree, drifted state) — report the reason, not a stack trace
   // through the compiled single-file bundle.
   process.stderr.write(
-    `kimi-reconcile: ${error instanceof Error ? error.message : String(error)}\n`,
+    `settings-reconcile: ${error instanceof Error ? error.message : String(error)}\n`,
   );
   process.exit(1);
 }
 
 function usage(): never {
-  process.stderr.write("Usage: kimi-reconcile <contracts|settings> ...\n");
+  process.stderr.write("Usage: settings-reconcile <contracts|settings> ...\n");
   process.exit(2);
 }
