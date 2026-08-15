@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# dotfiles-skips — report outstanding transient chezmoi skips.
+#
+# Reads private skip state records written by .chezmoitemplates/skip.sh.tmpl.
+# Reports outstanding transient-tolerable and transient-blocking skips without
+# modifying state or probing capabilities.
+set -euo pipefail
+
+prog=dotfiles-skips
+
+usage() {
+  cat <<'EOF'
+usage: dotfiles-skips [--help]
+
+Report outstanding transient skips recorded by chezmoi early exits.
+Outputs script, site, direction, and reason for active transient skips.
+EOF
+}
+
+case "${1-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    printf '%s: unrecognized option %q\n' "$prog" "$1" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
+
+skips_dir="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips"
+
+if [[ ! -d "$skips_dir" ]]; then
+  exit 0
+fi
+
+if [[ ! -r "$skips_dir" || ! -x "$skips_dir" ]]; then
+  printf '%s: error: unreadable state directory %s\n' "$prog" "$skips_dir" >&2
+  exit 1
+fi
+
+shopt -s nullglob
+files=("$skips_dir"/*)
+shopt -u nullglob
+
+if [[ ${#files[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+
+IFS=$'\n' sorted_files=($(LC_ALL=C sort <<<"${files[*]}"))
+unset IFS
+
+for file in "${sorted_files[@]}"; do
+
+  if [[ -L "$file" || ! -f "$file" ]]; then
+    continue
+  fi
+
+  if [[ ! -r "$file" ]]; then
+    printf '%s: warning: unreadable skip record %s\n' "$prog" "$file" >&2
+    continue
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" ]] && continue
+
+    IFS=$'\t' read -r version script site direction reason extra <<< "$line"
+    if [[ "$version" != "v1" || -z "$script" || -z "$site" || -z "$direction" || -z "$reason" || -n "$extra" ]]; then
+      printf '%s: warning: malformed record in %s\n' "$prog" "$file" >&2
+      continue
+    fi
+
+
+    case "$direction" in
+      transient-tolerable|transient-blocking|transient-blocking:*)
+        printf '%s\t%s\t%s\t%s\n' "$script" "$site" "$direction" "$reason"
+        ;;
+      harmless|done_here|not_applicable)
+
+        ;;
+      *)
+        printf '%s: warning: unknown direction %q in %s\n' "$prog" "$direction" "$file" >&2
+        ;;
+    esac
+  done < "$file"
+done
