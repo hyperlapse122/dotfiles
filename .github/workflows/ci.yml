@@ -132,6 +132,7 @@ jobs:
           .ci/test-capability-cache.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-dotfiles-skips.sh
+          .ci/test-chezmoiignore-script-paths.sh
           .ci/test-gnome-hard-errors.sh \
             "$RUNNER_TEMP/gnome-1password-shortcut.sh" \
             "$RUNNER_TEMP/gnome-remove-ibus-source.sh"

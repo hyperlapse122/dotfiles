@@ -126,7 +126,6 @@
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
-.chezmoiscripts/60-build/*mxm4-haptic.ps1
 .config/systemd/user/mxm4-haptic*.service
 .config/fontconfig
 Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
