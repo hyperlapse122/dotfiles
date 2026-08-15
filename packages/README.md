@@ -24,7 +24,7 @@ the repo's TypeScript/JavaScript library packages.
 | Path | Package | Purpose |
 |---|---|---|
 | [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth omp` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes omp's private SQLite credential row; apply only compiles and installs it. |
-| [`kimi-reconcile/`](kimi-reconcile/) | `@h82/kimi-reconcile` | Historical-name apply helper that overlays declared TOML settings leaves. It has no Kimi Code plugin contract. |
+| [`settings-reconcile/`](settings-reconcile/) | `@h82/settings-reconcile` | Apply helper that overlays declared TOML settings leaves. It has no plugin contract. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
 
@@ -105,7 +105,7 @@ dependency first. Vite+ Task caches live at
 are git-ignored. Cached tasks fingerprint their declared `input` set;
 first-party `vp pack` builds are tracked automatically, but a task that shells
 out to an external binary (e.g. `bun build --compile`, as in `figma-auth` and
-`kimi-reconcile`) must declare explicit `input`/`output` on the task or source
+`settings-reconcile`) must declare explicit `input`/`output` on the task or source
 edits replay a stale cached build.
 
 `figma-auth` is installed on Linux/macOS by

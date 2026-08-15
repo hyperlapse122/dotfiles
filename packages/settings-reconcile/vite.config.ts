@@ -5,7 +5,7 @@ export default defineConfig({
   run: {
     tasks: {
       build: {
-        command: "bun build --compile ./src/cli.ts --outfile ./dist/kimi-reconcile",
+        command: "bun build --compile ./src/cli.ts --outfile ./dist/settings-reconcile",
         // Explicit inputs: auto file tracking misses reads by the external
         // bun process, so source edits would replay a stale cached build.
         input: [

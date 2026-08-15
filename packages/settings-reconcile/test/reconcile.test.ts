@@ -12,7 +12,7 @@ const cliPath = join(packageRoot, "src", "cli.ts");
 
 async function scratch(): Promise<string> {
   const base = process.env.XDG_RUNTIME_DIR ?? join(homedir(), ".cache");
-  const root = join(base, "kimi-reconcile-tests");
+  const root = join(base, "settings-reconcile-tests");
   await mkdir(root, { recursive: true, mode: 0o700 });
   return mkdtemp(join(root, "case-"));
 }
@@ -60,7 +60,7 @@ describe("settings reconciliation", () => {
 
 describe("contract surface", () => {
   test("exports only the settings contract", () => {
-    expect(reconcile.SETTINGS_CONTRACT).toBe("kimi-settings/v1");
+    expect(reconcile.SETTINGS_CONTRACT).toBe("settings-reconcile/v1");
     expect(reconcile).not.toHaveProperty("PLUGIN_CONTRACT");
     expect(reconcile).not.toHaveProperty("reconcilePlugin");
   });
