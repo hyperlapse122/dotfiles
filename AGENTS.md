@@ -18,6 +18,8 @@ Prefer `run_onchange_before_`/`run_onchange_after_` with a comment-only dependen
 ```
 
 The partial hashes file content, uses `(stat .).isDir` to skip directories/output directories, and MUST NOT hash a rendered secret. A script with no external dependency hashes only its own rendered content; document that explicitly. A clean exit-0 skip is recorded as successful and will not retry until a fingerprint changes or `chezmoi apply --force` is used; retain `run_after_` only when that retry behavior is essential.
+Script early exits MUST use `.chezmoitemplates/skip.sh.tmpl` declarations across its four call forms (`skip_here`, `skip_step`, `done_here`, `not_applicable`) and three skip directions (`harmless`, `transient-tolerable`, `transient-blocking`), verified by `.ci/check-skip-declarations.sh`. Bare `exit 0` or `return 0` on conditional script paths is prohibited.
+
 
 Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/system.yaml` `removed:`, or document a one-time manual reversal. Numeric `.chezmoiscripts/` directories establish phase order; existing `run_*` naming and numeric ordering may be extended, and renaming an onchange script reruns it once per host.
 

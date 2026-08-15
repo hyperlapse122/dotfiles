@@ -51,8 +51,7 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 
-IFS=$'\n' sorted_files=($(LC_ALL=C sort <<<"${files[*]}"))
-unset IFS
+mapfile -t sorted_files < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
 
 for file in "${sorted_files[@]}"; do
 

@@ -61,7 +61,6 @@ never by spawning another agent as a subprocess
 MUST NOT invoke an agent CLI
 A non-agentic subcommand of an agent CLI stays allowed
 Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
-Script early exits MUST use `.chezmoitemplates/skip.sh.tmpl` declarations
 NEEDLES
 
 while IFS= read -r banned; do

@@ -104,6 +104,7 @@ validate_rendered_rules() {
     if [[ "$pattern" == .chezmoiscripts/* ]]; then
       matched=0
       for norm in "${normalized_scripts[@]}"; do
+        # shellcheck disable=SC2053
         if [[ "$norm" == $pattern || "$norm" == "$pattern"/* ]]; then
           matched=1
           break
