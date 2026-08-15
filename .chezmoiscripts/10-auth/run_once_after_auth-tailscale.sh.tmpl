@@ -1,7 +1,11 @@
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
 
+{{ if $facts.jetson -}}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "auth-tailscale" "site" "jetson-off-tailnet" "reason" "Jetson host intentionally stays off the tailnet") }}
+{{ else -}}
 {{ if eq .chezmoi.os "darwin" -}}
 SUDO=()
 # The Mac App Store / standalone Tailscale app ships its CLI inside the app
@@ -42,3 +46,4 @@ if ! "${SUDO[@]}" "${TAILSCALE[@]}" up --operator "$USER" --accept-routes --acce
   printf 'auth-tailscale.sh: `tailscale up` failed; node did not join the tailnet. Fix the auth key or connectivity, then re-run `chezmoi apply`.\n' >&2
   exit 1
 fi
+{{ end -}}

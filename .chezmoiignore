@@ -86,13 +86,12 @@
 # still skip the trees below (no MX Master 4 inside a container).
 
 # Jetson AGX Thor has no MX Master 4 hardware and intentionally stays off the
-# tailnet. This is a host-profile decision, not a sharedHost gate: dropping
-# the Tailscale script also removes its op:// auth-key read from a Thor render.
+# tailnet. This is a host-profile decision, not a sharedHost gate.
 {{- if $f.jetson }}
 .chezmoiscripts/60-build/*mxm4-haptic.sh
 .config/systemd/user/mxm4-haptic*.service
 .omp/agent/extensions/mxm4-haptic.ts
-.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl
+.local/share/omp-plugins
 {{- end }}
 
 

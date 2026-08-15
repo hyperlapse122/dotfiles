@@ -32,14 +32,14 @@ render() {
 # omits every fact added later and chezmoi then fails with `map has no entry for
 # key` in CI only.
 write_fact_stub() {
-  local source_path=$1 output_path=$2 container=$3
+  local source_path=$1 output_path=$2 container=$3 jetson=${4:-false}
   node -e '
     const fs = require("node:fs");
-    const [sourcePath, outputPath, container] = process.argv.slice(1);
+    const [sourcePath, outputPath, container, jetson] = process.argv.slice(1);
     const source = fs.readFileSync(sourcePath, "utf8");
     const needle = `{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}`;
     if (source.split(needle).length !== 2) throw new Error("facts provider anchor changed");
-    const pinned = { container: container === "true", desktop: "gnome", distro: "fedora" };
+    const pinned = { container: container === "true", jetson: jetson === "true", desktop: "gnome", distro: "fedora" };
     const referenced = new Set(
       [...source.matchAll(/\$f\.([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]),
     );
@@ -49,13 +49,13 @@ write_fact_stub() {
       return [`"${key}"`, typeof value === "string" ? `"${value}"` : String(value)];
     });
     fs.writeFileSync(outputPath, source.replace(needle, `{{- $f := dict ${entries.join(" ")} }}`));
-  ' "$source_path" "$output_path" "$container"
+  ' "$source_path" "$output_path" "$container" "$jetson"
 }
 
 render_ignore() {
-  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 variant
-  variant="$scratch/ignore-$os-$container.tmpl"
-  write_fact_stub "$repo_root/.chezmoiignore" "$variant" "$container"
+  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 jetson=${7:-false} variant
+  variant="$scratch/ignore-$os-$container-$jetson.tmpl"
+  write_fact_stub "$repo_root/.chezmoiignore" "$variant" "$container" "$jetson"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }
 
@@ -82,16 +82,23 @@ assert_gate() {
 }
 
 render_reconciler() {
-  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 variant
-  variant="$scratch/reconciler-$os-$container-$(basename "$template")"
+  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 jetson=${8:-false} variant
+  variant="$scratch/reconciler-$os-$container-$jetson-$(basename "$template")"
   node -e '
     const fs = require("node:fs");
-    const [sourcePath, outputPath, container] = process.argv.slice(1);
+    const [sourcePath, outputPath, container, jetson] = process.argv.slice(1);
     const source = fs.readFileSync(sourcePath, "utf8");
     const needle = `includeTemplate "facts.tmpl" . | fromYaml`;
-    const replacement = `dict "container" ${container}`;
     if (source.split(needle).length !== 2) throw new Error("reconciler facts provider anchor changed");
-    fs.writeFileSync(outputPath, source.replace(needle, replacement));
-  ' "$repo_root/$template" "$variant" "$container"
+    const pinned = { container: container === "true", jetson: jetson === "true", desktop: "gnome", distro: "fedora" };
+    const referenced = new Set(
+      [...source.matchAll(/\$facts\.([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]),
+    );
+    const entries = [...referenced].sort().flatMap((key) => {
+      const value = key in pinned ? pinned[key] : false;
+      return [`"${key}"`, typeof value === "string" ? `"${value}"` : String(value)];
+    });
+    fs.writeFileSync(outputPath, source.replace(needle, `dict ${entries.join(" ")}`));
+  ' "$repo_root/$template" "$variant" "$container" "$jetson"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }
