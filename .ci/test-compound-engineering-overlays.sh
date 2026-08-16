@@ -12,6 +12,7 @@
 #   - a foreign symlink at the reference path is reclaimed, not written through
 #   - a foreign symlink in the archive-owned directory chain is refused
 #   - the CE external is additive (exact removed from the localArchive block)
+#   - the CE external excludes */plugin.json (prevents chezmoi drift warnings on apply)
 #   - the agent skill externals are exact (no overlay to preserve)
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
@@ -185,6 +186,8 @@ printf '%s\n' "$ce_block" | grep -q '^type = "archive"$' \
 if printf '%s\n' "$ce_block" | grep -q '^exact = true$'; then
   echo "rendered CE external is not additive" >&2; exit 1
 fi
+printf '%s\n' "$ce_block" | grep -qxF 'exclude = ["*/plugin.json"]' \
+  || { echo "rendered CE external missing exclude for plugin.json" >&2; exit 1; }
 grep -q '^exact = true$' "$rendered_externals" \
   || { echo "agent-skills exact archives unexpectedly changed" >&2; exit 1; }
 
