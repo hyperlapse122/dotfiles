@@ -128,7 +128,7 @@ agents:
         default: anthropic/claude-opus-5:high
         plan: "@slow"
         slow: anthropic/claude-opus-5:max
-        smol: openai-codex/gpt-5.6-luna:max
+        smol: google-antigravity/gemini-3.7-flash:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
       task.agentModelOverrides:
         designer: "@default"
@@ -155,17 +155,16 @@ agents:
       retry.fallbackChains:
         anthropic/claude-opus-5:
         - kimi-code/k3:max
+        - google-antigravity/gemini-3.7-flash:high
         - openai-codex/gpt-5.6-terra:max
-        - google-antigravity/gemini-3.7-flash:high
-        openai-codex/gpt-5.6-luna:
-        - google-antigravity/gemini-3.7-flash:high
-        - kimi-code/k3:high
-        - anthropic/claude-sonnet-5:high
+        google-antigravity/gemini-3.7-flash:
+        - kimi-code/kimi-for-coding:high
+        - openai-codex/gpt-5.6-luna:max
         default:
         - anthropic/claude-opus-5:high
         - kimi-code/k3:max
-        - openai-codex/gpt-5.6-terra:max
         - google-antigravity/gemini-3.7-flash:high
+        - openai-codex/gpt-5.6-terra:max
       secrets.enabled: true
       providers.webSearchOrder:
       - exa
