@@ -145,10 +145,10 @@ factRegistry:
     absentDefault: false
     source: >-
       PCI vendor 0x10de anywhere under /sys/bus/pci/devices/*/vendor. The fact
-      therefore means a DISCRETE NVIDIA GPU ON THE PCI BUS, and nothing weaker: an
-      integrated Tegra GPU has no such PCI entry, so a Jetson resolves FALSE here.
-      That is the correct value rather than a defect — every path this fact gates is
-      a Fedora-and-discrete-card path. Use `jetson` to reach a Tegra board.
+      identifies an NVIDIA GPU device on the PCI bus (including PCIe bridges and 3D
+      controllers on Thor). All paths gated by `nvidia` are Fedora-specific driver and
+      DKMS paths, fully isolated from Jetson/Ubuntu by distro gates. On a Jetson, CUDA is
+      supplied by the vendor's nvidia-jetpack BSP metapackage and is gated on `jetson`.
     gates: >-
       nvidiaPackages (RPM Fusion's akmod driver stack plus the
       CUDA/libnvidia-container repos on Fedora), the nvidia-persistenced
@@ -179,8 +179,8 @@ factRegistry:
       identify the L4T release, and apply_binaries.sh copies it into every flashed
       rootfs, so it is the most stable Jetson marker across JetPack versions. NOT
       /proc/device-tree/model or .../compatible: those carry the hardware device-tree
-      model, which a custom device tree changes. NOT the `nvidia` fact — a Tegra GPU
-      is integrated and never appears as a PCI vendor 0x10de device.
+      model, which a custom device tree changes. NOT the `nvidia` fact alone — Thor's
+      Blackwell GPU is on PCIe, but Jetson behavior is discriminated by `jetson`.
     gates: >-
       The JetPack package delivery in 20-linux-ubuntu (nvidia-jetpack and the
       Jetson-gated package rows), the sharedHost disjunction below, and the

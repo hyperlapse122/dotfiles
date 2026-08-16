@@ -224,12 +224,16 @@ flowchart TB
 
 ### Dependencies and Assumptions
 
-- Thor runs JetPack 7.x on Ubuntu 24.04 LTS, aarch64, kernel 6.8, with CUDA supplied through the vendor's BSP-aligned packages.
+- Thor runs JetPack 7.2.1-b49 (L4T R39.2.1) on Ubuntu 24.04 LTS, aarch64, kernel 6.8.12-1021-tegra, with CUDA supplied through the vendor's BSP-aligned packages. Measured on the board on 2026-08-16 (U1).
 - The operator has sudo on the board and is restrained by policy rather than by missing privilege.
-- The board's authd has no `authctl user set-shell`; verified by the operator on 2026-08-14. The supported CLI landed after release tag v0.6.4, and no v0.7 release exists.
+- PCI vendor `0x10de` is present on Thor's PCIe bus: unlike older Tegra SoCs (Xavier/Orin), Thor's Blackwell GPU exposes a 3D controller (`10de:2b00`) and PCIe bridges (`10de:22e6`, `10de:22d8`). The `nvidia` fact therefore resolves `true` on Thor, but Fedora driver/CUDA/MOK paths are fully isolated by `distro == "fedora"` while Jetson package delivery is gated by `distro == "ubuntu"` and `jetson == true`. Measured on the board on 2026-08-16 (U1).
+- `/etc/nv_tegra_release` is present (`R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64`), confirming `jetson: true`. Measured on the board on 2026-08-16 (U1).
+- `/etc/apt/sources.list.d/nvidia-l4t-apt-source.list` is preconfigured on the flashed board (`r39.2` main/som/ffmpeg repositories). Measured on the board on 2026-08-16 (U1).
+- `nvidia-jetpack` is version 7.2.1-b49 (193 KiB metapackage); the full runtime and dev closure contains 148 packages totaling ~3.16 GiB (3,312,608 KiB). Measured on the board on 2026-08-16 (U1).
+- The board's authd is version 0.6.4~ubuntu24.04 (PPA) and has no `authctl user set-shell` subcommand (only `lock`, `unlock`, `set-uid` exist). Measured on the board on 2026-08-16 (U1).
+- The authd SQLite database at `/var/lib/authd/authd.sqlite3` has `schema_version = 2` and its `users` table contains `shell TEXT DEFAULT "/bin/bash"` (verified with user `hyperlapse@jpi.co.kr` set to `/usr/bin/zsh`). Measured on the board on 2026-08-16 (U1).
 - authd serves `getent` through a fresh gRPC lookup per query and reads the database per query, so a direct write is visible without a daemon restart. The write is still an unsupported interface and can race the daemon's single-connection database manager, which is why R17 makes every failure non-fatal and R34 keeps it retryable.
 - authd honors `/etc/shells` through `checkValidShell`; root gets a warning rather than a refusal for an unlisted shell. Ubuntu's `zsh` package registers its own path, so this plan does not write `/etc/shells`.
-- The `nvidia-jetpack` metapackage is 193 KiB itself and depends on the full runtime and dev closure. The installed size is not published; U1 measures it on the board.
 - WakaTime's key is seeded into the Secret Service keyring at provisioning time because its own lookup has a two-second cap (`.chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.tmpl:10-16`). Under KD6 the seeding succeeds, but a consumer running inside an SSH session with no unlocked keyring will not find the key. This degrades SSH usage, not provisioning.
 - The 1Password desktop app runs on the board and its CLI integration is enabled, verified by the operator on 2026-08-14 from the local GUI session. The `after-install.sh` polkit owner list excludes the authd account, and desktop integration works regardless, so the polkit allowlist is not the gate on CLI integration.
 - The version-pinned artifact `https://downloads.1password.com/linux/tar/stable/aarch64/1password-8.12.32.arm64.tar.gz` returns HTTP 200 and is byte-identical to `1password-latest.tar.gz` (206,918,527 bytes, same ETag). The same pattern resolves for the prior 8.12.30 release, so pinning is stable across versions. The tarball's top-level directory is `1password-<version>.arm64`, so an unpack into `/opt/1Password` must strip that component.
@@ -378,13 +382,13 @@ U1 and U12 are parallel roots. U2 gates U3 through U9. U5 additionally needs U12
 - **Requirements:** R25.
 - **Dependencies:** none.
 - **Files:** none. Findings land in this plan's Dependencies and Assumptions section.
-- **Approach:** Run read-only checks on the board from its local session, then write each result into this plan.
-  1. `ls /sys/bus/pci/devices/*/vendor | xargs grep -l 0x10de` — confirm the `nvidia` fact resolves false.
-  2. `cat /etc/nv_tegra_release` — confirm the `jetson` marker exists and record the L4T release.
-  3. `ls /etc/apt/sources.list.d/nvidia-l4t-apt-source.list` — confirm the NVIDIA source is preconfigured.
-  4. `apt-get -s install nvidia-jetpack` — record the closure package count and installed size.
-  5. `sudo sqlite3 /var/lib/authd/authd.sqlite3 '.schema users'` plus `'SELECT version FROM schema_version'` — record the live schema.
-  6. `apt policy authd` — record the installed authd version alongside the already-established absence of `authctl user set-shell`.
+- **Approach:** Run read-only checks on the board from its local session, then write each result into this plan. Completed on 2026-08-16:
+  1. `ls /sys/bus/pci/devices/*/vendor | xargs grep -l 0x10de` — measured 5 matches on PCIe (`10de:2b00` 3D controller, `10de:22e6`, `10de:22d8` bridges); `nvidia` fact resolves true on Thor and is isolated by distro checks.
+  2. `cat /etc/nv_tegra_release` — measured `R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64`, confirming `jetson: true`.
+  3. `ls /etc/apt/sources.list.d/nvidia-l4t-apt-source.list` — confirmed present with `r39.2` repositories.
+  4. `apt-get -s install nvidia-jetpack` — measured `nvidia-jetpack` 7.2.1-b49 closure (148 packages, 3.16 GiB total installed size).
+  5. `sudo sqlite3 /var/lib/authd/authd.sqlite3 '.schema users'` plus `'SELECT version FROM schema_version'` — confirmed `schema_version = 2` and `shell TEXT DEFAULT "/bin/bash"` in `users` table.
+  6. `apt policy authd` — measured installed version `0.6.4~ubuntu24.04` and confirmed absence of `authctl user set-shell`.
 - **Execution note:** This unit is measurement only. It makes no configuration change.
 - **Test scenarios:** `Test expectation: none -- measurement unit with no repository change.`
 - **Verification:** This plan's Dependencies and Assumptions section names a measured value for each of the six checks.
