@@ -43,6 +43,14 @@ if [ ! -f "$SOURCE" ] || [ ! -d "$CURRENT" ]; then
   exit 0
 fi
 
+# Prune root plugin.json: upstream compound-engineering includes a root plugin.json
+# with $schema pointing to agent-plugins.org 1.0.0. When present, OMP classifies it
+# as an agent-plugins package and rejects every SKILL.md containing Claude Code/Codex
+# frontmatter keys (argument-hint, disable-model-invocation), silently dropping 30
+# of 33 skills (ce-brainstorm, ce-plan, ce-work, lfg, etc.). Pruning root plugin.json
+# lets OMP load it via the .claude-plugin/ manifest without dropping skills.
+rm -f -- "$CURRENT/plugin.json"
+
 # Archive-owned directory chain: create what is missing, but never traverse a
 # symlink or a non-directory — mkdir and cp would then land outside the version
 # dir. Those components are not ours to replace, so surface the conflict.
