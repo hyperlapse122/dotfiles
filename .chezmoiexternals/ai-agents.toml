@@ -189,5 +189,8 @@ stripComponents = 1
 {{-     if index $authority "exact" }}
 exact = true
 {{-     end }}
+{{-     if hasKey $authority "exclude" }}
+exclude = {{ toJson $authority.exclude }}
+{{-     end }}
 {{-   end -}}
 {{- end }}

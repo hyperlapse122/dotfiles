@@ -65,6 +65,8 @@ agents:
       source: EveryInc/compound-engineering-plugin
       externalPath: .local/share/compound-engineering
       versionSource: compoundEngineeringRelease
+      exclude:
+      - "*/plugin.json"
       os: [linux, darwin]
       container: keep
   aoe:
