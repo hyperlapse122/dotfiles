@@ -345,12 +345,11 @@ packages:
       # Pulled from the CUDA + nvidia-container repos added during repo setup,
       # under the same gate.
       #
-      # A Jetson never reaches this group, and that is deliberate rather than an
-      # oversight: its Tegra GPU is integrated and has no PCI entry, so `nvidia`
-      # resolves false there. The board gets CUDA from the `nvidia-jetpack` BSP
-      # metapackage instead (see the `nvidiaCompute` capability below), and
-      # NVIDIA's own Thor setup guide forbids a generic `nvidia-cuda-toolkit` on a
-      # Jetson because it does not match the L4T drivers the BSP ships.
+      # A Jetson never reaches this group, and that is deliberate: this group is
+      # under `fedora:` and only runs on Fedora. The board gets CUDA from the
+      # `nvidia-jetpack` BSP metapackage instead (see the `nvidiaCompute` capability
+      # below), and NVIDIA's own Thor setup guide forbids a generic `nvidia-cuda-toolkit`
+      # on a Jetson because it does not match the L4T drivers the BSP ships.
       nvidiaPackages:
         - cuda-drivers
         - cuda-toolkit-13-3
