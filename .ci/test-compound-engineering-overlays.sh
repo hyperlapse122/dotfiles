@@ -77,6 +77,7 @@ build_fake_ce() {
   rm -rf "$home"
   mkdir -p "$current/skills/ce-sweep/references/sources"
   cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$current/skills/ce-sweep/SKILL.md"
+  printf '{"name":"compound-engineering"}\n' > "$current/plugin.json"
   for f in email github-issues slack; do
     printf 'upstream %s\n' "$f" > "$current/skills/ce-sweep/references/sources/$f.md"
     cp "$current/skills/ce-sweep/references/sources/$f.md" "$scratch/expected-$f.md"
@@ -95,6 +96,7 @@ skill="$current/skills/ce-sweep/SKILL.md"
 [ -f "$skill" ] || { echo "ce-sweep skill missing" >&2; exit 1; }
 cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
   || { echo "ce-sweep skill changed on first run" >&2; exit 1; }
+[ ! -e "$current/plugin.json" ] || { echo "plugin.json not pruned on first run" >&2; exit 1; }
 for f in email github-issues slack; do
   cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
     || { echo "upstream $f.md changed on first run" >&2; exit 1; }
