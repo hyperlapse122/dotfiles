@@ -318,13 +318,9 @@ jq -e '
     "anthropic/claude-opus-5",
     "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",
-    "kimi-code/*",
-    "openai-codex/gpt-5.6-luna",
-    "openai-codex/gpt-5.6-terra",
-    "openai-codex/gpt-5.6-sol"
+    "kimi-code/*"
   ]
   and (."retry.fallbackChains" | has("default"))
-  and ((."retry.fallbackChains" | has("openai-codex/gpt-5.6-sol")) | not)
 ' "$declared_json" >/dev/null || {
   printf 'model whitelist policy is not rendered as expected\n' >&2
   exit 1
