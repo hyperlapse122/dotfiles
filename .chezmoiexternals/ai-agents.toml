@@ -162,6 +162,50 @@ include = ["*/skills/{{ .name }}/**"]
 {{- end }}
 {{- end }}
 
+{{- /* ---------- external agent plugins (.local/share/omp-plugins/plugins/<name>) ----------
+       Portable Agent Plugins packages conforming to https://agent-plugins.org/ specification.
+       The list is data in .chezmoidata/agents.yaml (agents.agentPlugins.external).
+       Each plugin archive is extracted into the local marketplace plugin directory
+       (~/.local/share/omp-plugins/plugins/<name>), allowing OMP to load and validate it
+       through the h82-dotfiles local marketplace without escaping realpath containment.
+       exact=true ensures uninstalled files from older versions are pruned on update. */ -}}
+{{- if hasKey .agents "agentPlugins" }}
+{{- $agentPluginsCtx := . }}
+{{- range .agents.agentPlugins.external }}
+{{- $ref := "" -}}
+{{- if and (hasKey . "versionSource") (hasKey . "ref") -}}
+  {{- fail (printf "%s agent plugin: versionSource and ref are mutually exclusive" .name) -}}
+{{- end -}}
+{{- if hasKey . "versionSource" -}}
+  {{- fail (printf "%s agent plugin: unsupported versionSource %q" .name .versionSource) -}}
+{{- else if hasKey . "ref" -}}
+  {{- if eq (len .ref) 40 -}}
+    {{- $ref = .ref -}}
+  {{- else -}}
+    {{- $ref = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $agentPluginsCtx "tool" .name) -}}
+  {{- end -}}
+{{- else -}}
+  {{- $ref = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $agentPluginsCtx "tool" .name) -}}
+{{- end }}
+{{- $host := "github" -}}
+{{- if hasKey . "host" -}}{{- $host = .host -}}{{- end -}}
+{{- if ne $host "github" -}}
+  {{- fail (printf "%s agent plugin: unsupported host %q" .name $host) -}}
+{{- end }}
+
+[".local/share/omp-plugins/plugins/{{ .name }}"]
+type = "archive"
+url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
+exact = true
+{{- if hasKey . "path" }}
+stripComponents = {{ add 1 (len (splitList "/" .path)) }}
+include = [{{ printf "*/%s/**" .path | quote }}]
+{{- else }}
+stripComponents = 1
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- /* ---------- localArchive marketplace archives ----------
        One archive external per localArchive authority in agents.marketplaces
        (compound-engineering-plugin, i-have-adhd). Each is emitted on every OS

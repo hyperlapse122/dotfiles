@@ -68,6 +68,8 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
+  agentPlugins:
+    external: []
   marketplaces:
     h82-dotfiles:
       kind: localDir
