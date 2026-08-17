@@ -217,4 +217,34 @@ export const REGISTRY: Registry = {
   improve: { kind: "gitRef", source: "shadcn/improve", ref: "refs/heads/main" },
 
   "i-have-adhd": { kind: "gitRef", source: "ayghri/i-have-adhd", ref: "refs/heads/main" },
+
+  "composition-patterns": {
+    kind: "gitRef",
+    source: "vercel-labs/agent-skills",
+    ref: "refs/heads/main",
+  },
+
+  "react-best-practices": {
+    kind: "gitRef",
+    source: "vercel-labs/agent-skills",
+    ref: "refs/heads/main",
+  },
+
+  "react-view-transitions": {
+    kind: "gitRef",
+    source: "vercel-labs/agent-skills",
+    ref: "refs/heads/main",
+  },
+
+  "web-design-guidelines": {
+    kind: "gitRef",
+    source: "vercel-labs/agent-skills",
+    ref: "refs/heads/main",
+  },
+
+  "writing-guidelines": {
+    kind: "gitRef",
+    source: "vercel-labs/agent-skills",
+    ref: "refs/heads/main",
+  },
 };

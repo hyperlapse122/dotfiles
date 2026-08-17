@@ -158,6 +158,11 @@
           }
         }
       },
+      "composition-patterns": {
+        "kind": "gitRef",
+        "source": "vercel-labs/agent-skills",
+        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+      },
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
@@ -349,6 +354,16 @@
           }
         }
       },
+      "react-best-practices": {
+        "kind": "gitRef",
+        "source": "vercel-labs/agent-skills",
+        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+      },
+      "react-view-transitions": {
+        "kind": "gitRef",
+        "source": "vercel-labs/agent-skills",
+        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+      },
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
@@ -464,10 +479,20 @@
           }
         }
       },
+      "web-design-guidelines": {
+        "kind": "gitRef",
+        "source": "vercel-labs/agent-skills",
+        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+      },
       "winbox": {
         "kind": "vendorManifest",
         "source": "https://download.mikrotik.com/routeros/winbox/LATEST.4",
         "version": "4.3"
+      },
+      "writing-guidelines": {
+        "kind": "gitRef",
+        "source": "vercel-labs/agent-skills",
+        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
       }
     }
   }

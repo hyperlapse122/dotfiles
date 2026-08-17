@@ -43,6 +43,21 @@ agents:
       ref: main
     - name: i-have-adhd
       source: ayghri/i-have-adhd
+    - name: composition-patterns
+      source: vercel-labs/agent-skills
+      ref: main
+    - name: react-best-practices
+      source: vercel-labs/agent-skills
+      ref: main
+    - name: react-view-transitions
+      source: vercel-labs/agent-skills
+      ref: main
+    - name: web-design-guidelines
+      source: vercel-labs/agent-skills
+      ref: main
+    - name: writing-guidelines
+      source: vercel-labs/agent-skills
+      ref: main
     - name: glab
       source: gitlab-org/cli
       host: gitlab
