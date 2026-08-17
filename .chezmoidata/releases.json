@@ -367,22 +367,22 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-08-17.2",
+        "version": "2026-08-17.3",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.2/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.3/rust-analyzer-x86_64-unknown-linux-gnu.gz",
             "sha256": "a559eaa29920e4c12718fba101f2055f1da0ad8bc458ef9dc1a670778cc66901"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.2/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.3/rust-analyzer-aarch64-unknown-linux-gnu.gz",
             "sha256": "941ad31c4256eec3c8457257b0fcfb696d2b4f80c0e5a996f7375a92130c2447"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.2/rust-analyzer-x86_64-apple-darwin.gz",
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.3/rust-analyzer-x86_64-apple-darwin.gz",
             "sha256": "134a7d305991de776864e43d1e6c291f60fa2888d4b9b7749864c562c5dc28b7"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.2/rust-analyzer-aarch64-apple-darwin.gz",
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-17.3/rust-analyzer-aarch64-apple-darwin.gz",
             "sha256": "ece932daf2f077be87bf745d2eb0a62cbc550f4b1e2e31ca76dfafdd0cc599b3"
           }
         }
