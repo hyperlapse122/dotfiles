@@ -25,7 +25,7 @@ render_remove() {
 posix_build=.chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl
 posix_reconcile=.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl
 for path in .chezmoiignore .chezmoiremove "$posix_build" "$posix_reconcile" \
-  dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json \
+  dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json.tmpl \
   dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl \
   dot_config/systemd/user/mxm4-hapticd.service.tmpl \
   dot_config/systemd/user/mxm4-haptic-notify.service.tmpl \

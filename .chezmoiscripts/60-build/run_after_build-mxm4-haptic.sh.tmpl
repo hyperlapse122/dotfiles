@@ -1,5 +1,5 @@
 {{ $sourceDir := .chezmoi.sourceDir -}}
-{{ $pluginInputs := includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl")) -}}
+{{ $pluginInputs := includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "packages/package.json" "packages/bun.lock" "packages/vite.config.ts" "packages/mxm4-haptic/package.json" "packages/mxm4-haptic/tsconfig.json" "packages/mxm4-haptic/vite.config.ts" "packages/mxm4-haptic/src/**" "dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json.tmpl" "dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl")) -}}
 {{ $pluginConfig := printf "settled=%s\nfailed=%s\nquestion=%s\n" .haptic.omp.settled .haptic.omp.failed .haptic.omp.question -}}
 {{ $daemonInputs := "" -}}
 {{ $daemonConfig := "" -}}
