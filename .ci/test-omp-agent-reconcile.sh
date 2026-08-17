@@ -21,16 +21,11 @@ home="$scratch/home"
 fake_bin="$scratch/bin"
 mkdir -p "$home/.omp/agent" "$fake_bin"
 
-# One managed variable per reconcile property: EXA twice (collapse duplicates),
-# OPENROUTER once (overwrite a single stale value). The insertion case runs
-# against a second fixture below, so all three shapes stay covered after the
-# managed set narrows to two names.
 cat >"$home/.omp/agent/.env" <<'EOF'
 # user-owned values stay byte-identical
 OTHER_TOKEN='keep me'
-EXA_API_KEY=stale
-EXA_API_KEY="duplicate"
 OPENROUTER_API_KEY=stale
+OPENROUTER_API_KEY="duplicate"
 EOF
 chmod 0644 "$home/.omp/agent/.env"
 
@@ -42,31 +37,28 @@ run_auth() {
 run_auth
 
 [[ $(stat -c '%a' "$auth") == 600 ]]
-[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
 [[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 1 ]]
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
-grep -F 'EXA_API_KEY="dummy-secret"' "$auth" >/dev/null
 grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
 missing="$scratch/missing.env"
 cat >"$missing" <<'EOF'
-EXA_API_KEY=present
+OTHER_TOKEN=present
 EOF
 chmod 0644 "$missing"
 run_auth "$missing"
-[[ $(grep -c '^EXA_API_KEY=' "$missing") -eq 1 ]]
+[[ $(grep -c '^OTHER_TOKEN=' "$missing") -eq 1 ]]
 [[ $(grep -c '^OPENROUTER_API_KEY=' "$missing") -eq 1 ]]
 grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$missing" >/dev/null
 ambient="$scratch/ambient.env"
 printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
 run_auth "$ambient"
 grep -F 'AMBIENT_TOKEN=keep' "$ambient" >/dev/null
-grep -F 'EXA_API_KEY="dummy-secret"' "$ambient" >/dev/null
 grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$ambient" >/dev/null
 
 # The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
-printf '%s\n' EXA_API_KEY OPENROUTER_API_KEY >"$expected_names"
+printf '%s\n' OPENROUTER_API_KEY >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
   grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names"
@@ -538,7 +530,7 @@ settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
 models_yml='dot_omp/private_agent/private_readonly_models.yml.tmpl'
-closed_set='EXA_API_KEY, OPENROUTER_API_KEY'
+closed_set='OPENROUTER_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a
 # variable into the environment omp loads for every session, nor silently drop
@@ -548,15 +540,15 @@ assert_render_fails auth-outside-closed-set-linux "$auth_sh" \
   "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
 assert_render_fails auth-emptied-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
-  'must declare EXA_API_KEY'
+  'must declare OPENROUTER_API_KEY'
 assert_render_fails auth-duplicate-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"EXA_API_KEY\",\"key\":\"a\"},{\"variable\":\"EXA_API_KEY\",\"key\":\"b\"}]}}}}" \
-  'duplicates variable "EXA_API_KEY"'
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"OPENROUTER_API_KEY\",\"key\":\"a\"},{\"variable\":\"OPENROUTER_API_KEY\",\"key\":\"b\"}]}}}}" \
+  'duplicates variable "OPENROUTER_API_KEY"'
 assert_render_fails auth-empty-key-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"EXA_API_KEY\",\"key\":\"\"}]}}}}" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"OPENROUTER_API_KEY\",\"key\":\"\"}]}}}}" \
   'resolved to an empty value'
 assert_render_fails auth-non-string-key-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"EXA_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"OPENROUTER_API_KEY\",\"key\":[\"not-a-string\"]}]}}}}" \
   'field `key` must resolve to a string'
 
 # Role indirection is the one value shape no later layer validates.

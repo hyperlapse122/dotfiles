@@ -27,13 +27,6 @@ agents:
       url: https://mcp.context7.com/mcp
       headers:
         CONTEXT7_API_KEY: op://Private/Context7/API Key
-    - name: websearch
-      transport: http
-      url: https://mcp.exa.ai/mcp
-      headers:
-        x-api-key: op://Private/Exa/API Key
-      harnessSkip:
-      - omp
   skills:
     external:
     - name: agent-browser
@@ -178,14 +171,13 @@ agents:
         - kimi-code/k3:max
         - google-antigravity/gemini-3.7-flash:high
       secrets.enabled: true
+      providers.webSearchGeminiModel: gemini-3.7-flash
       providers.webSearchOrder:
-      - exa
       - gemini
       providers.imageOrder:
       - antigravity
       - openrouter
       provider.appendOnlyContext: on
-      exa.enabled: true
       task.isolation.mode: auto
       task.enableEffort: true
       task.enableLsp: true
@@ -204,7 +196,5 @@ agents:
       mcp.notifications: true
     auth:
       env:
-      - variable: EXA_API_KEY
-        key: op://Private/Exa/API Key
       - variable: OPENROUTER_API_KEY
         key: op://Private/OpenRouter/API Key
