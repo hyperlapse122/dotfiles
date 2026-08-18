@@ -59,8 +59,6 @@ Delegate agent work through the harness's own subagent mechanism, never by spawn
 
 Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
 
-New scripting/tooling/codegen uses Node/Deno/Bun or shell for OS glue, not Python (except established Python tooling).
-
 ## JavaScript, mise, and GitLab
 
 Dependencies, devDependencies, and optionalDependencies MUST be exact-pinned and at least one week old; choose the newest qualifying version. Correct ranges when editing `package.json`. Peer dependencies MUST remain widest compatible ranges; exact internal lockstep/prerelease peers stay exact-pinned. MUST NOT relax lifecycle/exact/cooldown settings, add cooldown exclusions, or lower the cooldown without explicit per-package approval.
