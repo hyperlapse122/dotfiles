@@ -163,12 +163,12 @@ agents:
       retry.usageAwareFallback: true
       retry.fallbackChains:
         anthropic/claude-opus-5:
-        - kimi-code/k3:max
+        - kimi-code/k3:high
         - google-antigravity/gemini-3.7-flash:high
         google-antigravity/gemini-3.7-flash: []
         default:
         - anthropic/claude-opus-5:high
-        - kimi-code/k3:max
+        - kimi-code/k3:high
         - google-antigravity/gemini-3.7-flash:high
       secrets.enabled: true
       providers.webSearchGeminiModel: gemini-3.7-flash
