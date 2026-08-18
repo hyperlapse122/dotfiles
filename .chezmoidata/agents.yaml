@@ -27,6 +27,11 @@ agents:
       url: https://mcp.context7.com/mcp
       headers:
         CONTEXT7_API_KEY: op://Private/Context7/API Key
+    - name: mdn
+      transport: http
+      url: https://mcp.mdn.mozilla.net/
+      headers:
+        X-Moz-1st-Party-Data-Opt-Out: "1"
   skills:
     external:
     - name: agent-browser
