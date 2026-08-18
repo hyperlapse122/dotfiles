@@ -178,7 +178,7 @@ agents:
       - antigravity
       - openrouter
       provider.appendOnlyContext: on
-      task.isolation.mode: auto
+      task.isolation.mode: none
       task.enableEffort: true
       task.enableLsp: true
       task.maxEffort: xhigh
