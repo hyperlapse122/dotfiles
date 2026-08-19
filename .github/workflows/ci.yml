@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   omp-agent-integration:
@@ -198,6 +203,8 @@ jobs:
   tmux-kitty-passthrough:
     name: tmux Kitty image passthrough
     runs-on: ubuntu-latest
+    # Drives a real tmux server and pty; the GitHub default is 6 hours.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       # The test drives a real tmux server; util-linux script(1) is already on
