@@ -369,6 +369,29 @@ jq -e '
   exit 1
 }
 
+# kimi-code stays whitelisted for manual /model switching while its
+# subscription winds down, but nothing automatic may route to it: the
+# apply-time catalog gate fails open once the provider is unauthenticated, so
+# this assertion is the only barrier between a retune and a dead recovery.
+# It covers roles, agent overrides, and chain hops, because a hop written as
+# a role alias would otherwise bypass a chains-only check. It stays true
+# after the eventual whitelist removal and may be dropped together with the
+# `kimi-code/*` entry, never before.
+kimi_refs=$(jq -r '
+  [ (.modelRoles // {} | to_entries[].value),
+    (."task.agentModelOverrides" // {} | to_entries[].value),
+    (."retry.fallbackChains" // {} | to_entries[].value[]) ]
+  | map(select(type == "string"))
+  | map(select(startswith("kimi-code/"))) | .[]
+' "$declared_json")
+if [[ -n $kimi_refs ]]; then
+  while IFS= read -r ref; do
+    [[ -n $ref ]] || continue
+    printf 'kimi-code automatic-routing guard: %s names kimi-code, but kimi-code is whitelisted for manual /model switching only while its subscription winds down; no role, agent override, or fallback chain may route to it\n' "$ref" >&2
+  done <<<"$kimi_refs"
+  exit 1
+fi
+
 # The harvest is shared by the catalog fixture and the shape check. A chain KEY
 # is a selector too when it is model-oriented, so it must be harvested alongside
 # the hop values. It is filtered HERE rather than downstream because the shape

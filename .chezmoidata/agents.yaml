@@ -181,20 +181,15 @@ agents:
       retry.usageAwareFallback: true
       retry.fallbackChains:
         anthropic/claude-fable-5:
-        - kimi-code/k3:max
         - google-antigravity/gemini-3.1-pro:high
         anthropic/claude-opus-5:
-        - kimi-code/k3:high
         - google-antigravity/gemini-3.1-pro:high
         anthropic/claude-sonnet-5:
-        - kimi-code/k3:high
         - google-antigravity/gemini-3.7-flash:high
         google-antigravity/gemini-3.7-flash:
         - google-antigravity/gemini-3.1-flash-lite:minimal
-        - kimi-code/k3:high
         default:
         - anthropic/claude-opus-5:high
-        - kimi-code/k3:high
         - google-antigravity/gemini-3.7-flash:high
       secrets.enabled: true
       providers.webSearchGeminiModel: gemini-3.7-flash
