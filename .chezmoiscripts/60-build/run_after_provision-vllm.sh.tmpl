@@ -190,8 +190,13 @@ if [[ -z "$manager_pid" || "$manager_pid" == "0" ]]; then
   manager_pid=$(pgrep -u "${EUID:-$(id -u)}" -f 'systemd --user' 2>/dev/null | head -n1 || true)
 fi
 
-if [[ -n "$manager_pid" && "$manager_pid" -gt 0 && -r "/proc/$manager_pid/status" ]]; then
-  manager_groups=$(grep -E '^Groups:' "/proc/$manager_pid/status" 2>/dev/null | cut -f2- || true)
+# Test/CI override: a status file to read instead of /proc/<pid>/status.
+manager_status_file=${VLLM_MANAGER_STATUS_FILE:-}
+if [[ -z "$manager_status_file" && -n "$manager_pid" && "$manager_pid" -gt 0 ]]; then
+  manager_status_file="/proc/$manager_pid/status"
+fi
+if [[ -n "$manager_status_file" && -r "$manager_status_file" ]]; then
+  manager_groups=$(grep -E '^Groups:' "$manager_status_file" 2>/dev/null | cut -f2- || true)
   if [[ -n "$manager_groups" ]]; then
     for want_gid in "$video_gid" "$render_gid"; do
       if [[ -n "$want_gid" && ! " $manager_groups " =~ [[:space:]]"$want_gid"[[:space:]] ]]; then

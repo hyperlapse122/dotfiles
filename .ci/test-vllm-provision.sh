@@ -192,20 +192,8 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  'group video')
-    if [[ "${STUB_MANAGER_LACKS_GROUPS:-0}" == 1 ]]; then
-      printf 'video:x:99991:\n'
-    else
-      printf 'video:x:4:\n'
-    fi
-    ;;
-  'group render')
-    if [[ "${STUB_MANAGER_LACKS_GROUPS:-0}" == 1 ]]; then
-      printf 'render:x:99992:\n'
-    else
-      printf 'render:x:27:\n'
-    fi
-    ;;
+  'group video') printf 'video:x:4:\n' ;;
+  'group render') printf 'render:x:27:\n' ;;
   *) /usr/bin/getent "$@" || true ;;
 esac
 EOF
@@ -310,10 +298,16 @@ prepare_case() {
 
 run_case() {
   local script_path=${1:-"$case_dir/provision.sh"}
+  if [[ "${STUB_MANAGER_LACKS_GROUPS:-0}" == 1 ]]; then
+    printf 'Name:\tsystemd\nState:\trunning\nGroups:\t1000\n' >"$case_dir/manager-status"
+  else
+    printf 'Name:\tsystemd\nState:\trunning\nGroups:\t1000 4 27\n' >"$case_dir/manager-status"
+  fi
   env HOME="$test_home" \
     PATH="$fake_bin:/usr/bin:/bin" \
     TEST_LOG="$TEST_LOG" \
     TEST_STATE="$TEST_STATE" \
+    VLLM_MANAGER_STATUS_FILE="$case_dir/manager-status" \
     STUB_SS_LISTENER_PORT="${STUB_SS_LISTENER_PORT:-}" \
     STUB_OP_ABSENT="${STUB_OP_ABSENT:-0}" \
     STUB_OP_FAIL="${STUB_OP_FAIL:-0}" \
