@@ -52,10 +52,11 @@
 {{- if ne .chezmoi.os "linux" }}
 .config/fontconfig
 {{- end }}
-# The haptic systemd units are Linux-only. macOS uses launchd, so it must not
-# receive inert systemd targets.
+# The haptic and vLLM systemd units are Linux-only. macOS uses launchd, so it
+# must not receive inert systemd targets.
 {{- if ne .chezmoi.os "linux" }}
 .config/systemd/user/mxm4-haptic*.service
+.config/systemd/user/vllm-*.service
 {{- end }}
 
 
@@ -94,6 +95,13 @@
 .local/share/omp-plugins
 {{- end }}
 
+# The vLLM local LLM inference services and their mDNS companions deploy only
+# on Jetson AGX Thor. Linux desktop hosts that are not the Jetson must not get
+# the units.
+{{- if not $f.jetson }}
+.config/systemd/user/vllm-*.service
+{{- end }}
+
 
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
 ./plans
@@ -126,7 +134,9 @@
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .chezmoiscripts/60-build/*mxm4-haptic.sh
+.chezmoiscripts/60-build/*provision-vllm.sh
 .config/systemd/user/mxm4-haptic*.service
+.config/systemd/user/vllm-*.service
 .config/fontconfig
 Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .local/share/omp-plugins

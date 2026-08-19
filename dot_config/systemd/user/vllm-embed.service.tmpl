@@ -1,0 +1,49 @@
+{{- $v := .vllm -}}
+{{- if not $v -}}{{- fail "vllm-embed.service.tmpl: .vllm data is missing" -}}{{- end -}}
+{{- if not (get $v "runtime") -}}{{- fail "vllm-embed.service.tmpl: vllm.runtime is required" -}}{{- end -}}
+{{- if not (get $v.runtime "packaging") -}}{{- fail "vllm-embed.service.tmpl: vllm.runtime.packaging is required" -}}{{- end -}}
+{{- if not (get $v.runtime "venvPath") -}}{{- fail "vllm-embed.service.tmpl: vllm.runtime.venvPath is required" -}}{{- end -}}
+{{- if not (get $v.runtime "modelRoot") -}}{{- fail "vllm-embed.service.tmpl: vllm.runtime.modelRoot is required" -}}{{- end -}}
+{{- if not (get $v "models") -}}{{- fail "vllm-embed.service.tmpl: vllm.models is required" -}}{{- end -}}
+{{- if not (get $v.models "embed") -}}{{- fail "vllm-embed.service.tmpl: vllm.models.embed is required" -}}{{- end -}}
+{{- $embed := $v.models.embed -}}
+{{- range $key := list "localDir" "servedName" "runner" "port" "gpuMemoryUtilization" "maxModelLen" -}}
+{{-   if not (get $embed $key) -}}{{- fail (printf "vllm-embed.service.tmpl: vllm.models.embed.%s is required" $key) -}}{{- end -}}
+{{- end -}}
+{{- if not (get $v "auth") -}}{{- fail "vllm-embed.service.tmpl: vllm.auth is required" -}}{{- end -}}
+{{- if not (get $v.auth "envFile") -}}{{- fail "vllm-embed.service.tmpl: vllm.auth.envFile is required" -}}{{- end -}}
+[Unit]
+Description=vLLM embedding service ({{ $embed.servedName }})
+# Local LLM inference service on Jetson AGX Thor serving {{ $embed.repo }}.
+# Configuration rendered from .chezmoidata/vllm.yaml (vllm.runtime.*,
+# vllm.models.embed.*, vllm.auth.*) — EDIT THE DATA, not this file; a data edit
+# re-runs the provisioner script (fingerprint), which daemon-reloads and restarts
+# this unit.
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+{{- if ne $v.runtime.packaging "native" }}
+{{-   fail (printf "vllm-embed.service.tmpl: unsupported runtime.packaging %q; only native is supported" $v.runtime.packaging) }}
+{{- end }}
+ExecStart=%h/{{ $v.runtime.venvPath }}/bin/vllm serve %h/{{ $v.runtime.modelRoot }}/{{ $embed.localDir }} \
+  --host 0.0.0.0 \
+  --port {{ $embed.port }} \
+  --served-model-name {{ $embed.servedName }} \
+  --runner {{ $embed.runner }} \
+  --gpu-memory-utilization {{ $embed.gpuMemoryUtilization }} \
+  --max-model-len {{ $embed.maxModelLen }} \
+  --allowed-origins {{ if $v.allowedOrigins }}'{{ $v.allowedOrigins | join "," }}'{{ else }}'[]'{{ end }}
+Restart=on-failure
+RestartSec=30
+OOMScoreAdjust=500
+EnvironmentFile=%h/{{ $v.auth.envFile }}
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment="PATH=%h/{{ $v.runtime.venvPath }}/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target

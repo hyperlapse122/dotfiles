@@ -1,0 +1,367 @@
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $v := .vllm -}}
+{{- if not $v -}}{{- fail "run_after_provision-vllm.sh.tmpl: .vllm data is missing" -}}{{- end -}}
+{{ $vllmInputs := includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list ".chezmoidata/vllm.yaml" "dot_config/systemd/user/vllm-chat.service.tmpl" "dot_config/systemd/user/vllm-embed.service.tmpl" "dot_config/systemd/user/vllm-chat-mdns.service.tmpl" "dot_config/systemd/user/vllm-embed-mdns.service.tmpl")) -}}
+#!/usr/bin/env bash
+# Provision and reconcile vLLM local LLM inference services on Jetson AGX Thor.
+# Inputs hash fingerprint:
+# vllm inputs:
+{{ $vllmInputs }}
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+
+if ! fact_gate "jetson"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "provision-vllm" "site" "non-jetson-host" "direction" "harmless" "reason" "vLLM local inference services deploy only on Jetson AGX Thor") | trim | indent 2 }}
+fi
+
+SOURCE_ROOT=${VLLM_SOURCE_ROOT:-{{ $sourceDir | quote }}}
+VLLM_FINGERPRINT={{ ($vllmInputs | sha256sum) | quote }}
+STATE_PARENT="$HOME/.local/share/vllm"
+STATE_DIR="$STATE_PARENT/.vllm-state"
+VLLM_STAMP="$STATE_DIR/provision-stamp"
+
+TEMP_CURL_CFG=""
+cleanup() {
+  if [[ -n "$TEMP_CURL_CFG" ]]; then
+    rm -f -- "$TEMP_CURL_CFG"
+  fi
+}
+trap cleanup EXIT
+
+fail() {
+  printf 'provision-vllm: %s\n' "$*" >&2
+  exit 1
+}
+
+stamp_matches() {
+  local path=$1 expected=$2
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  [[ $(<"$path") == "$expected" ]]
+}
+
+write_stamp() {
+  local destination=$1 value=$2 temporary
+  mkdir -p -- "${destination%/*}" || fail "stamp: cannot create directory for $destination"
+  temporary=$(mktemp "${destination}.new.XXXXXX") || fail "stamp: cannot allocate $destination"
+  printf '%s\n' "$value" >"$temporary" || fail "stamp: cannot write $destination"
+  chmod 0600 -- "$temporary"
+  mv -f -- "$temporary" "$destination" || fail "stamp: cannot replace $destination"
+}
+
+# Short-circuit on unchanged fingerprint before performing any system mutations.
+if stamp_matches "$VLLM_STAMP" "$VLLM_FINGERPRINT"; then
+  printf 'provision-vllm: vLLM services already provisioned with current configuration; nothing to do\n'
+  exit 0
+fi
+
+# Preflight commands
+for req in awk cat chmod curl cut df getent grep id loginctl mktemp mkdir mv openssl pgrep rm ss systemctl systemd-analyze; do
+  command -v "$req" >/dev/null 2>&1 || fail "preflight: $req is required"
+done
+
+BUILD_COMMAND_VIA_MISE=0
+resolve_build_command() {
+  local name=$1
+  if command -v "$name" >/dev/null 2>&1; then
+    BUILD_COMMAND_VIA_MISE=0
+    return 0
+  fi
+  command -v mise >/dev/null 2>&1 ||
+    fail "preflight: $name is required (not on PATH and mise cannot provide it)"
+  BUILD_COMMAND_VIA_MISE=1
+}
+
+run_build_command() {
+  local via_mise=$1 directory=$2
+  shift 2
+  if [[ "$via_mise" -eq 1 ]]; then
+    mise -C "$directory" exec -- "$@"
+  else
+    (cd "$directory" && "$@")
+  fi
+}
+
+# ==============================================================================
+# Gate 1: Preflight
+# ==============================================================================
+
+MODEL_ROOT="$HOME/{{ $v.runtime.modelRoot }}"
+mkdir -p "$MODEL_ROOT" || fail "preflight: cannot create model root $MODEL_ROOT"
+avail_kb=$(df -k "$MODEL_ROOT" | awk 'NR==2 {print $4}')
+# 45 GiB = 45 * 1024 * 1024 KiB = 47185920 KiB
+if [[ "$avail_kb" -lt 47185920 ]]; then
+  fail "preflight: insufficient disk space on $MODEL_ROOT (requires >= 45 GiB free)"
+fi
+
+CHAT_PORT={{ $v.models.chat.port }}
+EMBED_PORT={{ $v.models.embed.port }}
+
+check_port_available() {
+  local port=$1 service_name=$2
+  if ss -ltnH "sport = :$port" | grep -q .; then
+    if systemctl --user is-active --quiet "$service_name" 2>/dev/null; then
+      return 0
+    fi
+    fail "preflight: port $port is already in use by an unmanaged listener"
+  fi
+}
+
+check_port_available "$CHAT_PORT" "vllm-chat.service"
+check_port_available "$EMBED_PORT" "vllm-embed.service"
+
+USER_NAME=${USER:-{{ .chezmoi.username | quote }}}
+current_groups=$(id -nG "$USER_NAME" 2>/dev/null || id -nG)
+need_group_repair=0
+for g in video render; do
+  if [[ ! " $current_groups " =~ [[:space:]]"$g"[[:space:]] ]]; then
+    need_group_repair=1
+  fi
+done
+
+if [[ "$need_group_repair" -eq 1 ]]; then
+  sudo -n true 2>/dev/null || fail "preflight: passwordless sudo (sudo -n true) is required for video/render group repair"
+fi
+
+AUTH_ENV="$HOME/{{ $v.auth.envFile }}"
+API_KEY_REF={{ $v.auth.apiKeyRef | quote }}
+resolved_key=""
+
+if command -v op >/dev/null 2>&1; then
+  set +x
+  resolved_key="$(op read "$API_KEY_REF" 2>/dev/null || true)"
+fi
+
+key_to_write=""
+if [[ -n "$resolved_key" ]]; then
+  key_to_write=$resolved_key
+elif [[ -f "$AUTH_ENV" && -s "$AUTH_ENV" ]]; then
+  printf 'provision-vllm: WARNING: op is unavailable or could not resolve %s; retaining existing %s\n' "$API_KEY_REF" "$AUTH_ENV" >&2
+else
+  key_to_write=$(openssl rand -hex 32)
+  printf 'provision-vllm: NOTICE: Generated local API key in %s. This key is not enrolled in 1Password (%s) yet.\n' "$AUTH_ENV" "$API_KEY_REF" >&2
+fi
+
+if [[ -n "$key_to_write" ]]; then
+  mkdir -p "$(dirname "$AUTH_ENV")"
+  chmod 0700 "$(dirname "$AUTH_ENV")"
+  tmp_auth=$(mktemp "${AUTH_ENV}.new.XXXXXX")
+  chmod 0600 "$tmp_auth"
+  set +x
+  printf 'VLLM_API_KEY=%s\n' "$key_to_write" > "$tmp_auth"
+  mv -f "$tmp_auth" "$AUTH_ENV"
+  chmod 0600 "$AUTH_ENV"
+fi
+
+# ==============================================================================
+# Gate 2: Prerequisites (KTD5)
+# ==============================================================================
+
+group_membership_changed=0
+for g in video render; do
+  if [[ ! " $current_groups " =~ [[:space:]]"$g"[[:space:]] ]]; then
+    if [[ "$USER_NAME" == *"@"* ]]; then
+      sudo -n gpasswd -a "$USER_NAME" "$g" || fail "prereqs: failed to add $USER_NAME to group $g via gpasswd"
+    else
+      sudo -n usermod -aG "$g" "$USER_NAME" || fail "prereqs: failed to add $USER_NAME to group $g via usermod"
+    fi
+    verified_groups=$(id -nG "$USER_NAME" 2>/dev/null || true)
+    if [[ ! " $verified_groups " =~ [[:space:]]"$g"[[:space:]] ]]; then
+      fail "prereqs: group repair verification failed: $USER_NAME is still not in group $g (NSS query)"
+    fi
+    group_membership_changed=1
+  fi
+done
+linger_status=$(loginctl show-user "$USER_NAME" -p Linger 2>/dev/null || true)
+if [[ "$linger_status" != "Linger=yes" ]]; then
+  sudo -n loginctl enable-linger "$USER_NAME" || fail "prereqs: failed to enable linger for $USER_NAME"
+fi
+
+# Verify running systemd user manager credentials: if the manager was started
+# before group membership was added, it retains stale supplementary groups and
+# services launched by it will fail CUDA device access.
+manager_lacks_groups=0
+video_gid=$(getent group video 2>/dev/null | cut -d: -f3 || true)
+render_gid=$(getent group render 2>/dev/null | cut -d: -f3 || true)
+manager_pid=$(pgrep -u "${EUID:-$(id -u)}" -x systemd 2>/dev/null | head -n1 || true)
+if [[ -z "$manager_pid" || "$manager_pid" == "0" ]]; then
+  manager_pid=$(pgrep -u "${EUID:-$(id -u)}" -f 'systemd --user' 2>/dev/null | head -n1 || true)
+fi
+
+if [[ -n "$manager_pid" && "$manager_pid" -gt 0 && -r "/proc/$manager_pid/status" ]]; then
+  manager_groups=$(grep -E '^Groups:' "/proc/$manager_pid/status" 2>/dev/null | cut -f2- || true)
+  if [[ -n "$manager_groups" ]]; then
+    for want_gid in "$video_gid" "$render_gid"; do
+      if [[ -n "$want_gid" && ! " $manager_groups " =~ [[:space:]]"$want_gid"[[:space:]] ]]; then
+        manager_lacks_groups=1
+      fi
+    done
+  fi
+fi
+# ==============================================================================
+# Gate 3: Fetch Models (KTD2)
+# ==============================================================================
+
+CHAT_REPO={{ $v.models.chat.repo | quote }}
+CHAT_REVISION={{ $v.models.chat.revision | quote }}
+CHAT_LOCAL_DIR="$MODEL_ROOT/{{ $v.models.chat.localDir }}"
+
+EMBED_REPO={{ $v.models.embed.repo | quote }}
+EMBED_REVISION={{ $v.models.embed.revision | quote }}
+EMBED_LOCAL_DIR="$MODEL_ROOT/{{ $v.models.embed.localDir }}"
+
+fetch_model() {
+  local repo=$1 revision=$2 local_dir=$3
+  local marker="$local_dir/.download-complete"
+  if [[ -f "$marker" && ! -L "$marker" && "$(<"$marker")" == "$revision" ]]; then
+    return 0
+  fi
+  resolve_build_command uvx
+  printf 'provision-vllm: fetching weights for %s (revision %s)...\n' "$repo" "$revision"
+  local parent_dir tmp_dir
+  parent_dir="$(dirname "$local_dir")"
+  mkdir -p "$parent_dir" || fail "fetch: cannot create parent directory $parent_dir"
+  tmp_dir=$(mktemp -d "${local_dir}.tmp.XXXXXX") || fail "fetch: cannot allocate temp directory for $repo"
+  if ! run_build_command "$BUILD_COMMAND_VIA_MISE" "$SOURCE_ROOT" \
+    uvx --from huggingface_hub hf download "$repo" --revision "$revision" --local-dir "$tmp_dir"; then
+    rm -rf -- "$tmp_dir"
+    fail "fetch: download failed for $repo ($revision)"
+  fi
+  printf '%s\n' "$revision" > "$tmp_dir/.download-complete" || {
+    rm -rf -- "$tmp_dir"
+    fail "fetch: cannot write download marker for $repo"
+  }
+  rm -rf -- "$local_dir"
+  mv -f -- "$tmp_dir" "$local_dir" || {
+    rm -rf -- "$tmp_dir"
+    fail "fetch: failed to move downloaded weights into place for $repo"
+  }
+}
+
+fetch_model "$CHAT_REPO" "$CHAT_REVISION" "$CHAT_LOCAL_DIR"
+fetch_model "$EMBED_REPO" "$EMBED_REVISION" "$EMBED_LOCAL_DIR"
+
+# ==============================================================================
+# Gate 4: Runtime Install & Unit Validation (KTD1)
+# ==============================================================================
+
+PACKAGING={{ $v.runtime.packaging | quote }}
+VENV_PATH="$HOME/{{ $v.runtime.venvPath }}"
+VLLM_VERSION={{ $v.runtime.version | quote }}
+EXTRA_PACKAGES=({{ range $v.runtime.extraPackages }}{{ . | quote }} {{ end }})
+
+if [[ "$PACKAGING" != "native" ]]; then
+  fail "runtime: unsupported packaging $PACKAGING (only native is supported)"
+fi
+
+installed_vllm_version=""
+if [[ -x "$VENV_PATH/bin/vllm" ]]; then
+  installed_vllm_version="$("$VENV_PATH/bin/vllm" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || true)"
+fi
+if [[ "$installed_vllm_version" != "$VLLM_VERSION" ]]; then
+  resolve_build_command uv
+  printf 'provision-vllm: installing native vLLM %s venv at %s...\n' "$VLLM_VERSION" "$VENV_PATH"
+  mkdir -p "$(dirname "$VENV_PATH")"
+  run_build_command "$BUILD_COMMAND_VIA_MISE" "$SOURCE_ROOT" \
+    uv venv --python 3.12 "$VENV_PATH" || fail "runtime: uv venv failed"
+  run_build_command "$BUILD_COMMAND_VIA_MISE" "$SOURCE_ROOT" \
+    uv pip install --python "$VENV_PATH/bin/python" "vllm==$VLLM_VERSION" ${EXTRA_PACKAGES:+"${EXTRA_PACKAGES[@]}"} ||
+    fail "runtime: uv pip install vllm==$VLLM_VERSION failed"
+  [[ -x "$VENV_PATH/bin/vllm" ]] || fail "runtime: vllm executable missing after install at $VENV_PATH/bin/vllm"
+fi
+
+for u in vllm-chat.service vllm-embed.service vllm-chat-mdns.service vllm-embed-mdns.service; do
+  unit_file="$HOME/.config/systemd/user/$u"
+  [[ -f "$unit_file" ]] || fail "unit validation: unit file $unit_file is missing"
+  systemd-analyze --user verify "$unit_file" >/dev/null 2>&1 || fail "unit validation: $u failed systemd-analyze --user verify"
+done
+
+systemctl --user daemon-reload || fail "manager reconciliation: daemon-reload failed"
+
+# Deferred-activation path: when group membership changed this run or the running
+# user manager lacks video/render group credentials from session startup, enable units
+# and exit 0 with operator reboot notice without writing the stamp.
+if [[ "$group_membership_changed" -eq 1 || "$manager_lacks_groups" -eq 1 ]]; then
+  systemctl --user enable vllm-embed.service vllm-chat.service vllm-embed-mdns.service vllm-chat-mdns.service ||
+    fail "manager reconciliation: enable failed"
+  if [[ "$group_membership_changed" -eq 1 ]]; then
+    printf 'provision-vllm: NOTICE: Added user to video/render groups. A system reboot or full user-session restart (e.g. loginctl terminate-user) is required before services can access GPU device nodes.\n'
+  else
+    printf 'provision-vllm: NOTICE: Running systemd user manager lacks video/render group credentials from session startup. A system reboot or full user-session restart (e.g. loginctl terminate-user) is required before services can access GPU device nodes.\n'
+  fi
+  printf 'provision-vllm: Units have been enabled; service activation is deferred until after reboot or user-session restart.\n'
+  exit 0
+fi
+
+# ==============================================================================
+# Gate 5: Activation & Advertisement (KTD8)
+# ==============================================================================
+
+systemctl --user enable vllm-embed.service vllm-chat.service vllm-embed-mdns.service vllm-chat-mdns.service ||
+  fail "manager reconciliation: enable failed"
+
+# 1. Start/restart embed service (systemd restart starts an inactive unit)
+systemctl --user restart vllm-embed.service || fail "activation: restart vllm-embed.service failed"
+
+wait_for_health() {
+  local url=$1 timeout=$2 name=$3
+  local start_time elapsed
+  start_time=$SECONDS
+  while true; do
+    if curl -s -f -o /dev/null --connect-timeout 2 --max-time 5 "$url" 2>/dev/null; then
+      return 0
+    fi
+    elapsed=$(( SECONDS - start_time ))
+    if [[ "$elapsed" -ge "$timeout" ]]; then
+      fail "readiness: $name health check at $url timed out after ${timeout}s"
+    fi
+    sleep 2
+  done
+}
+
+# Poll embed endpoint health (timeout 180s)
+wait_for_health "http://127.0.0.1:${EMBED_PORT}/health" 180 "embed"
+
+# Assert embed readiness (keyless 401, keyed 200)
+embed_keyless_code=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://127.0.0.1:${EMBED_PORT}/v1/models" 2>/dev/null || true)
+[[ "$embed_keyless_code" == "401" ]] ||
+  fail "readiness: embed endpoint accepted keyless request or returned unexpected status: $embed_keyless_code (expected 401)"
+
+TEMP_CURL_CFG=$(mktemp)
+chmod 0600 "$TEMP_CURL_CFG"
+set +x
+api_key_val=$(grep -E '^VLLM_API_KEY=' "$AUTH_ENV" | head -n1 | cut -d= -f2-)
+printf 'header = "Authorization: Bearer %s"\n' "$api_key_val" > "$TEMP_CURL_CFG"
+
+embed_keyed_code=$(curl -s --max-time 5 -K "$TEMP_CURL_CFG" -o /dev/null -w "%{http_code}" "http://127.0.0.1:${EMBED_PORT}/v1/models" 2>/dev/null || true)
+
+[[ "$embed_keyed_code" == "200" ]] ||
+  fail "readiness: embed endpoint rejected keyed request (status: $embed_keyed_code, expected 200)"
+
+# 2. Start/restart chat service
+systemctl --user restart vllm-chat.service || fail "activation: restart vllm-chat.service failed"
+
+# Poll chat endpoint health (timeout 300s)
+wait_for_health "http://127.0.0.1:${CHAT_PORT}/health" 300 "chat"
+
+# Assert chat readiness (keyless 401, keyed 200)
+chat_keyless_code=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://127.0.0.1:${CHAT_PORT}/v1/models" 2>/dev/null || true)
+[[ "$chat_keyless_code" == "401" ]] ||
+  fail "readiness: chat endpoint accepted keyless request or returned unexpected status: $chat_keyless_code (expected 401)"
+
+chat_keyed_code=$(curl -s --max-time 5 -K "$TEMP_CURL_CFG" -o /dev/null -w "%{http_code}" "http://127.0.0.1:${CHAT_PORT}/v1/models" 2>/dev/null || true)
+rm -f -- "$TEMP_CURL_CFG"
+TEMP_CURL_CFG=""
+
+[[ "$chat_keyed_code" == "200" ]] ||
+  fail "readiness: chat endpoint rejected keyed request (status: $chat_keyed_code, expected 200)"
+
+# 3. Start mDNS companions ONLY after both endpoints are healthy
+for mdns_unit in vllm-embed-mdns.service vllm-chat-mdns.service; do
+  systemctl --user restart "$mdns_unit" || fail "activation: restart $mdns_unit failed"
+done
+
+write_stamp "$VLLM_STAMP" "$VLLM_FINGERPRINT"
+printf 'provision-vllm: converged services (chat=:%s, embed=:%s)\n' "$CHAT_PORT" "$EMBED_PORT"

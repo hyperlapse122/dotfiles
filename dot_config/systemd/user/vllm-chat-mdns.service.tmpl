@@ -1,0 +1,26 @@
+{{- $v := .vllm -}}
+{{- if not $v -}}{{- fail "vllm-chat-mdns.service.tmpl: .vllm data is missing" -}}{{- end -}}
+{{- if not (get $v "mdns") -}}{{- fail "vllm-chat-mdns.service.tmpl: vllm.mdns is required" -}}{{- end -}}
+{{- if not (get $v.mdns "chatName") -}}{{- fail "vllm-chat-mdns.service.tmpl: vllm.mdns.chatName is required" -}}{{- end -}}
+{{- if not (get $v.mdns "type") -}}{{- fail "vllm-chat-mdns.service.tmpl: vllm.mdns.type is required" -}}{{- end -}}
+{{- if not (get $v "models") -}}{{- fail "vllm-chat-mdns.service.tmpl: vllm.models is required" -}}{{- end -}}
+{{- if not (get $v.models "chat") -}}{{- fail "vllm-chat-mdns.service.tmpl: vllm.models.chat is required" -}}{{- end -}}
+{{- if not (get $v.models.chat "port") -}}{{- fail "vllm-chat-mdns.service.tmpl: vllm.models.chat.port is required" -}}{{- end -}}
+[Unit]
+Description=mDNS advertisement for vLLM chat service ({{ $v.mdns.chatName }})
+# Advertises the chat completion endpoint over DNS-SD via avahi-publish-service.
+# BindsTo= ensures this companion unit stops and starts with the serving unit.
+# Configuration rendered from .chezmoidata/vllm.yaml (vllm.mdns.*,
+# vllm.models.chat.port) — EDIT THE DATA, not this file; a data edit re-runs the
+# provisioner script (fingerprint), which daemon-reloads and restarts this unit.
+BindsTo=vllm-chat.service
+After=vllm-chat.service
+
+[Service]
+Type=exec
+ExecStart=sh -c 'until curl -sf -o /dev/null --connect-timeout 2 --max-time 5 http://127.0.0.1:{{ $v.models.chat.port }}/health; do sleep 5; done; exec /usr/bin/avahi-publish-service "{{ $v.mdns.chatName }}" {{ $v.mdns.type }} {{ $v.models.chat.port }}'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

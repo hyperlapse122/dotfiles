@@ -1,0 +1,54 @@
+{{- $v := .vllm -}}
+{{- if not $v -}}{{- fail "vllm-chat.service.tmpl: .vllm data is missing" -}}{{- end -}}
+{{- if not (get $v "runtime") -}}{{- fail "vllm-chat.service.tmpl: vllm.runtime is required" -}}{{- end -}}
+{{- if not (get $v.runtime "packaging") -}}{{- fail "vllm-chat.service.tmpl: vllm.runtime.packaging is required" -}}{{- end -}}
+{{- if not (get $v.runtime "venvPath") -}}{{- fail "vllm-chat.service.tmpl: vllm.runtime.venvPath is required" -}}{{- end -}}
+{{- if not (get $v.runtime "modelRoot") -}}{{- fail "vllm-chat.service.tmpl: vllm.runtime.modelRoot is required" -}}{{- end -}}
+{{- if not (get $v "models") -}}{{- fail "vllm-chat.service.tmpl: vllm.models is required" -}}{{- end -}}
+{{- if not (get $v.models "chat") -}}{{- fail "vllm-chat.service.tmpl: vllm.models.chat is required" -}}{{- end -}}
+{{- $chat := $v.models.chat -}}
+{{- range $key := list "localDir" "servedName" "port" "reasoningParser" "toolCallParser" "kvCacheDtype" "gpuMemoryUtilization" "maxModelLen" "maxNumSeqs" "speculativeTokens" -}}
+{{-   if not (get $chat $key) -}}{{- fail (printf "vllm-chat.service.tmpl: vllm.models.chat.%s is required" $key) -}}{{- end -}}
+{{- end -}}
+{{- if not (get $v "auth") -}}{{- fail "vllm-chat.service.tmpl: vllm.auth is required" -}}{{- end -}}
+{{- if not (get $v.auth "envFile") -}}{{- fail "vllm-chat.service.tmpl: vllm.auth.envFile is required" -}}{{- end -}}
+[Unit]
+Description=vLLM chat completion service ({{ $chat.servedName }})
+# Local LLM inference service on Jetson AGX Thor serving {{ $chat.repo }}.
+# Configuration rendered from .chezmoidata/vllm.yaml (vllm.runtime.*,
+# vllm.models.chat.*, vllm.auth.*) — EDIT THE DATA, not this file; a data edit
+# re-runs the provisioner script (fingerprint), which daemon-reloads and restarts
+# this unit.
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+{{- if ne $v.runtime.packaging "native" }}
+{{-   fail (printf "vllm-chat.service.tmpl: unsupported runtime.packaging %q; only native is supported" $v.runtime.packaging) }}
+{{- end }}
+ExecStart=%h/{{ $v.runtime.venvPath }}/bin/vllm serve %h/{{ $v.runtime.modelRoot }}/{{ $chat.localDir }} \
+  --host 0.0.0.0 \
+  --port {{ $chat.port }} \
+  --served-model-name {{ $chat.servedName }} \
+  --reasoning-parser {{ $chat.reasoningParser }} \
+  --enable-auto-tool-choice \
+  --tool-call-parser {{ $chat.toolCallParser }} \
+  --kv-cache-dtype {{ $chat.kvCacheDtype }} \
+  --gpu-memory-utilization {{ $chat.gpuMemoryUtilization }} \
+  --max-model-len {{ $chat.maxModelLen }} \
+  --max-num-seqs {{ $chat.maxNumSeqs }} \
+  --speculative-config '{"method":"mtp","num_speculative_tokens":{{ $chat.speculativeTokens }}}' \
+  --allowed-origins {{ if $v.allowedOrigins }}'{{ $v.allowedOrigins | join "," }}'{{ else }}'[]'{{ end }}
+Restart=on-failure
+RestartSec=30
+OOMScoreAdjust=500
+EnvironmentFile=%h/{{ $v.auth.envFile }}
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment="PATH=%h/{{ $v.runtime.venvPath }}/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target

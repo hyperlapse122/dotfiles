@@ -590,6 +590,12 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: cuda-drivers, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: notApplicable, reason: supported Apple silicon has no NVIDIA GPU, architectures: { arm64: notApplicable } }
         ubuntu: { disposition: managed, owner: apt, identifier: nvidia-jetpack, source: nvidiaJetson, architectures: { arm64: native } }
+      - id: avahiUtils
+        sentinel: avahi-publish-service
+        gate: jetson
+        fedora: { disposition: notApplicable, reason: Jetson mDNS advertisement runs only on Ubuntu arm64, architectures: { amd64: notApplicable, arm64: notApplicable } }
+        macos: { disposition: notApplicable, reason: macOS advertises Bonjour services natively via dns-sd; avahi-utils is not needed, architectures: { arm64: notApplicable } }
+        ubuntu: { disposition: managed, owner: apt, identifier: avahi-utils, source: ubuntu, architectures: { arm64: native } }
       - id: kittyTerminal
         sentinel: kitty
         integrity: checksum
