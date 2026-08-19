@@ -184,7 +184,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install libudev (hidapi linux-static-hidraw backend)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+        working-directory: ${{ github.workspace }}
+        run: .ci/lib/apt-install.sh - libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --all-targets
       - run: cargo test
@@ -213,17 +214,8 @@ jobs:
       - uses: actions/checkout@v7
       # The test drives a real tmux server; util-linux script(1) is already on
       # the runner and provides the pty the transport cases need.
-      # apt is only the fallback, and bounded: a stalled mirror retries for hours.
       - name: Install tmux
-        run: |
-          set -euo pipefail
-          if command -v tmux >/dev/null; then
-            tmux -V
-            exit 0
-          fi
-          sudo timeout 120 apt-get update -o Acquire::Retries=3
-          sudo timeout 120 env DEBIAN_FRONTEND=noninteractive \
-            apt-get install -y -o Acquire::Retries=3 tmux
+        run: .ci/lib/apt-install.sh tmux tmux
       - name: Run isolated tmux passthrough test
         run: .ci/test-tmux-kitty-passthrough.sh
 
@@ -247,15 +239,7 @@ jobs:
       # The test drives a real zsh so the $fpath prepend is proven to make
       # compinit resolve _omp, and proven NOT to without it.
       - name: Install zsh
-        run: |
-          set -euo pipefail
-          if command -v zsh >/dev/null; then
-            zsh --version
-            exit 0
-          fi
-          sudo timeout 120 apt-get update -o Acquire::Retries=3
-          sudo timeout 120 env DEBIAN_FRONTEND=noninteractive \
-            apt-get install -y -o Acquire::Retries=3 zsh
+        run: .ci/lib/apt-install.sh zsh zsh
       # Same render shape as the omp-agent-integration job's three call sites:
       # an empty config so no user state leaks in, and no --destination, which
       # execute-template does not need (it reads stdin and writes stdout).
