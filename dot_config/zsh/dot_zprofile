@@ -16,12 +16,18 @@ if [[ -z "$LANG" ]]; then
   export LANG='en_US.UTF-8'
 fi
 
+# Android SDK
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/.local/share/android-sdk}"
+export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/.local/share/android-sdk}"
+
 # Ensure path arrays do not contain duplicates.
 typeset -gU cdpath fpath mailpath path
 
 path=(
   $HOME/.local/{,s}bin(N)
   $HOME/.dotnet/tools(N)
+  $ANDROID_HOME/cmdline-tools/latest/bin(N)
+  $ANDROID_HOME/platform-tools(N)
   /opt/{homebrew,local}/{,s}bin(N)
   /usr/local/{,s}bin(N)
   $path

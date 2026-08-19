@@ -1,0 +1,44 @@
+{{- if not (includeTemplate "facts.tmpl" . | fromYaml).container -}}
+#!/usr/bin/env bash
+#
+# Provisions Android command-line tools, platform-tools, build-tools,
+# platforms, and accepts licenses headlessly into ~/.local/share/android-sdk.
+
+set -euo pipefail
+
+ANDROID_HOME="${ANDROID_HOME:-$HOME/.local/share/android-sdk}"
+mkdir -p "$ANDROID_HOME"
+
+{{- $os := "linux" -}}
+{{- if eq .chezmoi.os "darwin" -}}
+{{-   $os = "mac" -}}
+{{- end }}
+
+CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-{{ $os }}-11076708_latest.zip"
+
+if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/android-cmdline-tools.XXXXXX")"
+  cleanup() { rm -rf "$scratch"; }
+  trap cleanup EXIT INT TERM
+
+  zip_path="$scratch/cmdline-tools.zip"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$CMDLINE_TOOLS_URL" -o "$zip_path"
+    mkdir -p "$ANDROID_HOME/cmdline-tools"
+    unzip -q "$zip_path" -d "$scratch/extracted"
+    rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+    mv "$scratch/extracted/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+  fi
+fi
+
+SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+if [ -x "$SDKMANAGER" ]; then
+  # Accept all licenses
+  if command -v yes >/dev/null 2>&1; then
+    yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
+  fi
+
+  # Install required SDK components
+  "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;35.0.0" "platforms;android-36" "cmdline-tools;latest" || true
+fi
+{{- end -}}
