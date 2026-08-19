@@ -25,6 +25,15 @@ if [ "$command_name" != '-' ] && command -v "$command_name" >/dev/null; then
   exit 0
 fi
 
+# The image selects its mirror through a mirrorlist, so the dead host has to be
+# dropped there; the sources files are a fallback for images that inline it.
+mirrorlist=/etc/apt/apt-mirrors.txt
+if [ -f "$mirrorlist" ]; then
+  sudo sed -i '/azure\.archive\.ubuntu\.com/d' "$mirrorlist"
+  grep -q '://' "$mirrorlist" ||
+    printf 'https://archive.ubuntu.com/ubuntu/\n' | sudo tee "$mirrorlist" >/dev/null
+fi
+
 for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
   [ -f "$src" ] || continue
   sudo sed -i 's|http://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$src"
