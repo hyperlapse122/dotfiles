@@ -1,10 +1,23 @@
 {{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter")) -}}
+{{- $url := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter" "field" "url" "platform" "auto")) -}}
+{{- $sha := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter" "field" "sha256" "platform" "auto")) -}}
 
 #!/usr/bin/env bash
 #
-# onchange trigger: the latest release tag is rendered into the script body
-# below, so a new upstream release changes the rendered content and re-runs
-# the re-link + prune.
+# onchange trigger: the locked release tag, URL and digest are rendered into
+# the script body below, so a new upstream release changes the rendered
+# content and re-runs the install + re-link + prune.
+#
+# WHY THIS OWNS DELIVERY INSTEAD OF A CHEZMOI EXTERNAL. An archive external
+# puts every extracted file into chezmoi's target state, and the Flutter SDK
+# rewrites its own tree on ordinary use: git rewrites
+# .git/objects/info/commit-graph, and the tool deletes and regenerates
+# `version` and bin/cache/flutter.version.json. The next apply then asks to
+# overwrite a file that "has changed since chezmoi last wrote it" and, headless,
+# fails the entire apply. Excluding .git is not an option either —
+# bin/internal/shared.sh runs `git -C $FLUTTER_ROOT rev-parse HEAD` on every
+# invocation and aborts when .git is absent. Installing here keeps the SDK out
+# of the target state entirely; integrity comes from the lock's sha256 instead.
 
 set -euo pipefail
 
@@ -12,6 +25,39 @@ INSTALL_DIR="${FLUTTER_INSTALL_DIR:-$HOME/.local/share/flutter}"
 BIN_DIR="${FLUTTER_BIN_DIR:-$HOME/.local/bin}"
 
 dest="$INSTALL_DIR/versions/{{ $tag }}"
+url='{{ $url }}'
+sha256='{{ $sha }}'
+
+if [ ! -x "$dest/bin/flutter" ]; then
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/flutter-sdk.XXXXXX")"
+  cleanup() { rm -rf "$scratch"; }
+  trap cleanup EXIT INT TERM
+
+  archive="$scratch/${url##*/}"
+  printf 'flutter: downloading %s\n' "$url"
+  curl -fsSL "$url" -o "$archive"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$archive" | cut -d' ' -f1)"
+  else
+    actual="$(shasum -a 256 "$archive" | cut -d' ' -f1)"
+  fi
+  if [ "$actual" != "$sha256" ]; then
+    printf 'flutter: checksum mismatch for %s (expected %s, got %s)\n' "$url" "$sha256" "$actual" >&2
+    exit 1
+  fi
+
+  # Both upstream layouts nest the SDK under a single flutter/ component.
+  case "$archive" in
+    *.zip) unzip -q "$archive" -d "$scratch/extracted" ;;
+    *) mkdir -p "$scratch/extracted" && tar -xf "$archive" -C "$scratch/extracted" ;;
+  esac
+
+  mkdir -p "$INSTALL_DIR/versions"
+  rm -rf "$dest"
+  mv "$scratch/extracted/flutter" "$dest"
+fi
+
 ln -sfn "$dest" "$INSTALL_DIR/current"
 
 mkdir -p "$BIN_DIR"

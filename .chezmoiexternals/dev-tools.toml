@@ -149,11 +149,15 @@ targetPath = '{{ printf ".local/bin/uvx%s" $executableExtension }}'
 path = '{{ printf "%suvx%s" $uvPathPrefix $executableExtension }}'
 
 {{- /* ---------- flutter ---------- */ -}}
-
-{{- $flutterTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter") }}
-
-[flutter]
-targetPath = '{{ printf ".local/share/flutter/versions/%s" $flutterTag }}'
-type = "archive"
-url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter" "field" "url" "platform" "auto") }}'
-stripComponents = 1
+{{- /*
+  DELIBERATELY NOT AN EXTERNAL. A chezmoi archive external makes every
+  extracted file part of the target state, and the Flutter SDK rewrites its
+  own tree on ordinary use: bin/internal/shared.sh runs `git -C $FLUTTER_ROOT
+  rev-parse HEAD` on every invocation (so .git cannot be excluded either — the
+  tool aborts without it), git rewrites .git/objects/info/commit-graph, and the
+  tool deletes and regenerates `version` and bin/cache/flutter.version.json.
+  chezmoi then reports "has changed since chezmoi last wrote it" and, with no
+  TTY, fails the whole apply. Delivery therefore lives in
+  .chezmoiscripts/00-tools/run_onchange_after_flutter.sh.tmpl, which reads the
+  same lock through release-lock-ref.tmpl and verifies the recorded sha256.
+*/ -}}
