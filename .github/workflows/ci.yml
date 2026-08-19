@@ -98,6 +98,16 @@ jobs:
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
             chmod 700 "$RUNNER_TEMP/$output_name"
           done
+          # setup-podman-cluster gates on osRelease.id, not just os, so the ubuntu
+          # runner renders it empty without this override.
+          PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            --config "$RUNNER_TEMP/empty.toml" \
+            --source "$GITHUB_WORKSPACE" \
+            --override-data '{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}' \
+            execute-template \
+            < ".chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
+            > "$RUNNER_TEMP/setup-podman-cluster.sh"
+          chmod 700 "$RUNNER_TEMP/setup-podman-cluster.sh"
       - name: Install locked OMP
         run: |
           set -euo pipefail
@@ -116,6 +126,7 @@ jobs:
             "$RUNNER_TEMP/settings.sh"
           PATH="$RUNNER_TEMP/bin:$PATH" .ci/test-omp-comment-rules.sh
           .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
+          .ci/test-podman-cluster-convergence.sh "$RUNNER_TEMP/setup-podman-cluster.sh"
           .ci/test-omp-real-plugin.sh "$RUNNER_TEMP/haptic-package"
           .ci/test-mxm4-haptic-provision.sh "$RUNNER_TEMP/build-mxm4-haptic.sh"
           .ci/test-mxm4-haptic-gates.sh

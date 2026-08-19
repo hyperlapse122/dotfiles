@@ -158,7 +158,11 @@ configure_cgroup_delegation
 # skips only that step, while a later unchanged apply retries it.
 enable_podman_socket() {
   if run_user_systemctl cat podman.socket; then
-    if run_user_systemctl enable --now podman.socket; then
+    # run_after_ by contract, so a converged host must read live unit state and
+    # mutate nothing rather than re-enabling on every apply.
+    if run_user_systemctl is-enabled podman.socket && run_user_systemctl is-active podman.socket; then
+      echo "setup-podman-cluster: --user podman.socket already enabled and active"
+    elif run_user_systemctl enable --now podman.socket; then
       echo "setup-podman-cluster: enabled --user podman.socket"
     else
       echo "setup-podman-cluster: could not enable --user podman.socket (masked?); skip" >&2
@@ -170,7 +174,9 @@ enable_podman_socket() {
 
 enable_prune_timer() {
   if run_user_systemctl cat podman-prune.timer; then
-    if run_user_systemctl enable --now podman-prune.timer; then
+    if run_user_systemctl is-enabled podman-prune.timer && run_user_systemctl is-active podman-prune.timer; then
+      echo "setup-podman-cluster: --user podman-prune.timer already enabled and active"
+    elif run_user_systemctl enable --now podman-prune.timer; then
       echo "setup-podman-cluster: enabled --user podman-prune.timer"
     else
       echo "setup-podman-cluster: could not enable --user podman-prune.timer; skip" >&2
@@ -182,7 +188,9 @@ enable_prune_timer() {
 
 enable_minikube_autostart() {
   if run_user_systemctl cat minikube-autostart.service; then
-    if run_user_systemctl enable minikube-autostart.service; then
+    if run_user_systemctl is-enabled minikube-autostart.service; then
+      echo "setup-podman-cluster: minikube-autostart.service already enabled"
+    elif run_user_systemctl enable minikube-autostart.service; then
       echo "setup-podman-cluster: enabled minikube-autostart.service (reboot persistence)"
     else
       echo "setup-podman-cluster: could not enable minikube-autostart.service; skip" >&2
@@ -216,11 +224,30 @@ enable_user_podman_units
 export MINIKUBE_ROOTLESS=true
 configure_minikube() {
   if command -v minikube >/dev/null 2>&1; then
-    if minikube config set driver podman \
-      && minikube config set container-runtime containerd; then
-      echo "setup-podman-cluster: minikube set to driver=podman, container-runtime=containerd (rootless)"
+    # `minikube config set` unconditionally reprints its "changes take effect
+    # upon a minikube delete and then a minikube start" warning, so an
+    # every-apply script must read the value back before writing it.
+    local current_driver current_container_runtime minikube_config_needed minikube_config_ok
+    current_driver=$(minikube config get driver 2>/dev/null) || true
+    current_container_runtime=$(minikube config get container-runtime 2>/dev/null) || true
+    minikube_config_needed=false
+    [[ "$current_driver" == podman ]] || minikube_config_needed=true
+    [[ "$current_container_runtime" == containerd ]] || minikube_config_needed=true
+    if [[ "$minikube_config_needed" == false ]]; then
+      echo "setup-podman-cluster: minikube already set to driver=podman, container-runtime=containerd (rootless)"
     else
-      echo "setup-podman-cluster: minikube config set failed; skip start" >&2
+      minikube_config_ok=true
+      if [[ "$current_driver" != podman ]]; then
+        minikube config set driver podman || minikube_config_ok=false
+      fi
+      if [[ "$minikube_config_ok" == true && "$current_container_runtime" != containerd ]]; then
+        minikube config set container-runtime containerd || minikube_config_ok=false
+      fi
+      if [[ "$minikube_config_ok" == true ]]; then
+        echo "setup-podman-cluster: minikube set to driver=podman, container-runtime=containerd (rootless)"
+      else
+        echo "setup-podman-cluster: minikube config set failed; skip start" >&2
+      fi
     fi
 
     if ! podman info >/dev/null 2>&1; then

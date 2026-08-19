@@ -99,6 +99,16 @@ for index in "${!MANAGED_NAMES[@]}"; do
   printf '%s=%s\n' "${MANAGED_NAMES[$index]}" "$(dotenv_quote "$managed_value")" >>"$tmp"
 done
 chmod 0600 "$tmp"
+# run_after_ by contract, so publishing unconditionally rewrote a byte-identical
+# credential file on every apply. The mode is still narrowed on the skip path: a
+# converged file someone widened is drift, not convergence.
+if [[ -f "$AUTH" ]] && cmp -s -- "$tmp" "$AUTH"; then
+  chmod 0600 -- "$AUTH"
+  rm -f -- "$tmp"
+  trap - EXIT HUP INT TERM
+  printf 'config-omp-auth: %s already reconciled in %s\n' "${MANAGED_NAMES[*]}" "$AUTH"
+  exit 0
+fi
 mv -f -- "$tmp" "$AUTH"
 trap - EXIT HUP INT TERM
 printf 'config-omp-auth: reconciled %s in %s\n' "${MANAGED_NAMES[*]}" "$AUTH"

@@ -1110,6 +1110,10 @@ printf '%s\n' "$*" >>"$FIXTURE_PODMAN_RUNTIME_LOG"
 case "$*" in
   '--user show-environment') exit 0 ;;
   '--user cat podman.socket') exit "${FIXTURE_PODMAN_RUNTIME_UNIT_RC:-1}" ;;
+  # A unit that has just appeared is not yet enabled or active, which is the state
+  # this fixture drives; answering 0 would assert convergence instead.
+  '--user is-enabled '*) exit 1 ;;
+  '--user is-active '*) exit 1 ;;
   *) exit 0 ;;
 esac
 STUB
