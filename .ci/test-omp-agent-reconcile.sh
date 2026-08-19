@@ -307,6 +307,7 @@ awk '/^cat >"\$declared"/{flag=1;next}/^JSON$/{flag=0}flag' "$settings_script" >
 jq -e 'type == "object" and (keys | length) > 0' "$declared_json" >/dev/null
 jq -e '
   .enabledModels == [
+    "anthropic/claude-fable-5",
     "anthropic/claude-opus-5",
     "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",

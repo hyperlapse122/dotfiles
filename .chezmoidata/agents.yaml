@@ -135,6 +135,7 @@ agents:
       stt.enabled: true
       setupVersion: 1
       enabledModels:
+      - anthropic/claude-fable-5
       - anthropic/claude-opus-5
       - anthropic/claude-sonnet-5
       - google-antigravity/gemini-3.*
@@ -146,20 +147,22 @@ agents:
       - zai
       - github-copilot
       modelRoles:
-        advisor: "@smol"
-        commit: "@smol"
-        default: anthropic/claude-opus-5:high
+        advisor: "@worker"
+        commit: "@worker"
+        default: anthropic/claude-opus-5:max
         plan: "@slow"
-        slow: anthropic/claude-opus-5:max
-        smol: google-antigravity/gemini-3.7-flash:high
+        skim: google-antigravity/gemini-3.7-flash:low
+        slow: anthropic/claude-fable-5:max
+        smol: anthropic/claude-sonnet-5:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
+        worker: google-antigravity/gemini-3.7-flash:high
       task.agentModelOverrides:
         designer: "@smol"
-        librarian: "@smol"
-        reviewer: "@smol"
-        scout: "@smol"
+        librarian: "@skim"
+        reviewer: "@slow"
+        scout: "@skim"
         security-reviewer: "@smol"
-        sonic: "@smol"
+        sonic: "@worker"
         task: "@smol"
       skills.enableCodexUser: false
       skills.enableClaudeUser: false
@@ -173,13 +176,21 @@ agents:
       mnemopi.enhancedRecall: true
       mnemopi.proactiveLinking: true
       advisor.enabled: false
-      defaultThinkingLevel: high
+      defaultThinkingLevel: max
       retry.usageAwareFallback: true
       retry.fallbackChains:
+        anthropic/claude-fable-5:
+        - kimi-code/k3:max
+        - google-antigravity/gemini-3.1-pro:high
         anthropic/claude-opus-5:
         - kimi-code/k3:high
+        - google-antigravity/gemini-3.1-pro:high
+        anthropic/claude-sonnet-5:
+        - kimi-code/k3:high
         - google-antigravity/gemini-3.7-flash:high
-        google-antigravity/gemini-3.7-flash: []
+        google-antigravity/gemini-3.7-flash:
+        - google-antigravity/gemini-3.1-flash-lite:minimal
+        - anthropic/claude-sonnet-5:medium
         default:
         - anthropic/claude-opus-5:high
         - kimi-code/k3:high
@@ -193,9 +204,9 @@ agents:
       - openrouter
       provider.appendOnlyContext: on
       task.isolation.mode: none
-      task.enableEffort: true
+      task.enableEffort: false
       task.enableLsp: true
-      task.maxEffort: xhigh
+      task.maxEffort: max
       commands.enableClaudeUser: false
       commands.enableClaudeProject: false
       commands.enableOpencodeUser: false
