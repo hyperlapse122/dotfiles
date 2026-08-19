@@ -369,6 +369,24 @@ jq -e '
   exit 1
 }
 
+# kimi-code stays whitelisted for manual /model switching while its
+# subscription winds down, but no fallback chain may hop to it: the apply-time
+# catalog gate fails open once the provider is unauthenticated, so this
+# assertion is the only barrier between a retune and a dead-hop recovery
+# failure. It stays true after the eventual whitelist removal and may be
+# dropped together with the `kimi-code/*` entry, never before.
+kimi_hops=$(jq -r '
+  [."retry.fallbackChains" // {} | to_entries[].value[]
+   | select(startswith("kimi-code/"))] | .[]
+' "$declared_json")
+if [[ -n $kimi_hops ]]; then
+  while IFS= read -r hop; do
+    [[ -n $hop ]] || continue
+    printf 'kimi-code fallback-hop guard: retry.fallbackChains hops to %s, but kimi-code is whitelisted for manual /model switching only while its subscription winds down; no chain may hop to it\n' "$hop" >&2
+  done <<<"$kimi_hops"
+  exit 1
+fi
+
 # The harvest is shared by the catalog fixture and the shape check. A chain KEY
 # is a selector too when it is model-oriented, so it must be harvested alongside
 # the hop values. It is filtered HERE rather than downstream because the shape
