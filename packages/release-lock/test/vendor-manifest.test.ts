@@ -134,3 +134,100 @@ describe("resolveVendorManifest onePassword", () => {
     expect((error as Error).message).toContain(ONE_PASSWORD_SOURCE);
   });
 });
+
+const FLUTTER_SOURCE = "https://storage.example.invalid/flutter/releases";
+const FLUTTER_LINUX_MANIFEST = JSON.stringify({
+  base_url: "https://storage.example.invalid/flutter/releases",
+  current_release: {
+    stable: "hash_linux_stable",
+  },
+  releases: [
+    {
+      hash: "hash_linux_stable",
+      channel: "stable",
+      version: "3.29.0",
+      archive: "stable/linux/flutter_linux_3.29.0-stable.tar.xz",
+      sha256: "linux_sha256_hex",
+    },
+  ],
+});
+const FLUTTER_MACOS_MANIFEST = JSON.stringify({
+  base_url: "https://storage.example.invalid/flutter/releases",
+  current_release: {
+    stable: "hash_macos_stable",
+  },
+  releases: [
+    {
+      hash: "hash_macos_stable",
+      channel: "stable",
+      version: "3.29.0",
+      dart_sdk_arch: "x64",
+      archive: "stable/macos/flutter_macos_3.29.0-stable.zip",
+      sha256: "macos_x64_sha256_hex",
+    },
+    {
+      hash: "hash_macos_stable",
+      channel: "stable",
+      version: "3.29.0",
+      dart_sdk_arch: "arm64",
+      archive: "stable/macos/flutter_macos_arm64_3.29.0-stable.zip",
+      sha256: "macos_arm64_sha256_hex",
+    },
+  ],
+});
+
+function flutterSpec(): ToolSpec {
+  return {
+    kind: "vendorManifest",
+    vendor: "flutter",
+    source: FLUTTER_SOURCE,
+    emulatedPlatforms: ["linux-arm64"],
+  };
+}
+
+describe("resolveVendorManifest flutter", () => {
+  test("resolves stable releases for linux and macos across architectures", async () => {
+    const requests = stubRoutes({
+      [`${FLUTTER_SOURCE}/releases_linux.json`]: text(FLUTTER_LINUX_MANIFEST),
+      [`${FLUTTER_SOURCE}/releases_macos.json`]: text(FLUTTER_MACOS_MANIFEST),
+    });
+
+    const locked = await resolveVendorManifest("flutter", flutterSpec());
+
+    expect(locked.version).toBe("3.29.0");
+    expect(locked.artifacts).toEqual({
+      "linux-amd64": {
+        url: "https://storage.example.invalid/flutter/releases/stable/linux/flutter_linux_3.29.0-stable.tar.xz",
+        sha256: "linux_sha256_hex",
+      },
+      "linux-arm64": {
+        url: "https://storage.example.invalid/flutter/releases/stable/linux/flutter_linux_3.29.0-stable.tar.xz",
+        sha256: "linux_sha256_hex",
+        emulated: true,
+      },
+      "darwin-amd64": {
+        url: "https://storage.example.invalid/flutter/releases/stable/macos/flutter_macos_3.29.0-stable.zip",
+        sha256: "macos_x64_sha256_hex",
+      },
+      "darwin-arm64": {
+        url: "https://storage.example.invalid/flutter/releases/stable/macos/flutter_macos_arm64_3.29.0-stable.zip",
+        sha256: "macos_arm64_sha256_hex",
+      },
+    });
+    expect(requests).toEqual([
+      `${FLUTTER_SOURCE}/releases_linux.json`,
+      `${FLUTTER_SOURCE}/releases_macos.json`,
+    ]);
+  });
+
+  test("raises ResolutionError when manifest request fails", async () => {
+    stubRoutes({
+      [`${FLUTTER_SOURCE}/releases_linux.json`]: () => new Response("failed", { status: 500 }),
+      [`${FLUTTER_SOURCE}/releases_macos.json`]: text(FLUTTER_MACOS_MANIFEST),
+    });
+
+    const error = await resolveVendorManifest("flutter", flutterSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain(FLUTTER_SOURCE);
+  });
+});

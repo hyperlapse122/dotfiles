@@ -191,6 +191,30 @@
           }
         }
       },
+      "flutter": {
+        "kind": "vendorManifest",
+        "source": "https://storage.googleapis.com/flutter_infra_release/releases",
+        "version": "3.47.0",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.0-stable.tar.xz",
+            "sha256": "26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296"
+          },
+          "linux-arm64": {
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.0-stable.tar.xz",
+            "sha256": "26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296",
+            "emulated": true
+          },
+          "darwin-amd64": {
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.47.0-stable.zip",
+            "sha256": "74af3192ae4bcbceb6d35f8ed332af16b7ff00af300520b02fbea456ae3e955d"
+          },
+          "darwin-arm64": {
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.0-stable.zip",
+            "sha256": "bd59c85d032a9d81f31ada8c00858bc4f75eded9615b6584390eb13c6ee5083b"
+          }
+        }
+      },
       "garden": {
         "kind": "githubRelease",
         "source": "garden-rs/garden",

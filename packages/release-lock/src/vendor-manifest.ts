@@ -100,12 +100,111 @@ async function resolveOnePassword(name: string, spec: ToolSpec): Promise<LockedT
   };
 }
 
+interface FlutterRelease {
+  hash: string;
+  channel: string;
+  version: string;
+  dart_sdk_arch?: string;
+  archive: string;
+  sha256: string;
+}
+
+interface FlutterManifest {
+  base_url: string;
+  current_release: {
+    stable: string;
+  };
+  releases: FlutterRelease[];
+}
+
+async function resolveFlutter(name: string, spec: ToolSpec): Promise<LockedTool> {
+  const linuxUrl = `${spec.source.replace(/\/+$/, "")}/releases_linux.json`;
+  const macosUrl = `${spec.source.replace(/\/+$/, "")}/releases_macos.json`;
+
+  const [linuxText, macosText] = await Promise.all([
+    fetchText(spec.source, linuxUrl),
+    fetchText(spec.source, macosUrl),
+  ]);
+
+  let linuxManifest: FlutterManifest;
+  let macosManifest: FlutterManifest;
+  try {
+    linuxManifest = JSON.parse(linuxText) as FlutterManifest;
+    macosManifest = JSON.parse(macosText) as FlutterManifest;
+  } catch (err) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: invalid JSON manifest: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const linuxStableHash = linuxManifest.current_release?.stable;
+  if (!linuxStableHash) {
+    throw new ResolutionError(spec.source, `${name}: missing linux stable release hash`);
+  }
+  const linuxRelease = linuxManifest.releases?.find((r) => r.hash === linuxStableHash);
+  if (!linuxRelease) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: linux stable release ${linuxStableHash} not found in releases`,
+    );
+  }
+
+  const macosStableHash = macosManifest.current_release?.stable;
+  if (!macosStableHash) {
+    throw new ResolutionError(spec.source, `${name}: missing macos stable release hash`);
+  }
+  const macosArm64 = macosManifest.releases?.find(
+    (r) => r.hash === macosStableHash && r.dart_sdk_arch === "arm64",
+  );
+  const macosX64 = macosManifest.releases?.find(
+    (r) => r.hash === macosStableHash && (r.dart_sdk_arch === "x64" || !r.dart_sdk_arch),
+  );
+
+  if (!macosArm64 || !macosX64) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: macos arm64 or x64 stable release not found in releases`,
+    );
+  }
+
+  const linuxBase = linuxManifest.base_url.replace(/\/+$/, "");
+  const macosBase = macosManifest.base_url.replace(/\/+$/, "");
+
+  return {
+    kind: spec.kind,
+    source: spec.source,
+    version: linuxRelease.version,
+    artifacts: {
+      "linux-amd64": {
+        url: `${linuxBase}/${linuxRelease.archive}`,
+        sha256: linuxRelease.sha256,
+      },
+      "linux-arm64": {
+        url: `${linuxBase}/${linuxRelease.archive}`,
+        sha256: linuxRelease.sha256,
+        emulated: true,
+      },
+      "darwin-amd64": {
+        url: `${macosBase}/${macosX64.archive}`,
+        sha256: macosX64.sha256,
+      },
+      "darwin-arm64": {
+        url: `${macosBase}/${macosArm64.archive}`,
+        sha256: macosArm64.sha256,
+      },
+    },
+  };
+}
+
 export async function resolveVendorManifest(name: string, spec: ToolSpec): Promise<LockedTool> {
   switch (spec.vendor) {
     case "winbox":
       return resolveWinbox(name, spec);
     case "onePassword":
       return resolveOnePassword(name, spec);
+    case "flutter":
+      return resolveFlutter(name, spec);
     default:
       throw new ResolutionError(spec.source, `${name}: unknown vendor "${String(spec.vendor)}"`);
   }
