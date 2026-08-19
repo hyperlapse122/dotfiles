@@ -17,7 +17,9 @@ ln -sfn "$dest" "$INSTALL_DIR/current"
 mkdir -p "$BIN_DIR"
 if [ -d "$INSTALL_DIR/current/bin" ]; then
   for bin in "$INSTALL_DIR/current/bin"/*; do
-    [ -f "$bin" ] && [ -x "$bin" ] || continue
+    if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then
+      continue
+    fi
     ln -sf "$bin" "$BIN_DIR/$(basename "$bin")"
   done
 fi
