@@ -13,6 +13,7 @@ jobs:
   omp-agent-integration:
     name: oh-my-pi agent integration
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -151,6 +152,7 @@ jobs:
   ts-workspace:
     name: TypeScript workspace (packages/)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: packages
@@ -174,6 +176,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-26]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: crates/mxm4-haptic
@@ -190,6 +193,7 @@ jobs:
   compound-engineering-overlays:
     name: compound-engineering overlays
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Install chezmoi
@@ -220,6 +224,7 @@ jobs:
   omp-zsh-completion:
     name: omp zsh completion install
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Install locked chezmoi
@@ -272,6 +277,7 @@ jobs:
         compound-engineering-overlays,
       ]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Require every job to succeed
         env:
