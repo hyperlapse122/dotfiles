@@ -22,7 +22,7 @@ chmod 700 -- "$scratch/bin/op"
 source_root="$scratch/source"
 mkdir -p -- "$source_root"
 cp -a -- "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/.chezmoiscripts" \
-  "$repo_root/system" "$source_root/"
+  "$repo_root/system" "$repo_root/dot_config" "$source_root/"
 
 # The fact map replaces facts.tmpl wholesale: every fact this repository declares
 # must appear, because a consumer reading a missing key would silently get nil
@@ -53,7 +53,7 @@ render() {
     --config "$scratch/empty.toml" \
     --source "$source_root" \
     --destination "$scratch/target" \
-    --override-data '{"chezmoi":{"osRelease":{"id":"ubuntu"},"arch":"arm64"}}' \
+    --override-data '{"chezmoi":{"osRelease":{"id":"ubuntu"},"arch":"arm64","sourceDir":"'"$source_root"'"}}' \
     execute-template <"$template" >"$out"
 }
 
@@ -63,6 +63,7 @@ fail() {
 }
 
 installer="$repo_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
+vllm_provisioner="$repo_root/.chezmoiscripts/60-build/run_after_provision-vllm.sh.tmpl"
 
 write_facts true false
 render "$installer" "$scratch/on.sh"
@@ -89,10 +90,31 @@ for forbidden in nvidia-cuda-toolkit mokutil MOK dkms 1password-latest.tar.gz 's
   ! grep -qF -- "$forbidden" "$scratch/on.sh" \
     || fail "the jetson=true render names the forbidden ${forbidden}"
 done
+render "$vllm_provisioner" "$scratch/vllm-on.sh"
+bash -n "$scratch/vllm-on.sh" || fail 'the vllm jetson=true render is not valid shell'
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck -S warning "$scratch/vllm-on.sh" || fail 'the vllm jetson=true render fails shellcheck'
+fi
+for needle in \
+  'fact_gate "jetson"' \
+  'vllm-chat.service' \
+  'vllm-embed.service' \
+  'vllm-chat-mdns.service' \
+  'vllm-embed-mdns.service'
+do
+  grep -qF -- "$needle" "$scratch/vllm-on.sh" || fail "the vllm jetson=true render omits ${needle}"
+done
 
 write_facts false false
 render "$installer" "$scratch/off.sh"
 [[ ! -s "$scratch/off.sh" ]] || fail 'the jetson=false render is not empty'
+render "$vllm_provisioner" "$scratch/vllm-off.sh"
+bash -n "$scratch/vllm-off.sh" || fail 'the vllm jetson=false render is not valid shell'
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck -S warning "$scratch/vllm-off.sh" || fail 'the vllm jetson=false render fails shellcheck'
+fi
+grep -qF -- 'vLLM local inference services deploy only on Jetson AGX Thor' "$scratch/vllm-off.sh" \
+  || fail 'the vllm jetson=false render omits skip reason'
 
 # The lock lookups MUST sit inside the gate: release-lock-ref.tmpl hard-fails on a
 # missing artifact key and this tool publishes linux-arm64 only, so a hoisted

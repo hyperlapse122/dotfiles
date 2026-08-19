@@ -1,0 +1,26 @@
+{{- $v := .vllm -}}
+{{- if not $v -}}{{- fail "vllm-embed-mdns.service.tmpl: .vllm data is missing" -}}{{- end -}}
+{{- if not (get $v "mdns") -}}{{- fail "vllm-embed-mdns.service.tmpl: vllm.mdns is required" -}}{{- end -}}
+{{- if not (get $v.mdns "embedName") -}}{{- fail "vllm-embed-mdns.service.tmpl: vllm.mdns.embedName is required" -}}{{- end -}}
+{{- if not (get $v.mdns "type") -}}{{- fail "vllm-embed-mdns.service.tmpl: vllm.mdns.type is required" -}}{{- end -}}
+{{- if not (get $v "models") -}}{{- fail "vllm-embed-mdns.service.tmpl: vllm.models is required" -}}{{- end -}}
+{{- if not (get $v.models "embed") -}}{{- fail "vllm-embed-mdns.service.tmpl: vllm.models.embed is required" -}}{{- end -}}
+{{- if not (get $v.models.embed "port") -}}{{- fail "vllm-embed-mdns.service.tmpl: vllm.models.embed.port is required" -}}{{- end -}}
+[Unit]
+Description=mDNS advertisement for vLLM embed service ({{ $v.mdns.embedName }})
+# Advertises the embedding endpoint over DNS-SD via avahi-publish-service.
+# BindsTo= ensures this companion unit stops and starts with the serving unit.
+# Configuration rendered from .chezmoidata/vllm.yaml (vllm.mdns.*,
+# vllm.models.embed.port) — EDIT THE DATA, not this file; a data edit re-runs the
+# provisioner script (fingerprint), which daemon-reloads and restarts this unit.
+BindsTo=vllm-embed.service
+After=vllm-embed.service
+
+[Service]
+Type=exec
+ExecStart=sh -c 'until curl -sf -o /dev/null --connect-timeout 2 --max-time 5 http://127.0.0.1:{{ $v.models.embed.port }}/health; do sleep 5; done; exec /usr/bin/avahi-publish-service "{{ $v.mdns.embedName }}" {{ $v.mdns.type }} {{ $v.models.embed.port }}'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

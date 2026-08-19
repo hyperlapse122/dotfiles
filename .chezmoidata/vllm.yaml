@@ -1,0 +1,134 @@
+# vLLM local LLM inference services on Jetson AGX Thor:
+#   dot_config/systemd/user/vllm-chat.service.tmpl        (models.chat.*)
+#   dot_config/systemd/user/vllm-embed.service.tmpl       (models.embed.*)
+#   dot_config/systemd/user/vllm-chat-mdns.service.tmpl   (mdns.chatName)
+#   dot_config/systemd/user/vllm-embed-mdns.service.tmpl  (mdns.embedName)
+#
+# Consumed by the four user unit templates above and the 60-build provisioner:
+#   .chezmoiscripts/60-build/run_after_provision-vllm.sh.tmpl
+#
+# Single source of truth (like packages.yaml and haptic.yaml): tune service
+# knobs, model revisions, ports, memory allocations, or auth paths HERE, not
+# in the unit templates or scripts.
+#
+# FINGERPRINT & RESTART BEHAVIOR:
+# The provisioner script fingerprints this data file alongside the unit
+# templates and its own body via .chezmoitemplates/fingerprint.tmpl. Any edit
+# here changes the rendered script fingerprint, causing chezmoi to re-run the
+# provisioner on apply — prefetching weights for new revisions, updating
+# auth.env, staging units, issuing `systemctl --user daemon-reload`, and
+# restarting active services so new parameters take effect in the same apply.
+#
+# REVISION ROTATION PROCEDURE:
+# 1. Update `revision` (40-hex SHA) and `localDir` (<slug>@<short-sha>) below.
+# 2. Run `chezmoi apply`. The provisioner executes gate (2) weight prefetch:
+#    it invokes `hf download <repo> --revision <sha>` into
+#    ~/.local/share/vllm/models/<localDir> BEFORE touching any unit.
+# 3. Serving units update their model paths and restart. Old model weight
+#    directories stay on disk for instant rollback; reclaim disk space
+#    manually from ~/.local/share/vllm/models/ when no longer needed.
+#
+# KEY ROTATION PROCEDURE:
+# 1. Update the secret value in 1Password at the item referenced by `apiKeyRef`
+#    ("op://Private/vLLM/credential").
+# 2. Touch the comment or reference in this file so the fingerprint moves (the
+#    fingerprint hashes the unresolved `op://` reference, not the rendered key).
+# 3. Run `chezmoi apply`. The provisioner parity-checks ~/.config/vllm/auth.env
+#    against 1Password whenever `op` is reachable and writes the new 0600 file.
+# 4. Serving units reload or restart with the updated EnvironmentFile.
+#
+# SPIKE PROVENANCE (U1):
+# Native packaging was selected over container packaging because no vendor
+# Jetson image (dustynv/vllm tops out at 0.9.2 on r36.x tags) carries vLLM
+# >= 0.17 for Thor/R39. The native PyPI aarch64 wheel (vLLM 0.27.1, PyTorch
+# 2.13.0+cu130, FlashInfer 0.6.16.post3, ninja) compiles and serves sm_110a
+# natively using the real CutlassNvFp4LinearKernel (no emulation fallback, no
+# --enforce-eager needed). MTP speculative decoding ({"method":"mtp",
+# "num_speculative_tokens":3}) delivers 18.1 tok/s decode (vs 11.5 tok/s
+# non-speculative) with 0.38 acceptance. Sustained 3-stream load over 19 min
+# held steady at ~92-93 GiB RAM, junction temperature <= 70.4 C, with zero
+# BPMP thermal stalls and no OOM.
+#
+# REFERENCE:
+# vllm.runtime:
+#   packaging      : native (only supported path; PyPI aarch64 wheel in a uv venv on host)
+#   version        : pinned vLLM version (0.27.1)
+#   extraPackages  : extra PyPI packages needed in venv ([ninja] for FlashInfer JIT)
+#   venvPath       : home-relative venv path (.local/share/vllm/venv)
+#   modelRoot      : home-relative model weights root (.local/share/vllm/models)
+#
+# vllm.models.chat:
+#   repo                 : Hugging Face repository ID (unsloth/Qwen3.8-27B-NVFP4)
+#   revision             : 40-hex commit SHA pin
+#   localDir             : local directory name under modelRoot (<slug>@<short-sha>)
+#   servedName           : OpenAI model name exposed to clients (qwen-chat)
+#   port                 : TCP listen port on all interfaces (8000)
+#   gpuMemoryUtilization : fraction of unified memory for chat weights + KV cache (0.65)
+#   maxModelLen          : maximum context length (131072)
+#   maxNumSeqs           : maximum concurrent sequences (8)
+#   kvCacheDtype         : KV cache quantization data type (fp8)
+#   reasoningParser      : chat reasoning parser name (qwen3)
+#   toolCallParser       : tool call parser name (qwen3_coder)
+#   speculativeTokens    : number of MTP speculative draft tokens (3)
+#
+# vllm.models.embed:
+#   repo                 : Hugging Face repository ID (Qwen/Qwen3-Embedding-4B)
+#   revision             : 40-hex commit SHA pin
+#   localDir             : local directory name under modelRoot (<slug>@<short-sha>)
+#   servedName           : OpenAI model name exposed to clients (qwen-embed)
+#   runner               : vLLM model runner architecture (pooling)
+#   port                 : TCP listen port on all interfaces (8001)
+#   gpuMemoryUtilization : fraction of unified memory for embedding weights (0.12)
+#   maxModelLen          : maximum context length (32768)
+#
+# vllm.mdns:
+#   type                 : DNS-SD service type (_vllm._tcp)
+#   chatName             : human-readable mDNS service name for chat endpoint
+#   embedName            : human-readable mDNS service name for embedding endpoint
+#
+# vllm.auth:
+#   apiKeyRef            : unresolved 1Password URI for the shared API key
+#   envFile              : home-relative path to 0600 environment file (.config/vllm/auth.env)
+#
+# vllm.allowedOrigins:
+#   (list) allowed CORS origins ([] disables cross-origin browser access)
+#
+vllm:
+  runtime:
+    packaging: native
+    version: 0.27.1
+    extraPackages:
+      - ninja
+    venvPath: .local/share/vllm/venv
+    modelRoot: .local/share/vllm/models
+  models:
+    chat:
+      repo: unsloth/Qwen3.8-27B-NVFP4
+      revision: 7d6f8d4d72f56b92b3cdbf22f156b90e1bab0108
+      localDir: qwen3.8-27b-nvfp4@7d6f8d4d
+      servedName: qwen-chat
+      port: 8000
+      gpuMemoryUtilization: 0.65
+      maxModelLen: 131072
+      maxNumSeqs: 8
+      kvCacheDtype: fp8
+      reasoningParser: qwen3
+      toolCallParser: qwen3_coder
+      speculativeTokens: 3
+    embed:
+      repo: Qwen/Qwen3-Embedding-4B
+      revision: 5cf2132abc99cad020ac570b19d031efec650f2b
+      localDir: qwen3-embedding-4b@5cf2132a
+      servedName: qwen-embed
+      runner: pooling
+      port: 8001
+      gpuMemoryUtilization: 0.12
+      maxModelLen: 32768
+  mdns:
+    type: _vllm._tcp
+    chatName: "Jetson Qwen Chat"
+    embedName: "Jetson Qwen Embed"
+  auth:
+    apiKeyRef: "op://Private/vLLM/credential"
+    envFile: .config/vllm/auth.env
+  allowedOrigins: []
