@@ -108,6 +108,17 @@ if grep -qE 'plugin (install --scope user --force|enable --scope user|marketplac
   exit 1
 fi
 
+# h82-dotfiles still hosts mxm4-haptic, so the removal set must leave it out.
+grep -F 'unmanaged-repo-guard\th82-dotfiles' "$plugin_script" >/dev/null
+removed_marketplaces="$scratch/removed-marketplaces"
+awk '/^MARKETPLACES_REMOVED=\($/{flag=1;next} /^\)/{flag=0} flag' \
+  "$plugin_script" >"$removed_marketplaces"
+grep -F 'i-have-adhd' "$removed_marketplaces" >/dev/null
+if grep -qF 'h82-dotfiles' "$removed_marketplaces"; then
+  printf 'rendered plugin updater removes the surviving h82-dotfiles marketplace\n' >&2
+  exit 1
+fi
+
 grep -F "readonly EXPECTED_OMP_VERSION='$locked_omp_version'" "$plugin_script" >/dev/null
 posix_fingerprints="$scratch/posix-plugin-fingerprints"
 grep '^#   ' "$plugin_script" >"$posix_fingerprints"
@@ -228,6 +239,13 @@ if grep -qE 'plugin (install --scope user --force|enable --scope user) i-have-ad
   printf 'reconciler still installs or adds i-have-adhd\n' >&2
   exit 1
 fi
+
+# The install loop's remove-then-re-add refresh is also a marketplace remove,
+# so the proof is count plus the immediately following re-add, not absence.
+grep -F 'plugin uninstall --scope user unmanaged-repo-guard@h82-dotfiles' "$scratch/omp.calls" >/dev/null
+[[ $(grep -cF 'plugin marketplace remove h82-dotfiles' "$scratch/omp.calls") -eq 1 ]]
+grep -A1 -F 'plugin marketplace remove h82-dotfiles' "$scratch/omp.calls" |
+  tail -1 | grep -F 'plugin marketplace add' >/dev/null
 
 mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
   "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json.off"

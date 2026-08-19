@@ -14,6 +14,7 @@
 {{- $validJetsons := list "skip" "keep" -}}
 {{- $rows := list -}}
 {{- $seen := dict -}}
+{{- $survivingMarketplaces := dict -}}
 {{- range $i, $plugin := $plugins -}}
 {{-   $where := printf "agents.omp.plugins[%d]" $i -}}
 {{-   if not (has (len $plugin) (list 2)) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
@@ -77,11 +78,14 @@
 {{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
 {{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) (not (and $facts.jetson (eq $jetson "skip"))) -}}
 {{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t\t%s\t%s" $name $market $kind $source $strict (join " " $requiredExtensions) (join " " $requiredSkills))) -}}
+{{-     $_ := set $survivingMarketplaces $market true -}}
 {{- end -}}
 {{- end -}}
 {{- $pluginsRemoved := .agents.omp.pluginsRemoved -}}
 {{- $removedRows := list -}}
 {{- $removedSeen := dict -}}
+{{- $removedMarketplaceRows := list -}}
+{{- $removedMarketplaceSeen := dict -}}
 {{- range $i, $plugin := $pluginsRemoved -}}
 {{-   $where := printf "agents.omp.pluginsRemoved[%d]" $i -}}
 {{-   if not (has (len $plugin) (list 2)) -}}{{ fail (printf "update-omp-plugins: %s must contain exactly {name, marketplace}" $where) }}{{- end -}}
@@ -94,6 +98,10 @@
 {{-   if hasKey $removedSeen $id -}}{{ fail (printf "update-omp-plugins: duplicate removed OMP plugin %q" $id) }}{{- end -}}
 {{-   $_ := set $removedSeen $id true -}}
 {{-   $removedRows = append $removedRows (printf "  %q" (printf "%s\t%s" $name $market)) -}}
+{{-   if and (not (hasKey $survivingMarketplaces $market)) (not (hasKey $removedMarketplaceSeen $market)) -}}
+{{-     $_ := set $removedMarketplaceSeen $market true -}}
+{{-     $removedMarketplaceRows = append $removedMarketplaceRows (printf "  %q" $market) -}}
+{{-   end -}}
 {{- end -}}
 #!/usr/bin/env bash
 # Reconciles every eligible agents.omp.plugins row; haptic replacement is proof-gated.
@@ -115,6 +123,9 @@ PLUGINS=(
 )
 PLUGINS_REMOVED=(
 {{ join "\n" $removedRows }}
+)
+MARKETPLACES_REMOVED=(
+{{ join "\n" $removedMarketplaceRows }}
 )
 
 die() { printf 'update-omp-plugins: %s\n' "$*" >&2; exit 1; }
@@ -146,8 +157,12 @@ for row in "${PLUGINS_REMOVED[@]}"; do
   IFS=$'\t' read -r name market <<<"$row"
   id="${name}@${market}"
   omp plugin uninstall --scope user "$id" >/dev/null 2>&1 || true
-  omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
 done
+if [[ ${#MARKETPLACES_REMOVED[@]} -gt 0 ]]; then
+  for market in "${MARKETPLACES_REMOVED[@]}"; do
+    omp plugin marketplace remove "$market" >/dev/null 2>&1 || true
+  done
+fi
 
 if [[ ${#PLUGINS[@]} -eq 0 ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "update-omp-plugins" "site" "no-eligible-plugins" "reason" "no eligible plugins remain after removals") | trim | indent 2 }}
