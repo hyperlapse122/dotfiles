@@ -57,6 +57,34 @@ After every push opening/updating a PR/MR, wait for terminal green CI with one n
 
 Delegate agent work through the harness's own subagent mechanism, never by spawning another agent as a subprocess. MUST NOT invoke an agent CLI — `omp`, `claude`, `codex`, or any equivalent — to perform work, in any form: a headless one-shot (`omp run`, `claude -p`, `codex exec`), a nested interactive session, or a wrapper script or `npx`/`bunx` invocation that hides one. A nested run receives none of the current conversation, resolves its own instruction core and approval policy, cannot be steered or observed mid-flight, blocks on a prompt nobody can answer, and spends the same subscription quota twice, so its output is unattributable and its common failure is a hung process. Use the harness's native delegation instead: on omp that is the `task` tool with an explicit agent type — `scout` for read-only research, a writing agent for edits — carrying every constraint the subagent needs, because a subagent inherits no history; `hub` owns peer messaging and supervised processes. A non-agentic subcommand of an agent CLI stays allowed, because it is configuration or inspection rather than delegation: `omp config set` and `omp models --json` are examples. Only an explicit same-turn user instruction naming the command authorizes an agent-invoking run.
 
+Delegation is the default disposition, not an optimization for convenient moments: the agent MUST delegate work unless it falls in the main-tier reservation list below, and when it proceeds directly it MUST name the applicable reservation item. Before acting directly the agent MUST check, in order, whether a delegable agent type matches the work, then whether a role prompt shipped by an installed skill can be seeded into one, and only then whether direct execution genuinely produces the better result.
+
+The main-tier reservation list is closed and has five entries: dialogue, questions, and approval with the user, because a headless subagent cannot ask and cannot be asked; scope, interpretation, and the synthesis of several subagents' results into one answer; irreversible repository and platform actions, including commits, pushes, merge and pull requests, releases, and destructive commands; edits whose correctness depends on repository conventions a fresh-context subagent cannot infer; and the final judgment on whether the work is verified and done.
+
+Once an investigation is delegated the agent MUST NOT repeat it, including a partial re-check of the same files while that subagent is still running. Duplicated investigation spends the context the delegation was meant to protect, produces findings that can contradict the subagent's, and destroys the parallel throughput that motivated the dispatch.
+
+Independent work units MUST be decomposed and dispatched together in one batch rather than run one after another. An investigation with independent sub-questions MUST fan out to at least two read-only agents in a single batch; a single-target lookup stays one dispatch and MUST NOT be split to satisfy a count. A batch whose members write MUST state their shared interface contract in the batch context before dispatch, because concurrent authors that discover the contract separately will disagree. A dispatch prompt MUST NOT ask a subagent to spawn further subagents.
+
+A subagent inherits no conversation history, so every dispatch prompt MUST carry its target, the change it must make, its acceptance signal, its must-do and must-not-do constraints, the expected shape of the result it returns, and the context it cannot infer from the repository alone. The agent MUST NOT poll for a background result before that result is delivered, and MUST send a follow-up question to the subagent that produced the earlier result rather than opening a fresh dispatch for it.
+
+After three consecutive failed attempts at the same objective the agent MUST stop editing, restore the last known good state, record what was attempted, and consult the most capable review agent available with the full failure context; it asks the user only when that consultation does not resolve the failure. Work that the review agent was asked to decide stays blocked until that agent returns, and the agent MUST NOT deliver a final answer before collecting its result.
+{{- if eq .harness "omp" }}
+
+On omp the dispatch selects a seat, never a model: the seat's configured model and thinking level are its contract, and no per-dispatch thinking override is available. Route by work shape.
+
+| Work shape | Seat | Access |
+| --- | --- | --- |
+| Codebase search, extraction, quoting with locations | `scout` | read-only |
+| External library, API, or upstream source reading | `librarian` | read-only |
+| Security audit of a change | `security-reviewer` | read-only |
+| Deep review, architecture trade-offs, repeated-failure consultation | `reviewer` | read-only |
+| Strictly specified mechanical edits at volume | `sonic` | mutating |
+| Implementation slice needing judgment | `task` | mutating |
+| UI and visual work | `designer` | mutating |
+
+Only those seven seats are dispatchable, so a routing decision MUST name one of them. The compound-engineering role prompts under `skills/*/references/agents/` are prompts to seed into one of those seats, never agent types to dispatch by name.
+{{ end }}
+
 Prefer harness-provided tools over external CLI commands whenever available. When interacting with repositories, files, code intelligence, searches, or GitHub, the agent MUST prefer integrated harness tools (e.g. `read`, `edit`, `write`, `grep`, `glob`, `lsp`, `xd://github`, `xd://ast_grep`, `xd://ast_edit`, internal URL schemes `issue://`, `pr://`) over shell commands (`gh`, `curl`, `grep`, `rg`, `sed`, `awk`) shadowing those capabilities. External CLI commands remain the standard fallback when a harness tool is absent, lacks required functionality, or is explicitly exempted.
 
 Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
