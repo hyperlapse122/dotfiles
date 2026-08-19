@@ -87,4 +87,20 @@ require_file "$repo_root" "$scratch" "$chezmoi_bin" "$production_consumer"
 assert_render_ok production-globs-consumer "$repo_root" "$repo_root/$production_consumer" \
   '#   system/linux/etc/'
 
+vllm_consumer=.chezmoiscripts/60-build/run_after_provision-vllm.sh.tmpl
+require_file "$repo_root" "$scratch" "$chezmoi_bin" "$vllm_consumer"
+assert_render_ok vllm-globs-consumer "$repo_root" "$repo_root/$vllm_consumer" \
+  '#   .chezmoidata/vllm.yaml  '
+for expected_unit in \
+  '#   dot_config/systemd/user/vllm-chat.service.tmpl  ' \
+  '#   dot_config/systemd/user/vllm-embed.service.tmpl  ' \
+  '#   dot_config/systemd/user/vllm-chat-mdns.service.tmpl  ' \
+  '#   dot_config/systemd/user/vllm-embed-mdns.service.tmpl  '
+do
+  grep -qF -e "$expected_unit" -- "$scratch/vllm-globs-consumer.out" || {
+    printf 'vllm-globs-consumer: rendered output omitted %s\n' "$expected_unit" >&2
+    sed 's/^/  /' "$scratch/vllm-globs-consumer.out" >&2
+    exit 1
+  }
+done
 printf '%s\n' 'fingerprint render gates passed'

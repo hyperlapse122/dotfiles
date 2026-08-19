@@ -141,6 +141,16 @@ container_out="$scratch/rendered-linux-container"
 is_path_ignored "$container_out" ".chezmoiscripts/30-linux/chsh-zsh.sh" || fail 'container should ignore 30-linux'
 is_path_ignored "$container_out" ".chezmoiscripts/50-linux-kde/config-kde-settings.sh" || fail 'container should ignore 50-linux-kde'
 is_path_ignored "$container_out" ".chezmoiscripts/60-build/build-mxm4-haptic.sh" || fail 'container should ignore mxm4-haptic'
+is_path_ignored "$container_out" ".chezmoiscripts/60-build/provision-vllm.sh" || fail 'container should ignore provision-vllm'
+vllm_units=(
+  ".config/systemd/user/vllm-chat.service"
+  ".config/systemd/user/vllm-embed.service"
+  ".config/systemd/user/vllm-chat-mdns.service"
+  ".config/systemd/user/vllm-embed-mdns.service"
+)
+for unit in "${vllm_units[@]}"; do
+  is_path_ignored "$container_out" "$unit" || fail "container should ignore $unit"
+done
 is_path_ignored "$container_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'container should ignore kitty'
 is_path_ignored "$container_out" ".chezmoiscripts/90-src/reconcile-garden.sh" || fail 'container should ignore garden'
 
@@ -153,11 +163,20 @@ is_path_ignored "$headless_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'hea
 
 macos_out="$scratch/rendered-macos"
 is_path_ignored "$macos_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'macos should ignore kitty'
+for unit in "${vllm_units[@]}"; do
+  is_path_ignored "$macos_out" "$unit" || fail "macos should ignore $unit"
+done
 
-# Jetson ignores mxm4-haptic, Fedora desktop has it eligible
+# Jetson ignores mxm4-haptic and has vLLM eligible, Fedora desktop has mxm4-haptic eligible and ignores vLLM
 jetson_out="$scratch/rendered-linux-jetson"
 is_path_ignored "$jetson_out" ".chezmoiscripts/60-build/build-mxm4-haptic.sh" || fail 'jetson should ignore mxm4-haptic'
 ! is_path_ignored "$gnome_out" ".chezmoiscripts/60-build/build-mxm4-haptic.sh" || fail 'fedora gnome should not ignore mxm4-haptic'
+! is_path_ignored "$jetson_out" ".chezmoiscripts/60-build/provision-vllm.sh" || fail 'jetson should not ignore provision-vllm'
+for unit in "${vllm_units[@]}"; do
+  ! is_path_ignored "$jetson_out" "$unit" || fail "jetson should not ignore $unit"
+  is_path_ignored "$gnome_out" "$unit" || fail "fedora gnome should ignore $unit"
+  is_path_ignored "$headless_out" "$unit" || fail "headless should ignore $unit"
+done
 pass 'expected script gating behavior verified across variants'
 
 # 3. Mutant assertions
