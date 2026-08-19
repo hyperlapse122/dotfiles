@@ -102,7 +102,16 @@ agents:
     pluginsRemoved:
     - { name: i-have-adhd, marketplace: i-have-adhd }
     models:
-      providers: {}
+      providers:
+        google-antigravity:
+          modelOverrides:
+            gemini-3.7-flash:
+              thinking:
+                mode: google-level
+                efforts:
+                - low
+                - medium
+                - high
     settings:
       theme.dark: titanium
       theme.light: light
