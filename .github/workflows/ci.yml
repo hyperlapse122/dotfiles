@@ -115,6 +115,7 @@ jobs:
           .ci/test-mxm4-haptic-gates.sh
           .ci/test-mxm4-haptic-chezmoi-retry.sh
           .ci/test-agent-instructions.sh
+          .ci/check-omp-seat-routing.sh
       # Prerequisites are already in this job: locked chezmoi and the runner's
       # python3 for the render and matrix gates, bun and jq for the merged-result
       # audit, git for the prune fixtures. The R6 post-merge workflow itself stays

@@ -64,6 +64,14 @@ Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
 Prefer harness-provided tools over external CLI commands whenever available.
 prefer integrated harness tools
 Prefer harness-provided tools (e.g. `xd://github`, `issue://`, `pr://`) over external CLI commands
+Delegation is the default disposition, not an optimization for convenient moments
+The main-tier reservation list is closed and has five entries
+Once an investigation is delegated the agent MUST NOT repeat it
+Independent work units MUST be decomposed and dispatched together in one batch
+A dispatch prompt MUST NOT ask a subagent to spawn further subagents
+A subagent inherits no conversation history
+After three consecutive failed attempts at the same objective
+the dispatch selects a seat, never a model
 NEEDLES
 
 while IFS= read -r banned; do
