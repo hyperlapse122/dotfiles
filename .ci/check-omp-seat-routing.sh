@@ -56,9 +56,9 @@ rendered="$scratch/AGENTS.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$rendered"
 [[ -s $rendered ]] || fail 'wrapper rendered empty'
 
-# Extract seat names from the second column of the markdown routing table.
+# Column patterns are `[^|]+`, not `.*`, so a wider table cannot match.
 # shellcheck disable=SC2016
-sed -nE 's/^\| .* \| `([a-zA-Z0-9_-]+)` \| .* \|$/\1/p' "$rendered" | sort -u >"$scratch/routed.txt"
+sed -nE 's/^\| [^|]+ \| `([a-zA-Z0-9_-]+)` \| [^|]+ \|$/\1/p' "$rendered" | sort -u >"$scratch/routed.txt"
 
 routed_count=$(wc -l <"$scratch/routed.txt")
 [[ $routed_count -gt 0 ]] || {

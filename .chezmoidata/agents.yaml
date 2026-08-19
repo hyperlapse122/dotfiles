@@ -190,7 +190,7 @@ agents:
         - google-antigravity/gemini-3.7-flash:high
         google-antigravity/gemini-3.7-flash:
         - google-antigravity/gemini-3.1-flash-lite:minimal
-        - anthropic/claude-sonnet-5:medium
+        - kimi-code/k3:high
         default:
         - anthropic/claude-opus-5:high
         - kimi-code/k3:high

@@ -70,7 +70,7 @@ Once an investigation is delegated the agent MUST NOT repeat it
 Independent work units MUST be decomposed and dispatched together in one batch
 A dispatch prompt MUST NOT ask a subagent to spawn further subagents
 A subagent inherits no conversation history
-After three consecutive failed attempts at the same objective
+After three consecutive failed attempts at the same objective the agent MUST stop editing, restore the last known good state
 the dispatch selects a seat, never a model
 NEEDLES
 
