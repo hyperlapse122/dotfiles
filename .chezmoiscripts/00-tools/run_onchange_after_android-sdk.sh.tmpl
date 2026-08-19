@@ -3,40 +3,72 @@
 #
 # Provisions Android command-line tools, platform-tools, build-tools,
 # platforms, and accepts licenses headlessly into ~/.local/share/android-sdk.
+#
+# This script has no external source dependency, so it hashes only its own
+# rendered content: editing the body below is what re-runs it.
+#
+# WHY A SCRATCH BOOTSTRAP AND NOT A HAND-PLACED "latest". sdkmanager owns
+# cmdline-tools;latest through its package.xml. A directory unzipped into
+# cmdline-tools/latest by hand carries no package.xml, so the repo manager
+# treats the path as occupied by something it did not install, warns
+# ("should be installed in ... but it already exists"), and diverts the real
+# package to cmdline-tools/latest-2 — which is not on PATH and leaves the
+# stale hand-unzipped revision in front of it. The downloaded zip is therefore
+# only ever a throwaway bootstrap in a scratch directory; the copy that lands
+# under $ANDROID_HOME is always the sdkmanager-managed one, so it also updates
+# itself on later runs.
 
 set -euo pipefail
 
 ANDROID_HOME="${ANDROID_HOME:-$HOME/.local/share/android-sdk}"
-mkdir -p "$ANDROID_HOME"
+CMDLINE_TOOLS_DIR="$ANDROID_HOME/cmdline-tools"
+mkdir -p "$CMDLINE_TOOLS_DIR"
 
 {{- $os := "linux" -}}
 {{- if eq .chezmoi.os "darwin" -}}
 {{-   $os = "mac" -}}
 {{- end }}
 
+# Bootstrap only. The managed revision is whatever sdkmanager resolves below.
 CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-{{ $os }}-11076708_latest.zip"
 
-if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+# Repair a host provisioned by the earlier hand-unzip: drop an unmanaged
+# "latest", then adopt a diverted "latest-N" (its package.xml already declares
+# path="cmdline-tools;latest", so the move is what sdkmanager expected all
+# along) instead of re-downloading it.
+if [ -d "$CMDLINE_TOOLS_DIR/latest" ] && [ ! -f "$CMDLINE_TOOLS_DIR/latest/package.xml" ]; then
+  printf 'android-sdk: replacing unmanaged %s\n' "$CMDLINE_TOOLS_DIR/latest"
+  rm -rf "$CMDLINE_TOOLS_DIR/latest"
+fi
+for diverted in "$CMDLINE_TOOLS_DIR"/latest-*; do
+  [ -f "$diverted/package.xml" ] || continue
+  if [ -d "$CMDLINE_TOOLS_DIR/latest" ]; then
+    printf 'android-sdk: removing duplicate %s\n' "$diverted"
+    rm -rf "$diverted"
+  else
+    printf 'android-sdk: adopting %s as cmdline-tools/latest\n' "$diverted"
+    mv "$diverted" "$CMDLINE_TOOLS_DIR/latest"
+  fi
+done
+
+SDKMANAGER="$CMDLINE_TOOLS_DIR/latest/bin/sdkmanager"
+
+if [ ! -x "$SDKMANAGER" ] && command -v curl >/dev/null 2>&1; then
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/android-cmdline-tools.XXXXXX")"
   cleanup() { rm -rf "$scratch"; }
   trap cleanup EXIT INT TERM
 
-  zip_path="$scratch/cmdline-tools.zip"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$CMDLINE_TOOLS_URL" -o "$zip_path"
-    mkdir -p "$ANDROID_HOME/cmdline-tools"
-    unzip -q "$zip_path" -d "$scratch/extracted"
-    rm -rf "$ANDROID_HOME/cmdline-tools/latest"
-    mv "$scratch/extracted/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-  fi
+  curl -fsSL "$CMDLINE_TOOLS_URL" -o "$scratch/cmdline-tools.zip"
+  unzip -q "$scratch/cmdline-tools.zip" -d "$scratch/extracted"
+
+  bootstrap="$scratch/extracted/cmdline-tools/bin/sdkmanager"
+  yes | "$bootstrap" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
+  "$bootstrap" --sdk_root="$ANDROID_HOME" "cmdline-tools;latest"
 fi
 
-SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 if [ -x "$SDKMANAGER" ]; then
   # Accept all licenses
-  if command -v yes >/dev/null 2>&1; then
-    yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
-  fi
+  yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 
   # Install required SDK components
   "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;35.0.0" "platforms;android-36" "cmdline-tools;latest" || true
