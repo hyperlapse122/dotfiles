@@ -61,6 +61,9 @@ never by spawning another agent as a subprocess
 MUST NOT invoke an agent CLI
 A non-agentic subcommand of an agent CLI stays allowed
 Use tmux/interactive shell for servers, watches, TUIs, and REPLs.
+Prefer harness-provided tools over external CLI commands whenever available.
+prefer integrated harness tools
+Prefer harness-provided tools (e.g. `xd://github`, `issue://`, `pr://`) over external CLI commands
 NEEDLES
 
 while IFS= read -r banned; do
