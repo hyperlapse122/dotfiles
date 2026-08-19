@@ -53,9 +53,15 @@ This run closes four confirmed `unmanaged-repo-guard` classifier bypasses (R13-R
    > it — so an autopilot run still declines to file into a repository that is
    > not the user's.
    >
-   > Step 1 of `docs/decommission/unmanaged-repo-guard.md` records the guard's
-   > block counts here when an operator runs it, so this decision keeps the
-   > evidence for what the enforcement actually caught.
+   > The guard's block record, captured from this workstation's
+   > `blocks.jsonl` before the `.chezmoiremove` prune deleted it: 28 blocks,
+   > 13 `indeterminate` and 15 `invalid-target`, none of them a repository the
+   > user genuinely did not manage, the last at 2026-08-19T04:37:25.551Z. The
+   > decommission checklist that would have collected per-host figures was
+   > never run on any host;
+   > [`docs/plans/2026-08-19-1412-refactor-finish-unmanaged-repo-guard-removal-plan.md`](2026-08-19-1412-refactor-finish-unmanaged-repo-guard-removal-plan.md)
+   > replaced it with data-declared removal, so these are the only host's
+   > figures.
 2. **`R13` / `R15` strategy — fail closed on `gh`/`glab` anywhere in argv.** An unrecognised head, whether an argv-forwarding wrapper or a prefix's own option, is treated as a candidate write rather than ignored. This closes the whole class in one rule instead of chasing a denylist that #188 itself predicts will keep regressing. Accepted cost: more false candidates reach the probe.
 3. **`R1` re-scoped to a repo-ownable fix.** Instead of waiting on the upstream plugin cache, state the precedence rule where the agent actually reads it: a back-reference in `.chezmoitemplates/agents-instructions.tmpl` making the repository-management probe binding over any skill-level tracker-defer fallback chain.
 

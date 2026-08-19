@@ -142,12 +142,12 @@ AppData/Roaming/VSCodium/User/keybindings.json
 # applied between the guard's introduction and its removal simply takes this
 # as a no-op.
 #
-# This prune does NOT reach the copy omp installed under ~/.omp/plugins, nor
-# the runtime audit trail under ~/.local/state/unmanaged-repo-guard/. Neither
-# is chezmoi-managed and no script here may touch them —
-# docs/decommission/unmanaged-repo-guard.md is the operator's checklist for
-# both, and until it is run the installed plugin still blocks.
+# The omp-installed copy under ~/.omp/plugins is not chezmoi-managed; the
+# phase-70 reconciler uninstalls it from the agents.omp.pluginsRemoved
+# declaration. The plugin's runtime state was never deployed either — prune it
+# like the runtime-created .agents/skills/ce-* entries above.
 .local/share/omp-plugins/plugins/unmanaged-repo-guard
+.local/state/unmanaged-repo-guard
 
 # The mxm4-haptic container skip was restored to the whole .local/share/omp-plugins
 # tree now that unmanaged-repo-guard is gone. Prune any stranded marketplace.json

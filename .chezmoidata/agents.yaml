@@ -101,6 +101,7 @@ agents:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     pluginsRemoved:
     - { name: i-have-adhd, marketplace: i-have-adhd }
+    - { name: unmanaged-repo-guard, marketplace: h82-dotfiles }
     models:
       providers:
         google-antigravity:

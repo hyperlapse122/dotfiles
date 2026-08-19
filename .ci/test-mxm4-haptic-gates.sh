@@ -126,6 +126,21 @@ render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux false "$posix_rec
 ! grep -F 'mxm4-haptic\th82-dotfiles' "$scratch/reconcile-linux-jetson.sh" >/dev/null || fail 'jetson rendered the OMP haptic row'
 grep -F '.omp/agent/extensions/mxm4-haptic.ts' "$scratch/reconcile-linux-jetson.sh" >/dev/null || fail 'jetson migration is absent'
 
+# Container and Jetson skip h82-dotfiles entirely, so there the removal set
+# keeps it and cleans up the orphan.
+removed_marketplaces() {
+  awk '/^MARKETPLACES_REMOVED=\($/{flag=1;next} /^\)/{flag=0} flag' "$1"
+}
+render_reconciler "$repo_root" "$scratch" "$chezmoi_bin" linux false "$posix_reconcile" "$scratch/reconcile-linux-host.sh"
+grep -F 'unmanaged-repo-guard\th82-dotfiles' "$scratch/reconcile-linux-host.sh" >/dev/null || fail 'host lost the unmanaged-repo-guard uninstall row'
+removed_marketplaces "$scratch/reconcile-linux-host.sh" >"$scratch/removed-host"
+grep -F 'i-have-adhd' "$scratch/removed-host" >/dev/null || fail 'host lost the i-have-adhd marketplace removal'
+! grep -qF 'h82-dotfiles' "$scratch/removed-host" || fail 'host removes the surviving h82-dotfiles marketplace'
+removed_marketplaces "$scratch/reconcile-linux-container.sh" >"$scratch/removed-container"
+grep -F 'h82-dotfiles' "$scratch/removed-container" >/dev/null || fail 'container keeps the orphaned h82-dotfiles marketplace'
+removed_marketplaces "$scratch/reconcile-linux-jetson.sh" >"$scratch/removed-jetson"
+grep -F 'h82-dotfiles' "$scratch/removed-jetson" >/dev/null || fail 'jetson keeps the orphaned h82-dotfiles marketplace'
+
 
 # Every deployed manifest must reject a real invalid value during rendering.
 # Its observable rejection whitelist must exactly match both implementations.

@@ -164,6 +164,7 @@ jobs:
                    "${HOME}/.config/systemd/user" \
                    "${HOME}/.local/libexec" \
                    "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
+                   "${HOME}/.local/state/unmanaged-repo-guard" \
                    "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic" \
                    "${HOME}/.local/share/omp-plugins/.omp-plugin"
           : > "${HOME}/.agents/skills/ce-plan/prune-canary"
@@ -188,6 +189,7 @@ jobs:
           : > "${HOME}/.config/systemd/user/ydotool.service"
           : > "${HOME}/.local/libexec/ydotoold-active-seat"
           : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
+          : > "${HOME}/.local/state/unmanaged-repo-guard/blocks.jsonl"
           : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
           set +e
@@ -221,6 +223,7 @@ jobs:
           test ! -e "${home}/AppData/Roaming/VSCodium/User/settings.json"
           test ! -e "${home}/AppData/Roaming/VSCodium/User/keybindings.json"
           test ! -e "${home}/.local/share/omp-plugins/plugins/unmanaged-repo-guard"
+          test ! -e "${home}/.local/state/unmanaged-repo-guard"
           test ! -e "${home}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
           # Sibling files must survive.
@@ -672,6 +675,7 @@ jobs:
                    "${HOME}/.config/systemd/user" \
                    "${HOME}/.local/libexec" \
                    "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
+                   "${HOME}/.local/state/unmanaged-repo-guard" \
                    "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic" \
                    "${HOME}/.local/share/omp-plugins/.omp-plugin"
           : > "${HOME}/.agents/skills/ce-plan/prune-canary"
@@ -696,6 +700,7 @@ jobs:
           : > "${HOME}/.config/systemd/user/ydotool.service"
           : > "${HOME}/.local/libexec/ydotoold-active-seat"
           : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
+          : > "${HOME}/.local/state/unmanaged-repo-guard/blocks.jsonl"
           : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
@@ -725,6 +730,7 @@ jobs:
           test ! -e "${home}/.local/bin/docker-credential-glab"
           test ! -e "${home}/.local/share/i-have-adhd"
           test ! -e "${home}/.local/share/omp-plugins/plugins/unmanaged-repo-guard"
+          test ! -e "${home}/.local/state/unmanaged-repo-guard"
           test ! -e "${home}/AppData/Roaming/VSCodium/User/settings.json"
           test ! -e "${home}/AppData/Roaming/VSCodium/User/keybindings.json"
 
