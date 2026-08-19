@@ -30,7 +30,7 @@
 #
 # KEY ROTATION PROCEDURE:
 # 1. Update the secret value in 1Password at the item referenced by `apiKeyRef`
-#    ("op://Private/vLLM Jetson/API Key").
+#    ("op://Private/vLLM/credential").
 # 2. Touch the comment or reference in this file so the fingerprint moves (the
 #    fingerprint hashes the unresolved `op://` reference, not the rendered key).
 # 3. Run `chezmoi apply`. The provisioner parity-checks ~/.config/vllm/auth.env
@@ -129,6 +129,6 @@ vllm:
     chatName: "Jetson Qwen Chat"
     embedName: "Jetson Qwen Embed"
   auth:
-    apiKeyRef: "op://Private/vLLM Jetson/API Key"
+    apiKeyRef: "op://Private/vLLM/credential"
     envFile: .config/vllm/auth.env
   allowedOrigins: []

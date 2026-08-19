@@ -67,7 +67,7 @@ inference server or reinstall later.
 
 ## 6. Credential boundary — never delete operator-owned vault items
 
-- The 1Password item `op://Private/vLLM Jetson/API Key` referenced by
+- The 1Password item `op://Private/vLLM/credential` referenced by
   `.chezmoidata/vllm.yaml` stays in 1Password, operator-owned; delete or rotate
   it in 1Password only as a separate explicit action.
 - Chezmoi never stored plaintext credentials in tracked source: source carried
