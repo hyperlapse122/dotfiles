@@ -41,6 +41,29 @@ run_auth
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
 grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
+
+# Inode identity is the signal that no `mv` happened; this job runs on every
+# apply, so an unconditional rename rewrites a credential file forever.
+auth_inode_before=$(stat -c '%i' "$auth")
+run_auth
+[[ $(stat -c '%i' "$auth") == "$auth_inode_before" ]] || {
+  printf 'config-omp-auth: a converged re-run republished %s\n' "$auth" >&2
+  exit 1
+}
+grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
+[[ $(stat -c '%a' "$auth") == 600 ]]
+
+# The skip path is the only place left that can narrow a mode someone widened.
+chmod 0644 "$auth"
+run_auth
+[[ $(stat -c '%a' "$auth") == 600 ]] || {
+  printf 'config-omp-auth: a converged re-run left %s at mode %s\n' "$auth" "$(stat -c '%a' "$auth")" >&2
+  exit 1
+}
+[[ $(stat -c '%i' "$auth") == "$auth_inode_before" ]] || {
+  printf 'config-omp-auth: repairing the mode republished %s\n' "$auth" >&2
+  exit 1
+}
 missing="$scratch/missing.env"
 cat >"$missing" <<'EOF'
 OTHER_TOKEN=present
@@ -314,6 +337,15 @@ if [ "${1-}" = "models" ]; then
   printf 'no catalog\n' >&2
   exit 1
 fi
+# A read is never recorded: every call-count assertion below counts mutations.
+if [ "${1-}" = "config" ] && [ "${2-}" = "list" ]; then
+  if [ -n "${CANNED_LIVE-}" ]; then
+    cat "$CANNED_LIVE"
+    exit 0
+  fi
+  printf 'no live config\n' >&2
+  exit 1
+fi
 printf '%s\n' "$*" >>"$OMP_CALLS"
 EOF
 chmod 0755 "$settings_bin/omp"
@@ -388,12 +420,15 @@ fi
 
 declared_count=$(jq -r 'keys | length' "$declared_json")
 
+# An absent third argument leaves CANNED_LIVE empty, so the live read fails and
+# the provisioner asserts every declared path. That keeps every pre-existing
+# two-argument case below at its original meaning.
 run_settings() {
-  local label=$1 catalog=$2
+  local label=$1 catalog=$2 live=${3-}
   : >"$scratch/$label.calls"
   # An empty CANNED_CATALOG and an unset one take the same stub path, so the
   # assignment needs no fork.
-  OMP_CALLS="$scratch/$label.calls" CANNED_CATALOG="$catalog" \
+  OMP_CALLS="$scratch/$label.calls" CANNED_CATALOG="$catalog" CANNED_LIVE="$live" \
     env HOME="$settings_home" PATH="$settings_bin:$PATH" \
     bash "$settings_script" >"$scratch/$label.out" 2>"$scratch/$label.err"
 }
@@ -422,7 +457,7 @@ while IFS= read -r parent; do
     exit 1
   fi
 done < <(jq -r 'keys[] | select(contains(".")) | split(".")[0]' "$declared_json" | sort -u)
-grep -F "asserted $declared_count declared omp settings paths" "$scratch/full.out" >/dev/null
+grep -F "asserted $declared_count of $declared_count declared omp settings paths" "$scratch/full.out" >/dev/null
 
 # A selector the catalog covers by provider but does not serve aborts the apply
 # before anything is written.
@@ -460,6 +495,61 @@ grep -F 'model catalog unavailable' "$scratch/badcatalog.err" >/dev/null
 run_settings failcatalog ''
 grep -F 'model catalog unavailable' "$scratch/failcatalog.err" >/dev/null
 [[ $(wc -l <"$scratch/failcatalog.calls") -eq $declared_count ]]
+
+# --- convergence against the live config -----------------------------------
+# A blind `omp config set` per declared path spends one subprocess per path on
+# every apply, so the provisioner must read live state and mutate only drift.
+jq 'to_entries
+  | map({key: .key, value: {value: .value, type: "any", description: ""}})
+  | from_entries' "$declared_json" >"$scratch/live-converged.json"
+run_settings converged "$scratch/catalog-full.json" "$scratch/live-converged.json"
+[[ ! -s "$scratch/converged.calls" ]] || {
+  printf 'settings assertion re-asserted %d already-correct paths\n' \
+    "$(wc -l <"$scratch/converged.calls")" >&2
+  sed 's/^/  /' "$scratch/converged.calls" >&2
+  exit 1
+}
+grep -F "asserted 0 of $declared_count declared omp settings paths" "$scratch/converged.out" >/dev/null
+
+# Exactly the drifted paths are asserted, and both drift shapes count: a live
+# value that differs, and a path the live config does not carry at all. The
+# absent shape is what keeps an unset declared path converging.
+drift_key=$(jq -r 'to_entries | map(select((.value | type) == "boolean")) | .[0].key // ""' "$declared_json")
+absent_key=$(jq -r --arg d "$drift_key" 'to_entries | map(select(.key != $d)) | .[0].key // ""' "$declared_json")
+[[ -n $drift_key && -n $absent_key ]] || {
+  printf 'fixture found no boolean plus spare declared key; the partial-drift case is not being exercised\n' >&2
+  exit 1
+}
+jq --arg d "$drift_key" --arg a "$absent_key" '
+  (.[$d].value) |= (. | not) | del(.[$a])
+' "$scratch/live-converged.json" >"$scratch/live-partial.json"
+run_settings partial "$scratch/catalog-full.json" "$scratch/live-partial.json"
+[[ $(wc -l <"$scratch/partial.calls") -eq 2 ]] || {
+  printf 'settings assertion delivered %d calls for exactly two drifted paths\n' \
+    "$(wc -l <"$scratch/partial.calls")" >&2
+  sed 's/^/  /' "$scratch/partial.calls" >&2
+  exit 1
+}
+drift_want=$(jq -r --arg d "$drift_key" '.[$d] | tojson' "$declared_json")
+grep -qxF "config set $drift_key $drift_want" "$scratch/partial.calls" || {
+  printf 'settings assertion did not re-assert drifted path %s as %s\n' "$drift_key" "$drift_want" >&2
+  exit 1
+}
+grep -qF "config set $absent_key " "$scratch/partial.calls" || {
+  printf 'settings assertion did not assert live-absent path %s\n' "$absent_key" >&2
+  exit 1
+}
+grep -F "asserted 2 of $declared_count declared omp settings paths" "$scratch/partial.out" >/dev/null
+
+# An unreadable live config fails OPEN: a provisioner that cannot see live state
+# must still deliver the declared set, exactly as it did before this check.
+run_settings nolive "$scratch/catalog-full.json" "$scratch/does-not-exist.json"
+[[ $(wc -l <"$scratch/nolive.calls") -eq $declared_count ]] || {
+  printf 'an unreadable live config suppressed %d of %d declared assertions\n' \
+    "$((declared_count - $(wc -l <"$scratch/nolive.calls")))" "$declared_count" >&2
+  exit 1
+}
+grep -F 'could not read the live config' "$scratch/nolive.err" >/dev/null
 
 # A missing omp binary is a soft skip, not a failed apply.
 env HOME="$settings_home" PATH="/usr/bin:/bin" bash "$settings_script" \

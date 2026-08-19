@@ -40,36 +40,43 @@ chmod 0700 "$scratch"
 # No suffix after the X run: BSD mktemp(1) only substitutes trailing X's.
 declared="$(mktemp "$scratch/declared.XXXXXX")"
 catalog="$(mktemp "$scratch/catalog.XXXXXX")"
-cleanup() { rm -f -- "$declared" "$catalog"; }
+live="$(mktemp "$scratch/live.XXXXXX")"
+cleanup() { rm -f -- "$declared" "$catalog" "$live"; }
 trap cleanup EXIT HUP INT TERM
 
 cat >"$declared" <<'JSON'
 {{ $settings | toPrettyJson }}
 JSON
 
-# The catalog probe is the only network call in the apply path, so bound it and
-# fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
-# so exit status alone cannot tell "absent selector" from "absent credentials".
-# The deadline is enforced without `timeout`, which BSD/macOS hosts do not ship.
-omp models --json >"$catalog" 2>/dev/null &
-probe_pid=$!
-probe_waited=0
-while [[ $probe_waited -lt 15 ]] && kill -0 "$probe_pid" 2>/dev/null; do
-  sleep 1
-  probe_waited=$((probe_waited + 1))
-done
-# SIGTERM is catchable and the probe may be wedged in the very call the deadline
-# exists to survive, so escalate rather than `wait` on a process that will not die.
-if kill -0 "$probe_pid" 2>/dev/null; then
-  kill -TERM "$probe_pid" 2>/dev/null || true
-  probe_term=0
-  while [[ $probe_term -lt 2 ]] && kill -0 "$probe_pid" 2>/dev/null; do
+# Neither omp read is bounded on its own: the catalog probe is a network call and
+# `config list` has been observed to wedge. The deadline is enforced without
+# `timeout`, which BSD/macOS hosts do not ship. SIGTERM is catchable and a probe
+# may be wedged in the very call the deadline exists to survive, so escalate
+# rather than `wait` on a process that will not die.
+bounded_read() {
+  local destination=$1 deadline=$2
+  shift 2
+  local pid waited=0 termed=0
+  "$@" >"$destination" 2>/dev/null &
+  pid=$!
+  while [[ $waited -lt $deadline ]] && kill -0 "$pid" 2>/dev/null; do
     sleep 1
-    probe_term=$((probe_term + 1))
+    waited=$((waited + 1))
   done
-  kill -KILL "$probe_pid" 2>/dev/null || true
-fi
-wait "$probe_pid" 2>/dev/null || true
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    while [[ $termed -lt 2 ]] && kill -0 "$pid" 2>/dev/null; do
+      sleep 1
+      termed=$((termed + 1))
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
+# Fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
+# so exit status alone cannot tell "absent selector" from "absent credentials".
+bounded_read "$catalog" 15 omp models --json
 
 if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
   # Precomputed once: a per-selector jq would re-parse the whole catalog. Model
@@ -142,28 +149,47 @@ else
   printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
 fi
 
-# One jq pass emits every path with its argument already rendered: a string-typed
-# setting is stored verbatim, so it is passed raw, and everything else is JSON.
+# Fail OPEN: a provisioner that cannot see live state still delivers the declared
+# set. omp resolves this view against the working directory, so a key it reports
+# at its default while the stored config differs reads as drift and is
+# re-asserted exactly as an unconditional set would have done.
+bounded_read "$live" 15 omp config list --json
+if ! jq -e 'type == "object"' "$live" >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: could not read the live config; asserting every declared path.' >&2
+  printf '{}\n' >"$live"
+fi
+
+# `state` leads so a stray tab inside a value cannot corrupt it. Deep equality is
+# what preserves wholesale record ownership: a member omp adds inside a declared
+# record makes the live record unequal, so the record is replaced.
+examined=0
 asserted=0
-while IFS=$'\t' read -r path value; do
+while IFS=$'\t' read -r state path value; do
   [[ -n $path ]] || continue
+  examined=$((examined + 1))
+  [[ $state == drift ]] || continue
   omp config set "$path" "$value" >/dev/null || {
     status=$?
     printf 'config-omp-settings: failed to assert %s\n' "$path" >&2
     exit "$status"
   }
   asserted=$((asserted + 1))
-done < <(jq -r '
-  to_entries[]
-  | [.key, (if (.value | type) == "string" then .value else (.value | tojson) end)]
+done < <(jq -r --slurpfile live "$live" '
+  ($live[0] // {}) as $l
+  | to_entries[]
+  | [ (if (($l[.key] // {}) | (type == "object") and has("value"))
+        and ($l[.key].value == .value)
+        then "converged" else "drift" end),
+      .key,
+      (if (.value | type) == "string" then .value else (.value | tojson) end) ]
   | @tsv
 ' "$declared")
 
 # A truncated read is the one failure the loop above cannot see: a killed jq or a
 # trap firing mid-stream ends it early, and every iteration that DID run
 # succeeded. Comparing against the render-time count turns that into a failure.
-if [[ $asserted -ne {{ len $settings }} ]]; then
-  printf 'config-omp-settings: asserted %d of {{ len $settings }} declared paths; the declared stream ended early\n' "$asserted" >&2
+if [[ $examined -ne {{ len $settings }} ]]; then
+  printf 'config-omp-settings: examined %d of {{ len $settings }} declared paths; the declared stream ended early\n' "$examined" >&2
   exit 1
 fi
-printf 'config-omp-settings: asserted %d declared omp settings paths\n' "$asserted"
+printf 'config-omp-settings: asserted %d of %d declared omp settings paths\n' "$asserted" "$examined"
