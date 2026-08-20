@@ -192,7 +192,7 @@ agents:
         - anthropic/claude-opus-5:high
         - google-antigravity/gemini-3.7-flash:high
       secrets.enabled: true
-      providers.webSearchGeminiModel: gemini-3.7-flash
+      providers.webSearchGeminiModel: null
       providers.webSearchOrder:
       - gemini
       providers.imageOrder:
