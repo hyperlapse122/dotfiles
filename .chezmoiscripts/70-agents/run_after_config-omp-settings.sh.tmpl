@@ -153,33 +153,57 @@ fi
 # set. omp resolves this view against the working directory, so a key it reports
 # at its default while the stored config differs reads as drift and is
 # re-asserted exactly as an unconditional set would have done.
+live_ok=true
 bounded_read "$live" 15 omp config list --json
 if ! jq -e 'type == "object"' "$live" >/dev/null 2>&1; then
   printf '%s\n' 'config-omp-settings: could not read the live config; asserting every declared path.' >&2
   printf '{}\n' >"$live"
+  live_ok=false
 fi
 
 # `state` leads so a stray tab inside a value cannot corrupt it. Deep equality is
 # what preserves wholesale record ownership: a member omp adds inside a declared
-# record makes the live record unequal, so the record is replaced.
+# record makes the live record unequal, so the record is replaced. A declared
+# null is a third state, `reset`: it never compares by equality, only by
+# whether the live entry still carries a `value` at all. On a failed live read
+# (live_ok=false) fail-open still delivers the declared set, so a null path
+# blind-fires `reset` there too, exactly as an unconditional set would for a
+# non-null path.
 examined=0
 asserted=0
 while IFS=$'\t' read -r state path value; do
   [[ -n $path ]] || continue
   examined=$((examined + 1))
-  [[ $state == drift ]] || continue
-  omp config set "$path" "$value" >/dev/null || {
-    status=$?
-    printf 'config-omp-settings: failed to assert %s\n' "$path" >&2
-    exit "$status"
-  }
+  case $state in
+    drift)
+      omp config set "$path" "$value" >/dev/null || {
+        status=$?
+        printf 'config-omp-settings: failed to assert %s\n' "$path" >&2
+        exit "$status"
+      }
+      ;;
+    reset)
+      omp config reset "$path" >/dev/null || {
+        status=$?
+        printf 'config-omp-settings: failed to reset %s\n' "$path" >&2
+        exit "$status"
+      }
+      ;;
+    *)
+      continue
+      ;;
+  esac
   asserted=$((asserted + 1))
-done < <(jq -r --slurpfile live "$live" '
+done < <(jq -r --slurpfile live "$live" --argjson liveOk "$live_ok" '
   ($live[0] // {}) as $l
   | to_entries[]
-  | [ (if (($l[.key] // {}) | (type == "object") and has("value"))
-        and ($l[.key].value == .value)
-        then "converged" else "drift" end),
+  | (($l[.key] // {}) | (type == "object") and has("value")) as $liveHasValue
+  | [ (if .value == null then
+        (if $liveOk then (if $liveHasValue then "reset" else "converged" end)
+         else "reset" end)
+      else
+        (if $liveHasValue and ($l[.key].value == .value) then "converged" else "drift" end)
+      end),
       .key,
       (if (.value | type) == "string" then .value else (.value | tojson) end) ]
   | @tsv

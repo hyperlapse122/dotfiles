@@ -60,9 +60,21 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{- $pathRe := "^[A-Za-z][A-Za-z0-9_]*([.][A-Za-z][A-Za-z0-9_]*)*$" -}}
 {{- $valueRe := "^[A-Za-z0-9 ._:/@*+-]*$" -}}
 {{- $thinkRe := ":(off|minimal|low|medium|high|xhigh|max)$" -}}
+{{- /* A declared null resets a path to omp's upstream default (issue #262). That
+   is safe only for a plain scalar: a record-typed path is owned WHOLESALE by
+   `omp config set`, so nulling it would reset every member it owns at once,
+   and the three record paths below are exactly the ones the selector
+   validators below resolve into. Fail closed, before the modelRoles map gate
+   two blocks down would otherwise reject it with a generic type mismatch. */ -}}
+{{- $nullRejectedPaths := list "modelRoles" "task.agentModelOverrides" "retry.fallbackChains" "tools.approval" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-omp-settings: %q is not a valid omp settings path; use the dotted form `omp config list` prints" $path) -}}
+{{-   end -}}
+{{-   if eq $value nil -}}
+{{-     if has $path $nullRejectedPaths -}}
+{{-       fail (printf "config-omp-settings: declared path %s is null, but %s is a record-typed path that a reset cannot safely wipe; resetting it would silently unset every member omp owns beneath it and could bypass selector validation. Null an individual member instead, or declare the record explicitly" $path $path) -}}
+{{-     end -}}
 {{-   end -}}
 {{-   $json := $value | toJson -}}
 {{-   if contains "op://" $json -}}

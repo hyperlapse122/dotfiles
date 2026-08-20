@@ -16,6 +16,21 @@ cleanup() {
   rm -rf -- "$scratch"
 }
 trap cleanup EXIT
+render_config="$scratch/render.toml"
+: >"$render_config"
+# A guard that fires AFTER a credential field is resolved (the duplicate check is
+# one) still performs a live op read, so isolate the render from host secret
+# state: a scratch HOME and a stub op answering with a newline-free value keep
+# that read off the host without changing what the guard observes. Set up here,
+# ahead of every fixture that renders a template -- including the settings
+# section's own U1 null-declaration fixtures below -- rather than only beside
+# assert_render_fails/assert_render_ok, so every render shares one HOME.
+neg_home="$scratch/neg-home"
+neg_bin="$scratch/neg-bin"
+mkdir -p "$neg_home" "$neg_bin"
+printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$neg_bin/op"
+chmod 0700 "$neg_bin/op"
+settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 
 home="$scratch/home"
 fake_bin="$scratch/bin"
@@ -462,20 +477,32 @@ run_settings() {
 # every record as a literal string, which is the entire model policy.
 run_settings full "$scratch/catalog-full.json"
 [[ $(wc -l <"$scratch/full.calls") -eq $declared_count ]]
-while IFS=$'\t' read -r path want; do
-  grep -qxF "config set $path $want" "$scratch/full.calls" || {
-    printf 'settings assertion did not deliver declared path %s as %s\n' "$path" "$want" >&2
-    printf '  recorded: %s\n' "$(grep -F "config set $path " "$scratch/full.calls" || echo '(absent)')" >&2
-    exit 1
-  }
+while IFS=$'\t' read -r verb path want; do
+  case $verb in
+    set)
+      grep -qxF "config set $path $want" "$scratch/full.calls" || {
+        printf 'settings assertion did not deliver declared path %s as %s\n' "$path" "$want" >&2
+        printf '  recorded: %s\n' "$(grep -F "config set $path " "$scratch/full.calls" || echo '(absent)')" >&2
+        exit 1
+      }
+      ;;
+    reset)
+      grep -qxF "config reset $path" "$scratch/full.calls" || {
+        printf 'settings assertion did not reset declared null path %s\n' "$path" >&2
+        exit 1
+      }
+      ;;
+  esac
 done < <(jq -r '
   to_entries[]
-  | [.key, (if (.value | type) == "string" then .value else (.value | tojson) end)]
+  | [ (if .value == null then "reset" else "set" end),
+      .key,
+      (if .value == null then "" elif (.value | type) == "string" then .value else (.value | tojson) end) ]
   | @tsv
 ' "$declared_json")
 # Derived from the declared keys, so a newly declared dotted path is guarded too.
 while IFS= read -r parent; do
-  if grep -qF "config set $parent " "$scratch/full.calls"; then
+  if grep -qF "config set $parent " "$scratch/full.calls" || grep -qxF "config reset $parent" "$scratch/full.calls"; then
     printf 'settings assertion wrote parent namespace %s\n' "$parent" >&2
     exit 1
   fi
@@ -523,7 +550,7 @@ grep -F 'model catalog unavailable' "$scratch/failcatalog.err" >/dev/null
 # A blind `omp config set` per declared path spends one subprocess per path on
 # every apply, so the provisioner must read live state and mutate only drift.
 jq 'to_entries
-  | map({key: .key, value: {value: .value, type: "any", description: ""}})
+  | map({key: .key, value: (if .value == null then {type: "any", description: ""} else {value: .value, type: "any", description: ""} end)})
   | from_entries' "$declared_json" >"$scratch/live-converged.json"
 run_settings converged "$scratch/catalog-full.json" "$scratch/live-converged.json"
 [[ ! -s "$scratch/converged.calls" ]] || {
@@ -574,6 +601,116 @@ run_settings nolive "$scratch/catalog-full.json" "$scratch/does-not-exist.json"
 }
 grep -F 'could not read the live config' "$scratch/nolive.err" >/dev/null
 
+# --- null-value reconcile (U1) ----------------------------------------------
+# A declared null resets a path to omp's upstream default (KTD1). The shipped
+# data carries no null-valued path yet (U2 lands the first one), so these
+# fixtures render a second settings script with one synthetic null-valued
+# scalar added via --override-data -- the same mechanism assert_render_ok and
+# assert_render_fails use below to test a value the shipped data does not
+# carry, rather than editing the real declaration. The per-path loop and the
+# live-converged generator above are already null-aware, so this script's own
+# declared set drives the exact same reconcile logic a real null declaration
+# will once U2 lands.
+null_path=u1NullFixturePath
+null_settings_script="$scratch/null-settings.sh"
+env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+  chezmoi --config "$render_config" --source "$repo_root" \
+  --override-data "{\"chezmoi\":{\"os\":\"linux\"},\"agents\":{\"omp\":{\"settings\":{\"$null_path\":null}}}}" \
+  execute-template <"$repo_root/$settings_sh" >"$null_settings_script"
+chmod 0755 "$null_settings_script"
+
+null_declared_json="$scratch/null-declared.json"
+awk '/^cat >"\$declared"/{flag=1;next}/^JSON$/{flag=0}flag' "$null_settings_script" >"$null_declared_json"
+jq -e --arg p "$null_path" 'has($p) and (.[$p] == null)' "$null_declared_json" >/dev/null
+null_declared_count=$(jq -r 'keys | length' "$null_declared_json")
+
+run_settings_for() {
+  local script=$1 label=$2 catalog=$3 live=${4-}
+  : >"$scratch/$label.calls"
+  OMP_CALLS="$scratch/$label.calls" CANNED_CATALOG="$catalog" CANNED_LIVE="$live" \
+    env HOME="$settings_home" PATH="$settings_bin:$PATH" \
+    bash "$script" >"$scratch/$label.out" 2>"$scratch/$label.err"
+}
+
+jq 'to_entries
+  | map({key: .key, value: (if .value == null then {type: "any", description: ""} else {value: .value, type: "any", description: ""} end)})
+  | from_entries' "$null_declared_json" >"$scratch/null-live-converged.json"
+
+# Declared null + live entry has `value` -> exactly one reset, and no set
+# fires for that path.
+jq --arg p "$null_path" '.[$p] = {value: "stale", type: "any"}' \
+  "$scratch/null-live-converged.json" >"$scratch/null-live-reset.json"
+run_settings_for "$null_settings_script" null-reset "$scratch/catalog-full.json" "$scratch/null-live-reset.json"
+[[ $(wc -l <"$scratch/null-reset.calls") -eq 1 ]] || {
+  printf 'declared null with a live value delivered %d calls, want exactly one reset\n' \
+    "$(wc -l <"$scratch/null-reset.calls")" >&2
+  sed 's/^/  /' "$scratch/null-reset.calls" >&2
+  exit 1
+}
+grep -qxF "config reset $null_path" "$scratch/null-reset.calls" || {
+  printf 'declared null with a live value did not reset %s\n' "$null_path" >&2
+  exit 1
+}
+grep -F "asserted 1 of $null_declared_count declared omp settings paths" "$scratch/null-reset.out" >/dev/null
+
+# Declared null + live entry lacks `value` -> converged; zero calls, proving
+# second-apply idempotence.
+run_settings_for "$null_settings_script" null-converged "$scratch/catalog-full.json" "$scratch/null-live-converged.json"
+[[ ! -s "$scratch/null-converged.calls" ]] || {
+  printf 'declared null with no live value still fired %d calls\n' \
+    "$(wc -l <"$scratch/null-converged.calls")" >&2
+  sed 's/^/  /' "$scratch/null-converged.calls" >&2
+  exit 1
+}
+grep -F "asserted 0 of $null_declared_count declared omp settings paths" "$scratch/null-converged.out" >/dev/null
+
+# Mixed declaration -- one null path plus one drifted scalar -> one reset and
+# one set, and examined equals the declared count so the incomplete-stream
+# guard does not fire.
+null_drift_key=$(jq -r --arg p "$null_path" \
+  'to_entries | map(select((.value | type) == "boolean" and .key != $p)) | .[0].key // ""' \
+  "$null_declared_json")
+[[ -n $null_drift_key ]] || {
+  printf 'null fixture found no boolean declared key alongside the null path; the mixed case is not being exercised\n' >&2
+  exit 1
+}
+jq --arg p "$null_path" --arg d "$null_drift_key" '
+  (.[$d].value) |= (. | not) | .[$p] = {value: "stale", type: "any"}
+' "$scratch/null-live-converged.json" >"$scratch/null-live-mixed.json"
+run_settings_for "$null_settings_script" null-mixed "$scratch/catalog-full.json" "$scratch/null-live-mixed.json"
+[[ $(wc -l <"$scratch/null-mixed.calls") -eq 2 ]] || {
+  printf 'mixed null-plus-drift declaration delivered %d calls, want exactly two\n' \
+    "$(wc -l <"$scratch/null-mixed.calls")" >&2
+  sed 's/^/  /' "$scratch/null-mixed.calls" >&2
+  exit 1
+}
+grep -qxF "config reset $null_path" "$scratch/null-mixed.calls" || {
+  printf 'mixed null-plus-drift declaration did not reset %s\n' "$null_path" >&2
+  exit 1
+}
+null_drift_want=$(jq -r --arg d "$null_drift_key" '.[$d] | tojson' "$null_declared_json")
+grep -qxF "config set $null_drift_key $null_drift_want" "$scratch/null-mixed.calls" || {
+  printf 'mixed null-plus-drift declaration did not re-assert drifted path %s as %s\n' \
+    "$null_drift_key" "$null_drift_want" >&2
+  exit 1
+}
+grep -F "asserted 2 of $null_declared_count declared omp settings paths" "$scratch/null-mixed.out" >/dev/null
+
+# Failed live read (the {} fallback) -> a null-declared path still records a
+# reset call, so every no-live fixture keeps its one-call-per-declared-path
+# arithmetic.
+run_settings_for "$null_settings_script" null-nolive "$scratch/catalog-full.json" "$scratch/does-not-exist.json"
+[[ $(wc -l <"$scratch/null-nolive.calls") -eq $null_declared_count ]] || {
+  printf 'an unreadable live config suppressed %d of %d declared assertions for the null fixture\n' \
+    "$((null_declared_count - $(wc -l <"$scratch/null-nolive.calls")))" "$null_declared_count" >&2
+  exit 1
+}
+grep -qxF "config reset $null_path" "$scratch/null-nolive.calls" || {
+  printf 'an unreadable live config did not blind-fire a reset for null-declared %s\n' "$null_path" >&2
+  exit 1
+}
+grep -F 'could not read the live config' "$scratch/null-nolive.err" >/dev/null
+
 # A missing omp binary is a soft skip, not a failed apply.
 env HOME="$settings_home" PATH="/usr/bin:/bin" bash "$settings_script" \
   >"$scratch/noomp.out" 2>"$scratch/noomp.err"
@@ -600,19 +737,8 @@ done
 # already-rendered scripts. These cases fail the RENDER, the only layer that can
 # still catch them: the apply-time catalog gate skips role aliases by design, and
 # omp stores a nonsense selector silently. Requires chezmoi, which the job that
-# rendered the scripts under test already installed.
-# Reuse the repository root resolved before the release-lock assertions.
-render_config="$scratch/render.toml"
-: >"$render_config"
-# A guard that fires AFTER a credential field is resolved (the duplicate check is
-# one) still performs a live op read, so isolate the render from host secret
-# state: a scratch HOME and a stub op answering with a newline-free value keep
-# that read off the host without changing what the guard observes.
-neg_home="$scratch/neg-home"
-neg_bin="$scratch/neg-bin"
-mkdir -p "$neg_home" "$neg_bin"
-printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$neg_bin/op"
-chmod 0700 "$neg_bin/op"
+# rendered the scripts under test already installed. repo_root, render_config,
+# and the neg_home/neg_bin op stub were set up near the top of this script.
 assert_render_fails() {
   local label=$1 template=$2 data=$3 want=$4
   if env HOME="$neg_home" PATH="$neg_bin:$PATH" \
@@ -658,7 +784,6 @@ assert_render_ok() {
 }
 
 auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
-settings_sh='.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
 models_yml='dot_omp/private_agent/private_readonly_models.yml.tmpl'
@@ -745,5 +870,22 @@ assert_render_fails settings-nested-control-char "$settings_sh" \
 assert_render_fails settings-parent-namespace "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"exa\":true,\"exa.enableSearch\":true}}}}" \
   'is a parent namespace of'
+# A declared null resets a path to the upstream default, but only for a plain
+# scalar: nulling a record-typed path would silently wipe every member omp
+# owns beneath it and could bypass selector validation (KTD2).
+assert_render_fails settings-null-modelRoles "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":null}}}}" \
+  'is a record-typed path'
+assert_render_fails settings-null-agent-overrides "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":null}}}}" \
+  'is a record-typed path'
+assert_render_fails settings-null-fallback-chains "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":null}}}}" \
+  'is a record-typed path'
+assert_render_fails settings-null-tools-approval "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"tools.approval\":null}}}}" \
+  'is a record-typed path'
+assert_render_ok settings-null-scalar "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"$null_path\":null}}}}"
 
 printf 'omp auth, plugin, and settings reconcile tests passed\n'
