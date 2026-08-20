@@ -378,9 +378,22 @@ jq -e '
     "google-antigravity/gemini-3.*",
     "kimi-code/*"
   ]
-  and (."retry.fallbackChains" | has("default"))
 ' "$declared_json" >/dev/null || {
   printf 'model whitelist policy is not rendered as expected\n' >&2
+  exit 1
+}
+
+# Both halves are needed to keep automatic fallback off, and neither is
+# self-evident from the values: an empty declared record is what makes omp's
+# `retry.modelFallback` true-by-default inert (a chain lookup finds nothing)
+# and wipes any chain omp wrote, while `retry.usageAwareFallback: false` is
+# what stops the pre-request usage preflight from switching models. Half a
+# revert is therefore the failure this guards, and restoring fallback is a
+# policy change that must land with the root AGENTS.md paragraph.
+jq -e '
+  (."retry.fallbackChains" == {}) and (."retry.usageAwareFallback" == false)
+' "$declared_json" >/dev/null || {
+  printf 'fallback policy is not rendered as disabled: retry.fallbackChains must be {} and retry.usageAwareFallback must be false\n' >&2
   exit 1
 }
 
@@ -438,6 +451,9 @@ jq -e '(.models | length) > 0' "$scratch/catalog-full.json" >/dev/null
 # reject. The invariant is global over one complete policy, so it is checked once
 # here, over exactly the data that ships. A key naming a HOP is legitimate: that
 # hop can fail and own a chain in turn.
+# The shipped policy declares no chain at all (asserted above), so this walk is
+# vacuous today; it stays because it re-arms the moment a chain returns and
+# there is nowhere else the invariant can be checked.
 unnamed=$(jq -r '
   def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
   ([ (.modelRoles // {} | to_entries[].value),
