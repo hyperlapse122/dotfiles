@@ -26,7 +26,7 @@ During `lfg` pipeline execution, MUST run fully autonomously — MUST NOT pause 
 
 ## Skip declarations
 
-Chezmoi script early exits declare one of three skip directions: `harmless` (this host will never satisfy the condition, so not acting is correct and final), `transient-tolerable` (an eligible host is missing a precondition and failing here cannot block later chezmoi phases), or `transient-blocking` (an eligible host is missing a precondition, but failing here would abort later phases, so it exits 0 behind a declared capability probe instead). Run `dotfiles-skips` to list outstanding `transient-tolerable` and `transient-blocking` skips without inspecting apply scrollback; it only reads recorded state, never probes capabilities or hosts and never mutates anything, and a site drops off the report once a later run completes it.
+Chezmoi script early exits declare one of three skip directions: `harmless` (this host will never satisfy the condition, so not acting is correct and final), `transient-tolerable` (an eligible host is missing a precondition and failing here cannot block later chezmoi phases), or `transient-blocking` (an eligible host is missing a precondition, but failing here would abort later phases, so it exits 0 behind a declared capability probe instead). Run `dotfiles-skips` to list outstanding `transient-tolerable` and `transient-blocking` skips without inspecting apply scrollback; it only reads recorded state, never probes capabilities or hosts and never mutates anything.
 
 ## Repository layout and garden ownership
 

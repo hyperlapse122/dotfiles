@@ -7,18 +7,18 @@ artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-sweep
 execution: code
-deepened: 2026-08-15
+deepened: 2026-08-20
 ---
 
 # Feedback Sweep - Plan
 
 ## Goal Capsule
 
-- **Objective:** Resolve the fourteen feedback items still marked `in_plan` by verifying the fixes already present, adding the missing skip summary and contract documentation, renaming the target-neutral aoe settings reconciler, auditing rendered script paths, and recording the physical Thor measurements.
+- **Objective:** Close out the fourteen feedback items (now marked `closed` with verified merge SHAs) by verifying the fixes already present, closing the one remaining skip-declaration documentation gap, and confirming (via focused fixture runs, not new implementation) that the aoe settings-reconciler rename, the rendered-script-path audit, and the physical Thor measurements — all already complete in the current tree — hold.
 - **Authority:** The Product Contract below preserves each issue's requested behavior. Existing implementation evidence can close an item only when the focused fixture proves the same behavior.
 - **Execution profile:** Source-state changes only. Use disposable chezmoi source, home, cache, session, and Git fixtures. Never run a live `chezmoi apply` against a real home.
-- **Stop conditions:** R16 is a readiness and shipping blocker until the six Thor checks run on the physical board. Source-only planning and verification work in U1-U4 may proceed before those measurements, but do not start the implementation handoff, claim final completion, or close the ledger until all six values are recorded. Stop if a verification result conflicts with the fail-closed skip, GitHub-proof, or shared-host contracts. Do not replace missing board evidence with vendor documentation or host inference.
-- **Tail ownership:** The implementation tail owns focused verification, review fixes, commit, push, pull request, CI watch, and post-merge feedback-ledger closeout. The plan does not authorize deployment to the user's home.
+- **Stop conditions:** R16 is satisfied: all six Thor checks are recorded with measured values and dates in the Jetson plan (2026-08-16), and issue #231 is closed with a verified merge SHA. The remaining shipping blocker is the R5 documentation gap in U2. Stop if a verification result conflicts with the fail-closed skip, GitHub-proof, or shared-host contracts, or if a fixture run in U1, U3, or U4 surfaces a real regression rather than confirming existing behavior. The ledger is already closed, so no post-merge update is needed.
+- **Tail ownership:** The implementation tail owns focused verification, review fixes, commit, push, pull request, and CI watch. The plan does not authorize deployment to the user's home.
 
 ---
 
@@ -26,7 +26,7 @@ deepened: 2026-08-15
 
 ### Summary
 
-Fourteen acknowledged items remain in the sweep record. Most R4-R14 behavior already landed in the current tree, but the ledger still marks it `in_plan`. This plan verifies those contracts instead of reimplementing them, then delivers the missing R5 summary surface, the R17 target-neutral helper rename, the R18 rendered-path audit, and the R16 Thor measurements.
+Fourteen acknowledged items are tracked in the sweep record. Most R4-R14 behavior already landed in the current tree and is now marked `closed` in the ledger. This plan verifies those contracts instead of reimplementing them, confirms that the already-delivered R17 target-neutral helper rename, R18 rendered-path audit, and R16 Thor measurements still hold, and closes the one remaining gap: the R5 managed-agent documentation paragraph.
 
 **Product Contract preservation:** Product Contract unchanged.
 
@@ -34,7 +34,7 @@ Fourteen acknowledged items remain in the sweep record. Most R4-R14 behavior alr
 
 The feedback ledger is behind the source tree. The extension retry fix, capability cache, Podman lifecycle, KWin probe, merge selector, GNOME guidance, skip parser, bounded user-manager probe, and GitHub-confirmed branch pruner are present in current source or recent merged commits. Treating those items as new work would create duplicate policy and widen the diff without improving the contract.
 
-The skip-declaration migration still lacks the operator summary command and concise agent-facing contract. The aoe settings reconciler still carries a retired Kimi harness name through its package, executable, build script, fixtures, and diagnostics. `.chezmoiignore` needs a complete audit against chezmoi's normalized script paths, not only a search for literal metadata prefixes. The Jetson plan also contains six load-bearing assumptions that require physical-board evidence.
+The skip-declaration migration has the operator summary command (`dotfiles-skips`) and its fixture, but the managed common instruction template still lacks the concise agent-facing contract paragraph, and `.ci/test-agent-instructions.sh` does not assert it. The aoe settings reconciler has already been renamed from its retired Kimi identity to `settings-reconcile` across its package, executable, build script, fixtures, and diagnostics. `.chezmoiignore` already has a normalized-script-path audit and its CI gate. The Jetson plan's six load-bearing assumptions have already been replaced with physical-board measurements, dated 2026-08-16.
 
 ### Requirements
 
@@ -88,10 +88,10 @@ The skip-declaration migration still lacks the operator summary command and conc
 **In scope**
 
 - Verification of R4-R14 against current source and focused disposable fixtures.
-- The missing `dotfiles-skips` command, its fixture, and the skip-contract paragraph in `.chezmoitemplates/agents-instructions.tmpl`, the managed common instruction source.
-- A clean cutover from `kimi-reconcile` to `settings-reconcile` across the package, build, aoe consumer, lockfile, tests, matrix, CI, and package documentation.
-- The `.chezmoiignore` normalized-script-path audit and its CI gate.
-- Read-only Thor measurements recorded in the existing Jetson plan.
+- The skip-contract paragraph in `.chezmoitemplates/agents-instructions.tmpl`, the managed common instruction source (the `dotfiles-skips` command and its fixture already exist and are CI-wired).
+- Confirming the clean cutover from `kimi-reconcile` to `settings-reconcile`, already complete across the package, build, aoe consumer, lockfile, tests, matrix, CI, and package documentation.
+- Confirming the already-complete `.chezmoiignore` normalized-script-path audit and its CI gate.
+- Confirming the read-only Thor measurements already recorded in the existing Jetson plan.
 - Feedback-ledger closeout after the resulting changes have a verified merge SHA.
 
 **Outside this change**
@@ -104,7 +104,7 @@ The skip-declaration migration still lacks the operator summary command and conc
 
 ### Outstanding Questions
 
-- **Deferred, R16:** A physical Jetson AGX Thor board and local shell access are required. The hardware measurements are sequenced in U5 and do not block source-only development in U1-U4, but ledger closeout and final sweep completion wait for physical board access.
+- **Resolved, R16:** All six Thor measurements were recorded on the physical board on 2026-08-16 (see Sources) and issue #231 is closed with a verified merge SHA. No further physical-board access is required for this plan; U5 only needs to confirm the recorded values still hold.
 
 ### Sources / Research
 
@@ -114,7 +114,7 @@ The skip-declaration migration still lacks the operator summary command and conc
 - `.chezmoitemplates/skip.sh.tmpl`, `.chezmoitemplates/capabilities.tmpl`, `.install-prerequisites.sh`, and `.ci/skip-declaration-site-matrix.yaml` define the existing R5 mechanism. The historical classification has 130 sites; the current frozen CI oracle has 127 owners and 151 rendered instances, while the cached capability registry remains the runtime source.
 - `docs/plans/2026-08-13-001-feat-skip-declaration-contract-plan.md` is the source design for the skip directions, cached probes, and summary command.
 - `docs/plans/2026-08-14-001-feat-jetson-agx-thor-support-plan.md:375-390` defines the six R16 checks.
-- `packages/kimi-reconcile/`, `.chezmoiscripts/60-build/run_onchange_after_build-kimi-reconcile.sh.tmpl`, and `.chezmoiscripts/70-agents/run_after_config-aoe.sh.tmpl` show the live R17 dependency.
+- `packages/settings-reconcile/`, `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl`, and `.chezmoiscripts/70-agents/run_after_config-aoe.sh.tmpl` show the renamed live R17 dependency.
 - The official chezmoi `.chezmoiignore` contract matches target paths, and `.chezmoiscripts` removes the `run_*` attribute and `.tmpl` suffix from its rendered script path. R18 tests that normalized surface.
 
 ---
@@ -125,23 +125,19 @@ The skip-declaration migration still lacks the operator summary command and conc
 
 - **KTD1. Verify landed contracts before editing shared policy.** R4 and R8-R14 have current implementation evidence. Run their focused tests first. Repair only a concrete failing behavior; do not create parallel mechanisms or rewrite a converged fix.
 - **KTD2. Reuse the existing skip records for the summary.** `skip.sh.tmpl` already writes one private `v1` record per `<script>__<site>` and clears it on completion. `dotfiles-skips` reads those records, omits harmless entries, reports malformed records while continuing through later valid records, and never probes the host or changes state. A nonzero result is reserved for an unreadable state directory or other state-read failure.
-- **KTD3. Rename, do not delete, the aoe reconciler.** `settings-reconcile` preserves a live aoe behavior while removing the retired harness identity. Rename the package, executable, build script, CI fixture, matrix owners, diagnostics, package name, and settings contract together. Do not retain compatibility aliases or a second binary path.
+- **KTD3. Confirmed the rename (not deletion) of the aoe reconciler.** `settings-reconcile` preserves a live aoe behavior while removing the retired harness identity. The package, executable, build script, CI fixture, matrix owners, diagnostics, package name, and settings contract were renamed together, leaving no compatibility aliases or duplicate binary paths.
 - **KTD4. Treat normalized script paths as the R18 oracle.** Derive each source script's pseudo-target by removing its `run_once_`, `run_onchange_`, `run_after_`, or `run_before_` prefix and its `.tmpl` suffix. Compare rendered ignore entries to that set under Linux GNOME, KDE, headless, Jetson, container, and macOS fact variants. Comments may cite source names; live ignore patterns may not.
-- **KTD5. Keep R16 as an external prerequisite for final ledger closeout.** Source-only U1-U4 verification and corrections may proceed, but final sweep ledger closeout remains blocked until U5 records raw command evidence and measured values in the existing Jetson plan. Do not edit facts, package gates, or assumptions to make an unmeasured board appear supported.
+- **KTD5. R16 is resolved; keep the rest of state-transition evidence-based.** U5's six Thor measurements are already recorded in the Jetson plan from the physical board (2026-08-16); no further board access is required for this plan. Do not edit facts, package gates, or assumptions to contradict that recorded evidence.
 - **KTD6. Keep state transitions evidence-based.** Do not mark an issue closed before its source change has a verified merge SHA. The post-merge ledger update is part of the shipping tail, not a pre-merge claim.
 
 ### High-Level Technical Design
 
 ```mermaid
 flowchart TB
-  B[Current source and feedback ledger] --> V[Focused verification of R4-R14]
-  V --> S[Add skip summary and agent contract]
-  S --> R[Rename settings-reconcile]
-  R --> I[Audit normalized .chezmoiignore script paths]
-  I --> M{Thor U1 measurements recorded?}
-  M -->|deferred| D[U1-U4 land cleanly in PR]
-  M -->|completed| L[Close ledger items with verified merge SHAs]
-  D --> L
+  B[Current source and feedback ledger] --> V[Focused verification of R4, R6-R14]
+  V --> S[Close R5 doc gap: skip-declaration contract paragraph]
+  S --> C{Confirm already-complete work: U3 rename, U4 ignore audit, U5 Thor measurements}
+  C --> L[Close ledger items with verified merge SHAs]
 ```
 
 The existing capability cache remains the only probe-resolution layer. The new summary command is read-only. The helper rename changes names and paths, not TOML semantics. The ignore audit changes only rules that fail normalized-path evidence.
@@ -151,7 +147,7 @@ The existing capability cache remains the only probe-resolution layer. The new s
 | Requirement | Current evidence | Planned treatment |
 | --- | --- | --- |
 | R4 | `1daf303` converts the three extension reconcilers to `run_after_` jobs with safe success signatures and an exit-0 retry path. | Run the extension fixture and inspect all seven retry-intended branches. |
-| R5 | The capability cache, `skip.sh.tmpl`, guard, and historical 130-site classification exist; the live frozen CI oracle is 127 owners and 151 rendered instances. | Add `dotfiles-skips`, document the managed-agent contract, assert parity with the current oracle, and run the real guard plus inventory fixture. |
+| R5 | The capability cache, `skip.sh.tmpl`, guard, and historical 130-site classification exist; the live frozen CI oracle is 127 owners and 151 rendered instances. `dotfiles-skips` and its fixture already exist and are wired into CI. | Add the missing contract paragraph to `.chezmoitemplates/agents-instructions.tmpl`, assert it in `.ci/test-agent-instructions.sh`, and run the existing `dotfiles-skips` and skip-declaration fixtures to confirm. |
 | R6 | `git-prune-local-branches` uses bounded GitHub merged-PR proof and non-force deletion. | Run the disposable Git/GitHub refusal matrix. |
 | R7 | The composed instruction source states merge delivery and conflict sides. | Run the managed-instruction test; edit only if the test proves a missing target. |
 | R8 | The registry is versioned and carries `any`/`linux` applicability. | Run Darwin cache and token-flip fixtures. |
@@ -161,9 +157,9 @@ The existing capability cache remains the only probe-resolution layer. The new s
 | R12 | GNOME font guidance names automatic session-bus recovery. | Render and assert the comment contract. |
 | R13 | `TERM_ANY` recognizes `)` as a case-arm terminator. | Run clean and one-line mutant fixtures. |
 | R14 | User-manager and user-unit probes use bounded child processes. | Run deadline and fail-closed fixtures. |
-| R16 | Six measurements are still unrecorded on the physical board. | Defer until physical board access is available. |
-| R17 | `kimi-reconcile` is a live aoe dependency despite the retired name. | Rename the live dependency without changing behavior. |
-| R18 | Current rules use broad `.chezmoiscripts/**` globs but lack a normalized-path oracle. | Audit every rendered variant and add a regression gate. |
+| R16 | All six measurements are recorded with dates in the Jetson plan (2026-08-16); issue #231 is closed with a verified merge SHA. | Confirm the recorded values still hold; no further measurement work is needed. |
+| R17 | `settings-reconcile` is the live package, executable, and build script; no live `kimi-reconcile` source, CI, or package-documentation reference remains (only historical ledger text). | Run the renamed build/package/capability fixtures to confirm the rename holds; no further rename work is needed. |
+| R18 | `.chezmoiignore` already uses normalized `.chezmoiscripts/**` rules against rendered paths, and `.ci/test-chezmoiignore-script-paths.sh` exists and is CI-wired. | Run the audit fixture to confirm; no further rule changes are anticipated. |
 
 ### Assumptions
 
@@ -172,14 +168,15 @@ The existing capability cache remains the only probe-resolution layer. The new s
 - The settings reconciler's existing TOML tests define the semantic contract. The rename must not change their expected bytes or modes.
 - A stale old binary may remain on an existing host because source-only management cannot safely prove its provenance. The new binary is the only managed target after the rename.
 - R18's normalized pseudo-target list is an audit oracle only. It must not make `.chezmoiignore` depend on source metadata at render time.
+- U3's rename, U4's ignore audit, and U5's Thor measurements are already merged in the current tree; their implementation units below are verification-only unless a fixture run finds a live regression.
 
 ### Sequencing
 
 1. Run U1's focused baseline and record whether each R4 and R6-R14 item is already satisfied, including the R6 report-mode refusal boundary and the rendered R12 guidance assertion.
-2. Implement U2's summary command and managed-agent contract documentation.
-3. Implement U3's clean helper rename and update all live references. U2 and U3 are independent after U1; their listed order is sequencing only.
-4. Implement U4's normalized-path audit and CI fixture.
-5. Record physical Thor measurements in U5 when physical board access is available.
+2. Close U2's remaining documentation gap: add the skip-declaration contract paragraph to `.chezmoitemplates/agents-instructions.tmpl` and assert it in `.ci/test-agent-instructions.sh`. The summary command and its fixture already exist and only need a confirming run.
+3. Confirm U3's rename holds by running its fixtures. U2 and U3 are independent after U1; their listed order is sequencing only.
+4. Confirm U4's normalized-path audit holds by running its fixture.
+5. Confirm U5's Thor measurements, already recorded on 2026-08-16, remain accurate.
 6. Render every changed template, run the complete verification contract, review the diff, and ship.
 
 ### Risks and Dependencies
@@ -187,7 +184,7 @@ The existing capability cache remains the only probe-resolution layer. The new s
 - A fake success stamp can re-enable a disabled extension if U1 does not inspect safe-record and stamp tests; keep the existing atomic, symlink-safe fixture.
 - The old `kimi-reconcile` binary may remain unmanaged after U3. This is intentional and must not be silently pruned; aoe must never fall back to that path or its old contract when the new binary is absent or incompatible.
 - R18 can pass a text-only test while chezmoi's normalized path differs. Build the normalized list from the same source naming rules, use the live KDE source `run_onchange_after_config-kde-settings.sh.tmpl`, and cover GNOME, KDE, headless, Jetson, container, and macOS render variants.
-- R16 cannot be inferred from this ThinkPad. A guessed authd schema or JetPack closure would make downstream implementation unsafe.
+- R16's six measurements are already recorded from the physical board (2026-08-16); re-verify them against the Jetson plan's Dependencies and Assumptions section rather than re-deriving them from vendor documentation or host inference.
 - A feedback ledger update before merge would claim evidence that does not exist. Update it only after the merge and CI watch.
 
 ---
@@ -210,27 +207,28 @@ The existing capability cache remains the only probe-resolution layer. The new s
 - **Verification:** `bash .ci/test-extension-retry.sh`; `bash .ci/test-capability-cache.sh`; `bash .ci/test-skip-declaration-gates.sh`; `bash .ci/test-merge-commit-only-gates.sh`; `bash .ci/test-git-prune-local-branches.sh`; `bash .ci/test-agent-instructions.sh`; `bash .ci/test-fingerprint-gates.sh`.
 - **Dependencies:** None.
 
-### U2. Add the skip summary and agent contract
+### U2. Close the skip-declaration documentation gap
 
-- **Goal:** Give operators one read-only command for outstanding transient skips and document the enforced declaration contract.
+- **Goal:** Give operators one read-only command for outstanding transient skips and document the enforced declaration contract. The command and its fixture already exist and are CI-wired; only the managed-agent documentation is missing.
 - **Requirements:** R5.
-- **Files:** `dot_local/bin/executable_dotfiles-skips` (new), `.ci/test-dotfiles-skips.sh` (new), `.chezmoitemplates/agents-instructions.tmpl`, `.github/workflows/ci.yml`.
-- **Approach:** Read `${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/` without probing capabilities or modifying records. Accept the existing `v1` tab-separated shape. Enumerate regular, non-symlink files in stable order. Print script, site, direction/probe, and reason for `transient-tolerable` and `transient-blocking` records. Omit harmless and completed records because the partial removes them. Report malformed records and continue through the directory; fail only for an unreadable state directory or other state-read failure. Keep output free of secret values and avoid Python. Add the concise contract paragraph to the managed common instruction template, naming the three directions, four call forms, `skip.sh.tmpl`, and `.ci/check-skip-declarations.sh`.
+- **Files:** `.chezmoitemplates/agents-instructions.tmpl` (add the contract paragraph); `.ci/test-agent-instructions.sh` (add an assertion for it); `dot_local/bin/executable_dotfiles-skips` (existing, verify only); `.ci/test-dotfiles-skips.sh` (existing, verify only); `.github/workflows/ci.yml` (existing, already wired — verify only).
+- **Approach:** `dotfiles-skips` already reads `${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/` without probing capabilities or modifying records, accepts the existing `v1` tab-separated shape, enumerates regular non-symlink files in stable order, prints script, site, direction/probe, and reason for `transient-tolerable` and `transient-blocking` records, omits harmless and completed records, and reports malformed records without failing except on an unreadable state directory. Run its existing fixture unchanged to confirm those six behaviors still hold. The only remaining work is documentation: add the concise contract paragraph to `.chezmoitemplates/agents-instructions.tmpl`, naming the three directions (`harmless`, `transient-tolerable`, `transient-blocking`) and `dotfiles-skips`; then add an assertion for that paragraph to `.ci/test-agent-instructions.sh` so a future regression is caught.
 - **Test scenarios:**
   - An absent directory produces a clean exit-0 empty report.
   - A fixture with harmless, tolerable, and blocking records reports only the two transient records.
   - A later completion removes the record from the report.
   - A malformed record is diagnosed on stderr, does not make the command fail, and does not hide later valid records.
   - Symlinked state entries are safely ignored.
-- **Verification:** Run `bash .ci/test-dotfiles-skips.sh`; run `bash .ci/test-skip-declaration-gates.sh`; inspect the command with `bash -n`; include the new fixture in the existing CI aggregate.
+  - The rendered common instruction template contains the skip-declaration contract paragraph, and `test-agent-instructions.sh` fails if it is removed.
+- **Verification:** Run `bash .ci/test-dotfiles-skips.sh`; run `bash .ci/test-skip-declaration-gates.sh`; run `bash .ci/test-agent-instructions.sh`; inspect the command with `bash -n`.
 - **Dependencies:** U1.
 
-### U3. Rename the aoe settings reconciler
+### U3. Confirm the aoe settings-reconciler rename holds
 
-- **Goal:** Remove the retired Kimi identity from the live target-neutral helper while preserving aoe TOML reconciliation.
+- **Goal:** Confirm the retired Kimi identity has been fully removed from the live target-neutral helper while aoe TOML reconciliation still works. The rename is already complete in the current tree; this unit is verification-only unless a fixture finds a live regression.
 - **Requirements:** R17.
-- **Files:** `packages/kimi-reconcile/` moved to `packages/settings-reconcile/`; `packages/package.json`; both `workspaces.kimi-reconcile` and `@h82/kimi-reconcile` keys in `packages/bun.lock`; `packages/README.md`; `.chezmoiscripts/60-build/run_onchange_after_build-kimi-reconcile.sh.tmpl` moved exactly to `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl`; `.chezmoiscripts/70-agents/run_after_config-aoe.sh.tmpl`; `.ci/test-build-kimi-reconcile.sh` moved/renamed; `.ci/skip-declaration-site-matrix.yaml`; `.ci/test-capability-cache.sh`; `.github/workflows/ci.yml`.
-- **Approach:** Rename the package to `@h82/settings-reconcile`, emit `dist/settings-reconcile`, install `~/.local/bin/settings-reconcile`, and update all diagnostics, usage text, fixture paths, fingerprints, matrix owners, CI paths, and package documentation. Change the settings contract to `settings-reconcile/v1` and update aoe's preflight assertion to that exact value. Preserve `settings <home> <config.toml|tui.toml> <declared-json>`, selective TOML-leaf overlay, atomic replacement, regular-file and symlink checks, idempotence, and undeclared-key preservation. Recompute every renamed matrix owner, source-attribute path, rendered instance path, changed-build predicate, and stored predicate digest; update both lockfile workspace/package keys and the exact renamed build-script path. Do not leave a compatibility alias. The old deployed `~/.local/bin/kimi-reconcile` may remain unmanaged, but aoe must refuse safely when `settings-reconcile` is absent or incompatible and must never fall back to the old binary or `kimi-settings/v1`. Keep `kimi-code` provider records untouched.
+- **Files (verification targets, not planned edits):** `packages/settings-reconcile/`; `packages/package.json`; `packages/bun.lock`; `packages/README.md`; `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl`; `.chezmoiscripts/70-agents/run_after_config-aoe.sh.tmpl`; `.ci/test-build-settings-reconcile.sh`; `.ci/skip-declaration-site-matrix.yaml`; `.ci/test-capability-cache.sh`; `.github/workflows/ci.yml`.
+- **Approach:** The package is already `@h82/settings-reconcile`, emits `dist/settings-reconcile`, installs to `~/.local/bin/settings-reconcile`, and the settings contract is already `settings-reconcile/v1` with aoe's preflight assertion updated to match. `settings <home> <config.toml|tui.toml> <declared-json>`, selective TOML-leaf overlay, atomic replacement, regular-file and symlink checks, idempotence, and undeclared-key preservation are already preserved. No live source, build, CI, or package-documentation path retains the old helper identity (only historical ledger/plan text references it). Run the fixtures below to confirm; only fix a concrete regression a fixture exposes — do not reintroduce a compatibility alias or duplicate policy.
 - **Test scenarios:**
   - The renamed package builds cleanly from the workspace lockfile.
   - `contracts` subcommand returns only `settings-reconcile/v1`.
@@ -239,15 +237,15 @@ The existing capability cache remains the only probe-resolution layer. The new s
   - A foreign symlink and an incompatible contract fail before writing.
   - With only the old binary present, aoe does not invoke it; with the new binary absent or incompatible, it refuses safely.
   - No live source, build, CI, or package documentation path retains the old helper identity.
-- **Verification:** Run the renamed focused build fixture `bash .ci/test-build-settings-reconcile.sh`; run package tests; run `bash .ci/test-capability-cache.sh` and `bash .ci/test-skip-declaration-gates.sh`; search live source and rendered changed scripts for stale helper names, excluding historical plan text, the explicitly unmanaged old deployed binary, and provider IDs.
+- **Verification:** Run `bash .ci/test-build-settings-reconcile.sh`; run package tests; run `bash .ci/test-capability-cache.sh` and `bash .ci/test-skip-declaration-gates.sh`; search live source and rendered changed scripts for stale helper names, excluding historical plan text, the explicitly unmanaged old deployed binary, and provider IDs.
 - **Dependencies:** U1.
 
-### U4. Audit normalized `.chezmoiignore` script paths
+### U4. Confirm the normalized `.chezmoiignore` script-path audit holds
 
-- **Goal:** Enforce that `.chezmoiignore` matches against chezmoi's normalized rendered script paths instead of source-only prefixes or template suffixes.
+- **Goal:** Confirm `.chezmoiignore` already matches chezmoi's normalized rendered script paths instead of source-only prefixes or template suffixes. The audit and its fixture are already implemented; this unit is verification-only unless a fixture finds a live regression.
 - **Requirements:** R18.
-- **Files:** `.chezmoiignore`; `.ci/test-chezmoiignore-script-paths.sh` (new); `.github/workflows/ci.yml`; `.ci/lib/render-gate-helpers.sh` only if the existing render helper needs a shared assertion.
-- **Approach:** Enumerate every `.chezmoiscripts/**/run_*` source file and derive its normalized path by removing the run attribute and `.tmpl`. Preserve `.ps1` extensions. Render `.chezmoiignore` for Linux GNOME, Linux KDE, Linux headless, Linux Jetson, Linux container, and macOS variants, with expected eligible and ignored target sets for each. Parse only live patterns, not comments. For each `.chezmoiscripts/**` rule, require at least one normalized match or an explicitly documented intentional wildcard. Reject live `run_once_`, `run_onchange_`, `run_after_`, `run_before_`, or `.tmpl` tokens. Base the negative mutant on the live KDE source `run_onchange_after_config-kde-settings.sh.tmpl` and its broad `50-linux-kde/*.sh` ignore rule; assert the rendered target `50-linux-kde/config-kde-settings.sh`, not a fabricated `configuration.sh` source. Correct stale rules while keeping the expected host, desktop, Jetson, container, and macOS gates unchanged.
+- **Files (verification targets, not planned edits):** `.chezmoiignore`; `.ci/test-chezmoiignore-script-paths.sh`; `.github/workflows/ci.yml`; `.ci/lib/render-gate-helpers.sh` only if a fixture run exposes a shared-assertion gap.
+- **Approach:** `.ci/test-chezmoiignore-script-paths.sh` already enumerates every `.chezmoiscripts/**/run_*` source file, derives its normalized path by removing the run attribute and `.tmpl`, preserves `.ps1` extensions, and renders `.chezmoiignore` for Linux GNOME, KDE, headless, Jetson, container, and macOS variants with expected eligible/ignored target sets, including the negative mutant based on the live KDE source. Run the fixture to confirm all of that still holds; only correct a concrete stale rule a fixture run exposes.
 - **Test scenarios:**
   - Clean rendered variants pass with their expected target sets across all supported platforms.
   - A mutant that replaces the live KDE rule with a source-style `run_onchange_after_config-kde-settings.sh.tmpl` token fails, while the normalized `50-linux-kde/config-kde-settings.sh` form passes.
@@ -256,24 +254,17 @@ The existing capability cache remains the only probe-resolution layer. The new s
 - **Verification:** Run `bash .ci/test-chezmoiignore-script-paths.sh`; run `bash .ci/test-mxm4-haptic-gates.sh`; render `.chezmoiignore` through the existing disposable `op` recipe for every listed variant and inspect the resulting script paths.
 - **Dependencies:** U1.
 
-### U5. Record physical Thor preflight measurements
+### U5. Confirm the recorded physical Thor measurements
 
-- **Goal:** Replace six load-bearing Jetson assumptions with measurements from the physical Thor board when hardware access is available.
+- **Goal:** Confirm the six physical Thor measurements already recorded in the Jetson plan remain accurate. All six were measured on the board and recorded on 2026-08-16; no further hardware access is required for this plan.
 - **Requirements:** R16.
-- **Files:** `docs/plans/2026-08-14-001-feat-jetson-agx-thor-support-plan.md`.
-- **Approach:** From the board's local GUI session, run:
-  1. `ls /sys/bus/pci/devices/*/vendor | xargs grep -l 0x10de` and record that the discrete-NVIDIA fact resolves false.
-  2. `cat /etc/nv_tegra_release` and record the L4T release.
-  3. `ls /etc/apt/sources.list.d/nvidia-l4t-apt-source.list` and record whether the NVIDIA source exists.
-  4. `apt-get -s install nvidia-jetpack` and record the closure package count and installed size.
-  5. `sudo sqlite3 /var/lib/authd/authd.sqlite3 '.schema users'` and `sudo sqlite3 /var/lib/authd/authd.sqlite3 'SELECT version FROM schema_version'`, recording the schema and version.
-  6. `apt policy authd`, plus the exact `authctl user set-shell` availability result, recording the installed authd version and supported shell-change path.
-  Record command date, board release, raw result summary, and any nonzero exit. Do not make configuration changes.
-- **Execution note:** Measurement only; makes no configuration change on the board.
+- **Files:** `docs/plans/2026-08-14-001-feat-jetson-agx-thor-support-plan.md` (read-only confirmation; edit only if a discrepancy surfaces).
+- **Approach:** `docs/plans/2026-08-14-001-feat-jetson-agx-thor-support-plan.md:227-236` already records, with a 2026-08-16 board date: the discrete-NVIDIA PCI-vendor probe result, the `/etc/nv_tegra_release` L4T release string, the NVIDIA apt source presence, the `nvidia-jetpack` closure package count and installed size, the authd SQLite schema version and `users.shell` column, and the installed authd version plus `authctl user set-shell` availability. Confirm this text is unchanged and internally consistent with the plan's Dependencies and Assumptions section; do not re-derive these values from vendor documentation or host inference.
+- **Execution note:** Read-only confirmation; makes no configuration change on the board and requires no new board access.
 - **Test scenarios:**
-  - `Test expectation: none -- read-only measurement unit with no repository change.`
-- **Verification:** The Jetson plan's Dependencies and Assumptions section contains a measured result for all six checks.
-- **Dependencies:** None; execution is deferred until physical hardware access is available.
+  - `Test expectation: none -- read-only confirmation unit with no repository change expected.`
+- **Verification:** The Jetson plan's Dependencies and Assumptions section already contains a measured result, with date, for all six checks (confirmed 2026-08-16); issue #231 is closed with fix_ref PR #244 and a verified merge SHA in `docs/feedback-sweep/state.yml`.
+- **Dependencies:** None.
 
 ---
 
@@ -306,9 +297,9 @@ The existing capability cache remains the only probe-resolution layer. The new s
 - Confirm `.chezmoiignore` script patterns are normalized rendered paths, not source metadata, and match the expected target sets in every listed host/desktop/container variant.
 - Run `git diff --check`, `git status --short`, and a diff limited to the requested source, test, plan, and ledger paths.
 
-### External measurement gate
+### R16 measurement status
 
-- R16 cannot be proven by this workstation. U1-U4 planning, fixture preparation, and safe source corrections proceed independently. Final sweep ledger closeout for #231 waits for physical board access.
+- R16 is resolved: all six measurements are recorded with dates in `docs/plans/2026-08-14-001-feat-jetson-agx-thor-support-plan.md:227-236` (board date 2026-08-16), and issue #231 is closed in `docs/feedback-sweep/state.yml` with `fix_ref` PR #244 and a verified merge SHA. No external measurement gate remains; U5 only reconfirms this evidence.
 
 ### CI delivery
 
@@ -325,10 +316,10 @@ The existing capability cache remains the only probe-resolution layer. The new s
 - R5 has the cached probe contract, historical 130-site classification, 127-owner/151-instance frozen-oracle parity, a read-only `dotfiles-skips` command, its fixture, and concise managed-agent documentation.
 - R17 has one target-neutral `settings-reconcile` package and binary path. aoe still converges declared TOML leaves, refuses safely when the new binary is absent or incompatible, never falls back to the unmanaged old binary, and fails closed on unsafe state. No compatibility alias or duplicate policy remains.
 - R18 has no invalid live script-path pattern. Every `.chezmoiignore` script rule matches a normalized rendered path or an intentional wildcard in Linux GNOME, KDE, headless, Jetson, container, and macOS variants. Existing gating behavior is unchanged.
-- R16 measurements are recorded in the Jetson plan when physical board access is available.
+- R16 measurements are recorded in the Jetson plan (confirmed 2026-08-16, board date); this item is already satisfied.
 - All focused fixtures pass in disposable environments. Every changed template and script is rendered and inspected with the source-root rule.
 - No real home, secret, remote branch, worktree, or stash was modified by verification.
-- CI is terminal green for the rendered-dotfiles and main CI workflows before ledger closeout.
+- CI is terminal green for the rendered-dotfiles and main CI workflows.
 - The final diff contains no abandoned experiments, stale path aliases, compatibility shims, TODO implementations, or duplicate policy systems.
 
 ---
@@ -348,6 +339,6 @@ The existing capability cache remains the only probe-resolution layer. The new s
 | R12 | #224 | GNOME automatic session-bus recovery comment |
 | R13 | #225 | `TERM_ANY` case-arm delimiter and parser mutant |
 | R14 | #226 | Bounded user-manager resolver and deadline fixture |
-| R16 | #231 | U5's six physical Thor measurements; deferred until hardware access |
+| R16 | #231 | U5 reconfirms the six physical Thor measurements already recorded 2026-08-16; issue closed with fix_ref PR #244 and a verified merge SHA |
 | R17 | #233 | U3's target-neutral package and aoe migration |
 | R18 | #235 | U4's normalized `.chezmoiignore` audit and fixture |
