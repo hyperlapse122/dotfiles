@@ -150,21 +150,22 @@ agents:
       modelRoles:
         advisor: "@worker"
         commit: "@worker"
-        default: anthropic/claude-opus-5:max
-        plan: "@slow"
+        default: anthropic/claude-opus-5:xhigh
+        fable: anthropic/claude-fable-5:max
+        plan: "@fable"
         skim: google-antigravity/gemini-3.7-flash:low
-        slow: anthropic/claude-fable-5:max
+        slow: anthropic/claude-opus-5:max
         smol: anthropic/claude-sonnet-5:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
         worker: google-antigravity/gemini-3.7-flash:high
       task.agentModelOverrides:
-        designer: "@smol"
+        designer: "@worker"
         librarian: "@skim"
         reviewer: "@slow"
         scout: "@skim"
-        security-reviewer: "@smol"
+        security-reviewer: "@worker"
         sonic: "@worker"
-        task: "@smol"
+        task: "@worker"
       skills.enableCodexUser: false
       skills.enableClaudeUser: false
       skills.enableClaudeProject: false
@@ -177,8 +178,12 @@ agents:
       mnemopi.enhancedRecall: true
       mnemopi.proactiveLinking: true
       advisor.enabled: false
-      defaultThinkingLevel: max
+      defaultThinkingLevel: xhigh
+      includeModelInPrompt: false
       retry.usageAwareFallback: true
+      retry.usageReservePolicy: auto
+      retry.usageReservePct: 15
+      retry.fallbackRevertPolicy: never
       retry.fallbackChains:
         anthropic/claude-fable-5:
         - google-antigravity/gemini-3.1-pro:high
@@ -192,7 +197,7 @@ agents:
         - anthropic/claude-opus-5:high
         - google-antigravity/gemini-3.7-flash:high
       secrets.enabled: true
-      providers.webSearchGeminiModel: gemini-3.7-flash
+      providers.webSearchGeminiModel: null
       providers.webSearchOrder:
       - gemini
       providers.imageOrder:
