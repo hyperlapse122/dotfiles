@@ -180,22 +180,11 @@ agents:
       advisor.enabled: false
       defaultThinkingLevel: xhigh
       includeModelInPrompt: false
-      retry.usageAwareFallback: true
+      retry.usageAwareFallback: false
       retry.usageReservePolicy: auto
       retry.usageReservePct: 15
       retry.fallbackRevertPolicy: never
-      retry.fallbackChains:
-        anthropic/claude-fable-5:
-        - google-antigravity/gemini-3.1-pro:high
-        anthropic/claude-opus-5:
-        - google-antigravity/gemini-3.1-pro:high
-        anthropic/claude-sonnet-5:
-        - google-antigravity/gemini-3.7-flash:high
-        google-antigravity/gemini-3.7-flash:
-        - google-antigravity/gemini-3.1-flash-lite:minimal
-        default:
-        - anthropic/claude-opus-5:high
-        - google-antigravity/gemini-3.7-flash:high
+      retry.fallbackChains: {}
       secrets.enabled: true
       providers.webSearchGeminiModel: null
       providers.webSearchOrder:
