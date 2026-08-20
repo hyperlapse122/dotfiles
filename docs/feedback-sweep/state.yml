@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-08-14T21:20:56Z"
+    cursor: "2026-08-19T15:25:15Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -273,6 +273,7 @@ items:
     verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     category: "bug"
+    cursor: "2026-08-15T07:53:48Z"
     existing_ack: false
     existing_ack_actor: null
     existing_closeout: true
@@ -281,7 +282,7 @@ items:
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/192"
     requirement_id: "R1"
-    updated_at: "2026-08-10T02:55:33Z"
+    updated_at: "2026-08-15T07:53:48Z"
   "gh-issues:hyperlapse122/dotfiles#193":
     source: "gh-issues"
     status: "closed"
@@ -292,6 +293,7 @@ items:
     verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     category: "bug"
+    cursor: "2026-08-15T07:53:51Z"
     existing_ack: false
     existing_ack_actor: null
     existing_closeout: true
@@ -300,7 +302,7 @@ items:
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/193"
     requirement_id: "R2"
-    updated_at: "2026-08-10T02:55:31Z"
+    updated_at: "2026-08-15T07:53:51Z"
   "gh-issues:hyperlapse122/dotfiles#194":
     source: "gh-issues"
     status: "closed"
@@ -311,6 +313,7 @@ items:
     verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
     category: "chore"
+    cursor: "2026-08-15T07:53:53Z"
     existing_ack: false
     existing_ack_actor: null
     existing_closeout: true
@@ -319,184 +322,235 @@ items:
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/194"
     requirement_id: "R3"
-    updated_at: "2026-08-10T02:55:29Z"
+    updated_at: "2026-08-15T07:53:53Z"
   "gh-issues:hyperlapse122/dotfiles#214":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Seven exit-1 skip sites abort every later apply phase — Seven retry paths exit with failure and stop later chezmoi apply phases rather than recovering independently."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "bug"
-    cursor: "2026-08-13T12:52:10Z"
+    cursor: "2026-08-15T09:37:22Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#214"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/214"
     requirement_id: "R4"
     severity: null
-    updated_at: "2026-08-13T12:22:14Z"
+    updated_at: "2026-08-15T09:37:22Z"
   "gh-issues:hyperlapse122/dotfiles#215":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Complete the skip declaration migration: 130 sites, guard, summary — Cache capability probes before migrating the 130 skip sites to avoid expensive render-time resolution."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "feature"
-    cursor: "2026-08-13T12:54:09Z"
+    cursor: "2026-08-15T09:37:21Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#215"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/215"
     requirement_id: "R5"
     severity: null
-    updated_at: "2026-08-13T12:22:36Z"
+    updated_at: "2026-08-15T09:37:21Z"
   "gh-issues:hyperlapse122/dotfiles#217":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Local branches accumulate after squash merge; nothing prunes them — Use merged pull-request state rather than reachability to safely prune local branches left by squash merges."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "feature"
-    cursor: "2026-08-13T12:54:45Z"
+    cursor: "2026-08-15T09:37:22Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#217"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/217"
     requirement_id: "R6"
     severity: null
-    updated_at: "2026-08-13T12:49:55Z"
+    updated_at: "2026-08-15T09:37:22Z"
   "gh-issues:hyperlapse122/dotfiles#218":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "AGENTS.md is silent on merge method; repo now allows merge commits only — Document merge-commit delivery and correct conflict guidance for merging the default branch."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "docs"
-    cursor: "2026-08-13T12:54:29Z"
+    cursor: "2026-08-15T09:37:23Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#218"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/218"
     requirement_id: "R7"
     severity: null
-    updated_at: "2026-08-13T12:49:44Z"
+    updated_at: "2026-08-15T09:37:23Z"
   "gh-issues:hyperlapse122/dotfiles#220":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Darwin capability test blesses unavailable tokens for active consumers — The Darwin test marks active-tool tokens unavailable, preventing their transient-blocking consumers from retrying when tools appear."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:16:31Z"
+    cursor: "2026-08-15T09:37:23Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#220"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/220"
     requirement_id: "R8"
+    updated_at: "2026-08-15T09:37:23Z"
   "gh-issues:hyperlapse122/dotfiles#221":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Podman retry declaration uses wrong lifecycle and probe — The Podman retry path records an onchange run while its unit-availability condition can later become true without another content change."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:16:42Z"
+    cursor: "2026-08-15T09:37:23Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#221"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/221"
     requirement_id: "R9"
+    updated_at: "2026-08-15T09:37:23Z"
   "gh-issues:hyperlapse122/dotfiles#222":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "KWin-unreachable blocking skip names a probe that cannot track KWin — The KWin-absent condition fingerprints session-bus presence, which can already be available while KWin is absent and prevents recovery."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:16:50Z"
+    cursor: "2026-08-15T09:37:24Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#222"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/222"
     requirement_id: "R10"
+    updated_at: "2026-08-15T09:37:24Z"
   "gh-issues:hyperlapse122/dotfiles#223":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Merge gate never asserts which REST field the resolver reads — The merge gate validates the pull endpoint but not its merge_commit_sha selector, leaving the intended commit-SHA guarantee untested."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:16:57Z"
+    cursor: "2026-08-15T09:37:24Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#223"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/223"
     requirement_id: "R11"
+    updated_at: "2026-08-15T09:37:24Z"
   "gh-issues:hyperlapse122/dotfiles#224":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "GNOME font guidance still promises manual force — Guidance still requires --force even though the declared transient-blocking session-bus condition supports automatic recovery."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:17:05Z"
+    cursor: "2026-08-15T09:37:24Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#224"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/224"
     requirement_id: "R12"
+    updated_at: "2026-08-15T09:37:24Z"
   "gh-issues:hyperlapse122/dotfiles#225":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Skip guard cannot see a one-line case-arm exit, so it passes undeclared — A one-line case arm with exit 0 evades the skip guard's undeclared-terminator detector."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:17:11Z"
+    cursor: "2026-08-15T09:37:24Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#225"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/225"
     requirement_id: "R13"
+    updated_at: "2026-08-15T09:37:24Z"
   "gh-issues:hyperlapse122/dotfiles#226":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Capability snapshot can hang on user-manager D-Bus probe — Eager capability resolution can make chezmoi status, diff, and apply hang when the user-manager D-Bus probe is unresponsive."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:17:19Z"
+    cursor: "2026-08-15T09:37:25Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#226"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/226"
     requirement_id: "R14"
+    updated_at: "2026-08-15T09:37:25Z"
   "gh-issues:hyperlapse122/dotfiles#227":
     source: "gh-issues"
     status: "closed"
@@ -506,7 +560,7 @@ items:
     verified_merge_sha: "682920e7b4a1699cd8b1eba5d4beac747bd6890d"
     verified_at: "2026-08-15T07:51:58Z"
     author_class: "teammate"
-    cursor: "2026-08-14T02:17:27Z"
+    cursor: "2026-08-15T07:53:55Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
     existing_closeout: true
@@ -515,61 +569,146 @@ items:
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/227"
     requirement_id: "R15"
+    updated_at: "2026-08-15T07:53:55Z"
   "gh-issues:hyperlapse122/dotfiles#231":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Record the Jetson AGX Thor board preflight measurements (plan U1) — Six load-bearing hardware and software facts are currently reasoned from vendor documentation rather than measured on the physical Thor board."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/244"
+    verified_merge_sha: "7a649e1eec0b3084d13d4188701edac736ed37f4"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "docs"
+    cursor: "2026-08-16T13:07:08Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-16T13:07:07Z"
     id: "hyperlapse122/dotfiles#231"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/231"
     requirement_id: "R16"
-    updated_at: "2026-08-14T13:53:03Z"
+    updated_at: "2026-08-16T13:07:08Z"
   "gh-issues:hyperlapse122/dotfiles#233":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "remove or rename the obsolete kimi-reconcile helper — The Kimi CLI harness is retired but packages/kimi-reconcile is still built and installed for aoe TOML settings reconciliation."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "refactor"
+    cursor: "2026-08-15T09:37:22Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#233"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/233"
     requirement_id: "R17"
-    updated_at: "2026-08-14T20:26:17Z"
+    updated_at: "2026-08-15T09:37:22Z"
   "gh-issues:hyperlapse122/dotfiles#235":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "audit all rendered script paths in .chezmoiignore — .chezmoiignore must use paths from chezmois rendered source tree rather than source-only metadata prefixes/suffixes like run_after_ or .tmpl."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/238"
+    verified_merge_sha: "f555d38283e9c999e82a55d20600d664db3f3cbc"
+    verified_at: "2026-08-20T00:05:00Z"
     author_class: "teammate"
     category: "bug"
+    cursor: "2026-08-15T09:37:22Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_merged_at: "2026-08-15T09:37:20Z"
     id: "hyperlapse122/dotfiles#235"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/235"
     requirement_id: "R18"
-    updated_at: "2026-08-14T21:20:56Z"
+    updated_at: "2026-08-15T09:37:22Z"
+  "gh-issues:hyperlapse122/dotfiles#254":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    title: "docs(agents): prefer provided harness tools over CLI in instructions"
+    body: "docs(agents): prefer provided harness tools over CLI in instructions: update agent instructions across templates to prefer harness-provided tools over external CLI commands."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/255"
+    verified_merge_sha: "ec254edfd5b589b832bc8f3bc372b44686ee3a42"
+    verified_at: "2026-08-20T00:05:00Z"
+    author_class: "teammate"
+    category: "docs"
+    cursor: "2026-08-19T00:54:30Z"
+    existing_ack: true
+    existing_closeout: true
+    fix_merged_at: "2026-08-19T00:54:29Z"
+    id: "hyperlapse122/dotfiles#254"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/254"
+    updated_at: "2026-08-19T00:54:30Z"
+  "gh-issues:hyperlapse122/dotfiles#260":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "reduce claude-fable-5 usage: dedicated fable role, opus-5 slow, xhigh default"
+    body: "reduce claude-fable-5 usage: dedicated fable role, opus-5 slow, xhigh default: restructure model roles so Fable moves to a dedicated role and the default thinking level drops, to stop weekly Fable quota exhaustion."
+    author_class: "teammate"
+    category: "chore"
+    cursor: "2026-08-19T15:10:33Z"
+    existing_ack: true
+    id: "hyperlapse122/dotfiles#260"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/260"
+    requirement_id: "R20"
+    updated_at: "2026-08-19T15:10:33Z"
+  "gh-issues:hyperlapse122/dotfiles#261":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "seat task, designer, and security-reviewer on gemini-3.7-flash:high"
+    body: "seat task, designer, and security-reviewer on gemini-3.7-flash:high: switch those three subagent seats to gemini-3.7-flash:high to reduce Claude Sonnet 5 consumption against Anthropic quotas."
+    author_class: "teammate"
+    category: "chore"
+    cursor: "2026-08-19T15:09:24Z"
+    existing_ack: true
+    id: "hyperlapse122/dotfiles#261"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/261"
+    requirement_id: "R19"
+    updated_at: "2026-08-19T15:09:24Z"
+  "gh-issues:hyperlapse122/dotfiles#262":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "web_search silently falls back to anthropic: gemini grounding-model override breaks it"
+    body: "web_search silently falls back to anthropic: gemini grounding-model override breaks it: overriding providers.webSearchGeminiModel to gemini-3.7-flash breaks Google Search grounding and silently redirects searches to Anthropic."
+    author_class: "teammate"
+    category: "bug"
+    cursor: "2026-08-19T15:25:15Z"
+    existing_ack: true
+    id: "hyperlapse122/dotfiles#262"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/262"
+    requirement_id: "R21"
+    updated_at: "2026-08-19T15:25:15Z"
 last_run:
-  timestamp: "2026-08-15T07:51:58Z"
+  timestamp: "2026-08-20T00:12:32Z"
   outcome: "completed"
-  writer: "sweep-ThinkPad-E14-Gen-7-omp-20260815T075158Z"
+  writer: "sweep-JOOSUNGPARK-JPI-omp-20260820T000000Z"
   counts:
     gh-issues:
-      acknowledged: 3
-      closed: 4
-      fetched: 11
-      new_ack_labels: 3
+      ack_deferred: 0
+      acknowledged: 4
+      closed: 15
+      fetched: 22
+      in_plan: 3
+      media_analyzed: 0
+      new: 4
+      new_ack_labels: 4
+      new_closeout_labels: 15
