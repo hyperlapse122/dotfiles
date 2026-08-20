@@ -565,7 +565,7 @@ grep -F "asserted 0 of $declared_count declared omp settings paths" "$scratch/co
 # value that differs, and a path the live config does not carry at all. The
 # absent shape is what keeps an unset declared path converging.
 drift_key=$(jq -r 'to_entries | map(select((.value | type) == "boolean")) | .[0].key // ""' "$declared_json")
-absent_key=$(jq -r --arg d "$drift_key" 'to_entries | map(select(.key != $d)) | .[0].key // ""' "$declared_json")
+absent_key=$(jq -r --arg d "$drift_key" 'to_entries | map(select(.key != $d and .value != null)) | .[0].key // ""' "$declared_json")
 [[ -n $drift_key && -n $absent_key ]] || {
   printf 'fixture found no boolean plus spare declared key; the partial-drift case is not being exercised\n' >&2
   exit 1
@@ -602,15 +602,19 @@ run_settings nolive "$scratch/catalog-full.json" "$scratch/does-not-exist.json"
 grep -F 'could not read the live config' "$scratch/nolive.err" >/dev/null
 
 # --- null-value reconcile (U1) ----------------------------------------------
-# A declared null resets a path to omp's upstream default (KTD1). The shipped
-# data carries no null-valued path yet (U2 lands the first one), so these
-# fixtures render a second settings script with one synthetic null-valued
-# scalar added via --override-data -- the same mechanism assert_render_ok and
-# assert_render_fails use below to test a value the shipped data does not
-# carry, rather than editing the real declaration. The per-path loop and the
-# live-converged generator above are already null-aware, so this script's own
-# declared set drives the exact same reconcile logic a real null declaration
-# will once U2 lands.
+# A declared null resets a path to omp's upstream default (KTD1), and the
+# shipped data carries the first one: providers.webSearchGeminiModel. The
+# harvested fixtures above already exercise that real declaration end-to-end
+# through their null-aware branches. These fixtures instead render a second
+# settings script with one synthetic null-valued scalar added via
+# --override-data -- the same mechanism assert_render_ok and
+# assert_render_fails use below -- so the single-reset arithmetic and the
+# admission rules stay pinned independently of whatever the shipped data
+# happens to declare. Convergence for a null path is proven against the
+# live-entry shape real omp emits for empty-default keys (the unset entry
+# omits `value`); a key whose unset entry carries its schema default under
+# `value` would reset on every apply, so null is only valid for the
+# empty-default class.
 null_path=u1NullFixturePath
 null_settings_script="$scratch/null-settings.sh"
 env HOME="$neg_home" PATH="$neg_bin:$PATH" \
@@ -710,6 +714,16 @@ grep -qxF "config reset $null_path" "$scratch/null-nolive.calls" || {
   exit 1
 }
 grep -F 'could not read the live config' "$scratch/null-nolive.err" >/dev/null
+
+# omp lists every schema key even when unset, so a null path absent from a
+# successful live listing is dead data (a typo); it must fail loudly.
+jq --arg p "$null_path" 'del(.[$p])' \
+  "$scratch/null-live-converged.json" >"$scratch/null-live-unknown.json"
+if run_settings_for "$null_settings_script" null-unknown "$scratch/catalog-full.json" "$scratch/null-live-unknown.json"; then
+  printf 'declared null on a schema-absent path converged silently; want a loud failure\n' >&2
+  exit 1
+fi
+grep -F 'is absent from the live omp settings schema' "$scratch/null-unknown.err" >/dev/null
 
 # A missing omp binary is a soft skip, not a failed apply.
 env HOME="$settings_home" PATH="/usr/bin:/bin" bash "$settings_script" \
@@ -871,20 +885,36 @@ assert_render_fails settings-parent-namespace "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"exa\":true,\"exa.enableSearch\":true}}}}" \
   'is a parent namespace of'
 # A declared null resets a path to the upstream default, but only for a plain
-# scalar: nulling a record-typed path would silently wipe every member omp
-# owns beneath it and could bypass selector validation (KTD2).
+# scalar: nulling a record- or list-typed path would silently restore every
+# member omp owns beneath it to the upstream default and could bypass selector
+# validation (KTD2).
 assert_render_fails settings-null-modelRoles "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{\"modelRoles\":null}}}}" \
-  'is a record-typed path'
+  'owns a record or list that a reset cannot safely wipe'
 assert_render_fails settings-null-agent-overrides "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"task.agentModelOverrides\":null}}}}" \
-  'is a record-typed path'
+  'owns a record or list that a reset cannot safely wipe'
 assert_render_fails settings-null-fallback-chains "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"retry.fallbackChains\":null}}}}" \
-  'is a record-typed path'
+  'owns a record or list that a reset cannot safely wipe'
 assert_render_fails settings-null-tools-approval "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"tools.approval\":null}}}}" \
-  'is a record-typed path'
+  'owns a record or list that a reset cannot safely wipe'
+# The list-typed routing gates get the same fail-closed rejection: a reset
+# would restore the upstream default list, re-enabling a disabled provider or
+# handing a search order back to the built-in scan.
+assert_render_fails settings-null-enabled-models "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"enabledModels\":null}}}}" \
+  'owns a record or list that a reset cannot safely wipe'
+assert_render_fails settings-null-disabled-providers "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"disabledProviders\":null}}}}" \
+  'owns a record or list that a reset cannot safely wipe'
+assert_render_fails settings-null-websearch-order "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"providers.webSearchOrder\":null}}}}" \
+  'owns a record or list that a reset cannot safely wipe'
+assert_render_fails settings-null-image-order "$settings_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"settings\":{\"providers.imageOrder\":null}}}}" \
+  'owns a record or list that a reset cannot safely wipe'
 assert_render_ok settings-null-scalar "$settings_sh" \
   "{$linux,\"agents\":{\"omp\":{\"settings\":{$roles,\"$null_path\":null}}}}"
 

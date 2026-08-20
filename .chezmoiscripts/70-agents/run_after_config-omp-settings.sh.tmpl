@@ -165,10 +165,16 @@ fi
 # what preserves wholesale record ownership: a member omp adds inside a declared
 # record makes the live record unequal, so the record is replaced. A declared
 # null is a third state, `reset`: it never compares by equality, only by
-# whether the live entry still carries a `value` at all. On a failed live read
-# (live_ok=false) fail-open still delivers the declared set, so a null path
-# blind-fires `reset` there too, exactly as an unconditional set would for a
-# non-null path.
+# whether the live entry still carries a `value` at all. That convergence rule
+# holds only for an empty-default key — a key whose UNSET live entry carries
+# its schema default under `value` would reset on EVERY apply — so null is
+# valid only for a key whose unset entry omits `value`. A null path that a
+# successful live listing does not carry at all is a typo until proven
+# otherwise: omp lists every schema key even when unset, so the projection
+# emits a loud `unknown` state instead of converging silently. On a failed
+# live read (live_ok=false) none of this is decidable, and fail-open still
+# delivers the declared set, so a null path blind-fires `reset` there, exactly
+# as an unconditional set would for a non-null path.
 examined=0
 asserted=0
 while IFS=$'\t' read -r state path value; do
@@ -189,6 +195,10 @@ while IFS=$'\t' read -r state path value; do
         exit "$status"
       }
       ;;
+    unknown)
+      printf 'config-omp-settings: declared null path %s is absent from the live omp settings schema; refusing to converge an unknown path silently\n' "$path" >&2
+      exit 1
+      ;;
     *)
       continue
       ;;
@@ -197,15 +207,18 @@ while IFS=$'\t' read -r state path value; do
 done < <(jq -r --slurpfile live "$live" --argjson liveOk "$live_ok" '
   ($live[0] // {}) as $l
   | to_entries[]
-  | (($l[.key] // {}) | (type == "object") and has("value")) as $liveHasValue
-  | [ (if .value == null then
-        (if $liveOk then (if $liveHasValue then "reset" else "converged" end)
+  | . as $e
+  | (($l[$e.key] // {}) | (type == "object") and has("value")) as $liveHasValue
+  | [ (if $e.value == null then
+        (if $liveOk then
+          (if ($l | has($e.key)) then (if $liveHasValue then "reset" else "converged" end)
+           else "unknown" end)
          else "reset" end)
       else
-        (if $liveHasValue and ($l[.key].value == .value) then "converged" else "drift" end)
+        (if $liveHasValue and ($l[$e.key].value == $e.value) then "converged" else "drift" end)
       end),
-      .key,
-      (if (.value | type) == "string" then .value else (.value | tojson) end) ]
+      $e.key,
+      (if ($e.value | type) == "string" then $e.value else ($e.value | tojson) end) ]
   | @tsv
 ' "$declared")
 
