@@ -47,7 +47,6 @@ it neither files nor comments there, and routes the finding to the committed-rec
 never the fork the agent pushed from, and never a CLI remote-derived default
 MUST search the project's open issues and MUST reuse a matching one
 MUST NOT manage labels, milestones, or other people's assignees
-MUST NOT run a direct issue close or reopen
 every one of those issue numbers MUST be immediately preceded by its own keyword
 is the sole exception to the assignee rule
 SHOULD tick its checkbox items as the matching sub-tasks land
@@ -90,6 +89,7 @@ group_access
 access_level
 Figma URLs MUST use the `figma` MCP.
 During rebase, ours is the target and theirs is the feature commit
+MUST NOT run a direct issue close or reopen
 BANNED
 
 printf 'agent instruction gates passed\n'
