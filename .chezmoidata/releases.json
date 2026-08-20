@@ -299,7 +299,7 @@
       "kubectl": {
         "kind": "githubRelease",
         "source": "kubernetes/kubernetes",
-        "version": "v1.36.3"
+        "version": "v1.36.4"
       },
       "marksman": {
         "kind": "githubRelease",
