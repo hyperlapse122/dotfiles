@@ -173,14 +173,9 @@ agents:
       skills.enableCodexUser: false
       skills.enableClaudeUser: false
       skills.enableClaudeProject: false
-      memory.backend: mnemopi
+      # Assertion is per declared path: removing these lines would leave the live backend at mnemopi.
+      memory.backend: off
       autolearn.enabled: true
-      mnemopi.embeddingVariant: multilingual
-      mnemopi.autoRecall: true
-      mnemopi.autoRetain: true
-      mnemopi.polyphonicRecall: true
-      mnemopi.enhancedRecall: true
-      mnemopi.proactiveLinking: true
       advisor.enabled: false
       defaultThinkingLevel: xhigh
       includeModelInPrompt: true
