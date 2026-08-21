@@ -1,6 +1,6 @@
 [hooks]
 on_create = ["mise trust"]
-on_destroy = ["mise untrust"]
+on_destroy = ["mise untrust", "git trim --no-confirm --delete 'local'"]
 on_launch = ["mise install -yq"]
 
 [sandbox]
