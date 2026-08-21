@@ -161,7 +161,7 @@
       "composition-patterns": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+        "version": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e"
       },
       "compound-engineering": {
         "kind": "githubRelease",
@@ -381,12 +381,12 @@
       "react-best-practices": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+        "version": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e"
       },
       "react-view-transitions": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+        "version": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e"
       },
       "rust-analyzer": {
         "kind": "githubRelease",
@@ -506,7 +506,7 @@
       "web-design-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+        "version": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e"
       },
       "winbox": {
         "kind": "vendorManifest",
@@ -516,7 +516,7 @@
       "writing-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+        "version": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e"
       }
     }
   }
