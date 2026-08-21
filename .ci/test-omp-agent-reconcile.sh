@@ -376,6 +376,7 @@ jq -e '
     "anthropic/claude-opus-5",
     "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",
+    "openai-codex/gpt-5.6-sol",
     "kimi-code/*"
   ]
 ' "$declared_json" >/dev/null || {
@@ -419,6 +420,42 @@ if [[ -n $kimi_refs ]]; then
   done <<<"$kimi_refs"
   exit 1
 fi
+
+# openai-codex is whitelisted for ONE exact model so the cross-model review seat
+# can resolve it. The fail-open hole the kimi-code guard names applies here too —
+# an unauthenticated provider makes the apply-time catalog gate skip validation —
+# so this assertion is what keeps the provider off every automatic path. Drop it
+# together with the whitelist entry, never before.
+# `@codex` is inspected alongside the literal prefix: modelRoles.codex is the
+# sanctioned reference, so that alias is a live second spelling of the same route.
+codex_routing_refs='
+  [ (.modelRoles // {} | to_entries[] | select(.key != "codex") | .value),
+    (."task.agentModelOverrides" // {} | to_entries[].value),
+    (."retry.fallbackChains" // {} | to_entries[].value[]) ]
+  | map(select(type == "string"))
+  | map(select(startswith("openai-codex/") or . == "@codex")) | .[]'
+
+codex_refs=$(jq -r "$codex_routing_refs" "$declared_json")
+if [[ -n $codex_refs ]]; then
+  while IFS= read -r ref; do
+    [[ -n $ref ]] || continue
+    printf 'openai-codex automatic-routing guard: %s names openai-codex, but only modelRoles.codex may reference it; no other role, agent override, or fallback chain may route to it\n' "$ref" >&2
+  done <<<"$codex_refs"
+  exit 1
+fi
+
+# A silent regression in the filter above would read as a pass, so prove it trips.
+for injection in \
+  '.["task.agentModelOverrides"].reviewer = "openai-codex/gpt-5.6-sol:high"' \
+  '.["task.agentModelOverrides"].reviewer = "@codex"' \
+  '.modelRoles.smol = "@codex"' \
+  '.["retry.fallbackChains"] = {"anthropic/claude-opus-5": ["@codex"]}'
+do
+  if [[ -z $(jq "$injection" "$declared_json" | jq -r "$codex_routing_refs") ]]; then
+    printf 'openai-codex automatic-routing guard did not flag an injected route: %s\n' "$injection" >&2
+    exit 1
+  fi
+done
 
 # The harvest is shared by the catalog fixture and the shape check. A chain KEY
 # is a selector too when it is model-oriented, so it must be harvested alongside

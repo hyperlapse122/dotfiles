@@ -140,6 +140,7 @@ agents:
       - anthropic/claude-opus-5
       - anthropic/claude-sonnet-5
       - google-antigravity/gemini-3.*
+      - openai-codex/gpt-5.6-sol
       - kimi-code/*
       disabledProviders:
       - openrouter
@@ -149,9 +150,12 @@ agents:
       - github-copilot
       modelRoles:
         advisor: "@worker"
+        claude: anthropic/claude-opus-5:xhigh
+        codex: openai-codex/gpt-5.6-sol:xhigh
         commit: "@worker"
         default: anthropic/claude-opus-5:xhigh
         fable: anthropic/claude-fable-5:max
+        gemini: google-antigravity/gemini-3.7-flash:high
         plan: "@fable"
         skim: google-antigravity/gemini-3.7-flash:low
         slow: anthropic/claude-opus-5:max
@@ -179,7 +183,7 @@ agents:
       mnemopi.proactiveLinking: true
       advisor.enabled: false
       defaultThinkingLevel: xhigh
-      includeModelInPrompt: false
+      includeModelInPrompt: true
       retry.usageAwareFallback: false
       retry.usageReservePolicy: auto
       retry.usageReservePct: 15
