@@ -86,7 +86,9 @@ On omp the dispatch selects a seat, never a model: the seat's configured model a
 | Implementation slice needing judgment | `task` | mutating |
 | UI and visual work | `designer` | mutating |
 
-Only those seven seats are dispatchable, so a routing decision MUST name one of them. The compound-engineering role prompts under `skills/*/references/agents/` are prompts to seed into one of those seats, never agent types to dispatch by name.
+Those seven are the bundled dispatchable set, so an ordinary routing decision MUST name one of them. The compound-engineering role prompts under `skills/*/references/agents/` are prompts to seed into one of those seats, never agent types to dispatch by name.
+
+Three further seats exist for one purpose only. When a skill's procedure calls for a foreign agent CLI to obtain another model's judgment, the agent MUST dispatch the cross-model seat whose family differs from its own — `claude`, `codex`, or `gemini` — and MUST NOT invoke the CLI. Those seats hold no tools and review only what the dispatch prompt inlines. The full pass contract, including candidate order and how a return is folded in, lives in the `cross-model-review` skill; read it before running the pass. This substitution covers requests for judgment only. Write-delegation, such as `ce-work`'s implementation engine, is not covered, because a seat with no tools cannot author code.
 {{ end }}
 
 Prefer harness-provided tools over external CLI commands whenever available. When interacting with repositories, files, code intelligence, searches, or GitHub, the agent MUST prefer integrated harness tools (e.g. `read`, `edit`, `write`, `grep`, `glob`, `lsp`, `xd://github`, `xd://ast_grep`, `xd://ast_edit`, internal URL schemes `issue://`, `pr://`) over shell commands (`gh`, `curl`, `grep`, `rg`, `sed`, `awk`) shadowing those capabilities. External CLI commands remain the standard fallback when a harness tool is absent, lacks required functionality, or is explicitly exempted.
