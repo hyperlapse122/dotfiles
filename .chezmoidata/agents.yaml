@@ -143,8 +143,8 @@ agents:
       - google-antigravity/gemini-3.*
       - openai-codex/gpt-5.6-sol
       - kimi-code/*
+      - openrouter/stealth/ox-alpha
       disabledProviders:
-      - openrouter
       - opencode-go
       - opencode-zen
       - zai
@@ -163,6 +163,7 @@ agents:
         smol: anthropic/claude-sonnet-5:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
         worker: google-antigravity/gemini-3.7-flash:high
+      cycleOrder: [ "smol", "default", "slow" ]
       task.agentModelOverrides:
         designer: "@worker"
         librarian: "@skim"
@@ -191,7 +192,6 @@ agents:
       - gemini
       providers.imageOrder:
       - antigravity
-      - openrouter
       provider.appendOnlyContext: on
       task.isolation.mode: none
       task.enableEffort: false
