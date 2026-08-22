@@ -123,6 +123,7 @@ agents:
       tui.textSizing: true
       tui.codexResetFireworks: true
       tui.scrollbackRebuild: true
+      tui.resizeScrollback: rebuild
       display.shimmer: 'classic'
       display.showTokenUsage: true
       tui.imeSafeCursor: true
