@@ -166,7 +166,7 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.23.0"
+        "version": "compound-engineering-v3.23.1"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
