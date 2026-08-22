@@ -377,7 +377,8 @@ jq -e '
     "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",
     "openai-codex/gpt-5.6-sol",
-    "kimi-code/*"
+    "kimi-code/*",
+    "openrouter/stealth/ox-alpha"
   ]
 ' "$declared_json" >/dev/null || {
   printf 'model whitelist policy is not rendered as expected\n' >&2
