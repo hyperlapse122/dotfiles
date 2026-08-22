@@ -79,6 +79,8 @@ build_fake_ce() {
   mkdir -p "$current/skills/ce-sweep/references/sources"
   cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$current/skills/ce-sweep/SKILL.md"
   printf '{"name":"compound-engineering"}\n' > "$current/plugin.json"
+  printf 'upstream interview\n' > "$current/skills/ce-sweep/references/interview.md"
+  cp "$current/skills/ce-sweep/references/interview.md" "$scratch/expected-interview.md"
   for f in email github-issues slack; do
     printf 'upstream %s\n' "$f" > "$current/skills/ce-sweep/references/sources/$f.md"
     cp "$current/skills/ce-sweep/references/sources/$f.md" "$scratch/expected-$f.md"
@@ -92,8 +94,10 @@ build_fake_ce
 env HOME="$home" bash "$prov"
 
 src="$current/skills/ce-sweep/references/sources/gitlab-issues.md"
+interview="$current/skills/ce-sweep/references/interview.md"
 skill="$current/skills/ce-sweep/SKILL.md"
 [ -f "$src" ] || { echo "persona not injected" >&2; exit 1; }
+[ -f "$interview" ] || { echo "interview not injected" >&2; exit 1; }
 [ -f "$skill" ] || { echo "ce-sweep skill missing" >&2; exit 1; }
 cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
   || { echo "ce-sweep skill changed on first run" >&2; exit 1; }
@@ -104,7 +108,8 @@ for f in email github-issues slack; do
 done
 cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
   || { echo "injected persona differs from overlay source" >&2; exit 1; }
-
+cmp -s "$overlays/skills/ce-sweep/references/interview.md" "$interview" \
+  || { echo "injected interview differs from overlay source" >&2; exit 1; }
 # A later archive reconciliation restores archive-owned files. The provisioner
 # must reinstall only the reference and leave every archive-owned file unchanged.
 cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill"
@@ -113,11 +118,12 @@ cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
   || { echo "ce-sweep skill changed on second run" >&2; exit 1; }
 cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
   || { echo "persona differs after second run" >&2; exit 1; }
+cmp -s "$overlays/skills/ce-sweep/references/interview.md" "$interview" \
+  || { echo "interview differs after second run" >&2; exit 1; }
 for f in email github-issues slack; do
   cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
     || { echo "upstream $f.md changed on second run" >&2; exit 1; }
 done
-
 # --- skip when overlays dir absent (leave CE tree intact) ---
 build_fake_ce
 rm -rf "$overlays"
@@ -126,11 +132,12 @@ cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$current/skills/ce-sweep/SKILL.md
   || { echo "ce-sweep skill changed when overlay source was absent" >&2; exit 1; }
 [ ! -e "$current/skills/ce-sweep/references/sources/gitlab-issues.md" ] \
   || { echo "persona created when overlay source was absent" >&2; exit 1; }
+cmp -s "$scratch/expected-interview.md" "$current/skills/ce-sweep/references/interview.md" \
+  || { echo "upstream interview.md changed when overlay source was absent" >&2; exit 1; }
 for f in email github-issues slack; do
   cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
     || { echo "upstream $f.md changed when overlay source was absent" >&2; exit 1; }
 done
-
 # --- skip when CE version dir absent ---
 build_fake_ce
 rm -rf "$current"
@@ -246,4 +253,12 @@ fi
 if grep -qiE 'glab mr\b|glab mr list|merge request list' "$persona"; then
   echo "persona fetches merge requests" >&2; exit 1
 fi
+
+# --- interview content contract ---
+interview_file="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/interview.md"
+[ -f "$interview_file" ] || { echo "interview overlay missing: $interview_file" >&2; exit 1; }
+grep -qF -- 'gitlab-issues' "$interview_file" || { echo "interview missing gitlab-issues" >&2; exit 1; }
+grep -qF -- 'group/project' "$interview_file" || { echo "interview missing group/project target" >&2; exit 1; }
+grep -qF -- 'feedback:ack' "$interview_file" || { echo "interview missing feedback:ack label" >&2; exit 1; }
+grep -qF -- 'feedback:resolved' "$interview_file" || { echo "interview missing feedback:resolved label" >&2; exit 1; }
 echo "compound-engineering overlays: ok"

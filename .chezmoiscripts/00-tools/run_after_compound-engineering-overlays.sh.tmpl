@@ -6,27 +6,27 @@
 
 #!/usr/bin/env bash
 #
-# Installs the locally managed ce-sweep GitLab Issues source reference into the
+# Installs locally managed ce-sweep references and interview overlays into the
 # currently pinned compound-engineering version directory.
 #
 # The compound-engineering external is ADDITIVE: .chezmoiexternals/ai-agents.toml's
 # localArchive block intentionally omits `exact`, so chezmoi adds/updates archive
-# files but does not remove this archive-absent reference.
+# files but does not remove archive-absent references.
 #
-# This script copies only the source reference. It never changes archive-owned
+# This script copies only the managed overlay files. It never changes archive-owned
 # files such as skills/ce-sweep/SKILL.md.
 #
-# OWNERSHIP: the reference path is ours, while the directory chain above it is
-# archive-owned. Because the tree is additive, another process can replace the
+# OWNERSHIP: the overlay paths are ours, while the directory chain above them is
+# archive-owned. Because the tree is additive, another process can replace a
 # leaf with a symlink into an unrelated checkout. Following it would overwrite
-# a foreign tracked file. Reclaim the leaf we own; refuse, rather than delete,
+# a foreign tracked file. Reclaim the leaves we own; refuse, rather than delete,
 # a directory component that is not a plain directory.
 #
 # run_after_ (not run_onchange_): that drift is LIVE state in a third-party-
 # writable tree, so it must be re-asserted after every file phase — a
 # fingerprinted onchange run records a clean skip and never repairs it. Re-running
-# costs a stat plus a byte compare. The reference-only copy is idempotent and
-# touches no archive-owned file, so no managed target differs from source state
+# costs a stat plus a byte compare per file. The copy is idempotent and touches no
+# unmanaged archive-owned file, so no managed target differs from source state
 # after an apply.
 
 set -euo pipefail
@@ -34,15 +34,11 @@ set -euo pipefail
 BASE_DIR="$HOME/{{ $ceAuthority.externalPath }}"
 CURRENT="$BASE_DIR/{{ $ceVersion }}"
 OVERLAYS="${BASE_DIR}-overlays"
-RELATIVE="skills/ce-sweep/references/sources/gitlab-issues.md"
-SOURCE="$OVERLAYS/$RELATIVE"
-DESTINATION="$CURRENT/$RELATIVE"
 
-# Both must exist after the file phase. Match the prune script's defensive skip.
-if [ ! -f "$SOURCE" ] || [ ! -d "$CURRENT" ]; then
+# Both directories must exist after the file phase. Match the prune script's defensive skip.
+if [ ! -d "$OVERLAYS" ] || [ ! -d "$CURRENT" ]; then
   exit 0
 fi
-
 # Prune root plugin.json: upstream compound-engineering includes a root plugin.json
 # with $schema pointing to agent-plugins.org 1.0.0. When present, OMP classifies it
 # as an agent-plugins package and rejects every SKILL.md containing Claude Code/Codex
@@ -54,32 +50,42 @@ rm -f -- "$CURRENT/plugin.json"
 # Archive-owned directory chain: create what is missing, but never traverse a
 # symlink or a non-directory — mkdir and cp would then land outside the version
 # dir. Those components are not ours to replace, so surface the conflict.
-IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$RELATIVE")"
-NODE="$CURRENT"
-for component in "${COMPONENTS[@]}"; do
-  NODE="$NODE/$component"
-  if [ -L "$NODE" ] || { [ -e "$NODE" ] && [ ! -d "$NODE" ]; }; then
-    printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$NODE" >&2
-    exit 1
+OVERLAY_FILES=(
+  "skills/ce-sweep/references/sources/gitlab-issues.md"
+  "skills/ce-sweep/references/interview.md"
+)
+
+for RELATIVE in "${OVERLAY_FILES[@]}"; do
+  SOURCE="$OVERLAYS/$RELATIVE"
+  DESTINATION="$CURRENT/$RELATIVE"
+
+  [ -f "$SOURCE" ] || continue
+
+  IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$RELATIVE")"
+  NODE="$CURRENT"
+  for component in "${COMPONENTS[@]}"; do
+    NODE="$NODE/$component"
+    if [ -L "$NODE" ] || { [ -e "$NODE" ] && [ ! -d "$NODE" ]; }; then
+      printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$NODE" >&2
+      exit 1
+    fi
+    [ -d "$NODE" ] || mkdir -- "$NODE"
+  done
+
+  if [ -L "$DESTINATION" ]; then
+    printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
+      "$DESTINATION" "$(readlink -- "$DESTINATION")" >&2
+    rm -f -- "$DESTINATION"
+  elif [ -e "$DESTINATION" ] && [ ! -f "$DESTINATION" ]; then
+    printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$DESTINATION" >&2
+    rm -rf -- "$DESTINATION"
   fi
-  [ -d "$NODE" ] || mkdir -- "$NODE"
+
+  if cmp -s -- "$SOURCE" "$DESTINATION"; then
+    continue
+  fi
+
+  TEMP="$DESTINATION.chezmoi-$$.tmp"
+  cp -p -- "$SOURCE" "$TEMP"
+  mv -f -- "$TEMP" "$DESTINATION"
 done
-
-# The reference leaf is ours: reclaim it instead of writing through a foreign entry.
-if [ -L "$DESTINATION" ]; then
-  printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
-    "$DESTINATION" "$(readlink -- "$DESTINATION")" >&2
-  rm -f -- "$DESTINATION"
-elif [ -e "$DESTINATION" ] && [ ! -f "$DESTINATION" ]; then
-  printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$DESTINATION" >&2
-  rm -rf -- "$DESTINATION"
-fi
-
-if cmp -s -- "$SOURCE" "$DESTINATION"; then
-  exit 0
-fi
-
-TEMP="$DESTINATION.chezmoi-$$.tmp"
-trap 'rm -f -- "$TEMP"' EXIT
-cp -p -- "$SOURCE" "$TEMP"
-mv -f -- "$TEMP" "$DESTINATION"
