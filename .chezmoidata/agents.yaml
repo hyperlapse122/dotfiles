@@ -82,6 +82,7 @@ agents:
       versionSource: compoundEngineeringRelease
       exclude:
       - "*/plugin.json"
+      - "*/skills/ce-sweep/references/interview.md"
       os: [linux, darwin]
       container: keep
   aoe:
