@@ -122,7 +122,6 @@ agents:
       terminal.showProgress: false
       tui.textSizing: true
       tui.codexResetFireworks: true
-      tui.scrollbackRebuild: true
       tui.resizeScrollback: rebuild
       display.shimmer: 'classic'
       display.showTokenUsage: true
