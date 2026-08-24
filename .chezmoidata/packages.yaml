@@ -227,7 +227,7 @@ packages:
 
         # Cloud provider CLI
         - azure-cli
-        - rclone
+
         # Keyboard remapper
         - keyd
 
@@ -326,8 +326,6 @@ packages:
       kdePackages:
         - fcitx5
         - fcitx5-hangul
-        - kaccounts-integration
-        - kaccounts-providers
         - pinentry-qt
         # kitty is NOT installed from the distro package any more: the managed
         # config's vertical tab bar needs kitty >= 0.48 and the Fedora stream
@@ -500,11 +498,6 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: jq, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: jq, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
         ubuntu: { disposition: managed, owner: apt, identifier: jq, source: ubuntu, architectures: { arm64: native } }
-      - id: rclone
-        sentinel: rclone
-        fedora: { disposition: managed, owner: dnf, identifier: rclone, source: fedora, architectures: { amd64: native, arm64: native } }
-        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: rclone, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
-        ubuntu: { disposition: managed, owner: apt, identifier: rclone, source: ubuntu, architectures: { arm64: native } }
       - id: chrome
         sentinel: google-chrome
         gateClosing: g0
@@ -630,14 +623,6 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: kdenlive, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: cask, identifier: kdenlive, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
         ubuntu: { disposition: notApplicable, reason: Thor does not edit video and KTD9 rejects a Flatpak or Snap fallback, architectures: { arm64: notApplicable } }
-      - id: kaccountsIntegration
-        fedora: { disposition: managed, owner: dnf, identifier: kaccounts-integration, source: fedora, architectures: { amd64: native, arm64: native } }
-        macos: { disposition: notApplicable, reason: KAccounts is specific to KDE desktop environments on Linux, architectures: { arm64: notApplicable } }
-        ubuntu: { disposition: notApplicable, reason: Thor has no KDE desktop environment, architectures: { arm64: notApplicable } }
-      - id: kaccountsProviders
-        fedora: { disposition: managed, owner: dnf, identifier: kaccounts-providers, source: fedora, architectures: { amd64: native, arm64: native } }
-        macos: { disposition: notApplicable, reason: KAccounts is specific to KDE desktop environments on Linux, architectures: { arm64: notApplicable } }
-        ubuntu: { disposition: notApplicable, reason: Thor has no KDE desktop environment, architectures: { arm64: notApplicable } }
       # One GPG pinentry capability, per-OS delivery: Fedora KDE hosts install
       # pinentry-qt and GNOME hosts pinentry-gnome3 (gated legacy groups above;
       # private_dot_gnupg/.gpg-agent.linux.conf picks the matching program from

@@ -1,9 +1,7 @@
 # Linux-only directories
 {{- if ne .chezmoi.os "linux" }}
-akonadi
 autostart
 containers
-davmail
 environment.d
 fcitx5
 systemd
