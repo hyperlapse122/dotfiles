@@ -305,7 +305,7 @@ jobs:
       - name: Assert OpenLogi config script renders per-platform
         run: |
           set -euxo pipefail
-          # .chezmoiscripts/30-linux/run_after_config-openlogi.sh.tmpl renders
+          # .chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl renders
           # real configuration assertion content on Linux and Darwin hosts, and
           # empty content on Windows or inside containers.
           scratch="${RUNNER_TEMP}/openlogi-render"
@@ -316,7 +316,7 @@ jobs:
 
           # shellcheck source=.ci/lib/render-gate-helpers.sh
           source "${GITHUB_WORKSPACE}/.ci/lib/render-gate-helpers.sh"
-          tmpl=".chezmoiscripts/30-linux/run_after_config-openlogi.sh.tmpl"
+          tmpl=".chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl"
 
           render_reconciler "${GITHUB_WORKSPACE}" "${scratch}" "$(command -v chezmoi)" linux false \
             "${tmpl}" "${scratch}/openlogi-linux.sh"

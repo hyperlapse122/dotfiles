@@ -28,10 +28,10 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 | `00-tools` | trust repo mise; link/prune versioned CLIs; prune old compound-engineering trees |
 | `10-auth` | GitHub/GitLab/Docker auth and Tailscale login |
 | `20-linux-fedora` | data-driven DNF provisioning, repositories, and Secure Boot/NVIDIA |
-| `30-linux` | `/etc` manifest, host/network, chsh, OpenLogi, TPM2, Wi-Fi, browser, Podman, VSCodium |
+| `30-linux` | `/etc` manifest, host/network, chsh, TPM2, Wi-Fi, browser, Podman, VSCodium |
 | `50-linux-kde`, `50-linux-gnome` | desktop configuration |
 | `60-build` | Rust haptic and Vite+ helper/CLI builds |
-| `70-agents` | omp plugins, omp settings/auth, and omp updates |
+| `70-agents` | omp plugins, omp settings/auth, aoe/OpenLogi config, and omp updates |
 | `80-keys` | one-time GPG and age imports |
 | `90-src` | reconcile the `~/src` garden on manifest change (grow-all, the three bootstrap commands, aoe group self-heal); runs last so a garden failure cannot abort other provisioning |
 

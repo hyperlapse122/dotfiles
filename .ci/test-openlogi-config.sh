@@ -12,7 +12,7 @@
 set -euo pipefail
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
-script_tmpl=".chezmoiscripts/30-linux/run_after_config-openlogi.sh.tmpl"
+script_tmpl=".chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl"
 
 fail() {
   printf '::error::test-openlogi-config: %s\n' "$*" >&2
@@ -30,7 +30,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-source_dir="$scratch/source"
 destination="$scratch/destination"
 home_dir="$scratch/home"
 stub_bin="$scratch/bin"
@@ -38,7 +37,7 @@ stub_log="$scratch/systemctl.log"
 render_toml="$scratch/render.toml"
 : > "$render_toml"
 
-mkdir -p "$source_dir" "$destination" "$home_dir" "$stub_bin"
+mkdir -p "$destination" "$home_dir" "$stub_bin"
 
 bun_bin=$(command -v bun || true)
 [[ -n "$bun_bin" ]] || fail "bun is required for settings-reconcile CLI fixture execution"
@@ -235,7 +234,8 @@ reset_fixture
 # On darwin, systemctl is absent; script asserts config into config.toml
 env -i \
   HOME="$home_dir" \
-  PATH="$stub_bin:/usr/bin:/bin" \
+  PATH="/usr/bin:/bin" \
+  SETTINGS_RECONCILER_BIN="$stub_bin/settings-reconcile" \
   XDG_RUNTIME_DIR="$scratch/runtime" \
   bash "$rendered_darwin"
 [[ -f "$target_toml" ]] || fail "scenario 6: darwin failed to create config.toml"

@@ -21,9 +21,11 @@ dotfiles.
 
 ### Fedora (Linux)
 
-- Stop the Solaar user autostart service:
+- Stop and disable the Solaar user autostart service:
   ```sh
   systemctl --user stop app-solaar@autostart.service 2>/dev/null || true
+  systemctl --user disable app-solaar@autostart.service 2>/dev/null || true
+  rm -f ~/.config/autostart/solaar.desktop
   ```
 - Terminate any running Solaar GUI processes:
   ```sh

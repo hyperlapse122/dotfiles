@@ -1,7 +1,7 @@
 # Manifest of OpenLogi configuration:
 #   openlogi.app_settings — application-wide preferences asserted into
 #     ~/.config/openlogi/config.toml by
-#     .chezmoiscripts/30-linux/run_after_config-openlogi.sh.tmpl via settings-reconcile.
+#     .chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl via settings-reconcile.
 #
 # Single source of truth (like packages.yaml, agents.yaml, and kde.yaml):
 # add or retune declared OpenLogi settings HERE, not in the script or by hand-editing
