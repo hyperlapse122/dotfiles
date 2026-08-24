@@ -155,3 +155,8 @@ AppData/Roaming/VSCodium/User/keybindings.json
 {{- if $f.container }}
 .local/share/omp-plugins/.omp-plugin/marketplace.json
 {{- end }}
+
+# Solaar was retired in favor of OpenLogi, so dot_config/solaar/rules.yaml.tmpl
+# no longer has a source. Deleting that source stopped chezmoi managing it but
+# leaves the already-deployed ~/.config/solaar/rules.yaml copy behind — prune it here.
+.config/solaar/rules.yaml

@@ -378,6 +378,21 @@
           }
         }
       },
+      "openlogi": {
+        "kind": "githubRelease",
+        "source": "AprilNEA/OpenLogi",
+        "version": "v0.7.10",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/AprilNEA/OpenLogi/releases/download/v0.7.10/openlogi-v0.7.10-linux-amd64.rpm",
+            "sha256": "75a526f6437d6df152fceaef3927ba3ce7f9e45589e2de78e8cec333f13cf106"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/AprilNEA/OpenLogi/releases/download/v0.7.10/openlogi-v0.7.10-linux-arm64.rpm",
+            "sha256": "25aca0f6f1d5a25b123d06fdad544791cd262ac9e8cd347835c4964706c46c64"
+          }
+        }
+      },
       "react-best-practices": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",

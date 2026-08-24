@@ -5,12 +5,10 @@ repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
 new_templates=(
   ".chezmoiscripts/30-linux/run_after_install-vscodium-extensions.sh.tmpl"
-  ".chezmoiscripts/50-linux-gnome/run_after_install-gnome-solaar-extension.sh.tmpl"
   ".chezmoiscripts/50-linux-gnome/run_after_install-gnome-kimpanel-extension.sh.tmpl"
 )
 old_templates=(
   ".chezmoiscripts/30-linux/run_onchange_after_install-vscodium-extensions.sh.tmpl"
-  ".chezmoiscripts/50-linux-gnome/run_onchange_after_install-gnome-solaar-extension.sh.tmpl"
   ".chezmoiscripts/50-linux-gnome/run_onchange_after_install-gnome-kimpanel-extension.sh.tmpl"
 )
 
@@ -75,9 +73,6 @@ YAML
 cat >"$source_dir/.chezmoidata/gnome.yaml" <<'YAML'
 gnome:
   shellExtensions:
-    solaar:
-      uuid: solaar@test
-      egoId: 101
     kimpanel:
       uuid: kimpanel@test
       egoId: 102
@@ -91,7 +86,6 @@ SCRIPT
 
 chmod +x \
   "$source_dir/.chezmoiscripts/30-linux/run_after_install-vscodium-extensions.sh.tmpl" \
-  "$source_dir/.chezmoiscripts/50-linux-gnome/run_after_install-gnome-solaar-extension.sh.tmpl" \
   "$source_dir/.chezmoiscripts/50-linux-gnome/run_after_install-gnome-kimpanel-extension.sh.tmpl" \
   "$source_dir/.chezmoiscripts/70-later/run_after_later-phase.sh"
 
@@ -140,7 +134,6 @@ done
 
 if [[ "$url" == *'extension-info/'* ]]; then
   case "$url" in
-    *'pk=101'*) name=solaar; uuid=solaar@test ;;
     *'pk=102'*) name=kimpanel; uuid=kimpanel@test ;;
     *) printf 'unexpected extension-info URL: %s\n' "$url" >&2; exit 2 ;;
   esac
@@ -155,7 +148,6 @@ if [[ "$url" == *'extension-info/'* ]]; then
   fi
 else
   case "$url" in
-    */solaar.zip) name=solaar; uuid=solaar@test ;;
     */kimpanel.zip) name=kimpanel; uuid=kimpanel@test ;;
     *) printf 'unexpected download URL: %s\n' "$url" >&2; exit 2 ;;
   esac
@@ -180,7 +172,6 @@ case "${1:-}" in
     zip=${3:?zip is required}
     uuid=$(<"$zip")
     case "$uuid" in
-      solaar@test) name=solaar ;;
       kimpanel@test) name=kimpanel ;;
       *) printf 'unexpected extension archive identity: %s\n' "$uuid" >&2; exit 2 ;;
     esac
@@ -239,7 +230,6 @@ apply_stdout="$scratch/apply.stdout"
 apply_stderr="$scratch/apply.stderr"
 
 vscodium_signature="$fixture_home/.local/state/chezmoi/extension-retry/vscodium-extensions"
-solaar_signature="$fixture_home/.local/state/chezmoi/extension-retry/gnome-solaar-extension"
 kimpanel_signature="$fixture_home/.local/state/chezmoi/extension-retry/gnome-kimpanel-extension"
 
 reset_fixture() {
@@ -303,11 +293,9 @@ assert_safe_signature "$vscodium_signature"
 assert_log 'codium-install fixture.vscode'
 
 for retry_case in \
-  solaar-query-failure solaar-unexpected-response solaar-download-failure \
   kimpanel-query-failure kimpanel-unexpected-response kimpanel-download-failure; do
   name=${retry_case%%-*}
   case "$name" in
-    solaar) signature=$solaar_signature ;;
     kimpanel) signature=$kimpanel_signature ;;
     *) fail "unknown retry case: $retry_case" ;;
   esac
@@ -328,22 +316,20 @@ for retry_case in \
 done
 
 reset_fixture
-run_apply solaar-no-compatible
+run_apply kimpanel-no-compatible
 assert_later_phase
-assert_log 'gnome-query solaar'
-assert_no_signature "$solaar_signature"
+assert_log 'gnome-query kimpanel'
+assert_no_signature "$kimpanel_signature"
 assert_apply_error 'no compatible build for GNOME Shell 46; will retry on next apply'
 run_apply success
-assert_safe_signature "$solaar_signature"
-assert_log 'gnome-install solaar'
+assert_safe_signature "$kimpanel_signature"
+assert_log 'gnome-install kimpanel'
 
 reset_fixture
 run_apply success
 assert_safe_signature "$vscodium_signature"
-assert_safe_signature "$solaar_signature"
 assert_safe_signature "$kimpanel_signature"
-[[ $(<"$vscodium_signature") != $(<"$solaar_signature") ]] || fail 'VSCodium and Solaar signatures collided'
-[[ $(<"$solaar_signature") != $(<"$kimpanel_signature") ]] || fail 'GNOME signatures collided'
+[[ $(<"$vscodium_signature") != $(<"$kimpanel_signature") ]] || fail 'VSCodium and kimpanel signatures collided'
 printf '[]\n' >"$stub_state/enabled-extensions"
 : >"$log"
 run_apply success
@@ -399,8 +385,7 @@ for warning_mode in gsettings-read-warning gsettings-parse-warning gsettings-wri
   reset_fixture
   run_apply "$warning_mode"
   assert_later_phase
-  assert_log 'gnome-install solaar'
-  assert_safe_signature "$solaar_signature"
+  assert_log 'gnome-install kimpanel'
   assert_safe_signature "$kimpanel_signature"
   case "$warning_mode" in
     gsettings-read-warning) expected_warning='WARNING: cannot read org.gnome.shell enabled-extensions' ;;
@@ -417,12 +402,12 @@ for warning_mode in gsettings-read-warning gsettings-parse-warning gsettings-wri
 done
 
 reset_fixture
-if run_apply solaar-install-failure; then
+if run_apply kimpanel-install-failure; then
   fail 'gnome-extensions install failure unexpectedly succeeded'
 fi
-grep -qF 'HARD ERROR: gnome-extensions install --force failed for solaar@test' "$apply_stderr" \
+grep -qF 'HARD ERROR: gnome-extensions install --force failed for kimpanel@test' "$apply_stderr" \
   || fail 'gnome-extensions install failure lacked explicit hard-error diagnostic'
-assert_no_signature "$solaar_signature"
+assert_no_signature "$kimpanel_signature"
 assert_no_log_prefix 'later-phase'
 source_digest_after=$(sha256sum "${new_templates[@]/#/$repo_root/}")
 [[ "$source_digest_after" == "$source_digest_before" ]] || fail 'fixture changed repository extension sources'

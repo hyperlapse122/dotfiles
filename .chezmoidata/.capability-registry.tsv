@@ -21,9 +21,7 @@ plasma-apply-wallpaperimage-present	command-present	none	linux	available	unavail
 plasmashell-running	user-process	read-only-subprocess	linux	available	unavailable
 podman-socket-unit-present	user-manager-unit	read-only-subprocess	linux	available	unavailable
 ptyxis-present	command-present	none	linux	available	unavailable
-python3-yaml-present	python-module	read-only-subprocess	linux	available	unavailable
 session-bus-present	session-bus	none	linux	available	unavailable
-solaar-present	command-present	none	linux	available	unavailable
 sqlite3-present	command-present	none	linux	available	unavailable
 sudo-usable	sudo-nonrefreshing	sudo-credential-probe	linux	available	unavailable
 timedatectl-present	command-present	none	linux	available	unavailable

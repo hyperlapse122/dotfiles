@@ -33,23 +33,8 @@ render() {
 # key` in CI only.
 write_fact_stub() {
   local source_path=$1 output_path=$2 container=$3 jetson=${4:-false}
-  node -e '
-    const fs = require("node:fs");
-    const [sourcePath, outputPath, container, jetson] = process.argv.slice(1);
-    const source = fs.readFileSync(sourcePath, "utf8");
-    const needle = `{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}`;
-    if (source.split(needle).length !== 2) throw new Error("facts provider anchor changed");
-    const pinned = { container: container === "true", jetson: jetson === "true", desktop: "gnome", distro: "fedora" };
-    const referenced = new Set(
-      [...source.matchAll(/\$f\.([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]),
-    );
-    if (referenced.size === 0) throw new Error("no $f references found; anchor or usage changed");
-    const entries = [...referenced].sort().flatMap((key) => {
-      const value = key in pinned ? pinned[key] : false;
-      return [`"${key}"`, typeof value === "string" ? `"${value}"` : String(value)];
-    });
-    fs.writeFileSync(outputPath, source.replace(needle, `{{- $f := dict ${entries.join(" ")} }}`));
-  ' "$source_path" "$output_path" "$container" "$jetson"
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false"
+  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$source_path" > "$output_path"
 }
 
 render_ignore() {
@@ -84,21 +69,7 @@ assert_gate() {
 render_reconciler() {
   local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 jetson=${8:-false} variant
   variant="$scratch/reconciler-$os-$container-$jetson-$(basename "$template")"
-  node -e '
-    const fs = require("node:fs");
-    const [sourcePath, outputPath, container, jetson] = process.argv.slice(1);
-    const source = fs.readFileSync(sourcePath, "utf8");
-    const needle = `includeTemplate "facts.tmpl" . | fromYaml`;
-    if (source.split(needle).length !== 2) throw new Error("reconciler facts provider anchor changed");
-    const pinned = { container: container === "true", jetson: jetson === "true", desktop: "gnome", distro: "fedora" };
-    const referenced = new Set(
-      [...source.matchAll(/\$facts\.([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]),
-    );
-    const entries = [...referenced].sort().flatMap((key) => {
-      const value = key in pinned ? pinned[key] : false;
-      return [`"${key}"`, typeof value === "string" ? `"${value}"` : String(value)];
-    });
-    fs.writeFileSync(outputPath, source.replace(needle, `dict ${entries.join(" ")}`));
-  ' "$repo_root/$template" "$variant" "$container" "$jetson"
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false"
+  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$repo_root/$template" > "$variant"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }

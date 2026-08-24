@@ -14,7 +14,7 @@ does **not** touch hidraw, does **not** do device discovery, and does **not**
 replace the daemon — all device I/O, debounce, queueing, and pacing live in
 `mxm4-hapticd`. This is purely the "hand a waveform name to the daemon" half.
 
-> The latency-critical Solaar hot path still uses the Rust `mxm4-haptic` client
+> The latency-critical binding hot path still uses the Rust `mxm4-haptic` client
 > binary. This library is for **Node-compatible hosts** (Node, Bun, etc.) as a
 > consumer (scripts, tooling, MCP servers, etc.) that wants to trigger haptics
 > from a JavaScript runtime.
@@ -130,5 +130,5 @@ silently drift.
 | Alerts | `HAPPY ALERT`, `ANGRY ALERT`, `COMPLETED`, `MAD` |
 | Rhythmic | `SQUARE`, `WAVE`, `FIREWORK`, `KNOCK`, `JINGLE`, `RINGING` |
 
-See the root [`AGENTS.md`](../../AGENTS.md) "Solaar haptic playback (MX Master
-4)" section for the full daemon architecture and HID++ details.
+See the root [`AGENTS.md`](../../AGENTS.md) "MX Master 4 haptic playback"
+section for the full daemon architecture and HID++ details.

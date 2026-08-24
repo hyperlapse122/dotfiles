@@ -1,7 +1,7 @@
 //! mxm4-haptic <WAVEFORM>
 //!
-//! Thin one-shot client spawned by Solaar rules (rules.yaml
-//! `Execute: [mxm4-haptic, "<WAVEFORM>"]`). Validates the waveform name,
+//! Thin one-shot client spawned by OpenLogi RunShellCommand bindings or CLI
+//! (e.g. `mxm4-haptic "<WAVEFORM>"`). Validates the waveform name,
 //! hands it to the mxm4-hapticd daemon over the AF_UNIX socket, and exits.
 //! All device I/O, debounce, queueing and pacing live in the daemon —
 //! this binary never touches hidraw.

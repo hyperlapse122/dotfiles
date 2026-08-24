@@ -143,6 +143,12 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "aoe-darwin-amd64.tar.gz",
     "darwin-arm64": "aoe-darwin-arm64.tar.gz",
   },
+  openlogi: {
+    "linux-amd64": "openlogi-v0.0.0-linux-amd64.rpm",
+    "linux-arm64": "openlogi-v0.0.0-linux-arm64.rpm",
+    "darwin-amd64": null,
+    "darwin-arm64": null,
+  },
 };
 
 describe("registry asset selectors", () => {
