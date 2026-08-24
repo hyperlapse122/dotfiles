@@ -106,7 +106,7 @@ targetPath = '.local/share/winbox/WinBox.dmg'
 {{- end }}
 
 {{- /* ---------- davmail ---------- */}}
-
+{{- if and (eq .chezmoi.os "linux") (eq (includeTemplate "facts.tmpl" (dict "ctx" . "fact" "desktop")) "kde") (not (includeTemplate "facts.tmpl" (dict "ctx" . "fact" "is_container"))) }}
 [".local/lib/davmail"]
 type = "archive"
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "davmail" "field" "url" "platform" "auto") }}'
@@ -114,3 +114,4 @@ exact = true
 
 [".local/lib/davmail".checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "davmail" "field" "sha256" "platform" "auto") }}'
+{{- end }}

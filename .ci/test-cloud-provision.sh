@@ -323,21 +323,21 @@ cp "$stubs_dir"/* "$case1_bin/"
 
 run_in_sandbox "$case1_home" "$case1_bin" "$case1_runtime" "$case1_calls" "$case1_state" "$rendered_script" >"$case1_dir/stdout.log" 2>"$case1_dir/stderr.log"
 
-[[ -d "$case1_home/Cloud/GoogleDrive" ]] || { printf 'FAIL: GoogleDrive dir missing\n' >&2; exit 1; }
-[[ -d "$case1_home/Cloud/OneDrivePersonal" ]] || { printf 'FAIL: OneDrivePersonal dir missing\n' >&2; exit 1; }
-[[ -d "$case1_home/Cloud/OneDriveCorporate" ]] || { printf 'FAIL: OneDriveCorporate dir missing\n' >&2; exit 1; }
+[[ -d "$case1_home/Cloud/gdrive" ]] || { printf 'FAIL: gdrive dir missing\n' >&2; exit 1; }
+[[ -d "$case1_home/Cloud/onedrive" ]] || { printf 'FAIL: onedrive dir missing\n' >&2; exit 1; }
+[[ -d "$case1_home/Cloud/onedrive-corp" ]] || { printf 'FAIL: onedrive-corp dir missing\n' >&2; exit 1; }
 [[ -d "$case1_home/.local/state/davmail" ]] || { printf 'FAIL: davmail state dir missing\n' >&2; exit 1; }
 
 baloo_val=$(python3 -c "import configparser; cp = configparser.RawConfigParser(); cp.optionxform=str; cp.read('$case1_home/.config/baloofilerc'); print(cp.get('General', 'exclude folders'))")
-[[ "$baloo_val" == *"$case1_home/Cloud/GoogleDrive/"* ]] || { printf 'FAIL: GoogleDrive missing from baloo exclusions\n' >&2; exit 1; }
-[[ "$baloo_val" == *"$case1_home/Cloud/OneDrivePersonal/"* ]] || { printf 'FAIL: OneDrivePersonal missing from baloo exclusions\n' >&2; exit 1; }
-[[ "$baloo_val" == *"$case1_home/Cloud/OneDriveCorporate/"* ]] || { printf 'FAIL: OneDriveCorporate missing from baloo exclusions\n' >&2; exit 1; }
+[[ "$baloo_val" == *"$case1_home/Cloud/gdrive/"* ]] || { printf 'FAIL: gdrive missing from baloo exclusions\n' >&2; exit 1; }
+[[ "$baloo_val" == *"$case1_home/Cloud/onedrive/"* ]] || { printf 'FAIL: onedrive missing from baloo exclusions\n' >&2; exit 1; }
+[[ "$baloo_val" == *"$case1_home/Cloud/onedrive-corp/"* ]] || { printf 'FAIL: onedrive-corp missing from baloo exclusions\n' >&2; exit 1; }
 
 places_file="$case1_home/.local/share/user-places.xbel"
 [[ -f "$places_file" ]] || { printf 'FAIL: user-places.xbel missing\n' >&2; exit 1; }
-grep -F "file://$case1_home/Cloud/GoogleDrive" "$places_file" >/dev/null || { printf 'FAIL: GoogleDrive missing from places\n' >&2; exit 1; }
-grep -F "file://$case1_home/Cloud/OneDrivePersonal" "$places_file" >/dev/null || { printf 'FAIL: OneDrivePersonal missing from places\n' >&2; exit 1; }
-grep -F "file://$case1_home/Cloud/OneDriveCorporate" "$places_file" >/dev/null || { printf 'FAIL: OneDriveCorporate missing from places\n' >&2; exit 1; }
+grep -F "file://$case1_home/Cloud/gdrive" "$places_file" >/dev/null || { printf 'FAIL: gdrive missing from places\n' >&2; exit 1; }
+grep -F "file://$case1_home/Cloud/onedrive" "$places_file" >/dev/null || { printf 'FAIL: onedrive missing from places\n' >&2; exit 1; }
+grep -F "file://$case1_home/Cloud/onedrive-corp" "$places_file" >/dev/null || { printf 'FAIL: onedrive-corp missing from places\n' >&2; exit 1; }
 
 thumb_val=$(python3 -c "import configparser; cp = configparser.RawConfigParser(); cp.optionxform=str; cp.read('$case1_home/.config/kdeglobals'); print(cp.get('PreviewSettings', 'MaximumRemoteSize'))")
 [[ "$thumb_val" == "0" ]] || { printf 'FAIL: MaximumRemoteSize != 0\n' >&2; exit 1; }
@@ -427,6 +427,7 @@ printf 'PASS\n'
 printf 'Scenario 4: Mode switch to read-only... '
 readonly_script="$case3_dir/readonly_script.sh"
 sed -e 's/"corporate:bridge"/"corporate:read-only"/' \
+    -e 's/reconcile_ms_account "corporate" "bridge"/reconcile_ms_account "corporate" "read-only"/' \
     -e 's/local corp_mode="bridge"/local corp_mode="read-only"/' \
     "$rendered_script" > "$readonly_script"
 chmod 0755 "$readonly_script"

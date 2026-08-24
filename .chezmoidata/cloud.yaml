@@ -12,8 +12,8 @@ cloud:
       name: google
       description: Personal Google Drive & PIM
       remote: gdrive
-      mountDir: GoogleDrive
-      mountPath: Cloud/GoogleDrive
+      mountDir: gdrive
+      mountPath: Cloud/gdrive
       credentials:
         clientId: op://Private/Google/OAuth Client ID
         clientSecret: op://Private/Google/OAuth Client Secret
@@ -22,8 +22,8 @@ cloud:
       name: personalMs
       description: Personal Microsoft OneDrive & Outlook.com PIM
       remote: onedrive
-      mountDir: OneDrivePersonal
-      mountPath: Cloud/OneDrivePersonal
+      mountDir: onedrive
+      mountPath: Cloud/onedrive
       mode: bridge
       davmail:
         instance: personal
@@ -37,8 +37,8 @@ cloud:
       name: corporateMs
       description: Corporate Microsoft OneDrive for Business & Exchange Online PIM
       remote: onedrive-corp
-      mountDir: OneDriveCorporate
-      mountPath: Cloud/OneDriveCorporate
+      mountDir: onedrive-corp
+      mountPath: Cloud/onedrive-corp
       mode: bridge
       davmail:
         instance: corporate

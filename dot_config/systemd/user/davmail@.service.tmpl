@@ -13,7 +13,7 @@ StartLimitBurst=4
 Type=exec
 StateDirectory=davmail
 StateDirectoryMode=0700
-ExecStart=/usr/bin/java -Djava.awt.headless=true -jar %h/.local/lib/davmail/davmail.jar %h/.config/davmail/%i.properties
+ExecStart=/usr/bin/java -Xmx128m -Djava.awt.headless=true -jar %h/.local/lib/davmail/davmail.jar %h/.config/davmail/%i.properties
 Restart=on-failure
 RestartSec=15s
 

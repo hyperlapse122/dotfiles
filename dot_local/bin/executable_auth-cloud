@@ -35,7 +35,7 @@ export PATH
 RCLONE_CONFIG="${RCLONE_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/rclone/rclone.conf}"
 DAVMAIL_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/davmail"
 DAVMAIL_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/davmail"
-DAVMAIL_JAR="${DAVMAIL_JAR_PATH:-${XDG_DATA_HOME:-$HOME/.local}/lib/davmail/davmail.jar}"
+DAVMAIL_JAR="${DAVMAIL_JAR_PATH:-$HOME/.local/lib/davmail/davmail.jar}"
 AKONADI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/akonadi"
 
 usage() {
@@ -137,27 +137,6 @@ done
 rclone_has_token() {
   local remote="$1"
   [[ -f "$RCLONE_CONFIG" ]] || return 1
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$RCLONE_CONFIG" "$remote" <<'EOF' 2>/dev/null
-import configparser
-import sys
-
-conf_file, sec = sys.argv[1], sys.argv[2]
-parser = configparser.ConfigParser(interpolation=None)
-try:
-    parser.read(conf_file)
-    if parser.has_section(sec) and parser.has_option(sec, "token"):
-        tok = parser.get(sec, "token").strip()
-        if tok and tok != "{}":
-            sys.exit(0)
-except Exception:
-    pass
-sys.exit(1)
-EOF
-    return $?
-  fi
-
-  # Fallback grep for token under remote stanza
   awk -v remote="[$remote]" '
     $0 == remote { in_sec=1; next }
     /^\[/ { in_sec=0 }
@@ -165,7 +144,6 @@ EOF
     END { exit !found }
   ' "$RCLONE_CONFIG" 2>/dev/null
 }
-
 # Helper: check if DavMail has tokens
 davmail_has_token() {
   local instance="$1"
@@ -299,248 +277,132 @@ do_status() {
   return 0
 }
 
-# Target: gdrive
+# Helper: authenticate an rclone remote
+auth_rclone_remote() {
+  local remote="$1"
+  local label="$2"
+  printf 'auth-cloud: [%s] Checking %s...\n' "$remote" "$label"
+  if [[ "$force" -eq 0 ]] && rclone_has_token "$remote"; then
+    printf 'auth-cloud: %s: already authenticated with stored token (use --force to re-login).\n' "$remote"
+    activate_service "rclone-mount@${remote}.service"
+    return 0
+  fi
+
+  if ! command -v rclone >/dev/null 2>&1; then
+    printf 'auth-cloud: %s: rclone command not found. Please install rclone.\n' "$remote" >&2
+    return 1
+  fi
+
+  printf 'auth-cloud: %s: starting rclone OAuth authorization (flow: %s)...\n' "$remote" "$flow"
+  local -a rclone_cmd=(rclone config reconnect "${remote}:")
+  if [[ "$flow" == "device" ]]; then
+    rclone_cmd+=(--auto-confirm)
+  fi
+
+  "${rclone_cmd[@]}" || {
+    printf 'auth-cloud: %s: rclone reconnect failed.\n' "$remote" >&2
+    return 1
+  }
+
+  if rclone_has_token "$remote"; then
+    printf 'auth-cloud: %s: authentication successful.\n' "$remote"
+    activate_service "rclone-mount@${remote}.service"
+  else
+    printf 'auth-cloud: %s: authentication completed but token not found in %s\n' "$remote" "$RCLONE_CONFIG" >&2
+    return 1
+  fi
+}
+
+# Helper: authenticate a DavMail instance
+auth_davmail_instance() {
+  local instance="$1"
+  local label="$2"
+  printf 'auth-cloud: [%s] Checking %s...\n' "$instance" "$label"
+
+  local token_file="$DAVMAIL_STATE_DIR/${instance}-tokens.properties"
+  local props_file="$DAVMAIL_CONFIG_DIR/${instance}.properties"
+  local agent_id="akonadi_davgroupware_resource_${instance}"
+
+  if [[ "$force" -eq 0 ]] && davmail_has_token "$instance"; then
+    printf 'auth-cloud: %s: already authenticated with stored token at %s (use --force to re-auth).\n' "$instance" "$token_file"
+    activate_service "davmail@${instance}.service"
+    trigger_akonadi_sync "$agent_id"
+    return 0
+  fi
+
+  if [[ ! -f "$props_file" ]]; then
+    printf 'auth-cloud: %s: DavMail properties file not found: %s\n' "$instance" "$props_file" >&2
+    printf 'auth-cloud: %s: run `chezmoi apply` to deploy configured properties.\n' "$instance" >&2
+    return 1
+  fi
+
+  local java_bin
+  if command -v java >/dev/null 2>&1; then
+    java_bin="$(command -v java)"
+  elif [[ -x "/usr/bin/java" ]]; then
+    java_bin="/usr/bin/java"
+  else
+    printf 'auth-cloud: %s: java runtime not found. Please install java-latest-openjdk-devel.\n' "$instance" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$DAVMAIL_JAR" ]]; then
+    printf 'auth-cloud: %s: DavMail jar not found at %s\n' "$instance" "$DAVMAIL_JAR" >&2
+    printf 'auth-cloud: %s: run `chezmoi apply` to fetch DavMail external archive.\n' "$instance" >&2
+    return 1
+  fi
+
+  mkdir -p "$DAVMAIL_STATE_DIR"
+  chmod 0700 "$DAVMAIL_STATE_DIR"
+
+  local davmail_mode="O365Interactive"
+  if [[ "$flow" == "device" ]]; then
+    davmail_mode="O365DeviceCode"
+  fi
+
+  printf 'auth-cloud: %s: launching DavMail initial OAuth authentication (%s)...\n' "$instance" "$davmail_mode"
+  "$java_bin" -Xmx128m -Djava.awt.headless=true "-Ddavmail.mode=$davmail_mode" -jar "$DAVMAIL_JAR" "$props_file" || true
+
+  if [[ -f "$token_file" ]]; then
+    chmod 0600 "$token_file"
+    printf 'auth-cloud: %s: DavMail token saved securely to %s\n' "$instance" "$token_file"
+    activate_service "davmail@${instance}.service"
+    trigger_akonadi_sync "$agent_id"
+  else
+    printf 'auth-cloud: %s: DavMail authentication failed or token file was not created.\n' "$instance" >&2
+    if [[ "$instance" == "corporate" ]]; then
+      printf 'auth-cloud: corporate: Note (R14): If tenant administrator consent is blocked by corporate policy,\n' >&2
+      printf 'auth-cloud: corporate: degrade corporate PIM to read-only mode by setting:\n' >&2
+      printf 'auth-cloud: corporate:   corporateMs:\n' >&2
+      printf 'auth-cloud: corporate:     mode: read-only\n' >&2
+      printf 'auth-cloud: corporate: in .chezmoidata/cloud.yaml and re-running `chezmoi apply`.\n' >&2
+    fi
+    return 1
+  fi
+  return 0
+}
+
 auth_gdrive() {
-  printf 'auth-cloud: [gdrive] Checking personal Google Drive configuration...\n'
-  if [[ "$force" -eq 0 ]] && rclone_has_token "gdrive"; then
-    printf 'auth-cloud: gdrive: already authenticated with stored token (use --force to re-login).\n'
-    activate_service "rclone-mount@gdrive.service"
-    return 0
-  fi
-
-  if ! command -v rclone >/dev/null 2>&1; then
-    printf 'auth-cloud: gdrive: rclone command not found. Please install rclone.\n' >&2
-    return 1
-  fi
-
-  printf 'auth-cloud: gdrive: starting rclone OAuth authorization (flow: %s)...\n' "$flow"
-  if [[ "$flow" == "device" ]]; then
-    rclone config reconnect gdrive: --auto-confirm || {
-      printf 'auth-cloud: gdrive: rclone reconnect failed.\n' >&2
-      return 1
-    }
-  else
-    rclone config reconnect gdrive: || {
-      printf 'auth-cloud: gdrive: rclone reconnect failed.\n' >&2
-      return 1
-    }
-  fi
-
-  if rclone_has_token "gdrive"; then
-    printf 'auth-cloud: gdrive: authentication successful.\n'
-    activate_service "rclone-mount@gdrive.service"
-  else
-    printf 'auth-cloud: gdrive: authentication completed but token not found in %s\n' "$RCLONE_CONFIG" >&2
-    return 1
-  fi
+  auth_rclone_remote "gdrive" "personal Google Drive"
 }
 
-# Target: onedrive (Personal)
 auth_onedrive() {
-  printf 'auth-cloud: [onedrive] Checking personal Microsoft OneDrive configuration...\n'
-  if [[ "$force" -eq 0 ]] && rclone_has_token "onedrive"; then
-    printf 'auth-cloud: onedrive: already authenticated with stored token (use --force to re-login).\n'
-    activate_service "rclone-mount@onedrive.service"
-    return 0
-  fi
-
-  if ! command -v rclone >/dev/null 2>&1; then
-    printf 'auth-cloud: onedrive: rclone command not found. Please install rclone.\n' >&2
-    return 1
-  fi
-
-  printf 'auth-cloud: onedrive: starting rclone OAuth authorization (flow: %s)...\n' "$flow"
-  if [[ "$flow" == "device" ]]; then
-    rclone config reconnect onedrive: --auto-confirm || {
-      printf 'auth-cloud: onedrive: rclone reconnect failed.\n' >&2
-      return 1
-    }
-  else
-    rclone config reconnect onedrive: || {
-      printf 'auth-cloud: onedrive: rclone reconnect failed.\n' >&2
-      return 1
-    }
-  fi
-
-  if rclone_has_token "onedrive"; then
-    printf 'auth-cloud: onedrive: authentication successful.\n'
-    activate_service "rclone-mount@onedrive.service"
-  else
-    printf 'auth-cloud: onedrive: authentication completed but token not found in %s\n' "$RCLONE_CONFIG" >&2
-    return 1
-  fi
+  auth_rclone_remote "onedrive" "personal Microsoft OneDrive"
 }
 
-# Target: onedrive-corp (Corporate)
 auth_onedrive_corp() {
-  printf 'auth-cloud: [onedrive-corp] Checking corporate Microsoft OneDrive for Business...\n'
   printf 'auth-cloud: onedrive-corp: Note (R14): Corporate OneDrive authenticates independently via Microsoft Graph.\n'
-  printf 'auth-cloud: onedrive-corp: Ensure your organization permits OneDrive sync for desktop clients.\n'
-
-  if [[ "$force" -eq 0 ]] && rclone_has_token "onedrive-corp"; then
-    printf 'auth-cloud: onedrive-corp: already authenticated with stored token (use --force to re-login).\n'
-    activate_service "rclone-mount@onedrive-corp.service"
-    return 0
-  fi
-
-  if ! command -v rclone >/dev/null 2>&1; then
-    printf 'auth-cloud: onedrive-corp: rclone command not found. Please install rclone.\n' >&2
-    return 1
-  fi
-
-  printf 'auth-cloud: onedrive-corp: starting rclone OAuth authorization (flow: %s)...\n' "$flow"
-  if [[ "$flow" == "device" ]]; then
-    rclone config reconnect onedrive-corp: --auto-confirm || {
-      printf 'auth-cloud: onedrive-corp: rclone reconnect failed.\n' >&2
-      return 1
-    }
-  else
-    rclone config reconnect onedrive-corp: || {
-      printf 'auth-cloud: onedrive-corp: rclone reconnect failed.\n' >&2
-      return 1
-    }
-  fi
-
-  if rclone_has_token "onedrive-corp"; then
-    printf 'auth-cloud: onedrive-corp: authentication successful.\n'
-    activate_service "rclone-mount@onedrive-corp.service"
-  else
-    printf 'auth-cloud: onedrive-corp: authentication completed but token not found in %s\n' "$RCLONE_CONFIG" >&2
-    return 1
-  fi
+  auth_rclone_remote "onedrive-corp" "corporate Microsoft OneDrive for Business"
 }
 
-# Target: corporate (DavMail Corporate)
 auth_corporate() {
-  printf 'auth-cloud: [corporate] Checking corporate Microsoft Exchange/Graph PIM bridge...\n'
   printf 'auth-cloud: corporate: Validating corporate Entra tenant consent requirements (R14)...\n'
   printf 'auth-cloud: corporate: Delegated scopes needed: Calendars.ReadWrite, Tasks.ReadWrite, offline_access\n'
-
-  local token_file="$DAVMAIL_STATE_DIR/corporate-tokens.properties"
-  local props_file="$DAVMAIL_CONFIG_DIR/corporate.properties"
-
-  if [[ "$force" -eq 0 ]] && davmail_has_token "corporate"; then
-    printf 'auth-cloud: corporate: already authenticated with stored token at %s (use --force to re-auth).\n' "$token_file"
-    activate_service "davmail@corporate.service"
-    trigger_akonadi_sync "akonadi_davgroupware_resource_corporate"
-    return 0
-  fi
-
-  if [[ ! -f "$props_file" ]]; then
-    printf 'auth-cloud: corporate: DavMail properties file not found: %s\n' "$props_file" >&2
-    printf 'auth-cloud: corporate: run `chezmoi apply` to deploy configured properties.\n' >&2
-    return 1
-  fi
-
-  local java_bin
-  if command -v java >/dev/null 2>&1; then
-    java_bin="$(command -v java)"
-  elif [[ -x "/usr/bin/java" ]]; then
-    java_bin="/usr/bin/java"
-  else
-    printf 'auth-cloud: corporate: java runtime not found. Please install java-latest-openjdk-devel.\n' >&2
-    return 1
-  fi
-
-  if [[ ! -f "$DAVMAIL_JAR" ]]; then
-    printf 'auth-cloud: corporate: DavMail jar not found at %s\n' "$DAVMAIL_JAR" >&2
-    printf 'auth-cloud: corporate: run `chezmoi apply` to fetch DavMail external archive.\n' >&2
-    return 1
-  fi
-
-  mkdir -p "$DAVMAIL_STATE_DIR"
-  chmod 0700 "$DAVMAIL_STATE_DIR"
-
-  local davmail_mode="O365Interactive"
-  if [[ "$flow" == "device" ]]; then
-    davmail_mode="O365DeviceCode"
-  fi
-
-  printf 'auth-cloud: corporate: launching DavMail initial OAuth authentication (%s)...\n' "$davmail_mode"
-
-  # Run DavMail in initial auth mode
-  if ! "$java_bin" -Djava.awt.headless=true "-Ddavmail.mode=$davmail_mode" -jar "$DAVMAIL_JAR" "$props_file"; then
-    printf 'auth-cloud: corporate: DavMail authentication exited with an error.\n' >&2
-    # Check if this looks like a consent failure
-    printf 'auth-cloud: corporate: Note (R14): If tenant administrator consent is blocked by corporate policy,\n' >&2
-    printf 'auth-cloud: corporate: degrade corporate PIM to read-only mode by setting:\n' >&2
-    printf 'auth-cloud: corporate:   corporateMs:\n' >&2
-    printf 'auth-cloud: corporate:     mode: read-only\n' >&2
-    printf 'auth-cloud: corporate: in .chezmoidata/cloud.yaml and re-running `chezmoi apply`.\n' >&2
-    return 1
-  fi
-
-  if [[ -f "$token_file" ]]; then
-    chmod 0600 "$token_file"
-    printf 'auth-cloud: corporate: DavMail token saved securely to %s\n' "$token_file"
-    activate_service "davmail@corporate.service"
-    trigger_akonadi_sync "akonadi_davgroupware_resource_corporate"
-  else
-    printf 'auth-cloud: corporate: token file %s was not created.\n' "$token_file" >&2
-    return 1
-  fi
+  auth_davmail_instance "corporate" "corporate Microsoft Exchange/Graph PIM bridge"
 }
 
-# Target: personal (DavMail Personal)
 auth_personal() {
-  printf 'auth-cloud: [personal] Checking personal Microsoft Outlook.com PIM bridge...\n'
-
-  local token_file="$DAVMAIL_STATE_DIR/personal-tokens.properties"
-  local props_file="$DAVMAIL_CONFIG_DIR/personal.properties"
-
-  if [[ "$force" -eq 0 ]] && davmail_has_token "personal"; then
-    printf 'auth-cloud: personal: already authenticated with stored token at %s (use --force to re-auth).\n' "$token_file"
-    activate_service "davmail@personal.service"
-    trigger_akonadi_sync "akonadi_davgroupware_resource_personal"
-    return 0
-  fi
-
-  if [[ ! -f "$props_file" ]]; then
-    printf 'auth-cloud: personal: DavMail properties file not found: %s\n' "$props_file" >&2
-    printf 'auth-cloud: personal: run `chezmoi apply` to deploy configured properties.\n' >&2
-    return 1
-  fi
-
-  local java_bin
-  if command -v java >/dev/null 2>&1; then
-    java_bin="$(command -v java)"
-  elif [[ -x "/usr/bin/java" ]]; then
-    java_bin="/usr/bin/java"
-  else
-    printf 'auth-cloud: personal: java runtime not found. Please install java-latest-openjdk-devel.\n' >&2
-    return 1
-  fi
-
-  if [[ ! -f "$DAVMAIL_JAR" ]]; then
-    printf 'auth-cloud: personal: DavMail jar not found at %s\n' "$DAVMAIL_JAR" >&2
-    printf 'auth-cloud: personal: run `chezmoi apply` to fetch DavMail external archive.\n' >&2
-    return 1
-  fi
-
-  mkdir -p "$DAVMAIL_STATE_DIR"
-  chmod 0700 "$DAVMAIL_STATE_DIR"
-
-  local davmail_mode="O365Interactive"
-  if [[ "$flow" == "device" ]]; then
-    davmail_mode="O365DeviceCode"
-  fi
-
-  printf 'auth-cloud: personal: launching DavMail initial OAuth authentication (%s)...\n' "$davmail_mode"
-
-  if ! "$java_bin" -Djava.awt.headless=true "-Ddavmail.mode=$davmail_mode" -jar "$DAVMAIL_JAR" "$props_file"; then
-    printf 'auth-cloud: personal: DavMail authentication failed.\n' >&2
-    return 1
-  fi
-
-  if [[ -f "$token_file" ]]; then
-    chmod 0600 "$token_file"
-    printf 'auth-cloud: personal: DavMail token saved securely to %s\n' "$token_file"
-    activate_service "davmail@personal.service"
-    trigger_akonadi_sync "akonadi_davgroupware_resource_personal"
-  else
-    printf 'auth-cloud: personal: token file %s was not created.\n' "$token_file" >&2
-    return 1
-  fi
+  auth_davmail_instance "personal" "personal Microsoft Outlook.com PIM bridge"
 }
 
 # Target: google (KAccounts)

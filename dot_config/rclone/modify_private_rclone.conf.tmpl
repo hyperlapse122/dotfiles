@@ -33,19 +33,11 @@ def main():
     if trimmed:
         try:
             parser.read_string(input_text)
-        except configparser.Error as err:
+        except (configparser.Error, Exception) as err:
             sys.stderr.write(f"modify_rclone.conf: failed to parse existing config: {err}\n")
             sys.exit(1)
-        except Exception as err:
-            sys.stderr.write(f"modify_rclone.conf: unexpected error parsing config: {err}\n")
-            sys.exit(1)
 
-    for section, static_keys in MANAGED_REMOTES.items():
-        if not parser.has_section(section):
-            parser.add_section(section)
-        for key, val in static_keys.items():
-            parser.set(section, key, str(val))
-
+    parser.read_dict(MANAGED_REMOTES)
     parser.write(sys.stdout)
 
 

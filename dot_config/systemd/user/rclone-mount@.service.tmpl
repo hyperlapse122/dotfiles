@@ -8,11 +8,13 @@ ConditionPathExists=%h/.config/rclone/rclone.conf
 
 [Service]
 Type=notify
+CacheDirectory=rclone
+CacheDirectoryMode=0700
 ExecStartPre=-/usr/bin/fusermount3 -u -z %h/Cloud/%i
-ExecStartPre=/usr/bin/mkdir -p %h/Cloud/%i %h/.cache/rclone
-ExecStartPre=/usr/bin/chmod 0700 %h/.cache/rclone
+ExecStartPre=/usr/bin/mkdir -p %h/Cloud/%i
 ExecStart=/usr/bin/rclone mount %i: %h/Cloud/%i --vfs-cache-mode full --vfs-cache-max-size {{ .cloud.rclone.vfsCacheMaxSize }} --vfs-cache-max-age {{ .cloud.rclone.vfsCacheMaxAge }} --dir-cache-time {{ .cloud.rclone.dirCacheTime }} --timeout {{ .cloud.rclone.timeout }}
-ExecStop=/usr/bin/fusermount3 -u -z %h/Cloud/%i
+ExecStop=-/usr/bin/fusermount3 -u -z %h/Cloud/%i
+ExecStopPost=-/usr/bin/fusermount3 -u -z %h/Cloud/%i
 Restart=on-failure
 RestartSec=5s
 

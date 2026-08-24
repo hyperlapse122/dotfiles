@@ -215,7 +215,6 @@ async function resolveDavMail(name: string, spec: ToolSpec): Promise<LockedTool>
 
     const version = m[1];
     if (!version) continue;
-
     const publishedAt = Date.parse(pubDate);
     if (!Number.isFinite(publishedAt)) continue;
 
