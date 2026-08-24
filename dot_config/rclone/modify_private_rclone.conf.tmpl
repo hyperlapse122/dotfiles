@@ -1,45 +1,98 @@
-#!/usr/bin/python3
-import configparser
-import sys
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Static configurations managed by chezmoi for rclone remotes
-MANAGED_REMOTES = {
-    "{{ .cloud.accounts.google.remote }}": {
-        "type": "drive",
-        "client_id": {{ onepasswordRead .cloud.accounts.google.credentials.clientId | toJson }},
-        "client_secret": {{ onepasswordRead .cloud.accounts.google.credentials.clientSecret | toJson }},
-        "scope": "drive",
-    },
-    "{{ .cloud.accounts.personalMs.remote }}": {
-        "type": "onedrive",
-        "client_id": {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientId | toJson }},
-        "client_secret": {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientSecret | toJson }},
-    },
-    "{{ .cloud.accounts.corporateMs.remote }}": {
-        "type": "onedrive",
-        "client_id": {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId | toJson }},
-        "client_secret": {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret | toJson }},
-        "tenant_id": {{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId | toJson }},
-    },
+# Pure awk INI merger for rclone.conf (preserves runtime tokens and unmanaged remotes)
+exec awk '
+BEGIN {
+  remotes["{{ .cloud.accounts.google.remote }}"] = 1
+  remotes["{{ .cloud.accounts.personalMs.remote }}"] = 1
+  remotes["{{ .cloud.accounts.corporateMs.remote }}"] = 1
+
+  # Google Drive
+  k_order["{{ .cloud.accounts.google.remote }}", 1] = "type";          k_val["{{ .cloud.accounts.google.remote }}", "type"] = "drive"
+  k_order["{{ .cloud.accounts.google.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.google.remote }}", "client_id"] = {{ onepasswordRead .cloud.accounts.google.credentials.clientId | toJson }}
+  k_order["{{ .cloud.accounts.google.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.google.remote }}", "client_secret"] = {{ onepasswordRead .cloud.accounts.google.credentials.clientSecret | toJson }}
+  k_order["{{ .cloud.accounts.google.remote }}", 4] = "scope";         k_val["{{ .cloud.accounts.google.remote }}", "scope"] = "drive"
+  k_count["{{ .cloud.accounts.google.remote }}"] = 4
+
+  # Personal OneDrive
+  k_order["{{ .cloud.accounts.personalMs.remote }}", 1] = "type";          k_val["{{ .cloud.accounts.personalMs.remote }}", "type"] = "onedrive"
+  k_order["{{ .cloud.accounts.personalMs.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.personalMs.remote }}", "client_id"] = {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientId | toJson }}
+  k_order["{{ .cloud.accounts.personalMs.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.personalMs.remote }}", "client_secret"] = {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientSecret | toJson }}
+  k_count["{{ .cloud.accounts.personalMs.remote }}"] = 3
+
+  # Corporate OneDrive for Business
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 1] = "type";          k_val["{{ .cloud.accounts.corporateMs.remote }}", "type"] = "onedrive"
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.corporateMs.remote }}", "client_id"] = {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId | toJson }}
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.corporateMs.remote }}", "client_secret"] = {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret | toJson }}
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 4] = "tenant_id";     k_val["{{ .cloud.accounts.corporateMs.remote }}", "tenant_id"] = {{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId | toJson }}
+  k_count["{{ .cloud.accounts.corporateMs.remote }}"] = 4
+
+  current_sec = ""
 }
 
+/^\[[A-Za-z0-9_.-]+\]$/ {
+  sec = substr($0, 2, length($0) - 2)
+  flush_section(current_sec)
+  current_sec = sec
+  seen_sec[sec] = 1
+  print $0
+  next
+}
 
-def main():
-    parser = configparser.ConfigParser(interpolation=None, strict=True)
-    parser.optionxform = str
+/^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=/ {
+  if (current_sec != "") {
+    line = $0
+    sub(/^[[:space:]]+/, "", line)
+    eq_idx = index(line, "=")
+    k = substr(line, 1, eq_idx - 1)
+    sub(/[[:space:]]+$/, "", k)
 
-    input_text = sys.stdin.read()
-    trimmed = input_text.strip()
-    if trimmed:
-        try:
-            parser.read_string(input_text)
-        except (configparser.Error, Exception) as err:
-            sys.stderr.write(f"modify_rclone.conf: failed to parse existing config: {err}\n")
-            sys.exit(1)
+    if ((current_sec, k) in k_val) {
+      print k " = " k_val[current_sec, k]
+      handled[current_sec, k] = 1
+    } else {
+      print line
+    }
+    next
+  }
+}
 
-    parser.read_dict(MANAGED_REMOTES)
-    parser.write(sys.stdout)
+{
+  print $0
+}
 
+function flush_section(s) {
+  if (s in remotes) {
+    cnt = k_count[s]
+    for (i = 1; i <= cnt; i++) {
+      k = k_order[s, i]
+      if (!((s, k) in handled)) {
+        print k " = " k_val[s, k]
+        handled[s, k] = 1
+      }
+    }
+  }
+}
 
-if __name__ == "__main__":
-    main()
+END {
+  flush_section(current_sec)
+
+  r_list[1] = "{{ .cloud.accounts.google.remote }}"
+  r_list[2] = "{{ .cloud.accounts.personalMs.remote }}"
+  r_list[3] = "{{ .cloud.accounts.corporateMs.remote }}"
+
+  for (r_idx = 1; r_idx <= 3; r_idx++) {
+    r = r_list[r_idx]
+    if (!(r in seen_sec)) {
+      if (NR > 0 || r_idx > 1) print ""
+      print "[" r "]"
+      cnt = k_count[r]
+      for (i = 1; i <= cnt; i++) {
+        k = k_order[r, i]
+        print k " = " k_val[r, k]
+      }
+    }
+  }
+}
+'
