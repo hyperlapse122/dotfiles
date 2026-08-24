@@ -223,12 +223,6 @@ export const REGISTRY: Registry = {
     source: "https://download.mikrotik.com/routeros/winbox/LATEST.4",
   },
 
-  davmail: {
-    kind: "vendorManifest",
-    vendor: "davmail",
-    source: "https://sourceforge.net/projects/davmail/rss?path=/davmail",
-  },
-
   /* ---------- gitRef ---------- */
 
   // The improve skill has no releases/tags; agents.skills.external pins its
