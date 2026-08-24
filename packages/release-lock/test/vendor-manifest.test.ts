@@ -264,8 +264,8 @@ describe("resolveVendorManifest davmail", () => {
     const dummyZipBytes = new Uint8Array([80, 75, 3, 4, 0, 0]);
     stubRoutes({
       [DAVMAIL_SOURCE]: text(DAVMAIL_FEED),
-      "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip": () =>
-        new Response(dummyZipBytes, { status: 200 }),
+      "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip":
+        () => new Response(dummyZipBytes, { status: 200 }),
     });
 
     const locked = await resolveVendorManifest("davmail", davmailSpec());
