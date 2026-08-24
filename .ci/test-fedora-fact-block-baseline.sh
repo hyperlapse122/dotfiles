@@ -151,6 +151,10 @@ grep -Fq 'site=networkmanager-not-running' "$network_render" \
 files_render="$scratch/run_onchange_after_install-system-10-files.sh"
 grep -Fq 'keyd reload (etc/keyd changed)' "$files_render" \
   || fail 'install-system-10-files render omits the change-gated keyd reload'
+grep -Fq '"${SUDO[@]}" keyd reload' "$files_render" \
+  || fail 'install-system-10-files render omits the keyd reload command'
+grep -Fq 'systemctl is-active --quiet keyd.service' "$files_render" \
+  || fail 'install-system-10-files render omits the keyd active-unit guard'
 
 # The login-shell script consumes capabilities.tmpl and facts.tmpl, so it never
 # carries a FACT_* block; only these two scripts include facts-sh.tmpl.
