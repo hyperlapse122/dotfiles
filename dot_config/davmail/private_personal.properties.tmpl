@@ -8,8 +8,20 @@ davmail.popPort=
 davmail.imapPort=
 davmail.smtpPort=
 davmail.ldapPort=
+{{- if and (hasKey .cloud.accounts.personalMs.credentials "clientId") (hasPrefix "op://" .cloud.accounts.personalMs.credentials.clientId) }}
 davmail.oauth.clientId={{ onepasswordRead .cloud.accounts.personalMs.credentials.clientId }}
+{{- else if .cloud.accounts.personalMs.credentials.clientId }}
+davmail.oauth.clientId={{ .cloud.accounts.personalMs.credentials.clientId }}
+{{- else }}
+davmail.oauth.clientId=
+{{- end }}
+{{- if and (hasKey .cloud.accounts.personalMs.credentials "clientSecret") (hasPrefix "op://" .cloud.accounts.personalMs.credentials.clientSecret) }}
 davmail.oauth.clientSecret={{ onepasswordRead .cloud.accounts.personalMs.credentials.clientSecret }}
+{{- else if .cloud.accounts.personalMs.credentials.clientSecret }}
+davmail.oauth.clientSecret={{ .cloud.accounts.personalMs.credentials.clientSecret }}
+{{- else }}
+davmail.oauth.clientSecret=
+{{- end }}
 davmail.oauth.tenantId=consumers
 davmail.oauth.tokenFilePath={{ .chezmoi.homeDir }}/.local/state/davmail/personal-tokens.properties
 davmail.logFilePath={{ .chezmoi.homeDir }}/.local/state/davmail/personal-davmail.log

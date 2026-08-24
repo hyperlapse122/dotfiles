@@ -1,7 +1,12 @@
 [General]
 DisplayName=Personal Microsoft Calendar (Read-Only)
+{{- if and (hasKey .cloud.accounts.personalMs.credentials "icsUrl") (hasPrefix "op://" .cloud.accounts.personalMs.credentials.icsUrl) }}
 Path={{ onepasswordRead .cloud.accounts.personalMs.credentials.icsUrl }}
 Url={{ onepasswordRead .cloud.accounts.personalMs.credentials.icsUrl }}
+{{- else }}
+Path=
+Url=
+{{- end }}
 ReadOnly=true
 PeriodicUpdate=true
 UpdateInterval=30

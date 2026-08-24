@@ -8,9 +8,27 @@ davmail.popPort=
 davmail.imapPort=
 davmail.smtpPort=
 davmail.ldapPort=
+{{- if and (hasKey .cloud.accounts.corporateMs.credentials "clientId") (hasPrefix "op://" .cloud.accounts.corporateMs.credentials.clientId) }}
 davmail.oauth.clientId={{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId }}
+{{- else if .cloud.accounts.corporateMs.credentials.clientId }}
+davmail.oauth.clientId={{ .cloud.accounts.corporateMs.credentials.clientId }}
+{{- else }}
+davmail.oauth.clientId=
+{{- end }}
+{{- if and (hasKey .cloud.accounts.corporateMs.credentials "clientSecret") (hasPrefix "op://" .cloud.accounts.corporateMs.credentials.clientSecret) }}
 davmail.oauth.clientSecret={{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret }}
+{{- else if .cloud.accounts.corporateMs.credentials.clientSecret }}
+davmail.oauth.clientSecret={{ .cloud.accounts.corporateMs.credentials.clientSecret }}
+{{- else }}
+davmail.oauth.clientSecret=
+{{- end }}
+{{- if and (hasKey .cloud.accounts.corporateMs.credentials "tenantId") (hasPrefix "op://" .cloud.accounts.corporateMs.credentials.tenantId) }}
 davmail.oauth.tenantId={{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId }}
+{{- else if .cloud.accounts.corporateMs.credentials.tenantId }}
+davmail.oauth.tenantId={{ .cloud.accounts.corporateMs.credentials.tenantId }}
+{{- else }}
+davmail.oauth.tenantId=
+{{- end }}
 davmail.oauth.tokenFilePath={{ .chezmoi.homeDir }}/.local/state/davmail/corporate-tokens.properties
 davmail.logFilePath={{ .chezmoi.homeDir }}/.local/state/davmail/corporate-davmail.log
 davmail.logFileSize=10MB

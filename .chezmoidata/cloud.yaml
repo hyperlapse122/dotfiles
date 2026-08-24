@@ -15,8 +15,8 @@ cloud:
       mountDir: gdrive
       mountPath: Cloud/gdrive
       credentials:
-        clientId: op://Private/Google/OAuth Client ID
-        clientSecret: op://Private/Google/OAuth Client Secret
+        clientId: ""
+        clientSecret: ""
 
     personalMs:
       name: personalMs
@@ -29,9 +29,9 @@ cloud:
         instance: personal
         caldavPort: 1081
       credentials:
-        clientId: op://Private/Microsoft/Personal Client ID
-        clientSecret: op://Private/Microsoft/Personal Client Secret
-        icsUrl: op://Private/Microsoft/Personal ICS URL
+        clientId: ""
+        clientSecret: ""
+        icsUrl: op://Private/Microsoft Personal/ICS URL
 
     corporateMs:
       name: corporateMs
@@ -44,7 +44,7 @@ cloud:
         instance: corporate
         caldavPort: 1080
       credentials:
-        clientId: op://Private/Microsoft/Corporate Entra Client ID
-        clientSecret: op://Private/Microsoft/Corporate Entra Client Secret
-        tenantId: op://Private/Microsoft/Corporate Tenant ID
-        icsUrl: op://Private/Microsoft/Corporate ICS URL
+        clientId: op://Private/JPI Microsoft 365/Entra Client ID
+        clientSecret: ""
+        tenantId: op://Private/JPI Microsoft 365/Tenant ID
+        icsUrl: op://Private/JPI Microsoft 365/ICS URL

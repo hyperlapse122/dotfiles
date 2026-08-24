@@ -9,8 +9,8 @@
       <setting name="mechanism">user_agent</setting>
       <group name="oauth2">
         <group name="user_agent">
-          <setting name="ClientId">{{ onepasswordRead .cloud.accounts.google.credentials.clientId }}</setting>
-          <setting name="ClientSecret">{{ onepasswordRead .cloud.accounts.google.credentials.clientSecret }}</setting>
+          <setting name="ClientId">{{ if and (hasKey .cloud.accounts.google.credentials "clientId") (hasPrefix "op://" .cloud.accounts.google.credentials.clientId) }}{{ onepasswordRead .cloud.accounts.google.credentials.clientId }}{{ else }}{{ .cloud.accounts.google.credentials.clientId | default "" }}{{ end }}</setting>
+          <setting name="ClientSecret">{{ if and (hasKey .cloud.accounts.google.credentials "clientSecret") (hasPrefix "op://" .cloud.accounts.google.credentials.clientSecret) }}{{ onepasswordRead .cloud.accounts.google.credentials.clientSecret }}{{ else }}{{ .cloud.accounts.google.credentials.clientSecret | default "" }}{{ end }}</setting>
           <setting name="AuthPath">https://accounts.google.com/o/oauth2/auth</setting>
           <setting name="TokenPath">https://oauth2.googleapis.com/token</setting>
           <setting name="RedirectUri">http://127.0.0.1/oauth2redirect</setting>

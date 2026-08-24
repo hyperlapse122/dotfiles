@@ -20,15 +20,10 @@ else
   cat <<'EOF' > "$op_stub/op"
 #!/usr/bin/env bash
 case "$*" in
-  *"op://Private/Google/OAuth Client ID"*) printf 'mock-google-client-id' ;;
-  *"op://Private/Google/OAuth Client Secret"*) printf 'mock-google-client-secret' ;;
-  *"op://Private/Microsoft/Personal Client ID"*) printf 'mock-personal-client-id' ;;
-  *"op://Private/Microsoft/Personal Client Secret"*) printf 'mock-personal-client-secret' ;;
-  *"op://Private/Microsoft/Personal ICS URL"*) printf 'mock-personal-ics-url' ;;
-  *"op://Private/Microsoft/Corporate Entra Client ID"*) printf 'mock-corporate-client-id' ;;
-  *"op://Private/Microsoft/Corporate Entra Client Secret"*) printf 'mock-corporate-client-secret' ;;
-  *"op://Private/Microsoft/Corporate Tenant ID"*) printf 'mock-corporate-tenant-id' ;;
-  *"op://Private/Microsoft/Corporate ICS URL"*) printf 'mock-corporate-ics-url' ;;
+  *"op://Private/JPI Microsoft 365/Entra Client ID"*) printf 'mock-corporate-client-id' ;;
+  *"op://Private/JPI Microsoft 365/Tenant ID"*) printf 'mock-corporate-tenant-id' ;;
+  *"op://Private/JPI Microsoft 365/ICS URL"*) printf 'mock-corporate-ics-url' ;;
+  *"op://Private/Microsoft Personal/ICS URL"*) printf 'mock-personal-ics-url' ;;
   *) printf 'mock-dummy-secret' ;;
 esac
 EOF

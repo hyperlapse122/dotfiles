@@ -10,22 +10,22 @@ BEGIN {
 
   # Google Drive
   k_order["{{ .cloud.accounts.google.remote }}", 1] = "type";          k_val["{{ .cloud.accounts.google.remote }}", "type"] = "drive"
-  k_order["{{ .cloud.accounts.google.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.google.remote }}", "client_id"] = {{ onepasswordRead .cloud.accounts.google.credentials.clientId | toJson }}
-  k_order["{{ .cloud.accounts.google.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.google.remote }}", "client_secret"] = {{ onepasswordRead .cloud.accounts.google.credentials.clientSecret | toJson }}
+  k_order["{{ .cloud.accounts.google.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.google.remote }}", "client_id"] = {{ if and (hasKey .cloud.accounts.google.credentials "clientId") (hasPrefix "op://" .cloud.accounts.google.credentials.clientId) }}{{ onepasswordRead .cloud.accounts.google.credentials.clientId | toJson }}{{ else }}{{ .cloud.accounts.google.credentials.clientId | default "" | toJson }}{{ end }}
+  k_order["{{ .cloud.accounts.google.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.google.remote }}", "client_secret"] = {{ if and (hasKey .cloud.accounts.google.credentials "clientSecret") (hasPrefix "op://" .cloud.accounts.google.credentials.clientSecret) }}{{ onepasswordRead .cloud.accounts.google.credentials.clientSecret | toJson }}{{ else }}{{ .cloud.accounts.google.credentials.clientSecret | default "" | toJson }}{{ end }}
   k_order["{{ .cloud.accounts.google.remote }}", 4] = "scope";         k_val["{{ .cloud.accounts.google.remote }}", "scope"] = "drive"
   k_count["{{ .cloud.accounts.google.remote }}"] = 4
 
   # Personal OneDrive
   k_order["{{ .cloud.accounts.personalMs.remote }}", 1] = "type";          k_val["{{ .cloud.accounts.personalMs.remote }}", "type"] = "onedrive"
-  k_order["{{ .cloud.accounts.personalMs.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.personalMs.remote }}", "client_id"] = {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientId | toJson }}
-  k_order["{{ .cloud.accounts.personalMs.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.personalMs.remote }}", "client_secret"] = {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientSecret | toJson }}
+  k_order["{{ .cloud.accounts.personalMs.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.personalMs.remote }}", "client_id"] = {{ if and (hasKey .cloud.accounts.personalMs.credentials "clientId") (hasPrefix "op://" .cloud.accounts.personalMs.credentials.clientId) }}{{ onepasswordRead .cloud.accounts.personalMs.credentials.clientId | toJson }}{{ else }}{{ .cloud.accounts.personalMs.credentials.clientId | default "" | toJson }}{{ end }}
+  k_order["{{ .cloud.accounts.personalMs.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.personalMs.remote }}", "client_secret"] = {{ if and (hasKey .cloud.accounts.personalMs.credentials "clientSecret") (hasPrefix "op://" .cloud.accounts.personalMs.credentials.clientSecret) }}{{ onepasswordRead .cloud.accounts.personalMs.credentials.clientSecret | toJson }}{{ else }}{{ .cloud.accounts.personalMs.credentials.clientSecret | default "" | toJson }}{{ end }}
   k_count["{{ .cloud.accounts.personalMs.remote }}"] = 3
 
   # Corporate OneDrive for Business
   k_order["{{ .cloud.accounts.corporateMs.remote }}", 1] = "type";          k_val["{{ .cloud.accounts.corporateMs.remote }}", "type"] = "onedrive"
-  k_order["{{ .cloud.accounts.corporateMs.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.corporateMs.remote }}", "client_id"] = {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId | toJson }}
-  k_order["{{ .cloud.accounts.corporateMs.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.corporateMs.remote }}", "client_secret"] = {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret | toJson }}
-  k_order["{{ .cloud.accounts.corporateMs.remote }}", 4] = "tenant_id";     k_val["{{ .cloud.accounts.corporateMs.remote }}", "tenant_id"] = {{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId | toJson }}
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 2] = "client_id";     k_val["{{ .cloud.accounts.corporateMs.remote }}", "client_id"] = {{ if and (hasKey .cloud.accounts.corporateMs.credentials "clientId") (hasPrefix "op://" .cloud.accounts.corporateMs.credentials.clientId) }}{{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId | toJson }}{{ else }}{{ .cloud.accounts.corporateMs.credentials.clientId | default "" | toJson }}{{ end }}
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 3] = "client_secret"; k_val["{{ .cloud.accounts.corporateMs.remote }}", "client_secret"] = {{ if and (hasKey .cloud.accounts.corporateMs.credentials "clientSecret") (hasPrefix "op://" .cloud.accounts.corporateMs.credentials.clientSecret) }}{{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret | toJson }}{{ else }}{{ .cloud.accounts.corporateMs.credentials.clientSecret | default "" | toJson }}{{ end }}
+  k_order["{{ .cloud.accounts.corporateMs.remote }}", 4] = "tenant_id";     k_val["{{ .cloud.accounts.corporateMs.remote }}", "tenant_id"] = {{ if and (hasKey .cloud.accounts.corporateMs.credentials "tenantId") (hasPrefix "op://" .cloud.accounts.corporateMs.credentials.tenantId) }}{{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId | toJson }}{{ else }}{{ .cloud.accounts.corporateMs.credentials.tenantId | default "" | toJson }}{{ end }}
   k_count["{{ .cloud.accounts.corporateMs.remote }}"] = 4
 
   current_sec = ""
