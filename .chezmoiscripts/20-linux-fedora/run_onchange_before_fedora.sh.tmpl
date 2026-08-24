@@ -330,6 +330,26 @@ install_direct_rpms() {
     esac
   fi
 {{ end -}}
+{{- $openlogiRawVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "openlogi") -}}
+{{- $openlogiVersion := trimPrefix "v" $openlogiRawVersion -}}
+{{- $openlogiUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "openlogi" "field" "url" "platform" "auto") -}}
+{{- $openlogiSha256 := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "openlogi" "field" "sha256" "platform" "auto") -}}
+  local openlogi_installed_ver
+  openlogi_installed_ver="$(rpm -q --qf '%{VERSION}' openlogi 2>/dev/null || true)"
+  if [[ "${openlogi_installed_ver}" == {{ $openlogiVersion | quote }} || "${openlogi_installed_ver}" == {{ $openlogiRawVersion | quote }} ]]; then
+    printf 'install-fedora.sh: %s already at pinned version %s; skipping.\n' 'openlogi' {{ $openlogiRawVersion | quote }}
+  else
+    local openlogi_rpm
+    openlogi_rpm="$(mktemp "${TMPDIR:-/tmp}/openlogi.XXXXXX.rpm")"
+    if ! curl -fsSL --connect-timeout 15 --max-time 180 --retry 3 --retry-delay 2 {{ $openlogiUrl | quote }} -o "${openlogi_rpm}" || \
+       ! printf '%s  %s\n' {{ $openlogiSha256 | quote }} "${openlogi_rpm}" | sha256sum -c - >/dev/null 2>&1; then
+      rm -f "${openlogi_rpm}"
+      printf 'install-fedora.sh: openlogi download or checksum verification failed for %s\n' {{ $openlogiUrl | quote }} >&2
+      return 1
+    fi
+    "${DNF[@]}" install -y "${openlogi_rpm}"
+    rm -f "${openlogi_rpm}"
+  fi
 }
 
 # Flatpak apps from Flathub (system-wide). flatpak install is idempotent, so

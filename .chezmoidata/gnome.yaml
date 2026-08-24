@@ -14,7 +14,7 @@
 #                  libinput's profiles: `flat` (constant 1:1 mapping, no
 #                  speed-dependent curve — the standard choice for high-DPI
 #                  mice; pointer speed then comes from the mouse's own
-#                  hardware DPI, set in its firmware / the Solaar GUI),
+#                  hardware DPI, set in its firmware / the device GUI),
 #                  `adaptive` (the GNOME default curve),
 #                  or `custom`. The script stamps the exact value it applied
 #                  (value-signature, like config-gnome-fonts): editing this
@@ -70,14 +70,6 @@
 #                   re-binds in Settings is never fought.
 #
 # gnome.shellExtensions:
-#   solaar        : the GNOME Shell extension installed by
-#                   run_after_install-gnome-solaar-extension.sh.tmpl —
-#                   `uuid` is upstream's fixed extension id (sanity-checked
-#                   against the extensions.gnome.org response) and `egoId` is its
-#                   numeric extensions.gnome.org primary key, the `pk=` of the
-#                   extension-info API query that resolves a build for the RUNNING
-#                   shell version. Both identify WHICH extension; the script keeps
-#                   every bit of the download/compat/enable logic (see its header).
 #   kimpanel      : Input-method panel extension installed by
 #                   run_after_install-gnome-kimpanel-extension.sh.tmpl.
 #                   Load-bearing on GNOME Wayland: mutter has no wlr-layer-shell,
@@ -87,9 +79,13 @@
 #                   of the screen. Kimpanel receives fcitx5's candidate state
 #                   over the KDE Kimpanel D-Bus interface (fcitx5-module-kimpanel
 #                   in the fcitx5 package on both distros) and renders it inside
-#                   GNOME Shell instead. The `uuid` / `egoId` pair works exactly
-#                   like the solaar entry above; the script mirrors the same
-#                   resolve/download/enable logic.
+#                   GNOME Shell instead. `uuid` is upstream's fixed extension id
+#                   (sanity-checked against the extensions.gnome.org response)
+#                   and `egoId` is its numeric extensions.gnome.org primary key,
+#                   the `pk=` of the extension-info API query that resolves a
+#                   build for the RUNNING shell version. Both identify WHICH
+#                   extension; the script keeps every bit of the
+#                   download/compat/enable logic (see its header).
 gnome:
   mouse:
     accelProfile: adaptive
@@ -103,9 +99,6 @@ gnome:
       command: /usr/bin/1password --quick-access
       binding: <Control><Shift>space
   shellExtensions:
-    solaar:
-      uuid: solaar-extension@sidevesh
-      egoId: 6162
     kimpanel:
       uuid: kimpanel@kde.org
       egoId: 261

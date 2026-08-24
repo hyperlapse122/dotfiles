@@ -77,7 +77,7 @@ system/linux/etc/locale.conf
 |---|---|
 | `etc/bluetooth/main.conf` | BlueZ daemon config: `Experimental`/`KernelExperimental = true`, `ControllerMode = dual` (Classic A2DP dual mode so stereo audio stays available on TWS earbuds that fall back to mono over LE Audio on current BlueZ) |
 | `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
-| `etc/keyd/default.conf` | keyd keyboard remapping (CapsLock → Hangeul, meta layer) |
+| `etc/keyd/default.conf` | keyd keyboard remapping (CapsLock → Hangeul, meta layer; Logi Bolt receiver `046d:c548` excluded so paired MX Master mice stay on libinput/Solaar) |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
@@ -85,7 +85,7 @@ system/linux/etc/locale.conf
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreeze` gate skips it when the theme is not installed |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
-| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access, and the active-seat `/dev/uinput` grant Solaar's Wayland rule engine needs (`70-uinput-solaar.rules`) |
+| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
 
 ## The install-system script set (10-files → 20-host → 30-network)
 

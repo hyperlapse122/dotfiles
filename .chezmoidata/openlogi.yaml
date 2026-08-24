@@ -1,0 +1,39 @@
+# Manifest of OpenLogi configuration:
+#   openlogi.app_settings — application-wide preferences asserted into
+#     ~/.config/openlogi/config.toml by
+#     .chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl via settings-reconcile.
+#
+# Single source of truth (like packages.yaml, agents.yaml, and kde.yaml):
+# add or retune declared OpenLogi settings HERE, not in the script or by hand-editing
+# ~/.config/openlogi/config.toml on managed hosts.
+#
+# DATA CONTRACT & LIFECYCLE:
+#   - Leaf reconciliation: settings-reconcile asserts each declared key into
+#     config.toml in place, creating the file if missing and preserving any
+#     undeclared keys or tables written by the OpenLogi GUI (R10, KTD2).
+#   - Safe daemon restart: OpenLogi rewrites config.toml on every change and
+#     overwrites hand edits made while its background agent runs. The assertion
+#     script stops openlogi-agent when active, reconciles config.toml, and restarts
+#     it, with an EXIT trap that restores the agent on failure (KTD3).
+#   - Linux service enablement: on Linux, openlogi-agent.service is enabled and
+#     running after apply (R9).
+#
+# DEVICE BLOCKS (R11):
+#   OpenLogi keys device blocks by physical device identity (receiver UID/slot or
+#   serial, e.g. `receiver:<uid>:slot:<n>`). Replacing a mouse or receiver means
+#   a data edit, by accepted design. When per-device blocks are declared, they are
+#   keyed by physical identity in data rather than abstract model names.
+#
+# FRESH START (R12):
+#   No legacy Solaar content was ported: the initial declared set contains no gesture
+#   bindings, button remaps, or device settings translated from former Solaar configs.
+#
+# SETTING REFERENCE:
+#   app_settings:
+#     launch_at_login   : bool; ensures openlogi-agent starts at login.
+#     check_for_updates : bool; checks for OpenLogi application updates.
+
+openlogi:
+  app_settings:
+    launch_at_login: true
+    check_for_updates: true

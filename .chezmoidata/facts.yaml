@@ -131,7 +131,7 @@ factRegistry:
       kdePackages / gnomePackages in packages.yaml; the 50-linux-kde and
       50-linux-gnome script guards; the per-desktop fcitx5 launch mechanism
       (KDE via KWin virtualkeyboard, GNOME via XDG autostart + Kimpanel);
-      the pinentry choice; the solaar gesture D-Bus actions.
+      the pinentry choice.
     whenFalse: >-
       `none` (headless, container, CI — neither shell binary on PATH): neither
       per-desktop package set installs, and the KDE variant renders for the

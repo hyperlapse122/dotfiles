@@ -248,10 +248,6 @@ packages:
         # stores. The backing daemon is the desktop's own (ksecretd / gnome-keyring).
         - libsecret
 
-        # Logitech device manager
-        - solaar
-        - solaar-udev
-
         # Smartcard / code signing — Authenticode signing with the certificate held on
         # a SafeNet eToken 5110 (Gemalto IDPrime 940). The signing packages form one
         # chain — osslsigncode -> pkcs11-provider -> opensc -> pcscd -> CCID -> card —
@@ -601,9 +597,10 @@ packages:
         macos: { disposition: manual, reason: native macOS Korean input source is built in and added in System Settings > Keyboard > Input Sources; no package manager owns it, architectures: { arm64: manual } }
         ubuntu: { disposition: managed, owner: apt, identifier: fcitx5-hangul, source: ubuntu, architectures: { arm64: native } }
       - id: logitechGestures
-        sentinel: solaar
-        fedora: { disposition: managed, owner: dnf, identifier: solaar, source: fedora, architectures: { amd64: native, arm64: native } }
-        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: logi-options-plus, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native }, manual: profile }
+        sentinel: openlogi
+        integrity: checksum
+        fedora: { disposition: managed, owner: releaseLock, identifier: openlogi, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: openlogi, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
         ubuntu: { disposition: notApplicable, reason: Thor has no Logitech peripherals to manage, architectures: { arm64: notApplicable } }
       - id: nvidiaCompute
         sentinel: nvidia-smi

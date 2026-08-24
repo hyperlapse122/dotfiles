@@ -302,52 +302,45 @@ jobs:
           echo "- LUKS TPM2 tool (${{ matrix.os }}) rendered the shared dracut + systemd-cryptenroll backend" \
             >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Assert solaar gesture rules render per-desktop
+      - name: Assert OpenLogi config script renders per-platform
         run: |
           set -euxo pipefail
-          # dot_config/solaar/rules.yaml.tmpl selects its gesture ACTIONS via
-          # lookPath at render time: plasmashell on PATH -> KWin global-shortcut
-          # actions (also the no-desktop default, which the artifact apply above
-          # already covers); gnome-shell WITHOUT plasmashell -> GNOME Shell
-          # D-Bus actions. The containers ship neither binary, so exercise both
-          # branches explicitly with stub binaries on PATH and assert each
-          # variant carries its desktop's D-Bus calls — and none of the other's.
-          scratch="${RUNNER_TEMP}/de-render"
-          mkdir -p "${scratch}/target" "${scratch}/kde-bin" "${scratch}/gnome-bin"
+          # .chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl renders
+          # real configuration assertion content on Linux and Darwin hosts, and
+          # empty content on Windows or inside containers.
+          scratch="${RUNNER_TEMP}/openlogi-render"
+          mkdir -p "${scratch}/target" "${scratch}/home" "${scratch}/bin"
           : > "${scratch}/empty.toml"
-          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${scratch}/kde-bin/plasmashell"
-          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${scratch}/gnome-bin/gnome-shell"
-          chmod 0755 "${scratch}/kde-bin/plasmashell" "${scratch}/gnome-bin/gnome-shell"
+          printf '#!/usr/bin/env bash\nprintf dummy-secret\n' > "${scratch}/bin/op"
+          chmod 0755 "${scratch}/bin/op"
 
-          # KDE host (plasmashell on PATH). The rendered file's comment header
-          # documents BOTH desktop maps, so every check below anchors on rule
-          # lines (^- Execute) — a bare grep would match the comments.
-          env PATH="${scratch}/kde-bin:${PATH}" \
-            chezmoi --config "${scratch}/empty.toml" \
-              --source "${GITHUB_WORKSPACE}" \
-              --destination "${scratch}/target" \
-              execute-template < "${GITHUB_WORKSPACE}/dot_config/solaar/rules.yaml.tmpl" \
-              > "${scratch}/rules-kde.yaml"
-          grep -q '^- Execute: \[qdbus-qt6, org.kde.kglobalaccel' "${scratch}/rules-kde.yaml"
-          grep -q '^- Execute: \[qdbus-qt6, org.kde.krunner' "${scratch}/rules-kde.yaml"
-          ! grep -q '^- Execute: \[gdbus' "${scratch}/rules-kde.yaml"
+          # shellcheck source=.ci/lib/render-gate-helpers.sh
+          source "${GITHUB_WORKSPACE}/.ci/lib/render-gate-helpers.sh"
+          tmpl=".chezmoiscripts/70-agents/run_after_config-openlogi.sh.tmpl"
 
-          # GNOME-only host (gnome-shell on PATH, no plasmashell).
-          env PATH="${scratch}/gnome-bin:${PATH}" \
-            chezmoi --config "${scratch}/empty.toml" \
-              --source "${GITHUB_WORKSPACE}" \
-              --destination "${scratch}/target" \
-              execute-template < "${GITHUB_WORKSPACE}/dot_config/solaar/rules.yaml.tmpl" \
-              > "${scratch}/rules-gnome.yaml"
-          grep -q 'OverviewActive, "<true>"\]$' "${scratch}/rules-gnome.yaml"
-          grep -q 'OverviewActive, "<false>"\]$' "${scratch}/rules-gnome.yaml"
-          grep -q '^- Execute: \[gdbus, .*org.gnome.Shell.FocusSearch\]$' "${scratch}/rules-gnome.yaml"
-          ! grep -q '^- Execute: \[qdbus-qt6' "${scratch}/rules-gnome.yaml"
-          # The desktop-agnostic haptic confirm must survive in both variants.
-          grep -q '^- Execute: \[".*/mxm4-haptic", "SUBTLE COLLISION"\]$' "${scratch}/rules-kde.yaml"
-          grep -q '^- Execute: \[".*/mxm4-haptic", "SUBTLE COLLISION"\]$' "${scratch}/rules-gnome.yaml"
+          render_reconciler "${GITHUB_WORKSPACE}" "${scratch}" "$(command -v chezmoi)" linux false \
+            "${tmpl}" "${scratch}/openlogi-linux.sh"
+          test -s "${scratch}/openlogi-linux.sh"
+          grep -q 'RECONCILER=' "${scratch}/openlogi-linux.sh"
+          grep -q 'config-openlogi' "${scratch}/openlogi-linux.sh"
+          bash -n "${scratch}/openlogi-linux.sh"
 
-          echo "- solaar gesture rules (${{ matrix.os }}) rendered both per-desktop variants" \
+          render_reconciler "${GITHUB_WORKSPACE}" "${scratch}" "$(command -v chezmoi)" darwin false \
+            "${tmpl}" "${scratch}/openlogi-darwin.sh"
+          test -s "${scratch}/openlogi-darwin.sh"
+          grep -q 'RECONCILER=' "${scratch}/openlogi-darwin.sh"
+          grep -q 'config-openlogi' "${scratch}/openlogi-darwin.sh"
+          bash -n "${scratch}/openlogi-darwin.sh"
+
+          render_reconciler "${GITHUB_WORKSPACE}" "${scratch}" "$(command -v chezmoi)" linux true \
+            "${tmpl}" "${scratch}/openlogi-container.sh"
+          test ! -s "${scratch}/openlogi-container.sh"
+
+          render_reconciler "${GITHUB_WORKSPACE}" "${scratch}" "$(command -v chezmoi)" windows false \
+            "${tmpl}" "${scratch}/openlogi-windows.sh"
+          test ! -s "${scratch}/openlogi-windows.sh"
+
+          echo "- openlogi config assertion script (${{ matrix.os }}) rendered expected platform variants" \
             >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------

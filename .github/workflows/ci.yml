@@ -148,6 +148,7 @@ jobs:
           .ci/test-fontconfig-korean-local-font.sh
           .ci/test-fingerprint-gates.sh
           .ci/test-extension-retry.sh
+          .ci/test-openlogi-config.sh
           .ci/test-capability-cache.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-dotfiles-skips.sh

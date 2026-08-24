@@ -65,12 +65,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 129
+  classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 154
-  phase_local_instances: 124
-  shared_guard_instances: 30
-
+  rendered_instances: 149
+  phase_local_instances: 120
+  shared_guard_instances: 29
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -90,41 +89,40 @@ plan_contract_scopes:
   70-agents: 3
 
 audited_forms:
-  skip_here: 57
-  skip_step: 34
+  skip_here: 54
+  skip_step: 33
   done_here: 14
   not_applicable: 24
 
 audited_directions:
-  harmless: 28
-  transient-blocking: 61
+  harmless: 26
+  transient-blocking: 59
   transient-tolerable: 2
 audited_scopes:
   guard-partials: 5
   00-tools: 4
   10-auth: 5
   20-linux-fedora: 17
-  30-linux: 30
+  30-linux: 26
   50-linux-gnome: 29
   50-linux-kde: 31
   60-build: 5
   70-agents: 3
 
 shared_guard_fanout:
-  gnome-guard: 8
+  gnome-guard: 7
   kde-guard: 10
   headless-guard: 3
   sudo-skip-guard: 4
   shared-host-guard: 5
-
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 28
+    audited: 26
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them).'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 61
+    audited: 59
     reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
   - bucket: 'done_here'
     plan: 10
@@ -144,7 +142,7 @@ divergence:
     reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts.'
   - bucket: 'scope:30-linux'
     plan: 19
-    audited: 30
+    audited: 26
     reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
@@ -201,7 +199,6 @@ owners:
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-mouse.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-terminal-palette.sh.tmpl#gnome-guard/non-gnome-desktop'
-      - '.chezmoiscripts/50-linux-gnome/run_after_install-gnome-solaar-extension.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_after_install-gnome-kimpanel-extension.sh.tmpl#gnome-guard/non-gnome-desktop'
   - owner: 'kde-guard/non-kde-desktop'
     scope: 'guard-partials'
@@ -730,66 +727,6 @@ owners:
     direction: 'transient-tolerable'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#chsh-zsh/authd-confirm-deferred'
-  - owner: 'config-solaar/solaar-absent'
-    scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl'
-    anchor_line: 104
-    anchor: 'if ! command -v solaar >/dev/null 2>&1; then'
-    predicate: '! command -v solaar >/dev/null 2>&1'
-    predicate_digest: 'sha256:b1ef3b531cc634cc34baa2bc35eb16d8ff5fc6818018c69a092c8099ce37deb0'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'linux-desktop'
-    form: 'skip_here'
-    direction: 'transient-blocking'
-    probe: 'solaar-present'
-    fingerprint_placement: 'existing-header-block'
-    instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl#config-solaar/solaar-absent'
-  - owner: 'config-solaar/config-not-generated'
-    scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl'
-    anchor_line: 110
-    anchor: 'if [[ ! -f "$CONFIG" ]]; then'
-    predicate: '[[ ! -f "$CONFIG" ]]'
-    predicate_digest: 'sha256:c4dc195f494afeaf45565d8b1f4b438d0fb928eb995a439e02443e60e6539d14'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'linux-desktop'
-    form: 'skip_here'
-    direction: 'harmless'
-    instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl#config-solaar/config-not-generated'
-  - owner: 'config-solaar/pyyaml-absent'
-    scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl'
-    anchor_line: 118
-    anchor: 'if ! "$PYTHON" -c "import yaml" 2>/dev/null; then'
-    predicate: '! "$PYTHON" -c "import yaml" 2>/dev/null'
-    predicate_digest: 'sha256:ffa1935463a713eebf4f58f90a59ab723b9c309b558449bad35b9e97b17a8305'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'linux-desktop'
-    form: 'skip_here'
-    direction: 'transient-blocking'
-    probe: 'python3-yaml-present'
-    fingerprint_placement: 'existing-header-block'
-    instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl#config-solaar/pyyaml-absent'
-  - owner: 'config-solaar/service-not-running'
-    scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl'
-    anchor_line: 250
-    anchor: 'if systemctl --user is-active --quiet "$SOLAAR_SERVICE" 2>/dev/null; then'
-    predicate: 'systemctl --user is-active --quiet "$SOLAAR_SERVICE" 2>/dev/null'
-    predicate_digest: 'sha256:92a14bf3d32c38dbdc0a3735bd5c9959d5e0f4ffe46d3e64e9326f697549861b'
-    continuation: 'abandon-step-inline-notice'
-    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
-    render_profile: 'linux-desktop'
-    form: 'skip_step'
-    direction: 'harmless'
-    instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_config-solaar.sh.tmpl#config-solaar/service-not-running'
   - owner: 'config-wakatime-keyring/no-session-bus'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.tmpl'

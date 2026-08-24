@@ -101,9 +101,9 @@ NODE
 
 # Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=951825c4eacf30245aa7ca3e379b4c628bc1883dd5fec1c7408bee35ec47a7b3
+  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=55a3aaf1b220917e7546c6de54b8fc461160d98616583215b491ff489dff4eda
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=ddd39341d7838275d2904f46b3a42067c5b9771a8013139eff1051d96e11fcce
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=de15c7411db35e10f4efb7d9e7d86a9d9528fc0705373ae5afb03efbabcec017
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=6db6841c0b08b5c1feb461db18c2655bd2ea9630e4503e98a8846f6e01697c58
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl]=70a1d313716912bb41e3250248944a346ca9e1dc628ff1d3c1625c5f0313af28
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
 )
@@ -148,6 +148,13 @@ grep -Fq 'Restart affected services manually after apply, or reboot the system.'
   || fail 'network render omits manual restart-or-reboot guidance'
 grep -Fq 'site=networkmanager-not-running' "$network_render" \
   || fail 'network render lost the NetworkManager applicability declaration'
+files_render="$scratch/run_onchange_after_install-system-10-files.sh"
+grep -Fq 'keyd reload (etc/keyd changed)' "$files_render" \
+  || fail 'install-system-10-files render omits the change-gated keyd reload'
+grep -Fq '"${SUDO[@]}" keyd reload' "$files_render" \
+  || fail 'install-system-10-files render omits the keyd reload command'
+grep -Fq 'systemctl is-active --quiet keyd.service' "$files_render" \
+  || fail 'install-system-10-files render omits the keyd active-unit guard'
 
 # The login-shell script consumes capabilities.tmpl and facts.tmpl, so it never
 # carries a FACT_* block; only these two scripts include facts-sh.tmpl.

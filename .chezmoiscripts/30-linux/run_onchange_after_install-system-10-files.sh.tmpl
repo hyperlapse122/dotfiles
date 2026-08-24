@@ -145,6 +145,9 @@ skipped=0
 # host; consumed by the bluetoothd restart in the reload section. See the long
 # comment there for why this is change-gated instead of dir-gated like the rest.
 bluetooth_changed=false
+# Same contract for etc/keyd/; consumed by the keyd reload in the reload
+# section.
+keyd_changed=false
 for src in "$SRC_ROOT"/etc/**; do
   [[ -f "$src" ]] || continue
 
@@ -189,6 +192,10 @@ for src in "$SRC_ROOT"/etc/**; do
   # it the two files are identical by construction.
   if [[ "$rel" == etc/bluetooth/* ]] && ! cmp -s "$src" "$dst"; then
     bluetooth_changed=true
+  fi
+  # Same change test for keyd config, consumed by the reload section below.
+  if [[ "$rel" == etc/keyd/* ]] && ! cmp -s "$src" "$dst"; then
+    keyd_changed=true
   fi
 
   printf '  -> %s (mode %s)\n' "$dst" "$mode"
@@ -299,5 +306,20 @@ if [[ "$bluetooth_changed" == true ]] \
   && systemctl cat bluetooth.service >/dev/null 2>&1; then
   printf '  -> systemctl restart bluetooth (etc/bluetooth changed)\n'
   "${SUDO[@]}" systemctl restart bluetooth
+fi
+# Reload keyd so a changed /etc/keyd/*.conf takes effect — the daemon reads
+# its config once at startup, so an edited [ids] exclusion or layer is
+# otherwise inert until reboot. Change-gated like bluetoothd above: `keyd
+# reload` recreates the virtual keyboard, so it fires only when an etc/keyd/
+# file genuinely differed on this run. It is keyd's documented config-only
+# path; a service restart would drop and recreate the virtual devices. An
+# absent or inactive unit skips: an enabled-but-unstarted keyd reads the new
+# config at first start.
+if [[ "$keyd_changed" == true ]] \
+  && command -v keyd >/dev/null 2>&1 \
+  && command -v systemctl >/dev/null 2>&1 \
+  && systemctl is-active --quiet keyd.service; then
+  printf '  -> keyd reload (etc/keyd changed)\n'
+  "${SUDO[@]}" keyd reload
 fi
 {{ end -}}
