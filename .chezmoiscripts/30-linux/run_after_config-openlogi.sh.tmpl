@@ -1,0 +1,81 @@
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if and (or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin")) (not $facts.container) -}}
+#!/usr/bin/env bash
+# Asserts declared OpenLogi TOML keys (openlogi in .chezmoidata/openlogi.yaml)
+# into ~/.config/openlogi/config.toml on every apply using settings-reconcile.
+#
+# OpenLogi rewrites config.toml on every change and overwrites hand edits made
+# while its background agent is running. Following KTD3, this script stops the
+# agent when active, asserts the declared keys while preserving undeclared keys
+# and tables, and restarts the agent. An EXIT trap restores the agent's prior
+# state if reconciliation fails.
+set -euo pipefail
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+if [[ "${OPENLOGI_TEST_CONTAINER:-0}" == "1" || ( ( -f /run/.containerenv || -f /.dockerenv ) && ! -f /run/.toolboxenv ) ]]; then
+  exit 0
+fi
+
+RECONCILER="${SETTINGS_RECONCILER_BIN:-$HOME/.local/bin/settings-reconcile}"
+if [[ ! -x "$RECONCILER" ]]; then
+  if command -v settings-reconcile >/dev/null 2>&1; then
+    RECONCILER="$(command -v settings-reconcile)"
+  else
+    printf '%s\n' 'config-openlogi: settings-reconcile is unavailable; run chezmoi apply --force after fixing its build.' >&2
+    exit 1
+  fi
+fi
+contracts="$($RECONCILER contracts 2>/dev/null || true)"
+[[ "$contracts" == *'"settings":"settings-reconcile/v1"'* ]] || {
+  printf '%s\n' 'config-openlogi: installed reconciler has an incompatible settings contract.' >&2
+  exit 1
+}
+
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-openlogi-settings"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
+config="$(mktemp "$scratch/config.XXXXXX.json")"
+chmod 0600 "$config"
+
+agent_stopped=0
+cleanup() {
+  local exit_code=$?
+  rm -f -- "$config"
+  if [[ "$agent_stopped" -eq 1 ]]; then
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl --user start openlogi-agent.service 2>/dev/null || true
+    fi
+  fi
+  exit "$exit_code"
+}
+trap cleanup EXIT HUP INT TERM
+
+was_active=0
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl --user is-active --quiet openlogi-agent.service 2>/dev/null; then
+    was_active=1
+    systemctl --user stop openlogi-agent.service
+    agent_stopped=1
+  fi
+fi
+
+cat >"$config" <<'JSON'
+{{ .openlogi | toPrettyJson | replace "~/" (printf "%s/" .chezmoi.homeDir) }}
+JSON
+
+OPENLOGI_HOME="$HOME/.config/openlogi"
+"$RECONCILER" settings "$OPENLOGI_HOME" config.toml "$config"
+
+if command -v systemctl >/dev/null 2>&1; then
+  if ! systemctl --user is-enabled --quiet openlogi-agent.service 2>/dev/null; then
+    systemctl --user enable openlogi-agent.service 2>/dev/null || true
+  fi
+  systemctl --user start openlogi-agent.service
+  agent_stopped=0
+fi
+{{ end -}}
