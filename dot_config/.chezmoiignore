@@ -4,7 +4,6 @@ autostart
 containers
 environment.d
 fcitx5
-solaar
 systemd
 wireplumber
 {{- end }}
