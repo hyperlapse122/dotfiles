@@ -1,0 +1,53 @@
+#!/usr/bin/python3
+import configparser
+import sys
+
+# Static configurations managed by chezmoi for rclone remotes
+MANAGED_REMOTES = {
+    "{{ .cloud.accounts.google.remote }}": {
+        "type": "drive",
+        "client_id": {{ onepasswordRead .cloud.accounts.google.credentials.clientId | toJson }},
+        "client_secret": {{ onepasswordRead .cloud.accounts.google.credentials.clientSecret | toJson }},
+        "scope": "drive",
+    },
+    "{{ .cloud.accounts.personalMs.remote }}": {
+        "type": "onedrive",
+        "client_id": {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientId | toJson }},
+        "client_secret": {{ onepasswordRead .cloud.accounts.personalMs.credentials.clientSecret | toJson }},
+    },
+    "{{ .cloud.accounts.corporateMs.remote }}": {
+        "type": "onedrive",
+        "client_id": {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId | toJson }},
+        "client_secret": {{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret | toJson }},
+        "tenant_id": {{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId | toJson }},
+    },
+}
+
+
+def main():
+    parser = configparser.ConfigParser(interpolation=None, strict=True)
+    parser.optionxform = str
+
+    input_text = sys.stdin.read()
+    trimmed = input_text.strip()
+    if trimmed:
+        try:
+            parser.read_string(input_text)
+        except configparser.Error as err:
+            sys.stderr.write(f"modify_rclone.conf: failed to parse existing config: {err}\n")
+            sys.exit(1)
+        except Exception as err:
+            sys.stderr.write(f"modify_rclone.conf: unexpected error parsing config: {err}\n")
+            sys.exit(1)
+
+    for section, static_keys in MANAGED_REMOTES.items():
+        if not parser.has_section(section):
+            parser.add_section(section)
+        for key, val in static_keys.items():
+            parser.set(section, key, str(val))
+
+    parser.write(sys.stdout)
+
+
+if __name__ == "__main__":
+    main()
