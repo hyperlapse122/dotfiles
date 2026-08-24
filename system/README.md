@@ -77,7 +77,7 @@ system/linux/etc/locale.conf
 |---|---|
 | `etc/bluetooth/main.conf` | BlueZ daemon config: `Experimental`/`KernelExperimental = true`, `ControllerMode = dual` (Classic A2DP dual mode so stereo audio stays available on TWS earbuds that fall back to mono over LE Audio on current BlueZ) |
 | `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
-| `etc/keyd/default.conf` | keyd keyboard remapping (CapsLock → Hangeul, meta layer) |
+| `etc/keyd/default.conf` | keyd keyboard remapping (CapsLock → Hangeul, meta layer; Logi Bolt receiver `046d:c548` excluded so paired MX Master mice stay on libinput/Solaar) |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
