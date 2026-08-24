@@ -33,43 +33,8 @@ render() {
 # key` in CI only.
 write_fact_stub() {
   local source_path=$1 output_path=$2 container=$3 jetson=${4:-false}
-  python3 - "$source_path" "$output_path" "$container" "$jetson" <<'PY_EOF'
-import sys, re
-
-source_path, output_path, container, jetson = sys.argv[1:5]
-with open(source_path, "r", encoding="utf-8") as f:
-    source = f.read()
-
-needle = '{{- $f := includeTemplate "facts.tmpl" . | fromYaml }}'
-if needle not in source:
-    raise RuntimeError("facts provider anchor changed")
-
-pinned = {
-    "container": container == "true",
-    "jetson": jetson == "true",
-    "desktop": "gnome",
-    "distro": "fedora",
-}
-
-referenced = sorted(set(m.group(1) for m in re.finditer(r'\$f\.([A-Za-z][A-Za-z0-9]*)', source)))
-if not referenced:
-    raise RuntimeError("no $f references found; anchor or usage changed")
-
-entries = []
-for key in referenced:
-    val = pinned.get(key, False)
-    if isinstance(val, bool):
-        entries.append(f'"{key}" {"true" if val else "false"}')
-    elif isinstance(val, str):
-        entries.append(f'"{key}" "{val}"')
-    else:
-        entries.append(f'"{key}" {val}')
-
-replacement = f'{{{{- $f := dict {" ".join(entries)} }}}}'
-new_source = source.replace(needle, replacement, 1)
-with open(output_path, "w", encoding="utf-8") as f:
-    f.write(new_source)
-PY_EOF
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false"
+  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$source_path" > "$output_path"
 }
 
 render_ignore() {
@@ -104,39 +69,7 @@ assert_gate() {
 render_reconciler() {
   local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 jetson=${8:-false} variant
   variant="$scratch/reconciler-$os-$container-$jetson-$(basename "$template")"
-  python3 - "$repo_root/$template" "$variant" "$container" "$jetson" <<'PY_EOF'
-import sys, re
-
-source_path, output_path, container, jetson = sys.argv[1:5]
-with open(source_path, "r", encoding="utf-8") as f:
-    source = f.read()
-
-needle = 'includeTemplate "facts.tmpl" . | fromYaml'
-if needle not in source:
-    raise RuntimeError("reconciler facts provider anchor changed")
-
-pinned = {
-    "container": container == "true",
-    "jetson": jetson == "true",
-    "desktop": "gnome",
-    "distro": "fedora",
-}
-
-referenced = sorted(set(m.group(1) for m in re.finditer(r'\$facts\.([A-Za-z][A-Za-z0-9]*)', source)))
-entries = []
-for key in referenced:
-    val = pinned.get(key, False)
-    if isinstance(val, bool):
-        entries.append(f'"{key}" {"true" if val else "false"}')
-    elif isinstance(val, str):
-        entries.append(f'"{key}" "{val}"')
-    else:
-        entries.append(f'"{key}" {val}')
-
-replacement = f'dict {" ".join(entries)}'
-new_source = source.replace(needle, replacement, 1)
-with open(output_path, "w", encoding="utf-8") as f:
-    f.write(new_source)
-PY_EOF
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false"
+  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$repo_root/$template" > "$variant"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }
