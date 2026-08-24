@@ -1,0 +1,50 @@
+cloud:
+  rclone:
+    vfsCacheMaxSize: 20G
+    vfsCacheMaxAge: 24h
+    dirCacheTime: 1h
+    timeout: 30s
+
+  mountRoot: Cloud
+
+  accounts:
+    google:
+      name: google
+      description: Personal Google Drive & PIM
+      remote: gdrive
+      mountDir: gdrive
+      mountPath: Cloud/gdrive
+      credentials:
+        clientId: op://Private/Google/OAuth Client ID
+        clientSecret: op://Private/Google/OAuth Client Secret
+
+    personalMs:
+      name: personalMs
+      description: Personal Microsoft OneDrive & Outlook.com PIM
+      remote: onedrive
+      mountDir: onedrive
+      mountPath: Cloud/onedrive
+      mode: bridge
+      davmail:
+        instance: personal
+        caldavPort: 1081
+      credentials:
+        clientId: op://Private/Microsoft/Personal Client ID
+        clientSecret: op://Private/Microsoft/Personal Client Secret
+        icsUrl: op://Private/Microsoft/Personal ICS URL
+
+    corporateMs:
+      name: corporateMs
+      description: Corporate Microsoft OneDrive for Business & Exchange Online PIM
+      remote: onedrive-corp
+      mountDir: onedrive-corp
+      mountPath: Cloud/onedrive-corp
+      mode: bridge
+      davmail:
+        instance: corporate
+        caldavPort: 1080
+      credentials:
+        clientId: op://Private/Microsoft/Corporate Entra Client ID
+        clientSecret: op://Private/Microsoft/Corporate Entra Client Secret
+        tenantId: op://Private/Microsoft/Corporate Tenant ID
+        icsUrl: op://Private/Microsoft/Corporate ICS URL

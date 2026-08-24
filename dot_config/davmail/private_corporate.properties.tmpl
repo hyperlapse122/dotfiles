@@ -1,0 +1,17 @@
+davmail.server=true
+davmail.mode=O365Graph
+davmail.bindAddress=127.0.0.1
+davmail.allowRemote=false
+davmail.disableUpdateCheck=true
+davmail.caldavPort={{ .cloud.accounts.corporateMs.davmail.caldavPort }}
+davmail.popPort=
+davmail.imapPort=
+davmail.smtpPort=
+davmail.ldapPort=
+davmail.oauth.clientId={{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientId }}
+davmail.oauth.clientSecret={{ onepasswordRead .cloud.accounts.corporateMs.credentials.clientSecret }}
+davmail.oauth.tenantId={{ onepasswordRead .cloud.accounts.corporateMs.credentials.tenantId }}
+davmail.oauth.tokenFilePath={{ .chezmoi.homeDir }}/.local/state/davmail/corporate-tokens.properties
+davmail.logFilePath={{ .chezmoi.homeDir }}/.local/state/davmail/corporate-davmail.log
+davmail.logFileSize=10MB
+davmail.logFileMaxBackupIndex=3

@@ -65,11 +65,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 123
+  classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 146
-  phase_local_instances: 118
-  shared_guard_instances: 28
+  rendered_instances: 149
+  phase_local_instances: 120
+  shared_guard_instances: 29
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -90,13 +90,13 @@ plan_contract_scopes:
 
 audited_forms:
   skip_here: 54
-  skip_step: 31
+  skip_step: 33
   done_here: 14
   not_applicable: 24
 
 audited_directions:
   harmless: 26
-  transient-blocking: 57
+  transient-blocking: 59
   transient-tolerable: 2
 audited_scopes:
   guard-partials: 5
@@ -105,13 +105,13 @@ audited_scopes:
   20-linux-fedora: 17
   30-linux: 26
   50-linux-gnome: 29
-  50-linux-kde: 29
+  50-linux-kde: 31
   60-build: 5
   70-agents: 3
 
 shared_guard_fanout:
   gnome-guard: 7
-  kde-guard: 9
+  kde-guard: 10
   headless-guard: 3
   sudo-skip-guard: 4
   shared-host-guard: 5
@@ -122,7 +122,7 @@ divergence:
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them).'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 57
+    audited: 59
     reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
   - bucket: 'done_here'
     plan: 10
@@ -150,7 +150,7 @@ divergence:
     reason: 'The estimate of 40 included the roughly sixteen skip sites in the two GNOME extension jobs U4 renamed to run_after_, which are no longer on this surface; the six remaining config scripts hold 29 owners plus the four named hard errors.'
   - bucket: 'scope:50-linux-kde'
     plan: 28
-    audited: 29
+    audited: 31
     reason: 'One extra step owner beyond the estimate (config-kde-fonts/fc-cache-absent); the akonadi SQL-read failure in the same phase is recorded as the eleventh hard error rather than a classified owner.'
   - bucket: 'scope:60-build'
     plan: 4
@@ -215,6 +215,7 @@ owners:
     instances:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-digitalclock.sh.tmpl#kde-guard/non-kde-desktop'
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-fonts.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-kickoff.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-panel.sh.tmpl#kde-guard/non-kde-desktop'
@@ -1480,6 +1481,38 @@ owners:
     form: 'not_applicable'
     instances:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl#config-kde-calendar/no-calendar-collections'
+  - owner: 'config-kde-cloud/no-user-manager-bus'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl'
+    anchor_line: 75
+    anchor: '  if ! systemctl --user show-environment >/dev/null 2>&1; then'
+    predicate: '! systemctl --user show-environment >/dev/null 2>&1'
+    predicate_digest: 'sha256:be3d86a71e362b1c1408cb65aae1866147f0f4df327c5b0f3433e64f95485609'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-kde-session'
+    form: 'skip_step'
+    direction: 'transient-blocking'
+    probe: 'user-manager-bus-present'
+    fingerprint_placement: 'existing-header-block'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl#config-kde-cloud/no-user-manager-bus'
+  - owner: 'config-kde-cloud/kwriteconfig6-absent'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl'
+    anchor_line: 406
+    anchor: '  if ! command -v kwriteconfig6 >/dev/null 2>&1; then'
+    predicate: '! command -v kwriteconfig6 >/dev/null 2>&1'
+    predicate_digest: 'sha256:8b99a17d43c37b84d842271ad2f07535429e2ca41ae4f1fbb332f31276430668'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-kde-session'
+    form: 'skip_step'
+    direction: 'transient-blocking'
+    probe: 'kwriteconfig6-present'
+    fingerprint_placement: 'existing-header-block'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl#config-kde-cloud/kwriteconfig6-absent'
   - owner: 'config-kde-digitalclock/kconfig-tools-absent'
     scope: '50-linux-kde'
     template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-digitalclock.sh.tmpl'
