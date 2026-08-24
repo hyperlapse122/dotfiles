@@ -67,9 +67,9 @@ runtime_input: false
 totals:
   classified_owners: 127
   hard_error_owners: 11
-  rendered_instances: 151
+  rendered_instances: 152
   phase_local_instances: 122
-  shared_guard_instances: 29
+  shared_guard_instances: 30
 
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -112,7 +112,7 @@ audited_scopes:
 
 shared_guard_fanout:
   gnome-guard: 8
-  kde-guard: 9
+  kde-guard: 10
   headless-guard: 3
   sudo-skip-guard: 4
   shared-host-guard: 5
@@ -218,6 +218,7 @@ owners:
     instances:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-digitalclock.sh.tmpl#kde-guard/non-kde-desktop'
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-fonts.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-kickoff.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-panel.sh.tmpl#kde-guard/non-kde-desktop'

@@ -1,0 +1,279 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
+#!/usr/bin/env bash
+#
+# Configures KDE Plasma desktop integration for cloud drives and PIM accounts:
+#   - Baloo file indexing exclusions for cloud drive mount paths
+#   - Dolphin Places sidebar entries (user-places.xbel)
+#   - Thumbnail generation limits for remote/cloud mounts
+#   - Akonadi resource agent registration and mode reconciliation
+#
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "kwriteconfig6-present" "value" $kconfigPresent))) }}
+set -euo pipefail
+
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-cloud.sh") -}}
+
+merge_baloo_exclusions() {
+  printf '  configuring Baloo file indexer exclusions for cloud drives...\n'
+  if command -v kreadconfig6 >/dev/null 2>&1 && command -v kwriteconfig6 >/dev/null 2>&1; then
+    local current
+    current="$(kreadconfig6 --file baloofilerc --group General --key "exclude folders" 2>/dev/null || true)"
+
+    # Target mount paths with trailing slashes
+    local -a targets=(
+      "$HOME/Cloud/GoogleDrive/"
+      "$HOME/Cloud/OneDrivePersonal/"
+      "$HOME/Cloud/OneDriveCorporate/"
+    )
+
+    # Build deduplicated array preserving order
+    local -a merged=()
+    local -A seen=()
+
+    if [[ -n "$current" ]]; then
+      local IFS=','
+      local -a existing=()
+      read -r -a existing <<<"$current"
+      local p
+      for p in "${existing[@]}"; do
+        p="${p#"${p%%[![:space:]]*}"}" # trim leading
+        p="${p%"${p##*[![:space:]]}"}" # trim trailing
+        [[ -n "$p" ]] || continue
+        if [[ -z "${seen["$p"]:-}" ]]; then
+          merged+=("$p")
+          seen["$p"]=1
+        fi
+      done
+    fi
+
+    local t
+    for t in "${targets[@]}"; do
+      if [[ -z "${seen["$t"]:-}" ]]; then
+        merged+=("$t")
+        seen["$t"]=1
+      fi
+    done
+
+    local new_value
+    new_value="$(IFS=','; printf '%s' "${merged[*]}")"
+
+    kwriteconfig6 --file baloofilerc --group General --key "exclude folders" "$new_value"
+    printf '  set [General] exclude folders = %s in baloofilerc\n' "$new_value"
+  else
+    printf '  kreadconfig6/kwriteconfig6 not found; skipping baloo exclusions\n' >&2
+  fi
+}
+
+merge_dolphin_places() {
+  printf '  configuring Dolphin Places bookmarks for cloud drives...\n'
+  if command -v /usr/bin/python3 >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1; then
+    local py_bin
+    py_bin="$(command -v /usr/bin/python3 || command -v python3)"
+
+    "$py_bin" - "$HOME" <<'EOF'
+import os
+import shutil
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+home_dir = sys.argv[1]
+xbel_path = Path(home_dir) / ".local/share/user-places.xbel"
+
+bookmarks = [
+    ("Google Drive", f"file://{home_dir}/Cloud/GoogleDrive", "folder-gdrive"),
+    ("OneDrive Personal", f"file://{home_dir}/Cloud/OneDrivePersonal", "folder-cloud"),
+    ("OneDrive Corporate", f"file://{home_dir}/Cloud/OneDriveCorporate", "folder-cloud"),
+]
+
+ET.register_namespace('bookmark', 'http://www.freedesktop.org/standards/desktop-bookmarks')
+ET.register_namespace('kdepriv', 'http://www.kde.org/kdepriv')
+ET.register_namespace('mime', 'http://www.freedesktop.org/standards/shared-mime-info')
+
+xbel_path.parent.mkdir(parents=True, exist_ok=True)
+
+if xbel_path.exists():
+    shutil.copy2(xbel_path, f"{xbel_path}.bak")
+    tree = ET.parse(xbel_path)
+    root = tree.getroot()
+else:
+    root = ET.fromstring("""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xbel>
+<xbel xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks" xmlns:kdepriv="http://www.kde.org/kdepriv" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info">
+ <info>
+  <metadata owner="http://www.kde.org">
+   <kde_places_version>4</kde_places_version>
+   <GroupState-Places-IsHidden>false</GroupState-Places-IsHidden>
+   <GroupState-Remote-IsHidden>false</GroupState-Remote-IsHidden>
+   <GroupState-Devices-IsHidden>false</GroupState-Devices-IsHidden>
+   <GroupState-RemovableDevices-IsHidden>false</GroupState-RemovableDevices-IsHidden>
+   <GroupState-Tags-IsHidden>false</GroupState-Tags-IsHidden>
+   <withRecentlyUsed>true</withRecentlyUsed>
+   <GroupState-RecentlySaved-IsHidden>false</GroupState-RecentlySaved-IsHidden>
+   <withBaloo>true</withBaloo>
+   <GroupState-SearchFor-IsHidden>false</GroupState-SearchFor-IsHidden>
+  </metadata>
+ </info>
+</xbel>""")
+    tree = ET.ElementTree(root)
+
+existing_hrefs = {bm.get("href", "").rstrip("/") for bm in root.findall(".//bookmark") if bm.get("href")}
+
+changed = False
+for title, href, icon in bookmarks:
+    if href.rstrip("/") not in existing_hrefs:
+        bm = ET.Element("bookmark", {"href": href})
+        t = ET.SubElement(bm, "title")
+        t.text = title
+        info = ET.SubElement(bm, "info")
+        meta = ET.SubElement(info, "metadata", {"owner": "http://freedesktop.org"})
+        ET.SubElement(meta, "{http://www.freedesktop.org/standards/desktop-bookmarks}icon", {"name": icon})
+        root.append(bm)
+        existing_hrefs.add(href.rstrip("/"))
+        changed = True
+
+if changed or not xbel_path.exists():
+    ET.indent(root, space=" ", level=0)
+    xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    if b"<!DOCTYPE xbel>" not in xml_bytes:
+        lines = xml_bytes.split(b"\n", 1)
+        if len(lines) == 2 and lines[0].startswith(b"<?xml"):
+            xml_bytes = lines[0] + b"\n<!DOCTYPE xbel>\n" + lines[1]
+    
+    with tempfile.NamedTemporaryFile(dir=xbel_path.parent, mode="wb", delete=False) as tf:
+        tf.write(xml_bytes)
+        tf.flush()
+        os.fsync(tf.fileno())
+        temp_name = tf.name
+
+    os.chmod(temp_name, 0o644)
+    os.replace(temp_name, xbel_path)
+    print(f"  merged cloud bookmarks into {xbel_path}")
+else:
+    print(f"  cloud bookmarks already present in {xbel_path}")
+EOF
+  else
+    printf '  python3 not found; skipping dolphin places merge\n' >&2
+  fi
+}
+
+configure_thumbnail_exclusions() {
+  printf '  configuring thumbnail preview limits for remote mounts...\n'
+  if command -v kwriteconfig6 >/dev/null 2>&1; then
+    kwriteconfig6 --file kdeglobals --group PreviewSettings --key MaximumRemoteSize 0
+    printf '  set [PreviewSettings] MaximumRemoteSize = 0 in kdeglobals\n'
+  else
+    printf '  kwriteconfig6 not found; skipping thumbnail settings\n' >&2
+  fi
+}
+
+reconcile_akonadi_agents() {
+  printf '  reconciling Akonadi PIM agent instances...\n'
+  local akonadi_dir="$HOME/.config/akonadi"
+  local agentsrc="$akonadi_dir/agentsrc"
+  local state_dir="$HOME/.local/state/davmail"
+  local archive_dir="$state_dir/archive"
+
+  mkdir -p "$akonadi_dir" "$state_dir"
+
+  # Re-assert mode 0600 on all Akonadi agent configs owned by this feature
+  local -a agent_configs=(
+    "$akonadi_dir/agent_config_akonadi_davgroupware_resource_corporate"
+    "$akonadi_dir/agent_config_akonadi_davgroupware_resource_personal"
+    "$akonadi_dir/agent_config_akonadi_ical_resource_corporate"
+    "$akonadi_dir/agent_config_akonadi_ical_resource_personal"
+  )
+  local cfg
+  for cfg in "${agent_configs[@]}"; do
+    if [[ -f "$cfg" ]]; then
+      chmod 0600 "$cfg" 2>/dev/null || true
+    fi
+  done
+
+  # Process corporate Microsoft account
+  local corp_mode="{{ .cloud.accounts.corporateMs.mode }}"
+  local corp_token="$state_dir/corporate-tokens.properties"
+  local corp_dav_id="akonadi_davgroupware_resource_corporate"
+  local corp_ical_id="akonadi_ical_resource_corporate"
+
+  if [[ "$corp_mode" == "bridge" ]]; then
+    # In bridge mode: register DAV resource only if tokens exist
+    if [[ -f "$corp_token" ]] && command -v kwriteconfig6 >/dev/null 2>&1; then
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_dav_id" "akonadi_davgroupware_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key AgentType "akonadi_davgroupware_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key Autostart true
+      # Remove superseded ical instance if present
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_ical_id" --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key AgentType --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key Autostart --delete 2>/dev/null || true
+      printf '  registered %s in %s\n' "$corp_dav_id" "$agentsrc"
+    fi
+  elif [[ "$corp_mode" == "read-only" ]]; then
+    # In read-only mode: provision ical resource, tear down DAV resource, archive token cache
+    if command -v kwriteconfig6 >/dev/null 2>&1; then
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_ical_id" "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key AgentType "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key Autostart true
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_dav_id" --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key AgentType --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key Autostart --delete 2>/dev/null || true
+      printf '  registered %s (read-only) in %s\n' "$corp_ical_id" "$agentsrc"
+    fi
+    if [[ -f "$corp_token" ]]; then
+      mkdir -p "$archive_dir"
+      chmod 0700 "$archive_dir"
+      mv -f "$corp_token" "$archive_dir/corporate-tokens-retired-$(date +%Y%m%d%H%M%S).properties" 2>/dev/null || true
+      printf '  archived retired corporate DavMail token file\n'
+    fi
+  fi
+
+  # Process personal Microsoft account
+  local personal_mode="{{ .cloud.accounts.personalMs.mode }}"
+  local personal_token="$state_dir/personal-tokens.properties"
+  local personal_dav_id="akonadi_davgroupware_resource_personal"
+  local personal_ical_id="akonadi_ical_resource_personal"
+
+  if [[ "$personal_mode" == "bridge" ]]; then
+    # In bridge mode: register DAV resource only if tokens exist
+    if [[ -f "$personal_token" ]] && command -v kwriteconfig6 >/dev/null 2>&1; then
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_dav_id" "akonadi_davgroupware_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key AgentType "akonadi_davgroupware_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key Autostart true
+      # Remove superseded ical instance if present
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_ical_id" --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key AgentType --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key Autostart --delete 2>/dev/null || true
+      printf '  registered %s in %s\n' "$personal_dav_id" "$agentsrc"
+    fi
+  elif [[ "$personal_mode" == "read-only" ]]; then
+    # In read-only mode: provision ical resource, tear down DAV resource, archive token cache
+    if command -v kwriteconfig6 >/dev/null 2>&1; then
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_ical_id" "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key AgentType "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key Autostart true
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_dav_id" --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key AgentType --delete 2>/dev/null || true
+      kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key Autostart --delete 2>/dev/null || true
+      printf '  registered %s (read-only) in %s\n' "$personal_ical_id" "$agentsrc"
+    fi
+    if [[ -f "$personal_token" ]]; then
+      mkdir -p "$archive_dir"
+      chmod 0700 "$archive_dir"
+      mv -f "$personal_token" "$archive_dir/personal-tokens-retired-$(date +%Y%m%d%H%M%S).properties" 2>/dev/null || true
+      printf '  archived retired personal DavMail token file\n'
+    fi
+  fi
+}
+
+main() {
+  printf 'config-kde-cloud.sh: configuring KDE desktop integration for cloud drives and PIM...\n'
+  merge_baloo_exclusions
+  merge_dolphin_places
+  configure_thumbnail_exclusions
+  reconcile_akonadi_agents
+}
+
+main
+{{ end -}}
