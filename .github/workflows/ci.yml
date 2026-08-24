@@ -87,6 +87,7 @@ jobs:
             ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-1password-shortcut.sh.tmpl:gnome-1password-shortcut.sh" \
             ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl:gnome-remove-ibus-source.sh" \
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl:kde-calendar.sh" \
+            ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-cloud.sh.tmpl:kde-cloud.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl:build-figma-auth.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:build-settings-reconcile.sh"
           do
@@ -155,6 +156,7 @@ jobs:
             "$RUNNER_TEMP/gnome-1password-shortcut.sh" \
             "$RUNNER_TEMP/gnome-remove-ibus-source.sh"
           .ci/test-kde-calendar-hard-error.sh "$RUNNER_TEMP/kde-calendar.sh"
+          .ci/test-cloud-provision.sh "$RUNNER_TEMP/kde-cloud.sh"
           .ci/test-build-figma-auth.sh "$RUNNER_TEMP/build-figma-auth.sh"
           .ci/test-build-settings-reconcile.sh "$RUNNER_TEMP/build-settings-reconcile.sh"
           .ci/test-merge-commit-only-gates.sh
