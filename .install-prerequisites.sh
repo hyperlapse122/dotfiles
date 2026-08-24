@@ -356,7 +356,7 @@ CAPABILITY_REGISTRY_SCHEMA='capability-registry-v2'
 # with. Keep this path byte-identical to capabilities.tmpl's.
 CAPABILITY_REGISTRY_RELPATH='.chezmoidata/.capability-registry.tsv'
 CAPABILITY_REGISTRY_KINDS=(
-  absolute-executable command-present graphical-session python-module
+  absolute-executable command-present graphical-session
   session-bus sudo-nonrefreshing unix-socket user-manager-bus user-manager-unit
   user-process
 )
@@ -487,12 +487,6 @@ resolve_capability() {
         *) capability_cache_fail "absolute-executable key ${key@Q} has no reviewed path" ;;
       esac
       [[ -x "$path" ]]
-      ;;
-    python-module)
-      case "$key" in
-        python3-yaml-present) /usr/bin/python3 -c 'import yaml' >/dev/null 2>&1 ;;
-        *) capability_cache_fail "python-module key ${key@Q} has no reviewed module" ;;
-      esac
       ;;
     sudo-nonrefreshing)
       # `-N` is load-bearing: without it a successful probe REFRESHES the sudo
