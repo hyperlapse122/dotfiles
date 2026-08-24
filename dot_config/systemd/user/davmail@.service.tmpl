@@ -1,0 +1,21 @@
+[Unit]
+Description=DavMail Microsoft Graph CalDAV bridge for %i
+Documentation=https://davmail.sourceforge.net/
+After=network-online.target
+Wants=network-online.target
+PartOf=graphical-session.target
+ConditionPathExists=%h/.config/davmail/%i.properties
+ConditionPathExists=%h/.local/state/davmail/%i-tokens.properties
+StartLimitIntervalSec=300s
+StartLimitBurst=4
+
+[Service]
+Type=exec
+StateDirectory=davmail
+StateDirectoryMode=0700
+ExecStart=/usr/bin/java -Djava.awt.headless=true -jar %h/.local/lib/davmail/davmail.jar %h/.config/davmail/%i.properties
+Restart=on-failure
+RestartSec=15s
+
+[Install]
+WantedBy=default.target
