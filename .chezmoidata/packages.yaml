@@ -227,7 +227,7 @@ packages:
 
         # Cloud provider CLI
         - azure-cli
-
+        - rclone
         # Keyboard remapper
         - keyd
 
@@ -502,6 +502,11 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: jq, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: jq, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
         ubuntu: { disposition: managed, owner: apt, identifier: jq, source: ubuntu, architectures: { arm64: native } }
+      - id: rclone
+        sentinel: rclone
+        fedora: { disposition: managed, owner: dnf, identifier: rclone, source: fedora, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: formula, identifier: rclone, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
+        ubuntu: { disposition: managed, owner: apt, identifier: rclone, source: ubuntu, architectures: { arm64: native } }
       - id: chrome
         sentinel: google-chrome
         gateClosing: g0

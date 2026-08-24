@@ -231,3 +231,83 @@ describe("resolveVendorManifest flutter", () => {
     expect((error as Error).message).toContain(FLUTTER_SOURCE);
   });
 });
+
+const DAVMAIL_SOURCE = "https://sourceforge.example.invalid/projects/davmail/rss?path=/davmail";
+const DAVMAIL_FEED = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title><![CDATA[/davmail/6.8.0/davmail-6.8.0-4181.zip]]></title>
+      <pubDate>Fri, 12 Jun 2026 12:23:32 UT</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[/davmail/6.8.1/davmail-6.8.1-4210.zip]]></title>
+      <pubDate>Tue, 30 Jun 2026 15:32:25 UT</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[/davmail/6.8.1/davmail_6.8.1-4210-1_all.deb]]></title>
+      <pubDate>Tue, 30 Jun 2026 15:32:30 UT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
+function davmailSpec(): ToolSpec {
+  return {
+    kind: "vendorManifest",
+    vendor: "davmail",
+    source: DAVMAIL_SOURCE,
+  };
+}
+
+describe("resolveVendorManifest davmail", () => {
+  test("resolves newest release zip and computes sha256 across all platforms", async () => {
+    const dummyZipBytes = new Uint8Array([80, 75, 3, 4, 0, 0]);
+    stubRoutes({
+      [DAVMAIL_SOURCE]: text(DAVMAIL_FEED),
+      "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip": () =>
+        new Response(dummyZipBytes, { status: 200 }),
+    });
+
+    const locked = await resolveVendorManifest("davmail", davmailSpec());
+    expect(locked.version).toBe("6.8.1");
+    expect(locked.artifacts).toBeDefined();
+    const expectedUrl =
+      "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip";
+    expect(locked.artifacts!["linux-amd64"]).toEqual({
+      url: expectedUrl,
+      sha256: "be0c7ebd8b5fd4585f4b493d0325f974789b089cf31d26fe1078df41a5412fe3",
+    });
+    expect(locked.artifacts!["linux-arm64"]).toEqual({
+      url: expectedUrl,
+      sha256: "be0c7ebd8b5fd4585f4b493d0325f974789b089cf31d26fe1078df41a5412fe3",
+    });
+    expect(locked.artifacts!["darwin-amd64"]).toEqual({
+      url: expectedUrl,
+      sha256: "be0c7ebd8b5fd4585f4b493d0325f974789b089cf31d26fe1078df41a5412fe3",
+    });
+    expect(locked.artifacts!["darwin-arm64"]).toEqual({
+      url: expectedUrl,
+      sha256: "be0c7ebd8b5fd4585f4b493d0325f974789b089cf31d26fe1078df41a5412fe3",
+    });
+  });
+
+  test("raises ResolutionError when feed request fails", async () => {
+    stubRoutes({
+      [DAVMAIL_SOURCE]: () => new Response("failed", { status: 500 }),
+    });
+
+    const error = await resolveVendorManifest("davmail", davmailSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain(DAVMAIL_SOURCE);
+  });
+
+  test("raises ResolutionError when feed has no matching zip releases", async () => {
+    stubRoutes({
+      [DAVMAIL_SOURCE]: text("<rss><channel></channel></rss>"),
+    });
+
+    const error = await resolveVendorManifest("davmail", davmailSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain("feed contains no matching zip release items");
+  });
+});

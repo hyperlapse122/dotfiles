@@ -168,6 +168,29 @@
         "source": "everyinc/compound-engineering-plugin",
         "version": "compound-engineering-v3.23.3"
       },
+      "davmail": {
+        "kind": "vendorManifest",
+        "source": "https://sourceforge.net/projects/davmail/rss?path=/davmail",
+        "version": "6.8.1",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip",
+            "sha256": "15425e69f77af455808960a3856bbef71fec7d45ebd62c9c5541f6766f7bbbac"
+          },
+          "linux-arm64": {
+            "url": "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip",
+            "sha256": "15425e69f77af455808960a3856bbef71fec7d45ebd62c9c5541f6766f7bbbac"
+          },
+          "darwin-amd64": {
+            "url": "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip",
+            "sha256": "15425e69f77af455808960a3856bbef71fec7d45ebd62c9c5541f6766f7bbbac"
+          },
+          "darwin-arm64": {
+            "url": "https://downloads.sourceforge.net/project/davmail/davmail/6.8.1/davmail-6.8.1-4210.zip",
+            "sha256": "15425e69f77af455808960a3856bbef71fec7d45ebd62c9c5541f6766f7bbbac"
+          }
+        }
+      },
       "docker-credential-helpers": {
         "kind": "githubRelease",
         "source": "docker/docker-credential-helpers",

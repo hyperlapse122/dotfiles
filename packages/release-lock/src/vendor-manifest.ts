@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ResolutionError } from "./github.js";
 import type { LockedTool, ToolSpec } from "./types.js";
 
@@ -197,6 +198,56 @@ async function resolveFlutter(name: string, spec: ToolSpec): Promise<LockedTool>
   };
 }
 
+async function resolveDavMail(name: string, spec: ToolSpec): Promise<LockedTool> {
+  const feed = await fetchText(spec.source, spec.source);
+  let newestTitle: string | undefined;
+  let newestVersion: string | undefined;
+  let newestPublishedAt = Number.NEGATIVE_INFINITY;
+
+  for (const match of feed.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
+    const item = match[1] ?? "";
+    const title = itemField(item, "title");
+    const pubDate = itemField(item, "pubDate");
+    if (!title || !pubDate) continue;
+
+    const m = /^\/davmail\/([0-9.]+)\/davmail-(?:[0-9.]+(?:-[0-9]+)?)\.zip$/i.exec(title);
+    if (!m) continue;
+
+    const version = m[1];
+    if (!version) continue;
+
+    const publishedAt = Date.parse(pubDate);
+    if (!Number.isFinite(publishedAt)) continue;
+
+    if (publishedAt > newestPublishedAt) {
+      newestTitle = title;
+      newestVersion = version;
+      newestPublishedAt = publishedAt;
+    }
+  }
+
+  if (!newestTitle || !newestVersion) {
+    throw new ResolutionError(spec.source, `${name}: feed contains no matching zip release items`);
+  }
+
+  const downloadUrl = `https://downloads.sourceforge.net/project/davmail${newestTitle}`;
+  const response = await fetchOrThrow(spec.source, downloadUrl);
+  const zipBuffer = Buffer.from(await response.arrayBuffer());
+  const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
+
+  return {
+    kind: spec.kind,
+    source: spec.source,
+    version: newestVersion,
+    artifacts: {
+      "linux-amd64": { url: downloadUrl, sha256 },
+      "linux-arm64": { url: downloadUrl, sha256 },
+      "darwin-amd64": { url: downloadUrl, sha256 },
+      "darwin-arm64": { url: downloadUrl, sha256 },
+    },
+  };
+}
+
 export async function resolveVendorManifest(name: string, spec: ToolSpec): Promise<LockedTool> {
   switch (spec.vendor) {
     case "winbox":
@@ -205,6 +256,8 @@ export async function resolveVendorManifest(name: string, spec: ToolSpec): Promi
       return resolveOnePassword(name, spec);
     case "flutter":
       return resolveFlutter(name, spec);
+    case "davmail":
+      return resolveDavMail(name, spec);
     default:
       throw new ResolutionError(spec.source, `${name}: unknown vendor "${String(spec.vendor)}"`);
   }

@@ -104,3 +104,13 @@ targetPath = '.local/share/winbox/WinBox.dmg'
 
 {{- end }}
 {{- end }}
+
+{{- /* ---------- davmail ---------- */}}
+
+[".local/lib/davmail"]
+type = "archive"
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "davmail" "field" "url" "platform" "auto") }}'
+exact = true
+
+[".local/lib/davmail".checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "davmail" "field" "sha256" "platform" "auto") }}'
