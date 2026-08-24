@@ -103,11 +103,11 @@ totals = matrix.get('totals', {})
 # config-kde-calendar/akonadi-query-failed, a live SQL read failure on an eligible
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 frozen = {
-    'classified_owners': 127,
+    'classified_owners': 129,
     'hard_error_owners': 11,
-    'rendered_instances': 151,
-    'phase_local_instances': 122,
-    'shared_guard_instances': 29,
+    'rendered_instances': 154,
+    'phase_local_instances': 124,
+    'shared_guard_instances': 30,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -147,7 +147,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 8, 'kde-guard': 9, 'headless-guard': 3, 'sudo-skip-guard': 4, 'shared-host-guard': 5}
+SHARED = {'gnome-guard': 8, 'kde-guard': 10, 'headless-guard': 3, 'sudo-skip-guard': 4, 'shared-host-guard': 5}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that

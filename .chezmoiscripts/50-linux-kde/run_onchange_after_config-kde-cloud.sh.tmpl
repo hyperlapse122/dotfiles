@@ -1,5 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $kconfigPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "kwriteconfig6-present") -}}
+{{ $userManagerBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "user-manager-bus-present") -}}
 #!/usr/bin/env bash
 #
 # Configures KDE Plasma desktop integration for cloud drives and PIM accounts:
@@ -7,12 +8,134 @@
 #   - Dolphin Places sidebar entries (user-places.xbel)
 #   - Thumbnail generation limits for remote/cloud mounts
 #   - Akonadi resource agent registration and mode reconciliation
+#   - Service reconciliation for rclone mounts and DavMail bridge instances
 #
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
-      (dict "name" "kwriteconfig6-present" "value" $kconfigPresent))) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "globs" (list
+      ".chezmoidata/cloud.yaml"
+      "dot_config/rclone/**"
+      "dot_config/davmail/**"
+      "dot_config/systemd/user/**"
+      "dot_config/akonadi/**") "values" (list
+      (dict "name" "kwriteconfig6-present" "value" $kconfigPresent)
+      (dict "name" "user-manager-bus-present" "value" $userManagerBusPresent))) }}
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-cloud.sh") -}}
+
+cleanup_fuse_mounts() {
+  local exit_code=$?
+  if [[ $exit_code -ne 0 ]]; then
+    printf 'config-kde-cloud.sh: error encountered (exit code %d), cleaning up FUSE mounts...\n' "$exit_code" >&2
+    local -a mount_dirs=(
+      "$HOME/Cloud/GoogleDrive"
+      "$HOME/Cloud/OneDrivePersonal"
+      "$HOME/Cloud/OneDriveCorporate"
+    )
+    local m
+    for m in "${mount_dirs[@]}"; do
+      if command -v fusermount3 >/dev/null 2>&1; then
+        fusermount3 -u -z "$m" 2>/dev/null || true
+      elif command -v fusermount >/dev/null 2>&1; then
+        fusermount -u -z "$m" 2>/dev/null || true
+      fi
+    done
+  fi
+}
+trap cleanup_fuse_mounts ERR
+
+preflight_checks() {
+  mkdir -p "$HOME/Cloud/GoogleDrive" \
+           "$HOME/Cloud/OneDrivePersonal" \
+           "$HOME/Cloud/OneDriveCorporate" \
+           "$HOME/.local/state/davmail"
+
+  chmod 0700 "$HOME/.local/state/davmail" 2>/dev/null || true
+  if [[ -f "$HOME/.local/state/davmail/corporate-tokens.properties" ]]; then
+    chmod 0600 "$HOME/.local/state/davmail/corporate-tokens.properties" 2>/dev/null || true
+  fi
+  if [[ -f "$HOME/.local/state/davmail/personal-tokens.properties" ]]; then
+    chmod 0600 "$HOME/.local/state/davmail/personal-tokens.properties" 2>/dev/null || true
+  fi
+}
+
+is_rclone_remote_configured() {
+  local remote=$1
+  local rclone_conf="$HOME/.config/rclone/rclone.conf"
+  [[ -f "$rclone_conf" ]] || return 1
+  awk -v target="[$remote]" '
+    $0 == target { in_section=1; next }
+    /^\[/ { in_section=0 }
+    in_section && /^[[:space:]]*token[[:space:]]*=/ { found=1; exit 0 }
+    END { exit (found ? 0 : 1) }
+  ' "$rclone_conf"
+}
+
+reconcile_services() {
+  printf '  reconciling cloud systemd user services...\n'
+  if ! systemctl --user show-environment >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-cloud" "site" "no-user-manager-bus" "direction" "transient-blocking" "probe" "user-manager-bus-present" "reason" "the user manager bus is unavailable; cloud service reconciliation is deferred") | trim | indent 4 }}
+  fi
+
+  systemctl --user daemon-reload || true
+
+  # Reconcile rclone mount services
+  local -a rclone_remotes=("gdrive" "onedrive" "onedrive-corp")
+  local remote unit
+  for remote in "${rclone_remotes[@]}"; do
+    unit="rclone-mount@${remote}.service"
+    if is_rclone_remote_configured "$remote"; then
+      if ! systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then
+        systemctl --user enable "$unit" >/dev/null 2>&1 || true
+        printf '  enabled %s\n' "$unit"
+      fi
+      if ! systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+        systemctl --user start "$unit" >/dev/null 2>&1 || true
+        printf '  started %s\n' "$unit"
+      fi
+    else
+      if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+        systemctl --user stop "$unit" >/dev/null 2>&1 || true
+        printf '  stopped unconfigured %s\n' "$unit"
+      fi
+      if systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then
+        systemctl --user disable "$unit" >/dev/null 2>&1 || true
+        printf '  disabled unconfigured %s\n' "$unit"
+      fi
+    fi
+  done
+
+  # Reconcile DavMail bridge services
+  local -a davmail_instances=(
+    "corporate:{{ .cloud.accounts.corporateMs.mode }}"
+    "personal:{{ .cloud.accounts.personalMs.mode }}"
+  )
+  local entry instance mode token_file
+  for entry in "${davmail_instances[@]}"; do
+    IFS=':' read -r instance mode <<<"$entry"
+    unit="davmail@${instance}.service"
+    token_file="$HOME/.local/state/davmail/${instance}-tokens.properties"
+
+    if [[ "$mode" == "bridge" ]] && [[ -f "$token_file" ]]; then
+      if ! systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then
+        systemctl --user enable "$unit" >/dev/null 2>&1 || true
+        printf '  enabled %s\n' "$unit"
+      fi
+      if ! systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+        systemctl --user start "$unit" >/dev/null 2>&1 || true
+        printf '  started %s\n' "$unit"
+      fi
+    else
+      if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+        systemctl --user stop "$unit" >/dev/null 2>&1 || true
+        printf '  stopped %s\n' "$unit"
+      fi
+      if systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then
+        systemctl --user disable "$unit" >/dev/null 2>&1 || true
+        printf '  disabled %s\n' "$unit"
+      fi
+    fi
+  done
+}
 
 merge_baloo_exclusions() {
   printf '  configuring Baloo file indexer exclusions for cloud drives...\n'
@@ -199,33 +322,39 @@ reconcile_akonadi_agents() {
   local corp_ical_id="akonadi_ical_resource_corporate"
 
   if [[ "$corp_mode" == "bridge" ]]; then
-    # In bridge mode: register DAV resource only if tokens exist
-    if [[ -f "$corp_token" ]] && command -v kwriteconfig6 >/dev/null 2>&1; then
-      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_dav_id" "akonadi_davgroupware_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key AgentType "akonadi_davgroupware_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key Autostart true
-      # Remove superseded ical instance if present
+    # In bridge mode: remove superseded ical resource first, then register DAV resource if tokens exist
+    if command -v kwriteconfig6 >/dev/null 2>&1; then
       kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_ical_id" --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key AgentType --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key Autostart --delete 2>/dev/null || true
-      printf '  registered %s in %s\n' "$corp_dav_id" "$agentsrc"
+      if [[ -f "$corp_token" ]]; then
+        kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_dav_id" "akonadi_davgroupware_resource"
+        kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key AgentType "akonadi_davgroupware_resource"
+        kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key Autostart true
+        printf '  registered %s in %s\n' "$corp_dav_id" "$agentsrc"
+      fi
     fi
   elif [[ "$corp_mode" == "read-only" ]]; then
-    # In read-only mode: provision ical resource, tear down DAV resource, archive token cache
+    # In read-only mode: warn on un-synced changes, tear down DAV resource, archive token cache, provision ical resource
+    if [[ -f "$corp_token" ]]; then
+      printf '  warning: corporate Microsoft account configured in read-only mode; un-synced local changes will not sync\n' >&2
+    fi
     if command -v kwriteconfig6 >/dev/null 2>&1; then
-      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_ical_id" "akonadi_ical_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key AgentType "akonadi_ical_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key Autostart true
       kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_dav_id" --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key AgentType --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$corp_dav_id" --key Autostart --delete 2>/dev/null || true
-      printf '  registered %s (read-only) in %s\n' "$corp_ical_id" "$agentsrc"
     fi
     if [[ -f "$corp_token" ]]; then
       mkdir -p "$archive_dir"
       chmod 0700 "$archive_dir"
       mv -f "$corp_token" "$archive_dir/corporate-tokens-retired-$(date +%Y%m%d%H%M%S).properties" 2>/dev/null || true
       printf '  archived retired corporate DavMail token file\n'
+    fi
+    if command -v kwriteconfig6 >/dev/null 2>&1; then
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$corp_ical_id" "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key AgentType "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$corp_ical_id" --key Autostart true
+      printf '  registered %s (read-only) in %s\n' "$corp_ical_id" "$agentsrc"
     fi
   fi
 
@@ -236,27 +365,27 @@ reconcile_akonadi_agents() {
   local personal_ical_id="akonadi_ical_resource_personal"
 
   if [[ "$personal_mode" == "bridge" ]]; then
-    # In bridge mode: register DAV resource only if tokens exist
-    if [[ -f "$personal_token" ]] && command -v kwriteconfig6 >/dev/null 2>&1; then
-      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_dav_id" "akonadi_davgroupware_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key AgentType "akonadi_davgroupware_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key Autostart true
-      # Remove superseded ical instance if present
+    # In bridge mode: remove superseded ical resource first, then register DAV resource if tokens exist
+    if command -v kwriteconfig6 >/dev/null 2>&1; then
       kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_ical_id" --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key AgentType --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key Autostart --delete 2>/dev/null || true
-      printf '  registered %s in %s\n' "$personal_dav_id" "$agentsrc"
+      if [[ -f "$personal_token" ]]; then
+        kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_dav_id" "akonadi_davgroupware_resource"
+        kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key AgentType "akonadi_davgroupware_resource"
+        kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key Autostart true
+        printf '  registered %s in %s\n' "$personal_dav_id" "$agentsrc"
+      fi
     fi
   elif [[ "$personal_mode" == "read-only" ]]; then
-    # In read-only mode: provision ical resource, tear down DAV resource, archive token cache
+    # In read-only mode: warn on un-synced changes, tear down DAV resource, archive token cache, provision ical resource
+    if [[ -f "$personal_token" ]]; then
+      printf '  warning: personal Microsoft account configured in read-only mode; un-synced local changes will not sync\n' >&2
+    fi
     if command -v kwriteconfig6 >/dev/null 2>&1; then
-      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_ical_id" "akonadi_ical_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key AgentType "akonadi_ical_resource"
-      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key Autostart true
       kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_dav_id" --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key AgentType --delete 2>/dev/null || true
       kwriteconfig6 --file "$agentsrc" --group "$personal_dav_id" --key Autostart --delete 2>/dev/null || true
-      printf '  registered %s (read-only) in %s\n' "$personal_ical_id" "$agentsrc"
     fi
     if [[ -f "$personal_token" ]]; then
       mkdir -p "$archive_dir"
@@ -264,15 +393,31 @@ reconcile_akonadi_agents() {
       mv -f "$personal_token" "$archive_dir/personal-tokens-retired-$(date +%Y%m%d%H%M%S).properties" 2>/dev/null || true
       printf '  archived retired personal DavMail token file\n'
     fi
+    if command -v kwriteconfig6 >/dev/null 2>&1; then
+      kwriteconfig6 --file "$agentsrc" --group Instances --key "$personal_ical_id" "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key AgentType "akonadi_ical_resource"
+      kwriteconfig6 --file "$agentsrc" --group "$personal_ical_id" --key Autostart true
+      printf '  registered %s (read-only) in %s\n' "$personal_ical_id" "$agentsrc"
+    fi
   fi
 }
 
-main() {
-  printf 'config-kde-cloud.sh: configuring KDE desktop integration for cloud drives and PIM...\n'
+reconcile_desktop() {
+  if ! command -v kwriteconfig6 >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "config-kde-cloud" "site" "kwriteconfig6-absent" "direction" "transient-blocking" "probe" "kwriteconfig6-present" "reason" "kwriteconfig6 is not installed; KDE desktop configuration is deferred") | trim | indent 4 }}
+  fi
+
   merge_baloo_exclusions
   merge_dolphin_places
   configure_thumbnail_exclusions
   reconcile_akonadi_agents
+}
+
+main() {
+  printf 'config-kde-cloud.sh: configuring KDE desktop integration for cloud drives and PIM...\n'
+  preflight_checks
+  reconcile_desktop
+  reconcile_services
 }
 
 main
