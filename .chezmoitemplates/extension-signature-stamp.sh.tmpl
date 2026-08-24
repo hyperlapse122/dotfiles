@@ -1,6 +1,6 @@
 {{- /*
 extension-signature-stamp.sh.tmpl — the ONE success-signature implementation, shared
-verbatim by the three `run_after_` extension reconcilers (VSCodium, GNOME Solaar,
+verbatim by the run_after_ extension reconcilers (VSCodium,
 GNOME Kimpanel). Each job still owns its OWN signature: this partial only supplies
 the mechanism, and the caller names the state path it writes.
 
@@ -9,7 +9,7 @@ the only thing standing between a converged extension and a reconciliation that
 would re-enable one the user disabled. Every property that makes it safe — a
 regular non-symlink file, a private temporary in the same directory, a 0600 mode
 before publication, an atomic rename, and a refusal to write through a symlinked
-parent — has to hold in all three jobs. Three verbatim copies means three places to
+parent — has to hold across jobs. Multiple verbatim copies means multiple places to
 get that wrong.
 
 WHAT STAYS PER JOB. `SIGNATURE` (each job hashes its own desired configuration

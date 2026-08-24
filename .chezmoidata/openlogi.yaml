@@ -3,7 +3,7 @@
 #     ~/.config/openlogi/config.toml by
 #     .chezmoiscripts/30-linux/run_after_config-openlogi.sh.tmpl via settings-reconcile.
 #
-# Single source of truth (like packages.yaml, agents.yaml, and solaar.yaml):
+# Single source of truth (like packages.yaml, agents.yaml, and kde.yaml):
 # add or retune declared OpenLogi settings HERE, not in the script or by hand-editing
 # ~/.config/openlogi/config.toml on managed hosts.
 #
@@ -25,9 +25,8 @@
 #   keyed by physical identity in data rather than abstract model names.
 #
 # FRESH START (R12):
-#   No Solaar content is ported: the initial declared set contains no gesture
-#   bindings, button remaps, or device settings translated from solaar.yaml or
-#   rules.yaml.tmpl.
+#   No legacy Solaar content was ported: the initial declared set contains no gesture
+#   bindings, button remaps, or device settings translated from former Solaar configs.
 #
 # SETTING REFERENCE:
 #   app_settings:

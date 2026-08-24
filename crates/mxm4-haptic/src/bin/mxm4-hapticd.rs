@@ -1,14 +1,15 @@
 //! mxm4-hapticd — MX Master 4 haptic daemon.
 //!
-//! Sole owner of the Bolt receiver's HID++ session. Discovers the mouse
-//! and its HAPTIC feature index natively over HID (no Solaar CLI, no
-//! on-disk cache — device state lives only in memory), serializes haptic
-//! playback with debounce + per-pulse pacing, and re-discovers when the
-//! mouse disconnects/reconnects (possibly at a different receiver slot).
+//! Sole owner of the Bolt receiver's haptic playback session. Shares the
+//! receiver's hidraw node with openlogi-agent. Discovers the mouse and its
+//! HAPTIC feature index natively over HID (no external CLI, no on-disk cache —
+//! device state lives only in memory), serializes haptic playback with
+//! debounce + per-pulse pacing, and re-discovers when the mouse
+//! disconnects/reconnects (possibly at a different receiver slot).
 //!
 //! Inputs: waveform names on the IPC endpoint (AF_UNIX socket on Unix, Win32
-//! named pipe on Windows; see lib::IpcServer) from the thin client (Solaar
-//! rules) and the notification bridge. Output: HID++ play reports.
+//! named pipe on Windows; see lib::IpcServer) from the thin client (OpenLogi
+//! bindings / CLI) and the notification bridge. Output: HID++ play reports.
 //!
 //! Concurrency — a SINGLE I/O-owner thread holds the one `hidapi::HidDevice`
 //! (that type is `Send` but not `Sync`, and macOS IOKit does not promise that
@@ -226,7 +227,7 @@ fn io_loop(device: HidDevice, rx: Receiver<u8>) -> ! {
     let poll = poll_ms();
 
     // Enable 0x41 notifications and seed the connected-slot set. Both are
-    // idempotent receiver-register writes (safe alongside a running Solaar).
+    // idempotent receiver-register writes (safe alongside a running openlogi-agent).
     let _ = device.write(&lib::ENABLE_NOTIFICATIONS);
     let _ = device.write(&lib::REANNOUNCE_DEVICES);
 
