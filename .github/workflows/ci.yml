@@ -198,6 +198,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: .ci/lib/apt-install.sh - libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/mxm4-haptic -> target"
       - run: cargo build --all-targets
       - run: cargo test
       - run: cargo fmt --check
