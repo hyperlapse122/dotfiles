@@ -367,36 +367,39 @@ jobs:
           # onepassword* calls, and GITHUB_TOKEN covers gitHubLatest* / release
           # asset lookups.
           scratch="${RUNNER_TEMP}/scratch"
-          mkdir -p "${scratch}/target"
-          : > "${scratch}/empty.toml"
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
-          mkdir -p "${out}"
+          mkdir -p "${scratch}/target" "${out}"
+          : > "${scratch}/empty.toml"
 
-          render_one() {
-            chezmoi --config "${scratch}/empty.toml" \
-              --source "$PWD" \
-              --destination "${scratch}/target" \
-              execute-template
-          }
+          export scratch out
+          num_procs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-          total=0; failed=0
           # Both trees hold only template files: every .chezmoiscripts file is a
           # *.tmpl, and every .chezmoiexternals file is an implicit template.
-          while IFS= read -r -d '' f; do
-            rel="${f#./}"
-            # foo.sh.tmpl -> foo.sh; externals keep .toml
-            dest="${out}/${rel%.tmpl}"
-            mkdir -p "$(dirname "${dest}")"
-            total=$((total + 1))
-            if render_one < "${f}" > "${dest}" 2> "${dest}.stderr"; then
-              rm -f "${dest}.stderr"
-            else
-              mv "${dest}.stderr" "${dest}.render-error.txt"
-              failed=$((failed + 1))
-              echo "::warning file=${rel}::failed to render ${rel}"
-            fi
-          done < <(find .chezmoiscripts .chezmoiexternals -type f -print0)
+          find .chezmoiscripts .chezmoiexternals -type f -print0 | \
+            xargs -0 -n 1 -P "${num_procs}" bash -c '
+              for f in "$@"; do
+                rel="${f#./}"
+                dest="${out}/${rel%.tmpl}"
+                mkdir -p "$(dirname "${dest}")"
+                worker_scratch="${scratch}/worker-$BASHPID"
+                mkdir -p "${worker_scratch}/target"
+                : > "${worker_scratch}/empty.toml"
+                if chezmoi --config "${worker_scratch}/empty.toml" \
+                    --source "'"$PWD"'" \
+                    --destination "${worker_scratch}/target" \
+                    execute-template < "${f}" > "${dest}" 2> "${dest}.stderr"; then
+                  rm -f "${dest}.stderr"
+                else
+                  mv "${dest}.stderr" "${dest}.render-error.txt"
+                  echo "::warning file=${rel}::failed to render ${rel}"
+                fi
+                rm -rf "${worker_scratch}"
+              done
+            ' _
 
+          total=$(find .chezmoiscripts .chezmoiexternals -type f | wc -l)
+          failed=$(find "${out}" -type f -name '*.render-error.txt' | wc -l)
           echo "rendered ${total} template(s), ${failed} error(s)"
           {
             echo "### rendered internals (${{ matrix.os }})"
@@ -736,33 +739,37 @@ jobs:
         run: |
           set -euo pipefail
           scratch="${RUNNER_TEMP}/scratch"
-          mkdir -p "${scratch}/target"
-          : > "${scratch}/empty.toml"
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
-          mkdir -p "${out}"
+          mkdir -p "${scratch}/target" "${out}"
+          : > "${scratch}/empty.toml"
 
-          render_one() {
-            chezmoi --config "${scratch}/empty.toml" \
-              --source "${GITHUB_WORKSPACE}" \
-              --destination "${scratch}/target" \
-              execute-template
-          }
+          export scratch out
+          num_procs=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 
-          total=0; failed=0
-          while IFS= read -r -d '' f; do
-            rel="${f#./}"
-            dest="${out}/${rel%.tmpl}"
-            mkdir -p "$(dirname "${dest}")"
-            total=$((total + 1))
-            if render_one < "${f}" > "${dest}" 2> "${dest}.stderr"; then
-              rm -f "${dest}.stderr"
-            else
-              mv "${dest}.stderr" "${dest}.render-error.txt"
-              failed=$((failed + 1))
-              echo "::warning file=${rel}::failed to render ${rel}"
-            fi
-          done < <(find .chezmoiscripts .chezmoiexternals -type f -print0)
+          find .chezmoiscripts .chezmoiexternals -type f -print0 | \
+            xargs -0 -n 1 -P "${num_procs}" bash -c '
+              for f in "$@"; do
+                rel="${f#./}"
+                dest="${out}/${rel%.tmpl}"
+                mkdir -p "$(dirname "${dest}")"
+                worker_scratch="${scratch}/worker-$BASHPID"
+                mkdir -p "${worker_scratch}/target"
+                : > "${worker_scratch}/empty.toml"
+                if chezmoi --config "${worker_scratch}/empty.toml" \
+                    --source "'"${GITHUB_WORKSPACE}"'" \
+                    --destination "${worker_scratch}/target" \
+                    execute-template < "${f}" > "${dest}" 2> "${dest}.stderr"; then
+                  rm -f "${dest}.stderr"
+                else
+                  mv "${dest}.stderr" "${dest}.render-error.txt"
+                  echo "::warning file=${rel}::failed to render ${rel}"
+                fi
+                rm -rf "${worker_scratch}"
+              done
+            ' _
 
+          total=$(find .chezmoiscripts .chezmoiexternals -type f | wc -l)
+          failed=$(find "${out}" -type f -name '*.render-error.txt' | wc -l)
           echo "rendered ${total} template(s), ${failed} error(s)"
           {
             echo "### rendered internals (macos)"
