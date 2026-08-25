@@ -264,7 +264,7 @@
       "glab": {
         "kind": "gitlabRelease",
         "source": "https://gitlab.com/api/v4/projects/34675721",
-        "version": "v1.114.0"
+        "version": "v1.115.0"
       },
       "helm": {
         "kind": "githubRelease",
