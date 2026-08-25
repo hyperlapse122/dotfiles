@@ -104,11 +104,11 @@ Addressing these bottlenecks directly shortens feedback cycles for contributors 
 
 ## Planning Contract
 
-### Key Technical Decisions
+- **KTD1. Cargo Caching with `Swatinem/rust-cache@v2`:** Add `Swatinem/rust-cache@v2` with `workspaces: "crates/mxm4-haptic -> target"` and `cache-all-targets: "true"` to `.github/workflows/ci.yml` in the `rust-crate` matrix job. This automatically keys cache by Cargo.lock and OS matrix targets. Governs R1.
+- **KTD2. Workspace-Aware Dependency Caching in `setup-vp`:** Configure `voidzero-dev/setup-vp@v1` with `cache-dependency-path: packages/bun.lock` and `run-install: false` to ensure Bun lockfile hashing tracks `packages/bun.lock` rather than defaulting to root. Governs R3.
+- **KTD3. Tool Binary Caching with `actions/cache@v4`:** Wrap binary installation steps in `ci.yml` and `render-dotfiles.yml` with `actions/cache@v4` using cache paths (such as `~/.cache/chezmoi-bin` or `$RUNNER_TEMP/bin`) keyed on `.chezmoidata/releases.json` hash and platform. Governs R2.
+- **KTD4. Thread-safe Worker Isolation for `xargs -P` in Template Rendering:** Implement parallel rendering in `render-internals` and `apply-macos` via `xargs -0 -P $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)`. Each worker invocation creates a sub-scratch directory (`${scratch}/worker-$$`) with its own `empty.toml` and target destination, avoiding concurrent write locks or stdout interleaving. Governs R4, R5.
 
-- **KTD1. Cargo Caching with `Swatinem/rust-cache@v2`:** Add `Swatinem/rust-cache@v2` with `workspaces: "crates/mxm4-haptic -> target"` to `.github/workflows/ci.yml` in the `rust-crate` matrix job. This automatically keys cache by Cargo.lock and OS matrix targets. Governs R1.
-- **KTD2. Chezmoi & Tool Binary Caching with `actions/cache@v4`:** Wrap binary installation steps in `ci.yml` and `render-dotfiles.yml` with `actions/cache@v4` using cache paths (such as `~/.cache/chezmoi-bin` or `$RUNNER_TEMP/bin`) keyed on `.chezmoidata/releases.json` hash and platform. Governs R2.
-- **KTD3. Thread-safe Worker Isolation for `xargs -P` in Template Rendering:** Implement parallel rendering in `render-internals` and `apply-macos` via `xargs -0 -P $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)`. Each worker invocation creates a sub-scratch directory (`${scratch}/worker-$$`) with its own `empty.toml` and target destination, avoiding concurrent write locks or stdout interleaving. Governs R4, R5.
 
 ### High-Level Technical Design
 

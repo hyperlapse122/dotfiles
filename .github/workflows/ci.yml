@@ -21,6 +21,8 @@ jobs:
         with:
           node-version: "24"
           cache: true
+          cache-dependency-path: packages/bun.lock
+          run-install: false
       - name: Install locked chezmoi
         run: |
           set -euo pipefail
@@ -173,6 +175,8 @@ jobs:
         with:
           node-version: "24"
           cache: true
+          cache-dependency-path: packages/bun.lock
+          run-install: false
       - run: vp install --frozen-lockfile
       - run: vp run -r build
       - run: vp run -r typecheck
@@ -201,6 +205,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "crates/mxm4-haptic -> target"
+          cache-all-targets: "true"
       - run: cargo build --all-targets
       - run: cargo test
       - run: cargo fmt --check
