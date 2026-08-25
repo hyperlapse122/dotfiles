@@ -437,23 +437,23 @@
       "uv": {
         "kind": "githubRelease",
         "source": "astral-sh/uv",
-        "version": "0.12.5",
+        "version": "0.12.6",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "a4742988791c9aeae68c78150d6cba762062ad2a47e53738c2779d2b596bfcdb"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.6/uv-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "14e4172aace66a475062cebec7ca04f497d5619e95325dfcc9e4447b9c516846"
           },
           "linux-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "8767a0e77f2cd45436401b1b42bf7e9ed5a4a91a74a5305d6fe93249d0f6dbc5"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.6/uv-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "3719891de9ab41c878a84331e55826d2a46421976a346a65326513a6795b089a"
           },
           "darwin-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-apple-darwin.tar.gz",
-            "sha256": "b3b2137477cf96c9686ebfb71524614cec780c673fd73e59bce099aef02e70e8"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.6/uv-x86_64-apple-darwin.tar.gz",
+            "sha256": "2a26ea71bbeff1c7e12c2cc40245c96a041deff276bc921e7038e304d5d3e04c"
           },
           "darwin-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-aarch64-apple-darwin.tar.gz",
-            "sha256": "5bb0e5fe008a773c3dbcb97ff79cd89e1241464fe9d2f986d52ad8f1b037bd62"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.12.6/uv-aarch64-apple-darwin.tar.gz",
+            "sha256": "14b459d51ea2e71eeba28c45a268c922bdf8607fc6455e3f40b4e082895d160d"
           }
         }
       },
