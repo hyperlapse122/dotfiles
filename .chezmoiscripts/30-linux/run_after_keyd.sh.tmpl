@@ -1,4 +1,4 @@
-{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 {{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
@@ -72,9 +72,22 @@ if [[ $has_hardware -eq 0 ]]; then
 fi
 
 if ! command -v keyd >/dev/null 2>&1; then
-  printf '  -> enabling alternateved/keyd COPR and installing keyd\n'
-  "${SUDO[@]}" dnf -y copr enable alternateved/keyd
-  "${SUDO[@]}" dnf -y install keyd
+  os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")"
+  case "$os_id" in
+    fedora)
+      printf '  -> enabling alternateved/keyd COPR and installing keyd\n'
+      "${SUDO[@]}" dnf -y copr enable alternateved/keyd
+      "${SUDO[@]}" dnf -y install keyd
+      ;;
+    ubuntu|debian|pop)
+      printf '  -> installing keyd via apt\n'
+      "${SUDO[@]}" apt-get update -qq || true
+      "${SUDO[@]}" apt-get install -y keyd
+      ;;
+    *)
+      printf 'keyd: unsupported distribution "%s"; install keyd manually\n' "$os_id" >&2
+      ;;
+  esac
 fi
 
 target_user="${SUDO_USER:-$USER}"
