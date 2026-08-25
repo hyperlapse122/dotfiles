@@ -3,7 +3,7 @@
 #   kde.settings — one row per setting, applied to the user's Plasma rc files by
 #     .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl.
 #
-# Single source of truth (like packages.yaml and openlogi.yaml): add or retune a
+# Single source of truth (like packages.yaml and agents.yaml): add or retune a
 # setting HERE, not in the script. The rows render into that script's SETTINGS
 # array, so a data edit changes the rendered script content and re-triggers the
 # run_onchange_ script by itself — there is no fingerprint block, the rendered
@@ -183,7 +183,7 @@ kde:
 # KDE Plasma 6 desktop tunables, rendered into the .chezmoiscripts/50-linux-kde/
 # config scripts (the KDE target: Fedora KDE Spin).
 #
-# Single source of truth (like gnome.yaml / openlogi.yaml): tune a value HERE, not
+# Single source of truth (like gnome.yaml / agents.yaml): tune a value HERE, not
 # in the script. Every value below renders into the consuming script's body, so a
 # data edit changes that script's rendered content and re-triggers its
 # run_onchange_ automatically — no fingerprint block needed (the same reason

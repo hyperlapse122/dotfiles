@@ -1,5 +1,5 @@
 //! Shared internals for the mxm4-haptic binary set:
-//!   mxm4-haptic         thin one-shot client (spawned by OpenLogi / CLI)
+//!   mxm4-haptic         thin one-shot client (spawned from CLI / scripts)
 //!   mxm4-hapticd        haptic daemon (sole owner of the hidraw device)
 //!   mxm4-haptic-notify  desktop-notification -> haptic bridge
 //!
@@ -473,8 +473,7 @@ pub const HIDPP20_ERROR_SUB_ID: u8 = 0xFF;
 pub const HAPTIC_FEATURE_HI: u8 = 0x19;
 pub const HAPTIC_FEATURE_LO: u8 = 0xB0;
 /// Our request software id. Must be nonzero (so the device replies).
-/// Set to 0x0E for sub-second discovery requests; OpenLogi leases dynamic IDs
-/// from the 1..=15 pool on the shared hidraw, but playback uses sw_id 0
+/// Set to 0x0E for sub-second discovery requests; playback uses sw_id 0
 /// (fire-and-forget) and discovery replies are classified via RootReply::NotForUs.
 pub const SW_ID: u8 = 0x0E;
 
@@ -505,7 +504,7 @@ pub enum RootReply {
     Hidpp20Error(u8),
     /// HID++ 1.0 error.
     Hidpp10Error(u8),
-    /// Not a reply to our Root.GetFeature (other traffic / OpenLogi / events).
+    /// Not a reply to our Root.GetFeature (other traffic / events).
     NotForUs,
 }
 

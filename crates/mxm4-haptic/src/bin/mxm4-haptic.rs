@@ -1,6 +1,6 @@
 //! mxm4-haptic <WAVEFORM>
 //!
-//! Thin one-shot client spawned by OpenLogi RunShellCommand bindings or CLI
+//! Thin one-shot client spawned by CLI / user bindings
 //! (e.g. `mxm4-haptic "<WAVEFORM>"`). Validates the waveform name,
 //! hands it to the mxm4-hapticd daemon over the AF_UNIX socket, and exits.
 //! All device I/O, debounce, queueing and pacing live in the daemon —
