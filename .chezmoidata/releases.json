@@ -4,10 +4,10 @@
       "1password": {
         "kind": "vendorManifest",
         "source": "https://releases.1password.com/linux/stable/index.xml",
-        "version": "8.12.32",
+        "version": "8.12.34",
         "artifacts": {
           "linux-arm64": {
-            "url": "https://downloads.1password.com/linux/tar/stable/aarch64/1password-8.12.32.arm64.tar.gz",
+            "url": "https://downloads.1password.com/linux/tar/stable/aarch64/1password-8.12.34.arm64.tar.gz",
             "sha256": null
           }
         }
@@ -166,7 +166,7 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.23.3"
+        "version": "compound-engineering-v3.23.4"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
