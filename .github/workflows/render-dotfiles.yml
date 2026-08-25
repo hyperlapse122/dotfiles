@@ -517,7 +517,7 @@ jobs:
         if: matrix.os == 'fedora'
         run: |
           set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/10-nvidia.sh"
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh"
           test -f "${rendered}"
           test ! -e "${rendered}.render-error.txt"
           bash -n "${rendered}"
@@ -527,7 +527,7 @@ jobs:
         if: matrix.os == 'fedora'
         run: |
           set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/10-nvidia.sh"
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh"
           rendered_etc="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh"
           for f in "${rendered}" "${rendered_etc}"; do
             test -f "${f}"
