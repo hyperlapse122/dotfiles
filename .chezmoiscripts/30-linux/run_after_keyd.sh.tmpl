@@ -1,0 +1,134 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-keyd" }}
+
+declared_ids=()
+{{- if and (hasKey .system.linux "keyd") (hasKey .system.linux.keyd "keyboards") }}
+{{-   range .system.linux.keyd.keyboards }}
+{{-     if kindIs "string" . }}
+declared_ids+=({{ . | quote }})
+{{-     else if and (kindIs "map" .) (hasKey . "id") }}
+declared_ids+=({{ .id | quote }})
+{{-     end }}
+{{-   end }}
+{{- end }}
+
+if [[ ${#declared_ids[@]} -eq 0 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-keyd" "site" "no-declared-keyboards" "reason" "no keyboard hardware declared in chezmoidata") | trim | indent 2 }}
+fi
+
+is_hardware_present() {
+  local target_id="$1"
+  local target_vendor target_product
+  target_vendor="${target_id%%:*}"
+  target_product="${target_id##*:}"
+
+  target_vendor="${target_vendor#0x}"
+  target_product="${target_product#0x}"
+  target_vendor="$(printf '%s' "$target_vendor" | tr '[:upper:]' '[:lower:]')"
+  target_product="$(printf '%s' "$target_product" | tr '[:upper:]' '[:lower:]')"
+
+  if [[ -r /proc/bus/input/devices ]]; then
+    if grep -Ei "Vendor=${target_vendor}[[:space:]]+Product=${target_product}" /proc/bus/input/devices >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  local v_file p_file v p
+  for v_file in /sys/class/input/event*/device/id/vendor; do
+    [[ -r "$v_file" ]] || continue
+    p_file="${v_file%vendor}product"
+    [[ -r "$p_file" ]] || continue
+    v="$(tr '[:upper:]' '[:lower:]' < "$v_file" 2>/dev/null || true)"
+    p="$(tr '[:upper:]' '[:lower:]' < "$p_file" 2>/dev/null || true)"
+    v="${v#0x}"
+    p="${p#0x}"
+    if [[ "$v" == "$target_vendor" && "$p" == "$target_product" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+has_hardware=0
+for id in "${declared_ids[@]}"; do
+  if is_hardware_present "$id"; then
+    has_hardware=1
+    break
+  fi
+done
+
+if [[ $has_hardware -eq 0 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-keyd" "site" "no-declared-hardware-detected" "reason" "no declared keyboard hardware detected on this host") | trim | indent 2 }}
+fi
+
+if ! command -v keyd >/dev/null 2>&1; then
+  printf '  -> enabling alternateved/keyd COPR and installing keyd\n'
+  "${SUDO[@]}" dnf -y copr enable alternateved/keyd
+  "${SUDO[@]}" dnf -y install keyd
+fi
+
+target_user="${SUDO_USER:-$USER}"
+if getent group keyd >/dev/null 2>&1; then
+  "${SUDO[@]}" usermod -aG keyd "${target_user}" 2>/dev/null || true
+  if ! id -nG | grep -qw keyd; then
+    printf '\n'
+    printf 'NOTE: Added "%s" to groups: keyd\n' "${target_user}"
+    printf '      Log out and back in (or reboot) for group membership to take effect.\n'
+  fi
+fi
+
+tmp_conf="$(mktemp)"
+trap 'rm -f "$tmp_conf"' EXIT
+
+cat > "$tmp_conf" <<'EOF'
+[ids]
+EOF
+
+for id in "${declared_ids[@]}"; do
+  printf '%s\n' "$id" >> "$tmp_conf"
+done
+
+cat >> "$tmp_conf" <<'EOF'
+
+[control]
+capslock=capslock
+
+[main]
+capslock=hangeul
+leftshift+leftmeta+f23=layer(meta)
+EOF
+
+keyd_changed=false
+if ! cmp -s "$tmp_conf" /etc/keyd/default.conf 2>/dev/null; then
+  keyd_changed=true
+  printf '  -> /etc/keyd/default.conf (mode 644)\n'
+  "${SUDO[@]}" install -D -m 644 "$tmp_conf" /etc/keyd/default.conf
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  if ! systemctl is-enabled --quiet keyd.service 2>/dev/null; then
+    printf '  -> enabling keyd.service\n'
+    "${SUDO[@]}" systemctl enable keyd.service
+  fi
+  if systemctl is-active --quiet keyd.service 2>/dev/null; then
+    if [[ "$keyd_changed" == true ]]; then
+      printf '  -> keyd reload (/etc/keyd changed)\n'
+      "${SUDO[@]}" keyd reload
+    fi
+  else
+    printf '  -> starting keyd.service\n'
+    "${SUDO[@]}" systemctl start keyd.service
+  fi
+fi
+
+{{ end -}}

@@ -96,7 +96,6 @@ packages:
       # mechanism: `copr enable <owner/project>` resolves the whole repo from one
       # token.
       coprs:
-        - alternateved/keyd
         - jdxcode/mise
       # GPG keys imported (rpm --import) to verify third-party repo packages.
       # Fedora-only mechanism: rpm has ONE global keyring, so a key is declared once
@@ -227,9 +226,6 @@ packages:
 
         # Cloud provider CLI
         - azure-cli
-
-        # Keyboard remapper
-        - keyd
 
         # Language toolchains + version manager
         - dotnet-sdk-10.0
