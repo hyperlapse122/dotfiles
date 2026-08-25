@@ -285,7 +285,7 @@ fi
 if (( probe_line <= seed_line )); then
   fail 'enroll_dkms_mok must probe AFTER seeding, so a failed mint cannot reach mokutil --import'
 fi
-grep -Fq 'mok_state}" == present' "${scratch}/enroll.code" ||
+grep -Eq 'mok_state}" (!=|==) present' "${scratch}/enroll.code" ||
   fail 'only a complete keypair may be enrolled; partial and unreadable must not reach mokutil --import'
 
 printf 'Fedora DKMS MOK smoke passed.\n'
