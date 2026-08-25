@@ -23,7 +23,7 @@ fi
 install_apt() {
   local pkg=$1
   local status=''
-  status="$(dpkg-query -f '${db:Status-Status}' -W \"$pkg\" 2>/dev/null)" || status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
   if [[ "$status" != installed ]]; then
     "${SUDO[@]}" apt-get install -y "$pkg"
   fi
