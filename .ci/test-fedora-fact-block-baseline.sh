@@ -101,9 +101,9 @@ NODE
 
 # Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=95f94c6a6dde37933a66041dc73c189bce1ebc4b360249c49917889e5e327ef2
+  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=1dc8e7907b7c8b3d22ecb2561522e5c37f6d0c713d85da9b5c8bb2ec933642bb
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=ddd39341d7838275d2904f46b3a42067c5b9771a8013139eff1051d96e11fcce
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=6db6841c0b08b5c1feb461db18c2655bd2ea9630e4503e98a8846f6e01697c58
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=fc2e9164e0741013d71f34a688a820b0d66188f654710b9f5fea9d07a9c707b6
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl]=70a1d313716912bb41e3250248944a346ca9e1dc628ff1d3c1625c5f0313af28
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
 )
@@ -128,7 +128,7 @@ grep -Fq 'systemctl enable "${svc}"' "$fedora_render" \
   || fail 'Fedora service enablement no longer uses enable-only activation'
 ! grep -Eq 'systemctl[[:space:]]+(start|enable --now)' "$fedora_render" \
   || fail 'Fedora service enablement still starts units during apply'
-grep -Fq 'NOTE: This installer defers explicit activation for keyd, tailscaled, systemd-timesyncd, and (on NVIDIA hosts) nvidia-persistenced.' "$fedora_render" \
+grep -Fq 'NOTE: This installer defers explicit activation for tailscaled, systemd-timesyncd, and (on NVIDIA hosts) nvidia-persistenced.' "$fedora_render" \
   || fail 'Fedora render omits affected service names from the deferred activation notice'
 grep -Fq 'Package or time-configuration side effects may still activate services.' "$fedora_render" \
   || fail 'Fedora render omits the indirect activation boundary'
@@ -148,13 +148,9 @@ grep -Fq 'Restart affected services manually after apply, or reboot the system.'
   || fail 'network render omits manual restart-or-reboot guidance'
 grep -Fq 'site=networkmanager-not-running' "$network_render" \
   || fail 'network render lost the NetworkManager applicability declaration'
-files_render="$scratch/run_onchange_after_install-system-10-files.sh"
-grep -Fq 'keyd reload (etc/keyd changed)' "$files_render" \
-  || fail 'install-system-10-files render omits the change-gated keyd reload'
-grep -Fq '"${SUDO[@]}" keyd reload' "$files_render" \
-  || fail 'install-system-10-files render omits the keyd reload command'
-grep -Fq 'systemctl is-active --quiet keyd.service' "$files_render" \
-  || fail 'install-system-10-files render omits the keyd active-unit guard'
+keyd_render="$scratch/run_after_keyd.sh"
+render ".chezmoiscripts/30-linux/run_after_keyd.sh.tmpl" "$keyd_render"
+bash -n "$keyd_render" || fail "run_after_keyd.sh.tmpl does not render valid shell"
 
 # The login-shell script consumes capabilities.tmpl and facts.tmpl, so it never
 # carries a FACT_* block; only these two scripts include facts-sh.tmpl.
