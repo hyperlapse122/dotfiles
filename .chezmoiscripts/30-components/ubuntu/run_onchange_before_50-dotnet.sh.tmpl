@@ -1,0 +1,49 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-dotnet-ubuntu") }}
+
+SUDO=()
+if [[ "${EUID}" -ne 0 ]]; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'install-dotnet-ubuntu.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+  SUDO=(sudo)
+fi
+
+dotnet_tools=(
+  csharp-ls
+  git-credential-manager
+  powershell
+)
+
+install_dotnet_sdk() {
+  if ! command -v dotnet >/dev/null 2>&1; then
+    "${SUDO[@]}" apt-get update -qq || true
+    "${SUDO[@]}" apt-get install -y dotnet-sdk-8.0 2>/dev/null || true
+  fi
+}
+
+install_dotnet_tools() {
+  if ! command -v dotnet >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local installed tool
+  installed="$(dotnet tool list -g 2>/dev/null || true)"
+  for tool in "${dotnet_tools[@]}"; do
+    if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
+      continue
+    fi
+    dotnet tool install -g "${tool}" || true
+  done
+}
+
+install_dotnet_sdk
+install_dotnet_tools
+
+{{ end -}}

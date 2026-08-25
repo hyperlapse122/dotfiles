@@ -189,7 +189,7 @@ printf '## package groups  (.chezmoidata/packages.yaml, gates:)\n\n'
 {{-   $pkgSpec = .packages.linux.fedora -}}
 {{- end -}}
 {{- if hasKey $pkgSpec "gates" }}
-printf '  distro: {{ $distro }} → .chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl\n'
+printf '  distro: {{ $distro }} → .chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl\n'
 printf '  Every other package key in that map installs unconditionally.\n\n'
 # Row: <package key>:<gate expression>:<FORCE_* var that can override it, if any>
 #

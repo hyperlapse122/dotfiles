@@ -16,13 +16,13 @@ render() {
   local root=$1
   PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$root" \
     --override-data '{"chezmoi":{"os":"linux","arch":"amd64","osRelease":{"id":"fedora"}}}' \
-    execute-template <"$root/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl"
+    execute-template <"$root/.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl"
 }
 render_ubuntu() {
   local root=$1
   PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$root" \
     --override-data '{"chezmoi":{"os":"linux","arch":"arm64","osRelease":{"id":"ubuntu"}}}' \
-    execute-template <"$root/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl"
+    execute-template <"$root/.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl"
 }
 assert_ubuntu_gate_closed() {
   local root=$1 authority="$scratch/ubuntu-authority.json"
@@ -43,10 +43,10 @@ JS
 }
 make_fixture() {
   local root=$1
-  mkdir -p "$root/.chezmoiscripts/20-linux-fedora"
+  mkdir -p "$root/.chezmoiscripts/20-base/fedora"
   cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$root/"
-  cp -a "$repo_root/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl" \
-    "$root/.chezmoiscripts/20-linux-fedora/"
+  cp -a "$repo_root/.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl" \
+    "$root/.chezmoiscripts/20-base/fedora/"
 }
 mutate() {
   local root=$1 old=$2 new=$3 count=${4:-1}

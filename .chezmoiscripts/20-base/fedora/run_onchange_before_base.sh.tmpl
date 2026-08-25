@@ -1,0 +1,136 @@
+{{- /* Validate the complete cross-platform authority before any manager body can render. */ -}}
+{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
+{{- $timedatectlPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "timedatectl-present") -}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+#!/usr/bin/env bash
+
+# Capability fingerprints pair each transient-blocking declaration below with
+# the cached precondition it names. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list
+      (dict "name" "timedatectl-present" "value" $timedatectlPresent))) }}
+
+set -euo pipefail
+
+# Base Fedora system provisioning: repositories, core development tools,
+# shell utilities, and system time synchronization.
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-base-fedora") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-base-fedora.sh" -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+core_packages=(
+  clang
+  clang-tools-extra
+  cmake
+  curl
+  file
+  gcc-c++
+  git
+  gnupg2
+  jq
+  ninja-build
+  openssl-devel
+  pkg-config
+  ripgrep
+  systemd-devel
+  tmux
+  wget
+  xxd
+  yq
+  zsh
+)
+
+configure_kr_mirrorlists() {
+  local chassis_type=''
+  if [[ -r /sys/class/dmi/id/chassis_type ]]; then
+    chassis_type="$(</sys/class/dmi/id/chassis_type)"
+  fi
+
+  case "${chassis_type}" in
+    3|4|5|6|7|13|15|16|35) ;;
+    *)
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-base-fedora" "site" "chassis-not-desktop-class" "reason" "the chassis is not desktop class; Fedora mirrorlists stay upstream") | trim | indent 8 }}
+      )
+      return 0
+      ;;
+  esac
+
+  local -a repo_options=(
+    "fedora.metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-\$releasever&arch=\$basearch&country=KR"
+    'fedora.mirrorlist='
+    "updates.metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f\$releasever&arch=\$basearch&country=KR"
+    'updates.mirrorlist='
+    "updates-testing.metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-testing-f\$releasever&arch=\$basearch&country=KR"
+    'updates-testing.mirrorlist='
+  )
+
+  "${DNF[@]}" config-manager setopt "${repo_options[@]}"
+}
+
+setup_base_repos() {
+  if ! rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
+    "${DNF[@]}" install fedora-workstation-repositories -y
+  fi
+
+  configure_kr_mirrorlists
+
+  "${SUDO[@]}" fedora-third-party enable
+
+  # Enable COPRs for core tooling
+  "${DNF[@]}" copr enable jdxcode/mise -y
+
+  # Install RPM Fusion (free + nonfree)
+  if ! rpm -q rpmfusion-free-release rpmfusion-nonfree-release >/dev/null 2>&1; then
+    "${DNF[@]}" install -y \
+      "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+      "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+  fi
+  "${DNF[@]}" config-manager setopt fedora-cisco-openh264.enabled=1
+
+  "${DNF[@]}" makecache -y
+}
+
+install_base_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${core_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-base-fedora" "site" "base-packages-already-present" "reason" "all declared base packages are already installed") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  printf 'install-base-fedora.sh: %d of %d base packages missing; configuring repositories and installing.\n' \
+    "${#missing[@]}" "${#core_packages[@]}"
+
+  setup_base_repos
+  "${DNF[@]}" install -y "${core_packages[@]}"
+}
+
+configure_time() {
+  if ! command -v timedatectl >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-base-fedora" "site" "timedatectl-absent" "direction" "transient-blocking" "probe" "timedatectl-present" "reason" "timedatectl is not installed; time configuration is deferred") | trim | indent 4 }}
+  fi
+  "${SUDO[@]}" timedatectl set-local-rtc 0 2>/dev/null || true
+  "${SUDO[@]}" timedatectl set-ntp true 2>/dev/null || true
+}
+
+enable_base_services() {
+  "${SUDO[@]}" systemctl unmask systemd-timesyncd 2>/dev/null || true
+  if ! "${SUDO[@]}" systemctl enable systemd-timesyncd 2>/dev/null; then
+    if ! systemctl list-unit-files systemd-timesyncd.service 2>/dev/null | grep -q systemd-timesyncd; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-base-fedora" "site" "timesyncd-unit-absent" "direction" "harmless" "reason" "systemd-timesyncd is not installed on this host") | trim | indent 6 }}
+    fi
+  fi
+}
+
+install_base_packages
+configure_time
+enable_base_services
+
+{{ end -}}
