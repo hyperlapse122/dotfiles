@@ -9,7 +9,9 @@
 system:
   linux:
     keyd:
-      keyboards: []
+      keyboards:
+        - id: "0001:0001"
+          name: "AT Translated Set 2 keyboard"
     # Per-path overrides for files under system/linux/etc/. Defaults when a
     # file matches no entry: mode 0644, installed unconditionally. `path` is a
     # bash glob matched against the path relative to system/linux/ (first
