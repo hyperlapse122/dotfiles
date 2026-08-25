@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { normalizeDigest, resolveGitHubRelease, ResolutionError } from "../src/github.js";
 import type { ToolSpec } from "../src/types.js";
-import { REGISTRY } from "../src/registry.js";
 
 const realFetch = globalThis.fetch;
 
