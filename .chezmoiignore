@@ -135,6 +135,7 @@
 .config/systemd/user/mxm4-haptic*.service
 .omp/agent/extensions/mxm4-haptic.ts
 .local/share/omp-plugins
+.chezmoiscripts/50-linux-kde/*.sh
 {{- end }}
 
 
