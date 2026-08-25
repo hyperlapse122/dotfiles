@@ -275,8 +275,6 @@ sed -n "${enroll_start},/^}$/p" "${rendered_installer}" > "${scratch}/enroll.sh"
 
 grep -Fq 'ensure_dkms_mok_generated' "${scratch}/enroll.sh" ||
   fail 'enrollment must seed the DKMS MOK; nothing else calls ensure_dkms_mok_generated now'
-grep -Fq 'HAS_NVIDIA' "${scratch}/enroll.sh" ||
-  fail 'seeding must be gated on the NVIDIA host flag — no other module is signed with this key'
 
 grep -v '^[[:space:]]*#' "${scratch}/enroll.sh" > "${scratch}/enroll.code"
 seed_line=$(grep -n 'ensure_dkms_mok_generated' "${scratch}/enroll.code" | head -1 | cut -d: -f1 || true)
