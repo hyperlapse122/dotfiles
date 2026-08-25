@@ -488,7 +488,7 @@ jobs:
           sed -i 's/nvidiaPackages: nvidia/nvidiaPackages: ciUndeclaredFact/' \
             "${scratch}/unknown/.chezmoidata/packages.yaml"
           if render_from "${scratch}/unknown" \
-              ".chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl" \
+              ".chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl" \
               > "${scratch}/unknown.out" 2> "${scratch}/unknown.err"; then
             echo "unknown fact unexpectedly rendered" >&2
             exit 1
