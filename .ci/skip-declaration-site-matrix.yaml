@@ -67,9 +67,9 @@ runtime_input: false
 totals:
   classified_owners: 123
   hard_error_owners: 11
-  rendered_instances: 146
+  rendered_instances: 156
   phase_local_instances: 118
-  shared_guard_instances: 28
+  shared_guard_instances: 38
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -91,30 +91,31 @@ plan_contract_scopes:
 audited_forms:
   skip_here: 54
   skip_step: 31
-  done_here: 14
-  not_applicable: 24
+  done_here: 18
+  not_applicable: 20
 
 audited_directions:
   harmless: 26
   transient-blocking: 57
   transient-tolerable: 2
 audited_scopes:
-  guard-partials: 5
   00-tools: 4
   10-auth: 5
-  20-linux-fedora: 17
+  20-base: 5
+  30-components: 12
   30-linux: 26
   50-linux-gnome: 29
   50-linux-kde: 29
   60-build: 5
   70-agents: 3
+  guard-partials: 5
 
 shared_guard_fanout:
   gnome-guard: 7
-  kde-guard: 9
   headless-guard: 3
+  kde-guard: 9
+  shared-host-guard: 15
   sudo-skip-guard: 4
-  shared-host-guard: 5
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -126,11 +127,11 @@ divergence:
     reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
   - bucket: 'done_here'
     plan: 10
-    audited: 14
+    audited: 18
     reason: 'The six GNOME/KDE completion stamps plus eight already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, a converged authd login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here.'
   - bucket: 'not_applicable'
     plan: 22
-    audited: 24
+    audited: 20
     reason: 'Two additional permanent host-shape opt-outs (no TPM2 device, no LUKS device) are recorded alongside the fact-gated and data-declared ones. No row was relabelled to reach a count: every direction here follows skip.sh.tmpl verbatim, and the residual deltas in this block are the arithmetic of the U4 rename plus per-step rather than per-script enumeration.'
   - bucket: 'scope:00-tools+10-auth'
     plan: 8
@@ -175,11 +176,21 @@ owners:
     form: 'skip_here'
     direction: 'harmless'
     instances:
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_20-podman.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_30-tailscale.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_40-flatpaks.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_10-nvidia.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_20-podman.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_30-tailscale.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_40-flatpaks.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
     template: '.chezmoitemplates/gnome-guard.sh.tmpl'
@@ -193,13 +204,13 @@ owners:
     form: 'skip_here'
     direction: 'harmless'
     instances:
+      - '.chezmoiscripts/50-linux-gnome/run_after_install-gnome-kimpanel-extension.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-1password-shortcut.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-app-grid-order.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-fonts.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-mouse.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-terminal-palette.sh.tmpl#gnome-guard/non-gnome-desktop'
-      - '.chezmoiscripts/50-linux-gnome/run_after_install-gnome-kimpanel-extension.sh.tmpl#gnome-guard/non-gnome-desktop'
   - owner: 'kde-guard/non-kde-desktop'
     scope: 'guard-partials'
     template: '.chezmoitemplates/kde-guard.sh.tmpl'
@@ -392,224 +403,6 @@ owners:
     form: 'done_here'
     instances:
       - '.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl#auth-tailscale/already-authenticated'
-  - owner: 'install-fedora/chassis-not-desktop-class'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 152
-    anchor: '    *)'
-    predicate: '*)'
-    predicate_digest: 'sha256:69e11195653e133efe879683274617591b263817f97b21633fdea18e218af0d1'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/chassis-not-desktop-class'
-  - owner: 'install-fedora/nvidia-repo-policy-no-nvidia'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 179
-    anchor: '  [[ "${HAS_NVIDIA}" -eq 1 ]] || return 0'
-    predicate: '[[ "${HAS_NVIDIA}" -ne 1 ]]'
-    predicate_digest: 'sha256:736023d3c8b96ded5e47f9580b1f15162d5831e2066e1b1e4019282c91876e81'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/nvidia-repo-policy-no-nvidia'
-  - owner: 'install-fedora/rpmfusion-nonfree-absent'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 181
-    anchor: '  if ! "${DNF[@]}" -q repo list --all ''rpmfusion-nonfree*'' | grep -q ''^rpmfusion-nonfree''; then'
-    predicate: '! "${DNF[@]}" -q repo list --all ''rpmfusion-nonfree*'' | grep -q ''^rpmfusion-nonfree'''
-    predicate_digest: 'sha256:1741c442e2a6fc8bbddcf6d2a4bcc680d8d72eaa824b6292f347cecb1a0460df'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'skip_step'
-    direction: 'harmless'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/rpmfusion-nonfree-absent'
-  - owner: 'install-fedora/packages-already-present'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 276
-    anchor: '  if [[ "${#missing[@]}" -eq 0 ]]; then'
-    predicate: '[[ "${#missing[@]}" -eq 0 ]]'
-    predicate_digest: 'sha256:8a2cae930828f25724942554ba4fdba0abb87302560257d4f9df59db1ee56f5f'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'done_here'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/packages-already-present'
-  - owner: 'install-fedora/flatpaks-none-declared'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 321
-    anchor: '  if [[ "${#flatpaks[@]}" -eq 0 ]]; then'
-    predicate: '[[ "${#flatpaks[@]}" -eq 0 ]]'
-    predicate_digest: 'sha256:5a7621fe45ce2f21894fa88d6551f071a6e9edcb087eb4708a6679f730a153db'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/flatpaks-none-declared'
-  - owner: 'install-fedora/dotnet-tools-none-declared'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 341
-    anchor: '  if [[ "${#dotnet_tools[@]}" -eq 0 ]]; then'
-    predicate: '[[ "${#dotnet_tools[@]}" -eq 0 ]]'
-    predicate_digest: 'sha256:3a41cac32407b87a5e8e0b31c2833cfdc84700a9b71164d1f8b5d5da45615f63'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/dotnet-tools-none-declared'
-  - owner: 'install-fedora/dotnet-absent'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 344
-    anchor: '  if ! command -v dotnet >/dev/null 2>&1; then'
-    predicate: '! command -v dotnet >/dev/null 2>&1'
-    predicate_digest: 'sha256:8b8a5d96f8c54a874e8a0a98315073d9b61b17e275ce44f23ca26041b14a699d'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'skip_step'
-    direction: 'transient-blocking'
-    probe: 'dotnet-present'
-    fingerprint_placement: 'new-header-block'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/dotnet-absent'
-  - owner: 'install-fedora/nvidia-support-no-nvidia'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 369
-    anchor: '  if [[ "${HAS_NVIDIA}" -ne 1 ]]; then'
-    predicate: '[[ "${HAS_NVIDIA}" -ne 1 ]]'
-    predicate_digest: 'sha256:736023d3c8b96ded5e47f9580b1f15162d5831e2066e1b1e4019282c91876e81'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/nvidia-support-no-nvidia'
-  - owner: 'install-fedora/nvidia-ctk-absent'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 372
-    anchor: '  if ! command -v nvidia-ctk >/dev/null 2>&1; then'
-    predicate: '! command -v nvidia-ctk >/dev/null 2>&1'
-    predicate_digest: 'sha256:a3d82edabc7b521253288d25c1e9a67dd947e7635104a2cb6532101a35d47bd5'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'skip_step'
-    direction: 'transient-blocking'
-    probe: 'nvidia-ctk-present'
-    fingerprint_placement: 'new-header-block'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/nvidia-ctk-absent'
-  - owner: 'install-fedora/mok-generate-no-efi'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 397
-    anchor: '  [[ -d /sys/firmware/efi ]] || return 0'
-    predicate: '[[ ! -d /sys/firmware/efi ]]'
-    predicate_digest: 'sha256:27ead765bd805b1d0a116919557057c6819ff3255b71a54318751a493b6c86cb'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/mok-generate-no-efi'
-  - owner: 'install-fedora/mok-generate-secureboot-disabled'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 398
-    anchor: '  mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'' || return 0'
-    predicate: '! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'''
-    predicate_digest: 'sha256:16200f656b3199de84f96c8f69550bcf62fd0f0e3c8d2fb9477e1703f204c33f'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/mok-generate-secureboot-disabled'
-  - owner: 'install-fedora/mok-keypair-present'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 407
-    anchor: '    present) return 0 ;;'
-    predicate: 'present)'
-    predicate_digest: 'sha256:4038f98950b2d553ad38003770536b8b57bd5f462d157f8fdd229d9b94e4e213'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'done_here'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/mok-keypair-present'
-  - owner: 'install-fedora/mok-enroll-no-efi'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 475
-    anchor: '  if [[ ! -d /sys/firmware/efi ]]; then'
-    predicate: '[[ ! -d /sys/firmware/efi ]]'
-    predicate_digest: 'sha256:27ead765bd805b1d0a116919557057c6819ff3255b71a54318751a493b6c86cb'
-    continuation: 'abandon-step-inline-notice'
-    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/mok-enroll-no-efi'
-  - owner: 'install-fedora/mok-enroll-secureboot-disabled'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 477
-    anchor: '  elif ! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled''; then'
-    predicate: '! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'''
-    predicate_digest: 'sha256:16200f656b3199de84f96c8f69550bcf62fd0f0e3c8d2fb9477e1703f204c33f'
-    continuation: 'abandon-step-inline-notice'
-    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/mok-enroll-secureboot-disabled'
-  - owner: 'install-fedora/mok-enroll-no-keypair'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 494
-    anchor: '    if [[ ${#certs[@]} -eq 0 ]]; then'
-    predicate: '[[ ${#certs[@]} -eq 0 ]]'
-    predicate_digest: 'sha256:3bfdc64080f6cad4c09e74824fad4bda68ee3a642eb684c4b09252488efedea0'
-    continuation: 'abandon-step-inline-notice'
-    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
-    render_profile: 'linux-fedora'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/mok-enroll-no-keypair'
-  - owner: 'install-fedora/timedatectl-absent'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 553
-    anchor: '  command -v timedatectl >/dev/null 2>&1 || return 0'
-    predicate: '! command -v timedatectl >/dev/null 2>&1'
-    predicate_digest: 'sha256:5581fce270616a3d6972d15e7ca7d258a758736ed868fc144990ccb265420b2e'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'skip_step'
-    direction: 'transient-blocking'
-    probe: 'timedatectl-present'
-    fingerprint_placement: 'new-header-block'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/timedatectl-absent'
   - owner: 'chsh-zsh/zsh-absent'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl'
@@ -1955,20 +1748,6 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#install-system-network/networkmanager-not-running'
-  - owner: 'install-fedora/enable-unit-absent'
-    scope: '20-linux-fedora'
-    template: '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl'
-    anchor_line: 525
-    anchor: '  systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}" || return 0'
-    predicate: '! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}"'
-    predicate_digest: 'sha256:82a8fa5df2da976765f53a7e1608b64869169d3af53a45464a499af6deb3e98b'
-    continuation: 'abandon-step-return-0'
-    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
-    render_profile: 'linux-fedora'
-    form: 'skip_step'
-    direction: 'harmless'
-    instances:
-      - '.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl#install-fedora/enable-unit-absent'
   - owner: 'setup-podman-cluster/prune-timer-unit-absent'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl'
@@ -1983,6 +1762,238 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl#setup-podman-cluster/prune-timer-unit-absent'
+  - owner: 'install-base-fedora/chassis-not-desktop-class'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl'
+    anchor_line: 152
+    anchor: '    *)'
+    predicate: '*)'
+    predicate_digest: 'sha256:69e11195653e133efe879683274617591b263817f97b21633fdea18e218af0d1'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#install-base-fedora/chassis-not-desktop-class'
+  - owner: 'install-base-fedora/base-packages-already-present'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl'
+    anchor_line: 276
+    anchor: '  if [[ "${#missing[@]}" -eq 0 ]]; then'
+    predicate: '[[ "${#missing[@]}" -eq 0 ]]'
+    predicate_digest: 'sha256:8a2cae930828f25724942554ba4fdba0abb87302560257d4f9df59db1ee56f5f'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#install-base-fedora/base-packages-already-present'
+  - owner: 'install-base-fedora/timedatectl-absent'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl'
+    anchor_line: 553
+    anchor: '  command -v timedatectl >/dev/null 2>&1 || return 0'
+    predicate: '! command -v timedatectl >/dev/null 2>&1'
+    predicate_digest: 'sha256:5581fce270616a3d6972d15e7ca7d258a758736ed868fc144990ccb265420b2e'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'transient-blocking'
+    probe: 'timedatectl-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#install-base-fedora/timedatectl-absent'
+  - owner: 'install-base-fedora/timesyncd-unit-absent'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl'
+    anchor_line: 525
+    anchor: '  systemctl list-unit-files systemd-timesyncd.service 2>/dev/null | grep -q systemd-timesyncd || return 0'
+    predicate: '! systemctl list-unit-files systemd-timesyncd.service 2>/dev/null | grep -q systemd-timesyncd'
+    predicate_digest: 'sha256:3065346987efdd15643cbee6bcbcb83d8722e751d1b8522fa7f16a63a62ed81a'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#install-base-fedora/timesyncd-unit-absent'
+  - owner: 'install-base-ubuntu/base-packages-already-present'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl'
+    anchor_line: 276
+    anchor: '  if [[ "${#missing[@]}" -eq 0 ]]; then'
+    predicate: '[[ "${#missing[@]}" -eq 0 ]]'
+    predicate_digest: 'sha256:8a2cae930828f25724942554ba4fdba0abb87302560257d4f9df59db1ee56f5f'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'ubuntu'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl#install-base-ubuntu/base-packages-already-present'
+  - owner: 'install-nvidia-fedora/rpmfusion-nonfree-absent'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 181
+    anchor: '  if ! "${DNF[@]}" -q repo list --all ''rpmfusion-nonfree*'' | grep -q ''^rpmfusion-nonfree''; then'
+    predicate: '! "${DNF[@]}" -q repo list --all ''rpmfusion-nonfree*'' | grep -q ''^rpmfusion-nonfree'''
+    predicate_digest: 'sha256:1741c442e2a6fc8bbddcf6d2a4bcc680d8d72eaa824b6292f347cecb1a0460df'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/rpmfusion-nonfree-absent'
+  - owner: 'install-nvidia-fedora/nvidia-packages-already-present'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 276
+    anchor: '  if [[ "${#missing[@]}" -eq 0 ]]; then'
+    predicate: '[[ "${#missing[@]}" -eq 0 ]]'
+    predicate_digest: 'sha256:8a2cae930828f25724942554ba4fdba0abb87302560257d4f9df59db1ee56f5f'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-packages-already-present'
+  - owner: 'install-nvidia-fedora/nvidia-ctk-absent'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 372
+    anchor: '  if ! command -v nvidia-ctk >/dev/null 2>&1; then'
+    predicate: '! command -v nvidia-ctk >/dev/null 2>&1'
+    predicate_digest: 'sha256:a3d82edabc7b521253288d25c1e9a67dd947e7635104a2cb6532101a35d47bd5'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'transient-blocking'
+    probe: 'nvidia-ctk-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-ctk-absent'
+  - owner: 'install-nvidia-fedora/mok-generate-no-efi'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 397
+    anchor: '  [[ -d /sys/firmware/efi ]] || return 0'
+    predicate: '[[ ! -d /sys/firmware/efi ]]'
+    predicate_digest: 'sha256:27ead765bd805b1d0a116919557057c6819ff3255b71a54318751a493b6c86cb'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-no-efi'
+  - owner: 'install-nvidia-fedora/mok-generate-secureboot-disabled'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 399
+    anchor: '  mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'' || return 0'
+    predicate: '! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'''
+    predicate_digest: 'sha256:16200f656b3199de84f96c8f69550bcf62fd0f0e3c8d2fb9477e1703f204c33f'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-secureboot-disabled'
+  - owner: 'install-nvidia-fedora/mok-keypair-present'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 407
+    anchor: '    present) return 0 ;;'
+    predicate: 'present)'
+    predicate_digest: 'sha256:4038f98950b2d553ad38003770536b8b57bd5f462d157f8fdd229d9b94e4e213'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-keypair-present'
+  - owner: 'install-nvidia-fedora/mok-enroll-no-efi'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 475
+    anchor: '  if [[ ! -d /sys/firmware/efi ]]; then'
+    predicate: '[[ ! -d /sys/firmware/efi ]]'
+    predicate_digest: 'sha256:27ead765bd805b1d0a116919557057c6819ff3255b71a54318751a493b6c86cb'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-efi'
+  - owner: 'install-nvidia-fedora/mok-enroll-secureboot-disabled'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 479
+    anchor: '  if ! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled''; then'
+    predicate: '! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'''
+    predicate_digest: 'sha256:16200f656b3199de84f96c8f69550bcf62fd0f0e3c8d2fb9477e1703f204c33f'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-secureboot-disabled'
+  - owner: 'install-nvidia-fedora/mok-enroll-no-keypair'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 490
+    anchor: '  if [[ "${mok_state}" != present || ! -f "$cert" ]]; then'
+    predicate: '[[ "${mok_state}" != present || ! -f "$cert" ]]'
+    predicate_digest: 'sha256:60288ad184f857dcc5113dbfc4473b161fa59d02088d386bbeccfb8a1f019fcb'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-keypair'
+  - owner: 'install-nvidia-fedora/mok-already-enrolled'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 497
+    anchor: '  if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q ''is already enrolled''; then'
+    predicate: '"${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q ''is already enrolled'''
+    predicate_digest: 'sha256:c48cb11e6a24bf8dca08cc05ed940d9b5493a6047021bd8db3e61054828dbcca'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-already-enrolled'
+  - owner: 'install-nvidia-fedora/mok-already-queued'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 506
+    anchor: '  if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then'
+    predicate: '[[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"'
+    predicate_digest: 'sha256:3577a9921aff782d97a35f08b989b57ca5760734703115103ed52de58833e0c2'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-already-queued'
+  - owner: 'install-dotnet-fedora/dotnet-absent'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_50-dotnet.sh.tmpl'
+    anchor_line: 344
+    anchor: '  if ! command -v dotnet >/dev/null 2>&1; then'
+    predicate: '! command -v dotnet >/dev/null 2>&1'
+    predicate_digest: 'sha256:8b8a5d96f8c54a874e8a0a98315073d9b61b17e275ce44f23ca26041b14a699d'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'transient-blocking'
+    probe: 'dotnet-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/30-components/fedora/run_onchange_before_50-dotnet.sh.tmpl#install-dotnet-fedora/dotnet-absent'
 
 hard_errors:
   - owner: 'config-gnome-1password-shortcut/gsettings-read-failed'

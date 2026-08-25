@@ -29,18 +29,16 @@ install_dotnet_sdk() {
 }
 
 install_dotnet_tools() {
-  if ! command -v dotnet >/dev/null 2>&1; then
-    return 0
+  if command -v dotnet >/dev/null 2>&1; then
+    local installed tool
+    installed="$(dotnet tool list -g 2>/dev/null || true)"
+    for tool in "${dotnet_tools[@]}"; do
+      if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
+        continue
+      fi
+      dotnet tool install -g "${tool}" || true
+    done
   fi
-
-  local installed tool
-  installed="$(dotnet tool list -g 2>/dev/null || true)"
-  for tool in "${dotnet_tools[@]}"; do
-    if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
-      continue
-    fi
-    dotnet tool install -g "${tool}" || true
-  done
 }
 
 install_dotnet_sdk

@@ -1,8 +1,9 @@
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $nvidiaCtkPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
 #!/usr/bin/env bash
 
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent))) }}
 set -euo pipefail
-
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-nvidia-fedora") }}
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "install-nvidia-fedora.sh" -}}
@@ -33,7 +34,7 @@ nvidia_rpmfusion_excludes=(
 
 configure_nvidia_repo_policy() {
   if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "rpmfusion-nonfree-absent" "direction" "harmless" "reason" "RPM Fusion nonfree repositories are not present; NVIDIA package exclusions are not needed") | trim | indent 4 }}
   fi
 
   local IFS=,
@@ -55,6 +56,9 @@ install_nvidia_packages() {
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
   if [[ "${#missing[@]}" -eq 0 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "nvidia-packages-already-present" "reason" "all declared dnf packages are already installed") | trim | indent 6 }}
+    )
     return 0
   fi
 
@@ -63,10 +67,15 @@ install_nvidia_packages() {
 }
 
 configure_nvidia_support() {
-  if command -v nvidia-ctk >/dev/null 2>&1; then
-    "${SUDO[@]}" nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml 2>/dev/null || true
-    "${SUDO[@]}" setsebool -P container_use_devices on 2>/dev/null || true
+  if ! command -v nvidia-ctk >/dev/null 2>&1; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-ctk-absent" "direction" "transient-blocking" "probe" "nvidia-ctk-present" "reason" "nvidia-ctk is not installed; container toolkit cannot be configured") | trim | indent 4 }}
+    )
+    return 0
   fi
+
+  "${SUDO[@]}" nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml 2>/dev/null || true
+  "${SUDO[@]}" setsebool -P container_use_devices on 2>/dev/null || true
 }
 
 dkms_mok_state() {
@@ -92,9 +101,13 @@ ensure_dkms_mok_generated() {
   fi
   local state
   state="$(dkms_mok_state)" || return 1
-
-  case "${state}" in
-    present) return 0 ;;
+  case "$state" in
+    present)
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-keypair-present" "reason" "the DKMS MOK keypair already exists") | trim | indent 8 }}
+      )
+      return 0
+      ;;
     partial)
       printf 'install-nvidia-fedora.sh: partial MOK keypair at /var/lib/dkms; remove manually to regenerate\n' >&2
       return 1
@@ -136,24 +149,23 @@ enroll_dkms_mok() {
   local cert=/var/lib/dkms/mok.pub
   local mok_state
   mok_state="$(dkms_mok_state)" || mok_state=unreadable
-  if [[ "${mok_state}" != present ]]; then
+  if [[ "${mok_state}" != present || ! -f "$cert" ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "reason" "no enrollable DKMS MOK keypair is present") | trim | indent 6 }}
     )
     return 0
   fi
-  local cert=/var/lib/dkms/mok.pub
-  if [[ ! -f "$cert" ]]; then
-    return 0
-  fi
-
   if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-enrolled" "reason" "DKMS MOK key is already enrolled") | trim | indent 6 }}
+    )
     return 0
   fi
 
-  local fp
-  fp="$("${SUDO[@]}" openssl x509 -in "${cert}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')"
   if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-queued" "reason" "DKMS MOK key is already queued for enrollment") | trim | indent 6 }}
+    )
     return 0
   fi
 

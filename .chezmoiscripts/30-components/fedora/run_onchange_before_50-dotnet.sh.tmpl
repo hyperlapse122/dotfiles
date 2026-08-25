@@ -1,8 +1,9 @@
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $dotnetPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "dotnet-present") -}}
 #!/usr/bin/env bash
 
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "dotnet-present" "value" $dotnetPresent))) }}
 set -euo pipefail
-
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-dotnet-fedora") }}
 {{ includeTemplate "sudo-require-guard.sh.tmpl" "install-dotnet-fedora.sh" -}}
@@ -23,6 +24,9 @@ install_dotnet_sdk() {
 
 install_dotnet_tools() {
   if ! command -v dotnet >/dev/null 2>&1; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-fedora" "site" "dotnet-absent" "direction" "transient-blocking" "probe" "dotnet-present" "reason" "dotnet is not installed; tools cannot be installed") | trim | indent 6 }}
+    )
     return 0
   fi
 
