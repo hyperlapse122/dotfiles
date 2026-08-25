@@ -95,8 +95,7 @@ system:
       # without a distro gate, so reclaim it on supported Fedora hosts.
       - path: /etc/udev/rules.d/80-uinput.rules
       - path: /etc/udev/rules.d/logitech-receiver.rules
-      # Retired Solaar active-seat /dev/uinput grant. Solaar is replaced by
-      # OpenLogi, whose own RPM ships replacement udev rules.
+      # Retired Solaar active-seat /dev/uinput grant.
       - path: /etc/udev/rules.d/70-uinput-solaar.rules
       # Retired kernel-install(8) drop-in that tried to re-sign Oracle
       # VirtualBox modules on every new kernel install. It never worked: it

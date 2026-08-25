@@ -181,12 +181,6 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `aoe-${os}-${arch}.tar.gz`,
   },
 
-  openlogi: {
-    kind: "githubRelease",
-    source: "AprilNEA/OpenLogi",
-    asset: ({ os, arch }, tag) => (os === "linux" ? `openlogi-${tag}-linux-${arch}.rpm` : null),
-  },
-
   /* ---------- version-only githubRelease entries ---------- */
 
   "compound-engineering": {
