@@ -1,3 +1,14 @@
+{{- /* Validate this distro's `gates:` map against the fact registry. Emits
+   nothing, and deliberately sits OUTSIDE the OS gate below: a typo in
+   packages.yaml's fedora gates must abort the apply on EVERY host, not only on
+   the one distro whose installer body renders — otherwise a bad gate name would
+   sit unnoticed on the maintainer's machine until CI rendered the Fedora container.
+   container. `values` hands the partial the gate expressions; the keys are the
+   package-group names, which it has no opinion about. */ -}}
+{{- includeTemplate "facts-validate.tmpl" (dict
+      "ctx"    .
+      "source" ".chezmoidata/packages.yaml (packages.linux.fedora.gates)"
+      "gates"  (values .packages.linux.fedora.gates)) -}}
 {{- /* Validate the complete cross-platform authority before any manager body can render. */ -}}
 {{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
 {{- $timedatectlPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "timedatectl-present") -}}
