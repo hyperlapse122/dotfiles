@@ -287,5 +287,50 @@ if (( probe_line <= seed_line )); then
 fi
 grep -Eq 'mok_state}" (!=|==) present' "${scratch}/enroll.code" ||
   fail 'only a complete keypair may be enrolled; partial and unreadable must not reach mokutil --import'
+grep -Eq 'fp=.*openssl x509.*-fingerprint' "${scratch}/enroll.code" ||
+  fail 'enroll_dkms_mok must compute certificate fingerprint before checking queued keys'
 
+sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
+  "${scratch}/enroll.sh" > "${scratch}/enroll_nogates.sh"
+
+run_enroll() {
+  env HOME="${scratch}/home" MOK_DIR="${mokdir}" MOK_TEST_KEY="${1}" MOK_LIST_NEW="${2}" bash -c '
+    set -uo pipefail
+    fake_sudo() {
+      local -a a=()
+      for x in "$@"; do a+=("${x/\/var\/lib\/dkms/${MOK_DIR}}"); done
+      "${a[@]}"
+    }
+    SUDO=(fake_sudo)
+    mokutil() {
+      case "${1-}" in
+        --test-key)
+          [[ "${MOK_TEST_KEY}" == enrolled ]] && printf "%s is already enrolled\n" "${2-}"
+          return 0
+          ;;
+        --list-new)
+          [[ "${MOK_LIST_NEW}" == queued ]] && printf "[key 1]\nSHA1 Fingerprint: 11:22:33:44:55:66:77:88:99:00:aa:bb:cc:dd:ee:ff:00:11:22:33\n"
+          return 0
+          ;;
+        --import)
+          return 0
+          ;;
+      esac
+      return 1
+    }
+    ensure_dkms_mok_generated() { return 0; }
+    '"$(sed 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh" "${scratch}/enroll_nogates.sh")"'
+    enroll_dkms_mok && printf CONTINUED
+  ' 2>/dev/null
+}
+
+printf cert > "${mokdir}/mok.pub"
+printf key > "${mokdir}/mok.key"
+
+[[ "$(run_enroll enrolled none)" == *CONTINUED* ]] ||
+  fail 'enroll_dkms_mok must succeed when key is already enrolled'
+[[ "$(run_enroll not_enrolled queued)" == *CONTINUED* ]] ||
+  fail 'enroll_dkms_mok must succeed when key is already queued'
+[[ "$(run_enroll not_enrolled not_queued)" == *CONTINUED* ]] ||
+  fail 'enroll_dkms_mok must succeed when importing a new key'
 printf 'Fedora DKMS MOK smoke passed.\n'

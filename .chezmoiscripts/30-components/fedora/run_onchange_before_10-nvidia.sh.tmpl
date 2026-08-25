@@ -161,7 +161,8 @@ enroll_dkms_mok() {
     )
     return 0
   fi
-
+  local fp
+  fp="$("${SUDO[@]}" openssl x509 -in "${cert}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')"
   if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-queued" "reason" "DKMS MOK key is already queued for enrollment") | trim | indent 6 }}
