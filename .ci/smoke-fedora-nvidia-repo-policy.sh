@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -euxo pipefail
 
 rendered_installer=${1:?usage: smoke-fedora-nvidia-repo-policy.sh <rendered-fedora-installer>}
 if [[ ! -f "${rendered_installer}" ]]; then
@@ -40,8 +40,13 @@ if (( existing_host_call <= cuda_repo_setup )); then
   exit 1
 fi
 
+if [[ ! -s "${rendered_installer}" ]]; then
+  printf 'rendered Fedora installer is empty\n' >&2
+  exit 1
+fi
+
 for package in cuda-drivers cuda-toolkit-13-3 kmod-nvidia-latest-dkms nvidia-driver; do
-  grep -Eq "^[[:space:]]+\"${package}\"$" "${rendered_installer}"
+  grep -Eq "^[[:space:]]+[\"']?${package}[\"']?\r?$" "${rendered_installer}" || { printf "missing package %s in rendered installer\n" "${package}" >&2; exit 1; }
 done
 
 sed -n "${array_start},/^[[:space:]]*)$/p" "${rendered_installer}" > "${scratch}/array.sh"
@@ -71,10 +76,9 @@ chmod 0755 "${scratch}/harness.sh"
 expected='config-manager setopt rpmfusion-nonfree*.excludepkgs=akmod-nvidia*,kmod-nvidia*,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-xconfig,xorg-x11-drv-nvidia*'
 
 present_log="${scratch}/present.log"
-: > "${present_log}"
 env PATH="${scratch}/bin:${PATH}" DNF_HAS_RPMFUSION=1 DNF_LOG="${present_log}" \
   "${scratch}/harness.sh"
-grep -Fxq -- "${expected}" "${present_log}"
+grep -Fxq -- "${expected}" "${present_log}" || { printf "expected override not found in log. log contains:\n"; cat "${present_log}"; exit 1; }
 
 absent_log="${scratch}/absent.log"
 : > "${absent_log}"

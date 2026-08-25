@@ -17,7 +17,7 @@
 # ensure_dkms_mok_generated are asserted as rendered text, because
 # `/sys/firmware/efi` and the Secure Boot probe are not relocatable.
 
-set -euo pipefail
+set -euxo pipefail
 
 rendered_installer=${1:?usage: smoke-fedora-dkms-mok.sh <rendered-fedora-installer> <rendered-etc-installer>}
 rendered_etc=${2:?usage: smoke-fedora-dkms-mok.sh <rendered-fedora-installer> <rendered-etc-installer>}
