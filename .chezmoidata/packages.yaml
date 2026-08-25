@@ -585,12 +585,6 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: fcitx5-hangul, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: manual, reason: native macOS Korean input source is built in and added in System Settings > Keyboard > Input Sources; no package manager owns it, architectures: { arm64: manual } }
         ubuntu: { disposition: managed, owner: apt, identifier: fcitx5-hangul, source: ubuntu, architectures: { arm64: native } }
-      - id: logitechGestures
-        sentinel: openlogi
-        integrity: checksum
-        fedora: { disposition: managed, owner: releaseLock, identifier: openlogi, architectures: { amd64: native, arm64: native } }
-        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: openlogi, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
-        ubuntu: { disposition: notApplicable, reason: Thor has no Logitech peripherals to manage, architectures: { arm64: notApplicable } }
       - id: nvidiaCompute
         sentinel: nvidia-smi
         gate: jetson

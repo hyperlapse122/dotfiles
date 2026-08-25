@@ -31,7 +31,7 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 | `30-linux` | `/etc` manifest, host/network, chsh, TPM2, Wi-Fi, browser, Podman, VSCodium |
 | `50-linux-kde`, `50-linux-gnome` | desktop configuration |
 | `60-build` | Rust haptic and Vite+ helper/CLI builds |
-| `70-agents` | omp plugins, omp settings/auth, aoe/OpenLogi config, and omp updates |
+| `70-agents` | omp plugins, omp settings/auth, aoe config, and omp updates |
 | `80-keys` | one-time GPG and age imports |
 | `90-src` | reconcile the `~/src` garden on manifest change (grow-all, the three bootstrap commands, aoe group self-heal); runs last so a garden failure cannot abort other provisioning |
 
@@ -110,7 +110,6 @@ Edit data, not generated scripts or rendered targets:
 | `.chezmoidata/packages.yaml` | Fedora packages, repos, COPRs, flatpaks, dotnet, direct packages, services/groups |
 | `.chezmoidata/fonts.yaml` | font archives, families, sizes and fallbacks for KDE/GNOME/fcitx/VSCodium/kitty |
 | `.chezmoidata/vscodium.yaml` | additive VSCodium extension installer |
-| `.chezmoidata/openlogi.yaml` | application settings and device configuration |
 | `.chezmoidata/networking.yaml` | Wi-Fi importer, DNS defaults/overrides, unresolved-ref fingerprint |
 | `.chezmoidata/kde.yaml`, `.chezmoidata/gnome.yaml` | desktop manifests and tunables |
 | `.chezmoidata/haptic.yaml` | daemon/notify environment and omp event waveforms |

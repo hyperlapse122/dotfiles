@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { normalizeDigest, resolveGitHubRelease, ResolutionError } from "../src/github.js";
 import type { ToolSpec } from "../src/types.js";
-import { REGISTRY } from "../src/registry.js";
 
 const realFetch = globalThis.fetch;
 
@@ -237,37 +236,5 @@ describe("resolveGitHubRelease linuxMusl", () => {
     );
 
     expect(Object.keys(locked.artifacts ?? {})).toEqual(["linux-amd64"]);
-  });
-});
-
-describe("resolveGitHubRelease openlogi", () => {
-  test("resolves RPM artifacts for linux amd64 and arm64 only", async () => {
-    stubRelease("v0.7.10", [
-      asset("openlogi-v0.7.10-linux-amd64.rpm", `sha256:${SHA}`),
-      asset("openlogi-v0.7.10-linux-arm64.rpm", `sha256:${SHA}`),
-      asset("OpenLogi-v0.7.10-macos-arm64.dmg", `sha256:${SHA}`),
-      asset("OpenLogi-v0.7.10-macos-x86_64.dmg", `sha256:${SHA}`),
-    ]);
-
-    const locked = await resolveGitHubRelease("openlogi", REGISTRY["openlogi"]!, undefined);
-
-    expect(locked.version).toBe("v0.7.10");
-    expect(Object.keys(locked.artifacts ?? {}).sort()).toEqual(["linux-amd64", "linux-arm64"]);
-    expect(locked.artifacts?.["linux-amd64"]).toEqual({
-      url: "https://example.invalid/download/openlogi-v0.7.10-linux-amd64.rpm",
-      sha256: SHA,
-    });
-    expect(locked.artifacts?.["linux-arm64"]).toEqual({
-      url: "https://example.invalid/download/openlogi-v0.7.10-linux-arm64.rpm",
-      sha256: SHA,
-    });
-  });
-
-  test("fails loudly when a declared linux RPM asset is missing from the release", async () => {
-    stubRelease("v0.7.10", [asset("openlogi-v0.7.10-linux-amd64.rpm", `sha256:${SHA}`)]);
-
-    await expect(
-      resolveGitHubRelease("openlogi", REGISTRY["openlogi"]!, undefined),
-    ).rejects.toBeInstanceOf(ResolutionError);
   });
 });
