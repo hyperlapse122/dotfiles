@@ -1,0 +1,41 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-flatpaks-ubuntu") }}
+
+SUDO=()
+if [[ "${EUID}" -ne 0 ]]; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'install-flatpaks-ubuntu.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+  SUDO=(sudo)
+fi
+
+flatpaks=(
+  com.discordapp.Discord
+  io.github.nroduit.Weasis
+  org.telegram.desktop
+)
+
+install_flatpak_runtime() {
+  if ! command -v flatpak >/dev/null 2>&1; then
+    "${SUDO[@]}" apt-get update -qq || true
+    "${SUDO[@]}" apt-get install -y flatpak
+  fi
+
+  "${SUDO[@]}" flatpak remote-add --if-not-exists --system flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+}
+
+install_flatpak_apps() {
+  install_flatpak_runtime
+  "${SUDO[@]}" flatpak install --system -y --noninteractive flathub "${flatpaks[@]}"
+}
+
+install_flatpak_apps
+
+{{ end -}}

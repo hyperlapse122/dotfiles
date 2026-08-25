@@ -1,0 +1,33 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-tailscale-fedora") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-tailscale-fedora.sh" -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+setup_tailscale_repo() {
+  "${DNF[@]}" config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
+  "${DNF[@]}" makecache -y
+}
+
+install_tailscale() {
+  if ! rpm -q tailscale >/dev/null 2>&1; then
+    setup_tailscale_repo
+    "${DNF[@]}" install -y tailscale
+  fi
+}
+
+enable_tailscale() {
+  if systemctl list-unit-files tailscaled.service 2>/dev/null | grep -q tailscaled; then
+    "${SUDO[@]}" systemctl enable tailscaled 2>/dev/null || true
+  fi
+}
+
+install_tailscale
+enable_tailscale
+
+{{ end -}}

@@ -488,7 +488,7 @@ jobs:
           sed -i 's/nvidiaPackages: nvidia/nvidiaPackages: ciUndeclaredFact/' \
             "${scratch}/unknown/.chezmoidata/packages.yaml"
           if render_from "${scratch}/unknown" \
-              ".chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl" \
+              ".chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl" \
               > "${scratch}/unknown.out" 2> "${scratch}/unknown.err"; then
             echo "unknown fact unexpectedly rendered" >&2
             exit 1
@@ -517,7 +517,7 @@ jobs:
         if: matrix.os == 'fedora'
         run: |
           set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh"
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh"
           test -f "${rendered}"
           test ! -e "${rendered}.render-error.txt"
           bash -n "${rendered}"
@@ -527,7 +527,7 @@ jobs:
         if: matrix.os == 'fedora'
         run: |
           set -euo pipefail
-          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh"
+          rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh"
           rendered_etc="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh"
           for f in "${rendered}" "${rendered_etc}"; do
             test -f "${f}"

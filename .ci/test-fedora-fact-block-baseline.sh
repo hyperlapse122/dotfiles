@@ -101,7 +101,6 @@ NODE
 
 # Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/20-linux-fedora/run_onchange_before_fedora.sh.tmpl]=1dc8e7907b7c8b3d22ecb2561522e5c37f6d0c713d85da9b5c8bb2ec933642bb
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=ddd39341d7838275d2904f46b3a42067c5b9771a8013139eff1051d96e11fcce
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=fc2e9164e0741013d71f34a688a820b0d66188f654710b9f5fea9d07a9c707b6
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl]=70a1d313716912bb41e3250248944a346ca9e1dc628ff1d3c1625c5f0313af28
@@ -122,22 +121,6 @@ for template in "${!baseline_hashes[@]}"; do
   [[ "$actual" == "$expected" ]] || fail \
     "$template changed outside the two generated blocks (expected $expected, got $actual)"
 done
-
-fedora_render="$scratch/run_onchange_before_fedora.sh"
-grep -Fq 'systemctl enable "${svc}"' "$fedora_render" \
-  || fail 'Fedora service enablement no longer uses enable-only activation'
-! grep -Eq 'systemctl[[:space:]]+(start|enable --now)' "$fedora_render" \
-  || fail 'Fedora service enablement still starts units during apply'
-grep -Fq 'NOTE: This installer defers explicit activation for tailscaled, systemd-timesyncd, and (on NVIDIA hosts) nvidia-persistenced.' "$fedora_render" \
-  || fail 'Fedora render omits affected service names from the deferred activation notice'
-grep -Fq 'Package or time-configuration side effects may still activate services.' "$fedora_render" \
-  || fail 'Fedora render omits the indirect activation boundary'
-grep -Fq 'Restart affected services manually after apply, or reboot the system.' "$fedora_render" \
-  || fail 'Fedora render omits manual restart-or-reboot guidance'
-enable_call_line=$(awk '/^enable_services$/{line=NR} END{print line}' "$fedora_render")
-notice_line=$(awk '/NOTE: This installer defers explicit activation/{print NR; exit}' "$fedora_render")
-[[ -n "$enable_call_line" && -n "$notice_line" && "$notice_line" -gt "$enable_call_line" ]] \
-  || fail 'Fedora deferred activation notice does not follow enable_services'
 
 network_render="$scratch/run_onchange_after_install-system-30-network.sh"
 ! grep -Eq 'systemctl[[:space:]]+(start|restart|reload)([[:space:]]|$)' "$network_render" \

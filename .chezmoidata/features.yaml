@@ -1,0 +1,7 @@
+# Feature flags for optional components in .chezmoiscripts/30-components/
+features:
+  nvidia: true
+  podman: true
+  tailscale: true
+  flatpaks: true
+  dotnet: true

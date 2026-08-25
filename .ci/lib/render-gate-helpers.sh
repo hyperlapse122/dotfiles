@@ -33,7 +33,7 @@ render() {
 # key` in CI only.
 write_fact_stub() {
   local source_path=$1 output_path=$2 container=$3 jetson=${4:-false}
-  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false"
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
   sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$source_path" > "$output_path"
 }
 
@@ -69,7 +69,7 @@ assert_gate() {
 render_reconciler() {
   local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 jetson=${8:-false} variant
   variant="$scratch/reconciler-$os-$container-$jetson-$(basename "$template")"
-  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false"
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
   sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$repo_root/$template" > "$variant"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }

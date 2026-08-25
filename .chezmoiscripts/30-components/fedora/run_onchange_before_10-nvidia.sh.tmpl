@@ -1,0 +1,186 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $nvidiaCtkPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
+#!/usr/bin/env bash
+
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent))) }}
+set -euo pipefail
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-nvidia-fedora") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-nvidia-fedora.sh" -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+nvidia_packages=(
+  cuda-drivers
+  cuda-toolkit-13-3
+  dkms
+  kmod-nvidia-latest-dkms
+  libnvidia-container1
+  libnvidia-container-tools
+  nvidia-container-toolkit
+  nvidia-container-toolkit-base
+  nvidia-driver
+)
+
+nvidia_rpmfusion_excludes=(
+  'akmod-nvidia*'
+  'kmod-nvidia*'
+  nvidia-modprobe
+  nvidia-persistenced
+  nvidia-settings
+  nvidia-xconfig
+  'xorg-x11-drv-nvidia*'
+)
+
+configure_nvidia_repo_policy() {
+  if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "rpmfusion-nonfree-absent" "direction" "harmless" "reason" "RPM Fusion nonfree repositories are not present; NVIDIA package exclusions are not needed") | trim | indent 4 }}
+  fi
+
+  local IFS=,
+  "${DNF[@]}" config-manager setopt \
+    "rpmfusion-nonfree*.excludepkgs=${nvidia_rpmfusion_excludes[*]}" || true
+}
+
+setup_nvidia_repos() {
+  configure_nvidia_repo_policy
+  "${DNF[@]}" config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo --overwrite
+  "${DNF[@]}" config-manager addrepo --from-repofile https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo --overwrite
+  "${DNF[@]}" makecache -y
+}
+
+install_nvidia_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${nvidia_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "nvidia-packages-already-present" "reason" "all declared dnf packages are already installed") | trim | indent 6 }}
+    )
+    return 0
+  fi
+
+  setup_nvidia_repos
+  "${DNF[@]}" install -y "${nvidia_packages[@]}"
+}
+
+configure_nvidia_support() {
+  if ! command -v nvidia-ctk >/dev/null 2>&1; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-ctk-absent" "direction" "transient-blocking" "probe" "nvidia-ctk-present" "reason" "nvidia-ctk is not installed; container toolkit cannot be configured") | trim | indent 4 }}
+    )
+    return 0
+  fi
+
+  "${SUDO[@]}" nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml 2>/dev/null || true
+  "${SUDO[@]}" setsebool -P container_use_devices on 2>/dev/null || true
+}
+
+dkms_mok_state() {
+  "${SUDO[@]}" sh -c '
+    if [ -f "$1" ] && [ -f "$2" ]; then printf present
+    elif [ -e "$1" ] || [ -e "$2" ]; then printf partial
+    else printf absent
+    fi' sh /var/lib/dkms/mok.pub /var/lib/dkms/mok.key
+}
+
+ensure_dkms_mok_generated() {
+  if [[ ! -d /sys/firmware/efi ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-generate-no-efi" "reason" "not booted via UEFI; a MOK keypair is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  if ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-generate-secureboot-disabled" "reason" "Secure Boot is disabled; a MOK keypair is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  local state
+  state="$(dkms_mok_state)" || return 1
+  case "$state" in
+    present)
+      (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-keypair-present" "reason" "the DKMS MOK keypair already exists") | trim | indent 8 }}
+      )
+      return 0
+      ;;
+    partial)
+      printf 'install-nvidia-fedora.sh: partial MOK keypair at /var/lib/dkms; remove manually to regenerate\n' >&2
+      return 1
+      ;;
+  esac
+
+  if [[ -x /usr/lib/dkms/mok_signing_setup ]]; then
+    "${SUDO[@]}" /usr/lib/dkms/mok_signing_setup || true
+  else
+    "${SUDO[@]}" mkdir -p /var/lib/dkms
+    "${SUDO[@]}" openssl req -new -x509 -newkey rsa:2048 \
+      -keyout /var/lib/dkms/mok.key -outform DER -out /var/lib/dkms/mok.pub \
+      -nodes -days 36500 \
+      -subj '/CN=DKMS module signing key (chezmoi-managed)/' || true
+    "${SUDO[@]}" chmod 600 /var/lib/dkms/mok.key || true
+  fi
+
+  if [[ "$(dkms_mok_state 2>/dev/null || printf absent)" != present ]]; then
+    printf 'install-nvidia-fedora.sh: failed to create the DKMS MOK keypair at /var/lib/dkms/mok.{pub,key}; module signing cannot proceed.\n' >&2
+    return 1
+  fi
+}
+
+enroll_dkms_mok() {
+  if [[ ! -d /sys/firmware/efi ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-efi" "reason" "not booted via UEFI; MOK enrollment is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  if ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-secureboot-disabled" "reason" "Secure Boot is disabled; MOK enrollment is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+
+  ensure_dkms_mok_generated || true
+  local cert=/var/lib/dkms/mok.pub
+  local mok_state
+  mok_state="$(dkms_mok_state)" || mok_state=unreadable
+  if [[ "${mok_state}" != present || ! -f "$cert" ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "reason" "no enrollable DKMS MOK keypair is present") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-enrolled" "reason" "DKMS MOK key is already enrolled") | trim | indent 6 }}
+    )
+    return 0
+  fi
+
+  if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-queued" "reason" "DKMS MOK key is already queued for enrollment") | trim | indent 6 }}
+    )
+    return 0
+  fi
+
+  "${SUDO[@]}" mokutil --import "${cert}" 2>/dev/null || true
+}
+
+enable_nvidia_services() {
+  if systemctl list-unit-files nvidia-persistenced.service 2>/dev/null | grep -q nvidia-persistenced; then
+    "${SUDO[@]}" systemctl enable nvidia-persistenced 2>/dev/null || true
+  fi
+}
+
+install_nvidia_packages
+configure_nvidia_support
+enroll_dkms_mok
+enable_nvidia_services
+
+{{ end -}}

@@ -1,0 +1,34 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-nvidia-ubuntu") }}
+
+SUDO=()
+if [[ "${EUID}" -ne 0 ]]; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'install-nvidia-ubuntu.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+  SUDO=(sudo)
+fi
+
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+if [[ -f /etc/nv_tegra_release ]]; then
+  if [[ -f /etc/apt/sources.list.d/nvidia-l4t-apt-source.list ]]; then
+    "${SUDO[@]}" apt-get update -qq || true
+    install_apt nvidia-jetpack
+  fi
+fi
+
+{{ end -}}

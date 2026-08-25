@@ -1,0 +1,74 @@
+{{- /* Validate the complete cross-platform authority before any manager body can render. */ -}}
+{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Base Ubuntu/Debian system provisioning: core development tools,
+# shell utilities, and essential networking tools.
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-base-ubuntu") }}
+
+SUDO=()
+if [[ "${EUID}" -ne 0 ]]; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'install-base-ubuntu.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+  SUDO=(sudo)
+fi
+
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+base_packages=(
+  build-essential
+  ca-certificates
+  curl
+  file
+  git
+  gnupg
+  jq
+  lsb-release
+  ripgrep
+  tmux
+  wget
+  zsh
+)
+
+install_base_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${base_packages[@]}"; do
+    local status=''
+    status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+    if [[ "$status" != installed ]]; then
+      missing+=("${pkg}")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-base-ubuntu" "site" "base-packages-already-present" "reason" "all declared base packages are already installed") | trim | indent 6 }}
+    )
+    return 0
+  fi
+
+  printf 'install-base-ubuntu.sh: %d of %d base packages missing; updating apt cache and installing.\n' \
+    "${#missing[@]}" "${#base_packages[@]}"
+
+  "${SUDO[@]}" apt-get update -qq || true
+  "${SUDO[@]}" apt-get install -y "${missing[@]}"
+}
+
+install_base_packages
+
+{{ end -}}

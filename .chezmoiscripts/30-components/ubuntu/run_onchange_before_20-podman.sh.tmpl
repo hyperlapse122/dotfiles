@@ -1,0 +1,45 @@
+{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-podman-ubuntu") }}
+
+SUDO=()
+if [[ "${EUID}" -ne 0 ]]; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'install-podman-ubuntu.sh: requires root or sudo for package installation.\n' >&2
+    exit 1
+  fi
+  SUDO=(sudo)
+fi
+
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+podman_packages=(
+  buildah
+  fuse-overlayfs
+  podman
+  podman-docker
+  slirp4netns
+  uidmap
+)
+
+"${SUDO[@]}" apt-get update -qq || true
+for pkg in "${podman_packages[@]}"; do
+  install_apt "$pkg"
+done
+
+target_user="${SUDO_USER:-$USER}"
+grep -q "^${target_user}:" /etc/subgid 2>/dev/null || "${SUDO[@]}" usermod --add-subgids 100000-165535 "${target_user}" 2>/dev/null || true
+grep -q "^${target_user}:" /etc/subuid 2>/dev/null || "${SUDO[@]}" usermod --add-subuids 100000-165535 "${target_user}" 2>/dev/null || true
+
+{{ end -}}

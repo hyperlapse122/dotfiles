@@ -105,9 +105,9 @@ totals = matrix.get('totals', {})
 frozen = {
     'classified_owners': 123,
     'hard_error_owners': 11,
-    'rendered_instances': 146,
+    'rendered_instances': 156,
     'phase_local_instances': 118,
-    'shared_guard_instances': 28,
+    'shared_guard_instances': 38,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -147,7 +147,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 7, 'kde-guard': 9, 'headless-guard': 3, 'sudo-skip-guard': 4, 'shared-host-guard': 5}
+SHARED = {'gnome-guard': 7, 'kde-guard': 9, 'headless-guard': 3, 'sudo-skip-guard': 4, 'shared-host-guard': 15}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that
@@ -158,12 +158,11 @@ STATEMENT_SYNTAX = re.compile(r';\s*then\b|\|\|\s*return\s+0|\|\|\s*\{|\bexit\s+
 # carry control flow that their canonical predicate deliberately drops, so if an
 # anchor ever loses it, the evidence was overwritten with the canonical form.
 RAW_ANCHOR_EVIDENCE = {
-    'install-fedora/mok-generate-no-efi': '|| return 0',
-    'install-fedora/mok-generate-secureboot-disabled': '|| return 0',
-    'install-fedora/mok-keypair-present': 'return 0 ;;',
-    'install-fedora/nvidia-repo-policy-no-nvidia': '|| return 0',
-    'install-fedora/timedatectl-absent': '|| return 0',
-    'install-fedora/enable-unit-absent': '|| return 0',
+    'install-nvidia-fedora/mok-generate-no-efi': '|| return 0',
+    'install-nvidia-fedora/mok-generate-secureboot-disabled': '|| return 0',
+    'install-nvidia-fedora/mok-keypair-present': 'return 0 ;;',
+    'install-base-fedora/timedatectl-absent': '|| return 0',
+    'install-base-fedora/enable-unit-absent': '|| return 0',
     'config-gnome-fonts/fc-match-absent': '|| return 0',
     'luks-tpm2/tool-not-deployed': 'exit 0;',
     'update-omp-plugins/no-eligible-plugins': 'exit 0; fi',
@@ -280,6 +279,7 @@ audited_buckets = {
 }
 scope_combined = dict(scope_counts)
 scope_combined['00-tools+10-auth'] = scope_counts.get('00-tools', 0) + scope_counts.get('10-auth', 0)
+scope_combined['20-linux-fedora'] = scope_counts.get('20-base', 0) + scope_counts.get('30-components', 0)
 for bucket, expected in list(expected_plan.items()) + [(f'scope:{name}', count) for name, count in plan_scopes.items()]:
     audited = audited_buckets.get(bucket)
     if audited is None:

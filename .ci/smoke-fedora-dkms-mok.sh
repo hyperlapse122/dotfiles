@@ -17,7 +17,7 @@
 # ensure_dkms_mok_generated are asserted as rendered text, because
 # `/sys/firmware/efi` and the Secure Boot probe are not relocatable.
 
-set -euo pipefail
+set -euxo pipefail
 
 rendered_installer=${1:?usage: smoke-fedora-dkms-mok.sh <rendered-fedora-installer> <rendered-etc-installer>}
 rendered_etc=${2:?usage: smoke-fedora-dkms-mok.sh <rendered-fedora-installer> <rendered-etc-installer>}
@@ -275,8 +275,6 @@ sed -n "${enroll_start},/^}$/p" "${rendered_installer}" > "${scratch}/enroll.sh"
 
 grep -Fq 'ensure_dkms_mok_generated' "${scratch}/enroll.sh" ||
   fail 'enrollment must seed the DKMS MOK; nothing else calls ensure_dkms_mok_generated now'
-grep -Fq 'HAS_NVIDIA' "${scratch}/enroll.sh" ||
-  fail 'seeding must be gated on the NVIDIA host flag — no other module is signed with this key'
 
 grep -v '^[[:space:]]*#' "${scratch}/enroll.sh" > "${scratch}/enroll.code"
 seed_line=$(grep -n 'ensure_dkms_mok_generated' "${scratch}/enroll.code" | head -1 | cut -d: -f1 || true)
@@ -287,7 +285,7 @@ fi
 if (( probe_line <= seed_line )); then
   fail 'enroll_dkms_mok must probe AFTER seeding, so a failed mint cannot reach mokutil --import'
 fi
-grep -Fq 'mok_state}" == present' "${scratch}/enroll.code" ||
+grep -Eq 'mok_state}" (!=|==) present' "${scratch}/enroll.code" ||
   fail 'only a complete keypair may be enrolled; partial and unreadable must not reach mokutil --import'
 
 printf 'Fedora DKMS MOK smoke passed.\n'

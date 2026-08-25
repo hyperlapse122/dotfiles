@@ -15,6 +15,49 @@
 ./system
 
 {{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
+{{- $distro := "" }}
+{{- if and .chezmoi.osRelease (hasKey .chezmoi.osRelease "id") }}
+{{-   $distro = .chezmoi.osRelease.id }}
+{{- end }}
+{{- $features := .features }}
+
+{{- if ne .chezmoi.os "linux" }}
+.chezmoiscripts/20-base/**
+.chezmoiscripts/30-components/**
+{{- else }}
+{{-   if ne $distro "fedora" }}
+.chezmoiscripts/20-base/fedora/**
+.chezmoiscripts/30-components/fedora/**
+{{-   end }}
+{{-   if ne $distro "ubuntu" }}
+.chezmoiscripts/20-base/ubuntu/**
+.chezmoiscripts/30-components/ubuntu/**
+{{-   end }}
+{{-   if and (ne $distro "fedora") (ne $distro "ubuntu") }}
+.chezmoiscripts/20-base/**
+.chezmoiscripts/30-components/**
+{{-   end }}
+{{- end }}
+
+{{- if or (ne .chezmoi.os "linux") (not $f.nvidia) }}
+.chezmoiscripts/30-components/*/10-nvidia.sh
+{{- end }}
+
+{{- if not (default dict $features).nvidia }}
+.chezmoiscripts/30-components/*/10-nvidia.sh
+{{- end }}
+{{- if not (default dict $features).podman }}
+.chezmoiscripts/30-components/*/20-podman.sh
+{{- end }}
+{{- if not (default dict $features).tailscale }}
+.chezmoiscripts/30-components/*/30-tailscale.sh
+{{- end }}
+{{- if not (default dict $features).flatpaks }}
+.chezmoiscripts/30-components/*/40-flatpaks.sh
+{{- end }}
+{{- if not (default dict $features).dotnet }}
+.chezmoiscripts/30-components/*/50-dotnet.sh
+{{- end }}
 
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
@@ -119,8 +162,8 @@
 # machine, one answer.
 {{- if $f.container }}
 .chezmoiscripts/30-linux/*.sh
-.chezmoiscripts/20-linux-fedora/*.sh
-.chezmoiscripts/20-linux-ubuntu/*.sh
+.chezmoiscripts/20-base/**
+.chezmoiscripts/30-components/**
 .chezmoiscripts/50-linux-kde/*.sh
 .chezmoiscripts/50-linux-gnome/*.sh
 .chezmoiscripts/10-auth/*.sh
