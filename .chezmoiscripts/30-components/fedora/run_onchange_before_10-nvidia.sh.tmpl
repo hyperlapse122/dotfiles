@@ -78,7 +78,16 @@ dkms_mok_state() {
 }
 
 ensure_dkms_mok_generated() {
-  if [[ ! -d /sys/firmware/efi ]] || ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+  if [[ ! -d /sys/firmware/efi ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-generate-no-efi" "reason" "not booted via UEFI; a MOK keypair is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  if ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-generate-secureboot-disabled" "reason" "Secure Boot is disabled; a MOK keypair is not applicable") | trim | indent 6 }}
+    )
     return 0
   fi
   local state
@@ -102,14 +111,37 @@ ensure_dkms_mok_generated() {
       -subj '/CN=DKMS module signing key (chezmoi-managed)/' || true
     "${SUDO[@]}" chmod 600 /var/lib/dkms/mok.key || true
   fi
+
+  if [[ "$(dkms_mok_state 2>/dev/null || printf absent)" != present ]]; then
+    printf 'install-nvidia-fedora.sh: failed to create the DKMS MOK keypair at /var/lib/dkms/mok.{pub,key}; module signing cannot proceed.\n' >&2
+    return 1
+  fi
 }
 
 enroll_dkms_mok() {
-  if [[ ! -d /sys/firmware/efi ]] || ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+  if [[ ! -d /sys/firmware/efi ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-efi" "reason" "not booted via UEFI; MOK enrollment is not applicable") | trim | indent 6 }}
+    )
+    return 0
+  fi
+  if ! mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-secureboot-disabled" "reason" "Secure Boot is disabled; MOK enrollment is not applicable") | trim | indent 6 }}
+    )
     return 0
   fi
 
   ensure_dkms_mok_generated || true
+  local cert=/var/lib/dkms/mok.pub
+  local mok_state
+  mok_state="$(dkms_mok_state)" || mok_state=unreadable
+  if [[ "${mok_state}" != present ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "reason" "no enrollable DKMS MOK keypair is present") | trim | indent 6 }}
+    )
+    return 0
+  fi
   local cert=/var/lib/dkms/mok.pub
   if [[ ! -f "$cert" ]]; then
     return 0
