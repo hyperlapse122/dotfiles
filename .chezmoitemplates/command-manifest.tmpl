@@ -37,7 +37,7 @@
 {{-         end -}}
 {{-       end -}}
 {{-       $targetBase := base $unit.sourcePath | trimPrefix "private_" | trimPrefix "executable_" | trimSuffix ".tmpl" -}}
-{{-       $stagingPath = printf ".local/share/chezmoi/command-sources/%s" $targetBase -}}
+{{-       $stagingPath = printf ".local/share/chezmoi-command-sources/%s" $targetBase -}}
 {{-     else if eq $unit.producer "build" -}}
 {{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
 {{-     else if eq $unit.producer "existingTree" -}}

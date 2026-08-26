@@ -310,7 +310,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_auth-glab
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_auth-glab
       commands:
         - name: auth-glab
       legacy:
@@ -322,7 +322,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_code
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_code
       commands:
         - name: code
       legacy:
@@ -334,7 +334,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_docker-credential-dockerhub
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_docker-credential-dockerhub
       commands:
         - name: docker-credential-dockerhub
       legacy:
@@ -346,7 +346,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_dotfiles-skips
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_dotfiles-skips
       commands:
         - name: dotfiles-skips
       legacy:
@@ -358,7 +358,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_encryption-status
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_encryption-status
       commands:
         - name: encryption-status
       legacy:
@@ -370,7 +370,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_git-prune-local-branches
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_git-prune-local-branches
       commands:
         - name: git-prune-local-branches
       legacy:
@@ -382,7 +382,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_host-facts.tmpl
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_host-facts.tmpl
       commands:
         - name: host-facts
       legacy:
@@ -395,7 +395,7 @@ commands:
       mode: "0755"
       platforms: [linux]
       gate: kde
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_kde-color-picker
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_kde-color-picker
       commands:
         - name: kde-color-picker
       legacy:
@@ -408,7 +408,7 @@ commands:
       mode: "0755"
       platforms: [linux]
       gate: "!container"
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_setup-luks-tpm2-unlock.sh.tmpl
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_setup-luks-tpm2-unlock.sh.tmpl
       commands:
         - name: setup-luks-tpm2-unlock.sh
       legacy:
@@ -420,7 +420,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/executable_src-audit
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_src-audit
       commands:
         - name: src-audit
       legacy:
@@ -433,7 +433,7 @@ commands:
       privacy: secret
       mode: "0700"
       platforms: [linux]
-      sourcePath: dot_local/share/chezmoi/command-sources/private_executable_import-wifi-1password.tmpl
+      sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password.tmpl
       commands:
         - name: import-wifi-1password
       legacy:
@@ -446,7 +446,7 @@ commands:
       privacy: secret
       mode: "0700"
       platforms: [macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/private_executable_import-wifi-1password-macos.sh.tmpl
+      sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password-macos.sh.tmpl
       commands:
         - name: import-wifi-1password-macos.sh
       legacy:
@@ -458,7 +458,7 @@ commands:
       proofEligible: false
       mode: "0700"
       platforms: [linux, macos]
-      sourcePath: dot_local/share/chezmoi/command-sources/private_executable_tokscale.tmpl
+      sourcePath: dot_local/share/chezmoi-command-sources/private_executable_tokscale.tmpl
       commands:
         - name: tokscale
       legacy:

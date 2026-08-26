@@ -15,12 +15,12 @@ if [[ ! -x "$reconcile_bin" ]]; then
   (cd "$repo_root/packages/command-reconcile" && bun build --compile ./src/cli.ts --outfile ./dist/command-reconcile)
 fi
 
-mkdir -p "$home_dir/.local/share/chezmoi/command-sources"
-cat >"$home_dir/.local/share/chezmoi/command-sources/code" <<'EOF'
+mkdir -p "$home_dir/.local/share/chezmoi-command-sources"
+cat >"$home_dir/.local/share/chezmoi-command-sources/code" <<'EOF'
 #!/usr/bin/env bash
 echo "code-script"
 EOF
-chmod 0755 "$home_dir/.local/share/chezmoi/command-sources/code"
+chmod 0755 "$home_dir/.local/share/chezmoi-command-sources/code"
 
 mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/omp"
 cat >"$home_dir/.local/share/chezmoi-commands/incomplete/omp/omp" <<'EOF'
@@ -74,7 +74,7 @@ cat >"$scratch/manifest.json" <<EOF
       "mode": "0755",
       "commands": [{ "name": "code" }],
       "identity": "hash-code-1",
-      "stagingPath": ".local/share/chezmoi/command-sources/code",
+      "stagingPath": ".local/share/chezmoi-command-sources/code",
       "legacy": { "path": ".local/bin/code" }
     },
     {

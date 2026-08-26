@@ -29,7 +29,7 @@ export function resolveCommandPaths(targetHome?: string): CommandPaths {
     stateFile: join(home, ".local/state/chezmoi-command-reconcile/state.json"),
     leaseFile: join(home, ".local/state/chezmoi-command-reconcile/lock"),
     stagingDir: join(home, ".local/share/chezmoi-commands/incomplete"),
-    sourceStagingDir: join(home, ".local/share/chezmoi/command-sources"),
+    sourceStagingDir: join(home, ".local/share/chezmoi-command-sources"),
   };
 }
 

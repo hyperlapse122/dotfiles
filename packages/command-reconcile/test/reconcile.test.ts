@@ -84,7 +84,7 @@ describe("reconcile", () => {
 
   it("handles secret commands with opaque private generations", async () => {
     const testHome = join(tmpdir(), `test-rec-secret-${Date.now()}-${Math.random()}`);
-    const stagingDir = join(testHome, ".local/share/chezmoi/command-sources");
+    const stagingDir = join(testHome, ".local/share/chezmoi-command-sources");
     await mkdir(stagingDir, { recursive: true });
     const secretFile = join(stagingDir, "import-wifi-1password");
     await writeFile(secretFile, "secret-v1-bytes", "utf-8");
@@ -102,7 +102,7 @@ describe("reconcile", () => {
           mode: "0700",
           commands: [{ name: "import-wifi-1password" }],
           identity: "",
-          stagingPath: ".local/share/chezmoi/command-sources/import-wifi-1password",
+          stagingPath: ".local/share/chezmoi-command-sources/import-wifi-1password",
         },
       ],
     };
