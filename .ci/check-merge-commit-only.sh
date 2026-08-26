@@ -19,9 +19,8 @@ set -euo pipefail
 # parsed as a revision expression (`HEAD^`, `main@{1}`, `<sha>^{tree}`,
 # `a..b`) or expand inside one.
 #
-# Extracted from the workflow -- as .ci/check-windows-references.sh is -- so
-# .ci/test-merge-commit-only-gates.sh can drive it against disposable local Git
-# topologies instead of a live merge.
+# Extracted from the workflow so .ci/test-merge-commit-only-gates.sh can drive
+# it against disposable local Git topologies instead of a live merge.
 
 # repo_dir defaults to the current directory; the workflow runs this from the
 # base-branch checkout, and the gate fixture passes a scratch repository.
