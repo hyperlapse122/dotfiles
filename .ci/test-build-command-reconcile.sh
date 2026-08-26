@@ -66,6 +66,12 @@ prepare_case missing-toolchain
 printf old-executable >"$target"; chmod 0755 "$target"
 rm "$fake_bin/mise"
 ln -s "$(command -v mkdir)" "$fake_bin/mkdir"
-assert_fatal success 'build-command-reconcile: neither mise nor bun is installed'
-
+set +e
+env HOME="$home_dir" PATH="$fake_bin" /usr/bin/bash "$case_dir/build.sh" \
+  >"$case_dir/stdout" 2>"$case_dir/stderr"
+status=$?
+set -e
+[[ $status -ne 0 ]]
+grep -F 'build-command-reconcile: neither mise nor bun is installed' "$case_dir/stderr" >/dev/null
+[[ $(cat "$target") == old-executable ]]
 printf 'build-command-reconcile fatal-boundary tests passed\n'
