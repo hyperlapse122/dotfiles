@@ -161,13 +161,14 @@ agents:
         skim: google-antigravity/gemini-3.7-flash:low
         slow: anthropic/claude-opus-5:max
         smol: anthropic/claude-sonnet-5:high
+        reviewer: anthropic/claude-sonnet-5:max
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
         worker: google-antigravity/gemini-3.7-flash:high
       cycleOrder: [ "smol", "default", "slow" ]
       task.agentModelOverrides:
         designer: "@worker"
         librarian: "@skim"
-        reviewer: "@slow"
+        reviewer: "@reviewer"
         scout: "@skim"
         security-reviewer: "@worker"
         sonic: "@worker"
