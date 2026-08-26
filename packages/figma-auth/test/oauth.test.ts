@@ -474,7 +474,7 @@ describe("browser opening", () => {
     const write = vi.fn();
     await expect(
       openBrowser(new URL("https://example.invalid/auth"), {
-        platform: "win32",
+        platform: "aix",
         stderr: { write },
       }),
     ).rejects.toThrow("Unsupported platform");

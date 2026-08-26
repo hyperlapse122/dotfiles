@@ -116,7 +116,7 @@
 #
 # spectaclerc [General] — screenshot selection
 #   Makes Spectacle not re-use the last captured rectangular region, matching
-#   Windows Snipping Tool and macOS Screenshot behavior:
+#   macOS Screenshot behavior:
 #     rememberSelectionRect = Never
 #   Valid values per Spectacle's KConfig schema are Never, UntilQuit, Always.
 #   The default is UntilQuit, which remembers the selection while Spectacle is

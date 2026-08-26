@@ -59,12 +59,12 @@ describe("mergeLocks", () => {
 });
 
 describe("pruneRetiredPlatforms", () => {
-  test("covers AE1: a tool missing from resolution with a stale windows-amd64 key keeps its other artifacts and drops the stale key", () => {
+  test("covers AE1: a tool missing from resolution with a stale freebsd-amd64 key keeps its other artifacts and drops the stale key", () => {
     const existing = lock({
       foo: toolWithArtifacts("v1", {
         "linux-amd64": { url: "https://example.com/foo/linux-amd64", sha256: "a".repeat(64) },
         "darwin-arm64": { url: "https://example.com/foo/darwin-arm64", sha256: "b".repeat(64) },
-        "windows-amd64": { url: "https://example.com/foo/windows-amd64", sha256: "c".repeat(64) },
+        "freebsd-amd64": { url: "https://example.com/foo/freebsd-amd64", sha256: "c".repeat(64) },
       }),
     });
 
@@ -87,7 +87,7 @@ describe("pruneRetiredPlatforms", () => {
   test("a tool whose entire artifacts map is retired collapses to the same no-artifacts shape as covers AE2, not artifacts: {}", () => {
     const existing = lock({
       foo: toolWithArtifacts("v1", {
-        "windows-amd64": { url: "https://example.com/foo/windows-amd64", sha256: "a".repeat(64) },
+        "freebsd-amd64": { url: "https://example.com/foo/freebsd-amd64", sha256: "a".repeat(64) },
       }),
     });
 
@@ -101,8 +101,8 @@ describe("pruneRetiredPlatforms", () => {
     const existing = lock({
       foo: toolWithArtifacts("v1", {
         "linux-amd64": { url: "https://example.com/foo/linux-amd64", sha256: "a".repeat(64) },
-        "windows-amd64": {
-          url: "https://example.com/foo/windows-amd64",
+        "freebsd-amd64": {
+          url: "https://example.com/foo/freebsd-amd64",
           sha256: "b".repeat(64),
           emulated: true,
         },
@@ -119,8 +119,8 @@ describe("pruneRetiredPlatforms", () => {
   test("a tool present in the resolution is unaffected by pruning beyond the normal overwrite", () => {
     const existing = lock({
       foo: toolWithArtifacts("v1", {
-        "windows-amd64": {
-          url: "https://example.com/foo/windows-amd64-v1",
+        "freebsd-amd64": {
+          url: "https://example.com/foo/freebsd-amd64-v1",
           sha256: "a".repeat(64),
         },
       }),
@@ -141,7 +141,7 @@ describe("pruneRetiredPlatforms", () => {
     const existing = lock({
       foo: toolWithArtifacts("v1", {
         "linux-amd64": { url: "https://example.com/foo/linux-amd64", sha256: "a".repeat(64) },
-        "windows-amd64": { url: "https://example.com/foo/windows-amd64", sha256: "b".repeat(64) },
+        "freebsd-amd64": { url: "https://example.com/foo/freebsd-amd64", sha256: "b".repeat(64) },
       }),
     });
     const prunedOnce = pruneRetiredPlatforms(mergeLocks(existing, lock({})));

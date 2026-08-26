@@ -21,17 +21,14 @@
 # overwritten, and --force recreates it from scratch.
 #
 # PLATFORM SUPPORT MATRIX (per manifest field):
-#   ssid / psk / open      : all three tools.
+#   ssid / psk / open      : both tools.
 #   priority               : Linux — connection.autoconnect-priority (-999..999).
-#                            Windows — networks with a priority are ranked
-#                            (highest first) into `netsh wlan set profileorder`
-#                            positions 1..k on the single wireless interface.
 #                            macOS — NOT expressible in a Wi-Fi payload;
 #                            warned about and ignored.
 #   ipv4.dns / ipv6.dns /  : Linux — per-family connection DNS, fully applied.
-#   ignoreAutoDns            Windows/macOS — NOT expressible in a native Wi-Fi
-#                            profile (per-interface/service DNS is live state,
-#                            not per-network profile state); warned about and
+#   ignoreAutoDns            macOS — NOT expressible in a native Wi-Fi profile
+#                            (per-interface/service DNS is live state, not
+#                            per-network profile state); warned about and
 #                            ignored. The defaults below therefore apply to
 #                            Linux only.
 #
@@ -48,10 +45,10 @@
 # (owner-only), NOT the world-readable 0755 of an ordinary ~/.local/bin tool,
 # and why each is OS-gated in dot_local/bin/.chezmoiignore so secrets are never
 # baked into the wrong platform's copy. At RUNTIME the native tools never place
-# a PSK on a command line or in a log: macOS/Windows hand the key to the OS
-# through an owner-only TRANSIENT profile file (.mobileconfig / WLAN XML)
-# deleted on every exit path through one shared trap/finally, after which the
-# imported profile is owned by the OS store. The Linux tool's nmcli argv
+# a PSK on a command line or in a log: macOS hands the key to the OS
+# through an owner-only TRANSIENT profile file (.mobileconfig) deleted on
+# every exit path through one shared trap, after which the imported profile
+# is owned by the OS store. The Linux tool's nmcli argv
 # trade-off is documented in its own header. The run_onchange fingerprint
 # hashes THIS file's RAW text (the op:// refs, never the resolved passwords), so
 # no secret enters chezmoi state / `chezmoi diff`. Trade-off (same as
@@ -79,8 +76,7 @@
 #                     network, default 0) — e.g. give a dual-band router's 5GHz
 #                     SSID 10 and leave its 2.4GHz sibling unset. Absent = left
 #                     at NM's default, and never clobbered on an existing
-#                     connection. Windows -> relative rank for `netsh wlan set
-#                     profileorder`. macOS -> ignored with a warning.
+#                     connection. macOS -> ignored with a warning.
 #     ipv4.dns      : optional per-network override of defaults.ipv4.dns.
 #     ipv6.dns      : optional per-network override of defaults.ipv6.dns.
 #     ignoreAutoDns : optional per-network override of defaults.ignoreAutoDns.

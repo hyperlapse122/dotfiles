@@ -3,8 +3,6 @@
   prezto zsh framework, and WinBox (MikroTik RouterOS GUI).
 */ -}}
 
-{{- $executableExtension := "" -}}
-
 {{- /* ---------- docker-credential-helpers (one helper per OS credential store) ---------- */ -}}
 
 {{- $dockerCredentialHelpersUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "docker-credential-helpers" "field" "url" "platform" "auto") }}
@@ -31,10 +29,10 @@ executable = true
 
 [wakatime-cli]
 type = "archive-file"
-targetPath = '{{ printf ".local/share/chezmoi-commands/incomplete/wakatime-cli/wakatime-cli%s" $executableExtension }}'
+targetPath = '.local/share/chezmoi-commands/incomplete/wakatime-cli/wakatime-cli'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wakatime-cli" "field" "url" "platform" "auto") }}'
 executable = true
-path = '{{ printf "wakatime-cli-%s-%s%s" .chezmoi.os .chezmoi.arch $executableExtension }}'
+path = '{{ printf "wakatime-cli-%s-%s" .chezmoi.os .chezmoi.arch }}'
 
 {{- /* ---------- prezto (zsh framework) ---------- */}}
 

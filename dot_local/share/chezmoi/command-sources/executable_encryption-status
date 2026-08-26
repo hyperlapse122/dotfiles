@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Read-only FileVault status (macOS only — gated per-OS in .chezmoiignore;
-# Windows uses encryption-status.ps1 and Linux keeps its existing LUKS/TPM2
-# path). Disk-encryption enablement is an operator-owned high-impact security
+# Linux keeps its existing LUKS/TPM2 path). Disk-encryption enablement is an
+# operator-owned high-impact security
 # action: this tool MUST NEVER enable, disable, or modify encryption state.
 # `fdesetup status` is a pure query.
 set -eu

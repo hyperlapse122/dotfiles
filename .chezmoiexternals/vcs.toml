@@ -2,19 +2,15 @@
        bundled skills are agent-skill externals in ai-agents.toml, pinned to
        the same release via glab-release-ref.tmpl. */ -}}
 
-{{- $executableExtension := "" -}}
-{{- /* Archive extension for glab's release download. */ -}}
-{{- $archiveExtension := ".tar.gz" -}}
-
 {{- /* ---------- gh ---------- */ -}}
 {{- /* The per-platform URL is resolved at refresh time by packages/release-lock;
        the render only reads the locked value. */}}
 
 [gh]
 type = "archive-file"
-targetPath = '{{ printf ".local/share/chezmoi-commands/incomplete/gh/gh%s" $executableExtension }}'
+targetPath = '.local/share/chezmoi-commands/incomplete/gh/gh'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "gh" "field" "url" "platform" "auto") }}'
-path = '{{ printf "bin/gh%s" $executableExtension }}'
+path = 'bin/gh'
 executable = true
 stripComponents = 1
 
@@ -25,13 +21,13 @@ stripComponents = 1
        partial, so the CLI and its skills never pin different releases. */ -}}
 {{- $glabTag := includeTemplate "glab-release-ref.tmpl" . -}}
 
-{{- $glabArchiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s%s" $glabTag (replace "v" "" $glabTag) .chezmoi.os .chezmoi.arch $archiveExtension) }}
+{{- $glabArchiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s.tar.gz" $glabTag (replace "v" "" $glabTag) .chezmoi.os .chezmoi.arch) }}
 
 [glab]
-targetPath = '{{ printf ".local/share/chezmoi-commands/incomplete/glab/glab%s" $executableExtension }}'
+targetPath = '.local/share/chezmoi-commands/incomplete/glab/glab'
 type = "archive-file"
 url = '{{ $glabArchiveUrl }}'
-path = '{{ printf "bin/glab%s" $executableExtension }}'
+path = 'bin/glab'
 executable = true
 
 {{- /* ---------- garden ---------- */ -}}
@@ -52,5 +48,5 @@ executable = true
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden" "field" "url" "platform" "auto") | quote }}
 executable = true
-targetPath = '{{ printf ".local/share/chezmoi-commands/incomplete/garden/garden%s" $executableExtension }}'
-path = '{{ printf "%s/garden%s" $gardenStem $executableExtension }}'
+targetPath = '.local/share/chezmoi-commands/incomplete/garden/garden'
+path = '{{ printf "%s/garden" $gardenStem }}'
