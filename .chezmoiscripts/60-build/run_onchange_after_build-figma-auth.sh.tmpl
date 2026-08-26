@@ -2,19 +2,6 @@
 {{ $sourceDir := .chezmoi.sourceDir -}}
 {{ $misePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "mise-present") -}}
 #!/usr/bin/env bash
-# Builds the @h82/figma-auth workspace member as a standalone Bun executable
-# and atomically installs it at ~/.local/bin/figma-auth. The utility is an
-# interactive, on-demand command; this apply script only builds and installs it.
-#
-# The targeted fingerprint includes only toolchain/workspace manifests and the
-# figma-auth build inputs. It deliberately excludes dist/, node_modules/, tests,
-# and unrelated workspace members, so build outputs cannot retrigger the script.
-#
-# Missing mise is a DECLARED transient-blocking precondition paired with the
-# cached `mise-present` fingerprint below. Dependency installation, build, and
-# output validation are hard errors: preserving an older executable after a
-# failed requested rebuild would falsely report convergence.
-
 set -euo pipefail
 
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
@@ -22,8 +9,8 @@ set -euo pipefail
       "values" (list (dict "name" "mise-present" "value" $misePresent))) }}
 SRC="{{ $sourceDir }}"
 DIST="$SRC/packages/figma-auth/dist/figma-auth"
-BIN_DIR="$HOME/.local/bin"
-TARGET="$BIN_DIR/figma-auth"
+STAGING_DIR="$HOME/.local/share/chezmoi-commands/incomplete/figma-auth"
+TARGET="$STAGING_DIR/figma-auth"
 
 if ! command -v mise >/dev/null 2>&1; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-figma-auth" "site" "mise-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "mise is not installed; figma-auth build is deferred") | trim | indent 2 }}
@@ -44,8 +31,8 @@ if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
   exit 1
 fi
 
-mkdir -p "$BIN_DIR"
-temporary="$(mktemp "$BIN_DIR/.figma-auth.XXXXXX")"
+mkdir -p "$STAGING_DIR"
+temporary="$(mktemp "$STAGING_DIR/.figma-auth.XXXXXX")"
 cleanup() {
   if [[ -n "$temporary" ]]; then
     rm -f -- "$temporary"
@@ -74,8 +61,6 @@ chmod 0600 "$temporary"
 cat "$DIST" >"$temporary"
 chmod 0755 "$temporary"
 
-# `mv` treats an existing directory as a container rather than the destination
-# pathname. Refuse every unsafe target shape immediately before promotion.
 if [[ -L "$TARGET" || ( -e "$TARGET" && ! -f "$TARGET" ) ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-figma-auth" "site" "install-target-unsafe" "direction" "harmless" "reason" "the figma-auth install target is not a regular file; existing target is preserved") | trim | indent 2 }}
 fi
@@ -85,5 +70,5 @@ temporary=''
 if [[ ! -f "$TARGET" || -L "$TARGET" || ! -x "$TARGET" ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-figma-auth" "site" "promoted-target-unsafe" "direction" "harmless" "reason" "the promoted figma-auth target is not a regular executable") | trim | indent 2 }}
 fi
-printf '%s\n' 'build-figma-auth: installed ~/.local/bin/figma-auth'
+printf '%s\n' 'build-figma-auth: staged figma-auth'
 {{ end -}}

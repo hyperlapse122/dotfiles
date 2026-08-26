@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-dotfiles_skips="$repo_root/dot_local/bin/executable_dotfiles-skips"
+dotfiles_skips="$repo_root/dot_local/share/chezmoi/command-sources/executable_dotfiles-skips"
 
 if [[ ! -x "$dotfiles_skips" ]]; then
   printf 'test-dotfiles-skips: error: executable not found at %s\n' "$dotfiles_skips" >&2

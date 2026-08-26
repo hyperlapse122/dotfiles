@@ -12,7 +12,7 @@ prepare_case() {
   source_dir="$case_dir/source"
   home_dir="$case_dir/home"
   fake_bin="$case_dir/bin"
-  mkdir -p "$source_dir/packages/settings-reconcile/dist" "$home_dir/.local/bin" "$fake_bin"
+  mkdir -p "$source_dir/packages/settings-reconcile/dist" "$home_dir/.local/share/chezmoi-commands/incomplete/settings-reconcile" "$fake_bin"
   cat >"$source_dir/packages/settings-reconcile/dist/settings-reconcile" <<'EOF'
 #!/usr/bin/env bash
 exit 0
@@ -29,7 +29,7 @@ EOF
   chmod 0755 "$fake_bin/mise"
   sed "s|^SRC=.*$|SRC=\"$source_dir\"|" "$rendered" >"$case_dir/build.sh"
   chmod 0755 "$case_dir/build.sh"
-  target="$home_dir/.local/bin/settings-reconcile"
+  target="$home_dir/.local/share/chezmoi-commands/incomplete/settings-reconcile/settings-reconcile"
 }
 
 assert_fatal() {
@@ -41,7 +41,7 @@ assert_fatal() {
   set -e
   [[ $status -ne 0 ]] || { printf '%s unexpectedly succeeded\n' "$label" >&2; return 1; }
   grep -F "$diagnostic" "$case_dir/stderr" >/dev/null
-  if grep -E 'Recorded as done|nothing to do|installed ~/.local/bin/settings-reconcile' \
+  if grep -E 'Recorded as done|nothing to do|staged settings-reconcile' \
     "$case_dir/stdout" "$case_dir/stderr" >/dev/null; then
     printf '%s emitted a skip/success marker\n' "$label" >&2
     return 1

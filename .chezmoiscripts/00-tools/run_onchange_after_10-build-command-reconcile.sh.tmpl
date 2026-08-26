@@ -1,0 +1,49 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+set -euo pipefail
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/command-reconcile/package.json" "packages/command-reconcile/tsconfig.json" "packages/command-reconcile/vite.config.ts" "packages/command-reconcile/src/**")) }}
+
+SRC="{{ $sourceDir }}"
+DIST="$SRC/packages/command-reconcile/dist/command-reconcile"
+LIBEXEC_DIR="$HOME/.local/libexec"
+TARGET="$LIBEXEC_DIR/command-reconcile"
+
+if ! command -v mise >/dev/null 2>&1 && ! command -v bun >/dev/null 2>&1; then
+  printf '%s\n' 'build-command-reconcile: neither mise nor bun is installed; command-reconcile cannot be built' >&2
+  exit 1
+fi
+
+if command -v mise >/dev/null 2>&1; then
+  if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
+    printf '%s\n' 'build-command-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
+    exit 1
+  fi
+  if ! mise -C "$SRC/packages/command-reconcile" exec -- vp run build; then
+    printf '%s\n' 'build-command-reconcile: build failed; fix the command-reconcile build error, then re-apply.' >&2
+    exit 1
+  fi
+elif command -v bun >/dev/null 2>&1; then
+  if ! (cd "$SRC/packages/command-reconcile" && bun build --compile ./src/cli.ts --outfile ./dist/command-reconcile); then
+    printf '%s\n' 'build-command-reconcile: bun build failed; fix the command-reconcile build error, then re-apply.' >&2
+    exit 1
+  fi
+fi
+
+if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
+  printf '%s\n' 'build-command-reconcile: build completed without an executable dist artifact; inspect the build output, then re-apply.' >&2
+  exit 1
+fi
+
+mkdir -p "$LIBEXEC_DIR"
+temporary="$(mktemp "$LIBEXEC_DIR/.command-reconcile.XXXXXX")"
+trap 'rm -f -- "$temporary"' EXIT
+chmod 0600 "$temporary"
+cp -- "$DIST" "$temporary"
+chmod 0755 "$temporary"
+
+mv -f -- "$temporary" "$TARGET"
+temporary=''
+printf '%s\n' 'build-command-reconcile: installed ~/.local/libexec/command-reconcile'
+{{ end -}}

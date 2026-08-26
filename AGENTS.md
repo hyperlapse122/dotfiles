@@ -25,12 +25,13 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 
 | Directory | Responsibility |
 |---|---|
-| `00-tools` | trust repo mise; link/prune versioned CLIs; prune old compound-engineering trees |
+| `00-tools` | trust repo mise; build command-reconcile and activate available external/source commands; link/prune versioned CLIs; prune old compound-engineering trees |
 | `10-auth` | GitHub/GitLab/Docker auth and Tailscale login |
 | `20-linux-fedora` | data-driven DNF provisioning, repositories, and Secure Boot/NVIDIA |
 | `30-linux` | `/etc` manifest, host/network, chsh, TPM2, Wi-Fi, browser, Podman, VSCodium |
 | `50-linux-kde`, `50-linux-gnome` | desktop configuration |
 | `60-build` | Rust haptic and Vite+ helper/CLI builds |
+| `65-commands` | full command reconciliation, drift repair, and proof-classified pruning |
 | `70-agents` | omp plugins, omp settings/auth, aoe config, and omp updates |
 | `80-keys` | one-time GPG and age imports |
 | `90-src` | reconcile the `~/src` garden on manifest change (grow-all, the three bootstrap commands, aoe group self-heal); runs last so a garden failure cannot abort other provisioning |
@@ -106,6 +107,7 @@ Edit data, not generated scripts or rendered targets:
 
 | Data | Consumers |
 |---|---|
+| `.chezmoidata/commands.yaml` | repository-owned command manifest, producer classes, safety profiles, modes, and legacy migration evidence |
 | `.chezmoidata/facts.yaml` | host identity, `gate:`/`gates:` decisions, probes and fail-safe direction |
 | `.chezmoidata/packages.yaml` | Fedora packages, repos, COPRs, flatpaks, dotnet, direct packages, services/groups |
 | `.chezmoidata/fonts.yaml` | font archives, families, sizes and fallbacks for KDE/GNOME/fcitx/VSCodium/kitty |

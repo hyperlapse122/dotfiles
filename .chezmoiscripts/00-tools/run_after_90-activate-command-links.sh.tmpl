@@ -1,0 +1,12 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+RECONCILE_BIN="$HOME/.local/libexec/command-reconcile"
+if [[ ! -x "$RECONCILE_BIN" ]]; then
+  exit 0
+fi
+
+MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | quote }}
+"$RECONCILE_BIN" reconcile-all --manifest "$MANIFEST_JSON" || true
+{{ end -}}
