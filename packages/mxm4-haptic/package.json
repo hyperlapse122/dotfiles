@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Cross-platform TypeScript IPC client and bundled OMP integration for mxm4-hapticd.",
+  "description": "Linux/macOS TypeScript IPC client and bundled OMP integration for mxm4-hapticd.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=24"
