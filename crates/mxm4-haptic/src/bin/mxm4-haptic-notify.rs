@@ -42,7 +42,7 @@
 //! dbus-monitor). See crates/README.md.
 
 // Linux-only: it eavesdrops D-Bus via `dbus-monitor`.
-// macOS/Windows expose no public API to observe other apps' notifications, so
+// macOS exposes no public API to observe other apps' notifications, so
 // off Linux this binary compiles to a stub that exits with a clear message
 // (the [[bin]] target must still exist for `cargo build` on every platform).
 use std::process::ExitCode;
