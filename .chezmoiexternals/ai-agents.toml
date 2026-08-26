@@ -1,7 +1,5 @@
 {{- /* AI coding agents and adjacent tooling: agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
-{{- $executableExtension := "" -}}
-
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
        static-musl build. Shared by the agent-browser and omp externals below so the
        `ldd` subprocess runs once per render rather than once per consumer. */ -}}
@@ -25,7 +23,7 @@
 
 [agent-browser]
 type = "file"
-targetPath = '{{ printf ".local/bin/agent-browser%s" $executableExtension }}'
+targetPath = '.local/bin/agent-browser'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
 executable = true
 
@@ -40,7 +38,7 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent
 
 [omp]
 type = "file"
-targetPath = '{{ printf ".local/bin/omp%s" $executableExtension }}'
+targetPath = '.local/bin/omp'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
 executable = true
 
