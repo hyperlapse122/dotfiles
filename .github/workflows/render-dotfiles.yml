@@ -374,7 +374,7 @@ jobs:
                 rel="${f#./}"
                 dest="${out}/${rel%.tmpl}"
                 mkdir -p "$(dirname "${dest}")"
-                worker_scratch="${scratch}/worker-$BASHPID"
+                worker_scratch=$(mktemp -d "${scratch}/worker.XXXXXX")
                 mkdir -p "${worker_scratch}/target"
                 : > "${worker_scratch}/empty.toml"
                 if chezmoi --config "${worker_scratch}/empty.toml" \
@@ -736,7 +736,7 @@ jobs:
                 rel="${f#./}"
                 dest="${out}/${rel%.tmpl}"
                 mkdir -p "$(dirname "${dest}")"
-                worker_scratch="${scratch}/worker-$BASHPID"
+                worker_scratch=$(mktemp -d "${scratch}/worker.XXXXXX")
                 mkdir -p "${worker_scratch}/target"
                 : > "${worker_scratch}/empty.toml"
                 if chezmoi --config "${worker_scratch}/empty.toml" \
