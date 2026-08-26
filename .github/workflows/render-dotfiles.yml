@@ -269,12 +269,12 @@ jobs:
       - name: Assert LUKS TPM2 tool renders the shared dracut backend
         run: |
           set -euxo pipefail
-          # The deployed tool (dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl)
+          # The deployed tool (dot_local/share/chezmoi-command-sources/executable_setup-luks-tpm2-unlock.sh.tmpl)
           # inlines the enrollment backend at apply time via {{ include }}. Assert
           # the rendered tool carries the Fedora dracut + systemd-cryptenroll
           # backend so a regression is caught here
           # rather than at a reboot on a real host.
-          tool="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.local/bin/setup-luks-tpm2-unlock.sh"
+          tool="${GITHUB_WORKSPACE}/_artifacts/rendered-files/.local/share/chezmoi-command-sources/setup-luks-tpm2-unlock.sh"
           test -f "${tool}"
           # NB: the tool's header comments legitimately mention `{{ include }}` (escaped in
           # the source), so a blanket unrendered-template check would false-positive here.
