@@ -15,8 +15,7 @@
 # defaults, kept in lockstep; the units render every knob explicitly (even at
 # its default) so the effective value is always visible in the unit, and the
 # source defaults are only the fallback for a binary running OUTSIDE the units
-# (invoked by hand, the macOS launchd plist, or the Windows scheduled task —
-# neither of which renders env).
+# (invoked by hand or the macOS launchd plist, neither of which renders env).
 #
 # haptic.daemon — mxm4-hapticd (src/bin/mxm4-hapticd.rs):
 #   pacingMs   : MXM4D_PACING_MS. Minimum gap held AFTER a pulse so the motor

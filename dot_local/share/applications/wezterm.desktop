@@ -8,10 +8,10 @@
 #
 # Bare `wezterm` Exec/TryExec on purpose: this repo has no managed WezTerm
 # install location to point at (Fedora ownership is unresolved — see the
-# weztermTerminal row in .chezmoidata/packages.yaml). On Windows winget and on
-# macOS the Homebrew cask register their own launch surfaces. Here TryExec
-# keeps the entry hidden until a package manager puts wezterm on PATH, so the
-# launcher can never strand a host on a missing binary.
+# weztermTerminal row in .chezmoidata/packages.yaml). On macOS the Homebrew
+# cask registers its own launch surface. Here TryExec keeps the entry hidden
+# until a package manager puts wezterm on PATH, so the launcher can never
+# strand a host on a missing binary.
 [Desktop Entry]
 Type=Application
 Name=WezTerm (candidate)

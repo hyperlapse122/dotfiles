@@ -11,11 +11,9 @@
 # aoe worktree — aoe owns worktree lifecycle, and trees dropped from the
 # manifest are left in place for `src-audit` to report.
 #
-# GATING. Runs only where the ~/src layout exists. Windows renders out via the
-# OS guard above — an empty render, the same OS-gate idiom config-aoe uses;
-# the ~/src garden is POSIX-only. The container skip lives in the single gated
-# .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the sanctioned mechanism
-# that also skips .config/garden/garden.yaml. It runs on Linux and macOS on a real host.
+# GATING. Runs on Linux and macOS on a real host. The container skip lives in
+# the single gated .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the
+# sanctioned mechanism that also skips .config/garden/garden.yaml.
 #
 # PLACEMENT (90-src, last). Deliberately the last after-phase script. It must
 # run after 10-auth's after-scripts (which configure the gh/glab git credential

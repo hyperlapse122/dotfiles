@@ -111,6 +111,5 @@ partials. Override the headless skip with `INSTALL_SYSTEM_CONFIG_FORCE=1`;
 note chezmoi records a clean skip as a successful run, so re-run by hand with
 `chezmoi apply --force` on an interactive terminal.
 
-There is no `system/macos/` or `system/windows/` tree. macOS settings usually
-belong under `home/`/`Library/` (user-owned `~/Library` paths); Windows system
-config does not fit the "drop a file at an absolute path" model.
+There is no `system/macos/` tree: macOS settings belong under user-owned
+`Library/` (`~/Library`) paths.

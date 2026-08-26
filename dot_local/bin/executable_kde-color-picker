@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# kde-color-picker — PowerToys-style screen color picker for KDE Plasma (Wayland).
+# kde-color-picker — Screen color picker for KDE Plasma (Wayland).
 #
 # Pops KWin's native color-picker crosshair, copies the picked pixel to the
 # clipboard as #RRGGBB, prints it to stdout, and shows a brief notification.
@@ -9,7 +9,7 @@
 # key) — the same mechanism home/.local/share/applications/1password.desktop and
 # Spectacle use.
 #
-# Single-platform by design (no .ps1 mate): it drives KWin's
+# Single-platform by design: it drives KWin's
 # org.kde.kwin.ColorPicker D-Bus interface (Plasma/KWin only) and wl-copy
 # (Wayland). Every dependency ships with a Fedora KDE install: gdbus (glib2),
 # wl-copy (wl-clipboard — already in scripts/linux/install-packages.sh) and

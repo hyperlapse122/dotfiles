@@ -56,8 +56,7 @@
 # you want. The value is passed through to systemd-cryptenroll (`+`-separated form).
 #
 # Single-platform (Linux only) BY DESIGN — LUKS, TPM2 enrollment and initramfs
-# regeneration are Linux-only, so per the script-parity exception in AGENTS.md
-# there is no .ps1 counterpart.
+# regeneration are Linux-only.
 #
 # IDEMPOTENT: a device already enrolled is skipped; /etc/crypttab entries are
 # matched by exact device alias (UUID=, PARTUUID=, raw path, or any /dev/disk/*

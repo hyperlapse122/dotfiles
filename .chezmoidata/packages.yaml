@@ -291,13 +291,7 @@ packages:
         # Wayland clipboard management
         - wl-clipboard
 
-        # Filesystem access and OS-level containers. No hypervisor is managed here.
-        # fuse3 and ntfs-3g provide read-only ReFS/NTFS access to Windows Dev
-        # Drive VHDX images. fuse3-devel supplies the refs-fuse / refsprogs
-        # build dependency.
-        - fuse3
-        - fuse3-devel
-        - ntfs-3g
+        # OS-level container management
         - systemd-container
 
         # Dynamic Kernel Module Support
@@ -598,7 +592,7 @@ packages:
         macos: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { arm64: unresolved } }
         ubuntu: { disposition: unresolved, reason: Kitty's Ubuntu arm64 package-delivery path has not been proven on Thor, architectures: { arm64: unresolved } }
       # U8 native desktop/hardware completions. logitechGestures (Logi Options+,
-      # manual profile) and koreanInput (native Windows/macOS IMEs, manual
+      # manual profile) and koreanInput (native macOS/Linux IMEs, manual
       # prerequisite steps) above already carry their U8 dispositions; the rows
       # below close the remaining retained desktop-app, pinentry, and
       # default-app helper gaps. None of them close G0 — only chrome, cider,
@@ -617,7 +611,7 @@ packages:
       # pinentry-qt and GNOME hosts pinentry-gnome3 (gated legacy groups above;
       # private_dot_gnupg/.gpg-agent.linux.conf picks the matching program from
       # the desktop fact), macOS installs pinentry-mac and .gpg-agent.darwin.conf
-      # names it, and Windows gets pinentry inside the Gpg4win bundle.
+      # names it.
       - id: pinentry
         fedora: { disposition: managed, owner: dnf, identifier: pinentry-qt, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: managed, owner: homebrew, kind: formula, identifier: pinentry-mac, source: homebrewCore, elevation: none, greedy: false, architectures: { arm64: native } }
@@ -630,8 +624,8 @@ packages:
       # G1 CANDIDATE — opt-in launch only. Kitty (kittyTerminal above) stays the
       # authoritative Fedora terminal and the default on every host until G1b
       # opens; nothing here may switch a default or remove a Kitty source.
-      # Ownership is native-manager only: winget on Windows, Homebrew on macOS —
-      # a release-lock entry beside those would duplicate authority, and the
+      # Ownership is native-manager only: Homebrew on macOS — a release-lock
+      # entry beside that would duplicate authority, and the
       # Fedora RPM path has no lockable artifact today (see the reason below).
       - id: weztermTerminal
         sentinel: wezterm
