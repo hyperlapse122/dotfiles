@@ -138,23 +138,23 @@
       "codegraph": {
         "kind": "githubRelease",
         "source": "colbymchenry/codegraph",
-        "version": "v1.5.0",
+        "version": "v1.6.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-linux-x64.tar.gz",
-            "sha256": "2ba65e87a1210b706bb1e67d5e48b5fc4a1935e43dbb3fb5f31c5597840d2e58"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.0/codegraph-linux-x64.tar.gz",
+            "sha256": "de3391f79ed42622d937e6cd5b7642a7ea8bb7d1473607e80b879ba73ef216b0"
           },
           "linux-arm64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-linux-arm64.tar.gz",
-            "sha256": "9f17750aedf45d51f68caae39ed21d6e2a7290b2326e5c53f95a165918ebd1d8"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.0/codegraph-linux-arm64.tar.gz",
+            "sha256": "6dc935a7b8f1a61e688a578b98ea34680eb2e36d7b91db079d64f4011f1a668f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-darwin-x64.tar.gz",
-            "sha256": "0a0ccc29bf7da9d10be1458d89d7e15c55927ae24cd95e9fa3de4bdfea059dde"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.0/codegraph-darwin-x64.tar.gz",
+            "sha256": "cb86a2b62ee676b62a56bf8423600e7d867e752e57f323cdc98c0f6236efd908"
           },
           "darwin-arm64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.5.0/codegraph-darwin-arm64.tar.gz",
-            "sha256": "cf5ee435a6e44d097b2f98f2b7b8b9422bb1094844404efed82519c5da1af2cf"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.0/codegraph-darwin-arm64.tar.gz",
+            "sha256": "1c73033512d55f67be04717e81532e8beaf7be6fb8531f51a179fa23064ad480"
           }
         }
       },
@@ -171,23 +171,23 @@
       "docker-credential-helpers": {
         "kind": "githubRelease",
         "source": "docker/docker-credential-helpers",
-        "version": "v0.9.8",
+        "version": "v0.9.9",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-secretservice-v0.9.8.linux-amd64",
-            "sha256": "052a0243588b231fde8009f7fe95afc6f536e9d20f6b5896dfd5bc8fd55852f2"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.9/docker-credential-secretservice-v0.9.9.linux-amd64",
+            "sha256": "134c34af84ba6397f2d47a0bf8a09ea493ac2aa69a913904e1df1c61d0f0e031"
           },
           "linux-arm64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-secretservice-v0.9.8.linux-arm64",
-            "sha256": "b9e7b135c9b0cacf8f058d785dbc7188df38d98717dbc2fb1d6c63afb6d67198"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.9/docker-credential-secretservice-v0.9.9.linux-arm64",
+            "sha256": "92cd1bf8da5b8f09214511768e906c825dfe6d59c962bfab37923307877ff36e"
           },
           "darwin-amd64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-osxkeychain-v0.9.8.darwin-amd64",
-            "sha256": "0575a404c4ead8b5135a2482ece4dd142bde3cbd319433697e212bbea0afb100"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.9/docker-credential-osxkeychain-v0.9.9.darwin-amd64",
+            "sha256": "1be33ae30c8c80277bea3364d0d71afad411fa22e88bcabf3375550b989fd272"
           },
           "darwin-arm64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.8/docker-credential-osxkeychain-v0.9.8.darwin-arm64",
-            "sha256": "6fae515ffbc74f395af1b51c6f079ddb57895ed9e428e0bea3f6aff64e916b22"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.9/docker-credential-osxkeychain-v0.9.9.darwin-arm64",
+            "sha256": "3585188b1df1c3568ae536999eddb48ad2c781b3cf07a2f7d7181262d045820c"
           }
         }
       },
@@ -299,7 +299,7 @@
       "kubectl": {
         "kind": "githubRelease",
         "source": "kubernetes/kubernetes",
-        "version": "v1.36.4"
+        "version": "v1.37.0"
       },
       "marksman": {
         "kind": "githubRelease",
