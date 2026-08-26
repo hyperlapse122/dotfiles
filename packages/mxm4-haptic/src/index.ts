@@ -92,22 +92,12 @@ export class HapticTimeoutError extends HapticError<"TIMEOUT"> {
 
 // Endpoint shared byte-for-byte with the Rust daemon's socket_path()
 // (crates/mxm4-haptic/src/lib.rs); the two MUST agree or the client connects
-// nowhere. Node implements local IPC on Windows via named pipes, so a
-// \\.\pipe path connects to the daemon's CreateNamedPipeW server. Security
-// note: this is the machine-global \\.\pipe namespace, not the per-user POSIX
-// runtime dir — the daemon reserves the first pipe instance for its lifetime
-// and binds it with a protected DACL limited to the current-user SID plus
-// LocalSystem (see lib.rs ipc_server), so a different user cannot write
-// commands through it.
-const WINDOWS_PIPE_PATH = "\\\\.\\pipe\\mxm4-haptic";
-
+// nowhere.
+//
 // POSIX resolver: XDG_RUNTIME_DIR (Linux) -> TMPDIR (macOS launchd's per-user
 // DARWIN_USER_TEMP_DIR) -> /tmp. Always resolves, so an absent daemon surfaces
 // later as SocketMissingError rather than a "runtime dir unset" failure.
 function socketPath(): string {
-  if (process.platform === "win32") {
-    return WINDOWS_PIPE_PATH;
-  }
   const dir = nonEmptyEnv("XDG_RUNTIME_DIR") ?? nonEmptyEnv("TMPDIR") ?? "/tmp";
   return `${dir.replace(/\/+$/, "")}/mxm4-haptic.sock`;
 }

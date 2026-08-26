@@ -6,9 +6,9 @@
 //! serializes haptic playback with debounce + per-pulse pacing, and re-discovers
 //! when the mouse disconnects/reconnects (possibly at a different receiver slot).
 //!
-//! Inputs: waveform names on the IPC endpoint (AF_UNIX socket on Unix, Win32
-//! named pipe on Windows; see lib::IpcServer) from the thin client (CLI / scripts)
-//! and the notification bridge. Output: HID++ play reports.
+//! Inputs: waveform names on the IPC endpoint (AF_UNIX socket; see lib::IpcServer)
+//! from the thin client (CLI / scripts) and the notification bridge. Output:
+//! HID++ play reports.
 //!
 //! Concurrency — a SINGLE I/O-owner thread holds the one `hidapi::HidDevice`
 //! (that type is `Send` but not `Sync`, and macOS IOKit does not promise that
@@ -30,8 +30,7 @@
 //!   would block the full 4 s device timeout), so only connected slots are
 //!   probed. Spontaneous 0x41s thereafter drive reconnect re-discovery.
 //!
-//! Linux (hidraw backend) + macOS (IOKit, shared open) + Windows (native HID +
-//! named-pipe IPC). See crates/README.md.
+//! Linux (hidraw backend) + macOS (IOKit, shared open). See crates/README.md.
 
 use std::process::ExitCode;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -318,8 +317,8 @@ fn open_hidpp(api: &mut HidApi) -> HidDevice {
 
 fn main() -> ExitCode {
     // The accept loop runs on its own thread so the main thread can own the
-    // device. IpcServer::bind is the AF_UNIX socket (Unix) or named pipe
-    // (Windows); both yield one waveform name per accepted client.
+    // device. IpcServer::bind is the AF_UNIX socket; it yields one waveform
+    // name per accepted client.
     let server = match lib::IpcServer::bind() {
         Ok(s) => s,
         Err(e) => {

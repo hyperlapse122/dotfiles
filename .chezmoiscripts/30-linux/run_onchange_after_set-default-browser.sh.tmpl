@@ -40,9 +40,8 @@
 # no-op once Chrome is the default. Applies to newly launched apps; no daemon
 # restart needed (xdg-open / KDE re-read the associations on demand).
 #
-# Linux-only by design (gated on .chezmoi.os == "linux"): macOS and Windows use
-# their own default-app registries, so there is no xdg equivalent to drive and
-# no .ps1 counterpart per the script-parity exception in ../AGENTS.md.
+# Linux-only by design (gated on .chezmoi.os == "linux"): macOS uses its own
+# default-app registry, so there is no xdg equivalent to drive there.
 
 # Capability fingerprints pair each transient-blocking declaration below with
 # the cached precondition it names. Comment-only; never executed.

@@ -39,9 +39,7 @@
 # idempotent) so the registry stays correct.
 #
 # Single-platform (Linux only) by design — gated on `.chezmoi.os == "linux"`.
-# macOS already defaults to zsh and Windows has no /etc/passwd login shell, so
-# there is nothing equivalent to do on either; no .ps1 counterpart per the
-# script-parity exception in ../AGENTS.md.
+# macOS already defaults to zsh, so there is nothing equivalent to do there.
 
 # Capability fingerprints pair each transient-blocking declaration below with
 # the cached precondition it names. Comment-only; never executed.

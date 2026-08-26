@@ -66,7 +66,7 @@ document, a bash script, or a JSON file.
 {{- /* --- Check 1: registry <-> probe parity -------------------------------- */ -}}
 {{- range $name := $declared -}}
 {{-   if not (has $name $probed) -}}
-{{-     fail (printf "fact %q is declared in .chezmoidata/facts.yaml (factRegistry) but NO PROBE implements it — .chezmoitemplates/facts.tmpl emits: %s. Implement it in the layer its `probe:` names (hook = write_facts_cache in .install-prerequisites.sh + the .ps1 counterpart; template = facts.tmpl), or remove the declaration. A declared fact never silently resolves false." $name (join ", " $probed)) -}}
+{{-     fail (printf "fact %q is declared in .chezmoidata/facts.yaml (factRegistry) but NO PROBE implements it — .chezmoitemplates/facts.tmpl emits: %s. Implement it in the layer its `probe:` names (hook = write_facts_cache in .install-prerequisites.sh; template = facts.tmpl), or remove the declaration. A declared fact never silently resolves false." $name (join ", " $probed)) -}}
 {{-   end -}}
 {{- end -}}
 {{- range $name := $probed -}}

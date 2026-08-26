@@ -121,12 +121,10 @@ ensure_op_authenticated() {
 # init` the key does not exist yet when the LUKS prompt fires. The prompt
 # path in .chezmoi.toml.tmpl therefore resolves the key GET-OR-CREATE via
 # .chezmoitemplates/config-secrets-key-ensure.tmpl, seeding it inside that same
-# render. Seeding it here too keeps it present for later commands and mirrors
-# the Windows-parity .ps1 path (whose config-secrets-key-ensure sibling is
-# Linux-only). Idempotent: after the first render created the key, this GET
-# finds it and no-ops. NEVER fail (or hang) the hook over it: with no reachable
-# keyring (headless/TTY/container) the templates behave as if no secret was
-# entered.
+# render. Seeding it here too keeps it present for later commands.
+# Idempotent: after the first render created the key, this GET finds it and
+# no-ops. NEVER fail (or hang) the hook over it: with no reachable keyring
+# (headless/TTY/container) the templates behave as if no secret was entered.
 #
 # LINUX-ONLY, deliberately: the encrypted config secret is Linux-gated, and
 # macOS's keyring backend (go-keyring drives /usr/bin/security) can escalate
@@ -135,9 +133,7 @@ ensure_op_authenticated() {
 # Revisit the guard if a darwin template ever consumes the key. The `timeout`
 # wrappers are the same insurance on Linux (coreutils is a base package on
 # the target distro): a Secret Service prompter that never answers turns
-# into a soft-skip, not a stuck chezmoi run. Keep in sync with
-# Confirm-ConfigSecretsKey in .install-prerequisites.ps1 (Windows Credential
-# Manager works headless, same service/user names).
+# into a soft-skip, not a stuck chezmoi run.
 ensure_config_secrets_key() {
   [[ "$(uname -s)" == "Linux" ]] || return 0
   command -v chezmoi >/dev/null 2>&1 || return 0
@@ -342,10 +338,8 @@ ensure_github_token() {
 # deletes this identity's own record when it safely can and exits non-zero, which
 # stops the command before a single template renders.
 #
-# NO .ps1 COUNTERPART, deliberately: Windows has no hook counterpart, and its
-# template reader publishes `unavailable` when this POSIX hook did not write an
-# identity-matching record. The four `any` command probes are resolved by this
-# hook on supported POSIX hosts; Linux-only probes never launch off Linux.
+# The four `any` command probes are resolved by this hook on supported POSIX
+# hosts; Linux-only probes never launch off Linux.
 CAPABILITY_CACHE_SCHEMA='capability-cache-v1'
 CAPABILITY_REGISTRY_SCHEMA='capability-registry-v2'
 # Hidden basename on purpose: chezmoi discovers .chezmoidata/ recursively and

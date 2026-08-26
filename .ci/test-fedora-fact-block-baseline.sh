@@ -101,7 +101,7 @@ NODE
 
 # Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=ddd39341d7838275d2904f46b3a42067c5b9771a8013139eff1051d96e11fcce
+  [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=8a2418531929e8c0e1b4440001a674750fee40b5dde96648626d4833678ca771
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=fc2e9164e0741013d71f34a688a820b0d66188f654710b9f5fea9d07a9c707b6
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl]=70a1d313716912bb41e3250248944a346ca9e1dc628ff1d3c1625c5f0313af28
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56

@@ -67,9 +67,8 @@
 #   1. Declare it here (name, type, probe layer, gates, whenFalse; hook facts also
 #      declare their fail-safe `absentDefault`).
 #   2. Implement the probe in the layer you named — write_facts_cache in
-#      .install-prerequisites.sh (AND the all-false line in the .ps1), or
-#      facts.tmpl. Skipping this step aborts the apply; it does not silently
-#      resolve false.
+#      .install-prerequisites.sh, or facts.tmpl. Skipping this step aborts the
+#      apply; it does not silently resolve false.
 #   3. Pick the layer by whether the probe needs a subprocess/symlink walk (hook)
 #      or is a plain file test (template). When in doubt, template — it is free.
 #
@@ -101,8 +100,8 @@ factRegistry:
     values: [linux, darwin]
     source: .chezmoi.os
     gates: >-
-      Everything OS-specific: the .chezmoiignore per-OS blocks, every script's
-      {{ if eq .chezmoi.os "linux" }} gate, the .ps1/.sh wrapper pairs.
+      Everything OS-specific: the .chezmoiignore per-OS blocks and every
+      script's {{ if eq .chezmoi.os "linux" }} gate.
     whenFalse: n/a — always resolves to exactly one value.
   distro:
     type: string

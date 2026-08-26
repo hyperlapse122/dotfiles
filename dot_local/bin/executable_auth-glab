@@ -34,9 +34,6 @@
 # mint fresh registry tokens. Podman registry auth does not depend on it:
 # ~/.config/containers/auth.json carries stored keys rendered from 1Password
 # (dot_config/containers/private_auth.json.tmpl).
-#
-# Single-platform exception (AGENTS.md "script parity"): this script is POSIX-only.
-# Add an `auth-glab.ps1` counterpart if Windows support is added later.
 
 set -euo pipefail
 

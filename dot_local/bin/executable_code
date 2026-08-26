@@ -6,8 +6,6 @@
 # A real executable on PATH also covers scripts and tools that shell out to
 # `code`, including editor settings and "open in editor" integrations.
 #
-# POSIX counterpart of code.ps1 (Windows).
-#
 # Dependencies: `codium` on PATH (VS Codium install).
 
 set -euo pipefail

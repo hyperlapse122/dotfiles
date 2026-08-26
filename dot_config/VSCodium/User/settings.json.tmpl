@@ -1,5 +1,5 @@
 {{- /* VSCodium user settings — Linux XDG target (~/.config/VSCodium/User/settings.json).
-   The body is ONE shared template (.chezmoitemplates/vscodium-settings.json.tmpl) so the
-   Windows (%APPDATA%\VSCodium) and macOS (Library/Application Support/VSCodium) targets
-   render byte-identical settings from the same source. */ -}}
+   The body is ONE shared template (.chezmoitemplates/vscodium-settings.json.tmpl) so Linux
+   and macOS (Library/Application Support/VSCodium) render byte-identical settings from the
+   same source. */ -}}
 {{- includeTemplate "vscodium-settings.json.tmpl" . -}}

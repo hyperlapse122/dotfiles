@@ -2,11 +2,9 @@
 
 A tiny, zero-runtime-dependency **TypeScript client** for the `mxm4-hapticd`
 daemon. It sends MX Master 4 haptic waveform commands over the daemon's IPC
-endpoint — an AF_UNIX socket on Unix (`$XDG_RUNTIME_DIR/mxm4-haptic.sock` on
-Linux, `$TMPDIR/mxm4-haptic.sock` on macOS) and the `\\.\pipe\mxm4-haptic` named
-pipe on Windows (Node's `net` does local IPC via named pipes there). The
-resolver mirrors the Rust daemon's `socket_path()`: Windows → that pipe; Unix →
-`XDG_RUNTIME_DIR` → `TMPDIR` → `/tmp`.
+endpoint — an AF_UNIX socket (`$XDG_RUNTIME_DIR/mxm4-haptic.sock` on Linux,
+`$TMPDIR/mxm4-haptic.sock` on macOS). The resolver mirrors the Rust daemon's
+`socket_path()`: `XDG_RUNTIME_DIR` → `TMPDIR` → `/tmp`.
 
 It mirrors the portable client surface of the Rust crate
 [`../../crates/mxm4-haptic/src/lib.rs`](../../crates/mxm4-haptic/src/lib.rs). It
@@ -24,13 +22,11 @@ replace the daemon — all device I/O, debounce, queueing, and pacing live in
 - **Runtimes**: tested on **Node ≥24** (developed on Node 24). Works under
   **Bun** via its `node:net` compatibility layer. **Deno is not supported** /
   not claimed.
-- **Platform**: Linux + macOS + Windows at runtime — wherever the
-  `mxm4-hapticd` daemon runs (the daemon reaches the device via `hidapi`: Linux
-  hidraw, macOS IOKit, Windows native HID). The library itself only needs
-  `node:net` + the endpoint (a runtime dir on Unix, the named pipe on Windows),
-  but there is nothing for it to talk to unless the daemon is running. (The
-  daemon is not bootstrap-built on Windows — see the crate README; build/run it
-  manually there.)
+- **Platform**: Linux + macOS at runtime — wherever the `mxm4-hapticd` daemon
+  runs (the daemon reaches the device via `hidapi`: Linux hidraw, macOS IOKit).
+  The library itself only needs `node:net` + the socket endpoint in the
+  runtime dir, but there is nothing for it to talk to unless the daemon is
+  running.
 - **Dependencies**: zero runtime dependencies (`node:net` + `process.env`).
 - **Not published.** `private: true`; the `@h82/` scope is a naming namespace,
   not a registry target. Not installed by the dotfiles bootstrap.

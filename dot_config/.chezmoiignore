@@ -7,9 +7,3 @@ fcitx5
 systemd
 wireplumber
 {{- end }}
-
-# tmux and zsh cannot be used from Windows
-{{- if eq .chezmoi.os "windows" }}
-tmux
-zsh
-{{- end }}

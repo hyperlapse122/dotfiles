@@ -48,7 +48,7 @@
 {{-       if not (hasKey $delivery.architectures $arch) -}}{{- fail (printf "packages.yaml: capability %s.%s is missing architecture %s" $capability.id $platform $arch) -}}{{- end -}}
 {{-       $state := index $delivery.architectures $arch -}}
 {{-       if not (has $state (list "native" "emulated" "manual" "notApplicable" "unresolved")) -}}{{- fail (printf "packages.yaml: capability %s.%s.%s has unsupported architecture state %q" $capability.id $platform $arch $state) -}}{{- end -}}
-{{-       if eq $state "emulated" -}}{{- fail "packages.yaml: emulation is no longer supported (Windows dropped)" -}}{{- end -}}
+{{-       if eq $state "emulated" -}}{{- fail "packages.yaml: emulation is no longer supported" -}}{{- end -}}
 {{-       if and (hasKey $capability "bootstrap") $capability.bootstrap (ne $state "native") (ne $state "emulated") -}}{{- fail (printf "packages.yaml: bootstrap capability %s unavailable on %s.%s" $capability.id $platform $arch) -}}{{- end -}}
 {{-       if and (hasKey $capability "gateClosing") (eq $capability.gateClosing "g0") (eq $state "unresolved") -}}{{- $g0Unresolved = add1 $g0Unresolved -}}{{- end -}}
 {{-       if and (eq $platform "ubuntu") (eq $state "unresolved") -}}{{- $g1Unresolved = add1 $g1Unresolved -}}{{- end -}}

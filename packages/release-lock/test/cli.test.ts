@@ -217,12 +217,12 @@ describe("runCli", () => {
     expect(Object.keys(written.releases.tools)).toEqual(["good"]);
   });
 
-  test("covers AE1: a stubbed fetch failure prunes that tool's stale windows-amd64 key while its other artifacts and the succeeding tool's fresh data survive", async () => {
+  test("covers AE1: a stubbed fetch failure prunes that tool's stale freebsd-amd64 key while its other artifacts and the succeeding tool's fresh data survive", async () => {
     const path = join(await scratch(), "releases.json");
     const flakyArtifacts: Record<string, LockedArtifact> = {
       "linux-amd64": { url: "https://example.com/flaky/linux-amd64", sha256: "a".repeat(64) },
       "darwin-arm64": { url: "https://example.com/flaky/darwin-arm64", sha256: "b".repeat(64) },
-      "windows-amd64": { url: "https://example.com/flaky/windows-amd64", sha256: "c".repeat(64) },
+      "freebsd-amd64": { url: "https://example.com/flaky/freebsd-amd64", sha256: "c".repeat(64) },
     };
     const committed: ReleaseLock = {
       releases: {

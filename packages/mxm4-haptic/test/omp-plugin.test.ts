@@ -113,7 +113,7 @@ describe("OMP haptic plugin", () => {
   });
 });
 
-describe.skipIf(process.platform === "win32")("OMP plugin bundle isolation", () => {
+describe("OMP plugin bundle isolation", () => {
   test("imports without workspace dependencies and sends through the bundled client", async () => {
     const bundle = path.resolve("dist/omp-plugin/index.js");
     assert.ok(fs.existsSync(bundle), "run the configured build task before the package tests");
