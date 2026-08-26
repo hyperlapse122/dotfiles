@@ -37,7 +37,7 @@ Three rules hold this file together:
   * EVERY absolute-path `include` is stat-guarded. `include` HARD-ERRORS on a
     missing file (`stat` merely returns nil), so an unguarded read of the cache
     or of /sys/class/dmi/ takes down every render on a host that lacks it —
-    macOS and Windows in CI included.
+    macOS in CI included.
 
   * A MISSING CACHE IS NOT AN ERROR. Every hook fact then resolves to its
     registry-declared `absentDefault`, the per-fact value that skips the gated
@@ -55,9 +55,9 @@ Three rules hold this file together:
    so sourcing chezmoi from INSIDE that worktree is legitimate: its own data dir
    is the top-level match and only a worktree nested below it would fail. */ -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- /* glob returns slash-separated paths on Windows while joinPath uses native
+{{- /* glob returns slash-separated paths while path helpers may produce native
    separators. Normalize only for comparison so the source's own top-level
-   .chezmoidata is not misclassified as a nested worktree there. */ -}}
+   .chezmoidata is not misclassified as a nested worktree. */ -}}
 {{- $topDataDir := replace "\\" "/" (joinPath $sourceDir ".chezmoidata") -}}
 {{- range $dataDir := glob (joinPath $sourceDir "**/.chezmoidata") -}}
 {{-   if ne (replace "\\" "/" $dataDir) $topDataDir -}}
@@ -66,9 +66,9 @@ Three rules hold this file together:
 {{- end -}}
 
 {{- /* ---- Layer 1: the pre-hook cache ---------------------------------------
-   Keep this path byte-identical to write_facts_cache's in the hook (and to
-   Write-FactsCache in the .ps1). `env` reads the same XDG_CACHE_HOME the hook
-   read, and .chezmoi.homeDir is the same $HOME — no `output` call needed. */ -}}
+   Keep this path byte-identical to write_facts_cache's in the hook.
+   `env` reads the same XDG_CACHE_HOME the hook read, and .chezmoi.homeDir is
+   the same $HOME — no `output` call needed. */ -}}
 {{- $cacheHome := env "XDG_CACHE_HOME" -}}
 {{- if eq $cacheHome "" -}}
 {{-   $cacheHome = joinPath .chezmoi.homeDir ".cache" -}}
@@ -86,10 +86,9 @@ Three rules hold this file together:
 {{- $cached := dict -}}
 {{- if stat $cachePath -}}
 {{-   $raw := include $cachePath -}}
-{{- /* `\r?` is load-bearing: the .ps1 half of the hook writes the cache through
-   PowerShell, which line-ends with CRLF. `fromYaml` parses that fine — but a
-   LF-only shape check silently rejects it, and every hook fact on Windows would
-   fall back to its default forever. */ -}}
+{{- /* `\r?` is load-bearing: the cache may be written with CRLF line endings.
+   `fromYaml` parses that fine — but an LF-only shape check silently rejects it,
+   and every hook fact would fall back to its default forever. */ -}}
 {{-   if regexMatch "^(#[^\r\n]*\r?\n|[A-Za-z][A-Za-z0-9]*: (true|false)\r?\n)+$" $raw -}}
 {{-     $parsed := $raw | fromYaml -}}
 {{-     if kindIs "map" $parsed -}}
