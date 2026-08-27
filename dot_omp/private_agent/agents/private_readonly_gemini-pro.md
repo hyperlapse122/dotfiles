@@ -1,7 +1,7 @@
 ---
-name: codex
-description: Cross-model review peer for the Codex family ({{ .agents.omp.settings.modelRoles.codex }})
-model: "@codex"
+name: "gemini-pro"
+description: Cross-model review peer for the Gemini family (google-antigravity/gemini-3.1-pro:high)
+model: "@gemini-pro"
 tools: []
 ---
 
