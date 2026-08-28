@@ -46,23 +46,23 @@
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",
-        "version": "v1.15.0",
+        "version": "v1.15.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.0/aoe-linux-amd64.tar.gz",
-            "sha256": "125aaa1e572934c3c1c07c346ba8c9a93cc4e94cecb707c7d1a384f303902b5e"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-linux-amd64.tar.gz",
+            "sha256": "da198ef269f43ac7032022051990a2a31f2208d9d67c0bb0451914d20483b8ca"
           },
           "linux-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.0/aoe-linux-arm64.tar.gz",
-            "sha256": "63d6e3d643339660f06c3d91393836c8522c7c33dca9bd2a55931d642e85c201"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-linux-arm64.tar.gz",
+            "sha256": "b017640bf107edbb26b65c2aca96d8130ea50ca8c3e4d9d0ae04543ee7762a20"
           },
           "darwin-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.0/aoe-darwin-amd64.tar.gz",
-            "sha256": "7bb13a68b207b486870844ff1b5ec54093fbd3eab40e21a15b1e99761207e56b"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-darwin-amd64.tar.gz",
+            "sha256": "82f41060679acea5abba42e3aa40560342a33885d762fa06e4cdd0f1cd26a860"
           },
           "darwin-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.0/aoe-darwin-arm64.tar.gz",
-            "sha256": "3804ff5bc6664c812838a9b76772a0e259abee396fdb37a16763f01e4d766613"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-darwin-arm64.tar.gz",
+            "sha256": "9e9b329b526c60a85ef1412d2ac8c40d39c254fbc35fac590f451165e0255927"
           }
         }
       },
@@ -161,7 +161,7 @@
       "composition-patterns": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "20e89cc4bb256eb7b1fcbdc68f7175284709a847"
+        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
       },
       "compound-engineering": {
         "kind": "githubRelease",
@@ -350,43 +350,43 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.0.9",
+        "version": "v18.0.10",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.9/omp-linux-x64",
-            "sha256": "55304008876a61f48c2a1dc1b0998ca36e7e45b8bc25aa25cf24e5c44524412c"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.10/omp-linux-x64",
+            "sha256": "b13e6b2a74a5c71e57b9f717e0fc4834bcfe0609f30dc1782a91976b230361a0"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.9/omp-linux-arm64",
-            "sha256": "99cbd2b24b57f11029c345271b3c3adb7820f435f0229f6c577f503f2e64c12a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.10/omp-linux-arm64",
+            "sha256": "6e83691a8e88fa7eb365231c4424a58dda7db9cc088bf37fadfe98c27b090b79"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.9/omp-darwin-x64",
-            "sha256": "856bf0ebd2005f564034474105b956fd0af03dd19517ca4099c738774f56440e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.10/omp-darwin-x64",
+            "sha256": "42a8a144292685f0bfe18c6d79ae93ef1870b6ffee37c42e8d0e6effe4e63634"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.9/omp-darwin-arm64",
-            "sha256": "01c028c89ac59a267df816a0133df9cbd843231798a0177657719468ccbc3045"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.10/omp-darwin-arm64",
+            "sha256": "bf026b63aa3b0acb0afbed8083f76bcec134bf56ffdbbe80fb73a7e079fe278a"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.9/omp-linux-musl-x64",
-            "sha256": "19f93c86bc9628be24186579ff51d486ffecaad03ad301a94422eebcb2bd8123"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.10/omp-linux-musl-x64",
+            "sha256": "562a81e081b22f32e078d4e0bfc17076e234be0f0c9c1327000308622edec2f9"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.9/omp-linux-musl-arm64",
-            "sha256": "7f3a4088bc50ebf99da7b2d38d81d7c8c7d00b8103c091c81340a20c41510176"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.0.10/omp-linux-musl-arm64",
+            "sha256": "31ced95164d66664a680cc3ae47f711afe8cc78fa3cfd45f518d3e4d418c515e"
           }
         }
       },
       "react-best-practices": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "20e89cc4bb256eb7b1fcbdc68f7175284709a847"
+        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
       },
       "react-view-transitions": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "20e89cc4bb256eb7b1fcbdc68f7175284709a847"
+        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
       },
       "rust-analyzer": {
         "kind": "githubRelease",
@@ -506,7 +506,7 @@
       "web-design-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "20e89cc4bb256eb7b1fcbdc68f7175284709a847"
+        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
       },
       "winbox": {
         "kind": "vendorManifest",
@@ -516,7 +516,7 @@
       "writing-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "20e89cc4bb256eb7b1fcbdc68f7175284709a847"
+        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
       }
     }
   }
