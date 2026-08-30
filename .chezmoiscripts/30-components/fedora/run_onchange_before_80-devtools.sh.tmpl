@@ -1,0 +1,78 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-devtools-fedora.sh" -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+dev_groups=(
+  development-tools
+  c-development
+)
+
+dev_packages=(
+  # Build tooling and language dependencies
+  clang21-libs
+  dbus-devel
+  dkms
+  expect
+  gtk3-devel
+  java-latest-openjdk-devel
+  kernel-devel
+  kernel-devel-matched
+  kernel-headers
+  libappindicator-gtk3-devel
+  libffi-devel
+  librsvg2-devel
+  libxdo-devel
+  libyaml-devel
+  mesa-libGLU
+  mingw64-gcc
+  mise
+  webkit2gtk4.1-devel
+
+  # CLI utilities and system monitoring
+  btop
+  chezmoi
+  fd-find
+  libsecret
+  lm_sensors
+  nvtop
+  systemd-container
+  yp-tools
+
+  # Smartcard / code signing
+  opensc
+  osslsigncode
+  pcsc-lite
+  pcsc-lite-ccid
+  pcsc-tools
+  pkcs11-provider
+)
+
+install_devtools() {
+  local -a missing=()
+  local pkg
+  for pkg in "${dev_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+
+  # Ensure COPR for mise is enabled if missing
+  if ! rpm -q mise >/dev/null 2>&1; then
+    "${DNF[@]}" copr enable jdxcode/mise -y || true
+  fi
+
+  # Install group packages
+  "${DNF[@]}" group install -y "${dev_groups[@]}" 2>/dev/null || true
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    "${DNF[@]}" install -y "${missing[@]}" || true
+  fi
+}
+
+install_devtools
+
+{{ end -}}

@@ -1,0 +1,37 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-desktop-ime-fedora.sh" -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+desktop_ime_packages=(
+  fcitx5
+  fcitx5-hangul
+  wl-clipboard
+  xdg-terminal-exec
+)
+
+if [[ "${FACT_DESKTOP:-none}" == "kde" ]]; then
+  desktop_ime_packages+=(pinentry-qt)
+elif [[ "${FACT_DESKTOP:-none}" == "gnome" ]]; then
+  desktop_ime_packages+=(pinentry-gnome3)
+fi
+
+install_desktop_ime_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${desktop_ime_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    "${DNF[@]}" install -y "${missing[@]}"
+  fi
+}
+
+install_desktop_ime_packages
+
+{{ end -}}

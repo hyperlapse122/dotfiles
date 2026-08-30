@@ -5,3 +5,6 @@ features:
   tailscale: true
   flatpaks: true
   dotnet: true
+  desktopIme: true
+  apps: true
+  devtools: true

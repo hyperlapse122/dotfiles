@@ -1,0 +1,119 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-apps-fedora.sh" -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+app_packages=(
+  1password
+  1password-cli
+  codium
+  google-chrome-stable
+  Cider
+  azure-cli
+  kdenlive
+  obs-studio
+  pipewire-codec-aptx
+)
+
+if [[ "${FACT_VIRT:-0}" -eq 0 ]]; then
+  app_packages+=(steam)
+fi
+
+app_keys=(
+  https://downloads.1password.com/linux/keys/1password.asc
+  https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+  https://dl.google.com/linux/linux_signing_key.pub
+  https://repo.cider.sh/RPM-GPG-KEY
+  https://packages.microsoft.com/keys/microsoft-2025.asc
+)
+
+setup_app_repos() {
+  for key in "${app_keys[@]}"; do
+    "${SUDO[@]}" rpm --import "${key}" || true
+  done
+
+  "${SUDO[@]}" tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
+[1password]
+name=1Password Stable Channel
+baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey="https://downloads.1password.com/linux/keys/1password.asc"
+EOF
+
+  "${SUDO[@]}" tee /etc/yum.repos.d/vscodium.repo >/dev/null <<'EOF'
+[gitlab.com_paulcarroty_vscodium_repo]
+name=gitlab.com_paulcarroty_vscodium_repo
+baseurl=https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+metadata_expire=1h
+EOF
+
+  "${SUDO[@]}" tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'
+[google-chrome]
+name=google-chrome
+baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+EOF
+
+  "${SUDO[@]}" tee /etc/yum.repos.d/cider.repo >/dev/null <<'EOF'
+[cidercollective]
+name=Cider Collective Repository
+baseurl=https://repo.cider.sh/rpm/RPMS
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.cider.sh/RPM-GPG-KEY
+EOF
+
+  "${SUDO[@]}" tee /etc/yum.repos.d/azure-cli.repo >/dev/null <<'EOF'
+[packages-microsoft-com-prod]
+name=packages-microsoft-com-prod
+baseurl=https://packages.microsoft.com/rhel/10/prod/
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft-2025.asc
+EOF
+
+  "${DNF[@]}" makecache -y
+}
+
+install_direct_rpms() {
+  local host_arch
+  host_arch="$(uname -m)"
+  if ! rpm -q teamviewer >/dev/null 2>&1; then
+    "${SUDO[@]}" rpm --import https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc || true
+    "${SUDO[@]}" rpm --import https://linux.teamviewer.com/pubkey/currentkey.asc || true
+    case "${host_arch}" in
+      x86_64) "${DNF[@]}" install -y https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm || true ;;
+      aarch64) "${DNF[@]}" install -y https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm || true ;;
+    esac
+  fi
+}
+
+install_app_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${app_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    setup_app_repos
+    "${DNF[@]}" install -y "${missing[@]}" || true
+  fi
+  install_direct_rpms
+}
+
+install_app_packages
+
+{{ end -}}

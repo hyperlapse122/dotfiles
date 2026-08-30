@@ -58,6 +58,18 @@
 {{- if not (default dict $features).dotnet }}
 .chezmoiscripts/30-components/*/50-dotnet.sh
 {{- end }}
+{{- if or (ne .chezmoi.os "linux") (eq $f.desktop "none") }}
+.chezmoiscripts/30-components/*/60-desktop-ime.sh
+{{- end }}
+{{- if not (default dict $features).desktopIme }}
+.chezmoiscripts/30-components/*/60-desktop-ime.sh
+{{- end }}
+{{- if not (default dict $features).apps }}
+.chezmoiscripts/30-components/*/70-apps.sh
+{{- end }}
+{{- if not (default dict $features).devtools }}
+.chezmoiscripts/30-components/*/80-devtools.sh
+{{- end }}
 
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
