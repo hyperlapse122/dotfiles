@@ -118,11 +118,11 @@ agents:
       theme.dark: titanium
       theme.light: light
       symbolPreset: nerd
-      statusLine.preset: default
+      statusLine.preset: full
       statusLine.separator: powerline-thin
       terminal.showProgress: false
-      tui.textSizing: true
-      tui.codexResetFireworks: true
+      tui.textSizing: false
+      tui.codexResetFireworks: false
       tui.resizeScrollback: rebuild
       display.shimmer: 'classic'
       display.showTokenUsage: true
@@ -150,17 +150,17 @@ agents:
       - openai-codex
       modelRoles:
         advisor: "@worker"
-        claude: anthropic/claude-opus-5:xhigh
+        claude: google-antigravity/gemini-3.7-flash:high
         commit: "@worker"
-        default: anthropic/claude-sonnet-5:max
-        fable: anthropic/claude-fable-5:max
+        default: google-antigravity/gemini-3.7-flash:high
+        fable: google-antigravity/gemini-3.7-flash:high
         gemini: google-antigravity/gemini-3.7-flash:high
-        gemini-pro: google-antigravity/gemini-3.1-pro:high
+        gemini-pro: google-antigravity/gemini-3.7-flash:high
         plan: "@fable"
         skim: google-antigravity/gemini-3.7-flash:low
-        slow: anthropic/claude-opus-5:max
+        slow: google-antigravity/gemini-3.7-flash:high
         smol: google-antigravity/gemini-3.7-flash:high
-        reviewer: anthropic/claude-sonnet-5:max
+        reviewer: google-antigravity/gemini-3.7-flash:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
         worker: google-antigravity/gemini-3.7-flash:high
       cycleOrder: [ "smol", "default", "slow" ]
@@ -175,7 +175,6 @@ agents:
       skills.enableCodexUser: false
       skills.enableClaudeUser: false
       skills.enableClaudeProject: false
-      # Assertion is per declared path: removing these lines would leave the live backend at mnemopi.
       memory.backend: off
       autolearn.enabled: true
       advisor.enabled: false
