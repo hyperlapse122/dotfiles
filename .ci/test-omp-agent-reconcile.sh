@@ -376,7 +376,7 @@ jq -e '
     "anthropic/claude-opus-5",
     "anthropic/claude-sonnet-5",
     "google-antigravity/gemini-3.*",
-    "openai-codex/gpt-5.6-sol",
+    "openai-codex",
     "kimi-code/*",
     "openrouter/stealth/ox-alpha"
   ]
