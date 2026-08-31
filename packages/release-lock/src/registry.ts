@@ -204,6 +204,13 @@ export const REGISTRY: Registry = {
     source: "https://releases.1password.com/linux/stable/index.xml",
   },
 
+  android: {
+    kind: "vendorManifest",
+    vendor: "android",
+    source: "https://dl.google.com/android/cli/latest",
+    emulatedPlatforms: ["linux-arm64"],
+  },
+
   flutter: {
     kind: "vendorManifest",
     vendor: "flutter",
