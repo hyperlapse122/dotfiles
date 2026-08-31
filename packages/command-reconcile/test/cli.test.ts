@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,8 +53,8 @@ describe("command-reconcile cli", () => {
 
     stdoutData = [];
     stderrData = [];
-    originalStdoutWrite = process.stdout.write;
-    originalStderrWrite = process.stderr.write;
+    originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    originalStderrWrite = process.stderr.write.bind(process.stderr);
 
     process.stdout.write = ((chunk: string | Uint8Array) => {
       stdoutData.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
