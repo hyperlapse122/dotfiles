@@ -15,7 +15,7 @@ prepare_case() {
   source_dir="$case_dir/source"
   home_dir="$case_dir/home"
   fake_bin="$case_dir/bin"
-  mkdir -p "$source_dir/packages/figma-auth/dist" "$home_dir/.local/bin" "$fake_bin"
+  mkdir -p "$source_dir/packages/figma-auth/dist" "$home_dir/.local/share/chezmoi-commands/incomplete/figma-auth" "$fake_bin"
   cat >"$source_dir/packages/figma-auth/dist/figma-auth" <<'EOF'
 #!/usr/bin/env bash
 exit 0
@@ -32,12 +32,12 @@ EOF
   chmod 0755 "$fake_bin/mise"
   sed "s|^SRC=.*$|SRC=\"$source_dir\"|" "$rendered" >"$case_dir/build.sh"
   chmod 0755 "$case_dir/build.sh"
-  target="$home_dir/.local/bin/figma-auth"
+  target="$home_dir/.local/share/chezmoi-commands/incomplete/figma-auth/figma-auth"
 }
 
 assert_no_success_marker() {
   local output=$1
-  if grep -E 'Recorded as done|nothing to do|installed ~/.local/bin/figma-auth' "$output" >/dev/null; then
+  if grep -E 'Recorded as done|nothing to do|staged figma-auth' "$output" >/dev/null; then
     printf 'fatal path emitted a skip/success marker: %s\n' "$output" >&2
     return 1
   fi
@@ -120,7 +120,7 @@ status=$?
 set -e
 [[ $status -eq 143 ]]
 [[ $(cat "$target") == original-executable ]]
-if compgen -G "$home_dir/.local/bin/.figma-auth.*" >/dev/null; then
+if compgen -G "$home_dir/.local/share/chezmoi-commands/incomplete/figma-auth/.figma-auth.*" >/dev/null; then
   printf 'TERM left a promotion temporary file behind\n' >&2
   exit 1
 fi

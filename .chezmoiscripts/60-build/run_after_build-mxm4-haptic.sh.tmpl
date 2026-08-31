@@ -361,12 +361,30 @@ if [[ "$plugin_needed" -eq 1 ]]; then
   write_stamp "$PLUGIN_STAMP" "$PLUGIN_FINGERPRINT"
 fi
 
-if [[ "$daemon_needed" -eq 1 ]]; then
-  atomic_install "$STAGE/rust-target/release/mxm4-hapticd" "$DAEMON_DEST" 0755
-  atomic_install "$STAGE/rust-target/release/mxm4-haptic" "$BIN_DIR/mxm4-haptic" 0755
-fi
-if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
-  atomic_install "$STAGE/rust-target/release/mxm4-haptic-notify" "$BIN_DIR/mxm4-haptic-notify" 0755
+if [[ "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  HAPTIC_STAGING="$HOME/.local/share/chezmoi-commands/incomplete/mxm4-haptic"
+  mkdir -p "$HAPTIC_STAGING"
+  if [[ "$daemon_needed" -eq 1 ]]; then
+    atomic_install "$STAGE/rust-target/release/mxm4-hapticd" "$HAPTIC_STAGING/mxm4-hapticd" 0755
+    atomic_install "$STAGE/rust-target/release/mxm4-haptic" "$HAPTIC_STAGING/mxm4-haptic" 0755
+  fi
+  if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
+    atomic_install "$STAGE/rust-target/release/mxm4-haptic-notify" "$HAPTIC_STAGING/mxm4-haptic-notify" 0755
+  fi
+  RECONCILE_BIN="$HOME/.local/libexec/command-reconcile"
+  if [[ -x "$RECONCILE_BIN" ]]; then
+    MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | quote }}
+    "$RECONCILE_BIN" activate-unit --manifest "$MANIFEST_JSON" --unit mxm4-haptic ||
+      fail "activation: scoped activation for mxm4-haptic failed"
+  else
+    if [[ "$daemon_needed" -eq 1 ]]; then
+      atomic_install "$STAGE/rust-target/release/mxm4-hapticd" "$DAEMON_DEST" 0755
+      atomic_install "$STAGE/rust-target/release/mxm4-haptic" "$BIN_DIR/mxm4-haptic" 0755
+    fi
+    if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
+      atomic_install "$STAGE/rust-target/release/mxm4-haptic-notify" "$BIN_DIR/mxm4-haptic-notify" 0755
+    fi
+  fi
 fi
 
 # Startup-definition validation sits here, after the install and before every

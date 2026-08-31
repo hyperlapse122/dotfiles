@@ -11,7 +11,7 @@
 
 [docker-credential-secretservice]
 type = "file"
-targetPath = '.local/bin/docker-credential-secretservice'
+targetPath = '.local/share/chezmoi-commands/incomplete/docker-credential-secretservice/docker-credential-secretservice'
 url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
 
@@ -19,7 +19,7 @@ executable = true
 
 [docker-credential-osxkeychain]
 type = "file"
-targetPath = '.local/bin/docker-credential-osxkeychain'
+targetPath = '.local/share/chezmoi-commands/incomplete/docker-credential-osxkeychain/docker-credential-osxkeychain'
 url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
 
@@ -29,7 +29,7 @@ executable = true
 
 [wakatime-cli]
 type = "archive-file"
-targetPath = '.local/bin/wakatime-cli'
+targetPath = '.local/share/chezmoi-commands/incomplete/wakatime-cli/wakatime-cli'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wakatime-cli" "field" "url" "platform" "auto") }}'
 executable = true
 path = '{{ printf "wakatime-cli-%s-%s" .chezmoi.os .chezmoi.arch }}'

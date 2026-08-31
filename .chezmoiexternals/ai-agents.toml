@@ -23,7 +23,7 @@
 
 [agent-browser]
 type = "file"
-targetPath = '.local/bin/agent-browser'
+targetPath = '.local/share/chezmoi-commands/incomplete/agent-browser/agent-browser'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
 executable = true
 
@@ -38,7 +38,7 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent
 
 [omp]
 type = "file"
-targetPath = '.local/bin/omp'
+targetPath = '.local/share/chezmoi-commands/incomplete/omp/omp'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
 executable = true
 
@@ -63,7 +63,7 @@ stripComponents = 1
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "url" "platform" "auto") | quote }}
 executable = true
-targetPath = ".local/bin/aoe"
+targetPath = '.local/share/chezmoi-commands/incomplete/aoe/aoe'
 path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
 
 [aoe.checksum]

@@ -23,6 +23,7 @@ the repo's TypeScript/JavaScript library packages.
 
 | Path | Package | Purpose |
 |---|---|---|
+| [`command-reconcile/`](command-reconcile/) | `@h82/command-reconcile` | Serialized versioned command reconciler and safe pruner. |
 | [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth omp` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes omp's private SQLite credential row; apply only compiles and installs it. |
 | [`settings-reconcile/`](settings-reconcile/) | `@h82/settings-reconcile` | Apply helper that overlays declared TOML settings leaves. It has no plugin contract. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |

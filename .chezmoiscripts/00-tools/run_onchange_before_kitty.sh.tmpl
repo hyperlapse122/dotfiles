@@ -43,7 +43,6 @@ URL={{ $url | quote }}
 SHA256={{ $sha256 | quote }}
 
 INSTALL_DIR="$HOME/.local/share/kitty"
-BIN_DIR="$HOME/.local/bin"
 dest="$INSTALL_DIR/versions/$VERSION"
 
 fail() {
@@ -55,16 +54,7 @@ for tool in curl tar sha256sum xz; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is required to provision kitty"
 done
 
-mkdir -p "$INSTALL_DIR/versions" "$BIN_DIR" || fail "cannot create $INSTALL_DIR"
-
-# Remember the live tree BEFORE the flip so the prune below can keep it for one
-# more generation: a running kitty lazily loads fonts and python modules out of
-# its own tree, so pruning the version it is executing from would break the
-# session the operator is applying from.
-previous=""
-if [ -L "$INSTALL_DIR/current" ]; then
-  previous=$(readlink -f "$INSTALL_DIR/current" 2>/dev/null || printf '')
-fi
+mkdir -p "$INSTALL_DIR/versions" || fail "cannot create $INSTALL_DIR"
 
 if [ ! -x "$dest/bin/kitty" ]; then
   scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}"
@@ -94,24 +84,6 @@ fi
 
 [ -x "$dest/bin/kitty" ] || fail "no kitty executable at $dest/bin/kitty"
 
-ln -sfn "$dest" "$INSTALL_DIR/current"
-ln -sf "$INSTALL_DIR/current/bin/kitty" "$BIN_DIR/kitty"
-ln -sf "$INSTALL_DIR/current/bin/kitten" "$BIN_DIR/kitten"
-
-# Prune superseded versions, keeping the just-installed tree and the one that
-# was live before this run. `current` lives beside versions/ rather than inside
-# it, but test -d follows symlinks, so links are skipped defensively.
-if [ -d "$INSTALL_DIR/versions" ]; then
-  for d in "$INSTALL_DIR/versions"/*; do
-    if [ -L "$d" ] || [ ! -d "$d" ]; then
-      continue
-    fi
-    if [ "$d" = "$dest" ] || [ "$d" = "$previous" ]; then
-      continue
-    fi
-    rm -rf -- "$d"
-  done
-fi
 
 printf 'kitty: provisioned %s at %s\n' "$VERSION" "$dest"
 
