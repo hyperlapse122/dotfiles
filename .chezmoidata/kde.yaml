@@ -123,6 +123,20 @@
 #   running. Always persists it across sessions. We set Never so each rectangular
 #   capture starts fresh.
 #   Applies on next Spectacle launch.
+#
+# kwinrulesrc [General] / [1password-auth-above] — 1Password authentication dialog keep above
+#   Configures a KWin window rule keeping the 1Password authentication/unlock dialog
+#   always on top:
+#     [General] rules = 1password-auth-above
+#     [General] count = 1
+#     [1password-auth-above] Description  = 1Password Auth Dialog Always on Top
+#     [1password-auth-above] wmclass      = 1password
+#     [1password-auth-above] wmclassmatch = 1 (exact match)
+#     [1password-auth-above] title        = 1Password
+#     [1password-auth-above] titlematch   = 1 (exact match)
+#     [1password-auth-above] above        = true
+#     [1password-auth-above] aboverule    = 3 (Force)
+#   Applies after KWin reconfigures or re-login.
 kde:
   settings:
     # kdeglobals: Breeze Global Theme, automatic day/night
@@ -180,6 +194,17 @@ kde:
     #     is honored by Plasma 6.2+.
     - { file: kdeglobals, group: General, key: TerminalApplication, type: string, value: kitty }
 
+
+    # kwinrulesrc: 1Password auth dialog always on top
+    - { file: kwinrulesrc, group: General, key: rules, type: string, value: 1password-auth-above }
+    - { file: kwinrulesrc, group: General, key: count, type: int, value: 1 }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: Description, type: string, value: 1Password Auth Dialog Always on Top }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: wmclass, type: string, value: 1password }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: wmclassmatch, type: int, value: 1 }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: title, type: string, value: 1Password }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: titlematch, type: int, value: 1 }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: above, type: bool, value: true }
+    - { file: kwinrulesrc, group: 1password-auth-above, key: aboverule, type: int, value: 3 }
 # KDE Plasma 6 desktop tunables, rendered into the .chezmoiscripts/50-linux-kde/
 # config scripts (the KDE target: Fedora KDE Spin).
 #
