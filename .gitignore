@@ -1,7 +1,9 @@
 ### Vendored monorepo build artifacts (crates/ + packages/) ###
-# Rust build artifacts
+# Rust and JS build artifacts
 target/
-
+dist/
+dist
+node_modules/
 # packages/ Bun workspace (workspace root, node-modules layout).
 # Scoped to packages/ so the rest of the dotfiles repo is unaffected. The
 # single workspace-root packages/bun.lock is intentionally TRACKED (lockfile
@@ -18,6 +20,9 @@ packages/*/.turbo/
 
 ### claude ###
 .claude
+
+### opencode ###
+.opencode
 
 ### agents ###
 # dotagents auto-generates project state directly under .agents/; that stays
