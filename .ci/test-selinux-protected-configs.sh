@@ -21,7 +21,9 @@ for token in \
   "(typeattributeset file_type (chezmoi_exec_t))" \
   "(typeattributeset exec_type (chezmoi_exec_t))" \
   "(typetransition unconfined_t chezmoi_exec_t process chezmoi_t)" \
+  "(typeattributeset domain (chezmoi_t))" \
   "(typeattributeset unconfined_domain_type (chezmoi_t))" \
+  "(typeattributeset files_unconfined_type (chezmoi_t))" \
   "(allow chezmoi_t protected_agent_config_t" \
   "(allow unconfined_t protected_agent_config_t" \
   "(filecon \"HOME_DIR/\\.codex/config\\.toml\"" \
@@ -62,7 +64,40 @@ if command -v secilc >/dev/null 2>&1; then
 (type user_devpts_t)
 (typeattribute file_type)
 (typeattribute exec_type)
+(typeattribute domain)
+(typeattribute application_domain_type)
 (typeattribute unconfined_domain_type)
+(typeattribute can_change_object_identity)
+(typeattribute can_load_kernmodule)
+(typeattribute can_load_policy)
+(typeattribute can_read_shadow_passwords)
+(typeattribute can_relabelto_binary_policy)
+(typeattribute can_relabelto_shadow_passwords)
+(typeattribute can_setbool)
+(typeattribute can_setenforce)
+(typeattribute can_setsecparam)
+(typeattribute can_write_shadow_passwords)
+(typeattribute corenet_unconfined_type)
+(typeattribute corenet_unlabeled_type)
+(typeattribute dbusd_unconfined)
+(typeattribute devices_unconfined_type)
+(typeattribute files_unconfined_type)
+(typeattribute filesystem_unconfined_type)
+(typeattribute initrc_transition_domain)
+(typeattribute kern_unconfined)
+(typeattribute kernel_system_state_reader)
+(typeattribute named_filetrans_domain)
+(typeattribute netlabel_peer_type)
+(typeattribute nsswitch_domain)
+(typeattribute process_uncond_exempt)
+(typeattribute selinux_unconfined_type)
+(typeattribute sepgsql_unconfined_type)
+(typeattribute storage_unconfined_type)
+(typeattribute syslog_client_type)
+(typeattribute userdom_filetrans_type)
+(typeattribute userdomain)
+(typeattribute x_domain)
+(typeattribute xserver_unconfined_type)
 (class file (create read write getattr setattr unlink rename open append lock map entrypoint execute))
 (class dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock))
 (class process (transition sigchld signull sigkill sigstop signal siginh fork getattr getsched setsched))
