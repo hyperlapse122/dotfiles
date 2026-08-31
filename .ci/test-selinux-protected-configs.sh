@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cil_file="$repo_root/system/linux/selinux/dotfiles_protected_agent_configs.cil"
-script_tmpl="$repo_root/.chezmoiscripts/30-linux/run_after_selinux-policies.sh.tmpl"
+script_tmpl="$repo_root/.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl"
 
 fail() { printf 'test-selinux-protected-configs: %s\n' "$*" >&2; exit 1; }
 

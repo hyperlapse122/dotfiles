@@ -1,0 +1,50 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+{{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if not $facts.container -}}
+#!/usr/bin/env bash
+#
+# Installs and updates declarative SELinux policy modules from
+# system/linux/selinux/**/*.cil using `sudo semodule -X 400 -i`, and
+# relabels protected dotfiles in $HOME with `restorecon`.
+#
+# GATED: Linux + Fedora + active SELinux enforcement (sestatus).
+# Non-Fedora, non-Linux, and container hosts skip harmlessly at render time.
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "selinux-policies" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/selinux/**")) }}
+
+if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v semodule >/dev/null 2>&1; then
+  SRC_DIR="{{ $sourceDir }}/system/linux/selinux"
+  if [[ -d "$SRC_DIR" ]]; then
+    shopt -s nullglob
+    cil_files=("$SRC_DIR"/*.cil)
+    shopt -u nullglob
+
+    if [[ ${#cil_files[@]} -gt 0 ]]; then
+      for cil in "${cil_files[@]}"; do
+        module_name="$(basename "$cil" .cil)"
+        printf 'selinux-policies: installing module %s...\n' "$module_name"
+        "${SUDO[@]}" semodule -X 400 -i "$cil"
+      done
+
+      if command -v restorecon >/dev/null 2>&1; then
+        printf 'selinux-policies: relabeling protected paths...\n'
+        restorecon -RFv \
+          "$HOME/.codex/config.toml" \
+          "$HOME/.claude.json"* \
+          "$HOME/.mcp.json" \
+          "$HOME/.claude/settings.json" \
+          "$HOME/.codex/skills" \
+          "$HOME/.local/bin/chezmoi" \
+          2>/dev/null || true
+      fi
+    fi
+  fi
+fi
+{{ end -}}
+{{ end -}}

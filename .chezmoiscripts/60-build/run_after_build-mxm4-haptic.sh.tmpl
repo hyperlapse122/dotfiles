@@ -221,7 +221,7 @@ mac_service_running() {
 plugin_needed=0
 daemon_needed=0
 notify_needed=0
-HAPTIC_STORE_DIR="$HOME/.local/share/chezmoi-commands/store/mxm4-haptic"
+HAPTIC_STORE_DIR="$HOME/.local/lib/commands/store/mxm4-haptic"
 haptic_store_present=1
 if [[ -x "$HOME/.local/libexec/command-reconcile" && ! -d "$HAPTIC_STORE_DIR" ]]; then
   haptic_store_present=0
@@ -467,5 +467,7 @@ if [[ "$PLATFORM" == linux && "$notify_needed" -eq 1 ]]; then
   write_stamp "$NOTIFY_STAMP" "$NOTIFY_FINGERPRINT"
 fi
 
-printf 'mxm4-haptic: converged plugin=%s daemon=%s notify=%s\n' \
-  "$plugin_needed" "$daemon_needed" "$notify_needed"
+if [[ "$plugin_needed" -eq 1 || "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
+  printf 'mxm4-haptic: converged plugin=%s daemon=%s notify=%s\n' \
+    "$plugin_needed" "$daemon_needed" "$notify_needed"
+fi

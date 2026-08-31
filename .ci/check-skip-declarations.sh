@@ -193,8 +193,8 @@ CONTINUATIONS = ('terminate-script-exit-0', 'terminate-script-exit-1',
 PLACEMENTS = ('new-header-block', 'existing-header-block')
 # The R5 boundary U5 froze and U6/U7 executed against. Asserted literally so a
 # rendered surface cannot be reconciled against a quietly shrunken oracle.
-FROZEN = {'classified_owners': 125, 'rendered_instances': 177,
-          'phase_local_instances': 120, 'shared_guard_instances': 57}
+FROZEN = {'classified_owners': 125, 'rendered_instances': 178,
+          'phase_local_instances': 120, 'shared_guard_instances': 58}
 
 RUN_NAME = re.compile(r'^run_(?:(once|onchange)_)?(?:(?:before|after)_)?.+')
 SKIP_DIRS = {'.git'}

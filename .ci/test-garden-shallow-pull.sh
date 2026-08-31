@@ -84,7 +84,7 @@ fi
 sed \
   -e "s|\$HOME/src|$scratch/src|g" \
   -e "s|\$HOME/.config/garden/garden.yaml|$scratch/garden.yaml|g" \
-  "$repo_root/dot_local/bin/executable_src-audit" > "$scratch/src-audit"
+  "$repo_root/dot_local/share/chezmoi-command-sources/executable_src-audit" > "$scratch/src-audit"
 chmod +x "$scratch/src-audit"
 HOME="$scratch" "$scratch/src-audit" >"$scratch/audit.out" 2>&1 || {
   printf 'test-garden-shallow-pull: src-audit failed on shallow checkout\n' >&2

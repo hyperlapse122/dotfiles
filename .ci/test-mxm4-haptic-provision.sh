@@ -234,11 +234,18 @@ prepare_case() {
   TEST_LOG="$case_dir/commands.log"
   TEST_STATE="$case_dir/state"
   export TEST_LOG TEST_STATE
+  clean_bin="$case_dir/clean_bin"
   mkdir -p "$test_home/.local/bin" \
     "$test_home/.local/share/omp-plugins/plugins/mxm4-haptic" \
     "$test_home/.config/systemd/user" "$test_home/Library/LaunchAgents" \
     "$test_source/packages/mxm4-haptic/src" "$test_source/crates/mxm4-haptic/src" \
-    "$runtime" "$TEST_STATE"
+    "$runtime" "$TEST_STATE" "$clean_bin"
+  for p in /usr/bin/* /bin/*; do
+    tool_name=${p##*/}
+    if [[ $tool_name != mise && $tool_name != vp && $tool_name != cargo && $tool_name != node && ! -e "$clean_bin/$tool_name" ]]; then
+      ln -s "$p" "$clean_bin/$tool_name" 2>/dev/null || true
+    fi
+  done
   printf '%s\n' '{"name":"@h82/omp-mxm4-haptic","type":"module","omp":{"extensions":["./dist/index.js"]}}' \
     >"$test_home/.local/share/omp-plugins/plugins/mxm4-haptic/package.json"
   # Managed unit shape, including the %h-relative ExecStart that only resolves
@@ -272,7 +279,7 @@ assert_stage_clean() {
 
 run_case() {
   local platform=$1 status
-  if env HOME="$test_home" PATH="$fake_bin:/usr/bin:/bin" \
+  if env HOME="$test_home" PATH="$fake_bin:$case_dir/clean_bin" \
     TEST_LOG="$TEST_LOG" TEST_STATE="$TEST_STATE" \
     MXM4_HAPTIC_SOURCE_ROOT="$test_source" MXM4_HAPTIC_PLATFORM="$platform" \
     MXM4_HAPTIC_READINESS_ATTEMPTS=1 XDG_RUNTIME_DIR="$runtime" TMPDIR="$runtime" \

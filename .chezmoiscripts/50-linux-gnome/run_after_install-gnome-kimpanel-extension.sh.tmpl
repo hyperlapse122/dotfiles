@@ -10,7 +10,6 @@ SIGNATURE={{ $signatureConfig | sha256sum | quote }}
 {{ includeTemplate "gnome-guard.sh.tmpl" (dict "ctx" . "name" "install-gnome-kimpanel-extension") -}}
 
 if stamp_matches; then
-  echo "install-gnome-kimpanel-extension: already reconciled desired configuration; leaving extension alone"
   exit 0
 fi
 clear_safe_stamp || fail "cannot clear stale success signature"

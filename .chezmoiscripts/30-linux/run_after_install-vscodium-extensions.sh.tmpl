@@ -11,7 +11,6 @@ EXTENSIONS=(
 SIGNATURE={{ $signatureConfig | sha256sum | quote }}
 {{ includeTemplate "extension-signature-stamp.sh.tmpl" (dict "name" "install-vscodium-extensions" "stamp" "vscodium-extensions") }}
 if stamp_matches; then
-  echo "install-vscodium-extensions: already reconciled desired configuration; leaving extensions alone"
   exit 0
 fi
 clear_safe_stamp || fail "cannot clear stale success signature"

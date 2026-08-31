@@ -67,9 +67,9 @@ runtime_input: false
 totals:
   classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 177
+  rendered_instances: 178
   phase_local_instances: 120
-  shared_guard_instances: 57
+  shared_guard_instances: 58
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -115,7 +115,7 @@ shared_guard_fanout:
   headless-guard: 10
   kde-guard: 9
   shared-host-guard: 20
-  sudo-skip-guard: 11
+  sudo-skip-guard: 12
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -283,6 +283,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-skip-guard/no-cached-sudo'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-skip-guard/no-cached-sudo'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-skip-guard/no-cached-sudo'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'
     template: '.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl'
