@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This file is the common user-scoped instruction core, composed per agent harness. Use RFC 2119 terms literally. The repository root `AGENTS.md` is the local supplement and may be stricter; read it before changing this checkout. Edit this source, never deployed instruction targets.
+This file is the common user-scoped instruction core deployed to `~/.omp/agent/AGENTS.md`. Use RFC 2119 terms literally. When working in any repository, the repository root `AGENTS.md` (or repo instruction file) is the local supplement and may add stricter project-specific rules. Edit this source template (`.chezmoitemplates/agents-instructions.tmpl` in dotfiles), never deployed instruction targets.
 
 ## Writing and language
 
@@ -23,10 +23,6 @@ During `lfg` pipeline execution, MUST run fully autonomously — MUST NOT pause 
 - MUST NOT run `git commit/push --no-verify`, force-push shared branches, destructive reset/clean, amend a pushed commit, interactive rebase, or other history rewrite without explicit same-turn approval. `rm -rf` outside ignored/build directories is forbidden; when genuinely required, confirm the exact command and what it destroys first.
 - MUST NOT modify git config or identity at any scope (`--system`, `--global`, `--worktree`, `--local`, environment identity overrides). A config-driven failure means STOP and ask; if the user explicitly directs a fix, confirm the exact command and run only that command.
 - Use rootless Podman, never install or assume Docker/dockerd, and never use `sudo podman` unless a root-owned resource requires it. The `docker` CLI is only the podman-docker shim; it forwards to Podman and does not start a daemon. Docker-API clients use the rootless socket at `$XDG_RUNTIME_DIR/podman/podman.sock`, with `DOCKER_HOST` already configured by `~/.config/environment.d/65-containers.conf`. Registry auth uses `podman login <registry>`; credentials belong in `~/.config/containers/auth.json`, never `~/.docker/config.json`.
-
-## Skip declarations
-
-Chezmoi script early exits declare one of three skip directions: `harmless` (this host will never satisfy the condition, so not acting is correct and final), `transient-tolerable` (an eligible host is missing a precondition and failing here cannot block later chezmoi phases), or `transient-blocking` (an eligible host is missing a precondition, but failing here would abort later phases, so it exits 0 behind a declared capability probe instead). Run `dotfiles-skips` to list outstanding `transient-tolerable` and `transient-blocking` skips without inspecting apply scrollback; it only reads recorded state, never probes capabilities or hosts and never mutates anything.
 
 ## Repository layout and garden ownership
 
@@ -70,7 +66,6 @@ Independent work units MUST be decomposed and dispatched together in one batch r
 A subagent inherits no conversation history, so every dispatch prompt MUST carry its target, the change it must make, its acceptance signal, its must-do and must-not-do constraints, the expected shape of the result it returns, and the context it cannot infer from the repository alone. The agent MUST NOT poll for a background result before that result is delivered, and MUST send a follow-up question to the subagent that produced the earlier result rather than opening a fresh dispatch for it.
 
 After three consecutive failed attempts at the same objective the agent MUST stop editing, restore the last known good state, record what was attempted, and consult the most capable review agent available with the full failure context; it asks the user only when that consultation does not resolve the failure. Work that the review agent was asked to decide stays blocked until that agent returns, and the agent MUST NOT deliver a final answer before collecting its result.
-{{- if eq .harness "omp" }}
 
 On omp the dispatch selects a seat, never a model: the seat's configured model and thinking level are its contract, and no per-dispatch thinking override is available. Route by work shape.
 
@@ -87,7 +82,6 @@ On omp the dispatch selects a seat, never a model: the seat's configured model a
 Those seven are the bundled dispatchable set, so an ordinary routing decision MUST name one of them. The compound-engineering role prompts under `skills/*/references/agents/` are prompts to seed into one of those seats, never agent types to dispatch by name.
 
 Three further seats exist for one purpose only. When a skill's procedure calls for a foreign agent CLI to obtain another model's judgment, the agent MUST dispatch the cross-model seat whose family differs from its own — `claude`, `codex`, or `gemini` — and MUST NOT invoke the CLI. Those seats hold no tools and review only what the dispatch prompt inlines. The full pass contract, including candidate order and how a return is folded in, lives in the `cross-model-review` skill; read it before running the pass. This substitution covers requests for judgment only. Write-delegation, such as `ce-work`'s implementation engine, is not covered, because a seat with no tools cannot author code.
-{{ end }}
 
 Prefer harness-provided tools over external CLI commands whenever available. When interacting with repositories, files, code intelligence, searches, or GitHub, the agent MUST prefer integrated harness tools (e.g. `read`, `edit`, `write`, `grep`, `glob`, `lsp`, `xd://github`, `xd://ast_grep`, `xd://ast_edit`, internal URL schemes `issue://`, `pr://`) over shell commands (`gh`, `curl`, `grep`, `rg`, `sed`, `awk`) shadowing those capabilities. External CLI commands remain the standard fallback when a harness tool is absent, lacks required functionality, or is explicitly exempted.
 
@@ -100,10 +94,9 @@ Dependencies, devDependencies, and optionalDependencies MUST be exact-pinned and
 If mise reports `mise ERROR … not trusted`, immediately run `mise trust <path-to-mise.toml>` (or trust in the root) and retry the original command. Pass GitLab paths to `glab` with slashes intact; prefer `:fullpath`.
 
 On a GitLab remote, the push that first opens a merge request MUST create it in that same `git push` via merge-request push options, not a separate `glab mr create`. The opening push MUST carry `-o merge_request.create -o merge_request.remove_source_branch -o merge_request.assign=<authenticated user> -o merge_request.title=...`; add `-o merge_request.target=<branch>` only when the target is not the project default branch, and `-o merge_request.description=...` (carrying any `Closes #N` / `Refs #N`) only when the body fits one push-option value. The opening push MUST NOT pass `-o merge_request.auto_merge`, because an auto-merge does not fire the MR description's `Closes #N` issue auto-closing; the CI-watch obligation above still applies, so once it reports terminal green the agent confirms the MR/PR is merge-ready (mergeable, no conflicts, required approvals satisfied) and merges it itself with an explicit command or tool — `glab mr merge <id>` on GitLab, `gh pr merge <id>` on GitHub — so the platform fires any `Closes #N` on the real merge to the default branch; if it is not merge-ready (conflicts, missing approvals, or no pipeline), the agent leaves the MR/PR open, never force-merges, and surfaces the blocker. `glab mr create` stays the fallback only when push options cannot express the need — a rich or multi-line body, or any update to an already-open MR; later updating pushes to an open MR are a plain `git push`. GitHub has no push-option equivalent, so there `gh pr create` (or `xd://github` `pr_create`) remains a separate step after `git push`.
-{{- if eq .harness "omp" }}
 
-When fetching issues or making similar GitLab reads, prefer the `glab` CLI over the glab MCP — the glab MCP has compatibility problems under oh-my-pi.{{ end }}
+When fetching issues or making similar GitLab reads, prefer the `glab` CLI over the glab MCP — the glab MCP has compatibility problems under oh-my-pi.
 
 ## Project supplement
 
-The root `AGENTS.md` owns chezmoi source attributes, data/script/system ownership, host facts, desktop/container gates, agent contracts, isolated verification, and repository delivery details. It may add stricter local rules; do not treat this common core as permission to weaken them.
+A repository root `AGENTS.md` owns that project's source attributes, data/system conventions, host facts/gates, local agent contracts, isolated verification, and repository delivery details. It may add stricter local rules; do not treat this common core as permission to weaken them.
