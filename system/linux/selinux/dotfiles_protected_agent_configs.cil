@@ -6,13 +6,15 @@
 ; --- Types and Roles ---
 (type protected_agent_config_t)
 (roletype object_r protected_agent_config_t)
+(typeattributeset file_type (protected_agent_config_t))
 
 (type chezmoi_t)
 (roletype unconfined_r chezmoi_t)
 
 (type chezmoi_exec_t)
 (roletype object_r chezmoi_exec_t)
-(typeattribute chezmoi_exec_t (file_type exec_type))
+(typeattributeset file_type (chezmoi_exec_t))
+(typeattributeset exec_type (chezmoi_exec_t))
 
 ; --- Domain Transition: unconfined_t -> chezmoi_exec_t -> chezmoi_t ---
 (typetransition unconfined_t chezmoi_exec_t process chezmoi_t)
