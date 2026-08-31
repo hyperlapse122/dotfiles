@@ -114,6 +114,15 @@ EOF
   exit 1
 }
 
-"$reconcile_bin" reconcile-all --manifest "$scratch/manifest.json" --home "$home_dir" >/dev/null
+unchanged_output=$("$reconcile_bin" reconcile-all --manifest "$scratch/manifest.json" --home "$home_dir" 2>/dev/null)
+[[ -z "$unchanged_output" ]] || {
+  printf 'Failed: unchanged reconcile-all emitted output on stdout: %s\n' "$unchanged_output" >&2
+  exit 1
+}
 
+json_output=$("$reconcile_bin" reconcile-all --manifest "$scratch/manifest.json" --home "$home_dir" --json 2>/dev/null)
+[[ "$json_output" == *'"unchanged"'* ]] || {
+  printf 'Failed: reconcile-all --json did not emit JSON: %s\n' "$json_output" >&2
+  exit 1
+}
 printf '%s\n' 'command-reconcile apply integration test passed'
