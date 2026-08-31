@@ -480,7 +480,7 @@ jobs:
           cp -a "${GITHUB_WORKSPACE}/." "${scratch}/unknown/"
           cp -a "${GITHUB_WORKSPACE}/." "${scratch}/missing/"
 
-          sed -i 's/gate: "!virt"/gate: ciUndeclaredFact/' \
+          sed -i 's/gate: sddmBreeze/gate: ciUndeclaredFact/' \
             "${scratch}/unknown/.chezmoidata/system.yaml"
           if render_from "${scratch}/unknown" "${installer}" \
               > "${scratch}/unknown.out" 2> "${scratch}/unknown.err"; then
