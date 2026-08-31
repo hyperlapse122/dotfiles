@@ -1,0 +1,148 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-swap-hibernate" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/dracut.conf.d/resume.conf")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
+root_fstype="$(findmnt -n -o FSTYPE / 2>/dev/null || true)"
+
+if [[ "$os_id" == "fedora" && "$root_fstype" == "btrfs" ]]; then
+  # 1. Disable and mask zram-swap
+  if command -v systemctl >/dev/null 2>&1; then
+    printf '  -> masking systemd-zram-setup@.service (disable zram swap)\n'
+    "${SUDO[@]}" systemctl mask systemd-zram-setup@.service 2>/dev/null || true
+  fi
+  for zdev in /dev/zram*; do
+    [[ -b "$zdev" ]] || continue
+    printf '  -> swapoff %s\n' "$zdev"
+    "${SUDO[@]}" swapoff "$zdev" 2>/dev/null || true
+    if command -v zramctl >/dev/null 2>&1; then
+      "${SUDO[@]}" zramctl --reset "$zdev" 2>/dev/null || true
+    fi
+  done
+
+  # 2. Ensure /swap mount point and Btrfs subvolume
+  root_uuid="$(findmnt -n -o UUID / 2>/dev/null || true)"
+
+  if ! findmnt -n -o TARGET /swap >/dev/null 2>&1; then
+    "${SUDO[@]}" mkdir -p /swap
+    tmp_mnt="$(mktemp -d)"
+    "${SUDO[@]}" mount -t btrfs -o subvolid=5 "UUID=$root_uuid" "$tmp_mnt"
+    if ! "${SUDO[@]}" test -d "$tmp_mnt/@swap"; then
+      printf '  -> creating Btrfs subvolume @swap\n'
+      "${SUDO[@]}" btrfs subvolume create "$tmp_mnt/@swap"
+    fi
+    "${SUDO[@]}" umount "$tmp_mnt"
+    rmdir "$tmp_mnt" 2>/dev/null || true
+
+    printf '  -> mounting /swap (subvol=@swap,nodatacow)\n'
+    "${SUDO[@]}" mount -t btrfs -o subvol=@swap,nodatacow "UUID=$root_uuid" /swap
+  fi
+
+  # 3. Ensure /swap entry in /etc/fstab
+  if ! grep -q '[[:space:]]/swap[[:space:]]' /etc/fstab 2>/dev/null; then
+    printf '  -> adding /swap entry to /etc/fstab\n'
+    printf 'UUID=%s /swap btrfs subvol=@swap,nodatacow 0 0\n' "$root_uuid" | "${SUDO[@]}" tee -a /etc/fstab >/dev/null
+  fi
+
+  # 4. Calculate target swap size (RAM + 2GB)
+  mem_total_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
+  mem_total_gib=$(( (mem_total_kb + 1048576 - 1) / 1048576 ))
+  target_swap_gib=$(( mem_total_gib + 2 ))
+  target_swap_bytes=$(( target_swap_gib * 1024 * 1024 * 1024 ))
+
+  # 5. Allocate or verify /swap/swapfile
+  swap_recreated=0
+  current_size=0
+  if [[ -f /swap/swapfile ]]; then
+    current_size="$(stat -c '%s' /swap/swapfile 2>/dev/null || echo 0)"
+  fi
+
+  if [[ "$current_size" -ne "$target_swap_bytes" ]]; then
+    free_kb="$(df -k --output=avail /swap 2>/dev/null | tail -1 | tr -d ' ')"
+    required_kb=$(( (target_swap_gib + 4) * 1024 * 1024 ))
+    if [[ -n "$free_kb" && "$free_kb" -lt "$required_kb" ]]; then
+      printf '  ::warning:: insufficient disk space to allocate %dGB swapfile (%dMB free, %dMB required)\n' \
+        "$target_swap_gib" "$(( free_kb / 1024 ))" "$(( required_kb / 1024 ))" >&2
+    else
+      printf '  -> creating %dGiB NoCoW swapfile at /swap/swapfile\n' "$target_swap_gib"
+      "${SUDO[@]}" swapoff /swap/swapfile 2>/dev/null || true
+      "${SUDO[@]}" rm -f /swap/swapfile
+
+      if "${SUDO[@]}" btrfs filesystem mkswapfile --help >/dev/null 2>&1; then
+        "${SUDO[@]}" btrfs filesystem mkswapfile -s "${target_swap_gib}G" /swap/swapfile
+      else
+        "${SUDO[@]}" truncate -s 0 /swap/swapfile
+        "${SUDO[@]}" chattr +C /swap/swapfile
+        "${SUDO[@]}" fallocate -l "${target_swap_gib}G" /swap/swapfile
+        "${SUDO[@]}" chmod 0600 /swap/swapfile
+        "${SUDO[@]}" mkswap /swap/swapfile
+      fi
+      swap_recreated=1
+    fi
+  fi
+
+  # Apply SELinux context
+  if [[ -f /swap/swapfile ]] && command -v restorecon >/dev/null 2>&1; then
+    "${SUDO[@]}" restorecon -v /swap/swapfile >/dev/null 2>&1 || true
+  fi
+
+  # Ensure /swap/swapfile entry in /etc/fstab
+  if ! grep -q '[[:space:]]/swap/swapfile[[:space:]]' /etc/fstab 2>/dev/null; then
+    printf '  -> adding /swap/swapfile entry to /etc/fstab\n'
+    printf '/swap/swapfile none swap defaults 0 0\n' | "${SUDO[@]}" tee -a /etc/fstab >/dev/null
+  fi
+
+  # Activate swap if not active
+  if [[ -f /swap/swapfile ]] && ! grep -q '/swap/swapfile' /proc/swaps 2>/dev/null; then
+    printf '  -> activating swap /swap/swapfile\n'
+    "${SUDO[@]}" swapon /swap/swapfile
+  fi
+
+  # 6. Synchronize Dracut configuration
+  dracut_changed=0
+  if [[ -f "$SRC_ROOT/etc/dracut.conf.d/resume.conf" ]]; then
+    if ! cmp -s "$SRC_ROOT/etc/dracut.conf.d/resume.conf" /etc/dracut.conf.d/resume.conf 2>/dev/null; then
+      printf '  -> installing /etc/dracut.conf.d/resume.conf\n'
+      "${SUDO[@]}" install -D -m 644 "$SRC_ROOT/etc/dracut.conf.d/resume.conf" /etc/dracut.conf.d/resume.conf
+      dracut_changed=1
+    fi
+  fi
+
+  # 7. Compute physical resume_offset and update kernel args
+  swap_fs_uuid="$(findmnt -n -o UUID /swap 2>/dev/null || findmnt -n -o UUID / 2>/dev/null || true)"
+  resume_offset=""
+  if [[ -f /swap/swapfile ]] && command -v btrfs >/dev/null 2>&1; then
+    resume_offset="$("${SUDO[@]}" btrfs inspect-internal map-swapfile -r /swap/swapfile 2>/dev/null || true)"
+  fi
+
+  kernel_args_changed=0
+  if [[ -n "$swap_fs_uuid" && -n "$resume_offset" ]] && command -v grubby >/dev/null 2>&1; then
+    current_args="$(grubby --info=DEFAULT 2>/dev/null | grep -E '^args=' || true)"
+    expected_resume="resume=UUID=$swap_fs_uuid"
+    expected_offset="resume_offset=$resume_offset"
+
+    if [[ "$current_args" != *"$expected_resume"* || "$current_args" != *"$expected_offset"* ]]; then
+      printf '  -> updating kernel arguments with %s %s\n' "$expected_resume" "$expected_offset"
+      "${SUDO[@]}" grubby --update-kernel=ALL --args="$expected_resume $expected_offset"
+      kernel_args_changed=1
+    fi
+  fi
+
+  # 8. Rebuild initramfs with dracut if configuration or kernel args changed
+  if [[ $dracut_changed -eq 1 || $kernel_args_changed -eq 1 || $swap_recreated -eq 1 ]]; then
+    if command -v dracut >/dev/null 2>&1; then
+      printf '  -> regenerating initramfs with dracut (including resume module)\n'
+      "${SUDO[@]}" dracut -f
+    fi
+  fi
+fi
+{{ end -}}
