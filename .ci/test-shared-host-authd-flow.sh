@@ -83,8 +83,14 @@ NODE
 }
 
 for template in \
-  .chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl \
-  .chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl \
+  .chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl \
   .chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl
 do
   assert_shared_host_guard "$template" "$(basename "${template%.tmpl}")"

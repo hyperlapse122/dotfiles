@@ -3,7 +3,8 @@
 {{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable) (dict "name" "keyd-keyboards" "value" (toJson .system.linux.keyd.keyboards)))) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/libinput/local-overrides.quirks")) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}

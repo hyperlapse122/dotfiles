@@ -1,0 +1,29 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-host" }}
+
+loginctl enable-linger "${SUDO_USER:-$USER}" 2>/dev/null || true
+
+if command -v systemctl >/dev/null 2>&1; then
+  "${SUDO[@]}" systemctl mask podman.socket podman.service 2>/dev/null || true
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  printf '  -> masking systemd-zram-setup@.service (disable zram swap)\n'
+  "${SUDO[@]}" systemctl mask systemd-zram-setup@.service 2>/dev/null || true
+fi
+for zdev in /dev/zram*; do
+  [[ -b "$zdev" ]] || continue
+  printf '  -> swapoff %s\n' "$zdev"
+  "${SUDO[@]}" swapoff "$zdev" 2>/dev/null || true
+  if command -v zramctl >/dev/null 2>&1; then
+    "${SUDO[@]}" zramctl --reset "$zdev" 2>/dev/null || true
+  fi
+done
+{{ end -}}

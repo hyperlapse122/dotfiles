@@ -1,113 +1,64 @@
-# Manifest for the root-owned /etc installer
-# (.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl).
+# Manifest for root-owned Linux system configuration
+# Managed by modular subsystem scripts under .chezmoiscripts/30-linux/.
 # See system/README.md for the full model.
 #
 # Single source of truth (like packages.yaml): add/gate a system/linux/etc
-# file or list a removed /etc path HERE, not in the installer script. The
-# manifest is rendered into the installer, so any edit here re-triggers the
-# run_onchange_ installer automatically — no separate fingerprint needed.
+# file or list a removed /etc path HERE, organized by subsystem.
 system:
   linux:
     keyd:
       keyboards:
         - id: "0001:0001"
           name: "AT Translated Set 2 keyboard"
-    # Per-path overrides for files under system/linux/etc/. Defaults when a
-    # file matches no entry: mode 0644, installed unconditionally. `path` is a
-    # bash glob matched against the path relative to system/linux/ (first
-    # match wins, so keep specific entries before broad globs).
-    #
-    #   mode:  install(1) mode (string, e.g. "440")
-    #   gate:  named host FACT from the registry (.chezmoidata/facts.yaml,
-    #          factRegistry) — the file is skipped when the fact is false. The
-    #          installer no longer probes the host itself: it reads the FACT_*
-    #          variables the registry renders into it, so one probe answers here,
-    #          in the package installers, and in every template alike. Gates used
-    #          below, with the fail-safe direction each one protects:
-    #            thinkpad     DMI product_version/product_family says ThinkPad.
-    #            vm           systemd-detect-virt --vm — VMs ONLY. Deliberately
-    #                         not the registry's `virt` fact (which is true for a
-    #                         container too): this gate grants password-less sudo.
-    #            sddmBreeze   the breeze SDDM theme is installed.
-    #            gdm          the GDM greeter's compiled defaults db exists.
-    #            fprintdPam   pam_fprintd.so installed AND a Debian-style
-    #                         /etc/pam.d/common-auth to @include.
-    #          Every name here is validated against the registry at RENDER time
-    #          (.chezmoitemplates/facts-validate.tmpl), so an unknown gate aborts
-    #          the whole chezmoi command naming the valid facts — typos fail loud,
-    #          and a gate never silently evaluates false.
-    #   check: named validator run on the SOURCE file on every host, even
-    #          when the gate skips the install (so contributors catch broken
-    #          files on machines that never deploy them). Known: visudo. Unlike
-    #          `gate:` this is NOT a fact — it validates the file, not the host.
-    overrides:
-      # thinkpad_acpi module config/load only makes sense on a ThinkPad.
-      - path: etc/modprobe.d/thinkpad_acpi.conf
-        gate: thinkpad
-      - path: etc/modules-load.d/thinkpad_acpi.conf
-        gate: thinkpad
-      # sudoers(5): drop-ins must be mode 0440 (sudo ignores
-      # group/world-writable files) and the filename must not contain '.'
-      # or end in '~'. VM-only so password-less sudo never lands on bare
-      # metal; visudo-checked everywhere because a broken drop-in can break
-      # sudo globally on the host.
-      - path: "etc/sudoers.d/*"
-        mode: "440"
-        gate: vm
-        check: visudo
-      # De-brands the login greeter to upstream Breeze on both distros.
-      # Forcing Current=breeze without the theme installed yields a broken
-      # login screen, so skip when the breeze SDDM theme is absent.
-      - path: etc/sddm.conf.d/90-breeze.conf
-        gate: sddmBreeze
-      # GNOME targets: force password-only auth at the GDM greeter so
-      # pam_gnome_keyring always unlocks the login keyring (a fingerprint
-      # login proves identity but hands PAM no secret, leaving the keyring
-      # locked — gnome-keyring#1). The in-session lock screen reads the same
-      # key from the USER's dconf, so fingerprint unlock there is unaffected.
-      # The profile override in /etc/dconf/profile/ outranks the vendor
-      # profile in /usr/share/dconf/profile/ and adds system-db:gdm (upstream
-      # ships only user-db + file-db); the greeter always launches with
-      # DCONF_PROFILE=gdm (fixed upstream constant, both distros). Skipped on
-      # KDE hosts (no GDM).
-      - path: etc/dconf/profile/gdm
-        gate: gdm
-      - path: "etc/dconf/db/gdm.d/*"
-        gate: gdm
 
-    # Absolute /etc paths that the installer previously shipped but that no
-    # longer exist in system/linux/etc/. Listed explicitly so every machine —
-    # including ones that pull a committed deletion — removes the orphan on
-    # the next run. `rm -f` is idempotent, so leaving entries here for a
-    # release cycle or two after the deletion is safe (no-op once gone).
-    #
-    # When deleting a tracked file from system/linux/etc/, add its absolute
-    # /etc path HERE in the same commit. Optional `distro` restricts removal
-    # to one distro (matched against /etc/os-release ID at runtime) — for
-    # paths only ever deployed there, so a native/user file elsewhere is
-    # never deleted.
-    removed:
-      # systemd system-sleep hook for the removed per-user container proxy
-      # stack. Deployed on Linux hosts without a distro gate, so the
-      # reclamation is likewise unscoped.
-      - path: /etc/systemd/system-sleep/cli-proxy-api.sh
-      # systemd system-sleep hook that stopped the per-user open-design
-      # service before hibernation. Also deployed ungated on Linux hosts,
-      # so the reclamation is likewise unscoped.
-      - path: /etc/systemd/system-sleep/open-design.sh
-      # Retired ydotool package basename override. The file was deployed
-      # without a distro gate, so reclaim it on supported Fedora hosts.
-      - path: /etc/udev/rules.d/80-uinput.rules
-      - path: /etc/udev/rules.d/logitech-receiver.rules
-      # Retired Solaar active-seat /dev/uinput grant.
-      - path: /etc/udev/rules.d/70-uinput-solaar.rules
-      # Retired kernel-install(8) drop-in that tried to re-sign Oracle
-      # VirtualBox modules on every new kernel install. It never worked: it
-      # scanned /lib/modules/<ver>/updates while Oracle installs to misc/, and
-      # no vboxconfig entry point can build for a non-running kernel anyway.
-      # VirtualBox itself has since been dropped from the managed package set,
-      # so nothing signs vbox modules any more — but the reclamation stays so a
-      # host that once deployed the hook still loses it. Fedora-scoped: the hook
-      # was only ever deployed there.
-      - path: /etc/kernel/install.d/50-vbox-sign.install
-        distro: fedora
+    desktop:
+      overrides:
+        # De-brands the login greeter to upstream Breeze on both distros.
+        # Forcing Current=breeze without the theme installed yields a broken
+        # login screen, so skip when the breeze SDDM theme is absent.
+        - path: etc/sddm.conf.d/90-breeze.conf
+          gate: sddmBreeze
+        # GNOME targets: force password-only auth at the GDM greeter so
+        # pam_gnome_keyring always unlocks the login keyring.
+        - path: etc/dconf/profile/gdm
+          gate: gdm
+        - path: "etc/dconf/db/gdm.d/*"
+          gate: gdm
+      removed:
+        # Retired systemd system-sleep hooks for container proxy and open-design
+        - path: /etc/systemd/system-sleep/cli-proxy-api.sh
+        - path: /etc/systemd/system-sleep/open-design.sh
+
+    sudoers:
+      overrides:
+        # sudoers(5): drop-ins must be mode 0440 (sudo ignores
+        # group/world-writable files) and the filename must not contain '.'
+        # or end in '~'. VM-only so password-less sudo never lands on bare
+        # metal; visudo-checked everywhere.
+        - path: "etc/sudoers.d/*"
+          mode: "440"
+          gate: vm
+          check: visudo
+
+    sysctl: {}
+
+    udev:
+      removed:
+        # Retired uinput and receiver udev rules
+        - path: /etc/udev/rules.d/80-uinput.rules
+        - path: /etc/udev/rules.d/logitech-receiver.rules
+        - path: /etc/udev/rules.d/70-uinput-solaar.rules
+
+    hardware:
+      overrides:
+        # thinkpad_acpi module config/load only makes sense on a ThinkPad.
+        - path: etc/modprobe.d/thinkpad_acpi.conf
+          gate: thinkpad
+        - path: etc/modules-load.d/thinkpad_acpi.conf
+          gate: thinkpad
+      removed:
+        # Retired kernel-install(8) drop-in for VirtualBox module signing
+        - path: /etc/kernel/install.d/50-vbox-sign.install
+          distro: fedora
+
+    bluetooth: {}

@@ -1,0 +1,29 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sysctl") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sysctl") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-sysctl" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/sysctl.d/**")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+shopt -s globstar nullglob
+
+for src in "$SRC_ROOT"/etc/sysctl.d/**; do
+  [[ -f "$src" ]] || continue
+  rel="${src#"$SRC_ROOT"/}"
+  dst="/$rel"
+  printf '  -> %s (mode 644)\n' "$dst"
+  "${SUDO[@]}" install -D -m 644 "$src" "$dst"
+done
+
+if [[ -d "$SRC_ROOT/etc/sysctl.d" ]]; then
+  printf '  -> sysctl --system\n'
+  "${SUDO[@]}" sysctl --system >/dev/null
+fi
+
+{{ end -}}

@@ -5,11 +5,10 @@ Root-owned config that ships to absolute system paths (`/etc/...`).
 chezmoi manages files under `$HOME` and has no root-aware mode, so these files
 are **not** chezmoi-managed targets. The whole `system/` tree is listed in the
 repo-root [`.chezmoiignore`](../.chezmoiignore) so it is never linked into
-`$HOME`. Instead it is installed to `/etc/` by a `run_onchange_after_` script:
+`$HOME`. Instead it is installed to `/etc/` by modular
+`run_onchange_after_install-system-*.sh.tmpl` scripts under `.chezmoiscripts/30-linux/`:
 
-[`.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl`](../.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl)
-
-which runs:
+which run:
 
 ```sh
 sudo install -D -m <mode> "$SRC_ROOT"/etc/<abs/path> /etc/<abs/path>
@@ -25,10 +24,7 @@ source tree at apply time.
 Per-path install **modes**, host **gates**, source **checks**, and the
 **removed-path** cleanup list all live in
 [`.chezmoidata/system.yaml`](../.chezmoidata/system.yaml) — the single source
-of truth, like `packages.yaml` for packages. The installer script is a generic
-engine that renders the manifest into bash arrays; **edit the data, not the
-script**:
-
+of truth, organized by subsystem:
 - Adding a file in a non-gated path requires no edit at all (files are
   discovered recursively at runtime; default mode `0644`).
 - A non-default mode or a host gate is an `overrides:` entry (`path` is a bash
@@ -54,13 +50,11 @@ runtime case in the installer.
 
 ## How re-runs are triggered
 
-The installer is a `run_onchange_` script: chezmoi only re-runs it when its
-*rendered* contents change. The script embeds a `sha256` fingerprint of every
-file under `system/linux/etc/` (via the shared
-[`.chezmoitemplates/fingerprint.tmpl`](../.chezmoitemplates/fingerprint.tmpl)
-partial), and the manifest is rendered inline — so adding, removing, or
-editing any tracked file *or* any manifest entry forces the next
-`chezmoi apply` to re-run the installer. Re-running is idempotent.
+The installers are `run_onchange_` scripts: chezmoi only re-runs a subsystem
+script when its *rendered* contents or fingerprinted files change. Each script
+embeds a `sha256` fingerprint of its managed files under `system/linux/etc/`
+(via `.chezmoitemplates/fingerprint.tmpl`), so modifying a file in one
+subsystem only re-runs that specific subsystem installer.
 
 Force a re-run without changing any file with `chezmoi apply --force`.
 
@@ -86,20 +80,22 @@ system/linux/etc/locale.conf
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
 | `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
 
-## The install-system script set (10-files → 20-host → 30-network)
+## The modular install-system script set (30-linux)
 
-File installation is part 1 of a three-script set under
-`.chezmoiscripts/30-linux/`, split by concern so each carries its own
-`run_onchange_` trigger and re-run scope stays tight — editing a udev rule
-re-runs the file installer only, without restarting network services the way
-the old monolithic `install-system-config` script did:
+System file installation is modularized across discrete `run_onchange_after_`
+scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
 
 | Script | Does | Re-runs when |
 |---|---|---|
-| `run_onchange_after_install-system-10-files.sh.tmpl` | install `system/linux/etc/**` per the manifest, remove orphaned `/etc` paths, ThinkPad modprobe, reload systemd/udev/sysctl/gdm-dconf for what it installed | any tracked file or manifest entry changes |
-| `run_onchange_after_install-system-20-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable (Fedora `systemd-zram-setup@`) | its own content changes |
-| `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld (masquerade, `tailscale0` → trusted zone, WireGuard/STUN ports), `/etc/resolv.conf` → systemd-resolved, systemd-resolved/NetworkManager/tailscaled restarts, NetworkManager conf.d hygiene + reload | its own content changes |
-
+| `run_onchange_after_install-system-10-desktop.sh.tmpl` | locale, SDDM theme drop-in, GDM dconf override + `dconf update` | desktop files or desktop manifest section change |
+| `run_onchange_after_install-system-12-sudoers.sh.tmpl` | password-less sudoers drop-in (mode `0440`, `visudo` check) | `etc/sudoers.d/*` files change |
+| `run_onchange_after_install-system-14-sysctl.sh.tmpl` | sysctl drop-ins + `sysctl --system` reload | `etc/sysctl.d/*` files change |
+| `run_onchange_after_install-system-16-udev.sh.tmpl` | udev rules, libinput quirks, removed rules + `udevadm control --reload` | `etc/udev/rules.d/*` or `libinput/*` files change |
+| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config + `modprobe thinkpad_acpi` | modprobe/modules-load files change |
+| `run_onchange_after_install-system-20-bluetooth.sh.tmpl` | BlueZ config, autosuspend + `systemctl restart bluetooth` | `etc/bluetooth/*` files change |
+| `run_onchange_after_install-system-22-host.sh.tmpl` | user lingering, rootful podman socket mask, zram-swap disable | its own content changes |
+| `run_onchange_after_install-system-24-keyd.sh.tmpl` | keyd hardware probe, package install, config generation | keyd keyboards data or quirks file change |
+| `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld, resolv.conf → systemd-resolved, NM hygiene | its own content changes |
 The `10-`/`20-`/`30-` filename prefixes order execution (chezmoi runs scripts
 alphabetically), so files land before anything that might depend on them.
 

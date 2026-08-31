@@ -1,0 +1,31 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-bluetooth") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-bluetooth") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-bluetooth" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/bluetooth/**" "system/linux/etc/modprobe.d/bluetooth-no-autosuspend.conf")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+shopt -s globstar nullglob
+
+bt_files=("$SRC_ROOT"/etc/bluetooth/** "$SRC_ROOT"/etc/modprobe.d/bluetooth-no-autosuspend.conf)
+for src in "${bt_files[@]}"; do
+  [[ -f "$src" ]] || continue
+  rel="${src#"$SRC_ROOT"/}"
+  dst="/$rel"
+  printf '  -> %s (mode 644)\n' "$dst"
+  "${SUDO[@]}" install -D -m 644 "$src" "$dst"
+done
+
+if command -v systemctl >/dev/null 2>&1 \
+  && systemctl cat bluetooth.service >/dev/null 2>&1; then
+  printf '  -> systemctl restart bluetooth\n'
+  "${SUDO[@]}" systemctl restart bluetooth
+fi
+
+{{ end -}}

@@ -466,7 +466,7 @@ jobs:
           scratch="${RUNNER_TEMP}/registry-contracts"
           empty="${RUNNER_TEMP}/scratch/empty.toml"
           target="${RUNNER_TEMP}/scratch/target"
-          installer=".chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl"
+          installer=".chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl"
 
           render_from() {
             local source=$1 template=$2
@@ -504,7 +504,7 @@ jobs:
           # package installers but must never inherit their FORCE_* escape hatches.
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/${installer%.tmpl}"
           if grep -n 'FORCE_' "${rendered}"; then
-            echo "FORCE_* leaked into rendered install-system-10-files" >&2
+            echo "FORCE_* leaked into rendered install-system-desktop" >&2
             exit 1
           fi
 
@@ -523,7 +523,7 @@ jobs:
         run: |
           set -euo pipefail
           rendered="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh"
-          rendered_etc="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh"
+          rendered_etc="${GITHUB_WORKSPACE}/_artifacts/rendered-internals/.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh"
           for f in "${rendered}" "${rendered_etc}"; do
             test -f "${f}"
             test ! -e "${f}.render-error.txt"

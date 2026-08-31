@@ -102,8 +102,14 @@ NODE
 # Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=8a2418531929e8c0e1b4440001a674750fee40b5dde96648626d4833678ca771
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl]=fc2e9164e0741013d71f34a688a820b0d66188f654710b9f5fea9d07a9c707b6
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl]=70a1d313716912bb41e3250248944a346ca9e1dc628ff1d3c1625c5f0313af28
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=4fc8372442e23d4e7bd12a82c30272b9e7958a71891d7c98fef50259445c5209
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=6ceb9ae1bd15a55348024460e13701554a924c4ae961ddf0bd3996882d70c725
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=2d7541daea733281ee980de9eaabcb6dd1f5d6008ce8d811319be25461bb5f63
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=2eadcfc779ac005654a0b97225e741c619fcdcfe36f6e666f1b33a0bf4044c15
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=920ab244dd6b8d4e37dfd422a573f6406b2d0417a9bbfe175a8963a10cece00e
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=ab69056617db427f593db835a58424fd211613e6ee5320fb8da3040428d85916
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=856c095622ae325d2d431d7238e882cf7250f79e15a8c114c6960399482db033
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=0a12895347a0c4c162c05377fd4b268cd22a7a1aad14b1394a9fb7b9db370cd4
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
 )
 
@@ -131,19 +137,19 @@ grep -Fq 'Restart affected services manually after apply, or reboot the system.'
   || fail 'network render omits manual restart-or-reboot guidance'
 grep -Fq 'site=networkmanager-not-running' "$network_render" \
   || fail 'network render lost the NetworkManager applicability declaration'
-keyd_render="$scratch/run_after_keyd.sh"
-render ".chezmoiscripts/30-linux/run_after_keyd.sh.tmpl" "$keyd_render"
-bash -n "$keyd_render" || fail "run_after_keyd.sh.tmpl does not render valid shell"
+keyd_render="$scratch/run_onchange_after_install-system-24-keyd.sh"
+render ".chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl" "$keyd_render"
+bash -n "$keyd_render" || fail "run_onchange_after_install-system-24-keyd.sh.tmpl does not render valid shell"
 
 # The login-shell script consumes capabilities.tmpl and facts.tmpl, so it never
 # carries a FACT_* block; only these two scripts include facts-sh.tmpl.
-facts_consumer="$scratch/run_onchange_after_install-system-10-files.sh"
+facts_consumer="$scratch/run_onchange_after_install-system-10-desktop.sh"
 grep -Fqx '  FACT_JETSON=0' "$facts_consumer" \
   || fail 'Fedora facts block does not emit FACT_JETSON=0'
 grep -Fqx '  FACT_SHARED_HOST=0' "$facts_consumer" \
   || fail 'Fedora facts block does not emit FACT_SHARED_HOST=0'
 
-for script in install-system-10-files install-system-20-host install-system-30-network; do
+for script in install-system-10-desktop install-system-12-sudoers install-system-14-sysctl install-system-16-udev install-system-18-hardware install-system-20-bluetooth install-system-22-host install-system-24-keyd install-system-30-network; do
   rendered="$scratch/run_onchange_after_$script.sh"
   grep -Fq 'if [[ "$FACT_SHARED_HOST" -eq 1 ]]; then' "$rendered" \
     || fail "$script does not render the shared-host guard"

@@ -10,7 +10,7 @@
 ./docs
 
 # Root-owned system config installed to /etc by
-# .chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl
+# .chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl
 # (manifest: .chezmoidata/system.yaml), never linked into $HOME.
 ./system
 
