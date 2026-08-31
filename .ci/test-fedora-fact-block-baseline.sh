@@ -108,8 +108,9 @@ declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=2eadcfc779ac005654a0b97225e741c619fcdcfe36f6e666f1b33a0bf4044c15
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=920ab244dd6b8d4e37dfd422a573f6406b2d0417a9bbfe175a8963a10cece00e
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=ab69056617db427f593db835a58424fd211613e6ee5320fb8da3040428d85916
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=856c095622ae325d2d431d7238e882cf7250f79e15a8c114c6960399482db033
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=ed9995e98f754311030b42ce13bcc207eba5e81d40c1246ea4996d190b25577c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=0a12895347a0c4c162c05377fd4b268cd22a7a1aad14b1394a9fb7b9db370cd4
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=e5a960d62c6e38794753a8b65ecbc77c7e9081c8ef712423000a691cced38349
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
 )
 
@@ -149,7 +150,7 @@ grep -Fqx '  FACT_JETSON=0' "$facts_consumer" \
 grep -Fqx '  FACT_SHARED_HOST=0' "$facts_consumer" \
   || fail 'Fedora facts block does not emit FACT_SHARED_HOST=0'
 
-for script in install-system-10-desktop install-system-12-sudoers install-system-14-sysctl install-system-16-udev install-system-18-hardware install-system-20-bluetooth install-system-22-host install-system-24-keyd install-system-30-network; do
+for script in install-system-10-desktop install-system-12-sudoers install-system-14-sysctl install-system-16-udev install-system-18-hardware install-system-20-bluetooth install-system-22-host install-system-24-keyd install-system-26-swap-hibernate install-system-30-network; do
   rendered="$scratch/run_onchange_after_$script.sh"
   grep -Fq 'if [[ "$FACT_SHARED_HOST" -eq 1 ]]; then' "$rendered" \
     || fail "$script does not render the shared-host guard"
