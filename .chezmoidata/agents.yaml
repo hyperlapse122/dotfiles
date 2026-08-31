@@ -155,7 +155,6 @@ agents:
         default: google-antigravity/gemini-3.7-flash:high
         fable: google-antigravity/gemini-3.7-flash:high
         gemini: google-antigravity/gemini-3.7-flash:high
-        gemini-pro: google-antigravity/gemini-3.7-flash:high
         plan: "@fable"
         skim: google-antigravity/gemini-3.7-flash:low
         slow: google-antigravity/gemini-3.7-flash:high
