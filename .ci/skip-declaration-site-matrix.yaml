@@ -67,9 +67,9 @@ runtime_input: false
 totals:
   classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 174
+  rendered_instances: 177
   phase_local_instances: 120
-  shared_guard_instances: 54
+  shared_guard_instances: 57
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -112,10 +112,10 @@ audited_scopes:
 
 shared_guard_fanout:
   gnome-guard: 7
-  headless-guard: 9
+  headless-guard: 10
   kde-guard: 9
-  shared-host-guard: 19
-  sudo-skip-guard: 10
+  shared-host-guard: 20
+  sudo-skip-guard: 11
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -190,6 +190,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
@@ -254,6 +255,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#headless-guard/headless-install'
   - owner: 'sudo-skip-guard/no-cached-sudo'
     scope: 'guard-partials'
@@ -279,6 +281,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#sudo-skip-guard/no-cached-sudo'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#sudo-skip-guard/no-cached-sudo'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-skip-guard/no-cached-sudo'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-skip-guard/no-cached-sudo'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'

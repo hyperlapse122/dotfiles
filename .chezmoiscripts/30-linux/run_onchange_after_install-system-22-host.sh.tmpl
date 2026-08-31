@@ -13,17 +13,4 @@ loginctl enable-linger "${SUDO_USER:-$USER}" 2>/dev/null || true
 if command -v systemctl >/dev/null 2>&1; then
   "${SUDO[@]}" systemctl mask podman.socket podman.service 2>/dev/null || true
 fi
-
-if command -v systemctl >/dev/null 2>&1; then
-  printf '  -> masking systemd-zram-setup@.service (disable zram swap)\n'
-  "${SUDO[@]}" systemctl mask systemd-zram-setup@.service 2>/dev/null || true
-fi
-for zdev in /dev/zram*; do
-  [[ -b "$zdev" ]] || continue
-  printf '  -> swapoff %s\n' "$zdev"
-  "${SUDO[@]}" swapoff "$zdev" 2>/dev/null || true
-  if command -v zramctl >/dev/null 2>&1; then
-    "${SUDO[@]}" zramctl --reset "$zdev" 2>/dev/null || true
-  fi
-done
 {{ end -}}
