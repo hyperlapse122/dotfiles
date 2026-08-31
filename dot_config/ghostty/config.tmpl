@@ -1,0 +1,39 @@
+{{- /* Ghostty terminal — deploys on every target; Ghostty installs on
+   Linux and macOS desktop environments. A .tmpl for ONE reason: the two font
+   lines below. The family and size come from .chezmoidata/fonts.yaml
+   (`fonts.families.mono`, `fonts.sizes.terminal`) — the single font source
+   shared with the KDE/GNOME font scripts, fcitx5 classicui config, and
+   VSCodium settings — so changing the mono face is a ONE-FILE edit instead
+   of a multi-file hunt. `terminal` is the dedicated terminal font size,
+   deliberately separate from the shared `sizes.mono`.
+   Everything else here is Ghostty's own settings surface and stays literal. */ -}}
+# ~/.config/ghostty/config — managed by chezmoi.
+#
+# Font family and size render from fonts.yaml — edit the yaml, not here.
+# Docs: https://ghostty.org/docs/config
+
+# --- font ---
+font-family = {{ .fonts.families.mono }}
+font-size = {{ .fonts.sizes.terminal }}
+
+# --- window geometry & decoration ---
+window-width = 128
+window-height = 24
+window-decoration = auto
+window-inherit-working-directory = true
+
+# --- visual styling ---
+background-opacity = 0.9
+background-blur = true
+
+# --- input & clipboard ---
+copy-on-select = clipboard
+
+# --- tabs & keybindings ---
+keybind = ctrl+shift+t=new_tab
+keybind = ctrl+page_up=previous_tab
+keybind = ctrl+page_down=next_tab
+
+# --- quick terminal (dropdown / scratchpad) ---
+quick-terminal-position = top
+keybind = global:ctrl+grave_accent=toggle_quick_terminal

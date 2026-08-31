@@ -185,14 +185,14 @@ kde:
     # spectaclerc: never reuse the last rectangular selection
     - { file: spectaclerc, group: General, key: rememberSelectionRect, type: string, value: Never }
 
-    # --- kdeglobals: default terminal emulator = kitty (defaultterminal) ---
+    # --- kdeglobals: default terminal emulator = ghostty (defaultterminal) ---
     #     [General] TerminalApplication is the key Plasma's Default-Applications
     #     KCM writes and that KIO "Open Terminal Here" / KRunner honor across
     #     Plasma 5 & 6. A pure manifest row applied by config-kde-settings
     #     (kwriteconfig6) — no new script. Fallback if a Plasma 6.x build ignores
-    #     it: the xdg-terminal-exec drop-in (dot_local/share/xdg-terminals/kitty.desktop)
+    #     it: the xdg-terminal-exec drop-in (dot_local/share/xdg-terminals/ghostty.desktop)
     #     is honored by Plasma 6.2+.
-    - { file: kdeglobals, group: General, key: TerminalApplication, type: string, value: kitty }
+    - { file: kdeglobals, group: General, key: TerminalApplication, type: string, value: ghostty }
 
 
     # kwinrulesrc: 1Password auth dialog always on top

@@ -141,20 +141,11 @@ container_out="$scratch/rendered-linux-container"
 is_path_ignored "$container_out" ".chezmoiscripts/30-linux/chsh-zsh.sh" || fail 'container should ignore 30-linux'
 is_path_ignored "$container_out" ".chezmoiscripts/50-linux-kde/config-kde-settings.sh" || fail 'container should ignore 50-linux-kde'
 is_path_ignored "$container_out" ".chezmoiscripts/60-build/build-mxm4-haptic.sh" || fail 'container should ignore mxm4-haptic'
-is_path_ignored "$container_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'container should ignore kitty'
 is_path_ignored "$container_out" ".chezmoiscripts/90-src/reconcile-garden.sh" || fail 'container should ignore garden'
 is_path_ignored "$container_out" ".chezmoiscripts/20-base/fedora/base.sh" || fail 'container should ignore 20-base'
 is_path_ignored "$container_out" ".chezmoiscripts/30-components/fedora/10-nvidia.sh" || fail 'container should ignore 30-components'
-
-# Linux GNOME has kitty eligible, macOS and headless ignore kitty
 gnome_out="$scratch/rendered-linux-gnome"
-! is_path_ignored "$gnome_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'gnome should not ignore kitty'
-
-headless_out="$scratch/rendered-linux-headless"
-is_path_ignored "$headless_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'headless should ignore kitty'
-
 macos_out="$scratch/rendered-macos"
-is_path_ignored "$macos_out" ".chezmoiscripts/00-tools/kitty.sh" || fail 'macos should ignore kitty'
 is_path_ignored "$macos_out" ".chezmoiscripts/20-base/fedora/base.sh" || fail 'macos should ignore 20-base'
 is_path_ignored "$macos_out" ".chezmoiscripts/30-components/fedora/10-nvidia.sh" || fail 'macos should ignore 30-components'
 

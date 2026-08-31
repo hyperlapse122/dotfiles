@@ -137,14 +137,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "codegraph-darwin-x64.tar.gz",
     "darwin-arm64": "codegraph-darwin-arm64.tar.gz",
   },
-  kitty: {
-    "linux-amd64": "kitty-0.0.0-x86_64.txz",
-    "linux-arm64": "kitty-0.0.0-arm64.txz",
-    // Upstream ships a .dmg for macOS, which chezmoi cannot extract, so it
-    // is deliberately not locked.
-    "darwin-amd64": null,
-    "darwin-arm64": null,
-  },
   aoe: {
     "linux-amd64": "aoe-linux-amd64.tar.gz",
     "linux-arm64": "aoe-linux-arm64.tar.gz",

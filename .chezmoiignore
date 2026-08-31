@@ -112,19 +112,7 @@
 {{- end }}
 
 
-# kitty is provisioned from the upstream bundle by
-# .chezmoiscripts/00-tools/run_onchange_before_kitty.sh (the distro package no
-# longer installs it — see the kitty note in .chezmoidata/packages.yaml). Both
-# the provisioner and the launcher entry it points at only make sense on a Linux
-# host with a graphical session: a headless or non-KDE/GNOME host has no use for
-# a GPU terminal and no menu to show it in. The managed kitty.conf itself is NOT
-# gated here — it deploys everywhere and is inert without kitty.
-# The opt-in WezTerm candidate launcher rides the same gate: a headless or
-# non-desktop host has no menu for it either. wezterm.lua is likewise NOT gated
-# — it deploys everywhere and is inert unless wezterm is launched.
 {{- if or (ne .chezmoi.os "linux") (not (or (eq $f.desktop "kde") (eq $f.desktop "gnome"))) }}
-.chezmoiscripts/00-tools/*kitty.sh
-.local/share/applications/kitty.desktop
 .local/share/applications/wezterm.desktop
 {{- end }}
 
@@ -185,12 +173,7 @@
 Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .local/share/omp-plugins
 .omp/agent/extensions/mxm4-haptic.ts
-# No graphical session in a container, so the kitty bundle has nothing to draw
-# on. 00-tools is not wildcarded here (unlike the distro/desktop dirs above),
-# so this provisioner needs its own line. The opt-in WezTerm candidate
-# launcher has nothing to launch here either.
-.chezmoiscripts/00-tools/*kitty.sh
-.local/share/applications/kitty.desktop
+{{/* containers skip non-container desktop targets */}}
 .local/share/applications/wezterm.desktop
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the

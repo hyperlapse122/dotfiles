@@ -95,7 +95,8 @@ packages:
       # COPR (community) repositories enabled via `dnf copr enable`. Fedora-only
       # mechanism: `copr enable <owner/project>` resolves the whole repo from one
       # token.
-      coprs: []
+      coprs:
+        - scottames/ghostty
       # GPG keys imported (rpm --import) to verify third-party repo packages.
       # Fedora-only mechanism: rpm has ONE global keyring, so a key is declared once
       # and stands apart from the repos that use it.
@@ -315,14 +316,7 @@ packages:
         - fcitx5
         - fcitx5-hangul
         - pinentry-qt
-        # kitty is NOT installed from the distro package any more: the managed
-        # config's vertical tab bar needs kitty >= 0.48 and the Fedora stream
-        # skipped 0.44-0.46 and has not submitted 0.48. It is provisioned from
-        # the locked upstream bundle by
-        # .chezmoiscripts/00-tools/run_onchange_before_kitty.sh instead.
-        # ONE-TIME MANUAL STEP on a host that still carries the distro package
-        # (this repo adds no teardown scripts, and this manifest has no removal
-        # key): sudo dnf remove kitty
+        - ghostty
         - xdg-terminal-exec
       # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
       # framework as the KDE targets (unified input-method policy: ibus is
@@ -337,8 +331,7 @@ packages:
         - fcitx5
         - fcitx5-hangul
         - pinentry-gnome3
-        # kitty: provisioned from the locked upstream bundle — see the note in
-        # kdePackages above, including the one-time `sudo dnf remove kitty`.
+        - ghostty
         - xdg-terminal-exec
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
@@ -583,12 +576,11 @@ packages:
         fedora: { disposition: managed, owner: dnf, identifier: cuda-drivers, source: fedora, architectures: { amd64: native, arm64: native } }
         macos: { disposition: notApplicable, reason: supported Apple silicon has no NVIDIA GPU, architectures: { arm64: notApplicable } }
         ubuntu: { disposition: managed, owner: apt, identifier: nvidia-jetpack, source: nvidiaJetson, architectures: { arm64: native } }
-      - id: kittyTerminal
-        sentinel: kitty
-        integrity: checksum
-        fedora: { disposition: managed, owner: releaseLock, identifier: kitty, architectures: { amd64: native, arm64: native } }
-        macos: { disposition: unresolved, reason: retained inline-image outcome awaits WezTerm gate, architectures: { arm64: unresolved } }
-        ubuntu: { disposition: unresolved, reason: Kitty's Ubuntu arm64 package-delivery path has not been proven on Thor, architectures: { arm64: unresolved } }
+      - id: ghosttyTerminal
+        sentinel: ghostty
+        fedora: { disposition: managed, owner: dnf, identifier: ghostty, source: fedora, architectures: { amd64: native, arm64: native } }
+        macos: { disposition: managed, owner: homebrew, kind: cask, identifier: ghostty, source: homebrewCask, elevation: appManagement, greedy: true, architectures: { arm64: native } }
+        ubuntu: { disposition: unresolved, reason: Ghostty's Ubuntu arm64 package-delivery path has not been proven on Thor, architectures: { arm64: unresolved } }
       # U8 native desktop/hardware completions. logitechGestures (Logi Options+,
       # manual profile) and koreanInput (native macOS/Linux IMEs, manual
       # prerequisite steps) above already carry their U8 dispositions; the rows
