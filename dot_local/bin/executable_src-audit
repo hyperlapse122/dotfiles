@@ -1,14 +1,13 @@
 #!/bin/sh
 # src-audit — read-only drift report for the ~/src project layout
-# (~/src/<host>/[<group>/]<project>/<worktree>; registry: ~/.config/garden/garden.yaml).
+# (~/src/<host>/[<group>/]<project>; registry: ~/.config/garden/garden.yaml).
 #
 # Reports three kinds of drift:
 #   missing    declared in garden.yaml but not grown on this host. Informational
 #              (exit 0) — the manifest is the union across hosts; grow on demand
 #              with `garden --config ~/.config/garden/garden.yaml grow <name>`.
-#   broken     grown, but the on-disk layout does not match its declaration — a
-#              BARE tree's project root lacks the "gitdir: ./.bare" pointer, or a
-#              NON-BARE tree's path is not a valid clone. Exit 1.
+#   broken     grown, but the on-disk layout does not match its declaration —
+#              the tree path is not a valid git work tree. Exit 1.
 #   unmanaged  git repository under ~/src that no declared project accounts for
 #              (flat checkout, misplaced clone, unregistered project). Exit 1.
 #
@@ -58,26 +57,11 @@ broken=0
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   tree_path="$(garden --config "$reg" eval '${TREE_PATH}' "$name" 2>/dev/null)"
-  case "$tree_path" in
-    */.bare)
-      # BARE tree: the project root (parent of .bare) carries the git pointer,
-      # and the worktrees live under it (aoe's domain).
-      root="$(dirname "$tree_path")"
-      printf '%s\n' "$root" >>"$scratch/roots"
-      if [ ! -f "$root/.git" ] || [ "$(cat "$root/.git")" != "gitdir: ./.bare" ]; then
-        printf '%s (fix: garden --config ~/.config/garden/garden.yaml setup-gitdir %s)\n' "$root" "$name"
-        broken=1
-      fi
-      ;;
-    *)
-      # NON-BARE tree: the tree path itself is a plain clone (its own work tree).
-      printf '%s\n' "$tree_path" >>"$scratch/roots"
-      if ! git -C "$tree_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        printf '%s (fix: garden --config ~/.config/garden/garden.yaml grow %s)\n' "$tree_path" "$name"
-        broken=1
-      fi
-      ;;
-  esac
+  printf '%s\n' "$tree_path" >>"$scratch/roots"
+  if ! git -C "$tree_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf '%s (fix: garden --config ~/.config/garden/garden.yaml grow %s)\n' "$tree_path" "$name"
+    broken=1
+  fi
 done <"$scratch/grown"
 if [ "$broken" -eq 1 ]; then rc=1; else echo "(none)"; fi
 
