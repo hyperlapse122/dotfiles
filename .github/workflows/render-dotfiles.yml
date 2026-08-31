@@ -380,10 +380,10 @@ jobs:
                 if chezmoi --config "${worker_scratch}/empty.toml" \
                     --source "'"$PWD"'" \
                     --destination "${worker_scratch}/target" \
-                    execute-template < "${f}" > "${dest}" 2> "${dest}.stderr"; then
-                  rm -f "${dest}.stderr"
+                    execute-template < "${f}" > "${dest}" 2> "${worker_scratch}/render.stderr"; then
+                  :
                 else
-                  mv "${dest}.stderr" "${dest}.render-error.txt"
+                  mv "${worker_scratch}/render.stderr" "${dest}.render-error.txt"
                   echo "::warning file=${rel}::failed to render ${rel}"
                 fi
                 rm -rf "${worker_scratch}"
@@ -742,10 +742,10 @@ jobs:
                 if chezmoi --config "${worker_scratch}/empty.toml" \
                     --source "'"${GITHUB_WORKSPACE}"'" \
                     --destination "${worker_scratch}/target" \
-                    execute-template < "${f}" > "${dest}" 2> "${dest}.stderr"; then
-                  rm -f "${dest}.stderr"
+                    execute-template < "${f}" > "${dest}" 2> "${worker_scratch}/render.stderr"; then
+                  :
                 else
-                  mv "${dest}.stderr" "${dest}.render-error.txt"
+                  mv "${worker_scratch}/render.stderr" "${dest}.render-error.txt"
                   echo "::warning file=${rel}::failed to render ${rel}"
                 fi
                 rm -rf "${worker_scratch}"
