@@ -1,0 +1,84 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+{{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+#!/usr/bin/env bash
+#
+# Installs and updates declarative SELinux policy modules from
+# system/linux/etc/selinux/**/*.cil using `sudo semodule -X 400 -i`, and
+# relabels protected dotfiles in $HOME with `restorecon`.
+#
+# GATED: Linux + Fedora + active SELinux enforcement (sestatus).
+# Non-Fedora, non-Linux, and container hosts skip harmlessly.
+#
+# Fingerprint stamp: caches the SHA256 of the CIL source in
+# ~/.local/state/chezmoi/selinux-policies.stamp to prevent repeated
+# semodule compilation overhead on idempotent applies.
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list "system/linux/selinux/**")
+      "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ if or (ne .chezmoi.osRelease.id "fedora") $facts.container -}}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "selinux-policies" "site" "non-fedora-or-container" "reason" "SELinux policy modules are only deployed on Fedora non-container hosts") }}
+{{ else -}}
+
+if ! command -v selinuxenabled >/dev/null 2>&1 || ! selinuxenabled; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "selinux-policies" "site" "selinux-disabled" "direction" "harmless" "reason" "SELinux is disabled or selinuxenabled is not available") | trim | indent 2 }}
+fi
+
+if ! command -v semodule >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "selinux-policies" "site" "semodule-absent" "direction" "harmless" "reason" "semodule binary is not installed") | trim | indent 2 }}
+SRC_DIR="{{ $sourceDir }}/system/linux/selinux"
+STAMP_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi"
+STAMP_FILE="$STAMP_DIR/selinux-policies.stamp"
+mkdir -p "$STAMP_DIR"
+
+if [[ -d "$SRC_DIR" ]]; then
+  shopt -s nullglob
+  cil_files=("$SRC_DIR"/*.cil)
+  shopt -u nullglob
+
+  if [[ ${#cil_files[@]} -gt 0 ]]; then
+    current_hash="$(sha256sum "${cil_files[@]}" | sha256sum | awk '{print $1}')"
+    cached_hash=""
+    if [[ -f "$STAMP_FILE" ]]; then
+      cached_hash="$(cat "$STAMP_FILE" 2>/dev/null || true)"
+    fi
+
+    if [[ "$current_hash" != "$cached_hash" ]]; then
+      SUDO=()
+      if [[ "${EUID}" -ne 0 ]]; then
+        if ! command -v sudo >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "selinux-policies" "site" "sudo-unavailable" "direction" "transient-blocking" "probe" "sudo-usable" "reason" "not root and sudo is unavailable; SELinux policy installation is deferred") | trim | indent 10 }}
+        fi
+        SUDO=(sudo)
+      fi
+
+      for cil in "${cil_files[@]}"; do
+        module_name="$(basename "$cil" .cil)"
+        printf 'selinux-policies: installing module %s...\n' "$module_name"
+        "${SUDO[@]}" semodule -X 400 -i "$cil"
+      done
+
+      printf '%s' "$current_hash" > "$STAMP_FILE"
+
+      if command -v restorecon >/dev/null 2>&1; then
+        printf 'selinux-policies: relabeling protected paths...\n'
+        restorecon -RFv \
+          "$HOME/.codex/config.toml" \
+          "$HOME/.claude.json"* \
+          "$HOME/.mcp.json" \
+          "$HOME/.claude/settings.json" \
+          "$HOME/.codex/skills" \
+          "$HOME/.local/bin/chezmoi" \
+          2>/dev/null || true
+      fi
+    fi
+  fi
+fi
+
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "selinux-policies" "site" "policies-installed" "reason" "SELinux policy modules installed and protected dotfiles relabeled") | trim }}
+{{ end -}}
+{{ end -}}
