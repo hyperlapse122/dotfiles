@@ -9,13 +9,13 @@
 
 [kubectl]
 type = "file"
-targetPath = '.local/bin/kubectl'
+targetPath = '.local/share/chezmoi-commands/incomplete/kubectl/kubectl'
 url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl" $kubectlTag .chezmoi.os .chezmoi.arch }}'
 executable = true
 
 [kubectl-convert]
 type = "file"
-targetPath = '.local/bin/kubectl-convert'
+targetPath = '.local/share/chezmoi-commands/incomplete/kubectl-convert/kubectl-convert'
 url = '{{ printf "https://dl.k8s.io/release/%s/bin/%s/%s/kubectl-convert" $kubectlTag .chezmoi.os .chezmoi.arch }}'
 executable = true
 
@@ -24,7 +24,7 @@ executable = true
 {{- $helmTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "helm") }}
 
 [helm]
-targetPath = '.local/bin/helm'
+targetPath = '.local/share/chezmoi-commands/incomplete/helm/helm'
 type = "archive-file"
 url = '{{ printf "https://get.helm.sh/helm-%s-%s-%s.tar.gz" $helmTag .chezmoi.os .chezmoi.arch }}'
 path = '{{ printf "%s-%s/helm" .chezmoi.os .chezmoi.arch }}'
@@ -34,7 +34,7 @@ executable = true
 
 [minikube]
 type = "archive-file"
-targetPath = '.local/bin/minikube'
+targetPath = '.local/share/chezmoi-commands/incomplete/minikube/minikube'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "url" "platform" "auto") }}'
 path = '{{ printf "out/minikube-%s-%s" .chezmoi.os .chezmoi.arch }}'
 executable = true

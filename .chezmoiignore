@@ -80,20 +80,18 @@
 # deploys only to macOS. Linux keeps its existing LUKS/TPM2 path and receives
 # neither. Enablement stays a manual operator step — these tools only query.
 {{- if ne .chezmoi.os "darwin" }}
-.local/bin/encryption-status
+.local/share/chezmoi-command-sources/encryption-status
 {{- end }}
 
-# Native ~/.local/bin helpers deploy only where their runtime exists. Keep the
-# gate in this root file: chezmoi reads only the source-root .chezmoiignore.
 {{- if ne .chezmoi.os "linux" }}
-.local/bin/host-facts
-.local/bin/import-wifi-1password
-.local/bin/setup-luks-tpm2-unlock.sh
+.local/share/chezmoi-command-sources/host-facts
+.local/share/chezmoi-command-sources/import-wifi-1password
+.local/share/chezmoi-command-sources/setup-luks-tpm2-unlock.sh
+.local/share/chezmoi-command-sources/.setup-luks-tpm2-unlock_dracut.sh
 {{- end }}
 {{- if ne .chezmoi.os "darwin" }}
-.local/bin/import-wifi-1password-macos.sh
+.local/share/chezmoi-command-sources/import-wifi-1password-macos.sh
 {{- end }}
-
 # VSCodium user state deploys to the NATIVE per-OS location: the XDG path on
 # Linux (dot_config/VSCodium) and ~/Library/Application Support/VSCodium on
 # macOS — the latter covered by the Library gate above. The XDG path is

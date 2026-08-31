@@ -55,7 +55,7 @@ export LC_ALL=C
 
 # Enrollment tool and capability fingerprints — comment-only; never executed.
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
-      "globs" (list "dot_local/bin/executable_setup-luks-tpm2-unlock.sh.tmpl" "dot_local/bin/.setup-luks-tpm2-unlock_dracut.sh")
+      "globs" (list "dot_local/share/chezmoi-command-sources/executable_setup-luks-tpm2-unlock.sh.tmpl" "dot_local/share/chezmoi-command-sources/.setup-luks-tpm2-unlock_dracut.sh")
       "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 {{ if $luksPassphrase -}}
 tool="${HOME}/.local/bin/setup-luks-tpm2-unlock.sh"

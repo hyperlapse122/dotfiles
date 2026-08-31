@@ -8,7 +8,7 @@
 
 [gh]
 type = "archive-file"
-targetPath = '.local/bin/gh'
+targetPath = '.local/share/chezmoi-commands/incomplete/gh/gh'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "gh" "field" "url" "platform" "auto") }}'
 path = 'bin/gh'
 executable = true
@@ -24,7 +24,7 @@ stripComponents = 1
 {{- $glabArchiveUrl := (printf "https://gitlab.com/gitlab-org/cli/-/releases/%s/downloads/glab_%s_%s_%s.tar.gz" $glabTag (replace "v" "" $glabTag) .chezmoi.os .chezmoi.arch) }}
 
 [glab]
-targetPath = '.local/bin/glab'
+targetPath = '.local/share/chezmoi-commands/incomplete/glab/glab'
 type = "archive-file"
 url = '{{ $glabArchiveUrl }}'
 path = 'bin/glab'
@@ -48,5 +48,5 @@ executable = true
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden" "field" "url" "platform" "auto") | quote }}
 executable = true
-targetPath = '.local/bin/garden'
+targetPath = '.local/share/chezmoi-commands/incomplete/garden/garden'
 path = '{{ printf "%s/garden" $gardenStem }}'

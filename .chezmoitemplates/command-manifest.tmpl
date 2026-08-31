@@ -1,0 +1,77 @@
+{{- /* Command manifest template — renders the validated command contract for the current host. */ -}}
+{{- includeTemplate "command-manifest-validate.tmpl" (dict "ctx" .) -}}
+{{- $ctx := . -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $currentOs := .chezmoi.os -}}
+{{- if eq $currentOs "darwin" -}}{{- $currentOs = "macos" -}}{{- end -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $unitsList := list -}}
+{{- range $unitId, $unit := .commands.units -}}
+{{-   $eligible := has $currentOs $unit.platforms -}}
+{{-   if and $eligible (hasKey $unit "gate") -}}
+{{-     $gate := $unit.gate -}}
+{{-     if eq $gate "!container" -}}
+{{-       if $facts.container -}}{{- $eligible = false -}}{{- end -}}
+{{-     else if eq $gate "kde" -}}
+{{-       if ne $facts.desktop "kde" -}}{{- $eligible = false -}}{{- end -}}
+{{-     else if eq $gate "gnome" -}}
+{{-       if ne $facts.desktop "gnome" -}}{{- $eligible = false -}}{{- end -}}
+{{-     else if eq $gate "!virt" -}}
+{{-       if $facts.virt -}}{{- $eligible = false -}}{{- end -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if $eligible -}}
+{{-     $proofEligible := false -}}{{- if hasKey $unit "proofEligible" -}}{{- $proofEligible = $unit.proofEligible -}}{{- end -}}
+{{-     $mutableTree := false -}}{{- if hasKey $unit "mutableTree" -}}{{- $mutableTree = $unit.mutableTree -}}{{- end -}}
+{{-     $privacy := "public" -}}{{- if hasKey $unit "privacy" -}}{{- $privacy = $unit.privacy -}}{{- end -}}
+{{-     $identity := "" -}}
+{{-     $stagingPath := "" -}}
+{{-     if eq $unit.producer "external" -}}
+{{-       $identity = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
+{{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
+{{-     else if eq $unit.producer "source" -}}
+{{-       if ne $privacy "secret" -}}
+{{-         $srcFile := joinPath $sourceDir $unit.sourcePath -}}
+{{-         if stat $srcFile -}}
+{{-           $identity = include $srcFile | sha256sum -}}
+{{-         end -}}
+{{-       end -}}
+{{-       $targetBase := base $unit.sourcePath | trimPrefix "private_" | trimPrefix "executable_" | trimSuffix ".tmpl" -}}
+{{-       $stagingPath = printf ".local/share/chezmoi-command-sources/%s" $targetBase -}}
+{{-     else if eq $unit.producer "build" -}}
+{{-       if hasKey $unit "fingerprintGlobs" -}}
+{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $unit.fingerprintGlobs) | sha256sum -}}
+{{-       else -}}
+{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list (printf "packages/%s/**" $unitId))) | sha256sum -}}
+{{-       end -}}
+{{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
+{{-     else if eq $unit.producer "existingTree" -}}
+{{-       if hasKey $unit "tool" -}}
+{{-         $identity = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
+{{-       end -}}
+{{-       if $identity -}}
+{{-         $stagingPath = printf "%s/%s" $unit.treePath $identity -}}
+{{-       else -}}
+{{-         $stagingPath = $unit.treePath -}}
+{{-       end -}}
+{{-     end -}}
+{{-     $cmds := list -}}
+{{-     range $cmd := $unit.commands -}}
+{{-       $cmdEligible := true -}}
+{{-       if hasKey $cmd "platforms" -}}
+{{-         $cmdEligible = has $currentOs $cmd.platforms -}}
+{{-       end -}}
+{{-       if $cmdEligible -}}
+{{-         $cmdEntry := dict "name" $cmd.name -}}
+{{-         if hasKey $cmd "relPath" -}}{{- $_ := set $cmdEntry "relPath" $cmd.relPath -}}{{- end -}}
+{{-         if hasKey $cmd "mode" -}}{{- $_ := set $cmdEntry "mode" $cmd.mode -}}{{- end -}}
+{{-         $cmds = append $cmds $cmdEntry -}}
+{{-       end -}}
+{{-     end -}}
+{{-     $unitDict := dict "id" $unitId "producer" $unit.producer "safetyProfile" $unit.safetyProfile "proofEligible" $proofEligible "mutableTree" $mutableTree "privacy" $privacy "mode" $unit.mode "commands" $cmds "identity" $identity "stagingPath" $stagingPath -}}
+{{-     if hasKey $unit "legacy" -}}{{- $_ := set $unitDict "legacy" $unit.legacy -}}{{- end -}}
+{{-     if hasKey $unit "treePath" -}}{{- $_ := set $unitDict "treePath" $unit.treePath -}}{{- end -}}
+{{-     $unitsList = append $unitsList $unitDict -}}
+{{-   end -}}
+{{- end -}}
+{{ dict "schemaVersion" "command-manifest/v1" "units" $unitsList | toJson }}

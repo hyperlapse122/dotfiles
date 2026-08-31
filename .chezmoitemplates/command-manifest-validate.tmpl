@@ -1,0 +1,80 @@
+{{- /* Command manifest validator: schema, producer classes, safety profiles, platform gates, and command uniqueness. */ -}}
+{{- if not (hasKey . "ctx") -}}{{- fail "command-manifest-validate.tmpl: missing ctx" -}}{{- end -}}
+{{- $ctx := .ctx -}}
+{{- if not (hasKey $ctx "commands") -}}{{- fail "commands.yaml: .commands is required" -}}{{- end -}}
+{{- $commands := $ctx.commands -}}
+{{- if ne ($commands.schemaVersion | toString) "1" -}}{{- fail "commands.yaml: commands.schemaVersion must be 1" -}}{{- end -}}
+{{- if not (hasKey $commands "authority") -}}{{- fail "commands.yaml: commands.authority is required" -}}{{- end -}}
+{{- $authority := $commands.authority -}}
+{{- range $required := list "producerClasses" "safetyProfiles" "supportedPlatforms" -}}
+{{-   if not (hasKey $authority $required) -}}{{- fail (printf "commands.yaml: authority.%s is required" $required) -}}{{- end -}}
+{{- end -}}
+{{- $producerClasses := $authority.producerClasses -}}
+{{- $safetyProfiles := $authority.safetyProfiles -}}
+{{- $supportedPlatforms := $authority.supportedPlatforms -}}
+{{- range $p := $supportedPlatforms -}}
+{{-   if not (has $p (list "linux" "macos")) -}}{{- fail (printf "commands.yaml: unsupported platform %q in supportedPlatforms (Windows is not supported)" $p) -}}{{- end -}}
+{{- end -}}
+{{- if not (hasKey $commands "units") -}}{{- fail "commands.yaml: commands.units is required" -}}{{- end -}}
+{{- $seenCommands := dict "linux" (dict) "macos" (dict) -}}
+{{- range $unitId, $unit := $commands.units -}}
+{{-   if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._-]*$" $unitId) -}}{{- fail (printf "commands.yaml: invalid unit id %q" $unitId) -}}{{- end -}}
+{{-   range $required := list "producer" "safetyProfile" "platforms" "mode" "commands" -}}
+{{-     if not (hasKey $unit $required) -}}{{- fail (printf "commands.yaml: unit %q is missing required field %q" $unitId $required) -}}{{- end -}}
+{{-   end -}}
+{{-   if not (has $unit.producer $producerClasses) -}}{{- fail (printf "commands.yaml: unit %q has unknown producer %q" $unitId $unit.producer) -}}{{- end -}}
+{{-   if not (has $unit.safetyProfile $safetyProfiles) -}}{{- fail (printf "commands.yaml: unit %q has unknown safetyProfile %q" $unitId $unit.safetyProfile) -}}{{- end -}}
+{{-   $proofEligible := false -}}{{- if hasKey $unit "proofEligible" -}}{{- $proofEligible = $unit.proofEligible -}}{{- end -}}
+{{-   if and (eq $unit.safetyProfile "native-single-file") (not $proofEligible) -}}
+{{-     fail (printf "commands.yaml: unit %q with native-single-file must have proofEligible: true" $unitId) -}}
+{{-   end -}}
+{{-   if and (ne $unit.safetyProfile "native-single-file") $proofEligible -}}
+{{-     fail (printf "commands.yaml: unit %q with safetyProfile %q cannot have proofEligible: true" $unitId $unit.safetyProfile) -}}{{- end -}}
+{{-   $mutableTree := false -}}{{- if hasKey $unit "mutableTree" -}}{{- $mutableTree = $unit.mutableTree -}}{{- end -}}
+{{-   if and $mutableTree (ne $unit.safetyProfile "mutable-tree") -}}
+{{-     fail (printf "commands.yaml: unit %q with mutableTree: true must have safetyProfile: mutable-tree" $unitId) -}}
+{{-   end -}}
+{{-   if and (eq $unit.safetyProfile "mutable-tree") (not $mutableTree) -}}
+{{-     fail (printf "commands.yaml: unit %q with safetyProfile: mutable-tree must have mutableTree: true" $unitId) -}}
+{{-   end -}}
+{{-   $privacy := "public" -}}{{- if hasKey $unit "privacy" -}}{{- $privacy = $unit.privacy -}}{{- end -}}
+{{-   if not (has $privacy (list "public" "secret")) -}}{{- fail (printf "commands.yaml: unit %q has invalid privacy %q" $unitId $privacy) -}}{{- end -}}
+{{-   if and (eq $privacy "secret") (ne ($unit.mode | toString) "0700") -}}
+{{-     fail (printf "commands.yaml: secret unit %q must have mode 0700, got %v" $unitId $unit.mode) -}}
+{{-   end -}}
+{{-   range $platform := $unit.platforms -}}
+{{-     if not (has $platform $supportedPlatforms) -}}{{- fail (printf "commands.yaml: unit %q declares unsupported platform %q" $unitId $platform) -}}{{- end -}}
+{{-   end -}}
+{{-   if eq (len $unit.commands) 0 -}}{{- fail (printf "commands.yaml: unit %q must declare at least one command" $unitId) -}}{{- end -}}
+{{-   range $cmd := $unit.commands -}}
+{{-     if not (hasKey $cmd "name") -}}{{- fail (printf "commands.yaml: unit %q has command missing name" $unitId) -}}{{- end -}}
+{{-     if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._+-]*$" $cmd.name) -}}{{- fail (printf "commands.yaml: unit %q has invalid command name %q (path traversal or invalid characters)" $unitId $cmd.name) -}}{{- end -}}
+{{-     if or (contains "/" $cmd.name) (contains ".." $cmd.name) (contains "\\" $cmd.name) -}}
+{{-       fail (printf "commands.yaml: unit %q command %q contains path traversal characters" $unitId $cmd.name) -}}
+{{-     end -}}
+{{-     if hasKey $cmd "relPath" -}}
+{{-       if or (hasPrefix "/" $cmd.relPath) (contains ".." $cmd.relPath) (contains "\\" $cmd.relPath) -}}
+{{-         fail (printf "commands.yaml: unit %q command %q has invalid relPath %q" $unitId $cmd.name $cmd.relPath) -}}
+{{-       end -}}
+{{-     end -}}
+{{-     $cmdPlatforms := $unit.platforms -}}
+{{-     if hasKey $cmd "platforms" -}}{{- $cmdPlatforms = $cmd.platforms -}}{{- end -}}
+{{-     range $cp := $cmdPlatforms -}}
+{{-       if not (has $cp $supportedPlatforms) -}}{{- fail (printf "commands.yaml: command %q declares unsupported platform %q" $cmd.name $cp) -}}{{- end -}}
+{{-       $platformMap := index $seenCommands $cp -}}
+{{-       if hasKey $platformMap $cmd.name -}}
+{{-         fail (printf "commands.yaml: duplicate public command %q on platform %s (claimed by %q and %q)" $cmd.name $cp (index $platformMap $cmd.name) $unitId) -}}
+{{-       end -}}
+{{-       $_ := set $platformMap $cmd.name $unitId -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if eq $unit.producer "external" -}}
+{{-     if not (hasKey $unit "tool") -}}{{- fail (printf "commands.yaml: external unit %q is missing tool" $unitId) -}}{{- end -}}
+{{-     if or (not (hasKey $ctx "releases")) (not (hasKey $ctx.releases "tools")) (not (hasKey $ctx.releases.tools $unit.tool)) -}}
+{{-       fail (printf "commands.yaml: external unit %q references undeclared release tool %q" $unitId $unit.tool) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if eq $unit.producer "source" -}}
+{{-     if not (hasKey $unit "sourcePath") -}}{{- fail (printf "commands.yaml: source unit %q is missing sourcePath" $unitId) -}}{{- end -}}
+{{-   end -}}
+{{- end -}}

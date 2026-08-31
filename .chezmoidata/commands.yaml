@@ -1,0 +1,588 @@
+commands:
+  schemaVersion: 1
+  authority:
+    producerClasses:
+      - external
+      - source
+      - build
+      - existingTree
+    safetyProfiles:
+      - native-single-file
+      - interpreted
+      - multi-file
+      - mutable-tree
+    supportedPlatforms:
+      - linux
+      - macos
+
+  units:
+    android:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: android
+      commands:
+        - name: android
+      legacy:
+        path: .local/bin/android
+
+    agent-browser:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: agent-browser
+      commands:
+        - name: agent-browser
+      legacy:
+        path: .local/bin/agent-browser
+
+    omp:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: omp
+      commands:
+        - name: omp
+      legacy:
+        path: .local/bin/omp
+
+    aoe:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: aoe
+      commands:
+        - name: aoe
+      legacy:
+        path: .local/bin/aoe
+
+    ast-grep:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: ast-grep
+      commands:
+        - name: ast-grep
+      legacy:
+        path: .local/bin/ast-grep
+
+    sg:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: ast-grep
+      commands:
+        - name: sg
+      legacy:
+        path: .local/bin/sg
+
+    buf:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: buf
+      commands:
+        - name: buf
+      legacy:
+        path: .local/bin/buf
+
+    protoc-gen-buf-breaking:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: buf
+      commands:
+        - name: protoc-gen-buf-breaking
+      legacy:
+        path: .local/bin/protoc-gen-buf-breaking
+
+    protoc-gen-buf-lint:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: buf
+      commands:
+        - name: protoc-gen-buf-lint
+      legacy:
+        path: .local/bin/protoc-gen-buf-lint
+
+    marksman:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: marksman
+      commands:
+        - name: marksman
+      legacy:
+        path: .local/bin/marksman
+
+    shellcheck:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: shellcheck
+      commands:
+        - name: shellcheck
+      legacy:
+        path: .local/bin/shellcheck
+
+    wasm-pack:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: wasm-pack
+      commands:
+        - name: wasm-pack
+      legacy:
+        path: .local/bin/wasm-pack
+
+    rust-analyzer:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: rust-analyzer
+      commands:
+        - name: rust-analyzer
+      legacy:
+        path: .local/bin/rust-analyzer
+
+    uv:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: uv
+      commands:
+        - name: uv
+      legacy:
+        path: .local/bin/uv
+
+    uvx:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: uv
+      commands:
+        - name: uvx
+      legacy:
+        path: .local/bin/uvx
+
+    kubectl:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: kubectl
+      commands:
+        - name: kubectl
+      legacy:
+        path: .local/bin/kubectl
+
+    kubectl-convert:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: kubectl
+      commands:
+        - name: kubectl-convert
+      legacy:
+        path: .local/bin/kubectl-convert
+
+    helm:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: helm
+      commands:
+        - name: helm
+      legacy:
+        path: .local/bin/helm
+
+    minikube:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: minikube
+      commands:
+        - name: minikube
+      legacy:
+        path: .local/bin/minikube
+
+    docker-credential-secretservice:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux]
+      tool: docker-credential-helpers
+      commands:
+        - name: docker-credential-secretservice
+      legacy:
+        path: .local/bin/docker-credential-secretservice
+
+    docker-credential-osxkeychain:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [macos]
+      tool: docker-credential-helpers
+      commands:
+        - name: docker-credential-osxkeychain
+      legacy:
+        path: .local/bin/docker-credential-osxkeychain
+
+    wakatime-cli:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: wakatime-cli
+      commands:
+        - name: wakatime-cli
+      legacy:
+        path: .local/bin/wakatime-cli
+
+    gh:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: gh
+      commands:
+        - name: gh
+      legacy:
+        path: .local/bin/gh
+
+    glab:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: glab
+      commands:
+        - name: glab
+      legacy:
+        path: .local/bin/glab
+
+    garden:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: garden
+      commands:
+        - name: garden
+      legacy:
+        path: .local/bin/garden
+
+    auth-glab:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_auth-glab
+      commands:
+        - name: auth-glab
+      legacy:
+        path: .local/bin/auth-glab
+
+    code:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_code
+      commands:
+        - name: code
+      legacy:
+        path: .local/bin/code
+
+    docker-credential-dockerhub:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_docker-credential-dockerhub
+      commands:
+        - name: docker-credential-dockerhub
+      legacy:
+        path: .local/bin/docker-credential-dockerhub
+
+    dotfiles-skips:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_dotfiles-skips
+      commands:
+        - name: dotfiles-skips
+      legacy:
+        path: .local/bin/dotfiles-skips
+
+    encryption-status:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_encryption-status
+      commands:
+        - name: encryption-status
+      legacy:
+        path: .local/bin/encryption-status
+
+    git-prune-local-branches:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_git-prune-local-branches
+      commands:
+        - name: git-prune-local-branches
+      legacy:
+        path: .local/bin/git-prune-local-branches
+
+    host-facts:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_host-facts.tmpl
+      commands:
+        - name: host-facts
+      legacy:
+        path: .local/bin/host-facts
+
+    kde-color-picker:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux]
+      gate: kde
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_kde-color-picker
+      commands:
+        - name: kde-color-picker
+      legacy:
+        path: .local/bin/kde-color-picker
+
+    setup-luks-tpm2-unlock:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux]
+      gate: "!container"
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_setup-luks-tpm2-unlock.sh.tmpl
+      commands:
+        - name: setup-luks-tpm2-unlock.sh
+      legacy:
+        path: .local/bin/setup-luks-tpm2-unlock.sh
+
+    src-audit:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_src-audit
+      commands:
+        - name: src-audit
+      legacy:
+        path: .local/bin/src-audit
+
+    import-wifi-linux:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      privacy: secret
+      mode: "0700"
+      platforms: [linux]
+      sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password.tmpl
+      commands:
+        - name: import-wifi-1password
+      legacy:
+        path: .local/bin/import-wifi-1password
+
+    import-wifi-macos:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      privacy: secret
+      mode: "0700"
+      platforms: [macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password-macos.sh.tmpl
+      commands:
+        - name: import-wifi-1password-macos.sh
+      legacy:
+        path: .local/bin/import-wifi-1password-macos.sh
+
+    tokscale:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0700"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/private_executable_tokscale.tmpl
+      commands:
+        - name: tokscale
+      legacy:
+        path: .local/bin/tokscale
+
+    figma-auth:
+      producer: build
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      gate: "!container"
+      fingerprintGlobs:
+        - mise.toml
+        - packages/package.json
+        - packages/bun.lock
+        - packages/bunfig.toml
+        - packages/vite.config.ts
+        - packages/figma-auth/package.json
+        - packages/figma-auth/tsconfig.json
+        - packages/figma-auth/vite.config.ts
+        - packages/figma-auth/src/**
+      commands:
+        - name: figma-auth
+      legacy:
+        path: .local/bin/figma-auth
+
+    settings-reconcile:
+      producer: build
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      gate: "!container"
+      fingerprintGlobs:
+        - mise.toml
+        - packages/package.json
+        - packages/bun.lock
+        - packages/bunfig.toml
+        - packages/vite.config.ts
+        - packages/settings-reconcile/package.json
+        - packages/settings-reconcile/tsconfig.json
+        - packages/settings-reconcile/vite.config.ts
+        - packages/settings-reconcile/src/**
+      commands:
+        - name: settings-reconcile
+      legacy:
+        path: .local/bin/settings-reconcile
+
+    mxm4-haptic:
+      producer: build
+      safetyProfile: multi-file
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      gate: "!container"
+      fingerprintGlobs:
+        - crates/mxm4-haptic/Cargo.toml
+        - crates/mxm4-haptic/Cargo.lock
+        - crates/mxm4-haptic/src/**
+      commands:
+        - name: mxm4-hapticd
+        - name: mxm4-haptic
+        - name: mxm4-haptic-notify
+          platforms: [linux]
+      legacy:
+        path: .local/bin/mxm4-haptic
+    codegraph:
+      producer: existingTree
+      safetyProfile: multi-file
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: codegraph
+      treePath: .codegraph/versions
+      commands:
+        - name: codegraph
+          relPath: codegraph
+      legacy:
+        path: .local/bin/codegraph
+
+    flutter:
+      producer: existingTree
+      safetyProfile: mutable-tree
+      proofEligible: false
+      mutableTree: true
+      mode: "0755"
+      platforms: [linux, macos]
+      gate: "!container"
+      tool: flutter
+      treePath: .local/share/flutter/versions
+      commands:
+        - name: flutter
+          relPath: bin/flutter
+        - name: dart
+          relPath: bin/dart
+      legacy:
+        path: .local/bin/flutter
+
+    kitty:
+      producer: existingTree
+      safetyProfile: multi-file
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      gate: "!container"
+      tool: kitty
+      treePath: .local/share/kitty
+      commands:
+        - name: kitty
+          relPath: bin/kitty
+        - name: kitten
+          relPath: bin/kitten
+      legacy:
+        path: .local/bin/kitty

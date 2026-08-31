@@ -14,10 +14,9 @@
 
 [android]
 type = "file"
-targetPath = '.local/bin/android'
+targetPath = '.local/share/chezmoi-commands/incomplete/android/android'
 url = {{ $androidUrl | quote }}
 executable = true
-
 [android.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "android" "field" "sha256" "platform" "auto") }}'
 
@@ -29,14 +28,14 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "andro
 type = "archive-file"
 url = '{{ $astGrepArchiveUrl }}'
 executable = true
-targetPath = '.local/bin/ast-grep'
+targetPath = '.local/share/chezmoi-commands/incomplete/ast-grep/ast-grep'
 path = 'ast-grep'
 
 [sg]
 type = "archive-file"
 url = '{{ $astGrepArchiveUrl }}'
 executable = true
-targetPath = '.local/bin/sg'
+targetPath = '.local/share/chezmoi-commands/incomplete/sg/sg'
 path = 'sg'
 
 {{- /* ---------- buf (+ its protoc plugins, zsh completion and man pages) ---------- */ -}}
@@ -48,21 +47,21 @@ type = "archive-file"
 url = '{{ $bufArchiveUrl }}'
 path = 'buf/bin/buf'
 executable = true
-targetPath = '.local/bin/buf'
+targetPath = '.local/share/chezmoi-commands/incomplete/buf/buf'
 
 [protoc-gen-buf-breaking]
 type = "archive-file"
 url = '{{ $bufArchiveUrl }}'
 path = 'buf/bin/protoc-gen-buf-breaking'
 executable = true
-targetPath = '.local/bin/protoc-gen-buf-breaking'
+targetPath = '.local/share/chezmoi-commands/incomplete/protoc-gen-buf-breaking/protoc-gen-buf-breaking'
 
 [protoc-gen-buf-lint]
 type = "archive-file"
 url = '{{ $bufArchiveUrl }}'
 path = 'buf/bin/protoc-gen-buf-lint'
 executable = true
-targetPath = '.local/bin/protoc-gen-buf-lint'
+targetPath = '.local/share/chezmoi-commands/incomplete/protoc-gen-buf-lint/protoc-gen-buf-lint'
 
 [buf-zsh-completion]
 type = "archive-file"
@@ -85,7 +84,7 @@ executable = false
 
 [marksman]
 type = "file"
-targetPath = '.local/bin/marksman'
+targetPath = '.local/share/chezmoi-commands/incomplete/marksman/marksman'
 url = {{ $marksmanUrl | quote }}
 executable = true
 
@@ -102,7 +101,7 @@ executable = true
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "shellcheck" "field" "url" "platform" "auto") | quote }}
 executable = true
-targetPath = '.local/bin/shellcheck'
+targetPath = '.local/share/chezmoi-commands/incomplete/shellcheck/shellcheck'
 path = '{{ $shellcheckPath }}'
 
 {{- /* ---------- wasm-pack ---------- */ -}}
@@ -117,7 +116,7 @@ path = '{{ $shellcheckPath }}'
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wasm-pack" "field" "url" "platform" "auto") | quote }}
 executable = true
-targetPath = '.local/bin/wasm-pack'
+targetPath = '.local/share/chezmoi-commands/incomplete/wasm-pack/wasm-pack'
 path = '{{ printf "%s/wasm-pack" $wasmPackStem }}'
 
 {{- /* ---------- rust-analyzer ---------- */ -}}
@@ -132,7 +131,7 @@ type = "file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "rust-analyzer" "field" "url" "platform" "auto") | quote }}
 decompress = "gzip"
 executable = true
-targetPath = '.local/bin/rust-analyzer'
+targetPath = '.local/share/chezmoi-commands/incomplete/rust-analyzer/rust-analyzer'
 
 {{- /* ---------- uv (+ uvx, from the same archive) ---------- */ -}}
 {{- /*
@@ -148,14 +147,14 @@ targetPath = '.local/bin/rust-analyzer'
 type = "archive-file"
 url = '{{ $uvArchiveUrl }}'
 executable = true
-targetPath = '.local/bin/uv'
+targetPath = '.local/share/chezmoi-commands/incomplete/uv/uv'
 path = '{{ printf "%suv" $uvPathPrefix }}'
 
 [uvx]
 type = "archive-file"
 url = '{{ $uvArchiveUrl }}'
 executable = true
-targetPath = '.local/bin/uvx'
+targetPath = '.local/share/chezmoi-commands/incomplete/uvx/uvx'
 path = '{{ printf "%suvx" $uvPathPrefix }}'
 
 {{- /* ---------- flutter ---------- */ -}}

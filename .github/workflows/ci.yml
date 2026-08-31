@@ -90,7 +90,8 @@ jobs:
             ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl:gnome-remove-ibus-source.sh" \
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl:kde-calendar.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl:build-figma-auth.sh" \
-            ".chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:build-settings-reconcile.sh"
+            ".chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:build-settings-reconcile.sh" \
+            ".chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl:build-command-reconcile.sh"
           do
             source_path=${item%%:*}
             output_name=${item#*:}
@@ -159,6 +160,11 @@ jobs:
           .ci/test-kde-calendar-hard-error.sh "$RUNNER_TEMP/kde-calendar.sh"
           .ci/test-build-figma-auth.sh "$RUNNER_TEMP/build-figma-auth.sh"
           .ci/test-build-settings-reconcile.sh "$RUNNER_TEMP/build-settings-reconcile.sh"
+          .ci/test-build-command-reconcile.sh "$RUNNER_TEMP/build-command-reconcile.sh"
+          .ci/test-command-manifest.sh
+          .ci/test-command-external-render.sh
+          .ci/test-command-reconcile-apply.sh
+          .ci/test-command-reconcile-process.sh
           .ci/test-merge-commit-only-gates.sh
           .ci/test-git-prune-local-branches.sh
 

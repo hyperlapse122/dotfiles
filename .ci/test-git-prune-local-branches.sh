@@ -7,7 +7,7 @@ set -euo pipefail
 # credential.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-tool="$repo_root/dot_local/bin/executable_git-prune-local-branches"
+tool="$repo_root/dot_local/share/chezmoi-command-sources/executable_git-prune-local-branches"
 [ -f "$tool" ] || {
   printf 'git-prune-local-branches gates: missing %s\n' "$tool" >&2
   exit 1
