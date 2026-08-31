@@ -30,6 +30,7 @@ fi
 
 if ! command -v semodule >/dev/null 2>&1; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "selinux-policies" "site" "semodule-absent" "direction" "harmless" "reason" "semodule binary is not installed") | trim | indent 2 }}
+fi
 SRC_DIR="{{ $sourceDir }}/system/linux/selinux"
 STAMP_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi"
 STAMP_FILE="$STAMP_DIR/selinux-policies.stamp"

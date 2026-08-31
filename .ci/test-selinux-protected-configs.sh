@@ -45,6 +45,7 @@ env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" \
   execute-template < "$script_tmpl" > "$rendered"
 
 [[ -s "$rendered" ]] || fail "rendered script is empty"
+bash -n "$rendered" || fail "rendered script failed bash syntax check"
 
 grep -qF "semodule -X 400 -i" "$rendered" || fail "rendered script missing semodule invocation"
 grep -qF "restorecon -RFv" "$rendered" || fail "rendered script missing restorecon invocation"
