@@ -59,7 +59,7 @@ Prettier. A single dependency — `vite-plus`, pinned through the root
   [`bunfig.toml`](bunfig.toml) mirrors that hardening and additionally sets
   `linker = "hoisted"` so Vitest resolves to a single copy (see
   [Lint + format + test](#lint--format--test)). The workspace-root
-  [`package.json`](package.json) pins `"packageManager": "bun@1.3.14"`, so the
+  [`package.json`](package.json) pins `"packageManager": "bun@1.4.0"`, so the
   workspace uses a single known Bun version regardless of what is installed
   globally.
 - **One lockfile**: the workspace-root `packages/bun.lock` is the only lockfile

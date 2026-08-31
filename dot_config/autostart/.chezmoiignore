@@ -1,8 +1,3 @@
-# Ubuntu only
-{{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "ubuntu")) -}}
-private_claude-desktop.desktop
-{{ end }}
-
 # kleopatra is the KDE/GnuPG certificate manager; only autostart it on the KDE
 # targets. The desktop is the `desktop` fact (.chezmoidata/facts.yaml, resolved in
 # .chezmoitemplates/facts.tmpl): `gnome` means gnome-shell on PATH WITHOUT

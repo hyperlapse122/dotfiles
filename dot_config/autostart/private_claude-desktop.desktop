@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Claude
-Exec="/usr/lib/claude-desktop/claude-desktop" --startup
-X-GNOME-Autostart-enabled=true

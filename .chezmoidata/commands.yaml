@@ -560,7 +560,7 @@ commands:
       treePath: .codegraph/versions
       commands:
         - name: codegraph
-          relPath: codegraph
+          relPath: bin/codegraph
       legacy:
         path: .local/bin/codegraph
 
