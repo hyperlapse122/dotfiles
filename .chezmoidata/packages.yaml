@@ -217,13 +217,13 @@ packages:
         - jq
         - yq
         - gnupg2
+        - secilc
         # kdotool: managed by mise (cargo:kdotool — see dot_config/mise/config.toml)
         - nvtop
         - ripgrep
         - tmux
         - xxd
         - yp-tools
-
         # Cloud provider CLI
         - azure-cli
 

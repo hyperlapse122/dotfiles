@@ -13,24 +13,28 @@ fail() { printf 'test-selinux-protected-configs: %s\n' "$*" >&2; exit 1; }
 for token in \
   "(type protected_agent_config_t)" \
   "(roletype object_r protected_agent_config_t)" \
+  "(typeattributeset file_type (protected_agent_config_t))" \
   "(type chezmoi_t)" \
   "(roletype unconfined_r chezmoi_t)" \
   "(type chezmoi_exec_t)" \
   "(roletype object_r chezmoi_exec_t)" \
+  "(typeattributeset file_type (chezmoi_exec_t))" \
+  "(typeattributeset exec_type (chezmoi_exec_t))" \
   "(typetransition unconfined_t chezmoi_exec_t process chezmoi_t)" \
   "(typeattributeset unconfined_domain_type (chezmoi_t))" \
   "(allow chezmoi_t protected_agent_config_t" \
   "(allow unconfined_t protected_agent_config_t" \
-  "(filecon \"/home/[^/]+/\\.codex/config\\.toml\"" \
-  "(filecon \"/home/[^/]+/\\.claude\\.json.*\"" \
-  "(filecon \"/home/[^/]+/\\.mcp\\.json\"" \
-  "(filecon \"/home/[^/]+/\\.claude/settings\\.json\"" \
-  "(filecon \"/home/[^/]+/\\.codex/skills(/.*)?\"" \
+  "(filecon \"HOME_DIR/\\.codex/config\\.toml\"" \
+  "(filecon \"HOME_DIR/\\.claude\\.json.*\"" \
+  "(filecon \"HOME_DIR/\\.mcp\\.json\"" \
+  "(filecon \"HOME_DIR/\\.claude/settings\\.json\"" \
+  "(filecon \"HOME_DIR/\\.codex/skills(/.*)?\"" \
   "(filecon \"/usr/bin/chezmoi\"" \
-  "(filecon \"/home/[^/]+/\\.local/bin/chezmoi\""; do
+  "(filecon \"HOME_DIR/\\.local/bin/chezmoi\""; do
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing expected declaration: $token"
 done
 
+grep -qF -- "- secilc" "$repo_root/.chezmoidata/packages.yaml" || fail "packages.yaml missing secilc package"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/selinux-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
@@ -49,5 +53,39 @@ bash -n "$rendered" || fail "rendered script failed bash syntax check"
 
 grep -qF "semodule -X 400 -i" "$rendered" || fail "rendered script missing semodule invocation"
 grep -qF "restorecon -RFv" "$rendered" || fail "rendered script missing restorecon invocation"
+if command -v secilc >/dev/null 2>&1; then
+  base_stub="$scratch/base_stub.cil"
+  cat <<'EOF' > "$base_stub"
+(role object_r)
+(role unconfined_r)
+(type unconfined_t)
+(type user_devpts_t)
+(typeattribute file_type)
+(typeattribute exec_type)
+(typeattribute unconfined_domain_type)
+(class file (create read write getattr setattr unlink rename open append lock map entrypoint execute))
+(class dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock))
+(class process (transition sigchld signull sigkill sigstop signal siginh fork getattr getsched setsched))
+(class fd (use))
+(class chr_file (read write ioctl getattr append open))
+(classorder (file dir process fd chr_file))
+(sid kernel)
+(sidorder (kernel))
+(user unconfined_u)
+(user system_u)
+(userrole unconfined_u object_r)
+(userrole unconfined_u unconfined_r)
+(userrole system_u object_r)
+(userrole system_u unconfined_r)
+(sensitivity s0)
+(sensitivityorder (s0))
+(userlevel unconfined_u (s0))
+(userrange unconfined_u ((s0)(s0)))
+(userlevel system_u (s0))
+(userrange system_u ((s0)(s0)))
+(sidcontext kernel (system_u object_r user_devpts_t ((s0)(s0))))
+EOF
+  secilc -N -o "$scratch/policy" -f "$scratch/file_contexts" "$base_stub" "$cil_file" || fail "secilc failed to compile CIL policy"
+fi
 
 printf 'test-selinux-protected-configs: all assertions passed.\n'

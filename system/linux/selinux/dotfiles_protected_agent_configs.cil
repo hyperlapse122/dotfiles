@@ -6,13 +6,15 @@
 ; --- Types and Roles ---
 (type protected_agent_config_t)
 (roletype object_r protected_agent_config_t)
+(typeattributeset file_type (protected_agent_config_t))
 
 (type chezmoi_t)
 (roletype unconfined_r chezmoi_t)
 
 (type chezmoi_exec_t)
 (roletype object_r chezmoi_exec_t)
-(typeattribute chezmoi_exec_t (file_type exec_type))
+(typeattributeset file_type (chezmoi_exec_t))
+(typeattributeset exec_type (chezmoi_exec_t))
 
 ; --- Domain Transition: unconfined_t -> chezmoi_exec_t -> chezmoi_t ---
 (typetransition unconfined_t chezmoi_exec_t process chezmoi_t)
@@ -25,7 +27,7 @@
 (allow chezmoi_t chezmoi_exec_t (file (entrypoint read getattr execute open map)))
 
 ; Process inheritance and lifecycle between unconfined_t and chezmoi_t
-(allow chezmoi_t unconfined_t (process (sigchld signull sigkill sigterm signal)))
+(allow chezmoi_t unconfined_t (process (sigchld signull sigkill signal)))
 (allow chezmoi_t unconfined_t (fd (use)))
 (allow chezmoi_t user_devpts_t (chr_file (read write ioctl getattr append open)))
 
@@ -43,13 +45,13 @@
 
 ; --- File Context Specifications (filecon) ---
 ; Target config files in user home directories
-(filecon "/home/[^/]+/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 
 ; chezmoi executables
 (filecon "/usr/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
 (filecon "/usr/local/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))
