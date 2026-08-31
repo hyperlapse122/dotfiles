@@ -1,5 +1,5 @@
 import { lstat, readlink } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import type { CommandManifest, UnitManifest } from "./manifest.js";
 import { atomicSymlink, prepareDir, resolveCommandPaths, type CommandPaths } from "./paths.js";
 import { ensureCompletedUnit } from "./producer.js";
@@ -55,7 +55,9 @@ export async function activateUnitInternal(
         const isLegacyOwner =
           unit.legacy?.path &&
           (publicPath === resolve(paths.home, unit.legacy.path) ||
-            relative(paths.home, publicPath) === unit.legacy.path);
+            relative(paths.home, publicPath) === unit.legacy.path ||
+            (dirname(publicPath) === resolve(paths.home, dirname(unit.legacy.path)) &&
+              unit.commands.some((c) => c.name === cmd.name)));
         if (isLegacyOwner) {
           await atomicSymlink(expectedRel, publicPath);
         } else {
