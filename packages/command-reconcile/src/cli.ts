@@ -5,8 +5,8 @@ import { activateUnit, reconcileAll } from "./reconcile.js";
 function printUsage(): void {
   process.stderr.write(
     `Usage:
-  command-reconcile activate-unit --manifest <path|json> --unit <id> [--home <path>]
-  command-reconcile reconcile-all --manifest <path|json> [--home <path>] [--prune]
+  command-reconcile activate-unit --manifest <path|json> --unit <id> [--home <path>] [--json]
+  command-reconcile reconcile-all --manifest <path|json> [--home <path>] [--prune] [--json]
 `,
   );
 }
@@ -24,6 +24,7 @@ export async function main(argv: string[]): Promise<number> {
   let unitArg = "";
   let homeArg: string | undefined = undefined;
   let pruneArg = false;
+  let jsonArg = false;
 
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
@@ -35,6 +36,8 @@ export async function main(argv: string[]): Promise<number> {
       homeArg = args[++i];
     } else if (arg === "--prune") {
       pruneArg = true;
+    } else if (arg === "--json") {
+      jsonArg = true;
     }
   }
 
@@ -52,13 +55,36 @@ export async function main(argv: string[]): Promise<number> {
       return 1;
     }
     const result = await withLease(homeArg, () => activateUnit(homeArg, manifest, unitArg));
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return result.status === "failed" ? 1 : 0;
+    if (jsonArg) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else if (result.status === "failed" || result.status === "conflict") {
+      process.stderr.write(
+        `command-reconcile: activate-unit failed for ${unitArg}: ${result.error ?? result.status}\n`,
+      );
+    }
+    return result.status === "failed" || result.status === "conflict" ? 1 : 0;
   }
 
   if (command === "reconcile-all") {
     const report = await withLease(homeArg, () => reconcileAll(homeArg, manifest, pruneArg));
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    if (jsonArg) {
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    } else {
+      if (report.activated.length > 0) {
+        process.stdout.write(`command-reconcile: activated ${report.activated.join(", ")}\n`);
+      }
+      if (report.pruned.length > 0) {
+        process.stdout.write(`command-reconcile: pruned ${report.pruned.join(", ")}\n`);
+      }
+      for (const conflict of report.conflicts) {
+        process.stderr.write(
+          `command-reconcile: conflict for ${conflict.id} at ${conflict.path}: ${conflict.reason}\n`,
+        );
+      }
+      for (const fail of report.failed) {
+        process.stderr.write(`command-reconcile: failed ${fail.id}: ${fail.error}\n`);
+      }
+    }
     return report.failed.length > 0 ? 1 : 0;
   }
 
