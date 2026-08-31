@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.35.1",
+        "version": "v0.35.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.1/agent-browser-linux-x64",
-            "sha256": "21874b7afbe12a225d01c7f3f7d635c2c2f740660f6ef5e7916737c60c4f1faf"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.2/agent-browser-linux-x64",
+            "sha256": "b699f24eebdb7fde91a34a9d697a1b84c3145f54327b60694b46f06b2972ce4d"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.1/agent-browser-linux-arm64",
-            "sha256": "4c24f1fa2f704865a0c4d6f906bf8116931888681742bbf080c03dceb147ac9e"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.2/agent-browser-linux-arm64",
+            "sha256": "1599fec4f4e75dc26fc08eecc06ca4b729a0361932b32a6afb99885f0f829ecb"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.1/agent-browser-darwin-x64",
-            "sha256": "6cafdc32d0cccbd892310adb7a36d7cd97807ab684338664fc08c7fdfeb2fef2"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.2/agent-browser-darwin-x64",
+            "sha256": "d76cfc76885d5007f3c119008a80a145b381ec4dfdd202f43e46cd0829751774"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.1/agent-browser-darwin-arm64",
-            "sha256": "12be3313ec6d878d8fda62ca5c62b7013c1b6931bf57dd2678788654b01ffe95"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.2/agent-browser-darwin-arm64",
+            "sha256": "e1e08f3b0a1c711750209e6a25b6f3a9dab7ed6e6a24b55a2556050b991fcc97"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.1/agent-browser-linux-musl-x64",
-            "sha256": "593f83091c1324e8414da0837d358c4ad1f7007de35c5fdf8562a8d4c1e6e150"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.2/agent-browser-linux-musl-x64",
+            "sha256": "8395028176289e9fc5fbadd97891f97fb2ddc0d23682605a91044959788140ba"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.1/agent-browser-linux-musl-arm64",
-            "sha256": "afe009abe6eaa30ceb6a85c59305ae99ea16cdbb6da2a502b587bbd73b3b8adb"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.35.2/agent-browser-linux-musl-arm64",
+            "sha256": "2e414cd0657ae086ae9b096789d7a6a3db69cb80b4b9e699ac6deab1a0c11f52"
           }
         }
       },
@@ -363,31 +363,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.8.15",
+        "version": "v2026.8.16",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-x64",
-            "sha256": "a6dea05e896f1e6090f821588f45397262270e0e0b456252f8d1da28a416f3f2"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-x64",
+            "sha256": "cff4832ded79af2951e800bddcb5a22acac58630d765a2d062c1180680a0bb35"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-arm64",
-            "sha256": "124ea8f7c8cb9a6a3c99c763cbf37ca48c9beaa816735f011d9fd99e6cd463e9"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-arm64",
+            "sha256": "5bbe2e7751f1872fd574ba90cbc1f81db7cfa4f395d77ba52ba70b33ad466d9e"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-macos-x64",
-            "sha256": "6a1cef931e299d7392cd7008dd97fcef2d9b41fbdfe79df4fd9f7ab0cc33d9f7"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-macos-x64",
+            "sha256": "746f53f878ae07be41caf4b73fd505e080c5618dda4794eac123e8ff086f472c"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-macos-arm64",
-            "sha256": "17a6e37ac2aaeee78206abc601568e1fe5010e398bf3c7320e1683584124d3c7"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-macos-arm64",
+            "sha256": "59daf6d3d81846f5e190b3e8e30e06aaf003b48afd6619151bfd5df1829c75f4"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-x64-musl",
-            "sha256": "7f4ec9c0e4a0b314eeaacb41e45f9ee9dd96d67cfecfe68692a434883d2af725"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-x64-musl",
+            "sha256": "2c0a370f0b9133c477ac9a3f6d365b0f10f6a853d7cd65f5cc689efc49338239"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-arm64-musl",
-            "sha256": "c77d73628197a5c645924e8e37961266004a9fe1f72ab2dbf143b5e545812aeb"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-arm64-musl",
+            "sha256": "fe74977e9bfd5884e46fbefdeeb91e729c31ca294295841168f23bc43a13aba6"
           }
         }
       },
