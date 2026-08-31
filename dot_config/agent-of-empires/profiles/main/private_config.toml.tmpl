@@ -29,4 +29,4 @@ yolo_mode_default = true
 [worktree]
 delete_branch_on_cleanup = true
 enabled = true
-path_template = "~/.local/share/worktrees/{branch}"
+path_template = {{ printf "\"%s/.local/share/worktrees/{branch}\"" .chezmoi.homeDir }}
