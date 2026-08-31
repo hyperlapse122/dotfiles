@@ -73,10 +73,6 @@ After three consecutive failed attempts at the same objective the agent MUST sto
 the dispatch selects a seat, never a model
 MUST dispatch the cross-model seat whose family differs from its own
 Write-delegation, such as `ce-work`'s implementation engine, is not covered
-Run `dotfiles-skips` to list outstanding `transient-tolerable` and `transient-blocking` skips without inspecting apply scrollback
-never probes capabilities or hosts and never mutates anything
-declare one of three skip directions: `harmless`
-or `transient-blocking`
 NEEDLES
 
 while IFS= read -r banned; do
