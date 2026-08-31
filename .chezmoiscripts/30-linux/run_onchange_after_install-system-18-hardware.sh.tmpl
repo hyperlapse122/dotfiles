@@ -1,0 +1,90 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-hardware" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/modprobe.d/thinkpad_acpi.conf" "system/linux/etc/modules-load.d/thinkpad_acpi.conf")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
+
+override_patterns=()
+override_modes=()
+override_gates=()
+{{ range .system.linux.hardware.overrides -}}
+override_patterns+=({{ .path | quote }})
+override_modes+=({{ get . "mode" | default "644" | quote }})
+override_gates+=({{ get . "gate" | default "" | quote }})
+{{ end }}
+{{- $gates := list -}}
+{{- range .system.linux.hardware.overrides -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (hardware.overrides)" "gates" $gates) -}}
+
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+gate_ok() {
+  fact_gate "$1"
+}
+
+hw_files=("$SRC_ROOT"/etc/modprobe.d/thinkpad_acpi.conf "$SRC_ROOT"/etc/modules-load.d/thinkpad_acpi.conf)
+for src in "${hw_files[@]}"; do
+  [[ -f "$src" ]] || continue
+  rel="${src#"$SRC_ROOT"/}"
+  dst="/$rel"
+  mode=644
+  gate=
+  for i in "${!override_patterns[@]}"; do
+    # shellcheck disable=SC2254 # manifest entries are deliberate glob patterns
+    case "$rel" in
+      ${override_patterns[$i]})
+        mode="${override_modes[$i]}"
+        gate="${override_gates[$i]}"
+        break
+        ;;
+    esac
+  done
+
+  if ! gate_ok "$gate"; then
+    printf '  -- %s (skipped: gate %s failed)\n' "$dst" "$gate"
+    continue
+  fi
+
+  printf '  -> %s (mode %s)\n' "$dst" "$mode"
+  "${SUDO[@]}" install -D -m "$mode" "$src" "$dst"
+done
+
+if [[ "$FACT_THINKPAD" == 1 ]]; then
+  printf '  -> modprobe thinkpad_acpi\n'
+  "${SUDO[@]}" modprobe thinkpad_acpi
+else
+  (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-hardware" "site" "thinkpad-absent" "reason" "this host is not a ThinkPad") | trim | indent 4 }}
+  )
+fi
+
+REMOVED_PATHS=()
+REMOVED_DISTROS=()
+{{ range .system.linux.hardware.removed -}}
+REMOVED_PATHS+=({{ .path | quote }})
+REMOVED_DISTROS+=({{ get . "distro" | default "" | quote }})
+{{ end }}
+for i in "${!REMOVED_PATHS[@]}"; do
+  dst="${REMOVED_PATHS[$i]}"
+  distro="${REMOVED_DISTROS[$i]}"
+  [[ -z "$distro" || "$distro" == "$os_id" ]] || continue
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    printf '  -> removing %s\n' "$dst"
+    "${SUDO[@]}" rm -f "$dst"
+  fi
+done
+
+{{ end -}}

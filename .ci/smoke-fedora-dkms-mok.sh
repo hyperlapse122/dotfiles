@@ -72,7 +72,7 @@ fi
 if grep -Eq '^ETC_(FILES|PATHS|SOURCES).*50-vbox-sign' "${rendered_etc}"; then
   fail 'the retired 50-vbox-sign hook must no longer be deployed to /etc'
 fi
-grep -Fq 'REMOVED_ETC_PATHS+=("/etc/kernel/install.d/50-vbox-sign.install")' "${rendered_etc}" ||
+grep -Eq 'REMOVED_(ETC_)?PATHS\+=\(?"/etc/kernel/install\.d/50-vbox-sign\.install"\)?' "${rendered_etc}" ||
   fail 'the retired 50-vbox-sign hook must be listed for removal from /etc'
 
 # --- Behavioral: the MOK keypair is never destroyed -------------------------

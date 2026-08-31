@@ -65,11 +65,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 123
+  classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 156
-  phase_local_instances: 118
-  shared_guard_instances: 38
+  rendered_instances: 176
+  phase_local_instances: 120
+  shared_guard_instances: 56
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -92,7 +92,7 @@ audited_forms:
   skip_here: 54
   skip_step: 31
   done_here: 18
-  not_applicable: 20
+  not_applicable: 22
 
 audited_directions:
   harmless: 26
@@ -103,7 +103,7 @@ audited_scopes:
   10-auth: 5
   20-base: 5
   30-components: 12
-  30-linux: 26
+  30-linux: 28
   50-linux-gnome: 29
   50-linux-kde: 29
   60-build: 5
@@ -112,10 +112,10 @@ audited_scopes:
 
 shared_guard_fanout:
   gnome-guard: 7
-  headless-guard: 3
+  headless-guard: 9
   kde-guard: 9
-  shared-host-guard: 15
-  sudo-skip-guard: 4
+  shared-host-guard: 21
+  sudo-skip-guard: 10
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -129,10 +129,6 @@ divergence:
     plan: 10
     audited: 18
     reason: 'The six GNOME/KDE completion stamps plus eight already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, a converged authd login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here.'
-  - bucket: 'not_applicable'
-    plan: 22
-    audited: 20
-    reason: 'Two additional permanent host-shape opt-outs (no TPM2 device, no LUKS device) are recorded alongside the fact-gated and data-declared ones. No row was relabelled to reach a count: every direction here follows skip.sh.tmpl verbatim, and the residual deltas in this block are the arithmetic of the U4 rename plus per-step rather than per-script enumeration.'
   - bucket: 'scope:00-tools+10-auth'
     plan: 8
     audited: 9
@@ -143,7 +139,7 @@ divergence:
     reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts.'
   - bucket: 'scope:30-linux'
     plan: 19
-    audited: 26
+    audited: 28
     reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
@@ -188,8 +184,14 @@ owners:
       - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_30-tailscale.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_40-flatpaks.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
@@ -246,8 +248,14 @@ owners:
     form: 'skip_here'
     direction: 'harmless'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl#headless-guard/headless-install'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#headless-guard/headless-install'
   - owner: 'sudo-skip-guard/no-cached-sudo'
     scope: 'guard-partials'
@@ -265,8 +273,14 @@ owners:
     fingerprint_placement: 'new-header-block'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-host.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-skip-guard/no-cached-sudo'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-skip-guard/no-cached-sudo'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'
@@ -549,10 +563,10 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_import-wifi-1password.sh.tmpl#import-wifi-1password/command-not-deployed'
-  - owner: 'install-system-files/thinkpad-absent'
+  - owner: 'install-system-hardware/thinkpad-absent'
     scope: '30-linux'
-    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl'
-    anchor_line: 194
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl'
+    anchor_line: 58
     anchor: 'if [[ "$FACT_THINKPAD" == 1 ]]; then'
     predicate: '[[ "$FACT_THINKPAD" == 1 ]]'
     predicate_digest: 'sha256:b972ddc314078df8f357c1fd767f34c641444f33acd74159f2dcc7bf1434f0bc'
@@ -561,7 +575,33 @@ owners:
     render_profile: 'linux-desktop'
     form: 'not_applicable'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl#install-system-files/thinkpad-absent'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#install-system-hardware/thinkpad-absent'
+  - owner: 'install-keyd/no-declared-keyboards'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl'
+    anchor_line: 25
+    anchor: 'if [[ ${#declared_ids[@]} -eq 0 ]]; then'
+    predicate: '[[ ${#declared_ids[@]} -eq 0 ]]'
+    predicate_digest: 'sha256:fa5ee8edeec416c00f11010012d62451d749e4155e77ab2552ce47c485870cee'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-desktop'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#install-keyd/no-declared-keyboards'
+  - owner: 'install-keyd/no-declared-hardware-detected'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl'
+    anchor_line: 71
+    anchor: 'if [[ $has_hardware -eq 0 ]]; then'
+    predicate: '[[ $has_hardware -eq 0 ]]'
+    predicate_digest: 'sha256:9939fc7d513a428011e27b4f1f981297a816cd973acde80348c61202366fc49f'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-desktop'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#install-keyd/no-declared-hardware-detected'
   - owner: 'install-system-network/firewalld-not-running'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl'

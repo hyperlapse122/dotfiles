@@ -1,0 +1,41 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-udev") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-udev") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-udev" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/udev/rules.d/**" "system/linux/etc/libinput/**")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+shopt -s globstar nullglob
+
+udev_files=("$SRC_ROOT"/etc/udev/rules.d/** "$SRC_ROOT"/etc/libinput/**)
+for src in "${udev_files[@]}"; do
+  [[ -f "$src" ]] || continue
+  rel="${src#"$SRC_ROOT"/}"
+  dst="/$rel"
+  printf '  -> %s (mode 644)\n' "$dst"
+  "${SUDO[@]}" install -D -m 644 "$src" "$dst"
+done
+
+REMOVED_PATHS=()
+{{ range .system.linux.udev.removed -}}
+REMOVED_PATHS+=({{ .path | quote }})
+{{ end }}
+for dst in "${REMOVED_PATHS[@]}"; do
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    printf '  -> removing %s\n' "$dst"
+    "${SUDO[@]}" rm -f "$dst"
+  fi
+done
+
+if [[ -d "$SRC_ROOT/etc/udev/rules.d" ]]; then
+  printf '  -> udevadm control --reload\n'
+  "${SUDO[@]}" udevadm control --reload
+fi
+
+{{ end -}}

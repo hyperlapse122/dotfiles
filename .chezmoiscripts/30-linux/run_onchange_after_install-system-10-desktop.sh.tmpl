@@ -1,0 +1,90 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
+#!/usr/bin/env bash
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-desktop") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-desktop") }}
+{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-desktop" }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/locale.conf" "system/linux/etc/sddm.conf.d/**" "system/linux/etc/dconf/**")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+shopt -s globstar nullglob
+
+override_patterns=()
+override_modes=()
+override_gates=()
+override_checks=()
+{{ range .system.linux.desktop.overrides -}}
+override_patterns+=({{ .path | quote }})
+override_modes+=({{ get . "mode" | default "644" | quote }})
+override_gates+=({{ get . "gate" | default "" | quote }})
+override_checks+=({{ get . "check" | default "" | quote }})
+{{ end }}
+{{- $gates := list -}}
+{{- range .system.linux.desktop.overrides -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (desktop.overrides)" "gates" $gates) -}}
+
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+gate_ok() {
+  fact_gate "$1"
+}
+gate_reason() {
+  case "$1" in
+    sddmBreeze) printf 'breeze sddm theme absent' ;;
+    gdm) printf 'gdm not installed' ;;
+    *) printf 'gate %s failed' "$1" ;;
+  esac
+}
+
+desktop_files=("$SRC_ROOT"/etc/locale.conf "$SRC_ROOT"/etc/sddm.conf.d/** "$SRC_ROOT"/etc/dconf/**)
+for src in "${desktop_files[@]}"; do
+  [[ -f "$src" ]] || continue
+  rel="${src#"$SRC_ROOT"/}"
+  dst="/$rel"
+  mode=644
+  gate=
+  for i in "${!override_patterns[@]}"; do
+    # shellcheck disable=SC2254 # manifest entries are deliberate glob patterns
+    case "$rel" in
+      ${override_patterns[$i]})
+        mode="${override_modes[$i]}"
+        gate="${override_gates[$i]}"
+        break
+        ;;
+    esac
+  done
+  if ! gate_ok "$gate"; then
+    printf '  -- %s (skipped: %s)\n' "$dst" "$(gate_reason "$gate")"
+    continue
+  fi
+
+  printf '  -> %s (mode %s)\n' "$dst" "$mode"
+  "${SUDO[@]}" install -D -m "$mode" "$src" "$dst"
+done
+
+REMOVED_PATHS=()
+{{ range .system.linux.desktop.removed -}}
+REMOVED_PATHS+=({{ .path | quote }})
+{{ end }}
+for dst in "${REMOVED_PATHS[@]}"; do
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    printf '  -> removing %s\n' "$dst"
+    "${SUDO[@]}" rm -f "$dst"
+  fi
+done
+
+if [[ -d "$SRC_ROOT/etc/dconf/db/gdm.d" ]] && gate_ok gdm \
+  && command -v dconf >/dev/null 2>&1; then
+  printf '  -> dconf update\n'
+  "${SUDO[@]}" dconf update
+fi
+
+{{ end -}}

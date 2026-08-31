@@ -82,9 +82,9 @@ assert_render_ok values-only "$scratch/source" "$scratch/values-only.tmpl" \
 assert_partial_fails neither "$scratch/neither.tmpl" \
   'fingerprint.tmpl: called with neither "globs" nor "values"' "$scratch/source"
 
-production_consumer=.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl
+production_consumer=.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$production_consumer"
 assert_render_ok production-globs-consumer "$repo_root" "$repo_root/$production_consumer" \
-  '#   system/linux/etc/'
+  '#   system/linux/etc/locale.conf'
 
 printf '%s\n' 'fingerprint render gates passed'

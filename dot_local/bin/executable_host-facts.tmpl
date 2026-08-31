@@ -82,10 +82,14 @@ set -uo pipefail
 {{- end -}}
 {{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/packages.yaml (gates:)" "gates" $pkgGates) -}}
 {{- $etcGates := list -}}
-{{- range .system.linux.overrides -}}
-{{-   $gate := get . "gate" | default "" -}}
-{{-   if ne $gate "" -}}
-{{-     $etcGates = append $etcGates $gate -}}
+{{- range $subsystem, $config := .system.linux -}}
+{{-   if and (kindIs "map" $config) (hasKey $config "overrides") -}}
+{{-     range $config.overrides -}}
+{{-       $gate := get . "gate" | default "" -}}
+{{-       if ne $gate "" -}}
+{{-         $etcGates = append $etcGates $gate -}}
+{{-       end -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
 {{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (gate:)" "gates" $etcGates) -}}
@@ -258,9 +262,13 @@ printf '  A file matching no override entry installs unconditionally (mode 0644)
 SRC_ROOT="{{ .chezmoi.sourceDir }}/system/linux"
 override_patterns=()
 override_gates=()
-{{- range .system.linux.overrides }}
+{{- range $subsystem, $config := .system.linux }}
+{{-   if and (kindIs "map" $config) (hasKey $config "overrides") }}
+{{-     range $config.overrides }}
 override_patterns+=({{ .path | quote }})
 override_gates+=({{ get . "gate" | default "" | quote }})
+{{-     end }}
+{{-   end }}
 {{- end }}
 
 if [[ ! -d "$SRC_ROOT/etc" ]]; then
