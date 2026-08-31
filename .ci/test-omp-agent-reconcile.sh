@@ -587,8 +587,11 @@ grep -F 'does not serve' "$scratch/absent.err" >/dev/null
 [[ ! -s "$scratch/absent.calls" ]]
 
 # A provider the catalog cannot speak for is not evidence of an absent selector.
-jq --arg p "$test_provider" '.models |= map(select(.provider != $p))' \
-  "$scratch/catalog-full.json" >"$scratch/catalog-noprovider.json"
+jq --arg p "$test_provider" '
+  .models |= (map(select(.provider != $p)) + [
+    {provider: "other-provider", selector: "other-provider/model"}
+  ])
+' "$scratch/catalog-full.json" >"$scratch/catalog-noprovider.json"
 run_settings noprovider "$scratch/catalog-noprovider.json"
 grep -F "catalog has no $test_provider models" "$scratch/noprovider.err" >/dev/null
 [[ $(wc -l <"$scratch/noprovider.calls") -eq $declared_count ]]
