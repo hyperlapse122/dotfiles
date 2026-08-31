@@ -166,11 +166,11 @@ executable = true
 targetPath = '.local/share/chezmoi-commands/incomplete/uvx/uvx'
 path = '{{ printf "%suvx" $uvPathPrefix }}'
 
-{{- /* ---------- mise ---------- */ -}}
+{{- /* ---------- mise ---------- */}}
 {{- /*
   Tracks upstream jdx/mise releases via release-lock.
   Linux static-musl builds are supported alongside glibc and macOS binaries.
-*/ -}}
+*/}}
 
 [mise]
 type = "file"
