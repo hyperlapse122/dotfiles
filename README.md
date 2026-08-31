@@ -9,18 +9,18 @@ cross-platform dotfiles plus a narrower, OS-native provision set
 ### Bootstrap
 
 Each command downloads chezmoi, clones this repo into
-`~/.local/share/chezmoi` (the source state), and applies it.
+`~/src/github.com/hyperlapse122/dotfiles` (the source state), and applies it.
 
 **Linux & macOS** — curl:
 
 ```sh
-sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
+sh -c "$(curl -fsLS https://get.chezmoi.io/lb)" -- init --apply --source ~/src/github.com/hyperlapse122/dotfiles hyperlapse122
 ```
 
 **Linux & macOS** — wget (if `curl` is absent):
 
 ```sh
-sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
+sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/github.com/hyperlapse122/dotfiles hyperlapse122
 ```
 
 `hyperlapse122` is the GitHub username, which chezmoi expands to
@@ -29,7 +29,7 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply hyperlapse122
 ### What the command does
 
 1. Installs the chezmoi binary into a temporary location.
-2. Clones this repo into `~/.local/share/chezmoi` (the source state).
+2. Clones this repo into `~/src/github.com/hyperlapse122/dotfiles` (the source state).
 3. Runs the `read-source-state.pre` hook —
    [`.install-prerequisites.sh`](.install-prerequisites.sh) on Linux/macOS —
    which installs the tooling chezmoi itself depends on **before** it reads the

@@ -7,6 +7,7 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
 # Pin chezmoi-managed normal files/directories to 0644/0755 on POSIX hosts,
 # independent of a distribution's login umask.
 umask = 0o022
+sourceDir = "{{ .chezmoi.homeDir }}/src/github.com/hyperlapse122/dotfiles"
 
 # GPG encryption for `encrypted_` source files (the ~/src garden project
 # registry — kept ciphertext-only in this public repo).
@@ -67,4 +68,4 @@ encryption = "gpg"
 [hooks.read-source-state.pre]
     # `script` (not `command`): on Linux/macOS the `.sh` has no chezmoi interpreter,
     # so it runs through its shebang and executable bit.
-    script = ".local/share/chezmoi/.install-prerequisites.sh"
+    script = "src/github.com/hyperlapse122/dotfiles/.install-prerequisites.sh"

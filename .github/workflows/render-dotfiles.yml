@@ -121,11 +121,11 @@ jobs:
         run: |
           set -euxo pipefail
           # Reproduce chezmoi's canonical layout in a throwaway HOME: the source
-          # tree lives at ~/.local/share/chezmoi so the read-source-state.pre hook
-          # path (.local/share/chezmoi/.install-prerequisites.sh) resolves exactly
+          # tree lives at ~/src/github.com/hyperlapse122/dotfiles so the read-source-state.pre hook
+          # path (src/github.com/hyperlapse122/dotfiles/.install-prerequisites.sh) resolves exactly
           # as it does on a real host.
           export HOME="${RUNNER_TEMP}/fakehome"
-          SRC="${HOME}/.local/share/chezmoi"
+          SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
           rm -rf "${SRC}/.git"
@@ -242,7 +242,7 @@ jobs:
           cp -a "${src}/." "${out}/"
           # Drop the source copy and chezmoi's own state/cache — keep only the
           # files chezmoi rendered into the target.
-          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+          rm -rf "${out}/src/github.com" "${out}/.config/chezmoi" "${out}/.cache"
           # Drop the .chezmoiremove canaries seeded before the apply that survived.
           rm -rf "${out}/.agents/skills/daily-report" \
                  "${out}/.omp/agent/AGENTS.md" \
@@ -602,7 +602,7 @@ jobs:
         run: |
           set -euxo pipefail
           export HOME="${RUNNER_TEMP}/fakehome"
-          SRC="${HOME}/.local/share/chezmoi"
+          SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
           rm -rf "${SRC}/.git" "${SRC}/.chezmoiexternals"
@@ -697,7 +697,7 @@ jobs:
           mkdir -p "${out}"
           [ -d "${src}" ] || exit 0
           cp -a "${src}/." "${out}/"
-          rm -rf "${out}/.local/share/chezmoi" "${out}/.config/chezmoi" "${out}/.cache"
+          rm -rf "${out}/src/github.com" "${out}/.config/chezmoi" "${out}/.cache"
           rm -rf "${out}/.agents/skills/daily-report" \
                  "${out}/.omp/agent/AGENTS.md" \
                  "${out}/.omp/agent/.i-have-adhd-always" \
