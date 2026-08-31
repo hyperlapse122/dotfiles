@@ -39,12 +39,21 @@
 {{-       $targetBase := base $unit.sourcePath | trimPrefix "private_" | trimPrefix "executable_" | trimSuffix ".tmpl" -}}
 {{-       $stagingPath = printf ".local/share/chezmoi-command-sources/%s" $targetBase -}}
 {{-     else if eq $unit.producer "build" -}}
+{{-       if hasKey $unit "fingerprintGlobs" -}}
+{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $unit.fingerprintGlobs) | sha256sum -}}
+{{-       else -}}
+{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list (printf "packages/%s/**" $unitId))) | sha256sum -}}
+{{-       end -}}
 {{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
 {{-     else if eq $unit.producer "existingTree" -}}
 {{-       if hasKey $unit "tool" -}}
 {{-         $identity = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
 {{-       end -}}
-{{-       $stagingPath = $unit.treePath -}}
+{{-       if $identity -}}
+{{-         $stagingPath = printf "%s/%s" $unit.treePath $identity -}}
+{{-       else -}}
+{{-         $stagingPath = $unit.treePath -}}
+{{-       end -}}
 {{-     end -}}
 {{-     $cmds := list -}}
 {{-     range $cmd := $unit.commands -}}

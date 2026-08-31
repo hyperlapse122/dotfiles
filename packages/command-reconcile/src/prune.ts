@@ -12,6 +12,56 @@ export async function defaultRootScanner(): Promise<ProcessRoots> {
   }
   return scanLinuxRoots();
 }
+async function cleanupQuarantine(
+  paths: CommandPaths,
+  rootScanner: () => Promise<ProcessRoots>,
+): Promise<void> {
+  try {
+    const units = await readdir(paths.quarantineDir);
+    const roots = await rootScanner();
+    for (const unitId of units) {
+      const qUnitDir = join(paths.quarantineDir, unitId);
+      let versions: string[];
+      try {
+        versions = await readdir(qUnitDir);
+      } catch {
+        continue;
+      }
+      for (const version of versions) {
+        const qPath = join(qUnitDir, version);
+        let inUse = roots.uncertain;
+        if (!inUse) {
+          try {
+            const files = await readdir(qPath, { recursive: true });
+            for (const f of files) {
+              const fullPath = join(qPath, f);
+              if (roots.paths.has(fullPath)) {
+                inUse = true;
+                break;
+              }
+              try {
+                const st = await lstat(fullPath);
+                if (roots.inodes.has(`${st.dev}:${st.ino}`)) {
+                  inUse = true;
+                  break;
+                }
+              } catch {}
+            }
+          } catch {
+            inUse = true;
+          }
+        }
+        if (inUse) {
+          const storeVersionDir = join(paths.storeDir, unitId, version);
+          await prepareDir(join(paths.storeDir, unitId), 0o755);
+          await rename(qPath, storeVersionDir).catch(() => {});
+        } else {
+          await rm(qPath, { recursive: true, force: true }).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+}
 
 export async function pruneEligibleUnits(
   paths: CommandPaths,
@@ -21,9 +71,9 @@ export async function pruneEligibleUnits(
 ): Promise<{ retained: string[]; pruned: string[] }> {
   const retained: string[] = [];
   const pruned: string[] = [];
+  await cleanupQuarantine(paths, rootScanner);
 
   const roots = await rootScanner();
-
   for (const unit of manifest.units) {
     if (unit.mutableTree) continue;
 

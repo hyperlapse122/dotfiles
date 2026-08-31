@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile, readlink } from "node:fs/promises";
+import { lstat, readdir, readFile, readlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 export interface ProcessRoots {
@@ -36,14 +36,14 @@ export async function scanLinuxRoots(procRoot: string = "/proc"): Promise<Proces
 
     try {
       const exeLink = join(pidDir, "exe");
+      try {
+        const st = await stat(exeLink);
+        inodes.add(`${st.dev}:${st.ino}`);
+      } catch {}
       const exeTarget = await readlink(exeLink);
       if (exeTarget) {
         const cleanTarget = exeTarget.replace(/ \(deleted\)$/, "");
         paths.add(cleanTarget);
-        try {
-          const st = await lstat(cleanTarget);
-          inodes.add(`${st.dev}:${st.ino}`);
-        } catch {}
       }
     } catch {}
 
@@ -68,6 +68,10 @@ export async function scanLinuxRoots(procRoot: string = "/proc"): Promise<Proces
       for (const fd of fdEntries) {
         try {
           const fdLink = join(fdDir, fd);
+          try {
+            const st = await stat(fdLink);
+            inodes.add(`${st.dev}:${st.ino}`);
+          } catch {}
           const fdTarget = await readlink(fdLink);
           if (fdTarget && fdTarget.startsWith("/")) {
             const cleanFd = fdTarget.replace(/ \(deleted\)$/, "");

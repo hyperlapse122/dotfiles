@@ -483,6 +483,16 @@ commands:
       mode: "0755"
       platforms: [linux, macos]
       gate: "!container"
+      fingerprintGlobs:
+        - mise.toml
+        - packages/package.json
+        - packages/bun.lock
+        - packages/bunfig.toml
+        - packages/vite.config.ts
+        - packages/figma-auth/package.json
+        - packages/figma-auth/tsconfig.json
+        - packages/figma-auth/vite.config.ts
+        - packages/figma-auth/src/**
       commands:
         - name: figma-auth
       legacy:
@@ -495,6 +505,16 @@ commands:
       mode: "0755"
       platforms: [linux, macos]
       gate: "!container"
+      fingerprintGlobs:
+        - mise.toml
+        - packages/package.json
+        - packages/bun.lock
+        - packages/bunfig.toml
+        - packages/vite.config.ts
+        - packages/settings-reconcile/package.json
+        - packages/settings-reconcile/tsconfig.json
+        - packages/settings-reconcile/vite.config.ts
+        - packages/settings-reconcile/src/**
       commands:
         - name: settings-reconcile
       legacy:
@@ -507,6 +527,10 @@ commands:
       mode: "0755"
       platforms: [linux, macos]
       gate: "!container"
+      fingerprintGlobs:
+        - crates/mxm4-haptic/Cargo.toml
+        - crates/mxm4-haptic/Cargo.lock
+        - crates/mxm4-haptic/src/**
       commands:
         - name: mxm4-hapticd
         - name: mxm4-haptic
@@ -514,7 +538,6 @@ commands:
           platforms: [linux]
       legacy:
         path: .local/bin/mxm4-haptic
-
     codegraph:
       producer: existingTree
       safetyProfile: multi-file
