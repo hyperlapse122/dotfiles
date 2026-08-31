@@ -1,0 +1,55 @@
+; ==============================================================================
+; dotfiles_protected_agent_configs.cil
+; SELinux Policy Module for protecting user-scope agent, skill, and MCP configs
+; ==============================================================================
+
+; --- Types and Roles ---
+(type protected_agent_config_t)
+(roletype object_r protected_agent_config_t)
+
+(type chezmoi_t)
+(roletype unconfined_r chezmoi_t)
+
+(type chezmoi_exec_t)
+(roletype object_r chezmoi_exec_t)
+(typeattribute chezmoi_exec_t (file_type exec_type))
+
+; --- Domain Transition: unconfined_t -> chezmoi_exec_t -> chezmoi_t ---
+(typetransition unconfined_t chezmoi_exec_t process chezmoi_t)
+
+; Allow unconfined_t to execute chezmoi_exec_t and transition
+(allow unconfined_t chezmoi_exec_t (file (read getattr execute open map)))
+(allow unconfined_t chezmoi_t (process (transition)))
+
+; Allow chezmoi_t entrypoint
+(allow chezmoi_t chezmoi_exec_t (file (entrypoint read getattr execute open map)))
+
+; Process inheritance and lifecycle between unconfined_t and chezmoi_t
+(allow chezmoi_t unconfined_t (process (sigchld signull sigkill sigterm signal)))
+(allow chezmoi_t unconfined_t (fd (use)))
+(allow chezmoi_t user_devpts_t (chr_file (read write ioctl getattr append open)))
+
+; Inherit unconfined permissions for chezmoi_t for general operations
+(typeattributeset unconfined_domain_type (chezmoi_t))
+
+; --- Permissions on protected_agent_config_t ---
+; chezmoi_t has full management permissions on protected configs
+(allow chezmoi_t protected_agent_config_t (file (create read write getattr setattr unlink rename open append lock map)))
+(allow chezmoi_t protected_agent_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock)))
+
+; unconfined_t has read-only access to protected configs
+(allow unconfined_t protected_agent_config_t (file (read getattr open map)))
+(allow unconfined_t protected_agent_config_t (dir (read getattr open search)))
+
+; --- File Context Specifications (filecon) ---
+; Target config files in user home directories
+(filecon "/home/[^/]+/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "/home/[^/]+/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "/home/[^/]+/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "/home/[^/]+/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "/home/[^/]+/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+
+; chezmoi executables
+(filecon "/usr/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
+(filecon "/usr/local/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
+(filecon "/home/[^/]+/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))
