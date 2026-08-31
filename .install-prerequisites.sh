@@ -13,6 +13,18 @@
 
 set -euo pipefail
 
+# Prepend ~/.local/bin and ~/.local/sbin to PATH so non-login / non-interactive
+# environments resolve user-installed and chezmoi-managed local binaries.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$HOME/.local/sbin:"*) ;;
+  *) PATH="$HOME/.local/sbin:$PATH" ;;
+esac
+export PATH
+
 # Container / CI detection: Podman creates /run/.containerenv, Docker creates
 # /.dockerenv. Neither exists on a bare-metal host or VM.
 #

@@ -20,6 +20,12 @@
 # with the cached token it names. Comment-only; never executed.
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "mise-present" "value" $misePresent))) }}
 set -euo pipefail
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
 
 if ! command -v mise >/dev/null 2>&1; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "mise-trust" "site" "mise-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "mise not installed") | trim | indent 2 }}

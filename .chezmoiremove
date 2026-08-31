@@ -151,3 +151,7 @@ src/garden.yaml
 # no longer has a source. Deleting that source stopped chezmoi managing it but
 # leaves the already-deployed ~/.config/solaar/rules.yaml copy behind — prune it here.
 .config/solaar/rules.yaml
+
+# Claude Desktop autostart was decommissioned; deleting the source stops managing it
+# but leaves the already-deployed copy behind — prune it here.
+.config/autostart/claude-desktop.desktop
