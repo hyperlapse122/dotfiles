@@ -3,8 +3,8 @@
 #
 # Apply-time garden provisioning + reconcile. Turns the documented manual
 # bootstrap into an automatic step of `chezmoi apply`: whenever the ~/src
-# project registry changes, grow every declared tree and run the three custom
-# bootstrap commands (setup-gitdir, setup-upstream, aoe-session). aoe-session
+# project registry changes, grow every declared tree and run the custom
+# bootstrap commands (setup-upstream, aoe-session). aoe-session
 # additionally self-heals each session's group to the host-inclusive policy.
 #
 # ADDITIVE ONLY. This never removes, relocates, or unlocks a tree, clone, or
@@ -65,30 +65,18 @@ garden --config "$reg" grow '*'
 
 # 2. Completeness check — the real hard-fail gate. `garden grow '*'` exits 0
 #    even when trees fail to clone, so re-verify each DECLARED tree is a valid
-#    clone. A bare tree (path ends in /.bare) must be a bare git repo; a
-#    non-bare tree (plain clone) must be a git work tree. Missing/broken/
-#    half-cloned => exit non-zero, naming the tree, so a silent clone failure
-#    fails the apply. Mirrors the shape in dot_local/bin/executable_src-audit.
+#    git work tree. Missing/broken/half-cloned => exit non-zero, naming the
+#    tree, so a silent clone failure fails the apply.
 check_tree() {
   local name="$1" tp="$2"
   if [ -z "$tp" ]; then
     echo "reconcile-garden: cannot resolve tree path for '$name'" >&2
     return 1
   fi
-  case "$tp" in
-    */.bare)
-      if ! git -C "$tp" rev-parse --is-bare-repository >/dev/null 2>&1; then
-        echo "reconcile-garden: '$name' not grown/broken at $tp — clone failed or was left half-materialized. Fix: garden --config ~/.config/garden/garden.yaml grow $name; if a partial clone is present, remove $(dirname "$tp") and re-apply." >&2
-        return 1
-      fi
-      ;;
-    *)
-      if ! git -C "$tp" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo "reconcile-garden: '$name' not grown/broken at $tp (fix: garden --config ~/.config/garden/garden.yaml grow $name)" >&2
-        return 1
-      fi
-      ;;
-  esac
+  if ! git -C "$tp" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "reconcile-garden: '$name' not grown/broken at $tp (fix: garden --config ~/.config/garden/garden.yaml grow $name)" >&2
+    return 1
+  fi
 }
 
 # Enumerate declared trees AND their resolved paths in ONE `garden ls -v` call.
@@ -122,13 +110,9 @@ if [ "$rc" -ne 0 ]; then
   exit 1
 fi
 
-# 3. Bootstrap: write the .git pointer, set upstreams, and session each tree in
-#    aoe per its shape (bare: the default-branch worktree on the plain-shell
-#    zsh agent; non-bare: aoe's default tool directly on the checkout) and
-#    enforce its group policy. Idempotent; setup-gitdir and setup-upstream
-#    self-skip non-bare trees. aoe-session's group self-heal is a local
-#    aoe-metadata operation with no network dependency; it rides along here.
-echo "reconcile-garden: garden cmd '*' setup-gitdir setup-upstream aoe-session"
-garden --config "$reg" cmd '*' setup-gitdir setup-upstream aoe-session
+# 3. Bootstrap: set upstreams and session each tree in aoe directly on the
+#    checkout on its default branch and enforce its group policy. Idempotent.
+echo "reconcile-garden: garden cmd '*' setup-upstream aoe-session"
+garden --config "$reg" cmd '*' setup-upstream aoe-session
 
 echo "reconcile-garden: done"
