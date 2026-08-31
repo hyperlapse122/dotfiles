@@ -14,7 +14,6 @@ dev_groups=(
 )
 
 dev_coprs=(
-  scottames/ghostty
 )
 
 dev_packages=(
@@ -61,6 +60,10 @@ setup_dev_repos() {
   for copr in "${dev_coprs[@]}"; do
     "${DNF[@]}" copr enable -y "${copr}" || true
   done
+
+  if ! rpm -q terra-release >/dev/null 2>&1; then
+    "${DNF[@]}" install -y --nogpgcheck --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' terra-release terra-gpg-keys || true
+  fi
 }
 
 install_devtools() {
