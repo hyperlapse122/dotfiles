@@ -258,6 +258,8 @@ packages:
         - 1password
         - 1password-cli
 
+        - ghostty
+
         # Editor
         - codium
 
@@ -316,7 +318,6 @@ packages:
         - fcitx5
         - fcitx5-hangul
         - pinentry-qt
-        - ghostty
         - xdg-terminal-exec
       # Gate `desktop.gnome` — Fedora Workstation. GNOME uses the SAME fcitx5
       # framework as the KDE targets (unified input-method policy: ibus is
@@ -331,7 +332,6 @@ packages:
         - fcitx5
         - fcitx5-hangul
         - pinentry-gnome3
-        - ghostty
         - xdg-terminal-exec
       # Gate `!virt` — installed only when the host is neither a VM nor a
       # container (bare `systemd-detect-virt`, which is what this installer has
