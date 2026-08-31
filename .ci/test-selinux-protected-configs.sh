@@ -65,7 +65,7 @@ if command -v secilc >/dev/null 2>&1; then
 (typeattribute unconfined_domain_type)
 (class file (create read write getattr setattr unlink rename open append lock map entrypoint execute))
 (class dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock))
-(class process (transition sigchld signull sigkill sigterm signal))
+(class process (transition sigchld signull sigkill sigstop signal siginh fork getattr getsched setsched))
 (class fd (use))
 (class chr_file (read write ioctl getattr append open))
 (classorder (file dir process fd chr_file))

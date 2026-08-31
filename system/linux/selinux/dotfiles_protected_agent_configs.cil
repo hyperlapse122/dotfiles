@@ -27,7 +27,7 @@
 (allow chezmoi_t chezmoi_exec_t (file (entrypoint read getattr execute open map)))
 
 ; Process inheritance and lifecycle between unconfined_t and chezmoi_t
-(allow chezmoi_t unconfined_t (process (sigchld signull sigkill sigterm signal)))
+(allow chezmoi_t unconfined_t (process (sigchld signull sigkill signal)))
 (allow chezmoi_t unconfined_t (fd (use)))
 (allow chezmoi_t user_devpts_t (chr_file (read write ioctl getattr append open)))
 
