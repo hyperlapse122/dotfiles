@@ -15,9 +15,9 @@ origin: user request
 ## Goal Capsule
 
 - **Objective:** Prevent accidental modifications, writes, or deletions of user-scoped agent, skill, and MCP configurations (`~/.codex/config.toml`, `~/.claude.json*`, `~/.mcp.json`, `~/.codex/skills/**`, `~/.claude/settings.json`) from any non-chezmoi executable by enforcing SELinux Type Enforcement on Fedora, while preserving chezmoi as the sole authorized write-capable management domain.
-- **Means:** A declarative SELinux CIL policy module (`system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`) deployed and maintained via a fingerprinted chezmoi onchange script with `restorecon` relabeling (KTD1, KTD4).
+- **Means:** A declarative SELinux CIL policy module (`system/linux/selinux/dotfiles_protected_agent_configs.cil`) deployed and maintained via a fingerprinted chezmoi onchange script with `restorecon` relabeling (KTD1, KTD4).
 - **Product authority:** The user's session-settled choices govern target file scope, strict dotfiles-first editing constraints, automated CIL module packaging, and apply-time fingerprint caching.
-- **Execution profile:** Manifest-driven source additions in `system/linux/etc/selinux/` and `.chezmoiscripts/` with host fact gating. Intermediate source states do not apply to live `$HOME`.
+- **Execution profile:** Manifest-driven source additions in `system/linux/selinux/` and `.chezmoiscripts/` with host fact gating. Intermediate source states do not apply to live `$HOME`.
 - **Stop conditions:** Stop if non-Fedora or container environments fail to skip cleanly, if dynamic runtime files in `~/.codex/` (sqlite databases/logs) are inadvertently blocked from normal unconfined operation, or if `chezmoi apply` cannot transition cleanly into the writer domain.
 - **Tail ownership:** Local verification uses isolated scratch rendering, CIL syntax validation (`secilc` / `checkmodule`), and script skip-declaration checks (`.ci/check-skip-declarations.sh`). Pull request owns `render-dotfiles.yml` and `ci.yml` validation.
 
@@ -106,7 +106,7 @@ AI agent harnesses and CLI utilities running in the user session can accidentall
 
 **In scope:**
 
-- Declarative CIL module in dotfiles source (`system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`).
+- Declarative CIL module in dotfiles source (`system/linux/selinux/dotfiles_protected_agent_configs.cil`).
 - Dedicated onchange apply script in `.chezmoiscripts/` with fingerprinting and restorecon.
 - Path definitions for `~/.codex/config.toml`, `~/.claude.json*`, `~/.mcp.json`, `~/.codex/skills/**`, `~/.claude/settings.json`.
 - Binary labeling for `/usr/bin/chezmoi` and `~/.local/bin/chezmoi`.
@@ -176,10 +176,10 @@ flowchart TB
 New files created in the repository:
 
 ```text
-system/linux/etc/selinux/
+system/linux/selinux/
 └── dotfiles_protected_agent_configs.cil
-.chezmoiscripts/20-linux-fedora/
-└── run_onchange_after_selinux-policies.sh.tmpl
+.chezmoiscripts/30-linux/
+└── run_after_selinux-policies.sh.tmpl
 ```
 
 ### Technical Design Notes
@@ -215,10 +215,10 @@ system/linux/etc/selinux/
      - `(filecon "/home/[^/]+/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))`
 
 2. **Apply Script Integration:**
-   - Placed at `.chezmoiscripts/20-linux-fedora/run_onchange_after_selinux-policies.sh.tmpl`.
-   - Fingerprints `system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`.
+   - Placed at `.chezmoiscripts/30-linux/run_after_selinux-policies.sh.tmpl`.
+   - Fingerprints `system/linux/selinux/dotfiles_protected_agent_configs.cil`.
    - Checks `sudo-usable` capability probe and handles skip declaration (`skip.sh.tmpl`).
-   - Installs module with `sudo semodule -X 400 -i "$sourceDir/system/linux/etc/selinux/dotfiles_protected_agent_configs.cil"`.
+   - Installs module with `sudo semodule -X 400 -i "$sourceDir/system/linux/selinux/dotfiles_protected_agent_configs.cil"`.
    - Relabels target files with `restorecon -RFv`.
 
 ---
@@ -230,9 +230,9 @@ system/linux/etc/selinux/
 - **Goal:** Create the declarative SELinux CIL policy file defining `protected_agent_config_t`, `chezmoi_t`, `chezmoi_exec_t`, domain transitions, permissions, and file context specifications.
 - **Requirements:** R1, R2, R3, R4, R5
 - **Dependencies:** None
-- **Files:** `system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`
+- **Files:** `system/linux/selinux/dotfiles_protected_agent_configs.cil`
 - **Approach:**
-  1. Author `system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`.
+  1. Author `system/linux/selinux/dotfiles_protected_agent_configs.cil`.
   2. Declare types: `protected_agent_config_t`, `chezmoi_t`, `chezmoi_exec_t` with appropriate roles (`object_r`, `unconfined_r`).
   3. Declare domain transition from `unconfined_t` through `chezmoi_exec_t` into `chezmoi_t`.
   4. Grant `chezmoi_t` manage permissions on `protected_agent_config_t` and standard session inheritance permissions.
@@ -250,14 +250,14 @@ system/linux/etc/selinux/
 - **Goal:** Manage policy compilation, installation via `semodule -i`, and filesystem relabeling via `restorecon`, gated on Fedora Linux with SELinux active and cached via source fingerprinting.
 - **Requirements:** R6, R7, R8
 - **Dependencies:** U1
-- **Files:** `.chezmoiscripts/20-linux-fedora/run_onchange_after_selinux-policies.sh.tmpl`
+- **Files:** `.chezmoiscripts/30-linux/run_after_selinux-policies.sh.tmpl`
 - **Approach:**
-  1. Author `.chezmoiscripts/20-linux-fedora/run_onchange_after_selinux-policies.sh.tmpl`.
-  2. Embed template fingerprint of `system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`.
+  1. Author `.chezmoiscripts/30-linux/run_after_selinux-policies.sh.tmpl`.
+  2. Embed template fingerprint of `system/linux/selinux/dotfiles_protected_agent_configs.cil`.
   3. Gate execution on `eq .chezmoi.os "linux"` and `eq .chezmoi.osRelease.id "fedora"`.
   4. Query host fact / runtime `sestatus` or `selinuxenabled`; if disabled, skip cleanly using `skip_here` (`harmless`).
   5. Verify sudo capability with `capabilities.tmpl` (`sudo-usable`); if unavailable, skip using `transient-blocking`.
-  6. Execute `sudo semodule -X 400 -i "$sourceDir/system/linux/etc/selinux/dotfiles_protected_agent_configs.cil"`.
+  6. Execute `sudo semodule -X 400 -i "$sourceDir/system/linux/selinux/dotfiles_protected_agent_configs.cil"`.
   7. Run `restorecon -RFv` across protected config files and chezmoi binaries in `$HOME`.
 - **Execution note:** Follow the repository's `.chezmoitemplates/skip.sh.tmpl` contract for all early exit paths.
 - **Patterns to follow:** `.chezmoiscripts/30-linux/run_onchange_after_install-system-10-files.sh.tmpl` and `.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl`.
@@ -300,8 +300,8 @@ system/linux/etc/selinux/
 
 ## Definition of Done
 
-- [ ] Declarative CIL policy module created at `system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`.
-- [ ] Onchange apply script created at `.chezmoiscripts/20-linux-fedora/run_onchange_after_selinux-policies.sh.tmpl`.
+- [ ] Declarative CIL policy module created at `system/linux/selinux/dotfiles_protected_agent_configs.cil`.
+- [ ] Onchange apply script created at `.chezmoiscripts/30-linux/run_after_selinux-policies.sh.tmpl`.
 - [ ] Policy correctly restricts write/unlink access to `chezmoi_t` while keeping `unconfined_t` read-only.
 - [ ] Policy fingerprinting prevents redundant `semodule` execution on unchanged applies.
 - [ ] Clean skips on non-Linux, non-Fedora, and container platforms verified via `.ci/check-skip-declarations.sh`.

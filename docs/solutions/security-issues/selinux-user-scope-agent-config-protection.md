@@ -41,7 +41,7 @@ AI agent CLIs, IDE extensions, and background tools running in user session doma
 
 Deploy a declarative SELinux Common Intermediate Language (CIL) module that establishes a dedicated type `protected_agent_config_t`, a management domain `chezmoi_t`, and an entrypoint `chezmoi_exec_t`. Configure domain transitions so only chezmoi can write to protected files, while all other unconfined user processes retain read-only access.
 
-### 1. Declarative CIL Policy (`system/linux/etc/selinux/dotfiles_protected_agent_configs.cil`)
+### 1. Declarative CIL Policy (`system/linux/selinux/dotfiles_protected_agent_configs.cil`)
 
 ```cil
 ; Types and Roles
