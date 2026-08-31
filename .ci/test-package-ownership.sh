@@ -90,9 +90,6 @@ for (const capability of capabilities) {
 if (!registry.has("gh") || !externals.has("gh") || presentInLegacy("gh")) {
   fail("gh must be one locked external chain and absent from Fedora native packages");
 }
-if (!registry.has("kitty") || presentInLegacy("kitty")) {
-  fail("kitty must be release-lock owned and absent from Fedora native packages");
-}
 if (!miseNames.has("kdotool") || presentInLegacy("kdotool")) {
   fail("kdotool must be mise owned and absent from Fedora native packages");
 }

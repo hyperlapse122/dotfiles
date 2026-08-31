@@ -42,7 +42,6 @@ for plat in "${platforms[@]}"; do
 done
 
 rendered_flutter="$scratch/flutter.sh"
-rendered_kitty="$scratch/kitty.sh"
 
 env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
   --override-data '{"chezmoi":{"os":"linux","arch":"amd64"}}' \
@@ -52,12 +51,5 @@ if grep -E '\$BIN_DIR|pruned=' "$rendered_flutter"; then
   fail "flutter script still contains public link or prune operations"
 fi
 
-env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
-  --override-data '{"chezmoi":{"os":"linux","arch":"amd64"}}' \
-  execute-template <"$repo_root/.chezmoiscripts/00-tools/run_onchange_before_kitty.sh.tmpl" >"$rendered_kitty"
-
-if grep -E '\$BIN_DIR|rm -rf -- "\$d"' "$rendered_kitty"; then
-  fail "kitty script still contains public link or prune operations"
-fi
 
 printf '%s\n' 'command external render validation passed'

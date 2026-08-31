@@ -581,20 +581,3 @@ commands:
           relPath: bin/dart
       legacy:
         path: .local/bin/flutter
-
-    kitty:
-      producer: existingTree
-      safetyProfile: multi-file
-      proofEligible: false
-      mode: "0755"
-      platforms: [linux, macos]
-      gate: "!container"
-      tool: kitty
-      treePath: .local/share/kitty/versions
-      commands:
-        - name: kitty
-          relPath: bin/kitty
-        - name: kitten
-          relPath: bin/kitten
-      legacy:
-        path: .local/bin/kitty

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Ghostty
+Exec=ghostty
+Icon=com.mitchellh.ghostty
+NoDisplay=true
