@@ -10,3 +10,6 @@ postinstall = [
   { run = "bash -c \"cd crates/mxm4-haptic; cargo fetch\"" },
   { run = "codegraph init" },
 ]
+
+[settings]
+lockfile = true
