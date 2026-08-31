@@ -33,9 +33,8 @@ WHAT THIS PARTIAL DELIBERATELY DOES NOT DO:
     compared to a value, a negated dotted form, a `desktop.<typo>` outside the
     fact's declared `values:` — and every caller of fact_gate() below already
     runs its gate expressions through facts-validate.tmpl BEFORE any of them
-    ever reaches a `fact_gate "…"` call site (the package installer validates
-    packages.yaml's `gates:` map, install-system-10-files validates
-    system.yaml's `gate:` column, and host-facts validates both). A typo is
+    ever reaches a `fact_gate "…"` call site (install-system-10-files validates
+    system.yaml's `gate:` column). A typo is
     caught at render time; fact_gate() only has to PARSE the three grammar
     shapes at runtime, never police them.
   * CARRY FORCE_* LOGIC. FORCE_NVIDIA stays in the Fedora package installer

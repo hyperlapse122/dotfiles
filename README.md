@@ -55,8 +55,7 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
    scripts under [`.chezmoiscripts/`](.chezmoiscripts). What lands is OS-gated
    in [`.chezmoiignore`](.chezmoiignore), so the scope depends on the host:
 
-   - **Fedora** (full): packages from
-     [`.chezmoidata/packages.yaml`](.chezmoidata/packages.yaml) via dnf, fonts,
+   - **Fedora** (full): base and component packages via dnf/flatpak/dotnet, fonts,
      GPG key import, GitHub / GitLab / Tailscale / Docker auth, the zsh login
      shell, and desktop config (KDE or GNOME, detected at apply time via
      `plasmashell` vs `gnome-shell`). KDE hosts additionally get the Breeze
@@ -255,8 +254,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
 (`AGENTS.md`, `LICENSE`, `mise.toml`, …).
 
 - [`.chezmoidata/`](.chezmoidata) — template data, the single source of truth
-  for packages ([`packages.yaml`](.chezmoidata/packages.yaml): dnf, flatpaks,
-  services, groups), fonts (`fonts.yaml`), the root-owned `/etc`
+  for fonts (`fonts.yaml`), the root-owned `/etc`
   install manifest ([`system.yaml`](.chezmoidata/system.yaml): per-path
   modes/gates + removed-path cleanup), and user identity (`user.yaml`).
 - [`.chezmoiscripts/`](.chezmoiscripts) — provisioning scripts run on apply,

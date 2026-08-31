@@ -27,11 +27,9 @@
 {{- else }}
 {{-   if ne $distro "fedora" }}
 .chezmoiscripts/20-base/fedora/**
-.chezmoiscripts/30-components/fedora/**
 {{-   end }}
 {{-   if ne $distro "ubuntu" }}
 .chezmoiscripts/20-base/ubuntu/**
-.chezmoiscripts/30-components/ubuntu/**
 {{-   end }}
 {{-   if and (ne $distro "fedora") (ne $distro "ubuntu") }}
 .chezmoiscripts/20-base/**
@@ -40,37 +38,36 @@
 {{- end }}
 
 {{- if or (ne .chezmoi.os "linux") (not $f.nvidia) }}
-.chezmoiscripts/30-components/*/10-nvidia.sh
+.chezmoiscripts/30-components/10-nvidia.sh
 {{- end }}
 
 {{- if not (default dict $features).nvidia }}
-.chezmoiscripts/30-components/*/10-nvidia.sh
+.chezmoiscripts/30-components/10-nvidia.sh
 {{- end }}
 {{- if not (default dict $features).podman }}
-.chezmoiscripts/30-components/*/20-podman.sh
+.chezmoiscripts/30-components/20-podman.sh
 {{- end }}
 {{- if not (default dict $features).tailscale }}
-.chezmoiscripts/30-components/*/30-tailscale.sh
+.chezmoiscripts/30-components/30-tailscale.sh
 {{- end }}
 {{- if not (default dict $features).flatpaks }}
-.chezmoiscripts/30-components/*/40-flatpaks.sh
+.chezmoiscripts/30-components/40-flatpaks.sh
 {{- end }}
 {{- if not (default dict $features).dotnet }}
-.chezmoiscripts/30-components/*/50-dotnet.sh
+.chezmoiscripts/30-components/50-dotnet.sh
 {{- end }}
 {{- if or (ne .chezmoi.os "linux") (eq $f.desktop "none") }}
-.chezmoiscripts/30-components/*/60-desktop-ime.sh
+.chezmoiscripts/30-components/60-desktop-ime.sh
 {{- end }}
 {{- if not (default dict $features).desktopIme }}
-.chezmoiscripts/30-components/*/60-desktop-ime.sh
+.chezmoiscripts/30-components/60-desktop-ime.sh
 {{- end }}
 {{- if not (default dict $features).apps }}
-.chezmoiscripts/30-components/*/70-apps.sh
+.chezmoiscripts/30-components/70-apps.sh
 {{- end }}
 {{- if not (default dict $features).devtools }}
-.chezmoiscripts/30-components/*/80-devtools.sh
+.chezmoiscripts/30-components/80-devtools.sh
 {{- end }}
-
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
 ./Library

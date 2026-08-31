@@ -1,13 +1,21 @@
-{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
-{{- $nvidiaCtkPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- if or $isFedora $isUbuntu -}}
+{{- $nvidiaCtkPresent := "" -}}
+{{- if $isFedora -}}
+{{-   $nvidiaCtkPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
+{{- end -}}
 #!/usr/bin/env bash
 
+{{ if $isFedora -}}
 # fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent))) }}
+{{ end -}}
 set -euo pipefail
 {{ includeTemplate "facts-sh.tmpl" . }}
-{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-nvidia-fedora") }}
-{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-nvidia-fedora.sh" -}}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-nvidia") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-nvidia.sh" -}}
 
+{{ if $isFedora -}}
 DNF=("${SUDO[@]}" dnf)
 
 nvidia_packages=(
@@ -183,5 +191,23 @@ install_nvidia_packages
 configure_nvidia_support
 enroll_dkms_mok
 enable_nvidia_services
+
+{{ else if $isUbuntu -}}
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+if [[ -f /etc/nv_tegra_release ]]; then
+  if [[ -f /etc/apt/sources.list.d/nvidia-l4t-apt-source.list ]]; then
+    "${SUDO[@]}" apt-get update -qq || true
+    install_apt nvidia-jetpack
+  fi
+fi
+{{ end -}}
 
 {{ end -}}

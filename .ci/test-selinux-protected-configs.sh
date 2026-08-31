@@ -36,7 +36,7 @@ for token in \
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing expected declaration: $token"
 done
 
-grep -qF -- "- secilc" "$repo_root/.chezmoidata/packages.yaml" || fail "packages.yaml missing secilc package"
+grep -qF -- "secilc" "$repo_root/.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl" || fail "devtools missing secilc package"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/selinux-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 

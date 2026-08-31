@@ -3,7 +3,7 @@
 #   dot_config/systemd/user/mxm4-hapticd.service.tmpl        (haptic.daemon.*)
 #   dot_config/systemd/user/mxm4-haptic-notify.service.tmpl  (haptic.notify.*)
 #
-# Single source of truth (like packages.yaml): tune a knob HERE, not in the
+# Single source of truth: tune a knob HERE, not in the
 # unit files. The build script
 # (.chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl)
 # fingerprints this file alongside the unit templates, so a knob edit re-runs

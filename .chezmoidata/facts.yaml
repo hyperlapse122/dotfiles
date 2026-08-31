@@ -44,14 +44,14 @@
 #       {{ $f := includeTemplate "facts.tmpl" . | fromYaml }} … {{ if $f.nvidia }}
 #   scripts
 #       {{ includeTemplate "facts-sh.tmpl" . }}   → FACT_NVIDIA=1, FACT_DESKTOP=gnome, …
-#   data files that name a gate (system.yaml `gate:`, packages.yaml `gates:`)
+#   data files that name a gate (system.yaml `gate:`)
 #       {{ includeTemplate "facts-validate.tmpl" (dict "ctx" . "gates" (list …)) }}
 #
 # ---------------------------------------------------------------------------
 # Gate-expression grammar (what a `gate:` / `gates:` value may say):
 #
 #   <fact>          boolean fact is true          nvidia, thinkpad, gdm
-#   !<fact>         boolean fact is false         !virt   (bareMetalPackages)
+#   !<fact>         boolean fact is false         !virt
 #   <fact>.<value>  string fact equals value      desktop.kde, distro.fedora
 #
 # facts-validate.tmpl checks the fact half of every expression against this
@@ -127,7 +127,7 @@ factRegistry:
       present — the precedence encoded in .chezmoitemplates/facts.tmpl (lookPath
       plasmashell first, then gnome-shell).
     gates: >-
-      kdePackages / gnomePackages in packages.yaml; the 50-linux-kde and
+      desktop and IME packages; the 50-linux-kde and
       50-linux-gnome script guards; the per-desktop fcitx5 launch mechanism
       (KDE via KWin virtualkeyboard, GNOME via XDG autostart + Kimpanel);
       the pinentry choice.

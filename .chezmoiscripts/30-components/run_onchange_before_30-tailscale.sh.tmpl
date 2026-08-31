@@ -1,0 +1,49 @@
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- if or $isFedora $isUbuntu -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-tailscale") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-tailscale.sh" -}}
+
+{{ if $isFedora -}}
+DNF=("${SUDO[@]}" dnf)
+
+setup_tailscale_repo() {
+  "${DNF[@]}" config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
+  "${DNF[@]}" makecache -y
+}
+
+install_tailscale() {
+  if ! rpm -q tailscale >/dev/null 2>&1; then
+    setup_tailscale_repo
+    "${DNF[@]}" install -y tailscale
+  fi
+}
+
+enable_tailscale() {
+  if systemctl list-unit-files tailscaled.service 2>/dev/null | grep -q tailscaled; then
+    "${SUDO[@]}" systemctl enable tailscaled 2>/dev/null || true
+  fi
+}
+
+install_tailscale
+enable_tailscale
+
+{{ else if $isUbuntu -}}
+if ! command -v tailscale >/dev/null 2>&1; then
+  curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | "${SUDO[@]}" tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null || true
+  curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list | "${SUDO[@]}" tee /etc/apt/sources.list.d/tailscale.list || true
+  "${SUDO[@]}" apt-get update -qq || true
+  "${SUDO[@]}" apt-get install -y tailscale || true
+fi
+
+if systemctl list-unit-files tailscaled.service 2>/dev/null | grep -q tailscaled; then
+  "${SUDO[@]}" systemctl enable tailscaled 2>/dev/null || true
+fi
+{{ end -}}
+
+{{ end -}}

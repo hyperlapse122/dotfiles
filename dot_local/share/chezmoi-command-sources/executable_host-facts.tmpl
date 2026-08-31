@@ -66,21 +66,10 @@ set -uo pipefail
 {{- $registry := .factRegistry -}}
 {{- $distro := $facts.distro -}}
 
-{{- /* Validate every gate expression this report reads, from both distro maps and
-   from the /etc manifest — not just the running host's. facts-validate.tmpl
-   `fail`s the whole chezmoi command on an unknown fact name, on a boolean
-   compared to a value, or on a `desktop.<typo>`, so a gate that would silently
-   mean nothing takes the apply down here too, on every host, not only on the one
-   distro that reads it. Emits nothing on success. */ -}}
-{{- /* `$.` — inside a range, `.` is the loop element, not the root context. */ -}}
-{{- $pkgGates := list -}}
-{{- $spec := index $.packages.linux "fedora" -}}
-{{- if hasKey $spec "gates" -}}
-{{-   range $gate := (values $spec.gates) -}}
-{{-     $pkgGates = append $pkgGates $gate -}}
-{{-   end -}}
-{{- end -}}
-{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/packages.yaml (gates:)" "gates" $pkgGates) -}}
+{{- /* Validate every gate expression this report reads from the /etc manifest.
+   facts-validate.tmpl `fail`s the whole chezmoi command on an unknown fact name,
+   on a boolean compared to a value, or on a `desktop.<typo>`, so a gate that would
+   silently mean nothing takes the apply down here too, on every host. */ -}}
 {{- $etcGates := list -}}
 {{- range $subsystem, $config := .system.linux -}}
 {{-   if and (kindIs "map" $config) (hasKey $config "overrides") -}}
@@ -183,69 +172,10 @@ printf '    template  probed in-process at render time (stat / glob / DMI read).
 printf '    builtin   chezmoi'\''s own template data (os, osRelease.id, lookPath).\n'
 printf '\n'
 
-# --- 2. Package groups ------------------------------------------------------
-# Rendered from the Fedora package map only. Fedora is the sole managed Linux
-# distribution, so printing a package map for any other distro would be noise
-# that never runs here.
-printf '## package groups  (.chezmoidata/packages.yaml, gates:)\n\n'
-{{- $pkgSpec := dict -}}
-{{- if and (eq $facts.os "linux") (eq $distro "fedora") -}}
-{{-   $pkgSpec = .packages.linux.fedora -}}
-{{- end -}}
-{{- if hasKey $pkgSpec "gates" }}
-printf '  distro: {{ $distro }} → .chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl\n'
-printf '  Every other package key in that map installs unconditionally.\n\n'
-# Row: <package key>:<gate expression>:<FORCE_* var that can override it, if any>
-#
-# FORCE_NVIDIA is the Fedora installer's sole package override. Reporting it
-# here mirrors the installer's behavior: a GPU-less test container can exercise
-# the NVIDIA repository and package path without turning the override into a
-# host fact.
-PKG_GATES=(
-{{- $forceVars := dict "nvidia" "FORCE_NVIDIA" -}}
-{{- range $key := (keys $pkgSpec.gates | sortAlpha) }}
-{{- $gate := index $pkgSpec.gates $key }}
-{{- /* The gate's FACT half — strip the `!` of a negation and the `.<value>` of a
-   string comparison, the same way facts-validate.tmpl parses the grammar. */ -}}
-{{- $factName := $gate | trimPrefix "!" }}
-{{- if contains "." $factName }}
-{{-   $factName = (splitn "." 2 $factName)._0 }}
-{{- end }}
-{{- $force := "" }}
-{{- if hasKey $forceVars $factName }}
-{{-   $force = index $forceVars $factName }}
-{{- end }}
-  "{{ $key }}:{{ $gate }}:{{ $force }}"
-{{- end }}
-)
-
-for row in "${PKG_GATES[@]}"; do
-  IFS=: read -r key gate force <<<"$row"
-  forced=0
-  if [[ -n "$force" && "${!force:-0}" == 1 ]]; then
-    forced=1
-  fi
-  if gate_eval "$gate"; then
-    if [[ "$forced" -eq 1 ]]; then
-      # The override is redundant here — the fact already said yes. Say so, so a
-      # maintainer does not read the group's presence as an artifact of the flag.
-      printf '  RECEIVED  %-18s %s  [%s=1 set, redundant]\n' "$key" "$(gate_why "$gate")" "$force"
-    else
-      printf '  RECEIVED  %-18s %s\n' "$key" "$(gate_why "$gate")"
-    fi
-  elif [[ "$forced" -eq 1 ]]; then
-    # The whole reason the FORCE_* hatches exist: a GPU-less container can still
-    # exercise the driver package sets. BY OVERRIDE, not by fact — a
-    # fact alone cannot explain a host that took the NVIDIA path without a GPU.
-    printf '  RECEIVED  %-18s BY OVERRIDE %s=1 — %s\n' "$key" "$force" "$(gate_why "$gate")"
-  else
-    printf '  SKIPPED   %-18s %s\n' "$key" "$(gate_why "$gate")"
-  fi
-done
-{{- else }}
-printf '  (none — the package installer is Linux + Fedora only; this host is\n'
-printf '  os={{ $facts.os }}, distro={{ if eq $distro "" }}<none>{{ else }}{{ $distro }}{{ end }})\n'
-{{- end }}
+# --- 2. Modular package components ------------------------------------------
+printf '## package components  (.chezmoiscripts/30-components/)\n\n'
+printf '  Package installation is decentralized into modular component scripts under\n'
+printf '  .chezmoiscripts/30-components/ across Fedora, Ubuntu, and macOS.\n'
 printf '\n'
 
 # --- 3. Root-owned /etc files ----------------------------------------------

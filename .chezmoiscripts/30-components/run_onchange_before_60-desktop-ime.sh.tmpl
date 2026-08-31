@@ -1,0 +1,67 @@
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- if or $isFedora $isUbuntu -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-desktop-ime") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-desktop-ime.sh" -}}
+
+{{ if $isFedora -}}
+DNF=("${SUDO[@]}" dnf)
+
+desktop_ime_packages=(
+  fcitx5
+  fcitx5-hangul
+  wl-clipboard
+  xdg-terminal-exec
+)
+
+if [[ "${FACT_DESKTOP:-none}" == "kde" ]]; then
+  desktop_ime_packages+=(pinentry-qt)
+elif [[ "${FACT_DESKTOP:-none}" == "gnome" ]]; then
+  desktop_ime_packages+=(pinentry-gnome3)
+fi
+
+install_desktop_ime_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${desktop_ime_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    "${DNF[@]}" install -y "${missing[@]}"
+  fi
+}
+
+install_desktop_ime_packages
+
+{{ else if $isUbuntu -}}
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+desktop_ime_packages=(
+  fcitx5
+  fcitx5-hangul
+  wl-clipboard
+)
+
+if [[ "${FACT_DESKTOP:-none}" != "none" ]]; then
+  desktop_ime_packages+=(pinentry-qt)
+fi
+
+"${SUDO[@]}" apt-get update -qq || true
+for pkg in "${desktop_ime_packages[@]}"; do
+  install_apt "$pkg"
+done
+{{ end -}}
+
+{{ end -}}
