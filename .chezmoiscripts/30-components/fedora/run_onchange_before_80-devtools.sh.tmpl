@@ -13,6 +13,10 @@ dev_groups=(
   c-development
 )
 
+dev_coprs=(
+  scottames/ghostty
+)
+
 dev_packages=(
   # Build tooling and language dependencies
   clang21-libs
@@ -37,6 +41,7 @@ dev_packages=(
   btop
   chezmoi
   fd-find
+  ghostty
   libsecret
   lm_sensors
   nvtop
@@ -52,6 +57,12 @@ dev_packages=(
   pkcs11-provider
 )
 
+setup_dev_repos() {
+  for copr in "${dev_coprs[@]}"; do
+    "${DNF[@]}" copr enable -y "${copr}" || true
+  done
+}
+
 install_devtools() {
   local -a missing=()
   local pkg
@@ -59,11 +70,11 @@ install_devtools() {
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
 
-
   # Install group packages
   "${DNF[@]}" group install -y "${dev_groups[@]}" 2>/dev/null || true
 
   if [[ "${#missing[@]}" -gt 0 ]]; then
+    setup_dev_repos
     "${DNF[@]}" install -y "${missing[@]}" || true
   fi
 }
