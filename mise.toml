@@ -9,6 +9,7 @@ postinstall = [
   { run = "bash -c \"cd packages; vp install\"" },
   { run = "bash -c \"cd crates/mxm4-haptic; cargo fetch\"" },
   { run = "codegraph init" },
+  { run = "codegraph sync" },
 ]
 
 [settings]
