@@ -24,13 +24,13 @@ for token in \
   "(typeattributeset unconfined_domain_type (chezmoi_t))" \
   "(allow chezmoi_t protected_agent_config_t" \
   "(allow unconfined_t protected_agent_config_t" \
-  "(filecon \"/home/[^/]+/\\.codex/config\\.toml\"" \
-  "(filecon \"/home/[^/]+/\\.claude\\.json.*\"" \
-  "(filecon \"/home/[^/]+/\\.mcp\\.json\"" \
-  "(filecon \"/home/[^/]+/\\.claude/settings\\.json\"" \
-  "(filecon \"/home/[^/]+/\\.codex/skills(/.*)?\"" \
+  "(filecon \"HOME_DIR/\\.codex/config\\.toml\"" \
+  "(filecon \"HOME_DIR/\\.claude\\.json.*\"" \
+  "(filecon \"HOME_DIR/\\.mcp\\.json\"" \
+  "(filecon \"HOME_DIR/\\.claude/settings\\.json\"" \
+  "(filecon \"HOME_DIR/\\.codex/skills(/.*)?\"" \
   "(filecon \"/usr/bin/chezmoi\"" \
-  "(filecon \"/home/[^/]+/\\.local/bin/chezmoi\""; do
+  "(filecon \"HOME_DIR/\\.local/bin/chezmoi\""; do
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing expected declaration: $token"
 done
 

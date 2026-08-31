@@ -45,13 +45,13 @@
 
 ; --- File Context Specifications (filecon) ---
 ; Target config files in user home directories
-(filecon "/home/[^/]+/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 
 ; chezmoi executables
 (filecon "/usr/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
 (filecon "/usr/local/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
-(filecon "/home/[^/]+/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))
