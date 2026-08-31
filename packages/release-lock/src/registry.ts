@@ -87,6 +87,13 @@ export const REGISTRY: Registry = {
     source: "astral-sh/uv",
     asset: ({ os, arch }) => `uv-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
   },
+  mise: {
+    kind: "githubRelease",
+    source: "jdx/mise",
+    linuxMusl: true,
+    asset: ({ os, arch, libc }, tag) =>
+      `mise-${tag}-${os === "darwin" ? "macos" : os}-${x64Arch(arch)}${libc === "musl" ? "-musl" : ""}`,
+  },
 
   gh: {
     kind: "githubRelease",

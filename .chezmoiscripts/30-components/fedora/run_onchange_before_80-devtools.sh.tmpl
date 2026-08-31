@@ -31,7 +31,6 @@ dev_packages=(
   libyaml-devel
   mesa-libGLU
   mingw64-gcc
-  mise
   webkit2gtk4.1-devel
 
   # CLI utilities and system monitoring
@@ -60,10 +59,6 @@ install_devtools() {
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
 
-  # Ensure COPR for mise is enabled if missing
-  if ! rpm -q mise >/dev/null 2>&1; then
-    "${DNF[@]}" copr enable jdxcode/mise -y || true
-  fi
 
   # Install group packages
   "${DNF[@]}" group install -y "${dev_groups[@]}" 2>/dev/null || true

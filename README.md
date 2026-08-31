@@ -37,8 +37,8 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs 1Password / `op` / `mise` via `dnf` (the 1Password
-     RPM repo + the `jdxcode/mise` COPR).
+   - **Fedora** installs 1Password / `op` via `dnf` (the 1Password
+     RPM repo).
    - **Ubuntu arm64 on an NVIDIA Jetson AGX Thor** installs the required
      bootstrap tools through `apt`. The hook accepts `ubuntu` for this path.
    - **macOS** uses Homebrew (bootstrapping Homebrew first if needed). The

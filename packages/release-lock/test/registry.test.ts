@@ -72,6 +72,14 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "uv-x86_64-apple-darwin.tar.gz",
     "darwin-arm64": "uv-aarch64-apple-darwin.tar.gz",
   },
+  mise: {
+    "linux-amd64": "mise-v0.0.0-linux-x64",
+    "linux-arm64": "mise-v0.0.0-linux-arm64",
+    "linux-amd64-musl": "mise-v0.0.0-linux-x64-musl",
+    "linux-arm64-musl": "mise-v0.0.0-linux-arm64-musl",
+    "darwin-amd64": "mise-v0.0.0-macos-x64",
+    "darwin-arm64": "mise-v0.0.0-macos-arm64",
+  },
   gh: {
     // darwin ships .zip spelled `macOS`; the leading `v` is stripped.
     "linux-amd64": "gh_0.0.0_linux_amd64.tar.gz",
