@@ -375,6 +375,37 @@
           }
         }
       },
+      "mise": {
+        "kind": "githubRelease",
+        "source": "jdx/mise",
+        "version": "v2026.8.15",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-x64",
+            "sha256": "a6dea05e896f1e6090f821588f45397262270e0e0b456252f8d1da28a416f3f2"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-arm64",
+            "sha256": "124ea8f7c8cb9a6a3c99c763cbf37ca48c9beaa816735f011d9fd99e6cd463e9"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-macos-x64",
+            "sha256": "6a1cef931e299d7392cd7008dd97fcef2d9b41fbdfe79df4fd9f7ab0cc33d9f7"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-macos-arm64",
+            "sha256": "17a6e37ac2aaeee78206abc601568e1fe5010e398bf3c7320e1683584124d3c7"
+          },
+          "linux-amd64-musl": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-x64-musl",
+            "sha256": "7f4ec9c0e4a0b314eeaacb41e45f9ee9dd96d67cfecfe68692a434883d2af725"
+          },
+          "linux-arm64-musl": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.8.15/mise-v2026.8.15-linux-arm64-musl",
+            "sha256": "c77d73628197a5c645924e8e37961266004a9fe1f72ab2dbf143b5e545812aeb"
+          }
+        }
+      },
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",

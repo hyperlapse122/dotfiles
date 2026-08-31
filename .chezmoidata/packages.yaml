@@ -95,8 +95,7 @@ packages:
       # COPR (community) repositories enabled via `dnf copr enable`. Fedora-only
       # mechanism: `copr enable <owner/project>` resolves the whole repo from one
       # token.
-      coprs:
-        - jdxcode/mise
+      coprs: []
       # GPG keys imported (rpm --import) to verify third-party repo packages.
       # Fedora-only mechanism: rpm has ONE global keyring, so a key is declared once
       # and stands apart from the repos that use it.
@@ -230,7 +229,6 @@ packages:
         # Language toolchains + version manager
         - dotnet-sdk-10.0
         - dotnet-sdk-8.0
-        - mise
 
         # Ruby build dependencies (consumed by mise's ruby-build).
         # The runtime libs libffi/libyaml are pulled in transitively.

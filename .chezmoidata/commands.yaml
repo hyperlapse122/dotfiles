@@ -196,6 +196,18 @@ commands:
       legacy:
         path: .local/bin/uvx
 
+    mise:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: mise
+      commands:
+        - name: mise
+      legacy:
+        path: .local/bin/mise
+
     kubectl:
       producer: external
       safetyProfile: native-single-file

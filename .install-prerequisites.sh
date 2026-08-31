@@ -760,8 +760,8 @@ if is_container; then
 fi
 
 # Fedora: install via dnf, mirroring .chezmoidata/packages.yaml (1Password's
-# stable RPM repo + the jdxcode/mise COPR). Skips work that is already done so
-# the hook is idempotent across re-runs.
+# stable RPM repo). Skips work that is already done so the hook is idempotent
+# across re-runs.
 install_fedora() {
   # Use sudo only when not already root (matches the package-install script).
   # Throw early if neither root nor sudo is available — dnf needs it.
@@ -792,10 +792,6 @@ EOF
     "${SUDO[@]}" dnf install gh zsh git-lfs -y
   fi
 
-  if ! rpm -q mise >/dev/null 2>&1; then
-    "${SUDO[@]}" dnf copr enable jdxcode/mise -y
-    "${SUDO[@]}" dnf install mise -y
-  fi
 }
 
 # Ubuntu: install via apt. Two upstream constraints shape this, neither visible

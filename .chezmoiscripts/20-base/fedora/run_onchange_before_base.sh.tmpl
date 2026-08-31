@@ -90,8 +90,6 @@ setup_base_repos() {
 
   "${SUDO[@]}" fedora-third-party enable
 
-  # Enable COPRs for core tooling
-  "${DNF[@]}" copr enable jdxcode/mise -y
 
   # Install RPM Fusion (free + nonfree)
   if ! rpm -q rpmfusion-free-release rpmfusion-nonfree-release >/dev/null 2>&1; then

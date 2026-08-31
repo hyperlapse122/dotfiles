@@ -1,12 +1,21 @@
 {{- /*
   Developer CLIs & language servers: android, ast-grep, buf, marksman,
-  shellcheck, wasm-pack, rust-analyzer, uv/uvx.
+  shellcheck, wasm-pack, rust-analyzer, uv/uvx, mise.
 */ -}}
 
 {{- /* Rust-style triple components, shared by the rust-toolchain-built CLIs below. */ -}}
 {{- $rustArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
 {{- /* Same, but for the projects that only publish a static musl linux build. */ -}}
 {{- $muslTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" .chezmoi.os)) -}}
+
+{{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
+       static-musl build. */ -}}
+{{- $isMuslLinux := false -}}
+{{- if eq .chezmoi.os "linux" -}}
+  {{- if eq (output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim) "0" -}}
+    {{- $isMuslLinux = true -}}
+  {{- end -}}
+{{- end -}}
 
 {{- /* ---------- android (Google Android CLI) ---------- */ -}}
 
@@ -156,6 +165,21 @@ url = '{{ $uvArchiveUrl }}'
 executable = true
 targetPath = '.local/share/chezmoi-commands/incomplete/uvx/uvx'
 path = '{{ printf "%suvx" $uvPathPrefix }}'
+
+{{- /* ---------- mise ---------- */ -}}
+{{- /*
+  Tracks upstream jdx/mise releases via release-lock.
+  Linux static-musl builds are supported alongside glibc and macOS binaries.
+*/ -}}
+
+[mise]
+type = "file"
+targetPath = '.local/share/chezmoi-commands/incomplete/mise/mise'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "mise" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
+executable = true
+
+[mise.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "mise" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
 
 {{- /* ---------- flutter ---------- */ -}}
 {{- /*
