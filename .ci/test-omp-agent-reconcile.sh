@@ -563,14 +563,19 @@ grep -F "asserted $declared_count of $declared_count declared omp settings paths
 
 # A selector the catalog covers by provider but does not serve aborts the apply
 # before anything is written.
-absent_selector=$(jq -r 'first(.models[] | select(.provider == "anthropic") | .selector) // ""' "$scratch/catalog-full.json")
-[[ -n $absent_selector ]] || {
-  printf 'fixture found no anthropic selector to withhold; the absent-selector case is not being exercised\n' >&2
+test_provider=$(jq -r 'first(.models[].provider) // ""' "$scratch/catalog-full.json")
+[[ -n $test_provider ]] || {
+  printf 'fixture found no provider in catalog; the absent-selector case is not being exercised\n' >&2
   exit 1
 }
-jq --arg s "$absent_selector" '
+absent_selector=$(jq -r --arg p "$test_provider" 'first(.models[] | select(.provider == $p) | .selector) // ""' "$scratch/catalog-full.json")
+[[ -n $absent_selector ]] || {
+  printf 'fixture found no %s selector to withhold; the absent-selector case is not being exercised\n' "$test_provider" >&2
+  exit 1
+}
+jq --arg s "$absent_selector" --arg p "$test_provider" '
   .models |= (map(select(.selector != $s)) + [
-    {provider: "anthropic", selector: "anthropic/fixture-survivor"}
+    {provider: $p, selector: ($p + "/fixture-survivor")}
   ])
 ' "$scratch/catalog-full.json" >"$scratch/catalog-absent.json"
 if run_settings absent "$scratch/catalog-absent.json"; then
@@ -582,10 +587,10 @@ grep -F 'does not serve' "$scratch/absent.err" >/dev/null
 [[ ! -s "$scratch/absent.calls" ]]
 
 # A provider the catalog cannot speak for is not evidence of an absent selector.
-jq '.models |= map(select(.provider != "anthropic"))' \
+jq --arg p "$test_provider" '.models |= map(select(.provider != $p))' \
   "$scratch/catalog-full.json" >"$scratch/catalog-noprovider.json"
 run_settings noprovider "$scratch/catalog-noprovider.json"
-grep -F 'catalog has no anthropic models' "$scratch/noprovider.err" >/dev/null
+grep -F "catalog has no $test_provider models" "$scratch/noprovider.err" >/dev/null
 [[ $(wc -l <"$scratch/noprovider.calls") -eq $declared_count ]]
 
 # An unparseable catalog and a failing probe both fail open.
