@@ -110,7 +110,7 @@ declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=ab69056617db427f593db835a58424fd211613e6ee5320fb8da3040428d85916
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=ed9995e98f754311030b42ce13bcc207eba5e81d40c1246ea4996d190b25577c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=0a12895347a0c4c162c05377fd4b268cd22a7a1aad14b1394a9fb7b9db370cd4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=7887653ca847ae802ed5d1d1368ae3d02125d580e5887ee0c8b823730d9db5a2
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=74fe5e811e195f50d047b65e2419305e4c66483dec2434e4fbee61432d2297e0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
 )
 

@@ -63,7 +63,7 @@ if [[ "$os_id" == "fedora" && "$root_fstype" == "btrfs" ]]; then
   fi
 
   # 3. Ensure /swap entry in /etc/fstab
-  if ! grep -q '[[:space:]]/swap[[:space:]]' /etc/fstab 2>/dev/null; then
+  if ! grep -qE '^[[:space:]]*[^#[:space:]]+[[:space:]]+/swap[[:space:]]' /etc/fstab 2>/dev/null; then
     printf '  -> adding /swap entry to /etc/fstab\n'
     printf 'UUID=%s /swap btrfs subvol=@swap,nodatacow 0 0\n' "$root_uuid" | "${SUDO[@]}" tee -a /etc/fstab >/dev/null
   fi
@@ -110,10 +110,20 @@ if [[ "$os_id" == "fedora" && "$root_fstype" == "btrfs" ]]; then
     "${SUDO[@]}" restorecon -v /swap/swapfile >/dev/null 2>&1 || true
   fi
 
-  # Ensure /swap/swapfile entry in /etc/fstab
-  if ! grep -q '[[:space:]]/swap/swapfile[[:space:]]' /etc/fstab 2>/dev/null; then
+  # Ensure /swap/swapfile entry in /etc/fstab (idempotent, deduplicating any legacy duplicate entries)
+  if ! grep -qE '^[[:space:]]*/swap/swapfile([[:space:]]|$)' /etc/fstab 2>/dev/null; then
     printf '  -> adding /swap/swapfile entry to /etc/fstab\n'
     printf '/swap/swapfile none swap defaults 0 0\n' | "${SUDO[@]}" tee -a /etc/fstab >/dev/null
+  elif [[ "$(grep -cE '^[[:space:]]*/swap/swapfile([[:space:]]|$)' /etc/fstab 2>/dev/null || echo 0)" -gt 1 ]]; then
+    printf '  -> deduplicating /swap/swapfile entries in /etc/fstab\n'
+    tmp_fstab="$(mktemp)"
+    awk '/^[[:space:]]*\/swap\/swapfile([[:space:]]|$)/ { if (seen++) next } { print }' /etc/fstab > "$tmp_fstab"
+    "${SUDO[@]}" cp "$tmp_fstab" /etc/fstab
+    "${SUDO[@]}" chmod 644 /etc/fstab
+    rm -f "$tmp_fstab"
+    if command -v restorecon >/dev/null 2>&1; then
+      "${SUDO[@]}" restorecon /etc/fstab >/dev/null 2>&1 || true
+    fi
   fi
 
   # Activate swap if not active
