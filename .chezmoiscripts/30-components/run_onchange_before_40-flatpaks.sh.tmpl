@@ -1,19 +1,13 @@
-{{ if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- if or $isFedora $isUbuntu -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
-{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-flatpaks-ubuntu") }}
-
-SUDO=()
-if [[ "${EUID}" -ne 0 ]]; then
-  if ! command -v sudo >/dev/null 2>&1; then
-    printf 'install-flatpaks-ubuntu.sh: requires root or sudo for package installation.\n' >&2
-    exit 1
-  fi
-  SUDO=(sudo)
-fi
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-flatpaks") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-flatpaks.sh" -}}
 
 flatpaks=(
   com.discordapp.Discord
@@ -22,10 +16,17 @@ flatpaks=(
 )
 
 install_flatpak_runtime() {
+{{ if $isFedora -}}
+  DNF=("${SUDO[@]}" dnf)
+  if ! rpm -q flatpak >/dev/null 2>&1; then
+    "${DNF[@]}" install flatpak -y
+  fi
+{{ else if $isUbuntu -}}
   if ! command -v flatpak >/dev/null 2>&1; then
     "${SUDO[@]}" apt-get update -qq || true
     "${SUDO[@]}" apt-get install -y flatpak
   fi
+{{ end -}}
 
   "${SUDO[@]}" flatpak remote-add --if-not-exists --system flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo

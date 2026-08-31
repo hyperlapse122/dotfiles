@@ -759,7 +759,7 @@ if is_container; then
   exit 1
 fi
 
-# Fedora: install via dnf, mirroring .chezmoidata/packages.yaml (1Password's
+# Fedora: install via dnf (1Password's
 # stable RPM repo). Skips work that is already done so the hook is idempotent
 # across re-runs.
 install_fedora() {

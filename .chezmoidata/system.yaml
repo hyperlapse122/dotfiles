@@ -2,7 +2,7 @@
 # Managed by modular subsystem scripts under .chezmoiscripts/30-linux/.
 # See system/README.md for the full model.
 #
-# Single source of truth (like packages.yaml): add/gate a system/linux/etc
+# Single source of truth: add/gate a system/linux/etc
 # file or list a removed /etc path HERE, organized by subsystem.
 system:
   linux:

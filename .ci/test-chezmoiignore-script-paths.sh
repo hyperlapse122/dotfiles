@@ -143,11 +143,11 @@ is_path_ignored "$container_out" ".chezmoiscripts/50-linux-kde/config-kde-settin
 is_path_ignored "$container_out" ".chezmoiscripts/60-build/build-mxm4-haptic.sh" || fail 'container should ignore mxm4-haptic'
 is_path_ignored "$container_out" ".chezmoiscripts/90-src/reconcile-garden.sh" || fail 'container should ignore garden'
 is_path_ignored "$container_out" ".chezmoiscripts/20-base/fedora/base.sh" || fail 'container should ignore 20-base'
-is_path_ignored "$container_out" ".chezmoiscripts/30-components/fedora/10-nvidia.sh" || fail 'container should ignore 30-components'
+is_path_ignored "$container_out" ".chezmoiscripts/30-components/10-nvidia.sh" || fail 'container should ignore 30-components'
 gnome_out="$scratch/rendered-linux-gnome"
 macos_out="$scratch/rendered-macos"
 is_path_ignored "$macos_out" ".chezmoiscripts/20-base/fedora/base.sh" || fail 'macos should ignore 20-base'
-is_path_ignored "$macos_out" ".chezmoiscripts/30-components/fedora/10-nvidia.sh" || fail 'macos should ignore 30-components'
+is_path_ignored "$macos_out" ".chezmoiscripts/30-components/10-nvidia.sh" || fail 'macos should ignore 30-components'
 
 # Jetson ignores mxm4-haptic, Fedora desktop has it eligible
 jetson_out="$scratch/rendered-linux-jetson"

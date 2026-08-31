@@ -135,8 +135,7 @@ login_host() {
 
   # The `user` key the token path cleared: look the account up through the API
   # with the token we just stored. `glab api` prints compact single-line JSON and
-  # has no --jq flag, and `jq` is not a provisioned package here (not in
-  # .chezmoidata/packages.yaml), so the username is extracted with sed. The API
+  # has no --jq flag, so the username is extracted with sed. The API
   # call is captured in an `if !` condition — a bare `username=$(...)` assignment
   # takes the command substitution's exit status, so under `set -e` a failed
   # lookup would abort the script instead of reaching the explicit check below

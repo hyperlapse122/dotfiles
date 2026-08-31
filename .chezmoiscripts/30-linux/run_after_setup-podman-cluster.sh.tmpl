@@ -9,7 +9,7 @@
 # Kubernetes dev cluster on the Linux desktop targets. Every piece is
 # already INSTALLED elsewhere; this script only performs the runtime
 # *activation* that cannot be expressed as a managed file:
-#   - podman + rootless tooling ....... .chezmoidata/packages.yaml (dnf)
+#   - podman + rootless tooling ....... .chezmoiscripts/30-components/ (dnf/apt)
 #   - minikube ........................ .chezmoiexternals/k8s.toml (~/.local/bin)
 #   - DOCKER_HOST + MINIKUBE_ROOTLESS . dot_config/environment.d/65-containers.conf
 #   - user lingering + rootful

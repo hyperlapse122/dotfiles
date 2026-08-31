@@ -1,0 +1,82 @@
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- if or $isFedora $isUbuntu -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-podman") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-podman.sh" -}}
+
+{{ if $isFedora -}}
+DNF=("${SUDO[@]}" dnf)
+
+podman_packages=(
+  buildah
+  containers-common
+  fuse-overlayfs
+  kubernetes-client
+  passt
+  podman
+  podman-compose
+  podman-docker
+  slirp4netns
+)
+
+install_podman_packages() {
+  local -a missing=()
+  local pkg
+  for pkg in "${podman_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    "${DNF[@]}" install -y "${missing[@]}"
+  fi
+}
+
+configure_user_namespaces() {
+  local target_user
+  target_user="${SUDO_USER:-$USER}"
+
+  if getent group docker >/dev/null 2>&1; then
+    "${SUDO[@]}" gpasswd -d "${target_user}" docker 2>/dev/null || true
+  fi
+
+  grep -q "^${target_user}:" /etc/subgid 2>/dev/null || "${SUDO[@]}" usermod --add-subgids 100000-165535 "${target_user}" 2>/dev/null || true
+  grep -q "^${target_user}:" /etc/subuid 2>/dev/null || "${SUDO[@]}" usermod --add-subuids 100000-165535 "${target_user}" 2>/dev/null || true
+}
+
+install_podman_packages
+configure_user_namespaces
+
+{{ else if $isUbuntu -}}
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+podman_packages=(
+  buildah
+  fuse-overlayfs
+  podman
+  podman-docker
+  slirp4netns
+  uidmap
+)
+
+"${SUDO[@]}" apt-get update -qq || true
+for pkg in "${podman_packages[@]}"; do
+  install_apt "$pkg"
+done
+
+target_user="${SUDO_USER:-$USER}"
+grep -q "^${target_user}:" /etc/subgid 2>/dev/null || "${SUDO[@]}" usermod --add-subgids 100000-165535 "${target_user}" 2>/dev/null || true
+grep -q "^${target_user}:" /etc/subuid 2>/dev/null || "${SUDO[@]}" usermod --add-subuids 100000-165535 "${target_user}" 2>/dev/null || true
+{{ end -}}
+
+{{ end -}}

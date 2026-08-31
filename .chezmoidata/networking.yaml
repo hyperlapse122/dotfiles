@@ -14,7 +14,7 @@
 # `wifi`) to leave room for future ethernet/dns/vpn siblings without another
 # .chezmoidata file rename.
 #
-# Single source of truth (like packages.yaml / agents.yaml): declare every Wi-Fi
+# Single source of truth (like agents.yaml): declare every Wi-Fi
 # network HERE, not by editing 1Password items or the scripts. Only the networks
 # enumerated below are provisioned. Each tool adds or overwrites its OS profile
 # store to match this file: a missing network is added, an existing one is

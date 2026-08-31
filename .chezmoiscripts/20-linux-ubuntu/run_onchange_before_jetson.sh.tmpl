@@ -1,8 +1,3 @@
-{{- /* Validate the complete cross-platform authority before any manager body can
-   render, exactly as the Fedora installer does. Deliberately OUTSIDE the gate
-   below: a typo in the ubuntu authority rows must abort the apply on every host,
-   not only on the one board whose body renders. */ -}}
-{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{ if and (eq .chezmoi.os "linux") (eq $facts.distro "ubuntu") $facts.jetson (eq .chezmoi.arch "arm64") -}}
 {{- /* The lock lookups sit INSIDE the gate on purpose. release-lock-ref.tmpl
@@ -56,18 +51,20 @@ if [[ ! -f "$nvidia_source" ]]; then
   exit 1
 fi
 
-{{ range $capability := .packages.authority.capabilities -}}
-{{-   $delivery := index $capability "ubuntu" -}}
-{{-   if and (eq $delivery.disposition "managed") (eq (get $delivery "owner") "apt") -}}
-{{-     if hasKey $capability "gate" }}
-if fact_gate {{ $capability.gate | quote }}; then
-  install_apt {{ $delivery.identifier | quote }}
+"${SUDO[@]}" apt-get update -qq || true
+install_apt "1password-cli"
+install_apt "default-jdk"
+install_apt "fcitx5-hangul"
+install_apt "gh"
+install_apt "gnupg"
+install_apt "jq"
+install_apt "libdbus-1-dev"
+install_apt "libssl-dev"
+install_apt "pinentry-qt"
+
+if fact_gate "jetson"; then
+  install_apt "nvidia-jetpack"
 fi
-{{-     else }}
-install_apt {{ $delivery.identifier | quote }}
-{{-     end -}}
-{{-   end -}}
-{{- end }}
 
 # 1Password desktop: the vendor publishes no arm64 deb or rpm, so the aarch64
 # tarball is the only artifact. Its version and URL come from the generated lock,

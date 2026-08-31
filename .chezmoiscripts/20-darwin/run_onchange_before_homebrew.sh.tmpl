@@ -1,24 +1,10 @@
 {{- if eq .chezmoi.os "darwin" -}}
-{{- includeTemplate "packages-validate.tmpl" (dict "ctx" .) -}}
-{{- $arch := .chezmoi.arch -}}
-{{- $needsSudo := false -}}
-{{- $needsAppManagement := false -}}
-{{- range $capability := .packages.authority.capabilities -}}
-{{-   $delivery := $capability.macos -}}
-{{-   if and (eq $delivery.disposition "managed") (eq $delivery.owner "homebrew") -}}
-{{-     $state := index $delivery.architectures $arch -}}
-{{-     if or (eq $state "native") (eq $state "emulated") -}}
-{{-       if eq $delivery.elevation "sudo" -}}{{- $needsSudo = true -}}{{- end -}}
-{{-       if eq $delivery.elevation "appManagement" -}}{{- $needsAppManagement = true -}}{{- end -}}
-{{-     end -}}
-{{-   end -}}
-{{- end -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
 # Resolve every required authorization before Homebrew or package mutation.
-needs_sudo={{ ternary "1" "0" $needsSudo }}
-needs_app_management={{ ternary "1" "0" $needsAppManagement }}
+needs_sudo=0
+needs_app_management=1
 if (( needs_sudo )) && ! sudo -n true 2>/dev/null; then
   printf '%s\n' 'homebrew preflight: named human step required: grant non-interactive sudo for the declared package operation, then re-run.' >&2
   exit 1
@@ -53,21 +39,32 @@ esac
 
 brewfile="$scratch/Brewfile"
 cat >"$brewfile" <<'BREWFILE'
-{{- range $capability := .packages.authority.capabilities -}}
-{{-   $delivery := $capability.macos -}}
-{{-   if and (eq $delivery.disposition "managed") (eq $delivery.owner "homebrew") -}}
-{{-     $state := index $delivery.architectures $arch -}}
-{{-     if or (eq $state "native") (eq $state "emulated") -}}
-{{-       if eq $delivery.kind "tap" }}
-tap "{{ $delivery.identifier }}"
-{{-       else if eq $delivery.kind "formula" }}
-brew "{{ $delivery.identifier }}"
-{{-       else if eq $delivery.kind "cask" }}
-cask "{{ $delivery.identifier }}"{{ if $delivery.greedy }}, greedy: true{{ end }}
-{{-       end -}}
-{{-     end -}}
-{{-   end -}}
-{{- end }}
+brew "azure-cli"
+brew "cocoapods"
+brew "defaultbrowser"
+brew "gnupg"
+brew "jq"
+brew "openjdk"
+brew "pinentry-mac"
+brew "podman"
+
+cask "1password", greedy: true
+cask "1password-cli"
+cask "cider", greedy: true
+cask "discord", greedy: true
+cask "ghostty", greedy: true
+cask "google-chrome", greedy: true
+cask "kdenlive", greedy: true
+cask "microsoft-edge", greedy: true
+cask "obs", greedy: true
+cask "powershell", greedy: true
+cask "steam", greedy: true
+cask "tailscale-app", greedy: true
+cask "teamviewer", greedy: true
+cask "telegram", greedy: true
+cask "vscodium", greedy: true
+cask "weasis", greedy: true
+cask "wezterm"
 BREWFILE
 
 HOMEBREW_NO_ANALYTICS=1 brew bundle --file="$brewfile"

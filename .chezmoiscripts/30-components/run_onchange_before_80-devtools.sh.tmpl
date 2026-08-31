@@ -1,11 +1,15 @@
-{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
+{{- if or $isFedora $isUbuntu -}}
 #!/usr/bin/env bash
 
 set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
-{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-devtools-fedora.sh" -}}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-devtools") }}
+{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-devtools.sh" -}}
 
+{{ if $isFedora -}}
 DNF=("${SUDO[@]}" dnf)
 
 dev_groups=(
@@ -44,9 +48,9 @@ dev_packages=(
   libsecret
   lm_sensors
   nvtop
+  secilc
   systemd-container
   yp-tools
-
   # Smartcard / code signing
   opensc
   osslsigncode
@@ -83,5 +87,30 @@ install_devtools() {
 }
 
 install_devtools
+
+{{ else if $isUbuntu -}}
+install_apt() {
+  local pkg=$1
+  local status=''
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
+  if [[ "$status" != installed ]]; then
+    "${SUDO[@]}" apt-get install -y "$pkg"
+  fi
+}
+
+dev_packages=(
+  build-essential
+  default-jdk
+  libdbus-1-dev
+  libssl-dev
+  opensc
+  pcscd
+)
+
+"${SUDO[@]}" apt-get update -qq || true
+for pkg in "${dev_packages[@]}"; do
+  install_apt "$pkg"
+done
+{{ end -}}
 
 {{ end -}}

@@ -24,15 +24,13 @@ unknown-waveform guard in the mxm4-haptic hooks manifest:
      value is checked against the fact's declared `values:` list when it has one.
 
 The contract is CALLER PASSES THE NAMES, PARTIAL CHECKS MEMBERSHIP. It does not
-go looking for gate references itself, because the two data files spell them
-differently — system.yaml carries a per-path `gate:` scalar, packages.yaml a
-`gates:` map — and one partial has to serve both.
+go looking for gate references itself, because callers pass their gate expressions
+explicitly.
 
 Usage:
 
   {{ includeTemplate "facts-validate.tmpl" (dict
-       "ctx"    .
-       "source" ".chezmoidata/packages.yaml (gates:)"
+       "source" ".chezmoidata/system.yaml (gate:)"
        "gates"  (list "nvidia" "desktop.kde" "!virt")) }}
 
   "ctx"    (required) the root template context — the partial needs .factRegistry

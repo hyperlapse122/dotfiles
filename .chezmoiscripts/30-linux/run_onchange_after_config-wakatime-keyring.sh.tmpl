@@ -40,10 +40,10 @@ if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && ! -S "${XDG_RUNTIME_DIR:-/nonexisten
       "reason"    "no D-Bus session bus, so the keyring is unreachable") | nindent 2 }}
 fi
 
-# Fatal, not a skip: libsecret is declared in .chezmoidata/packages.yaml and
-# phase 20 installs it before this phase runs. Absence means provisioning broke.
+# Fatal, not a skip: libsecret is installed in devtools component
+# and phase 20/30 installs it before this phase runs.
 command -v secret-tool >/dev/null 2>&1 ||
-  fail 'secret-tool not found (libsecret is declared in .chezmoidata/packages.yaml)'
+  fail 'secret-tool not found (libsecret is required)'
 
 # `read -r` strips the heredoc's trailing newline, which `secret-tool store`
 # would otherwise keep as part of the secret; `printf` is a shell builtin, so

@@ -67,9 +67,9 @@ runtime_input: false
 totals:
   classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 179
+  rendered_instances: 177
   phase_local_instances: 120
-  shared_guard_instances: 59
+  shared_guard_instances: 57
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -114,7 +114,7 @@ shared_guard_fanout:
   gnome-guard: 7
   headless-guard: 10
   kde-guard: 9
-  shared-host-guard: 22
+  shared-host-guard: 20
   sudo-skip-guard: 11
 divergence:
   - bucket: 'harmless'
@@ -174,16 +174,14 @@ owners:
     instances:
       - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_20-podman.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_30-tailscale.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_40-flatpaks.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_10-nvidia.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_20-podman.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_30-tailscale.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_40-flatpaks.sh.tmpl#shared-host-guard/shared-host'
-      - '.chezmoiscripts/30-components/ubuntu/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_40-flatpaks.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_70-apps.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl#shared-host-guard/shared-host'
@@ -1876,7 +1874,7 @@ owners:
       - '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl#install-base-ubuntu/base-packages-already-present'
   - owner: 'install-nvidia-fedora/rpmfusion-nonfree-absent'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 181
     anchor: '  if ! "${DNF[@]}" -q repo list --all ''rpmfusion-nonfree*'' | grep -q ''^rpmfusion-nonfree''; then'
     predicate: '! "${DNF[@]}" -q repo list --all ''rpmfusion-nonfree*'' | grep -q ''^rpmfusion-nonfree'''
@@ -1887,10 +1885,10 @@ owners:
     form: 'skip_step'
     direction: 'harmless'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/rpmfusion-nonfree-absent'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/rpmfusion-nonfree-absent'
   - owner: 'install-nvidia-fedora/nvidia-packages-already-present'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 276
     anchor: '  if [[ "${#missing[@]}" -eq 0 ]]; then'
     predicate: '[[ "${#missing[@]}" -eq 0 ]]'
@@ -1900,10 +1898,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'done_here'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-packages-already-present'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-packages-already-present'
   - owner: 'install-nvidia-fedora/nvidia-ctk-absent'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 372
     anchor: '  if ! command -v nvidia-ctk >/dev/null 2>&1; then'
     predicate: '! command -v nvidia-ctk >/dev/null 2>&1'
@@ -1916,10 +1914,10 @@ owners:
     probe: 'nvidia-ctk-present'
     fingerprint_placement: 'new-header-block'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-ctk-absent'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-ctk-absent'
   - owner: 'install-nvidia-fedora/mok-generate-no-efi'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 397
     anchor: '  [[ -d /sys/firmware/efi ]] || return 0'
     predicate: '[[ ! -d /sys/firmware/efi ]]'
@@ -1929,10 +1927,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'not_applicable'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-no-efi'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-no-efi'
   - owner: 'install-nvidia-fedora/mok-generate-secureboot-disabled'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 399
     anchor: '  mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'' || return 0'
     predicate: '! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'''
@@ -1942,10 +1940,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'not_applicable'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-secureboot-disabled'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-secureboot-disabled'
   - owner: 'install-nvidia-fedora/mok-keypair-present'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 407
     anchor: '    present) return 0 ;;'
     predicate: 'present)'
@@ -1955,10 +1953,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'done_here'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-keypair-present'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-keypair-present'
   - owner: 'install-nvidia-fedora/mok-enroll-no-efi'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 475
     anchor: '  if [[ ! -d /sys/firmware/efi ]]; then'
     predicate: '[[ ! -d /sys/firmware/efi ]]'
@@ -1968,10 +1966,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'not_applicable'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-efi'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-efi'
   - owner: 'install-nvidia-fedora/mok-enroll-secureboot-disabled'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 479
     anchor: '  if ! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled''; then'
     predicate: '! mokutil --sb-state 2>/dev/null | grep -q ''SecureBoot enabled'''
@@ -1981,10 +1979,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'not_applicable'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-secureboot-disabled'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-secureboot-disabled'
   - owner: 'install-nvidia-fedora/mok-enroll-no-keypair'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 490
     anchor: '  if [[ "${mok_state}" != present || ! -f "$cert" ]]; then'
     predicate: '[[ "${mok_state}" != present || ! -f "$cert" ]]'
@@ -1994,10 +1992,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'not_applicable'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-keypair'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-keypair'
   - owner: 'install-nvidia-fedora/mok-already-enrolled'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 497
     anchor: '  if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q ''is already enrolled''; then'
     predicate: '"${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q ''is already enrolled'''
@@ -2007,10 +2005,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'done_here'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-already-enrolled'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-already-enrolled'
   - owner: 'install-nvidia-fedora/mok-already-queued'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
     anchor_line: 506
     anchor: '  if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then'
     predicate: '[[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"'
@@ -2020,10 +2018,10 @@ owners:
     render_profile: 'linux-fedora'
     form: 'done_here'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-already-queued'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-already-queued'
   - owner: 'install-dotnet-fedora/dotnet-absent'
     scope: '30-components'
-    template: '.chezmoiscripts/30-components/fedora/run_onchange_before_50-dotnet.sh.tmpl'
+    template: '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl'
     anchor_line: 344
     anchor: '  if ! command -v dotnet >/dev/null 2>&1; then'
     predicate: '! command -v dotnet >/dev/null 2>&1'
@@ -2036,8 +2034,7 @@ owners:
     probe: 'dotnet-present'
     fingerprint_placement: 'new-header-block'
     instances:
-      - '.chezmoiscripts/30-components/fedora/run_onchange_before_50-dotnet.sh.tmpl#install-dotnet-fedora/dotnet-absent'
-
+      - '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl#install-dotnet-fedora/dotnet-absent'
 hard_errors:
   - owner: 'config-gnome-1password-shortcut/gsettings-read-failed'
     scope: '50-linux-gnome'

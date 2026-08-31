@@ -3,7 +3,7 @@
 # one of the deliberate, user-approved policy exceptions documented in
 # AGENTS.md).
 #
-# Single source of truth (like packages.yaml): tune a value HERE, not in the
+# Single source of truth: tune a value HERE, not in the
 # script — each value renders into the consuming script's body, so a data edit
 # re-triggers that run_onchange_ script automatically (no separate fingerprint
 # needed).

@@ -3,7 +3,7 @@
 #   kde.settings — one row per setting, applied to the user's Plasma rc files by
 #     .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl.
 #
-# Single source of truth (like packages.yaml and agents.yaml): add or retune a
+# Single source of truth (like agents.yaml): add or retune a
 # setting HERE, not in the script. The rows render into that script's SETTINGS
 # array, so a data edit changes the rendered script content and re-triggers the
 # run_onchange_ script by itself — there is no fingerprint block, the rendered
@@ -266,8 +266,8 @@ kde:
 # kde.virtualKeyboard (run_onchange_after_config-kde-virtualkeyboard.sh.tmpl):
 #   desktopFile    : kwinrc [Wayland] InputMethod — the .desktop file KWin
 #                    launches as the Wayland input method. fcitx5 is the
-#                    unified input method across KDE and GNOME (see
-#                    packages.yaml); on KDE KWin owns launch through this
+#                    unified input method across KDE and GNOME; on KDE KWin
+#                    owns launch through this
 #                    wayland-launcher entry, on GNOME an XDG autostart entry
 #                    handles it (dot_config/autostart/org.fcitx.Fcitx5.desktop).
 #                    The script writes it with `--type path` and skips cleanly
