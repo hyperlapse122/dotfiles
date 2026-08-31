@@ -76,6 +76,10 @@ flowchart TB
 - R9. The provisioner must skip swapfile reallocation, formatting, and initramfs regeneration when an active swapfile of the expected size is present and the corresponding kernel parameters and dracut configuration are already in sync.
 - R10. The provisioner must safely abort without modifying disks if free disk space on the target partition is less than the calculated swapfile size plus 4GB.
 
+#### Required Package Installation
+
+- R11. The provisioner must inspect whether required system tooling binaries (`btrfs`, `grubby`, `dracut`, `findmnt`) are present and install any missing packages (`btrfs-progs`, `grubby`, `dracut`, `util-linux`) via dnf.
+
 ### Key Flows
 
 - KF1. **Initial Provisioning Flow**
@@ -207,10 +211,11 @@ flowchart TB
 - **Goal**: Create `.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl` implementing subvolume creation, swapfile allocation, offset inspection, grubby/dracut update, and idempotency guards.
 - **Files**:
   - `.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl`
-- **Requirements**: R1, R2, R3, R4, R5, R6, R7, R8, R9, R10
+- **Requirements**: R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11
 - **Approach**:
   - Include template header with OS gate `{{ if eq .chezmoi.os "linux" -}}`, sudo capability check, `headless-guard.sh.tmpl`, `shared-host-guard.sh.tmpl`, and `sudo-skip-guard.sh.tmpl`.
   - Add OS/Btrfs check: if not Fedora or root filesystem is not Btrfs, declare skip with `skip.sh.tmpl` (form: `not_applicable`, direction: `harmless`, reason: `this host is not Fedora or not using Btrfs`).
+  - Check and install missing required packages (`btrfs-progs`, `grubby`, `dracut`, `util-linux`) using dnf if any corresponding binary is not found on PATH.
   - Disable zram: mask `systemd-zram-setup@.service`, `swapoff /dev/zram*`, and reset zram devices.
   - Subvolume check: Check if `/swap` is mounted as `@swap` with `nodatacow`. If not, mount or create subvolume `@swap` on the root btrfs filesystem and mount to `/swap`.
   - Calculate target swap size: Read total RAM in MiB/GiB from `/proc/meminfo`, add 2GiB. Check available disk space; if free space < target size + 4GiB, abort gracefully with an error log.

@@ -15,6 +15,21 @@ os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
 root_fstype="$(findmnt -n -o FSTYPE / 2>/dev/null || true)"
 
 if [[ "$os_id" == "fedora" && "$root_fstype" == "btrfs" ]]; then
+  # 0. Ensure required packages are installed
+  missing_pkgs=()
+  for cmd in btrfs:btrfs-progs grubby:grubby dracut:dracut findmnt:util-linux; do
+    bin="${cmd%%:*}"
+    pkg="${cmd##*:}"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+      missing_pkgs+=("$pkg")
+    fi
+  done
+
+  if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+    printf '  -> installing missing swap/hibernation packages: %s\n' "${missing_pkgs[*]}"
+    "${SUDO[@]}" dnf install -y --setopt=install_weak_deps=False "${missing_pkgs[@]}"
+  fi
+
   # 1. Disable and mask zram-swap
   if command -v systemctl >/dev/null 2>&1; then
     printf '  -> masking systemd-zram-setup@.service (disable zram swap)\n'
