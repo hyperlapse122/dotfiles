@@ -70,6 +70,7 @@ system/linux/etc/locale.conf
 | Path | Used for |
 |---|---|
 | `etc/dracut.conf.d/resume.conf` | dracut initramfs resume module for hibernation |
+| `etc/dracut.conf.d/bluetooth.conf` | dracut initramfs bluetooth module |
 | `etc/bluetooth/main.conf` | BlueZ daemon config: `Experimental`/`KernelExperimental = true`, `ControllerMode = dual` (Classic A2DP dual mode so stereo audio stays available on TWS earbuds that fall back to mono over LE Audio on current BlueZ) |
 | `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |

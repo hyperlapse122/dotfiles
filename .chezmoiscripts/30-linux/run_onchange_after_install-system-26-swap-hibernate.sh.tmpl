@@ -8,7 +8,7 @@ set -euo pipefail
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
 {{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-swap-hibernate" }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/dracut.conf.d/resume.conf")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/dracut.conf.d/**")) }}
 SRC_ROOT="{{ $sourceDir }}/system/linux"
 
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
@@ -124,13 +124,17 @@ if [[ "$os_id" == "fedora" && "$root_fstype" == "btrfs" ]]; then
 
   # 6. Synchronize Dracut configuration
   dracut_changed=0
-  if [[ -f "$SRC_ROOT/etc/dracut.conf.d/resume.conf" ]]; then
-    if ! cmp -s "$SRC_ROOT/etc/dracut.conf.d/resume.conf" /etc/dracut.conf.d/resume.conf 2>/dev/null; then
-      printf '  -> installing /etc/dracut.conf.d/resume.conf\n'
-      "${SUDO[@]}" install -D -m 644 "$SRC_ROOT/etc/dracut.conf.d/resume.conf" /etc/dracut.conf.d/resume.conf
+  shopt -s globstar nullglob
+  for src in "$SRC_ROOT"/etc/dracut.conf.d/*.conf; do
+    [[ -f "$src" ]] || continue
+    rel="${src#"$SRC_ROOT"/}"
+    dst="/$rel"
+    if ! cmp -s "$src" "$dst" 2>/dev/null; then
+      printf '  -> installing %s\n' "$dst"
+      "${SUDO[@]}" install -D -m 644 "$src" "$dst"
       dracut_changed=1
     fi
-  fi
+  done
 
   # 7. Compute physical resume_offset and update kernel args
   swap_fs_uuid="$(findmnt -n -o UUID /swap 2>/dev/null || findmnt -n -o UUID / 2>/dev/null || true)"
