@@ -1,5 +1,5 @@
 {{- /*
-  Developer CLIs & language servers: ast-grep, buf, marksman,
+  Developer CLIs & language servers: android, ast-grep, buf, marksman,
   shellcheck, wasm-pack, rust-analyzer, uv/uvx.
 */ -}}
 
@@ -7,6 +7,19 @@
 {{- $rustArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
 {{- /* Same, but for the projects that only publish a static musl linux build. */ -}}
 {{- $muslTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" .chezmoi.os)) -}}
+
+{{- /* ---------- android (Google Android CLI) ---------- */ -}}
+
+{{- $androidUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "android" "field" "url" "platform" "auto") }}
+
+[android]
+type = "file"
+targetPath = '.local/bin/android'
+url = {{ $androidUrl | quote }}
+executable = true
+
+[android.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "android" "field" "sha256" "platform" "auto") }}'
 
 {{- /* ---------- ast-grep (ships the `sg` alias from the same archive) ---------- */ -}}
 

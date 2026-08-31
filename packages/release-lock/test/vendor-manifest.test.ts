@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { resolveVendorManifest, ResolutionError } from "../src/vendor-manifest.js";
 import type { ToolSpec } from "../src/types.js";
@@ -229,5 +230,80 @@ describe("resolveVendorManifest flutter", () => {
     const error = await resolveVendorManifest("flutter", flutterSpec()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ResolutionError);
     expect((error as Error).message).toContain(FLUTTER_SOURCE);
+  });
+});
+
+const ANDROID_SOURCE = "https://dl.google.com/android/cli/latest";
+const DUMMY_LINUX_BINARY = "android launcher binary version=1.0.15985488 data";
+const DUMMY_DARWIN_ARM64_BINARY = "darwin arm64 android binary payload";
+const DUMMY_DARWIN_X64_BINARY = "darwin x64 android binary payload";
+
+function androidSpec(): ToolSpec {
+  return {
+    kind: "vendorManifest",
+    vendor: "android",
+    source: ANDROID_SOURCE,
+    emulatedPlatforms: ["linux-arm64"],
+  };
+}
+
+describe("resolveVendorManifest android", () => {
+  test("resolves latest android binaries and parses version", async () => {
+    stubRoutes({
+      [`${ANDROID_SOURCE}/linux_x86_64/android`]: text(DUMMY_LINUX_BINARY),
+      [`${ANDROID_SOURCE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
+      [`${ANDROID_SOURCE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
+    });
+
+    const locked = await resolveVendorManifest("android", androidSpec());
+
+    expect(locked.version).toBe("1.0.15985488");
+    expect(locked.artifacts).toEqual({
+      "linux-amd64": {
+        url: `${ANDROID_SOURCE}/linux_x86_64/android`,
+        sha256: createHash("sha256").update(Buffer.from(DUMMY_LINUX_BINARY)).digest("hex"),
+        size: Buffer.byteLength(DUMMY_LINUX_BINARY),
+      },
+      "linux-arm64": {
+        url: `${ANDROID_SOURCE}/linux_x86_64/android`,
+        sha256: createHash("sha256").update(Buffer.from(DUMMY_LINUX_BINARY)).digest("hex"),
+        size: Buffer.byteLength(DUMMY_LINUX_BINARY),
+        emulated: true,
+      },
+      "darwin-amd64": {
+        url: `${ANDROID_SOURCE}/darwin_x86_64/android`,
+        sha256: createHash("sha256").update(Buffer.from(DUMMY_DARWIN_X64_BINARY)).digest("hex"),
+        size: Buffer.byteLength(DUMMY_DARWIN_X64_BINARY),
+      },
+      "darwin-arm64": {
+        url: `${ANDROID_SOURCE}/darwin_arm64/android`,
+        sha256: createHash("sha256").update(Buffer.from(DUMMY_DARWIN_ARM64_BINARY)).digest("hex"),
+        size: Buffer.byteLength(DUMMY_DARWIN_ARM64_BINARY),
+      },
+    });
+  });
+
+  test("raises ResolutionError when binary cannot be fetched", async () => {
+    stubRoutes({
+      [`${ANDROID_SOURCE}/linux_x86_64/android`]: () => new Response("404", { status: 404 }),
+      [`${ANDROID_SOURCE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
+      [`${ANDROID_SOURCE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
+    });
+
+    const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain(ANDROID_SOURCE);
+  });
+
+  test("raises ResolutionError when version cannot be extracted from binary", async () => {
+    stubRoutes({
+      [`${ANDROID_SOURCE}/linux_x86_64/android`]: text("corrupted binary without version string"),
+      [`${ANDROID_SOURCE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
+      [`${ANDROID_SOURCE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
+    });
+
+    const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain("could not extract version");
   });
 });

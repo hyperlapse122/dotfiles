@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ResolutionError } from "./github.js";
 import type { LockedTool, ToolSpec } from "./types.js";
 
@@ -197,6 +198,65 @@ async function resolveFlutter(name: string, spec: ToolSpec): Promise<LockedTool>
   };
 }
 
+async function fetchBinary(
+  source: string,
+  url: string,
+): Promise<{ buffer: Buffer; sha256: string; size: number }> {
+  const response = await fetchOrThrow(source, url);
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const sha256 = createHash("sha256").update(buffer).digest("hex");
+  return { buffer, sha256, size: buffer.length };
+}
+
+async function resolveAndroidCli(name: string, spec: ToolSpec): Promise<LockedTool> {
+  const base = spec.source.replace(/\/+$/, "");
+  const linuxUrl = `${base}/linux_x86_64/android`;
+  const darwinArm64Url = `${base}/darwin_arm64/android`;
+  const darwinX64Url = `${base}/darwin_x86_64/android`;
+
+  const [linuxBinary, darwinArm64Binary, darwinX64Binary] = await Promise.all([
+    fetchBinary(spec.source, linuxUrl),
+    fetchBinary(spec.source, darwinArm64Url),
+    fetchBinary(spec.source, darwinX64Url),
+  ]);
+
+  const match = linuxBinary.buffer.toString("latin1").match(/version=([0-9.]+)/);
+  if (!match || !match[1]) {
+    throw new ResolutionError(spec.source, `${name}: could not extract version from binary`);
+  }
+  const version = match[1];
+
+  return {
+    kind: spec.kind,
+    source: spec.source,
+    version,
+    artifacts: {
+      "linux-amd64": {
+        url: linuxUrl,
+        sha256: linuxBinary.sha256,
+        size: linuxBinary.size,
+      },
+      "linux-arm64": {
+        url: linuxUrl,
+        sha256: linuxBinary.sha256,
+        size: linuxBinary.size,
+        emulated: true,
+      },
+      "darwin-amd64": {
+        url: darwinX64Url,
+        sha256: darwinX64Binary.sha256,
+        size: darwinX64Binary.size,
+      },
+      "darwin-arm64": {
+        url: darwinArm64Url,
+        sha256: darwinArm64Binary.sha256,
+        size: darwinArm64Binary.size,
+      },
+    },
+  };
+}
+
 export async function resolveVendorManifest(name: string, spec: ToolSpec): Promise<LockedTool> {
   switch (spec.vendor) {
     case "winbox":
@@ -205,6 +265,8 @@ export async function resolveVendorManifest(name: string, spec: ToolSpec): Promi
       return resolveOnePassword(name, spec);
     case "flutter":
       return resolveFlutter(name, spec);
+    case "android":
+      return resolveAndroidCli(name, spec);
     default:
       throw new ResolutionError(spec.source, `${name}: unknown vendor "${String(spec.vendor)}"`);
   }

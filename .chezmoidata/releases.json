@@ -43,6 +43,34 @@
           }
         }
       },
+      "android": {
+        "kind": "vendorManifest",
+        "source": "https://dl.google.com/android/cli/latest",
+        "version": "1.0.15985488",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://dl.google.com/android/cli/latest/linux_x86_64/android",
+            "sha256": "7d0f4b41e6511ab6eeeaec4b885442f02aded270cf83cb75f521aca2c03d593d",
+            "size": 5065056
+          },
+          "linux-arm64": {
+            "url": "https://dl.google.com/android/cli/latest/linux_x86_64/android",
+            "sha256": "7d0f4b41e6511ab6eeeaec4b885442f02aded270cf83cb75f521aca2c03d593d",
+            "size": 5065056,
+            "emulated": true
+          },
+          "darwin-amd64": {
+            "url": "https://dl.google.com/android/cli/latest/darwin_x86_64/android",
+            "sha256": "f23a02c5c11dda6fd6aaa1dbaf572be8525119f46f6493e01c3e91f9f5b4817c",
+            "size": 4723328
+          },
+          "darwin-arm64": {
+            "url": "https://dl.google.com/android/cli/latest/darwin_arm64/android",
+            "sha256": "0fa343fda9433b7c74e4eb91d3a18cec60477a29c015a018dd189222a3d0d020",
+            "size": 3671824
+          }
+        }
+      },
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",
