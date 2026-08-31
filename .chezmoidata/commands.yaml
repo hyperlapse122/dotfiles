@@ -578,7 +578,7 @@ commands:
       platforms: [linux, macos]
       gate: "!container"
       tool: kitty
-      treePath: .local/share/kitty
+      treePath: .local/share/kitty/versions
       commands:
         - name: kitty
           relPath: bin/kitty

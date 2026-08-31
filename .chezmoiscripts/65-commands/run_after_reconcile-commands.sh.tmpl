@@ -7,6 +7,6 @@ if [[ ! -x "$RECONCILE_BIN" ]]; then
   exit 0
 fi
 
-MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | quote }}
+MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | trim | quote }}
 "$RECONCILE_BIN" reconcile-all --manifest "$MANIFEST_JSON" --prune || true
 {{ end -}}

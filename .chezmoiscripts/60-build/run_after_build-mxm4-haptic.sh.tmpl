@@ -221,14 +221,19 @@ mac_service_running() {
 plugin_needed=0
 daemon_needed=0
 notify_needed=0
+HAPTIC_STORE_DIR="$HOME/.local/share/chezmoi-commands/store/mxm4-haptic"
+haptic_store_present=1
+if [[ -x "$HOME/.local/libexec/command-reconcile" && ! -d "$HAPTIC_STORE_DIR" ]]; then
+  haptic_store_present=0
+fi
+
 stamp_matches "$PLUGIN_STAMP" "$PLUGIN_FINGERPRINT" &&
   [[ -f "$PLUGIN_DEST" && ! -L "$PLUGIN_DEST" && -s "$PLUGIN_DEST" ]] || plugin_needed=1
 stamp_matches "$DAEMON_STAMP" "$DAEMON_FINGERPRINT" &&
-  [[ -f "$DAEMON_DEST" && ! -L "$DAEMON_DEST" && -x "$DAEMON_DEST" ]] || daemon_needed=1
+  [[ -x "$DAEMON_DEST" && "$haptic_store_present" -eq 1 ]] || daemon_needed=1
 if [[ "$PLATFORM" == linux ]]; then
   stamp_matches "$NOTIFY_STAMP" "$NOTIFY_FINGERPRINT" &&
-    [[ -f "$BIN_DIR/mxm4-haptic-notify" && ! -L "$BIN_DIR/mxm4-haptic-notify" &&
-      -x "$BIN_DIR/mxm4-haptic-notify" ]] || notify_needed=1
+    [[ -x "$BIN_DIR/mxm4-haptic-notify" && "$haptic_store_present" -eq 1 ]] || notify_needed=1
 fi
 
 # Preflight is deliberately complete before mktemp, mkdir, build output removal,
@@ -373,7 +378,7 @@ if [[ "$daemon_needed" -eq 1 || "$notify_needed" -eq 1 ]]; then
   fi
   RECONCILE_BIN="$HOME/.local/libexec/command-reconcile"
   if [[ -x "$RECONCILE_BIN" ]]; then
-    MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | quote }}
+    MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | trim | quote }}
     "$RECONCILE_BIN" activate-unit --manifest "$MANIFEST_JSON" --unit mxm4-haptic ||
       fail "activation: scoped activation for mxm4-haptic failed"
   else
