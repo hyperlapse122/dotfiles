@@ -281,10 +281,10 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   client.
 - [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`).
   `run_onchange_after_build-figma-auth.sh.tmpl` compiles the standalone
-  `figma-auth omp` utility into `~/.local/bin/figma-auth`. This repository
+  `figma-auth` utility into `~/.local/bin/figma-auth`. This repository
   declares no Figma MCP server. Projects that need Figma own their MCP
-  configuration. Apply never starts the interactive OAuth flow. Run `figma-auth
-  omp` on demand to update omp's private OAuth row. Build failures preserve the
+  configuration. Apply never starts the interactive OAuth flow. Run `figma-auth`
+  on demand to update omp's private OAuth row. Build failures preserve the
   last executable and retry after an input change or `chezmoi apply --force`.
   `release-lock/` generates the static external-tool lock consumed by templates
   and externals. See [`packages/README.md`](packages/README.md).
@@ -331,7 +331,7 @@ that client name. If the entries cannot be distinguished, skip provider
 revocation rather than invalidate the current omp authorization.
 
 Do not remove omp's Figma row from `~/.omp/agent/agent.db`. The surviving
-`figma-auth omp` command owns that row.
+`figma-auth` command owns that row.
 
 ## Host cleanup (one-time, this host)
 

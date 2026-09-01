@@ -24,7 +24,7 @@ the repo's TypeScript/JavaScript library packages.
 | Path | Package | Purpose |
 |---|---|---|
 | [`command-reconcile/`](command-reconcile/) | `@h82/command-reconcile` | Serialized versioned command reconciler and safe pruner. |
-| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth omp` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes omp's private SQLite credential row; apply only compiles and installs it. |
+| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | Standalone `figma-auth` CLI. It runs a fresh Figma MCP OAuth/PKCE/DCR flow on demand and atomically writes omp's private SQLite credential row; apply only compiles and installs it. |
 | [`settings-reconcile/`](settings-reconcile/) | `@h82/settings-reconcile` | Apply helper that overlays declared TOML settings leaves. It has no plugin contract. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
@@ -112,7 +112,7 @@ edits replay a stale cached build.
 `figma-auth` is installed on Linux/macOS by
 `run_onchange_after_build-figma-auth.sh.tmpl` at `~/.local/bin/figma-auth` and
 is never run during apply. This repository declares no Figma MCP server.
-Projects own their Figma MCP configuration. Run `figma-auth omp` manually to
+Projects own their Figma MCP configuration. Run `figma-auth` manually to
 seed or refresh the `https://mcp.figma.com/mcp` row in `~/.omp/agent/agent.db`;
 the transaction preserves every unrelated row. A soft-skipped build preserves the
 executable and, under `run_onchange` semantics, retries only after an input
