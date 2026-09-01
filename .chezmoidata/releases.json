@@ -246,23 +246,23 @@
       "garden": {
         "kind": "githubRelease",
         "source": "garden-rs/garden",
-        "version": "v2.6.2",
+        "version": "v2.7.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/garden-rs/garden/releases/download/v2.6.2/garden-2.6.2-x86_64-unknown-linux-gnu.tar.gz",
-            "sha256": "00a101096ba720a2384ee44e633fc2bb512ba3fc7ff8269ab7a69e31a775a6e5"
+            "url": "https://github.com/garden-rs/garden/releases/download/v2.7.0/garden-2.7.0-x86_64-unknown-linux-gnu.tar.gz",
+            "sha256": "49f89b99c64b2b6cf9ad4ab187bdd3cfac2a665a2b9ab753ecbbe59fb608e245"
           },
           "linux-arm64": {
-            "url": "https://github.com/garden-rs/garden/releases/download/v2.6.2/garden-2.6.2-aarch64-unknown-linux-gnu.tar.gz",
-            "sha256": "d56bf8cbfe86079516f9c4c88c41b0436d32c1b142bdaad4e0d700251b397e98"
+            "url": "https://github.com/garden-rs/garden/releases/download/v2.7.0/garden-2.7.0-aarch64-unknown-linux-gnu.tar.gz",
+            "sha256": "2816903aade822e679242e02b3755378a0f7a51fdbb0c52761060fa5f287f183"
           },
           "darwin-amd64": {
-            "url": "https://github.com/garden-rs/garden/releases/download/v2.6.2/garden-2.6.2-x86_64-apple-darwin.tar.gz",
-            "sha256": "ab7e41c60b6976bde175c9c748e6cea4d733efc3c08e22aa626759b66fe38711"
+            "url": "https://github.com/garden-rs/garden/releases/download/v2.7.0/garden-2.7.0-x86_64-apple-darwin.tar.gz",
+            "sha256": "f6faf63853467580c30034235146d0ebab0a1c39bdd859920600188e5975170b"
           },
           "darwin-arm64": {
-            "url": "https://github.com/garden-rs/garden/releases/download/v2.6.2/garden-2.6.2-aarch64-apple-darwin.tar.gz",
-            "sha256": "ad2d8b77d04e3061c1df1fa57c75cc645f76c557d2ef9c01bcf6f1e7fe66275f"
+            "url": "https://github.com/garden-rs/garden/releases/download/v2.7.0/garden-2.7.0-aarch64-apple-darwin.tar.gz",
+            "sha256": "fe214c3c01ff178934cd53b1511181fb45ad4ea609689da464568cd975ccbc6c"
           }
         }
       },
@@ -292,7 +292,7 @@
       "glab": {
         "kind": "gitlabRelease",
         "source": "https://gitlab.com/api/v4/projects/34675721",
-        "version": "v1.115.0"
+        "version": "v1.116.0"
       },
       "helm": {
         "kind": "githubRelease",
@@ -363,31 +363,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.8.16",
+        "version": "v2026.9.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-x64",
-            "sha256": "cff4832ded79af2951e800bddcb5a22acac58630d765a2d062c1180680a0bb35"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-x64",
+            "sha256": "c9b089f2be1db4d4262eacaf367e480e7a328848adcc37d9d1612996902485d0"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-arm64",
-            "sha256": "5bbe2e7751f1872fd574ba90cbc1f81db7cfa4f395d77ba52ba70b33ad466d9e"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-arm64",
+            "sha256": "0b5c4586353010378d9caca62c95166588c3dc4e310eb2d276aac1068397faec"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-macos-x64",
-            "sha256": "746f53f878ae07be41caf4b73fd505e080c5618dda4794eac123e8ff086f472c"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-macos-x64",
+            "sha256": "d4c68596addfd102717699243acfb795177dc025e7895bad581317c43fadb4ef"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-macos-arm64",
-            "sha256": "59daf6d3d81846f5e190b3e8e30e06aaf003b48afd6619151bfd5df1829c75f4"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-macos-arm64",
+            "sha256": "50eeb4b907fb5fd4ad87a5fec0e55735bb16dfe00c725c9c3dc40852afd55b06"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-x64-musl",
-            "sha256": "2c0a370f0b9133c477ac9a3f6d365b0f10f6a853d7cd65f5cc689efc49338239"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-x64-musl",
+            "sha256": "342bd607ec4d351c26515838444ed0af9bb11c633ba0ab5ad816e98f0afee2c5"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.8.16/mise-v2026.8.16-linux-arm64-musl",
-            "sha256": "fe74977e9bfd5884e46fbefdeeb91e729c31ca294295841168f23bc43a13aba6"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-arm64-musl",
+            "sha256": "1a981875fb99cc3916e1caaef37a70b028cc72b161e57ea7d589f5c85d1803db"
           }
         }
       },
