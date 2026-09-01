@@ -115,13 +115,13 @@ agents:
                 - medium
                 - high
     settings:
-      theme.dark: titanium
-      theme.light: light
+      theme.dark: dark-catppuccin
+      theme.light: light-catppuccin
       symbolPreset: nerd
       statusLine.preset: full
       statusLine.separator: powerline-thin
-      terminal.showProgress: false
-      tui.textSizing: false
+      terminal.showProgress: true
+      tui.textSizing: true
       tui.codexResetFireworks: false
       tui.resizeScrollback: rebuild
       tui.hyperlinks: always
@@ -192,7 +192,15 @@ agents:
       providers.imageOrder:
       - antigravity
       provider.appendOnlyContext: on
-      task.isolation.mode: none
+      eval.py: true
+      eval.js: true
+      eval.rb: true
+      eval.jl: true
+      python.kernelMode: session
+      python.interpreter: mise exec python -- python
+      ruby.interpreter: mise exec ruby -- ruby
+      julia.interpreter: mise exec julia -- julia
+      task.isolation.mode: auto
       task.enableEffort: false
       task.enableLsp: true
       task.maxEffort: max
