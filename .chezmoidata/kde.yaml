@@ -325,5 +325,5 @@ kde:
   wallpaper:
     theme: Next
   googleOAuth:
-    clientIdRef: "op://Personal/Google-KDE-OAuth/client_id"
-    clientSecretRef: "op://Personal/Google-KDE-OAuth/client_secret"
+    clientIdRef: "op://Private/Google-KDE-OAuth/client_id"
+    clientSecretRef: "op://Private/Google-KDE-OAuth/client_secret"

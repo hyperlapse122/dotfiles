@@ -16,8 +16,8 @@
 #   --vault <vault_name>        1Password vault (default: Personal)
 #   --item <item_title>         1Password item name (default: Google-KDE-OAuth)
 #   --skip-api-enable           Skip enabling GCP APIs
-#   -h, --help                  Show this help message
-#
+VAULT="Private"
+ITEM="Google-KDE-OAuth"
 
 set -euo pipefail
 
