@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+#
+# setup-google-oauth — Set up Google Cloud APIs and OAuth credentials for KDE Plasma.
+#
+# Enables necessary Google Cloud APIs (Drive, Calendar, Tasks, People/Contacts)
+# using the gcloud CLI (via mise) and saves the generated OAuth 2.0 Web Application
+# Client ID and Client Secret into 1Password.
+#
+# Usage:
+#   setup-google-oauth [options]
+#
+# Options:
+#   --project <project_id>       GCP Project ID (default: active gcloud project)
+#   --client-id <client_id>     Google OAuth 2.0 Client ID
+#   --client-secret <secret>    Google OAuth 2.0 Client Secret
+#   --vault <vault_name>        1Password vault (default: Personal)
+#   --item <item_title>         1Password item name (default: Google-KDE-OAuth)
+#   --skip-api-enable           Skip enabling GCP APIs
+#   -h, --help                  Show this help message
+#
+
+set -euo pipefail
+
+VAULT="Personal"
+ITEM="Google-KDE-OAuth"
+PROJECT=""
+CLIENT_ID=""
+CLIENT_SECRET=""
+SKIP_API_ENABLE=0
+
+APIS=(
+  drive.googleapis.com
+  calendar-json.googleapis.com
+  tasks.googleapis.com
+  people.googleapis.com
+  youtube.googleapis.com
+)
+
+usage() {
+  cat <<'EOF'
+Usage: setup-google-oauth [options]
+
+Configures Google Cloud APIs and stores OAuth 2.0 Client credentials into 1Password
+for KDE Plasma online accounts integration.
+
+Options:
+  --project <project_id>       GCP Project ID (default: active gcloud project)
+  --client-id <client_id>     Google OAuth 2.0 Client ID
+  --client-secret <secret>    Google OAuth 2.0 Client Secret
+  --vault <vault_name>        1Password vault (default: Personal)
+  --item <item_title>         1Password item title (default: Google-KDE-OAuth)
+  --skip-api-enable           Skip enabling GCP APIs
+  -h, --help                  Show this help message
+
+Requirements:
+  - 1Password CLI (`op`) authenticated
+  - `mise` with `gcloud` authenticated (`mise exec gcloud -- gcloud auth login`)
+EOF
+  exit 0
+}
+
+log() {
+  printf '==> %s\n' "$*"
+}
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project)
+      PROJECT="$2"
+      shift 2
+      ;;
+    --client-id)
+      CLIENT_ID="$2"
+      shift 2
+      ;;
+    --client-secret)
+      CLIENT_SECRET="$2"
+      shift 2
+      ;;
+    --vault)
+      VAULT="$2"
+      shift 2
+      ;;
+    --item)
+      ITEM="$2"
+      shift 2
+      ;;
+    --skip-api-enable)
+      SKIP_API_ENABLE=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      fail "Unknown option: $1 (use --help for usage)"
+      ;;
+  esac
+done
+
+# Preflight checks
+log "Checking prerequisites..."
+command -v op >/dev/null 2>&1 || fail "1Password CLI ('op') is required but not found on PATH."
+op vault list >/dev/null 2>&1 || fail "1Password CLI is not authenticated. Please unlock 1Password or run 'eval \$(op signin)'."
+
+command -v mise >/dev/null 2>&1 || fail "mise is required but not found on PATH."
+
+run_gcloud() {
+  mise exec gcloud -- gcloud "$@"
+}
+
+if ! run_gcloud version >/dev/null 2>&1; then
+  fail "gcloud is not available via 'mise exec gcloud -- gcloud'. Run 'mise use -g gcloud' or check your mise configuration."
+fi
+
+# Detect GCP project
+if [[ -z "$PROJECT" ]]; then
+  PROJECT="$(run_gcloud config get-value project 2>/dev/null || true)"
+fi
+
+if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
+  log "No active GCP project detected in gcloud configuration."
+  read -r -p "Enter Google Cloud Project ID: " PROJECT
+  if [[ -z "$PROJECT" ]]; then
+    fail "Google Cloud Project ID is required."
+  fi
+  run_gcloud config set project "$PROJECT"
+fi
+
+log "Active GCP Project: $PROJECT"
+
+# Enable APIs
+if [[ "$SKIP_API_ENABLE" -eq 0 ]]; then
+  log "Enabling required Google Cloud APIs for KDE Plasma..."
+  run_gcloud services enable "${APIS[@]}" --project "$PROJECT"
+  log "Google Cloud APIs successfully enabled."
+else
+  log "Skipping GCP API enablement as requested."
+fi
+
+# Prompt for OAuth Client Credentials if not provided
+if [[ -z "$CLIENT_ID" || -z "$CLIENT_SECRET" ]]; then
+  printf '\n'
+  log "Google Cloud Console OAuth 2.0 Credentials Setup:"
+  printf '  1. Open Google Cloud Console -> APIs & Services -> Credentials:\n'
+  printf '     https://console.cloud.google.com/apis/credentials?project=%s\n' "$PROJECT"
+  printf '  2. Ensure OAuth Consent Screen is configured (User type: External, Status: Testing).\n'
+  printf '     Add your Google account email as a Test User.\n'
+  printf '  3. Create Credentials -> OAuth client ID:\n'
+  printf '     - Application type: Web application\n'
+  printf '     - Name: KDE Plasma (or your preferred name)\n'
+  printf '     - Authorized redirect URIs: http://localhost/oauth2callback\n'
+  printf '\n'
+
+  if [[ -z "$CLIENT_ID" ]]; then
+    read -r -p "Enter Client ID: " CLIENT_ID
+  fi
+  if [[ -z "$CLIENT_SECRET" ]]; then
+    read -r -s -p "Enter Client Secret: " CLIENT_SECRET
+    printf '\n'
+  fi
+fi
+
+[[ -n "$CLIENT_ID" ]] || fail "Client ID cannot be empty."
+[[ -n "$CLIENT_SECRET" ]] || fail "Client Secret cannot be empty."
+
+# Store in 1Password
+log "Saving credentials to 1Password (Vault: $VAULT, Item: $ITEM)..."
+
+if op item get --vault "$VAULT" "$ITEM" >/dev/null 2>&1; then
+  op item edit --vault "$VAULT" "$ITEM" \
+    "client_id=$CLIENT_ID" \
+    "client_secret=$CLIENT_SECRET" >/dev/null
+  log "Updated existing 1Password item '$ITEM'."
+else
+  op item create --category="API Credential" \
+    --vault "$VAULT" \
+    --title "$ITEM" \
+    "client_id=$CLIENT_ID" \
+    "client_secret[password]=$CLIENT_SECRET" >/dev/null
+  log "Created new 1Password item '$ITEM'."
+fi
+
+printf '\n'
+log "Setup complete! Next steps:"
+printf '  1. Run `chezmoi apply` to deploy ~/.local/share/accounts/providers/kde/google.provider\n'
+printf '  2. Open KDE System Settings -> Online Accounts -> Add Google Account\n'
+printf '  3. Complete Google OAuth authorization in your browser\n'

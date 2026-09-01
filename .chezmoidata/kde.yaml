@@ -324,3 +324,6 @@ kde:
     desktopFile: /usr/share/applications/fcitx5-wayland-launcher.desktop
   wallpaper:
     theme: Next
+  googleOAuth:
+    clientIdRef: "op://Personal/Google-KDE-OAuth/client_id"
+    clientSecretRef: "op://Personal/Google-KDE-OAuth/client_secret"
