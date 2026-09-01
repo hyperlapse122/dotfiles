@@ -438,19 +438,6 @@ commands:
       legacy:
         path: .local/bin/setup-luks-tpm2-unlock.sh
 
-    setup-google-oauth:
-      producer: source
-      safetyProfile: interpreted
-      proofEligible: false
-      mode: "0755"
-      platforms: [linux]
-      gate: "!container"
-      sourcePath: dot_local/share/chezmoi-command-sources/executable_setup-google-oauth
-      commands:
-        - name: setup-google-oauth
-      legacy:
-        path: .local/bin/setup-google-oauth
-
     src-audit:
       producer: source
       safetyProfile: interpreted
