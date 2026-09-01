@@ -27,9 +27,7 @@ The host resolves its model string to a family using this identity-to-family res
 | Model Identity Prefix | Model Family |
 | --------------------- | ------------ |
 | `anthropic/*` | `claude` |
-| `openai-codex/*` | `codex` |
 | `google-antigravity/gemini-*` | `gemini` |
-
 ### Fail-Closed Rule
 
 If the host model identity does not match any prefix in this table, the host MUST fail closed. The host records the pass state as `not run`. The host MUST NOT guess or infer a model family.
@@ -40,14 +38,12 @@ A host never dispatches a review to its own family. The host drops its own famil
 
 | Host Family | Primary Candidate | Secondary Failover Candidate |
 | ----------- | ----------------- | ---------------------------- |
-| `claude` | `codex` | `gemini` |
-| `codex` | `claude` | `gemini` |
-| `gemini` | `claude` | `codex` |
+| `claude` | `gemini` | — |
+| `gemini` | `claude` | — |
 
-### Rationale for `claude` Host Ordering
+### Rationale for Candidate Ordering
 
-A `claude` host selects `codex` before `gemini` because the Anthropic subscription bucket is quota-constrained. The authenticated OpenAI Codex account maintains substantial headroom on a pro plan. Prioritizing `codex` balances provider quota consumption across accounts.
-
+A `claude` host selects `gemini` and a `gemini` host selects `claude`. This ensures peer review always runs on a distinct model family with an independent training baseline.
 ## 4. Dispatch
 
 The host dispatches peer reviews in a single `task` batch call.
@@ -57,7 +53,7 @@ Batch composition:
 - Exactly one whole-document sweep item.
 
 Dispatch item properties:
-- `agent`: The candidate seat name (`claude`, `codex`, or `gemini`).
+- `agent`: The candidate seat name (`claude` or `gemini`).
 - `schemaMode`: `"permissive"` (avoids hard aborts on minor formatting issues; host validates output explicitly).
 - `outputSchema`: The findings return JSON schema defined below.
 

@@ -52,10 +52,9 @@ run_auth() {
 run_auth
 
 [[ $(stat -c '%a' "$auth") == 600 ]]
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 1 ]]
+[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 0 ]]
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
-grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
 
 # Inode identity is the signal that no `mv` happened; this job runs on every
 # apply, so an unconditional rename rewrites a credential file forever.
@@ -65,7 +64,7 @@ run_auth
   printf 'config-omp-auth: a converged re-run republished %s\n' "$auth" >&2
   exit 1
 }
-grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$auth" >/dev/null
+[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 0 ]]
 [[ $(stat -c '%a' "$auth") == 600 ]]
 
 # The skip path is the only place left that can narrow a mode someone widened.
@@ -86,20 +85,19 @@ EOF
 chmod 0644 "$missing"
 run_auth "$missing"
 [[ $(grep -c '^OTHER_TOKEN=' "$missing") -eq 1 ]]
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$missing") -eq 1 ]]
-grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$missing" >/dev/null
+[[ $(grep -c '^OPENROUTER_API_KEY=' "$missing") -eq 0 ]]
 ambient="$scratch/ambient.env"
 printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
 run_auth "$ambient"
 grep -F 'AMBIENT_TOKEN=keep' "$ambient" >/dev/null
-grep -F 'OPENROUTER_API_KEY="openrouter-test-secret"' "$ambient" >/dev/null
+[[ $(grep -c '^OPENROUTER_API_KEY=' "$ambient") -eq 0 ]]
 
 # The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
-printf '%s\n' OPENROUTER_API_KEY >"$expected_names"
+: >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
-  grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names"
+  grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names" || true
 diff -u "$expected_names" "$posix_names"
 
 printf 'NOT A DOTENV ASSIGNMENT\n' >"$auth"
@@ -391,9 +389,9 @@ jq -e '
 # revert is therefore the failure this guards, and restoring fallback is a
 # policy change that must land with the root AGENTS.md paragraph.
 jq -e '
-  (."retry.fallbackChains" == {}) and (."retry.usageAwareFallback" == false)
+  (."retry.fallbackChains" == {}) and (."retry.usageAwareFallback" == false) and (."retry.modelFallback" == false)
 ' "$declared_json" >/dev/null || {
-  printf 'fallback policy is not rendered as disabled: retry.fallbackChains must be {} and retry.usageAwareFallback must be false\n' >&2
+  printf 'fallback policy is not rendered as disabled: retry.fallbackChains must be {}, retry.usageAwareFallback must be false, and retry.modelFallback must be false\n' >&2
   exit 1
 }
 
@@ -869,9 +867,8 @@ closed_set='OPENROUTER_API_KEY'
 assert_render_fails auth-outside-closed-set-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"NODE_OPTIONS\",\"key\":\"x\"}]}}}}" \
   "declares unsupported variable \"NODE_OPTIONS\"; the closed set is $closed_set"
-assert_render_fails auth-emptied-set-linux "$auth_sh" \
-  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}" \
-  'must declare OPENROUTER_API_KEY'
+assert_render_ok auth-empty-set-linux "$auth_sh" \
+  "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[]}}}}"
 assert_render_fails auth-duplicate-linux "$auth_sh" \
   "{$linux,\"agents\":{\"omp\":{\"auth\":{\"env\":[{\"variable\":\"OPENROUTER_API_KEY\",\"key\":\"a\"},{\"variable\":\"OPENROUTER_API_KEY\",\"key\":\"b\"}]}}}}" \
   'duplicates variable "OPENROUTER_API_KEY"'

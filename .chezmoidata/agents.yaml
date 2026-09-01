@@ -103,17 +103,7 @@ agents:
     pluginsRemoved:
     - { name: i-have-adhd, marketplace: i-have-adhd }
     - { name: unmanaged-repo-guard, marketplace: h82-dotfiles }
-    models:
-      providers:
-        google-antigravity:
-          modelOverrides:
-            gemini-3.7-flash:
-              thinking:
-                mode: google-level
-                efforts:
-                - low
-                - medium
-                - high
+    models: {}
     settings:
       theme.dark: dark-catppuccin
       theme.light: light-catppuccin
@@ -141,24 +131,25 @@ agents:
       - anthropic/claude-fable-5
       - anthropic/claude-opus-5
       - anthropic/claude-sonnet-5
-      - google-antigravity/gemini-3.*
+      - "google-antigravity/gemini-3.*"
       - kimi-code/*
       disabledProviders:
       - zai
       - github-copilot
       - openai-codex
+      - openrouter
       modelRoles:
         advisor: "@worker"
-        claude: google-antigravity/gemini-3.7-flash:high
+        claude: anthropic/claude-opus-5:max
         commit: "@worker"
-        default: google-antigravity/gemini-3.7-flash:high
-        fable: google-antigravity/gemini-3.7-flash:high
+        default: anthropic/claude-opus-5:xhigh
+        fable: anthropic/claude-fable-5:max
         gemini: google-antigravity/gemini-3.7-flash:high
         plan: "@fable"
         skim: google-antigravity/gemini-3.7-flash:low
-        slow: google-antigravity/gemini-3.7-flash:high
+        slow: anthropic/claude-opus-5:max
         smol: google-antigravity/gemini-3.7-flash:high
-        reviewer: google-antigravity/gemini-3.7-flash:high
+        reviewer: google-antigravity/gemini-3.1-pro:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
         worker: google-antigravity/gemini-3.7-flash:high
       cycleOrder: [ "smol", "default", "slow" ]
@@ -178,6 +169,7 @@ agents:
       advisor.enabled: false
       defaultThinkingLevel: xhigh
       includeModelInPrompt: true
+      retry.modelFallback: false
       retry.usageAwareFallback: false
       retry.usageReservePolicy: auto
       retry.usageReservePct: 15
@@ -213,6 +205,4 @@ agents:
       security.enabled: true
       mcp.notifications: true
     auth:
-      env:
-      - variable: OPENROUTER_API_KEY
-        key: op://Private/OpenRouter/API Key
+      env: []
