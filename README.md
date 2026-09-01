@@ -301,7 +301,7 @@ The source-only trees are also excluded from taplo formatting via
 ## Managed agent harnesses
 
 This repository manages only **omp**. Retired harness sources (Claude Code,
-Codex, and the earlier Pi, Kimi Code, OpenCode, oh-my-openagent, and AGY) are
+Codex, and the earlier Pi, Kimi Code, oh-my-openagent, and AGY) are
 removed from source state; that does not delete already-deployed host files,
 installed binaries, or provider-side OAuth grants.
 
@@ -315,9 +315,6 @@ duplicate discovery.
 The following cleanup is optional. Remove only the listed Figma data if the
 retired harnesses are no longer in use:
 
-- OpenCode: remove the top-level `figma` and `Figma` properties from
-  `~/.local/share/opencode/mcp-auth.json`. Keep the file and all other
-  properties.
 - Pi: delete
   `~/.pi/agent/mcp-auth/5b79d0d574eedd09.json`.
 - Kimi Code: under `~/.kimi-code/credentials/mcp/`, delete the

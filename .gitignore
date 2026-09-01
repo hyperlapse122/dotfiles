@@ -21,9 +21,6 @@ packages/*/.turbo/
 ### claude ###
 .claude
 
-### opencode ###
-.opencode
-
 ### agents ###
 # dotagents auto-generates project state directly under .agents/; that stays
 # untracked. No repo-scoped project skill is tracked there today. If one returns,
