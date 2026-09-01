@@ -192,12 +192,12 @@ agents:
       provider.appendOnlyContext: on
       eval.py: true
       eval.js: true
-      eval.rb: true
-      eval.jl: true
+      eval.rb: null
+      eval.jl: null
       python.kernelMode: session
-      python.interpreter: mise exec python -- python
-      ruby.interpreter: mise exec ruby -- ruby
-      julia.interpreter: mise exec julia -- julia
+      python.interpreter: null
+      ruby.interpreter: null
+      julia.interpreter: null
       task.isolation.mode: auto
       task.enableEffort: false
       task.enableLsp: true
