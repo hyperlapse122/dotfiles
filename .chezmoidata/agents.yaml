@@ -124,6 +124,7 @@ agents:
       tui.textSizing: false
       tui.codexResetFireworks: false
       tui.resizeScrollback: rebuild
+      tui.hyperlinks: always
       display.shimmer: 'classic'
       display.showTokenUsage: true
       tui.imeSafeCursor: true
