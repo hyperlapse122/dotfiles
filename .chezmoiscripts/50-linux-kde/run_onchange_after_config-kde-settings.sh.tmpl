@@ -33,10 +33,11 @@ shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
    would corrupt the row's own delimiter) and no slash (it is the group-path
    separator). */ -}}
 {{- $fieldRe := "^[A-Za-z0-9_.-]+$" -}}
-{{- /* Value allowlist: as above plus space and `/` (HomeUrl is a path) and `+`.
+{{- /* Value allowlist: as above plus space, `/` (HomeUrl is a path), `+`, and `,`
+   (for comma-separated lists such as kwinrulesrc General:rules).
    Deliberately excludes `@`, so an unsubstituted placeholder cannot slip through
    as a literal value. */ -}}
-{{- $valueRe := "^[A-Za-z0-9 _./+-]+$" -}}
+{{- $valueRe := "^[A-Za-z0-9 _./+,-]+$" -}}
 {{- $rows := list -}}
 {{- range $i, $s := .kde.settings -}}
 {{-   $where := printf "row %d (%v)" $i $s -}}
@@ -107,7 +108,7 @@ shell quoting. Anything outside [A-Za-z0-9 _./+-] is rejected outright.
 {{-     fail (printf "config-kde-settings: %s has value %q containing a colon; the rendered rows are colon-delimited (<file>:<group>:<key>:<type>:<value>) and a colon in the value would corrupt the row" $where $value) -}}
 {{-   end -}}
 {{-   if not (regexMatch $valueRe $value) -}}
-{{-     fail (printf "config-kde-settings: %s has value %q containing a shell metacharacter or a character outside the allowed set (A-Za-z0-9, space, and _./+-); the rows are interpolated into bash" $where $value) -}}
+{{-     fail (printf "config-kde-settings: %s has value %q containing a shell metacharacter or a character outside the allowed set (A-Za-z0-9, space, and _./+,-); the rows are interpolated into bash" $where $value) -}}
 {{-   end -}}
 {{-   if eq $type "bool" -}}
 {{-     if not (regexMatch "^(true|false)$" $value) -}}
