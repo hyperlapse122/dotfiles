@@ -52,9 +52,7 @@ viteplus = "latest"
 "npm:cypress" = { version = "latest", allow_builds = ["cypress"] }
 "pipx:mmdc" = "latest"
 
-# Agentic AI
-# codex and kimi are NOT here: .chezmoiexternals/ai-agents.toml fetches their
-# standalone releases; codex's linker and kimi's external expose ~/.local/bin.
+gcloud = "latest"
 
 [settings]
 all_compile = false
