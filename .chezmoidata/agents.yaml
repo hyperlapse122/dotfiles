@@ -144,8 +144,6 @@ agents:
       - google-antigravity/gemini-3.*
       - kimi-code/*
       disabledProviders:
-      - opencode-go
-      - opencode-zen
       - zai
       - github-copilot
       - openai-codex
@@ -206,8 +204,6 @@ agents:
       task.maxEffort: max
       commands.enableClaudeUser: false
       commands.enableClaudeProject: false
-      commands.enableOpencodeUser: false
-      commands.enableOpencodeProject: false
       tools.approvalMode: yolo
       tools.approval: {}
       astGrep.enabled: true
