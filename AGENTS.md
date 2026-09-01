@@ -49,7 +49,7 @@ Gate grammar is `<fact>`, `!<fact>`, or `<fact>.<value>`; YAML values beginning 
 
 ## Agent surfaces and ownership
 
-All agent data is in `.chezmoidata/agents.yaml`. The managed harness set is omp. MCP declarations are transport-neutral and feed omp. `op://` strings resolve only at render. OAuth entries stay headerless for native stores. Figma authorization is on demand through `figma-auth omp`; never commit tokens.
+All agent data is in `.chezmoidata/agents.yaml`. The managed harness set is omp. MCP declarations are transport-neutral and feed omp. `op://` strings resolve only at render. OAuth entries stay headerless for native stores. Figma authorization is on demand through `figma-auth`; never commit tokens.
 
 External skills come from `agents.skills.external` -> `.chezmoiexternals/ai-agents.toml` -> `~/.agents/skills/<name>`; keep the exact isolated subtree and no pin-bump workflow. GitHub-sourced skills (`agent-browser`, `improve`, `i-have-adhd`) ship as archive externals extracting the `skills/<name>/` subtree. GitLab-sourced skills (`glab`, `glab-stack`) are raw single-file externals (`type = "file"` on `<name>/SKILL.md`) pinned to the glab release via `.chezmoitemplates/glab-release-ref.tmpl`, which `.chezmoiexternals/vcs.toml`'s glab binary also consumes. Locally-authored personal skills (unpublished) are managed directly under `dot_agents/skills/<name>/` and deploy to `~/.agents/skills/<name>`. `dot_agents/skills/` is harness-neutral and is omp's sole managed skills source.
 

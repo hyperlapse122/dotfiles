@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { parseTarget, runCli, USAGE } from "../src/cli.js";
+import { runCli, USAGE } from "../src/cli.js";
 
 function sink(): { output: string; write(value: string): boolean } {
   return {
@@ -12,28 +12,30 @@ function sink(): { output: string; write(value: string): boolean } {
 }
 
 describe("CLI parsing", () => {
-  it.each([[[]], [["unknown"]], [["omp", "extra"]], [["pi"]], [["antigravity"]], [["kimi"]]])(
-    "rejects invalid arguments before running OAuth: %j",
-    async (args: string[]) => {
-      const stderr = sink();
-      const run = vi.fn();
-      expect(await runCli(args, { stderr, run })).toBe(2);
-      expect(stderr.output).toBe(USAGE);
-      expect(stderr.output).toContain("omp");
-      expect(stderr.output).not.toContain("pi");
-      expect(stderr.output).not.toContain("antigravity");
-      expect(stderr.output).not.toContain("kimi");
-      expect(run).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    [["omp"]],
+    [["unknown"]],
+    [["--help"]],
+    [["omp", "extra"]],
+    [["pi"]],
+    [["antigravity"]],
+    [["kimi"]],
+  ])("rejects invalid arguments before running OAuth: %j", async (args: string[]) => {
+    const stderr = sink();
+    const run = vi.fn();
+    expect(await runCli(args, { stderr, run })).toBe(2);
+    expect(stderr.output).toBe(USAGE);
+    expect(stderr.output).toBe("Usage: figma-auth\n");
+    expect(run).not.toHaveBeenCalled();
+  });
 
-  it("accepts only the omp target", async () => {
+  it("executes OAuth flow with zero arguments", async () => {
     const stdout = sink();
     const run = vi.fn(async () => undefined);
-    expect(parseTarget(["omp"])).toBe("omp");
-    expect(await runCli(["omp"], { stdout, run })).toBe(0);
+    expect(await runCli([], { stdout, run })).toBe(0);
     expect(run).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledWith("omp", expect.any(AbortSignal));
+    expect(run).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(stdout.output).toBe("Figma MCP credentials saved.\n");
   });
 
   it("reports failures without claiming credentials were saved", async () => {
@@ -42,7 +44,7 @@ describe("CLI parsing", () => {
     const run = vi.fn(async () => {
       throw new Error("cancelled");
     });
-    expect(await runCli(["omp"], { stdout, stderr, run })).toBe(1);
+    expect(await runCli([], { stdout, stderr, run })).toBe(1);
     expect(stdout.output).toBe("");
     expect(stderr.output).toContain("cancelled");
   });
