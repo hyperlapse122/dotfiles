@@ -39,6 +39,12 @@ sha256. A Linux runner can therefore lock darwin artifacts without
 downloading them — verified by hashing a real `darwin-arm64` artifact and
 comparing it to the recorded digest.
 
+Not every source publishes a sha256. A vendor manifest that publishes only a
+sha512 is recorded in the artifact's `sha512` field with a null `sha256`, and
+its consuming external verifies it through chezmoi's `checksum.sha512`. The
+`antigravity` vendor is the one such source today. `.ci/check-release-lock-digests.sh`
+accepts either digest and rejects an artifact carrying neither.
+
 ## Usage
 
 ```sh

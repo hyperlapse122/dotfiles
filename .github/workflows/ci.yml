@@ -247,6 +247,8 @@ jobs:
           .ci/test-ci-wiring.sh
           .ci/test-merge-commit-only-gates.sh
           .ci/test-git-prune-local-branches.sh
+          .ci/check-release-lock-digests.sh
+          .ci/test-release-lock-digest-gate.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)

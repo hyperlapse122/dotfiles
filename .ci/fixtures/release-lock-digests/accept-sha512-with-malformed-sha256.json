@@ -1,0 +1,16 @@
+{
+  "releases": {
+    "tools": {
+      "toolx": {
+        "kind": "vendorManifest",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://example.invalid/x.tar.gz",
+            "sha256": "not-a-digest",
+            "sha512": "ed4df91ea7ced986aa14507a0ab8225d92985190f7d551010eba0c46c569587e602cb36af81c9cde7af0d6b380e8dd3a82131361806cd96012d44a3e47fb369a"
+          }
+        }
+      }
+    }
+  }
+}
