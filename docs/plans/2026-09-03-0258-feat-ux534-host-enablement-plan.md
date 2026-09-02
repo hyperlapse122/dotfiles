@@ -237,11 +237,11 @@ U1 이 먼저 서야 나머지 게이트가 이름을 갖는다. U4 와 U5 는 U
 - **Goal:** 부팅 시 ScreenPad 를 꺼뜨리는 밝기 복원 서비스를 막고, 원하는 전원·밝기 상태를 이 리포지터리가 선언한다.
 - **Requirements:** R1, R2
 - **Dependencies:** U1
-- **Files:** `.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl`, `.chezmoidata/screenpad.yaml`, `.ci/test-fedora-fact-block-baseline.sh`, `.ci/skip-declaration-site-matrix.yaml`, `.ci/check-skip-declarations.sh`
+- **Files:** `.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl`, `.chezmoidata/ux534.yaml`, `.ci/test-fedora-fact-block-baseline.sh`, `.ci/skip-declaration-site-matrix.yaml`, `.ci/check-skip-declarations.sh`
 - **Approach:**
   1. 하드웨어 설치 스크립트에 `FACT_UX534` 분기를 추가한다. `FACT_THINKPAD` 분기와 같은 자리, 같은 형태다.
   2. 분기 안에서 `systemd-backlight@backlight:asus_screenpad.service` 를 마스킹한다.
-  3. ScreenPad 관련 값의 단일 출처로 `.chezmoidata/screenpad.yaml` 을 신설하고 밝기 기본값을 여기 둔다. 마스킹 직후 그 값을 단언한다. U6 이 쓰는 배율·회전·위치도 같은 파일에 모아 같은 장치의 값이 두 곳으로 갈리지 않게 한다.
+  3. 이 호스트 값의 단일 출처로 `.chezmoidata/ux534.yaml` 을 신설하고 밝기 기본값을 여기 둔다. 마스킹 직후 그 값을 단언한다. U6 이 쓰는 배율·회전·위치도 같은 파일에 모아 같은 장치의 값이 두 곳으로 갈리지 않게 한다.
   4. 게이트가 false 인 호스트에서는 `skip.sh.tmpl` 로 스킵 사유를 남긴다 — `thinkpad-absent` 분기와 같은 형태다. 새 스킵 선언이므로 `.ci` 사이트 매트릭스와 동결 총계를 함께 갱신한다.
 - **Patterns to follow:** `.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl:34` 의 `systemctl mask`, `.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl:19` 의 podman 마스킹, 18-hardware 의 `FACT_THINKPAD` 분기와 `skip.sh.tmpl` 사용, `.chezmoidata/kde.yaml` 의 "데이터가 단일 출처" 규약.
 - **Test scenarios:**
@@ -255,9 +255,9 @@ U1 이 먼저 서야 나머지 게이트가 이름을 갖는다. U4 와 U5 는 U
 - **Goal:** ScreenPad 의 표시 모드와 방향, 그리고 서스펜드 방식을 커널 인자로 선언하고, 조사용으로 남은 임시 인자를 제거한다.
 - **Requirements:** R3, R10, R12
 - **Dependencies:** U1
-- **Files:** `.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl`, `.chezmoidata/screenpad.yaml`, `.ci/test-fedora-fact-block-baseline.sh`
+- **Files:** `.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl`, `.chezmoidata/ux534.yaml`, `.ci/test-fedora-fact-block-baseline.sh`
 - **Approach:**
-  1. 선언할 인자 집합을 `.chezmoidata/screenpad.yaml` 에 둔다 — ScreenPad 의 `video=HDMI-A-1:...` 항목(모드와 `panel_orientation` 값 포함), `mem_sleep_default=deep`, 그리고 제거 대상 인자 이름.
+  1. 선언할 인자 집합을 `.chezmoidata/ux534.yaml` 에 둔다 — ScreenPad 의 `video=HDMI-A-1:...` 항목(모드와 `panel_orientation` 값 포함), `mem_sleep_default=deep`, 그리고 제거 대상 인자 이름.
   2. `grubby --info=DEFAULT` 로 현재 인자를 먼저 읽고, 기대값이 이미 있으면 아무것도 하지 않는다.
   3. 차이가 있을 때만 `grubby --update-kernel=ALL --args=` 를 호출하고, 제거 대상은 `--remove-args=` 로 지운다.
   4. 전체를 `FACT_UX534` 게이트 아래 둔다.
@@ -308,9 +308,9 @@ U1 이 먼저 서야 나머지 게이트가 이름을 갖는다. U4 와 U5 는 U
 - **Goal:** ScreenPad 의 배율·회전·위치를 사용자 세션과 로그인 그리터 양쪽에서 선언한 값으로 만든다.
 - **Requirements:** R4
 - **Dependencies:** U1, U2, U3
-- **Files:** `.chezmoidata/screenpad.yaml`, `.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl`, `.ci/skip-declaration-site-matrix.yaml`, `.ci/check-skip-declarations.sh`
+- **Files:** `.chezmoidata/ux534.yaml`, `.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl`, `.ci/skip-declaration-site-matrix.yaml`, `.ci/check-skip-declarations.sh`
 - **Approach:**
-  1. 목표값을 `.chezmoidata/screenpad.yaml` 에 선언한다 — 커넥터 이름, EDID 식별자, 배율, 변환, 위치. U2 가 쓰는 밝기 기본값과 같은 파일이라 같은 장치의 값이 두 곳으로 갈리지 않는다.
+  1. 목표값을 `.chezmoidata/ux534.yaml` 에 선언한다 — 커넥터 이름, EDID 식별자, 배율, 변환, 위치. U2 가 쓰는 밝기 기본값과 같은 파일이라 같은 장치의 값이 두 곳으로 갈리지 않는다.
   2. **살아 있는 세션에는 파일이 아니라 실행 중인 컴포지터에 적용한다.** KWin 은 `kwinoutputconfig.json` 을 시작 시 읽고 출력 상태가 바뀔 때 자기 값을 되쓰므로, 세션 중 파일만 고치면 반영되지 않거나 덮어써진다. 세션 쪽은 `kscreen-doctor` 로 실행 중인 KWin 에 직접 적용한다.
   3. **JSON per-key 단언은 그리터 파일 전용으로 한정한다.** 그리터의 KWin 은 로그인 화면이 떠 있지 않은 동안 존재하지 않으므로 파일 단언이 유효한 유일한 대상이다. `jq` 로 커넥터/EDID 로 해당 출력 항목을 찾아 선언한 키만 단언하고, 다른 출력 항목과 다른 키는 건드리지 않는다. root 소유이므로 기존 elevation guard 를 재사용하고 소유권과 모드를 보존한다.
   4. 대상 파일이나 해당 출력 항목이 없으면 조용히 스킵하고 사유를 남긴다 — 아직 ScreenPad 가 붙지 않은 호스트에서 정상 경로다. 새 스킵 선언과 공유 guard 소비자 증가를 `.ci` 사이트 매트릭스와 동결 총계에 반영한다.

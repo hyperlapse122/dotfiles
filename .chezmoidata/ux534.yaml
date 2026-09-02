@@ -1,0 +1,72 @@
+# Hardware values for the ASUS ZenBook UX534FTC — the single source of truth for
+# every consumer gated on the `ux534` host fact. Tune a value HERE, never in a
+# script (same rule as .chezmoidata/kde.yaml).
+#
+# The file is host-scoped rather than device-scoped on purpose: the suspend mode
+# and the battery threshold are not ScreenPad settings, and splitting one
+# machine's values across several files is how the same value ends up declared
+# twice with different answers. The ScreenPad gets a sub-map, not a file.
+#
+# WHAT THE SCREENPAD ACTUALLY IS, because nothing about it is guessable:
+# it is not a private ASUS surface and not an internal panel. The firmware wires
+# it to DDI B, the VBT describes that port as plain HDMI, and so i915 enumerates
+# it as `HDMI-A-1` and detects it by hotplug and EDID exactly like an external
+# monitor. Its EDID monitor name is `ScreenXpert-` (the vendor block reads
+# "Toshiba America Info Systems Inc", which is wrong and is not a useful key).
+# Native mode is 1080x2160@50 — the panel reports portrait and is mounted
+# landscape under the keyboard, which is why a transform is needed at all.
+#
+# WHY IT WAS DEAD BEFORE THIS FILE EXISTED. The panel comes up powered by
+# firmware, i915 enumerates it, picks the native mode, and sets a CRTC — and
+# roughly three seconds later `systemd-backlight@backlight:asus_screenpad`
+# restores the brightness it saved at the previous shutdown, that write reaches
+# the panel's power path, HPD drops, and the connector goes `disconnected`. The
+# 14 ms between the unit starting and the disconnect is the whole bug. It only
+# ever worked on the very first boot after install, when no saved value existed
+# yet. The fix is to stop systemd owning that state (the mask in
+# install-system-hardware) and to declare the value here instead.
+#
+# GATING: every consumer is behind the `ux534` host fact. On any other machine
+# nothing in this file is read.
+ux534:
+  screenpad:
+    # Panel brightness, written to /sys/class/backlight/asus_screenpad/brightness.
+    # Range 0-255 (`max_brightness`). 0 is not "dim" — it powers the panel down,
+    # which drops HPD and disconnects the output, so treat 0 as "disable the
+    # second screen" rather than as a brightness. This value is asserted at apply
+    # time; it is deliberately NOT restored per boot, because a per-boot restore
+    # is exactly the mechanism that was killing the panel.
+    brightness: 128
+
+  # Kernel arguments this host declares, added with `grubby --update-kernel=ALL`
+  # only when they are not already present (read-compare-then-write, mirroring
+  # the resume= handling in install-system-swap-hibernate).
+  #
+  # video= — the ScreenPad's mode and orientation. The kernel SILENTLY IGNORES a
+  #   `video=` option it does not recognise, so the presence of this argument is
+  #   not evidence that it took effect; the panel's actual orientation after a
+  #   reboot is. `panel_orientation` sets the DRM connector property compositors
+  #   read, which is what carries the rotation to the boot splash, the VT console
+  #   and the login greeter — surfaces no per-compositor config reaches. It is
+  #   normally an internal-panel property and this connector is classified as
+  #   external HDMI, so whether it applies here is the one open question in this
+  #   set. If it does not, rotation falls back to the compositor layer and those
+  #   pre-session surfaces stay unrotated.
+  #
+  # mem_sleep_default — s2idle keeps too much powered on this 2019-era platform.
+  #   `deep` is the suspend-to-RAM state. The ArchWiki UX534 page reports audio
+  #   crackling after resume from deep on the FHD variant; that is deliberately
+  #   NOT pre-empted here, because it has not been observed on this machine and a
+  #   workaround for a bug that does not reproduce is dead code.
+  kernelArgs:
+    - 'video=HDMI-A-1:1080x2160@50,panel_orientation=right_side_up'
+    - 'mem_sleep_default=deep'
+
+  # Kernel arguments this host must NOT carry, removed with `--remove-args` when
+  # present. These two were added by hand while diagnosing the ScreenPad (drm
+  # debug output at KMS+DRIVER+DP level, and a 16M ring buffer to hold it). They
+  # are listed rather than merely deleted so a machine that still carries them
+  # from that session converges without anyone remembering they were set.
+  removedKernelArgs:
+    - 'drm.debug'
+    - 'log_buf_len'

@@ -74,7 +74,7 @@ if [[ "$FACT_UX534" == 1 ]]; then
   # and i915 enumerates it as HDMI-A-1; what kills it is this unit restoring the
   # brightness it saved at the previous shutdown, ~3s in. Masking stops both
   # halves — the restore that disconnects the panel and the save that recorded
-  # the value. See .chezmoidata/screenpad.yaml for the full mechanism.
+  # the value. See .chezmoidata/ux534.yaml for the full mechanism.
   printf '  -> masking systemd-backlight@backlight:asus_screenpad.service\n'
   "${SUDO[@]}" systemctl mask systemd-backlight@backlight:asus_screenpad.service 2>/dev/null || true
 
@@ -82,10 +82,44 @@ if [[ "$FACT_UX534" == 1 ]]; then
   # per boot: a per-boot restore is the mechanism just masked away.
   screenpad_brightness=/sys/class/backlight/asus_screenpad/brightness
   if [[ -e "$screenpad_brightness" ]]; then
-    printf '  -> ScreenPad brightness -> %s\n' {{ .screenpad.brightness | quote }}
-    "${SUDO[@]}" sh -c 'printf %s "$1" >"$2"' _ {{ .screenpad.brightness | quote }} "$screenpad_brightness"
+    printf '  -> ScreenPad brightness -> %s\n' {{ .ux534.screenpad.brightness | quote }}
+    "${SUDO[@]}" sh -c 'printf %s "$1" >"$2"' _ {{ .ux534.screenpad.brightness | quote }} "$screenpad_brightness"
   else
     printf '  -- %s absent; asus_wmi has not exposed the panel yet\n' "$screenpad_brightness"
+  fi
+
+  # Kernel arguments. Read-compare-then-write so a converged host makes no
+  # grubby call at all, mirroring the resume= handling in
+  # install-system-swap-hibernate. See .chezmoidata/ux534.yaml for why the
+  # presence of a video= argument is not evidence that it took effect.
+  if command -v grubby >/dev/null 2>&1; then
+    ux534_wanted_args=({{ range .ux534.kernelArgs }}{{ . | quote }} {{ end }})
+    ux534_stale_args=({{ range .ux534.removedKernelArgs }}{{ . | quote }} {{ end }})
+    ux534_current_args="$(grubby --info=DEFAULT 2>/dev/null | grep -E '^args=' || true)"
+
+    ux534_add=()
+    for arg in "${ux534_wanted_args[@]}"; do
+      if [[ "$ux534_current_args" != *"$arg"* ]]; then
+        ux534_add+=("$arg")
+      fi
+    done
+    if [[ ${#ux534_add[@]} -gt 0 ]]; then
+      printf '  -> kernel args += %s\n' "${ux534_add[*]}"
+      "${SUDO[@]}" grubby --update-kernel=ALL --args="${ux534_add[*]}"
+    fi
+
+    ux534_drop=()
+    for arg in "${ux534_stale_args[@]}"; do
+      if [[ "$ux534_current_args" == *"$arg"* ]]; then
+        ux534_drop+=("$arg")
+      fi
+    done
+    if [[ ${#ux534_drop[@]} -gt 0 ]]; then
+      printf '  -> kernel args -= %s\n' "${ux534_drop[*]}"
+      "${SUDO[@]}" grubby --update-kernel=ALL --remove-args="${ux534_drop[*]}"
+    fi
+  else
+    printf '  -- grubby absent; kernel arguments not managed on this host\n'
   fi
 else
   (
