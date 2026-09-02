@@ -1,101 +1,253 @@
 ; ==============================================================================
 ; dotfiles_protected_agent_configs.cil
 ; SELinux Policy Module for protecting user-scope agent, skill, and MCP configs
+;
+; THREE OBJECT TYPES, ONE WRITER RULE EACH.
+;   protected_agent_config_t  chezmoi writes; every other domain only reads.
+;   claude_config_t           chezmoi and Claude Code write; everyone reads.
+;   gemini_config_t           chezmoi and Antigravity write; everyone reads.
+;
+; WHY THE SPLIT. ~/.claude/** and ~/.gemini/** are LIVE state their own harness
+; rewrites during ordinary use — session transcripts, the plugin cache, the
+; enabled-plugin set, OAuth credentials — so a chezmoi-only writer would break
+; the very tool the label protects. Each harness therefore gets a domain of its
+; own, which is also what makes the boundary meaningful in the other direction:
+; Claude Code cannot write ~/.gemini, and Antigravity cannot write ~/.claude.
+; protected_agent_config_t keeps its original chezmoi-only meaning for the paths
+; no harness owns: the canonical ~/.agents skills and plugins roots, and codex.
+;
+; THE PROTECTED TYPES MUST NOT CARRY THE file_type ATTRIBUTE. This is the whole
+; enforcement mechanism, and it is the one line a future edit must never "fix"
+; back in. The Fedora targeted policy ships
+;
+;   allow files_unconfined_type file_type:file { ... write create unlink ... };
+;
+; and unconfined_t holds files_unconfined_type. So the moment a type joins
+; file_type, EVERY unconfined user process may write it, and an explicit
+; read-only allow beside that does nothing — an allow rule can only add access,
+; never subtract it. An earlier revision of this module declared
+; (typeattributeset file_type (protected_agent_config_t)) and was therefore
+; inert: it labelled the files and denied nothing. Carrying no attribute at all
+; is what makes these types unreachable from the base policy, so the rules below
+; are the complete access set for them.
+;
+; The three domains still hold files_unconfined_type themselves. That grant is
+; scoped to file_type objects, which these three types are not, so each harness
+; keeps its ordinary access to the rest of the filesystem — project trees, /tmp,
+; caches — while the config split above stays enforced.
+;
+; DROPPING file_type COSTS EXACTLY ONE THING, AND IT IS REPLACED BELOW. Queried
+; against the running Fedora policy, `file_type` appears as the SOURCE of five
+; rules and no others, all of them `filesystem associate`:
+;
+;   allow file_type { fs_t tmp_t tmpfs_t hugetlbfs_t noxattrfs }:filesystem associate;
+;
+; associate is the kernel's check that a FILE LABEL may live on a FILESYSTEM
+; label — scontext is the file's type, tcontext is the filesystem's — so without
+; it restorecon cannot write the label at all and fails with
+; `avc: denied { associate } ... scontext=...:gemini_config_t tcontext=...:fs_t`.
+; The five rules are reproduced verbatim for the protected types. They say
+; nothing about which domain may read or write the file, so the split is intact.
+;
+; The *_exec_t entrypoints DO stay file_type: they are ordinary binaries every
+; launcher must be able to read and execute, and chezmoi owns their content.
+;
+; LABEL DURABILITY. A file created inside a labelled DIRECTORY inherits that
+; directory's type, so everything a harness writes under ~/.claude or ~/.gemini
+; stays protected with no further rule. The flat files in $HOME are the
+; exception: a writer that publishes one by renaming a temp file carries the
+; temp file's user_home_t label onto the target. A named file transition labels
+; ~/.claude.json and ~/.mcp.json when Claude Code creates them by that name, and
+; the apply script's restorecon repairs a rename that got past it.
+;
+; WHY THE CALLER SET IS unconfined_domain_type. These three binaries ran as
+; unconfined_t before this module existed and must keep launching from wherever
+; they launch from today — a login shell, a chezmoi script, another agent, an
+; IDE helper. Naming one source domain would leave every other unconfined
+; launcher executing an entrypoint with no transition and no allow, which is a
+; denial, not a downgrade. The transition is what the split depends on, so it is
+; granted from every unconfined domain.
 ; ==============================================================================
 
-; --- Types and Roles ---
+; --- Protected object types (deliberately attribute-free; see header) --------
 (type protected_agent_config_t)
+(type claude_config_t)
+(type gemini_config_t)
 (roletype object_r protected_agent_config_t)
-(typeattributeset file_type (protected_agent_config_t))
+(roletype object_r claude_config_t)
+(roletype object_r gemini_config_t)
 
+(typeattribute protected_agent_config_type)
+(typeattributeset protected_agent_config_type (protected_agent_config_t claude_config_t gemini_config_t))
+
+; --- Management domains and their entrypoints -------------------------------
 (type chezmoi_t)
+(type claude_t)
+(type agy_t)
 (roletype unconfined_r chezmoi_t)
+(roletype unconfined_r claude_t)
+(roletype unconfined_r agy_t)
 
 (type chezmoi_exec_t)
+(type claude_exec_t)
+(type agy_exec_t)
 (roletype object_r chezmoi_exec_t)
-(typeattributeset file_type (chezmoi_exec_t))
-(typeattributeset exec_type (chezmoi_exec_t))
+(roletype object_r claude_exec_t)
+(roletype object_r agy_exec_t)
 
-; --- Domain Transition: unconfined_t -> chezmoi_exec_t -> chezmoi_t ---
-(typetransition unconfined_t chezmoi_exec_t process chezmoi_t)
+(typeattribute dotfiles_agent_domain)
+(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t))
+(typeattribute dotfiles_agent_exec)
+(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t))
+(typeattributeset file_type (dotfiles_agent_exec))
+(typeattributeset exec_type (dotfiles_agent_exec))
 
-; Allow unconfined_t to execute chezmoi_exec_t and transition
-(allow unconfined_t chezmoi_exec_t (file (read getattr execute open map)))
-(allow unconfined_t chezmoi_t (process (transition)))
+; --- Domain transitions: <any unconfined domain> -> *_exec_t -> *_t ----------
+(typetransition unconfined_domain_type chezmoi_exec_t process chezmoi_t)
+(typetransition unconfined_domain_type claude_exec_t process claude_t)
+(typetransition unconfined_domain_type agy_exec_t process agy_t)
 
-; Allow chezmoi_t entrypoint
+; Execute the entrypoint and enter the domain. execute_no_trans keeps a launcher
+; this module never transitioned from failing open — it runs the binary in its
+; own domain — instead of being denied the exec outright.
+(allow unconfined_domain_type dotfiles_agent_exec (file (read getattr execute execute_no_trans open map ioctl lock)))
+(allow unconfined_domain_type dotfiles_agent_domain (process (transition)))
+
+; Entrypoints are per pair: a domain may only be entered through its own binary.
 (allow chezmoi_t chezmoi_exec_t (file (entrypoint read getattr execute open map)))
+(allow claude_t claude_exec_t (file (entrypoint read getattr execute open map)))
+(allow agy_t agy_exec_t (file (entrypoint read getattr execute open map)))
 
-; Process inheritance and lifecycle between unconfined_t and chezmoi_t
-(allow chezmoi_t unconfined_t (process (sigchld signull sigkill signal)))
-(allow chezmoi_t unconfined_t (fd (use)))
-(allow chezmoi_t user_devpts_t (chr_file (read write ioctl getattr append open)))
+; --- Process inheritance and lifecycle --------------------------------------
+(allow dotfiles_agent_domain unconfined_t (process (sigchld signull sigkill signal)))
+(allow dotfiles_agent_domain unconfined_t (fd (use)))
+(allow unconfined_domain_type dotfiles_agent_domain (process (sigchld signull sigkill signal)))
+(allow unconfined_domain_type dotfiles_agent_domain (fd (use)))
+(allow dotfiles_agent_domain dotfiles_agent_domain (process (sigchld signull sigkill signal siginh)))
+(allow dotfiles_agent_domain dotfiles_agent_domain (fd (use)))
+(allow dotfiles_agent_domain user_devpts_t (chr_file (read write ioctl getattr append open)))
 
 ; Process capabilities and unconfined execution (JIT runtimes: Node.js, Bun, V8, omp)
-(allow chezmoi_t self (process (execmem fork sigchld signull sigkill sigstop signal getsched setsched getsession getpgid setpgid setrlimit)))
+(allow dotfiles_agent_domain self (process (execmem fork sigchld signull sigkill sigstop signal getsched setsched getsession getpgid setpgid setrlimit)))
+
+; Relabelling stays chezmoi's: it is the domain that runs restorecon, and no
+; harness has a reason to move a file between these types.
 (allow chezmoi_t file_type (file (relabelto relabelfrom)))
 (allow chezmoi_t file_type (dir (relabelto relabelfrom)))
-; Inherit base domain and unconfined permissions for chezmoi_t
-(typeattributeset domain (chezmoi_t))
-(typeattributeset application_domain_type (chezmoi_t))
-(typeattributeset unconfined_domain_type (chezmoi_t))
-(typeattributeset can_change_object_identity (chezmoi_t))
-(typeattributeset can_load_kernmodule (chezmoi_t))
-(typeattributeset can_load_policy (chezmoi_t))
-(typeattributeset can_read_shadow_passwords (chezmoi_t))
-(typeattributeset can_relabelto_binary_policy (chezmoi_t))
-(typeattributeset can_relabelto_shadow_passwords (chezmoi_t))
-(typeattributeset can_setbool (chezmoi_t))
-(typeattributeset can_setenforce (chezmoi_t))
-(typeattributeset can_setsecparam (chezmoi_t))
-(typeattributeset can_write_shadow_passwords (chezmoi_t))
-(typeattributeset corenet_unconfined_type (chezmoi_t))
-(typeattributeset corenet_unlabeled_type (chezmoi_t))
-(typeattributeset dbusd_unconfined (chezmoi_t))
-(typeattributeset devices_unconfined_type (chezmoi_t))
-(typeattributeset files_unconfined_type (chezmoi_t))
-(typeattributeset filesystem_unconfined_type (chezmoi_t))
-(typeattributeset initrc_transition_domain (chezmoi_t))
-(typeattributeset kern_unconfined (chezmoi_t))
-(typeattributeset kernel_system_state_reader (chezmoi_t))
-(typeattributeset named_filetrans_domain (chezmoi_t))
-(typeattributeset netlabel_peer_type (chezmoi_t))
-(typeattributeset nsswitch_domain (chezmoi_t))
-(typeattributeset process_uncond_exempt (chezmoi_t))
-(typeattributeset selinux_unconfined_type (chezmoi_t))
-(typeattributeset sepgsql_unconfined_type (chezmoi_t))
-(typeattributeset storage_unconfined_type (chezmoi_t))
-(typeattributeset syslog_client_type (chezmoi_t))
-(typeattributeset userdom_filetrans_type (chezmoi_t))
-(typeattributeset userdomain (chezmoi_t))
-(typeattributeset x_domain (chezmoi_t))
-(typeattributeset xserver_unconfined_type (chezmoi_t))
+; lnk_file too: ~/.claude/skills and ~/.gemini/skills arrive as user_home_t
+; symlinks, and restorecon needs relabelfrom on the type they are LEAVING.
+(allow chezmoi_t file_type (lnk_file (relabelto relabelfrom)))
 
-; --- Permissions on protected_agent_config_t ---
-; chezmoi_t has full management permissions on protected configs
-(allow chezmoi_t protected_agent_config_t (file (create read write getattr setattr unlink rename open append lock map relabelto relabelfrom)))
-(allow chezmoi_t protected_agent_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock relabelto relabelfrom)))
-(allow chezmoi_t protected_agent_config_t (lnk_file (create read getattr setattr unlink rename relabelto relabelfrom)))
+; Inherit base domain and unconfined permissions. Every one of these attributes
+; is one unconfined_t already carries, so a harness that moves into its own
+; domain keeps exactly the privileges it had before this module existed. None of
+; them reaches the three protected types, which carry no attribute at all.
+(typeattributeset domain (dotfiles_agent_domain))
+(typeattributeset application_domain_type (dotfiles_agent_domain))
+(typeattributeset unconfined_domain_type (dotfiles_agent_domain))
+(typeattributeset can_change_object_identity (dotfiles_agent_domain))
+(typeattributeset can_load_kernmodule (dotfiles_agent_domain))
+(typeattributeset can_load_policy (dotfiles_agent_domain))
+(typeattributeset can_read_shadow_passwords (dotfiles_agent_domain))
+(typeattributeset can_relabelto_binary_policy (dotfiles_agent_domain))
+(typeattributeset can_relabelto_shadow_passwords (dotfiles_agent_domain))
+(typeattributeset can_setbool (dotfiles_agent_domain))
+(typeattributeset can_setenforce (dotfiles_agent_domain))
+(typeattributeset can_setsecparam (dotfiles_agent_domain))
+(typeattributeset can_write_shadow_passwords (dotfiles_agent_domain))
+(typeattributeset corenet_unconfined_type (dotfiles_agent_domain))
+(typeattributeset corenet_unlabeled_type (dotfiles_agent_domain))
+(typeattributeset dbusd_unconfined (dotfiles_agent_domain))
+(typeattributeset devices_unconfined_type (dotfiles_agent_domain))
+(typeattributeset files_unconfined_type (dotfiles_agent_domain))
+(typeattributeset filesystem_unconfined_type (dotfiles_agent_domain))
+(typeattributeset initrc_transition_domain (dotfiles_agent_domain))
+(typeattributeset kern_unconfined (dotfiles_agent_domain))
+(typeattributeset kernel_system_state_reader (dotfiles_agent_domain))
+(typeattributeset named_filetrans_domain (dotfiles_agent_domain))
+(typeattributeset netlabel_peer_type (dotfiles_agent_domain))
+(typeattributeset nsswitch_domain (dotfiles_agent_domain))
+(typeattributeset process_uncond_exempt (dotfiles_agent_domain))
+(typeattributeset selinux_unconfined_type (dotfiles_agent_domain))
+(typeattributeset sepgsql_unconfined_type (dotfiles_agent_domain))
+(typeattributeset storage_unconfined_type (dotfiles_agent_domain))
+(typeattributeset syslog_client_type (dotfiles_agent_domain))
+(typeattributeset userdom_filetrans_type (dotfiles_agent_domain))
+(typeattributeset userdomain (dotfiles_agent_domain))
+(typeattributeset x_domain (dotfiles_agent_domain))
+(typeattributeset xserver_unconfined_type (dotfiles_agent_domain))
 
-; unconfined_t has read-only access to protected configs
-(allow unconfined_t protected_agent_config_t (file (read getattr open map execute)))
-(allow unconfined_t protected_agent_config_t (dir (read getattr open search)))
-(allow unconfined_t protected_agent_config_t (lnk_file (read getattr)))
+; --- Permissions on the protected types -------------------------------------
+; chezmoi manages every protected type.
+(allow chezmoi_t protected_agent_config_type (file (create read write getattr setattr unlink rename open append lock map ioctl link execute execute_no_trans watch watch_reads relabelto relabelfrom)))
+(allow chezmoi_t protected_agent_config_type (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads relabelto relabelfrom)))
+(allow chezmoi_t protected_agent_config_type (lnk_file (create read getattr setattr unlink rename relabelto relabelfrom)))
 
-; --- File Context Specifications (filecon) ---
-; Target config files in user home directories
+; Claude Code manages its own configuration and nothing else's.
+(allow claude_t claude_config_t (file (create read write getattr setattr unlink rename open append lock map ioctl link execute execute_no_trans watch watch_reads)))
+(allow claude_t claude_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
+(allow claude_t claude_config_t (lnk_file (create read getattr setattr unlink rename)))
+
+; Antigravity manages its own configuration and nothing else's.
+(allow agy_t gemini_config_t (file (create read write getattr setattr unlink rename open append lock map ioctl link execute execute_no_trans watch watch_reads)))
+(allow agy_t gemini_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
+(allow agy_t gemini_config_t (lnk_file (create read getattr setattr unlink rename)))
+
+; Every user domain — including each harness on the other harness's tree —
+; reads, traverses, maps, executes and watches, and does nothing else.
+(allow unconfined_domain_type protected_agent_config_type (file (read getattr open map ioctl lock execute execute_no_trans watch watch_reads)))
+(allow unconfined_domain_type protected_agent_config_type (dir (read getattr open search ioctl lock watch watch_reads)))
+(allow unconfined_domain_type protected_agent_config_type (lnk_file (read getattr)))
+
+; The filesystem association file_type used to confer, reproduced verbatim for
+; types that deliberately carry no attribute. Without this, no label can be set:
+; the check is file-label against filesystem-label, not a domain access grant.
+(allow protected_agent_config_type fs_t (filesystem (associate)))
+(allow protected_agent_config_type tmp_t (filesystem (associate)))
+(allow protected_agent_config_type tmpfs_t (filesystem (associate)))
+(allow protected_agent_config_type hugetlbfs_t (filesystem (associate)))
+(allow protected_agent_config_type noxattrfs (filesystem (associate)))
+
+; A flat $HOME file Claude Code creates by name keeps its label without waiting
+; for the next restorecon.
+(typetransition claude_t user_home_t file ".claude.json" claude_config_t)
+(typetransition claude_t user_home_t file ".mcp.json" claude_config_t)
+
+; The same durability problem on the other side: the command store keys its
+; directory by version, so an upgrade writes the binary into a directory that
+; has never been relabelled, and a new file inherits its parent's type. The
+; filecon below matches any version, but it only takes effect when restorecon
+; runs — and restorecon runs when the POLICY changes, not when claude or agy
+; does. Without these the upgraded binary would be unlabelled, the transition
+; would not fire, and the harness would silently drop back to unconfined_t with
+; its own config now denied to it. Only chezmoi_t creates these files, and only
+; under the home type that holds ~/.local/lib, so the name cannot be captured
+; elsewhere.
+(typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t)
+(typetransition chezmoi_t gconf_home_t file "agy" agy_exec_t)
+
+; --- File Context Specifications (filecon) ----------------------------------
+; Neutral, chezmoi-only: no harness rewrites these during ordinary use.
 (filecon "HOME_DIR/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.claude/skills" symlink (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.gemini/antigravity-cli/mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.gemini/config/mcp_config\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.gemini/skills" symlink (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.agents/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.agents/plugins(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-; chezmoi executables
+; Claude Code: chezmoi and claude. The ~/.claude/skills and ~/.gemini/skills
+; symlinks land in their harness's type, but they RESOLVE into ~/.agents/skills,
+; which stays chezmoi-only — so the canonical skills root is still not writable
+; through a harness.
+(filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude(/.*)?" any (unconfined_u object_r claude_config_t ((s0)(s0))))
+; Antigravity: chezmoi and agy.
+(filecon "HOME_DIR/\.gemini(/.*)?" any (unconfined_u object_r gemini_config_t ((s0)(s0))))
+; Entrypoint binaries. The versioned command store holds the real files; the
+; ~/.local/bin entries are symlinks today and the spec is inert while they are,
+; so it costs nothing and covers a future direct install at that path.
 (filecon "/usr/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
 (filecon "/usr/local/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
 (filecon "HOME_DIR/\.local/bin/chezmoi" file (unconfined_u object_r chezmoi_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/lib/commands/store/claude/[^/]+/claude" file (unconfined_u object_r claude_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/bin/claude" file (unconfined_u object_r claude_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/lib/commands/store/agy/[^/]+/agy" file (unconfined_u object_r agy_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/bin/agy" file (unconfined_u object_r agy_exec_t ((s0)(s0))))

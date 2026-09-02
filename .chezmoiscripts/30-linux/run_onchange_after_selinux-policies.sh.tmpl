@@ -34,20 +34,64 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
 
       if command -v restorecon >/dev/null 2>&1; then
         printf 'selinux-policies: relabeling protected paths...\n'
+        # Every filecon root the module declares, plus the entrypoint stores.
+        # ~/.claude and ~/.gemini are relabelled WHOLE: their harness writes new
+        # files there constantly, and a file created inside a labelled directory
+        # inherits that directory's type, so the recursive pass is what carries
+        # the label onto anything a rename left behind as user_home_t.
         restorecon -RFv \
           "$HOME/.codex/config.toml" \
-          "$HOME/.claude.json"* \
-          "$HOME/.mcp.json" \
-          "$HOME/.claude/settings.json" \
-          "$HOME/.claude/skills" \
-          "$HOME/.gemini/antigravity-cli/mcp.json" \
-          "$HOME/.gemini/config/mcp_config.json" \
-          "$HOME/.gemini/skills" \
+          "$HOME/.codex/skills" \
           "$HOME/.agents/skills" \
           "$HOME/.agents/plugins" \
-          "$HOME/.codex/skills" \
+          "$HOME/.claude.json"* \
+          "$HOME/.mcp.json" \
+          "$HOME/.claude" \
+          "$HOME/.gemini" \
           "$HOME/.local/bin/chezmoi" \
+          "$HOME/.local/bin/claude" \
+          "$HOME/.local/bin/agy" \
+          "$HOME/.local/lib/commands/store/claude" \
+          "$HOME/.local/lib/commands/store/agy" \
+          "$HOME/.local/bin/tokscale" \
+          "$HOME/.local/lib/commands/store/tokscale" \
+          "$HOME/.local/share/mise/installs/npm-tokscale" \
           2>/dev/null || true
+      fi
+
+      # SELinux fixes a process's domain at exec, and installing a module never
+      # moves a process that is already running. An agent session started before
+      # this ran therefore keeps unconfined_t while its files are now labelled
+      # claude_config_t / gemini_config_t, and its own writes — transcripts,
+      # session state — are denied with EACCES. Only a re-exec fixes it, so say
+      # so: this script only runs when the policy actually changed.
+      # Name the offenders rather than warning in the abstract. An operator who
+      # can see the pids knows which terminal to restart; an empty list is the
+      # all-clear. A process that already sits in an agent domain is fine, and so
+      # is chezmoi_t, which is what runs this script.
+      stale=()
+      while read -r pid; do
+        [[ -r "/proc/$pid/attr/current" ]] || continue
+        case "$(tr -d '\0' <"/proc/$pid/attr/current")" in
+        *:claude_t:* | *:agy_t:* | *:tokscale_t:* | *:chezmoi_t:*) ;;
+        *) stale+=("$pid") ;;
+        esac
+      done < <(pgrep -x -u "$(id -u)" 'claude|agy|tokscale' 2>/dev/null || true)
+
+      if [[ ${#stale[@]} -gt 0 ]]; then
+        printf 'selinux-policies: WARNING %s\n' \
+          'Restart any claude/agy/tokscale process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
+        for pid in "${stale[@]}"; do
+          # ps pads lstart to a fixed width under LC_ALL=C but not under every
+          # locale, so trim rather than relying on a leading space in the format.
+          printf 'selinux-policies:   pid %s (%s) started %s\n' \
+            "$pid" \
+            "$(tr -d '\0' <"/proc/$pid/comm" 2>/dev/null || printf '?')" \
+            "$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//' || printf '?')"
+        done
+      else
+        printf 'selinux-policies: %s\n' \
+          'policy reinstalled; no claude/agy/tokscale process is left in a stale domain. Restart any agent session started earlier if one appears later.'
       fi
     fi
   fi
