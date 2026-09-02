@@ -35,20 +35,28 @@ lock=${1:-$repo_root/.chezmoidata/releases.json}
 
 supported='["linux-amd64","linux-arm64","linux-amd64-musl","linux-arm64-musl","darwin-amd64","darwin-arm64"]'
 
+# fail <summary> [detail]. Every failure path goes through here so each one also
+# emits the GitHub Actions annotation.
 fail() {
   printf 'check-release-lock-digests: %s\n' "$1" >&2
-  printf '%s\n' "$2" >&2
+  [ -z "${2:-}" ] || printf '%s\n' "$2" >&2
   printf '::error::%s\n' "$1"
   exit 1
 }
 
-[ -f "$lock" ] || {
-  printf 'check-release-lock-digests: lock not found: %s\n' "$lock" >&2
-  exit 1
-}
+[ -f "$lock" ] || fail "lock not found: $lock"
+jq empty "$lock" 2>/dev/null || fail "lock is not valid JSON: $lock"
+
+# A lock with no tools has nothing to violate either check, so both walks would
+# report clean and the gate would green a file that says nothing. Refuse it up
+# front: an empty `.releases.tools` is a broken generator run, never a valid
+# lock. The per-tool `// {}` below stays — a version-only tool such as winbox
+# legitimately has no artifacts.
+jq -e '(.releases.tools | type) == "object" and ((.releases.tools | length) > 0)' \
+  "$lock" >/dev/null 2>&1 || fail "lock carries no releases.tools entries: $lock"
 
 bad_keys=$(jq -r --argjson supported "$supported" '
-  (.releases.tools // {}) | to_entries[]
+  .releases.tools | to_entries[]
   | .key as $tool
   | (.value.artifacts // {}) | keys[]
   | select(. as $key | $supported | index($key) == null)
@@ -60,10 +68,13 @@ if [ -n "$bad_keys" ]; then
 fi
 
 bad_artifacts=$(jq -r '
-  def has_sha256: .sha256 | type == "string" and test("^[0-9a-f]{64}$");
-  def has_sha512: .sha512 | type == "string" and test("^[0-9a-f]{128}$");
+  # `\z`, not `$`: Oniguruma treats `$` as a line anchor, so `$` would accept a
+  # digest with a trailing newline — a string chezmoi would then compare
+  # literally and never match.
+  def has_sha256: .sha256 | type == "string" and test("^[0-9a-f]{64}\\z");
+  def has_sha512: .sha512 | type == "string" and test("^[0-9a-f]{128}\\z");
 
-  (.releases.tools // {}) | to_entries[] as $entry
+  .releases.tools | to_entries[] as $entry
   | $entry.value as $tool
   | ($tool.artifacts // {}) | to_entries[] as $artifact
   | $artifact.value as $a
