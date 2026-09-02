@@ -78,9 +78,9 @@ done
 {{- end }}
 {{- if ne $rows "" }}
 
-# Preflight every row before the first mutation, then stage and install in a
-# second pass: a half-applied set would leave agy holding a bundle whose sibling
-# never resolved.
+# Preflight every row before the first mutation, then migrate and install in a
+# second pass: a half-applied set would leave agy pointed at neither the
+# superseded staged bundle nor the marketplace source.
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
   IFS=$'\t' read -r name market kind source <<<"$row"
