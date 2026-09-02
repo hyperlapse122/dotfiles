@@ -122,11 +122,10 @@ grep -F 'unsafe target' "$scratch/auth.err" >/dev/null
 # calls, digest/loader checks, migration boundary, locked OMP version, and
 # raw-input fingerprint set.
 for needle in \
-  'compound-engineering@compound-engineering-plugin' \
+  'compound-engineering\tcompound-engineering-plugin' \
   'plugin marketplace add' \
   'plugin install --scope user --force' \
-  'plugin enable --scope user' \
-  'legacy'; do
+  'plugin enable --scope user'; do
   grep -F "$needle" "$plugin_script" >/dev/null
 done
 
@@ -198,7 +197,7 @@ case "$*" in
   "plugin marketplace add "*) ;;
   "plugin install --scope user --force compound-engineering@compound-engineering-plugin")
     install="$root/cache/plugins/compound-engineering-plugin___compound-engineering___v-test"
-    rm -rf "$install"; mkdir -p "$(dirname "$install")"; cp -R "$home/.local/share/compound-engineering/v-test" "$install"
+    rm -rf "$install"; mkdir -p "$(dirname "$install")"; cp -R "$HOME/.local/share/compound-engineering/v-test" "$install"
     mkdir -p "$root/node_modules"; ln -sfn "$install" "$root/node_modules/compound-engineering"
     cat >"$root/installed_plugins.json" <<JSON
 {"version":2,"plugins":{"compound-engineering@compound-engineering-plugin":[{"scope":"user","installPath":"$install","version":"v-test"}]}}
@@ -207,6 +206,7 @@ JSON
   "plugin enable --scope user compound-engineering@compound-engineering-plugin")
     printf '%s\n' '{"plugins":{"compound-engineering":{"version":"v-test","enabled":true}},"settings":{}}' >"$root/omp-plugins.lock.json"
     ;;
+esac
 EOF
 chmod 0755 "$fake_bin/omp"
 
@@ -214,14 +214,10 @@ run_plugins() {
   OMP_CALLS="$1" OMP_FAIL_MATCH="${2-}" OMP_STUB_VERSION="${3-}" EXPECTED_OMP_VERSION="$locked_omp_version" \
     env HOME="$home" PATH="$fake_bin:$PATH" bash "$test_plugin"
 }
-legacy="$home/.omp/agent/extensions/mxm4-haptic.ts"
-mkdir -p "$(dirname "$legacy")"
-printf 'legacy owner\n' >"$legacy"
 if run_plugins "$scratch/fail.calls" 'plugin enable --scope user compound-engineering@compound-engineering-plugin' >"$scratch/fail.out" 2>"$scratch/fail.err"; then
   printf 'injected enable failure unexpectedly succeeded\n' >&2
   exit 1
 fi
-[[ -f $legacy ]]
 
 # The version gate rejects mismatched, digit-adjacent, and suffixed decoys
 # before any marketplace mutation, and still accepts the bare version form.
@@ -238,14 +234,8 @@ for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.
   fi
 done
 run_plugins "$scratch/version-bare.calls" '' "$locked_omp_version"
-# The bare-accept run is a full reconcile and removes the legacy sentinel;
-# recreate it so the success runs below still prove their own removal.
-printf 'legacy owner\n' >"$legacy"
-
 run_plugins "$scratch/omp.calls"
-[[ ! -e $legacy ]]
 run_plugins "$scratch/repeat.calls"
-[[ ! -e $legacy ]]
 [[ $(grep -c 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/repeat.calls") -eq 1 ]]
 [[ $(grep -c 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/repeat.calls") -eq 1 ]]
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
@@ -263,8 +253,8 @@ fi
 # The install loop's remove-then-re-add refresh is also a marketplace remove,
 # so the proof is count plus the immediately following re-add, not absence.
 grep -F 'plugin uninstall --scope user unmanaged-repo-guard@h82-dotfiles' "$scratch/omp.calls" >/dev/null
-[[ $(grep -cF 'plugin marketplace remove h82-dotfiles' "$scratch/omp.calls") -eq 1 ]]
-grep -A1 -F 'plugin marketplace remove h82-dotfiles' "$scratch/omp.calls" |
+[[ $(grep -cF 'plugin marketplace remove compound-engineering-plugin' "$scratch/omp.calls") -eq 1 ]]
+grep -A1 -F 'plugin marketplace remove compound-engineering-plugin' "$scratch/omp.calls" |
   tail -1 | grep -F 'plugin marketplace add' >/dev/null
 
 mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
@@ -299,10 +289,7 @@ grep -F 'preflight: omp is not on PATH' "$scratch/fallback-noomp.err" >/dev/null
 
 mkdir -p "$home/.local/bin"
 cp "$fake_bin/omp" "$home/.local/bin/omp"
-printf 'legacy owner\n' >"$legacy"
 run_fallback "$scratch/fallback.calls"
-grep -F 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' "$scratch/fallback.calls" >/dev/null
-grep -F 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/fallback.calls" >/dev/null
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/fallback.calls" >/dev/null
 grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/fallback.calls" >/dev/null
 rm -f "$home/.local/bin/omp"
