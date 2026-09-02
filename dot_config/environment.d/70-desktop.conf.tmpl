@@ -10,8 +10,27 @@
 # both are present); with neither desktop (headless, container, CI) the fact is
 # `none`, so the KDE variant renders, as elsewhere — deterministic artifacts, inert
 # without a desktop.
+#
+# SUDO_ASKPASS names the desktop's own askpass program, so `sudo -A` can read the
+# password from the session credential store when a run has no terminal. This
+# repository never supplies the password itself; the credential stays in KWallet
+# or the Secret Service. The sudo guard sets the same value in-script for apply
+# runs that do not inherit the user manager environment, so this file is what
+# gives an interactive desktop session the variable too.
+#
+# `none` renders NO SUDO_ASKPASS line — the divergence from the PINENTRY default
+# above is deliberate. A variable pointing at an absent binary is a new failure
+# surface, while the KWallet knob is merely inert. Note the widening this accepts:
+# sudo consults SUDO_ASKPASS on ANY terminal-less invocation, not only under `-A`,
+# so a terminal-less sudo call made elsewhere in the session can now open a dialog
+# too. The capability probes are unaffected because they pass `-n`.
 {{ $f := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{ if ne $f.desktop "gnome" -}}
 PINENTRY_KDE_USE_WALLET=1
+{{ end -}}
+{{ if eq $f.desktop "kde" -}}
+SUDO_ASKPASS=/usr/bin/ksshaskpass
+{{ else if eq $f.desktop "gnome" -}}
+SUDO_ASKPASS=/usr/libexec/openssh/gnome-ssh-askpass
 {{ end -}}
 ELECTRON_OZONE_PLATFORM_HINT=auto
