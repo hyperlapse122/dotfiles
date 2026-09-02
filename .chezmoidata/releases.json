@@ -455,37 +455,6 @@
           }
         }
       },
-      "omp": {
-        "kind": "githubRelease",
-        "source": "can1357/oh-my-pi",
-        "version": "v18.1.4",
-        "artifacts": {
-          "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-x64",
-            "sha256": "6aef8347b6e3790da2bb39dc5911a7a3587c5cea99b04eb7ea0c793ecb4f8faf"
-          },
-          "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-arm64",
-            "sha256": "e8b6fcfda4df32e7f22fca98107b48eea9e4edf2201dc1132703fb615550237f"
-          },
-          "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-darwin-x64",
-            "sha256": "318de84851036417dac4046978d00ffe6693fb129dd8008e9c6ac66ec1c91662"
-          },
-          "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-darwin-arm64",
-            "sha256": "4c460597154027e8203b3d447d9669e1bab4aa399ac510d516315a1d5dab3ea7"
-          },
-          "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-musl-x64",
-            "sha256": "ee5ee51c0a9e3dbe8920186a5a164ad42e62cb4c63c27d78fb3a4e6621f4b4d9"
-          },
-          "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-musl-arm64",
-            "sha256": "972933fef05f51c5c081420d43a25a0149d2a1e2d9a18a80d5b9be2970a8530e"
-          }
-        }
-      },
       "react-best-practices": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",

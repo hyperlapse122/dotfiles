@@ -28,9 +28,6 @@ packages/*/.turbo/
 # which would make every descendant unreachable to a negation.
 .agents/*
 
-### omp ###
-.omp/*
-!.omp/mcp.json
 
 ### Compound Engineering ###
 docs/plans/.*.md

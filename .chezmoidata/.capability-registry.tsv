@@ -16,7 +16,6 @@ mariadb-present	command-present	none	linux	available	unavailable
 minikube-present	command-present	none	linux	available	unavailable
 mise-present	command-present	none	any	available	unavailable
 nvidia-ctk-present	command-present	none	linux	available	unavailable
-omp-present	command-present	none	linux	available	unavailable
 plasma-apply-colorscheme-present	command-present	none	linux	available	unavailable
 plasma-apply-wallpaperimage-present	command-present	none	linux	available	unavailable
 plasmashell-running	user-process	read-only-subprocess	linux	available	unavailable

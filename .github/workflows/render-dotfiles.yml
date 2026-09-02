@@ -172,8 +172,22 @@ jobs:
           : > "${HOME}/.agents/skills/daily-report/prune-canary"
           : > "${HOME}/.agents/AGENTS.md"
           : > "${HOME}/.agents/CLAUDE.md"
+          mkdir -p "${HOME}/.omp/agent/agents" "${HOME}/.omp/agent/rules"
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
+          : > "${HOME}/.omp/agent/mcp.json"
+          : > "${HOME}/.omp/agent/models.yml"
+          : > "${HOME}/.omp/agent/APPEND_SYSTEM.md"
+          : > "${HOME}/.omp/agent/TITLE_SYSTEM.md"
+          : > "${HOME}/.omp/agent/.env"
+          : > "${HOME}/.omp/agent/agents/claude.md"
+          : > "${HOME}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            : > "${HOME}/.omp/agent/rules/comment-${rule}.md"
+          done
+          # AE1 negative control: omp wrote this, chezmoi never did. The prune set
+          # is per-managed-target precisely so apply cannot reach it.
+          : > "${HOME}/.omp/agent/agent.db"
           : > "${HOME}/.omp/agent/.i-have-adhd-always"
           : > "${HOME}/src/garden.yaml"
           : > "${HOME}/.local/bin/chezmoi-secrets-sync"
@@ -210,6 +224,17 @@ jobs:
           test ! -e "${home}/.agents/AGENTS.md"
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
+          test ! -e "${home}/.omp/agent/AGENTS.md"
+          test ! -e "${home}/.omp/agent/mcp.json"
+          test ! -e "${home}/.omp/agent/models.yml"
+          test ! -e "${home}/.omp/agent/APPEND_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/TITLE_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/.env"
+          test ! -e "${home}/.omp/agent/agents/claude.md"
+          test ! -e "${home}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            test ! -e "${home}/.omp/agent/rules/comment-${rule}.md"
+          done
           test ! -e "${home}/.omp/agent/.i-have-adhd-always"
           test ! -e "${home}/.local/bin/chezmoi-secrets-sync"
           test ! -e "${home}/.local/bin/claude-glm"
@@ -222,7 +247,8 @@ jobs:
 
           # Sibling files must survive.
           test -f "${home}/.agents/skills/daily-report/prune-canary"
-          test -f "${home}/.omp/agent/AGENTS.md"
+          # AE1: what omp wrote survives; only chezmoi's own targets are un-written.
+          test -f "${home}/.omp/agent/agent.db"
           test -f "${home}/.local/bin/canary-sibling"
           test -f "${home}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
 
@@ -245,7 +271,7 @@ jobs:
           rm -rf "${out}/src/github.com" "${out}/.config/chezmoi" "${out}/.cache"
           # Drop the .chezmoiremove canaries seeded before the apply that survived.
           rm -rf "${out}/.agents/skills/daily-report" \
-                 "${out}/.omp/agent/AGENTS.md" \
+                 "${out}/.omp/agent/agent.db" \
                  "${out}/.omp/agent/.i-have-adhd-always" \
                  "${out}/.local/bin/canary-sibling" \
                  "${out}/.local/bin/docker-credential-gh" \
@@ -446,7 +472,7 @@ jobs:
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           reconciler="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
-          mcp="${out}/omp-mcp.json"
+          mcp="${out}/universal-mcp.json"
           test -f "${external}"
           test ! -e "${external}.render-error.txt"
           ! grep -RIFq -e "figma/mcp-server-guide" -e "figma-skills-stage" "${out}"
@@ -455,7 +481,7 @@ jobs:
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
             --source "$PWD" \
             --destination "${RUNNER_TEMP}/scratch/target" \
-            execute-template < dot_omp/private_agent/private_readonly_mcp.json.tmpl > "${mcp}"
+            execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
           ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
           echo "- retired global Figma lifecycle remains absent (${{ matrix.os }})" \
             >> "${GITHUB_STEP_SUMMARY}"
@@ -629,8 +655,22 @@ jobs:
           : > "${HOME}/.agents/skills/daily-report/prune-canary"
           : > "${HOME}/.agents/AGENTS.md"
           : > "${HOME}/.agents/CLAUDE.md"
+          mkdir -p "${HOME}/.omp/agent/agents" "${HOME}/.omp/agent/rules"
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
+          : > "${HOME}/.omp/agent/mcp.json"
+          : > "${HOME}/.omp/agent/models.yml"
+          : > "${HOME}/.omp/agent/APPEND_SYSTEM.md"
+          : > "${HOME}/.omp/agent/TITLE_SYSTEM.md"
+          : > "${HOME}/.omp/agent/.env"
+          : > "${HOME}/.omp/agent/agents/claude.md"
+          : > "${HOME}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            : > "${HOME}/.omp/agent/rules/comment-${rule}.md"
+          done
+          # AE1 negative control: omp wrote this, chezmoi never did. The prune set
+          # is per-managed-target precisely so apply cannot reach it.
+          : > "${HOME}/.omp/agent/agent.db"
           : > "${HOME}/.omp/agent/.i-have-adhd-always"
           : > "${HOME}/src/garden.yaml"
           : > "${HOME}/.local/bin/chezmoi-secrets-sync"
@@ -665,6 +705,17 @@ jobs:
           test ! -e "${home}/.agents/AGENTS.md"
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
+          test ! -e "${home}/.omp/agent/AGENTS.md"
+          test ! -e "${home}/.omp/agent/mcp.json"
+          test ! -e "${home}/.omp/agent/models.yml"
+          test ! -e "${home}/.omp/agent/APPEND_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/TITLE_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/.env"
+          test ! -e "${home}/.omp/agent/agents/claude.md"
+          test ! -e "${home}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            test ! -e "${home}/.omp/agent/rules/comment-${rule}.md"
+          done
           test ! -e "${home}/.omp/agent/.i-have-adhd-always"
           test ! -e "${home}/.local/bin/chezmoi-secrets-sync"
           test ! -e "${home}/.local/bin/claude-glm"
@@ -679,7 +730,8 @@ jobs:
 
           # Sibling files must survive.
           test -f "${home}/.agents/skills/daily-report/prune-canary"
-          test -f "${home}/.omp/agent/AGENTS.md"
+          # AE1: what omp wrote survives; only chezmoi's own targets are un-written.
+          test -f "${home}/.omp/agent/agent.db"
           test -f "${home}/.local/bin/canary-sibling"
           test -f "${home}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
 
@@ -698,7 +750,7 @@ jobs:
           cp -a "${src}/." "${out}/"
           rm -rf "${out}/src/github.com" "${out}/.config/chezmoi" "${out}/.cache"
           rm -rf "${out}/.agents/skills/daily-report" \
-                 "${out}/.omp/agent/AGENTS.md" \
+                 "${out}/.omp/agent/agent.db" \
                  "${out}/.omp/agent/.i-have-adhd-always" \
                  "${out}/.local/bin/canary-sibling" \
                  "${out}/.local/bin/docker-credential-gh" \
@@ -766,7 +818,7 @@ jobs:
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           reconciler="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
-          mcp="${out}/omp-mcp.json"
+          mcp="${out}/universal-mcp.json"
           test -f "${external}"
           test ! -e "${external}.render-error.txt"
           ! grep -RIFq -e "figma/mcp-server-guide" -e "figma-skills-stage" "${out}"
@@ -775,7 +827,7 @@ jobs:
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
             --source "${GITHUB_WORKSPACE}" \
             --destination "${RUNNER_TEMP}/scratch/target" \
-            execute-template < dot_omp/private_agent/private_readonly_mcp.json.tmpl > "${mcp}"
+            execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
           ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
           echo "- retired global Figma lifecycle remains absent (macos)" \
             >> "${GITHUB_STEP_SUMMARY}"

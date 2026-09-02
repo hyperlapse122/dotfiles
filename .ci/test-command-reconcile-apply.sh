@@ -22,12 +22,12 @@ echo "code-script"
 EOF
 chmod 0755 "$home_dir/.local/share/chezmoi-command-sources/code"
 
-mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/omp"
-cat >"$home_dir/.local/share/chezmoi-commands/incomplete/omp/omp" <<'EOF'
+mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/agent-browser"
+cat >"$home_dir/.local/share/chezmoi-commands/incomplete/agent-browser/agent-browser" <<'EOF'
 #!/usr/bin/env bash
-echo "omp-binary"
+echo "agent-browser-binary"
 EOF
-chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/omp/omp"
+chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/agent-browser/agent-browser"
 
 mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/foreign-tool"
 cat >"$home_dir/.local/share/chezmoi-commands/incomplete/foreign-tool/foreign-tool" <<'EOF'
@@ -53,16 +53,16 @@ cat >"$scratch/manifest.json" <<EOF
   "schemaVersion": "command-manifest/v1",
   "units": [
     {
-      "id": "omp",
+      "id": "agent-browser",
       "producer": "external",
       "safetyProfile": "native-single-file",
       "proofEligible": true,
       "mutableTree": false,
       "privacy": "public",
       "mode": "0755",
-      "commands": [{ "name": "omp" }],
+      "commands": [{ "name": "agent-browser" }],
       "identity": "v1.0.0",
-      "stagingPath": ".local/share/chezmoi-commands/incomplete/omp"
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/agent-browser"
     },
     {
       "id": "code",
@@ -95,8 +95,8 @@ EOF
 
 "$reconcile_bin" reconcile-all --manifest "$scratch/manifest.json" --home "$home_dir"
 
-[[ -L "$home_dir/.local/bin/omp" ]] || {
-  printf 'Failed: omp is not a symbolic link\n' >&2
+[[ -L "$home_dir/.local/bin/agent-browser" ]] || {
+  printf 'Failed: agent-browser is not a symbolic link\n' >&2
   exit 1
 }
 

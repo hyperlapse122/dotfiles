@@ -1,14 +1,12 @@
 {{- /* agent-plugin-rows.tmpl — validated bash-array rows for a harness plugin reconciler.
 
-       WHY THIS EXISTS. `agents.omp.plugins` was the first declared plugin set, and
-       its reconciler carried the whole validation inline. `agents.claude.plugins`
-       and `agents.agy.plugins` reconcile the SAME neutral `agents.marketplaces`
-       registry against two more harnesses, so the registry contract — the exactly
-       {name, marketplace} row shape, the name charset, the duplicate rejection, the
-       kind/os/container/jetson gates, and the source path each kind resolves to —
-       is stated once here instead of three times. The omp updater keeps its own
-       copy: it additionally validates `requiredPaths` and a bun-checked manifest
-       digest, and rewriting that surface is not this partial's job.
+       WHY THIS EXISTS. `agents.claude.plugins` and `agents.agy.plugins` reconcile
+       the SAME neutral `agents.marketplaces` registry against two harnesses, so the
+       registry contract — the exactly {name, marketplace} row shape, the name
+       charset, the duplicate rejection, the kind/os/container/jetson gates, and the
+       source path each kind resolves to — is stated once here instead of twice.
+       This partial is harness-agnostic: it reads `agents.<harness>` and carries no
+       per-harness branch, so a third consumer needs no change here.
 
        WHAT IT RETURNS. Newline-joined, already-quoted bash array elements for one
        field, or the empty string when the field yields no row. The caller decides

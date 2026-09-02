@@ -12,7 +12,8 @@
 #   - a foreign symlink at the reference path is reclaimed, not written through
 #   - a foreign symlink in the archive-owned directory chain is refused
 #   - the CE external is additive (exact removed from the localArchive block)
-#   - the CE external excludes */plugin.json and */skills/ce-sweep/references/interview.md (prevents chezmoi drift warnings on apply)
+#   - the CE external excludes */skills/ce-sweep/references/interview.md (prevents chezmoi drift warnings on apply)
+#   - the upstream root plugin.json survives the overlay run (agy needs it as its bundle manifest)
 #   - the agent skill externals are exact (no overlay to preserve)
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
@@ -101,7 +102,7 @@ skill="$current/skills/ce-sweep/SKILL.md"
 [ -f "$skill" ] || { echo "ce-sweep skill missing" >&2; exit 1; }
 cmp -s "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill" \
   || { echo "ce-sweep skill changed on first run" >&2; exit 1; }
-[ ! -e "$current/plugin.json" ] || { echo "plugin.json not pruned on first run" >&2; exit 1; }
+[ -e "$current/plugin.json" ] || { echo "root plugin.json missing after first run" >&2; exit 1; }
 for f in email github-issues slack; do
   cmp -s "$scratch/expected-$f.md" "$current/skills/ce-sweep/references/sources/$f.md" \
     || { echo "upstream $f.md changed on first run" >&2; exit 1; }
@@ -193,8 +194,8 @@ printf '%s\n' "$ce_block" | grep -q '^type = "archive"$' \
 if printf '%s\n' "$ce_block" | grep -q '^exact = true$'; then
   echo "rendered CE external is not additive" >&2; exit 1
 fi
-printf '%s\n' "$ce_block" | grep -qxF 'exclude = ["*/plugin.json","*/skills/ce-sweep/references/interview.md"]' \
-  || { echo "rendered CE external missing exclude for plugin.json or interview.md" >&2; exit 1; }
+printf '%s\n' "$ce_block" | grep -qxF 'exclude = ["*/skills/ce-sweep/references/interview.md"]' \
+  || { echo "rendered CE external missing exclude for interview.md" >&2; exit 1; }
 grep -q '^exact = true$' "$rendered_externals" \
   || { echo "agent-skills exact archives unexpectedly changed" >&2; exit 1; }
 

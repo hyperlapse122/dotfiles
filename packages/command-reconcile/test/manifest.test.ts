@@ -7,23 +7,23 @@ describe("parseManifest", () => {
       schemaVersion: "command-manifest/v1",
       units: [
         {
-          id: "omp",
+          id: "agent-browser",
           producer: "external",
           safetyProfile: "native-single-file",
           proofEligible: true,
           mutableTree: false,
           privacy: "public",
           mode: "0755",
-          commands: [{ name: "omp" }],
+          commands: [{ name: "agent-browser" }],
           identity: "v0.35.0",
-          stagingPath: ".local/share/chezmoi-commands/incomplete/omp",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agent-browser",
         },
       ],
     });
     const manifest = parseManifest(json);
     expect(manifest.schemaVersion).toBe("command-manifest/v1");
     expect(manifest.units.length).toBe(1);
-    expect(manifest.units[0]?.id).toBe("omp");
+    expect(manifest.units[0]?.id).toBe("agent-browser");
     expect(manifest.units[0]?.proofEligible).toBe(true);
   });
 

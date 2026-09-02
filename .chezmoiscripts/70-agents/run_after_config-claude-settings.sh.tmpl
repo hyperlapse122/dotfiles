@@ -8,7 +8,7 @@
 # settings.json is deliberately NOT a chezmoi target: Claude Code rewrites it
 # during ordinary use, aoe injects session-tracking hooks into it, and
 # install-claude-plugins writes enabledPlugins and extraKnownMarketplaces. A
-# managed-readonly target would fight all three. run_after (like config-omp-settings)
+# managed-readonly target would fight all three. run_after rather than run_onchange
 # because a live vendor edit does not change a chezmoi source fingerprint, so an
 # onchange script would not re-assert a declared value the tool overwrote until the
 # DATA changed.

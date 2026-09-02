@@ -21,8 +21,8 @@ scratch=$(mktemp -d "$scratch_root/run.XXXXXX")
 cleanup() { rm -rf -- "$scratch"; }
 trap cleanup EXIT
 
-# Renders resolve secrets live, so isolate them from host state exactly as the omp
-# reconcile test does: a scratch HOME plus a stub op answering newline-free.
+# Renders resolve secrets live, so isolate them from host state: a scratch HOME
+# plus a stub op answering newline-free.
 render_config="$scratch/render.toml"
 printf '[data]\n' >"$render_config"
 neg_home="$scratch/neg-home"

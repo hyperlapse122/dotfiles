@@ -10,11 +10,11 @@
 
 #!/usr/bin/env bash
 #
-# Prunes older extracted localArchive versions only after the patch and updater
+# Prunes older extracted localArchive versions only after the patch and updaters
 # have succeeded. The phase-70 location is load-bearing: patch- runs first,
-# update-omp-plugins performs the failure-prone reconcile, and this zz-prune
-# script runs last. A pin-bump failure therefore preserves OMP's known-good
-# registered source.
+# update-claude-plugins and update-agy-plugins perform the failure-prone
+# reconciles, and this zz-prune script runs last. A pin-bump failure therefore
+# leaves each harness pointed at its known-good registered source.
 #
 # Chezmoi's exact=true only cleans within one target path, so sibling version
 # directories under the same parent accumulate without this onchange cleanup.
@@ -36,7 +36,7 @@ for row in "${PRUNES[@]}"; do
 
   # The file phase must have extracted the current version already; if not, do
   # nothing rather than nuking the whole tree. Same defensive skip as the
-  # omp plugin updater.
+  # harness plugin updaters.
   [ -d "$current" ] || continue
 
   for d in "$base_dir"/*; do

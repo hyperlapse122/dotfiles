@@ -119,7 +119,6 @@
 # still skip the trees below (no MX Master 4 inside a container).
 
 {{- if $f.jetson }}
-.local/share/omp-plugins
 .chezmoiscripts/50-linux-kde/*.sh
 {{- end }}
 
@@ -155,7 +154,6 @@
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
 .config/fontconfig
-.local/share/omp-plugins
 {{/* containers skip non-container desktop targets */}}
 .local/share/applications/wezterm.desktop
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
