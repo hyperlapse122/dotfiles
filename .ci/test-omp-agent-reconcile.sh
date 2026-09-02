@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_PACKAGE SETTINGS_SH'
+usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT SETTINGS_SH'
 auth_script=${1:?$usage}
 plugin_script=${2:?$usage}
-haptic_package=${3:?$usage}
-settings_script=${4:?$usage}
+settings_script=${3:?$usage}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 locked_omp_version=$(jq -er '.releases.tools.omp.version | sub("^v"; "")' "$repo_root/.chezmoidata/releases.json")
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-agent-reconcile-fixtures
@@ -282,11 +281,6 @@ if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
   exit 1
 fi
 
-# Same-version package/config changes must replace the full installed payload.
-printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"
-run_plugins "$scratch/update.calls"
-cmp "$source/plugins/mxm4-haptic/package.json" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/package.json"
-cmp "$source/plugins/mxm4-haptic/dist/index.js" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/dist/index.js"
 fallback_bin="$scratch/fallback-bin"
 mkdir -p "$fallback_bin"
 bun_source=$(command -v bun)

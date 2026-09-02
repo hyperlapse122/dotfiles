@@ -100,11 +100,9 @@ jobs:
       - name: Test OMP reconciliation
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/haptic-stub"
           PATH="$RUNNER_TEMP/bin:$PATH" .ci/test-omp-agent-reconcile.sh \
             "$RUNNER_TEMP/auth.sh" \
             "$RUNNER_TEMP/plugins.sh" \
-            "$RUNNER_TEMP/haptic-stub" \
             "$RUNNER_TEMP/settings.sh"
           PATH="$RUNNER_TEMP/bin:$PATH" .ci/test-omp-comment-rules.sh
           .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
