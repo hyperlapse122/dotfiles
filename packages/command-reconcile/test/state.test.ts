@@ -21,12 +21,12 @@ describe("state", () => {
     const testHome = join(tmpdir(), `test-state-${Date.now()}-${Math.random()}`);
     try {
       const state = initEmptyState();
-      state.units["omp"] = { activeIdentity: "v1.0.0" };
+      state.units["agent-browser"] = { activeIdentity: "v1.0.0" };
       await writeState(testHome, state);
 
       const loaded = await readState(testHome);
       expect(loaded.revision).toBe(1);
-      expect(loaded.units["omp"]?.activeIdentity).toBe("v1.0.0");
+      expect(loaded.units["agent-browser"]?.activeIdentity).toBe("v1.0.0");
 
       await writeState(testHome, loaded);
       const reloaded = await readState(testHome);

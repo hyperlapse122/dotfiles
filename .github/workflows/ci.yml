@@ -17,70 +17,12 @@ jobs:
   # only the tooling its own scripts need. `.ci/test-ci-wiring.sh` in `repo meta`
   # is what keeps a gate from being written and wired nowhere.
 
-  comment-rules:
-    name: comment rules (shard ${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # This gate alone was 149s of the old job's 276s: `omp ttsr test` has no batch
-    # mode, so each of its 169 cases pays a fresh process start. Four shards is the
-    # split that puts it under the longest remaining job.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install locked OMP
-        run: |
-          set -euo pipefail
-          artifact_url=$(jq -r '.releases.tools.omp.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
-          artifact_sha=$(jq -r '.releases.tools.omp.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
-          mkdir -p "$RUNNER_TEMP/bin"
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/bin/omp"
-          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/bin/omp" | sha256sum --check -
-          chmod 700 "$RUNNER_TEMP/bin/omp"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run this shard of the comment rule gate
-        run: |
-          set -euo pipefail
-          .ci/test-omp-comment-rules.sh \
-            --shard '${{ matrix.shard }}/4' \
-            --coverage-out "$RUNNER_TEMP/coverage"
-      - name: Upload this shard's rule coverage
-        uses: actions/upload-artifact@v7
-        with:
-          name: comment-rule-coverage-${{ matrix.shard }}
-          path: ${{ runner.temp }}/coverage
-          retention-days: 3
-          if-no-files-found: error
-
-  comment-rule-coverage:
-    name: comment rule coverage
-    needs: comment-rules
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # The gate asserts every declared rule condition matched at least one trigger
-    # fixture. That spans the whole case set, so no single shard can run it; the
-    # shards export their coverage and this job checks the union. It needs no omp.
-    steps:
-      - uses: actions/checkout@v7
-      - name: Download every shard's rule coverage
-        uses: actions/download-artifact@v8
-        with:
-          path: ${{ runner.temp }}/coverage
-          pattern: comment-rule-coverage-*
-      - name: Reconcile rule coverage across shards
-        run: .ci/test-omp-comment-rules.sh --reconcile "$RUNNER_TEMP/coverage"
-
   agent-reconciliation:
     name: agent reconciliation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      # Not for the .ci scripts themselves: the rendered omp plugin updater they
-      # execute verifies its manifest digest with bun.
-      - uses: oven-sh/setup-bun@v2
       - name: Install locked chezmoi
         run: |
           set -euo pipefail
@@ -91,15 +33,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install locked OMP
-        run: |
-          set -euo pipefail
-          artifact_url=$(jq -r '.releases.tools.omp.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
-          artifact_sha=$(jq -r '.releases.tools.omp.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
-          mkdir -p "$RUNNER_TEMP/bin"
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/bin/omp"
-          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/bin/omp" | sha256sum --check -
-          chmod 700 "$RUNNER_TEMP/bin/omp"
       # An empty config so no user state leaks in, and an `op` stub so no template
       # secret read can reach a real vault.
       - name: Render agent reconciler scripts
@@ -111,11 +44,8 @@ jobs:
           chmod 700 "$RUNNER_TEMP/op-stub/op"
           printf '[data]\n' > "$RUNNER_TEMP/empty.toml"
           for item in \
-            ".chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl:auth.sh" \
-            ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
-            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
             ".chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl:claude-settings.sh"
           do
             source_path=${item%%:*}
@@ -125,22 +55,15 @@ jobs:
               --source "$GITHUB_WORKSPACE" \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
-          chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
-            "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
-            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/claude-settings.sh"
+          chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
+            "$RUNNER_TEMP/claude-settings.sh"
       - name: Test agent reconciliation
         run: |
           set -euo pipefail
-          .ci/test-omp-agent-reconcile.sh \
-            "$RUNNER_TEMP/auth.sh" \
-            "$RUNNER_TEMP/plugins.sh" \
-            "$RUNNER_TEMP/settings.sh"
           .ci/test-claude-agy-plugin-reconcile.sh \
             "$RUNNER_TEMP/claude-plugins.sh" \
             "$RUNNER_TEMP/agy-plugins.sh"
           .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
-          .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
-          .ci/check-omp-seat-routing.sh
           .ci/test-agent-instructions.sh
 
   render-gates:
@@ -214,7 +137,6 @@ jobs:
             ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-1password-shortcut.sh.tmpl:gnome-1password-shortcut.sh" \
             ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl:gnome-remove-ibus-source.sh" \
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl:kde-calendar.sh" \
-            ".chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl:build-figma-auth.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:build-settings-reconcile.sh" \
             ".chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl:build-command-reconcile.sh"
           do
@@ -244,7 +166,6 @@ jobs:
             "$RUNNER_TEMP/gnome-1password-shortcut.sh" \
             "$RUNNER_TEMP/gnome-remove-ibus-source.sh"
           .ci/test-kde-calendar-hard-error.sh "$RUNNER_TEMP/kde-calendar.sh"
-          .ci/test-build-figma-auth.sh "$RUNNER_TEMP/build-figma-auth.sh"
           .ci/test-build-settings-reconcile.sh "$RUNNER_TEMP/build-settings-reconcile.sh"
           .ci/test-build-command-reconcile.sh "$RUNNER_TEMP/build-command-reconcile.sh"
           .ci/test-podman-cluster-convergence.sh "$RUNNER_TEMP/setup-podman-cluster.sh"
@@ -389,72 +310,11 @@ jobs:
       - name: Run overlay injection test
         run: .ci/test-compound-engineering-overlays.sh "$GITHUB_WORKSPACE"
 
-  tmux-kitty-passthrough:
-    name: tmux Kitty image passthrough
-    runs-on: ubuntu-latest
-    # Drives a real tmux server and pty; the GitHub default is 6 hours.
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      # The test drives a real tmux server; util-linux script(1) is already on
-      # the runner and provides the pty the transport cases need.
-      - name: Install tmux
-        run: .ci/lib/apt-install.sh tmux tmux
-      - name: Run isolated tmux passthrough test
-        run: .ci/test-tmux-kitty-passthrough.sh
-
-  omp-zsh-completion:
-    name: omp zsh completion install
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install locked chezmoi
-        run: |
-          set -euo pipefail
-          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
-          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
-          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
-          mkdir -p "$RUNNER_TEMP/bin"
-          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
-          chmod 700 "$RUNNER_TEMP/bin/chezmoi"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # The test drives a real zsh so the $fpath prepend is proven to make
-      # compinit resolve _omp, and proven NOT to without it.
-      - name: Install zsh
-        run: .ci/lib/apt-install.sh zsh zsh
-      # Same render shape as the omp-agent-integration job's three call sites:
-      # an empty config so no user state leaks in, and no --destination, which
-      # execute-template does not need (it reads stdin and writes stdout).
-      - name: Render the completion generator
-        run: |
-          set -euo pipefail
-          : > "$RUNNER_TEMP/empty.toml"
-          chezmoi --config "$RUNNER_TEMP/empty.toml" \
-            --source "$GITHUB_WORKSPACE" \
-            execute-template \
-            < .chezmoiscripts/70-agents/run_onchange_after_install-omp-zsh-completion.sh.tmpl \
-            > "$RUNNER_TEMP/omp-zsh-completion.sh"
-      - name: Run isolated completion install test
-        run: .ci/test-omp-zsh-completion.sh "$RUNNER_TEMP/omp-zsh-completion.sh"
-
-  # Every quality gate above must actually RUN. GitHub skips a job whose
-  # `needs:` dependency fails, so checking only named jobs can mistake grey
-  # for green. This always-running aggregate turns failure, cancellation, and
-  # skip in any required job into one stable red required check.
-  #
-  # The job names live in `needs:` and nowhere else -- the step iterates the
-  # results rather than restating each name in an env block and a loop, so
-  # adding a job means editing one list. `.ci/test-ci-wiring.sh` fails when a
-  # job defined in this file is missing from that list.
   delivery:
     name: Final delivery
     if: always()
     needs:
       [
-        comment-rules,
-        comment-rule-coverage,
         agent-reconciliation,
         render-gates,
         fatal-boundary-gates,
@@ -463,8 +323,6 @@ jobs:
         repo-meta,
         ts-workspace,
         rust-crate,
-        tmux-kitty-passthrough,
-        omp-zsh-completion,
         compound-engineering-overlays,
       ]
     runs-on: ubuntu-24.04

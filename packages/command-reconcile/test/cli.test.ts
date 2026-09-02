@@ -15,12 +15,12 @@ describe("command-reconcile cli", () => {
   beforeEach(async () => {
     testHome = join(tmpdir(), `test-cli-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await mkdir(join(testHome, ".local/bin"), { recursive: true });
-    await mkdir(join(testHome, ".local/share/chezmoi-commands/incomplete/omp"), {
+    await mkdir(join(testHome, ".local/share/chezmoi-commands/incomplete/agent-browser"), {
       recursive: true,
     });
     await writeFile(
-      join(testHome, ".local/share/chezmoi-commands/incomplete/omp/omp"),
-      "#!/usr/bin/env bash\necho omp\n",
+      join(testHome, ".local/share/chezmoi-commands/incomplete/agent-browser/agent-browser"),
+      "#!/usr/bin/env bash\necho agent-browser\n",
       { mode: 0o755 },
     );
 
@@ -32,16 +32,16 @@ describe("command-reconcile cli", () => {
           schemaVersion: "command-manifest/v1",
           units: [
             {
-              id: "omp",
+              id: "agent-browser",
               producer: "external",
               safetyProfile: "native-single-file",
               proofEligible: true,
               mutableTree: false,
               privacy: "public",
               mode: "0755",
-              commands: [{ name: "omp" }],
+              commands: [{ name: "agent-browser" }],
               identity: "v1.0.0",
-              stagingPath: ".local/share/chezmoi-commands/incomplete/omp",
+              stagingPath: ".local/share/chezmoi-commands/incomplete/agent-browser",
             },
           ],
         },
@@ -100,7 +100,7 @@ describe("command-reconcile cli", () => {
       "--manifest",
       testManifestPath,
       "--unit",
-      "omp",
+      "agent-browser",
       "--home",
       testHome,
     ]);
@@ -117,14 +117,14 @@ describe("command-reconcile cli", () => {
       "--manifest",
       testManifestPath,
       "--unit",
-      "omp",
+      "agent-browser",
       "--home",
       testHome,
       "--json",
     ]);
     expect(code).toBe(0);
     const parsed = JSON.parse(stdoutData.join(""));
-    expect(parsed.unitId).toBe("omp");
+    expect(parsed.unitId).toBe("agent-browser");
     expect(parsed.status).toBe("activated");
   });
 
@@ -139,7 +139,7 @@ describe("command-reconcile cli", () => {
       testHome,
     ]);
     expect(code1).toBe(0);
-    expect(stdoutData.join("")).toBe("command-reconcile: activated omp\n");
+    expect(stdoutData.join("")).toBe("command-reconcile: activated agent-browser\n");
     expect(stderrData.join("")).toBe("");
 
     stdoutData = [];
@@ -172,12 +172,12 @@ describe("command-reconcile cli", () => {
     ]);
     expect(code).toBe(0);
     const parsed = JSON.parse(stdoutData.join(""));
-    expect(parsed.activated).toEqual(["omp"]);
+    expect(parsed.activated).toEqual(["agent-browser"]);
     expect(parsed.failed).toEqual([]);
   });
 
   it("reconcile-all reports conflicts to stderr", async () => {
-    await writeFile(join(testHome, ".local/bin/omp"), "foreign-binary", { mode: 0o755 });
+    await writeFile(join(testHome, ".local/bin/agent-browser"), "foreign-binary", { mode: 0o755 });
 
     const code = await main([
       "bun",
@@ -189,6 +189,6 @@ describe("command-reconcile cli", () => {
       testHome,
     ]);
     expect(code).toBe(0);
-    expect(stderrData.join("")).toContain("command-reconcile: conflict for omp");
+    expect(stderrData.join("")).toContain("command-reconcile: conflict for agent-browser");
   });
 });

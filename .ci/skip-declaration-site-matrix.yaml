@@ -7,7 +7,7 @@
 # WHAT IT FREEZES. The 130-site inventory of docs/plans/2026-08-13-001-feat-skip-
 # declaration-contract-plan.md, plus the post-inventory WakaTime keyring site
 # present in the current source, is re-audited here: 121 classified source
-# owners plus the eleven settled hard-error owners. Every field below was read
+# owners plus the settled hard-error owners. Every field below was read
 # out of the named template at the named line; anchors are PRE-CONVERSION snapshots,
 # so U6/U7 edits move the code without invalidating the freeze (CI checks the
 # template path, never that the line still reads the same).
@@ -38,8 +38,9 @@
 # that can appear later. A `transient-blocking` row additionally names the registry
 # probe its rendered fingerprint must hash and where that fingerprint block lives.
 #
-# THE FATAL SUBSET IS ELEVEN, AND THE PLAN NOW FIXES ELEVEN. Ten are the plan's
-# GNOME parser and Figma/Kimi build causes; the eleventh,
+# THE FATAL SUBSET IS EIGHT. Retiring the figma-auth build removed its three
+# causes from the plan's original eleven. Seven are the plan's GNOME parser and
+# Kimi build causes; the eighth,
 # `config-kde-calendar/akonadi-query-failed`, is a conditional `return 0` on a path
 # where mariadb is present and the akonadi socket check has already passed, so the
 # SQL read itself failed on an ELIGIBLE host. No declaration form fits it —
@@ -56,8 +57,9 @@
 # run_after_ signature lifecycles; those sites left this surface, so the same 120
 # in-scope owners cannot carry that split without re-labelling rows against
 # skip.sh.tmpl's own definitions. The current source adds one transient-blocking
-# WakaTime keyring site after that inventory. The frozen totals — 121 owners, 11
-# hard errors, 141 instances, 117 + 24 — are CI-enforced.
+# WakaTime keyring site after that inventory. Retiring the omp harness and the
+# figma-auth build removed nine owners (six classified, three hard errors), so the
+# frozen totals are now 119 owners, 8 hard errors, 181 instances — all CI-enforced.
 
 schema: skip-declaration-site-matrix-v1
 frozen_from: 'docs/plans/2026-08-13-001-feat-skip-declaration-contract-plan.md#site-inventory-and-direction-matrix'
@@ -65,10 +67,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 125
-  hard_error_owners: 11
-  rendered_instances: 187
-  phase_local_instances: 120
+  classified_owners: 119
+  hard_error_owners: 8
+  rendered_instances: 181
+  phase_local_instances: 114
   shared_guard_instances: 67
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -89,14 +91,14 @@ plan_contract_scopes:
   70-agents: 3
 
 audited_forms:
-  skip_here: 54
+  skip_here: 50
   skip_step: 31
   done_here: 18
-  not_applicable: 22
+  not_applicable: 20
 
 audited_directions:
-  harmless: 26
-  transient-blocking: 56
+  harmless: 24
+  transient-blocking: 54
   transient-tolerable: 3
 audited_scopes:
   00-tools: 4
@@ -106,8 +108,8 @@ audited_scopes:
   30-linux: 28
   50-linux-gnome: 29
   50-linux-kde: 29
-  60-build: 5
-  70-agents: 3
+  60-build: 2
+  70-agents: 0
   guard-partials: 5
 
 shared_guard_fanout:
@@ -119,11 +121,11 @@ shared_guard_fanout:
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 26
+    audited: 24
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them).'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 56
+    audited: 54
     reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all.'
   - bucket: 'done_here'
     plan: 10
@@ -148,11 +150,23 @@ divergence:
   - bucket: 'scope:50-linux-kde'
     plan: 28
     audited: 29
-    reason: 'One extra step owner beyond the estimate (config-kde-fonts/fc-cache-absent); the akonadi SQL-read failure in the same phase is recorded as the eleventh hard error rather than a classified owner.'
+    reason: 'One extra step owner beyond the estimate (config-kde-fonts/fc-cache-absent); the akonadi SQL-read failure in the same phase is recorded as a hard error rather than a classified owner.'
   - bucket: 'scope:60-build'
     plan: 4
-    audited: 5
-    reason: 'The two build scripts hold five classified owners (two mise preconditions and three unsafe-target guards) beside their six hard errors; the estimate counted four.'
+    audited: 2
+    reason: 'The surviving settings-reconcile build script holds two classified owners beside its hard errors; the estimate counted four, and the figma-auth build that carried the rest has been retired.'
+  - bucket: 'not_applicable'
+    plan: 22
+    audited: 20
+    reason: 'Retiring the omp harness removed the two update-omp-plugins empty-set opt-outs, the only not_applicable owners in the 70-agents phase. Both were data opt-outs on a declared plugin list that no longer exists.'
+  - bucket: 'hard_error_owners'
+    plan: 11
+    audited: 8
+    reason: 'The figma-auth build carried three of the plan''s eleven hard errors (dependency-install, build, missing-dist). Removing that package removed its causes; the surviving settings-reconcile build keeps the equivalent three, and the GNOME parser and KDE Akonadi causes are unchanged.'
+  - bucket: 'scope:70-agents'
+    plan: 3
+    audited: 0
+    reason: 'All three owners in this phase belonged to omp: the zsh-completion capability gate and the plugin updater''s two empty-set opt-outs. The surviving claude and agy reconcilers declare no skip sites, so the phase holds no classified owner.'
   - bucket: 'scope:guard-partials'
     plan: 4
     audited: 5
@@ -1667,50 +1681,6 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl#config-kde-wallpaper-breeze/wallpaper-image-absent'
-  - owner: 'build-figma-auth/mise-absent'
-    scope: '60-build'
-    template: '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl'
-    anchor_line: 25
-    anchor: 'if ! command -v mise >/dev/null 2>&1; then'
-    predicate: '! command -v mise >/dev/null 2>&1'
-    predicate_digest: 'sha256:835ab7195af16d30ba70fa83c3147775b7b52436cc2cbc57c5ea3ff0e41a190f'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'linux-desktop'
-    form: 'skip_here'
-    direction: 'transient-blocking'
-    probe: 'mise-present'
-    fingerprint_placement: 'existing-header-block'
-    instances:
-      - '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl#build-figma-auth/mise-absent'
-  - owner: 'build-figma-auth/install-target-unsafe'
-    scope: '60-build'
-    template: '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl'
-    anchor_line: 77
-    anchor: 'if [[ -L "$TARGET" || ( -e "$TARGET" && ! -f "$TARGET" ) ]]; then'
-    predicate: '[[ -L "$TARGET" || ( -e "$TARGET" && ! -f "$TARGET" ) ]]'
-    predicate_digest: 'sha256:28ed2c9d43476ebeca51d8448a403b79c1c660ee1a9839b8a81e547faf5cbb56'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'linux-desktop'
-    form: 'skip_here'
-    direction: 'harmless'
-    instances:
-      - '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl#build-figma-auth/install-target-unsafe'
-  - owner: 'build-figma-auth/promoted-target-unsafe'
-    scope: '60-build'
-    template: '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl'
-    anchor_line: 84
-    anchor: 'if [[ ! -f "$TARGET" || -L "$TARGET" || ! -x "$TARGET" ]]; then'
-    predicate: '[[ ! -f "$TARGET" || -L "$TARGET" || ! -x "$TARGET" ]]'
-    predicate_digest: 'sha256:95671045c62ceac897d7f53653f6f904c108dfa51de30be36c96fe6b0477b675'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'linux-desktop'
-    form: 'skip_here'
-    direction: 'harmless'
-    instances:
-      - '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl#build-figma-auth/promoted-target-unsafe'
   - owner: 'build-settings-reconcile/mise-absent'
     scope: '60-build'
     template: '.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl'
@@ -1741,48 +1711,6 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl#build-settings-reconcile/install-target-unsafe'
-  - owner: 'install-omp-zsh-completion/omp-absent'
-    scope: '70-agents'
-    template: '.chezmoiscripts/70-agents/run_onchange_after_install-omp-zsh-completion.sh.tmpl'
-    anchor_line: 48
-    anchor: 'if ! command -v omp >/dev/null 2>&1; then'
-    predicate: '! command -v omp >/dev/null 2>&1'
-    predicate_digest: 'sha256:200427f5c75c40cb6b49b41abd885dffea5020719633ce9eca0406ae5f40b611'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'any-host'
-    form: 'skip_here'
-    direction: 'transient-blocking'
-    probe: 'omp-present'
-    fingerprint_placement: 'new-header-block'
-    instances:
-      - '.chezmoiscripts/70-agents/run_onchange_after_install-omp-zsh-completion.sh.tmpl#install-omp-zsh-completion/omp-absent'
-  - owner: 'update-omp-plugins/no-plugins-or-removals'
-    scope: '70-agents'
-    template: '.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl'
-    anchor_line: 125
-    anchor: 'if [[ ${#PLUGINS[@]} -eq 0 && ${#PLUGINS_REMOVED[@]} -eq 0 ]]; then printf ''%s\n'' ''update-omp-plugins: no eligible plugins or removals''; exit 0; fi'
-    predicate: '[[ ${#PLUGINS[@]} -eq 0 && ${#PLUGINS_REMOVED[@]} -eq 0 ]]'
-    predicate_digest: 'sha256:469b8a3293ae9d5c0d70da15c2dee11d4bdbd863ec1cc24d4972fcc563496b94'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'any-host'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl#update-omp-plugins/no-plugins-or-removals'
-  - owner: 'update-omp-plugins/no-eligible-plugins'
-    scope: '70-agents'
-    template: '.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl'
-    anchor_line: 137
-    anchor: 'if [[ ${#PLUGINS[@]} -eq 0 ]]; then printf ''%s\n'' ''update-omp-plugins: no eligible plugins''; exit 0; fi'
-    predicate: '[[ ${#PLUGINS[@]} -eq 0 ]]'
-    predicate_digest: 'sha256:c6b2f885da978a0c96c80a66a2a2d23678af835e1837385e6cb89239cd798d58'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
-    render_profile: 'any-host'
-    form: 'not_applicable'
-    instances:
-      - '.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl#update-omp-plugins/no-eligible-plugins'
   - owner: 'install-system-network/networkmanager-not-running'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl'
@@ -2082,36 +2010,6 @@ hard_errors:
     predicate: 'PARSE_ERROR)'
     predicate_digest: 'sha256:7a8ca916e22dc969742f766edd7e52ce11748b86c77bd4311d45ed83de45d208'
     cause: 'dconf-parser-failure'
-    current_outcome: 'exit-0-skip'
-    required_outcome: 'nonzero-exit-with-diagnostic'
-  - owner: 'build-figma-auth/dependency-install-failed'
-    scope: '60-build'
-    template: '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl'
-    anchor_line: '30'
-    anchor: 'if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then'
-    predicate: '! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile'
-    predicate_digest: 'sha256:7767e99cc5a88a3b3ae9f1d329719101ed72c2433159ef6a9ce6e34841128a8c'
-    cause: 'dependency-install-failure'
-    current_outcome: 'exit-0-skip'
-    required_outcome: 'nonzero-exit-with-diagnostic'
-  - owner: 'build-figma-auth/build-failed'
-    scope: '60-build'
-    template: '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl'
-    anchor_line: '35'
-    anchor: 'if ! mise -C "$SRC/packages/figma-auth" exec -- vp run build; then'
-    predicate: '! mise -C "$SRC/packages/figma-auth" exec -- vp run build'
-    predicate_digest: 'sha256:dd8642802d73d6d6d568e4f9878b269a1a7425a277c996283ab894f0f64667b5'
-    cause: 'build-failure'
-    current_outcome: 'exit-0-skip'
-    required_outcome: 'nonzero-exit-with-diagnostic'
-  - owner: 'build-figma-auth/missing-dist'
-    scope: '60-build'
-    template: '.chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl'
-    anchor_line: '40'
-    anchor: 'if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then'
-    predicate: '[[ ! -f "$DIST" || ! -x "$DIST" ]]'
-    predicate_digest: 'sha256:d9956937e5f86d733324f759124fbb074f31b1ccf8c251adc6b36bc0c5cbafda'
-    cause: 'missing-dist-artifact'
     current_outcome: 'exit-0-skip'
     required_outcome: 'nonzero-exit-with-diagnostic'
   - owner: 'build-settings-reconcile/dependency-install-failed'

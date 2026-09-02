@@ -13,25 +13,25 @@ describe("prune", () => {
     const testHome = join(tmpdir(), `test-prune-${Date.now()}-${Math.random()}`);
     const paths = resolveCommandPaths(testHome);
 
-    const storeV1 = join(paths.storeDir, "omp", "v1.0");
-    const storeV2 = join(paths.storeDir, "omp", "v2.0");
+    const storeV1 = join(paths.storeDir, "agent-browser", "v1.0");
+    const storeV2 = join(paths.storeDir, "agent-browser", "v2.0");
     await mkdir(storeV1, { recursive: true });
     await mkdir(storeV2, { recursive: true });
-    await writeFile(join(storeV1, "omp"), "bin-v1", "utf-8");
-    await writeFile(join(storeV2, "omp"), "bin-v2", "utf-8");
+    await writeFile(join(storeV1, "agent-browser"), "bin-v1", "utf-8");
+    await writeFile(join(storeV2, "agent-browser"), "bin-v2", "utf-8");
 
     const manifest: CommandManifest = {
       schemaVersion: "command-manifest/v1",
       units: [
         {
-          id: "omp",
+          id: "agent-browser",
           producer: "external",
           safetyProfile: "native-single-file",
           proofEligible: true,
           mutableTree: false,
           privacy: "public",
           mode: "0755",
-          commands: [{ name: "omp" }],
+          commands: [{ name: "agent-browser" }],
           identity: "v2.0",
           stagingPath: "path",
         },
@@ -43,7 +43,7 @@ describe("prune", () => {
       revision: 1,
       updatedAt: new Date().toISOString(),
       units: {
-        omp: { activeIdentity: "v2.0" },
+        "agent-browser": { activeIdentity: "v2.0" },
       },
     };
 
@@ -55,7 +55,7 @@ describe("prune", () => {
 
     try {
       const result = await pruneEligibleUnits(paths, manifest, state, mockScanner);
-      expect(result.pruned).toContain("omp/v1.0");
+      expect(result.pruned).toContain("agent-browser/v1.0");
       expect(result.retained.length).toBe(0);
 
       await expect(lstat(storeV1)).rejects.toThrow();
@@ -70,26 +70,26 @@ describe("prune", () => {
     const testHome = join(tmpdir(), `test-prune-live-${Date.now()}-${Math.random()}`);
     const paths = resolveCommandPaths(testHome);
 
-    const storeV1 = join(paths.storeDir, "omp", "v1.0");
-    const storeV2 = join(paths.storeDir, "omp", "v2.0");
+    const storeV1 = join(paths.storeDir, "agent-browser", "v1.0");
+    const storeV2 = join(paths.storeDir, "agent-browser", "v2.0");
     await mkdir(storeV1, { recursive: true });
     await mkdir(storeV2, { recursive: true });
-    const binV1 = join(storeV1, "omp");
+    const binV1 = join(storeV1, "agent-browser");
     await writeFile(binV1, "bin-v1", "utf-8");
-    await writeFile(join(storeV2, "omp"), "bin-v2", "utf-8");
+    await writeFile(join(storeV2, "agent-browser"), "bin-v2", "utf-8");
 
     const manifest: CommandManifest = {
       schemaVersion: "command-manifest/v1",
       units: [
         {
-          id: "omp",
+          id: "agent-browser",
           producer: "external",
           safetyProfile: "native-single-file",
           proofEligible: true,
           mutableTree: false,
           privacy: "public",
           mode: "0755",
-          commands: [{ name: "omp" }],
+          commands: [{ name: "agent-browser" }],
           identity: "v2.0",
           stagingPath: "path",
         },
@@ -101,7 +101,7 @@ describe("prune", () => {
       revision: 1,
       updatedAt: new Date().toISOString(),
       units: {
-        omp: { activeIdentity: "v2.0" },
+        "agent-browser": { activeIdentity: "v2.0" },
       },
     };
 
@@ -113,7 +113,7 @@ describe("prune", () => {
 
     try {
       const result = await pruneEligibleUnits(paths, manifest, state, mockScanner);
-      expect(result.retained).toContain("omp/v1.0");
+      expect(result.retained).toContain("agent-browser/v1.0");
       expect(result.pruned.length).toBe(0);
 
       const st1 = await lstat(storeV1);

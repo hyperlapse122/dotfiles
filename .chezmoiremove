@@ -1,9 +1,8 @@
 {{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
 # The i-have-adhd plugin was retired to a skill-only delivery. Deleting the
-# managed source stopped chezmoi managing the extracted archive and the always-on
-# flag, but already-deployed copies survive until pruned here.
-.local/share/i-have-adhd
-.omp/agent/.i-have-adhd-always
+# managed source stopped chezmoi managing the extracted archive, but an
+# already-deployed copy survives until pruned here. Its ~/.omp/agent flag is
+# pruned by the omp block below, with the rest of that tree's managed targets.
 
 # Orphaned compound-engineering skills. They used to be fetched into
 # ~/.agents/skills/ by the dotagents `[[skills]] name = "*"` wildcard entry;
@@ -37,13 +36,27 @@
 .agents/AGENTS.md
 .agents/CLAUDE.md
 
-# omp reads ~/.omp/agent/AGENTS.md natively and never CLAUDE.md, so the sibling
-# @AGENTS.md mirror that dot_omp/private_agent/readonly_CLAUDE.md used to deploy
-# was pointless: the mirror rule is a repository-documentation convention, not a
-# managed-target one (see the managed instruction targets paragraph in
-# AGENTS.md). Deleting that source stops managing the file but leaves the
-# already-deployed 0444 copy behind — prune it here.
+# The omp harness was retired: dot_omp/ and the four phase-70 reconcilers are
+# gone, so nothing deploys into ~/.omp/agent any more. Every path below was
+# WRITTEN BY CHEZMOI and is un-written here, one entry per managed target rather
+# than a directory entry, because ~/.omp/ also holds state omp itself created —
+# agent.db carries live Figma OAuth tokens — and apply must not reach it. The
+# operator removes the binary and the remaining runtime state by hand; see
+# docs/decommission/omp.md.
+#
+# .env is included: run_after_config-omp-auth.sh.tmpl resolved EXA_API_KEY from
+# 1Password and wrote it there in plaintext, so leaving it behind strands a live
+# credential in a directory nothing manages any more.
+.omp/agent/AGENTS.md
 .omp/agent/CLAUDE.md
+.omp/agent/mcp.json
+.omp/agent/models.yml
+.omp/agent/APPEND_SYSTEM.md
+.omp/agent/TITLE_SYSTEM.md
+.omp/agent/.i-have-adhd-always
+.omp/agent/.env
+.omp/agent/agents
+.omp/agent/rules
 
 # The garden project registry moved from ~/src/garden.yaml to
 # ~/.config/garden/garden.yaml so ~/src holds only project trees. Deleting the
@@ -133,19 +146,17 @@ src/garden.yaml
 # applied between the guard's introduction and its removal simply takes this
 # as a no-op.
 #
-# The omp-installed copy under ~/.omp/plugins is not chezmoi-managed; the
-# phase-70 reconciler uninstalls it from the agents.omp.pluginsRemoved
-# declaration. The plugin's runtime state was never deployed either — prune it
-# like the runtime-created .agents/skills/ce-* entries above.
+# The omp-installed copy under ~/.omp/plugins was never chezmoi-managed and is
+# the operator's to remove. The plugin's runtime state was never deployed either
+# — prune it like the runtime-created .agents/skills/ce-* entries above.
 .local/share/omp-plugins/plugins/unmanaged-repo-guard
 .local/state/unmanaged-repo-guard
 
-# The mxm4-haptic container skip was restored to the whole .local/share/omp-plugins
-# tree now that unmanaged-repo-guard is gone. Prune any stranded marketplace.json
-# left behind in containers by earlier applies when the skip was narrowed.
-{{- if $f.container }}
+# The local h82-dotfiles marketplace was omp's alone and its source is gone, so
+# the catalog chezmoi deployed is un-written here on every host rather than only
+# in containers. Anything else under ~/.local/share/omp-plugins/ was installed by
+# omp, not by chezmoi, and belongs to the operator checklist.
 .local/share/omp-plugins/.omp-plugin/marketplace.json
-{{- end }}
 
 # Solaar was retired, so dot_config/solaar/rules.yaml.tmpl
 # no longer has a source. Deleting that source stopped chezmoi managing it but

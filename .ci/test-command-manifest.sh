@@ -80,8 +80,8 @@ assert macos_data["schemaVersion"] == "command-manifest/v1"
 linux_units = {u["id"]: u for u in linux_data["units"]}
 macos_units = {u["id"]: u for u in macos_data["units"]}
 
-assert "omp" in linux_units
-assert "omp" in macos_units
+assert "agent-browser" in linux_units
+assert "agent-browser" in macos_units
 assert "docker-credential-secretservice" in linux_units
 assert "docker-credential-secretservice" not in macos_units
 assert "docker-credential-osxkeychain" in macos_units
@@ -95,7 +95,7 @@ for u in linux_data["units"] + macos_data["units"]:
 rejects unknown-producer 'producer: external' 'producer: madeUpProducer' 'unknown producer'
 rejects unknown-safety 'safetyProfile: native-single-file' 'safetyProfile: unknownProfile' 'unknown safetyProfile'
 rejects windows-platform 'platforms: [linux, macos]' 'platforms: [linux, macos, windows]' 'unsupported platform'
-rejects duplicate-command 'name: agent-browser' $'name: agent-browser\n        - name: omp' 'duplicate public command'
+rejects duplicate-command 'name: agent-browser' $'name: agent-browser\n        - name: agent-browser' 'duplicate public command'
 rejects path-traversal 'name: agent-browser' 'name: ../../bin/evil' 'path traversal'
 rejects missing-release-tool 'tool: agent-browser' 'tool: nonExistentTool' 'undeclared release tool'
 rejects secret-mode-mismatch 'mode: "0700"' 'mode: "0755"' 'secret unit'
