@@ -76,9 +76,11 @@ Figma skill or transaction paths.
 
 ## 5. Credential boundary — do not remove or rotate
 
-- Do not delete `~/.omp/agent/agent.db`. It can contain existing Figma OAuth
-  credentials in OMP's native credential store.
-- Do not remove `packages/figma-auth/`. It remains the on-demand OAuth utility
-  for a project that configures the Figma MCP.
+- **Superseded for omp.** `~/.omp/agent/agent.db` and `packages/figma-auth/` were
+  protected here while the omp harness was managed. Both have since been retired;
+  [`omp.md`](omp.md) owns their removal and orders the Figma revocation before the
+  database is deleted. Follow that document instead of this section for omp.
+- The surviving harnesses keep their own Figma credential stores. Do not delete
+  those while the harness is in use.
 - Do not revoke credentials or reauthorize as part of this cleanup. Project
   repositories own any future Figma MCP configuration and skills.

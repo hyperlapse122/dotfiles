@@ -148,7 +148,7 @@ systemctl --user status openlogi-agent.service
 
 Verify that the haptic stack functions alongside OpenLogi:
 1. Ensure `openlogi-agent` and `mxm4-hapticd` are both running.
-2. Send a desktop notification or trigger an OMP event:
+2. Send a desktop notification:
    ```sh
    notify-send "OpenLogi Migration" "Haptic coexistence check"
    ```
