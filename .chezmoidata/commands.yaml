@@ -500,28 +500,6 @@ commands:
       legacy:
         path: .local/bin/tokscale
 
-    figma-auth:
-      producer: build
-      safetyProfile: native-single-file
-      proofEligible: true
-      mode: "0755"
-      platforms: [linux, macos]
-      gate: "!container"
-      fingerprintGlobs:
-        - mise.toml
-        - packages/package.json
-        - packages/bun.lock
-        - packages/bunfig.toml
-        - packages/vite.config.ts
-        - packages/figma-auth/package.json
-        - packages/figma-auth/tsconfig.json
-        - packages/figma-auth/vite.config.ts
-        - packages/figma-auth/src/**
-      commands:
-        - name: figma-auth
-      legacy:
-        path: .local/bin/figma-auth
-
     settings-reconcile:
       producer: build
       safetyProfile: native-single-file
