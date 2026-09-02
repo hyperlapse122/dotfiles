@@ -98,7 +98,7 @@
 {{-   if hasKey $removedSeen $id -}}{{ fail (printf "update-omp-plugins: duplicate removed OMP plugin %q" $id) }}{{- end -}}
 {{-   $_ := set $removedSeen $id true -}}
 {{-   $removedRows = append $removedRows (printf "  %q" (printf "%s\t%s" $name $market)) -}}
-{{-   if and (not (hasKey $survivingMarketplaces $market)) (not (hasKey $removedMarketplaceSeen $market)) -}}
+{{-   if and (not (hasKey $marketplaces $market)) (not (hasKey $removedMarketplaceSeen $market)) -}}
 {{-     $_ := set $removedMarketplaceSeen $market true -}}
 {{-     $removedMarketplaceRows = append $removedMarketplaceRows (printf "  %q" $market) -}}
 {{-   end -}}

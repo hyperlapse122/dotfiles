@@ -13,7 +13,7 @@ const realFetch = globalThis.fetch;
 function stubRoutes(routes: Record<string, () => Response>): string[] {
   const requests: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = String(input);
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     requests.push(url);
     for (const [prefix, respond] of Object.entries(routes)) {
       if (url.startsWith(prefix)) return respond();

@@ -57,7 +57,13 @@ export type ResolverKind =
   | "gitRef";
 
 /** The vendor endpoints the vendorManifest kind knows how to read. */
-export type VendorName = "winbox" | "onePassword" | "flutter" | "android" | "claude" | "antigravity";
+export type VendorName =
+  | "winbox"
+  | "onePassword"
+  | "flutter"
+  | "android"
+  | "claude"
+  | "antigravity";
 
 /**
  * Asset selection for one tool.
