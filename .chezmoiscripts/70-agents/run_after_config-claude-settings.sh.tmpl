@@ -1,11 +1,37 @@
+{{- $settings := .agents.claude.settings -}}
+{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- if ne .chezmoi.os "windows" -}}
 #!/usr/bin/env bash
+# Asserts the declared Claude Code settings leaves (agents.claude.settings in
+# .chezmoidata/agents.yaml) into the live ~/.claude/settings.json on every apply.
+#
+# settings.json is deliberately NOT a chezmoi target: Claude Code rewrites it
+# during ordinary use, aoe injects session-tracking hooks into it, and
+# install-claude-plugins writes enabledPlugins and extraKnownMarketplaces. A
+# managed-readonly target would fight all three. run_after (like config-omp-settings)
+# because a live vendor edit does not change a chezmoi source fingerprint, so an
+# onchange script would not re-assert a declared value the tool overwrote until the
+# DATA changed.
+#
+# Ownership boundary: each declared path names a LEAF, and only that leaf is
+# written, so a key this declaration does not name -- a sibling, another member of
+# an enclosing record, or a whole top-level key -- survives untouched. Removing a
+# path from the declaration therefore does NOT restore anything; it only stops the
+# assertion. Paths owned by aoe and install-claude-plugins are rejected at render
+# time by claude-settings-validate.tmpl, not merely avoided by convention.
 set -euo pipefail
 
+{{ if eq (len $settings) 0 -}}
+printf '%s\n' 'config-claude-settings: agents.claude.settings declares no paths; nothing to assert.' >&2
+exit 0
+{{- else -}}
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 SETTINGS_DIR="$(dirname "$SETTINGS")"
 
+# A silent skip is the failure mode this reconciler cannot afford: the declaration
+# is authoritative, so a user who sees nothing believes the values are pinned.
 if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' 'config-claude-settings: jq is unavailable; declared Claude Code settings were NOT asserted.' >&2
   exit 0
 fi
 
@@ -15,26 +41,101 @@ decode_b64() {
   printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D
 }
 
-DECLARED="$(decode_b64 '{{ .agents.claude.settings | toJson | b64enc }}')"
+DECLARED="$(decode_b64 '{{ $settings | toJson | b64enc }}')"
 
-tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
-trap 'rm -f "$tmp"' EXIT
-chmod 0600 "$tmp"
+# Inode plus mtime, portable across GNU and BSD stat. Used to prove the target did
+# not move under us between the read and the rename.
+file_identity() {
+  stat -c '%i %Y' "$1" 2>/dev/null || stat -f '%i %m' "$1" 2>/dev/null
+}
 
-if [[ -f "$SETTINGS" ]] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
-  jq --argjson declared "$DECLARED" '. + $declared' "$SETTINGS" > "$tmp"
-  if cmp -s "$tmp" "$SETTINGS"; then
+live='{}'
+identity_before=''
+if [[ -e "$SETTINGS" ]]; then
+  # A malformed live file is preserved, never rebuilt: under leaf semantics a
+  # rebuild from the declaration alone would drop everything the other writers own.
+  if ! jq -e 'type == "object"' "$SETTINGS" >/dev/null 2>&1; then
+    cp -a "$SETTINGS" "${SETTINGS}.bak"
+    printf 'config-claude-settings: %s is not a JSON object; copied it to %s.bak and asserted nothing. Repair or remove it, then re-apply.\n' "$SETTINGS" "$SETTINGS" >&2
     exit 0
   fi
-else
-  if [[ -f "$SETTINGS" ]]; then
-    cp -a "$SETTINGS" "${SETTINGS}.bak"
-  fi
-  printf '%s\n' "$DECLARED" > "$tmp"
+  live="$(cat "$SETTINGS")"
+  identity_before="$(file_identity "$SETTINGS")"
 fi
+
+scratch="$(mktemp "${TMPDIR:-/tmp}/claude-settings-classify.XXXXXX")"
+tmp=''
+cleanup() { rm -f -- "$scratch" ${tmp:+"$tmp"}; }
+trap cleanup EXIT HUP INT TERM
+
+# One classification pass per declared leaf. getpath raises on an ancestor that
+# holds a scalar or an array exactly as setpath does, so the probe is wrapped: a
+# bare getpath would kill the whole stream before any blocked path could be
+# reported. `blocked` therefore travels as a state on the stream, not as an abort.
+jq -rn --argjson live "$live" --argjson declared "$DECLARED" '
+  $declared
+  | to_entries[]
+  | . as $e
+  | ($e.key | split(".")) as $p
+  | (try {found: ($live | getpath($p))} catch {blocked: true}) as $probe
+  | (if ($probe | has("blocked")) then "blocked"
+     elif $probe.found == $e.value then "converged"
+     else "drift" end) as $state
+  | "\($state)\t\($e.key)"
+' >"$scratch"
+
+examined=0
+drifted=0
+blocked=()
+while IFS=$'\t' read -r state path; do
+  [[ -n $path ]] || continue
+  examined=$((examined + 1))
+  case "$state" in
+    drift) drifted=$((drifted + 1)) ;;
+    blocked) blocked+=("$path") ;;
+  esac
+done <"$scratch"
+
+# A truncated read is the one failure the loop cannot see: every iteration that DID
+# run succeeded. Comparing against the render-time count turns that into a failure.
+if [[ $examined -ne {{ len $settings }} ]]; then
+  printf 'config-claude-settings: classified %d of {{ len $settings }} declared paths; the stream ended early and nothing was asserted.\n' "$examined" >&2
+  exit 1
+fi
+
+if [[ ${#blocked[@]} -gt 0 ]]; then
+  printf 'config-claude-settings: an ancestor of %s holds a scalar or an array, so the leaf cannot be written; asserted nothing. Repair that key in %s, then re-apply.\n' "${blocked[*]}" "$SETTINGS" >&2
+  exit 0
+fi
+
+# Convergence is the success case, not a skip: exit silently and write nothing, so
+# a second apply on unchanged source changes zero bytes.
+if [[ $drifted -eq 0 ]]; then
+  exit 0
+fi
+
+# Staged in the target's own directory so it inherits that directory's SELinux type
+# and the replacement is a same-filesystem rename. Staging under TMPDIR would strip
+# the label (see docs/solutions/security-issues/selinux-user-scope-agent-config-protection.md).
+tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
 chmod 0600 "$tmp"
+jq -n --argjson live "$live" --argjson declared "$DECLARED" '
+  reduce ($declared | to_entries[]) as $e ($live; setpath($e.key | split("."); $e.value))
+' >"$tmp"
+
+# Another owner may have written between the read and now; its change is not ours
+# to discard, and nothing else would restore it.
+if [[ -e "$SETTINGS" && "$(file_identity "$SETTINGS")" != "$identity_before" ]]; then
+  printf 'config-claude-settings: %s changed while this apply staged its replacement; discarded the staged file and asserted nothing. The next apply retries.\n' "$SETTINGS" >&2
+  exit 0
+fi
+
 mv -f "$tmp" "$SETTINGS"
+tmp=''
 if command -v restorecon >/dev/null 2>&1; then
+  restorecon -F "$SETTINGS_DIR" 2>/dev/null || true
   restorecon -F "$SETTINGS" 2>/dev/null || true
 fi
+printf 'config-claude-settings: asserted %d of %d declared settings paths\n' "$drifted" "$examined"
+{{- end }}
 {{- end }}

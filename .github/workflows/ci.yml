@@ -46,7 +46,8 @@ jobs:
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
-            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh"
+            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
+            ".chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl:claude-settings.sh"
           do
             source_path=${item%%:*}
             output_name=${item#*:}
@@ -57,7 +58,7 @@ jobs:
           done
           chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
             "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
-            "$RUNNER_TEMP/settings.sh"
+            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/claude-settings.sh"
       # Same locked render shape as the step above: an empty config so no user
       # state leaks in, and the `op` stub so no template secret read can reach a
       # real vault. Each fixture rewrites the render-time desktop fact in its own
@@ -110,6 +111,7 @@ jobs:
           .ci/test-claude-agy-plugin-reconcile.sh \
             "$RUNNER_TEMP/claude-plugins.sh" \
             "$RUNNER_TEMP/agy-plugins.sh"
+          .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           PATH="$RUNNER_TEMP/bin:$PATH" .ci/test-omp-comment-rules.sh
           .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
           .ci/test-podman-cluster-convergence.sh "$RUNNER_TEMP/setup-podman-cluster.sh"

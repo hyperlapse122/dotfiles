@@ -106,7 +106,26 @@ agents:
         status_bar: enabled
         clipboard: enabled
   claude:
-    settings: {}
+    # Claude Code setting VALUES asserted into the live ~/.claude/settings.json by
+    # .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl, validated at
+    # render time by .chezmoitemplates/claude-settings-validate.tmpl.
+    #
+    # Each key is a dot-separated path to a LEAF in settings.json. The reconciler
+    # asserts that leaf alone, so sibling keys and the other members of the records
+    # above it survive. settings.json is NOT a chezmoi target: Claude Code, aoe, and
+    # install-claude-plugins all write it during normal use.
+    #
+    # Declaring a path makes it authoritative — a UI change to it is reverted on the
+    # next apply. Leave a value undeclared to keep it adjustable; theme, editorMode
+    # and verbose are deliberately absent for that reason. hooks, enabledPlugins and
+    # extraKnownMarketplaces belong to other writers and are rejected at render time.
+    settings:
+      language: Korean
+      skipDangerousModePermissionPrompt: true
+      modelSettings.claude-opus-5.effortLevel: high
+      inputNeededNotifEnabled: true
+      agentPushNotifEnabled: true
+      remoteControlAtStartup: false
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     pluginsRemoved: []

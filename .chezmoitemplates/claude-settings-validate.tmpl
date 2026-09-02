@@ -1,0 +1,52 @@
+{{- /*
+claude-settings-validate.tmpl — fail the apply LOUDLY on a bad Claude Code
+settings declaration, before the provisioner renders a single line of script.
+
+The config-claude-settings provisioner is this partial's caller. Validation lives
+here rather than inline in that script for the same reason omp-settings-validate.tmpl
+does: a guard written inline can silently exist for one consumer only.
+
+Every check here aborts the whole chezmoi command. None of them can be satisfied
+by a runtime skip, because a declaration this file rejects is wrong on every host.
+
+  1. SHAPE. agents.claude.settings is a map. An EMPTY map is valid and means
+     "manage nothing" — the reconciler renders a notice and no assertion loop —
+     so it returns here rather than failing. That keeps the declaration's
+     pre-adoption state a legal state.
+  2. PATH GRAMMAR. Each key is a dot-separated path to a LEAF in settings.json.
+     Every dot is a separator, so a segment must be non-empty: a leading,
+     trailing, or doubled dot is rejected. Segments admit hyphens and digits
+     because model ids are path segments (modelSettings.claude-opus-5.effortLevel).
+     A settings key whose OWN name contains a dot has no expressible form here and
+     is indistinguishable from an extra segment, so it is out of scope rather than
+     detectable — see the plan's Scope Boundaries.
+  3. NO OTHER WRITER'S NAMESPACE. hooks belongs to aoe, which injects session
+     tracking at session start; enabledPlugins and extraKnownMarketplaces belong
+     to install-claude-plugins. Asserting into any of them would fight a writer
+     that rewrites the same file during ordinary use, and the loser would be
+     whichever ran last. A comment saying "do not declare these" is a convention
+     the next edit breaks; this is the check that holds.
+
+  {{ includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- if not $ctx -}}{{- fail "claude-settings-validate.tmpl: ctx is required" -}}{{- end -}}
+{{- $settings := .settings -}}
+{{- if not (kindIs "map" $settings) -}}
+{{-   fail (printf "config-claude-settings: agents.claude.settings must be a map, got %s" (kindOf $settings)) -}}
+{{- end -}}
+{{- /* Segments start with a letter and admit digits, underscore and hyphen. The
+   trailing hyphen in the class is a literal, not a range. This regexp rejects an
+   empty path, an empty segment, and any segment carrying a character a
+   settings.json key cannot hold. */ -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9_-]*([.][A-Za-z][A-Za-z0-9_-]*)*$" -}}
+{{- $ownedElsewhere := list "hooks" "enabledPlugins" "extraKnownMarketplaces" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch $pathRe $path) -}}
+{{-     fail (printf "config-claude-settings: %q is not a valid settings path; use dot-separated segments naming a leaf in settings.json, each segment non-empty and starting with a letter" $path) -}}
+{{-   end -}}
+{{-   $first := index (splitList "." $path) 0 -}}
+{{-   if has $first $ownedElsewhere -}}
+{{-     fail (printf "config-claude-settings: declared path %s addresses %s, which another writer owns (hooks -> aoe session tracking; enabledPlugins and extraKnownMarketplaces -> install-claude-plugins). Asserting it would fight that writer on every apply" $path $first) -}}
+{{-   end -}}
+{{- end -}}
