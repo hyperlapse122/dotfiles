@@ -24,9 +24,9 @@ executable = true
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "sha256")) }}'
 size = {{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "size")) }}
 
-{{- /* ---------- antigravity (agy) ---------- */ -}}
+{{- /* ---------- antigravity (agy) ---------- */}}
 
-{{- $agyLockArtifact := dict "ctx" . "tool" "agy" "platform" "auto" -}}
+{{- $agyLockArtifact := dict "ctx" . "tool" "agy" "platform" "auto" }}
 
 [agy]
 type = "archive-file"
