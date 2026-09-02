@@ -17,6 +17,9 @@ trap 'rm -f "$tmp"' EXIT
 
 if [[ -f "$SETTINGS" ]] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
   jq --argjson declared "$DECLARED" '. + $declared' "$SETTINGS" > "$tmp"
+  if cmp -s "$tmp" "$SETTINGS"; then
+    exit 0
+  fi
 else
   if [[ -f "$SETTINGS" ]]; then
     cp -a "$SETTINGS" "${SETTINGS}.bak"

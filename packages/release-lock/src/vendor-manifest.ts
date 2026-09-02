@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { ResolutionError } from "./github.js";
 import { ALL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
-export { ResolutionError };
 
+export { ResolutionError };
 /**
  * Vendor manifest resolution — the non-registry sources resolved at render
  * time today:
@@ -95,17 +95,15 @@ async function resolveAntigravity(name: string, spec: ToolSpec): Promise<LockedT
   const artifacts: Partial<Record<PlatformKey, LockedArtifact>> = {};
   let version: string | undefined;
 
-  const settled = await Promise.allSettled(
+  const manifests = (await Promise.all(
     ALL_PLATFORMS.map((platform) =>
       fetchJson(spec.source, `${spec.source}/${platform.os}_${platform.arch}.json`),
     ),
-  );
+  )) as AntigravityManifest[];
 
   for (const [index, platform] of ALL_PLATFORMS.entries()) {
-    const result = settled[index]!;
-    if (result.status === "rejected") throw result.reason;
+    const manifest = manifests[index]!;
     const platformId = `${platform.os}_${platform.arch}`;
-    const manifest = result.value as AntigravityManifest;
     if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {
       throw new ResolutionError(spec.source, `${name}: ${platformId} manifest missing fields`);
     }
@@ -123,7 +121,11 @@ async function resolveAntigravity(name: string, spec: ToolSpec): Promise<LockedT
     };
   }
 
-  return { kind: spec.kind, source: spec.source, version: version as string, artifacts };
+  if (version === undefined) {
+    throw new ResolutionError(spec.source, `${name}: no platforms resolved`);
+  }
+
+  return { kind: spec.kind, source: spec.source, version, artifacts };
 }
 
 async function resolveWinbox(name: string, spec: ToolSpec): Promise<LockedTool> {

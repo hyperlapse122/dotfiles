@@ -38,7 +38,7 @@ structurally because every consumer reads the same one lock key (R7).
 {{- $tool := .tool -}}
 {{- $field := "version" -}}
 {{- if hasKey . "field" -}}{{- $field = .field -}}{{- end -}}
-{{- if not (or (eq $field "version") (eq $field "url") (eq $field "sha256") (eq $field "sha512") (eq $field "size") (eq $field "emulated")) -}}
+{{- if not (has $field (list "version" "url" "sha256" "sha512" "size" "emulated")) -}}
 {{-   fail (printf "release-lock-ref.tmpl: unsupported field %q" $field) -}}
 {{- end -}}
 {{- $optional := false -}}

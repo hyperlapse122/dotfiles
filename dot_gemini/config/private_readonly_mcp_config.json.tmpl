@@ -7,12 +7,8 @@
 {{- else -}}
 {{- $e := dict "serverUrl" .url -}}
 {{- if hasKey . "headers" -}}
-{{- $h := dict -}}
-{{- range $k, $v := get . "headers" -}}
-{{- $resolved := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $v "ctx" $) | fromJson -}}
-{{- $h = set $h $k $resolved -}}
-{{- end -}}
-{{- $e = set $e "headers" $h -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson -}}
+{{- $e = set $e "headers" $headers -}}
 {{- end -}}
 {{- $servers = set $servers .name $e -}}
 {{- end -}}
