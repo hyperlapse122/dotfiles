@@ -152,7 +152,6 @@ export const REGISTRY: Registry = {
       `agent-browser-${os}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}`,
   },
 
-
   codegraph: {
     kind: "githubRelease",
     source: "colbymchenry/codegraph",
