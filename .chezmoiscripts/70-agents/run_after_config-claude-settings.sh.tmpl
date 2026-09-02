@@ -1,0 +1,28 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+
+if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
+mkdir -p "$(dirname "$SETTINGS")"
+
+DECLARED='{{ .agents.claude.settings | toJson }}'
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+if [[ -f "$SETTINGS" ]] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
+  jq --argjson declared "$DECLARED" '. + $declared' "$SETTINGS" > "$tmp"
+else
+  if [[ -f "$SETTINGS" ]]; then
+    cp -a "$SETTINGS" "${SETTINGS}.bak"
+  fi
+  printf '%s\n' "$DECLARED" > "$tmp"
+fi
+chmod 0644 "$tmp"
+mv -f "$tmp" "$SETTINGS"
+{{- end }}

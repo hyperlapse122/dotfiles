@@ -73,9 +73,8 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
      supported Ubuntu packages, JetPack, the 1Password desktop app, and desktop
      configuration. This is not a generic Ubuntu host path.
    - **macOS**: the cross-platform dotfiles, Homebrew-managed tools (installed
-     by the [`20-darwin`](.chezmoiscripts/20-darwin) Homebrew reconciler), the
-     `mxm4-hapticd` LaunchAgent ([`Library/`](Library)), VSCodium user state,
-     and the Winbox-from-1Password importer.
+     by the [`20-darwin`](.chezmoiscripts/20-darwin) Homebrew reconciler),
+     VSCodium user state, and the Winbox-from-1Password importer.
 
    Before the first apply on a shared host, create
    `/etc/dotfiles-shared-host`. The marker declares the host shared and enables
@@ -274,11 +273,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   into `~/.agents/skills/`.
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
-- [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust sources, built on apply by
-  `.chezmoiscripts/60-build/run_after_build-mxm4-haptic.sh.tmpl` into
-  `~/.local/bin/`. Linux builds all three binaries: `mxm4-hapticd`,
-  `mxm4-haptic-notify`, and `mxm4-haptic`; macOS builds only the daemon and
-  client.
+- [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust haptic client sources and utilities.
 - [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`).
   `run_onchange_after_build-figma-auth.sh.tmpl` compiles the standalone
   `figma-auth` utility into `~/.local/bin/figma-auth`. This repository
@@ -292,26 +287,19 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   template (MCP servers) and any locally-authored personal skill under
   `dot_agents/skills/<name>/` (e.g. `daily-report`), deployed to
   `~/.agents/skills/<name>/`.
-- [`Library/`](Library) — macOS-only `~/Library` payload (the `mxm4-hapticd`
-  LaunchAgent).
+- [`Library/`](Library) — macOS-only `~/Library` payloads.
 
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).
 
 ## Managed agent harnesses
 
-This repository manages only **omp**. Retired harness sources (Claude Code,
-Codex, and the earlier Pi, Kimi Code, oh-my-openagent, and AGY) are
-removed from source state; that does not delete already-deployed host files,
-installed binaries, or provider-side OAuth grants.
+This repository manages **Claude Code** (`claude`), **Google Antigravity CLI** (`agy`), and **Oh My Pi** (`omp`).
 
-OMP settings are asserted per key from `.chezmoidata/agents.yaml`. The declared
-policy keeps progress, token usage, and tmux scrollback behavior stable. It
-also enables structural search and computer control. Codex-user and
-Claude-user/project compatibility skill scans stay disabled so OMP uses the
-canonical `~/.agents/skills/` and repository `.agents/skills/` roots without
-duplicate discovery.
-
+- **Single source of truth:** `.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
+- **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time.
+- **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills` and `~/.gemini/skills` pointing to `~/.agents/skills`.
+- **SELinux Type Enforcement:** On Fedora, `system/linux/selinux/dotfiles_protected_agent_configs.cil` enforces read-open / write-locked security (`unconfined_t` has full read-only access while writes and deletes are strictly restricted to `chezmoi_t`).
 The following cleanup is optional. Remove only the listed Figma data if the
 retired harnesses are no longer in use:
 

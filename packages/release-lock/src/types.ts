@@ -13,7 +13,9 @@ export interface LockedArtifact {
   readonly url: string;
   /** Lowercase hex sha256, or null when the source publishes no digest. */
   readonly sha256: string | null;
-  /** Byte size of the artifact, where the source publishes one. */
+  /** Lowercase hex sha512 where the source publishes only sha512 (antigravity). */
+  readonly sha512?: string | null;
+  /** Byte size of the artifact, where the source publishes one (claude). */
   readonly size?: number;
   /** Present when this target borrows the amd64 build and runs it emulated. */
   readonly emulated?: true;
@@ -55,7 +57,7 @@ export type ResolverKind =
   | "gitRef";
 
 /** The vendor endpoints the vendorManifest kind knows how to read. */
-export type VendorName = "winbox" | "onePassword" | "flutter" | "android";
+export type VendorName = "winbox" | "onePassword" | "flutter" | "android" | "claude" | "antigravity";
 
 /**
  * Asset selection for one tool.

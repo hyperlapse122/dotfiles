@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, omp, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
        static-musl build. Shared by the agent-browser and omp externals below so the
@@ -10,6 +10,33 @@
   {{- end -}}
 {{- end -}}
 
+{{- /* ---------- claude ---------- */ -}}
+
+{{- $claudeLockArtifact := dict "ctx" . "tool" "claude" "platform" "auto" "musl" $isMuslLinux -}}
+
+[claude]
+type = "file"
+targetPath = '.local/share/chezmoi-commands/incomplete/claude/claude'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "url")) }}'
+executable = true
+
+[claude.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "sha256")) }}'
+size = {{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArtifact (dict "field" "size")) }}
+
+{{- /* ---------- antigravity (agy) ---------- */ -}}
+
+{{- $agyLockArtifact := dict "ctx" . "tool" "agy" "platform" "auto" -}}
+
+[agy]
+type = "archive-file"
+targetPath = '.local/share/chezmoi-commands/incomplete/agy/agy'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "url")) }}'
+path = 'antigravity'
+executable = true
+
+[agy.checksum]
+sha512 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "sha512")) }}'
 {{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
        ("Browser automation CLI for AI agents"), tracked at the newest release.
        The release ships bare per-platform binaries (agent-browser-<os>-<arch>,

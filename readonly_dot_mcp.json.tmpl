@@ -1,0 +1,23 @@
+{{- /* ~/.mcp.json — universal MCP configuration rendered from .chezmoidata/agents.yaml.
+       Consumed by Claude Code, Antigravity, and tool orchestrators. */ -}}
+{{- $servers := dict -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "claude") | fromJson -}}
+{{- range $mcpServers -}}
+{{- $entry := dict -}}
+{{- if eq .transport "stdio" -}}
+{{- $entry = set $entry "command" .command -}}
+{{- $entry = set $entry "args" .args -}}
+{{- if hasKey . "env" -}}
+{{- $entry = set $entry "env" .env -}}
+{{- end -}}
+{{- else -}}
+{{- $entry = set $entry "type" "http" -}}
+{{- $entry = set $entry "url" .url -}}
+{{- if hasKey . "headers" -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson -}}
+{{- $entry = set $entry "headers" $headers -}}
+{{- end -}}
+{{- end -}}
+{{- $servers = set $servers .name $entry -}}
+{{- end -}}
+{{ toPrettyJson "  " (dict "mcpServers" $servers) }}

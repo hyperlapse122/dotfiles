@@ -39,6 +39,12 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           "$HOME/.claude.json"* \
           "$HOME/.mcp.json" \
           "$HOME/.claude/settings.json" \
+          "$HOME/.claude/skills" \
+          "$HOME/.gemini/antigravity-cli/mcp.json" \
+          "$HOME/.gemini/config/mcp_config.json" \
+          "$HOME/.gemini/skills" \
+          "$HOME/.agents/skills" \
+          "$HOME/.agents/plugins" \
           "$HOME/.codex/skills" \
           "$HOME/.local/bin/chezmoi" \
           2>/dev/null || true

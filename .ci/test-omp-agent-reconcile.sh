@@ -39,8 +39,8 @@ mkdir -p "$home/.omp/agent" "$fake_bin"
 cat >"$home/.omp/agent/.env" <<'EOF'
 # user-owned values stay byte-identical
 OTHER_TOKEN='keep me'
-OPENROUTER_API_KEY=stale
-OPENROUTER_API_KEY="duplicate"
+EXA_API_KEY=stale
+EXA_API_KEY="duplicate"
 EOF
 chmod 0644 "$home/.omp/agent/.env"
 
@@ -52,10 +52,10 @@ run_auth() {
 run_auth
 
 [[ $(stat -c '%a' "$auth") == 600 ]]
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
+grep -F 'EXA_API_KEY="dummy-secret"' "$auth" >/dev/null
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
-
 # Inode identity is the signal that no `mv` happened; this job runs on every
 # apply, so an unconditional rename rewrites a credential file forever.
 auth_inode_before=$(stat -c '%i' "$auth")
@@ -64,7 +64,7 @@ run_auth
   printf 'config-omp-auth: a converged re-run republished %s\n' "$auth" >&2
   exit 1
 }
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
 [[ $(stat -c '%a' "$auth") == 600 ]]
 
 # The skip path is the only place left that can narrow a mode someone widened.
@@ -85,16 +85,16 @@ EOF
 chmod 0644 "$missing"
 run_auth "$missing"
 [[ $(grep -c '^OTHER_TOKEN=' "$missing") -eq 1 ]]
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$missing") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$missing") -eq 1 ]]
 ambient="$scratch/ambient.env"
 printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
 run_auth "$ambient"
 grep -F 'AMBIENT_TOKEN=keep' "$ambient" >/dev/null
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$ambient") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$ambient") -eq 1 ]]
 
 # The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
-: >"$expected_names"
+printf 'EXA_API_KEY\n' >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
   grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names" || true
@@ -859,7 +859,7 @@ auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
 models_yml='dot_omp/private_agent/private_readonly_models.yml.tmpl'
-closed_set='OPENROUTER_API_KEY'
+closed_set='OPENROUTER_API_KEY, EXA_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a
 # variable into the environment omp loads for every session, nor silently drop
