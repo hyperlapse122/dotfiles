@@ -35,10 +35,9 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
       if command -v restorecon >/dev/null 2>&1; then
         printf 'selinux-policies: relabeling protected paths...\n'
         # Every filecon root the module declares, plus the entrypoint stores.
-        # ~/.claude and ~/.gemini are relabelled WHOLE: their harness writes new
-        # files there constantly, and a file created inside a labelled directory
-        # inherits that directory's type, so the recursive pass is what carries
-        # the label onto anything a rename left behind as user_home_t.
+        # Only explicit config files, skill roots, and plugin state are relabelled.
+        # Whole harness homes ($HOME/.claude, $HOME/.gemini) are deliberately NOT
+        # relabelled to prevent hardlink leaks into shared caches (e.g. Bun cache).
         restorecon -RFv \
           "$HOME/.codex/config.toml" \
           "$HOME/.codex/skills" \
@@ -46,16 +45,18 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           "$HOME/.agents/plugins" \
           "$HOME/.claude.json"* \
           "$HOME/.mcp.json" \
-          "$HOME/.claude" \
-          "$HOME/.gemini" \
+          "$HOME/.claude/settings.json" \
+          "$HOME/.claude/skills" \
+          "$HOME/.claude/plugins/installed_plugins.json" \
+          "$HOME/.claude/plugins/known_marketplaces.json" \
+          "$HOME/.claude/plugins/marketplaces" \
+          "$HOME/.gemini/config" \
+          "$HOME/.gemini/skills" \
           "$HOME/.local/bin/chezmoi" \
           "$HOME/.local/bin/claude" \
           "$HOME/.local/bin/agy" \
           "$HOME/.local/lib/commands/store/claude" \
           "$HOME/.local/lib/commands/store/agy" \
-          "$HOME/.local/bin/tokscale" \
-          "$HOME/.local/lib/commands/store/tokscale" \
-          "$HOME/.local/share/mise/installs/npm-tokscale" \
           2>/dev/null || true
       fi
 
@@ -73,14 +74,14 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
       while read -r pid; do
         [[ -r "/proc/$pid/attr/current" ]] || continue
         case "$(tr -d '\0' <"/proc/$pid/attr/current")" in
-        *:claude_t:* | *:agy_t:* | *:tokscale_t:* | *:chezmoi_t:*) ;;
+        *:claude_t:* | *:agy_t:* | *:chezmoi_t:*) ;;
         *) stale+=("$pid") ;;
         esac
-      done < <(pgrep -x -u "$(id -u)" 'claude|agy|tokscale' 2>/dev/null || true)
+      done < <(pgrep -x -u "$(id -u)" 'claude|agy' 2>/dev/null || true)
 
       if [[ ${#stale[@]} -gt 0 ]]; then
         printf 'selinux-policies: WARNING %s\n' \
-          'Restart any claude/agy/tokscale process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
+          'Restart any claude/agy process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
         for pid in "${stale[@]}"; do
           # ps pads lstart to a fixed width under LC_ALL=C but not under every
           # locale, so trim rather than relying on a leading space in the format.
@@ -91,7 +92,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
         done
       else
         printf 'selinux-policies: %s\n' \
-          'policy reinstalled; no claude/agy/tokscale process is left in a stale domain. Restart any agent session started earlier if one appears later.'
+          'policy reinstalled; no claude/agy process is left in a stale domain. Restart any agent session started earlier if one appears later.'
       fi
     fi
   fi

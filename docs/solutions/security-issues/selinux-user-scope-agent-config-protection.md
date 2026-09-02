@@ -208,68 +208,47 @@ By granting `(file (read getattr open map ioctl lock execute execute_no_trans wa
 | Type | Paths | Writers |
 |---|---|---|
 | `protected_agent_config_t` | `~/.codex/config.toml`, `~/.codex/skills/**`, `~/.agents/skills/**`, `~/.agents/plugins/**` | `chezmoi_t` |
-| `claude_config_t` | `~/.claude.json*`, `~/.mcp.json`, `~/.claude/**` | `chezmoi_t`, `claude_t` |
-| `gemini_config_t` | `~/.gemini/**` | `chezmoi_t`, `agy_t` |
+| `claude_config_t` | `~/.claude.json*`, `~/.mcp.json`, `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/plugins/installed_plugins.json`, `~/.claude/plugins/known_marketplaces.json`, `~/.claude/plugins/marketplaces/**` | `chezmoi_t`, `claude_t` |
+| `gemini_config_t` | `~/.gemini/config/**`, `~/.gemini/skills` | `chezmoi_t`, `agy_t` |
 
-A harness needs its own domain because it rewrites its own tree during ordinary use — session transcripts, plugin cache, the enabled-plugin set, OAuth credentials — so a chezmoi-only writer would break the tool the label protects. `~/.claude/skills` and `~/.gemini/skills` take their harness's type but resolve into `~/.agents/skills`, so the canonical skills root stays chezmoi-only through the symlink.
+A harness needs its own domain because it rewrites its own configuration during ordinary use — the enabled-plugin set, marketplace registries, settings — so a chezmoi-only writer would break the tool the label protects. Non-config runtime state (`plugins/cache`, `plugins/data`, `sessions`, `projects`, `history.jsonl`, `daemon*`, `backups`, and `~/.gemini/antigravity-cli/**`) falls back to `user_home_t`. `~/.claude/skills` and `~/.gemini/skills` take their harness's type but resolve into `~/.agents/skills`, so the canonical skills root stays chezmoi-only through the symlink.
 
 Domain transitions are granted from `unconfined_domain_type` rather than from one named source: these binaries are launched from a login shell, a chezmoi script, another agent, and IDE helpers, and a launcher with no transition rule is denied the exec outright rather than merely running unconfined. Entrypoints are labelled on the real files in the versioned command store (`~/.local/lib/commands/store/<tool>/<version>/<tool>`), because `~/.local/bin/<tool>` is a symlink and an exec label on a symlink never applies.
 
-## The tokscale exception (2026-09-02)
+## The fourth surprise: `restorecon` on whole harness homes leaks labels via hardlinks into shared package caches (2026-09-02)
 
-After the split landed, `tokscale` — a token-usage meter installed through mise — began failing against `~/.gemini`:
+When `.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl` ran `restorecon -RFv "$HOME/.claude"`, it relabelled **inodes**, not paths. Claude Code installs plugins using Bun, and Bun populates `node_modules` with **hardlinks** into the shared global cache at `~/.bun/install/cache/`. Because hardlinked files share the same inode, the recursive relabel stamped `claude_config_t` onto thousands of inodes in `~/.bun/install/cache/` and unrelated project trees.
+
+Subsequent `bun install` or `mise install` invocations running in `unconfined_t` failed with `EACCES` when attempting to link or write to those cached package files:
 
 ```
-avc: denied { write } for pid=70851 comm="tokscale" name="conversations"
+type=AVC msg=audit(...): avc: denied { link } for pid=... comm="bun.native"
+  name="package.json" dev="dm-0" ino=246909
   scontext=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023
-  tcontext=unconfined_u:object_r:gemini_config_t:s0 tclass=dir permissive=0
-avc: denied { write } for pid=70851 comm="tokscale" name="…db-wal" … tclass=file
+  tcontext=unconfined_u:object_r:claude_config_t:s0 tclass=file permissive=0
 ```
 
-It opens Antigravity's SQLite conversation store at `~/.gemini/antigravity-cli/conversations/<uuid>.db`. SQLite in WAL mode writes the `-wal` and `-shm` sidecars and needs the containing directory writable **even when the caller only reads rows**, so the denials are the cost of reading that database, not of changing Antigravity's configuration.
+### The Fix
 
-The fix is a second module, `system/linux/selinux/dotfiles_tokscale_gemini_access.cil`, not an edit to the base module: installing it is the entire record of the exception and removing it revokes the access. It declares `tokscale_t`, joins the base module's `dotfiles_agent_domain` and `dotfiles_agent_exec` attributes so it keeps the same unconfined privileges the other domains keep, and grants write on `gemini_config_t` alone. `claude_config_t` and `protected_agent_config_t` stay read-only to it.
-
-Two details decided the shape:
-
-**The entrypoint is not where you would look first.** `~/.local/bin/tokscale` is a symlink to a chezmoi-deployed bash wrapper, which execs `mise exec`, which runs node, which execs the real ELF under `~/.local/share/mise/installs/npm-tokscale/<version>/…/bin/tokscale`. The ELF is the process the audit log names. Both the wrapper and the ELF carry the entrypoint label, so the domain is entered wherever the chain starts; mise and node have no transition of their own and simply inherit it.
-
-**The grant is wider than the need.** `gemini_config_t` covers all of `~/.gemini`, so tokscale can now also write `~/.gemini/config/mcp_config.json` — an MCP server definition, and therefore a code-execution surface. Narrowing it would take a separate type for the conversations subtree; until that exists, the trust placed in tokscale is the trust placed in that file. This is recorded in the module header rather than left implicit.
-
-## The third surprise: a `filecon` alone does not survive an upgrade
-
-Writing the tokscale module exposed the same latent defect in the original three domains. Both the command store and the mise tree key their directories by version:
-
-```
-~/.local/lib/commands/store/claude/2.1.258/claude
-~/.local/share/mise/installs/npm-tokscale/4.15.0/…/bin/tokscale
-```
-
-The `filecon` specs match any version, but a `filecon` only takes effect when `restorecon` runs — and the apply script runs `restorecon` when the **policy** changes, not when the harness does. An upgrade writes the binary into a directory that has never been relabelled, where it inherits the parent's type. The transition would not fire, and `claude`, `agy` or `tokscale` would drop back to `unconfined_t` with its own configuration now denied to it: the original bug, reintroduced silently by a routine version bump.
-
-Named file transitions close it at creation time instead:
-
-```
-(typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t)
-(typetransition chezmoi_t gconf_home_t file "agy" agy_exec_t)
-(typetransition chezmoi_t gconf_home_t file "tokscale" tokscale_exec_t)
-(typetransition chezmoi_t data_home_t file "tokscale" tokscale_exec_t)
-```
-
-Only `chezmoi_t` creates these files, and only under the home types that hold `~/.local/lib` and `~/.local/share`, so the rule cannot capture an unrelated file that merely shares the name. CI asserts each one: dropping a transition fails the suite.
+1. **Shrink the protected surface to exact config and manifest boundaries**:
+   - `claude_config_t`: `~/.claude.json*`, `~/.mcp.json`, `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/plugins/installed_plugins.json`, `~/.claude/plugins/known_marketplaces.json`, `~/.claude/plugins/marketplaces/**`.
+   - `gemini_config_t`: `~/.gemini/config/**`, `~/.gemini/skills`.
+   - Non-config trees (`plugins/cache`, `plugins/data`, `sessions`, `projects`, `history.jsonl`, `daemon*`, `backups`, `~/.gemini/antigravity-cli/**`) default to `user_home_t`.
+2. **Relabel only narrow paths**: Pass discrete paths to `restorecon` in the apply script; never pass `$HOME/.claude` or `$HOME/.gemini` recursively.
+3. **Retire the tokscale exception module (`dotfiles_tokscale_gemini_access.cil`)**: With `~/.gemini/antigravity-cli` on `user_home_t`, `tokscale` runs as an ordinary `unconfined_t` utility and accesses Antigravity's conversation SQLite store without requiring write permissions on `gemini_config_t`, eliminating previous excess trust over `~/.gemini/config/mcp_config.json`.
 
 ## Prevention
 
-- Restart every agent session after a policy change, and never take `audit2allow`'s advice for these denials: a `unconfined_t` → `claude_config_t` write grant silently removes the whole boundary. Check the denial's scontext first — `unconfined_t` on an agent's own file means a stale process, not a missing rule.
-- Replace `filesystem associate` explicitly whenever a type is made attribute-free, and assert it: a missing `associate` looks exactly like a successful apply.
-- Never add a protected config type to `file_type` (or any other base-policy attribute). That is the one edit that silently turns the module back into a no-op; `.ci/test-selinux-protected-configs.sh` rejects it, and where `secilc` and `python3-setools` are available it also compiles the module against a stub carrying the blanket `files_unconfined_type` grant and asserts each writer/non-writer pair directly.
-- Declare a broad `filecon` for a directory a harness owns end to end (`HOME_DIR/\.claude(/.*)?`) and targeted regexes for the flat files and shared roots. A file created inside a labelled directory inherits that directory's type, so the recursive spec is also what keeps new harness state protected.
-- Ensure the read set is granted to `unconfined_domain_type` so scripts inside protected directories remain executable, watchable, and mappable.
-- For credential-bearing templates (`~/.mcp.json`), prefix template names with `private_` (`private_readonly_dot_mcp.json.tmpl`) so POSIX mode is `0600` alongside SELinux confinement.
-- When reconciling live settings files via shell scripts, create staging files inside the target directory (`$SETTINGS_DIR/.settings.XXXXXX`) with mode `0600` and invoke `restorecon -F` after rename to prevent temporary filesystem label stripping.
-- Verify policy compilation with `secilc` in `.ci/test-selinux-protected-configs.sh` and validate skip behavior in `.ci/check-skip-declarations.sh`.
+- **Never protect package manager caches**: Package caches (like `node_modules` in plugin directories) use hardlinks into machine-wide caches. Placing a cache under a protected SELinux type leaks that type onto shared inodes during `restorecon`.
+- **Narrow `filecon` specifications**: Protect only exact configuration files, skill symlinks/roots, and plugin manifest/marketplace trees. Let runtime cache, log, and session directories fall back to `user_home_t`.
+- **Pass only discrete paths to `restorecon`**: Never pass whole-home harness directories (`$HOME/.claude`, `$HOME/.gemini`) recursively to `restorecon`.
+- **Never add a protected config type to `file_type`**: Doing so silently removes confinement because `unconfined_t` can write all `file_type` objects.
+- **Maintain upgrade-durability named transitions**: When entrypoint binaries reside in versioned paths, named file transitions (`typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t`) ensure newly installed binaries inherit the entrypoint type at creation time before `restorecon` runs.
+- **Verify policy compilation and boundaries in CI**: `.ci/test-selinux-protected-configs.sh` asserts the absence of whole-tree `filecon` and `restorecon` entries, compiles CIL modules with `secilc`, and tests the write matrix with `setools`.
 
 ## Related Issues
 
 - Plan: `docs/plans/2026-08-31-1258-feat-selinux-protected-agent-configs-plan.md`
 - Plan: `docs/plans/2026-09-02-1124-feat-manage-claude-antigravity-harnesses-selinux-protection-plan.md`
+- Plan: `docs/plans/2026-09-02-1637-fix-selinux-narrow-protected-agent-configs-plan.md`
+- Issue: https://github.com/hyperlapse122/dotfiles/issues/338
