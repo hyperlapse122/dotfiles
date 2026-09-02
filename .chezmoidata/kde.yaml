@@ -56,17 +56,38 @@
 # ---------------------------------------------------------------------------
 # PER-SETTING RATIONALE
 #
-# kdeglobals [KDE] — Global Theme
-#   Fedora KDE Spin. Puts the desktop on Plasma's default Breeze Global
-#   Theme with automatic day/night switching (Plasma 6.5+):
-#     LookAndFeelPackage      = org.kde.breezedark.desktop  (initial theme)
-#     DefaultLightLookAndFeel = org.kde.breeze.desktop       (daytime theme)
-#     DefaultDarkLookAndFeel  = org.kde.breezedark.desktop   (night theme)
-#     AutomaticLookAndFeel    = true
-#   Priority-1 behaviour is automatic Breeze Dark + Breeze Light switching, timed
-#   off the Night Light schedule. On Plasma < 6.5 the auto-switch keys are unknown
-#   and silently ignored, so the LookAndFeelPackage pin alone leaves the desktop on
-#   Breeze Dark -- the priority-2 fallback -- without any extra handling here.
+# kdeglobals [KDE] / [Icons] — Global Theme, pinned dark at every hour
+#   Fedora KDE Spin. The desktop is Breeze Dark at all hours; there is no
+#   day/night switching:
+#     LookAndFeelPackage      = org.kde.breezedark.desktop  (last-applied package)
+#     DefaultLightLookAndFeel = org.kde.breezedark.desktop  (switcher's day slot)
+#     DefaultDarkLookAndFeel  = org.kde.breezedark.desktop  (switcher's night slot)
+#     AutomaticLookAndFeel    = false
+#     [Icons] Theme           = breeze-dark
+#   AutomaticLookAndFeel is OFF because the switcher is what rewrites the colour
+#   data on a schedule (see the colour note below) -- leaving it on would undo any
+#   pin at the next day/night transition. Both Default*LookAndFeel slots still name
+#   the DARK package, so a switcher re-enabled by hand or by a future Plasma default
+#   cannot paint light either. The runner writes keys and cannot delete them, which
+#   is why the light slot is repointed rather than dropped.
+#
+#   [Icons] Theme belongs HERE because the icon theme is a plain NAME key, and
+#   ~/.config/kdeglobals (which carries no [Icons] group of its own) outranks the
+#   ~/.config/kdedefaults/kdeglobals layer that supplies it today.
+#
+#   THE COLOUR SCHEME IS DELIBERATELY NOT A ROW HERE, and this is the one thing to
+#   know before "fixing" it. [General] ColorScheme is only a LABEL the Colors KCM
+#   reads; on a dark desktop that key is absent from ~/.config/kdeglobals entirely.
+#   What Plasma actually paints from is the EXPANDED [Colors:Button],
+#   [Colors:View], [Colors:Window], [Colors:Header], [Colors:Selection],
+#   [Colors:Tooltip], [Colors:Complementary], [ColorEffects:Disabled] and
+#   [ColorEffects:Inactive] groups written into that same file. Those group names
+#   carry a colon, which the runner's group-segment allowlist rejects -- and could
+#   not admit anyway, because the rendered rows are colon-delimited. Writing the
+#   label without the data would leave a name disagreeing with the colours beside
+#   it. The colours are therefore owned by
+#   .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-colorscheme-dark.sh.tmpl,
+#   which applies them with plasma-apply-colorscheme in a live Plasma session.
 #   Applies after re-login.
 #
 # powerdevilrc [<profile>][Display] — idle screen dimming
@@ -147,11 +168,13 @@
 #   Applies after KWin reconfigures or re-login.
 kde:
   settings:
-    # kdeglobals: Breeze Global Theme, automatic day/night
+    # kdeglobals: Breeze Dark pinned at every hour, no day/night switching.
+    # The colour scheme is NOT here on purpose — config-kde-colorscheme-dark owns it.
     - { file: kdeglobals, group: KDE, key: LookAndFeelPackage, type: string, value: org.kde.breezedark.desktop }
-    - { file: kdeglobals, group: KDE, key: DefaultLightLookAndFeel, type: string, value: org.kde.breeze.desktop }
+    - { file: kdeglobals, group: KDE, key: DefaultLightLookAndFeel, type: string, value: org.kde.breezedark.desktop }
     - { file: kdeglobals, group: KDE, key: DefaultDarkLookAndFeel, type: string, value: org.kde.breezedark.desktop }
-    - { file: kdeglobals, group: KDE, key: AutomaticLookAndFeel, type: bool, value: true }
+    - { file: kdeglobals, group: KDE, key: AutomaticLookAndFeel, type: bool, value: false }
+    - { file: kdeglobals, group: Icons, key: Theme, type: string, value: breeze-dark }
 
     # powerdevilrc: no idle screen dimming in all three profiles
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayWhenIdle, type: bool, value: false }
