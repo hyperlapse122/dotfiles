@@ -4,12 +4,68 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 rules_dir="$repo_root/dot_omp/private_agent/rules"
 fixtures_dir="$repo_root/.ci/fixtures/comment-checker"
-locked_version=$(jq -er '.releases.tools.omp.version | sub("^v"; "")' "$repo_root/.chezmoidata/releases.json")
-actual_version=$(omp --version)
-[[ $actual_version == "omp/$locked_version" ]] || {
-  printf 'expected omp/%s, got %s\n' "$locked_version" "$actual_version" >&2
-  exit 1
+
+# Every case here spawns a fresh `omp` process, and `omp ttsr test` has no batch
+# mode, so the suite costs about 150s serially -- more than half of the CI job it
+# used to sit in. CI therefore splits it across matrix shards. Three modes:
+#
+#   (no arguments)                  run every case, then reconcile in-process
+#   --shard i/n --coverage-out DIR  run this shard's cases; write coverage to DIR
+#   --reconcile DIR                 union every shard's coverage under DIR and check it
+#
+# Reconcile is a separate mode because the coverage check below spans the WHOLE
+# case set: it requires every declared rule condition to have matched at least one
+# trigger fixture, which no single shard can observe. Reconcile needs no `omp`, so
+# its CI job installs nothing.
+#
+# Cases are assigned to shards by a running index, not by rule family: c-family holds
+# 44 of the 86 alias cases, so a family split would leave one shard carrying half the
+# suite. The index must therefore be reproducible, which is why the family loop
+# below iterates a sorted list rather than an associative array's hash order.
+shard_index=''
+shard_total=''
+coverage_out=''
+reconcile_dir=''
+
+usage() {
+  printf 'usage: %s [--shard i/n --coverage-out DIR] | [--reconcile DIR]\n' "${0##*/}" >&2
+  exit 2
 }
+
+while (($#)); do
+  case ${1-} in
+    --shard)
+      [[ ${2-} =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || usage
+      shard_index=${BASH_REMATCH[1]}
+      shard_total=${BASH_REMATCH[2]}
+      ((shard_index <= shard_total)) || usage
+      shift 2
+      ;;
+    --coverage-out)
+      [[ -n ${2-} ]] || usage
+      coverage_out=$2
+      shift 2
+      ;;
+    --reconcile)
+      [[ -n ${2-} ]] || usage
+      reconcile_dir=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+
+if [[ -n $reconcile_dir ]]; then
+  [[ -z $shard_index && -z $coverage_out ]] || usage
+  [[ -d $reconcile_dir ]] || {
+    printf 'comment-rule test failed: %s is not a directory\n' "$reconcile_dir" >&2
+    exit 1
+  }
+elif [[ -n $shard_index || -n $coverage_out ]]; then
+  # Neither half is useful alone: a shard that runs a subset without exporting its
+  # coverage makes that subset unreconcilable.
+  [[ -n $shard_index && -n $coverage_out ]] || usage
+fi
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-comment-rules
 mkdir -p -- "$scratch_root"
@@ -23,8 +79,97 @@ fail() {
   exit 1
 }
 
+# Compare, per rule, the conditions omp declared against the ones a trigger
+# fixture actually matched. `$1` holds one defined.<rule>/matched.<rule> pair per
+# rule; a missing file is itself a failure, because it means no fixture ever
+# triggered that rule.
+compare_coverage() {
+  local data_dir=$1 rule_file name
+  for rule_file in "$rules_dir"/*.md; do
+    name=$(basename "$rule_file")
+    sort -u "$data_dir/defined.$name" >"$scratch/defined.sorted"
+    sort -u "$data_dir/matched.$name" >"$scratch/matched.sorted"
+    diff -u "$scratch/defined.sorted" "$scratch/matched.sorted"
+  done
+}
+
+if [[ -n $reconcile_dir ]]; then
+  # Each shard drops a marker naming its i/n. Collecting exactly n distinct markers
+  # of a single n is what proves none was dropped -- a silently missing shard would
+  # otherwise reconcile a partial union and pass.
+  declare -A shard_seen=()
+  shard_expected=''
+  shard_count=0
+  for shard_dir in "$reconcile_dir"/*/; do
+    [[ -d $shard_dir ]] || continue
+    [[ -f "${shard_dir}shard" ]] || fail "no shard marker in ${shard_dir%/}"
+    IFS=/ read -r marker_index marker_total <"${shard_dir}shard"
+    [[ $marker_index =~ ^[1-9][0-9]*$ && $marker_total =~ ^[1-9][0-9]*$ ]] ||
+      fail "malformed shard marker in ${shard_dir%/}"
+    if [[ -z $shard_expected ]]; then
+      shard_expected=$marker_total
+    elif [[ $marker_total != "$shard_expected" ]]; then
+      fail "coverage mixes a $shard_expected-way and a $marker_total-way split"
+    fi
+    [[ -z ${shard_seen[$marker_index]-} ]] || fail "shard $marker_index appears twice"
+    shard_seen[$marker_index]=1
+    shard_count=$((shard_count + 1))
+  done
+  [[ -n $shard_expected ]] || fail "no shard coverage found under $reconcile_dir"
+  for ((i = 1; i <= shard_expected; i++)); do
+    [[ -n ${shard_seen[$i]-} ]] || fail "shard $i/$shard_expected is missing"
+  done
+
+  mkdir -p -- "$scratch/merged"
+  for rule_file in "$rules_dir"/*.md; do
+    name=$(basename "$rule_file")
+    for kind in defined matched; do
+      rm -f -- "$scratch/merged/$kind.$name"
+      for shard_dir in "$reconcile_dir"/*/; do
+        [[ -f "$shard_dir$kind.$name" ]] || continue
+        cat -- "$shard_dir$kind.$name" >>"$scratch/merged/$kind.$name"
+      done
+    done
+  done
+  compare_coverage "$scratch/merged"
+
+  # The shards partition the case set; they never overlap it. A duplicated label
+  # means two shards claimed the same case, so the split is not a partition.
+  cat -- "$reconcile_dir"/*/cases >"$scratch/all-cases"
+  [[ -s $scratch/all-cases ]] || fail 'shards recorded no cases'
+  duplicates=$(sort "$scratch/all-cases" | uniq -d)
+  [[ -z $duplicates ]] || fail "shards ran these cases more than once: $(tr '\n' ' ' <<<"$duplicates")"
+
+  printf 'omp comment rule coverage reconciled across %s shards, %s cases\n' \
+    "$shard_expected" "$(wc -l <"$scratch/all-cases" | tr -d ' ')"
+  exit 0
+fi
+
+locked_version=$(jq -er '.releases.tools.omp.version | sub("^v"; "")' "$repo_root/.chezmoidata/releases.json")
+actual_version=$(omp --version)
+[[ $actual_version == "omp/$locked_version" ]] || {
+  printf 'expected omp/%s, got %s\n' "$locked_version" "$actual_version" >&2
+  exit 1
+}
+
+# Assign the next case to a shard. Every case is counted whether or not this shard
+# runs it, so the same case lands on the same shard in every process.
+case_index=0
+# Created up front: a shard that owns no cases at all (n above the case count)
+# would otherwise leave the export with nothing to copy.
+: >"$scratch/cases"
+shard_owns_next_case() {
+  case_index=$((case_index + 1))
+  if [[ -z $shard_index ]]; then
+    return 0
+  fi
+  (((case_index - 1) % shard_total == shard_index - 1))
+}
+
 run_case() {
   local label=$1 rule=$2 file=$3 source=$4 tool=$5 path=$6 expected=$7 output count
+  shard_owns_next_case || return 0
+  printf '%s\n' "$label" >>"$scratch/cases"
   if [[ $source == tool ]]; then
     output=$(omp ttsr test --rule "$rule" --file "$file" --source tool --tool "$tool" --path "$path" --json)
   else
@@ -83,7 +228,7 @@ declare -A scope_fixture=(
   [ocaml]='ocaml/trigger-todo.ml'
   [python-docstring]='python-docstring/trigger-docstring.py'
 )
-for family in "${!aliases[@]}"; do
+for family in $(printf '%s\n' "${!aliases[@]}" | sort); do
   for alias in ${aliases[$family]}; do
     if [[ $alias == Dockerfile ]]; then
       path=Dockerfile
@@ -138,13 +283,11 @@ run_snippet 'empty hash comment' "$(rule hash)" '#' tool write case.py trigger
 run_snippet 'empty dash comment' "$(rule dash)" '--' tool write case.sql trigger
 
 # Registration can silently drop one invalid condition. Require every declared
-# condition to have matched at least one trigger fixture.
-for rule_file in "$rules_dir"/*.md; do
-  name=$(basename "$rule_file")
-  sort -u "$scratch/defined.$name" >"$scratch/defined.sorted"
-  sort -u "$scratch/matched.$name" >"$scratch/matched.sorted"
-  diff -u "$scratch/defined.sorted" "$scratch/matched.sorted"
-done
+# condition to have matched at least one trigger fixture. A shard sees only its own
+# slice, so it exports instead and `--reconcile` runs this over the union.
+if [[ -z $shard_index ]]; then
+  compare_coverage "$scratch"
+fi
 
 # Installed rules must be discovered from the deployed location, not only via
 # --rule. chezmoi strips the readonly_ attribute prefix, so deploy the rules
@@ -173,6 +316,8 @@ done
 
 run_deployed() {
   local label=$1 family=$2 file=$3 tool=$4 path=$5 expected=$6 output provider
+  shard_owns_next_case || return 0
+  printf '%s\n' "$label" >>"$scratch/cases"
   output=$(cd "$deployed_home/project" \
     && deployed_omp ttsr test --file "$file" --source tool --tool "$tool" --path "$path" --json)
   provider=$(jq -r --arg want "comment-$family" \
@@ -210,4 +355,19 @@ for name in comment-c-family comment-hash comment-dash comment-html comment-ocam
   fi
 done
 
-printf 'omp comment rule tests passed\n'
+if [[ -n $shard_index ]]; then
+  mkdir -p -- "$coverage_out"
+  printf '%s/%s\n' "$shard_index" "$shard_total" >"$coverage_out/shard"
+  cp -- "$scratch/cases" "$coverage_out/cases"
+  for rule_file in "$rules_dir"/*.md; do
+    name=$(basename "$rule_file")
+    for kind in defined matched; do
+      [[ -f "$scratch/$kind.$name" ]] || continue
+      cp -- "$scratch/$kind.$name" "$coverage_out/$kind.$name"
+    done
+  done
+  printf 'omp comment rule shard %s/%s passed, %s cases; coverage in %s\n' \
+    "$shard_index" "$shard_total" "$(wc -l <"$scratch/cases" | tr -d ' ')" "$coverage_out"
+else
+  printf 'omp comment rule tests passed\n'
+fi
