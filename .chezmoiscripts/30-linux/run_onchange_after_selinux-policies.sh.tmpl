@@ -1,6 +1,5 @@
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
-{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 {{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{ if not $facts.container -}}
 #!/usr/bin/env bash
@@ -12,10 +11,9 @@
 # GATED: Linux + Fedora + active SELinux enforcement (sestatus).
 # Non-Fedora, non-Linux, and container hosts skip harmlessly at render time.
 
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 set -euo pipefail
 
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "selinux-policies" }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "selinux-policies") }}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/selinux/**")) }}
 
 if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v semodule >/dev/null 2>&1; then

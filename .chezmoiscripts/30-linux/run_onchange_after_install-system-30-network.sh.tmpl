@@ -1,5 +1,4 @@
 {{ if eq .chezmoi.os "linux" -}}
-{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 #
 # Network-path configuration: firewalld for Tailscale/VMware, resolv.conf →
@@ -12,9 +11,10 @@
 # affected service manually after apply or reboots.
 #
 # onchange, no source-tree dependency: everything here asserts fixed
-# firewalld/DNS state derived from nothing in the source tree, so the only
-# fingerprint below is the sudo capability one. (The IPv4/IPv6 forwarding
-# sysctl the masquerade path rides on is installed and applied by 10-files.)
+# firewalld/DNS state derived from nothing in the source tree, so there is NO
+# fingerprint block at all — chezmoi re-runs this script only when its own
+# rendered content changes. (The IPv4/IPv6 forwarding sysctl the masquerade
+# path rides on is installed and applied by 10-files.)
 #
 # firewalld setup covers three things: (1) IPv4 masquerade on the default
 # zone, required for the Tailscale exit-node and VMware NAT egress paths to
@@ -27,19 +27,16 @@
 # Skip behaviour: both shared guards inlined below declare their early exits
 # (.chezmoitemplates/skip.sh.tmpl). A headless/server install is `harmless` —
 # this host is not a desktop and will not become one, so exit 0 is final. A
-# sudo prompt this run cannot answer is `transient-blocking` on the cached
-# `sudo-usable` capability: chezmoi records the exit-0 skip as a successful run,
-# and the sudo fingerprint block below is what re-runs the script by itself once
-# that token flips to available.
+# host with no elevation path at all is `transient-tolerable`: the elevation
+# guard exits NON-ZERO, so chezmoi never records the run as successful and the
+# next apply retries it by itself. Recovery needs no capability token and no
+# fingerprint — chezmoi's own error handling is the whole mechanism.
 
-# sudo capability fingerprint — pairs the transient-blocking sudo declaration
-# with the cached token it names. Comment-only; never executed.
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-network") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-network") }}
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-network" }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-network") }}
 # Configure firewalld for Tailscale and VMware (see header for the three
 # changes and their rationale).
 #

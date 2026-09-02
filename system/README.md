@@ -102,13 +102,19 @@ scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
 The `10-`/`20-`/`30-` filename prefixes order execution (chezmoi runs scripts
 alphabetically), so files land before anything that might depend on them.
 
-All three scripts skip (`exit 0`) on headless/server installs — default boot
-target not `graphical.target` and no display-manager enabled — and when sudo
-credentials can't be obtained non-interactively, via the shared
-`.chezmoitemplates/headless-guard.sh.tmpl` and `sudo-skip-guard.sh.tmpl`
-partials. Override the headless skip with `INSTALL_SYSTEM_CONFIG_FORCE=1`;
-note chezmoi records a clean skip as a successful run, so re-run by hand with
-`chezmoi apply --force` on an interactive terminal.
+All these scripts skip (`exit 0`) on headless/server installs — default boot
+target not `graphical.target` and no display-manager enabled — via the shared
+`.chezmoitemplates/headless-guard.sh.tmpl` partial. Override that skip with
+`INSTALL_SYSTEM_CONFIG_FORCE=1`; note chezmoi records a clean skip as a
+successful run, so re-run by hand with `chezmoi apply --force`.
+
+Elevation is different: `.chezmoitemplates/sudo-elevation-guard.sh.tmpl` walks
+a ladder (already root, cached/NOPASSWD sudo, a TTY to prompt on, the desktop's
+own askpass helper) and **fails with `exit 1`** when no rung succeeds, rather
+than skipping. A host that cannot elevate is therefore never recorded as
+provisioned: chezmoi does not record a failed run, so the next `chezmoi apply`
+retries the script by itself. To supply an elevation path, give the run a
+terminal (`ssh -t`) or authenticate first with `sudo -v`.
 
 There is no `system/macos/` tree: macOS settings belong under user-owned
 `Library/` (`~/Library`) paths.

@@ -1,12 +1,17 @@
 {{ if eq .chezmoi.os "linux" -}}
-{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable))) }}
+#
+# NO fingerprint block, deliberately. This script depends on nothing in the
+# source tree, so it has no globs to hash, and it no longer hashes a capability
+# token either: chezmoi re-runs it only when its own rendered content changes.
+# That is sufficient because the elevation guard below exits non-zero when the
+# host cannot elevate — chezmoi does not record a failed run, so the next apply
+# retries it without any token having to flip.
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-system-host" }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-host") }}
 
 loginctl enable-linger "${SUDO_USER:-$USER}" 2>/dev/null || true
 

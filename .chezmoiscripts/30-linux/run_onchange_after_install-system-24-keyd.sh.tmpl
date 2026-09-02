@@ -1,15 +1,14 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
-{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 #!/usr/bin/env bash
 
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "sudo-usable" "value" $sudoUsable) (dict "name" "keyd-keyboards" "value" (toJson .system.linux.keyd.keyboards)))) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "keyd-keyboards" "value" (toJson .system.linux.keyd.keyboards)))) }}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/libinput/local-overrides.quirks")) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "install-keyd" }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}
 
 declared_ids=()
 {{- if and (hasKey .system.linux "keyd") (hasKey .system.linux.keyd "keyboards") }}
