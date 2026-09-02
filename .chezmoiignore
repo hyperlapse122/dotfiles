@@ -102,11 +102,6 @@
 {{- if ne .chezmoi.os "linux" }}
 .config/fontconfig
 {{- end }}
-# The haptic systemd units are Linux-only. macOS uses launchd, so it must not
-# receive inert systemd targets.
-{{- if ne .chezmoi.os "linux" }}
-.config/systemd/user/mxm4-haptic*.service
-{{- end }}
 
 
 {{- if or (ne .chezmoi.os "linux") (not (or (eq $f.desktop "kde") (eq $f.desktop "gnome"))) }}
@@ -123,12 +118,7 @@
 # on every desktop OS. The POSIX hook wrapper covers Linux/macOS. Containers
 # still skip the trees below (no MX Master 4 inside a container).
 
-# Jetson AGX Thor has no MX Master 4 hardware and intentionally stays off the
-# tailnet. This is a host-profile decision, not a sharedHost gate.
 {{- if $f.jetson }}
-.chezmoiscripts/60-build/*mxm4-haptic.sh
-.config/systemd/user/mxm4-haptic*.service
-.omp/agent/extensions/mxm4-haptic.ts
 .local/share/omp-plugins
 .chezmoiscripts/50-linux-kde/*.sh
 {{- end }}
@@ -164,12 +154,8 @@
 .chezmoiscripts/50-linux-gnome/*.sh
 .chezmoiscripts/10-auth/*.sh
 .chezmoiscripts/80-keys/*.sh
-.chezmoiscripts/60-build/*mxm4-haptic.sh
-.config/systemd/user/mxm4-haptic*.service
 .config/fontconfig
-Library/LaunchAgents/dev.h82.mxm4-hapticd.plist
 .local/share/omp-plugins
-.omp/agent/extensions/mxm4-haptic.ts
 {{/* containers skip non-container desktop targets */}}
 .local/share/applications/wezterm.desktop
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped

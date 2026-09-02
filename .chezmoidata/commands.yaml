@@ -28,6 +28,30 @@ commands:
       legacy:
         path: .local/bin/android
 
+    claude:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: claude
+      commands:
+        - name: claude
+      legacy:
+        path: .local/bin/claude
+
+    agy:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: agy
+      commands:
+        - name: agy
+        - name: antigravity
+      legacy:
+        path: .local/bin/agy
     agent-browser:
       producer: external
       safetyProfile: native-single-file

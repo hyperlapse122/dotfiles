@@ -54,7 +54,7 @@ harness and the sole caller; a harnessSkip entry naming a retired harness
 {{- end -}}
 {{- $validOS := $ctx.agents.validOS -}}
 {{- $validContainers := list "keep" "skip" -}}
-{{- $validHarness := list "omp" -}}
+{{- $validHarness := list "omp" "claude" "agy" -}}
 {{- $skippableHarness := $validHarness -}}
 {{- $harness := .harness -}}
 {{- if not (has $harness $validHarness) -}}

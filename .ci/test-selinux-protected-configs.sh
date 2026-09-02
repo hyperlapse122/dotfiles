@@ -30,6 +30,12 @@ for token in \
   "(filecon \"HOME_DIR/\\.claude\\.json.*\"" \
   "(filecon \"HOME_DIR/\\.mcp\\.json\"" \
   "(filecon \"HOME_DIR/\\.claude/settings\\.json\"" \
+  "(filecon \"HOME_DIR/\\.claude/skills\"" \
+  "(filecon \"HOME_DIR/\\.gemini/antigravity-cli/mcp\\.json\"" \
+  "(filecon \"HOME_DIR/\\.gemini/config/mcp_config\\.json\"" \
+  "(filecon \"HOME_DIR/\\.gemini/skills\"" \
+  "(filecon \"HOME_DIR/\\.agents/skills(/.*)?\"" \
+  "(filecon \"HOME_DIR/\\.agents/plugins(/.*)?\"" \
   "(filecon \"HOME_DIR/\\.codex/skills(/.*)?\"" \
   "(filecon \"/usr/bin/chezmoi\"" \
   "(filecon \"HOME_DIR/\\.local/bin/chezmoi\""; do
@@ -100,10 +106,11 @@ if command -v secilc >/dev/null 2>&1; then
 (typeattribute xserver_unconfined_type)
 (class file (create read write getattr setattr unlink rename open append lock map entrypoint execute relabelto relabelfrom))
 (class dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock relabelto relabelfrom))
+(class lnk_file (create read getattr setattr unlink rename relabelto relabelfrom))
 (class process (transition sigchld signull sigkill sigstop signal siginh fork getattr getsched setsched execmem getsession getpgid setpgid setrlimit))
 (class fd (use))
 (class chr_file (read write ioctl getattr append open))
-(classorder (file dir process fd chr_file))
+(classorder (file dir lnk_file process fd chr_file))
 (sid kernel)
 (sidorder (kernel))
 (user unconfined_u)

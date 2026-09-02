@@ -1,0 +1,16 @@
+{{- /* ~/.gemini/config/mcp_config.json — Antigravity CLI MCP configuration */ -}}
+{{- $servers := dict -}}
+{{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "agy") | fromJson -}}
+{{- range $mcpServers -}}
+{{- if eq .transport "stdio" -}}
+{{- $servers = set $servers .name (dict "command" .command "args" .args) -}}
+{{- else -}}
+{{- $e := dict "serverUrl" .url -}}
+{{- if hasKey . "headers" -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson -}}
+{{- $e = set $e "headers" $headers -}}
+{{- end -}}
+{{- $servers = set $servers .name $e -}}
+{{- end -}}
+{{- end -}}
+{{ toPrettyJson "  " (dict "mcpServers" $servers) }}

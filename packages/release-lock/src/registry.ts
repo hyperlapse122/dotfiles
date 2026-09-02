@@ -191,12 +191,17 @@ export const REGISTRY: Registry = {
 
   /* ---------- vendorManifest ---------- */
 
+  agy: {
+    kind: "vendorManifest",
+    vendor: "antigravity",
+    source: "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
+  },
+
   "1password": {
     kind: "vendorManifest",
     vendor: "onePassword",
     source: "https://releases.1password.com/linux/stable/index.xml",
   },
-
   android: {
     kind: "vendorManifest",
     vendor: "android",
@@ -211,12 +216,17 @@ export const REGISTRY: Registry = {
     emulatedPlatforms: ["linux-arm64"],
   },
 
+  claude: {
+    kind: "vendorManifest",
+    vendor: "claude",
+    source: "https://downloads.claude.ai/claude-code-releases",
+  },
+
   winbox: {
     kind: "vendorManifest",
     vendor: "winbox",
     source: "https://download.mikrotik.com/routeros/winbox/LATEST.4",
   },
-
   /* ---------- gitRef ---------- */
 
   // The improve skill has no releases/tags; agents.skills.external pins its

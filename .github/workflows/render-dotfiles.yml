@@ -164,7 +164,7 @@ jobs:
                    "${HOME}/.local/libexec" \
                    "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
                    "${HOME}/.local/state/unmanaged-repo-guard" \
-                   "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic" \
+                   "${HOME}/.local/share/omp-plugins/plugins/sample-plugin" \
                    "${HOME}/.local/share/omp-plugins/.omp-plugin"
           : > "${HOME}/.agents/skills/ce-plan/prune-canary"
           : > "${HOME}/.agents/skills/lfg/prune-canary"
@@ -186,7 +186,7 @@ jobs:
           : > "${HOME}/.local/libexec/ydotoold-active-seat"
           : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
           : > "${HOME}/.local/state/unmanaged-repo-guard/blocks.jsonl"
-          : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+          : > "${HOME}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
           set +e
           printf '\n\n\n' | chezmoi apply --init --source "${SRC}" --no-tty --exclude=scripts,encrypted
@@ -224,7 +224,7 @@ jobs:
           test -f "${home}/.agents/skills/daily-report/prune-canary"
           test -f "${home}/.omp/agent/AGENTS.md"
           test -f "${home}/.local/bin/canary-sibling"
-          test -f "${home}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+          test -f "${home}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
 
           # Container / fact-gated entries must survive in container CI.
           test -f "${home}/src/garden.yaml"
@@ -251,7 +251,7 @@ jobs:
                  "${out}/.local/bin/docker-credential-gh" \
                  "${out}/.local/bin/docker-credential-glab" \
                  "${out}/.local/share/i-have-adhd" \
-                 "${out}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary" \
+                 "${out}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary" \
                  "${out}/src/garden.yaml" \
                  "${out}/.config/systemd/user/ydotool.service" \
                  "${out}/.local/libexec/ydotoold-active-seat"
@@ -621,7 +621,7 @@ jobs:
                    "${HOME}/.local/libexec" \
                    "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
                    "${HOME}/.local/state/unmanaged-repo-guard" \
-                   "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic" \
+                   "${HOME}/.local/share/omp-plugins/plugins/sample-plugin" \
                    "${HOME}/.local/share/omp-plugins/.omp-plugin"
           : > "${HOME}/.agents/skills/ce-plan/prune-canary"
           : > "${HOME}/.agents/skills/lfg/prune-canary"
@@ -643,7 +643,7 @@ jobs:
           : > "${HOME}/.local/libexec/ydotoold-active-seat"
           : > "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard/prune-canary"
           : > "${HOME}/.local/state/unmanaged-repo-guard/blocks.jsonl"
-          : > "${HOME}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+          : > "${HOME}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
 
           set +e
@@ -681,7 +681,7 @@ jobs:
           test -f "${home}/.agents/skills/daily-report/prune-canary"
           test -f "${home}/.omp/agent/AGENTS.md"
           test -f "${home}/.local/bin/canary-sibling"
-          test -f "${home}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary"
+          test -f "${home}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
 
           # ydotool is Linux-gated: macOS is not Linux, so it must survive.
           test -f "${home}/.config/systemd/user/ydotool.service"
@@ -704,7 +704,7 @@ jobs:
                  "${out}/.local/bin/docker-credential-gh" \
                  "${out}/.local/bin/docker-credential-glab" \
                  "${out}/.local/share/i-have-adhd" \
-                 "${out}/.local/share/omp-plugins/plugins/mxm4-haptic/prune-canary" \
+                 "${out}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary" \
                  "${out}/.config/systemd/user/ydotool.service" \
                  "${out}/.local/libexec/ydotoold-active-seat"
       - name: Upload rendered files

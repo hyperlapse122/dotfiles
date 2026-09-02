@@ -5,7 +5,7 @@ artifact lock (.chezmoidata/releases.json, exposed to templates as .releases).
 Input (dict):
   ctx       required; root chezmoi context (carries .releases and .chezmoi)
   tool      required; lock key under .releases.tools
-  field     optional; "version" (default), "url", "sha256", "size", or
+  field     optional; "version" (default), "url", "sha256", "sha512", "size", or
             "emulated"
   platform  required for artifact fields; an explicit lock platform key
             (e.g. "linux-amd64", "darwin-arm64") or "auto" to compose
@@ -38,7 +38,7 @@ structurally because every consumer reads the same one lock key (R7).
 {{- $tool := .tool -}}
 {{- $field := "version" -}}
 {{- if hasKey . "field" -}}{{- $field = .field -}}{{- end -}}
-{{- if not (or (eq $field "version") (eq $field "url") (eq $field "sha256") (eq $field "size") (eq $field "emulated")) -}}
+{{- if not (has $field (list "version" "url" "sha256" "sha512" "size" "emulated")) -}}
 {{-   fail (printf "release-lock-ref.tmpl: unsupported field %q" $field) -}}
 {{- end -}}
 {{- $optional := false -}}

@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT HAPTIC_PACKAGE SETTINGS_SH'
+usage='usage: test-omp-agent-reconcile.sh AUTH_SCRIPT PLUGIN_SCRIPT SETTINGS_SH'
 auth_script=${1:?$usage}
 plugin_script=${2:?$usage}
-haptic_package=${3:?$usage}
-settings_script=${4:?$usage}
+settings_script=${3:?$usage}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 locked_omp_version=$(jq -er '.releases.tools.omp.version | sub("^v"; "")' "$repo_root/.chezmoidata/releases.json")
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-agent-reconcile-fixtures
@@ -39,8 +38,8 @@ mkdir -p "$home/.omp/agent" "$fake_bin"
 cat >"$home/.omp/agent/.env" <<'EOF'
 # user-owned values stay byte-identical
 OTHER_TOKEN='keep me'
-OPENROUTER_API_KEY=stale
-OPENROUTER_API_KEY="duplicate"
+EXA_API_KEY=stale
+EXA_API_KEY="duplicate"
 EOF
 chmod 0644 "$home/.omp/agent/.env"
 
@@ -52,10 +51,10 @@ run_auth() {
 run_auth
 
 [[ $(stat -c '%a' "$auth") == 600 ]]
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
+grep -F 'EXA_API_KEY="dummy-secret"' "$auth" >/dev/null
 grep -F "# user-owned values stay byte-identical" "$auth" >/dev/null
 grep -F "OTHER_TOKEN='keep me'" "$auth" >/dev/null
-
 # Inode identity is the signal that no `mv` happened; this job runs on every
 # apply, so an unconditional rename rewrites a credential file forever.
 auth_inode_before=$(stat -c '%i' "$auth")
@@ -64,7 +63,7 @@ run_auth
   printf 'config-omp-auth: a converged re-run republished %s\n' "$auth" >&2
   exit 1
 }
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$auth") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$auth") -eq 1 ]]
 [[ $(stat -c '%a' "$auth") == 600 ]]
 
 # The skip path is the only place left that can narrow a mode someone widened.
@@ -85,16 +84,16 @@ EOF
 chmod 0644 "$missing"
 run_auth "$missing"
 [[ $(grep -c '^OTHER_TOKEN=' "$missing") -eq 1 ]]
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$missing") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$missing") -eq 1 ]]
 ambient="$scratch/ambient.env"
 printf 'AMBIENT_TOKEN=keep\n' >"$ambient"
 run_auth "$ambient"
 grep -F 'AMBIENT_TOKEN=keep' "$ambient" >/dev/null
-[[ $(grep -c '^OPENROUTER_API_KEY=' "$ambient") -eq 0 ]]
+[[ $(grep -c '^EXA_API_KEY=' "$ambient") -eq 1 ]]
 
 # The rendered POSIX script must enforce the ordered managed set.
 expected_names="$scratch/expected-managed-names"
-: >"$expected_names"
+printf 'EXA_API_KEY\n' >"$expected_names"
 posix_names="$scratch/posix-managed-names"
 grep -m1 '^MANAGED_NAMES=' "$auth_script" |
   grep -oE '"[A-Z0-9_]+"' | tr -d '"' >"$posix_names" || true
@@ -123,14 +122,10 @@ grep -F 'unsafe target' "$scratch/auth.err" >/dev/null
 # calls, digest/loader checks, migration boundary, locked OMP version, and
 # raw-input fingerprint set.
 for needle in \
-  'mxm4-haptic@h82-dotfiles' \
-  'compound-engineering' \
+  'compound-engineering\tcompound-engineering-plugin' \
   'plugin marketplace add' \
   'plugin install --scope user --force' \
-  'plugin enable --scope user' \
-  'payload digest' \
-  'loader health' \
-  'legacy'; do
+  'plugin enable --scope user'; do
   grep -F "$needle" "$plugin_script" >/dev/null
 done
 
@@ -144,7 +139,7 @@ if grep -qE 'plugin (install --scope user --force|enable --scope user|marketplac
   exit 1
 fi
 
-# h82-dotfiles still hosts mxm4-haptic, so the removal set must leave it out.
+grep -F 'mxm4-haptic\th82-dotfiles' "$plugin_script" >/dev/null
 grep -F 'unmanaged-repo-guard\th82-dotfiles' "$plugin_script" >/dev/null
 removed_marketplaces="$scratch/removed-marketplaces"
 awk '/^MARKETPLACES_REMOVED=\($/{flag=1;next} /^\)/{flag=0} flag' \
@@ -161,19 +156,11 @@ grep '^#   ' "$plugin_script" >"$posix_fingerprints"
 [[ -s $posix_fingerprints ]]
 for raw_input in \
   '.chezmoidata/agents.yaml' \
-  '.chezmoidata/haptic.yaml' \
   '.chezmoidata/releases.json' \
-  'packages/bun.lock' \
-  'packages/mxm4-haptic/src/omp-plugin.ts'; do
+  'dot_local/share/omp-plugins/dot_omp-plugin/marketplace.json.tmpl'; do
   grep -F "#   $raw_input  " "$posix_fingerprints" >/dev/null
 done
-[[ -f $haptic_package/package.json && -f $haptic_package/dist/index.js ]]
-source="$home/.local/share/omp-plugins"
-mkdir -p "$source/.omp-plugin" "$source/plugins" "$home/.local/share/compound-engineering/v-test/.claude-plugin"
-cp -R "$haptic_package" "$source/plugins/mxm4-haptic"
-cat >"$source/.omp-plugin/marketplace.json" <<'EOF'
-{"name":"h82-dotfiles","owner":{"name":"test"},"plugins":[{"name":"mxm4-haptic","source":"./plugins/mxm4-haptic"}]}
-EOF
+mkdir -p "$home/.local/share/compound-engineering/v-test/.claude-plugin"
 cat >"$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" <<'EOF'
 {"name":"compound-engineering-plugin","plugins":[{"name":"compound-engineering","source":"./"}]}
 EOF
@@ -182,13 +169,10 @@ EOF
 # isolated HOME without letting the provisioner consult the live HOME.
 test_plugin="$scratch/plugins.sh"
 cp "$plugin_script" "$test_plugin"
-haptic_row=$(grep -m1 'mxm4-haptic\\th82-dotfiles\\tlocalDir\\t' "$test_plugin")
-rendered_haptic=${haptic_row#*localDir\\t}
-rendered_haptic=${rendered_haptic%%\\t*}
 ce_row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$test_plugin")
 rendered_ce=${ce_row#*localArchive\\t}
 rendered_ce=${rendered_ce%%\\t*}
-sed -i "s|$rendered_haptic|$source|g; s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
+sed -i "s|$rendered_ce|$home/.local/share/compound-engineering/v-test|g" "$test_plugin"
 chmod 0700 "$test_plugin"
 
 path_guard_line=$(grep -m1 -nF 'case ":$PATH:"' "$test_plugin" | cut -d: -f1)
@@ -210,18 +194,17 @@ if [[ -n ${OMP_FAIL_MATCH:-} && "$*" == *"$OMP_FAIL_MATCH"* ]]; then exit 72; fi
 root="$HOME/.omp/plugins"
 mkdir -p "$root"
 case "$*" in
-  "plugin marketplace add "*/omp-plugins) printf '%s\n' "${*:4}" >"$HOME/.haptic-source" ;;
-  "plugin install --scope user --force mxm4-haptic@h82-dotfiles")
-    source=$(cat "$HOME/.haptic-source")
-    install="$root/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0"
-    rm -rf "$install"; mkdir -p "$(dirname "$install")"; cp -R "$source/plugins/mxm4-haptic" "$install"
-    mkdir -p "$root/node_modules/@h82"; ln -sfn "$install" "$root/node_modules/@h82/omp-mxm4-haptic"
+  "plugin marketplace add "*) ;;
+  "plugin install --scope user --force compound-engineering@compound-engineering-plugin")
+    install="$root/cache/plugins/compound-engineering-plugin___compound-engineering___v-test"
+    rm -rf "$install"; mkdir -p "$(dirname "$install")"; cp -R "$HOME/.local/share/compound-engineering/v-test" "$install"
+    mkdir -p "$root/node_modules"; ln -sfn "$install" "$root/node_modules/compound-engineering"
     cat >"$root/installed_plugins.json" <<JSON
-{"version":2,"plugins":{"mxm4-haptic@h82-dotfiles":[{"scope":"user","installPath":"$install","version":"0.0.0"}]}}
+{"version":2,"plugins":{"compound-engineering@compound-engineering-plugin":[{"scope":"user","installPath":"$install","version":"v-test"}]}}
 JSON
     ;;
-  "plugin enable --scope user mxm4-haptic@h82-dotfiles")
-    printf '%s\n' '{"plugins":{"@h82/omp-mxm4-haptic":{"version":"0.0.0","enabled":true}},"settings":{}}' >"$root/omp-plugins.lock.json"
+  "plugin enable --scope user compound-engineering@compound-engineering-plugin")
+    printf '%s\n' '{"plugins":{"compound-engineering":{"version":"v-test","enabled":true}},"settings":{}}' >"$root/omp-plugins.lock.json"
     ;;
 esac
 EOF
@@ -231,14 +214,10 @@ run_plugins() {
   OMP_CALLS="$1" OMP_FAIL_MATCH="${2-}" OMP_STUB_VERSION="${3-}" EXPECTED_OMP_VERSION="$locked_omp_version" \
     env HOME="$home" PATH="$fake_bin:$PATH" bash "$test_plugin"
 }
-legacy="$home/.omp/agent/extensions/mxm4-haptic.ts"
-mkdir -p "$(dirname "$legacy")"
-printf 'legacy owner\n' >"$legacy"
-if run_plugins "$scratch/fail.calls" 'plugin enable --scope user mxm4-haptic@h82-dotfiles' >"$scratch/fail.out" 2>"$scratch/fail.err"; then
+if run_plugins "$scratch/fail.calls" 'plugin enable --scope user compound-engineering@compound-engineering-plugin' >"$scratch/fail.out" 2>"$scratch/fail.err"; then
   printf 'injected enable failure unexpectedly succeeded\n' >&2
   exit 1
 fi
-[[ -f $legacy ]]
 
 # The version gate rejects mismatched, digit-adjacent, and suffixed decoys
 # before any marketplace mutation, and still accepts the bare version form.
@@ -255,18 +234,13 @@ for decoy in "omp/0.0.0" "omp/9$locked_omp_version" "omp/$locked_omp_version-rc.
   fi
 done
 run_plugins "$scratch/version-bare.calls" '' "$locked_omp_version"
-# The bare-accept run is a full reconcile and removes the legacy sentinel;
-# recreate it so the success runs below still prove their own removal.
-printf 'legacy owner\n' >"$legacy"
-
 run_plugins "$scratch/omp.calls"
-[[ ! -e $legacy ]]
 run_plugins "$scratch/repeat.calls"
-[[ ! -e $legacy ]]
-[[ $(grep -c 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
-[[ $(grep -c 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/repeat.calls") -eq 1 ]]
+[[ $(grep -c 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/repeat.calls") -eq 1 ]]
+[[ $(grep -c 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/repeat.calls") -eq 1 ]]
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
 grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/omp.calls" >/dev/null
+grep -F 'plugin uninstall --scope user mxm4-haptic@h82-dotfiles' "$scratch/omp.calls" >/dev/null
 
 # The removal loop runs before install, so a removed plugin is not re-added.
 grep -F 'plugin uninstall --scope user i-have-adhd@i-have-adhd' "$scratch/omp.calls" >/dev/null
@@ -279,8 +253,8 @@ fi
 # The install loop's remove-then-re-add refresh is also a marketplace remove,
 # so the proof is count plus the immediately following re-add, not absence.
 grep -F 'plugin uninstall --scope user unmanaged-repo-guard@h82-dotfiles' "$scratch/omp.calls" >/dev/null
-[[ $(grep -cF 'plugin marketplace remove h82-dotfiles' "$scratch/omp.calls") -eq 1 ]]
-grep -A1 -F 'plugin marketplace remove h82-dotfiles' "$scratch/omp.calls" |
+[[ $(grep -cF 'plugin marketplace remove compound-engineering-plugin' "$scratch/omp.calls") -eq 1 ]]
+grep -A1 -F 'plugin marketplace remove compound-engineering-plugin' "$scratch/omp.calls" |
   tail -1 | grep -F 'plugin marketplace add' >/dev/null
 
 mv "$home/.local/share/compound-engineering/v-test/.claude-plugin/marketplace.json" \
@@ -296,13 +270,6 @@ if grep -qF 'plugin marketplace add' "$scratch/ce-manifest.calls"; then
   printf 'missing CE manifest reached marketplace mutation\n' >&2
   exit 1
 fi
-
-# Same-version package/config changes must replace the full installed payload.
-printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/index.js"
-run_plugins "$scratch/update.calls"
-cmp "$source/plugins/mxm4-haptic/package.json" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/package.json"
-cmp "$source/plugins/mxm4-haptic/dist/index.js" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/dist/index.js"
-bun "$(dirname "$0")/test-omp-haptic-plugin.ts" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0"
 
 fallback_bin="$scratch/fallback-bin"
 mkdir -p "$fallback_bin"
@@ -322,10 +289,7 @@ grep -F 'preflight: omp is not on PATH' "$scratch/fallback-noomp.err" >/dev/null
 
 mkdir -p "$home/.local/bin"
 cp "$fake_bin/omp" "$home/.local/bin/omp"
-printf 'legacy owner\n' >"$legacy"
 run_fallback "$scratch/fallback.calls"
-grep -F 'plugin install --scope user --force mxm4-haptic@h82-dotfiles' "$scratch/fallback.calls" >/dev/null
-grep -F 'plugin enable --scope user mxm4-haptic@h82-dotfiles' "$scratch/fallback.calls" >/dev/null
 grep -F 'plugin install --scope user --force compound-engineering@compound-engineering-plugin' "$scratch/fallback.calls" >/dev/null
 grep -F 'plugin enable --scope user compound-engineering@compound-engineering-plugin' "$scratch/fallback.calls" >/dev/null
 rm -f "$home/.local/bin/omp"
@@ -859,7 +823,7 @@ auth_sh='.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl'
 linux='"chezmoi":{"os":"linux"}'
 roles='"modelRoles":{"default":"anthropic/claude-opus-5:xhigh"}'
 models_yml='dot_omp/private_agent/private_readonly_models.yml.tmpl'
-closed_set='OPENROUTER_API_KEY'
+closed_set='OPENROUTER_API_KEY, EXA_API_KEY'
 
 # The credential set is closed on both platforms so a data edit cannot inject a
 # variable into the environment omp loads for every session, nor silently drop

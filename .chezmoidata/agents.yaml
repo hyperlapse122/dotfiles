@@ -32,6 +32,11 @@ agents:
       url: https://mcp.mdn.mozilla.net/
       headers:
         X-Moz-1st-Party-Data-Opt-Out: "1"
+    - name: websearch
+      transport: http
+      url: https://mcp.exa.ai/mcp
+      headers:
+        x-api-key: op://Private/Exa/API Key
   skills:
     external:
     - name: agent-browser
@@ -91,16 +96,24 @@ agents:
         custom_agents:
           omp: omp
           zsh: zsh
+          claude: claude
+          agy: agy
         agent_detect_as:
           omp: pi
+          claude: claude
+          agy: agy
       tmux:
         status_bar: enabled
         clipboard: enabled
+  claude:
+    settings: {}
+  agy:
+    settings: {}
   omp:
     plugins:
-    - { name: mxm4-haptic, marketplace: h82-dotfiles }
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     pluginsRemoved:
+    - { name: mxm4-haptic, marketplace: h82-dotfiles }
     - { name: i-have-adhd, marketplace: i-have-adhd }
     - { name: unmanaged-repo-guard, marketplace: h82-dotfiles }
     models: {}
@@ -178,7 +191,9 @@ agents:
       secrets.enabled: true
       providers.webSearchGeminiModel: null
       providers.webSearchOrder:
+      - exa
       - gemini
+      exa.enabled: true
       providers.imageOrder:
       - antigravity
       provider.appendOnlyContext: on
@@ -205,4 +220,6 @@ agents:
       security.enabled: true
       mcp.notifications: true
     auth:
-      env: []
+      env:
+      - variable: EXA_API_KEY
+        key: op://Private/Exa/API Key

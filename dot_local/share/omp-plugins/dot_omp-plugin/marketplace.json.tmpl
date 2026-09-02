@@ -1,4 +1,4 @@
-{{- $plugins := list (dict "name" "mxm4-haptic" "description" "Pulses the MX Master 4 haptics through the mxm4-hapticd daemon on OMP lifecycle events." "source" "./plugins/mxm4-haptic") -}}
+{{- $plugins := list -}}
 {{- if hasKey .agents "agentPlugins" -}}
 {{-   range .agents.agentPlugins.external -}}
 {{-     $desc := printf "Portable Agent Plugin %s" .name -}}

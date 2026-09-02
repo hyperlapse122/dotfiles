@@ -73,12 +73,14 @@
 
 ; --- Permissions on protected_agent_config_t ---
 ; chezmoi_t has full management permissions on protected configs
-(allow chezmoi_t protected_agent_config_t (file (create read write getattr setattr unlink rename open append lock map)))
-(allow chezmoi_t protected_agent_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock)))
+(allow chezmoi_t protected_agent_config_t (file (create read write getattr setattr unlink rename open append lock map relabelto relabelfrom)))
+(allow chezmoi_t protected_agent_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock relabelto relabelfrom)))
+(allow chezmoi_t protected_agent_config_t (lnk_file (create read getattr setattr unlink rename relabelto relabelfrom)))
 
 ; unconfined_t has read-only access to protected configs
-(allow unconfined_t protected_agent_config_t (file (read getattr open map)))
+(allow unconfined_t protected_agent_config_t (file (read getattr open map execute)))
 (allow unconfined_t protected_agent_config_t (dir (read getattr open search)))
+(allow unconfined_t protected_agent_config_t (lnk_file (read getattr)))
 
 ; --- File Context Specifications (filecon) ---
 ; Target config files in user home directories
@@ -86,8 +88,13 @@
 (filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.claude/settings\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/skills" symlink (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.gemini/antigravity-cli/mcp\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.gemini/config/mcp_config\.json" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.gemini/skills" symlink (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.agents/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.agents/plugins(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-
 ; chezmoi executables
 (filecon "/usr/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
 (filecon "/usr/local/bin/chezmoi" file (system_u object_r chezmoi_exec_t ((s0)(s0))))
