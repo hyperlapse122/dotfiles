@@ -165,11 +165,31 @@ factRegistry:
       /sys/class/dmi/id/product_version or /sys/class/dmi/id/product_family contains
       "ThinkPad" (case-insensitive), read with a stat-guarded `include`. NOT
       sys_vendor: that field holds the MANUFACTURER (LENOVO on every Lenovo consumer
-      laptop, "Micro-Star International Co., Ltd." on this host) and never the model
+      laptop, "ASUSTeK COMPUTER INC." on this host) and never the model
       string. This replaces a `sudo dmidecode -t system` grep, which matched the same
       two DMI fields — at the cost of a sudo call in a file-install loop.
     gates: etc/modprobe.d/thinkpad_acpi.conf, etc/modules-load.d/thinkpad_acpi.conf.
     whenFalse: The ThinkPad ACPI module is neither configured nor force-loaded.
+  ux534:
+    type: bool
+    probe: template
+    source: >-
+      /sys/class/dmi/id/board_name or /sys/class/dmi/id/product_name contains
+      "UX534" (case-insensitive), read with a stat-guarded `include` — the same two
+      MODEL fields `thinkpad` above reads, and NOT sys_vendor for the same reason.
+      board_name carries the bare board ("UX534FTC") while product_name carries the
+      marketing string ("ZenBook UX534FTC_UX534FT"); reading both means a firmware
+      that fills only one still identifies the host.
+    gates: >-
+      The UX534 hardware set: the systemd-backlight mask that stops the ScreenPad
+      being powered off at boot, the ScreenPad transform and suspend-mode kernel
+      arguments, etc/udev/rules.d/90-ux534-battery-threshold.rules, the dGPU
+      runtime-suspend posture, and the ScreenPad compositor output assertion.
+    whenFalse: >-
+      None of the UX534 configuration is applied — no service masked, no kernel
+      argument written, no udev rule installed, and the host's existing NVIDIA and
+      keyd behavior untouched. Every gated action skips, which is the correct
+      outcome on every other machine.
   jetson:
     type: bool
     probe: template

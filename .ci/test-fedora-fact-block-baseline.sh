@@ -44,6 +44,7 @@ fprintdPam: false
 headless: false
 container: false
 sharedHost: false
+ux534: false
 FACTS
 
 render() {
@@ -113,13 +114,23 @@ NODE
 # ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
 # is not byte-pinned here; `.ci/test-sudo-elevation-guard.sh` is what covers all
 # three renderings.
+#
+# REBASELINED AGAIN when the `ux534` host fact was declared. THE FACT ITSELF IS
+# NORMALIZED AWAY — it lands in the facts-sh block this gate already excises —
+# but `facts-gate.sh.tmpl` renders one `case` arm PER REGISTRY FACT outside that
+# block, so every consumer of that partial gained a line. Exactly three of the
+# eleven include it (10-desktop, 12-sudoers, 18-hardware) and exactly those three
+# digests moved; the other eight are byte-identical, which is the evidence that
+# the drift is the case table and nothing else. Expect this same three-digest
+# move on any future fact declaration, and do NOT normalize the case table away:
+# a fact silently vanishing from the dispatch is precisely a silent GRANT.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=7b328fe4c8547ad653d6d885e68d4ac959edce4f13828ecfd62a388d7b998cf9
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=614c17f15f4ab50923e22631ea538072084966ff925fff5df2a4a591e18e2b4f
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=0ab7387105198496ab89d0c449478b65cae894aa6098bf6d282491ca0b20d646
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=bdbfc704e44f4c7e5822eb73d9b5c4424735361e0c60e20df1afab417a38de50
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=5e086c571eb1f11394e659ac699cfcdf8e4ee162ca468482620c650b45c100f5
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=c584788d3e946555e6433fc7f50f5a6070bec46b3b5e7f9549fc046a8d096441
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=9e95bfb92c4501fe101914683f5ec3f8008bf8c62a51f199f8e406ee6e6aef8a
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc

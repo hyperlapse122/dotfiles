@@ -174,8 +174,8 @@ Three rules hold this file together:
 {{- /* ---- Layer 2b: in-process file probes ---------------------------------- */ -}}
 
 {{- /* thinkpad — the MODEL fields, not the vendor field. sys_vendor holds the
-   manufacturer (LENOVO on every Lenovo consumer laptop, "Micro-Star
-   International Co., Ltd." here) and never the string ThinkPad. product_version
+   manufacturer (LENOVO on every Lenovo consumer laptop, "ASUSTeK COMPUTER INC."
+   here) and never the string ThinkPad. product_version
    and product_family are the two fields the old `sudo dmidecode -t system` grep
    actually matched; reading them from /sys/class/dmi/id/ drops the sudo call. */ -}}
 {{- $thinkpad := false -}}
@@ -187,6 +187,26 @@ Three rules hold this file together:
 {{-   end -}}
 {{- end -}}
 {{- $_ := set $facts "thinkpad" $thinkpad -}}
+
+{{- /* ux534 — the ASUS ZenBook UX534FTC this repo's ScreenPad, kernel-argument,
+   battery-threshold and dGPU-posture configuration is written for. Same two
+   MODEL fields as thinkpad above, and NOT sys_vendor for the same reason: that
+   field holds "ASUSTeK COMPUTER INC." and never the model. board_name carries
+   the bare board (UX534FTC) while product_name carries the marketing string
+   (ZenBook UX534FTC_UX534FT), so reading both means a firmware that fills only
+   one still identifies the host. The 4K and FHD variants share this board name
+   deliberately: what the gate turns on is the same on either panel, and the one
+   place the variant matters (the ScreenPad's own EDID) is matched by EDID, not
+   by this fact. */ -}}
+{{- $ux534 := false -}}
+{{- range $dmi := (list "/sys/class/dmi/id/board_name" "/sys/class/dmi/id/product_name") -}}
+{{-   if stat $dmi -}}
+{{-     if contains "ux534" (include $dmi | lower) -}}
+{{-       $ux534 = true -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "ux534" $ux534 -}}
 
 {{- /* jetson — /etc/nv_tegra_release, the L4T release stamp apply_binaries.sh
    copies into every flashed rootfs and the file NVIDIA's own BSP documentation
