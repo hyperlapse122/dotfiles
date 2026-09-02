@@ -7,7 +7,7 @@ set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-podman") }}
-{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-podman.sh" -}}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-podman.sh") -}}
 
 {{ if $isFedora -}}
 DNF=("${SUDO[@]}" dnf)

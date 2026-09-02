@@ -6,7 +6,7 @@ set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-apps") }}
-{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-apps-fedora.sh" -}}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-apps-fedora.sh") -}}
 
 DNF=("${SUDO[@]}" dnf)
 

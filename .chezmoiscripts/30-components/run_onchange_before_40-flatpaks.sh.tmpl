@@ -7,7 +7,7 @@ set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-flatpaks") }}
-{{ includeTemplate "sudo-require-guard.sh.tmpl" "install-flatpaks.sh" -}}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-flatpaks.sh") -}}
 
 flatpaks=(
   com.discordapp.Discord
