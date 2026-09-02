@@ -167,8 +167,13 @@ chmod 700 "$scratch/bin/op"
 printf '[data]\n' > "$scratch/empty.toml"
 
 rendered="$scratch/rendered.sh"
+# The script template is gated on Fedora, so it renders to nothing on the ubuntu
+# runner this test executes on and every assertion below would have nothing to
+# read. Injecting the platform is the repo's established shape for exercising a
+# host-gated template off-host (see test-fedora-fact-block-baseline.sh).
 env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" \
   --source "$repo_root" --destination "$scratch/target" \
+  --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fedora-fixture","osRelease":{"id":"fedora"}}}' \
   execute-template < "$script_tmpl" > "$rendered"
 
 [[ -s "$rendered" ]] || fail "rendered script is empty"
