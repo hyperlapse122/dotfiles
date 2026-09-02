@@ -78,6 +78,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      # Not for the .ci scripts themselves: the rendered omp plugin updater they
+      # execute verifies its manifest digest with bun.
+      - uses: oven-sh/setup-bun@v2
       - name: Install locked chezmoi
         run: |
           set -euo pipefail
