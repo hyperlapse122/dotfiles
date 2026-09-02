@@ -111,9 +111,17 @@ def main():
         for text in strings(document):
             invoked.update(CI_SCRIPT.findall(text))
 
-    # A helper invoked only by its caller is wired through that caller.
+    # A helper invoked only by its caller is wired through that caller. Comment
+    # lines are dropped first: a mention in prose is not an invocation, and
+    # counting one would let a script satisfy this gate by being talked about --
+    # including in this file's own comments.
     for script in sorted(ci_dir.rglob("*.sh")):
-        for name in CI_SCRIPT.findall(script.read_text(encoding="utf-8")):
+        code = "\n".join(
+            line
+            for line in script.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        for name in CI_SCRIPT.findall(code):
             if name != script.name:
                 invoked.add(name)
 
@@ -255,7 +263,7 @@ check_tree "$transitive" >/dev/null 2>&1 ||
   fail 'a gate invoked only by another .ci script should count as wired'
 pass 'a gate reached through its caller counts as wired'
 
-# An exception is a declaration, not a mute button: it must still name a real file.
+# The other direction: a declared exception does suppress the orphan report.
 excepted=$(fixture excepted)
 printf '#!/usr/bin/env bash\nexit 0\n' > "$excepted/.ci/test-orphan.sh"
 chmod 700 "$excepted/.ci/test-orphan.sh"

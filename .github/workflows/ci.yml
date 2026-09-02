@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # This gate alone was 149s of the old job's 276s: `omp ttsr test` has no batch
-    # mode, so each of its 169 cases pays a fresh process start. Four legs is the
+    # mode, so each of its 169 cases pays a fresh process start. Four shards is the
     # split that puts it under the longest remaining job.
     strategy:
       fail-fast: false
@@ -60,8 +60,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The gate asserts every declared rule condition matched at least one trigger
-    # fixture. That spans the whole case set, so no single leg can run it; the
-    # legs export their coverage and this job checks the union. It needs no omp.
+    # fixture. That spans the whole case set, so no single shard can run it; the
+    # shards export their coverage and this job checks the union. It needs no omp.
     steps:
       - uses: actions/checkout@v7
       - name: Download every shard's rule coverage

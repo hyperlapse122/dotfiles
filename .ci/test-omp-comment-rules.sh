@@ -7,19 +7,19 @@ fixtures_dir="$repo_root/.ci/fixtures/comment-checker"
 
 # Every case here spawns a fresh `omp` process, and `omp ttsr test` has no batch
 # mode, so the suite costs about 150s serially -- more than half of the CI job it
-# used to sit in. CI therefore splits it across matrix legs. Three modes:
+# used to sit in. CI therefore splits it across matrix shards. Three modes:
 #
 #   (no arguments)                  run every case, then reconcile in-process
-#   --shard i/n --coverage-out DIR  run this leg's cases; write coverage to DIR
-#   --reconcile DIR                 union every leg's coverage under DIR and check it
+#   --shard i/n --coverage-out DIR  run this shard's cases; write coverage to DIR
+#   --reconcile DIR                 union every shard's coverage under DIR and check it
 #
 # Reconcile is a separate mode because the coverage check below spans the WHOLE
 # case set: it requires every declared rule condition to have matched at least one
-# trigger fixture, which no single leg can observe. Reconcile needs no `omp`, so
+# trigger fixture, which no single shard can observe. Reconcile needs no `omp`, so
 # its CI job installs nothing.
 #
-# Cases are assigned to legs by a running index, not by rule family: c-family holds
-# 44 of the 86 alias cases, so a family split would leave one leg carrying half the
+# Cases are assigned to shards by a running index, not by rule family: c-family holds
+# 44 of the 86 alias cases, so a family split would leave one shard carrying half the
 # suite. The index must therefore be reproducible, which is why the family loop
 # below iterates a sorted list rather than an associative array's hash order.
 shard_index=''
@@ -62,7 +62,7 @@ if [[ -n $reconcile_dir ]]; then
     exit 1
   }
 elif [[ -n $shard_index || -n $coverage_out ]]; then
-  # Neither half is useful alone: a leg that runs a subset without exporting its
+  # Neither half is useful alone: a shard that runs a subset without exporting its
   # coverage makes that subset unreconcilable.
   [[ -n $shard_index && -n $coverage_out ]] || usage
 fi
@@ -94,9 +94,9 @@ compare_coverage() {
 }
 
 if [[ -n $reconcile_dir ]]; then
-  # Each leg drops a `shard` marker naming its i/n. Collecting exactly n distinct
-  # markers of a single n is what proves no leg was dropped -- a silently missing
-  # leg would otherwise reconcile a partial union and pass.
+  # Each shard drops a marker naming its i/n. Collecting exactly n distinct markers
+  # of a single n is what proves none was dropped -- a silently missing shard would
+  # otherwise reconcile a partial union and pass.
   declare -A shard_seen=()
   shard_expected=''
   shard_count=0
@@ -133,8 +133,8 @@ if [[ -n $reconcile_dir ]]; then
   done
   compare_coverage "$scratch/merged"
 
-  # The legs partition the case set; they never overlap it. A duplicated label
-  # means two legs claimed the same case, so the split is not a partition.
+  # The shards partition the case set; they never overlap it. A duplicated label
+  # means two shards claimed the same case, so the split is not a partition.
   cat -- "$reconcile_dir"/*/cases >"$scratch/all-cases"
   [[ -s $scratch/all-cases ]] || fail 'shards recorded no cases'
   duplicates=$(sort "$scratch/all-cases" | uniq -d)
@@ -152,9 +152,12 @@ actual_version=$(omp --version)
   exit 1
 }
 
-# Assign the next case to a leg. Every case is counted whether or not this leg
-# runs it, so the same case lands on the same leg in every process.
+# Assign the next case to a shard. Every case is counted whether or not this shard
+# runs it, so the same case lands on the same shard in every process.
 case_index=0
+# Created up front: a shard that owns no cases at all (n above the case count)
+# would otherwise leave the export with nothing to copy.
+: >"$scratch/cases"
 shard_owns_next_case() {
   case_index=$((case_index + 1))
   if [[ -z $shard_index ]]; then
@@ -280,7 +283,7 @@ run_snippet 'empty hash comment' "$(rule hash)" '#' tool write case.py trigger
 run_snippet 'empty dash comment' "$(rule dash)" '--' tool write case.sql trigger
 
 # Registration can silently drop one invalid condition. Require every declared
-# condition to have matched at least one trigger fixture. A leg sees only its own
+# condition to have matched at least one trigger fixture. A shard sees only its own
 # slice, so it exports instead and `--reconcile` runs this over the union.
 if [[ -z $shard_index ]]; then
   compare_coverage "$scratch"
