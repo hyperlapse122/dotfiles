@@ -345,7 +345,8 @@ EOF
     fi
   done
   if [[ -n $selinux_python ]]; then
-    "$selinux_python" - "$scratch/policy" <<'SETOOLS' || fail 'compiled policy does not enforce the declared write boundary'
+    policy_check="$scratch/policy_check.py"
+    cat <<'SETOOLS' > "$policy_check"
 import sys
 import setools
 
@@ -405,7 +406,35 @@ for line in failures:
     print(f'test-selinux-protected-configs: {line}', file=sys.stderr)
 sys.exit(1 if failures else 0)
 SETOOLS
+
+    "$selinux_python" "$policy_check" "$scratch/policy" ||
+      fail 'compiled policy does not enforce the declared write boundary'
     printf 'test-selinux-protected-configs: compiled-policy write boundary verified.\n'
+
+    # A check that passes is only worth anything if it would fail on the defect it
+    # exists for. The module shipped until 2026-09-02 carried
+    # (typeattributeset file_type (protected_agent_config_t)), and Fedora's base
+    # policy lets every unconfined domain write any file_type object, so the
+    # read-only rule beside it granted nothing back and denied nothing. Rebuild
+    # that exact defect and require the check above to catch it.
+    mutant_cil="$scratch/mutant.cil"
+    {
+      cat -- "$cil_file"
+      printf '\n(typeattributeset file_type (protected_agent_config_t))\n'
+    } > "$mutant_cil"
+    secilc -N -o "$scratch/policy_mutant" -f "$scratch/file_contexts_mutant" \
+      "$base_stub" "$mutant_cil" "$tokscale_cil" ||
+      fail 'secilc failed to compile the mutant CIL policy'
+
+    mutant_report="$scratch/mutant_report"
+    if "$selinux_python" "$policy_check" "$scratch/policy_mutant" >"$mutant_report" 2>&1; then
+      fail 'the write-boundary check accepts a policy that regained file_type on protected_agent_config_t; it no longer detects the defect it exists for'
+    fi
+    # Fail for the right reason, not merely fail: any compile or query error would
+    # also exit non-zero and would prove nothing about the boundary.
+    grep -qF 'unconfined_t may write protected_agent_config_t' "$mutant_report" ||
+      fail "mutant policy was rejected for the wrong reason: $(tr '\n' ';' <"$mutant_report")"
+    printf 'test-selinux-protected-configs: write boundary proven against the file_type regression.\n'
   fi
 fi
 
