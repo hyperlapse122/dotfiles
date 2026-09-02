@@ -78,7 +78,6 @@ agents:
       externalPath: .local/share/compound-engineering
       versionSource: compoundEngineeringRelease
       exclude:
-      - "*/plugin.json"
       - "*/skills/ce-sweep/references/interview.md"
       os: [linux, darwin]
       container: keep

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Proves the two harness plugin reconcilers that share
-# .chezmoitemplates/agent-plugin-rows.tmpl with the omp updater: the rendered
+# .chezmoitemplates/agent-plugin-rows.tmpl: the rendered
 # scripts carry the declared rows and the fail-closed lifecycle calls, they
 # converge on a re-run instead of re-mutating, and each one rejects a marketplace
 # source that cannot serve its harness.
@@ -52,8 +52,7 @@ for needle in \
   'compound-engineering\tcompound-engineering-plugin\tlocalArchive\t' \
   'agy plugin install' \
   'agy plugin enable' \
-  '.claude-plugin/plugin.json' \
-  '/.agy/plugin.json'; do
+  'has no bundle root plugin.json'; do
   grep -F "$needle" "$agy_script" >/dev/null ||
     fail "rendered Antigravity updater is missing: $needle"
 done
@@ -89,9 +88,12 @@ EOF
 cat >"$market/.claude-plugin/plugin.json" <<'EOF'
 {"name":"compound-engineering","version":"0.0.0-test"}
 EOF
-# Upstream's own compatibility entry point, and the reason the reconciler trusts
-# .claude-plugin/plugin.json as the bundle root manifest. The target stays absent
-# because this repository prunes the archive's root plugin.json for omp.
+# Upstream ships the bundle manifest at the archive root and points its own
+# compatibility entry at it. Nothing prunes it now, so the reconciler installs
+# the marketplace source directly.
+cat >"$market/plugin.json" <<'EOF'
+{"name":"compound-engineering","version":"0.0.0-test"}
+EOF
 ln -s '../plugin.json' "$market/.agy/plugin.json"
 printf -- '---\nname: demo\n---\n' >"$market/skills/demo/SKILL.md"
 
@@ -149,7 +151,7 @@ EOF
 chmod 0700 "$bin/claude"
 
 # The Antigravity stub asserts what agy itself requires of a bundle: a root
-# plugin.json and component trees it can read THROUGH the staged symlinks.
+# plugin.json and a component tree it can read.
 cat >"$bin/agy" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -210,53 +212,69 @@ fi
 grep -F 'no Claude Code manifest' "$scratch/claude-bad.out" >/dev/null ||
   fail 'Claude Code reconcile rejected the bad marketplace without naming the cause'
 
-# --- Antigravity: staged bundle, then a converged re-run ------------------- #
+# --- Antigravity: direct install, then a converged re-run ------------------ #
 
 run_agy >"$scratch/agy.out" 2>&1 || {
   cat "$scratch/agy.out" >&2
   fail 'first Antigravity reconcile failed'
 }
-bundle="$home/.local/share/agy-plugin-bundles/compound-engineering-plugin/compound-engineering"
-[[ -f $bundle/plugin.json ]] || fail 'Antigravity reconcile staged no bundle manifest'
-cmp -s "$market/.claude-plugin/plugin.json" "$bundle/plugin.json" ||
-  fail 'staged bundle manifest is not the marketplace plugin manifest'
-[[ -L $bundle/skills ]] || fail 'staged bundle does not link the skills component'
-[[ $(readlink -- "$bundle/skills") == "$market/skills" ]] ||
-  fail 'staged skills link does not point at the pinned marketplace'
-[[ ! -e $bundle/agents ]] || fail 'staged bundle invented a component the source does not have'
-grep -Fx "plugin install $bundle" "$agy_calls" >/dev/null ||
-  fail 'Antigravity reconcile did not install the staged bundle'
+grep -Fx "plugin install $market" "$agy_calls" >/dev/null ||
+  fail 'Antigravity reconcile did not install the marketplace source directly'
 grep -Fx 'plugin enable compound-engineering' "$agy_calls" >/dev/null ||
   fail 'Antigravity reconcile did not enable the declared plugin'
+[[ ! -e $home/.local/share/agy-plugin-bundles ]] ||
+  fail 'Antigravity reconcile staged a bundle the source already provides'
 
-# A component that goes away upstream must lose its link, or agy installs a
-# bundle with a dangling entry.
-ln -s "$market/skills" "$bundle/commands"
+: >"$agy_calls"
 run_agy >"$scratch/agy-2.out" 2>&1 || {
   cat "$scratch/agy-2.out" >&2
   fail 'converged Antigravity re-run failed'
 }
-[[ ! -e $bundle/commands && ! -L $bundle/commands ]] ||
-  fail 'Antigravity reconcile kept a component link the source does not have'
+grep -Fx "plugin uninstall compound-engineering" "$agy_calls" >/dev/null &&
+  fail 'converged Antigravity re-run re-mutated an already-installed plugin'
 
-# A real directory where a staged link belongs is someone else's file: replacing
-# it with `ln -sfn` would link INSIDE it instead, so the run must stop.
-rm -f "$bundle/skills"
-mkdir -p "$bundle/skills"
-if run_agy >"$scratch/agy-3.out" 2>&1; then
-  fail 'Antigravity reconcile wrote through a non-symlink bundle entry'
+# --- Antigravity: a host still serving the superseded staged bundle -------- #
+
+stale="$home/.local/share/agy-plugin-bundles/compound-engineering-plugin/compound-engineering"
+mkdir -p "$stale"
+cp "$market/plugin.json" "$stale/plugin.json"
+ln -s "$market/skills" "$stale/skills"
+: >"$agy_calls"
+run_agy >"$scratch/agy-3.out" 2>&1 || {
+  cat "$scratch/agy-3.out" >&2
+  fail 'Antigravity migration off the staged bundle failed'
+}
+grep -Fx 'plugin uninstall compound-engineering' "$agy_calls" >/dev/null ||
+  fail 'Antigravity reconcile did not release the superseded staged bundle'
+grep -Fx "plugin install $market" "$agy_calls" >/dev/null ||
+  fail 'Antigravity reconcile did not re-point the plugin at the marketplace source'
+[[ ! -e $stale ]] || fail 'Antigravity reconcile left the superseded staged bundle behind'
+
+: >"$agy_calls"
+run_agy >"$scratch/agy-4.out" 2>&1 || {
+  cat "$scratch/agy-4.out" >&2
+  fail 'Antigravity re-run after migration failed'
+}
+grep -Fx 'plugin uninstall compound-engineering' "$agy_calls" >/dev/null &&
+  fail 'Antigravity migration re-ran after the staged bundle was gone'
+
+# --- Antigravity: a source whose root manifest is absent or misdeclared ---- #
+
+mv "$market/plugin.json" "$scratch/plugin.json.bak"
+if run_agy >"$scratch/agy-5.out" 2>&1; then
+  fail 'Antigravity reconcile installed a source with no bundle root manifest'
 fi
-grep -F 'is not a symlink' "$scratch/agy-3.out" >/dev/null ||
-  fail 'Antigravity reconcile rejected the foreign bundle entry without naming the cause'
-rmdir "$bundle/skills"
+grep -F 'has no bundle root plugin.json' "$scratch/agy-5.out" >/dev/null ||
+  fail 'Antigravity reconcile rejected the manifest-less source without naming the cause'
 
-# --- Antigravity: a source that no longer vouches for its bundle root ------ #
-
-rm -f "$market/.agy/plugin.json"
-if run_agy >"$scratch/agy-4.out" 2>&1; then
-  fail 'Antigravity reconcile staged a bundle root nothing vouched for'
+cat >"$market/plugin.json" <<'EOF'
+{"name":"someone-elses-plugin","version":"0.0.0-test"}
+EOF
+if run_agy >"$scratch/agy-6.out" 2>&1; then
+  fail 'Antigravity reconcile installed a bundle declaring a different plugin'
 fi
-grep -F 'agy bundle manifest' "$scratch/agy-4.out" >/dev/null ||
-  fail 'Antigravity reconcile rejected the unvouched source without naming the cause'
+grep -F 'does not declare plugin compound-engineering' "$scratch/agy-6.out" >/dev/null ||
+  fail 'Antigravity reconcile rejected the misdeclared bundle without naming the cause'
+mv "$scratch/plugin.json.bak" "$market/plugin.json"
 
 printf 'test-claude-agy-plugin-reconcile: ok\n'
