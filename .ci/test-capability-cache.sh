@@ -169,6 +169,7 @@ RAW_ANCHOR_EVIDENCE = {
     'update-omp-plugins/no-plugins-or-removals': 'exit 0; fi',
     'config-gnome-1password-shortcut/gsettings-absent': 'command -v gsettings',
     'config-kde-wallpaper-breeze/wallpaper-tool-absent': 'command -v plasma-apply-wallpaperimage',
+    'config-kde-theme-dark/colorscheme-tool-absent': 'command -v plasma-apply-colorscheme',
 }
 
 seen_owners, seen_instances, blocking_probes = set(), set(), set()

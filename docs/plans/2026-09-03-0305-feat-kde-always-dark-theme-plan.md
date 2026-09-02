@@ -120,7 +120,7 @@ So disabling the switcher freezes the desktop on whatever colors it last wrote �
   - Add one row in the same block: `{ file: kdeglobals, group: Icons, key: Theme, type: string, value: breeze-dark }`.
   - Add no `ColorScheme` row, per KTD3.
   - Update the group comment above the rows so it no longer says "automatic day/night".
-  - Rewrite the `kdeglobals [KDE] — Global Theme` rationale block (`.chezmoidata/kde.yaml:59-70`), keeping its existing shape. It must state: the desktop is pinned dark at all hours; the switcher is off because it rewrites the expanded color groups on a schedule; both `Default*LookAndFeel` slots are dark so a re-enabled switcher cannot paint light; the icon theme is pinned here because it is a plain name key; the color scheme is deliberately **not** a row here, because the painted values live in `[Colors:*]` groups the row format cannot carry, and `config-kde-colorscheme-dark` owns them. Drop the Plasma < 6.5 fallback paragraph, which described the switching behavior being removed.
+  - Rewrite the `kdeglobals [KDE] — Global Theme` rationale block (`.chezmoidata/kde.yaml:59-70`), keeping its existing shape. It must state: the desktop is pinned dark at all hours; the switcher is off because it rewrites the expanded color groups on a schedule; both `Default*LookAndFeel` slots are dark so a re-enabled switcher cannot paint light; the icon theme is pinned here because it is a plain name key; the color scheme is deliberately **not** a row here, because the painted values live in `[Colors:*]` groups the row format cannot carry, and `config-kde-theme-dark` owns them. Drop the Plasma < 6.5 fallback paragraph, which described the switching behavior being removed.
 - **Test Scenarios:**
   - Rendering `run_onchange_after_config-kde-settings.sh.tmpl` succeeds; `Icons` and `breeze-dark` clear the field and value allowlists, so no `fail` fires.
   - The rendered `SETTINGS` array contains `kdeglobals:KDE:LookAndFeelPackage:string:org.kde.breezedark.desktop`, `kdeglobals:KDE:DefaultLightLookAndFeel:string:org.kde.breezedark.desktop`, `kdeglobals:KDE:DefaultDarkLookAndFeel:string:org.kde.breezedark.desktop`, `kdeglobals:KDE:AutomaticLookAndFeel:bool:false`, and `kdeglobals:Icons:Theme:string:breeze-dark`.
@@ -133,7 +133,7 @@ So disabling the switcher freezes the desktop on whatever colors it last wrote �
 - **Requirements:** R1 (color half), R3, R5, R6. Applies KTD4, KTD5.
 - **Dependencies:** U1 — the switcher must be off, or the applied colors are overwritten at the next transition.
 - **Files:**
-  - `.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-colorscheme-dark.sh.tmpl` (new)
+  - `.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl` (new)
   - `.chezmoidata/.capability-registry.tsv`
 - **Approach:**
   - Add one sorted registry row: `plasma-apply-colorscheme-present`, kind `command-present`, side effect `none`, platform `linux`, tokens `available`/`unavailable`. It sorts directly before `plasma-apply-wallpaperimage-present`. No hook change — `command-present` strips the `-present` suffix to get the command.
@@ -194,10 +194,12 @@ To produce the before side of the scope gate, render all nine `50-linux-kde` tem
 |---|---|---|
 | Manifest renders | `render .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl` | exit 0, no `config-kde-settings:` validation failure |
 | Manifest rows correct | grep the rendered `SETTINGS` array | the five theme entries in U1 are present and no `ColorScheme` entry exists |
-| New script renders | `render .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-colorscheme-dark.sh.tmpl` | exit 0, no unknown-probe failure, four skip sentinels present |
+| New script renders | `render .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl` | exit 0, no unknown-probe failure, four skip sentinels present |
 | Scope is limited | the before/after `diff -r` above | only the two intended scripts differ |
 | Skip audit | `.ci/check-skip-declarations.sh` | exit 0 |
 | Skip gates | `.ci/test-skip-declaration-gates.sh` and `.ci/test-dotfiles-skips.sh` | both exit 0 |
+| Apply behaviour | `.ci/test-kde-theme-dark-apply.sh <rendered-script>` | exit 0; and it must FAIL against a guard that reads `[General] ColorScheme` instead of a painted value |
+| CI wiring | `.ci/test-ci-wiring.sh` | exit 0 (the new gate is invoked by a workflow) |
 | Tree is clean | `git diff --check` and `git status` | no whitespace errors; only the five files U1-U3 name are changed |
 | CI | `render-dotfiles.yml` and `ci.yml` on the pushed branch | both terminal green |
 
@@ -210,14 +212,20 @@ Known blind spot: rendering proves the rows and the guards, not the painted desk
 - R1 through R7 are true.
 - U1, U2, and U3 are complete and every Verification Contract gate passes.
 - Only `.chezmoidata/kde.yaml`, `.chezmoidata/.capability-registry.tsv`, the new script, `.ci/skip-declaration-site-matrix.yaml`, and `.ci/check-skip-declarations.sh` are changed.
-- The kde.yaml rationale block describes the always-dark behavior, names `config-kde-colorscheme-dark` as the owner of the color scheme, and no longer describes day/night switching.
+- The kde.yaml rationale block describes the always-dark behavior, names `config-kde-theme-dark` as the owner of the color scheme, and no longer describes day/night switching.
 - No dead-end edits remain in the diff — no commented-out rows, no abandoned `ColorScheme` row, no leftover stamp logic.
-- **Manual host check, not a CI gate.** After the next `chezmoi apply` on a KDE host with a live session: `kreadconfig6 --file kdeglobals --group General --key ColorScheme` returns `BreezeDark`, `kreadconfig6 --file kdeglobals --group Icons --key Theme` returns `breeze-dark` after re-login, and the desktop and its GTK applications render dark. Record the result; this is the only evidence that R1 holds.
+- **Manual host check, not a CI gate.** After the next `chezmoi apply` on a KDE host with a live session, check the artifacts the run actually produces — **not** `kreadconfig6 --group General --key ColorScheme`, which resolves through the KConfig cascade and answers `BreezeDark` from the `kdedefaults` layer whether or not this change did anything:
+  - `~/.config/kdeglobals` itself carries the expanded `[Colors:*]` / `[ColorEffects:*]` groups matching `/usr/share/color-schemes/BreezeDark.colors` — spot-check `[Colors:Window] BackgroundNormal` is `32,35,38`.
+  - `~/.config/kdeglobals` carries a literal `[Icons]` group with `Theme=breeze-dark` (it had none before; the value previously came from the defaults layer).
+  - The apply printed `colour scheme set to BreezeDark`, not `already BreezeDark`, on a host that was not already dark — that line is what proves the script acted rather than skipped.
+  - After re-login, the desktop and its GTK applications render dark.
+
+  Record the result; this is the only evidence that R1 holds end to end.
 
 ---
 
 ## Operational Notes
 
-The color scheme applies as soon as `config-kde-colorscheme-dark` runs in a live session. The icon theme and the switcher keys are manifest rows and take effect at the next login.
+The color scheme applies as soon as `config-kde-theme-dark` runs in a live session. The icon theme and the switcher keys are manifest rows and take effect at the next login.
 
 A host that applies with no Plasma session running gets the rows but not the colors, and `dotfiles-skips` will list the deferred script. It re-runs on its own once a session exists — the capability token flips and changes the script's rendered content.

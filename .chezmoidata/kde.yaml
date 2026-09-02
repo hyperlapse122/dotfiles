@@ -17,7 +17,7 @@
 # precondition, and no `if` — ever. A KDE script that needs one stays a script:
 # that is exactly why `config-kde-virtualkeyboard` was NOT collapsed (it carries a
 # file-existence precondition), and why the applet-discovery scripts (`calendar`,
-# `digitalclock`, `kickoff`, `panel`), `fonts`, `touchpad`, and
+# `digitalclock`, `kickoff`, `panel`), `fonts`, `theme-dark`, `touchpad`, and
 # `wallpaper-breeze` keep their own structure. Datafying their logic would turn
 # this manifest into a DSL and cost the comments that carry the design record.
 #
@@ -75,19 +75,10 @@
 #   ~/.config/kdeglobals (which carries no [Icons] group of its own) outranks the
 #   ~/.config/kdedefaults/kdeglobals layer that supplies it today.
 #
-#   THE COLOUR SCHEME IS DELIBERATELY NOT A ROW HERE, and this is the one thing to
-#   know before "fixing" it. [General] ColorScheme is only a LABEL the Colors KCM
-#   reads; on a dark desktop that key is absent from ~/.config/kdeglobals entirely.
-#   What Plasma actually paints from is the EXPANDED [Colors:Button],
-#   [Colors:View], [Colors:Window], [Colors:Header], [Colors:Selection],
-#   [Colors:Tooltip], [Colors:Complementary], [ColorEffects:Disabled] and
-#   [ColorEffects:Inactive] groups written into that same file. Those group names
-#   carry a colon, which the runner's group-segment allowlist rejects -- and could
-#   not admit anyway, because the rendered rows are colon-delimited. Writing the
-#   label without the data would leave a name disagreeing with the colours beside
-#   it. The colours are therefore owned by
-#   .chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-colorscheme-dark.sh.tmpl,
-#   which applies them with plasma-apply-colorscheme in a live Plasma session.
+#   THE COLOUR SCHEME IS DELIBERATELY NOT A ROW HERE. [General] ColorScheme is only
+#   a label; Plasma paints from expanded [Colors:*] groups whose names carry a colon
+#   this row format cannot express. run_onchange_after_config-kde-theme-dark.sh.tmpl
+#   owns the colours and carries the full rationale.
 #   Applies after re-login.
 #
 # powerdevilrc [<profile>][Display] — idle screen dimming
@@ -169,7 +160,7 @@
 kde:
   settings:
     # kdeglobals: Breeze Dark pinned at every hour, no day/night switching.
-    # The colour scheme is NOT here on purpose — config-kde-colorscheme-dark owns it.
+    # The colour scheme is NOT here on purpose — config-kde-theme-dark owns it.
     - { file: kdeglobals, group: KDE, key: LookAndFeelPackage, type: string, value: org.kde.breezedark.desktop }
     - { file: kdeglobals, group: KDE, key: DefaultLightLookAndFeel, type: string, value: org.kde.breezedark.desktop }
     - { file: kdeglobals, group: KDE, key: DefaultDarkLookAndFeel, type: string, value: org.kde.breezedark.desktop }
