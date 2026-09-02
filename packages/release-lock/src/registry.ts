@@ -152,15 +152,6 @@ export const REGISTRY: Registry = {
       `agent-browser-${os}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}`,
   },
 
-  omp: {
-    kind: "githubRelease",
-    source: "can1357/oh-my-pi",
-    // A lone per-platform binary (oh-my-pi is a fork of pi but ships a bare
-    // executable, not pi's whole-dir bundle): linux publishes glibc AND static
-    // musl, darwin carries the raw binary.
-    linuxMusl: true,
-    asset: ({ os, arch, libc }) => `omp-${os}${libc === "musl" ? "-musl" : ""}-${x64Arch(arch)}`,
-  },
 
   codegraph: {
     kind: "githubRelease",

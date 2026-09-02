@@ -120,17 +120,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "linux-amd64-musl": "agent-browser-linux-musl-x64",
     "linux-arm64-musl": "agent-browser-linux-musl-arm64",
   },
-  omp: {
-    // A lone per-platform binary (oh-my-pi ships a bare executable, not pi's
-    // dir bundle); linux publishes glibc AND static musl.
-    "linux-amd64": "omp-linux-x64",
-    "linux-arm64": "omp-linux-arm64",
-    "darwin-amd64": "omp-darwin-x64",
-    "darwin-arm64": "omp-darwin-arm64",
-    // linuxMusl: distinct static-musl builds next to the glibc ones.
-    "linux-amd64-musl": "omp-linux-musl-x64",
-    "linux-arm64-musl": "omp-linux-musl-arm64",
-  },
   codegraph: {
     "linux-amd64": "codegraph-linux-x64.tar.gz",
     "linux-arm64": "codegraph-linux-arm64.tar.gz",

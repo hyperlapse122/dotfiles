@@ -55,16 +55,3 @@ haptic:
     skipReplaces: true
     denyApps: []
     battery: true
-  # haptic.omp — oh-my-pi (OMP) plugin event -> waveform. These values render
-  # into the package-local mxm4Haptic.waveforms configuration at
-  # dot_local/share/omp-plugins/plugins/mxm4-haptic/package.json.tmpl. The
-  # bundled extension reads only that validated installed configuration.
-  # `settled` handles a UI-backed agent end; `failed` replaces it after the
-  # last numeric provider status is >= 400; `question` handles a UI-backed ask
-  # tool call. Each value MUST be one of the 16 names in
-  # crates/mxm4-haptic/src/lib.rs (WAVEFORMS); the manifest's fail guard aborts
-  # rendering before an invalid plugin can be deployed.
-  omp:
-    settled: COMPLETED
-    failed: MAD
-    question: RINGING

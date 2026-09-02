@@ -71,15 +71,7 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
-  agentPlugins:
-    external: []
   marketplaces:
-    h82-dotfiles:
-      kind: localDir
-      path: .local/share/omp-plugins
-      os: [linux, darwin]
-      container: skip
-      jetson: skip
     compound-engineering-plugin:
       kind: localArchive
       source: EveryInc/compound-engineering-plugin
@@ -94,12 +86,10 @@ agents:
     config.toml:
       session:
         custom_agents:
-          omp: omp
           zsh: zsh
           claude: claude
           agy: agy
         agent_detect_as:
-          omp: pi
           claude: claude
           agy: agy
       tmux:
@@ -144,117 +134,3 @@ agents:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     pluginsRemoved: []
-  omp:
-    plugins:
-    - { name: compound-engineering, marketplace: compound-engineering-plugin }
-    pluginsRemoved:
-    - { name: mxm4-haptic, marketplace: h82-dotfiles }
-    - { name: i-have-adhd, marketplace: i-have-adhd }
-    - { name: unmanaged-repo-guard, marketplace: h82-dotfiles }
-    models: {}
-    settings:
-      theme.dark: dark-catppuccin
-      theme.light: light-catppuccin
-      symbolPreset: nerd
-      statusLine.preset: full
-      statusLine.separator: powerline-thin
-      terminal.showProgress: true
-      tui.textSizing: true
-      tui.codexResetFireworks: false
-      tui.resizeScrollback: rebuild
-      tui.hyperlinks: always
-      display.shimmer: 'classic'
-      display.showTokenUsage: true
-      tui.imeSafeCursor: true
-      task.showResolvedModelBadge: true
-      ttsr.repeatMode: after-gap
-      power.sleepPrevention: idle
-      steeringMode: one-at-a-time
-      followUpMode: one-at-a-time
-      startup.setupWizard: false
-      startup.checkUpdate: true
-      stt.enabled: true
-      setupVersion: 1
-      enabledModels:
-      - anthropic/claude-fable-5
-      - anthropic/claude-opus-5
-      - anthropic/claude-sonnet-5
-      - "google-antigravity/gemini-3.*"
-      - kimi-code/*
-      disabledProviders:
-      - zai
-      - github-copilot
-      - openai-codex
-      - openrouter
-      modelRoles:
-        advisor: "@worker"
-        claude: google-antigravity/gemini-3.7-flash:high
-        commit: "@worker"
-        default: google-antigravity/gemini-3.7-flash:high
-        fable: google-antigravity/gemini-3.7-flash:high
-        gemini: google-antigravity/gemini-3.7-flash:high
-        plan: "@fable"
-        skim: google-antigravity/gemini-3.7-flash:low
-        slow: google-antigravity/gemini-3.7-flash:high
-        smol: google-antigravity/gemini-3.7-flash:high
-        reviewer: google-antigravity/gemini-3.1-pro:high
-        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
-        worker: google-antigravity/gemini-3.7-flash:high
-      cycleOrder: [ "smol", "default", "slow" ]
-      task.agentModelOverrides:
-        designer: "@worker"
-        librarian: "@skim"
-        reviewer: "@reviewer"
-        scout: "@skim"
-        security-reviewer: "@worker"
-        sonic: "@worker"
-        task: "@worker"
-      skills.enableCodexUser: false
-      skills.enableClaudeUser: false
-      skills.enableClaudeProject: false
-      memory.backend: off
-      autolearn.enabled: true
-      advisor.enabled: false
-      defaultThinkingLevel: xhigh
-      includeModelInPrompt: true
-      retry.modelFallback: false
-      retry.usageAwareFallback: false
-      retry.usageReservePolicy: auto
-      retry.usageReservePct: 15
-      retry.fallbackRevertPolicy: never
-      retry.fallbackChains: {}
-      secrets.enabled: true
-      providers.webSearchGeminiModel: null
-      providers.webSearchOrder:
-      - exa
-      - gemini
-      exa.enabled: true
-      providers.imageOrder:
-      - antigravity
-      provider.appendOnlyContext: on
-      eval.py: true
-      eval.js: true
-      eval.rb: null
-      eval.jl: null
-      python.kernelMode: session
-      python.interpreter: null
-      ruby.interpreter: null
-      julia.interpreter: null
-      task.isolation.mode: auto
-      task.enableEffort: false
-      task.enableLsp: true
-      task.maxEffort: max
-      commands.enableClaudeUser: false
-      commands.enableClaudeProject: false
-      tools.approvalMode: yolo
-      tools.approval: {}
-      astGrep.enabled: true
-      generate_image.enabled: true
-      computer.enabled: true
-      github.enabled: true
-      security.enabled: true
-      mcp.notifications: true
-    auth:
-      env:
-      - variable: EXA_API_KEY
-        key: op://Private/Exa/API Key

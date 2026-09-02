@@ -64,18 +64,6 @@ commands:
       legacy:
         path: .local/bin/agent-browser
 
-    omp:
-      producer: external
-      safetyProfile: native-single-file
-      proofEligible: true
-      mode: "0755"
-      platforms: [linux, macos]
-      tool: omp
-      commands:
-        - name: omp
-      legacy:
-        path: .local/bin/omp
-
     aoe:
       producer: external
       safetyProfile: native-single-file
