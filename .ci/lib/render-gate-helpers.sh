@@ -32,9 +32,17 @@ render() {
 # omits every fact added later and chezmoi then fails with `map has no entry for
 # key` in CI only.
 write_fact_stub() {
-  local source_path=$1 output_path=$2 container=$3 jetson=${4:-false}
-  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
-  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$source_path" > "$output_path"
+  local source_path=$1 output_path=$2 container=$3 jetson=${4:-false} desktop=${5:-gnome}
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"$desktop\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
+  # Two call forms reach facts.tmpl: a top-level template passes `.`, while a
+  # shared partial must pass `.ctx` because a partial's `.` is only ever what its
+  # caller handed it. Both are matched, so a fixture can pin facts for either.
+  # `desktop` is a parameter rather than a constant: the fact is derived from
+  # `lookPath` and KDE wins a tie, so a PATH stub cannot produce a `gnome`
+  # rendering on a host that has plasmashell — only substitution can.
+  sed -e 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' \
+      -e 's|includeTemplate "facts.tmpl" \.ctx \| fromYaml|'"$stub"'|g' \
+      "$source_path" > "$output_path"
 }
 
 render_ignore() {

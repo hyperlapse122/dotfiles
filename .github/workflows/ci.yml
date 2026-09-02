@@ -177,6 +177,7 @@ jobs:
           .ci/test-extension-retry.sh
           .ci/test-capability-cache.sh
           .ci/test-skip-declaration-gates.sh
+          .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh
           .ci/test-chezmoiignore-script-paths.sh
 
