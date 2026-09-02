@@ -103,11 +103,11 @@ totals = matrix.get('totals', {})
 # config-kde-calendar/akonadi-query-failed, a live SQL read failure on an eligible
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 frozen = {
-    'classified_owners': 125,
+    'classified_owners': 129,
     'hard_error_owners': 11,
-    'rendered_instances': 187,
-    'phase_local_instances': 120,
-    'shared_guard_instances': 67,
+    'rendered_instances': 192,
+    'phase_local_instances': 124,
+    'shared_guard_instances': 68,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -147,7 +147,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 7, 'kde-guard': 9, 'headless-guard': 10, 'sudo-elevation-guard': 21, 'shared-host-guard': 20}
+SHARED = {'gnome-guard': 7, 'kde-guard': 10, 'headless-guard': 10, 'sudo-elevation-guard': 21, 'shared-host-guard': 20}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that
@@ -370,8 +370,8 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
     kinds[key] = kind
     platforms[key] = platform
 
-if len(keys) != 33:
-    problems.append(f'registry has {len(keys)} probes, expected 33')
+if len(keys) != 34:
+    problems.append(f'registry has {len(keys)} probes, expected 34')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
         'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
     problems.append('only mise-present, gh-present, glab-present, and tokscale-present may be any-platform probes')
