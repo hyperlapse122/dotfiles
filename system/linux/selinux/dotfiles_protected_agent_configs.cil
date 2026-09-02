@@ -7,12 +7,15 @@
 ;   claude_config_t           chezmoi and Claude Code write; everyone reads.
 ;   gemini_config_t           chezmoi and Antigravity write; everyone reads.
 ;
-; WHY THE SPLIT. ~/.claude/** and ~/.gemini/** are LIVE state their own harness
-; rewrites during ordinary use — session transcripts, the plugin cache, the
-; enabled-plugin set, OAuth credentials — so a chezmoi-only writer would break
-; the very tool the label protects. Each harness therefore gets a domain of its
-; own, which is also what makes the boundary meaningful in the other direction:
+; WHY THE SPLIT. ~/.claude and ~/.gemini configuration surfaces (skills, MCP
+; configs, hooks, and plugin manifests/marketplaces) are LIVE state their own
+; harness rewrites during ordinary use — the enabled-plugin set, marketplace
+; registries, OAuth credentials — so a chezmoi-only writer would break the very
+; tool the label protects. Each harness therefore gets a domain of its own,
+; which is also what makes the boundary meaningful in the other direction:
 ; Claude Code cannot write ~/.gemini, and Antigravity cannot write ~/.claude.
+; Non-config runtime state (caches, sessions, transcripts, SQLite dbs) is left
+; on user_home_t to prevent hardlink label leaks into global caches.
 ; protected_agent_config_t keeps its original chezmoi-only meaning for the paths
 ; no harness owns: the canonical ~/.agents skills and plugins roots, and codex.
 ;
@@ -232,15 +235,23 @@
 (filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.agents/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.agents/plugins(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-; Claude Code: chezmoi and claude. The ~/.claude/skills and ~/.gemini/skills
-; symlinks land in their harness's type, but they RESOLVE into ~/.agents/skills,
-; which stays chezmoi-only — so the canonical skills root is still not writable
-; through a harness.
+; Claude Code: chezmoi and claude. Narrowed to skills, MCP/hooks, and plugin state.
+; Everything else in ~/.claude (cache, sessions, projects, history, backups, etc.)
+; falls back to user_home_t.
+; The ~/.claude/skills and ~/.gemini/skills symlinks land in their harness's type,
+; but they RESOLVE into ~/.agents/skills, which stays chezmoi-only — so the canonical
+; skills root is still not writable through a harness.
 (filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r claude_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.claude(/.*)?" any (unconfined_u object_r claude_config_t ((s0)(s0))))
-; Antigravity: chezmoi and agy.
-(filecon "HOME_DIR/\.gemini(/.*)?" any (unconfined_u object_r gemini_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/settings\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/skills" symlink (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/plugins/installed_plugins\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/plugins/known_marketplaces\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/plugins/marketplaces(/.*)?" any (unconfined_u object_r claude_config_t ((s0)(s0))))
+; Antigravity: chezmoi and agy. Narrowed to skills and MCP server configuration.
+; Runtime state (~/.gemini/antigravity-cli, transcripts, etc.) falls back to user_home_t.
+(filecon "HOME_DIR/\.gemini/config(/.*)?" any (unconfined_u object_r gemini_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.gemini/skills" symlink (unconfined_u object_r gemini_config_t ((s0)(s0))))
 ; Entrypoint binaries. The versioned command store holds the real files; the
 ; ~/.local/bin entries are symlinks today and the spec is inert while they are,
 ; so it costs nothing and covers a future direct install at that path.

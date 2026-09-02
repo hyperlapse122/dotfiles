@@ -9,15 +9,8 @@ script_tmpl="$repo_root/.chezmoiscripts/30-linux/run_onchange_after_selinux-poli
 fail() { printf 'test-selinux-protected-configs: %s\n' "$*" >&2; exit 1; }
 
 [[ -f "$cil_file" ]] || fail "missing CIL policy file at $cil_file"
-[[ -f "$tokscale_cil" ]] || fail "missing tokscale CIL policy file at $tokscale_cil"
+[[ ! -f "$tokscale_cil" ]] || fail "tokscale CIL policy file should be removed at $tokscale_cil"
 [[ -f "$script_tmpl" ]] || fail "missing script template at $script_tmpl"
-
-# The tokscale module references gemini_config_t and both dotfiles_agent_*
-# attributes from the base module, and semodule resolves cross-module references
-# only once both are in the store. The apply script installs in glob order, so
-# the base module's filename must keep sorting first.
-[[ $(basename "$cil_file") < $(basename "$tokscale_cil") ]] ||
-  fail 'the base module must sort before the tokscale module so glob-order install resolves its references'
 
 # --- declarations the module must carry ------------------------------------ #
 
@@ -64,8 +57,13 @@ for token in \
   "(filecon \"HOME_DIR/\\.agents/plugins(/.*)?\"" \
   "(filecon \"HOME_DIR/\\.claude\\.json.*\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.mcp\\.json\" file (unconfined_u object_r claude_config_t" \
-  "(filecon \"HOME_DIR/\\.claude(/.*)?\" any (unconfined_u object_r claude_config_t" \
-  "(filecon \"HOME_DIR/\\.gemini(/.*)?\" any (unconfined_u object_r gemini_config_t" \
+  "(filecon \"HOME_DIR/\\.claude/settings\\.json\" file (unconfined_u object_r claude_config_t" \
+  "(filecon \"HOME_DIR/\\.claude/skills\" symlink (unconfined_u object_r claude_config_t" \
+  "(filecon \"HOME_DIR/\\.claude/plugins/installed_plugins\\.json\" file (unconfined_u object_r claude_config_t" \
+  "(filecon \"HOME_DIR/\\.claude/plugins/known_marketplaces\\.json\" file (unconfined_u object_r claude_config_t" \
+  "(filecon \"HOME_DIR/\\.claude/plugins/marketplaces(/.*)?\" any (unconfined_u object_r claude_config_t" \
+  "(filecon \"HOME_DIR/\\.gemini/config(/.*)?\" any (unconfined_u object_r gemini_config_t" \
+  "(filecon \"HOME_DIR/\\.gemini/skills\" symlink (unconfined_u object_r gemini_config_t" \
   "(filecon \"/usr/bin/chezmoi\"" \
   "(filecon \"HOME_DIR/\\.local/bin/chezmoi\"" \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/claude/[^/]+/claude\" file (unconfined_u object_r claude_exec_t" \
@@ -73,22 +71,14 @@ for token in \
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing expected declaration: $token"
 done
 
-for token in \
-  "(type tokscale_t)" \
-  "(type tokscale_exec_t)" \
-  "(roletype unconfined_r tokscale_t)" \
-  "(roletype object_r tokscale_exec_t)" \
-  "(typeattributeset dotfiles_agent_domain (tokscale_t))" \
-  "(typeattributeset dotfiles_agent_exec (tokscale_exec_t))" \
-  "(typetransition unconfined_domain_type tokscale_exec_t process tokscale_t)" \
-  "(allow tokscale_t tokscale_exec_t (file (entrypoint" \
-  "(allow tokscale_t gemini_config_t" \
-  "(typetransition chezmoi_t gconf_home_t file \"tokscale\" tokscale_exec_t)" \
-  "(typetransition chezmoi_t data_home_t file \"tokscale\" tokscale_exec_t)" \
-  "(filecon \"HOME_DIR/\\.local/lib/commands/store/tokscale/[^/]+/tokscale\" file (unconfined_u object_r tokscale_exec_t" \
-  "(filecon \"HOME_DIR/\\.local/share/mise/installs/npm-tokscale/.*/tokscale\" file (unconfined_u object_r tokscale_exec_t"; do
-  grep -qF -- "$token" "$tokscale_cil" || fail "tokscale CIL policy missing expected declaration: $token"
-done
+# The whole-tree specs must NEVER return: they leak claude_config_t into the global Bun cache
+# and break package manager hardlinks across user projects.
+if grep -qE 'filecon "HOME_DIR/\\\.claude\(/\.\*\)\?"' "$cil_file"; then
+  fail 'CIL policy must not claim whole ~/.claude tree: causes hardlink leaks into ~/.bun/install/cache'
+fi
+if grep -qE 'filecon "HOME_DIR/\\\.gemini\(/\.\*\)\?"' "$cil_file"; then
+  fail 'CIL policy must not claim whole ~/.gemini tree: runtime sqlite databases belong on user_home_t'
+fi
 
 # An upgrade writes the binary into a directory restorecon has never seen, and a
 # new file inherits its parent's type. The version-agnostic filecon only helps
@@ -111,7 +101,7 @@ done
 
 forbidden_writer() {
   local domain=$1 target=$2
-  if grep -qE "^\(allow ${domain} ${target} " "$cil_file" "$tokscale_cil"; then
+  if grep -qE "^\(allow ${domain} ${target} " "$cil_file"; then
     fail "$domain must not be granted any access to $target"
   fi
 }
@@ -119,12 +109,10 @@ forbidden_writer 'claude_t' 'gemini_config_t'
 forbidden_writer 'claude_t' 'protected_agent_config_t'
 forbidden_writer 'agy_t' 'claude_config_t'
 forbidden_writer 'agy_t' 'protected_agent_config_t'
-# tokscale is granted ~/.gemini and nothing more: it must not reach Claude Code's
-# configuration, nor the chezmoi-only canonical skills and plugins roots, nor the
-# attribute that would hand it all three at once.
-forbidden_writer 'tokscale_t' 'claude_config_t'
-forbidden_writer 'tokscale_t' 'protected_agent_config_t'
-forbidden_writer 'tokscale_t' 'protected_agent_config_type'
+
+if grep -qF "tokscale_t" "$cil_file"; then
+  fail "tokscale_t must not be declared in base CIL policy"
+fi
 
 # THE load-bearing assertion. Fedora's base policy ships
 #   allow files_unconfined_type file_type:file { ... write create unlink ... };
@@ -185,36 +173,50 @@ grep -qF "restorecon -RFv" "$rendered" || fail "rendered script missing restorec
 # A filecon nobody relabels is a label that never lands: every root the module
 # declares must appear in the relabel list, including the entrypoint stores.
 for relabel_path in \
-  '"$HOME/.claude"' \
-  '"$HOME/.gemini"' \
-  '"$HOME/.mcp.json"' \
-  '"$HOME/.agents/skills"' \
-  '"$HOME/.agents/plugins"' \
   '"$HOME/.codex/config.toml"' \
   '"$HOME/.codex/skills"' \
+  '"$HOME/.agents/skills"' \
+  '"$HOME/.agents/plugins"' \
+  '"$HOME/.claude.json"*' \
+  '"$HOME/.mcp.json"' \
+  '"$HOME/.claude/settings.json"' \
+  '"$HOME/.claude/skills"' \
+  '"$HOME/.claude/plugins/installed_plugins.json"' \
+  '"$HOME/.claude/plugins/known_marketplaces.json"' \
+  '"$HOME/.claude/plugins/marketplaces"' \
+  '"$HOME/.gemini/config"' \
+  '"$HOME/.gemini/skills"' \
   '"$HOME/.local/bin/chezmoi"' \
+  '"$HOME/.local/bin/claude"' \
+  '"$HOME/.local/bin/agy"' \
   '"$HOME/.local/lib/commands/store/claude"' \
-  '"$HOME/.local/lib/commands/store/agy"' \
-  '"$HOME/.local/lib/commands/store/tokscale"' \
-  '"$HOME/.local/share/mise/installs/npm-tokscale"'; do
+  '"$HOME/.local/lib/commands/store/agy"'; do
   grep -qF -- "$relabel_path" "$rendered" || fail "rendered script does not relabel $relabel_path"
 done
+
+# The script MUST NOT relabel whole ~/.claude or ~/.gemini roots recursively.
+if grep -qE '"\$HOME/\.claude"\b' "$rendered"; then
+  fail 'rendered script must not pass recursive "$HOME/.claude" root to restorecon'
+fi
+if grep -qE '"\$HOME/\.gemini"\b' "$rendered"; then
+  fail 'rendered script must not pass recursive "$HOME/.gemini" root to restorecon'
+fi
 
 # A policy change strands every agent session that is already running: SELinux
 # assigns the domain at exec, so the old process keeps unconfined_t while its
 # files have just been relabelled, and its writes start failing with EACCES.
 # The script has to say so, because nothing else will.
-grep -qF 'Restart any claude/agy/tokscale process started earlier' "$rendered" ||
+grep -qF 'Restart any claude/agy process started earlier' "$rendered" ||
   fail 'rendered script does not tell the operator to restart running agent sessions'
 
 # The warning is only actionable if it names the processes: a generic notice
 # leaves the operator guessing which of several terminals holds the stale
 # session. Assert the detection itself, not just the sentence.
-grep -qF "pgrep -x -u \"\$(id -u)\" 'claude|agy|tokscale'" "$rendered" ||
-  fail 'rendered script does not enumerate every domain-owning process, tokscale included'
+grep -qF "pgrep -x -u \"\$(id -u)\" 'claude|agy'" "$rendered" ||
+  fail 'rendered script does not enumerate domain-owning claude and agy processes'
 grep -qF '/attr/current' "$rendered" ||
   fail 'rendered script does not read the domain of running agent processes'
-grep -qF '*:claude_t:* | *:agy_t:* | *:tokscale_t:* | *:chezmoi_t:*' "$rendered" ||
+grep -qF '*:claude_t:* | *:agy_t:* | *:chezmoi_t:*' "$rendered" ||
   fail 'rendered script does not treat an already-transitioned process as healthy'
 
 if command -v secilc >/dev/null 2>&1; then
@@ -304,11 +306,8 @@ if command -v secilc >/dev/null 2>&1; then
 (allow files_unconfined_type file_type (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads relabelto relabelfrom)))
 (allow files_unconfined_type file_type (lnk_file (create read getattr setattr unlink rename relabelto relabelfrom)))
 EOF
-  # Both modules compile together, exactly as semodule links them: the tokscale
-  # module references gemini_config_t and the dotfiles_agent_* attributes, so
-  # compiling it alone proves nothing about the policy that actually loads.
-  secilc -N -o "$scratch/policy" -f "$scratch/file_contexts" "$base_stub" "$cil_file" "$tokscale_cil" ||
-    fail "secilc failed to compile the CIL policy modules together"
+  secilc -N -o "$scratch/policy" -f "$scratch/file_contexts" "$base_stub" "$cil_file" ||
+    fail "secilc failed to compile the CIL policy module"
 
   # The compiled file_contexts is the artifact restorecon consumes, so assert the
   # split there rather than only in the source text.
@@ -324,12 +323,15 @@ EOF
     done < "$scratch/file_contexts"
     [[ $got == "$want" ]] || fail "file_contexts maps $spec to ${got:-<nothing>}, expected $want"
   }
-  expect_context 'HOME_DIR/\.claude(/.*)?' 'unconfined_u:object_r:claude_config_t'
-  expect_context 'HOME_DIR/\.gemini(/.*)?' 'unconfined_u:object_r:gemini_config_t'
+  expect_context 'HOME_DIR/\.claude/settings\.json' 'unconfined_u:object_r:claude_config_t'
+  expect_context 'HOME_DIR/\.claude/skills' 'unconfined_u:object_r:claude_config_t'
+  expect_context 'HOME_DIR/\.claude/plugins/installed_plugins\.json' 'unconfined_u:object_r:claude_config_t'
+  expect_context 'HOME_DIR/\.claude/plugins/known_marketplaces\.json' 'unconfined_u:object_r:claude_config_t'
+  expect_context 'HOME_DIR/\.claude/plugins/marketplaces(/.*)?' 'unconfined_u:object_r:claude_config_t'
+  expect_context 'HOME_DIR/\.gemini/config(/.*)?' 'unconfined_u:object_r:gemini_config_t'
+  expect_context 'HOME_DIR/\.gemini/skills' 'unconfined_u:object_r:gemini_config_t'
   expect_context 'HOME_DIR/\.mcp\.json' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.agents/skills(/.*)?' 'unconfined_u:object_r:protected_agent_config_t'
-  expect_context 'HOME_DIR/\.local/share/mise/installs/npm-tokscale/.*/tokscale' 'unconfined_u:object_r:tokscale_exec_t'
-  expect_context 'HOME_DIR/\.local/lib/commands/store/tokscale/[^/]+/tokscale' 'unconfined_u:object_r:tokscale_exec_t'
 
   # The strongest proof available offline: ask the COMPILED policy who may write
   # what. The stub reproduces Fedora's blanket files_unconfined_type grant, so a
@@ -362,9 +364,6 @@ EXPECTED = {
     ('agy_t', 'gemini_config_t'): True,
     ('agy_t', 'claude_config_t'): False,
     ('agy_t', 'protected_agent_config_t'): False,
-    ('tokscale_t', 'gemini_config_t'): True,
-    ('tokscale_t', 'claude_config_t'): False,
-    ('tokscale_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'claude_config_t'): False,
     ('unconfined_t', 'gemini_config_t'): False,
@@ -423,7 +422,7 @@ SETOOLS
       printf '\n(typeattributeset file_type (protected_agent_config_t))\n'
     } > "$mutant_cil"
     secilc -N -o "$scratch/policy_mutant" -f "$scratch/file_contexts_mutant" \
-      "$base_stub" "$mutant_cil" "$tokscale_cil" ||
+      "$base_stub" "$mutant_cil" ||
       fail 'secilc failed to compile the mutant CIL policy'
 
     mutant_report="$scratch/mutant_report"
