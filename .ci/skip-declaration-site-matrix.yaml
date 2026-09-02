@@ -67,9 +67,9 @@ runtime_input: false
 totals:
   classified_owners: 125
   hard_error_owners: 11
-  rendered_instances: 178
+  rendered_instances: 187
   phase_local_instances: 120
-  shared_guard_instances: 58
+  shared_guard_instances: 67
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -96,8 +96,8 @@ audited_forms:
 
 audited_directions:
   harmless: 26
-  transient-blocking: 57
-  transient-tolerable: 2
+  transient-blocking: 56
+  transient-tolerable: 3
 audited_scopes:
   00-tools: 4
   10-auth: 5
@@ -115,7 +115,7 @@ shared_guard_fanout:
   headless-guard: 10
   kde-guard: 9
   shared-host-guard: 20
-  sudo-skip-guard: 12
+  sudo-elevation-guard: 21
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -123,8 +123,8 @@ divergence:
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them).'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 57
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical.'
+    audited: 56
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all.'
   - bucket: 'done_here'
     plan: 10
     audited: 18
@@ -257,33 +257,40 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#headless-guard/headless-install'
-  - owner: 'sudo-skip-guard/no-cached-sudo'
+  - owner: 'sudo-elevation-guard/no-elevation-path'
     scope: 'guard-partials'
-    template: '.chezmoitemplates/sudo-skip-guard.sh.tmpl'
-    anchor_line: 28
-    anchor: '  if [[ ! -t 0 ]] && ! sudo -n true 2>/dev/null; then'
-    predicate: '[[ ! -t 0 ]] && ! sudo -n true 2>/dev/null'
-    predicate_digest: 'sha256:070929e95744d751a5d024386eb9da0a18ac1f0edbb16d57cf7e2784d37d8687'
-    continuation: 'terminate-script-exit-0'
-    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    template: '.chezmoitemplates/sudo-elevation-guard.sh.tmpl'
+    anchor_line: 123
+    anchor: '  if [[ "$sudo_elevation_ready" -ne 1 ]]; then'
+    predicate: '[[ "$sudo_elevation_ready" -ne 1 ]]'
+    predicate_digest: 'sha256:6a60dcc2b4ba9f2e475ea31178363884a1010df9a50aa85f9a99b813715db60f'
+    continuation: 'terminate-script-exit-1'
+    continuation_digest: 'sha256:07eeb7c245b07db4755530e5c6504d74d5ecdf4f6efa3287cbf8859bb0239202'
     render_profile: 'linux-noninteractive'
     form: 'skip_here'
-    direction: 'transient-blocking'
-    probe: 'sudo-usable'
-    fingerprint_placement: 'new-header-block'
+    direction: 'transient-tolerable'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-skip-guard/no-cached-sudo'
-      - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-skip-guard/no-cached-sudo'
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_40-flatpaks.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_70-apps.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'
     template: '.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl'

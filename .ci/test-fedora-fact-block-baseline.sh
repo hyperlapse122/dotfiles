@@ -99,19 +99,32 @@ fs.writeFileSync(output, normalized.replaceAll(sourceRoot, "<SOURCE_ROOT>"));
 NODE
 }
 
-# Pre-Jetson Fedora x86_64 hashes after generated facts are normalized.
+# Fedora x86_64 hashes after generated facts are normalized.
+#
+# REBASELINED when sudo-skip-guard was replaced by sudo-elevation-guard. These
+# eleven scripts render a different guard body now — an elevation ladder that
+# exits 1 instead of a skip that exited 0 — so the rendered control flow this
+# gate watches legitimately moved, once, by design. The elevation guard is
+# deliberately NOT added to the normalized-away blocks above: it is exactly the
+# kind of shared control flow this baseline exists to watch, and excising it
+# would blind the gate to a later change in the ladder.
+#
+# SCOPE, precisely: the fixture pins `desktop: none`, so these digests watch the
+# ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
+# is not byte-pinned here; `.ci/test-sudo-elevation-guard.sh` is what covers all
+# three renderings.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=8a2418531929e8c0e1b4440001a674750fee40b5dde96648626d4833678ca771
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=4fc8372442e23d4e7bd12a82c30272b9e7958a71891d7c98fef50259445c5209
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=6ceb9ae1bd15a55348024460e13701554a924c4ae961ddf0bd3996882d70c725
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=2d7541daea733281ee980de9eaabcb6dd1f5d6008ce8d811319be25461bb5f63
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=2eadcfc779ac005654a0b97225e741c619fcdcfe36f6e666f1b33a0bf4044c15
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=920ab244dd6b8d4e37dfd422a573f6406b2d0417a9bbfe175a8963a10cece00e
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=ab69056617db427f593db835a58424fd211613e6ee5320fb8da3040428d85916
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=ed9995e98f754311030b42ce13bcc207eba5e81d40c1246ea4996d190b25577c
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=0a12895347a0c4c162c05377fd4b268cd22a7a1aad14b1394a9fb7b9db370cd4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=74fe5e811e195f50d047b65e2419305e4c66483dec2434e4fbee61432d2297e0
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=d7cd8c48ee94f2b7c2ea8170ecd38bdc385f549334d7ca19accfa07744940f56
+  [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=7b328fe4c8547ad653d6d885e68d4ac959edce4f13828ecfd62a388d7b998cf9
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=614c17f15f4ab50923e22631ea538072084966ff925fff5df2a4a591e18e2b4f
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=5e086c571eb1f11394e659ac699cfcdf8e4ee162ca468482620c650b45c100f5
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=c584788d3e946555e6433fc7f50f5a6070bec46b3b5e7f9549fc046a8d096441
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=65f019e900b7c452c9b09c23b1f657fe7758cf9e33746d47d81bd855c6576fdd
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=dc0b94a8166d05d1fddd55ae9c0e8a929ea8a417651073afe8e7d6e508d308d3
 )
 
 for template in "${!baseline_hashes[@]}"; do

@@ -1,5 +1,4 @@
 {{ if eq .chezmoi.os "linux" -}}
-{{ $sudoUsable := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sudo-usable") -}}
 {{ $zshPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "zsh-present") -}}
 {{ $chshPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "chsh-present") -}}
 {{ $sqlite3Present := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "sqlite3-present") -}}
@@ -21,12 +20,12 @@
 # Soft-skips (exit 0, never aborts `chezmoi apply`) when:
 #   - zsh is not installed (nothing to switch to; install zsh, then re-run)
 #   - chsh is not available (Fedora ships it in util-linux-user)
-#   - not root, stdin is not a TTY, and sudo has no cached credentials — a
-#     non-interactive apply (CI, an agent, a piped run) can't answer a sudo
-#     prompt. That skip is DECLARED transient-blocking on the cached
-#     `sudo-usable` capability (see the fingerprint block below), so chezmoi
-#     still records the run as successful, but the token flipping to available
-#     changes this script's content and chezmoi re-runs it on its own.
+#
+# Hard-fails (exit 1) when the host has no elevation path at all: not root,
+# sudo wants a password, no TTY to prompt on, and no usable desktop askpass
+# helper. The elevation guard inlined at step 4 owns that exit. Nothing is
+# recorded as done, so chezmoi's own error handling retries the script on the
+# next apply — no cached capability token is involved in that recovery.
 #
 # sudo: rewriting the /etc/passwd shell field needs root. The script body runs
 # as the user (so $USER is the real invoking user), and only the privileged
@@ -44,7 +43,6 @@
 # Capability fingerprints pair each transient-blocking declaration below with
 # the cached precondition it names. Comment-only; never executed.
 {{- $fingerprintValues := list
-      (dict "name" "sudo-usable" "value" $sudoUsable)
       (dict "name" "zsh-present" "value" $zshPresent)
       (dict "name" "chsh-present" "value" $chshPresent) -}}
 {{- if $authdAccount -}}
@@ -74,7 +72,9 @@ if ! command -v chsh >/dev/null 2>&1; then
 fi
 
 # 4. Privilege: prefix privileged calls with sudo unless we are already root.
-{{ includeTemplate "sudo-skip-guard.sh.tmpl" "chsh-zsh" -}}
+# The elevation guard fails the script (exit 1) when no rung of its ladder
+# succeeds, so an unprovisionable host is never recorded as done.
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "chsh-zsh") -}}
 
 {{ if $authdAccount -}}
 # 4b. authd-managed account? An authd/Entra account has no /etc/passwd row, so

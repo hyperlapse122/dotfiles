@@ -1,0 +1,147 @@
+{{- /*
+sudo-elevation-guard.sh.tmpl — SUDO array + an elevation ladder that FAILS when
+no rung succeeds. Replaces sudo-skip-guard.sh.tmpl and sudo-require-guard.sh.tmpl.
+
+THE LADDER, in order. Only the fourth rung is new:
+
+  1  already root                     SUDO=()
+  2  sudo succeeds without prompting  SUDO=(sudo)      cached ticket, or NOPASSWD
+  3  a TTY is present                 SUDO=(sudo)      sudo prompts on the terminal
+  4  a usable desktop askpass helper  SUDO=(sudo -A)   sudo prompts through the session
+     none of the above                declared exit 1
+
+Rungs 2 to 4 sit behind `command -v sudo`. Without the binary, `sudo -n true`
+fails for the wrong reason, and rung 3 would then read a bare TTY as success and
+hand the script a SUDO array its first privileged call cannot honour. The retired
+sudo-require-guard made that check; the ladder keeps it.
+
+THE ASKPASS RUNG IS FEDORA-SHAPED. Both helper literals are Fedora paths, and only
+the Fedora branch of 30-components/60-desktop-ime installs the packages. On a
+Debian or Ubuntu host the rung is therefore inert — `-x` fails and the ladder
+falls through to rung 3 or the declared exit, exactly as it does on a host with no
+desktop. That is a narrower capability, not a regression: those hosts got no
+askpass rung before this guard either. Extending it needs the Debian package name
+and its own binary path (`/usr/lib/openssh/gnome-ssh-askpass`, unverified here),
+so it is left out rather than guessed.
+
+WHY THE SKIP BECAME A FAILURE. The old sudo-skip-guard exited 0 so that `chezmoi
+apply` would not abort every later script — and chezmoi therefore recorded twelve
+unprovisioned scripts as SUCCESSFUL runs. An unprovisioned host became
+indistinguishable from a provisioned one, and recovery depended on a `sudo-usable`
+capability token flipping to change each consumer's rendered content. The exit is
+now skip.sh.tmpl's `transient-tolerable` direction: it exits 1, so chezmoi does not
+record the run and the next apply retries it by itself. No probe, no fingerprint.
+
+That direction's own contract note says it is valid only when nothing later depends
+on the script, which is NOT true here — these are 30-linux/ and 30-components/
+consumers with later phases behind them. The exception is deliberate and recorded in
+skip.sh.tmpl: aborting is the correct outcome when a host that needs elevation
+cannot get it. See the plan under docs/plans/ for the settled decision.
+
+THIS REPOSITORY NEVER SUPPLIES THE PASSWORD. `SUDO_ASKPASS` names the desktop's own
+askpass program, which is already wired into the session credential store
+(ksshaskpass -> KWallet, gnome-ssh-askpass -> Secret Service). Nothing here prints,
+stores, reads or defaults a password, and none ever reaches a process argument or a
+log.
+
+WHY THE HELPER IS A RENDER-TIME LITERAL. The path is resolved here from the
+`desktop` fact, the same way dot_config/environment.d/70-desktop.conf.tmpl resolves
+PINENTRY_KDE_USE_WALLET. It DIVERGES from that file's convention for `none`: there,
+`none` renders the KDE variant to keep artifacts deterministic. Here `none` renders
+NO helper and no rung at all, because a SUDO_ASKPASS pointing at an absent binary is
+a new failure surface rather than an inert one. Resolving at render time also keeps
+this partial free of a FACT_DESKTOP branch, which would need facts-sh.tmpl a second
+time in the ten consumers that already inline it through headless-guard.
+
+WHY THE GRAPHICAL CHECK IS A RUNTIME TEST. capabilities.tmpl states that a
+capability never gates anything and is only ever a fingerprint input, so the display
+test cannot be a probe. It mirrors the hook's own `graphical-session` resolver in
+shell instead.
+
+WHY PRIMING, AND WHAT IS BOUNDED. `timeout` wrapped around each "${SUDO[@]}" call
+would kill a long `dnf install`, so the bound sits on ONE priming `sudo -A -v` that
+resolves the ladder. `-A` then stays on the array: a timestamp expiry mid-run
+re-prompts through the helper rather than blocking on a terminal read sudo cannot
+perform. That later dialog is bounded by sudo's own passwd_timeout, not by this
+guard.
+
+ONE DIALOG PER SCRIPT, NOT PER APPLY. sudoers(5) defaults timestamp_type to `tty`,
+which behaves as `ppid` when there is no terminal, and every chezmoi script is a
+separate parent process. This repository sets no timestamp_type, so a TTY-less apply
+authenticates in each sudo-conditioned script. That is the accepted cost of a
+TTY-less run, not a defect to fix by widening the ticket.
+
+THE DECLARED EXIT SITS BEHIND ONE CONDITION IN EVERY RENDERING. The three shapes
+(kde / gnome / none) all reach it through the identical
+`if [[ "$sudo_elevation_ready" -ne 1 ]]` line, so .ci/skip-declaration-site-matrix.yaml
+stores ONE predicate that holds whatever desktop the render host happens to have.
+Without that, the CI oracle would pass on a KDE workstation and fail on a runner.
+
+ARGUMENT — a dict, NOT a bare string. This partial reads facts.tmpl, and a partial's
+`.` is only ever what its caller passed, so the call site must hand over the chezmoi
+context alongside the consumer's name:
+
+  {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "my-script") }}
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "sudo-elevation-guard.sh.tmpl: expected a dict, got a %s (%v). This guard reads facts.tmpl, which needs the chezmoi context, so the call site must pass it: {{ includeTemplate \"sudo-elevation-guard.sh.tmpl\" (dict \"ctx\" . \"name\" %q) }}" (kindOf .) . .) -}}
+{{- end -}}
+{{- if not (hasKey . "ctx") -}}
+{{-   fail "sudo-elevation-guard.sh.tmpl: missing \"ctx\". Pass the chezmoi context: (dict \"ctx\" . \"name\" \"my-script\")" -}}
+{{- end -}}
+{{- if not (hasKey . "name") -}}
+{{-   fail "sudo-elevation-guard.sh.tmpl: missing \"name\". It is half of the stable identity dotfiles-skips reports on: (dict \"ctx\" . \"name\" \"my-script\")" -}}
+{{- end -}}
+{{- $name := .name -}}
+{{- $facts := includeTemplate "facts.tmpl" .ctx | fromYaml -}}
+{{- /* The helper map is closed and both paths are root-owned /usr locations shipped
+   by a distribution package, so the literal below is never attacker-influenced.
+   `none` deliberately yields the empty string, which renders the rung away. */ -}}
+{{- $helper := "" -}}
+{{- if eq $facts.desktop "kde" -}}
+{{-   $helper = "/usr/bin/ksshaskpass" -}}
+{{- else if eq $facts.desktop "gnome" -}}
+{{-   $helper = "/usr/libexec/openssh/gnome-ssh-askpass" -}}
+{{- end -}}
+# Elevation ladder; see .chezmoitemplates/sudo-elevation-guard.sh.tmpl for the
+# full rationale. Every rung is a RUNTIME test: the host may gain or lose a
+# credential between the render and the run.
+if [[ "${EUID}" -eq 0 ]]; then
+  SUDO=()
+else
+  SUDO=(sudo)
+  sudo_elevation_ready=0
+  # The binary is the precondition every later rung shares, and it is checked
+  # first because a missing sudo makes `sudo -n true` fail for the WRONG reason:
+  # the ladder would then read a TTY as success and hand the script a SUDO array
+  # whose first privileged call dies with `command not found` instead of the
+  # declared exit below. The retired sudo-require-guard checked this; keep it.
+  if command -v sudo >/dev/null 2>&1; then
+    # `sudo -n true` succeeds on a cached ticket or a NOPASSWD rule. `[[ -t 0 ]]`
+    # is true only when stdin is a TTY, which is how sudo reads a password
+    # normally; chezmoi connects stdin to its own under an interactive apply and
+    # not under an agent or CI run.
+    if sudo -n true 2>/dev/null || [[ -t 0 ]]; then
+      sudo_elevation_ready=1
+{{- if ne $helper "" }}
+    else
+      # No terminal to prompt on, but this host has a desktop askpass helper.
+      # sudo reads the password through it and stores nothing here.
+      SUDO_ASKPASS='{{ $helper }}'
+      export SUDO_ASKPASS
+      if [[ -x "$SUDO_ASKPASS" && -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
+        # One bounded dialog resolves the ladder; -k follows the TERM with a KILL
+        # so a cancelled prompt cannot linger. timeout signals the child's process
+        # group, so the helper goes with sudo.
+        if timeout -k 5 120 sudo -A -v 2>/dev/null; then
+          SUDO=(sudo -A)
+          sudo_elevation_ready=1
+        fi
+      fi
+{{- end }}
+    fi
+  fi
+  if [[ "$sudo_elevation_ready" -ne 1 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" .ctx "owner" "sudo-elevation-guard/no-elevation-path" "form" "skip_here" "script" $name "site" "no-elevation-path" "direction" "transient-tolerable" "reason" "no elevation path: not root, and sudo cannot authenticate here (missing, or it wants a password with no terminal to ask on and no usable desktop askpass helper). Give the run a terminal (ssh -t) or authenticate first with: sudo -v") | trim | indent 4 }}
+  fi
+fi

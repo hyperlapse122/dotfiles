@@ -36,6 +36,18 @@ THREE DIRECTIONS, for the two skip forms only:
                        error, and `--keep-going` is flag-only (not settable in
                        the config file), so an early-phase exit 1 would strand
                        every later phase.
+
+                       ONE DECLARED EXCEPTION: sudo-elevation-guard. Its
+                       consumers ARE early-phase and later phases DO depend on
+                       them, so the stranding above is real — and it is the
+                       intended outcome. A host that needs root and cannot get
+                       it has not converged, and the alternative this repository
+                       shipped before (exit 0, transient-blocking) recorded
+                       twelve unprovisioned scripts as successful runs. Aborting
+                       loudly beats claiming a convergence that never happened.
+                       Do not copy this exception to a new site: it is a settled
+                       decision about elevation, not a general licence to strand
+                       later phases.
   transient-blocking   an eligible host is missing a precondition, but exiting
                        non-zero here WOULD abort later phases. Exits 0 and
                        declares a capabilities.tmpl probe, so the rendered
@@ -75,7 +87,7 @@ self-contained — no prelude, no shared function to inline first.
 OPTIONAL `owner` — the SOURCE site that owns this declaration, as
 `<source>/<site>`. It defaults to `<script>/<site>`, which is what a phase-local
 call site wants: the script that contains the branch is also the owner. A SHARED
-partial (gnome-guard, kde-guard, headless-guard, sudo-skip-guard) renders one
+partial (gnome-guard, kde-guard, headless-guard, sudo-elevation-guard) renders one
 declaration into every consumer, so its `script` is the CONSUMER's name while the
 owner is the partial's own site; those four call sites therefore pass `owner`
 explicitly. Nothing here maps a site to an owner — the value is data from the

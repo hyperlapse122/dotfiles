@@ -239,7 +239,10 @@ else
     printf '        host (headless-guard.sh.tmpl); none of the above is installed.\n'
     printf '        INSTALL_SYSTEM_CONFIG_FORCE=1 overrides that guard.\n'
   fi
-  printf '  NOTE: the installer also soft-skips without sudo (sudo-skip-guard.sh.tmpl).\n'
+  printf '  NOTE: without an elevation path the installer FAILS rather than skips\n'
+  printf '        (sudo-elevation-guard.sh.tmpl): not root, sudo wants a password,\n'
+  printf '        no TTY, and no usable desktop askpass helper. chezmoi does not\n'
+  printf '        record the failed run, so the next apply retries it.\n'
   printf '\n'
 fi
 {{- else }}
