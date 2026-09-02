@@ -56,8 +56,10 @@
 # run_after_ signature lifecycles; those sites left this surface, so the same 120
 # in-scope owners cannot carry that split without re-labelling rows against
 # skip.sh.tmpl's own definitions. The current source adds one transient-blocking
-# WakaTime keyring site after that inventory. The frozen totals — 121 owners, 11
-# hard errors, 141 instances, 117 + 24 — are CI-enforced.
+# WakaTime keyring site after that inventory, and config-kde-theme-dark adds four
+# more. The frozen totals — 129 owners, 11 hard errors, 192 instances, 124 + 68 —
+# are CI-enforced and must be re-frozen in .ci/check-skip-declarations.sh and
+# .ci/test-capability-cache.sh together with this file.
 
 schema: skip-declaration-site-matrix-v1
 frozen_from: 'docs/plans/2026-08-13-001-feat-skip-declaration-contract-plan.md#site-inventory-and-direction-matrix'
@@ -65,11 +67,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 127
+  classified_owners: 131
   hard_error_owners: 11
-  rendered_instances: 191
-  phase_local_instances: 122
-  shared_guard_instances: 69
+  rendered_instances: 196
+  phase_local_instances: 126
+  shared_guard_instances: 70
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -89,14 +91,14 @@ plan_contract_scopes:
   70-agents: 3
 
 audited_forms:
-  skip_here: 54
+  skip_here: 58
   skip_step: 31
   done_here: 18
   not_applicable: 24
 
 audited_directions:
   harmless: 26
-  transient-blocking: 56
+  transient-blocking: 60
   transient-tolerable: 3
 audited_scopes:
   00-tools: 4
@@ -105,7 +107,7 @@ audited_scopes:
   30-components: 12
   30-linux: 29
   50-linux-gnome: 29
-  50-linux-kde: 31
+  50-linux-kde: 34
   60-build: 5
   70-agents: 3
   guard-partials: 5
@@ -113,7 +115,7 @@ audited_scopes:
 shared_guard_fanout:
   gnome-guard: 7
   headless-guard: 10
-  kde-guard: 10
+  kde-guard: 11
   shared-host-guard: 20
   sudo-elevation-guard: 22
 divergence:
@@ -123,12 +125,16 @@ divergence:
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them).'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 56
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all.'
+    audited: 60
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session.'
   - bucket: 'done_here'
     plan: 10
     audited: 18
     reason: 'The six GNOME/KDE completion stamps plus eight already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, a converged authd login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here.'
+  - bucket: 'not_applicable'
+    plan: 22
+    audited: 24
+    reason: 'Two host-identity opt-outs the pre-U4 inventory could not have counted, both from the UX534 work: install-system-hardware skips its ScreenPad and kernel-argument block on any machine that is not that laptop, and config-screenpad-output skips entirely there. Baked hardware identity is not deferred work, so neither is a skip_here with a direction -- they are not_applicable in the same sense thinkpad-absent already was.'
   - bucket: 'scope:00-tools+10-auth'
     plan: 8
     audited: 9
@@ -139,7 +145,7 @@ divergence:
     reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts.'
   - bucket: 'scope:30-linux'
     plan: 19
-    audited: 28
+    audited: 29
     reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
@@ -147,8 +153,8 @@ divergence:
     reason: 'The estimate of 40 included the roughly sixteen skip sites in the two GNOME extension jobs U4 renamed to run_after_, which are no longer on this surface; the six remaining config scripts hold 29 owners plus the four named hard errors.'
   - bucket: 'scope:50-linux-kde'
     plan: 28
-    audited: 29
-    reason: 'One extra step owner beyond the estimate (config-kde-fonts/fc-cache-absent); the akonadi SQL-read failure in the same phase is recorded as the eleventh hard error rather than a classified owner.'
+    audited: 34
+    reason: 'One extra step owner beyond the estimate (config-kde-fonts/fc-cache-absent); the akonadi SQL-read failure in the same phase is recorded as the eleventh hard error rather than a classified owner. config-kde-theme-dark adds four owners: the colour scheme cannot be a config-kde-settings row, because Plasma paints from expanded [Colors:*] groups whose names carry a colon that the group-segment allowlist rejects, so applying them needs a live-session script with its own four preconditions.'
   - bucket: 'scope:60-build'
     plan: 4
     audited: 5
@@ -244,6 +250,7 @@ owners:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-kickoff.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-panel.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl#kde-guard/non-kde-desktop'
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-virtualkeyboard.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl#kde-guard/non-kde-desktop'
@@ -1527,6 +1534,70 @@ owners:
     fingerprint_placement: 'new-header-block'
     instances:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl#config-kde-settings/kwriteconfig6-absent'
+  - owner: 'config-kde-theme-dark/no-session-bus'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl'
+    anchor_line: 76
+    anchor: 'if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then'
+    predicate: '[[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]'
+    predicate_digest: 'sha256:305e3f5b48f45749cbab1c9daac129d3b46b5ca12e2690bdae9e03f5065d93d8'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-kde-session'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'session-bus-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl#config-kde-theme-dark/no-session-bus'
+  - owner: 'config-kde-theme-dark/no-display-server'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl'
+    anchor_line: 79
+    anchor: 'if [[ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then'
+    predicate: '[[ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]'
+    predicate_digest: 'sha256:61ef94ee1e1954f674eae6da84cb1afcef73731dcc3c4f4d9472046d83659cfc'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-kde-session'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'graphical-session-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl#config-kde-theme-dark/no-display-server'
+  - owner: 'config-kde-theme-dark/plasmashell-not-running'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl'
+    anchor_line: 82
+    anchor: 'if ! pgrep -xu "$USER" plasmashell >/dev/null 2>&1; then'
+    predicate: '! pgrep -xu "$USER" plasmashell >/dev/null 2>&1'
+    predicate_digest: 'sha256:0ea59d5b7d6a0bec3e6571cc62349dc69df50b761758dc7f88cbc954c98ad4ce'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-kde-session'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'plasmashell-running'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl#config-kde-theme-dark/plasmashell-not-running'
+  - owner: 'config-kde-theme-dark/colorscheme-tool-absent'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl'
+    anchor_line: 85
+    anchor: 'if ! command -v plasma-apply-colorscheme >/dev/null 2>&1; then'
+    predicate: '! command -v plasma-apply-colorscheme >/dev/null 2>&1'
+    predicate_digest: 'sha256:31d688c76a1c2ade6c8635028a9e1b9fd663d9e246c1f07c081820943df0f549'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-kde-session'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'plasma-apply-colorscheme-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl#config-kde-theme-dark/colorscheme-tool-absent'
   - owner: 'config-kde-touchpad/busctl-absent'
     scope: '50-linux-kde'
     template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl'
