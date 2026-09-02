@@ -140,14 +140,14 @@ agents:
       - openrouter
       modelRoles:
         advisor: "@worker"
-        claude: anthropic/claude-opus-5:max
+        claude: google-antigravity/gemini-3.7-flash:high
         commit: "@worker"
-        default: anthropic/claude-opus-5:xhigh
-        fable: anthropic/claude-fable-5:max
+        default: google-antigravity/gemini-3.7-flash:high
+        fable: google-antigravity/gemini-3.7-flash:high
         gemini: google-antigravity/gemini-3.7-flash:high
         plan: "@fable"
         skim: google-antigravity/gemini-3.7-flash:low
-        slow: anthropic/claude-opus-5:max
+        slow: google-antigravity/gemini-3.7-flash:high
         smol: google-antigravity/gemini-3.7-flash:high
         reviewer: google-antigravity/gemini-3.1-pro:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
