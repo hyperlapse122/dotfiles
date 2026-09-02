@@ -20,7 +20,16 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
      A settings key whose OWN name contains a dot has no expressible form here and
      is indistinguishable from an extra segment, so it is out of scope rather than
      detectable — see the plan's Scope Boundaries.
-  3. NO OTHER WRITER'S NAMESPACE. hooks belongs to aoe, which injects session
+  3. LEAF VALUES ONLY. A declared path names a LEAF. A container value would be
+     written wholesale by setpath and would destroy every sibling another writer
+     put inside that record -- the exact clobbering this whole design removes.
+     The sibling omp partial carries the equivalent parent-namespace check.
+  4. NO PATH OVERLAP. Two declared paths where one is an ancestor of the other
+     pass every per-path check, then the write applies them in sequence against
+     progressively mutated state and dies on a scalar it created itself. Under
+     `set -e` that aborts the whole apply with a bare jq error naming no path, so
+     only this render-time check can report it usefully.
+  5. NO OTHER WRITER'S NAMESPACE. hooks belongs to aoe, which injects session
      tracking at session start; enabledPlugins and extraKnownMarketplaces belong
      to install-claude-plugins. Asserting into any of them would fight a writer
      that rewrites the same file during ordinary use, and the loser would be
@@ -45,8 +54,21 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-claude-settings: %q is not a valid settings path; use dot-separated segments naming a leaf in settings.json, each segment non-empty and starting with a letter" $path) -}}
 {{-   end -}}
+{{-   if or (kindIs "map" $value) (kindIs "slice" $value) -}}
+{{-     fail (printf "config-claude-settings: %s declares a %s value, but a declared path must name a LEAF; asserting a container would replace the whole record and destroy every sibling another writer put there" $path (kindOf $value)) -}}
+{{-   end -}}
 {{-   $first := index (splitList "." $path) 0 -}}
 {{-   if has $first $ownedElsewhere -}}
 {{-     fail (printf "config-claude-settings: declared path %s addresses %s, which another writer owns (hooks -> aoe session tracking; enabledPlugins and extraKnownMarketplaces -> install-claude-plugins). Asserting it would fight that writer on every apply" $path $first) -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Overlap is checked only after EVERY path has passed the grammar rule above:
+   Go template map iteration has no defined order, so a shared pass would let this
+   check fire on a malformed path and report the wrong reason. */ -}}
+{{- range $path, $value := $settings -}}
+{{-   range $other, $_ := $settings -}}
+{{-     if and (ne $other $path) (hasPrefix (printf "%s." $path) $other) -}}
+{{-       fail (printf "config-claude-settings: declared path %s is an ancestor of %s; only one of them can name a leaf, and declaring both aborts the apply with no usable diagnostic" $path $other) -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
