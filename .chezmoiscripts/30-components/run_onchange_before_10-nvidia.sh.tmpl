@@ -183,7 +183,19 @@ enroll_dkms_mok() {
 
 enable_nvidia_services() {
   if systemctl list-unit-files nvidia-persistenced.service 2>/dev/null | grep -q nvidia-persistenced; then
-    "${SUDO[@]}" systemctl enable nvidia-persistenced 2>/dev/null || true
+    if [[ "$FACT_UX534" == 1 ]]; then
+      # nvidia-persistenced exists to hold the GPU initialised between clients,
+      # which is the opposite of what a laptop dGPU should do when nothing is
+      # using it. The driver already ships fine-grained runtime power management
+      # and the PCI device already sits at control=auto, so the only thing
+      # standing between this GPU and runtime suspend is this daemon. The
+      # enable/disable choice is made HERE, in one place: enabling first and
+      # disabling later would leave the unit toggled on every apply.
+      printf '  -> disabling nvidia-persistenced (dGPU runtime suspend)\n'
+      "${SUDO[@]}" systemctl disable --now nvidia-persistenced 2>/dev/null || true
+    else
+      "${SUDO[@]}" systemctl enable nvidia-persistenced 2>/dev/null || true
+    fi
   fi
 }
 
