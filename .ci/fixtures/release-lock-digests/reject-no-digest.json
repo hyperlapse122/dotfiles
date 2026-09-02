@@ -1,0 +1,15 @@
+{
+  "releases": {
+    "tools": {
+      "toolx": {
+        "kind": "githubRelease",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://example.invalid/x.tar.gz",
+            "sha256": null
+          }
+        }
+      }
+    }
+  }
+}

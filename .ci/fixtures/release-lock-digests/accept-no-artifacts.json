@@ -1,0 +1,11 @@
+{
+  "releases": {
+    "tools": {
+      "winbox": {
+        "kind": "vendorManifest",
+        "source": "https://winbox.invalid/LATEST.4",
+        "version": "4.0"
+      }
+    }
+  }
+}
