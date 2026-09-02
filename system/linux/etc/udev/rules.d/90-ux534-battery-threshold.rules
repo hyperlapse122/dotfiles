@@ -1,0 +1,19 @@
+# Charge ceiling for the ASUS ZenBook UX534FTC.
+#
+# WHY A UDEV RULE AND NOT A SCRIPT. `charge_control_end_threshold` is a plain
+# sysfs attribute with no persistence of its own: it resets to 100 on every
+# boot, so a one-shot write at apply time converges the machine exactly once and
+# then quietly stops being true. udev re-applies it every time the power_supply
+# device appears, which is the only place this value can live and stay lived.
+#
+# 80 is the ceiling. A lithium cell ages fastest held at full charge, and this
+# is a laptop that spends most of its life on mains, so the top 20% is capacity
+# traded for cycle life. Raise it for a trip and let this rule take it back.
+#
+# The `!=""` guard is not ceremony: a battery whose driver does not expose the
+# attribute would otherwise make the rule fail rather than skip, and this host
+# may yet see a second power_supply device that is not this battery.
+#
+# GATED on the `ux534` host fact via .chezmoidata/system.yaml (udev.overrides).
+# The file ships to no other machine.
+ACTION=="add|change", SUBSYSTEM=="power_supply", KERNEL=="BAT[0-9]", ATTR{type}=="Battery", ATTR{charge_control_end_threshold}!="", ATTR{charge_control_end_threshold}="80"

@@ -9,6 +9,28 @@ set -euo pipefail
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/udev/rules.d/**" "system/linux/etc/libinput/**")) }}
 SRC_ROOT="{{ $sourceDir }}/system/linux"
 
+override_patterns=()
+override_modes=()
+override_gates=()
+{{ range .system.linux.udev.overrides -}}
+override_patterns+=({{ .path | quote }})
+override_modes+=({{ get . "mode" | default "644" | quote }})
+override_gates+=({{ get . "gate" | default "" | quote }})
+{{ end }}
+{{- $gates := list -}}
+{{- range .system.linux.udev.overrides -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (udev.overrides)" "gates" $gates) -}}
+
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+gate_ok() {
+  fact_gate "$1"
+}
+
 shopt -s globstar nullglob
 
 udev_files=("$SRC_ROOT"/etc/udev/rules.d/** "$SRC_ROOT"/etc/libinput/**)
@@ -16,8 +38,26 @@ for src in "${udev_files[@]}"; do
   [[ -f "$src" ]] || continue
   rel="${src#"$SRC_ROOT"/}"
   dst="/$rel"
-  printf '  -> %s (mode 644)\n' "$dst"
-  "${SUDO[@]}" install -D -m 644 "$src" "$dst"
+  mode=644
+  gate=
+  for i in "${!override_patterns[@]}"; do
+    # shellcheck disable=SC2254 # manifest entries are deliberate glob patterns
+    case "$rel" in
+      ${override_patterns[$i]})
+        mode="${override_modes[$i]}"
+        gate="${override_gates[$i]}"
+        break
+        ;;
+    esac
+  done
+
+  if ! gate_ok "$gate"; then
+    printf '  -- %s (skipped: gate %s failed)\n' "$dst" "$gate"
+    continue
+  fi
+
+  printf '  -> %s (mode %s)\n' "$dst" "$mode"
+  "${SUDO[@]}" install -D -m "$mode" "$src" "$dst"
 done
 
 REMOVED_PATHS=()

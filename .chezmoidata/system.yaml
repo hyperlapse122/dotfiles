@@ -43,6 +43,11 @@ system:
     sysctl: {}
 
     udev:
+      overrides:
+        # The battery charge ceiling is UX534-specific hardware policy, not a
+        # general input rule, so it ships only where that battery is.
+        - path: etc/udev/rules.d/90-ux534-battery-threshold.rules
+          gate: ux534
       removed:
         # Retired uinput and receiver udev rules
         - path: /etc/udev/rules.d/80-uinput.rules
