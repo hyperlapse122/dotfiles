@@ -101,23 +101,23 @@
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",
-        "version": "v1.15.1",
+        "version": "v1.15.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-linux-amd64.tar.gz",
-            "sha256": "da198ef269f43ac7032022051990a2a31f2208d9d67c0bb0451914d20483b8ca"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.2/aoe-linux-amd64.tar.gz",
+            "sha256": "df821297f53e72809742ad90737c11bd364261faeba8d15953cfd148868764e4"
           },
           "linux-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-linux-arm64.tar.gz",
-            "sha256": "b017640bf107edbb26b65c2aca96d8130ea50ca8c3e4d9d0ae04543ee7762a20"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.2/aoe-linux-arm64.tar.gz",
+            "sha256": "14d0fa3f67cb68431fefd9ecf1b02d63f374b0a176a8e0838c7663c612fd3581"
           },
           "darwin-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-darwin-amd64.tar.gz",
-            "sha256": "82f41060679acea5abba42e3aa40560342a33885d762fa06e4cdd0f1cd26a860"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.2/aoe-darwin-amd64.tar.gz",
+            "sha256": "e85913b4656715e4afffdfc37b49d6c970a7df99bb60ca933da75b33d79a2992"
           },
           "darwin-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.1/aoe-darwin-arm64.tar.gz",
-            "sha256": "9e9b329b526c60a85ef1412d2ac8c40d39c254fbc35fac590f451165e0255927"
+            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.2/aoe-darwin-arm64.tar.gz",
+            "sha256": "6f03a0956f508bd097c696465e41d648227c5ae0d72966e5f5c619bd5d40207c"
           }
         }
       },
@@ -427,62 +427,62 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.0",
+        "version": "v2026.9.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-x64",
-            "sha256": "c9b089f2be1db4d4262eacaf367e480e7a328848adcc37d9d1612996902485d0"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-x64",
+            "sha256": "c98423c8470d6dc416d9f7036d0646d8ef5ae92ad9186907f8fcc84cbe7db4ea"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-arm64",
-            "sha256": "0b5c4586353010378d9caca62c95166588c3dc4e310eb2d276aac1068397faec"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-arm64",
+            "sha256": "0ef0a778eaa8599f3e90a8a0979c9fc3f79922cafb5fa6d39f366d974da33bba"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-macos-x64",
-            "sha256": "d4c68596addfd102717699243acfb795177dc025e7895bad581317c43fadb4ef"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-macos-x64",
+            "sha256": "0718a2aa14a96545a287f77a172d700247bb2d33016e5cf29fce1a05e45ac47a"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-macos-arm64",
-            "sha256": "50eeb4b907fb5fd4ad87a5fec0e55735bb16dfe00c725c9c3dc40852afd55b06"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-macos-arm64",
+            "sha256": "3cfbe3295dba1a7e43bd02653517a8cc21135ba91f0635b45c98f1ebecc5513f"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-x64-musl",
-            "sha256": "342bd607ec4d351c26515838444ed0af9bb11c633ba0ab5ad816e98f0afee2c5"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-x64-musl",
+            "sha256": "fb5111a3e46389bcfc026632e5dc0cfdd45b6565146c21bdb9c7a75ccefbc193"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.0/mise-v2026.9.0-linux-arm64-musl",
-            "sha256": "1a981875fb99cc3916e1caaef37a70b028cc72b161e57ea7d589f5c85d1803db"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-arm64-musl",
+            "sha256": "0175bbd05839105a99dc9599c0317654e8f01e67c00d2d394ed51e965bda2a51"
           }
         }
       },
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.1.2",
+        "version": "v18.1.4",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.2/omp-linux-x64",
-            "sha256": "c6a306347a57c872bf38587e81132db50490228867e3e179a363a4cf874da1a0"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-x64",
+            "sha256": "6aef8347b6e3790da2bb39dc5911a7a3587c5cea99b04eb7ea0c793ecb4f8faf"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.2/omp-linux-arm64",
-            "sha256": "2865c21a73ae8b893fd5553bf302afc5be8a0bcafa015af99732349d518830da"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-arm64",
+            "sha256": "e8b6fcfda4df32e7f22fca98107b48eea9e4edf2201dc1132703fb615550237f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.2/omp-darwin-x64",
-            "sha256": "fff1ecc1950b45530bc30fac54783c45d93f1bc8a5c49186b1bd796cc6cb62d0"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-darwin-x64",
+            "sha256": "318de84851036417dac4046978d00ffe6693fb129dd8008e9c6ac66ec1c91662"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.2/omp-darwin-arm64",
-            "sha256": "5f2512cce2a154ad2406a4792421c42f022b1335f83dcbde4236f76e50ab35b4"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-darwin-arm64",
+            "sha256": "4c460597154027e8203b3d447d9669e1bab4aa399ac510d516315a1d5dab3ea7"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.2/omp-linux-musl-x64",
-            "sha256": "094e69fad0fc70e2a0e6cd55ad2137c6f4803b72f3032a895df6100f2c38d3a1"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-musl-x64",
+            "sha256": "ee5ee51c0a9e3dbe8920186a5a164ad42e62cb4c63c27d78fb3a4e6621f4b4d9"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.2/omp-linux-musl-arm64",
-            "sha256": "bfdac4340ca6cd6727c8da2e5497572a6716b47aba25e3f71a2964eebadf42ec"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.4/omp-linux-musl-arm64",
+            "sha256": "972933fef05f51c5c081420d43a25a0149d2a1e2d9a18a80d5b9be2970a8530e"
           }
         }
       },
