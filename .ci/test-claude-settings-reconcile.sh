@@ -103,6 +103,16 @@ created=$scratch/created.json
 run "$created" >/dev/null
 assert_declared_present "$created" 'missing target'
 
+# Claude Code reads env values as STRINGS, so an unquoted scalar in agents.yaml
+# renders as a JSON number and the tool ignores the key. assert_declared_present
+# cannot catch that: it compares the live value against the SAME rendered
+# declaration, so an unquoted value is a number on both sides and matches. Only a
+# type check over the record sees it. Declared as a record sweep rather than one
+# key, so a later env leaf inherits the guard instead of needing its own line.
+mistyped_env=$(jq -r '(.env // {}) | to_entries[] | select(.value | type != "string") | .key' "$created")
+[[ -z $mistyped_env ]] \
+  || fail "declared env leaves reached the settings file as non-strings: $mistyped_env"
+
 # A malformed live file is preserved and reported, never rebuilt: rebuilding from
 # the declaration alone would drop everything the other writers own.
 malformed=$scratch/malformed.json
