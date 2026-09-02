@@ -69,6 +69,30 @@ else
   )
 fi
 
+if [[ "$FACT_UX534" == 1 ]]; then
+  # Take the ScreenPad's power state away from systemd. The panel boots powered
+  # and i915 enumerates it as HDMI-A-1; what kills it is this unit restoring the
+  # brightness it saved at the previous shutdown, ~3s in. Masking stops both
+  # halves — the restore that disconnects the panel and the save that recorded
+  # the value. See .chezmoidata/screenpad.yaml for the full mechanism.
+  printf '  -> masking systemd-backlight@backlight:asus_screenpad.service\n'
+  "${SUDO[@]}" systemctl mask systemd-backlight@backlight:asus_screenpad.service 2>/dev/null || true
+
+  # Then assert the declared brightness. Deliberately once, at apply time, not
+  # per boot: a per-boot restore is the mechanism just masked away.
+  screenpad_brightness=/sys/class/backlight/asus_screenpad/brightness
+  if [[ -e "$screenpad_brightness" ]]; then
+    printf '  -> ScreenPad brightness -> %s\n' {{ .screenpad.brightness | quote }}
+    "${SUDO[@]}" sh -c 'printf %s "$1" >"$2"' _ {{ .screenpad.brightness | quote }} "$screenpad_brightness"
+  else
+    printf '  -- %s absent; asus_wmi has not exposed the panel yet\n' "$screenpad_brightness"
+  fi
+else
+  (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-hardware" "site" "ux534-absent" "reason" "this host is not an ASUS ZenBook UX534") | trim | indent 4 }}
+  )
+fi
+
 REMOVED_PATHS=()
 REMOVED_DISTROS=()
 {{ range .system.linux.hardware.removed -}}

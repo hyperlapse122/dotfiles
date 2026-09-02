@@ -65,10 +65,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 125
+  classified_owners: 126
   hard_error_owners: 11
-  rendered_instances: 187
-  phase_local_instances: 120
+  rendered_instances: 188
+  phase_local_instances: 121
   shared_guard_instances: 67
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -92,7 +92,7 @@ audited_forms:
   skip_here: 54
   skip_step: 31
   done_here: 18
-  not_applicable: 22
+  not_applicable: 23
 
 audited_directions:
   harmless: 26
@@ -103,7 +103,7 @@ audited_scopes:
   10-auth: 5
   20-base: 5
   30-components: 12
-  30-linux: 28
+  30-linux: 29
   50-linux-gnome: 29
   50-linux-kde: 29
   60-build: 5
@@ -585,6 +585,19 @@ owners:
     form: 'not_applicable'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#install-system-hardware/thinkpad-absent'
+  - owner: 'install-system-hardware/ux534-absent'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl'
+    anchor_line: 72
+    anchor: 'if [[ "$FACT_UX534" == 1 ]]; then'
+    predicate: '[[ "$FACT_UX534" == 1 ]]'
+    predicate_digest: 'sha256:87c670df3729910aa192e7b4440075b24a28f9c084cc1eb2b57f7d8140ef068a'
+    continuation: 'abandon-step-inline-notice'
+    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
+    render_profile: 'linux-desktop'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl#install-system-hardware/ux534-absent'
   - owner: 'install-keyd/no-declared-keyboards'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl'
