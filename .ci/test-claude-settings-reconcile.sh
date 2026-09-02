@@ -159,7 +159,7 @@ race_err=$(RACE_MARK="$scratch/race.mark" RACE_CONTENT="$race_content" \
 grep -qF 'changed while this apply staged its replacement' <<<"$race_err" \
   || fail "the concurrent write was not reported; stderr was: $race_err"
 [[ $(cat "$race_fixture") == "$race_content" ]] \
-  || fail 'the concurrent writer\'"'"'s content was overwritten by the staged file'
+  || fail "the staged file overwrote the concurrent writer's content"
 [[ -z $(find "$(dirname "$race_fixture")" -maxdepth 1 -name '.settings.*' -print -quit) ]] \
   || fail 'the discarded staged file was left behind'
 
