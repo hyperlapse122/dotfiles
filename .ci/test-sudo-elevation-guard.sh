@@ -163,6 +163,13 @@ EOF
 printf '#!/usr/bin/env bash\nprintf secret\n' >"$scratch/bin/askpass-stub"
 chmod 700 "$scratch/bin/askpass-stub"
 
+# The PATH the ladder runs under. Every scenario but one uses the stub bin ahead
+# of the real system directories; the no-sudo scenario swaps in a hermetic bin
+# instead, because removing the stub while /usr/bin stays on PATH does not
+# produce a host without sudo — it produces a host with the REAL one, and on a
+# runner with passwordless sudo that resolves the ladder at rung 2.
+ladder_path="$scratch/bin:/usr/bin:/bin"
+
 run_ladder() {
   local fixture=$1
   shift
@@ -170,10 +177,19 @@ run_ladder() {
   # record, and on a host that sets that variable an unisolated run would land it
   # in the operator's real ledger.
   env -u WAYLAND_DISPLAY -u DISPLAY "$@" \
-    PATH="$scratch/bin:/usr/bin:/bin" HOME="$scratch/home" \
+    PATH="$ladder_path" HOME="$scratch/home" \
     XDG_STATE_HOME="$scratch/state" \
     bash "$fixture" </dev/null 2>&1
 }
+
+# A bin directory with no sudo in it, carrying only what the guard's failure path
+# actually runs: bash (env resolves the interpreter through the new PATH too),
+# plus the mkdir and rm the declared exit shells out to.
+mkdir -p "$scratch/nosudo-bin"
+for tool in bash mkdir rm; do
+  ln -sf "$(command -v "$tool")" "$scratch/nosudo-bin/$tool"
+done
+[[ ! -e "$scratch/nosudo-bin/sudo" ]] || fail 'the hermetic bin must not contain sudo'
 
 behaviour_fixture kde "$scratch/behave-kde.sh"
 behaviour_fixture none "$scratch/behave-none.sh"
@@ -222,12 +238,21 @@ chmod 700 "$scratch/bin/askpass-stub"
 pass 'a named but non-executable helper does not resolve the ladder'
 
 # A host with no sudo at all must reach the declared exit, not hand the script a
-# SUDO array whose first privileged call dies with command not found.
-mv "$scratch/bin/sudo" "$scratch/sudo.hidden"
+# SUDO array whose first privileged call dies with command not found. This needs
+# the hermetic bin: hiding the stub while /usr/bin is still on PATH only exposes
+# the real sudo, and on a runner with passwordless sudo that resolves rung 2.
+#
+# What this scenario does and does not prove: it pins the OUTCOME (a no-sudo host
+# reaches the declared exit), not the `command -v sudo` gate itself. Without that
+# gate the ladder still fails here, because the askpass rung's own `sudo -A -v`
+# also fails when the binary is missing — verified by removing the gate. The gate
+# is pinned by the render-half assertion above, which is what keeps the failure a
+# declared exit rather than a `command not found` at the first privileged call.
+ladder_path="$scratch/nosudo-bin"
 if run_ladder "$scratch/behave-kde.sh" DISPLAY=:0 >/dev/null; then
   fail 'the ladder resolved on a host with no sudo binary'
 fi
-mv "$scratch/sudo.hidden" "$scratch/bin/sudo"
+ladder_path="$scratch/bin:/usr/bin:/bin"
 pass 'a host with no sudo binary reaches the declared exit'
 
 printf 'sudo-elevation-guard: all elevation ladder gates passed\n'
