@@ -38,6 +38,35 @@ ux534:
     # is exactly the mechanism that was killing the panel.
     brightness: 128
 
+    # How the panel should sit in the desktop. KMS carries mode and orientation
+    # (see kernelArgs below) but has no concept of scale or position at all, so
+    # those two can only be stated per compositor — which is why this block
+    # exists alongside the kernel arguments rather than instead of them.
+    #
+    # `connector` and `edidIdentifier` together are how a config entry is found:
+    # the connector alone is not unique across machines, and the EDID string is
+    # what KWin itself keys on. Note the vendor prefix is wrong in the panel's
+    # own EDID; it is used verbatim because KWin uses it verbatim.
+    #
+    # `rotation` is kscreen-doctor's spelling and `transform` is KWin's spelling
+    # of the same quarter turn. Both are declared because the session is
+    # configured through kscreen-doctor and the greeter through its config file,
+    # and inferring one from the other in shell would be a lookup table nobody
+    # can read.
+    #
+    # scale 2 on a 5.65" 2160-wide panel gives 1080x540 logical pixels. It is a
+    # starting point, not a measured optimum; adjusting it is deliberately out
+    # of scope here.
+    output:
+      connector: 'HDMI-A-1'
+      edidIdentifier: 'TSB 34952 2290649088 28 2011 0'
+      scale: 2
+      rotation: 'right'
+      transform: 'Rotated270'
+      position:
+        x: 420
+        y: 1080
+
   # Kernel arguments this host declares, added with `grubby --update-kernel=ALL`
   # only when they are not already present (read-compare-then-write, mirroring
   # the resume= handling in install-system-swap-hibernate).

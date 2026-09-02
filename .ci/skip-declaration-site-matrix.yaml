@@ -65,11 +65,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 126
+  classified_owners: 127
   hard_error_owners: 11
-  rendered_instances: 188
-  phase_local_instances: 121
-  shared_guard_instances: 67
+  rendered_instances: 191
+  phase_local_instances: 122
+  shared_guard_instances: 69
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -92,7 +92,7 @@ audited_forms:
   skip_here: 54
   skip_step: 31
   done_here: 18
-  not_applicable: 23
+  not_applicable: 24
 
 audited_directions:
   harmless: 26
@@ -105,7 +105,7 @@ audited_scopes:
   30-components: 12
   30-linux: 29
   50-linux-gnome: 29
-  50-linux-kde: 29
+  50-linux-kde: 31
   60-build: 5
   70-agents: 3
   guard-partials: 5
@@ -113,9 +113,9 @@ audited_scopes:
 shared_guard_fanout:
   gnome-guard: 7
   headless-guard: 10
-  kde-guard: 9
+  kde-guard: 10
   shared-host-guard: 20
-  sudo-elevation-guard: 21
+  sudo-elevation-guard: 22
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -212,6 +212,19 @@ owners:
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-mouse.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl#gnome-guard/non-gnome-desktop'
       - '.chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-terminal-palette.sh.tmpl#gnome-guard/non-gnome-desktop'
+  - owner: 'config-screenpad-output/ux534-absent'
+    scope: '50-linux-kde'
+    template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl'
+    anchor_line: 31
+    anchor: 'if [[ "$FACT_UX534" != 1 ]]; then'
+    predicate: '[[ "$FACT_UX534" != 1 ]]'
+    predicate_digest: 'sha256:7369aebe20290cb59cf4538a15cc2b14e2c7b9aad2dfd3b716f01e254615be66'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-desktop'
+    form: 'not_applicable'
+    instances:
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl#config-screenpad-output/ux534-absent'
   - owner: 'kde-guard/non-kde-desktop'
     scope: 'guard-partials'
     template: '.chezmoitemplates/kde-guard.sh.tmpl'
@@ -233,6 +246,7 @@ owners:
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-settings.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-virtualkeyboard.sh.tmpl#kde-guard/non-kde-desktop'
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl#kde-guard/non-kde-desktop'
       - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-wallpaper-breeze.sh.tmpl#kde-guard/non-kde-desktop'
   - owner: 'headless-guard/headless-install'
     scope: 'guard-partials'
@@ -288,6 +302,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'

@@ -1,0 +1,128 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+#
+# Places the UX534's ScreenPad in the desktop: scale, quarter turn, and position
+# relative to the main panel. The values are DATA — .chezmoidata/ux534.yaml
+# `ux534.screenpad.output` is the single source of truth (see its header) — edit
+# the yaml, not this file.
+#
+# TWO SURFACES, TWO MECHANISMS, and the split is not arbitrary. KWin reads
+# kwinoutputconfig.json when it starts and writes its own values back whenever
+# the output set changes, so editing that file underneath a running compositor
+# either does nothing or loses to KWin's next write. The session is therefore
+# configured through kscreen-doctor, against the live KWin — the same shape
+# config-kde-touchpad uses for the same reason. The login greeter runs its own
+# KWin that is not running while the user is logged in, so for that one the
+# config file IS the live surface, and per-key assertion is the only way in.
+#
+# Neither half is required for the other, so neither absence ends the script:
+# a machine without kscreen-doctor still gets its greeter placed, and a machine
+# whose greeter has never seen the panel still gets its session placed.
+#
+# WHAT THIS DELIBERATELY DOES NOT DO: own the whole file. KWin rewrites it, so
+# whole-file management drifts on every login. Only the declared keys of the one
+# matching output are touched; every other output and every other key is left
+# exactly as KWin wrote it.
+set -euo pipefail
+
+{{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-screenpad-output.sh") -}}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "config-screenpad-output.sh") -}}
+
+if [[ "$FACT_UX534" != 1 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-screenpad-output" "site" "ux534-absent" "reason" "this host is not an ASUS ZenBook UX534, so it has no ScreenPad to place") | trim | indent 2 }}
+fi
+
+CONNECTOR={{ .ux534.screenpad.output.connector | quote }}
+EDID_IDENTIFIER={{ .ux534.screenpad.output.edidIdentifier | quote }}
+SCALE={{ .ux534.screenpad.output.scale | quote }}
+ROTATION={{ .ux534.screenpad.output.rotation | quote }}
+TRANSFORM={{ .ux534.screenpad.output.transform | quote }}
+POSITION_X={{ .ux534.screenpad.output.position.x | quote }}
+POSITION_Y={{ .ux534.screenpad.output.position.y | quote }}
+
+GREETER_CONFIG=/var/lib/plasmalogin/.config/kwinoutputconfig.json
+
+place_in_session() {
+  if ! command -v kscreen-doctor >/dev/null 2>&1; then
+    printf '  -- kscreen-doctor absent; session placement deferred\n'
+  elif ! kscreen-doctor -o 2>/dev/null | grep -q "$CONNECTOR"; then
+    printf '  -- %s is not an output in this session; nothing to place\n' "$CONNECTOR"
+  else
+    printf '  -> session: %s scale=%s rotation=%s position=%s,%s\n' \
+      "$CONNECTOR" "$SCALE" "$ROTATION" "$POSITION_X" "$POSITION_Y"
+    kscreen-doctor \
+      "output.$CONNECTOR.scale.$SCALE" \
+      "output.$CONNECTOR.rotation.$ROTATION" \
+      "output.$CONNECTOR.position.$POSITION_X,$POSITION_Y" >/dev/null
+  fi
+}
+
+place_in_greeter() {
+  local current updated owner group mode
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '  -- jq absent; greeter placement deferred\n'
+  elif [[ ! -f "$GREETER_CONFIG" ]]; then
+    printf '  -- %s absent; the greeter has not run yet\n' "$GREETER_CONFIG"
+  elif ! current="$("${SUDO[@]}" cat "$GREETER_CONFIG" 2>/dev/null)"; then
+    printf '  -- %s unreadable; greeter placement deferred\n' "$GREETER_CONFIG"
+  elif ! printf '%s' "$current" | jq -e . >/dev/null 2>&1; then
+    # Refuse to touch a file we cannot parse rather than truncating it.
+    printf '  !! %s is not valid JSON; refusing to rewrite it\n' "$GREETER_CONFIG" >&2
+    return 1
+  else
+    assert_greeter_placement "$current"
+  fi
+}
+
+assert_greeter_placement() {
+  local current="$1" updated owner group mode
+
+  # Assert only the declared keys of the one matching output, then the position
+  # of whichever setup entry refers to it by index. `outputs` and `setups` are
+  # separate groups in this file and the link between them is the array index,
+  # which is why the index is resolved first and reused.
+  updated="$(printf '%s' "$current" | jq \
+    --arg connector "$CONNECTOR" \
+    --arg edid "$EDID_IDENTIFIER" \
+    --arg transform "$TRANSFORM" \
+    --argjson scale "$SCALE" \
+    --argjson x "$POSITION_X" \
+    --argjson y "$POSITION_Y" '
+    (map(select(.name == "outputs")) | first | .data // []) as $outputs
+    | ($outputs | map(.connectorName == $connector and .edidIdentifier == $edid) | index(true)) as $idx
+    | if $idx == null then .
+      else
+        map(
+          if .name == "outputs" then
+            .data[$idx].scale = $scale
+            | .data[$idx].transform = $transform
+          elif .name == "setups" then
+            .data |= map(
+              .outputs |= map(
+                if .outputIndex == $idx then .position = {x: $x, y: $y} else . end
+              )
+            )
+          else . end
+        )
+      end
+  ')"
+
+  if [[ "$updated" == "$current" ]]; then
+    printf '  == greeter already placed; no write\n'
+  else
+    printf '  -> greeter: %s scale=%s transform=%s position=%s,%s\n' \
+      "$CONNECTOR" "$SCALE" "$TRANSFORM" "$POSITION_X" "$POSITION_Y"
+    # Preserve the file's existing owner and mode rather than naming the greeter
+    # account here: a root redirect would silently reassign both, and the account
+    # name is the display manager's business, not this repository's.
+    owner="$("${SUDO[@]}" stat -c '%U' "$GREETER_CONFIG")"
+    group="$("${SUDO[@]}" stat -c '%G' "$GREETER_CONFIG")"
+    mode="$("${SUDO[@]}" stat -c '%a' "$GREETER_CONFIG")"
+    "${SUDO[@]}" install -m "$mode" -o "$owner" -g "$group" /dev/stdin "$GREETER_CONFIG" <<<"$updated"
+  fi
+}
+
+place_in_session
+place_in_greeter
+{{ end -}}
