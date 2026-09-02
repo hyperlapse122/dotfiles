@@ -237,11 +237,43 @@ type=AVC msg=audit(...): avc: denied { link } for pid=... comm="bun.native"
 2. **Relabel only narrow paths**: Pass discrete paths to `restorecon` in the apply script; never pass `$HOME/.claude` or `$HOME/.gemini` recursively.
 3. **Retire the tokscale exception module (`dotfiles_tokscale_gemini_access.cil`)**: With `~/.gemini/antigravity-cli` on `user_home_t`, `tokscale` runs as an ordinary `unconfined_t` utility and accesses Antigravity's conversation SQLite store without requiring write permissions on `gemini_config_t`, eliminating previous excess trust over `~/.gemini/config/mcp_config.json`.
 
+## The fifth surprise: narrowing the policy repairs no inode, and only `chezmoi_t` can (2026-09-02)
+
+Shrinking the `filecon` set removes the cause of the hardlink leak. It removes none of the damage. A SELinux label lives on the **inode**, so every file the old recursive `restorecon` stamped keeps `claude_config_t` after the new policy is installed, no matter which path it is reached through.
+
+The obvious repair does not work:
+
+```
+$ restorecon -RF ~/.bun/install/cache
+restorecon: Could not set context for /home/h82/.bun/install/cache/...:  Permission denied
+```
+
+`restorecon` needs `relabelfrom` on the type it is LEAVING. The protected types deliberately carry no base attribute, so the only rule that grants `relabelfrom` on them is the module's own `allow chezmoi_t protected_agent_config_type ...`. No unconfined domain holds it, and `sudo` does not help because a login shell's `sudo` stays `unconfined_t`. `rm -rf` fails for the same reason: `unlink` is checked against the file's type, and the protected types grant it to `chezmoi_t` and to the owning harness only. A `rm -rf ~/.bun/install/cache` from a login shell therefore deletes the correctly labelled majority and leaves exactly the mislabelled files behind.
+
+Measured on host MS-7D91 after the narrowing landed: 8,467 stranded files in `~/.bun/install/cache`, 974 in `~/.claude`, and 614 in project `node_modules` trees.
+
+### The Fix
+
+The apply script gained a reclaim sweep, because `chezmoi_t` is the only domain that can run it:
+
+```sh
+find "$HOME" -xdev \
+  \( -context '*:protected_agent_config_t:*' \
+  -o -context '*:claude_config_t:*' \
+  -o -context '*:gemini_config_t:*' \) -print0 |
+  xargs -0 -r -n 200 restorecon -Fiv
+```
+
+The sweep can only LOWER a label. It selects paths that ALREADY carry a protected type and asks `restorecon` for the policy default, so a path the module still claims is a no-op and every stale one drops back to `user_home_t`. It never walks a cache root looking for files to protect, which is what makes it safe where `restorecon -RF "$HOME/.claude"` was not. A full `$HOME` walk costs about 6 seconds, and the script runs only when the policy changes.
+
+The caches themselves are refetchable, so dropping them is the faster route for a host that has one of them stranded — but only a domain with `unlink` on the protected type can do it. Inside a Claude Code session (`claude_t`) `rm -rf ~/.claude/plugins/cache ~/.bun/install/cache` succeeds; from a login shell it does not.
+
 ## Prevention
 
 - **Never protect package manager caches**: Package caches (like `node_modules` in plugin directories) use hardlinks into machine-wide caches. Placing a cache under a protected SELinux type leaks that type onto shared inodes during `restorecon`.
 - **Narrow `filecon` specifications**: Protect only exact configuration files, skill symlinks/roots, and plugin manifest/marketplace trees. Let runtime cache, log, and session directories fall back to `user_home_t`.
 - **Pass only discrete paths to `restorecon`**: Never pass whole-home harness directories (`$HOME/.claude`, `$HOME/.gemini`) recursively to `restorecon`.
+- **Ship the repair with the narrowing**: A `filecon` change never moves an existing label. Plan a reclaim sweep run by the one domain that holds `relabelfrom` on the protected types, because no login shell and no `sudo` can clear a stale protected label.
 - **Never add a protected config type to `file_type`**: Doing so silently removes confinement because `unconfined_t` can write all `file_type` objects.
 - **Maintain upgrade-durability named transitions**: When entrypoint binaries reside in versioned paths, named file transitions (`typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t`) ensure newly installed binaries inherit the entrypoint type at creation time before `restorecon` runs.
 - **Verify policy compilation and boundaries in CI**: `.ci/test-selinux-protected-configs.sh` asserts the absence of whole-tree `filecon` and `restorecon` entries, compiles CIL modules with `secilc`, and tests the write matrix with `setools`.

@@ -202,6 +202,29 @@ if grep -qE '"\$HOME/\.gemini"\b' "$rendered"; then
   fail 'rendered script must not pass recursive "$HOME/.gemini" root to restorecon'
 fi
 
+# Narrowing the filecon set stopped the leak but repaired no inode: a label
+# lives on the inode, the protected types carry no base attribute, and so no
+# unconfined domain holds relabelfrom on them. Neither `restorecon` nor `rm`
+# from a login shell can clear a stale claude_config_t out of the Bun cache,
+# which leaves chezmoi_t — this script — as the only domain that can. Assert
+# the reclaim exists, and that it stays a LOWERING sweep: it selects paths that
+# already carry a protected type and asks restorecon for the policy default,
+# so it can never stamp a protected label onto a hardlinked cache file.
+grep -qF 'reclaiming stale protected labels' "$rendered" ||
+  fail 'rendered script does not reclaim stale protected labels left by an earlier policy revision'
+for reclaim_selector in \
+  "-context '*:protected_agent_config_t:*'" \
+  "-context '*:claude_config_t:*'" \
+  "-context '*:gemini_config_t:*'"; do
+  grep -qF -- "$reclaim_selector" "$rendered" ||
+    fail "reclaim sweep does not select $reclaim_selector"
+done
+grep -qF 'xargs -0 -r -n 200 restorecon -Fiv' "$rendered" ||
+  fail 'reclaim sweep must pass a discrete path list to restorecon, never a recursive root'
+if grep -qE 'restorecon -[A-Za-z]*R[A-Za-z]* .*\$\(find|find .*\| *xargs .*restorecon -[A-Za-z]*R' "$rendered"; then
+  fail 'reclaim sweep must not pass -R to restorecon'
+fi
+
 # A policy change strands every agent session that is already running: SELinux
 # assigns the domain at exec, so the old process keeps unconfined_t while its
 # files have just been relabelled, and its writes start failing with EACCES.

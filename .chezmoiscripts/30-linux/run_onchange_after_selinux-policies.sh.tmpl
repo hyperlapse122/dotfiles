@@ -58,6 +58,36 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           "$HOME/.local/lib/commands/store/claude" \
           "$HOME/.local/lib/commands/store/agy" \
           2>/dev/null || true
+
+        # LEGACY LABEL RECLAIM. An earlier revision of this module claimed the
+        # whole of ~/.claude and ~/.gemini, and restorecon relabels INODES, not
+        # paths: the recursive walk stamped claude_config_t onto files that Bun
+        # had hardlinked out of ~/.bun/install/cache, and onto every other name
+        # those inodes carry in project node_modules trees (issue #338).
+        #
+        # Narrowing the filecon set stopped the cause but repaired no damage. A
+        # label lives on the inode, and the protected types carry no attribute,
+        # so no unconfined domain holds relabelfrom on them: `restorecon -RF
+        # ~/.bun/install/cache` from a login shell fails with EACCES, and so
+        # does `rm`. chezmoi_t is the only domain the module grants relabelfrom,
+        # which makes this script the only place the repair can run.
+        #
+        # The sweep can only LOWER a label. It selects paths that ALREADY carry
+        # a protected type and asks restorecon for the policy default, so a path
+        # the module still claims is a no-op and every stale one drops back to
+        # user_home_t. It never walks a cache root looking for files to protect,
+        # so it cannot re-create the leak it repairs.
+        if find "$HOME" -maxdepth 0 -context '*' >/dev/null 2>&1; then
+          printf 'selinux-policies: reclaiming stale protected labels...\n'
+          find "$HOME" -xdev \
+            \( -context '*:protected_agent_config_t:*' \
+            -o -context '*:claude_config_t:*' \
+            -o -context '*:gemini_config_t:*' \) -print0 2>/dev/null |
+            xargs -0 -r -n 200 restorecon -Fiv 2>/dev/null || true
+        else
+          printf 'selinux-policies: %s\n' \
+            'find(1) has no -context support, so stale protected labels left by an earlier policy revision cannot be found. Reinstall findutils with SELinux support to reclaim them.'
+        fi
       fi
 
       # SELinux fixes a process's domain at exec, and installing a module never
