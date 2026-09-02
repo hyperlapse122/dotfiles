@@ -29,16 +29,16 @@ scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/sudo-elevation-guard.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
-mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target" "$scratch/src/.chezmoitemplates"
+mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target" "$scratch/state" "$scratch/src/.chezmoitemplates"
 printf '[data]\n' >"$scratch/empty.toml"
 
 fail() { printf 'sudo-elevation-guard: FAIL: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'sudo-elevation-guard: ok - %s\n' "$*"; }
 
-command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is required on PATH'
+chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is required on PATH'
 
+require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/sudo-elevation-guard.sh.tmpl
 guard_src="$repo_root/.chezmoitemplates/sudo-elevation-guard.sh.tmpl"
-[[ -f "$guard_src" ]] || fail "missing source surface $guard_src"
 cp "$repo_root/.chezmoitemplates/skip.sh.tmpl" "$scratch/src/.chezmoitemplates/"
 
 # A consumer that uses the SUDO array, so shellcheck sees the array consumed the
@@ -50,15 +50,13 @@ set -euo pipefail
 "${SUDO[@]}" install -d -m 0755 /etc/probe.d
 EOF
 
+# The fixture source tree carries a fact-pinned copy of the production partial,
+# so one render exercises the real guard at a chosen `desktop` value.
 render_guard() {
   local desktop=$1 output=$2
   write_fact_stub "$guard_src" "$scratch/src/.chezmoitemplates/sudo-elevation-guard.sh.tmpl" \
     false false "$desktop"
-  env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" chezmoi \
-    --config "$scratch/empty.toml" --source "$scratch/src" \
-    --destination "$scratch/target" \
-    --override-data '{"chezmoi":{"os":"linux"}}' \
-    execute-template <"$scratch/consumer.tmpl" >"$output"
+  render "$scratch/src" "$scratch" "$chezmoi_bin" linux "$scratch/consumer.tmpl" "$output"
 }
 
 # ---- Render half ------------------------------------------------------------
@@ -117,6 +115,17 @@ grep -q 'if \[\[ "${EUID}" -eq 0 \]\]; then' "$scratch/render-none.sh" \
   || fail 'the ladder does not start at the already-root rung'
 pass 'the ladder starts at the already-root rung'
 
+# The behaviour half rewrites this bound down to one second. Pin the production
+# value here so widening it is caught by the render half rather than silently
+# rewritten and asserted as bounded.
+grep -q 'timeout -k 5 120 sudo -A -v' "$scratch/render-kde.sh" \
+  || fail 'the askpass rung no longer carries the 120-second bound'
+pass 'the askpass rung carries its production bound'
+
+grep -q 'if command -v sudo >/dev/null 2>&1; then' "$scratch/render-none.sh" \
+  || fail 'the ladder does not gate its rungs on the sudo binary'
+pass 'rungs 2 to 4 sit behind the sudo binary check'
+
 # ---- Behaviour half ---------------------------------------------------------
 
 # Rewrite the two literals a test cannot otherwise reach: the absolute helper
@@ -124,7 +133,7 @@ pass 'the ladder starts at the already-root rung'
 behaviour_fixture() {
   local shape=$1 output=$2
   sed -e "s@SUDO_ASKPASS='[^']*'@SUDO_ASKPASS='$scratch/bin/askpass-stub'@" \
-      -e 's@timeout -k 5 120@timeout -k 1 1@' \
+      -e 's@timeout -k 5 120 sudo -A -v@timeout -k 1 1 sudo -A -v@' \
       "$scratch/render-$shape.sh" \
     | grep -v 'install -d -m 0755 /etc/probe.d' >"$output"
   # Report the resolved state in place of the consumer's privileged call.
@@ -139,7 +148,13 @@ write_sudo_stub() {
   cat >"$scratch/bin/sudo" <<EOF
 #!/usr/bin/env bash
 if [[ "\$1" == "-n" ]]; then exit $1; fi
-if [[ "\$1" == "-A" ]]; then $2; fi
+if [[ "\$1" == "-A" ]]; then
+  # Real sudo reads the helper named by SUDO_ASKPASS. Requiring it here is what
+  # makes the gate fail if the guard ever stops exporting the variable.
+  [[ -x "\${SUDO_ASKPASS:-}" ]] || exit 1
+  "\$SUDO_ASKPASS" >/dev/null || exit 1
+  $2
+fi
 exit 0
 EOF
   chmod 700 "$scratch/bin/sudo"
@@ -151,8 +166,12 @@ chmod 700 "$scratch/bin/askpass-stub"
 run_ladder() {
   local fixture=$1
   shift
+  # XDG_STATE_HOME is isolated as well as HOME: the declared exit writes a skip
+  # record, and on a host that sets that variable an unisolated run would land it
+  # in the operator's real ledger.
   env -u WAYLAND_DISPLAY -u DISPLAY "$@" \
     PATH="$scratch/bin:/usr/bin:/bin" HOME="$scratch/home" \
+    XDG_STATE_HOME="$scratch/state" \
     bash "$fixture" </dev/null 2>&1
 }
 
@@ -192,5 +211,23 @@ if run_ladder "$scratch/behave-none.sh" DISPLAY=:0 >/dev/null; then
   fail 'the none shape resolved through an askpass rung it must not have'
 fi
 pass 'the none shape fails without ever reaching a helper'
+
+# The state every fresh desktop host is in before the package script has run:
+# the helper is named but not installed.
+chmod 000 "$scratch/bin/askpass-stub"
+if run_ladder "$scratch/behave-kde.sh" DISPLAY=:0 >/dev/null; then
+  fail 'the ladder resolved with a named but non-executable helper'
+fi
+chmod 700 "$scratch/bin/askpass-stub"
+pass 'a named but non-executable helper does not resolve the ladder'
+
+# A host with no sudo at all must reach the declared exit, not hand the script a
+# SUDO array whose first privileged call dies with command not found.
+mv "$scratch/bin/sudo" "$scratch/sudo.hidden"
+if run_ladder "$scratch/behave-kde.sh" DISPLAY=:0 >/dev/null; then
+  fail 'the ladder resolved on a host with no sudo binary'
+fi
+mv "$scratch/sudo.hidden" "$scratch/bin/sudo"
+pass 'a host with no sudo binary reaches the declared exit'
 
 printf 'sudo-elevation-guard: all elevation ladder gates passed\n'

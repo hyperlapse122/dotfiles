@@ -108,18 +108,23 @@ NODE
 # deliberately NOT added to the normalized-away blocks above: it is exactly the
 # kind of shared control flow this baseline exists to watch, and excising it
 # would blind the gate to a later change in the ladder.
+#
+# SCOPE, precisely: the fixture pins `desktop: none`, so these digests watch the
+# ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
+# is not byte-pinned here; `.ci/test-sudo-elevation-guard.sh` is what covers all
+# three renderings.
 declare -A baseline_hashes=(
-  [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=816b9ec031c2c3b727fb76599e2b439cf975a232325967774d4c83f20ce3873e
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=8b1b23c8b5e2ecb9abb5cc868c779e35016b6509268f70e7ee6a5c7db5db3d39
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=0f56d1f8c52a455c9b2c0f2cf4c71714570d7590e95f7f9a0a7857efdba72a6e
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=b061201144f486ec17a71e907456db29f480ff57d56689feca42ae09ea53b234
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=9bb65a71733f8dd495d02b6d5d60ce26944fd8123f7903aabe9b22d04251f1a1
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=8330ddaab915eb18215fb5bcaf335e92a0d5584431d975fbbf9020c095b206bc
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=c6bbd279677da52010cf56362b57fcd56003d3e2354e2aaadda7b3981a433a7f
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0afd323a11ff383786a311eb119851f4c2e56d76f8eaae8f8b961c6c8b5244d7
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=f93849d47306b47eff1a48620e9408f55ce159ffb8441bfcaca74dd1e3713c1a
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=3d064a36db351dce7076db6debdc0f654149457c68acce868079fc1915ea1c72
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=1ec91a0ee72202e62f5e950334d8b2e6c4e4fc5e3846476945ad818f1fe1a545
+  [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=7b328fe4c8547ad653d6d885e68d4ac959edce4f13828ecfd62a388d7b998cf9
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=614c17f15f4ab50923e22631ea538072084966ff925fff5df2a4a591e18e2b4f
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=5e086c571eb1f11394e659ac699cfcdf8e4ee162ca468482620c650b45c100f5
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=c584788d3e946555e6433fc7f50f5a6070bec46b3b5e7f9549fc046a8d096441
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=65f019e900b7c452c9b09c23b1f657fe7758cf9e33746d47d81bd855c6576fdd
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=dc0b94a8166d05d1fddd55ae9c0e8a929ea8a417651073afe8e7d6e508d308d3
 )
 
 for template in "${!baseline_hashes[@]}"; do

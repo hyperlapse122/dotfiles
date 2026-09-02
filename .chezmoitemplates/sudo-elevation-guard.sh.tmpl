@@ -10,6 +10,20 @@ THE LADDER, in order. Only the fourth rung is new:
   4  a usable desktop askpass helper  SUDO=(sudo -A)   sudo prompts through the session
      none of the above                declared exit 1
 
+Rungs 2 to 4 sit behind `command -v sudo`. Without the binary, `sudo -n true`
+fails for the wrong reason, and rung 3 would then read a bare TTY as success and
+hand the script a SUDO array its first privileged call cannot honour. The retired
+sudo-require-guard made that check; the ladder keeps it.
+
+THE ASKPASS RUNG IS FEDORA-SHAPED. Both helper literals are Fedora paths, and only
+the Fedora branch of 30-components/60-desktop-ime installs the packages. On a
+Debian or Ubuntu host the rung is therefore inert — `-x` fails and the ladder
+falls through to rung 3 or the declared exit, exactly as it does on a host with no
+desktop. That is a narrower capability, not a regression: those hosts got no
+askpass rung before this guard either. Extending it needs the Debian package name
+and its own binary path (`/usr/lib/openssh/gnome-ssh-askpass`, unverified here),
+so it is left out rather than guessed.
+
 WHY THE SKIP BECAME A FAILURE. The old sudo-skip-guard exited 0 so that `chezmoi
 apply` would not abort every later script — and chezmoi therefore recorded twelve
 unprovisioned scripts as SUCCESSFUL runs. An unprovisioned host became
@@ -97,30 +111,37 @@ if [[ "${EUID}" -eq 0 ]]; then
 else
   SUDO=(sudo)
   sudo_elevation_ready=0
-  # `sudo -n true` succeeds on a cached ticket or a NOPASSWD rule. `[[ -t 0 ]]`
-  # is true only when stdin is a TTY, which is how sudo reads a password
-  # normally; chezmoi connects stdin to its own under an interactive apply and
-  # not under an agent or CI run.
-  if sudo -n true 2>/dev/null || [[ -t 0 ]]; then
-    sudo_elevation_ready=1
+  # The binary is the precondition every later rung shares, and it is checked
+  # first because a missing sudo makes `sudo -n true` fail for the WRONG reason:
+  # the ladder would then read a TTY as success and hand the script a SUDO array
+  # whose first privileged call dies with `command not found` instead of the
+  # declared exit below. The retired sudo-require-guard checked this; keep it.
+  if command -v sudo >/dev/null 2>&1; then
+    # `sudo -n true` succeeds on a cached ticket or a NOPASSWD rule. `[[ -t 0 ]]`
+    # is true only when stdin is a TTY, which is how sudo reads a password
+    # normally; chezmoi connects stdin to its own under an interactive apply and
+    # not under an agent or CI run.
+    if sudo -n true 2>/dev/null || [[ -t 0 ]]; then
+      sudo_elevation_ready=1
 {{- if ne $helper "" }}
-  else
-    # No terminal to prompt on, but this host has a desktop askpass helper.
-    # sudo reads the password through it and stores nothing here.
-    SUDO_ASKPASS='{{ $helper }}'
-    export SUDO_ASKPASS
-    if [[ -x "$SUDO_ASKPASS" && -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
-      # One bounded dialog resolves the ladder; -k follows the TERM with a KILL
-      # so a cancelled prompt cannot linger. timeout signals the child's process
-      # group, so the helper goes with sudo.
-      if timeout -k 5 120 sudo -A -v 2>/dev/null; then
-        SUDO=(sudo -A)
-        sudo_elevation_ready=1
+    else
+      # No terminal to prompt on, but this host has a desktop askpass helper.
+      # sudo reads the password through it and stores nothing here.
+      SUDO_ASKPASS='{{ $helper }}'
+      export SUDO_ASKPASS
+      if [[ -x "$SUDO_ASKPASS" && -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
+        # One bounded dialog resolves the ladder; -k follows the TERM with a KILL
+        # so a cancelled prompt cannot linger. timeout signals the child's process
+        # group, so the helper goes with sudo.
+        if timeout -k 5 120 sudo -A -v 2>/dev/null; then
+          SUDO=(sudo -A)
+          sudo_elevation_ready=1
+        fi
       fi
-    fi
 {{- end }}
+    fi
   fi
   if [[ "$sudo_elevation_ready" -ne 1 ]]; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" .ctx "owner" "sudo-elevation-guard/no-elevation-path" "form" "skip_here" "script" $name "site" "no-elevation-path" "direction" "transient-tolerable" "reason" "no elevation path: not root, sudo wants a password, no terminal to ask on, and no usable desktop askpass helper. Give the run a terminal (ssh -t) or authenticate first with: sudo -v") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" .ctx "owner" "sudo-elevation-guard/no-elevation-path" "form" "skip_here" "script" $name "site" "no-elevation-path" "direction" "transient-tolerable" "reason" "no elevation path: not root, and sudo cannot authenticate here (missing, or it wants a password with no terminal to ask on and no usable desktop askpass helper). Give the run a terminal (ssh -t) or authenticate first with: sudo -v") | trim | indent 4 }}
   fi
 fi
