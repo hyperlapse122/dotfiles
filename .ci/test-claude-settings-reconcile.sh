@@ -109,7 +109,10 @@ assert_declared_present "$created" 'missing target'
 # declaration, so an unquoted value is a number on both sides and matches. Only a
 # type check over the record sees it. Declared as a record sweep rather than one
 # key, so a later env leaf inherits the guard instead of needing its own line.
-mistyped_env=$(jq -r '(.env // {}) | to_entries[] | select(.value | type != "string") | .key' "$created")
+# The object test is not redundant: a bare `env` scalar leaf renders past the
+# declaration guard, and to_entries would then abort this whole suite at the
+# assignment with jq's own "has no keys" rather than the diagnostic below.
+mistyped_env=$(jq -r '(.env // {}) | if type == "object" then (to_entries[] | select(.value | type != "string") | .key) else "env" end' "$created")
 [[ -z $mistyped_env ]] \
   || fail "declared env leaves reached the settings file as non-strings: $mistyped_env"
 
