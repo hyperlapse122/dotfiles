@@ -3,17 +3,23 @@
 set -euo pipefail
 
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+SETTINGS_DIR="$(dirname "$SETTINGS")"
 
 if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-mkdir -p "$(dirname "$SETTINGS")"
+mkdir -p "$SETTINGS_DIR"
 
-DECLARED='{{ .agents.claude.settings | toJson }}'
+decode_b64() {
+  printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D
+}
 
-tmp="$(mktemp)"
+DECLARED="$(decode_b64 '{{ .agents.claude.settings | toJson | b64enc }}')"
+
+tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
+chmod 0600 "$tmp"
 
 if [[ -f "$SETTINGS" ]] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
   jq --argjson declared "$DECLARED" '. + $declared' "$SETTINGS" > "$tmp"
@@ -26,6 +32,9 @@ else
   fi
   printf '%s\n' "$DECLARED" > "$tmp"
 fi
-chmod 0644 "$tmp"
+chmod 0600 "$tmp"
 mv -f "$tmp" "$SETTINGS"
+if command -v restorecon >/dev/null 2>&1; then
+  restorecon -F "$SETTINGS" 2>/dev/null || true
+fi
 {{- end }}

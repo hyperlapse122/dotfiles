@@ -78,7 +78,7 @@
 (allow chezmoi_t protected_agent_config_t (lnk_file (create read getattr setattr unlink rename relabelto relabelfrom)))
 
 ; unconfined_t has read-only access to protected configs
-(allow unconfined_t protected_agent_config_t (file (read getattr open map)))
+(allow unconfined_t protected_agent_config_t (file (read getattr open map execute)))
 (allow unconfined_t protected_agent_config_t (dir (read getattr open search)))
 (allow unconfined_t protected_agent_config_t (lnk_file (read getattr)))
 

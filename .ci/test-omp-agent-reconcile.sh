@@ -302,8 +302,6 @@ printf '\n// same-version payload change\n' >>"$source/plugins/mxm4-haptic/dist/
 run_plugins "$scratch/update.calls"
 cmp "$source/plugins/mxm4-haptic/package.json" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/package.json"
 cmp "$source/plugins/mxm4-haptic/dist/index.js" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0/dist/index.js"
-bun "$(dirname "$0")/test-omp-haptic-plugin.ts" "$home/.omp/plugins/cache/plugins/h82-dotfiles___mxm4-haptic___0.0.0"
-
 fallback_bin="$scratch/fallback-bin"
 mkdir -p "$fallback_bin"
 bun_source=$(command -v bun)

@@ -17,7 +17,7 @@ export { ResolutionError };
 const HEADERS = { "user-agent": "h82-release-lock" } as const;
 
 async function fetchOrThrow(source: string, url: string): Promise<Response> {
-  const response = await fetch(url, { headers: HEADERS });
+  const response = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(30_000) });
   if (!response.ok) {
     throw new ResolutionError(source, `${url} returned HTTP ${response.status}`);
   }
@@ -62,10 +62,15 @@ async function resolveClaude(name: string, spec: ToolSpec): Promise<LockedTool> 
     spec.source,
     `${spec.source}/${id}/manifest.json`,
   )) as ClaudeManifest;
-  if (typeof manifest.version !== "string" || typeof manifest.platforms !== "object") {
+  if (
+    !manifest ||
+    typeof manifest !== "object" ||
+    typeof manifest.version !== "string" ||
+    !manifest.platforms ||
+    typeof manifest.platforms !== "object"
+  ) {
     throw new ResolutionError(spec.source, `${name}: manifest missing version or platforms`);
   }
-
   const artifacts: Partial<Record<PlatformKey, LockedArtifact>> = {};
   for (const [platformId, key] of Object.entries(CLAUDE_PLATFORMS)) {
     const entry = manifest.platforms[platformId];
@@ -104,7 +109,12 @@ async function resolveAntigravity(name: string, spec: ToolSpec): Promise<LockedT
   for (const [index, platform] of ALL_PLATFORMS.entries()) {
     const manifest = manifests[index]!;
     const platformId = `${platform.os}_${platform.arch}`;
-    if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {
+    if (
+      !manifest ||
+      typeof manifest !== "object" ||
+      typeof manifest.version !== "string" ||
+      typeof manifest.url !== "string"
+    ) {
       throw new ResolutionError(spec.source, `${name}: ${platformId} manifest missing fields`);
     }
     if (version === undefined) version = manifest.version;
