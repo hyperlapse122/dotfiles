@@ -26,11 +26,18 @@
 set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-screenpad-output.sh") -}}
-{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "config-screenpad-output.sh") -}}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "config-screenpad-output.sh") -}}
 
+# The host check comes BEFORE the elevation guard, and the order is load-bearing.
+# kde-guard already inlines facts-sh, so FACT_UX534 is known here. Only the
+# greeter half needs root, and on a machine that is not this laptop there is no
+# greeter half to run -- so demanding an elevation path first would make every
+# other KDE host fail and retry forever on a script with nothing to do.
 if [[ "$FACT_UX534" != 1 ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-screenpad-output" "site" "ux534-absent" "reason" "this host is not an ASUS ZenBook UX534, so it has no ScreenPad to place") | trim | indent 2 }}
 fi
+
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "config-screenpad-output.sh") -}}
 
 CONNECTOR={{ .ux534.screenpad.output.connector | quote }}
 EDID_IDENTIFIER={{ .ux534.screenpad.output.edidIdentifier | quote }}
@@ -50,33 +57,44 @@ place_in_session() {
   else
     printf '  -> session: %s scale=%s rotation=%s position=%s,%s\n' \
       "$CONNECTOR" "$SCALE" "$ROTATION" "$POSITION_X" "$POSITION_Y"
-    kscreen-doctor \
+    # Guarded: this talks to a live compositor, and an unguarded failure here
+    # would take the script down under `set -e` before the greeter half runs —
+    # which contradicts the independence this file's header promises.
+    if ! kscreen-doctor \
       "output.$CONNECTOR.scale.$SCALE" \
       "output.$CONNECTOR.rotation.$ROTATION" \
-      "output.$CONNECTOR.position.$POSITION_X,$POSITION_Y" >/dev/null
+      "output.$CONNECTOR.position.$POSITION_X,$POSITION_Y" >/dev/null; then
+      printf '  !! KWin rejected the ScreenPad placement; session left as-is\n' >&2
+    fi
   fi
 }
 
 place_in_greeter() {
-  local current updated owner group mode
+  local current
 
+  # No unprivileged existence test here. The greeter's home is mode 0750 and
+  # owned by the display manager's own account, so `[[ -f ]]` returns false for
+  # a file that is plainly there -- the check would skip this half on exactly
+  # the host it exists for. The privileged read below distinguishes "not there
+  # yet" from "there but unreadable" by its own exit status anyway.
   if ! command -v jq >/dev/null 2>&1; then
     printf '  -- jq absent; greeter placement deferred\n'
-  elif [[ ! -f "$GREETER_CONFIG" ]]; then
-    printf '  -- %s absent; the greeter has not run yet\n' "$GREETER_CONFIG"
   elif ! current="$("${SUDO[@]}" cat "$GREETER_CONFIG" 2>/dev/null)"; then
-    printf '  -- %s unreadable; greeter placement deferred\n' "$GREETER_CONFIG"
+    printf '  -- %s not readable; the greeter has not run yet, or it is not ours to read\n' "$GREETER_CONFIG"
   elif ! printf '%s' "$current" | jq -e . >/dev/null 2>&1; then
-    # Refuse to touch a file we cannot parse rather than truncating it.
-    printf '  !! %s is not valid JSON; refusing to rewrite it\n' "$GREETER_CONFIG" >&2
-    return 1
+    # Refuse to touch a file we cannot parse rather than truncating it — but do
+    # not take the whole apply down with it. This script places a second monitor;
+    # a zero-byte greeter config is a reason to leave that file alone, not to
+    # abort provisioning. Failing here would also never clear: a failed run is
+    # not recorded, so the next apply would re-read the same file and die again.
+    printf '  !! %s is not valid JSON; leaving it alone\n' "$GREETER_CONFIG" >&2
   else
     assert_greeter_placement "$current"
   fi
 }
 
 assert_greeter_placement() {
-  local current="$1" updated owner group mode
+  local current="$1" updated owner group mode staged
 
   # Assert only the declared keys of the one matching output, then the position
   # of whichever setup entry refers to it by index. `outputs` and `setups` are
@@ -99,9 +117,9 @@ assert_greeter_placement() {
             | .data[$idx].transform = $transform
           elif .name == "setups" then
             .data |= map(
-              .outputs |= map(
+              .outputs = ((.outputs // []) | map(
                 if .outputIndex == $idx then .position = {x: $x, y: $y} else . end
-              )
+              ))
             )
           else . end
         )
@@ -115,11 +133,29 @@ assert_greeter_placement() {
       "$CONNECTOR" "$SCALE" "$TRANSFORM" "$POSITION_X" "$POSITION_Y"
     # Preserve the file's existing owner and mode rather than naming the greeter
     # account here: a root redirect would silently reassign both, and the account
-    # name is the display manager's business, not this repository's.
-    owner="$("${SUDO[@]}" stat -c '%U' "$GREETER_CONFIG")"
-    group="$("${SUDO[@]}" stat -c '%G' "$GREETER_CONFIG")"
-    mode="$("${SUDO[@]}" stat -c '%a' "$GREETER_CONFIG")"
-    "${SUDO[@]}" install -m "$mode" -o "$owner" -g "$group" /dev/stdin "$GREETER_CONFIG" <<<"$updated"
+    # name is the display manager's business, not this repository's. One stat,
+    # not three -- each is a full elevation.
+    read -r owner group mode <<<"$("${SUDO[@]}" stat -c '%U %G %a' "$GREETER_CONFIG")"
+
+    # Stage beside the target and rename, never write the target in place. This
+    # file decides whether the login screen comes up correctly, so a write that
+    # dies halfway must not be able to leave it truncated. Re-read immediately
+    # before the rename: the greeter's KWin owns this file too, and a write that
+    # landed while we were patching is its decision, not ours to overwrite.
+    staged="$GREETER_CONFIG.chezmoi-new"
+    "${SUDO[@]}" install -m "$mode" -o "$owner" -g "$group" /dev/stdin "$staged" <<<"$updated"
+    if [[ "$("${SUDO[@]}" cat "$GREETER_CONFIG" 2>/dev/null)" != "$current" ]]; then
+      printf '  -- %s changed while we were patching it; leaving it alone\n' "$GREETER_CONFIG" >&2
+      "${SUDO[@]}" rm -f "$staged"
+    else
+      # -T is not optional. This path is owned by another account, so it may be
+      # a symlink to a directory; a plain `mv` would then drop the file INSIDE
+      # that directory instead of replacing the path, letting the greeter
+      # account choose where a root write lands. -T forces rename(2) on the
+      # path itself. (`install` above is already symlink-safe: it unlinks, then
+      # opens O_EXCL, then chowns with AT_SYMLINK_NOFOLLOW.)
+      "${SUDO[@]}" mv -fT "$staged" "$GREETER_CONFIG"
+    fi
   fi
 }
 

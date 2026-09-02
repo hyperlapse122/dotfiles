@@ -1,6 +1,9 @@
 # Hardware values for the ASUS ZenBook UX534FTC — the single source of truth for
-# every consumer gated on the `ux534` host fact. Tune a value HERE, never in a
-# script (same rule as .chezmoidata/kde.yaml).
+# every consumer that reads a value through a template. Tune those HERE, never in
+# a script (same rule as .chezmoidata/kde.yaml). Files under system/linux/etc are
+# installed verbatim with no templating, so a value that lives in one of them —
+# the battery ceiling — is declared in that file rather than here; splitting it
+# would leave a dead declaration nothing reads.
 #
 # The file is host-scoped rather than device-scoped on purpose: the suspend mode
 # and the battery threshold are not ScreenPad settings, and splitting one
@@ -23,20 +26,30 @@
 # the panel's power path, HPD drops, and the connector goes `disconnected`. The
 # 14 ms between the unit starting and the disconnect is the whole bug. It only
 # ever worked on the very first boot after install, when no saved value existed
-# yet. The fix is to stop systemd owning that state (the mask in
-# install-system-hardware) and to declare the value here instead.
+# yet. The fix is to stop systemd owning that state -- the mask in
+# install-system-hardware. Nothing replaces the write; see the screenpad block.
 #
 # GATING: every consumer is behind the `ux534` host fact. On any other machine
 # nothing in this file is read.
 ux534:
   screenpad:
-    # Panel brightness, written to /sys/class/backlight/asus_screenpad/brightness.
-    # Range 0-255 (`max_brightness`). 0 is not "dim" — it powers the panel down,
-    # which drops HPD and disconnects the output, so treat 0 as "disable the
-    # second screen" rather than as a brightness. This value is asserted at apply
-    # time; it is deliberately NOT restored per boot, because a per-boot restore
-    # is exactly the mechanism that was killing the panel.
-    brightness: 128
+    # NO BRIGHTNESS IS DECLARED HERE, and the omission is the decision.
+    #
+    # The saved value systemd restored at the boot that killed the panel was 40
+    # (/var/lib/systemd/backlight/platform-asus-nb-wmi:backlight:asus_screenpad),
+    # not 0. So a NON-ZERO write is what dropped HPD, and "0 powers the panel
+    # down" — separately measured — does not by itself explain the disconnect.
+    # The mechanism between a brightness write and the power path is therefore
+    # not understood.
+    #
+    # Given that, adding a write of our own would be reintroducing the suspected
+    # cause under a different name. Masking removes systemd's write and the
+    # repository adds none; the panel keeps whatever the firmware leaves, which
+    # is the state in which it displays the boot splash. If a declared value is
+    # wanted later, it needs a per-boot mechanism (a udev rule on the backlight
+    # device, as the battery ceiling uses) AND evidence that the write is safe —
+    # not a one-shot write at apply time, which would be true for one uptime and
+    # then quietly stop being true.
 
     # How the panel should sit in the desktop. KMS carries mode and orientation
     # (see kernelArgs below) but has no concept of scale or position at all, so
@@ -71,16 +84,20 @@ ux534:
   # only when they are not already present (read-compare-then-write, mirroring
   # the resume= handling in install-system-swap-hibernate).
   #
-  # video= — the ScreenPad's mode and orientation. The kernel SILENTLY IGNORES a
-  #   `video=` option it does not recognise, so the presence of this argument is
-  #   not evidence that it took effect; the panel's actual orientation after a
-  #   reboot is. `panel_orientation` sets the DRM connector property compositors
-  #   read, which is what carries the rotation to the boot splash, the VT console
-  #   and the login greeter — surfaces no per-compositor config reaches. It is
-  #   normally an internal-panel property and this connector is classified as
-  #   external HDMI, so whether it applies here is the one open question in this
-  #   set. If it does not, rotation falls back to the compositor layer and those
-  #   pre-session surfaces stay unrotated.
+  # video= — the ScreenPad's mode only, NOT its orientation.
+  #
+  #   `panel_orientation` is deliberately absent. It would set the DRM connector
+  #   property that carries rotation to the boot splash, the VT console and the
+  #   greeter — surfaces no per-compositor config reaches — and that is genuinely
+  #   wanted. But it is NOT an alternative to the compositor transform below:
+  #   panel_orientation describes how the panel is mounted and the compositor
+  #   counter-rotates for it, while `transform: Rotated270` is a rotation applied
+  #   on top. Where both exist they compose, so shipping them together risks
+  #   landing 180 degrees out rather than correct. They go in one at a time, and
+  #   the compositor half — the one that can be checked in a live session — goes
+  #   first. The kernel also SILENTLY IGNORES a `video=` option it does not
+  #   recognise, so only the panel's orientation after a reboot settles whether
+  #   the property applies to a connector i915 classifies as external HDMI.
   #
   # mem_sleep_default — s2idle keeps too much powered on this 2019-era platform.
   #   `deep` is the suspend-to-RAM state. The ArchWiki UX534 page reports audio
@@ -88,7 +105,7 @@ ux534:
   #   NOT pre-empted here, because it has not been observed on this machine and a
   #   workaround for a bug that does not reproduce is dead code.
   kernelArgs:
-    - 'video=HDMI-A-1:1080x2160@50,panel_orientation=right_side_up'
+    - 'video=HDMI-A-1:1080x2160@50'
     - 'mem_sleep_default=deep'
 
   # Kernel arguments this host must NOT carry, removed with `--remove-args` when

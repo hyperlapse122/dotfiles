@@ -69,9 +69,9 @@ runtime_input: false
 totals:
   classified_owners: 131
   hard_error_owners: 11
-  rendered_instances: 196
+  rendered_instances: 197
   phase_local_instances: 126
-  shared_guard_instances: 70
+  shared_guard_instances: 71
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -116,7 +116,7 @@ shared_guard_fanout:
   gnome-guard: 7
   headless-guard: 10
   kde-guard: 11
-  shared-host-guard: 20
+  shared-host-guard: 21
   sudo-elevation-guard: 22
 divergence:
   - bucket: 'harmless'
@@ -198,6 +198,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
     template: '.chezmoitemplates/gnome-guard.sh.tmpl'
@@ -221,7 +222,7 @@ owners:
   - owner: 'config-screenpad-output/ux534-absent'
     scope: '50-linux-kde'
     template: '.chezmoiscripts/50-linux-kde/run_onchange_after_config-screenpad-output.sh.tmpl'
-    anchor_line: 31
+    anchor_line: 35
     anchor: 'if [[ "$FACT_UX534" != 1 ]]; then'
     predicate: '[[ "$FACT_UX534" != 1 ]]'
     predicate_digest: 'sha256:7369aebe20290cb59cf4538a15cc2b14e2c7b9aad2dfd3b716f01e254615be66'

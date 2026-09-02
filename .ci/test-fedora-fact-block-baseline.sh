@@ -119,11 +119,15 @@ NODE
 # NORMALIZED AWAY — it lands in the facts-sh block this gate already excises —
 # but `facts-gate.sh.tmpl` renders one `case` arm PER REGISTRY FACT outside that
 # block, so every consumer of that partial gained a line. Exactly three of the
-# eleven include it (10-desktop, 12-sudoers, 18-hardware) and exactly those three
-# digests moved; the other eight are byte-identical, which is the evidence that
-# the drift is the case table and nothing else. Expect this same three-digest
-# move on any future fact declaration, and do NOT normalize the case table away:
-# a fact silently vanishing from the dispatch is precisely a silent GRANT.
+# eleven include it (10-desktop, 12-sudoers, 18-hardware). For 10-desktop and
+# 12-sudoers that one line IS the whole delta, and the eight scripts that do not
+# include the partial are byte-identical -- which is what shows the case table is
+# the only shared drift. 18-hardware is NOT in that class: it also gained the
+# whole UX534 block (the backlight mask and the grubby kernel arguments), so most
+# of its delta is the feature itself, not the dispatch table. Expect the two-digest
+# case-table move on any future fact declaration, and do NOT normalize the case
+# table away: a fact silently vanishing from the dispatch is precisely a silent
+# GRANT. 16-udev's digest moved for a third reason -- see the note below.
 #
 # 16-udev moved for a different reason in the same series: it gained the gate
 # wiring the other /etc installers already had (override arrays, facts-validate,
@@ -135,8 +139,8 @@ declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=0ab7387105198496ab89d0c449478b65cae894aa6098bf6d282491ca0b20d646
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=bdbfc704e44f4c7e5822eb73d9b5c4424735361e0c60e20df1afab417a38de50
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=728f7df371d2eca825964bbe80031cf5e28ca3db9266146af0f196d7428f2117
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=ab7d5a348148d057ca4162b17c9038ec037b93812e80f05696380b4dc9988a9d
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=0c8d4054fde56e79a474c052d950e3f635f0929b3a682fd8105dbb40136d3a61
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=77dbd97f2c8de5d992455b63e374f97a0e5e437285e159cf84257a9eb35c9f2e
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc

@@ -36,7 +36,7 @@ of truth, organized by subsystem:
   file elsewhere).
 
 Gates are *named host facts* from the registry (`.chezmoidata/facts.yaml`) —
-`thinkpad`, `vm`, `sddmBreeze`, `gdm`, `fprintdPam`. The
+`thinkpad`, `ux534`, `vm`, `sddmBreeze`, `gdm`, `fprintdPam`. The
 installer no longer probes for any of them: `gate_ok()` is a lookup into the
 `FACT_*` variables the registry resolved once for this chezmoi command. A gate
 naming a fact the registry does not declare aborts the render, so typos fail
@@ -80,7 +80,7 @@ system/linux/etc/locale.conf
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreeze` gate skips it when the theme is not installed |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
-| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
+| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access, UX534 battery charge ceiling (gated) |
 
 ## The modular install-system script set (30-linux)
 
@@ -93,7 +93,7 @@ scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
 | `run_onchange_after_install-system-12-sudoers.sh.tmpl` | password-less sudoers drop-in (mode `0440`, `visudo` check) | `etc/sudoers.d/*` files change |
 | `run_onchange_after_install-system-14-sysctl.sh.tmpl` | sysctl drop-ins + `sysctl --system` reload | `etc/sysctl.d/*` files change |
 | `run_onchange_after_install-system-16-udev.sh.tmpl` | udev rules, libinput quirks, removed rules + `udevadm control --reload` | `etc/udev/rules.d/*` or `libinput/*` files change |
-| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config + `modprobe thinkpad_acpi` | modprobe/modules-load files change |
+| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config + `modprobe thinkpad_acpi`; on a UX534, the ScreenPad backlight-unit mask and this host's grubby kernel arguments | modprobe/modules-load files change, or the rendered UX534 block changes |
 | `run_onchange_after_install-system-20-bluetooth.sh.tmpl` | BlueZ config, autosuspend + `systemctl restart bluetooth` | `etc/bluetooth/*` files change |
 | `run_onchange_after_install-system-22-host.sh.tmpl` | user lingering, rootful podman socket mask | its own content changes |
 | `run_onchange_after_install-system-24-keyd.sh.tmpl` | keyd hardware probe, package install, config generation | keyd keyboards data or quirks file change |

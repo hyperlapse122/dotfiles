@@ -44,6 +44,7 @@ fprintdPam: false
 headless: false
 container: false
 sharedHost: ${shared_host}
+ux534: false
 FACTS
 }
 

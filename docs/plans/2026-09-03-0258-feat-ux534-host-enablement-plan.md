@@ -128,6 +128,30 @@ flowchart TB
 
 계획 단계로 미뤄져 있던 나머지는 Planning Contract가 해소했다 — 컴포지터 출력 설정의 소유 방식은 KTD5, ScreenPad 밝기 기본값의 선언 계층은 U2, 배터리 충전 상한 값은 Assumptions.
 
+### Review Residuals
+
+코드 리뷰 6인이 낸 21건 중 적용하지 않은 것과, 이 브랜치가 아직 증명하지 못한 것이다. 어느 것도 착수를 막지 않지만, 전부 이 계획의 완료 판정 밖에 남아 있다.
+
+**미적용 findings**
+
+- 네 곳의 포기 경로(kscreen-doctor 부재, 커넥터 미존재, jq 부재, 그리터 설정 읽기 불가)가 출력만 하고 exit 0 으로 끝난다. chezmoi 는 이를 수렴한 실행으로 기록하므로, 도달하지 못한 수렴을 주장한다. `skip.sh.tmpl` 선언으로 바꾸려면 `kscreen-doctor-present` 와 `jq-present` capability 프로브를 신설해야 한다. `.ci/check-skip-declarations.sh` 는 `exit`/`return` 종료자만 검사하므로 이 형태를 보지 못한다.
+- 백라이트 유닛 마스크는 apply 한 번에 단언되고 이후 재수렴하지 않는다. 다른 곳에서 `unmask` 하거나 `/etc` 를 재생성하면 조용히 되돌아간다. `/etc/systemd/system/` 아래 `/dev/null` 심볼릭 링크로 배포하면 매 apply 가 되돌리지만, 현재 /etc 설치기는 일반 파일만 놓는다.
+- grubby 인자 조정 로직이 `install-system-26-swap-hibernate` 의 `resume=` 처리와 같은 모양으로 두 번째 등장했다. 공유 partial 로 추출하려면 이 브랜치 범위 밖 파일을 함께 고쳐야 한다.
+- CI 가 `ux534` 가 참인 갈래를 한 번도 실행하지 않는다. 필요한 게이트 넷: `FACT_UX534=1` 렌더 픽스처, jq 변환 픽스처, 게이트 스킵 동작(빈 게이트가 기존 규칙을 계속 설치하는지), 그리터 쓰기 경로. `.ci/test-kde-theme-dark-apply.sh` 와 `.ci/test-jetson-installer-render.sh` 가 이 두 형태의 기존 선례다.
+
+**설계 판단으로 남긴 것**
+
+- ScreenPad 밝기를 선언하지 않는다. systemd 가 복원한 저장값은 40 이었고 0 이 아니었다 — 0 이 아닌 쓰기가 패널을 떨어뜨렸다는 뜻이고, 따로 측정한 "0 은 전원을 내린다" 만으로는 설명되지 않는다. 기제를 모르는 채 쓰기를 더하면 의심되는 원인을 이름만 바꿔 되살리는 것이다. 값을 선언하려면 per-boot 기제(배터리 상한이 쓰는 udev 규칙 형태)와 그 쓰기가 안전하다는 증거가 함께 필요하다.
+- `panel_orientation` 을 커널 인자에서 뺐다. 컴포지터 변환의 대안이 아니라 가산적이라, 둘을 함께 넣으면 180 도 어긋날 수 있다. 컴포지터 절반을 먼저 확인한 뒤 하나씩 넣는다. 그때까지 **R3 는 미충족**이고 부팅 스플래시·VT 콘솔·로그인 화면의 회전은 해결되지 않은 상태다.
+
+**호스트 검증 전무**
+
+이 브랜치는 어떤 머신에도 적용되지 않았다. `chezmoi apply` 의 `read-source-state.pre` 훅이 1Password 를 요구하고 `op` 가 사인인되어 있지 않아, 비대화형 셸이 해결할 수 없다. 따라서 R1–R12 의 실호스트 확인, U7 의 물리적 키 확인, U8 전체가 미수행이다. Definition of Done 의 단위별 항목이 그대로 남아 있다.
+
+**되돌려야 할 임시 상태**
+
+조사용 커널 인자 `drm.debug=0x106` 과 `log_buf_len=16M` 이 이 머신에 아직 걸려 있다. R12 가 apply 시 제거한다. ScreenPad 는 손으로 켜 둔 상태라 다음 부팅에 다시 꺼진다.
+
 ### Sources / Research
 
 이 호스트에서 직접 측정한 값이다.

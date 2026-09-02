@@ -175,8 +175,10 @@ factRegistry:
     probe: template
     source: >-
       /sys/class/dmi/id/board_name or /sys/class/dmi/id/product_name contains
-      "UX534" (case-insensitive), read with a stat-guarded `include` — the same two
-      MODEL fields `thinkpad` above reads, and NOT sys_vendor for the same reason.
+      "UX534" (case-insensitive), read with a stat-guarded `include` — the same
+      TECHNIQUE `thinkpad` above uses, but different DMI fields (that one reads
+      product_version and product_family). NOT sys_vendor, for the same reason it
+      gives: that field holds the manufacturer and never the model.
       board_name carries the bare board ("UX534FTC") while product_name carries the
       marketing string ("ZenBook UX534FTC_UX534FT"); reading both means a firmware
       that fills only one still identifies the host.
@@ -187,9 +189,9 @@ factRegistry:
       runtime-suspend posture, and the ScreenPad compositor output assertion.
     whenFalse: >-
       None of the UX534 configuration is applied — no service masked, no kernel
-      argument written, no udev rule installed, and the host's existing NVIDIA and
-      keyd behavior untouched. Every gated action skips, which is the correct
-      outcome on every other machine.
+      argument written, no udev rule installed, and the host's existing NVIDIA
+      behavior untouched. Every gated action skips, which is the correct outcome
+      on every other machine.
   jetson:
     type: bool
     probe: template

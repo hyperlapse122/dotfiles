@@ -74,6 +74,13 @@ done
 if [[ -d "$SRC_ROOT/etc/udev/rules.d" ]]; then
   printf '  -> udevadm control --reload\n'
   "${SUDO[@]}" udevadm control --reload
+  # --reload only re-reads the rule FILES; it does not re-run them against
+  # devices that were enumerated before the apply. A ceiling installed for a
+  # battery that came up at boot would otherwise not take effect until the next
+  # one -- and the acceptance signal for it is "after apply", not "after
+  # reboot". A synthetic change event is benign on a host with no matching rule.
+  printf '  -> udevadm trigger (power_supply)\n'
+  "${SUDO[@]}" udevadm trigger --subsystem-match=power_supply --action=change
 fi
 
 {{ end -}}

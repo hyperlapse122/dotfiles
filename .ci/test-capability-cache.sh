@@ -105,9 +105,9 @@ totals = matrix.get('totals', {})
 frozen = {
     'classified_owners': 131,
     'hard_error_owners': 11,
-    'rendered_instances': 196,
+    'rendered_instances': 197,
     'phase_local_instances': 126,
-    'shared_guard_instances': 70,
+    'shared_guard_instances': 71,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -147,7 +147,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 7, 'kde-guard': 11, 'headless-guard': 10, 'sudo-elevation-guard': 22, 'shared-host-guard': 20}
+SHARED = {'gnome-guard': 7, 'kde-guard': 11, 'headless-guard': 10, 'sudo-elevation-guard': 22, 'shared-host-guard': 21}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that

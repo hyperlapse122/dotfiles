@@ -76,17 +76,22 @@ if [[ "$FACT_UX534" == 1 ]]; then
   # halves — the restore that disconnects the panel and the save that recorded
   # the value. See .chezmoidata/ux534.yaml for the full mechanism.
   printf '  -> masking systemd-backlight@backlight:asus_screenpad.service\n'
-  "${SUDO[@]}" systemctl mask systemd-backlight@backlight:asus_screenpad.service 2>/dev/null || true
-
-  # Then assert the declared brightness. Deliberately once, at apply time, not
-  # per boot: a per-boot restore is the mechanism just masked away.
-  screenpad_brightness=/sys/class/backlight/asus_screenpad/brightness
-  if [[ -e "$screenpad_brightness" ]]; then
-    printf '  -> ScreenPad brightness -> %s\n' {{ .ux534.screenpad.brightness | quote }}
-    "${SUDO[@]}" sh -c 'printf %s "$1" >"$2"' _ {{ .ux534.screenpad.brightness | quote }} "$screenpad_brightness"
-  else
-    printf '  -- %s absent; asus_wmi has not exposed the panel yet\n' "$screenpad_brightness"
+  # FATAL on failure, deliberately. This mask IS the fix, and masking is just a
+  # symlink to /dev/null -- it does not require the unit to exist, so a failure
+  # here is a real one. Swallowing it would be worse than noisy: chezmoi records
+  # a script that exits 0 as a converged run and will not retry it until the
+  # rendered content changes, so a warning-and-continue would leave the panel
+  # broken with a permanent false success against it.
+  if ! "${SUDO[@]}" systemctl mask systemd-backlight@backlight:asus_screenpad.service; then
+    printf '  !! could not mask the ScreenPad backlight unit; the panel will keep disconnecting at boot\n' >&2
+    exit 1
   fi
+
+  # And nothing writes the panel's brightness. See .chezmoidata/ux534.yaml for
+  # why: the saved value systemd restored was 40, not 0, so a NON-ZERO write is
+  # what dropped the panel. Until that is understood, the repository adds no
+  # write of its own to that attribute -- masking removes systemd's, and that is
+  # the whole intervention.
 
   # Kernel arguments. Read-compare-then-write so a converged host makes no
   # grubby call at all, mirroring the resume= handling in
