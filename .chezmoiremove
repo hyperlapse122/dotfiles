@@ -3,6 +3,7 @@
 # managed source stopped chezmoi managing the extracted archive, but an
 # already-deployed copy survives until pruned here. Its ~/.omp/agent flag is
 # pruned by the omp block below, with the rest of that tree's managed targets.
+.local/share/i-have-adhd
 
 # Orphaned compound-engineering skills. They used to be fetched into
 # ~/.agents/skills/ by the dotagents `[[skills]] name = "*"` wildcard entry;
@@ -55,8 +56,14 @@
 .omp/agent/TITLE_SYSTEM.md
 .omp/agent/.i-have-adhd-always
 .omp/agent/.env
-.omp/agent/agents
-.omp/agent/rules
+.omp/agent/agents/claude.md
+.omp/agent/agents/gemini.md
+.omp/agent/rules/comment-c-family.md
+.omp/agent/rules/comment-dash.md
+.omp/agent/rules/comment-hash.md
+.omp/agent/rules/comment-html.md
+.omp/agent/rules/comment-ocaml.md
+.omp/agent/rules/comment-python-docstring.md
 
 # The garden project registry moved from ~/src/garden.yaml to
 # ~/.config/garden/garden.yaml so ~/src holds only project trees. Deleting the

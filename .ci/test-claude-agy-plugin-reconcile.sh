@@ -159,6 +159,7 @@ printf '%s\n' "$*" >>"$AGY_CALLS"
 case "${1-} ${2-}" in
   "plugin install")
     bundle=$3
+    [[ -z ${AGY_INSTALL_FAILS:-} ]] || { printf 'simulated install failure: %s\n' "$bundle" >&2; exit 1; }
     [[ -f $bundle/plugin.json ]] || { printf 'no bundle manifest: %s\n' "$bundle" >&2; exit 1; }
     [[ -f $bundle/skills/demo/SKILL.md ]] || { printf 'bundle skills unreadable: %s\n' "$bundle" >&2; exit 1; }
     ;;
@@ -257,6 +258,27 @@ run_agy >"$scratch/agy-4.out" 2>&1 || {
 }
 grep -Fx 'plugin uninstall compound-engineering' "$agy_calls" >/dev/null &&
   fail 'Antigravity migration re-ran after the staged bundle was gone'
+
+# --- Antigravity: a failed install must not consume the migration signal --- #
+
+mkdir -p "$stale"
+cp "$market/plugin.json" "$stale/plugin.json"
+ln -s "$market/skills" "$stale/skills"
+: >"$agy_calls"
+if AGY_INSTALL_FAILS=1 run_agy >"$scratch/agy-7.out" 2>&1; then
+  fail 'Antigravity reconcile reported success on a failing install'
+fi
+[[ -d $stale ]] ||
+  fail 'a failed install removed the staged bundle, so the next apply cannot retry the migration'
+
+: >"$agy_calls"
+run_agy >"$scratch/agy-8.out" 2>&1 || {
+  cat "$scratch/agy-8.out" >&2
+  fail 'the retry after a failed install did not converge'
+}
+grep -Fx "plugin install $market" "$agy_calls" >/dev/null ||
+  fail 'the retry did not re-point the plugin at the marketplace source'
+[[ ! -e $stale ]] || fail 'the successful retry left the staged bundle behind'
 
 # --- Antigravity: a source whose root manifest is absent or misdeclared ---- #
 

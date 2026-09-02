@@ -6,7 +6,7 @@
 #
 # WHAT IT FREEZES. The 130-site inventory of docs/plans/2026-08-13-001-feat-skip-
 # declaration-contract-plan.md, plus the post-inventory WakaTime keyring site
-# present in the current source, is re-audited here: 121 classified source
+# present in the current source, is re-audited here: 119 classified source
 # owners plus the settled hard-error owners. Every field below was read
 # out of the named template at the named line; anchors are PRE-CONVERSION snapshots,
 # so U6/U7 edits move the code without invalidating the freeze (CI checks the
@@ -25,8 +25,8 @@
 #   * A helper reached from several call sites is one owner per call site, matching
 #     the legacy inventory rule.
 #   * Each shared guard owner declares its complete consumer fan-out (8 GNOME, 9
-#     KDE, 3 headless, 4 sudo), so the rendered total is 117 + 24 = 141 sentinels,
-#     never 121.
+#     KDE, 3 headless, 4 sudo), so the rendered total is 114 + 67 = 181 sentinels,
+#     never 119.
 #
 # FIELDS. `predicate` is the anchor line normalized (leading if/elif, trailing
 # `; then` and line continuations removed, whitespace collapsed); `*_digest` is
@@ -54,7 +54,7 @@
 # fails if a bucket differs without a divergence entry (or carries a stale one). The
 # plan's per-direction split was estimated from the PRE-U4 130-site inventory, whose
 # harmless/done_here mass included the three extension jobs U4 has since converted to
-# run_after_ signature lifecycles; those sites left this surface, so the same 120
+# run_after_ signature lifecycles; those sites left this surface, so the same
 # in-scope owners cannot carry that split without re-labelling rows against
 # skip.sh.tmpl's own definitions. The current source adds one transient-blocking
 # WakaTime keyring site after that inventory. Retiring the omp harness and the

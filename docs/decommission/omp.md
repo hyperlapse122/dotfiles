@@ -21,14 +21,21 @@ Section 1 must run first.
 `figma-auth` wrote omp's Figma MCP credential row into `~/.omp/agent/agent.db`,
 and that grant stays valid at Figma until it is revoked there.
 
-Read the client id out of the row while the database still exists:
+Read the client id out of the row while the database still exists. `figma-auth`
+wrote the grant into `auth_credentials`, with the client id inside the JSON
+`data` column, so project that one field rather than selecting the whole row —
+`data` also holds the access and refresh tokens:
 
 ```sh
-sqlite3 ~/.omp/agent/agent.db \
-  "select value from kv where key like '%mcp.figma.com%';" | head -c 2000
+sqlite3 -readonly ~/.omp/agent/agent.db \
+  "select json_extract(data,'\$.clientId') from auth_credentials
+   where provider like '%mcp.figma.com%';"
 ```
 
-Then, at **Figma → Settings → Security → Connected apps**, revoke only the
+No output means this host never authorized Figma through omp; there is nothing
+to revoke and you can go straight to section 2.
+
+Otherwise, at **Figma → Settings → Security → Connected apps**, revoke only the
 registration matching that client id.
 
 **Do not revoke every `Codex` registration.** Antigravity holds its own live

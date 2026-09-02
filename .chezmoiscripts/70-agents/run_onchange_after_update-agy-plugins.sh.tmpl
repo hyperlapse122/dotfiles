@@ -98,15 +98,21 @@ for row in "${PLUGINS[@]}"; do
   IFS=$'\t' read -r name market kind source <<<"$row"
   # One-time migration off the staged bundle this repository used to build. Its
   # presence is the only signal that agy is still pointed at the old path, so the
-  # uninstall runs once and the directory it removes makes the next run a no-op.
+  # directory is removed LAST: a failed install leaves the signal in place and the
+  # next apply retries the whole migration. agy uninstall is idempotent, so the
+  # retry costs nothing.
   stale="$BUNDLE_ROOT/$market/$name"
   if [[ -d $stale ]]; then
-    agy plugin uninstall "$name" >/dev/null 2>&1 || true
-    rm -rf -- "$stale" || die "cannot remove superseded staged bundle: $stale"
-    rmdir -- "${stale%/*}" "$BUNDLE_ROOT" 2>/dev/null || true
+    agy plugin uninstall "$name" >/dev/null 2>&1 ||
+      printf 'update-agy-plugins: uninstall of %s before re-pointing it at %s reported an error; continuing\n' \
+        "$name" "$source" >&2
   fi
   agy plugin install "$source" || die "plugin install failed for $name ($market)"
   agy plugin enable "$name" || die "plugin enable failed for $name"
+  if [[ -d $stale ]]; then
+    rm -rf -- "$stale" || die "cannot remove superseded staged bundle: $stale"
+    rmdir -- "${stale%/*}" "$BUNDLE_ROOT" 2>/dev/null || true
+  fi
 done
 {{- end }}
 {{- end }}

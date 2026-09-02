@@ -172,8 +172,19 @@ jobs:
           : > "${HOME}/.agents/skills/daily-report/prune-canary"
           : > "${HOME}/.agents/AGENTS.md"
           : > "${HOME}/.agents/CLAUDE.md"
+          mkdir -p "${HOME}/.omp/agent/agents" "${HOME}/.omp/agent/rules"
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
+          : > "${HOME}/.omp/agent/mcp.json"
+          : > "${HOME}/.omp/agent/models.yml"
+          : > "${HOME}/.omp/agent/APPEND_SYSTEM.md"
+          : > "${HOME}/.omp/agent/TITLE_SYSTEM.md"
+          : > "${HOME}/.omp/agent/.env"
+          : > "${HOME}/.omp/agent/agents/claude.md"
+          : > "${HOME}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            : > "${HOME}/.omp/agent/rules/comment-${rule}.md"
+          done
           # AE1 negative control: omp wrote this, chezmoi never did. The prune set
           # is per-managed-target precisely so apply cannot reach it.
           : > "${HOME}/.omp/agent/agent.db"
@@ -214,6 +225,16 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
           test ! -e "${home}/.omp/agent/AGENTS.md"
+          test ! -e "${home}/.omp/agent/mcp.json"
+          test ! -e "${home}/.omp/agent/models.yml"
+          test ! -e "${home}/.omp/agent/APPEND_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/TITLE_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/.env"
+          test ! -e "${home}/.omp/agent/agents/claude.md"
+          test ! -e "${home}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            test ! -e "${home}/.omp/agent/rules/comment-${rule}.md"
+          done
           test ! -e "${home}/.omp/agent/.i-have-adhd-always"
           test ! -e "${home}/.local/bin/chezmoi-secrets-sync"
           test ! -e "${home}/.local/bin/claude-glm"
@@ -634,8 +655,19 @@ jobs:
           : > "${HOME}/.agents/skills/daily-report/prune-canary"
           : > "${HOME}/.agents/AGENTS.md"
           : > "${HOME}/.agents/CLAUDE.md"
+          mkdir -p "${HOME}/.omp/agent/agents" "${HOME}/.omp/agent/rules"
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
+          : > "${HOME}/.omp/agent/mcp.json"
+          : > "${HOME}/.omp/agent/models.yml"
+          : > "${HOME}/.omp/agent/APPEND_SYSTEM.md"
+          : > "${HOME}/.omp/agent/TITLE_SYSTEM.md"
+          : > "${HOME}/.omp/agent/.env"
+          : > "${HOME}/.omp/agent/agents/claude.md"
+          : > "${HOME}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            : > "${HOME}/.omp/agent/rules/comment-${rule}.md"
+          done
           # AE1 negative control: omp wrote this, chezmoi never did. The prune set
           # is per-managed-target precisely so apply cannot reach it.
           : > "${HOME}/.omp/agent/agent.db"
@@ -674,6 +706,16 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
           test ! -e "${home}/.omp/agent/AGENTS.md"
+          test ! -e "${home}/.omp/agent/mcp.json"
+          test ! -e "${home}/.omp/agent/models.yml"
+          test ! -e "${home}/.omp/agent/APPEND_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/TITLE_SYSTEM.md"
+          test ! -e "${home}/.omp/agent/.env"
+          test ! -e "${home}/.omp/agent/agents/claude.md"
+          test ! -e "${home}/.omp/agent/agents/gemini.md"
+          for rule in c-family dash hash html ocaml python-docstring; do
+            test ! -e "${home}/.omp/agent/rules/comment-${rule}.md"
+          done
           test ! -e "${home}/.omp/agent/.i-have-adhd-always"
           test ! -e "${home}/.local/bin/chezmoi-secrets-sync"
           test ! -e "${home}/.local/bin/claude-glm"
