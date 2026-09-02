@@ -99,14 +99,15 @@ totals = matrix.get('totals', {})
 
 # The frozen R5 boundary. These numbers are the contract U6/U7/U8 execute against,
 # so they are asserted literally rather than derived from the rows. The fatal subset
-# is ELEVEN: the plan's GNOME parser and Figma/Kimi build causes plus
+# is EIGHT: the plan's GNOME parser and settings-reconcile build causes plus
 # config-kde-calendar/akonadi-query-failed, a live SQL read failure on an eligible
 # host that the plan's session-settled R5 decision authorizes as a hard error.
+# Retiring the figma-auth build removed its three causes from the original eleven.
 frozen = {
-    'classified_owners': 131,
-    'hard_error_owners': 11,
-    'rendered_instances': 197,
-    'phase_local_instances': 126,
+    'classified_owners': 125,
+    'hard_error_owners': 8,
+    'rendered_instances': 191,
+    'phase_local_instances': 120,
     'shared_guard_instances': 71,
 }
 for key, expected in frozen.items():
@@ -165,8 +166,6 @@ RAW_ANCHOR_EVIDENCE = {
     'install-base-fedora/enable-unit-absent': '|| return 0',
     'config-gnome-fonts/fc-match-absent': '|| return 0',
     'luks-tpm2/tool-not-deployed': 'exit 0;',
-    'update-omp-plugins/no-eligible-plugins': 'exit 0; fi',
-    'update-omp-plugins/no-plugins-or-removals': 'exit 0; fi',
     'config-gnome-1password-shortcut/gsettings-absent': 'command -v gsettings',
     'config-kde-wallpaper-breeze/wallpaper-tool-absent': 'command -v plasma-apply-wallpaperimage',
     'config-kde-theme-dark/colorscheme-tool-absent': 'command -v plasma-apply-colorscheme',
@@ -299,8 +298,8 @@ for bucket in divergence:
     if bucket not in expected_plan and bucket.removeprefix('scope:') not in plan_scopes:
         problems.append(f'divergence names unknown bucket {bucket!r}')
 
-# The settled fatal boundary: four GNOME gsettings/dconf parser cases, six
-# Figma/Kimi dependency-install, build and missing-dist causes, and the KDE Akonadi
+# The settled fatal boundary: four GNOME gsettings/dconf parser cases, three
+# settings-reconcile dependency-install, build and missing-dist causes, and the KDE Akonadi
 # SQL read that fails after mariadb and its socket both check out. Nothing else, and
 # never a skip declaration.
 expected_hard = {
@@ -308,9 +307,6 @@ expected_hard = {
     ('config-gnome-1password-shortcut/keybindings-parse-error', 'dconf-parser-failure'),
     ('config-gnome-remove-ibus-source/gsettings-read-failed', 'gsettings-get-failure'),
     ('config-gnome-remove-ibus-source/sources-parse-error', 'dconf-parser-failure'),
-    ('build-figma-auth/dependency-install-failed', 'dependency-install-failure'),
-    ('build-figma-auth/build-failed', 'build-failure'),
-    ('build-figma-auth/missing-dist', 'missing-dist-artifact'),
     ('build-settings-reconcile/dependency-install-failed', 'dependency-install-failure'),
     ('build-settings-reconcile/build-failed', 'build-failure'),
     ('build-settings-reconcile/missing-dist', 'missing-dist-artifact'),
@@ -371,8 +367,8 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
     kinds[key] = kind
     platforms[key] = platform
 
-if len(keys) != 34:
-    problems.append(f'registry has {len(keys)} probes, expected 34')
+if len(keys) != 33:
+    problems.append(f'registry has {len(keys)} probes, expected 33')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
         'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
     problems.append('only mise-present, gh-present, glab-present, and tokscale-present may be any-platform probes')

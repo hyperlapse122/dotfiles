@@ -3,8 +3,8 @@ claude-settings-validate.tmpl — fail the apply LOUDLY on a bad Claude Code
 settings declaration, before the provisioner renders a single line of script.
 
 The config-claude-settings provisioner is this partial's caller. Validation lives
-here rather than inline in that script for the same reason omp-settings-validate.tmpl
-does: a guard written inline can silently exist for one consumer only.
+here rather than inline in that script on purpose: a guard written inline can
+silently exist for one consumer only.
 
 Every check here aborts the whole chezmoi command. None of them can be satisfied
 by a runtime skip, because a declaration this file rejects is wrong on every host.
@@ -23,7 +23,6 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
   3. LEAF VALUES ONLY. A declared path names a LEAF. A container value would be
      written wholesale by setpath and would destroy every sibling another writer
      put inside that record -- the exact clobbering this whole design removes.
-     The sibling omp partial carries the equivalent parent-namespace check.
   4. NO PATH OVERLAP. Two declared paths where one is an ancestor of the other
      pass every per-path check, then the write applies them in sequence against
      progressively mutated state and dies on a scalar it created itself. Under

@@ -94,7 +94,7 @@ returning the upstream filename for a platform. Conventions that matter:
   the prefix instead of `releases/latest`, for repos that interleave several
   tag trains (compound-engineering next to marketplace-*/cli-*).
 - `linuxMusl` (githubRelease) locks the distinct static-musl linux builds
-  under `-musl` platform keys next to the glibc ones (agent-browser, omp).
+  under `-musl` platform keys next to the glibc ones (agent-browser).
 - `versionTransform` (githubTag) applies a required tag-shape transform in the
   registry so consumers read the normalized locked version.
 - A tool whose binary is not a GitHub asset — `kubectl` from `dl.k8s.io`,

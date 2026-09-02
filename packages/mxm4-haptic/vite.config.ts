@@ -10,21 +10,6 @@ export default defineConfig({
     dts: true,
     clean: true,
   },
-  // `vp run build:omp-plugin` emits the deployable OMP package entry without
-  // cleaning the normal library artifact. Local client code is bundled; the
-  // resulting module may import only Node built-ins at runtime.
-  build: {
-    outDir: "dist/omp-plugin",
-    emptyOutDir: false,
-    lib: {
-      entry: "src/omp-plugin.ts",
-      formats: ["es"],
-      fileName: "index",
-    },
-    rollupOptions: {
-      external: [/^node:/],
-    },
-  },
   // `vp test` (Vitest) — tests live under test/, importing ../src directly.
   test: {
     include: ["test/**/*.test.ts"],
@@ -39,11 +24,7 @@ export default defineConfig({
   run: {
     tasks: {
       build: {
-        command: "vp pack && vp build",
-        dependsOn: [{ task: "build", from: "dependencies" }],
-      },
-      "build:omp-plugin": {
-        command: "vp build",
+        command: "vp pack",
         dependsOn: [{ task: "build", from: "dependencies" }],
       },
       typecheck: {

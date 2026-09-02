@@ -11,25 +11,12 @@
 --
 -- G1 candidate config. Docs: https://wezterm.org/config/files.html
 --
--- Inline images: wezterm's Kitty graphics protocol support is switched on
--- below so omp's image path has a protocol to speak. What stable wezterm does
--- NOT implement is Kitty UNICODE PLACEHOLDERS (wezterm/wezterm#4531, PR
--- #7924) — the mechanism that lets tmux own the image cells so an image
--- survives scroll/redraw/resize/split. That gap is exactly the recorded G1a
--- blocker (.chezmoidata/packages.yaml, weztermTerminal), so this config
--- deliberately sets no placeholder option: there is none to set. The tmux
--- transport pair (allow-passthrough + PI_FORCE_IMAGE_PROTOCOL=kitty in
--- dot_config/tmux/tmux.conf) is untouched and stays the shared path.
-
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
 -- --- font (renders from fonts.yaml — edit the yaml, not here) ---
 config.font = wezterm.font({{ .fonts.families.mono | quote }})
 config.font_size = {{ .fonts.sizes.terminal }}
-
--- --- graphics ---
-config.enable_kitty_graphics = true
 
 -- --- parity with the managed kitty.conf surface ---
 config.scrollback_lines = 10000
