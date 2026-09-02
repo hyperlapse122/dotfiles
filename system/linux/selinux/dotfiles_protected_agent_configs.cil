@@ -130,7 +130,7 @@
 (allow dotfiles_agent_domain dotfiles_agent_domain (fd (use)))
 (allow dotfiles_agent_domain user_devpts_t (chr_file (read write ioctl getattr append open)))
 
-; Process capabilities and unconfined execution (JIT runtimes: Node.js, Bun, V8, omp)
+; Process capabilities and unconfined execution (JIT runtimes: Node.js, Bun, V8)
 (allow dotfiles_agent_domain self (process (execmem fork sigchld signull sigkill sigstop signal getsched setsched getsession getpgid setpgid setrlimit)))
 
 ; Relabelling stays chezmoi's: it is the domain that runs restorecon, and no
