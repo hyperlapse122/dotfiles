@@ -104,11 +104,11 @@ totals = matrix.get('totals', {})
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 # Retiring the figma-auth build removed its three causes from the original eleven.
 frozen = {
-    'classified_owners': 119,
+    'classified_owners': 123,
     'hard_error_owners': 8,
-    'rendered_instances': 181,
-    'phase_local_instances': 114,
-    'shared_guard_instances': 67,
+    'rendered_instances': 186,
+    'phase_local_instances': 118,
+    'shared_guard_instances': 68,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -148,7 +148,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 7, 'kde-guard': 9, 'headless-guard': 10, 'sudo-elevation-guard': 21, 'shared-host-guard': 20}
+SHARED = {'gnome-guard': 7, 'kde-guard': 10, 'headless-guard': 10, 'sudo-elevation-guard': 21, 'shared-host-guard': 20}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that
@@ -168,6 +168,7 @@ RAW_ANCHOR_EVIDENCE = {
     'luks-tpm2/tool-not-deployed': 'exit 0;',
     'config-gnome-1password-shortcut/gsettings-absent': 'command -v gsettings',
     'config-kde-wallpaper-breeze/wallpaper-tool-absent': 'command -v plasma-apply-wallpaperimage',
+    'config-kde-theme-dark/colorscheme-tool-absent': 'command -v plasma-apply-colorscheme',
 }
 
 seen_owners, seen_instances, blocking_probes = set(), set(), set()
@@ -366,8 +367,8 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
     kinds[key] = kind
     platforms[key] = platform
 
-if len(keys) != 32:
-    problems.append(f'registry has {len(keys)} probes, expected 32')
+if len(keys) != 33:
+    problems.append(f'registry has {len(keys)} probes, expected 33')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
         'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
     problems.append('only mise-present, gh-present, glab-present, and tokscale-present may be any-platform probes')
