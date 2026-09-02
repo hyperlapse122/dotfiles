@@ -107,8 +107,14 @@ agents:
         clipboard: enabled
   claude:
     settings: {}
+    plugins:
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    pluginsRemoved: []
   agy:
     settings: {}
+    plugins:
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    pluginsRemoved: []
   omp:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }

@@ -1,0 +1,113 @@
+{{- $ctx := . -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "plugins") -}}
+{{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "pluginsRemoved") -}}
+{{- $removedMarketplaceRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "marketplacesRemoved") -}}
+#!/usr/bin/env bash
+# Reconciles every eligible agents.claude.plugins row into Claude Code's user scope.
+#
+# Claude Code stores the marketplace declaration and the enabled set in
+# ~/.claude/settings.json (extraKnownMarketplaces / enabledPlugins) and caches the
+# plugin tree under ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>. The
+# cache key carries the version, so `plugin install` alone is a no-op once a plugin
+# is present at ANY version: `plugin update` is what re-resolves the pinned local
+# archive after agents.marketplaces moves to a new version segment.
+#
+# The whole eligible set is a render-time constant, so an empty set renders a
+# notice and no loop at all rather than a runtime branch over an empty array.
+set -euo pipefail
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$HOME/.local/sbin:"*) ;;
+  *) PATH="$HOME/.local/sbin:$PATH" ;;
+esac
+export PATH
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $fingerprintInputs) }}
+{{- if and (eq $rows "") (eq $removedRows "") }}
+printf 'update-claude-plugins: %s\n' 'no eligible plugins or removals are declared for this host'
+{{- else -}}
+{{- if ne $rows "" }}
+
+PLUGINS=(
+{{ $rows }}
+)
+{{- end }}
+{{- if ne $removedRows "" }}
+PLUGINS_REMOVED=(
+{{ $removedRows }}
+)
+{{- end }}
+{{- if ne $removedMarketplaceRows "" }}
+MARKETPLACES_REMOVED=(
+{{ $removedMarketplaceRows }}
+)
+{{- end }}
+
+die() { printf 'update-claude-plugins: %s\n' "$*" >&2; exit 1; }
+
+[[ -n ${HOME:-} && -d $HOME && -w $HOME ]] || die 'preflight: HOME is not writable'
+command -v claude >/dev/null 2>&1 || die 'preflight: claude is not on PATH'
+for parent in "$HOME/.claude" "$HOME/.claude/plugins"; do
+  if [[ -e $parent ]]; then
+    [[ -d $parent && -w $parent ]] || die "preflight: user path is not writable: $parent"
+  else
+    ancestor=$parent
+    while [[ ! -e $ancestor ]]; do ancestor=${ancestor%/*}; done
+    [[ -d $ancestor && -w $ancestor ]] || die "preflight: cannot create user path below $ancestor"
+  fi
+done
+mkdir -p "$HOME/.claude/plugins" || die 'preflight: failed to create Claude Code user paths'
+{{- if ne $removedRows "" }}
+
+# Removals run first and stay best-effort: `plugin uninstall` exits non-zero once
+# the entry is already gone, which is the converged state this loop wants.
+for row in "${PLUGINS_REMOVED[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market <<<"$row"
+  claude plugin uninstall --scope user "${name}@${market}" >/dev/null 2>&1 || true
+done
+{{- end }}
+{{- if ne $removedMarketplaceRows "" }}
+for market in "${MARKETPLACES_REMOVED[@]}"; do
+  claude plugin marketplace remove "$market" >/dev/null 2>&1 || true
+done
+{{- end }}
+{{- if ne $rows "" }}
+
+# Preflight every row before the first mutation: a half-applied set would leave
+# Claude Code pointing at a marketplace it cannot read.
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  [[ -d $source ]] || die "preflight: $kind marketplace $market is missing: $source"
+  [[ -f $source/.claude-plugin/marketplace.json ]] ||
+    die "preflight: $kind marketplace $market has no Claude Code manifest: $source/.claude-plugin/marketplace.json"
+done
+
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  id="${name}@${market}"
+  # `marketplace add` is idempotent and rewrites the declared path in place, so a
+  # version bump converges without removing the declaration first — removing it
+  # would drop the installed plugin with it.
+  claude plugin marketplace add "$source" || die "marketplace add failed for $market"
+  claude plugin install --scope user "$id" || die "plugin install failed for $id"
+  claude plugin update --scope user "$id" || die "plugin update failed for $id"
+  # `install` enables what it installs, so this only repairs a plugin someone
+  # disabled by hand. Claude Code reports that already-enabled state as a
+  # failure, which is the one message this loop accepts as converged.
+  if ! enable_output=$(claude plugin enable --scope user "$id" 2>&1); then
+    case $enable_output in
+      *'already enabled'*) ;;
+      *) printf '%s\n' "$enable_output" >&2; die "plugin enable failed for $id" ;;
+    esac
+  fi
+done
+{{- end }}
+{{- end }}

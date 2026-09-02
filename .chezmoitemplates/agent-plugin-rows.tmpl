@@ -1,0 +1,145 @@
+{{- /* agent-plugin-rows.tmpl — validated bash-array rows for a harness plugin reconciler.
+
+       WHY THIS EXISTS. `agents.omp.plugins` was the first declared plugin set, and
+       its reconciler carried the whole validation inline. `agents.claude.plugins`
+       and `agents.agy.plugins` reconcile the SAME neutral `agents.marketplaces`
+       registry against two more harnesses, so the registry contract — the exactly
+       {name, marketplace} row shape, the name charset, the duplicate rejection, the
+       kind/os/container/jetson gates, and the source path each kind resolves to —
+       is stated once here instead of three times. The omp updater keeps its own
+       copy: it additionally validates `requiredPaths` and a bun-checked manifest
+       digest, and rewriting that surface is not this partial's job.
+
+       WHAT IT RETURNS. Newline-joined, already-quoted bash array elements for one
+       field, or the empty string when the field yields no row. The caller decides
+       whether an empty result means "render no loop at all" — every consumer
+       renders its loops only when it has rows, so no rendered script ever iterates
+       an empty array under `set -u`.
+
+       FIELDS.
+         plugins              one row per ELIGIBLE declared plugin, gated by the
+                              marketplace's os/container/jetson values, as
+                              `<name>\t<marketplace>\t<kind>\t<source>`.
+         pluginsRemoved       one row per declared removal, `<name>\t<marketplace>`.
+                              Removals are NEVER gated: a host that has since become
+                              ineligible must still drop what an earlier apply put
+                              there.
+         marketplacesRemoved  one row per `pluginsRemoved` marketplace the neutral
+                              `agents.marketplaces` registry no longer declares.
+                              A registry entry that survives is NEVER removed: it
+                              is shared with the other harnesses, and dropping the
+                              declaration here would uninstall it from under them.
+
+       Invoke as:
+         includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" . "harness" "claude" "field" "plugins")
+    */ -}}
+{{- $ctx := .ctx -}}
+{{- $harness := .harness -}}
+{{- $field := .field -}}
+{{- $fields := list "plugins" "pluginsRemoved" "marketplacesRemoved" -}}
+{{- if not (has $field $fields) -}}
+{{-   fail (printf "agent-plugin-rows: unsupported field %q; valid: plugins, pluginsRemoved, marketplacesRemoved" $field) -}}
+{{- end -}}
+{{- if not (hasKey $ctx.agents $harness) -}}
+{{-   fail (printf "agent-plugin-rows: agents.%s is not declared" $harness) -}}
+{{- end -}}
+{{- $block := index $ctx.agents $harness -}}
+{{- $os := $ctx.chezmoi.os -}}
+{{- $home := $ctx.chezmoi.homeDir -}}
+{{- $facts := includeTemplate "facts.tmpl" $ctx | fromYaml -}}
+{{- $marketplaces := $ctx.agents.marketplaces -}}
+{{- $validOS := $ctx.agents.validOS -}}
+{{- $nameRe := "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" -}}
+{{- $validKinds := list "localDir" "localArchive" -}}
+{{- $validContainers := list "skip" "keep" -}}
+{{- $validJetsons := list "skip" "keep" -}}
+{{- /* Both lists share the row shape, so read and shape-check them together. The
+       declared entry is exactly {name, marketplace}: an extra key is a typo that
+       would otherwise be dropped in silence. */ -}}
+{{- $plugins := list -}}
+{{- if hasKey $block "plugins" -}}{{- $plugins = index $block "plugins" -}}{{- end -}}
+{{- $removedPlugins := list -}}
+{{- if hasKey $block "pluginsRemoved" -}}{{- $removedPlugins = index $block "pluginsRemoved" -}}{{- end -}}
+{{- $rows := list -}}
+{{- $seen := dict -}}
+{{- range $i, $entry := $plugins -}}
+{{-   $at := printf "agents.%s.plugins[%d]" $harness $i -}}
+{{-   if not (and (eq (len $entry) 2) (hasKey $entry "name") (hasKey $entry "marketplace")) -}}
+{{-     fail (printf "agent-plugin-rows: %s must contain exactly {name, marketplace}" $at) -}}
+{{-   end -}}
+{{-   $name := printf "%v" (index $entry "name") -}}
+{{-   $market := printf "%v" (index $entry "marketplace") -}}
+{{-   if not (regexMatch $nameRe $name) -}}{{ fail (printf "agent-plugin-rows: %s has invalid plugin name %q" $at $name) }}{{- end -}}
+{{-   if not (regexMatch $nameRe $market) -}}{{ fail (printf "agent-plugin-rows: %s has invalid marketplace name %q" $at $market) }}{{- end -}}
+{{-   $id := printf "%s@%s" $name $market -}}
+{{-   if hasKey $seen $id -}}{{ fail (printf "agent-plugin-rows: duplicate %s plugin %q" $harness $id) }}{{- end -}}
+{{-   $_ := set $seen $id true -}}
+{{-   if not (hasKey $marketplaces $market) -}}
+{{-     fail (printf "agent-plugin-rows: %s references undefined marketplace %q" $at $market) -}}
+{{-   end -}}
+{{-   $authority := index $marketplaces $market -}}
+{{-   range $required := (list "kind" "container" "os") -}}
+{{-     if not (hasKey $authority $required) -}}
+{{-       fail (printf "agent-plugin-rows: marketplace %q is missing %s" $market $required) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   $kind := printf "%v" (index $authority "kind") -}}
+{{-   if not (has $kind $validKinds) -}}{{ fail (printf "agent-plugin-rows: marketplace %q has unsupported kind %q" $market $kind) }}{{- end -}}
+{{-   $container := printf "%v" (index $authority "container") -}}
+{{-   if not (has $container $validContainers) -}}{{ fail (printf "agent-plugin-rows: marketplace %q has invalid container value %q" $market $container) }}{{- end -}}
+{{-   $jetson := "keep" -}}
+{{-   if hasKey $authority "jetson" -}}
+{{-     $jetson = printf "%v" (index $authority "jetson") -}}
+{{-     if not (has $jetson $validJetsons) -}}{{ fail (printf "agent-plugin-rows: marketplace %q has invalid jetson value %q" $market $jetson) }}{{- end -}}
+{{-   end -}}
+{{-   $marketOS := list -}}
+{{-   range $value := index $authority "os" -}}
+{{-     $value = printf "%v" $value -}}
+{{-     if not (has $value $validOS) -}}{{ fail (printf "agent-plugin-rows: marketplace %q has invalid os %q" $market $value) }}{{- end -}}
+{{-     $marketOS = append $marketOS $value -}}
+{{-   end -}}
+{{-   $path := "" -}}
+{{-   if eq $kind "localDir" -}}
+{{-     if not (hasKey $authority "path") -}}{{ fail (printf "agent-plugin-rows: localDir marketplace %q is missing path" $market) }}{{- end -}}
+{{-     $rel := printf "%v" (index $authority "path") -}}
+{{-     if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $rel)) (hasPrefix "/" $rel) (contains ".." $rel) -}}
+{{-       fail (printf "agent-plugin-rows: marketplace %q has unsafe relative path %q" $market $rel) -}}
+{{-     end -}}
+{{-     $path = printf "%s/%s" $home $rel -}}
+{{-   else -}}
+{{-     $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $market "field" "segment") -}}
+{{-     $rel := printf "%v" (index $authority "externalPath") -}}
+{{-     $path = printf "%s/%s/%s" $home $rel $segment -}}
+{{-   end -}}
+{{-   if or (contains "\t" $path) (contains "\n" $path) -}}
+{{-     fail (printf "agent-plugin-rows: %s resolves to unsafe path %q" $at $path) -}}
+{{-   end -}}
+{{-   if and (eq $field "plugins") (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) (not (and $facts.jetson (eq $jetson "skip"))) -}}
+{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s" $name $market $kind $path)) -}}
+{{-   end -}}
+{{- end -}}
+{{- $removedSeen := dict -}}
+{{- $removedMarketplaceSeen := dict -}}
+{{- range $i, $entry := $removedPlugins -}}
+{{-   $at := printf "agents.%s.pluginsRemoved[%d]" $harness $i -}}
+{{-   if not (and (eq (len $entry) 2) (hasKey $entry "name") (hasKey $entry "marketplace")) -}}
+{{-     fail (printf "agent-plugin-rows: %s must contain exactly {name, marketplace}" $at) -}}
+{{-   end -}}
+{{-   $name := printf "%v" (index $entry "name") -}}
+{{-   $market := printf "%v" (index $entry "marketplace") -}}
+{{-   if not (regexMatch $nameRe $name) -}}{{ fail (printf "agent-plugin-rows: %s has invalid plugin name %q" $at $name) }}{{- end -}}
+{{-   if not (regexMatch $nameRe $market) -}}{{ fail (printf "agent-plugin-rows: %s has invalid marketplace name %q" $at $market) }}{{- end -}}
+{{-   $id := printf "%s@%s" $name $market -}}
+{{-   if hasKey $seen $id -}}{{ fail (printf "agent-plugin-rows: %s is declared both installed and removed for %s" $id $harness) }}{{- end -}}
+{{-   if hasKey $removedSeen $id -}}{{ fail (printf "agent-plugin-rows: duplicate removed %s plugin %q" $harness $id) }}{{- end -}}
+{{-   $_ := set $removedSeen $id true -}}
+{{-   if eq $field "pluginsRemoved" -}}
+{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s" $name $market)) -}}
+{{-   else if eq $field "marketplacesRemoved" -}}
+{{-     if and (not (hasKey $marketplaces $market)) (not (hasKey $removedMarketplaceSeen $market)) -}}
+{{-       $_ := set $removedMarketplaceSeen $market true -}}
+{{-       $rows = append $rows (printf "  %q" $market) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- join "\n" $rows -}}

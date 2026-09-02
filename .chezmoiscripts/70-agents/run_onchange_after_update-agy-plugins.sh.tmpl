@@ -1,0 +1,137 @@
+{{- $ctx := . -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "agy" "field" "plugins") -}}
+{{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "agy" "field" "pluginsRemoved") -}}
+#!/usr/bin/env bash
+# Reconciles every eligible agents.agy.plugins row into the Antigravity CLI.
+#
+# agy has no marketplace registry: `agy plugin install <path>` takes an
+# agent-plugins bundle directory — a root plugin.json plus the component trees
+# beside it — and copies it into ~/.gemini/config/plugins/<name>. Identity is the
+# plugin name alone, so uninstall/enable take <name> while the marketplace stays a
+# source-resolution detail of agents.marketplaces.
+#
+# WHY A STAGED BUNDLE. The compound-engineering archive is shared with omp, and
+# .chezmoidata/agents.yaml prunes its ROOT plugin.json from the external
+# (agents.marketplaces exclude) because omp otherwise classifies the tree as an
+# agent-plugins package and drops the skills whose frontmatter carries Claude Code
+# keys. That pruned file is exactly the manifest agy needs, and upstream's own
+# .agy/plugin.json symlink (-> ../plugin.json) is upstream declaring the root
+# manifest to be the agy bundle manifest — the same manifest .claude-plugin/
+# carries for Claude Code. So a source with no root plugin.json is staged into a
+# bundle of its own: the manifest copied back from .claude-plugin/plugin.json, and
+# one symlink per component that exists at the source root. The .agy symlink is
+# re-checked first, so an upstream that stops making that equivalence claim fails
+# here instead of installing a bundle nobody vouched for.
+#
+# The whole eligible set is a render-time constant, so an empty set renders a
+# notice and no loop at all rather than a runtime branch over an empty array.
+set -euo pipefail
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$HOME/.local/sbin:"*) ;;
+  *) PATH="$HOME/.local/sbin:$PATH" ;;
+esac
+export PATH
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $fingerprintInputs) }}
+{{- if and (eq $rows "") (eq $removedRows "") }}
+printf 'update-agy-plugins: %s\n' 'no eligible plugins or removals are declared for this host'
+{{- else -}}
+{{- if ne $rows "" }}
+
+PLUGINS=(
+{{ $rows }}
+)
+# The agent-plugins component set agy reports on, in its own order. A component
+# is linked when the source has it and unlinked when it goes away, so a bundle
+# never keeps a dangling entry across an upstream reshuffle.
+COMPONENTS=(skills agents commands hooks mcp.json)
+BUNDLE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/agy-plugin-bundles"
+{{- end }}
+{{- if ne $removedRows "" }}
+PLUGINS_REMOVED=(
+{{ $removedRows }}
+)
+{{- end }}
+
+die() { printf 'update-agy-plugins: %s\n' "$*" >&2; exit 1; }
+
+[[ -n ${HOME:-} && -d $HOME && -w $HOME ]] || die 'preflight: HOME is not writable'
+command -v agy >/dev/null 2>&1 || die 'preflight: agy is not on PATH'
+for parent in "$HOME/.gemini" "$HOME/.gemini/config"; do
+  if [[ -e $parent ]]; then
+    [[ -d $parent && -w $parent ]] || die "preflight: user path is not writable: $parent"
+  else
+    ancestor=$parent
+    while [[ ! -e $ancestor ]]; do ancestor=${ancestor%/*}; done
+    [[ -d $ancestor && -w $ancestor ]] || die "preflight: cannot create user path below $ancestor"
+  fi
+done
+mkdir -p "$HOME/.gemini/config" || die 'preflight: failed to create Antigravity user paths'
+{{- if ne $removedRows "" }}
+
+# Removals run first. agy uninstall is already idempotent, so a failure here is a
+# real one and is not swallowed.
+for row in "${PLUGINS_REMOVED[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market <<<"$row"
+  agy plugin uninstall "$name" >/dev/null 2>&1 ||
+    printf 'update-agy-plugins: uninstall of %s (declared removed from %s) reported an error; continuing\n' \
+      "$name" "$market" >&2
+done
+{{- end }}
+{{- if ne $rows "" }}
+
+# Preflight every row before the first mutation, then stage and install in a
+# second pass: a half-applied set would leave agy holding a bundle whose sibling
+# never resolved.
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  [[ -d $source ]] || die "preflight: $kind marketplace $market is missing: $source"
+  if [[ ! -f $source/plugin.json ]]; then
+    manifest="$source/.claude-plugin/plugin.json"
+    [[ -f $manifest ]] ||
+      die "preflight: $market has neither a bundle root plugin.json nor $manifest to restore it from"
+    agy_manifest="$source/.agy/plugin.json"
+    [[ -L $agy_manifest && $(readlink -- "$agy_manifest") == '../plugin.json' ]] ||
+      die "preflight: $market no longer declares its root manifest as the agy bundle manifest ($agy_manifest)"
+    name_re=${name//./\\.}
+    grep -Eq "\"name\"[[:space:]]*:[[:space:]]*\"${name_re}\"" "$manifest" ||
+      die "preflight: $manifest does not declare plugin $name; $market is not a single-plugin bundle"
+  fi
+done
+
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  bundle=$source
+  if [[ ! -f $source/plugin.json ]]; then
+    bundle="$BUNDLE_ROOT/$market/$name"
+    mkdir -p -- "$bundle" || die "cannot create staged bundle: $bundle"
+    staged="$bundle/plugin.json.chezmoi-$$.tmp"
+    cp -- "$source/.claude-plugin/plugin.json" "$staged" || die "cannot stage manifest for $name"
+    mv -f -- "$staged" "$bundle/plugin.json" || die "cannot publish staged manifest for $name"
+    for component in "${COMPONENTS[@]}"; do
+      target="$bundle/$component"
+      if [[ -e $source/$component ]]; then
+        # Only a symlink of ours may sit here: `ln -sfn` over a real directory
+        # would silently link INSIDE it instead of replacing it.
+        [[ ! -e $target || -L $target ]] ||
+          die "staged bundle entry is not a symlink; remove it and re-apply: $target"
+        ln -sfn -- "$source/$component" "$target" || die "cannot link $component into $bundle"
+      elif [[ -L $target ]]; then
+        rm -f -- "$target" || die "cannot drop stale $component link from $bundle"
+      fi
+    done
+  fi
+  agy plugin install "$bundle" || die "plugin install failed for $name ($market)"
+  agy plugin enable "$name" || die "plugin enable failed for $name"
+done
+{{- end }}
+{{- end }}
