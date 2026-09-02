@@ -73,13 +73,10 @@
 {{-     end -}}
 {{-   end -}}
 {{-   if or (contains "\t" $source) (contains "\n" $source) -}}{{ fail (printf "update-omp-plugins: %s resolves to unsafe path %q" $where $source) }}{{- end -}}
-{{-   $strict := eq $id "mxm4-haptic@h82-dotfiles" -}}
-{{-   if and (eq $name "mxm4-haptic") (not $strict) -}}{{ fail "update-omp-plugins: mxm4-haptic must use marketplace h82-dotfiles" }}{{- end -}}
-{{-   if and $strict (ne $kind "localDir") -}}{{ fail "update-omp-plugins: h82-dotfiles must be a localDir marketplace" }}{{- end -}}
 {{-   if and (has $os $marketOS) (not (and $facts.container (eq $container "skip"))) (not (and $facts.jetson (eq $jetson "skip"))) -}}
-{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%t\t%s\t%s" $name $market $kind $source $strict (join " " $requiredExtensions) (join " " $requiredSkills))) -}}
+{{-     $rows = append $rows (printf "  %q" (printf "%s\t%s\t%s\t%s\t%s\t%s" $name $market $kind $source (join " " $requiredExtensions) (join " " $requiredSkills))) -}}
 {{-     $_ := set $survivingMarketplaces $market true -}}
-{{- end -}}
+{{-   end -}}
 {{- end -}}
 {{- $pluginsRemoved := .agents.omp.pluginsRemoved -}}
 {{- $removedRows := list -}}
@@ -123,7 +120,6 @@ fi
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $fingerprintInputs) }}
 
 readonly EXPECTED_OMP_VERSION='{{ $ompVersion }}'
-readonly LEGACY_EXTENSION="$HOME/.omp/agent/extensions/mxm4-haptic.ts"
 PLUGINS=(
 {{ join "\n" $rows }}
 )
@@ -182,10 +178,9 @@ cat >"$helper" <<'BUN'
 {{ includeTemplate "omp-plugin-reconcile-helper.ts.tmpl" . }}
 BUN
 
-strict_source=
 for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
-  IFS=$'\t' read -r name market kind source strict required_extensions required_skills <<<"$row"
+  IFS=$'\t' read -r name market kind source required_extensions required_skills <<<"$row"
   if [[ $kind == localDir ]]; then
     [[ -f $source/.omp-plugin/marketplace.json ]] || die "preflight: marketplace manifest is missing: $source"
   else
@@ -200,10 +195,6 @@ for row in "${PLUGINS[@]}"; do
     bun "$helper" manifest "$source" "$required_extensions" "$required_skills" >/dev/null ||
       die "preflight: pi manifest drift: $source"
   fi
-  if [[ $strict == true ]]; then
-    bun "$helper" pre "$source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'precheck: staged haptic validation failed'
-    strict_source=$source
-  fi
 done
 
 mkdir -p "$HOME/.omp/agent/extensions" "$HOME/.omp/plugins" || die 'preflight: failed to create OMP user paths'
@@ -216,8 +207,3 @@ for row in "${PLUGINS[@]}"; do
   omp plugin install --scope user --force "$id" || die "plugin install failed for $id"
   omp plugin enable --scope user "$id" || die "plugin enable failed for $id"
 done
-if [[ -n $strict_source ]]; then
-  bun "$helper" post "$strict_source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'postcheck: haptic replacement proof failed'
-  rm -f -- "$LEGACY_EXTENSION" || die 'migration: failed to remove legacy haptic extension'
-  bun "$helper" final "$strict_source" "$HOME/.omp" "$LEGACY_EXTENSION" >/dev/null || die 'final postcheck: fresh haptic loader proof failed'
-fi
