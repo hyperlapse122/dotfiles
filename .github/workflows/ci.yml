@@ -115,7 +115,8 @@ jobs:
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
-            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh"
+            ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:settings.sh" \
+            ".chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl:claude-settings.sh"
           do
             source_path=${item%%:*}
             output_name=${item#*:}
@@ -126,7 +127,7 @@ jobs:
           done
           chmod 700 "$RUNNER_TEMP/auth.sh" "$RUNNER_TEMP/plugins.sh" \
             "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
-            "$RUNNER_TEMP/settings.sh"
+            "$RUNNER_TEMP/settings.sh" "$RUNNER_TEMP/claude-settings.sh"
       - name: Test agent reconciliation
         run: |
           set -euo pipefail
@@ -137,6 +138,7 @@ jobs:
           .ci/test-claude-agy-plugin-reconcile.sh \
             "$RUNNER_TEMP/claude-plugins.sh" \
             "$RUNNER_TEMP/agy-plugins.sh"
+          .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           .ci/check-omp-agent-roster.sh "$RUNNER_TEMP/settings.sh"
           .ci/check-omp-seat-routing.sh
           .ci/test-agent-instructions.sh

@@ -1,40 +1,189 @@
+{{- $settings := .agents.claude.settings -}}
+{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- if ne .chezmoi.os "windows" -}}
 #!/usr/bin/env bash
+# Asserts the declared Claude Code settings leaves (agents.claude.settings in
+# .chezmoidata/agents.yaml) into the live ~/.claude/settings.json on every apply.
+#
+# settings.json is deliberately NOT a chezmoi target: Claude Code rewrites it
+# during ordinary use, aoe injects session-tracking hooks into it, and
+# install-claude-plugins writes enabledPlugins and extraKnownMarketplaces. A
+# managed-readonly target would fight all three. run_after (like config-omp-settings)
+# because a live vendor edit does not change a chezmoi source fingerprint, so an
+# onchange script would not re-assert a declared value the tool overwrote until the
+# DATA changed.
+#
+# Ownership boundary: each declared path names a LEAF, and only that leaf is
+# written, so a key this declaration does not name -- a sibling, another member of
+# an enclosing record, or a whole top-level key -- survives untouched. Removing a
+# path from the declaration therefore does NOT restore anything; it only stops the
+# assertion. Paths owned by aoe and install-claude-plugins are rejected at render
+# time by claude-settings-validate.tmpl, not merely avoided by convention.
 set -euo pipefail
 
+{{ if eq (len $settings) 0 -}}
+printf '%s\n' 'config-claude-settings: agents.claude.settings declares no paths; nothing to assert.' >&2
+exit 0
+{{- else -}}
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 SETTINGS_DIR="$(dirname "$SETTINGS")"
 
+# A silent skip is the failure mode this reconciler cannot afford: the declaration
+# is authoritative, so a user who sees nothing believes the values are pinned.
 if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' 'config-claude-settings: jq is unavailable; declared Claude Code settings were NOT asserted.' >&2
   exit 0
 fi
 
-mkdir -p "$SETTINGS_DIR"
+if [[ ! -d "$SETTINGS_DIR" ]]; then
+  mkdir -p "$SETTINGS_DIR"
+  # A filecon spec only takes effect when restorecon runs, and no type transition
+  # covers chezmoi_t creating this directory -- so on a first provision it lands as
+  # a plain home type and anything staged inside would inherit that. Relabel it
+  # HERE, before the staging below depends on the inheritance.
+  if command -v restorecon >/dev/null 2>&1; then
+    restorecon -F "$SETTINGS_DIR" 2>/dev/null || true
+  fi
+fi
 
 decode_b64() {
   printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D
 }
 
-DECLARED="$(decode_b64 '{{ .agents.claude.settings | toJson | b64enc }}')"
+DECLARED="$(decode_b64 '{{ $settings | toJson | b64enc }}')"
 
-tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
-trap 'rm -f "$tmp"' EXIT
-chmod 0600 "$tmp"
+# Canonical content of the target, or the ABSENT marker. Neither marker can collide
+# with a real reading: canonical JSON object text always begins with '{'.
+read_target() {
+  if [[ ! -e "$SETTINGS" ]]; then
+    printf 'ABSENT'
+    return 0
+  fi
+  jq -e -c 'if type == "object" then . else empty end' "$SETTINGS" 2>/dev/null || printf 'UNREADABLE'
+}
 
-if [[ -f "$SETTINGS" ]] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
-  jq --argjson declared "$DECLARED" '. + $declared' "$SETTINGS" > "$tmp"
-  if cmp -s "$tmp" "$SETTINGS"; then
-    exit 0
+# Back a file aside before discarding or replacing it. cp follows a symlink at the
+# DESTINATION, so a planted .bak would redirect the write into whatever it points
+# at -- and this script runs as chezmoi_t, which may write trees the agent domain
+# cannot. Refuse the symlink outright and clear the path first.
+backup_target() {
+  local bak="${SETTINGS}.bak"
+  if [[ -L $bak ]]; then
+    printf 'config-claude-settings: %s is a symlink; refusing to write a backup through it. Remove it, then re-apply.\n' "$bak" >&2
+    return 1
   fi
-else
-  if [[ -f "$SETTINGS" ]]; then
-    cp -a "$SETTINGS" "${SETTINGS}.bak"
-  fi
-  printf '%s\n' "$DECLARED" > "$tmp"
+  rm -f -- "$bak"
+  cp -a "$SETTINGS" "$bak"
+}
+
+# Read the target exactly once. Every later comparison uses this same snapshot, so
+# the states cannot drift apart.
+live_snapshot="$(read_target)"
+live='{}'
+case "$live_snapshot" in
+  ABSENT)
+    : # nothing there yet; build the declared leaves from scratch
+    ;;
+  UNREADABLE)
+    backup_target || exit 0
+    if [[ -s "$SETTINGS" ]]; then
+      # Malformed but non-empty: preserved, never rebuilt -- under leaf semantics a
+      # rebuild from the declaration alone would drop everything the other writers own.
+      printf 'config-claude-settings: %s is not a JSON object; copied it to %s.bak and asserted nothing. Repair or remove it, then re-apply.\n' "$SETTINGS" "$SETTINGS" >&2
+      exit 0
+    fi
+    # Zero bytes is the residue of an interrupted in-place write, which the
+    # co-writers this reconciler shares the file with can leave behind. There is
+    # nothing in it to preserve, so rebuild rather than halting on every apply.
+    printf 'config-claude-settings: %s was empty; copied it to %s.bak and rebuilt the declared leaves.\n' "$SETTINGS" "$SETTINGS" >&2
+    ;;
+  *)
+    live="$live_snapshot"
+    ;;
+esac
+
+scratch="$(mktemp "${TMPDIR:-/tmp}/claude-settings-classify.XXXXXX")"
+tmp=''
+cleanup() { rm -f -- "$scratch" ${tmp:+"$tmp"}; }
+# A signal handler that does not exit lets execution resume at the next statement,
+# so an interrupt between the identity check and the rename would delete the staged
+# file and then try to rename it. Terminate explicitly.
+trap cleanup EXIT
+trap 'cleanup; exit 1' HUP INT TERM
+
+# One classification pass per declared leaf. getpath raises on an ancestor that
+# holds a scalar or an array exactly as setpath does, so the probe is wrapped: a
+# bare getpath would kill the whole stream before any blocked path could be
+# reported. `blocked` therefore travels as a state on the stream, not as an abort.
+jq -rn --argjson live "$live" --argjson declared "$DECLARED" '
+  $declared
+  | to_entries[]
+  | . as $e
+  | ($e.key | split(".")) as $p
+  | (try {found: ($live | getpath($p))} catch {blocked: true}) as $probe
+  | (if ($probe | has("blocked")) then "blocked"
+     elif $probe.found == $e.value then "converged"
+     else "drift" end) as $state
+  | "\($state)\t\($e.key)"
+' >"$scratch"
+
+examined=0
+drifted=0
+# A string rather than an array: bash 3.2, still the default on macOS, errors on
+# empty-array expansion under `set -u`, and the diagnostic below wants one joined
+# list anyway.
+blocked=''
+while IFS=$'\t' read -r state path; do
+  [[ -n $path ]] || continue
+  examined=$((examined + 1))
+  case "$state" in
+    drift) drifted=$((drifted + 1)) ;;
+    blocked) blocked="${blocked:+$blocked }$path" ;;
+  esac
+done <"$scratch"
+
+# A truncated read is the one failure the loop cannot see: every iteration that DID
+# run succeeded. Comparing against the render-time count turns that into a failure.
+if [[ $examined -ne {{ len $settings }} ]]; then
+  printf 'config-claude-settings: classified %d of {{ len $settings }} declared paths; the stream ended early and nothing was asserted.\n' "$examined" >&2
+  exit 1
 fi
+
+if [[ -n $blocked ]]; then
+  printf 'config-claude-settings: an ancestor of %s holds a scalar or an array, so the leaf cannot be written; asserted nothing. Repair that key in %s, then re-apply.\n' "$blocked" "$SETTINGS" >&2
+  exit 0
+fi
+
+# Convergence is the success case, not a skip: exit silently and write nothing, so
+# a second apply on unchanged source changes zero bytes.
+if [[ $drifted -eq 0 ]]; then
+  exit 0
+fi
+
+# Staged in the target's own directory so it inherits that directory's SELinux type
+# and the replacement is a same-filesystem rename. Staging under TMPDIR would strip
+# the label (see docs/solutions/security-issues/selinux-user-scope-agent-config-protection.md).
+tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
 chmod 0600 "$tmp"
+jq -n --argjson live "$live" --argjson declared "$DECLARED" '
+  reduce ($declared | to_entries[]) as $e ($live; setpath($e.key | split("."); $e.value))
+' >"$tmp"
+
+# Another owner may have written between the read and now; its change is not ours
+# to discard, and nothing else would restore it. Compare CONTENT, not inode and
+# mtime: the whole staging window is tens of milliseconds, so an in-place rewrite
+# keeps the inode and lands in the same whole second, and an identity check would
+# pass while the write is silently lost.
+if [[ "$(read_target)" != "$live_snapshot" ]]; then
+  printf 'config-claude-settings: %s changed while this apply staged its replacement; discarded the staged file and asserted nothing. The next apply retries.\n' "$SETTINGS" >&2
+  exit 0
+fi
+
 mv -f "$tmp" "$SETTINGS"
+tmp=''
 if command -v restorecon >/dev/null 2>&1; then
   restorecon -F "$SETTINGS" 2>/dev/null || true
 fi
+printf 'config-claude-settings: asserted %d of %d declared settings paths\n' "$drifted" "$examined"
+{{- end }}
 {{- end }}
