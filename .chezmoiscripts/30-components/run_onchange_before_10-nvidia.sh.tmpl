@@ -38,6 +38,15 @@ nvidia_rpmfusion_excludes=(
 {{- end }}
 )
 
+# The mirror image, applied on a NON-cuda branch. Generated from
+# .chezmoidata/nvidia.yaml for the same reason as the array above: which names the
+# CUDA repository owns is policy, not a decision this installer makes.
+nvidia_cuda_excludes=(
+{{- range .nvidia.legacyBranchCudaExcludes }}
+  {{ . | quote }}
+{{- end }}
+)
+
 nvidia_branch=''
 nvidia_branch_source=''
 nvidia_build_system=''
@@ -71,6 +80,8 @@ resolve_nvidia_branch() {
       )
       # This branch is served by its own package source, so the exclusions that
       # keep that source out of the way for the current branch must not apply.
+      # configure_cuda_exclusions then puts the reciprocal exclusion on the CUDA
+      # repository, so exactly one source can serve these names.
       nvidia_rpmfusion_excludes=()
 {{- end }}
       ;;
@@ -95,7 +106,7 @@ resolve_nvidia_branch() {
   return 0
 }
 
-configure_nvidia_repo_policy() {
+configure_rpmfusion_exclusions() {
   if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "rpmfusion-nonfree-absent" "direction" "harmless" "reason" "RPM Fusion nonfree repositories are not present; NVIDIA package exclusions are not needed") | trim | indent 4 }}
   fi
@@ -103,6 +114,32 @@ configure_nvidia_repo_policy() {
   local IFS=,
   "${DNF[@]}" config-manager setopt \
     "rpmfusion-nonfree*.excludepkgs=${nvidia_rpmfusion_excludes[*]}" || true
+}
+
+# UNCONDITIONAL ON THE REPOSITORY BEING PRESENT, unlike its RPM Fusion sibling. A
+# legacy-branch host is very likely to carry cuda-fedora*.repo from an apply that
+# predates the branch axis, when it was added to every NVIDIA host -- and skipping
+# the ADD does nothing about a repofile that is already there. `config-manager
+# setopt` on an absent repository is a no-op, so running it anyway costs nothing
+# and is what repairs that host.
+#
+# SYMMETRIC IN BOTH DIRECTIONS: a cuda-branch host WRITES THE EMPTY VALUE rather
+# than leaving whatever was set. Without that, a host that resolved to the legacy
+# branch once and then resolves back after a hardware change would keep excluding
+# the very packages its branch now needs.
+configure_cuda_exclusions() {
+  local IFS=,
+  local excludes=''
+  if [[ "$nvidia_branch_source" != 'cuda' ]]; then
+    excludes="${nvidia_cuda_excludes[*]}"
+  fi
+  "${DNF[@]}" config-manager setopt \
+    "cuda-fedora*.excludepkgs=${excludes}" || true
+}
+
+configure_nvidia_repo_policy() {
+  configure_rpmfusion_exclusions
+  configure_cuda_exclusions
 }
 
 # The vendor CUDA repository serves the CURRENT branch only; a legacy branch comes
