@@ -308,22 +308,50 @@ async function resolveFlutter(name: string, spec: ToolSpec): Promise<LockedTool>
   };
 }
 
+async function fetchBuffer(source: string, url: string): Promise<Buffer> {
+  const response = await fetchOrThrow(source, url);
+  return Buffer.from(await response.arrayBuffer());
+}
+
 async function fetchBinary(
   source: string,
   url: string,
 ): Promise<{ buffer: Buffer; sha256: string; size: number }> {
-  const response = await fetchOrThrow(source, url);
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = await fetchBuffer(source, url);
   const sha256 = createHash("sha256").update(buffer).digest("hex");
   return { buffer, sha256, size: buffer.length };
 }
 
+const ANDROID_VERSION = /version=([0-9.]+)/;
+const ANDROID_VERSION_SEGMENT = /^[0-9]+(?:\.[0-9]+)*$/;
+
+/**
+ * `latest` is served with `max-age=0` over bytes that change under a stable URL,
+ * so a lock that recorded it left every chezmoi HTTP cache holding a superseded
+ * body permanently mismatched against the digest beside it. The moving URL is
+ * therefore read only to discover the version; every recorded URL and digest
+ * comes from the immutable per-version path.
+ */
 async function resolveAndroidCli(name: string, spec: ToolSpec): Promise<LockedTool> {
   const base = spec.source.replace(/\/+$/, "");
-  const linuxUrl = `${base}/linux_x86_64/android`;
-  const darwinArm64Url = `${base}/darwin_arm64/android`;
-  const darwinX64Url = `${base}/darwin_x86_64/android`;
+  if (!base.endsWith("/latest")) {
+    throw new ResolutionError(spec.source, `${name}: source must end in /latest`);
+  }
+
+  const latestLinux = await fetchBuffer(spec.source, `${base}/linux_x86_64/android`);
+  const match = latestLinux.toString("latin1").match(ANDROID_VERSION);
+  if (!match || !match[1]) {
+    throw new ResolutionError(spec.source, `${name}: could not extract version from binary`);
+  }
+  const version = match[1];
+  if (!ANDROID_VERSION_SEGMENT.test(version)) {
+    throw new ResolutionError(spec.source, `${name}: invalid version segment "${version}"`);
+  }
+
+  const versionBase = base.replace(/\/latest$/, `/${version}`);
+  const linuxUrl = `${versionBase}/linux_x86_64/android`;
+  const darwinArm64Url = `${versionBase}/darwin_arm64/android`;
+  const darwinX64Url = `${versionBase}/darwin_x86_64/android`;
 
   const [linuxBinary, darwinArm64Binary, darwinX64Binary] = await Promise.all([
     fetchBinary(spec.source, linuxUrl),
@@ -331,11 +359,16 @@ async function resolveAndroidCli(name: string, spec: ToolSpec): Promise<LockedTo
     fetchBinary(spec.source, darwinX64Url),
   ]);
 
-  const match = linuxBinary.buffer.toString("latin1").match(/version=([0-9.]+)/);
-  if (!match || !match[1]) {
-    throw new ResolutionError(spec.source, `${name}: could not extract version from binary`);
+  // The version path is a separate object from `latest`, so nothing upstream
+  // guarantees it serves the build `latest` just named. A soft 200 or a
+  // mislabelled directory would otherwise be locked as that version.
+  const pinnedVersion = linuxBinary.buffer.toString("latin1").match(ANDROID_VERSION)?.[1];
+  if (pinnedVersion !== version) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: ${linuxUrl} reports version "${pinnedVersion ?? "none"}", expected "${version}"`,
+    );
   }
-  const version = match[1];
 
   return {
     kind: spec.kind,
