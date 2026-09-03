@@ -18,18 +18,24 @@ set -euo pipefail
 # Debian-shaped polkit stack would overwrite Fedora's rpm-owned one and break
 # every polkit prompt. authselect's feature is the sanctioned mechanism.
 #
-# WHAT THE FEATURE ACTUALLY REACHES. It writes pam_fprintd into system-auth,
-# which /etc/pam.d/sudo and /usr/lib/pam.d/polkit-1 both include -- so the factor
-# reaches privilege escalation as well as polkit, and there is no stock authselect
-# feature that separates them. AGENTS.md was amended to say so rather than the
-# plan pretending the separation exists.
+# WHAT THE FEATURE ACTUALLY REACHES. It writes pam_fprintd into system-auth, and
+# every service including that stack in its auth phase gains the factor with it.
+# On a live Fedora 44 host that set is sudo, polkit-1, su, login, vlock, chsh,
+# chfn, config-util, crond, kcheckpass and kscreensaver -- so the factor reaches
+# privilege escalation, console login, and the Plasma lock screen, not only
+# polkit. There is no stock authselect feature that separates them, so the whole
+# set is the accepted scope; AGENTS.md enumerates it rather than the plan
+# pretending a separation exists. The list is host-verified, not exhaustive: it
+# was read off one host's installed packages.
 #
 # WHAT IT MUST NOT REACH is the login greeter. The feature does not touch
 # password-auth, which is the stack a greeter authenticates through, and GDM
 # additionally carries a locked dconf key. Neither of those is assumed here: the
 # check below resolves the greeter's stack through its include chain, against the
 # profile as it would stand AFTER the feature is enabled, and withholds the
-# feature if a fingerprint module would reach it.
+# feature if a fingerprint module would reach it. It fails closed on both
+# unknowns: a display manager greeter_service() does not recognize, and a stack
+# that could not be resolved at all, both withhold.
 
 AUTHSELECT_FEATURES=(
 {{ range .system.linux.fingerprint.authselectFeatures }}  {{ . | quote }}

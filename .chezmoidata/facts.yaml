@@ -289,11 +289,13 @@ factRegistry:
       host does not run SDDM" cannot be written as !displayManager.sddm. The retirement
       entry for the SDDM greeter drop-in needs exactly that negation.
     gates: >-
-      Inverted, as !displayManagerSddm, on the retirement of etc/sddm.conf.d/90-breeze.conf.
+      Nothing directly. It is the input both sddmBreezeUsable and sddmBreezeRetirable are
+      derived from, so the SDDM comparison has ONE definition; no manifest entry names it.
     whenFalse: >-
-      The host does not run SDDM, so the SDDM greeter drop-in is retired from it. On a
-      host with no display manager at all the fact is false too, and retiring a file that
-      was never installed is a no-op.
+      This host does not run SDDM -- OR the displayManager probe could not answer, which
+      resolves the same false. That ambiguity is exactly why no manifest entry may gate on
+      the inverse of this fact: !displayManagerSddm would turn an unreadable probe into an
+      active removal. sddmBreezeRetirable exists to separate the two.
   thinkpad:
     type: bool
     probe: template
@@ -370,6 +372,24 @@ factRegistry:
     whenFalse: >-
       The drop-in is not installed, either because the theme is absent or because
       this host does not run SDDM. Both are the safe direction.
+  sddmBreezeRetirable:
+    type: bool
+    probe: template
+    source: >-
+      displayManager is NON-EMPTY and sddmBreezeUsable is false -- a POSITIVE fact, which
+      is the whole point. The retirement entry used to gate on !displayManagerSddm, and
+      that fact is false on a host whose displayManager probe could not answer, so an
+      unreadable probe DELETED the drop-in from a real SDDM host. Requiring a known display
+      manager is what makes an unresolved fact skip rather than act, per the registry rule
+      that false MUST skip rather than grant. The second half is the complement of the
+      install gate rather than its own condition: an SDDM host that lost the breeze theme
+      is not usable either, and under the old gate it neither installed the drop-in nor
+      retired it, so it kept a Current=breeze file pointing at a theme that is gone.
+    gates: >-
+      /etc/sddm.conf.d/90-breeze.conf -- the retirement of the Breeze greeter drop-in.
+    whenFalse: >-
+      Nothing is removed. Either the display manager is unknown, so acting would be acting
+      on a fact nobody could read, or the drop-in is usable here and belongs on this host.
   sddmBreeze:
     type: bool
     probe: template

@@ -3,14 +3,42 @@
 {{- if or $isFedora $isUbuntu -}}
 {{- $nvidiaCtkPresent := "" -}}
 {{- $akmodsKeyPresent := "" -}}
+{{- $expectPresent := "" -}}
+{{- $mokPassphrase := "" -}}
 {{- if $isFedora -}}
 {{-   $nvidiaCtkPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
 {{-   $akmodsKeyPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "akmods-signing-key-present") -}}
+{{-   $expectPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "expect-present") -}}
+{{- /* The MOK enrollment password is the LUKS passphrase the config already
+     stores: the operator has to retype this value at the MokManager screen on the
+     next boot, and a generated one would have to be recorded somewhere for them
+     to look up. Read exactly the way run_onchange_after_luks-tpm2.sh.tmpl reads
+     it -- the READ-ONLY key partial, so a host that stored a cipher and lost its
+     keyring entry does not get a fresh key that cannot decrypt the old text. */ -}}
+{{-   if and (hasKey . "luksPassphraseCipher") (ne .luksPassphraseCipher "") -}}
+{{-     $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
+{{-     if ne $secretsKey "" }}{{ $mokPassphrase = decryptAES $secretsKey .luksPassphraseCipher }}{{ end -}}
+{{-   end -}}
 {{- end -}}
 #!/usr/bin/env bash
 
 {{ if $isFedora -}}
-# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent))) }}
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent) (dict "name" "expect-present" "value" $expectPresent))) }}
+#
+# SECURITY NOTES for the MOK enrollment passphrase below, identical in shape to
+# run_onchange_after_luks-tpm2.sh.tmpl's, because it is the same stored secret:
+#   * At rest the config carries only the AES ciphertext and the key never leaves
+#     the user keyring. But when it decrypts, it is rendered (base64-wrapped for
+#     shell safety, NOT secrecy) into this script's transient run-script file,
+#     which chezmoi writes mode-0700 and deletes after execution. Avoid
+#     `chezmoi apply --verbose` / `--dry-run` with a real passphrase stored --
+#     those print rendered script contents.
+#   * The passphrase is handed to expect through the environment ONLY, never
+#     argv, so it is not visible in the process table.
+#   * A blank prompt, an unreachable or locked keyring, or an absent expect all
+#     render the declared skip path instead, so no passphrase is rendered at all.
+#   * shim consumes MokAuth at boot and does not expose it as a runtime efivar,
+#     so the queued hash has no persistent runtime read surface.
 {{ end -}}
 set -euo pipefail
 {{ includeTemplate "facts-sh.tmpl" . }}
@@ -34,6 +62,15 @@ nvidia_packages=(
 
 nvidia_rpmfusion_excludes=(
 {{- range .nvidia.currentBranchRpmfusionExcludes }}
+  {{ . | quote }}
+{{- end }}
+)
+
+# The mirror image, applied on a NON-cuda branch. Generated from
+# .chezmoidata/nvidia.yaml for the same reason as the array above: which names the
+# CUDA repository owns is policy, not a decision this installer makes.
+nvidia_cuda_excludes=(
+{{- range .nvidia.legacyBranchCudaExcludes }}
   {{ . | quote }}
 {{- end }}
 )
@@ -71,6 +108,8 @@ resolve_nvidia_branch() {
       )
       # This branch is served by its own package source, so the exclusions that
       # keep that source out of the way for the current branch must not apply.
+      # configure_cuda_exclusions then puts the reciprocal exclusion on the CUDA
+      # repository, so exactly one source can serve these names.
       nvidia_rpmfusion_excludes=()
 {{- end }}
       ;;
@@ -95,7 +134,7 @@ resolve_nvidia_branch() {
   return 0
 }
 
-configure_nvidia_repo_policy() {
+configure_rpmfusion_exclusions() {
   if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "rpmfusion-nonfree-absent" "direction" "harmless" "reason" "RPM Fusion nonfree repositories are not present; NVIDIA package exclusions are not needed") | trim | indent 4 }}
   fi
@@ -103,6 +142,32 @@ configure_nvidia_repo_policy() {
   local IFS=,
   "${DNF[@]}" config-manager setopt \
     "rpmfusion-nonfree*.excludepkgs=${nvidia_rpmfusion_excludes[*]}" || true
+}
+
+# UNCONDITIONAL ON THE REPOSITORY BEING PRESENT, unlike its RPM Fusion sibling. A
+# legacy-branch host is very likely to carry cuda-fedora*.repo from an apply that
+# predates the branch axis, when it was added to every NVIDIA host -- and skipping
+# the ADD does nothing about a repofile that is already there. `config-manager
+# setopt` on an absent repository is a no-op, so running it anyway costs nothing
+# and is what repairs that host.
+#
+# SYMMETRIC IN BOTH DIRECTIONS: a cuda-branch host WRITES THE EMPTY VALUE rather
+# than leaving whatever was set. Without that, a host that resolved to the legacy
+# branch once and then resolves back after a hardware change would keep excluding
+# the very packages its branch now needs.
+configure_cuda_exclusions() {
+  local IFS=,
+  local excludes=''
+  if [[ "$nvidia_branch_source" != 'cuda' ]]; then
+    excludes="${nvidia_cuda_excludes[*]}"
+  fi
+  "${DNF[@]}" config-manager setopt \
+    "cuda-fedora*.excludepkgs=${excludes}" || true
+}
+
+configure_nvidia_repo_policy() {
+  configure_rpmfusion_exclusions
+  configure_cuda_exclusions
 }
 
 # The vendor CUDA repository serves the CURRENT branch only; a legacy branch comes
@@ -150,7 +215,7 @@ install_nvidia_packages() {
   fi
 
   if conflict="$(conflicting_nvidia_branch)" && report_branch_conflict "$conflict"; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-conflict" "direction" "harmless" "reason" "a conflicting NVIDIA driver branch is installed; the operator command to clear it was printed and nothing was installed or removed") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-conflict" "direction" "operator-blocking" "reason" "a conflicting NVIDIA driver branch is installed; the operator command to clear it was printed and nothing was installed or removed") | trim | indent 4 }}
   fi
 
   setup_nvidia_repos
@@ -164,11 +229,20 @@ install_nvidia_packages() {
   # a non-zero exit makes one genuinely missing package report every package as
   # unavailable.
   available="$("${DNF[@]}" -q list --available "${missing[@]}" 2>/dev/null || true)"
+  # NO OUTPUT AT ALL is not the same answer as a package the sources do not
+  # offer. dnf still prints the arguments that DID match when one of them misses,
+  # so an entirely empty result means the probe itself did not answer -- a network
+  # failure, an unreadable metadata cache, a dnf that could not start. Reporting
+  # that as a declared package set the sources do not offer states a permanent
+  # fact about the branch on the strength of a transient failure.
+  if [[ -z "$available" ]] && report_unknown_availability; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-package-availability-unknown" "direction" "operator-blocking" "reason" "the package availability probe returned no output at all, so availability could not be determined; nothing was installed") | trim | indent 4 }}
+  fi
   for pkg in "${missing[@]}"; do
     printf '%s\n' "$available" | grep -qE "^${pkg}\\." || unavailable+=("$pkg")
   done
   if [[ "${#unavailable[@]}" -gt 0 ]] && report_unavailable_packages "${unavailable[@]}"; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "harmless" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "operator-blocking" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
   fi
 
   "${DNF[@]}" install -y "${nvidia_packages[@]}"
@@ -196,6 +270,14 @@ mok_cert_path() {
     akmod) printf '/etc/pki/akmods/certs/public_key.der' ;;
     *)     printf '/var/lib/dkms/mok.pub' ;;
   esac
+}
+
+# MokManager reads its password on a US-layout UEFI console with no input method,
+# so only printable US-ASCII is typeable there. Pinned to LC_ALL=C: the character
+# class is a byte range, and a UTF-8 locale would widen it to accept exactly the
+# characters this rejects.
+mok_passphrase_is_typeable() {
+  printf '%s' "$1" | LC_ALL=C grep -qE '^[ -~]+$'
 }
 
 mok_key_path() {
@@ -357,7 +439,106 @@ enroll_dkms_mok() {
     return 0
   fi
 
-  "${SUDO[@]}" mokutil --import "${cert}" 2>/dev/null || true
+  # THE IMPORT NEEDS A TERMINAL AND AN APPLY HAS NONE. `mokutil --import` reads a
+  # one-time enrollment password from the tty (`input password:` twice), so on a
+  # non-interactive apply it fails -- and this call used to discard both the error
+  # text and the exit status, so the apply reported success while no MokNew
+  # variable was ever written. Secure Boot then rejected the signed module with
+  # nothing on screen to say why.
+  #
+  # THE PASSWORD IS THE STORED LUKS PASSPHRASE. The operator must retype this
+  # value at the MokManager screen on the next boot, so it has to be a value they
+  # already know; a generated one would have to be recorded and looked up.
+  # ONE RENDERED SHAPE, not a render-time fork. The passphrase renders as the
+  # empty string when the config stores no cipher, or when the keyring could not
+  # be reached to decrypt it, and every precondition is then a RUNTIME branch --
+  # so the rendered script is identical in shape on a host with a stored
+  # passphrase and one without, and the smoke harness can drive every path from a
+  # single render. base64 keeps a shell-special character in the passphrase from
+  # breaking the assignment; it is not secrecy, exactly as the LUKS wrapper
+  # documents.
+  local MOK_ENROLL_PASSPHRASE
+  MOK_ENROLL_PASSPHRASE="$(printf '%s' {{ $mokPassphrase | b64enc | quote }} | base64 -d)"
+
+  if [[ -z "$MOK_ENROLL_PASSPHRASE" ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-passphrase" "direction" "harmless" "reason" "no stored passphrase is available to answer the mokutil enrollment prompt; run the printed mokutil command by hand") | trim | indent 6 }}
+    )
+    report_manual_mok_import "$cert"
+    return 0
+  fi
+
+  if ! command -v expect >/dev/null 2>&1; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-expect" "direction" "transient-blocking" "probe" "expect-present" "reason" "expect is not installed, so the enrollment password cannot be supplied without a terminal; run the printed mokutil command by hand instead") | trim | indent 6 }}
+    )
+    report_manual_mok_import "$cert"
+    return 0
+  fi
+
+  # Queueing a request the operator cannot complete is worse than not queueing
+  # it: the machine reboots into a MokManager prompt it can never satisfy.
+  if ! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-passphrase-untypeable" "direction" "harmless" "reason" "the stored passphrase is not printable US-ASCII and could not be typed at the MokManager console; run the printed mokutil command by hand with a typeable password") | trim | indent 6 }}
+    )
+    report_manual_mok_import "$cert"
+    return 0
+  fi
+
+  # EXPECT RUNS UNPRIVILEGED AND SPAWNS THE ELEVATION ITSELF, rather than running
+  # under sudo. Handing the secret to a privileged child would mean either `sudo
+  # -E` (which sudoers may strip) or `sudo env VAR=...` -- and that second form
+  # puts the passphrase in env's ARGV, visible in the process table to every user
+  # on the box. Inheriting it into an unprivileged expect keeps it in that
+  # process's own environment, which only its owner and root can read.
+  #
+  # The exit status is PROPAGATED: a discarded one is the whole defect this
+  # replaced.
+  #
+  # LC_ALL=C, an explicit timeout action, and {*} rather than eval. The prompt
+  # strings below are matched literally, so a localized mokutil would defeat them
+  # -- the same reason the fingerprint installer pins its authselect call. Without
+  # a timeout action an unmatched prompt would fall through to `expect eof` and
+  # then block in `wait` on a process still reading stdin, hanging the apply
+  # instead of failing it. And `eval spawn $argv` would re-parse the certificate
+  # path as Tcl; {*} expands the list without a second parse.
+  #
+  # THE INDENTATION IS LOAD-BEARING, unusually for Tcl. Every helper here is
+  # extracted by `sed -n '<start>,/^}$/p'`, so a line that is exactly `}` at
+  # column 0 inside this heredoc truncates enroll_dkms_mok at that brace and the
+  # smoke harness drives half a function. Keep the closing braces indented.
+  if ! MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert" \
+    MOK_SUDO="${SUDO[*]-}" LC_ALL=C expect -f - <<'EXPECT'; then
+set timeout 30
+set pw $env(MOK_ENROLL_PASSPHRASE)
+set cert $env(MOK_CERT)
+set argv [concat $env(MOK_SUDO) [list mokutil --import $cert]]
+spawn -noecho {*}$argv
+expect {
+    "input password:" { send -- "$pw\r" }
+    timeout { puts stderr "mokutil did not ask for the enrollment password"; exit 90 }
+    eof { puts stderr "mokutil exited before asking for the enrollment password"; exit 91 }
+  }
+expect {
+    "input password again:" { send -- "$pw\r" }
+    timeout { puts stderr "mokutil did not ask for the password confirmation"; exit 92 }
+    eof { puts stderr "mokutil exited before confirming the enrollment password"; exit 93 }
+  }
+expect {
+    eof {}
+    timeout { puts stderr "mokutil did not exit after the enrollment password"; exit 94 }
+  }
+catch wait result
+exit [lindex $result 3]
+EXPECT
+    printf 'install-nvidia-fedora.sh: mokutil --import failed for %s; the certificate was NOT queued.\n' "$cert" >&2
+    report_manual_mok_import "$cert"
+    return 1
+  fi
+  MOK_ENROLL_PASSPHRASE=''
+  printf 'install-nvidia-fedora.sh: %s is queued for enrollment.\n' "$cert"
+  printf 'install-nvidia-fedora.sh: the MokManager screen on the next boot still needs a physical console: choose Enroll MOK and type the stored LUKS passphrase.\n'
 }
 
 enable_nvidia_services() {
@@ -390,6 +571,20 @@ report_branch_conflict() {
 report_unavailable_packages() {
   printf 'install-nvidia-fedora.sh: the %s branch declares packages the enabled sources do not offer: %s\n' \
     "$nvidia_branch" "$*" >&2
+}
+
+report_unknown_availability() {
+  printf 'install-nvidia-fedora.sh: dnf listed no available packages at all for the %s branch, so it could not be asked whether they exist.\n' \
+    "$nvidia_branch" >&2
+  printf 'install-nvidia-fedora.sh: check repository reachability, then re-run: sudo dnf makecache\n' >&2
+}
+
+# The fallback every skip path above takes. Printing the exact command is the
+# whole point: the silent half of the original defect was that an operator saw
+# nothing at all when the import did not happen.
+report_manual_mok_import() {
+  printf 'install-nvidia-fedora.sh: queue it by hand instead, then reboot and choose Enroll MOK:\n' >&2
+  printf '  sudo mokutil --import %s\n' "$1" >&2
 }
 
 report_awaiting_builder_key() {

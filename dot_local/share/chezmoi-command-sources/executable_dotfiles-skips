@@ -2,7 +2,7 @@
 # dotfiles-skips — report outstanding transient chezmoi skips.
 #
 # Reads private skip state records written by .chezmoitemplates/skip.sh.tmpl.
-# Reports outstanding transient-tolerable and transient-blocking skips without
+# Reports outstanding transient-tolerable, transient-blocking and operator-blocking skips without
 # modifying state or probing capabilities.
 set -euo pipefail
 
@@ -13,7 +13,7 @@ usage() {
 usage: dotfiles-skips [--help]
 
 Report outstanding transient skips recorded by chezmoi early exits.
-Outputs script, site, direction, and reason for active transient skips.
+Outputs script, site, direction, and reason for every skip that is still outstanding.
 EOF
 }
 
@@ -75,7 +75,7 @@ for file in "${sorted_files[@]}"; do
 
 
     case "$direction" in
-      transient-tolerable|transient-blocking|transient-blocking:*)
+      transient-tolerable|transient-blocking|transient-blocking:*|operator-blocking)
         printf '%s\t%s\t%s\t%s\n' "$script" "$site" "$direction" "$reason"
         ;;
       harmless|done_here|not_applicable)

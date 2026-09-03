@@ -166,7 +166,7 @@ configure_touchpad() {
       else
         printf '    skip middleEmulation: not supported by device\n'
       fi
-      if [[ -n "$(_dbus_get "$path" scrollOnButtonDown)" ]]; then
+      if [[ "$(_dbus_get "$path" supportsScrollOnButtonDown)" == "true" ]]; then
         _dbus_set_b "$path" scrollOnButtonDown "$TP_SCROLL_ON_BUTTON_DOWN"
       else
         printf '    skip scrollOnButtonDown: not supported by device\n'

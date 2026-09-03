@@ -47,13 +47,26 @@ printf 'v1\tinstall-vscodium\text-fail\ttransient-tolerable\tfailed to install e
   > "$skips_dir/install-vscodium__ext-fail"
 printf 'v1\tconfig-kde\twrong-desktop\tharmless\tnot a KDE desktop\n' \
   > "$skips_dir/config-kde__wrong-desktop"
+# operator-blocking is outstanding too: the host has not converged, and nothing
+# re-runs the script on its own, so the report is the only place it shows up.
+printf 'v1\tinstall-nvidia-fedora\tbranch-conflict\toperator-blocking\ta conflicting driver branch is installed\n' \
+  > "$skips_dir/install-nvidia-fedora__branch-conflict"
 
 out=$("$dotfiles_skips")
-expected=$(printf 'config-gnome\tno-bus\ttransient-blocking:session-bus-present\tno D-Bus session bus\ninstall-vscodium\text-fail\ttransient-tolerable\tfailed to install extension')
+expected=$(printf 'config-gnome\tno-bus\ttransient-blocking:session-bus-present\tno D-Bus session bus\ninstall-nvidia-fedora\tbranch-conflict\toperator-blocking\ta conflicting driver branch is installed\ninstall-vscodium\text-fail\ttransient-tolerable\tfailed to install extension')
 [[ "$out" == "$expected" ]] || fail "unexpected output for mixed records:\nGot:\n$out\nExpected:\n$expected"
-pass 'mixed records report transient entries and omit harmless'
+pass 'mixed records report every outstanding direction and omit harmless'
 
-rm -f "$skips_dir/config-gnome__no-bus"
+# An unknown direction must still warn: adding a direction to skip.sh.tmpl without
+# adding it here would silently drop an outstanding skip from the report.
+sideways_err=$(printf 'v1\tconfig-fx\tsideways\tsideways\ta direction this reader does not know\n' \
+  > "$skips_dir/config-fx__sideways" && "$dotfiles_skips" 2>&1 >/dev/null)
+grep -qF 'unknown direction' <<<"$sideways_err" \
+  || fail "an unknown direction was not warned about: $sideways_err"
+rm -f "$skips_dir/config-fx__sideways"
+pass 'an unknown direction is reported as a warning'
+
+rm -f "$skips_dir/config-gnome__no-bus" "$skips_dir/install-nvidia-fedora__branch-conflict"
 out=$("$dotfiles_skips")
 expected=$(printf 'install-vscodium\text-fail\ttransient-tolerable\tfailed to install extension')
 [[ "$out" == "$expected" ]] || fail "completed record was not cleared:\nGot:\n$out\nExpected:\n$expected"

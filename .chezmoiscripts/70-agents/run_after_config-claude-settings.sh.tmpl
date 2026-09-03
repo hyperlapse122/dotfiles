@@ -19,6 +19,15 @@
 # path from the declaration therefore does NOT restore anything; it only stops the
 # assertion. Paths owned by aoe and install-claude-plugins are rejected at render
 # time by claude-settings-validate.tmpl, not merely avoided by convention.
+#
+# A BLOCKED PATH SUPPRESSES ONLY ITSELF. An ancestor holding a scalar or an array
+# cannot be written through, and this used to abort the whole assertion: one
+# damaged key anywhere in the file left every declared leaf unwritten while the
+# apply stayed green -- and one of those leaves is the DISABLE_AUTOUPDATER pin,
+# which on macOS is that control's only carrier. Each declared path is an
+# independent leaf with no invariant tying it to the others, so writing the
+# writable ones is not a torn write. The blocked paths are reported BY NAME and
+# the run still exits 0; the ancestor itself is left exactly as it was found.
 set -euo pipefail
 
 {{ if eq (len $settings) 0 -}}
@@ -129,6 +138,10 @@ jq -rn --argjson live "$live" --argjson declared "$DECLARED" '
 
 examined=0
 drifted=0
+# The paths that are writable AND out of date. A string rather than an array for
+# the same bash 3.2 reason as `blocked` below; each path already passed the render
+# grammar, so no path can carry a newline and a newline separator is safe.
+drifted_paths=''
 # A string rather than an array: bash 3.2, still the default on macOS, errors on
 # empty-array expansion under `set -u`, and the diagnostic below wants one joined
 # list anyway.
@@ -137,7 +150,10 @@ while IFS=$'\t' read -r state path; do
   [[ -n $path ]] || continue
   examined=$((examined + 1))
   case "$state" in
-    drift) drifted=$((drifted + 1)) ;;
+    drift)
+      drifted=$((drifted + 1))
+      drifted_paths="${drifted_paths}${path}"$'\n'
+      ;;
     blocked) blocked="${blocked:+$blocked }$path" ;;
   esac
 done <"$scratch"
@@ -150,12 +166,12 @@ if [[ $examined -ne {{ len $settings }} ]]; then
 fi
 
 if [[ -n $blocked ]]; then
-  printf 'config-claude-settings: an ancestor of %s holds a scalar or an array, so the leaf cannot be written; asserted nothing. Repair that key in %s, then re-apply.\n' "$blocked" "$SETTINGS" >&2
-  exit 0
+  printf 'config-claude-settings: an ancestor of %s holds a scalar or an array, so that leaf cannot be written and it was left alone. Repair that key in %s, then re-apply. Every other declared leaf was still reconciled.\n' "$blocked" "$SETTINGS" >&2
 fi
 
 # Convergence is the success case, not a skip: exit silently and write nothing, so
-# a second apply on unchanged source changes zero bytes.
+# a second apply on unchanged source changes zero bytes. `drifted` counts only the
+# WRITABLE drifted paths, so a run whose sole drift is blocked writes nothing.
 if [[ $drifted -eq 0 ]]; then
   exit 0
 fi
@@ -165,8 +181,12 @@ fi
 # the label (see docs/solutions/security-issues/selinux-user-scope-agent-config-protection.md).
 tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
 chmod 0600 "$tmp"
-jq -n --argjson live "$live" --argjson declared "$DECLARED" '
-  reduce ($declared | to_entries[]) as $e ($live; setpath($e.key | split("."); $e.value))
+# `write_paths` is the classifier's verdict, not the declaration: a blocked path
+# never reaches setpath, which would otherwise abort the whole apply under `set -e`
+# with a bare jq error naming nothing.
+jq -n --argjson live "$live" --argjson declared "$DECLARED" --arg write_paths "$drifted_paths" '
+  ($write_paths | split("\n") | map(select(length > 0))) as $keys
+  | reduce $keys[] as $k ($live; setpath($k | split("."); $declared[$k]))
 ' >"$tmp"
 
 # Another owner may have written between the read and now; its change is not ours

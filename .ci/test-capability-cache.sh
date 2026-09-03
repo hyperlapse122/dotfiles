@@ -104,10 +104,10 @@ totals = matrix.get('totals', {})
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 # Retiring the figma-auth build removed its three causes from the original eleven.
 frozen = {
-    'classified_owners': 131,
+    'classified_owners': 135,
     'hard_error_owners': 8,
-    'rendered_instances': 200,
-    'phase_local_instances': 126,
+    'rendered_instances': 204,
+    'phase_local_instances': 130,
     'shared_guard_instances': 74,
 }
 for key, expected in frozen.items():
@@ -141,7 +141,8 @@ for row in matrix.get('divergence', []):
         problems.append(f'divergence for {row.get("bucket")!r} carries no reason')
 
 FORMS = {'skip_here', 'skip_step', 'done_here', 'not_applicable'}
-DIRECTIONS = {'harmless', 'transient-blocking', 'transient-tolerable'}
+DIRECTIONS = {'harmless', 'transient-blocking', 'transient-tolerable',
+              'operator-blocking'}
 REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
             'predicate_digest', 'continuation', 'continuation_digest',
             'render_profile', 'form', 'instances']
@@ -345,7 +346,7 @@ if registry_lines[-1] != '':
     problems.append('registry must end with a newline')
 # The frozen probe count. It is named once so the check and the message it prints
 # can never disagree; a new registry row moves this single number.
-EXPECTED_PROBES = 35
+EXPECTED_PROBES = 36
 keys, kinds, platforms, previous = [], {}, {}, ''
 for number, line in enumerate(registry_lines[1:-1], start=2):
     fields = line.split('\t')

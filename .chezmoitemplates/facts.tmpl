@@ -301,7 +301,17 @@ Three rules hold this file together:
    it the greeter drop-in either loses its theme guard (a broken login screen) or
    gets installed and then removed on the same run on a non-SDDM host that
    happens to carry the theme. */ -}}
-{{- $_ := set $facts "sddmBreezeUsable" (and $sddmBreeze (eq (index $facts "displayManager") "sddm")) -}}
+{{- $_ := set $facts "sddmBreezeUsable" (and $sddmBreeze $displayManagerSddm) -}}
+
+{{- /* sddmBreezeRetirable — the RETIREMENT gate, and deliberately not the inverse
+   of the install gate. !displayManagerSddm is true on a host whose displayManager
+   probe could not answer, which turned an unreadable fact into an active removal
+   of a live SDDM host's drop-in. Requiring displayManager to be KNOWN is what
+   restores the registry's fail-safe direction; the second half then retires it
+   from every known host the drop-in is not usable on, including an SDDM host that
+   lost the theme -- which the old gate left holding a Current=breeze file pointing
+   at a theme that is gone. */ -}}
+{{- $_ := set $facts "sddmBreezeRetirable" (and (ne (index $facts "displayManager") "") (not (index $facts "sddmBreezeUsable"))) -}}
 
 {{- /* gdm — probe the exact file-db the shipped /etc/dconf/profile/gdm
    references, not "is GNOME installed". */ -}}

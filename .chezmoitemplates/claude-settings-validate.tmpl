@@ -34,6 +34,24 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
      that rewrites the same file during ordinary use, and the loser would be
      whichever ran last. A comment saying "do not declare these" is a convention
      the next edit breaks; this is the check that holds.
+  6. SECURITY-SENSITIVE KEYS ARE ALLOWLISTED, NOT BLOCKLISTED. Check 5 screens for
+     OWNERSHIP -- who else writes the key. It cannot tell a notification toggle
+     from a key that grants a permission, so a permission declaration would enter
+     through the same data edit as inputNeededNotifEnabled. This check screens for
+     RISK instead: a path under a security-sensitive prefix, or one of the
+     security-sensitive exact keys, is accepted ONLY when its full path appears in
+     the reviewed allowlist. An allowlist and not a blocklist, because a blocklist
+     would need a new entry for every permission key the vendor adds and would
+     fail open until someone noticed.
+
+     THE DECLARABLE permissions.* SURFACE IS permissions.defaultMode ALONE, and it
+     is deliberately left undeclared -- see AGENTS.md. permissions.allow, .deny and
+     .ask are LISTS, and check 3 already rejects a container value; there is no
+     narrower form to accept, because owning individual entries would need a path
+     syntax for list MEMBERSHIP and the grammar in check 2 addresses object keys
+     only. That is a scope boundary, not a gap waiting on a mechanism.
+     docs/plans/2026-09-02-1529-feat-reconcile-claude-settings-plan.md is
+     authoritative for what already shipped here.
 
   {{ includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
 */ -}}
@@ -49,6 +67,14 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
    settings.json key cannot hold. */ -}}
 {{- $pathRe := "^[A-Za-z][A-Za-z0-9_-]*([.][A-Za-z][A-Za-z0-9_-]*)*$" -}}
 {{- $ownedElsewhere := list "hooks" "enabledPlugins" "extraKnownMarketplaces" -}}
+{{- /* Check 6's three lists. `$securityPrefixes` holds first segments whose whole
+   subtree grants or bypasses a permission; `$securityExactKeys` holds single keys
+   that do the same without a prefix to key on; `$reviewedSecurityPaths` is the
+   full-path allowlist both are measured against. Adding a path here is a reviewed
+   change to this partial, which is the point -- it cannot happen as a data edit. */ -}}
+{{- $securityPrefixes := list "permissions" -}}
+{{- $securityExactKeys := list "skipDangerousModePermissionPrompt" -}}
+{{- $reviewedSecurityPaths := list "permissions.defaultMode" "skipDangerousModePermissionPrompt" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
 {{-     fail (printf "config-claude-settings: %q is not a valid settings path; use dot-separated segments naming a leaf in settings.json, each segment non-empty and starting with a letter" $path) -}}
@@ -59,6 +85,9 @@ by a runtime skip, because a declaration this file rejects is wrong on every hos
 {{-   $first := index (splitList "." $path) 0 -}}
 {{-   if has $first $ownedElsewhere -}}
 {{-     fail (printf "config-claude-settings: declared path %s addresses %s, which another writer owns (hooks -> aoe session tracking; enabledPlugins and extraKnownMarketplaces -> install-claude-plugins). Asserting it would fight that writer on every apply" $path $first) -}}
+{{-   end -}}
+{{-   if and (or (has $first $securityPrefixes) (has $path $securityExactKeys)) (not (has $path $reviewedSecurityPaths)) -}}
+{{-     fail (printf "config-claude-settings: declared path %s grants or bypasses a Claude Code permission, and only these paths are reviewed for that: %s. permissions.allow, permissions.deny and permissions.ask are lists, so asserting one would replace the whole list and drop every entry a user or a plugin contributed; owning single entries would need a path syntax for list membership that this grammar does not have. Declare a reviewed path, or leave the key undeclared so it stays adjustable" $path (join ", " $reviewedSecurityPaths)) -}}
 {{-   end -}}
 {{- end -}}
 {{- /* Overlap is checked only after EVERY path has passed the grammar rule above:

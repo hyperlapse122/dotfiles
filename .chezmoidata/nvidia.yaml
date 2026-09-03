@@ -96,6 +96,38 @@ nvidia:
       - nvidia-driver
     cudaToolkit: true
 
+  # Packages the LEGACY-branch repository policy excludes from the vendor CUDA
+  # repository, so RPM Fusion wins there.
+  #
+  # THE MIRROR IMAGE OF currentBranchRpmfusionExcludes, AND IT EXISTS FOR A HOST
+  # THAT ALREADY APPLIED. Before the branch axis, every NVIDIA Fedora host got the
+  # CUDA repofile unconditionally, so a host that NOW resolves to the legacy branch
+  # very likely still carries cuda-fedora*.repo enabled from an earlier apply.
+  # Skipping the ADD does nothing for it, and the legacy branch also clears the RPM
+  # Fusion exclusions -- which were what kept RPM Fusion out of the way of the CUDA
+  # repository. Both sources would then be able to serve the same driver package
+  # names, which is exactly the two-source competition the installer exists to
+  # avoid.
+  #
+  # EXCLUDE RATHER THAN DISABLE OR REMOVE. AGENTS.md forbids teardown, and the same
+  # host may resolve back to the current branch after a hardware change; an
+  # exclusion is reversible by writing the empty value, a deleted repofile is not.
+  #
+  # Only DRIVER and TOOLKIT names belong here. libnvidia-container* and
+  # nvidia-container-toolkit* are served by the container-toolkit repository to BOTH
+  # branches, so excluding them from the CUDA repository is unnecessary and
+  # excluding them anywhere else would break the legacy host's own package set.
+  legacyBranchCudaExcludes:
+    - cuda-drivers
+    - 'cuda-toolkit*'
+    - 'kmod-nvidia*'
+    - nvidia-driver
+    - nvidia-modprobe
+    - nvidia-persistenced
+    - nvidia-settings
+    - nvidia-xconfig
+    - 'xorg-x11-drv-nvidia*'
+
   # Packages the current-branch repository policy excludes from RPM Fusion so the
   # vendor CUDA repository wins. A legacy-branch host must NOT carry these
   # exclusions, because its driver comes from exactly that source.

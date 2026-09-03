@@ -16,6 +16,23 @@
 # with stubbed sudo and openssl; the environment guards inside
 # ensure_dkms_mok_generated are asserted as rendered text, because
 # `/sys/firmware/efi` and the Secure Boot probe are not relocatable.
+#
+# BOTH BUILD SYSTEMS, not just DKMS. The driver-branch axis gave the legacy branch
+# its own out-of-tree builder and its own certificate under /etc/pki/akmods, and
+# this harness used to pin nvidia_build_system to `dkms` and rewrite only the
+# /var/lib/dkms paths -- so cert_path_for_marker, the akmods paths,
+# report_stale_mok and the awaiting-builder branch had never run in CI, and both
+# MOK defects fixed alongside them reached review through that gap. The state and
+# mint assertions now loop over both build systems, and the akmods tree is
+# relocated the same way the DKMS one is.
+#
+# AND THE ENROLLMENT ITSELF. `mokutil --import` reads a one-time password from a
+# terminal an apply does not have, so it is driven through expect with the stored
+# passphrase in the ENVIRONMENT. Every precondition (no stored passphrase, no
+# expect, a passphrase that cannot be typed on the MokManager console) is a
+# declared skip that prints the by-hand command, and the import's exit status is
+# propagated. All of that is asserted below, including that the passphrase never
+# reaches an argument vector.
 
 set -euxo pipefail
 
@@ -100,22 +117,73 @@ fi
 if [[ -z "${cert_start}" || -z "${key_start}" ]]; then
   fail 'rendered Fedora installer is missing the branch-aware MOK path helpers'
 fi
+marker_start=$(grep -n '^cert_path_for_marker() {$' "${rendered_installer}" | cut -d: -f1 || true)
+stale_start=$(grep -n '^report_stale_mok() {$' "${rendered_installer}" | cut -d: -f1 || true)
+typeable_start=$(grep -n '^mok_passphrase_is_typeable() {$' "${rendered_installer}" | cut -d: -f1 || true)
+manual_start=$(grep -n '^report_manual_mok_import() {$' "${rendered_installer}" | cut -d: -f1 || true)
+for var in marker_start stale_start typeable_start manual_start; do
+  [[ -n "${!var}" ]] || fail "rendered Fedora installer is missing the helper behind ${var}"
+done
+
+awaiting_start=$(grep -n '^report_awaiting_builder_key() {$' "${rendered_installer}" | cut -d: -f1 || true)
+[[ -n "${awaiting_start}" ]] || fail 'rendered Fedora installer is missing report_awaiting_builder_key'
+
+# The real reporting and predicate helpers, not stubs. Each is a printf or a
+# grep -- no host state, no privilege -- and stubbing them would hide exactly the
+# branches this harness exists to cover.
 {
-  printf 'nvidia_build_system=%s\n' "${SMOKE_BUILD_SYSTEM:-dkms}"
-  sed -n "${cert_start},/^}$/p" "${rendered_installer}"
-  sed -n "${key_start},/^}$/p" "${rendered_installer}"
-} > "${scratch}/mok_paths.sh"
-cat "${scratch}/mok_paths.sh" > "${scratch}/mok_state.sh"
-sed -n "${state_start},/^}$/p" "${rendered_installer}" >> "${scratch}/mok_state.sh"
-# ensure_dkms_mok_generated now consults the branch-aware path helpers and the
-# resolved build system, so the fixture seeds both before the extracted body. The
-# reporting helper is stubbed: this fixture drives the DKMS branch, where the
-# out-of-tree wait never fires.
-{
-  cat "${scratch}/mok_paths.sh"
-  printf 'report_awaiting_builder_key() { :; }\n'
-  sed -n "${ensure_start},/^}$/p" "${rendered_installer}"
-} > "${scratch}/mok_ensure.sh"
+  sed -n "${marker_start},/^}$/p" "${rendered_installer}"
+  sed -n "${stale_start},/^}$/p" "${rendered_installer}"
+  sed -n "${typeable_start},/^}$/p" "${rendered_installer}"
+  sed -n "${manual_start},/^}$/p" "${rendered_installer}"
+  sed -n "${awaiting_start},/^}$/p" "${rendered_installer}"
+} > "${scratch}/helpers.sh"
+
+# $1 = build system. The paths follow the RESOLVED branch, so the fixture seeds
+# nvidia_build_system and the two path helpers answer for that branch.
+write_mok_paths() {
+  {
+    printf 'nvidia_build_system=%s\n' "$1"
+    sed -n "${cert_start},/^}$/p" "${rendered_installer}"
+    sed -n "${key_start},/^}$/p" "${rendered_installer}"
+  } > "${scratch}/mok_paths.sh"
+  cat "${scratch}/mok_paths.sh" > "${scratch}/mok_state.sh"
+  sed -n "${state_start},/^}$/p" "${rendered_installer}" >> "${scratch}/mok_state.sh"
+  # The awaiting-builder report is real for the akmod branch: its skip sits inside
+  # that call's condition, so stubbing it would hide the branch under test. It is
+  # a printf to stderr and always succeeds, so it is safe to run here.
+  {
+    cat "${scratch}/mok_paths.sh"
+    cat "${scratch}/helpers.sh"
+    sed -n "${ensure_start},/^}$/p" "${rendered_installer}"
+  } > "${scratch}/mok_ensure.sh"
+}
+
+# BOTH trees are relocated. The akmods rewrite is what the previous version
+# lacked: without it an akmod fixture would probe the host's real
+# /etc/pki/akmods and read a CI runner's empty tree as the branch's answer.
+relocate() {
+  sed -e "s|'/var/lib/dkms/\([a-z.]*\)'|\"\${MOK_DIR}/\1\"|g" \
+      -e 's|/var/lib/dkms|${MOK_DIR}|g' \
+      -e "s|'/etc/pki/akmods/\([a-z/_.]*\)'|\"\${MOK_DIR}/akmods/\1\"|g" \
+      -e 's|/etc/pki/akmods|${MOK_DIR}/akmods|g' \
+      "$@"
+}
+
+write_mok_paths "${SMOKE_BUILD_SYSTEM:-dkms}"
+
+# The always-succeeds sudo stub both enrollment fixtures drive. The state and mint
+# fixtures need their own ok/fail/flaky variant -- the failed-probe regression is
+# the whole point there -- so only these two are pooled.
+plain_sudo_stub="${scratch}/plain-sudo.sh"
+cat > "${plain_sudo_stub}" <<'STUB'
+fake_sudo() {
+  local -a a=()
+  for x in "$@"; do a+=("${x/\/var\/lib\/dkms/${MOK_DIR}}"); done
+  "${a[@]}"
+}
+SUDO=(fake_sudo)
+STUB
 
 # ensure_dkms_mok_generated must not re-probe the files itself, and the sole
 # mint must be reachable only from the `absent` branch.
@@ -151,7 +219,7 @@ run_mok_state() {
       "${a[@]}"
     }
     SUDO=(fake_sudo)
-    '"$(sed -e "s|'/var/lib/dkms/\([a-z.]*\)'|\"\${MOK_DIR}/\1\"|g" -e 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh")"'
+    '"$(relocate "${scratch}/mok_state.sh")"'
     dkms_mok_state
   '
 }
@@ -232,7 +300,7 @@ run_ensure() {
       printf MINTED > "${MOK_DIR}/mok.pub"
       printf MINTED > "${MOK_DIR}/mok.key"
     }
-    '"$(sed -e "s|'/var/lib/dkms/\([a-z.]*\)'|\"\${MOK_DIR}/\1\"|g" -e 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh" "${scratch}/mok_ensure_nogates.sh")"'
+    '"$(relocate "${scratch}/mok_state.sh" "${scratch}/mok_ensure_nogates.sh")"'
     ensure_dkms_mok_generated && printf CONTINUED
   ' 2>/dev/null
 }
@@ -284,6 +352,96 @@ if [[ "$(run_ensure ok noop)" == *CONTINUED* ]]; then
   fail 'a failed mint must be caught by the post-mint re-probe, not reported as success'
 fi
 
+# --- Both build systems ------------------------------------------------------
+#
+# The legacy branch builds through akmods, which mints its OWN keypair with
+# kmodgenca on the first module build. So the installer must NOT mint one for it:
+# a key minted here would sign the module with a key the builder does not use.
+# The declared wait is what makes that visible, and it is transient-blocking, so
+# the host re-runs itself once the key appears.
+write_mok_paths akmod
+
+akmod_cert=$(env MOK_DIR="${mokdir}" bash -c '
+  set -uo pipefail
+  '"$(relocate "${scratch}/mok_paths.sh")"'
+  mok_cert_path
+')
+[[ "${akmod_cert}" == "${mokdir}/akmods/certs/public_key.der" ]] ||
+  fail "the akmod branch must resolve to the akmods certificate, got ${akmod_cert}"
+
+akmod_key=$(env MOK_DIR="${mokdir}" bash -c '
+  set -uo pipefail
+  '"$(relocate "${scratch}/mok_paths.sh")"'
+  mok_key_path
+')
+[[ "${akmod_key}" == "${mokdir}/akmods/private/private_key.priv" ]] ||
+  fail "the akmod branch must resolve to the akmods private key, got ${akmod_key}"
+
+# The state probe over the akmods tree. Relocated the same way the DKMS one is;
+# without the akmods rewrite this would read the runner's real /etc/pki/akmods.
+mkdir -p "${mokdir}/akmods/certs" "${mokdir}/akmods/private"
+rm -f "${mokdir}/akmods/certs/public_key.der" "${mokdir}/akmods/private/private_key.priv"
+[[ "$(run_mok_state ok)" == absent ]] ||
+  fail 'an empty akmods tree must report absent'
+printf cert > "${mokdir}/akmods/certs/public_key.der"
+[[ "$(run_mok_state ok)" == partial ]] ||
+  fail 'an akmods certificate without its key must report partial'
+printf key > "${mokdir}/akmods/private/private_key.priv"
+[[ "$(run_mok_state ok)" == present ]] ||
+  fail 'a complete akmods keypair must report present'
+
+# THE ASSERTION THE PINNED DKMS DEFAULT MADE UNREACHABLE: on the akmod branch with
+# no builder key yet, ensure_dkms_mok_generated declares the wait and returns
+# WITHOUT reaching the openssl mint.
+sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
+  "${scratch}/mok_ensure.sh" > "${scratch}/mok_ensure_nogates.sh"
+grep -Fq 'mok-generate-awaiting-builder' "${scratch}/mok_ensure_nogates.sh" ||
+  fail 'ensure_dkms_mok_generated does not declare the awaiting-builder wait'
+
+rm -f "${mokdir}/akmods/certs/public_key.der" "${mokdir}/akmods/private/private_key.priv"
+skip_record="${scratch}/home/.local/state/chezmoi/skips/install-nvidia-fedora__mok-generate-awaiting-builder"
+rm -f "${skip_record}"
+run_ensure ok mint >/dev/null
+# The state record, not the return value: skip_step deliberately returns 0 so the
+# caller keeps running, so the record is what distinguishes taking the wait from
+# falling through it. dotfiles-skips reads this same file.
+[[ -f "${skip_record}" ]] ||
+  fail 'the akmod branch did not record the awaiting-builder wait; it fell through instead'
+grep -Fq 'transient-blocking:akmods-signing-key-present' "${skip_record}" ||
+  fail 'the awaiting-builder wait is not recorded against its capability probe'
+if [[ -e "${mokdir}/akmods/certs/public_key.der" || -e "${mokdir}/mok.pub" ]]; then
+  fail 'the akmod branch must never mint a keypair; the module builder owns that key'
+fi
+
+# Once the builder HAS minted its pair, the same call accepts it untouched.
+printf builder-cert > "${mokdir}/akmods/certs/public_key.der"
+printf builder-key > "${mokdir}/akmods/private/private_key.priv"
+[[ "$(run_ensure ok noop)" == *CONTINUED* ]] ||
+  fail 'a complete akmods keypair must be accepted'
+[[ "$(cat "${mokdir}/akmods/certs/public_key.der")" == builder-cert ]] ||
+  fail 'an existing akmods certificate must never be rewritten'
+
+# --- cert_path_for_marker ----------------------------------------------------
+#
+# Each branch marker resolves to ITS OWN build system's certificate, which is what
+# lets report_stale_mok name a certificate enrolled for a branch this host no
+# longer resolves to. Nothing asserted this before.
+marker_cert() {
+  env MOK_DIR="${mokdir}" MARKER="$1" bash -c '
+    set -uo pipefail
+    '"$(relocate "${scratch}/mok_paths.sh" "${scratch}/helpers.sh")"'
+    if out=$(cert_path_for_marker "$MARKER"); then printf "%s" "$out"; else printf "unmapped"; fi
+  '
+}
+[[ "$(marker_cert akmod-nvidia-580xx)" == "${mokdir}/akmods/certs/public_key.der" ]] ||
+  fail 'the akmod branch marker does not resolve to the akmods certificate'
+[[ "$(marker_cert kmod-nvidia-latest-dkms)" == "${mokdir}/mok.pub" ]] ||
+  fail 'the DKMS branch marker does not resolve to the DKMS certificate'
+[[ "$(marker_cert some-unrelated-package)" == unmapped ]] ||
+  fail 'an unknown marker must not resolve to a certificate'
+
+write_mok_paths dkms
+
 # --- Structural contract: enrollment seeds, then re-probes -------------------
 #
 # ensure_dkms_mok_generated used to be reached only from the VirtualBox signing
@@ -317,14 +475,10 @@ sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/enroll.sh" > "${scratch}/enroll_nogates.sh"
 
 run_enroll() {
-  env HOME="${scratch}/home" MOK_DIR="${mokdir}" MOK_TEST_KEY="${1}" MOK_LIST_NEW="${2}" bash -c '
+  env HOME="${scratch}/home" MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${plain_sudo_stub}" \
+    MOK_TEST_KEY="${1}" MOK_LIST_NEW="${2}" bash -c '
     set -uo pipefail
-    fake_sudo() {
-      local -a a=()
-      for x in "$@"; do a+=("${x/\/var\/lib\/dkms/${MOK_DIR}}"); done
-      "${a[@]}"
-    }
-    SUDO=(fake_sudo)
+    . "${PLAIN_SUDO_STUB:?}"
     mokutil() {
       case "${1-}" in
         --test-key)
@@ -342,7 +496,7 @@ run_enroll() {
       return 1
     }
     ensure_dkms_mok_generated() { return 0; }
-    '"$(sed 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh" "${scratch}/enroll_nogates.sh")"'
+    '"$(relocate "${scratch}/mok_state.sh" "${scratch}/helpers.sh" "${scratch}/enroll_nogates.sh")"'
     enroll_dkms_mok && printf CONTINUED
   ' 2>/dev/null
 }
@@ -356,4 +510,189 @@ printf key > "${mokdir}/mok.key"
   fail 'enroll_dkms_mok must succeed when key is already queued'
 [[ "$(run_enroll not_enrolled not_queued)" == *CONTINUED* ]] ||
   fail 'enroll_dkms_mok must succeed when importing a new key'
+# --- Non-interactive enrollment ---------------------------------------------
+#
+# `mokutil --import` reads a one-time enrollment password from the terminal, so on
+# a non-interactive apply it fails -- and the call used to end in
+# `2>/dev/null || true`, which discarded both the error text and the exit status.
+# The apply reported success, no MokNew variable was written, and Secure Boot then
+# rejected the signed module with nothing on screen to say why.
+#
+# The password is the stored LUKS passphrase, handed to expect through the
+# ENVIRONMENT. Two properties are load-bearing and asserted here: the passphrase
+# never reaches an argument vector, and the import's exit status is propagated.
+
+# The rendered assignment: base64 for shell safety, and exactly one of them.
+assign_line=$(grep -c 'MOK_ENROLL_PASSPHRASE="\$(printf .%s. .* | base64 -d)"' "${scratch}/enroll.code" || true)
+[[ "${assign_line}" == 1 ]] ||
+  fail 'the enrollment passphrase is not assigned through the single base64 form the LUKS wrapper uses'
+
+# ARGV IS THE PROPERTY. `sudo env VAR=...` would put the passphrase in env's own
+# argument vector, readable in the process table by every user on the box. The
+# rendered call must therefore pass it as an ENVIRONMENT PREFIX to an
+# unprivileged expect, which spawns the elevation itself.
+grep -Fq 'MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert"' "${scratch}/enroll.code" ||
+  fail 'the enrollment passphrase is not handed to expect as an environment prefix'
+if grep -Eq 'env[[:space:]]+MOK_ENROLL_PASSPHRASE=' "${scratch}/enroll.code"; then
+  fail 'the passphrase must never reach an argument vector; `sudo env VAR=...` exposes it in the process table'
+fi
+if grep -Eq 'mokutil --import.*(\|\| true|2>/dev/null \|\| true)' "${scratch}/enroll.code"; then
+  fail 'the mokutil --import exit status must be propagated, never discarded'
+fi
+
+# The expect script's own hardening. All three prevent a HUNG apply or a re-parse
+# of interpolated data rather than a wrong answer, and all three are read from the
+# comment-stripped copy: this installer explains the shapes it forbids, and a
+# comment naming one must not read as the shape itself.
+grep -Fq 'LC_ALL=C expect -f -' "${scratch}/enroll.code" ||
+  fail 'the expect call is not pinned to LC_ALL=C, so a localized mokutil prompt would not match'
+if grep -Fq 'eval spawn' "${scratch}/enroll.code"; then
+  fail 'spawn must expand the argument list with {*}, not re-parse it through eval'
+fi
+grep -Fq 'spawn -noecho {*}$argv' "${scratch}/enroll.code" ||
+  fail 'the expect script does not spawn through a {*}-expanded argument list'
+[[ $(grep -c '^    timeout {' "${scratch}/enroll.code") -ge 3 ]] ||
+  fail 'every expect block needs a timeout action; without one an unmatched prompt blocks in wait and hangs the apply'
+
+# The extraction contract this heredoc has to respect: every helper is pulled out
+# with `sed -n '<start>,/^}$/p'`, so a `}` at column 0 inside the heredoc would
+# truncate enroll_dkms_mok at that brace and this harness would drive half a
+# function. Assert the whole function arrived.
+grep -Fq 'is queued for enrollment' "${scratch}/enroll.sh" ||
+  fail 'enroll_dkms_mok was extracted truncated; a line that is exactly } at column 0 inside the expect heredoc ends the extraction early'
+
+# A PATH with only what the enrollment body reaches, so `command -v expect` is
+# decided by this fixture and not by whatever the runner happens to have.
+minbin="${scratch}/minbin"
+mkdir -p "${minbin}"
+# bash is here for the expect STUB's own shebang, not for the code under test;
+# everything else is a tool the enrollment body actually reaches.
+for tool in grep base64 sh sed mkdir rm cat bash; do
+  real=$(command -v "${tool}") || fail "the fixture needs ${tool} on PATH"
+  ln -sf "${real}" "${minbin}/${tool}"
+done
+# openssl is OPTIONAL, and a GitHub runner image does not always carry it. It is
+# reached only by the certificate-fingerprint read that feeds the already-queued
+# short circuit, and that circuit has its own case in run_enroll above, which runs
+# on the full PATH. Without openssl the fingerprint reads empty, the short circuit
+# is skipped, and every branch this fixture asserts is reached unchanged -- so a
+# hard failure here would fail the harness over a tool it does not need.
+if openssl_real=$(command -v openssl); then
+  ln -sf "${openssl_real}" "${minbin}/openssl"
+else
+  printf 'note: openssl is absent, so the enrollment fixtures skip the already-queued fingerprint read\n'
+fi
+
+# Records the whole call surface -- argv, the two environment variables, and the
+# expect script it is fed on stdin -- using only bash builtins, because the
+# fixture PATH deliberately carries almost nothing.
+cat > "${scratch}/expect-stub" <<'STUB'
+#!/usr/bin/env bash
+script=$(cat)
+{
+  printf 'argv:'
+  printf ' %s' "$@"
+  printf '\n'
+  if [[ -n "${MOK_ENROLL_PASSPHRASE-}" ]]; then
+    printf 'env-passphrase:%s\n' "${MOK_ENROLL_PASSPHRASE}"
+  fi
+  printf 'env-cert:%s\n' "${MOK_CERT-}"
+  printf 'stdin-bytes:%s\n' "${#script}"
+} >> "${EXPECT_LOG:?}"
+exit "${EXPECT_RC:-0}"
+STUB
+chmod 0755 "${scratch}/expect-stub"
+
+# $1 = passphrase to render in, $2 = have-expect (yes|no), $3 = expect exit code.
+# Prints CONTINUED when enroll_dkms_mok succeeded; $EXPECT_LOG records the call.
+run_enroll_import() {
+  local passphrase=$1 have_expect=$2 expect_rc=$3
+  rm -rf -- "${scratch}/enroll-home"
+  rm -f -- "${minbin}/expect"
+  mkdir -p "${scratch}/enroll-home"
+  : > "${scratch}/expect.log"
+  [[ "${have_expect}" == yes ]] && ln -sf "${scratch}/expect-stub" "${minbin}/expect"
+  # The one fixture rewrite: the rendered assignment is a literal, so drive it
+  # from the environment instead. Its shape was asserted above.
+  sed -E 's|MOK_ENROLL_PASSPHRASE="\$\(printf .%s. .*\| base64 -d\)"|MOK_ENROLL_PASSPHRASE="${SMOKE_MOK_PASSPHRASE-}"|' \
+    "${scratch}/enroll_nogates.sh" > "${scratch}/enroll_import.sh"
+  grep -Fq 'MOK_ENROLL_PASSPHRASE="${SMOKE_MOK_PASSPHRASE-}"' "${scratch}/enroll_import.sh" ||
+    fail 'the fixture could not redirect the rendered passphrase assignment'
+  env -i HOME="${scratch}/enroll-home" PATH="${minbin}" \
+    MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${plain_sudo_stub}" SMOKE_MOK_PASSPHRASE="${passphrase}" \
+    EXPECT_LOG="${scratch}/expect.log" EXPECT_RC="${expect_rc}" \
+    "${BASH}" -c '
+      set -uo pipefail
+      . "${PLAIN_SUDO_STUB:?}"
+      mokutil() {
+        case "${1-}" in
+          --test-key) return 0 ;;
+          --list-new) return 0 ;;
+        esac
+        return 1
+      }
+      ensure_dkms_mok_generated() { return 0; }
+      '"$(relocate "${scratch}/mok_state.sh" "${scratch}/helpers.sh" "${scratch}/enroll_import.sh")"'
+      enroll_dkms_mok && printf CONTINUED
+    ' 2>"${scratch}/enroll.err"
+}
+
+skips="${scratch}/enroll-home/.local/state/chezmoi/skips"
+printf cert > "${mokdir}/mok.pub"
+printf key > "${mokdir}/mok.key"
+
+# A `harmless` skip DELETES its state entry -- nothing is outstanding -- so its
+# signal is the operator notice on stdout. Only a record-keeping direction leaves
+# a file behind, which is what the absent-expect case asserts below.
+no_passphrase_out=$(run_enroll_import '' yes 0)
+grep -Fq 'no stored passphrase is available' <<<"${no_passphrase_out}" ||
+  fail "an absent enrollment passphrase did not take its declared skip; output was: ${no_passphrase_out}"
+grep -Fq 'sudo mokutil --import' "${scratch}/enroll.err" ||
+  fail 'an absent passphrase did not print the by-hand mokutil command'
+[[ ! -s "${scratch}/expect.log" ]] ||
+  fail 'an absent passphrase still invoked expect'
+
+# expect absent: transient-blocking, so it KEEPS its record and self-heals once
+# the base package set installs expect.
+no_expect_out=$(run_enroll_import 'fixture-passphrase' no 0)
+[[ -f "${skips}/install-nvidia-fedora__mok-enroll-no-expect" ]] ||
+  fail "an absent expect did not record its declared skip; output was: ${no_expect_out}"
+grep -Fq 'transient-blocking:expect-present' "${skips}/install-nvidia-fedora__mok-enroll-no-expect" ||
+  fail 'the absent-expect skip is not recorded against its capability probe'
+grep -Fq 'sudo mokutil --import' "${scratch}/enroll.err" ||
+  fail 'an absent expect did not print the by-hand mokutil command'
+
+# A passphrase MokManager cannot accept: it reads on a US-layout UEFI console, so
+# a non-ASCII byte is untypeable there and queueing the request would reboot the
+# host into a prompt it can never satisfy.
+untypeable_out=$(run_enroll_import 'pässphrase' yes 0)
+grep -Fq 'not printable US-ASCII' <<<"${untypeable_out}" ||
+  fail "a non-ASCII passphrase did not take its declared skip; output was: ${untypeable_out}"
+[[ ! -s "${scratch}/expect.log" ]] ||
+  fail 'a passphrase that cannot be typed at MokManager still queued a request'
+
+# The happy path: expect is driven, and the passphrase arrives in its ENVIRONMENT
+# while its argument vector carries only the script flags.
+[[ "$(run_enroll_import 'fixture-passphrase' yes 0)" == *CONTINUED* ]] ||
+  fail 'a typeable passphrase with expect present did not complete the import'
+grep -Fq 'env-passphrase:fixture-passphrase' "${scratch}/expect.log" ||
+  fail 'the passphrase did not reach expect through the environment'
+grep -Fq 'env-cert:' "${scratch}/expect.log" ||
+  fail 'the certificate path did not reach expect through the environment'
+if grep -F 'argv:' "${scratch}/expect.log" | grep -Fq 'fixture-passphrase'; then
+  fail 'the passphrase reached expect through its ARGUMENT VECTOR, readable in the process table'
+fi
+grep -Eq '^stdin-bytes:[1-9][0-9]*$' "${scratch}/expect.log" ||
+  fail 'the expect script was not fed on stdin'
+
+# A failing import fails the function loudly and says what to run by hand. This is
+# the whole defect the discarded `|| true` created.
+if [[ "$(run_enroll_import 'fixture-passphrase' yes 3)" == *CONTINUED* ]]; then
+  fail 'a failed mokutil --import must not be reported as success'
+fi
+grep -Fq 'the certificate was NOT queued' "${scratch}/enroll.err" ||
+  fail 'a failed import did not say the certificate was not queued'
+grep -Fq 'sudo mokutil --import' "${scratch}/enroll.err" ||
+  fail 'a failed import did not print the by-hand mokutil command'
+
 printf 'Fedora DKMS MOK smoke passed.\n'
