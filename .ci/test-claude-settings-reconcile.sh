@@ -129,15 +129,48 @@ grep -qF 'is not a JSON object' <<<"$malformed_err" || fail 'malformed target wa
 # An ancestor holding a scalar or an array cannot be written through. Both the
 # probe and the write raise on it, so this proves the classifier survives to
 # report rather than dying mid-stream.
+#
+# It must suppress ONLY its own leaf. An all-or-nothing abort left every declared
+# path unwritten behind one unrelated damaged key -- including the
+# DISABLE_AUTOUPDATER pin, which on macOS is that control's only carrier -- while
+# the apply stayed green. So each case asserts three things: the damaged ancestor
+# is untouched, its own leaf is reported by name, and every OTHER declared leaf
+# landed anyway.
 for bad in '{"modelSettings":"oops"}' '{"modelSettings":[1,2]}'; do
   blocked=$scratch/blocked.json
   printf '%s' "$bad" >"$blocked"
   blocked_err=$(run "$blocked" 2>&1 >/dev/null) || fail 'blocked ancestor should not fail the apply'
-  [[ $(cat "$blocked") == "$bad" ]] || fail "blocked ancestor was written through: $bad"
+  [[ $(jq -Sc '.modelSettings' "$blocked") == "$(jq -Sc '.modelSettings' <<<"$bad")" ]] \
+    || fail "blocked ancestor was written through: $bad"
   grep -qF 'modelSettings.claude-opus-5.effortLevel' <<<"$blocked_err" \
     || fail "blocked ancestor was not reported by path: $bad"
+  jq -e --argjson d "$declared" '
+    . as $live
+    | [ $d | to_entries[]
+        | select(.key | startswith("modelSettings.") | not)
+        | . as $e | ($live | getpath($e.key | split("."))) == $e.value ]
+    | all' "$blocked" >/dev/null \
+    || fail "a blocked ancestor suppressed the leaves it does not own: $bad"
   rm -f "$blocked"
 done
+
+# A run whose ONLY drifted path is the blocked one must write nothing at all. The
+# fixture starts from the declaration with modelSettings damaged, so every other
+# leaf is already converged and there is nothing writable left to assert.
+blocked_only=$scratch/blocked-only.json
+jq -n --argjson d "$declared" '
+  reduce ($d | to_entries[]
+          | select(.key | startswith("modelSettings.") | not)) as $e
+    ({}; setpath($e.key | split("."); $e.value))
+  | .modelSettings = "oops"' >"$blocked_only"
+chmod 0600 "$blocked_only"
+blocked_only_identity=$(stat -c '%i %Y' "$blocked_only")
+blocked_only_before=$(cat "$blocked_only")
+run "$blocked_only" >/dev/null 2>&1 || fail 'a blocked-only run should not fail the apply'
+[[ $(cat "$blocked_only") == "$blocked_only_before" ]] \
+  || fail 'a run whose only drift was blocked still rewrote the settings file'
+[[ $(stat -c '%i %Y' "$blocked_only") == "$blocked_only_identity" ]] \
+  || fail 'a run whose only drift was blocked republished the settings file'
 
 # The concurrent-write discard branch is the whole of R12, and it is the one branch
 # a fixture cannot reach by content alone: the write must land BETWEEN this script's
