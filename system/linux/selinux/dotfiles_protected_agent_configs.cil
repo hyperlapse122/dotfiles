@@ -130,6 +130,16 @@
 (allow dotfiles_agent_domain dotfiles_agent_domain (fd (use)))
 (allow dotfiles_agent_domain user_devpts_t (chr_file (read write ioctl getattr append open)))
 
+; RPM SCRIPTLETS. dnf runs from an apply script, so it runs in chezmoi_t, and
+; rpm transitions each scriptlet into rpm_script_t. The base policy's
+; type_transition fires for this domain through unconfined_domain_type, but the
+; paired allow does not cover it, so the scriptlet exec is denied and the
+; package installs with its %post never run.
+(allow dotfiles_agent_domain rpm_script_t (process (transition siginh rlimitinh noatsecure)))
+(allow dotfiles_agent_domain rpm_script_t (fd (use)))
+(allow rpm_script_t dotfiles_agent_domain (fd (use)))
+(allow rpm_script_t dotfiles_agent_domain (process (sigchld)))
+
 ; Process capabilities and unconfined execution (JIT runtimes: Node.js, Bun, V8)
 (allow dotfiles_agent_domain self (process (execmem fork sigchld signull sigkill sigstop signal getsched setsched getsession getpgid setpgid setrlimit)))
 

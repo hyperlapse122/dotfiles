@@ -67,7 +67,11 @@ for token in \
   "(filecon \"/usr/bin/chezmoi\"" \
   "(filecon \"HOME_DIR/\\.local/bin/chezmoi\"" \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/claude/[^/]+/claude\" file (unconfined_u object_r claude_exec_t" \
-  "(filecon \"HOME_DIR/\\.local/lib/commands/store/agy/[^/]+/agy\" file (unconfined_u object_r agy_exec_t"; do
+  "(filecon \"HOME_DIR/\\.local/lib/commands/store/agy/[^/]+/agy\" file (unconfined_u object_r agy_exec_t" \
+  "(allow dotfiles_agent_domain rpm_script_t (process (transition siginh rlimitinh noatsecure)))" \
+  "(allow dotfiles_agent_domain rpm_script_t (fd (use)))" \
+  "(allow rpm_script_t dotfiles_agent_domain (fd (use)))" \
+  "(allow rpm_script_t dotfiles_agent_domain (process (sigchld)))"; do
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing expected declaration: $token"
 done
 
@@ -146,6 +150,7 @@ done < <(grep -E '^\(allow unconfined_domain_type protected_agent_config_type ' 
   fail 'expected exactly one read-only grant per object class for unconfined_domain_type'
 
 grep -qF -- "secilc" "$repo_root/.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl" || fail "devtools missing secilc package"
+grep -qF -- "python3-setools" "$repo_root/.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl" || fail "devtools missing python3-setools package"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/selinux-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
@@ -256,6 +261,7 @@ if command -v secilc >/dev/null 2>&1; then
 (type tmp_t)
 (type tmpfs_t)
 (type hugetlbfs_t)
+(type rpm_script_t)
 (typeattribute noxattrfs)
 (typeattribute file_type)
 (typeattribute exec_type)
@@ -298,7 +304,7 @@ if command -v secilc >/dev/null 2>&1; then
 (class file (create read write getattr setattr unlink rename open append lock map ioctl link watch watch_reads entrypoint execute execute_no_trans relabelto relabelfrom))
 (class dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads relabelto relabelfrom))
 (class lnk_file (create read getattr setattr unlink rename relabelto relabelfrom))
-(class process (transition sigchld signull sigkill sigstop signal siginh fork getattr getsched setsched execmem getsession getpgid setpgid setrlimit))
+(class process (transition sigchld signull sigkill sigstop signal siginh fork getattr getsched setsched execmem getsession getpgid setpgid setrlimit rlimitinh noatsecure))
 (class fd (use))
 (class chr_file (read write ioctl getattr append open))
 (class filesystem (associate))
@@ -359,8 +365,8 @@ EOF
   # The strongest proof available offline: ask the COMPILED policy who may write
   # what. The stub reproduces Fedora's blanket files_unconfined_type grant, so a
   # protected type that regained file_type shows up here as an unconfined_t
-  # write. Skipped where python3-setools is absent (CI runners); the text
-  # assertions above still hold there.
+  # write. Skipped where python3-setools is absent; the text assertions above
+  # still hold there.
   selinux_python=''
   for candidate in /usr/bin/python3 python3; do
     command -v "$candidate" >/dev/null 2>&1 || continue
@@ -390,6 +396,9 @@ EXPECTED = {
     ('unconfined_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'claude_config_t'): False,
     ('unconfined_t', 'gemini_config_t'): False,
+    ('rpm_script_t', 'protected_agent_config_t'): False,
+    ('rpm_script_t', 'claude_config_t'): False,
+    ('rpm_script_t', 'gemini_config_t'): False,
 }
 
 
@@ -413,6 +422,16 @@ def may_associate(label):
     return False
 
 
+def can_transition(source, target):
+    query = setools.TERuleQuery(policy, source=source, target=target, tclass=['process'])
+    for rule in query.results():
+        if str(rule.ruletype) != 'allow':
+            continue
+        if 'transition' in {str(perm) for perm in rule.perms}:
+            return True
+    return False
+
+
 failures = []
 for (source, target), want in sorted(EXPECTED.items()):
     got = may_mutate(source, target)
@@ -424,6 +443,9 @@ for (source, target), want in sorted(EXPECTED.items()):
 for label in ('protected_agent_config_t', 'claude_config_t', 'gemini_config_t'):
     if not may_associate(label):
         failures.append(f'{label} may not associate with fs_t, so restorecon cannot label it')
+for domain in ('chezmoi_t', 'claude_t', 'agy_t'):
+    if not can_transition(domain, 'rpm_script_t'):
+        failures.append(f'{domain} cannot transition to rpm_script_t in compiled policy')
 for line in failures:
     print(f'test-selinux-protected-configs: {line}', file=sys.stderr)
 sys.exit(1 if failures else 0)
