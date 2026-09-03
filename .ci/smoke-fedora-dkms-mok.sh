@@ -567,10 +567,21 @@ minbin="${scratch}/minbin"
 mkdir -p "${minbin}"
 # bash is here for the expect STUB's own shebang, not for the code under test;
 # everything else is a tool the enrollment body actually reaches.
-for tool in grep base64 sh sed mkdir rm openssl cat bash; do
+for tool in grep base64 sh sed mkdir rm cat bash; do
   real=$(command -v "${tool}") || fail "the fixture needs ${tool} on PATH"
   ln -sf "${real}" "${minbin}/${tool}"
 done
+# openssl is OPTIONAL, and a GitHub runner image does not always carry it. It is
+# reached only by the certificate-fingerprint read that feeds the already-queued
+# short circuit, and that circuit has its own case in run_enroll above, which runs
+# on the full PATH. Without openssl the fingerprint reads empty, the short circuit
+# is skipped, and every branch this fixture asserts is reached unchanged -- so a
+# hard failure here would fail the harness over a tool it does not need.
+if openssl_real=$(command -v openssl); then
+  ln -sf "${openssl_real}" "${minbin}/openssl"
+else
+  printf 'note: openssl is absent, so the enrollment fixtures skip the already-queued fingerprint read\n'
+fi
 
 # Records the whole call surface -- argv, the two environment variables, and the
 # expect script it is fed on stdin -- using only bash builtins, because the
