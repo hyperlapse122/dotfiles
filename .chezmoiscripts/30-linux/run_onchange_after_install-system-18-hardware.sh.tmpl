@@ -6,7 +6,7 @@ set -euo pipefail
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/modprobe.d/thinkpad_acpi.conf" "system/linux/etc/modules-load.d/thinkpad_acpi.conf")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/modprobe.d/thinkpad_acpi.conf" "system/linux/etc/modules-load.d/thinkpad_acpi.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-power.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-modeset.conf")) }}
 SRC_ROOT="{{ $sourceDir }}/system/linux"
 
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
@@ -33,7 +33,14 @@ gate_ok() {
   fact_gate "$1"
 }
 
-hw_files=("$SRC_ROOT"/etc/modprobe.d/thinkpad_acpi.conf "$SRC_ROOT"/etc/modules-load.d/thinkpad_acpi.conf)
+# The manifest supplies mode and gate for files THIS array already lists; a
+# manifest entry on its own installs nothing.
+hw_files=(
+  "$SRC_ROOT"/etc/modprobe.d/thinkpad_acpi.conf
+  "$SRC_ROOT"/etc/modules-load.d/thinkpad_acpi.conf
+  "$SRC_ROOT"/etc/modprobe.d/nvidia-hybrid-power.conf
+  "$SRC_ROOT"/etc/modprobe.d/nvidia-hybrid-modeset.conf
+)
 for src in "${hw_files[@]}"; do
   [[ -f "$src" ]] || continue
   rel="${src#"$SRC_ROOT"/}"

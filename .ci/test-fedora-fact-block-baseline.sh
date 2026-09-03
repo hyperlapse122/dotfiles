@@ -130,6 +130,13 @@ NODE
 # kind of shared control flow this baseline exists to watch, and excising it
 # would blind the gate to a later change in the ladder.
 #
+# REBASELINED again for install-system-18-hardware when the hybrid-graphics
+# drop-ins were added. That installer's own file array and fingerprint globs are
+# hand-written control flow, not a generated block, so a new managed /etc file
+# legitimately moves its digest exactly once -- and the gate seeing that move is
+# the point: a manifest entry alone installs nothing, so the array is what the
+# baseline must keep watching.
+#
 # SCOPE, precisely: the fixture pins `desktop: none`, so these digests watch the
 # ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
 # is not byte-pinned here; `.ci/test-sudo-elevation-guard.sh` is what covers all
@@ -140,7 +147,7 @@ declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=5e054c7bb0099089a34704bdd6e0959145b8e974d35e5aec7be6b538ae486b05
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=5e086c571eb1f11394e659ac699cfcdf8e4ee162ca468482620c650b45c100f5
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=9c7d110090e280f016d000e0eff803ace5be36a4430f5b8b855f04616d7b2251
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=2cd879bd220edc10a475478f9822b72589276229b8ba32ed98dd5611ac460241
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc

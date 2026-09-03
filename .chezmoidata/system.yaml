@@ -56,6 +56,12 @@ system:
           gate: thinkpad
         - path: etc/modules-load.d/thinkpad_acpi.conf
           gate: thinkpad
+        # Render offload and runtime power management for a laptop's discrete
+        # GPU. A desktop with a single discrete card has nothing to offload to.
+        - path: etc/modprobe.d/nvidia-hybrid-power.conf
+          gate: hybridGraphics
+        - path: etc/modprobe.d/nvidia-hybrid-modeset.conf
+          gate: hybridGraphics
       removed:
         # Retired kernel-install(8) drop-in for VirtualBox module signing
         - path: /etc/kernel/install.d/50-vbox-sign.install
