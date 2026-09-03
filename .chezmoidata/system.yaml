@@ -16,8 +16,13 @@ system:
         # De-brands the login greeter to upstream Breeze on both distros.
         # Forcing Current=breeze without the theme installed yields a broken
         # login screen, so skip when the breeze SDDM theme is absent.
+        # ONE fact, not two gates: a manifest entry carries one gate expression
+        # and the shared helper has no conjunction form. sddmBreezeUsable is the
+        # theme being installed AND this host running SDDM, so the drop-in is
+        # never installed on a host the retirement below would strip it from on
+        # the same run.
         - path: etc/sddm.conf.d/90-breeze.conf
-          gate: sddmBreeze
+          gate: sddmBreezeUsable
         # GNOME targets: force password-only auth at the GDM greeter so
         # pam_gnome_keyring always unlocks the login keyring.
         - path: etc/dconf/profile/gdm
@@ -28,6 +33,13 @@ system:
         # Retired systemd system-sleep hooks for container proxy and open-design
         - path: /etc/systemd/system-sleep/cli-proxy-api.sh
         - path: /etc/systemd/system-sleep/open-design.sh
+        # The Breeze drop-in de-brands an SDDM greeter. Fedora 44 KDE ships the
+        # Plasma login manager, which has no theme engine at all -- no [Theme]
+        # section and no themes directory -- so the intent is not merely unmet
+        # there, it is unexpressible. Retire it from every host that does not run
+        # SDDM; a host that does keeps it.
+        - path: /etc/sddm.conf.d/90-breeze.conf
+          gate: '!displayManagerSddm'
 
     sudoers:
       overrides:

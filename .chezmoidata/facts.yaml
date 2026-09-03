@@ -354,6 +354,22 @@ factRegistry:
       keeps host-hardware packages out of a VM/container.
 
   # --- Distro flavor / platform features -------------------------------------
+  sddmBreezeUsable:
+    type: bool
+    probe: template
+    source: >-
+      sddmBreeze AND displayManagerSddm — the Breeze SDDM theme is installed AND
+      this host actually runs SDDM. ONE fact because a manifest entry carries ONE
+      gate expression and the shared helper has no conjunction form. Gating the
+      theme drop-in on the display manager alone would drop the theme-presence
+      guard, which exists because forcing the theme without it yields a broken
+      login screen; gating on the theme alone would install the drop-in on a
+      non-SDDM host that happens to carry the theme, and the retirement entry
+      would then remove it on the same run.
+    gates: etc/sddm.conf.d/90-breeze.conf (de-brands the login greeter to Breeze).
+    whenFalse: >-
+      The drop-in is not installed, either because the theme is absent or because
+      this host does not run SDDM. Both are the safe direction.
   sddmBreeze:
     type: bool
     probe: template

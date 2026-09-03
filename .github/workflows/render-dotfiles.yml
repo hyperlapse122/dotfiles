@@ -506,8 +506,16 @@ jobs:
           cp -a "${GITHUB_WORKSPACE}/." "${scratch}/unknown/"
           cp -a "${GITHUB_WORKSPACE}/." "${scratch}/missing/"
 
-          sed -i 's/gate: sddmBreeze/gate: ciUndeclaredFact/' \
+          # Aimed at the GDM dconf profile's gate, which this repository's
+          # greeter work does not move. It previously substituted into the SDDM
+          # drop-in's gate by name; when that gate was re-pointed the
+          # substitution matched nothing, the render succeeded, and this step
+          # failed with "unknown fact unexpectedly rendered" -- a green-looking
+          # assertion that had quietly stopped testing anything.
+          sed -i 's/gate: gdm/gate: ciUndeclaredFact/' \
             "${scratch}/unknown/.chezmoidata/system.yaml"
+          grep -qF 'gate: ciUndeclaredFact' "${scratch}/unknown/.chezmoidata/system.yaml" \
+            || { echo "the undeclared-fact substitution matched no gate" >&2; exit 1; }
           if render_from "${scratch}/unknown" "${installer}" \
               > "${scratch}/unknown.out" 2> "${scratch}/unknown.err"; then
             echo "unknown fact unexpectedly rendered" >&2

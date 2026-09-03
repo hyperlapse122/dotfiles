@@ -302,6 +302,14 @@ Three rules hold this file together:
 {{- end -}}
 {{- $_ := set $facts "sddmBreeze" $sddmBreeze -}}
 
+{{- /* sddmBreezeUsable — the conjunction the gate grammar cannot express. A
+   manifest entry carries one gate expression and fact_gate has no `and` form, so
+   "the theme is installed AND this host runs SDDM" has to be one fact. Without
+   it the greeter drop-in either loses its theme guard (a broken login screen) or
+   gets installed and then removed on the same run on a non-SDDM host that
+   happens to carry the theme. */ -}}
+{{- $_ := set $facts "sddmBreezeUsable" (and $sddmBreeze (eq (index $facts "displayManager") "sddm")) -}}
+
 {{- /* gdm — probe the exact file-db the shipped /etc/dconf/profile/gdm
    references, not "is GNOME installed". */ -}}
 {{- $gdm := false -}}

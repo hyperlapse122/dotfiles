@@ -33,7 +33,11 @@ of truth, organized by subsystem:
   `removed:` in the same commit, so every machine — including ones that pull a
   committed deletion — removes the orphan on its next run. An optional
   `distro:` key scopes the removal to one distro (never deletes a native/user
-  file elsewhere).
+  file elsewhere), and an optional `gate:` key scopes it to hosts the named fact
+  holds for — the same expression grammar `overrides:` uses, negation included.
+  A gate is what keeps a retirement from undoing an install: a path that is both
+  installed under one gate and retired under its negation is never installed and
+  then removed on the same run.
 
 Gates are *named host facts* from the registry (`.chezmoidata/facts.yaml`) —
 `thinkpad`, `vm`, `sddmBreeze`, `gdm`, `fprintdPam`. The

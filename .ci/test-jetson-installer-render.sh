@@ -46,6 +46,7 @@ jetson: ${jetson}
 vm: false
 virt: false
 sddmBreeze: false
+sddmBreezeUsable: false
 gdm: false
 fprintdPam: false
 headless: false

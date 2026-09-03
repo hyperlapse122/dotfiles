@@ -46,6 +46,7 @@ jetson: false
 vm: false
 virt: false
 sddmBreeze: false
+sddmBreezeUsable: false
 gdm: false
 fprintdPam: false
 headless: false
@@ -143,7 +144,7 @@ NODE
 # three renderings.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=d4372a03ccca1cf620e20906e4ac04f2265055ba67b69e586f96e60dfa860a14
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=3c2c696213b91e664ec7c6d12684be46b7cc00b637e63a7ebe131cad1d36033d
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=5e054c7bb0099089a34704bdd6e0959145b8e974d35e5aec7be6b538ae486b05
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=5e086c571eb1f11394e659ac699cfcdf8e4ee162ca468482620c650b45c100f5
