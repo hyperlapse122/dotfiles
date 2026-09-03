@@ -325,15 +325,37 @@ kde:
     applicationsDisplay: 1
   panel:
     groupingStrategy: 0
+  # Pointing devices. The reconciler selects by what a device IS, not by a name
+  # somebody remembered to add: a touchpad is any input device KWin reports
+  # `touchpad=true` for, and a TrackPoint is a pointer that is not a touchpad.
+  #
+  # The old model was an exact-name allowlist, and it failed the way an allowlist
+  # fails: this laptop's third Synaptics model matched nothing, so four managed
+  # settings were never applied and the only sign was one line saying the device
+  # was not in the list. The deny-list keeps the escape hatch -- an operator can
+  # still name a device the repository must leave alone -- without making every
+  # new laptop a silent non-convergence.
   touchpad:
-    devices:
-      - SynPS/2 Synaptics TouchPad
-      - ELAN06E8:00 04F3:332E Touchpad
+    # Exact libinput names to leave alone. Empty by default: nothing on the
+    # managed fleet needs an exemption, and an entry here is a deliberate
+    # "this device is not ours to configure".
+    denyDevices: []
     settings:
       naturalScroll: true
       tapToClick: true
       clickMethodClickfinger: true
       clickMethodAreas: false
+  # A TrackPoint is a different device class and takes a different set: it has no
+  # tap and no click-method, and middle-button scroll is the behaviour that makes
+  # it worth using. Verified against the audited ThinkPad's `TPPS/2 Elan
+  # TrackPoint`, which reports supportsNaturalScroll, supportsMiddleEmulation and
+  # supportsPointerAcceleration true, and supportsClickMethod* false.
+  trackpoint:
+    denyDevices: []
+    settings:
+      naturalScroll: true
+      middleEmulation: true
+      scrollOnButtonDown: true
   virtualKeyboard:
     desktopFile: /usr/share/applications/fcitx5-wayland-launcher.desktop
   wallpaper:

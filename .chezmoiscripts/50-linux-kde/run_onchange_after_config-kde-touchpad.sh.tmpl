@@ -16,9 +16,15 @@
 # supports* CAPABILITY PROBE stay here: a device that cannot do clickfinger is
 # still skipped rather than forced, whatever the data says.
 #
-# Only touchpads whose libinput name appears in TOUCHPAD_TARGET_NAMES are
-# configured; other touchpads are left untouched. Skips cleanly when busctl is
-# missing or no Plasma session owns org.kde.KWin.
+# Devices are selected by WHAT THEY ARE, not by a name somebody remembered to
+# add: a touchpad is any device KWin reports `touchpad=true` for, and a TrackPoint
+# is a pointer that is not a touchpad. TOUCHPAD_DENY_NAMES / TRACKPOINT_DENY_NAMES
+# are the escape hatch for a device the operator wants left alone.
+#
+# The previous model was an exact-name allowlist and it failed the way allowlists
+# fail: an unlisted model matched nothing, four managed settings were never
+# applied, and the only sign was one line saying the device was not in the list.
+# Skips cleanly when busctl is missing or no Plasma session owns org.kde.KWin.
 #
 # Capability fingerprints pair each transient-blocking declaration below with
 # the cached precondition it names. Comment-only; never executed.
@@ -30,8 +36,13 @@ set -euo pipefail
 
 {{ includeTemplate "kde-guard.sh.tmpl" (dict "ctx" . "name" "config-kde-touchpad.sh") -}}
 
-TOUCHPAD_TARGET_NAMES=(
-{{ range .kde.touchpad.devices }}  {{ . | quote }}
+TOUCHPAD_DENY_NAMES=(
+{{ range .kde.touchpad.denyDevices }}  {{ . | quote }}
+{{ end -}}
+)
+
+TRACKPOINT_DENY_NAMES=(
+{{ range .kde.trackpoint.denyDevices }}  {{ . | quote }}
 {{ end -}}
 )
 
@@ -40,6 +51,10 @@ NATURAL_SCROLL={{ .kde.touchpad.settings.naturalScroll | ternary "true" "false" 
 TAP_TO_CLICK={{ .kde.touchpad.settings.tapToClick | ternary "true" "false" }}
 CLICK_METHOD_CLICKFINGER={{ .kde.touchpad.settings.clickMethodClickfinger | ternary "true" "false" }}
 CLICK_METHOD_AREAS={{ .kde.touchpad.settings.clickMethodAreas | ternary "true" "false" }}
+
+TP_NATURAL_SCROLL={{ .kde.trackpoint.settings.naturalScroll | ternary "true" "false" }}
+TP_MIDDLE_EMULATION={{ .kde.trackpoint.settings.middleEmulation | ternary "true" "false" }}
+TP_SCROLL_ON_BUTTON_DOWN={{ .kde.trackpoint.settings.scrollOnButtonDown | ternary "true" "false" }}
 
 configure_touchpad() {
   printf 'config-kde-touchpad.sh: configuring KDE touchpad(s)...\n'
@@ -76,26 +91,57 @@ configure_touchpad() {
     [[ -n "$name" ]] && sysnames+=("$name")
   done < <(printf '%s\n' "$raw" | grep -oE '"[^"]+"' | tr -d '"')
 
+  _denied() {
+    local candidate="$1"
+    shift
+    local entry
+    for entry in "$@"; do
+      [[ "$candidate" == "$entry" ]] && return 0
+    done
+    return 1
+  }
+
   local count=0
-  local sn path is_touchpad name_quoted matched target
+  local sn path is_touchpad is_pointer name_quoted
   for sn in "${sysnames[@]}"; do
     path="$MGR_PATH/$sn"
     is_touchpad="$(_dbus_get "$path" touchpad)"
-    [[ "$is_touchpad" == "true" ]] || continue
+    is_pointer="$(_dbus_get "$path" pointer)"
+    [[ "$is_touchpad" == "true" || "$is_pointer" == "true" ]] || continue
 
     name_quoted="$(_dbus_get "$path" name)"
     name="${name_quoted#\"}"
     name="${name%\"}"
 
-    matched=0
-    for target in "${TOUCHPAD_TARGET_NAMES[@]}"; do
-      if [[ "$name" == "$target" ]]; then
-        matched=1
-        break
+    # A TrackPoint is a pointer that is not a touchpad. It supports neither tap
+    # nor a click method, so it takes its own set rather than the touchpad's.
+    if [[ "$is_touchpad" != "true" ]]; then
+      if _denied "$name" ${TRACKPOINT_DENY_NAMES[@]+"${TRACKPOINT_DENY_NAMES[@]}"}; then
+        printf '  skip: %s (%s) — named in kde.trackpoint.denyDevices\n' "$name" "$sn"
+        continue
       fi
-    done
-    if [[ "$matched" -eq 0 ]]; then
-      printf '  skip: %s (%s) — not in TOUCHPAD_TARGET_NAMES\n' "$name" "$sn"
+      printf '  trackpoint: %s (%s)\n' "$name" "$sn"
+      if [[ "$(_dbus_get "$path" supportsNaturalScroll)" == "true" ]]; then
+        _dbus_set_b "$path" naturalScroll "$TP_NATURAL_SCROLL"
+      else
+        printf '    skip naturalScroll: not supported by device\n'
+      fi
+      if [[ "$(_dbus_get "$path" supportsMiddleEmulation)" == "true" ]]; then
+        _dbus_set_b "$path" middleEmulation "$TP_MIDDLE_EMULATION"
+      else
+        printf '    skip middleEmulation: not supported by device\n'
+      fi
+      if [[ -n "$(_dbus_get "$path" scrollOnButtonDown)" ]]; then
+        _dbus_set_b "$path" scrollOnButtonDown "$TP_SCROLL_ON_BUTTON_DOWN"
+      else
+        printf '    skip scrollOnButtonDown: not supported by device\n'
+      fi
+      count=$((count + 1))
+      continue
+    fi
+
+    if _denied "$name" ${TOUCHPAD_DENY_NAMES[@]+"${TOUCHPAD_DENY_NAMES[@]}"}; then
+      printf '  skip: %s (%s) — named in kde.touchpad.denyDevices\n' "$name" "$sn"
       continue
     fi
 
@@ -129,7 +175,7 @@ configure_touchpad() {
 
   if [[ "$count" -eq 0 ]]; then
     (
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-kde-touchpad" "site" "no-target-touchpad" "reason" "no configured target touchpad is present in this session") | trim | indent 6 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "config-kde-touchpad" "site" "no-target-touchpad" "reason" "no touchpad or trackpoint is present in this session") | trim | indent 6 }}
     )
     return 0
   fi
