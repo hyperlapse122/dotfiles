@@ -1,0 +1,71 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sleep") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sleep") }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sleep") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/systemd/sleep.conf.d/**" "system/linux/etc/systemd/logind.conf.d/**")) }}
+SRC_ROOT="{{ $sourceDir }}/system/linux"
+
+# Sleep policy for a battery-powered host: suspend first, hibernate before the
+# battery is gone. This is its own subsystem rather than a passenger on
+# install-system-26-swap-hibernate, which owns the swap and resume SIDE of
+# hibernation but wraps its whole body in a Fedora-and-btrfs condition and pulls
+# in no fact machinery — absorbing the policy there would have narrowed it to
+# Fedora-on-btrfs hosts without saying so.
+{{ $gates := list -}}
+{{ range .system.linux.sleep.overrides -}}
+{{   $gate := get . "gate" | default "" -}}
+{{   if ne $gate "" }}{{ $gates = append $gates $gate }}{{ end -}}
+{{ end -}}
+{{ includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (sleep.overrides)" "gates" $gates) -}}
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+
+sleep_patterns=()
+sleep_modes=()
+sleep_gates=()
+{{ range .system.linux.sleep.overrides -}}
+sleep_patterns+=({{ .path | quote }})
+sleep_modes+=({{ get . "mode" | default "644" | quote }})
+sleep_gates+=({{ get . "gate" | default "" | quote }})
+{{ end }}
+
+gate_reason() {
+  case "$1" in
+    battery) printf 'no system battery; sleep policy is a laptop concern' ;;
+    *) printf 'gate %s failed' "$1" ;;
+  esac
+}
+
+shopt -s globstar nullglob
+
+reload_needed=0
+for i in "${!sleep_patterns[@]}"; do
+  gate="${sleep_gates[$i]}"
+  if [[ -n "$gate" ]] && ! fact_gate "$gate"; then
+    printf '  -> skip %s (%s)\n' "${sleep_patterns[$i]}" "$(gate_reason "$gate")"
+    continue
+  fi
+  for src in "$SRC_ROOT"/${sleep_patterns[$i]}; do
+    [[ -f "$src" ]] || continue
+    rel="${src#"$SRC_ROOT"/}"
+    dst="/$rel"
+    printf '  -> %s (mode %s)\n' "$dst" "${sleep_modes[$i]}"
+    "${SUDO[@]}" install -D -m "${sleep_modes[$i]}" "$src" "$dst"
+    reload_needed=1
+  done
+done
+
+# logind reads its drop-ins at start and on reload; sleep.conf is read per
+# suspend, so it needs nothing. Reload rather than restart: restarting logind
+# terminates the graphical session.
+if [[ "$reload_needed" -eq 1 ]] && command -v systemctl >/dev/null 2>&1 \
+  && systemctl cat systemd-logind.service >/dev/null 2>&1; then
+  printf '  -> systemctl reload systemd-logind\n'
+  "${SUDO[@]}" systemctl reload systemd-logind || true
+fi
+
+{{ end -}}

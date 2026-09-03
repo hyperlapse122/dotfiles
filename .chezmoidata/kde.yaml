@@ -168,12 +168,18 @@ kde:
     - { file: kdeglobals, group: Icons, key: Theme, type: string, value: breeze-dark }
 
     # powerdevilrc: no idle screen dimming in all three profiles
+    # On AC, idle dimming is off: a plugged-in machine has no reason to dim.
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayWhenIdle, type: bool, value: false }
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
-    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
-    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
-    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
-    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
+    # On battery it is ON, and sooner still at low battery. All three profiles
+    # used to carry the AC value, which held a laptop panel at full brightness
+    # while idle -- a desktop-shaped default reaching a machine that has to
+    # ration its own power. These rows are inert on a desktop, whose PowerDevil
+    # never enters the battery profiles.
+    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayWhenIdle, type: bool, value: true }
+    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: 120 }
+    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayWhenIdle, type: bool, value: true }
+    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: 60 }
 
     # dolphinrc: open home folder on startup without restoring tabs
     - { file: dolphinrc, group: General, key: RememberOpenedTabs, type: bool, value: false }

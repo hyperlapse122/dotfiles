@@ -67,4 +67,15 @@ system:
         - path: /etc/kernel/install.d/50-vbox-sign.install
           distro: fedora
 
+    # Sleep policy is a laptop concern, gated on the battery fact. Its own
+    # subsystem rather than a passenger on the hibernation-storage installer,
+    # which is wrapped in a Fedora-and-btrfs condition and carries no fact
+    # machinery.
+    sleep:
+      overrides:
+        - path: "etc/systemd/sleep.conf.d/*"
+          gate: battery
+        - path: "etc/systemd/logind.conf.d/*"
+          gate: battery
+
     bluetooth: {}

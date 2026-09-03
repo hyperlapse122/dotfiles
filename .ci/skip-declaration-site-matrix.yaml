@@ -72,9 +72,9 @@ runtime_input: false
 totals:
   classified_owners: 127
   hard_error_owners: 8
-  rendered_instances: 190
+  rendered_instances: 193
   phase_local_instances: 122
-  shared_guard_instances: 68
+  shared_guard_instances: 71
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -117,10 +117,10 @@ audited_scopes:
 
 shared_guard_fanout:
   gnome-guard: 7
-  headless-guard: 10
+  headless-guard: 11
   kde-guard: 10
-  shared-host-guard: 20
-  sudo-elevation-guard: 21
+  shared-host-guard: 21
+  sudo-elevation-guard: 22
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -208,6 +208,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
@@ -274,6 +275,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#headless-guard/headless-install'
   - owner: 'sudo-elevation-guard/no-elevation-path'
     scope: 'guard-partials'
@@ -307,6 +309,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
   - owner: 'mise-trust/mise-absent'
