@@ -70,11 +70,11 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 127
+  classified_owners: 131
   hard_error_owners: 8
-  rendered_instances: 193
-  phase_local_instances: 122
-  shared_guard_instances: 71
+  rendered_instances: 200
+  phase_local_instances: 126
+  shared_guard_instances: 74
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -94,21 +94,21 @@ plan_contract_scopes:
   70-agents: 3
 
 audited_forms:
-  skip_here: 54
+  skip_here: 57
   skip_step: 35
-  done_here: 18
+  done_here: 19
   not_applicable: 20
 
 audited_directions:
-  harmless: 28
-  transient-blocking: 58
+  harmless: 30
+  transient-blocking: 59
   transient-tolerable: 3
 audited_scopes:
   00-tools: 4
   10-auth: 5
   20-base: 5
   30-components: 16
-  30-linux: 28
+  30-linux: 32
   50-linux-gnome: 29
   50-linux-kde: 33
   60-build: 2
@@ -117,23 +117,23 @@ audited_scopes:
 
 shared_guard_fanout:
   gnome-guard: 7
-  headless-guard: 11
+  headless-guard: 12
   kde-guard: 10
-  shared-host-guard: 21
-  sudo-elevation-guard: 22
+  shared-host-guard: 22
+  sudo-elevation-guard: 23
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 28
-    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). Four more arrive with the NVIDIA branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and an out-of-tree signing keypair the module builder has not minted yet. Each names a condition this repository will not resolve on its own -- the operator adds a table row or clears the conflicting branch -- so none of them is a precondition a later phase supplies, which is what would have made them transient-blocking.'
+    audited: 30
+    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). Four more arrive with the NVIDIA branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and an out-of-tree signing keypair the module builder has not minted yet. Each names a condition this repository will not resolve on its own -- the operator adds a table row or clears the conflicting branch -- so none of them is a precondition a later phase supplies, which is what would have made them transient-blocking. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 58
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session.'
+    audited: 59
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session. One more: authselect itself, a tool the distribution ships but a minimal host may not have installed yet.'
   - bucket: 'done_here'
     plan: 10
-    audited: 18
-    reason: 'The six GNOME/KDE completion stamps plus eight already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, a converged authd login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here.'
+    audited: 19
+    reason: 'The six GNOME/KDE completion stamps plus eight already-current fast paths (fedora packages/MOK, an enrolled or queued certificate, an already-zsh login shell, a converged authd login shell, an already-registered keybinding, an ibus-free source list, an authenticated tailnet) are recorded as done_here because each reads a completion marker or a converged state. The pre-U4 estimate split several of those into its not_applicable all-work-done bucket instead; skip.sh.tmpl reserves not_applicable for a data opt-out, so they are recorded here. One more: a fingerprint feature that is enabled while the user has enrolled no finger, which is a converged host waiting on an interactive per-user step rather than a failure.'
   - bucket: 'scope:00-tools+10-auth'
     plan: 8
     audited: 9
@@ -144,8 +144,8 @@ divergence:
     reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis, each a condition the repository will not resolve on its own: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet.'
   - bucket: 'scope:30-linux'
     plan: 19
-    audited: 28
-    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply.'
+    audited: 32
+    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply. Four more arrive with the fingerprint installer, which is its own subsystem.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
     audited: 29
@@ -210,6 +210,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#shared-host-guard/shared-host'
   - owner: 'gnome-guard/non-gnome-desktop'
     scope: 'guard-partials'
     template: '.chezmoitemplates/gnome-guard.sh.tmpl'
@@ -277,6 +278,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#headless-guard/headless-install'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#headless-guard/headless-install'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#headless-guard/headless-install'
   - owner: 'sudo-elevation-guard/no-elevation-path'
     scope: 'guard-partials'
     template: '.chezmoitemplates/sudo-elevation-guard.sh.tmpl'
@@ -311,6 +313,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'
@@ -1879,6 +1882,63 @@ owners:
     form: 'done_here'
     instances:
       - '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl#install-base-ubuntu/base-packages-already-present'
+  - owner: 'install-system-fingerprint/no-fingerprint-reader'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl'
+    anchor_line: 224
+    anchor: 'if ! fact_gate ''fingerprintReader''; then'
+    predicate: '! fact_gate ''fingerprintReader'''
+    predicate_digest: 'sha256:0346d876b6c2bc246595080e2ae6edae6bf71150530a31cfa49917727fa85bf5'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-fedora'
+    form: 'skip_here'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#install-system-fingerprint/no-fingerprint-reader'
+  - owner: 'install-system-fingerprint/authselect-absent'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl'
+    anchor_line: 231
+    anchor: 'if ! command -v authselect >/dev/null 2>&1; then'
+    predicate: '! command -v authselect >/dev/null 2>&1'
+    predicate_digest: 'sha256:75cac686776dbba19dc469ea6e0d5c2b3cc8ed527a5e2ce2d2da6b8d6aa6d00e'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-fedora'
+    form: 'skip_here'
+    direction: 'transient-blocking'
+    probe: 'authselect-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#install-system-fingerprint/authselect-absent'
+  - owner: 'install-system-fingerprint/greeter-would-gain-fingerprint'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl'
+    anchor_line: 300
+    anchor: 'if greeter_would_gain_fingerprint; then'
+    predicate: 'greeter_would_gain_fingerprint'
+    predicate_digest: 'sha256:d4af55efbbec56c80358e2c1d9c7817a10e13073a7e3b764d29caedf429b21d5'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-fedora'
+    form: 'skip_here'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#install-system-fingerprint/greeter-would-gain-fingerprint'
+  - owner: 'install-system-fingerprint/no-enrolled-finger'
+    scope: '30-linux'
+    template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl'
+    anchor_line: 321
+    anchor: 'if command -v fprintd-list >/dev/null 2>&1 \'
+    predicate: 'command -v fprintd-list >/dev/null 2>&1'
+    predicate_digest: 'sha256:b26b8f29ab1b972cf218e4b986a9543521819736dcfc7e2a0ba5c0e5635c6f36'
+    continuation: 'terminate-script-exit-0'
+    continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
+    render_profile: 'linux-fedora'
+    form: 'done_here'
+    instances:
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#install-system-fingerprint/no-enrolled-finger'
   - owner: 'install-nvidia-fedora/nvidia-architecture-unlisted'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'

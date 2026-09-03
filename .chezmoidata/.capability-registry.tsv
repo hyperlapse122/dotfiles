@@ -1,5 +1,6 @@
 capability-registry-v2
 akonadi-socket-present	unix-socket	none	linux	available	unavailable
+authselect-present	command-present	none	linux	available	unavailable
 busctl-present	command-present	none	linux	available	unavailable
 chsh-present	command-present	none	linux	available	unavailable
 docker-credential-secretservice-present	command-present	none	linux	available	unavailable

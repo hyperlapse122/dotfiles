@@ -90,4 +90,11 @@ system:
         - path: "etc/systemd/logind.conf.d/*"
           gate: battery
 
+    # Fingerprint authentication on Fedora. The feature set is data; which hosts
+    # get it is the fingerprintReader fact plus the greeter check the installer
+    # makes before enabling anything.
+    fingerprint:
+      authselectFeatures:
+        - with-fingerprint
+
     bluetooth: {}

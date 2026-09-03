@@ -1,0 +1,130 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $authselectPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "authselect-present") -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-fingerprint") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-fingerprint") }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-fingerprint") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list
+      (dict "name" "authselect-present" "value" $authselectPresent))) }}
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+
+# Fingerprint authentication on Fedora, through authselect and nothing else.
+#
+# Writing PAM files directly is forbidden (AGENTS.md): this repository's
+# Debian-shaped polkit stack would overwrite Fedora's rpm-owned one and break
+# every polkit prompt. authselect's feature is the sanctioned mechanism.
+#
+# WHAT THE FEATURE ACTUALLY REACHES. It writes pam_fprintd into system-auth,
+# which /etc/pam.d/sudo and /usr/lib/pam.d/polkit-1 both include -- so the factor
+# reaches privilege escalation as well as polkit, and there is no stock authselect
+# feature that separates them. AGENTS.md was amended to say so rather than the
+# plan pretending the separation exists.
+#
+# WHAT IT MUST NOT REACH is the login greeter. The feature does not touch
+# password-auth, which is the stack a greeter authenticates through, and GDM
+# additionally carries a locked dconf key. Neither of those is assumed here: the
+# check below resolves the greeter's stack through its include chain, against the
+# profile as it would stand AFTER the feature is enabled, and withholds the
+# feature if a fingerprint module would reach it.
+
+AUTHSELECT_FEATURES=(
+{{ range .system.linux.fingerprint.authselectFeatures }}  {{ . | quote }}
+{{ end -}}
+)
+
+if ! fact_gate 'fingerprintReader'; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-fingerprint" "site" "no-fingerprint-reader" "direction" "harmless" "reason" "this host has no fingerprint reader this repository knows how to manage") | trim | indent 2 }}
+fi
+
+if ! command -v authselect >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-fingerprint" "site" "authselect-absent" "direction" "transient-blocking" "probe" "authselect-present" "reason" "authselect is not installed; the fingerprint feature cannot be declared") | trim | indent 2 }}
+fi
+
+# Resolve a PAM service through its include/substack chain and report whether any
+# module in it is the fingerprint one. Reading only the greeter's own service file
+# would pass on exactly the hosts this exists to protect: a greeter names no
+# fingerprint module directly, it reaches one through system-auth.
+pam_chain_has_fprintd() {
+  local service="$1" depth="${2:-0}" file kind target
+  (( depth > 4 )) && return 1
+  for file in "/etc/pam.d/${service}" "/usr/lib/pam.d/${service}"; do
+    [[ -r "$file" ]] || continue
+    while read -r _ kind target _; do
+      case "$kind" in
+        include|substack) pam_chain_has_fprintd "$target" "$((depth + 1))" && return 0 ;;
+      esac
+    done < <(grep -E '^[[:space:]]*(auth)[[:space:]]' "$file" 2>/dev/null || true)
+    grep -qE '^[[:space:]]*auth[[:space:]].*pam_fprintd\.so' "$file" 2>/dev/null && return 0
+    return 1
+  done
+  return 1
+}
+
+# The greeters this repository is prepared to keep password-only, and the service
+# each authenticates through. A display manager absent from this list is not
+# assumed safe -- it withholds the feature.
+greeter_service() {
+  case "${FACT_DISPLAY_MANAGER:-}" in
+    plasmalogin) printf 'plasmalogin' ;;
+    sddm)        printf 'sddm' ;;
+    gdm)         printf 'gdm-password' ;;
+    *)           return 1 ;;
+  esac
+}
+
+# Answers "would enabling the feature put a fingerprint module in the greeter's
+# authentication stack?". Single terminal return: a conditional `return 0` here
+# reads as an undeclared skip to the declaration checker, and this is a predicate,
+# not a skip -- the skip is the call site below.
+greeter_would_gain_fingerprint() {
+  local service rendered verdict=0
+  # An unrecognized display manager is NOT assumed safe: there is no known greeter
+  # service to check, so the answer stays yes and the feature is withheld.
+  if service="$(greeter_service)"; then
+    # authselect renders the profile it WOULD apply; ask it rather than the live
+    # files, so the decision is made before the factor can land.
+    rendered="$("${SUDO[@]}" authselect test "${AUTHSELECT_FEATURES[@]/#/--enable-feature=}" 2>/dev/null)" || rendered=''
+    if [[ -n "$rendered" ]] && printf '%s' "$rendered" | awk -v svc="$service" '
+        $0 ~ "^\\[/etc/pam\\.d/" svc "\\]" { inblk = 1; next }
+        /^\[/ { inblk = 0 }
+        inblk && /^auth/ && /pam_fprintd\.so/ { found = 1 }
+        END { exit found ? 0 : 1 }
+      '; then
+      verdict=0
+    elif pam_chain_has_fprintd "$service"; then
+      verdict=0
+    else
+      verdict=1
+    fi
+  fi
+  return "$verdict"
+}
+
+if greeter_would_gain_fingerprint; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-fingerprint" "site" "greeter-would-gain-fingerprint" "direction" "harmless" "reason" "the login greeter authentication stack would reach a fingerprint module; the feature is withheld so the greeter stays password-only") | trim | indent 2 }}
+fi
+
+for feature in "${AUTHSELECT_FEATURES[@]}"; do
+  if "${SUDO[@]}" authselect current 2>/dev/null | grep -qx -- "- ${feature}"; then
+    printf 'install-system-fingerprint.sh: %s already enabled\n' "$feature"
+    continue
+  fi
+  printf '  -> authselect enable-feature %s\n' "$feature"
+  "${SUDO[@]}" authselect enable-feature "$feature"
+done
+
+# Enrollment is interactive and per user, so it stays a manual step -- but whether
+# it happened must not be invisible, which is the state that let the audited host
+# look managed while nothing recorded it. An unenrolled user is reported through
+# the same declared-skip surface `dotfiles-skips` reads, distinguishable from a
+# convergence failure by its reason.
+if command -v fprintd-list >/dev/null 2>&1 \
+  && ! fprintd-list "${USER:-$(id -un)}" >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-system-fingerprint" "site" "no-enrolled-finger" "reason" "the fingerprint feature is enabled but this user has enrolled no finger; run fprintd-enroll once") | trim | indent 2 }}
+fi
+
+{{ end -}}

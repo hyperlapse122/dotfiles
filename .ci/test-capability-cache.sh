@@ -104,11 +104,11 @@ totals = matrix.get('totals', {})
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 # Retiring the figma-auth build removed its three causes from the original eleven.
 frozen = {
-    'classified_owners': 127,
+    'classified_owners': 131,
     'hard_error_owners': 8,
-    'rendered_instances': 193,
-    'phase_local_instances': 122,
-    'shared_guard_instances': 71,
+    'rendered_instances': 200,
+    'phase_local_instances': 126,
+    'shared_guard_instances': 74,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -148,7 +148,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 7, 'kde-guard': 10, 'headless-guard': 11, 'sudo-elevation-guard': 22, 'shared-host-guard': 21}
+SHARED = {'gnome-guard': 7, 'kde-guard': 10, 'headless-guard': 12, 'sudo-elevation-guard': 23, 'shared-host-guard': 22}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that
@@ -367,7 +367,7 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
     kinds[key] = kind
     platforms[key] = platform
 
-if len(keys) != 33:
+if len(keys) != 34:
     problems.append(f'registry has {len(keys)} probes, expected 33')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
         'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
