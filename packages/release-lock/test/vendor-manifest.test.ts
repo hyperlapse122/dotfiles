@@ -389,76 +389,140 @@ describe("resolveVendorManifest flutter", () => {
 });
 
 const ANDROID_SOURCE = "https://dl.google.com/android/cli/latest";
-const DUMMY_LINUX_BINARY = "android launcher binary version=1.0.15985488 data";
+const ANDROID_VERSION = "1.0.15985488";
+const ANDROID_VERSION_BASE = `https://dl.google.com/android/cli/${ANDROID_VERSION}`;
+const DUMMY_LATEST_LINUX_BINARY = `android launcher binary version=${ANDROID_VERSION} data`;
+const DUMMY_LINUX_BINARY = `pinned linux android binary version=${ANDROID_VERSION} data`;
 const DUMMY_DARWIN_ARM64_BINARY = "darwin arm64 android binary payload";
 const DUMMY_DARWIN_X64_BINARY = "darwin x64 android binary payload";
 
-function androidSpec(): ToolSpec {
+function androidSpec(source = ANDROID_SOURCE): ToolSpec {
   return {
     kind: "vendorManifest",
     vendor: "android",
-    source: ANDROID_SOURCE,
+    source,
     emulatedPlatforms: ["linux-arm64"],
   };
 }
 
+/**
+ * The `latest` body differs from every version-pinned body on purpose: it is the
+ * only way to prove each recorded digest was computed from the URL the lock
+ * records, rather than from the moving URL used to discover the version.
+ */
+function androidRoutes(
+  overrides: Record<string, () => Response> = {},
+): Record<string, () => Response> {
+  return {
+    [`${ANDROID_SOURCE}/linux_x86_64/android`]: text(DUMMY_LATEST_LINUX_BINARY),
+    [`${ANDROID_VERSION_BASE}/linux_x86_64/android`]: text(DUMMY_LINUX_BINARY),
+    [`${ANDROID_VERSION_BASE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
+    [`${ANDROID_VERSION_BASE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
+    ...overrides,
+  };
+}
+
 describe("resolveVendorManifest android", () => {
-  test("resolves latest android binaries and parses version", async () => {
-    stubRoutes({
-      [`${ANDROID_SOURCE}/linux_x86_64/android`]: text(DUMMY_LINUX_BINARY),
-      [`${ANDROID_SOURCE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
-      [`${ANDROID_SOURCE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
-    });
+  test("records version-pinned urls with digests from the version-pinned bodies", async () => {
+    stubRoutes(androidRoutes());
 
     const locked = await resolveVendorManifest("android", androidSpec());
 
-    expect(locked.version).toBe("1.0.15985488");
+    expect(locked.version).toBe(ANDROID_VERSION);
+    expect(locked.source).toBe(ANDROID_SOURCE);
     expect(locked.artifacts).toEqual({
       "linux-amd64": {
-        url: `${ANDROID_SOURCE}/linux_x86_64/android`,
+        url: `${ANDROID_VERSION_BASE}/linux_x86_64/android`,
         sha256: createHash("sha256").update(Buffer.from(DUMMY_LINUX_BINARY)).digest("hex"),
         size: Buffer.byteLength(DUMMY_LINUX_BINARY),
       },
       "linux-arm64": {
-        url: `${ANDROID_SOURCE}/linux_x86_64/android`,
+        url: `${ANDROID_VERSION_BASE}/linux_x86_64/android`,
         sha256: createHash("sha256").update(Buffer.from(DUMMY_LINUX_BINARY)).digest("hex"),
         size: Buffer.byteLength(DUMMY_LINUX_BINARY),
         emulated: true,
       },
       "darwin-amd64": {
-        url: `${ANDROID_SOURCE}/darwin_x86_64/android`,
+        url: `${ANDROID_VERSION_BASE}/darwin_x86_64/android`,
         sha256: createHash("sha256").update(Buffer.from(DUMMY_DARWIN_X64_BINARY)).digest("hex"),
         size: Buffer.byteLength(DUMMY_DARWIN_X64_BINARY),
       },
       "darwin-arm64": {
-        url: `${ANDROID_SOURCE}/darwin_arm64/android`,
+        url: `${ANDROID_VERSION_BASE}/darwin_arm64/android`,
         sha256: createHash("sha256").update(Buffer.from(DUMMY_DARWIN_ARM64_BINARY)).digest("hex"),
         size: Buffer.byteLength(DUMMY_DARWIN_ARM64_BINARY),
       },
     });
   });
 
+  test("reads latest only to discover the version", async () => {
+    const requests = stubRoutes(androidRoutes());
+
+    await resolveVendorManifest("android", androidSpec());
+
+    expect(requests).toContain(`${ANDROID_SOURCE}/linux_x86_64/android`);
+    expect(requests.filter((url) => url.startsWith(`${ANDROID_SOURCE}/`))).toEqual([
+      `${ANDROID_SOURCE}/linux_x86_64/android`,
+    ]);
+  });
+
   test("raises ResolutionError when binary cannot be fetched", async () => {
-    stubRoutes({
-      [`${ANDROID_SOURCE}/linux_x86_64/android`]: () => new Response("404", { status: 404 }),
-      [`${ANDROID_SOURCE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
-      [`${ANDROID_SOURCE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
-    });
+    stubRoutes(
+      androidRoutes({
+        [`${ANDROID_SOURCE}/linux_x86_64/android`]: () => new Response("404", { status: 404 }),
+      }),
+    );
 
     const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ResolutionError);
     expect((error as Error).message).toContain(ANDROID_SOURCE);
   });
 
+  test("raises ResolutionError when a version-pinned binary cannot be fetched", async () => {
+    stubRoutes(
+      androidRoutes({
+        [`${ANDROID_VERSION_BASE}/darwin_arm64/android`]: () =>
+          new Response("404", { status: 404 }),
+      }),
+    );
+
+    const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain(`${ANDROID_VERSION_BASE}/darwin_arm64/android`);
+  });
+
   test("raises ResolutionError when version cannot be extracted from binary", async () => {
-    stubRoutes({
-      [`${ANDROID_SOURCE}/linux_x86_64/android`]: text("corrupted binary without version string"),
-      [`${ANDROID_SOURCE}/darwin_arm64/android`]: text(DUMMY_DARWIN_ARM64_BINARY),
-      [`${ANDROID_SOURCE}/darwin_x86_64/android`]: text(DUMMY_DARWIN_X64_BINARY),
-    });
+    stubRoutes(
+      androidRoutes({
+        [`${ANDROID_SOURCE}/linux_x86_64/android`]: text("corrupted binary without version string"),
+      }),
+    );
 
     const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ResolutionError);
     expect((error as Error).message).toContain("could not extract version");
+  });
+
+  test("raises ResolutionError when the extracted version is not a version segment", async () => {
+    stubRoutes(
+      androidRoutes({
+        [`${ANDROID_SOURCE}/linux_x86_64/android`]: text("android launcher binary version=.. data"),
+      }),
+    );
+
+    const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain("invalid version");
+  });
+
+  test("raises ResolutionError when the source does not end in /latest", async () => {
+    stubRoutes(androidRoutes());
+
+    const error = await resolveVendorManifest(
+      "android",
+      androidSpec("https://dl.google.com/android/cli"),
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain("/latest");
   });
 });

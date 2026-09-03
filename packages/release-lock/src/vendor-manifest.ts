@@ -319,23 +319,41 @@ async function fetchBinary(
   return { buffer, sha256, size: buffer.length };
 }
 
+const ANDROID_VERSION_SEGMENT = /^[0-9]+(?:\.[0-9]+)*$/;
+
+/**
+ * `latest` is served with `max-age=0` over bytes that change under a stable URL,
+ * so a lock that recorded it left every chezmoi HTTP cache holding a superseded
+ * body permanently mismatched against the digest beside it. The moving URL is
+ * therefore read only to discover the version; every recorded URL and digest
+ * comes from the immutable per-version path.
+ */
 async function resolveAndroidCli(name: string, spec: ToolSpec): Promise<LockedTool> {
   const base = spec.source.replace(/\/+$/, "");
-  const linuxUrl = `${base}/linux_x86_64/android`;
-  const darwinArm64Url = `${base}/darwin_arm64/android`;
-  const darwinX64Url = `${base}/darwin_x86_64/android`;
+  if (!base.endsWith("/latest")) {
+    throw new ResolutionError(spec.source, `${name}: source must end in /latest`);
+  }
+
+  const latestLinux = await fetchBinary(spec.source, `${base}/linux_x86_64/android`);
+  const match = latestLinux.buffer.toString("latin1").match(/version=([0-9.]+)/);
+  if (!match || !match[1]) {
+    throw new ResolutionError(spec.source, `${name}: could not extract version from binary`);
+  }
+  const version = match[1];
+  if (!ANDROID_VERSION_SEGMENT.test(version)) {
+    throw new ResolutionError(spec.source, `${name}: invalid version segment "${version}"`);
+  }
+
+  const versionBase = base.replace(/\/latest$/, `/${version}`);
+  const linuxUrl = `${versionBase}/linux_x86_64/android`;
+  const darwinArm64Url = `${versionBase}/darwin_arm64/android`;
+  const darwinX64Url = `${versionBase}/darwin_x86_64/android`;
 
   const [linuxBinary, darwinArm64Binary, darwinX64Binary] = await Promise.all([
     fetchBinary(spec.source, linuxUrl),
     fetchBinary(spec.source, darwinArm64Url),
     fetchBinary(spec.source, darwinX64Url),
   ]);
-
-  const match = linuxBinary.buffer.toString("latin1").match(/version=([0-9.]+)/);
-  if (!match || !match[1]) {
-    throw new ResolutionError(spec.source, `${name}: could not extract version from binary`);
-  }
-  const version = match[1];
 
   return {
     kind: spec.kind,
