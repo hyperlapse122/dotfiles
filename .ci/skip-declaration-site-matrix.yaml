@@ -315,7 +315,7 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#sudo-elevation-guard/no-elevation-path'
-      - '.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'
     template: '.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl'

@@ -199,7 +199,9 @@ if [[ "$(read_target)" != "$live_snapshot" ]]; then
   exit 0
 fi
 
-mv -f "$tmp" "$SETTINGS"
+cat "$tmp" > "$SETTINGS"
+chmod 0600 "$SETTINGS"
+rm -f "$tmp"
 tmp=''
 if command -v restorecon >/dev/null 2>&1; then
   restorecon -F "$SETTINGS" 2>/dev/null || true

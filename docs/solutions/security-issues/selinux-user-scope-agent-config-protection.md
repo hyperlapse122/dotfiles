@@ -268,6 +268,22 @@ The sweep can only LOWER a label. It selects paths that ALREADY carry a protecte
 
 The caches themselves are refetchable, so dropping them is the faster route for a host that has one of them stranded — but only a domain with `unlink` on the protected type can do it. Inside a Claude Code session (`claude_t`) `rm -rf ~/.claude/plugins/cache ~/.bun/install/cache` succeeds; from a login shell it does not.
 
+## The sixth surprise: phase ordering, root restorecon, aoe confinement, and background AVCs (2026-09-03)
+
+As agent confinement matured, four operational and policy defects emerged across chezmoi runs, daily tooling, and system jobs:
+
+1. **Phase Ordering**: The SELinux policy script resided in `.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl`. Scripts in `20-base` and `30-components` ran before policy installation, causing early scripts to execute under stale policy rules or fail unconfined.
+   - *Fix*: Relocated policy installation to phase `00-tools` (`.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl`) so policy compilation, installation, and entrypoint relabelling happen before all downstream provisioning.
+2. **System Chezmoi Entrypoints**: `/usr/bin/chezmoi` and `/usr/local/bin/chezmoi` are owned by root. Relabelling them as `chezmoi_exec_t` failed silently without root elevation, causing chezmoi to run as `bin_t` / `unconfined_t`.
+   - *Fix*: Relabel system chezmoi binaries using root elevation (`"${SUDO[@]}" restorecon -Fv ...`).
+3. **AOE Session Management & Lockfiles**: `aoe` runs outside Claude Code to orchestrate sessions, updating `~/.claude/settings.json` and creating `~/.claude/settings.json.lock`. Running as `unconfined_t`, writes were denied by the `claude_config_t` boundary.
+   - *Fix*: Defined `aoe_t` and `aoe_exec_t`, transitioned from `unconfined_domain_type`, granting full management permissions over `claude_config_t` only, while forbidding access to `gemini_config_t` and `protected_agent_config_t`.
+4. **Settings In-Place Assertion & File Transitions**: `run_after_config-claude-settings.sh.tmpl` used `mv -f "$tmp" "$SETTINGS"`, swapping the inode with a temporary file that lost `claude_config_t` to `user_home_t`.
+   - *Fix*: Overwrite `$SETTINGS` in-place via `cat "$tmp" > "$SETTINGS"`, and add named file transitions `(typetransition dotfiles_agent_domain user_home_t file "settings.json" claude_config_t)` and for `"settings.json.lock"`.
+5. **Background Tool AVCs (`pasta` and `locate`)**:
+   - `pasta` (Podman rootless networking) inherits an open file descriptor to `/dev/dri/renderD128` (`dri_device_t`), generating spurious denials: suppressed via `(dontaudit pasta_t dri_device_t (chr_file (read write)))`.
+   - `plocate-updatedb` / `mlocate-updatedb` traverses `/home` for search indexing: granted read, getattr, and search access across `protected_agent_config_type` without write permissions.
+
 ## Prevention
 
 - **Never protect package manager caches**: Package caches (like `node_modules` in plugin directories) use hardlinks into machine-wide caches. Placing a cache under a protected SELinux type leaks that type onto shared inodes during `restorecon`.
@@ -276,6 +292,7 @@ The caches themselves are refetchable, so dropping them is the faster route for 
 - **Ship the repair with the narrowing**: A `filecon` change never moves an existing label. Plan a reclaim sweep run by the one domain that holds `relabelfrom` on the protected types, because no login shell and no `sudo` can clear a stale protected label.
 - **Never add a protected config type to `file_type`**: Doing so silently removes confinement because `unconfined_t` can write all `file_type` objects.
 - **Maintain upgrade-durability named transitions**: When entrypoint binaries reside in versioned paths, named file transitions (`typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t`) ensure newly installed binaries inherit the entrypoint type at creation time before `restorecon` runs.
+- **Install SELinux policies in phase `00-tools`**: Early compilation ensures base system and component provisioning execute under active policy rules.
 - **Verify policy compilation and boundaries in CI**: `.ci/test-selinux-protected-configs.sh` asserts the absence of whole-tree `filecon` and `restorecon` entries, compiles CIL modules with `secilc`, and tests the write matrix with `setools`.
 
 ## Related Issues
@@ -283,4 +300,6 @@ The caches themselves are refetchable, so dropping them is the faster route for 
 - Plan: `docs/plans/2026-08-31-1258-feat-selinux-protected-agent-configs-plan.md`
 - Plan: `docs/plans/2026-09-02-1124-feat-manage-claude-antigravity-harnesses-selinux-protection-plan.md`
 - Plan: `docs/plans/2026-09-02-1637-fix-selinux-narrow-protected-agent-configs-plan.md`
+- Plan: `docs/plans/2026-09-03-2315-fix-selinux-early-install-avc-fixes-plan.md`
 - Issue: https://github.com/hyperlapse122/dotfiles/issues/338
+- Issue: https://github.com/hyperlapse122/dotfiles/issues/374

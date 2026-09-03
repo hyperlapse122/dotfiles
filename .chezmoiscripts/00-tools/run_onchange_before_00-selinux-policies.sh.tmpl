@@ -32,6 +32,16 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
 
       if command -v restorecon >/dev/null 2>&1; then
         printf 'selinux-policies: relabeling protected paths...\n'
+        # Relabel system chezmoi entrypoints so subsequent chezmoi subprocesses
+        # run in chezmoi_t rather than bin_t.
+        system_chezmoi_binaries=()
+        for bin in /usr/bin/chezmoi /usr/local/bin/chezmoi; do
+          [[ -e "$bin" ]] && system_chezmoi_binaries+=("$bin")
+        done
+        if [[ ${#system_chezmoi_binaries[@]} -gt 0 ]]; then
+          "${SUDO[@]}" restorecon -Fv "${system_chezmoi_binaries[@]}" 2>/dev/null || true
+        fi
+
         # Every filecon root the module declares, plus the entrypoint stores.
         # Only explicit config files, skill roots, and plugin state are relabelled.
         # Whole harness homes ($HOME/.claude, $HOME/.gemini) are deliberately NOT
@@ -44,6 +54,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           "$HOME/.claude.json"* \
           "$HOME/.mcp.json" \
           "$HOME/.claude/settings.json" \
+          "$HOME/.claude/settings.json.lock" \
           "$HOME/.claude/skills" \
           "$HOME/.claude/plugins/installed_plugins.json" \
           "$HOME/.claude/plugins/known_marketplaces.json" \
@@ -53,8 +64,10 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           "$HOME/.local/bin/chezmoi" \
           "$HOME/.local/bin/claude" \
           "$HOME/.local/bin/agy" \
+          "$HOME/.local/bin/aoe" \
           "$HOME/.local/lib/commands/store/claude" \
           "$HOME/.local/lib/commands/store/agy" \
+          "$HOME/.local/lib/commands/store/aoe" \
           2>/dev/null || true
 
         # LEGACY LABEL RECLAIM. An earlier revision of this module claimed the
@@ -102,14 +115,14 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
       while read -r pid; do
         [[ -r "/proc/$pid/attr/current" ]] || continue
         case "$(tr -d '\0' <"/proc/$pid/attr/current")" in
-        *:claude_t:* | *:agy_t:* | *:chezmoi_t:*) ;;
+        *:claude_t:* | *:agy_t:* | *:aoe_t:* | *:chezmoi_t:*) ;;
         *) stale+=("$pid") ;;
         esac
-      done < <(pgrep -x -u "$(id -u)" 'claude|agy' 2>/dev/null || true)
+      done < <(pgrep -x -u "$(id -u)" 'claude|agy|aoe' 2>/dev/null || true)
 
       if [[ ${#stale[@]} -gt 0 ]]; then
         printf 'selinux-policies: WARNING %s\n' \
-          'Restart any claude/agy process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
+          'Restart any claude/agy/aoe process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
         for pid in "${stale[@]}"; do
           # ps pads lstart to a fixed width under LC_ALL=C but not under every
           # locale, so trim rather than relying on a leading space in the format.
@@ -120,7 +133,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
         done
       else
         printf 'selinux-policies: %s\n' \
-          'policy reinstalled; no claude/agy process is left in a stale domain. Restart any agent session started earlier if one appears later.'
+          'policy reinstalled; no claude/agy/aoe process is left in a stale domain. Restart any agent session started earlier if one appears later.'
       fi
     fi
   fi
