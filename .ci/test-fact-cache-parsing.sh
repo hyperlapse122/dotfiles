@@ -60,13 +60,15 @@ render() {
   )
 }
 
-# The map is emitted with toYaml, which serializes the empty string as `""`.
-# Consumers read it back through fromYaml and see a real empty string, so the
-# quoted form is normalized here rather than asserted on.
+# The map is emitted with toYaml, which quotes a string only when it would
+# otherwise parse as something else — the empty string, and a numeric-looking id
+# such as `2704`. Consumers read the map back through fromYaml and see a plain
+# string either way, so the quoting is normalized here rather than asserted on.
 assert_fact() {
   local rendered=$1 name=$2 want=$3 context=$4 got
   got=$(printf '%s\n' "$rendered" | sed -n "s/^${name}: //p")
-  [[ "$got" == '""' ]] && got=''
+  got=${got#\"}
+  got=${got%\"}
   [[ "$got" == "$want" ]] ||
     fail "$context: expected ${name}=${want:-<empty>}, rendered ${name}=${got:-<empty>}"
 }
@@ -93,7 +95,7 @@ assert_fact "$out" nvidia false 'malformed boolean defaults its own fact'
 assert_fact "$out" headless false 'malformed boolean leaves its neighbours alone'
 
 # --- 4. A string-valued hook fact round-trips through the cache.
-printf 'nvidia: true\nvm: false\nvirt: false\nheadless: false\nciFixtureString: pascal\n' >"$cache_file"
+printf 'nvidia: true\nvm: false\nvirt: false\nheadless: false\nciFixtureString: "pascal"\n' >"$cache_file"
 out=$(render) || fail 'render failed on a cache carrying a string fact'
 assert_fact "$out" ciFixtureString pascal 'string hook fact'
 assert_fact "$out" nvidia true 'string hook fact leaves booleans alone'
@@ -112,5 +114,32 @@ assert_fact "$out" ciFixtureString '' 'absent cache'
 printf '# generated\n# do not edit\n' >"$cache_file"
 out=$(render) || fail 'render failed on a comments-only cache'
 assert_fact "$out" headless true 'comments-only cache'
+
+# --- 7. gpuArch maps a listed device id through nvidia.deviceArchitectures.
+listed_id=$(sed -n 's/^ *"\([0-9a-f]\{4\}\)": *[a-z].*/\1/p' \
+  "$repo_root/.chezmoidata/nvidia.yaml" | head -1)
+[[ -n "$listed_id" ]] || fail 'no device id is listed in .chezmoidata/nvidia.yaml'
+listed_arch=$(sed -n "s/^ *\"${listed_id}\": *\([a-z][a-z0-9]*\).*/\1/p" \
+  "$repo_root/.chezmoidata/nvidia.yaml" | head -1)
+printf 'nvidia: true\ngpuDeviceId: "%s"\nvm: false\nvirt: false\nheadless: false\n' \
+  "$listed_id" >"$cache_file"
+out=$(render) || fail 'render failed on a listed device id'
+assert_fact "$out" gpuArch "$listed_arch" 'listed device id'
+
+# --- 8. An UNLISTED id resolves gpuArch empty but PRESERVES the id, which the
+#        installer needs in order to name the device in its declared skip. An
+#        all-digit id is the regression this guards: written unquoted it parses
+#        out of YAML as a number, fails the string type check, and the identity
+#        is lost exactly when it is needed.
+printf 'nvidia: true\ngpuDeviceId: "2704"\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
+out=$(render) || fail 'render failed on an unlisted all-digit device id'
+assert_fact "$out" gpuArch '' 'unlisted all-digit id resolves no architecture'
+assert_fact "$out" gpuDeviceId 2704 'unlisted all-digit id is preserved'
+
+# --- 9. No NVIDIA display device: both facts empty, every gated path skips.
+printf 'nvidia: false\ngpuDeviceId: ""\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
+out=$(render) || fail 'render failed with no NVIDIA device'
+assert_fact "$out" gpuArch '' 'no NVIDIA device'
+assert_fact "$out" gpuDeviceId '' 'no NVIDIA device'
 
 printf 'fact-cache-parsing: OK\n'

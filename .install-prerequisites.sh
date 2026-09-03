@@ -210,16 +210,22 @@ fact_bool() {
 
 # A STRING-valued fact. The probe prints its value on stdout; anything outside the
 # charset facts-sh.tmpl allows through to an unquoted shell assignment is dropped
-# to the empty string, which is the skip value every string fact declares. Empty
-# is written as `""` so the reader's per-line filter can tell it from a truncated
-# line. A probe that fails, prints nothing, or prints a value with a space, a
-# newline, or a shell metacharacter therefore skips what it gates instead of
-# leaking an unquotable token into every consumer.
+# to the empty string, which is the skip value every string fact declares. A probe
+# that fails, prints nothing, or prints a value with a space, a newline, or a shell
+# metacharacter therefore skips what it gates instead of leaking an unquotable
+# token into every consumer.
+#
+# THE VALUE IS ALWAYS QUOTED. An all-digit id such as a PCI device `2704` parses
+# out of YAML as a NUMBER when written bare, the reader's string type check then
+# rejects it, and the fact silently takes its empty default -- losing exactly the
+# identity the installer needs in order to name what it skipped. Quoting makes
+# every string fact round-trip as a string, and makes the empty value the same
+# shape as any other.
 fact_string() {
   local value=''
   value="$("$@" 2>/dev/null)" || value=''
   if [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    printf '%s' "$value"
+    printf '"%s"' "$value"
   else
     printf '""'
   fi
@@ -232,6 +238,32 @@ fact_string() {
 # and the fact is false.
 fact_nvidia() {
   grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null
+}
+
+# The PCI device id of the host's NVIDIA DISPLAY device, four hex digits with no
+# 0x prefix (a Quadro P520 prints `1d34`). This is raw hardware identity and
+# nothing else: the mapping from an id to an architecture, and from an
+# architecture to a driver branch, is data in .chezmoidata/nvidia.yaml. The walk
+# lives here because /sys/bus/pci/devices/* is a directory of SYMLINKS and the
+# template layer's `glob` does not traverse them.
+#
+# Class-filtered to 0x03* (display controllers), so an NVIDIA audio function or
+# USB-C controller on the same card cannot be mistaken for the GPU. The first
+# match wins; a host with two NVIDIA display devices of different architectures
+# is out of scope and would need its own axis.
+fact_gpu_device_id() {
+  local dev vendor class id
+  for dev in /sys/bus/pci/devices/*/; do
+    [[ -r "$dev/vendor" && -r "$dev/class" && -r "$dev/device" ]] || continue
+    read -r vendor <"$dev/vendor" 2>/dev/null || continue
+    [[ "$vendor" == '0x10de' ]] || continue
+    read -r class <"$dev/class" 2>/dev/null || continue
+    [[ "$class" == 0x03* ]] || continue
+    read -r id <"$dev/device" 2>/dev/null || continue
+    printf '%s' "${id#0x}"
+    return 0
+  done
+  return 1
 }
 
 # Headless / server install. Mirrors .chezmoitemplates/headless-guard.sh.tmpl
@@ -294,6 +326,7 @@ write_facts_cache() {
     printf '# Do NOT edit — every value here is a probe result, not a setting.\n'
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
+    printf 'gpuDeviceId: %s\n'  "$(fact_string fact_gpu_device_id)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
   } >"$tmp_file" || {
@@ -318,18 +351,18 @@ write_facts_cache() {
   local line
   while IFS= read -r line; do
     [[ "$line" == '#'* || -z "$line" ]] && continue
-    [[ "$line" =~ ^[A-Za-z][A-Za-z0-9]*:\ (true|false|\"\"|[A-Za-z0-9._-]+)$ ]] && continue
+    [[ "$line" =~ ^[A-Za-z][A-Za-z0-9]*:\ (true|false|\"[A-Za-z0-9._-]*\")$ ]] && continue
     bad_facts+=("${line%%:*}")
   done <"$tmp_file"
   if ((${#bad_facts[@]} > 0)); then
     printf 'install-prerequisites.sh: dropped %d malformed fact line(s) from the cache: %s\n' \
       "${#bad_facts[@]}" "${bad_facts[*]}" >&2
     printf 'install-prerequisites.sh: those facts take their declared fail-safe defaults this run; this is a defect in write_facts_cache, not in the host.\n' >&2
-    grep -vxE '[A-Za-z][A-Za-z0-9]*: (true|false|""|[A-Za-z0-9._-]+)' "$tmp_file" >/dev/null 2>&1 && {
+    grep -vxE '[A-Za-z][A-Za-z0-9]*: (true|false|"[A-Za-z0-9._-]*")' "$tmp_file" >/dev/null 2>&1 && {
       local kept_file
       kept_file="$(mktemp "$cache_file.XXXXXX" 2>/dev/null)" || kept_file=''
       if [[ -n "$kept_file" ]]; then
-        grep -xE '(#.*|[A-Za-z][A-Za-z0-9]*: (true|false|""|[A-Za-z0-9._-]+))' "$tmp_file" >"$kept_file" 2>/dev/null || true
+        grep -xE '(#.*|[A-Za-z][A-Za-z0-9]*: (true|false|"[A-Za-z0-9._-]*"))' "$tmp_file" >"$kept_file" 2>/dev/null || true
         mv -f "$kept_file" "$tmp_file" 2>/dev/null || rm -f "$kept_file" 2>/dev/null || true
       fi
     }

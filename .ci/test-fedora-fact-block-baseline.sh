@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Prove the standard Fedora x86_64 render stays byte-for-byte at its pre-Jetson
-# baseline once two GENERATED blocks are removed: the facts-sh assignment group,
-# which new host facts legitimately grow, and the shared-host guard, which the
-# three system installers share with Ubuntu. No other rendered control flow may
+# baseline once three GENERATED blocks are removed: the facts-sh assignment group
+# and the fact_gate dispatch arms, both of which new host facts legitimately grow,
+# and the shared-host guard, which the three system installers share with Ubuntu. No other rendered control flow may
 # drift, and the guard must render INERT here (R22).
 set -euo pipefail
 
@@ -34,6 +34,8 @@ os: linux
 distro: fedora
 desktop: none
 nvidia: false
+gpuDeviceId: ""
+gpuArch: ""
 thinkpad: false
 jetson: false
 vm: false
@@ -95,6 +97,20 @@ normalized = cut(
   "shared-host guard",
   null,
 );
+// facts-gate.sh.tmpl renders ONE `case` arm per registry fact into fact_gate(),
+// so the dispatch table grows with the registry exactly the way the facts-sh
+// assignment group does. It sits inside the hashed region, so without this cut a
+// single new fact fails eleven baselines with "changed outside the two generated
+// blocks" — pointing at a script nobody touched, and at a block that is in fact
+// generated. The marker keeps the `*)` guard arm visible, because THAT arm is
+// hand-written control flow this gate is meant to watch.
+normalized = cut(
+  normalized,
+  "    want=1\n  fi\n  case \"$name\" in\n",
+  "    *)\n",
+  "fact-gate dispatch arms",
+  "    want=1\n  fi\n  case \"$name\" in\n# <GENERATED FACT GATE ARMS>\n    *)",
+);
 fs.writeFileSync(output, normalized.replaceAll(sourceRoot, "<SOURCE_ROOT>"));
 NODE
 }
@@ -115,11 +131,11 @@ NODE
 # three renderings.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=7b328fe4c8547ad653d6d885e68d4ac959edce4f13828ecfd62a388d7b998cf9
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=614c17f15f4ab50923e22631ea538072084966ff925fff5df2a4a591e18e2b4f
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=d4372a03ccca1cf620e20906e4ac04f2265055ba67b69e586f96e60dfa860a14
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=5e054c7bb0099089a34704bdd6e0959145b8e974d35e5aec7be6b538ae486b05
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=5e086c571eb1f11394e659ac699cfcdf8e4ee162ca468482620c650b45c100f5
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=c584788d3e946555e6433fc7f50f5a6070bec46b3b5e7f9549fc046a8d096441
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=9c7d110090e280f016d000e0eff803ace5be36a4430f5b8b855f04616d7b2251
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc
@@ -138,8 +154,12 @@ for template in "${!baseline_hashes[@]}"; do
   without_facts "$rendered" "$normalized" "$fixture_root"
   actual=$(sha256sum "$normalized" | cut -d ' ' -f1)
   expected=${baseline_hashes[$template]}
+  if [[ -n "${BASELINE_REPRINT:-}" ]]; then
+    printf '  [%s]=%s\n' "$template" "$actual"
+    continue
+  fi
   [[ "$actual" == "$expected" ]] || fail \
-    "$template changed outside the two generated blocks (expected $expected, got $actual)"
+    "$template changed outside the three generated blocks (expected $expected, got $actual)"
 done
 
 network_render="$scratch/run_onchange_after_install-system-30-network.sh"

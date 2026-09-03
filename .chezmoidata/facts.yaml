@@ -170,6 +170,50 @@ factRegistry:
       No driver, no CUDA repo, no container toolkit, no MOK enrollment. On a host
       whose GPU sits behind a PCIe bridge the hook's grep still finds it, where a
       template-only glob would not — that is why this one stays a hook probe.
+      COEXISTS WITH gpuArch, deliberately, and is NOT superseded by it. This fact
+      still decides whether .chezmoiscripts/30-components/10-nvidia.sh is deployed
+      at all (the root .chezmoiignore gates on it); gpuArch decides what that
+      script then does. Gating deployment on gpuArch instead would un-deploy the
+      very script that must declare the unlisted-device skip, and that skip is the
+      only thing standing between an unlisted GPU and a silently driverless host.
+  gpuDeviceId:
+    type: string
+    probe: hook
+    absentDefault: ""
+    source: >-
+      The PCI device id of the host's NVIDIA DISPLAY device, four hex digits with no
+      0x prefix (a Quadro P520 gives 1d34). Class-filtered to 0x03* so an NVIDIA audio
+      or USB-C function on the same card is not mistaken for the GPU. Raw hardware
+      identity only — every policy statement about it is data in .chezmoidata/nvidia.yaml.
+      Hook-probed because /sys/bus/pci/devices/* is a directory of symlinks and `glob`
+      does not traverse them.
+    gates: >-
+      Nothing directly. It is the input gpuArch maps through the declared device table;
+      no gate expression should name it, because an id is hardware trivia and a branch
+      decision is policy.
+    whenFalse: >-
+      Empty — no NVIDIA display device, or the walk could not read sysfs. gpuArch then
+      resolves empty too and every NVIDIA-gated path skips.
+  gpuArch:
+    type: string
+    probe: template
+    values: ["", pascal]
+    source: >-
+      gpuDeviceId looked up in nvidia.deviceArchitectures (.chezmoidata/nvidia.yaml).
+      An id the table does not list resolves to the EMPTY STRING, and so does an absent
+      cache. Extend `values:` only when a genuinely new architecture appears; adding a
+      device id to an architecture that already exists is a data row and needs no
+      registry edit.
+    gates: >-
+      Which driver branch the Fedora NVIDIA installer selects — its package set, its
+      repository and exclusion policy, its module-signing certificate, and whether
+      nvidia-persistenced is enabled. Written as `gpuArch.pascal` in a gate expression.
+    whenFalse: >-
+      Empty. Every NVIDIA-gated path inside the installer skips, and the installer
+      declares that skip naming the unmatched device id so the operator can add a
+      table row. The empty string is the skip value on purpose: a consumer that tests
+      the fact for plain truthiness skips rather than installs, where a non-empty
+      sentinel such as `none` would be TRUE in a Go template and install everywhere.
   thinkpad:
     type: bool
     probe: template

@@ -77,18 +77,14 @@ Three rules hold this file together:
 {{- /* SHAPE-CHECK THE RAW TEXT BEFORE fromYaml. `fromYaml` raises a TEMPLATE ERROR on
    malformed YAML, and a Go template has no recover — so a truncated or corrupt cache
    would abort the render of the root .chezmoiignore and take the whole tool down, not
-   fall through to the defaults below. The `kindIs "map"` guard that used to sit here
-   was dead code: fromYaml errors first, it never runs.
+   fall through to the defaults below.
 
-   The hook writes exactly one shape — comment lines, then `<name>: true|false` — so
-   match that and parse nothing else. Anything unexpected is treated as no cache at
-   all, which is the documented (and now actually reachable) fail-safe path. */ -}}
+   Carriage returns are stripped before the check: the cache may be written with CRLF
+   line endings, which fromYaml parses fine but an LF-only match would reject, leaving
+   every hook fact on its default forever. */ -}}
 {{- $cached := dict -}}
 {{- if stat $cachePath -}}
 {{-   $raw := include $cachePath -}}
-{{- /* `\r?` is load-bearing: the cache may be written with CRLF line endings.
-   `fromYaml` parses that fine — but an LF-only shape check silently rejects it,
-   and every hook fact would fall back to its default forever. */ -}}
 {{- /* PER LINE, NOT PER FILE. A whole-file shape check made one bad line void
    EVERY fact, and `headless` and `virt` carry an inverted absentDefault of true —
    so a single unparseable line skipped the entire /etc install set and the
@@ -98,14 +94,18 @@ Three rules hold this file together:
    a writer defect still cannot hide; this filter is the reader's own defence
    against a truncated or hand-edited cache.
 
-   The accepted value shapes are exactly what write_facts_cache emits: a boolean,
-   or a string restricted to the same charset facts-sh.tmpl allows through to an
-   unquoted shell assignment, with `""` for the empty string. Anything else is
-   dropped rather than handed to fromYaml, which would raise a render-aborting
-   template error. */ -}}
+   The accepted value shapes are exactly what write_facts_cache emits: a bare
+   boolean, or a QUOTED string restricted to the same charset facts-sh.tmpl allows
+   through to an unquoted shell assignment. Anything else is dropped rather than
+   handed to fromYaml, which would raise a render-aborting template error.
+
+   The quotes on string values are not cosmetic. An all-digit value such as a PCI
+   device id `2704` parses out of bare YAML as a NUMBER, the string type check
+   below then rejects it, and the fact takes its empty default — losing the very
+   identity the NVIDIA installer needs in order to name the device it skipped. */ -}}
 {{-   $keep := list -}}
 {{-   range $line := splitList "\n" (replace "\r" "" $raw) -}}
-{{-     if regexMatch "^[A-Za-z][A-Za-z0-9]*: (true|false|\"\"|[A-Za-z0-9._-]+)$" $line -}}
+{{-     if regexMatch "^[A-Za-z][A-Za-z0-9]*: (true|false|\"[A-Za-z0-9._-]*\")$" $line -}}
 {{-       $keep = append $keep $line -}}
 {{-     end -}}
 {{-   end -}}
@@ -225,6 +225,28 @@ Three rules hold this file together:
 {{-   end -}}
 {{- end -}}
 {{- $_ := set $facts "thinkpad" $thinkpad -}}
+
+{{- /* gpuArch — the hook reported a raw PCI device id; the ARCHITECTURE it belongs
+   to is policy, so it comes from .chezmoidata/nvidia.yaml rather than from the
+   probe. An id the table does not list resolves to the empty string, which is the
+   value that skips every NVIDIA-gated path — and the installer, which stays
+   deployed because the root .chezmoiignore gates on the vendor fact rather than on
+   this one, declares that skip naming the unmatched id.
+
+   The empty string is load-bearing as the skip value. A non-empty sentinel like
+   the `desktop` fact's `none` would be TRUE in every Go-template truthiness test
+   and would install the stack on hosts it cannot drive. */ -}}
+{{- $gpuArch := "" -}}
+{{- $gpuDeviceId := index $facts "gpuDeviceId" -}}
+{{- if and (kindIs "string" $gpuDeviceId) (ne $gpuDeviceId "") -}}
+{{-   if and .nvidia (hasKey .nvidia "deviceArchitectures") -}}
+{{-     $mapped := index .nvidia.deviceArchitectures $gpuDeviceId -}}
+{{-     if kindIs "string" $mapped -}}
+{{-       $gpuArch = $mapped -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "gpuArch" $gpuArch -}}
 
 {{- /* jetson — /etc/nv_tegra_release, the L4T release stamp apply_binaries.sh
    copies into every flashed rootfs and the file NVIDIA's own BSP documentation

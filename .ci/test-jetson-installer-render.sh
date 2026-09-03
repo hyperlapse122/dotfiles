@@ -34,6 +34,8 @@ os: linux
 distro: ubuntu
 desktop: gnome
 nvidia: false
+gpuDeviceId: ""
+gpuArch: ""
 thinkpad: false
 jetson: ${jetson}
 vm: false
