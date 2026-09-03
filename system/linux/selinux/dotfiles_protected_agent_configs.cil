@@ -87,21 +87,25 @@
 (type chezmoi_t)
 (type claude_t)
 (type agy_t)
+(type aoe_t)
 (roletype unconfined_r chezmoi_t)
 (roletype unconfined_r claude_t)
 (roletype unconfined_r agy_t)
+(roletype unconfined_r aoe_t)
 
 (type chezmoi_exec_t)
 (type claude_exec_t)
 (type agy_exec_t)
+(type aoe_exec_t)
 (roletype object_r chezmoi_exec_t)
 (roletype object_r claude_exec_t)
 (roletype object_r agy_exec_t)
+(roletype object_r aoe_exec_t)
 
 (typeattribute dotfiles_agent_domain)
-(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t))
+(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t aoe_t))
 (typeattribute dotfiles_agent_exec)
-(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t))
+(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t aoe_exec_t))
 (typeattributeset file_type (dotfiles_agent_exec))
 (typeattributeset exec_type (dotfiles_agent_exec))
 
@@ -109,6 +113,7 @@
 (typetransition unconfined_domain_type chezmoi_exec_t process chezmoi_t)
 (typetransition unconfined_domain_type claude_exec_t process claude_t)
 (typetransition unconfined_domain_type agy_exec_t process agy_t)
+(typetransition unconfined_domain_type aoe_exec_t process aoe_t)
 
 ; Execute the entrypoint and enter the domain. execute_no_trans keeps a launcher
 ; this module never transitioned from failing open — it runs the binary in its
@@ -120,6 +125,7 @@
 (allow chezmoi_t chezmoi_exec_t (file (entrypoint read getattr execute open map)))
 (allow claude_t claude_exec_t (file (entrypoint read getattr execute open map)))
 (allow agy_t agy_exec_t (file (entrypoint read getattr execute open map)))
+(allow aoe_t aoe_exec_t (file (entrypoint read getattr execute open map)))
 
 ; --- Process inheritance and lifecycle --------------------------------------
 (allow dotfiles_agent_domain unconfined_t (process (sigchld signull sigkill signal)))
@@ -201,6 +207,11 @@
 (allow claude_t claude_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
 (allow claude_t claude_config_t (lnk_file (create read getattr setattr unlink rename)))
 
+; aoe manages Claude Code configuration (session hooks, settings.json, settings.json.lock).
+(allow aoe_t claude_config_t (file (create read write getattr setattr unlink rename open append lock map ioctl link execute execute_no_trans watch watch_reads)))
+(allow aoe_t claude_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
+(allow aoe_t claude_config_t (lnk_file (create read getattr setattr unlink rename)))
+
 ; Antigravity manages its own configuration and nothing else's.
 (allow agy_t gemini_config_t (file (create read write getattr setattr unlink rename open append lock map ioctl link execute execute_no_trans watch watch_reads)))
 (allow agy_t gemini_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
@@ -211,6 +222,14 @@
 (allow unconfined_domain_type protected_agent_config_type (file (read getattr open map ioctl lock execute execute_no_trans watch watch_reads)))
 (allow unconfined_domain_type protected_agent_config_type (dir (read getattr open search ioctl lock watch watch_reads)))
 (allow unconfined_domain_type protected_agent_config_type (lnk_file (read getattr)))
+
+; plocate-updatedb / mlocate-updatedb traverses and indexes protected configs without mutation.
+(allow locate_t protected_agent_config_type (dir (open read getattr search)))
+(allow locate_t protected_agent_config_type (file (open read getattr)))
+(allow locate_t protected_agent_config_type (lnk_file (read getattr)))
+
+; pasta rootless container networking inherits an unused open descriptor to the DRI render node.
+(dontaudit pasta_t dri_device_t (chr_file (read write)))
 
 ; The filesystem association file_type used to confer, reproduced verbatim for
 ; types that deliberately carry no attribute. Without this, no label can be set:
@@ -225,6 +244,8 @@
 ; for the next restorecon.
 (typetransition claude_t user_home_t file ".claude.json" claude_config_t)
 (typetransition claude_t user_home_t file ".mcp.json" claude_config_t)
+(typetransition dotfiles_agent_domain user_home_t file "settings.json" claude_config_t)
+(typetransition dotfiles_agent_domain user_home_t file "settings.json.lock" claude_config_t)
 
 ; The same durability problem on the other side: the command store keys its
 ; directory by version, so an upgrade writes the binary into a directory that
@@ -238,6 +259,7 @@
 ; elsewhere.
 (typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t)
 (typetransition chezmoi_t gconf_home_t file "agy" agy_exec_t)
+(typetransition chezmoi_t gconf_home_t file "aoe" aoe_exec_t)
 
 ; --- File Context Specifications (filecon) ----------------------------------
 ; Neutral, chezmoi-only: no harness rewrites these during ordinary use.
@@ -254,6 +276,7 @@
 (filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r claude_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.mcp\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.claude/settings\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.claude/settings\.json\.lock" file (unconfined_u object_r claude_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.claude/skills" symlink (unconfined_u object_r claude_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.claude/plugins/installed_plugins\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.claude/plugins/known_marketplaces\.json" file (unconfined_u object_r claude_config_t ((s0)(s0))))
@@ -272,3 +295,5 @@
 (filecon "HOME_DIR/\.local/bin/claude" file (unconfined_u object_r claude_exec_t ((s0)(s0))))
 (filecon "HOME_DIR/\.local/lib/commands/store/agy/[^/]+/agy" file (unconfined_u object_r agy_exec_t ((s0)(s0))))
 (filecon "HOME_DIR/\.local/bin/agy" file (unconfined_u object_r agy_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/lib/commands/store/aoe/[^/]+/aoe" file (unconfined_u object_r aoe_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/bin/aoe" file (unconfined_u object_r aoe_exec_t ((s0)(s0))))

@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cil_file="$repo_root/system/linux/selinux/dotfiles_protected_agent_configs.cil"
 tokscale_cil="$repo_root/system/linux/selinux/dotfiles_tokscale_gemini_access.cil"
-script_tmpl="$repo_root/.chezmoiscripts/30-linux/run_onchange_after_selinux-policies.sh.tmpl"
+script_tmpl="$repo_root/.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl"
 
 fail() { printf 'test-selinux-protected-configs: %s\n' "$*" >&2; exit 1; }
 
@@ -23,34 +23,45 @@ for token in \
   "(type chezmoi_t)" \
   "(type claude_t)" \
   "(type agy_t)" \
+  "(type aoe_t)" \
   "(roletype unconfined_r chezmoi_t)" \
   "(roletype unconfined_r claude_t)" \
   "(roletype unconfined_r agy_t)" \
+  "(roletype unconfined_r aoe_t)" \
   "(type chezmoi_exec_t)" \
   "(type claude_exec_t)" \
   "(type agy_exec_t)" \
-  "(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t))" \
-  "(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t))" \
+  "(type aoe_exec_t)" \
+  "(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t aoe_t))" \
+  "(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t aoe_exec_t))" \
   "(typeattributeset file_type (dotfiles_agent_exec))" \
   "(typeattributeset exec_type (dotfiles_agent_exec))" \
   "(typetransition unconfined_domain_type chezmoi_exec_t process chezmoi_t)" \
   "(typetransition unconfined_domain_type claude_exec_t process claude_t)" \
   "(typetransition unconfined_domain_type agy_exec_t process agy_t)" \
+  "(typetransition unconfined_domain_type aoe_exec_t process aoe_t)" \
   "(allow chezmoi_t chezmoi_exec_t (file (entrypoint" \
   "(allow claude_t claude_exec_t (file (entrypoint" \
   "(allow agy_t agy_exec_t (file (entrypoint" \
+  "(allow aoe_t aoe_exec_t (file (entrypoint" \
   "(typeattributeset domain (dotfiles_agent_domain))" \
   "(typeattributeset unconfined_domain_type (dotfiles_agent_domain))" \
   "(typeattributeset files_unconfined_type (dotfiles_agent_domain))" \
   "(allow chezmoi_t protected_agent_config_type" \
   "(allow claude_t claude_config_t" \
+  "(allow aoe_t claude_config_t" \
   "(allow agy_t gemini_config_t" \
   "(allow unconfined_domain_type protected_agent_config_type" \
+  "(allow locate_t protected_agent_config_type (dir (open read getattr search)))" \
+  "(allow locate_t protected_agent_config_type (file (open read getattr)))" \
+  "(dontaudit pasta_t dri_device_t (chr_file (read write)))" \
   "(allow protected_agent_config_type fs_t (filesystem (associate)))" \
   "(allow protected_agent_config_type tmpfs_t (filesystem (associate)))" \
   "(allow protected_agent_config_type noxattrfs (filesystem (associate)))" \
   "(typetransition claude_t user_home_t file \".claude.json\" claude_config_t)" \
   "(typetransition claude_t user_home_t file \".mcp.json\" claude_config_t)" \
+  "(typetransition dotfiles_agent_domain user_home_t file \"settings.json\" claude_config_t)" \
+  "(typetransition dotfiles_agent_domain user_home_t file \"settings.json.lock\" claude_config_t)" \
   "(filecon \"HOME_DIR/\\.codex/config\\.toml\"" \
   "(filecon \"HOME_DIR/\\.codex/skills(/.*)?\"" \
   "(filecon \"HOME_DIR/\\.agents/skills(/.*)?\"" \
@@ -58,6 +69,7 @@ for token in \
   "(filecon \"HOME_DIR/\\.claude\\.json.*\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.mcp\\.json\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.claude/settings\\.json\" file (unconfined_u object_r claude_config_t" \
+  "(filecon \"HOME_DIR/\\.claude/settings\\.json\\.lock\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.claude/skills\" symlink (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.claude/plugins/installed_plugins\\.json\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.claude/plugins/known_marketplaces\\.json\" file (unconfined_u object_r claude_config_t" \
@@ -68,6 +80,8 @@ for token in \
   "(filecon \"HOME_DIR/\\.local/bin/chezmoi\"" \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/claude/[^/]+/claude\" file (unconfined_u object_r claude_exec_t" \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/agy/[^/]+/agy\" file (unconfined_u object_r agy_exec_t" \
+  "(filecon \"HOME_DIR/\\.local/lib/commands/store/aoe/[^/]+/aoe\" file (unconfined_u object_r aoe_exec_t" \
+  "(filecon \"HOME_DIR/\\.local/bin/aoe\" file (unconfined_u object_r aoe_exec_t" \
   "(allow dotfiles_agent_domain rpm_script_t (process (transition siginh rlimitinh noatsecure)))" \
   "(allow dotfiles_agent_domain rpm_script_t (fd (use)))" \
   "(allow rpm_script_t dotfiles_agent_domain (fd (use)))" \
@@ -92,7 +106,8 @@ fi
 # next upgrade.
 for token in \
   "(typetransition chezmoi_t gconf_home_t file \"claude\" claude_exec_t)" \
-  "(typetransition chezmoi_t gconf_home_t file \"agy\" agy_exec_t)"; do
+  "(typetransition chezmoi_t gconf_home_t file \"agy\" agy_exec_t)" \
+  "(typetransition chezmoi_t gconf_home_t file \"aoe\" aoe_exec_t)"; do
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing upgrade-durability transition: $token"
 done
 
@@ -113,6 +128,8 @@ forbidden_writer 'claude_t' 'gemini_config_t'
 forbidden_writer 'claude_t' 'protected_agent_config_t'
 forbidden_writer 'agy_t' 'claude_config_t'
 forbidden_writer 'agy_t' 'protected_agent_config_t'
+forbidden_writer 'aoe_t' 'gemini_config_t'
+forbidden_writer 'aoe_t' 'protected_agent_config_t'
 
 if grep -qF "tokscale_t" "$cil_file"; then
   fail "tokscale_t must not be declared in base CIL policy"
@@ -185,6 +202,7 @@ for relabel_path in \
   '"$HOME/.claude.json"*' \
   '"$HOME/.mcp.json"' \
   '"$HOME/.claude/settings.json"' \
+  '"$HOME/.claude/settings.json.lock"' \
   '"$HOME/.claude/skills"' \
   '"$HOME/.claude/plugins/installed_plugins.json"' \
   '"$HOME/.claude/plugins/known_marketplaces.json"' \
@@ -194,10 +212,15 @@ for relabel_path in \
   '"$HOME/.local/bin/chezmoi"' \
   '"$HOME/.local/bin/claude"' \
   '"$HOME/.local/bin/agy"' \
+  '"$HOME/.local/bin/aoe"' \
   '"$HOME/.local/lib/commands/store/claude"' \
-  '"$HOME/.local/lib/commands/store/agy"'; do
+  '"$HOME/.local/lib/commands/store/agy"' \
+  '"$HOME/.local/lib/commands/store/aoe"'; do
   grep -qF -- "$relabel_path" "$rendered" || fail "rendered script does not relabel $relabel_path"
 done
+
+grep -qF 'system_chezmoi_binaries=' "$rendered" || fail "rendered script missing system chezmoi restorecon check"
+grep -qF 'restorecon -Fv "${system_chezmoi_binaries[@]}"' "$rendered" || fail "rendered script missing system chezmoi restorecon invocation"
 
 # The script MUST NOT relabel whole ~/.claude or ~/.gemini roots recursively.
 if grep -qE '"\$HOME/\.claude"\b' "$rendered"; then
@@ -234,17 +257,17 @@ fi
 # assigns the domain at exec, so the old process keeps unconfined_t while its
 # files have just been relabelled, and its writes start failing with EACCES.
 # The script has to say so, because nothing else will.
-grep -qF 'Restart any claude/agy process started earlier' "$rendered" ||
+grep -qF 'Restart any claude/agy/aoe process started earlier' "$rendered" ||
   fail 'rendered script does not tell the operator to restart running agent sessions'
 
 # The warning is only actionable if it names the processes: a generic notice
 # leaves the operator guessing which of several terminals holds the stale
 # session. Assert the detection itself, not just the sentence.
-grep -qF "pgrep -x -u \"\$(id -u)\" 'claude|agy'" "$rendered" ||
-  fail 'rendered script does not enumerate domain-owning claude and agy processes'
+grep -qF "pgrep -x -u \"\$(id -u)\" 'claude|agy|aoe'" "$rendered" ||
+  fail 'rendered script does not enumerate domain-owning claude, agy, and aoe processes'
 grep -qF '/attr/current' "$rendered" ||
   fail 'rendered script does not read the domain of running agent processes'
-grep -qF '*:claude_t:* | *:agy_t:* | *:chezmoi_t:*' "$rendered" ||
+grep -qF '*:claude_t:* | *:agy_t:* | *:aoe_t:* | *:chezmoi_t:*' "$rendered" ||
   fail 'rendered script does not treat an already-transitioned process as healthy'
 
 if command -v secilc >/dev/null 2>&1; then
@@ -262,6 +285,9 @@ if command -v secilc >/dev/null 2>&1; then
 (type tmpfs_t)
 (type hugetlbfs_t)
 (type rpm_script_t)
+(type pasta_t)
+(type dri_device_t)
+(type locate_t)
 (typeattribute noxattrfs)
 (typeattribute file_type)
 (typeattribute exec_type)
@@ -353,6 +379,7 @@ EOF
     [[ $got == "$want" ]] || fail "file_contexts maps $spec to ${got:-<nothing>}, expected $want"
   }
   expect_context 'HOME_DIR/\.claude/settings\.json' 'unconfined_u:object_r:claude_config_t'
+  expect_context 'HOME_DIR/\.claude/settings\.json\.lock' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.claude/skills' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.claude/plugins/installed_plugins\.json' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.claude/plugins/known_marketplaces\.json' 'unconfined_u:object_r:claude_config_t'
@@ -361,6 +388,8 @@ EOF
   expect_context 'HOME_DIR/\.gemini/skills' 'unconfined_u:object_r:gemini_config_t'
   expect_context 'HOME_DIR/\.mcp\.json' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.agents/skills(/.*)?' 'unconfined_u:object_r:protected_agent_config_t'
+  expect_context 'HOME_DIR/\.local/lib/commands/store/aoe/[^/]+/aoe' 'unconfined_u:object_r:aoe_exec_t'
+  expect_context 'HOME_DIR/\.local/bin/aoe' 'unconfined_u:object_r:aoe_exec_t'
 
   # The strongest proof available offline: ask the COMPILED policy who may write
   # what. The stub reproduces Fedora's blanket files_unconfined_type grant, so a
@@ -393,6 +422,9 @@ EXPECTED = {
     ('agy_t', 'gemini_config_t'): True,
     ('agy_t', 'claude_config_t'): False,
     ('agy_t', 'protected_agent_config_t'): False,
+    ('aoe_t', 'claude_config_t'): True,
+    ('aoe_t', 'gemini_config_t'): False,
+    ('aoe_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'claude_config_t'): False,
     ('unconfined_t', 'gemini_config_t'): False,
@@ -443,7 +475,7 @@ for (source, target), want in sorted(EXPECTED.items()):
 for label in ('protected_agent_config_t', 'claude_config_t', 'gemini_config_t'):
     if not may_associate(label):
         failures.append(f'{label} may not associate with fs_t, so restorecon cannot label it')
-for domain in ('chezmoi_t', 'claude_t', 'agy_t'):
+for domain in ('chezmoi_t', 'claude_t', 'agy_t', 'aoe_t'):
     if not can_transition(domain, 'rpm_script_t'):
         failures.append(f'{domain} cannot transition to rpm_script_t in compiled policy')
 for line in failures:
