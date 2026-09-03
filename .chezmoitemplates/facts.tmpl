@@ -157,31 +157,24 @@ Three rules hold this file together:
 {{-     end -}}
 {{-     $fallback := $spec.absentDefault -}}
 {{-     $type := $spec.type | default "bool" -}}
-{{- /* The absentDefault must match the fact's declared type, and the cached value
-   is accepted only when it matches too. A string fact whose cache line was
-   dropped therefore lands on its declared empty-string default rather than
-   leaking a boolean into a consumer's comparison, and a boolean fact keeps the
-   type check that has always guarded it. */ -}}
-{{-     if eq $type "string" -}}
-{{-       if not (kindIs "string" $fallback) -}}
-{{-         fail (printf "hook fact %q is declared type string but its absentDefault %v is not a string in .chezmoidata/facts.yaml" $name $fallback) -}}
-{{-       end -}}
-{{-       $value := index $cached $name -}}
-{{-       if kindIs "string" $value -}}
-{{-         $_ := set $facts $name $value -}}
-{{-       else -}}
-{{-         $_ := set $facts $name $fallback -}}
-{{-       end -}}
+{{- /* ONE type check, driven by the declared type. The absentDefault must match
+   it, and the cached value is accepted only when it matches too. A string fact
+   whose cache line was dropped therefore lands on its declared empty-string
+   default rather than leaking a boolean into a consumer's comparison, and a
+   boolean fact keeps the type check that has always guarded it. An unsupported
+   declared type fails loudly instead of silently matching nothing and putting
+   every host on the default. */ -}}
+{{-     if not (has $type (list "bool" "string")) -}}
+{{-       fail (printf "hook fact %q declares unsupported type %q in .chezmoidata/facts.yaml; the registry supports bool and string" $name $type) -}}
+{{-     end -}}
+{{-     if not (kindIs $type $fallback) -}}
+{{-       fail (printf "hook fact %q is declared type %s but its absentDefault %v is not one in .chezmoidata/facts.yaml" $name $type $fallback) -}}
+{{-     end -}}
+{{-     $value := index $cached $name -}}
+{{-     if kindIs $type $value -}}
+{{-       $_ := set $facts $name $value -}}
 {{-     else -}}
-{{-       if not (kindIs "bool" $fallback) -}}
-{{-         fail (printf "hook fact %q has non-boolean absentDefault %v in .chezmoidata/facts.yaml" $name $fallback) -}}
-{{-       end -}}
-{{-       $value := index $cached $name -}}
-{{-       if kindIs "bool" $value -}}
-{{-         $_ := set $facts $name $value -}}
-{{-       else -}}
-{{-         $_ := set $facts $name $fallback -}}
-{{-       end -}}
+{{-       $_ := set $facts $name $fallback -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}

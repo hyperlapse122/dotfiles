@@ -44,24 +44,57 @@ if ! command -v authselect >/dev/null 2>&1; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-fingerprint" "site" "authselect-absent" "direction" "transient-blocking" "probe" "authselect-present" "reason" "authselect is not installed; the fingerprint feature cannot be declared") | trim | indent 2 }}
 fi
 
+# The first readable PAM file for a service. /etc/pam.d wins over the vendor copy,
+# which is the order PAM itself uses.
+pam_service_file() {
+  local service="$1" file
+  for file in "/etc/pam.d/${service}" "/usr/lib/pam.d/${service}"; do
+    [[ -r "$file" ]] && { printf '%s' "$file"; return 0; }
+  done
+  return 1
+}
+
 # Resolve a PAM service through its include/substack chain and report whether any
 # module in it is the fingerprint one. Reading only the greeter's own service file
 # would pass on exactly the hosts this exists to protect: a greeter names no
-# fingerprint module directly, it reaches one through system-auth.
+# fingerprint module directly, it reaches one through the stack it substacks.
 pam_chain_has_fprintd() {
-  local service="$1" depth="${2:-0}" file kind target
+  local service="$1" depth="${2:-0}" file kind target found=1
   (( depth > 4 )) && return 1
-  for file in "/etc/pam.d/${service}" "/usr/lib/pam.d/${service}"; do
-    [[ -r "$file" ]] || continue
+  file="$(pam_service_file "$service")" || return 1
+  if grep -qE '^[[:space:]]*auth[[:space:]].*pam_fprintd\.so' "$file" 2>/dev/null; then
+    return 0
+  fi
+  while read -r _ kind target _; do
+    case "$kind" in
+      include|substack)
+        if pam_chain_has_fprintd "$target" "$((depth + 1))"; then
+          found=0
+          break
+        fi
+        ;;
+    esac
+  done < <(grep -E '^[[:space:]]*auth[[:space:]]' "$file" 2>/dev/null || true)
+  return "$found"
+}
+
+# The authselect-managed stacks a service pulls in through its auth phase. These
+# are the files `authselect test` actually renders -- a greeter's own service file
+# is shipped by its package and authselect never touches it, so asking for a
+# section named after the greeter would search for something that is never there.
+pam_auth_includes() {
+  local service="$1" file kind target
+  # A generator, not a guard: a service with no readable file emits nothing and
+  # the caller sees an empty list. Structured as an `if` rather than an early
+  # `return 0` because a bare conditional success exit is indistinguishable from
+  # an undeclared skip to the declaration checker.
+  if file="$(pam_service_file "$service")"; then
     while read -r _ kind target _; do
       case "$kind" in
-        include|substack) pam_chain_has_fprintd "$target" "$((depth + 1))" && return 0 ;;
+        include|substack) printf '%s\n' "$target" ;;
       esac
-    done < <(grep -E '^[[:space:]]*(auth)[[:space:]]' "$file" 2>/dev/null || true)
-    grep -qE '^[[:space:]]*auth[[:space:]].*pam_fprintd\.so' "$file" 2>/dev/null && return 0
-    return 1
-  done
-  return 1
+    done < <(grep -E '^[[:space:]]*auth[[:space:]]' "$file" 2>/dev/null || true)
+  fi
 }
 
 # The greeters this repository is prepared to keep password-only, and the service
@@ -80,25 +113,73 @@ greeter_service() {
 # authentication stack?". Single terminal return: a conditional `return 0` here
 # reads as an undeclared skip to the declaration checker, and this is a predicate,
 # not a skip -- the skip is the call site below.
+#
+# `authselect test PROFILE [FEATURE...]` renders the profile it WOULD apply
+# without applying it, which is what lets the decision be made before the factor
+# can land. The profile id is POSITIONAL and features are bare names; there is no
+# --enable-feature= flag on `test`. Section headers are `File /etc/pam.d/<name>:`
+# and are localized, so the call is pinned to LC_ALL=C.
 greeter_would_gain_fingerprint() {
-  local service rendered verdict=0
+  # `rendered` is initialised, not merely declared: `local rendered` leaves it
+  # UNSET, and under `set -u` the `[[ -n "$rendered" ]]` test below aborts the
+  # whole installer on exactly the path the fallback was written for -- an
+  # authselect that cannot be asked.
+  local service rendered='' profile stack verdict=1
   # An unrecognized display manager is NOT assumed safe: there is no known greeter
   # service to check, so the answer stays yes and the feature is withheld.
-  if service="$(greeter_service)"; then
-    # authselect renders the profile it WOULD apply; ask it rather than the live
-    # files, so the decision is made before the factor can land.
-    rendered="$("${SUDO[@]}" authselect test "${AUTHSELECT_FEATURES[@]/#/--enable-feature=}" 2>/dev/null)" || rendered=''
-    if [[ -n "$rendered" ]] && printf '%s' "$rendered" | awk -v svc="$service" '
-        $0 ~ "^\\[/etc/pam\\.d/" svc "\\]" { inblk = 1; next }
-        /^\[/ { inblk = 0 }
-        inblk && /^auth/ && /pam_fprintd\.so/ { found = 1 }
-        END { exit found ? 0 : 1 }
-      '; then
+  if ! service="$(greeter_service)"; then
+    return 0
+  fi
+
+  profile="$("${SUDO[@]}" authselect current --raw 2>/dev/null | awk 'NR==1 {print $1}')" || profile=''
+  if [[ -n "$profile" ]]; then
+    rendered="$(LC_ALL=C "${SUDO[@]}" env LC_ALL=C authselect test "$profile" "${AUTHSELECT_FEATURES[@]}" 2>/dev/null)" || rendered=''
+  fi
+
+  # The greeter's own file is package-shipped and authselect never renders it, so
+  # what matters is the authselect-managed stacks it pulls in.
+  #
+  # `examined` is the difference between "checked, and the greeter is clean" and
+  # "could not check". Only the first may enable the factor: this predicate
+  # guards the repository's password-only greeter guarantee, so an unanswerable
+  # question resolves the same way an unrecognized display manager does, by
+  # withholding.
+  # awk's three exit codes are the three distinct answers, so they are captured
+  # into a variable rather than read from $? at a distance:
+  #   0  the stack rendered AND carries a fingerprint module  -> withhold
+  #   1  the stack rendered and is clean                      -> a real answer
+  #   2  authselect rendered no section by that name          -> no answer
+  local examined=0 rc
+  if [[ -n "$rendered" ]]; then
+    while read -r stack; do
+      [[ -n "$stack" ]] || continue
+      rc=0
+      printf '%s\n' "$rendered" | awk -v svc="$stack" '
+          $0 == "File /etc/pam.d/" svc ":" { inblk = 1; found_block = 1; next }
+          /^File / { inblk = 0 }
+          inblk && /^auth/ && /pam_fprintd\.so/ { found = 1 }
+          END { if (!found_block) exit 2; exit found ? 0 : 1 }
+        ' || rc=$?
+      if [[ "$rc" -eq 0 ]]; then
+        verdict=0
+        examined=1
+        break
+      elif [[ "$rc" -eq 1 ]]; then
+        examined=1
+      fi
+    done < <(pam_auth_includes "$service")
+  fi
+
+  # Fall back to the live chain whenever the rendered profile could not answer --
+  # authselect unavailable, the greeter's PAM file unresolvable, or none of its
+  # includes present as a rendered section. It cannot see a factor that has not
+  # landed yet, so it is the weaker check and stays the fallback.
+  if [[ "$verdict" -ne 0 && "$examined" -eq 0 ]]; then
+    if pam_chain_has_fprintd "$service"; then
       verdict=0
-    elif pam_chain_has_fprintd "$service"; then
+    elif ! pam_service_file "$service" >/dev/null; then
+      # Nothing could be resolved at all. Withhold.
       verdict=0
-    else
-      verdict=1
     fi
   fi
   return "$verdict"

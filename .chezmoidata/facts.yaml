@@ -207,7 +207,7 @@ factRegistry:
     gates: >-
       Which driver branch the Fedora NVIDIA installer selects — its package set, its
       repository and exclusion policy, its module-signing certificate, and whether
-      nvidia-persistenced is enabled. Written as `gpuArch.pascal` in a gate expression.
+      nvidia-persistenced is enabled. Read by the NVIDIA installer as $FACT_GPU_ARCH (through facts-sh.tmpl), in resolve_nvidia_branch's case statement -- NOT through a manifest gate. No gpuArch.<value> gate expression exists today; a manifest entry that wants one would be the first.
     whenFalse: >-
       Empty. Every NVIDIA-gated path inside the installer skips, and the installer
       declares that skip naming the unmatched device id so the operator can add a

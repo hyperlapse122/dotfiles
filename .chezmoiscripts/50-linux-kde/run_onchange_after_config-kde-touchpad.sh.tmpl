@@ -16,10 +16,16 @@
 # supports* CAPABILITY PROBE stay here: a device that cannot do clickfinger is
 # still skipped rather than forced, whatever the data says.
 #
-# Devices are selected by WHAT THEY ARE, not by a name somebody remembered to
-# add: a touchpad is any device KWin reports `touchpad=true` for, and a TrackPoint
-# is a pointer that is not a touchpad. TOUCHPAD_DENY_NAMES / TRACKPOINT_DENY_NAMES
-# are the escape hatch for a device the operator wants left alone.
+# A touchpad is selected by WHAT IT IS, not by a name somebody remembered to add:
+# any device KWin reports `touchpad=true` for. TOUCHPAD_DENY_NAMES is the escape
+# hatch for one the operator wants left alone.
+#
+# A TRACKPOINT CANNOT BE SELECTED THAT WAY. KWin exposes no property separating a
+# TrackPoint from an ordinary mouse, so "a pointer that is not a touchpad" is
+# every mouse on every desktop in the fleet -- which is what the first version of
+# this rewrite did. TRACKPOINT_MATCH_NAMES is therefore a positive glob list from
+# kde.trackpoint.matchDevices, and TRACKPOINT_DENY_NAMES still excludes a matched
+# device the operator wants left alone.
 #
 # The previous model was an exact-name allowlist and it failed the way allowlists
 # fail: an unlisted model matched nothing, four managed settings were never
@@ -38,6 +44,11 @@ set -euo pipefail
 
 TOUCHPAD_DENY_NAMES=(
 {{ range .kde.touchpad.denyDevices }}  {{ . | quote }}
+{{ end -}}
+)
+
+TRACKPOINT_MATCH_NAMES=(
+{{ range .kde.trackpoint.matchDevices }}  {{ . | quote }}
 {{ end -}}
 )
 
@@ -101,21 +112,45 @@ configure_touchpad() {
     return 1
   }
 
+  # Glob match, unlike _denied's exact match: a TrackPoint's libinput name varies
+  # by vendor prefix ("TPPS/2 Elan TrackPoint", "Lenovo TrackPoint"), so the
+  # patterns are globs and the comparison is deliberately unquoted on the right.
+  _matched() {
+    local candidate="$1"
+    shift
+    local pattern
+    for pattern in "$@"; do
+      # shellcheck disable=SC2053
+      [[ "$candidate" == $pattern ]] && return 0
+    done
+    return 1
+  }
+
   local count=0
-  local sn path is_touchpad is_pointer name_quoted
+  local sn path is_touchpad name_quoted
   for sn in "${sysnames[@]}"; do
     path="$MGR_PATH/$sn"
     is_touchpad="$(_dbus_get "$path" touchpad)"
-    is_pointer="$(_dbus_get "$path" pointer)"
-    [[ "$is_touchpad" == "true" || "$is_pointer" == "true" ]] || continue
+    # `pointer` is asked only when the device is not a touchpad: a touchpad has
+    # already qualified, and every property read is a round trip on the session
+    # bus paid for each of the host's input devices -- keyboards and lid switches
+    # included -- on every apply.
+    if [[ "$is_touchpad" != "true" ]]; then
+      [[ "$(_dbus_get "$path" pointer)" == "true" ]] || continue
+    fi
 
     name_quoted="$(_dbus_get "$path" name)"
     name="${name_quoted#\"}"
     name="${name%\"}"
 
-    # A TrackPoint is a pointer that is not a touchpad. It supports neither tap
-    # nor a click method, so it takes its own set rather than the touchpad's.
+    # A non-touchpad pointer takes the TrackPoint set ONLY when its name matches
+    # kde.trackpoint.matchDevices. Every other mouse is reported and left alone --
+    # this script has never managed ordinary mice and must not start.
     if [[ "$is_touchpad" != "true" ]]; then
+      if ! _matched "$name" ${TRACKPOINT_MATCH_NAMES[@]+"${TRACKPOINT_MATCH_NAMES[@]}"}; then
+        printf '  skip: %s (%s) — a pointer, but no kde.trackpoint.matchDevices pattern matches it\n' "$name" "$sn"
+        continue
+      fi
       if _denied "$name" ${TRACKPOINT_DENY_NAMES[@]+"${TRACKPOINT_DENY_NAMES[@]}"}; then
         printf '  skip: %s (%s) — named in kde.trackpoint.denyDevices\n' "$name" "$sn"
         continue

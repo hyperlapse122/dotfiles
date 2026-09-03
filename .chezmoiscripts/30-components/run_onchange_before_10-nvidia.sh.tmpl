@@ -2,13 +2,15 @@
 {{- $isUbuntu := and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian") (eq .chezmoi.osRelease.id "pop")) -}}
 {{- if or $isFedora $isUbuntu -}}
 {{- $nvidiaCtkPresent := "" -}}
+{{- $akmodsKeyPresent := "" -}}
 {{- if $isFedora -}}
 {{-   $nvidiaCtkPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
+{{-   $akmodsKeyPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "akmods-signing-key-present") -}}
 {{- end -}}
 #!/usr/bin/env bash
 
 {{ if $isFedora -}}
-# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent))) }}
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent))) }}
 {{ end -}}
 set -euo pipefail
 {{ includeTemplate "facts-sh.tmpl" . }}
@@ -153,9 +155,17 @@ install_nvidia_packages() {
 
   setup_nvidia_repos
 
+  # ONE dnf call, not one per package: each invocation re-loads repository and
+  # plugin state and may touch the network, right after makecache already did.
   local -a unavailable=()
+  local available
+  # `|| true`, not `|| available=''`: dnf exits non-zero when ANY argument matches
+  # nothing while still printing the ones that DID match, so discarding stdout on
+  # a non-zero exit makes one genuinely missing package report every package as
+  # unavailable.
+  available="$("${DNF[@]}" -q list --available "${missing[@]}" 2>/dev/null || true)"
   for pkg in "${missing[@]}"; do
-    "${DNF[@]}" -q list --available "$pkg" >/dev/null 2>&1 || unavailable+=("$pkg")
+    printf '%s\n' "$available" | grep -qE "^${pkg}\\." || unavailable+=("$pkg")
   done
   if [[ "${#unavailable[@]}" -gt 0 ]] && report_unavailable_packages "${unavailable[@]}"; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "harmless" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
@@ -207,18 +217,29 @@ dkms_mok_state() {
 # firmware: MOK enrollment is not something this repository can withdraw, and it
 # forbids teardown. Report it so the trust gap is visible rather than assumed
 # away; withdrawing it is an operator action.
+# marker package -> the certificate that branch's build system uses. GENERATED
+# from .chezmoidata/nvidia.yaml, the same source resolve_nvidia_branch reads, so a
+# future branch whose marker does not follow today's naming convention still
+# resolves correctly.
+cert_path_for_marker() {
+  case "$1" in
+{{- range $arch, $branch := .nvidia.branches }}
+    {{ $branch.marker | quote }}) nvidia_build_system={{ $branch.buildSystem | quote }} mok_cert_path ;;
+{{- end }}
+    {{ .nvidia.currentBranch.marker | quote }}) nvidia_build_system={{ .nvidia.currentBranch.buildSystem | quote }} mok_cert_path ;;
+    *) return 1 ;;
+  esac
+}
+
 report_stale_mok() {
-  local other
-  for other in "${nvidia_conflicting_packages[@]}"; do
-    case "$other" in
-      akmod-nvidia-*) other='/etc/pki/akmods/certs/public_key.der' ;;
-      *)              other='/var/lib/dkms/mok.pub' ;;
-    esac
-    [[ "$other" == "$(mok_cert_path)" ]] && continue
-    "${SUDO[@]}" test -f "$other" 2>/dev/null || continue
-    "${SUDO[@]}" mokutil --test-key "$other" 2>/dev/null | grep -q 'is already enrolled' || continue
-    printf 'install-nvidia-fedora.sh: %s is still enrolled but belongs to a branch this host no longer resolves to.\n' "$other" >&2
-    printf 'install-nvidia-fedora.sh: withdrawing it is an operator action: sudo mokutil --delete %s\n' "$other" >&2
+  local marker cert
+  for marker in "${nvidia_conflicting_packages[@]}"; do
+    cert="$(cert_path_for_marker "$marker")" || continue
+    [[ "$cert" == "$(mok_cert_path)" ]] && continue
+    "${SUDO[@]}" test -f "$cert" 2>/dev/null || continue
+    "${SUDO[@]}" mokutil --test-key "$cert" 2>/dev/null | grep -q 'is already enrolled' || continue
+    printf 'install-nvidia-fedora.sh: %s is still enrolled but belongs to a branch this host no longer resolves to.\n' "$cert" >&2
+    printf 'install-nvidia-fedora.sh: withdrawing it is an operator action: sudo mokutil --delete %s\n' "$cert" >&2
   done
 }
 
@@ -235,15 +256,6 @@ ensure_dkms_mok_generated() {
     )
     return 0
   fi
-  # The out-of-tree builder owns its own keypair and mints it with kmodgenca on
-  # first build. Minting one here would leave the module signed by a key the
-  # builder does not use, so this waits for it and declares the wait rather than
-  # exiting clean -- an eligible Secure Boot host with an unsigned module is not a
-  # converged host, and reusing the DKMS not-applicable site would hide it.
-  if [[ "$nvidia_build_system" == 'akmod' ]] && report_awaiting_builder_key; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-generate-awaiting-builder" "direction" "harmless" "reason" "the out-of-tree module builder has not generated its signing keypair yet; it is minted on the first build and enrollment is deferred to the next apply") | trim | indent 4 }}
-  fi
-
   local state
   state="$(dkms_mok_state)" || return 1
   case "$state" in
@@ -254,10 +266,30 @@ ensure_dkms_mok_generated() {
       return 0
       ;;
     partial)
-      printf 'install-nvidia-fedora.sh: partial MOK keypair at /var/lib/dkms; remove manually to regenerate\n' >&2
+      printf 'install-nvidia-fedora.sh: partial MOK keypair (%s / %s); remove manually to regenerate\n' \
+        "$(mok_cert_path)" "$(mok_key_path)" >&2
       return 1
       ;;
   esac
+
+  # The out-of-tree builder owns its own keypair and mints it with kmodgenca on
+  # first build. Minting one here would leave the module signed by a key the
+  # builder does not use, so this waits for it and declares the wait rather than
+  # exiting clean -- an eligible Secure Boot host with an unsigned module is not a
+  # converged host, and reusing the DKMS not-applicable site would hide it.
+  #
+  # TRANSIENT-BLOCKING, NOT HARMLESS. The condition clears the moment the builder
+  # mints its key, so `harmless` -- "this host will never satisfy the condition"
+  # -- would record the unsigned host as converged and never look again. And
+  # `transient-tolerable` cannot be used here either: it exits 1, and this is a
+  # 30-components `before` script, so a non-zero exit strands every later phase
+  # (skip.sh.tmpl reserves that stranding for the elevation guard alone). Naming
+  # the akmods-signing-key-present probe is what makes the rendered content
+  # change once the key appears, so chezmoi re-runs this script by itself.
+  if [[ "$nvidia_build_system" == 'akmod' ]] && report_awaiting_builder_key; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-generate-awaiting-builder" "direction" "transient-blocking" "probe" "akmods-signing-key-present" "reason" "the out-of-tree module builder has not generated its signing keypair yet; it is minted on the first build and enrollment resumes once it appears") | trim | indent 4 }}
+  fi
+
 
 
   if [[ -x /usr/lib/dkms/mok_signing_setup ]]; then
@@ -291,6 +323,14 @@ enroll_dkms_mok() {
     return 0
   fi
 
+  # BEFORE the early returns, not after the import. R10 requires that a
+  # certificate enrolled for a branch this host no longer resolves to is
+  # reported; as the last statement of this function it fired only on the single
+  # apply that imported a key, so on a converged host -- the steady state -- the
+  # trust gap it exists to surface was silent forever. The helper is read-only
+  # (test -f plus mokutil --test-key), so it is safe on every path.
+  report_stale_mok
+
   ensure_dkms_mok_generated || true
   local cert
   cert="$(mok_cert_path)"
@@ -318,7 +358,6 @@ enroll_dkms_mok() {
   fi
 
   "${SUDO[@]}" mokutil --import "${cert}" 2>/dev/null || true
-  report_stale_mok
 }
 
 enable_nvidia_services() {

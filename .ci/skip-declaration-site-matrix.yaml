@@ -59,8 +59,8 @@
 # skip.sh.tmpl's own definitions. The current source adds one transient-blocking
 # WakaTime keyring site after that inventory, and config-kde-theme-dark adds four
 # more, while retiring the omp harness and the figma-auth build removed nine
-# owners (six classified, three hard errors). The frozen totals — 123 owners,
-# 8 hard errors, 186 instances, 118 + 68 — are CI-enforced and must be re-frozen
+# owners (six classified, three hard errors). The frozen totals — 131 owners,
+# 8 hard errors, 200 instances, 126 + 74 — are CI-enforced and must be re-frozen
 # in .ci/check-skip-declarations.sh and .ci/test-capability-cache.sh together
 # with this file.
 
@@ -100,8 +100,8 @@ audited_forms:
   not_applicable: 20
 
 audited_directions:
-  harmless: 30
-  transient-blocking: 59
+  harmless: 29
+  transient-blocking: 60
   transient-tolerable: 3
 audited_scopes:
   00-tools: 4
@@ -124,12 +124,12 @@ shared_guard_fanout:
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 30
-    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). Four more arrive with the NVIDIA branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and an out-of-tree signing keypair the module builder has not minted yet. Each names a condition this repository will not resolve on its own -- the operator adds a table row or clears the conflicting branch -- so none of them is a precondition a later phase supplies, which is what would have made them transient-blocking. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
+    audited: 29
+    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). Three more arrive with the NVIDIA branch axis: an unlisted GPU architecture, a conflicting installed branch, and a declared package set the enabled sources do not offer. Each names a condition this repository will not resolve on its own -- the operator adds a table row or clears the conflicting branch -- so none of them is a precondition a later phase supplies, which is what would have made them transient-blocking. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 59
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session. One more: authselect itself, a tool the distribution ships but a minimal host may not have installed yet.'
+    audited: 60
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session. One more: authselect itself, a tool the distribution ships but a minimal host may not have installed yet. And one arriving from the harmless bucket in review: the akmods signing keypair, which the module builder mints on its first build -- a precondition that does clear on its own, named through the akmods-signing-key-present probe.'
   - bucket: 'done_here'
     plan: 10
     audited: 19
@@ -1992,7 +1992,9 @@ owners:
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
     form: 'skip_step'
-    direction: 'harmless'
+    direction: 'transient-blocking'
+    probe: 'akmods-signing-key-present'
+    fingerprint_placement: 'new-header-block'
     instances:
       - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-generate-awaiting-builder'
   - owner: 'install-nvidia-fedora/rpmfusion-nonfree-absent'

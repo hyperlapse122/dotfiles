@@ -357,6 +357,14 @@ kde:
   # TrackPoint`, which reports supportsNaturalScroll, supportsMiddleEmulation and
   # supportsPointerAcceleration true, and supportsClickMethod* false.
   trackpoint:
+    # POSITIVE match, not "any pointer that is not a touchpad". A TrackPoint has
+    # no property that separates it from an ordinary mouse, so selecting by
+    # absence would hand every mouse on the fleet the TrackPoint settings. These
+    # are libinput device names, matched as shell globs against KWin's `name`.
+    matchDevices:
+      - '*TrackPoint*'
+      - '*Trackpoint*'
+      - 'TPPS/2*'
     denyDevices: []
     settings:
       naturalScroll: true
