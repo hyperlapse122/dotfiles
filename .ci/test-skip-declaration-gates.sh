@@ -82,6 +82,9 @@ fx_step() {
   if [[ ! -f /nonexistent-fx-input ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "fx-main" "site" "step-input-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "the fixture step input is absent") | trim | indent 4 }}
   fi
+  if [[ -e /nonexistent-fx-operator-conflict ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "fx-main" "site" "operator-must-clear" "direction" "operator-blocking" "reason" "the fixture condition needs an operator action") | trim | indent 4 }}
+  fi
   if [[ -f /nonexistent-fx-stamp ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "fx-main" "site" "step-already-done" "reason" "the fixture step is already done") | trim | indent 6 }}
@@ -171,6 +174,13 @@ owners = [
          form='skip_step', direction='transient-blocking', probe='mise-present',
          fingerprint_placement='new-header-block',
          instances=[f'{FX}/run_onchange_after_fx-main.sh.tmpl#fx-main/step-input-absent']),
+    dict(owner='fx-main/operator-must-clear', scope='fixture',
+         template=f'{FX}/run_onchange_after_fx-main.sh.tmpl', anchor_line=19,
+         anchor='  if [[ -e /nonexistent-fx-operator-conflict ]]; then',
+         predicate='[[ -e /nonexistent-fx-operator-conflict ]]',
+         continuation='abandon-step-return-0', render_profile='any-host',
+         form='skip_step', direction='operator-blocking',
+         instances=[f'{FX}/run_onchange_after_fx-main.sh.tmpl#fx-main/operator-must-clear']),
     dict(owner='fx-main/step-already-done', scope='fixture',
          template=f'{FX}/run_onchange_after_fx-main.sh.tmpl', anchor_line=19,
          anchor='  if [[ -f /nonexistent-fx-stamp ]]; then',
@@ -339,8 +349,8 @@ matrix=.ci/skip-declaration-site-matrix.yaml
 # error case, and the U4-style always-run exclusion case: all three are part of
 # what a clean tree must accept.
 expect_pass "$clean" 'clean fixture tree reconciles' \
-  '7 matrix owners, 1 hard errors, 9 declared instances' \
-  '8 instances rendered + 1 lifecycle-excluded + 0 missing = 9' \
+  '8 matrix owners, 1 hard errors, 10 declared instances' \
+  '9 instances rendered + 1 lifecycle-excluded + 0 missing = 10' \
   'lifecycle-excluded .chezmoiscripts/fixture/run_after_fx-always.sh.tmpl#fx-guard/ineligible-host' \
   '1 of 1 matrix-named hard errors verified nonzero and unclaimed' \
   'rendered declaration surface matches the matrix'
@@ -602,6 +612,37 @@ open(path, 'w').write('\n'.join(kept))
 PY
 expect_finding "$dir" 'a blocking declaration without its cached fingerprint value fails' \
   'transient-blocking declaration without the cached fingerprint value value:mise-present'
+
+# --- 13b. operator-blocking: no probe, and the record must be KEPT -------- #
+# The direction exists for a condition no render-time probe can observe, so
+# naming one is a call-site error the render must refuse.
+dir=$(variant operator-blocking-with-probe)
+python3 - "$dir/$main" <<'PROBEPY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+needle = '"site" "operator-must-clear" "direction" "operator-blocking"'
+assert text.count(needle) == 1, 'operator-blocking call site changed'
+open(path, 'w').write(text.replace(needle, needle + ' "probe" "mise-present"'))
+PROBEPY
+expect_enforcement_error "$dir" 'an operator-blocking site naming a probe aborts the render' \
+  'cannot render .chezmoiscripts/fixture/run_onchange_after_fx-main.sh.tmpl'
+
+# Clearing the record would claim the convergence this direction exists to deny:
+# dotfiles-skips would stop reporting a host that never converged.
+dir=$(variant operator-blocking-clears-record)
+python3 - "$dir/$partial" <<'RECORDPY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+old = "'operator-blocking' '{{ $reason }}'"
+assert text.count(old) == 1, 'operator-blocking record shape changed'
+start = text.index('mkdir -p {{ $dir }} 2>/dev/null || true', text.index('else if eq $direction "operator-blocking"'))
+end = text.index('|| true\n', text.index('> {{ $file }} 2>/dev/null', start)) + len('|| true\n')
+open(path, 'w').write(text[:start] + 'rm -f {{ $file }} 2>/dev/null || true\n' + text[end:])
+RECORDPY
+expect_finding "$dir" 'an operator-blocking declaration that clears its record fails' \
+  'declaration body'
 
 # --- 14. Matrix-named hard error ------------------------------------------ #
 dir=$(variant hard-error-becomes-success)

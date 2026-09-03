@@ -186,15 +186,16 @@ from pathlib import Path
 SCHEMA = 'skip-declaration-site-matrix-v1'
 SENTINEL_TOKEN = 'skip-declaration-v1'
 FORMS = ('skip_here', 'skip_step', 'done_here', 'not_applicable')
-DIRECTIONS = ('harmless', 'transient-tolerable', 'transient-blocking')
+DIRECTIONS = ('harmless', 'transient-tolerable', 'transient-blocking',
+              'operator-blocking')
 CONTINUATIONS = ('terminate-script-exit-0', 'terminate-script-exit-1',
                  'terminate-script-render-branch', 'abandon-step-return-0',
                  'abandon-step-inline-notice')
 PLACEMENTS = ('new-header-block', 'existing-header-block')
 # The R5 boundary U5 froze and U6/U7 executed against. Asserted literally so a
 # rendered surface cannot be reconciled against a quietly shrunken oracle.
-FROZEN = {'classified_owners': 131, 'rendered_instances': 200,
-          'phase_local_instances': 126, 'shared_guard_instances': 74}
+FROZEN = {'classified_owners': 132, 'rendered_instances': 201,
+          'phase_local_instances': 127, 'shared_guard_instances': 74}
 
 RUN_NAME = re.compile(r'^run_(?:(once|onchange)_)?(?:(?:before|after)_)?.+')
 SKIP_DIRS = {'.git'}
@@ -658,10 +659,15 @@ def declaration_body(raws, sentinel_line, term_line, values):
     terminator, and that it writes/clears this declaration's own state entry."""
     body = [raws[i - 1].strip() for i in range(sentinel_line + 1, term_line)]
     state = f'chezmoi/skips/{values["script"]}__{values["site"]}'
-    blocking = values['fingerprint'] == 'required' or values['direction'] == 'transient-tolerable'
+    # The three record-KEEPING directions share one body shape; only `harmless`
+    # (and the two non-deferred forms) clears its entry instead. operator-blocking
+    # keeps its record for the same reason the two transient directions do: the
+    # host has not converged, so dotfiles-skips must go on reporting it.
+    keeps_record = (values['fingerprint'] == 'required'
+                    or values['direction'] in ('transient-tolerable', 'operator-blocking'))
     if not body or not body[0].startswith("printf '%s: %s"):
         return 'declaration body does not open with the derived operator notice'
-    if blocking:
+    if keeps_record:
         shape = [r"^printf '%s: %s", r'^mkdir -p "', r"^printf 'v1", r'^> "']
     else:
         shape = [r"^printf '%s: %s", r'^rm -f "']

@@ -150,7 +150,7 @@ install_nvidia_packages() {
   fi
 
   if conflict="$(conflicting_nvidia_branch)" && report_branch_conflict "$conflict"; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-conflict" "direction" "harmless" "reason" "a conflicting NVIDIA driver branch is installed; the operator command to clear it was printed and nothing was installed or removed") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-conflict" "direction" "operator-blocking" "reason" "a conflicting NVIDIA driver branch is installed; the operator command to clear it was printed and nothing was installed or removed") | trim | indent 4 }}
   fi
 
   setup_nvidia_repos
@@ -164,11 +164,20 @@ install_nvidia_packages() {
   # a non-zero exit makes one genuinely missing package report every package as
   # unavailable.
   available="$("${DNF[@]}" -q list --available "${missing[@]}" 2>/dev/null || true)"
+  # NO OUTPUT AT ALL is not the same answer as a package the sources do not
+  # offer. dnf still prints the arguments that DID match when one of them misses,
+  # so an entirely empty result means the probe itself did not answer -- a network
+  # failure, an unreadable metadata cache, a dnf that could not start. Reporting
+  # that as a declared package set the sources do not offer states a permanent
+  # fact about the branch on the strength of a transient failure.
+  if [[ -z "$available" ]] && report_unknown_availability; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-package-availability-unknown" "direction" "operator-blocking" "reason" "the package availability probe returned no output at all, so availability could not be determined; nothing was installed") | trim | indent 4 }}
+  fi
   for pkg in "${missing[@]}"; do
     printf '%s\n' "$available" | grep -qE "^${pkg}\\." || unavailable+=("$pkg")
   done
   if [[ "${#unavailable[@]}" -gt 0 ]] && report_unavailable_packages "${unavailable[@]}"; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "harmless" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "operator-blocking" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
   fi
 
   "${DNF[@]}" install -y "${nvidia_packages[@]}"
@@ -390,6 +399,12 @@ report_branch_conflict() {
 report_unavailable_packages() {
   printf 'install-nvidia-fedora.sh: the %s branch declares packages the enabled sources do not offer: %s\n' \
     "$nvidia_branch" "$*" >&2
+}
+
+report_unknown_availability() {
+  printf 'install-nvidia-fedora.sh: dnf listed no available packages at all for the %s branch, so it could not be asked whether they exist.\n' \
+    "$nvidia_branch" >&2
+  printf 'install-nvidia-fedora.sh: check repository reachability, then re-run: sudo dnf makecache\n' >&2
 }
 
 report_awaiting_builder_key() {

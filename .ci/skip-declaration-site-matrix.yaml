@@ -70,10 +70,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 131
+  classified_owners: 132
   hard_error_owners: 8
-  rendered_instances: 200
-  phase_local_instances: 126
+  rendered_instances: 201
+  phase_local_instances: 127
   shared_guard_instances: 74
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -95,19 +95,20 @@ plan_contract_scopes:
 
 audited_forms:
   skip_here: 57
-  skip_step: 35
+  skip_step: 36
   done_here: 19
   not_applicable: 20
 
 audited_directions:
-  harmless: 29
+  harmless: 27
   transient-blocking: 60
   transient-tolerable: 3
+  operator-blocking: 3
 audited_scopes:
   00-tools: 4
   10-auth: 5
   20-base: 5
-  30-components: 16
+  30-components: 17
   30-linux: 32
   50-linux-gnome: 29
   50-linux-kde: 33
@@ -125,7 +126,7 @@ divergence:
   - bucket: 'harmless'
     plan: 41
     audited: 29
-    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). Three more arrive with the NVIDIA branch axis: an unlisted GPU architecture, a conflicting installed branch, and a declared package set the enabled sources do not offer. Each names a condition this repository will not resolve on its own -- the operator adds a table row or clears the conflicting branch -- so none of them is a precondition a later phase supplies, which is what would have made them transient-blocking. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
+    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). One more arrives with the NVIDIA branch axis: an unlisted GPU architecture, which stays here because a device this table does not classify is a fact about the table and not a precondition a later phase supplies. Its two siblings -- a conflicting installed branch, and a declared package set the enabled sources do not offer -- were reclassified OUT of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, but the reason text of the first one prints the dnf command that clears it, so an operator who ran that command was left with a host recorded as provisioned and no driver. A third NVIDIA site joined them there: an availability probe that returned no output at all could not be asked whether the packages exist, which is not the same answer as the sources not offering them. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
   - bucket: 'transient_blocking'
     plan: 47
     audited: 60
@@ -1964,7 +1965,7 @@ owners:
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
     form: 'skip_step'
-    direction: 'harmless'
+    direction: 'operator-blocking'
     instances:
       - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-branch-conflict'
   - owner: 'install-nvidia-fedora/nvidia-branch-packages-unavailable'
@@ -1978,9 +1979,23 @@ owners:
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
     form: 'skip_step'
-    direction: 'harmless'
+    direction: 'operator-blocking'
     instances:
       - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-branch-packages-unavailable'
+  - owner: 'install-nvidia-fedora/nvidia-package-availability-unknown'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 173
+    anchor: '  if [[ -z "$available" ]] && report_unknown_availability; then'
+    predicate: '[[ -z "$available" ]] && report_unknown_availability'
+    predicate_digest: 'sha256:5089f7634ad1610404748be16af461c15cb691dd2d191c382e1feb49c7ba63bd'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-package-availability-unknown'
   - owner: 'install-nvidia-fedora/mok-generate-awaiting-builder'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
