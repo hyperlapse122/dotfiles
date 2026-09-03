@@ -112,6 +112,14 @@ rejects reject-1password-wrong-kind.json '1password linux-arm64' 'the exemption 
 rejects reject-1password-wrong-tool-key.json '1password-beta linux-arm64' 'the exemption does not widen to another tool key'
 rejects reject-1password-absent-sha256.json '1password linux-arm64' 'the exemption requires an explicitly null sha256, not an absent one'
 
+# A URL is only as good as the bytes it keeps addressing. The `android` entry
+# once locked a `/latest/` path whose body changed underneath the digest beside
+# it, which no cache could recover from; the rule rejects that shape wherever it
+# comes back. It binds on the path segment, so `latest` inside a filename — the
+# version is elsewhere in the URL — still passes.
+rejects reject-url-latest-segment.json 'url carries a moving /latest path segment' 'a url with a /latest/ path segment is rejected'
+accepts accept-url-latest-in-filename.json 'a url with latest inside the filename is accepted'
+
 # The transport check is unchanged by the digest work.
 rejects reject-url-http.json 'url is not an https:// string' 'a plain http url is rejected'
 rejects reject-url-missing.json 'url is not an https:// string' 'a missing url is rejected'

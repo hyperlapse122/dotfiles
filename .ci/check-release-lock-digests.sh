@@ -10,7 +10,19 @@ set -euo pipefail
 # TWO CHECKS.
 #   1. Every `artifacts` key is in the canonical support matrix. A tool with no
 #      `artifacts` key contributes none and is not a violation.
-#   2. Every artifact has an https source URL and a usable digest.
+#   2. Every artifact has an https source URL, free of a moving `latest` path
+#      segment, and a usable digest.
+#
+# MOVING URLS. A recorded URL must address the same bytes for as long as the
+# digest recorded beside it stands. `android` used to lock
+# `.../android/cli/latest/linux_x86_64/android`, whose bytes change beneath it:
+# once the lock moved to a newer build, every host whose chezmoi HTTP cache
+# still held the previous body failed each apply on a SHA256 mismatch that no
+# later refresh could clear. The resolver now records the per-version path, and
+# this clause is what keeps a regression, a revert, or a `mergeLocks` overlay of
+# an older entry from putting a moving URL back without CI noticing. Only
+# `latest` is rejected: `stable` channel paths such as Flutter's carry the
+# version in the filename, so they address fixed bytes.
 #
 # DIGESTS. Upstreams do not agree on one hash. The GitHub release API supplies a
 # sha256 per asset, and that is what most tools carry. The `antigravity` vendor
@@ -86,6 +98,8 @@ bad_artifacts=$(jq -r '
      and $a.sha256 == null) as $exempt
   | [ (if ($a.url | type == "string" and startswith("https://")) then empty
        else "url is not an https:// string" end),
+      (if ($a.url | type == "string" and test("/latest(/|\\z)"))
+       then "url carries a moving /latest path segment" else empty end),
       (if (($a | has_sha256) or ($a | has_sha512) or $exempt) then empty
        else "no valid sha256 or sha512" end) ] as $reasons
   | select($reasons | length > 0)
@@ -93,7 +107,7 @@ bad_artifacts=$(jq -r '
 ' "$lock")
 
 if [ -n "$bad_artifacts" ]; then
-  fail 'lock carries an artifact without an https source URL or a valid digest' "$bad_artifacts"
+  fail 'lock carries an artifact without a fixed https source URL or a valid digest' "$bad_artifacts"
 fi
 
 printf 'check-release-lock-digests: ok - %s\n' "$lock"

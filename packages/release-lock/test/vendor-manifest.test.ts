@@ -460,9 +460,11 @@ describe("resolveVendorManifest android", () => {
 
     await resolveVendorManifest("android", androidSpec());
 
-    expect(requests).toContain(`${ANDROID_SOURCE}/linux_x86_64/android`);
-    expect(requests.filter((url) => url.startsWith(`${ANDROID_SOURCE}/`))).toEqual([
+    expect(requests).toEqual([
       `${ANDROID_SOURCE}/linux_x86_64/android`,
+      `${ANDROID_VERSION_BASE}/linux_x86_64/android`,
+      `${ANDROID_VERSION_BASE}/darwin_arm64/android`,
+      `${ANDROID_VERSION_BASE}/darwin_x86_64/android`,
     ]);
   });
 
@@ -475,7 +477,31 @@ describe("resolveVendorManifest android", () => {
 
     const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ResolutionError);
-    expect((error as Error).message).toContain(ANDROID_SOURCE);
+    expect((error as Error).message).toContain(`${ANDROID_SOURCE}/linux_x86_64/android`);
+  });
+
+  test("raises ResolutionError when the version-pinned body reports another version", async () => {
+    stubRoutes(
+      androidRoutes({
+        [`${ANDROID_VERSION_BASE}/linux_x86_64/android`]: text(
+          "pinned linux android binary version=1.0.99999999 data",
+        ),
+      }),
+    );
+
+    const error = await resolveVendorManifest("android", androidSpec()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain('reports version "1.0.99999999"');
+  });
+
+  test("accepts a source with a trailing slash", async () => {
+    stubRoutes(androidRoutes());
+
+    const locked = await resolveVendorManifest("android", androidSpec(`${ANDROID_SOURCE}/`));
+
+    expect(locked.artifacts?.["linux-amd64"]?.url).toBe(
+      `${ANDROID_VERSION_BASE}/linux_x86_64/android`,
+    );
   });
 
   test("raises ResolutionError when a version-pinned binary cannot be fetched", async () => {

@@ -308,17 +308,21 @@ async function resolveFlutter(name: string, spec: ToolSpec): Promise<LockedTool>
   };
 }
 
+async function fetchBuffer(source: string, url: string): Promise<Buffer> {
+  const response = await fetchOrThrow(source, url);
+  return Buffer.from(await response.arrayBuffer());
+}
+
 async function fetchBinary(
   source: string,
   url: string,
 ): Promise<{ buffer: Buffer; sha256: string; size: number }> {
-  const response = await fetchOrThrow(source, url);
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = await fetchBuffer(source, url);
   const sha256 = createHash("sha256").update(buffer).digest("hex");
   return { buffer, sha256, size: buffer.length };
 }
 
+const ANDROID_VERSION = /version=([0-9.]+)/;
 const ANDROID_VERSION_SEGMENT = /^[0-9]+(?:\.[0-9]+)*$/;
 
 /**
@@ -334,8 +338,8 @@ async function resolveAndroidCli(name: string, spec: ToolSpec): Promise<LockedTo
     throw new ResolutionError(spec.source, `${name}: source must end in /latest`);
   }
 
-  const latestLinux = await fetchBinary(spec.source, `${base}/linux_x86_64/android`);
-  const match = latestLinux.buffer.toString("latin1").match(/version=([0-9.]+)/);
+  const latestLinux = await fetchBuffer(spec.source, `${base}/linux_x86_64/android`);
+  const match = latestLinux.toString("latin1").match(ANDROID_VERSION);
   if (!match || !match[1]) {
     throw new ResolutionError(spec.source, `${name}: could not extract version from binary`);
   }
@@ -354,6 +358,17 @@ async function resolveAndroidCli(name: string, spec: ToolSpec): Promise<LockedTo
     fetchBinary(spec.source, darwinArm64Url),
     fetchBinary(spec.source, darwinX64Url),
   ]);
+
+  // The version path is a separate object from `latest`, so nothing upstream
+  // guarantees it serves the build `latest` just named. A soft 200 or a
+  // mislabelled directory would otherwise be locked as that version.
+  const pinnedVersion = linuxBinary.buffer.toString("latin1").match(ANDROID_VERSION)?.[1];
+  if (pinnedVersion !== version) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: ${linuxUrl} reports version "${pinnedVersion ?? "none"}", expected "${version}"`,
+    );
+  }
 
   return {
     kind: spec.kind,
