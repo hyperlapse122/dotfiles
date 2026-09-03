@@ -266,6 +266,78 @@ fact_gpu_device_id() {
   return 1
 }
 
+# Hybrid graphics: an NVIDIA display device AND a display device from another
+# vendor on the same bus, which is what an Optimus-style laptop looks like. A
+# desktop with one discrete card is NOT hybrid and must not receive render-offload
+# or runtime-power-management options, so the fact is false there.
+fact_hybrid_graphics() {
+  local dev vendor class has_nvidia=0 has_other=0
+  for dev in /sys/bus/pci/devices/*/; do
+    [[ -r "$dev/vendor" && -r "$dev/class" ]] || continue
+    read -r class <"$dev/class" 2>/dev/null || continue
+    [[ "$class" == 0x03* ]] || continue
+    read -r vendor <"$dev/vendor" 2>/dev/null || continue
+    if [[ "$vendor" == '0x10de' ]]; then has_nvidia=1; else has_other=1; fi
+  done
+  [[ "$has_nvidia" -eq 1 && "$has_other" -eq 1 ]]
+}
+
+# A SYSTEM battery, not a peripheral one. A wireless mouse or keyboard registers
+# an ordinary power supply too, and this fleet already runs a mouse-battery
+# watcher on desktops -- so `type == Battery` alone would make every such desktop
+# claim laptop power behaviour. The kernel distinguishes them with `scope`:
+# `Device` for a peripheral, `System` (or absent, on a chassis battery whose
+# driver predates the attribute) for the machine's own.
+fact_battery() {
+  local supply type scope
+  for supply in /sys/class/power_supply/*/; do
+    [[ -r "$supply/type" ]] || continue
+    read -r type <"$supply/type" 2>/dev/null || continue
+    [[ "$type" == 'Battery' ]] || continue
+    scope='System'
+    [[ -r "$supply/scope" ]] && { read -r scope <"$supply/scope" 2>/dev/null || scope='System'; }
+    [[ "$scope" == 'Device' ]] || return 0
+  done
+  return 1
+}
+
+# A fingerprint reader this repository knows how to manage. There is NO generic
+# sysfs signal for one: the readers present a vendor-specific USB interface class
+# and expose no product string, so the identity has to be declared. The list lives
+# in .chezmoidata/.fingerprint-readers.tsv -- dot-prefixed and TSV for the same
+# reason .chezmoidata/.capability-registry.tsv is, so it stays out of the template
+# data map and stays readable from this hook, which runs before the source state
+# and has no YAML parser.
+#
+# Seeded, not exhaustive. An unlisted reader resolves false and the fingerprint
+# path skips, which is the fail-safe direction: no authentication factor is
+# enabled for hardware nobody verified.
+fact_fingerprint_reader() {
+  local table dev vendor product
+  table="${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.fingerprint-readers.tsv"
+  [[ -r "$table" ]] || return 1
+  for dev in /sys/bus/usb/devices/*/; do
+    [[ -r "$dev/idVendor" && -r "$dev/idProduct" ]] || continue
+    read -r vendor <"$dev/idVendor" 2>/dev/null || continue
+    read -r product <"$dev/idProduct" 2>/dev/null || continue
+    grep -qxF "$(printf '%s\t%s' "$vendor" "$product")" "$table" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# Which display manager the host runs, as the bare unit name (`plasmalogin`,
+# `gdm`, `sddm`). Read from the display-manager.service alias symlink systemd
+# creates when a DM is enabled -- the same signal `headless` already trusts as a
+# reliable positive. Hook-probed because resolving a symlink target is not
+# something the template layer can do.
+fact_display_manager() {
+  local target
+  target="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" || return 1
+  [[ -n "$target" ]] || return 1
+  target="${target##*/}"
+  printf '%s' "${target%.service}"
+}
+
 # Headless / server install. Mirrors .chezmoitemplates/headless-guard.sh.tmpl
 # EXACTLY (keep the two in lockstep): a host is headless when its systemd default
 # target is not graphical.target AND no display-manager alias symlink exists.
@@ -327,6 +399,10 @@ write_facts_cache() {
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
     printf 'gpuDeviceId: %s\n'  "$(fact_string fact_gpu_device_id)"
+    printf 'hybridGraphics: %s\n' "$(fact_bool fact_hybrid_graphics)"
+    printf 'battery: %s\n'      "$(fact_bool fact_battery)"
+    printf 'fingerprintReader: %s\n' "$(fact_bool fact_fingerprint_reader)"
+    printf 'displayManager: %s\n' "$(fact_string fact_display_manager)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
   } >"$tmp_file" || {

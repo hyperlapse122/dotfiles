@@ -226,6 +226,19 @@ Three rules hold this file together:
 {{- end -}}
 {{- $_ := set $facts "thinkpad" $thinkpad -}}
 
+{{- /* displayManagerSddm — the boolean companion to the displayManager string.
+   The gate grammar cannot negate a value comparison (facts-validate rejects
+   !displayManager.sddm outright), and the SDDM greeter drop-in's retirement entry
+   needs exactly that negation: remove it on every host that is NOT running SDDM.
+   Teaching the grammar to negate a comparison would touch the validator every
+   manifest gate passes through, to serve one entry; a companion boolean is local
+   to this axis and changes nothing else. */ -}}
+{{- $displayManagerSddm := false -}}
+{{- if eq (index $facts "displayManager") "sddm" -}}
+{{-   $displayManagerSddm = true -}}
+{{- end -}}
+{{- $_ := set $facts "displayManagerSddm" $displayManagerSddm -}}
+
 {{- /* gpuArch — the hook reported a raw PCI device id; the ARCHITECTURE it belongs
    to is policy, so it comes from .chezmoidata/nvidia.yaml rather than from the
    probe. An id the table does not list resolves to the empty string, which is the

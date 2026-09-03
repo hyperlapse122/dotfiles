@@ -36,6 +36,11 @@ desktop: none
 nvidia: false
 gpuDeviceId: ""
 gpuArch: ""
+hybridGraphics: false
+battery: false
+fingerprintReader: false
+displayManager: ""
+displayManagerSddm: false
 thinkpad: false
 jetson: false
 vm: false

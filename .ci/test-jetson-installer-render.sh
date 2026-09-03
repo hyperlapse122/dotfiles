@@ -36,6 +36,11 @@ desktop: gnome
 nvidia: false
 gpuDeviceId: ""
 gpuArch: ""
+hybridGraphics: false
+battery: false
+fingerprintReader: false
+displayManager: ""
+displayManagerSddm: false
 thinkpad: false
 jetson: ${jetson}
 vm: false

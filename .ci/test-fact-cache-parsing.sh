@@ -136,6 +136,23 @@ out=$(render) || fail 'render failed on an unlisted all-digit device id'
 assert_fact "$out" gpuArch '' 'unlisted all-digit id resolves no architecture'
 assert_fact "$out" gpuDeviceId 2704 'unlisted all-digit id is preserved'
 
+# --- 9a. displayManagerSddm is the negatable companion to the displayManager
+#         string, because the gate grammar rejects !displayManager.sddm and the
+#         SDDM greeter drop-in's retirement needs exactly that negation.
+printf 'nvidia: false\ngpuDeviceId: ""\ndisplayManager: "sddm"\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
+out=$(render) || fail 'render failed on an SDDM host'
+assert_fact "$out" displayManager sddm 'SDDM host'
+assert_fact "$out" displayManagerSddm true 'SDDM host'
+
+printf 'nvidia: false\ngpuDeviceId: ""\ndisplayManager: "plasmalogin"\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
+out=$(render) || fail 'render failed on a non-SDDM host'
+assert_fact "$out" displayManager plasmalogin 'non-SDDM host'
+assert_fact "$out" displayManagerSddm false 'non-SDDM host'
+
+printf 'nvidia: false\ngpuDeviceId: ""\ndisplayManager: ""\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
+out=$(render) || fail 'render failed with no display manager'
+assert_fact "$out" displayManagerSddm false 'no display manager'
+
 # --- 9. No NVIDIA display device: both facts empty, every gated path skips.
 printf 'nvidia: false\ngpuDeviceId: ""\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
 out=$(render) || fail 'render failed with no NVIDIA device'
