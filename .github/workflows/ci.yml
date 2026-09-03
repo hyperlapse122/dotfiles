@@ -141,6 +141,7 @@ jobs:
             ".chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-remove-ibus-source.sh.tmpl:gnome-remove-ibus-source.sh" \
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-calendar.sh.tmpl:kde-calendar.sh" \
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl:kde-theme-dark.sh" \
+            ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl:kde-touchpad.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:build-settings-reconcile.sh" \
             ".chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl:build-command-reconcile.sh"
           do
@@ -171,6 +172,7 @@ jobs:
             "$RUNNER_TEMP/gnome-remove-ibus-source.sh"
           .ci/test-kde-calendar-hard-error.sh "$RUNNER_TEMP/kde-calendar.sh"
           .ci/test-kde-theme-dark-apply.sh "$RUNNER_TEMP/kde-theme-dark.sh"
+          .ci/test-kde-touchpad-devices.sh "$RUNNER_TEMP/kde-touchpad.sh"
           .ci/test-build-settings-reconcile.sh "$RUNNER_TEMP/build-settings-reconcile.sh"
           .ci/test-build-command-reconcile.sh "$RUNNER_TEMP/build-command-reconcile.sh"
           .ci/test-podman-cluster-convergence.sh "$RUNNER_TEMP/setup-podman-cluster.sh"
