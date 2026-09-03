@@ -23,6 +23,11 @@ core_packages=(
   clang-tools-extra
   cmake
   curl
+  # expect drives mokutil --import, which reads its one-time enrollment password
+  # from a terminal a chezmoi apply does not have. install-nvidia-fedora gates on
+  # the expect-present capability, so an absent expect is a declared skip rather
+  # than a failed apply -- but every managed Fedora host should simply have it.
+  expect
   file
   gcc-c++
   git

@@ -70,10 +70,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 132
+  classified_owners: 135
   hard_error_owners: 8
-  rendered_instances: 201
-  phase_local_instances: 127
+  rendered_instances: 204
+  phase_local_instances: 130
   shared_guard_instances: 74
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -95,20 +95,20 @@ plan_contract_scopes:
 
 audited_forms:
   skip_here: 57
-  skip_step: 36
+  skip_step: 39
   done_here: 19
   not_applicable: 20
 
 audited_directions:
-  harmless: 27
-  transient-blocking: 60
+  harmless: 29
+  transient-blocking: 61
   transient-tolerable: 3
   operator-blocking: 3
 audited_scopes:
   00-tools: 4
   10-auth: 5
   20-base: 5
-  30-components: 17
+  30-components: 20
   30-linux: 32
   50-linux-gnome: 29
   50-linux-kde: 33
@@ -129,8 +129,8 @@ divergence:
     reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). One more arrives with the NVIDIA branch axis: an unlisted GPU architecture, which stays here because a device this table does not classify is a fact about the table and not a precondition a later phase supplies. Its two siblings -- a conflicting installed branch, and a declared package set the enabled sources do not offer -- were reclassified OUT of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, but the reason text of the first one prints the dnf command that clears it, so an operator who ran that command was left with a host recorded as provisioned and no driver. A third NVIDIA site joined them there: an availability probe that returned no output at all could not be asked whether the packages exist, which is not the same answer as the sources not offering them. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
   - bucket: 'transient_blocking'
     plan: 47
-    audited: 60
-    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session. One more: authselect itself, a tool the distribution ships but a minimal host may not have installed yet. And one arriving from the harmless bucket in review: the akmods signing keypair, which the module builder mints on its first build -- a precondition that does clear on its own, named through the akmods-signing-key-present probe.'
+    audited: 61
+    reason: 'Every session-bus, gsettings, kconfig-tools, sudo and repo-installed-tool precondition on an otherwise eligible host is transient-blocking by definition, and the fan-out of those preconditions across the GNOME/KDE config scripts is larger than the pre-U4 estimate. The post-inventory WakaTime keyring site adds one session-bus precondition, and the authd fallback adds one sqlite3 precondition; each such row names a registry probe, so U6/U7 wiring stays mechanical. One owner has since LEFT this bucket: the sudo guard moved to transient-tolerable when sudo-skip-guard and sudo-require-guard were replaced by sudo-elevation-guard. Its exit-0 skip recorded twelve unprovisioned scripts as successful runs, so the direction is now the exit-1 one and the owner names no probe at all. config-kde-theme-dark adds four more of the same shape: the session-bus, display-server and plasmashell preconditions the wallpaper script already carries, plus a plasma-apply-colorscheme precondition, because the colour half of the always-dark theme is applied by a Plasma tool that needs a live session. One more: authselect itself, a tool the distribution ships but a minimal host may not have installed yet. And one arriving from the harmless bucket in review: the akmods signing keypair, which the module builder mints on its first build -- a precondition that does clear on its own, named through the akmods-signing-key-present probe. And one from the non-interactive MOK enrollment: expect itself, which the base package set installs, so an absent expect clears on its own and is named through the expect-present probe.'
   - bucket: 'done_here'
     plan: 10
     audited: 19
@@ -141,8 +141,8 @@ divergence:
     reason: 'The auth phase carries a fifth step owner — auth-tailscale/already-authenticated — that the pre-U4 estimate folded into its four blocking rows.'
   - bucket: 'scope:20-linux-fedora'
     plan: 14
-    audited: 21
-    reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis, each a condition the repository will not resolve on its own: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet.'
+    audited: 25
+    reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet. Four more arrive with the non-interactive MOK enrollment that replaced the discarded mokutil --import exit status: an availability probe that answered nothing, no stored enrollment passphrase, an absent expect, and a stored passphrase that is not typeable on the MokManager console. Each of the last three prints the mokutil command to run by hand, which is the signal the silent original had none of.'
   - bucket: 'scope:30-linux'
     plan: 19
     audited: 32
@@ -1996,6 +1996,50 @@ owners:
     direction: 'operator-blocking'
     instances:
       - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-package-availability-unknown'
+  - owner: 'install-nvidia-fedora/mok-enroll-no-expect'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 471
+    anchor: '  if ! command -v expect >/dev/null 2>&1; then'
+    predicate: '! command -v expect >/dev/null 2>&1'
+    predicate_digest: 'sha256:c3f8e00f3feadb7c8e2c437062f1b4423341495378bcccef7fb9acc089f2e71d'
+    continuation: 'abandon-step-inline-notice'
+    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'transient-blocking'
+    probe: 'expect-present'
+    fingerprint_placement: 'new-header-block'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-expect'
+  - owner: 'install-nvidia-fedora/mok-enroll-passphrase-untypeable'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 481
+    anchor: '  if ! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"; then'
+    predicate: '! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"'
+    predicate_digest: 'sha256:6fc2dbac44c96b2c7f5c1cd340c4edb3dcdef6991c7ade10030283a0155b5a88'
+    continuation: 'abandon-step-inline-notice'
+    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-passphrase-untypeable'
+  - owner: 'install-nvidia-fedora/mok-enroll-no-passphrase'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 463
+    anchor: '  if [[ -z "$MOK_ENROLL_PASSPHRASE" ]]; then'
+    predicate: '[[ -z "$MOK_ENROLL_PASSPHRASE" ]]'
+    predicate_digest: 'sha256:96c6b6ba8a4e8fdd90f9a99d1623003b403331d08534acd1f713151a976458ad'
+    continuation: 'abandon-step-inline-notice'
+    continuation_digest: 'sha256:aa2ba0e8a1b3b1b5197cb1b6966488ba8d48c6b9a4a8b452113fe97e603bf9f0'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/mok-enroll-no-passphrase'
   - owner: 'install-nvidia-fedora/mok-generate-awaiting-builder'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'

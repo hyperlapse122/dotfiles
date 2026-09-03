@@ -3,14 +3,42 @@
 {{- if or $isFedora $isUbuntu -}}
 {{- $nvidiaCtkPresent := "" -}}
 {{- $akmodsKeyPresent := "" -}}
+{{- $expectPresent := "" -}}
+{{- $mokPassphrase := "" -}}
 {{- if $isFedora -}}
 {{-   $nvidiaCtkPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
 {{-   $akmodsKeyPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "akmods-signing-key-present") -}}
+{{-   $expectPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "expect-present") -}}
+{{- /* The MOK enrollment password is the LUKS passphrase the config already
+     stores: the operator has to retype this value at the MokManager screen on the
+     next boot, and a generated one would have to be recorded somewhere for them
+     to look up. Read exactly the way run_onchange_after_luks-tpm2.sh.tmpl reads
+     it -- the READ-ONLY key partial, so a host that stored a cipher and lost its
+     keyring entry does not get a fresh key that cannot decrypt the old text. */ -}}
+{{-   if and (hasKey . "luksPassphraseCipher") (ne .luksPassphraseCipher "") -}}
+{{-     $secretsKey := includeTemplate "config-secrets-key.tmpl" . -}}
+{{-     if ne $secretsKey "" }}{{ $mokPassphrase = decryptAES $secretsKey .luksPassphraseCipher }}{{ end -}}
+{{-   end -}}
 {{- end -}}
 #!/usr/bin/env bash
 
 {{ if $isFedora -}}
-# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent))) }}
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent) (dict "name" "expect-present" "value" $expectPresent))) }}
+#
+# SECURITY NOTES for the MOK enrollment passphrase below, identical in shape to
+# run_onchange_after_luks-tpm2.sh.tmpl's, because it is the same stored secret:
+#   * At rest the config carries only the AES ciphertext and the key never leaves
+#     the user keyring. But when it decrypts, it is rendered (base64-wrapped for
+#     shell safety, NOT secrecy) into this script's transient run-script file,
+#     which chezmoi writes mode-0700 and deletes after execution. Avoid
+#     `chezmoi apply --verbose` / `--dry-run` with a real passphrase stored --
+#     those print rendered script contents.
+#   * The passphrase is handed to expect through the environment ONLY, never
+#     argv, so it is not visible in the process table.
+#   * A blank prompt, an unreachable or locked keyring, or an absent expect all
+#     render the declared skip path instead, so no passphrase is rendered at all.
+#   * shim consumes MokAuth at boot and does not expose it as a runtime efivar,
+#     so the queued hash has no persistent runtime read surface.
 {{ end -}}
 set -euo pipefail
 {{ includeTemplate "facts-sh.tmpl" . }}
@@ -244,6 +272,14 @@ mok_cert_path() {
   esac
 }
 
+# MokManager reads its password on a US-layout UEFI console with no input method,
+# so only printable US-ASCII is typeable there. Pinned to LC_ALL=C: the character
+# class is a byte range, and a UTF-8 locale would widen it to accept exactly the
+# characters this rejects.
+mok_passphrase_is_typeable() {
+  printf '%s' "$1" | LC_ALL=C grep -qE '^[ -~]+$'
+}
+
 mok_key_path() {
   case "$nvidia_build_system" in
     akmod) printf '/etc/pki/akmods/private/private_key.priv' ;;
@@ -403,7 +439,82 @@ enroll_dkms_mok() {
     return 0
   fi
 
-  "${SUDO[@]}" mokutil --import "${cert}" 2>/dev/null || true
+  # THE IMPORT NEEDS A TERMINAL AND AN APPLY HAS NONE. `mokutil --import` reads a
+  # one-time enrollment password from the tty (`input password:` twice), so on a
+  # non-interactive apply it fails -- and this call used to discard both the error
+  # text and the exit status, so the apply reported success while no MokNew
+  # variable was ever written. Secure Boot then rejected the signed module with
+  # nothing on screen to say why.
+  #
+  # THE PASSWORD IS THE STORED LUKS PASSPHRASE. The operator must retype this
+  # value at the MokManager screen on the next boot, so it has to be a value they
+  # already know; a generated one would have to be recorded and looked up.
+  # ONE RENDERED SHAPE, not a render-time fork. The passphrase renders as the
+  # empty string when the config stores no cipher, or when the keyring could not
+  # be reached to decrypt it, and every precondition is then a RUNTIME branch --
+  # so the rendered script is identical in shape on a host with a stored
+  # passphrase and one without, and the smoke harness can drive every path from a
+  # single render. base64 keeps a shell-special character in the passphrase from
+  # breaking the assignment; it is not secrecy, exactly as the LUKS wrapper
+  # documents.
+  local MOK_ENROLL_PASSPHRASE
+  MOK_ENROLL_PASSPHRASE="$(printf '%s' {{ $mokPassphrase | b64enc | quote }} | base64 -d)"
+
+  if [[ -z "$MOK_ENROLL_PASSPHRASE" ]]; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-passphrase" "direction" "harmless" "reason" "no stored passphrase is available to answer the mokutil enrollment prompt; run the printed mokutil command by hand") | trim | indent 6 }}
+    )
+    report_manual_mok_import "$cert"
+    return 0
+  fi
+
+  if ! command -v expect >/dev/null 2>&1; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-expect" "direction" "transient-blocking" "probe" "expect-present" "reason" "expect is not installed, so the enrollment password cannot be supplied without a terminal; run the printed mokutil command by hand instead") | trim | indent 6 }}
+    )
+    report_manual_mok_import "$cert"
+    return 0
+  fi
+
+  # Queueing a request the operator cannot complete is worse than not queueing
+  # it: the machine reboots into a MokManager prompt it can never satisfy.
+  if ! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-passphrase-untypeable" "direction" "harmless" "reason" "the stored passphrase is not printable US-ASCII and could not be typed at the MokManager console; run the printed mokutil command by hand with a typeable password") | trim | indent 6 }}
+    )
+    report_manual_mok_import "$cert"
+    return 0
+  fi
+
+  # EXPECT RUNS UNPRIVILEGED AND SPAWNS THE ELEVATION ITSELF, rather than running
+  # under sudo. Handing the secret to a privileged child would mean either `sudo
+  # -E` (which sudoers may strip) or `sudo env VAR=...` -- and that second form
+  # puts the passphrase in env's ARGV, visible in the process table to every user
+  # on the box. Inheriting it into an unprivileged expect keeps it in that
+  # process's own environment, which only its owner and root can read.
+  #
+  # The exit status is PROPAGATED: a discarded one is the whole defect this
+  # replaced.
+  if ! MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert" \
+    MOK_SUDO="${SUDO[*]-}" expect -f - <<'EXPECT'; then
+set timeout 30
+set pw $env(MOK_ENROLL_PASSPHRASE)
+set cert $env(MOK_CERT)
+set argv [concat $env(MOK_SUDO) [list mokutil --import $cert]]
+eval spawn -noecho $argv
+expect "input password:" { send -- "$pw\r" }
+expect "input password again:" { send -- "$pw\r" }
+expect eof
+catch wait result
+exit [lindex $result 3]
+EXPECT
+    printf 'install-nvidia-fedora.sh: mokutil --import failed for %s; the certificate was NOT queued.\n' "$cert" >&2
+    report_manual_mok_import "$cert"
+    return 1
+  fi
+  MOK_ENROLL_PASSPHRASE=''
+  printf 'install-nvidia-fedora.sh: %s is queued for enrollment.\n' "$cert"
+  printf 'install-nvidia-fedora.sh: the MokManager screen on the next boot still needs a physical console: choose Enroll MOK and type the stored LUKS passphrase.\n'
 }
 
 enable_nvidia_services() {
@@ -442,6 +553,14 @@ report_unknown_availability() {
   printf 'install-nvidia-fedora.sh: dnf listed no available packages at all for the %s branch, so it could not be asked whether they exist.\n' \
     "$nvidia_branch" >&2
   printf 'install-nvidia-fedora.sh: check repository reachability, then re-run: sudo dnf makecache\n' >&2
+}
+
+# The fallback every skip path above takes. Printing the exact command is the
+# whole point: the silent half of the original defect was that an operator saw
+# nothing at all when the import did not happen.
+report_manual_mok_import() {
+  printf 'install-nvidia-fedora.sh: queue it by hand instead, then reboot and choose Enroll MOK:\n' >&2
+  printf '  sudo mokutil --import %s\n' "$1" >&2
 }
 
 report_awaiting_builder_key() {

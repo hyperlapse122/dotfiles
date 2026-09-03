@@ -6,6 +6,7 @@ busctl-present	command-present	none	linux	available	unavailable
 chsh-present	command-present	none	linux	available	unavailable
 docker-credential-secretservice-present	command-present	none	linux	available	unavailable
 dotnet-present	command-present	none	linux	available	unavailable
+expect-present	command-present	none	linux	available	unavailable
 fc-cache-present	command-present	none	linux	available	unavailable
 fc-match-present	command-present	none	linux	available	unavailable
 fcitx5-present	command-present	none	linux	available	unavailable
