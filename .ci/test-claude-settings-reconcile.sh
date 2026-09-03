@@ -350,6 +350,27 @@ assert_render_fails trailing-dot \
 assert_render_fails segment-leading-digit \
   '{"agents":{"claude":{"settings":{"modelSettings.9bad":"x"}}}}' "$bad_path"
 
+# A permission grant enters through the same data edit as a notification toggle, so
+# the ownership list in check 5 cannot screen it. Check 6 screens for risk with an
+# allowlist: a security-sensitive path outside it fails the render by name.
+permission_reject='grants or bypasses a Claude Code permission'
+assert_render_fails permissions-allow-list \
+  '{"agents":{"claude":{"settings":{"permissions.allow":"x"}}}}' "$permission_reject"
+# A list INDEX is rejected one check earlier, by the path grammar: a segment must
+# start with a letter. Assert that reason, not check 6's -- it is the honest one.
+assert_render_fails permissions-deny-index \
+  '{"agents":{"claude":{"settings":{"permissions.deny.0":"x"}}}}' "$bad_path"
+assert_render_fails permissions-deny-named-entry \
+  '{"agents":{"claude":{"settings":{"permissions.deny.Bash":"x"}}}}' "$permission_reject"
+assert_render_fails permissions-ask-list \
+  '{"agents":{"claude":{"settings":{"permissions.ask":"x"}}}}' "$permission_reject"
+assert_render_fails permissions-unreviewed-leaf \
+  '{"agents":{"claude":{"settings":{"permissions.additionalDirectories":"x"}}}}' "$permission_reject"
+# A bare `permissions` scalar is security-sensitive by prefix too, so check 6 owns
+# it rather than the ancestor-overlap check further down.
+assert_render_fails permissions-bare \
+  '{"agents":{"claude":{"settings":{"permissions":"x"}}}}' "$permission_reject"
+
 # A container value would be written wholesale and destroy the record's other
 # members -- the exact clobbering the leaf-path design removes.
 assert_render_fails container-value \
@@ -368,6 +389,16 @@ assert_partial_ok empty-declaration \
 # Model ids are path segments, so the grammar must admit hyphens and digits.
 assert_partial_ok hyphen-and-digit-segment \
   '{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" (dict "modelSettings.claude-opus-5.effortLevel" "high")) -}}'
+# The one reviewed permissions.* path renders clean, so the allowlist admits it --
+# it is deliberately left undeclared in agents.yaml, not unexpressible.
+assert_partial_ok reviewed-permission-path \
+  '{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" (dict "permissions.defaultMode" "default")) -}}'
+# The existing permission-shaped pin must keep rendering: it is on the allowlist.
+assert_partial_ok reviewed-skip-dangerous-prompt \
+  '{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" (dict "skipDangerousModePermissionPrompt" true)) -}}'
+# Check 6 must not widen: an ordinary notification toggle is not security-sensitive.
+assert_partial_ok non-permission-leaf \
+  '{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" (dict "inputNeededNotifEnabled" true)) -}}'
 # The real declaration must always render clean.
 assert_partial_ok real-declaration \
   '{{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" .agents.claude.settings) -}}'
