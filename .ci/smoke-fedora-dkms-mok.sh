@@ -88,11 +88,34 @@ grep -Eq 'REMOVED_(ETC_)?PATHS\+=\(?"/etc/kernel/install\.d/50-vbox-sign\.instal
 
 state_start=$(grep -n '^dkms_mok_state() {$' "${rendered_installer}" | cut -d: -f1 || true)
 ensure_start=$(grep -n '^ensure_dkms_mok_generated() {$' "${rendered_installer}" | cut -d: -f1 || true)
+cert_start=$(grep -n '^mok_cert_path() {$' "${rendered_installer}" | cut -d: -f1 || true)
+key_start=$(grep -n '^mok_key_path() {$' "${rendered_installer}" | cut -d: -f1 || true)
 if [[ -z "${state_start}" || -z "${ensure_start}" ]]; then
   fail 'rendered Fedora installer is missing the DKMS MOK state helpers'
 fi
-sed -n "${state_start},/^}$/p" "${rendered_installer}" > "${scratch}/mok_state.sh"
-sed -n "${ensure_start},/^}$/p" "${rendered_installer}" > "${scratch}/mok_ensure.sh"
+# The certificate path follows the resolved branch's module build system, so
+# dkms_mok_state no longer names a literal path -- it asks these two helpers.
+# Extract them alongside it, and leave nvidia_build_system unset so they answer
+# with the DKMS pair this fixture drives.
+if [[ -z "${cert_start}" || -z "${key_start}" ]]; then
+  fail 'rendered Fedora installer is missing the branch-aware MOK path helpers'
+fi
+{
+  printf 'nvidia_build_system=%s\n' "${SMOKE_BUILD_SYSTEM:-dkms}"
+  sed -n "${cert_start},/^}$/p" "${rendered_installer}"
+  sed -n "${key_start},/^}$/p" "${rendered_installer}"
+} > "${scratch}/mok_paths.sh"
+cat "${scratch}/mok_paths.sh" > "${scratch}/mok_state.sh"
+sed -n "${state_start},/^}$/p" "${rendered_installer}" >> "${scratch}/mok_state.sh"
+# ensure_dkms_mok_generated now consults the branch-aware path helpers and the
+# resolved build system, so the fixture seeds both before the extracted body. The
+# reporting helper is stubbed: this fixture drives the DKMS branch, where the
+# out-of-tree wait never fires.
+{
+  cat "${scratch}/mok_paths.sh"
+  printf 'report_awaiting_builder_key() { :; }\n'
+  sed -n "${ensure_start},/^}$/p" "${rendered_installer}"
+} > "${scratch}/mok_ensure.sh"
 
 # ensure_dkms_mok_generated must not re-probe the files itself, and the sole
 # mint must be reachable only from the `absent` branch.
@@ -128,7 +151,7 @@ run_mok_state() {
       "${a[@]}"
     }
     SUDO=(fake_sudo)
-    '"$(sed 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh")"'
+    '"$(sed -e "s|'/var/lib/dkms/\([a-z.]*\)'|\"\${MOK_DIR}/\1\"|g" -e 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh")"'
     dkms_mok_state
   '
 }
@@ -209,7 +232,7 @@ run_ensure() {
       printf MINTED > "${MOK_DIR}/mok.pub"
       printf MINTED > "${MOK_DIR}/mok.key"
     }
-    '"$(sed 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh" "${scratch}/mok_ensure_nogates.sh")"'
+    '"$(sed -e "s|'/var/lib/dkms/\([a-z.]*\)'|\"\${MOK_DIR}/\1\"|g" -e 's|/var/lib/dkms|${MOK_DIR}|g' "${scratch}/mok_state.sh" "${scratch}/mok_ensure_nogates.sh")"'
     ensure_dkms_mok_generated && printf CONTINUED
   ' 2>/dev/null
 }

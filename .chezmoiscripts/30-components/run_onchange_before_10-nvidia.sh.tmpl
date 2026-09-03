@@ -18,27 +18,80 @@ set -euo pipefail
 {{ if $isFedora -}}
 DNF=("${SUDO[@]}" dnf)
 
+# Branch policy — GENERATED from .chezmoidata/nvidia.yaml. Every package name,
+# package source and module build system below is a data row, not a decision made
+# here: the installer selects a set, it does not know which GPU needs which
+# branch. Selection happens at RUN time on FACT_GPU_ARCH so one rendered script
+# covers every branch, which is what lets the smoke harness assert both shapes
+# from a single render.
 nvidia_packages=(
-  cuda-drivers
-  cuda-toolkit-13-3
-  dkms
-  kmod-nvidia-latest-dkms
-  libnvidia-container1
-  libnvidia-container-tools
-  nvidia-container-toolkit
-  nvidia-container-toolkit-base
-  nvidia-driver
+{{- range .nvidia.currentBranch.packages }}
+  {{ . }}
+{{- end }}
 )
 
 nvidia_rpmfusion_excludes=(
-  'akmod-nvidia*'
-  'kmod-nvidia*'
-  nvidia-modprobe
-  nvidia-persistenced
-  nvidia-settings
-  nvidia-xconfig
-  'xorg-x11-drv-nvidia*'
+{{- range .nvidia.currentBranchRpmfusionExcludes }}
+  {{ . | quote }}
+{{- end }}
 )
+
+nvidia_branch=''
+nvidia_branch_source=''
+nvidia_build_system=''
+nvidia_conflicting_packages=()
+
+# One marker package per branch: its presence means that branch is installed.
+nvidia_branch_markers=(
+{{- range $arch, $branch := .nvidia.branches }}
+  {{ $branch.marker }}
+{{- end }}
+  {{ .nvidia.currentBranch.marker }}
+)
+
+# Resolve the branch this host's GPU architecture needs. Returns 1 when the
+# architecture is unknown, which is every host whose device id the table does not
+# list -- including a GPU newer than the table. The caller declares that as a skip
+# naming the device, so an operator sees the row to add rather than a machine that
+# quietly lost its driver.
+resolve_nvidia_branch() {
+  case "${FACT_GPU_ARCH:-}" in
+{{- range $arch, $branch := .nvidia.branches }}
+    {{ $arch }})
+      nvidia_branch={{ $branch.name | quote }}
+      nvidia_branch_source={{ $branch.source | quote }}
+      nvidia_build_system={{ $branch.buildSystem | quote }}
+{{- if $branch.packages }}
+      nvidia_packages=(
+{{- range $branch.packages }}
+        {{ . }}
+{{- end }}
+      )
+      # This branch is served by its own package source, so the exclusions that
+      # keep that source out of the way for the current branch must not apply.
+      nvidia_rpmfusion_excludes=()
+{{- end }}
+      ;;
+{{- end }}
+    *)
+      return 1
+      ;;
+  esac
+  # Everything that marks a DIFFERENT branch is a conflict for this host.
+  local marker resolved_marker=''
+  case "$nvidia_branch" in
+{{- range $arch, $branch := .nvidia.branches }}
+    {{ $branch.name | quote }}) resolved_marker={{ $branch.marker | quote }} ;;
+{{- end }}
+    {{ .nvidia.currentBranch.name | quote }}) resolved_marker={{ .nvidia.currentBranch.marker | quote }} ;;
+  esac
+  nvidia_conflicting_packages=()
+  for marker in "${nvidia_branch_markers[@]}"; do
+    [[ "$marker" == "$resolved_marker" ]] && continue
+    nvidia_conflicting_packages+=("$marker")
+  done
+  return 0
+}
 
 configure_nvidia_repo_policy() {
   if ! "${DNF[@]}" -q repo list --all 'rpmfusion-nonfree*' | grep -q '^rpmfusion-nonfree'; then
@@ -50,16 +103,40 @@ configure_nvidia_repo_policy() {
     "rpmfusion-nonfree*.excludepkgs=${nvidia_rpmfusion_excludes[*]}" || true
 }
 
+# The vendor CUDA repository serves the CURRENT branch only; a legacy branch comes
+# from RPM Fusion, which the exclusions above deliberately keep out of the way for
+# a current-branch host. Adding the CUDA repository on a legacy host would put the
+# two sources in competition for the same driver.
+#
+# Both sources are added from their own signed release repofile with package
+# signature checking left at the distribution default. Content from here is
+# compiled into a kernel module that the host then signs with its own machine
+# owner key, so it ends up INSIDE the Secure Boot trust chain: never reach for
+# --nogpgcheck or gpgcheck=0 to make an install succeed.
 setup_nvidia_repos() {
   configure_nvidia_repo_policy
-  "${DNF[@]}" config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo --overwrite
+  if [[ "$nvidia_branch_source" == 'cuda' ]]; then
+    "${DNF[@]}" config-manager addrepo --from-repofile https://developer.download.nvidia.com/compute/cuda/repos/fedora"$(rpm -E %fedora)"/x86_64/cuda-fedora"$(rpm -E %fedora)".repo --overwrite
+  fi
   "${DNF[@]}" config-manager addrepo --from-repofile https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo --overwrite
   "${DNF[@]}" makecache -y
 }
 
+# A branch this host does not resolve to, but whose packages are installed. The
+# two are alternatives -- they ship the same kernel module and the same libraries
+# -- so installing over the top would leave the host with neither working. The
+# repository does not remove packages (see AGENTS.md), so this reports and stops.
+conflicting_nvidia_branch() {
+  local installed
+  for installed in "${nvidia_conflicting_packages[@]}"; do
+    rpm -q "$installed" >/dev/null 2>&1 && { printf '%s' "$installed"; return 0; }
+  done
+  return 1
+}
+
 install_nvidia_packages() {
   local -a missing=()
-  local pkg
+  local pkg conflict
   for pkg in "${nvidia_packages[@]}"; do
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
@@ -70,7 +147,20 @@ install_nvidia_packages() {
     return 0
   fi
 
+  if conflict="$(conflicting_nvidia_branch)" && report_branch_conflict "$conflict"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-conflict" "direction" "harmless" "reason" "a conflicting NVIDIA driver branch is installed; the operator command to clear it was printed and nothing was installed or removed") | trim | indent 4 }}
+  fi
+
   setup_nvidia_repos
+
+  local -a unavailable=()
+  for pkg in "${missing[@]}"; do
+    "${DNF[@]}" -q list --available "$pkg" >/dev/null 2>&1 || unavailable+=("$pkg")
+  done
+  if [[ "${#unavailable[@]}" -gt 0 ]] && report_unavailable_packages "${unavailable[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "harmless" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
+  fi
+
   "${DNF[@]}" install -y "${nvidia_packages[@]}"
 }
 
@@ -86,12 +176,50 @@ configure_nvidia_support() {
   "${SUDO[@]}" setsebool -P container_use_devices on 2>/dev/null || true
 }
 
+# WHICH certificate this host signs its module with follows the resolved branch's
+# kernel-module build system, not a fixed path. The out-of-tree builder mints its
+# own pair with kmodgenca on first use; DKMS keeps the pair this repository has
+# always generated. Both are host-generated, so the installer selects a path and
+# waits for the tool that owns it -- it never mints the other one's key.
+mok_cert_path() {
+  case "$nvidia_build_system" in
+    akmod) printf '/etc/pki/akmods/certs/public_key.der' ;;
+    *)     printf '/var/lib/dkms/mok.pub' ;;
+  esac
+}
+
+mok_key_path() {
+  case "$nvidia_build_system" in
+    akmod) printf '/etc/pki/akmods/private/private_key.priv' ;;
+    *)     printf '/var/lib/dkms/mok.key' ;;
+  esac
+}
+
 dkms_mok_state() {
   "${SUDO[@]}" sh -c '
     if [ -f "$1" ] && [ -f "$2" ]; then printf present
     elif [ -e "$1" ] || [ -e "$2" ]; then printf partial
     else printf absent
-    fi' sh /var/lib/dkms/mok.pub /var/lib/dkms/mok.key
+    fi' sh "$(mok_cert_path)" "$(mok_key_path)"
+}
+
+# A certificate enrolled for a branch this host no longer resolves to stays in
+# firmware: MOK enrollment is not something this repository can withdraw, and it
+# forbids teardown. Report it so the trust gap is visible rather than assumed
+# away; withdrawing it is an operator action.
+report_stale_mok() {
+  local other
+  for other in "${nvidia_conflicting_packages[@]}"; do
+    case "$other" in
+      akmod-nvidia-*) other='/etc/pki/akmods/certs/public_key.der' ;;
+      *)              other='/var/lib/dkms/mok.pub' ;;
+    esac
+    [[ "$other" == "$(mok_cert_path)" ]] && continue
+    "${SUDO[@]}" test -f "$other" 2>/dev/null || continue
+    "${SUDO[@]}" mokutil --test-key "$other" 2>/dev/null | grep -q 'is already enrolled' || continue
+    printf 'install-nvidia-fedora.sh: %s is still enrolled but belongs to a branch this host no longer resolves to.\n' "$other" >&2
+    printf 'install-nvidia-fedora.sh: withdrawing it is an operator action: sudo mokutil --delete %s\n' "$other" >&2
+  done
 }
 
 ensure_dkms_mok_generated() {
@@ -107,6 +235,15 @@ ensure_dkms_mok_generated() {
     )
     return 0
   fi
+  # The out-of-tree builder owns its own keypair and mints it with kmodgenca on
+  # first build. Minting one here would leave the module signed by a key the
+  # builder does not use, so this waits for it and declares the wait rather than
+  # exiting clean -- an eligible Secure Boot host with an unsigned module is not a
+  # converged host, and reusing the DKMS not-applicable site would hide it.
+  if [[ "$nvidia_build_system" == 'akmod' ]] && report_awaiting_builder_key; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-generate-awaiting-builder" "direction" "harmless" "reason" "the out-of-tree module builder has not generated its signing keypair yet; it is minted on the first build and enrollment is deferred to the next apply") | trim | indent 4 }}
+  fi
+
   local state
   state="$(dkms_mok_state)" || return 1
   case "$state" in
@@ -121,6 +258,7 @@ ensure_dkms_mok_generated() {
       return 1
       ;;
   esac
+
 
   if [[ -x /usr/lib/dkms/mok_signing_setup ]]; then
     "${SUDO[@]}" /usr/lib/dkms/mok_signing_setup || true
@@ -154,7 +292,8 @@ enroll_dkms_mok() {
   fi
 
   ensure_dkms_mok_generated || true
-  local cert=/var/lib/dkms/mok.pub
+  local cert
+  cert="$(mok_cert_path)"
   local mok_state
   mok_state="$(dkms_mok_state)" || mok_state=unreadable
   if [[ "${mok_state}" != present || ! -f "$cert" ]]; then
@@ -179,18 +318,58 @@ enroll_dkms_mok() {
   fi
 
   "${SUDO[@]}" mokutil --import "${cert}" 2>/dev/null || true
+  report_stale_mok
 }
 
 enable_nvidia_services() {
-  if systemctl list-unit-files nvidia-persistenced.service 2>/dev/null | grep -q nvidia-persistenced; then
+  if [[ -n "$nvidia_branch" ]] && systemctl list-unit-files nvidia-persistenced.service 2>/dev/null | grep -q nvidia-persistenced; then
     "${SUDO[@]}" systemctl enable nvidia-persistenced 2>/dev/null || true
   fi
 }
 
-install_nvidia_packages
-configure_nvidia_support
-enroll_dkms_mok
-enable_nvidia_services
+# Prints the guidance and always succeeds, so it can sit inside the condition of
+# the branch its skip declares. The declaration has to be the FIRST line of that
+# branch -- anything printed after it would be dead code, because skip_step
+# returns immediately.
+report_unlisted_gpu() {
+  if [[ -n "${FACT_GPU_DEVICE_ID:-}" ]]; then
+    printf 'install-nvidia-fedora.sh: NVIDIA device %s is not in nvidia.deviceArchitectures.\n' \
+      "$FACT_GPU_DEVICE_ID" >&2
+    printf 'install-nvidia-fedora.sh: add a row for it under the architecture it belongs to:\n' >&2
+    printf '  .chezmoidata/nvidia.yaml   deviceArchitectures: "%s": <architecture>\n' \
+      "$FACT_GPU_DEVICE_ID" >&2
+  fi
+}
+
+report_branch_conflict() {
+  printf 'install-nvidia-fedora.sh: %s is installed but this host resolves to the %s branch.\n' \
+    "$1" "$nvidia_branch" >&2
+  printf 'install-nvidia-fedora.sh: clear it first, then re-apply:\n' >&2
+  printf '  sudo dnf remove %s\n' "$1" >&2
+}
+
+report_unavailable_packages() {
+  printf 'install-nvidia-fedora.sh: the %s branch declares packages the enabled sources do not offer: %s\n' \
+    "$nvidia_branch" "$*" >&2
+}
+
+report_awaiting_builder_key() {
+  printf 'install-nvidia-fedora.sh: %s has not been generated yet; the akmods key generator creates it on the first module build.\n' \
+    "$(mok_cert_path)" >&2
+}
+
+main() {
+  if ! resolve_nvidia_branch && report_unlisted_gpu; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-architecture-unlisted" "direction" "harmless" "reason" "this NVIDIA device is not listed in the declared architecture table; the device id and the row to add were printed and no driver branch was selected") | trim | indent 4 }}
+  fi
+
+  install_nvidia_packages
+  configure_nvidia_support
+  enroll_dkms_mok
+  enable_nvidia_services
+}
+
+main
 
 {{ else if $isUbuntu -}}
 install_apt() {

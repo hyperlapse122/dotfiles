@@ -41,10 +41,21 @@ nvidia:
   # Architecture -> the branch that still supports it. `buildSystem` decides
   # which signing certificate the installer enrolls: `akmod` uses the out-of-tree
   # builder's own generated certificate, `dkms` keeps /var/lib/dkms/mok.pub.
+  #
+  # An architecture the CURRENT branch still supports gets an entry here too, with
+  # `name`, `source`, `buildSystem` and `marker` copied from currentBranch below
+  # and NO `packages` key -- omitting it keeps the default package set. Listing it
+  # explicitly is the point: an architecture nobody has classified must never
+  # inherit a branch by falling through, because that is the fail-open this axis
+  # exists to remove.
   branches:
     pascal:
       name: "580xx"
       buildSystem: akmod
+      # The package whose presence means THIS branch is installed. Used to detect
+      # a host carrying a branch it no longer resolves to; the installer reports
+      # that and stops rather than removing anything.
+      marker: akmod-nvidia-580xx
       # RPM Fusion carries the legacy branch; NVIDIA's own CUDA repository ships
       # only the current one. The current-branch exclusion policy must therefore
       # NOT apply to this branch's packages.
@@ -71,6 +82,7 @@ nvidia:
   currentBranch:
     name: "latest"
     buildSystem: dkms
+    marker: kmod-nvidia-latest-dkms
     source: cuda
     packages:
       - cuda-drivers

@@ -104,10 +104,10 @@ totals = matrix.get('totals', {})
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 # Retiring the figma-auth build removed its three causes from the original eleven.
 frozen = {
-    'classified_owners': 123,
+    'classified_owners': 127,
     'hard_error_owners': 8,
-    'rendered_instances': 186,
-    'phase_local_instances': 118,
+    'rendered_instances': 190,
+    'phase_local_instances': 122,
     'shared_guard_instances': 68,
 }
 for key, expected in frozen.items():
