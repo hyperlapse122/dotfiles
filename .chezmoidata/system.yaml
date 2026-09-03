@@ -36,10 +36,20 @@ system:
         # The Breeze drop-in de-brands an SDDM greeter. Fedora 44 KDE ships the
         # Plasma login manager, which has no theme engine at all -- no [Theme]
         # section and no themes directory -- so the intent is not merely unmet
-        # there, it is unexpressible. Retire it from every host that does not run
-        # SDDM; a host that does keeps it.
+        # there, it is unexpressible.
+        #
+        # A POSITIVE FACT, NOT THE INVERSE OF THE INSTALL GATE. Three host classes
+        # have to come out right and !displayManagerSddm got the first one wrong:
+        #   unknown display manager -> remove NOTHING. That fact is false when the
+        #     probe could not answer, so the inverse turned an unreadable fact into
+        #     an active removal on a real SDDM host.
+        #   known host, drop-in not usable -> RETIRE. This covers a non-SDDM host
+        #     and, unlike the old gate, an SDDM host that lost the breeze theme --
+        #     which used to keep a Current=breeze file pointing at a theme that is
+        #     gone, the broken login screen sddmBreeze exists to prevent.
+        #   known SDDM host with the theme -> KEEP. It is the install case.
         - path: /etc/sddm.conf.d/90-breeze.conf
-          gate: '!displayManagerSddm'
+          gate: sddmBreezeRetirable
 
     sudoers:
       overrides:

@@ -81,7 +81,7 @@ system/linux/etc/locale.conf
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable; ThinkPad-only `thinkpad_acpi` (no `fan_control` — retired, nothing managed consumed it); `hybridGraphics`-gated `nvidia-hybrid-modeset.conf` / `nvidia-hybrid-power.conf` (PRIME KMS and discrete-GPU runtime power management) |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
-| `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreezeUsable` gate installs it only where the theme is present **and** the host runs SDDM |
+| `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreezeUsable` installs it only where the theme is present **and** the host runs SDDM, and `sddmBreezeRetirable` retires it from every host with a KNOWN display manager it is not usable on — an unknown display manager removes nothing |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/systemd/logind.conf.d/` | laptop lid behaviour (`battery` gate): suspend on lid close on battery, ignore on external power and while docked |
 | `etc/systemd/sleep.conf.d/` | laptop sleep policy (`battery` gate): `suspend-then-hibernate`, reusing the swapfile and resume path `install-system-26-swap-hibernate` provisions |

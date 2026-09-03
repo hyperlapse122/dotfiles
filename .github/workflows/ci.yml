@@ -101,6 +101,7 @@ jobs:
           .ci/test-extension-retry.sh
           .ci/test-fact-cache-parsing.sh
           .ci/test-host-fact-probes.sh
+          .ci/test-system-removed-gates.sh
           .ci/test-capability-cache.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-sudo-elevation-guard.sh

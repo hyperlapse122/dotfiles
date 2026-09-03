@@ -47,7 +47,7 @@ gate_reason() {
   case "$1" in
     sddmBreezeUsable) printf 'this host does not run SDDM, or the breeze theme is absent' ;;
     sddmBreeze) printf 'breeze sddm theme absent' ;;
-    '!displayManagerSddm') printf 'this host runs SDDM, so the drop-in stays' ;;
+    sddmBreezeRetirable) printf 'the display manager is unknown, or the drop-in belongs on this host' ;;
     gdm) printf 'gdm not installed' ;;
     *) printf 'gate %s failed' "$1" ;;
   esac
