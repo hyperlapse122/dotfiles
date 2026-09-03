@@ -54,6 +54,50 @@ assert_declared_present() {
     || fail "$label: a declared leaf is missing or holds the wrong value in $file"
 }
 
+# Claude Code reads env values as STRINGS, so an unquoted scalar in agents.yaml
+# renders as a JSON number and the tool ignores the key. assert_declared_present
+# cannot catch that: it compares the live value against the SAME rendered
+# declaration, so an unquoted value is a number on both sides and matches. Only a
+# type check over the record sees it. Declared as a record sweep rather than one
+# key, so a later env leaf inherits the guard instead of needing its own line.
+# The object test is not redundant: a bare `env` scalar leaf renders past the
+# declaration guard, and to_entries would then abort this whole suite at the
+# assignment with jq's own "has no keys" rather than the diagnostic below.
+env_type_offenders() {
+  jq -r '(.env // {}) | if type == "object" then (to_entries[] | select(.value | type != "string") | .key) else "env" end' "$1"
+}
+
+assert_env_types_are_strings() {
+  local file=$1 label=$2 offenders
+  offenders=$(env_type_offenders "$file")
+  [[ -z $offenders ]] \
+    || fail "$label: declared env leaves reached the settings file as non-strings: $offenders"
+}
+
+# The sweep above runs only against files the reconciler built from today's
+# correctly quoted declaration, so its FAILURE branch never executed in CI -- the
+# exact silent-pass the guard exists to prevent. These two fixtures force it, and
+# they are written by hand so they cannot go quiet if agents.yaml changes.
+mistyped_number=$scratch/env-number.json
+printf '%s' '{"env":{"DISABLE_AUTOUPDATER":1,"OK_KEY":"1"}}' >"$mistyped_number"
+[[ $(env_type_offenders "$mistyped_number") == 'DISABLE_AUTOUPDATER' ]] \
+  || fail 'the env-type sweep did not flag a numeric env leaf by name'
+
+mistyped_scalar=$scratch/env-scalar.json
+printf '%s' '{"env":"oops"}' >"$mistyped_scalar"
+[[ $(env_type_offenders "$mistyped_scalar") == 'env' ]] \
+  || fail 'the env-type sweep did not flag a bare env scalar as env'
+
+env_clean=$scratch/env-clean.json
+printf '%s' '{"env":{"DISABLE_AUTOUPDATER":"1"}}' >"$env_clean"
+[[ -z $(env_type_offenders "$env_clean") ]] \
+  || fail 'the env-type sweep flagged a correctly typed env record'
+
+env_absent=$scratch/env-absent.json
+printf '%s' '{"language":"English"}' >"$env_absent"
+[[ -z $(env_type_offenders "$env_absent") ]] \
+  || fail 'the env-type sweep flagged a file that declares no env record'
+
 # Every other writer's key, plus two values deliberately left undeclared so they
 # stay adjustable through the interface.
 fixture=$scratch/settings.json
@@ -76,6 +120,7 @@ before_other_model=$(jq -Sc '.modelSettings["other-model"]' "$fixture")
 
 run "$fixture" >/dev/null
 assert_declared_present "$fixture" 'drift run'
+assert_env_types_are_strings "$fixture" 'drift run'
 
 # Leaf ownership: the enclosing record keeps its other members, and every key the
 # declaration does not name survives. This is the assertion the old top-level
@@ -103,18 +148,20 @@ created=$scratch/created.json
 run "$created" >/dev/null
 assert_declared_present "$created" 'missing target'
 
-# Claude Code reads env values as STRINGS, so an unquoted scalar in agents.yaml
-# renders as a JSON number and the tool ignores the key. assert_declared_present
-# cannot catch that: it compares the live value against the SAME rendered
-# declaration, so an unquoted value is a number on both sides and matches. Only a
-# type check over the record sees it. Declared as a record sweep rather than one
-# key, so a later env leaf inherits the guard instead of needing its own line.
-# The object test is not redundant: a bare `env` scalar leaf renders past the
-# declaration guard, and to_entries would then abort this whole suite at the
-# assignment with jq's own "has no keys" rather than the diagnostic below.
-mistyped_env=$(jq -r '(.env // {}) | if type == "object" then (to_entries[] | select(.value | type != "string") | .key) else "env" end' "$created")
-[[ -z $mistyped_env ]] \
-  || fail "declared env leaves reached the settings file as non-strings: $mistyped_env"
+assert_env_types_are_strings "$created" 'missing target'
+
+# The env record has a co-writer: Claude Code's own legacy `autoUpdates` migration
+# writes into it, and .chezmoidata/agents.yaml claims convergence with that. The
+# suite proves sibling preservation for modelSettings; this proves it for env,
+# which is a different enclosing record and could regress on its own.
+env_sibling=$scratch/env-sibling.json
+printf '%s' '{"env":{"FROM_ANOTHER_WRITER":"keep-me"},"language":"English"}' >"$env_sibling"
+chmod 0600 "$env_sibling"
+run "$env_sibling" >/dev/null
+[[ $(jq -r '.env.FROM_ANOTHER_WRITER' "$env_sibling") == 'keep-me' ]] \
+  || fail 'an env key another writer owns did not survive the assert'
+assert_declared_present "$env_sibling" 'env co-writer'
+assert_env_types_are_strings "$env_sibling" 'env co-writer'
 
 # A malformed live file is preserved and reported, never rebuilt: rebuilding from
 # the declaration alone would drop everything the other writers own.
@@ -218,6 +265,7 @@ zero_err=$(run "$zero" 2>&1 >/dev/null) || fail 'an empty target should not fail
 grep -qF 'was empty' <<<"$zero_err" || fail 'an empty target was not reported on stderr'
 [[ -f "$zero.bak" ]] || fail 'an empty target was not copied aside'
 assert_declared_present "$zero" 'empty target'
+assert_env_types_are_strings "$zero" 'empty target'
 
 # cp follows a symlink at the DESTINATION, so a planted .bak would redirect the
 # backup write into whatever it points at -- and this script runs as chezmoi_t,
