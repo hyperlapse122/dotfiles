@@ -21,6 +21,9 @@ override_modes+=({{ get . "mode" | default "644" | quote }})
 override_gates+=({{ get . "gate" | default "" | quote }})
 override_checks+=({{ get . "check" | default "" | quote }})
 {{ end }}
+{{- /* The gate accumulation covers BOTH lists. A retirement gate that never
+   reached facts-validate would let a typo through to a host un-caught, which is
+   exactly what the validator exists to stop. */ -}}
 {{- $gates := list -}}
 {{- range .system.linux.desktop.overrides -}}
 {{-   $gate := get . "gate" | default "" -}}
@@ -28,7 +31,13 @@ override_checks+=({{ get . "check" | default "" | quote }})
 {{-     $gates = append $gates $gate -}}
 {{-   end -}}
 {{- end -}}
-{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (desktop.overrides)" "gates" $gates) -}}
+{{- range .system.linux.desktop.removed -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (desktop.overrides and desktop.removed)" "gates" $gates) -}}
 
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
 gate_ok() {
@@ -36,7 +45,9 @@ gate_ok() {
 }
 gate_reason() {
   case "$1" in
+    sddmBreezeUsable) printf 'this host does not run SDDM, or the breeze theme is absent' ;;
     sddmBreeze) printf 'breeze sddm theme absent' ;;
+    '!displayManagerSddm') printf 'this host runs SDDM, so the drop-in stays' ;;
     gdm) printf 'gdm not installed' ;;
     *) printf 'gate %s failed' "$1" ;;
   esac
@@ -68,11 +79,22 @@ for src in "${desktop_files[@]}"; do
   "${SUDO[@]}" install -D -m "$mode" "$src" "$dst"
 done
 
+# Retirement entries carry a gate, through the same parallel-array shape the
+# hardware subsystem already uses for its distro filter. Without it a retirement
+# is unconditional: the SDDM greeter drop-in would be installed by the override
+# loop above and removed by this one on the same run, on every host that keeps it.
 REMOVED_PATHS=()
+REMOVED_GATES=()
 {{ range .system.linux.desktop.removed -}}
 REMOVED_PATHS+=({{ .path | quote }})
+REMOVED_GATES+=({{ get . "gate" | default "" | quote }})
 {{ end }}
-for dst in "${REMOVED_PATHS[@]}"; do
+for i in "${!REMOVED_PATHS[@]}"; do
+  dst="${REMOVED_PATHS[$i]}"
+  gate="${REMOVED_GATES[$i]}"
+  if [[ -n "$gate" ]] && ! gate_ok "$gate"; then
+    continue
+  fi
   if [[ -e "$dst" || -L "$dst" ]]; then
     printf '  -> removing %s\n' "$dst"
     "${SUDO[@]}" rm -f "$dst"

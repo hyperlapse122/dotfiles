@@ -104,11 +104,11 @@ totals = matrix.get('totals', {})
 # host that the plan's session-settled R5 decision authorizes as a hard error.
 # Retiring the figma-auth build removed its three causes from the original eleven.
 frozen = {
-    'classified_owners': 123,
+    'classified_owners': 131,
     'hard_error_owners': 8,
-    'rendered_instances': 186,
-    'phase_local_instances': 118,
-    'shared_guard_instances': 68,
+    'rendered_instances': 200,
+    'phase_local_instances': 126,
+    'shared_guard_instances': 74,
 }
 for key, expected in frozen.items():
     if totals.get(key) != expected:
@@ -148,7 +148,7 @@ REQUIRED = ['owner', 'scope', 'template', 'anchor_line', 'anchor', 'predicate',
 CONTINUATIONS = {'terminate-script-exit-0', 'terminate-script-exit-1',
                  'abandon-step-return-0', 'abandon-step-inline-notice',
                  'terminate-script-render-branch'}
-SHARED = {'gnome-guard': 7, 'kde-guard': 10, 'headless-guard': 10, 'sudo-elevation-guard': 21, 'shared-host-guard': 20}
+SHARED = {'gnome-guard': 7, 'kde-guard': 10, 'headless-guard': 12, 'sudo-elevation-guard': 23, 'shared-host-guard': 22}
 
 # `anchor`/`anchor_line` are the RAW pre-conversion snapshot (evidence), while
 # `predicate` is the canonical condition the rendered declaration branches on — that
@@ -343,6 +343,9 @@ if registry_lines[0] != 'capability-registry-v2':
     problems.append('registry must start with capability-registry-v2')
 if registry_lines[-1] != '':
     problems.append('registry must end with a newline')
+# The frozen probe count. It is named once so the check and the message it prints
+# can never disagree; a new registry row moves this single number.
+EXPECTED_PROBES = 35
 keys, kinds, platforms, previous = [], {}, {}, ''
 for number, line in enumerate(registry_lines[1:-1], start=2):
     fields = line.split('\t')
@@ -367,8 +370,8 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
     kinds[key] = kind
     platforms[key] = platform
 
-if len(keys) != 33:
-    problems.append(f'registry has {len(keys)} probes, expected 33')
+if len(keys) != EXPECTED_PROBES:
+    problems.append(f'registry has {len(keys)} probes, expected {EXPECTED_PROBES}')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
         'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
     problems.append('only mise-present, gh-present, glab-present, and tokscale-present may be any-platform probes')
@@ -1012,7 +1015,9 @@ if run_chezmoi "$scratch/hooked.toml" "$unknown_source" available present real \
 fi
 grep -qF 'unknown probe "definitely-not-a-probe"' "$scratch/stderr" \
   || fail 'an unknown probe did not produce the known-probe diagnostic'
-grep -qF 'Known probes: akonadi-socket-present' "$scratch/stderr" \
+# The registry is sorted, so this pins BOTH the "Known probes: " prefix and the
+# fact that the enumeration starts at the registry's first key.
+grep -qF 'Known probes: akmods-signing-key-present, akonadi-socket-present' "$scratch/stderr" \
   || fail 'the unknown-probe diagnostic must enumerate the registry keys'
 
 # --- a cache-integrity fault stops the command before a stale token renders ----

@@ -19,6 +19,18 @@
 # Three layers, and which one owns a fact is decided by WHERE its probe can run
 # (see `probe:` below):
 #
+# The cache is NOT boolean-only. write_facts_cache emits `<name>: true|false` for a
+# bool fact and `<name>: <value>` for a string one (`""` for the empty string), and
+# facts.tmpl parses it PER LINE: a line it cannot read is dropped on its own and
+# that fact falls back to its declared absentDefault, rather than voiding the whole
+# file. That distinction is load-bearing — `headless` and `virt` default to true, so
+# a whole-file void skips the entire /etc install set on an ordinary desktop with a
+# successful exit code. The writer validates its own output before publishing it and
+# names any line it drops on stderr, so a defect in the writer cannot hide behind the
+# reader's tolerance. A string fact's value must match [A-Za-z0-9._-]+ or it is
+# written as the empty skip value; that is the same charset facts-sh.tmpl requires
+# for an unquoted shell assignment.
+#
 #   probe: hook      .install-prerequisites.sh (write_facts_cache) — chezmoi's
 #                    read-source-state.pre hook, so it runs ONCE per chezmoi
 #                    command, before the source state is read. It writes
@@ -158,6 +170,130 @@ factRegistry:
       No driver, no CUDA repo, no container toolkit, no MOK enrollment. On a host
       whose GPU sits behind a PCIe bridge the hook's grep still finds it, where a
       template-only glob would not — that is why this one stays a hook probe.
+      COEXISTS WITH gpuArch, deliberately, and is NOT superseded by it. This fact
+      still decides whether .chezmoiscripts/30-components/10-nvidia.sh is deployed
+      at all (the root .chezmoiignore gates on it); gpuArch decides what that
+      script then does. Gating deployment on gpuArch instead would un-deploy the
+      very script that must declare the unlisted-device skip, and that skip is the
+      only thing standing between an unlisted GPU and a silently driverless host.
+  gpuDeviceId:
+    type: string
+    probe: hook
+    absentDefault: ""
+    source: >-
+      The PCI device id of the host's NVIDIA DISPLAY device, four hex digits with no
+      0x prefix (a Quadro P520 gives 1d34). Class-filtered to 0x03* so an NVIDIA audio
+      or USB-C function on the same card is not mistaken for the GPU. Raw hardware
+      identity only — every policy statement about it is data in .chezmoidata/nvidia.yaml.
+      Hook-probed because /sys/bus/pci/devices/* is a directory of symlinks and `glob`
+      does not traverse them.
+    gates: >-
+      Nothing directly. It is the input gpuArch maps through the declared device table;
+      no gate expression should name it, because an id is hardware trivia and a branch
+      decision is policy.
+    whenFalse: >-
+      Empty — no NVIDIA display device, or the walk could not read sysfs. gpuArch then
+      resolves empty too and every NVIDIA-gated path skips.
+  gpuArch:
+    type: string
+    probe: template
+    values: ["", pascal]
+    source: >-
+      gpuDeviceId looked up in nvidia.deviceArchitectures (.chezmoidata/nvidia.yaml).
+      An id the table does not list resolves to the EMPTY STRING, and so does an absent
+      cache. Extend `values:` only when a genuinely new architecture appears; adding a
+      device id to an architecture that already exists is a data row and needs no
+      registry edit.
+    gates: >-
+      Which driver branch the Fedora NVIDIA installer selects — its package set, its
+      repository and exclusion policy, its module-signing certificate, and whether
+      nvidia-persistenced is enabled. Read by the NVIDIA installer as $FACT_GPU_ARCH (through facts-sh.tmpl), in resolve_nvidia_branch's case statement -- NOT through a manifest gate. No gpuArch.<value> gate expression exists today; a manifest entry that wants one would be the first.
+    whenFalse: >-
+      Empty. Every NVIDIA-gated path inside the installer skips, and the installer
+      declares that skip naming the unmatched device id so the operator can add a
+      table row. The empty string is the skip value on purpose: a consumer that tests
+      the fact for plain truthiness skips rather than installs, where a non-empty
+      sentinel such as `none` would be TRUE in a Go template and install everywhere.
+  hybridGraphics:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      An NVIDIA display device AND a display device from another vendor on the PCI
+      bus — what an Optimus-style laptop looks like. Hook-probed for the same reason
+      the vendor walk is: /sys/bus/pci/devices/* is a directory of symlinks.
+    gates: >-
+      The driver module options that let a laptop's discrete GPU suspend and enter
+      runtime power management, and the render-offload defaults that keep it idle
+      until an application asks for it.
+    whenFalse: >-
+      Neither drop-in is installed. A desktop with a single discrete card must not
+      receive them — offloading to an integrated GPU it does not have would be a
+      broken display, so absent-means-skip is the only safe direction.
+  battery:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      A power supply with type Battery whose `scope` is not `Device`. THE SCOPE CHECK
+      IS LOAD-BEARING: a wireless mouse or keyboard registers an ordinary power supply,
+      and this fleet already runs a mouse-battery watcher on desktops, so `type ==
+      Battery` alone would make every such desktop claim laptop power behaviour. A
+      chassis battery whose driver predates the attribute has no `scope` file and is
+      treated as System.
+    gates: >-
+      The systemd sleep policy (suspend-then-hibernate) on laptops.
+    whenFalse: >-
+      Treated as a desktop, which is the behaviour every host had before this axis
+      existed — so a missing probe changes nothing.
+  fingerprintReader:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      A USB device whose vendor/product pair appears in .chezmoidata/.fingerprint-readers.tsv.
+      There is NO generic sysfs signal for a fingerprint reader — they present a
+      vendor-specific interface class and expose no product string — so the identity is
+      declared rather than detected. The table is dot-prefixed TSV because the hook reads
+      it directly: the hook runs before the source state and has no YAML parser, and a
+      dot-prefixed name keeps the file out of the merged template data. Deliberately NOT
+      a probe of fprintd or its PAM module, which describe what is installed at this
+      moment rather than what the machine is.
+    gates: >-
+      Whether the Fedora authselect fingerprint feature is applied at all.
+    whenFalse: >-
+      The feature is not applied. An unlisted reader therefore enables no authentication
+      factor, which is the only safe direction for hardware nobody verified.
+  displayManager:
+    type: string
+    probe: hook
+    absentDefault: ""
+    source: >-
+      The bare unit name behind the /etc/systemd/system/display-manager.service alias
+      symlink (plasmalogin, gdm, sddm). The same signal `headless` already trusts as a
+      reliable positive; hook-probed because resolving a symlink target is not something
+      the template layer can do. No `values:` is declared: any display manager may appear
+      on a host, and the bounded decisions are made through displayManagerSddm below.
+    gates: >-
+      Nothing directly today. Greeter-shaped configuration gates on displayManagerSddm,
+      which is bounded and negatable; this fact carries the identity for reporting and
+      for a future per-greeter decision.
+    whenFalse: >-
+      Empty — no display manager is enabled, which is also what `headless` reports.
+  displayManagerSddm:
+    type: bool
+    probe: template
+    source: >-
+      displayManager equals "sddm". A BOOLEAN COMPANION to a string fact, and the reason
+      is the gate grammar: facts-validate rejects a negated value comparison, so "this
+      host does not run SDDM" cannot be written as !displayManager.sddm. The retirement
+      entry for the SDDM greeter drop-in needs exactly that negation.
+    gates: >-
+      Inverted, as !displayManagerSddm, on the retirement of etc/sddm.conf.d/90-breeze.conf.
+    whenFalse: >-
+      The host does not run SDDM, so the SDDM greeter drop-in is retired from it. On a
+      host with no display manager at all the fact is false too, and retiring a file that
+      was never installed is a no-op.
   thinkpad:
     type: bool
     probe: template
@@ -218,6 +354,22 @@ factRegistry:
       keeps host-hardware packages out of a VM/container.
 
   # --- Distro flavor / platform features -------------------------------------
+  sddmBreezeUsable:
+    type: bool
+    probe: template
+    source: >-
+      sddmBreeze AND displayManagerSddm — the Breeze SDDM theme is installed AND
+      this host actually runs SDDM. ONE fact because a manifest entry carries ONE
+      gate expression and the shared helper has no conjunction form. Gating the
+      theme drop-in on the display manager alone would drop the theme-presence
+      guard, which exists because forcing the theme without it yields a broken
+      login screen; gating on the theme alone would install the drop-in on a
+      non-SDDM host that happens to carry the theme, and the retirement entry
+      would then remove it on the same run.
+    gates: etc/sddm.conf.d/90-breeze.conf (de-brands the login greeter to Breeze).
+    whenFalse: >-
+      The drop-in is not installed, either because the theme is absent or because
+      this host does not run SDDM. Both are the safe direction.
   sddmBreeze:
     type: bool
     probe: template

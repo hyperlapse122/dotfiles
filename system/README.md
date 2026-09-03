@@ -33,7 +33,11 @@ of truth, organized by subsystem:
   `removed:` in the same commit, so every machine — including ones that pull a
   committed deletion — removes the orphan on its next run. An optional
   `distro:` key scopes the removal to one distro (never deletes a native/user
-  file elsewhere).
+  file elsewhere), and an optional `gate:` key scopes it to hosts the named fact
+  holds for — the same expression grammar `overrides:` uses, negation included.
+  A gate is what keeps a retirement from undoing an install: a path that is both
+  installed under one gate and retired under its negation is never installed and
+  then removed on the same run.
 
 Gates are *named host facts* from the registry (`.chezmoidata/facts.yaml`) —
 `thinkpad`, `vm`, `sddmBreeze`, `gdm`, `fprintdPam`. The
@@ -75,10 +79,12 @@ system/linux/etc/locale.conf
 | `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
-| `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable, plus ThinkPad-only `thinkpad_acpi fan_control=1` |
+| `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable; ThinkPad-only `thinkpad_acpi` (no `fan_control` — retired, nothing managed consumed it); `hybridGraphics`-gated `nvidia-hybrid-modeset.conf` / `nvidia-hybrid-power.conf` (PRIME KMS and discrete-GPU runtime power management) |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
-| `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreeze` gate skips it when the theme is not installed |
+| `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreezeUsable` gate installs it only where the theme is present **and** the host runs SDDM |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
+| `etc/systemd/logind.conf.d/` | laptop lid behaviour (`battery` gate): suspend on lid close on battery, ignore on external power and while docked |
+| `etc/systemd/sleep.conf.d/` | laptop sleep policy (`battery` gate): `suspend-then-hibernate`, reusing the swapfile and resume path `install-system-26-swap-hibernate` provisions |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
 | `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
 
@@ -93,12 +99,14 @@ scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
 | `run_onchange_after_install-system-12-sudoers.sh.tmpl` | password-less sudoers drop-in (mode `0440`, `visudo` check) | `etc/sudoers.d/*` files change |
 | `run_onchange_after_install-system-14-sysctl.sh.tmpl` | sysctl drop-ins + `sysctl --system` reload | `etc/sysctl.d/*` files change |
 | `run_onchange_after_install-system-16-udev.sh.tmpl` | udev rules, libinput quirks, removed rules + `udevadm control --reload` | `etc/udev/rules.d/*` or `libinput/*` files change |
-| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config + `modprobe thinkpad_acpi` | modprobe/modules-load files change |
+| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config, `hybridGraphics`-gated NVIDIA hybrid-graphics module options + `modprobe thinkpad_acpi` | modprobe/modules-load files change |
 | `run_onchange_after_install-system-20-bluetooth.sh.tmpl` | BlueZ config, autosuspend + `systemctl restart bluetooth` | `etc/bluetooth/*` files change |
 | `run_onchange_after_install-system-22-host.sh.tmpl` | user lingering, rootful podman socket mask | its own content changes |
 | `run_onchange_after_install-system-24-keyd.sh.tmpl` | keyd hardware probe, package install, config generation | keyd keyboards data or quirks file change |
 | `run_onchange_after_install-system-26-swap-hibernate.sh.tmpl` | zram disable, Btrfs @swap subvol, swapfile creation, grubby/dracut hibernation setup | `etc/dracut.conf.d/*` files or own content change |
+| `run_onchange_after_install-system-28-sleep.sh.tmpl` | laptop lid and sleep drop-ins (`battery` gate) + `systemctl restart systemd-logind` | `etc/systemd/logind.conf.d/*` or `etc/systemd/sleep.conf.d/*` files change |
 | `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld, resolv.conf → systemd-resolved, NM hygiene | its own content changes |
+| `run_onchange_after_install-system-32-fingerprint.sh.tmpl` | Fedora fingerprint authentication through `authselect`, withheld when the greeter's stack would gain the factor | fingerprint data or its own content changes |
 The `10-`/`20-`/`30-` filename prefixes order execution (chezmoi runs scripts
 alphabetically), so files land before anything that might depend on them.
 

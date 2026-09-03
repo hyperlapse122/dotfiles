@@ -168,12 +168,18 @@ kde:
     - { file: kdeglobals, group: Icons, key: Theme, type: string, value: breeze-dark }
 
     # powerdevilrc: no idle screen dimming in all three profiles
+    # On AC, idle dimming is off: a plugged-in machine has no reason to dim.
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayWhenIdle, type: bool, value: false }
     - { file: powerdevilrc, group: AC/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
-    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
-    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
-    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayWhenIdle, type: bool, value: false }
-    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: -1 }
+    # On battery it is ON, and sooner still at low battery. All three profiles
+    # used to carry the AC value, which held a laptop panel at full brightness
+    # while idle -- a desktop-shaped default reaching a machine that has to
+    # ration its own power. These rows are inert on a desktop, whose PowerDevil
+    # never enters the battery profiles.
+    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayWhenIdle, type: bool, value: true }
+    - { file: powerdevilrc, group: Battery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: 120 }
+    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayWhenIdle, type: bool, value: true }
+    - { file: powerdevilrc, group: LowBattery/Display, key: DimDisplayIdleTimeoutSec, type: int, value: 60 }
 
     # dolphinrc: open home folder on startup without restoring tabs
     - { file: dolphinrc, group: General, key: RememberOpenedTabs, type: bool, value: false }
@@ -325,15 +331,45 @@ kde:
     applicationsDisplay: 1
   panel:
     groupingStrategy: 0
+  # Pointing devices. The reconciler selects by what a device IS, not by a name
+  # somebody remembered to add: a touchpad is any input device KWin reports
+  # `touchpad=true` for, and a TrackPoint is a pointer that is not a touchpad.
+  #
+  # The old model was an exact-name allowlist, and it failed the way an allowlist
+  # fails: this laptop's third Synaptics model matched nothing, so four managed
+  # settings were never applied and the only sign was one line saying the device
+  # was not in the list. The deny-list keeps the escape hatch -- an operator can
+  # still name a device the repository must leave alone -- without making every
+  # new laptop a silent non-convergence.
   touchpad:
-    devices:
-      - SynPS/2 Synaptics TouchPad
-      - ELAN06E8:00 04F3:332E Touchpad
+    # Exact libinput names to leave alone. Empty by default: nothing on the
+    # managed fleet needs an exemption, and an entry here is a deliberate
+    # "this device is not ours to configure".
+    denyDevices: []
     settings:
       naturalScroll: true
       tapToClick: true
       clickMethodClickfinger: true
       clickMethodAreas: false
+  # A TrackPoint is a different device class and takes a different set: it has no
+  # tap and no click-method, and middle-button scroll is the behaviour that makes
+  # it worth using. Verified against the audited ThinkPad's `TPPS/2 Elan
+  # TrackPoint`, which reports supportsNaturalScroll, supportsMiddleEmulation and
+  # supportsPointerAcceleration true, and supportsClickMethod* false.
+  trackpoint:
+    # POSITIVE match, not "any pointer that is not a touchpad". A TrackPoint has
+    # no property that separates it from an ordinary mouse, so selecting by
+    # absence would hand every mouse on the fleet the TrackPoint settings. These
+    # are libinput device names, matched as shell globs against KWin's `name`.
+    matchDevices:
+      - '*TrackPoint*'
+      - '*Trackpoint*'
+      - 'TPPS/2*'
+    denyDevices: []
+    settings:
+      naturalScroll: true
+      middleEmulation: true
+      scrollOnButtonDown: true
   virtualKeyboard:
     desktopFile: /usr/share/applications/fcitx5-wayland-launcher.desktop
   wallpaper:

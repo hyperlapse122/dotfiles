@@ -1,5 +1,7 @@
 capability-registry-v2
+akmods-signing-key-present	absolute-file	none	linux	available	unavailable
 akonadi-socket-present	unix-socket	none	linux	available	unavailable
+authselect-present	command-present	none	linux	available	unavailable
 busctl-present	command-present	none	linux	available	unavailable
 chsh-present	command-present	none	linux	available	unavailable
 docker-credential-secretservice-present	command-present	none	linux	available	unavailable

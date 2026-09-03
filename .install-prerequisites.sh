@@ -208,13 +208,165 @@ fact_bool() {
   if "$@" >/dev/null 2>&1; then printf 'true'; else printf 'false'; fi
 }
 
+# A STRING-valued fact. The probe prints its value on stdout; anything outside the
+# charset facts-sh.tmpl allows through to an unquoted shell assignment is dropped
+# to the empty string, which is the skip value every string fact declares. A probe
+# that fails, prints nothing, or prints a value with a space, a newline, or a shell
+# metacharacter therefore skips what it gates instead of leaking an unquotable
+# token into every consumer.
+#
+# THE VALUE IS ALWAYS QUOTED. An all-digit id such as a PCI device `2704` parses
+# out of YAML as a NUMBER when written bare, the reader's string type check then
+# rejects it, and the fact silently takes its empty default -- losing exactly the
+# identity the installer needs in order to name what it skipped. Quoting makes
+# every string fact round-trip as a string, and makes the empty value the same
+# shape as any other.
+fact_string() {
+  local value=''
+  value="$("$@" 2>/dev/null)" || value=''
+  if [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    printf '"%s"' "$value"
+  else
+    printf '""'
+  fi
+}
+
 # NVIDIA GPU: PCI vendor id 0x10de anywhere on the bus. Verbatim the probe both
 # package installers already run — sysfs, not lspci, because pciutils is not
 # guaranteed installed this early and the vendor files always exist. A missing
 # /sys (macOS) leaves the glob unexpanded; grep then fails on a nonexistent path
 # and the fact is false.
+# ONE pass over the PCI bus, three facts. This runs in chezmoi's
+# read-source-state.pre hook, once per `chezmoi diff`/`apply`/`status`/
+# `execute-template` -- so three independent globs of /sys/bus/pci/devices/*,
+# each re-reading `vendor` and `class` for every device on the bus, was work paid
+# interactively on every invocation of the tool.
+#
+# Class-filtered to 0x03* (display controllers) for the GPU identity and the
+# hybrid check, so an NVIDIA audio function or USB-C controller on the same card
+# is not mistaken for the GPU. The vendor-presence fact deliberately stays
+# unfiltered: it answers "is there an NVIDIA device on this bus at all", which is
+# what gates whether the installer is deployed.
+PCI_SCAN_DONE=0
+PCI_NVIDIA_PRESENT=0
+PCI_NVIDIA_DISPLAY_ID=""
+PCI_OTHER_DISPLAY=0
+
+scan_pci_bus() {
+  [[ "$PCI_SCAN_DONE" -eq 1 ]] && return 0
+  PCI_SCAN_DONE=1
+  local dev vendor class id
+  for dev in /sys/bus/pci/devices/*/; do
+    [[ -r "$dev/vendor" ]] || continue
+    read -r vendor <"$dev/vendor" 2>/dev/null || continue
+    [[ "$vendor" == '0x10de' ]] && PCI_NVIDIA_PRESENT=1
+    [[ -r "$dev/class" ]] || continue
+    read -r class <"$dev/class" 2>/dev/null || continue
+    [[ "$class" == 0x03* ]] || continue
+    if [[ "$vendor" == '0x10de' ]]; then
+      if [[ -z "$PCI_NVIDIA_DISPLAY_ID" && -r "$dev/device" ]]; then
+        read -r id <"$dev/device" 2>/dev/null && PCI_NVIDIA_DISPLAY_ID="${id#0x}"
+      fi
+    else
+      PCI_OTHER_DISPLAY=1
+    fi
+  done
+  return 0
+}
+
+# An NVIDIA device anywhere on the PCI bus, including behind a bridge. This is
+# what decides whether the driver installer is deployed at all.
 fact_nvidia() {
-  grep -qx '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null
+  scan_pci_bus
+  [[ "$PCI_NVIDIA_PRESENT" -eq 1 ]]
+}
+
+# The PCI device id of the host's NVIDIA DISPLAY device, four hex digits with no
+# 0x prefix (a Quadro P520 prints `1d34`). Raw hardware identity and nothing else:
+# the mapping from an id to an architecture, and from an architecture to a driver
+# branch, is data in .chezmoidata/nvidia.yaml.
+fact_gpu_device_id() {
+  scan_pci_bus
+  [[ -n "$PCI_NVIDIA_DISPLAY_ID" ]] || return 1
+  printf '%s' "$PCI_NVIDIA_DISPLAY_ID"
+}
+
+# Hybrid graphics: an NVIDIA display device AND a display device from another
+# vendor, which is what an Optimus-style laptop looks like. A desktop with one
+# discrete card is NOT hybrid and must not receive render-offload or runtime
+# power-management options.
+fact_hybrid_graphics() {
+  scan_pci_bus
+  [[ -n "$PCI_NVIDIA_DISPLAY_ID" && "$PCI_OTHER_DISPLAY" -eq 1 ]]
+}
+
+# A SYSTEM battery, not a peripheral one. A wireless mouse or keyboard registers
+# an ordinary power supply too, and this fleet already runs a mouse-battery
+# watcher on desktops -- so `type == Battery` alone would make every such desktop
+# claim laptop power behaviour. The kernel distinguishes them with `scope`:
+# `Device` for a peripheral, `System` (or absent, on a chassis battery whose
+# driver predates the attribute) for the machine's own.
+fact_battery() {
+  local supply type scope
+  for supply in /sys/class/power_supply/*/; do
+    [[ -r "$supply/type" ]] || continue
+    read -r type <"$supply/type" 2>/dev/null || continue
+    [[ "$type" == 'Battery' ]] || continue
+    scope='System'
+    [[ -r "$supply/scope" ]] && { read -r scope <"$supply/scope" 2>/dev/null || scope='System'; }
+    [[ "$scope" == 'Device' ]] || return 0
+  done
+  return 1
+}
+
+# A fingerprint reader this repository knows how to manage. There is NO generic
+# sysfs signal for one: the readers present a vendor-specific USB interface class
+# and expose no product string, so the identity has to be declared. The list lives
+# in .chezmoidata/.fingerprint-readers.tsv -- dot-prefixed and TSV for the same
+# reason .chezmoidata/.capability-registry.tsv is, so it stays out of the template
+# data map and stays readable from this hook, which runs before the source state
+# and has no YAML parser.
+#
+# Seeded, not exhaustive. An unlisted reader resolves false and the fingerprint
+# path skips, which is the fail-safe direction: no authentication factor is
+# enabled for hardware nobody verified.
+fact_fingerprint_reader() {
+  local table dev vendor product known=''
+  table="${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.fingerprint-readers.tsv"
+  [[ -r "$table" ]] || return 1
+  # Read the table ONCE. A host has tens of USB entries -- hubs, interfaces and
+  # endpoints included -- and this runs in the pre-hook on every chezmoi command,
+  # so forking a grep per entry against a two-line file was the wrong shape.
+  known="$(< "$table")" || return 1
+  for dev in /sys/bus/usb/devices/*/; do
+    [[ -r "$dev/idVendor" && -r "$dev/idProduct" ]] || continue
+    read -r vendor <"$dev/idVendor" 2>/dev/null || continue
+    read -r product <"$dev/idProduct" 2>/dev/null || continue
+    case $'\n'"$known"$'\n' in
+      *$'\n'"$vendor"$'\t'"$product"$'\n'*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Which display manager the host runs, as the bare unit name (`plasmalogin`,
+# `gdm`, `sddm`). Read from the display-manager.service alias symlink systemd
+# creates when a DM is enabled -- the same signal `headless` already trusts as a
+# reliable positive. Hook-probed because resolving a symlink target is not
+# something the template layer can do.
+fact_display_manager() {
+  local target
+  # The alias must EXIST before it is resolved. `readlink -f` succeeds on a
+  # missing path and prints the path back, so without this guard a host with no
+  # display manager resolves the fact to the literal string "display-manager"
+  # instead of the empty absentDefault the registry declares -- a fabricated
+  # value where the contract promises "unknown". fact_headless guards the same
+  # symlink the same way.
+  [[ -L /etc/systemd/system/display-manager.service ]] || return 1
+  target="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" || return 1
+  [[ -n "$target" ]] || return 1
+  target="${target##*/}"
+  printf '%s' "${target%.service}"
 }
 
 # Headless / server install. Mirrors .chezmoitemplates/headless-guard.sh.tmpl
@@ -271,12 +423,25 @@ write_facts_cache() {
     return 0
   }
 
+  # Walk the PCI bus HERE, in this shell. Each fact below is evaluated inside a
+  # command substitution, and a subshell cannot write PCI_SCAN_DONE back to its
+  # parent -- so memoizing inside the first fact would leave the next two walking
+  # the bus again. Scanning first inverts that: the subshells INHERIT the
+  # finished scan and return from the memo, which is what makes the single pass
+  # real. The facts stay ordinary probes, correct whether or not this ran.
+  scan_pci_bus
+
   {
     printf '# Generated by .install-prerequisites.sh (chezmoi read-source-state.pre hook).\n'
     printf '# Rewritten once per chezmoi command; read by .chezmoitemplates/facts.tmpl.\n'
     printf '# Do NOT edit — every value here is a probe result, not a setting.\n'
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
+    printf 'gpuDeviceId: %s\n'  "$(fact_string fact_gpu_device_id)"
+    printf 'hybridGraphics: %s\n' "$(fact_bool fact_hybrid_graphics)"
+    printf 'battery: %s\n'      "$(fact_bool fact_battery)"
+    printf 'fingerprintReader: %s\n' "$(fact_bool fact_fingerprint_reader)"
+    printf 'displayManager: %s\n' "$(fact_string fact_display_manager)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"
   } >"$tmp_file" || {
@@ -290,6 +455,33 @@ write_facts_cache() {
     invalidate_facts_cache "$cache_file"
     return 0
   }
+
+  # VALIDATE OUR OWN OUTPUT BEFORE PUBLISHING IT. facts.tmpl parses this file per
+  # line and silently drops a line it cannot read, which is the right blast radius
+  # for a truncated or hand-edited cache but would hide a defect in this writer.
+  # So the writer checks the lines it just built: a malformed one is dropped here,
+  # loudly, naming the fact whose value the render will now take from its declared
+  # default. The accepted shapes match the reader's filter exactly.
+  local bad_facts=()
+  local line
+  while IFS= read -r line; do
+    [[ "$line" == '#'* || -z "$line" ]] && continue
+    [[ "$line" =~ ^[A-Za-z][A-Za-z0-9]*:\ (true|false|\"[A-Za-z0-9._-]*\")$ ]] && continue
+    bad_facts+=("${line%%:*}")
+  done <"$tmp_file"
+  if ((${#bad_facts[@]} > 0)); then
+    printf 'install-prerequisites.sh: dropped %d malformed fact line(s) from the cache: %s\n' \
+      "${#bad_facts[@]}" "${bad_facts[*]}" >&2
+    printf 'install-prerequisites.sh: those facts take their declared fail-safe defaults this run; this is a defect in write_facts_cache, not in the host.\n' >&2
+    grep -vxE '[A-Za-z][A-Za-z0-9]*: (true|false|"[A-Za-z0-9._-]*")' "$tmp_file" >/dev/null 2>&1 && {
+      local kept_file
+      kept_file="$(mktemp "$cache_file.XXXXXX" 2>/dev/null)" || kept_file=''
+      if [[ -n "$kept_file" ]]; then
+        grep -xE '(#.*|[A-Za-z][A-Za-z0-9]*: (true|false|"[A-Za-z0-9._-]*"))' "$tmp_file" >"$kept_file" 2>/dev/null || true
+        mv -f "$kept_file" "$tmp_file" 2>/dev/null || rm -f "$kept_file" 2>/dev/null || true
+      fi
+    }
+  fi
 
   # Atomic swap: a template mid-render must never see a half-written cache.
   mv -f "$tmp_file" "$cache_file" 2>/dev/null || {
@@ -362,7 +554,7 @@ CAPABILITY_REGISTRY_SCHEMA='capability-registry-v2'
 # with. Keep this path byte-identical to capabilities.tmpl's.
 CAPABILITY_REGISTRY_RELPATH='.chezmoidata/.capability-registry.tsv'
 CAPABILITY_REGISTRY_KINDS=(
-  absolute-executable command-present graphical-session
+  absolute-executable absolute-file command-present graphical-session
   session-bus sudo-nonrefreshing unix-socket user-manager-bus user-manager-unit
   user-process
 )
@@ -493,6 +685,17 @@ resolve_capability() {
         *) capability_cache_fail "absolute-executable key ${key@Q} has no reviewed path" ;;
       esac
       [[ -x "$path" ]]
+      ;;
+    absolute-file)
+      # A file that only has to EXIST, not to be runnable. A signing certificate
+      # a package's build system mints on its first build is the shape this
+      # serves: it is the precondition a transient-blocking skip waits on, and
+      # `-x` would never be true for it.
+      case "$key" in
+        akmods-signing-key-present) path=/etc/pki/akmods/certs/public_key.der ;;
+        *) capability_cache_fail "absolute-file key ${key@Q} has no reviewed path" ;;
+      esac
+      [[ -f "$path" ]]
       ;;
     sudo-nonrefreshing)
       # `-N` is load-bearing: without it a successful probe REFRESHES the sudo

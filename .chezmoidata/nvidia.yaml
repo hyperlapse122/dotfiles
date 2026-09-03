@@ -1,0 +1,109 @@
+# NVIDIA driver-branch policy, as data.
+#
+# The registry fact `gpuDeviceId` carries the raw PCI device id of the host's
+# NVIDIA display device; the hook does that walk because /sys/bus/pci/devices/*
+# is nothing but symlinks and the template layer cannot traverse them. Every
+# POLICY statement lives here: which architecture an id belongs to, which driver
+# branch that architecture needs, and what that branch installs.
+#
+# ---------------------------------------------------------------------------
+# WHY A TABLE AND NOT A PROBE VERDICT
+#
+# The installer used to assume the newest branch for any 0x10de device. On a GPU
+# the newest branch has dropped, that set installs, builds, signs -- and then
+# refuses the GPU at module load, leaving a persistence daemon in a restart loop
+# and a DKMS rebuild on every kernel update for a driver that will never bind.
+# Putting the mapping here means the next branch drop is a row, not a probe edit.
+#
+# ---------------------------------------------------------------------------
+# COVERAGE IS DELIBERATELY INCOMPLETE, AND THAT IS SAFE
+#
+# `deviceArchitectures` lists ids verified against real hardware. An id that
+# matches nothing resolves the `gpuArch` fact to the empty string, which skips
+# every NVIDIA-gated path -- and the installer declares that skip naming the
+# unmatched id, so the operator sees exactly which row to add rather than
+# discovering a driverless GPU. Guessing ranges here would be worse than an
+# honest gap: a wrong row installs a branch that cannot drive the GPU, which is
+# the defect this file exists to remove.
+#
+# To add a host: read its id with
+#   for d in /sys/bus/pci/devices/*/; do
+#     [ "$(cat "$d/vendor")" = 0x10de ] && printf '%s %s\n' "$(cat "$d/device")" "$(cat "$d/class")"
+#   done
+# then add the four-hex-digit id (no 0x) under the architecture it belongs to.
+nvidia:
+  deviceArchitectures:
+    # Quadro P520 (GP108GLM, Pascal). ThinkPad P14s Gen 1, 20S40002KR.
+    # Verified: lspci 10de:1d34, class 0x030200; the 610 branch refuses it with
+    # "supported through the NVIDIA 580.xx Legacy drivers".
+    "1d34": pascal
+
+  # Architecture -> the branch that still supports it. `buildSystem` decides
+  # which signing certificate the installer enrolls: `akmod` uses the out-of-tree
+  # builder's own generated certificate, `dkms` keeps /var/lib/dkms/mok.pub.
+  #
+  # An architecture the CURRENT branch still supports gets an entry here too, with
+  # `name`, `source`, `buildSystem` and `marker` copied from currentBranch below
+  # and NO `packages` key -- omitting it keeps the default package set. Listing it
+  # explicitly is the point: an architecture nobody has classified must never
+  # inherit a branch by falling through, because that is the fail-open this axis
+  # exists to remove.
+  branches:
+    pascal:
+      name: "580xx"
+      buildSystem: akmod
+      # The package whose presence means THIS branch is installed. Used to detect
+      # a host carrying a branch it no longer resolves to; the installer reports
+      # that and stops rather than removing anything.
+      marker: akmod-nvidia-580xx
+      # RPM Fusion carries the legacy branch; NVIDIA's own CUDA repository ships
+      # only the current one. The current-branch exclusion policy must therefore
+      # NOT apply to this branch's packages.
+      source: rpmfusion
+      packages:
+        - akmod-nvidia-580xx
+        - xorg-x11-drv-nvidia-580xx
+        - xorg-x11-drv-nvidia-580xx-cuda
+        - xorg-x11-drv-nvidia-580xx-cuda-libs
+        - xorg-x11-drv-nvidia-580xx-power
+        - nvidia-settings-580xx
+        - libnvidia-container1
+        - libnvidia-container-tools
+        - nvidia-container-toolkit
+        - nvidia-container-toolkit-base
+      # The current CUDA toolkit compiles for no architecture older than
+      # compute_75; this GPU is compute_61, so the toolkit is pure disk cost
+      # here. The runtime that ships with the driver stays.
+      cudaToolkit: false
+
+  # The branch a host takes when its architecture is listed as current. Kept as
+  # a named row rather than an implicit fallback so an unlisted device can never
+  # silently inherit it -- that is the fail-open this whole axis removes.
+  currentBranch:
+    name: "latest"
+    buildSystem: dkms
+    marker: kmod-nvidia-latest-dkms
+    source: cuda
+    packages:
+      - cuda-drivers
+      - cuda-toolkit-13-3
+      - dkms
+      - kmod-nvidia-latest-dkms
+      - libnvidia-container1
+      - libnvidia-container-tools
+      - nvidia-container-toolkit
+      - nvidia-container-toolkit-base
+      - nvidia-driver
+    cudaToolkit: true
+
+  # Packages the current-branch repository policy excludes from RPM Fusion so the
+  # vendor CUDA repository wins. A legacy-branch host must NOT carry these
+  # exclusions, because its driver comes from exactly that source.
+  currentBranchRpmfusionExcludes:
+    - 'akmod-nvidia*'
+    - 'kmod-nvidia*'
+    - nvidia-modprobe
+    - nvidia-persistenced
+    - nvidia-settings
+    - nvidia-xconfig
+    - 'xorg-x11-drv-nvidia*'
