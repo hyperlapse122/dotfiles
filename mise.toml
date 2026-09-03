@@ -13,4 +13,4 @@ postinstall = [
 ]
 
 [settings]
-lockfile = true
+lockfile = false
