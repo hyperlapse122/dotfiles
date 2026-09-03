@@ -208,6 +208,23 @@ fact_bool() {
   if "$@" >/dev/null 2>&1; then printf 'true'; else printf 'false'; fi
 }
 
+# A STRING-valued fact. The probe prints its value on stdout; anything outside the
+# charset facts-sh.tmpl allows through to an unquoted shell assignment is dropped
+# to the empty string, which is the skip value every string fact declares. Empty
+# is written as `""` so the reader's per-line filter can tell it from a truncated
+# line. A probe that fails, prints nothing, or prints a value with a space, a
+# newline, or a shell metacharacter therefore skips what it gates instead of
+# leaking an unquotable token into every consumer.
+fact_string() {
+  local value=''
+  value="$("$@" 2>/dev/null)" || value=''
+  if [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    printf '%s' "$value"
+  else
+    printf '""'
+  fi
+}
+
 # NVIDIA GPU: PCI vendor id 0x10de anywhere on the bus. Verbatim the probe both
 # package installers already run — sysfs, not lspci, because pciutils is not
 # guaranteed installed this early and the vendor files always exist. A missing
@@ -290,6 +307,33 @@ write_facts_cache() {
     invalidate_facts_cache "$cache_file"
     return 0
   }
+
+  # VALIDATE OUR OWN OUTPUT BEFORE PUBLISHING IT. facts.tmpl parses this file per
+  # line and silently drops a line it cannot read, which is the right blast radius
+  # for a truncated or hand-edited cache but would hide a defect in this writer.
+  # So the writer checks the lines it just built: a malformed one is dropped here,
+  # loudly, naming the fact whose value the render will now take from its declared
+  # default. The accepted shapes match the reader's filter exactly.
+  local bad_facts=()
+  local line
+  while IFS= read -r line; do
+    [[ "$line" == '#'* || -z "$line" ]] && continue
+    [[ "$line" =~ ^[A-Za-z][A-Za-z0-9]*:\ (true|false|\"\"|[A-Za-z0-9._-]+)$ ]] && continue
+    bad_facts+=("${line%%:*}")
+  done <"$tmp_file"
+  if ((${#bad_facts[@]} > 0)); then
+    printf 'install-prerequisites.sh: dropped %d malformed fact line(s) from the cache: %s\n' \
+      "${#bad_facts[@]}" "${bad_facts[*]}" >&2
+    printf 'install-prerequisites.sh: those facts take their declared fail-safe defaults this run; this is a defect in write_facts_cache, not in the host.\n' >&2
+    grep -vxE '[A-Za-z][A-Za-z0-9]*: (true|false|""|[A-Za-z0-9._-]+)' "$tmp_file" >/dev/null 2>&1 && {
+      local kept_file
+      kept_file="$(mktemp "$cache_file.XXXXXX" 2>/dev/null)" || kept_file=''
+      if [[ -n "$kept_file" ]]; then
+        grep -xE '(#.*|[A-Za-z][A-Za-z0-9]*: (true|false|""|[A-Za-z0-9._-]+))' "$tmp_file" >"$kept_file" 2>/dev/null || true
+        mv -f "$kept_file" "$tmp_file" 2>/dev/null || rm -f "$kept_file" 2>/dev/null || true
+      fi
+    }
+  fi
 
   # Atomic swap: a template mid-render must never see a half-written cache.
   mv -f "$tmp_file" "$cache_file" 2>/dev/null || {

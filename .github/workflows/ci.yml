@@ -98,6 +98,7 @@ jobs:
           .ci/test-fontconfig-korean-local-font.sh
           .ci/test-fingerprint-gates.sh
           .ci/test-extension-retry.sh
+          .ci/test-fact-cache-parsing.sh
           .ci/test-capability-cache.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-sudo-elevation-guard.sh

@@ -89,8 +89,28 @@ Three rules hold this file together:
 {{- /* `\r?` is load-bearing: the cache may be written with CRLF line endings.
    `fromYaml` parses that fine — but an LF-only shape check silently rejects it,
    and every hook fact would fall back to its default forever. */ -}}
-{{-   if regexMatch "^(#[^\r\n]*\r?\n|[A-Za-z][A-Za-z0-9]*: (true|false)\r?\n)+$" $raw -}}
-{{-     $parsed := $raw | fromYaml -}}
+{{- /* PER LINE, NOT PER FILE. A whole-file shape check made one bad line void
+   EVERY fact, and `headless` and `virt` carry an inverted absentDefault of true —
+   so a single unparseable line skipped the entire /etc install set and the
+   desktop provisioning on an ordinary desktop, with a successful exit code.
+   Keeping only the lines that parse bounds that to the one fact whose line is
+   bad. The hook warns on stderr when it is the one that produced a bad line, so
+   a writer defect still cannot hide; this filter is the reader's own defence
+   against a truncated or hand-edited cache.
+
+   The accepted value shapes are exactly what write_facts_cache emits: a boolean,
+   or a string restricted to the same charset facts-sh.tmpl allows through to an
+   unquoted shell assignment, with `""` for the empty string. Anything else is
+   dropped rather than handed to fromYaml, which would raise a render-aborting
+   template error. */ -}}
+{{-   $keep := list -}}
+{{-   range $line := splitList "\n" (replace "\r" "" $raw) -}}
+{{-     if regexMatch "^[A-Za-z][A-Za-z0-9]*: (true|false|\"\"|[A-Za-z0-9._-]+)$" $line -}}
+{{-       $keep = append $keep $line -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if $keep -}}
+{{-     $parsed := join "\n" $keep | fromYaml -}}
 {{-     if kindIs "map" $parsed -}}
 {{-       $cached = $parsed -}}
 {{-     end -}}
@@ -136,14 +156,32 @@ Three rules hold this file together:
 {{-       fail (printf "hook fact %q has no absentDefault in .chezmoidata/facts.yaml; declare its fail-safe value explicitly" $name) -}}
 {{-     end -}}
 {{-     $fallback := $spec.absentDefault -}}
-{{-     if not (kindIs "bool" $fallback) -}}
-{{-       fail (printf "hook fact %q has non-boolean absentDefault %v in .chezmoidata/facts.yaml" $name $fallback) -}}
-{{-     end -}}
-{{-     $value := index $cached $name -}}
-{{-     if kindIs "bool" $value -}}
-{{-       $_ := set $facts $name $value -}}
+{{-     $type := $spec.type | default "bool" -}}
+{{- /* The absentDefault must match the fact's declared type, and the cached value
+   is accepted only when it matches too. A string fact whose cache line was
+   dropped therefore lands on its declared empty-string default rather than
+   leaking a boolean into a consumer's comparison, and a boolean fact keeps the
+   type check that has always guarded it. */ -}}
+{{-     if eq $type "string" -}}
+{{-       if not (kindIs "string" $fallback) -}}
+{{-         fail (printf "hook fact %q is declared type string but its absentDefault %v is not a string in .chezmoidata/facts.yaml" $name $fallback) -}}
+{{-       end -}}
+{{-       $value := index $cached $name -}}
+{{-       if kindIs "string" $value -}}
+{{-         $_ := set $facts $name $value -}}
+{{-       else -}}
+{{-         $_ := set $facts $name $fallback -}}
+{{-       end -}}
 {{-     else -}}
-{{-       $_ := set $facts $name $fallback -}}
+{{-       if not (kindIs "bool" $fallback) -}}
+{{-         fail (printf "hook fact %q has non-boolean absentDefault %v in .chezmoidata/facts.yaml" $name $fallback) -}}
+{{-       end -}}
+{{-       $value := index $cached $name -}}
+{{-       if kindIs "bool" $value -}}
+{{-         $_ := set $facts $name $value -}}
+{{-       else -}}
+{{-         $_ := set $facts $name $fallback -}}
+{{-       end -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}

@@ -19,6 +19,18 @@
 # Three layers, and which one owns a fact is decided by WHERE its probe can run
 # (see `probe:` below):
 #
+# The cache is NOT boolean-only. write_facts_cache emits `<name>: true|false` for a
+# bool fact and `<name>: <value>` for a string one (`""` for the empty string), and
+# facts.tmpl parses it PER LINE: a line it cannot read is dropped on its own and
+# that fact falls back to its declared absentDefault, rather than voiding the whole
+# file. That distinction is load-bearing — `headless` and `virt` default to true, so
+# a whole-file void skips the entire /etc install set on an ordinary desktop with a
+# successful exit code. The writer validates its own output before publishing it and
+# names any line it drops on stderr, so a defect in the writer cannot hide behind the
+# reader's tolerance. A string fact's value must match [A-Za-z0-9._-]+ or it is
+# written as the empty skip value; that is the same charset facts-sh.tmpl requires
+# for an unquoted shell assignment.
+#
 #   probe: hook      .install-prerequisites.sh (write_facts_cache) — chezmoi's
 #                    read-source-state.pre hook, so it runs ONCE per chezmoi
 #                    command, before the source state is read. It writes
