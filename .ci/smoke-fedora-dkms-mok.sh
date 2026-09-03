@@ -172,6 +172,19 @@ relocate() {
 
 write_mok_paths "${SMOKE_BUILD_SYSTEM:-dkms}"
 
+# The always-succeeds sudo stub both enrollment fixtures drive. The state and mint
+# fixtures need their own ok/fail/flaky variant -- the failed-probe regression is
+# the whole point there -- so only these two are pooled.
+plain_sudo_stub="${scratch}/plain-sudo.sh"
+cat > "${plain_sudo_stub}" <<'STUB'
+fake_sudo() {
+  local -a a=()
+  for x in "$@"; do a+=("${x/\/var\/lib\/dkms/${MOK_DIR}}"); done
+  "${a[@]}"
+}
+SUDO=(fake_sudo)
+STUB
+
 # ensure_dkms_mok_generated must not re-probe the files itself, and the sole
 # mint must be reachable only from the `absent` branch.
 if grep -Eq 'test -f .*mok\.(pub|key)' "${scratch}/mok_ensure.sh"; then
@@ -462,14 +475,10 @@ sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/enroll.sh" > "${scratch}/enroll_nogates.sh"
 
 run_enroll() {
-  env HOME="${scratch}/home" MOK_DIR="${mokdir}" MOK_TEST_KEY="${1}" MOK_LIST_NEW="${2}" bash -c '
+  env HOME="${scratch}/home" MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${plain_sudo_stub}" \
+    MOK_TEST_KEY="${1}" MOK_LIST_NEW="${2}" bash -c '
     set -uo pipefail
-    fake_sudo() {
-      local -a a=()
-      for x in "$@"; do a+=("${x/\/var\/lib\/dkms/${MOK_DIR}}"); done
-      "${a[@]}"
-    }
-    SUDO=(fake_sudo)
+    . "${PLAIN_SUDO_STUB:?}"
     mokutil() {
       case "${1-}" in
         --test-key)
@@ -514,7 +523,7 @@ printf key > "${mokdir}/mok.key"
 # never reaches an argument vector, and the import's exit status is propagated.
 
 # The rendered assignment: base64 for shell safety, and exactly one of them.
-assign_line=$(grep -c 'MOK_ENROLL_PASSPHRASE="\$(printf .%s. .* | base64 -d)"' "${scratch}/enroll.sh" || true)
+assign_line=$(grep -c 'MOK_ENROLL_PASSPHRASE="\$(printf .%s. .* | base64 -d)"' "${scratch}/enroll.code" || true)
 [[ "${assign_line}" == 1 ]] ||
   fail 'the enrollment passphrase is not assigned through the single base64 form the LUKS wrapper uses'
 
@@ -522,14 +531,35 @@ assign_line=$(grep -c 'MOK_ENROLL_PASSPHRASE="\$(printf .%s. .* | base64 -d)"' "
 # argument vector, readable in the process table by every user on the box. The
 # rendered call must therefore pass it as an ENVIRONMENT PREFIX to an
 # unprivileged expect, which spawns the elevation itself.
-grep -Fq 'MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert"' "${scratch}/enroll.sh" ||
+grep -Fq 'MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert"' "${scratch}/enroll.code" ||
   fail 'the enrollment passphrase is not handed to expect as an environment prefix'
-if grep -Eq 'env[[:space:]]+MOK_ENROLL_PASSPHRASE=' "${scratch}/enroll.sh"; then
+if grep -Eq 'env[[:space:]]+MOK_ENROLL_PASSPHRASE=' "${scratch}/enroll.code"; then
   fail 'the passphrase must never reach an argument vector; `sudo env VAR=...` exposes it in the process table'
 fi
-if grep -Eq 'mokutil --import.*(\|\| true|2>/dev/null \|\| true)' "${scratch}/enroll.sh"; then
+if grep -Eq 'mokutil --import.*(\|\| true|2>/dev/null \|\| true)' "${scratch}/enroll.code"; then
   fail 'the mokutil --import exit status must be propagated, never discarded'
 fi
+
+# The expect script's own hardening. All three prevent a HUNG apply or a re-parse
+# of interpolated data rather than a wrong answer, and all three are read from the
+# comment-stripped copy: this installer explains the shapes it forbids, and a
+# comment naming one must not read as the shape itself.
+grep -Fq 'LC_ALL=C expect -f -' "${scratch}/enroll.code" ||
+  fail 'the expect call is not pinned to LC_ALL=C, so a localized mokutil prompt would not match'
+if grep -Fq 'eval spawn' "${scratch}/enroll.code"; then
+  fail 'spawn must expand the argument list with {*}, not re-parse it through eval'
+fi
+grep -Fq 'spawn -noecho {*}$argv' "${scratch}/enroll.code" ||
+  fail 'the expect script does not spawn through a {*}-expanded argument list'
+[[ $(grep -c '^    timeout {' "${scratch}/enroll.code") -ge 3 ]] ||
+  fail 'every expect block needs a timeout action; without one an unmatched prompt blocks in wait and hangs the apply'
+
+# The extraction contract this heredoc has to respect: every helper is pulled out
+# with `sed -n '<start>,/^}$/p'`, so a `}` at column 0 inside the heredoc would
+# truncate enroll_dkms_mok at that brace and this harness would drive half a
+# function. Assert the whole function arrived.
+grep -Fq 'is queued for enrollment' "${scratch}/enroll.sh" ||
+  fail 'enroll_dkms_mok was extracted truncated; a line that is exactly } at column 0 inside the expect heredoc ends the extraction early'
 
 # A PATH with only what the enrollment body reaches, so `command -v expect` is
 # decided by this fixture and not by whatever the runner happens to have.
@@ -566,7 +596,8 @@ chmod 0755 "${scratch}/expect-stub"
 # Prints CONTINUED when enroll_dkms_mok succeeded; $EXPECT_LOG records the call.
 run_enroll_import() {
   local passphrase=$1 have_expect=$2 expect_rc=$3
-  rm -rf "${scratch}/enroll-home" "${minbin}/expect"
+  rm -rf -- "${scratch}/enroll-home"
+  rm -f -- "${minbin}/expect"
   mkdir -p "${scratch}/enroll-home"
   : > "${scratch}/expect.log"
   [[ "${have_expect}" == yes ]] && ln -sf "${scratch}/expect-stub" "${minbin}/expect"
@@ -577,16 +608,11 @@ run_enroll_import() {
   grep -Fq 'MOK_ENROLL_PASSPHRASE="${SMOKE_MOK_PASSPHRASE-}"' "${scratch}/enroll_import.sh" ||
     fail 'the fixture could not redirect the rendered passphrase assignment'
   env -i HOME="${scratch}/enroll-home" PATH="${minbin}" \
-    MOK_DIR="${mokdir}" SMOKE_MOK_PASSPHRASE="${passphrase}" \
+    MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${plain_sudo_stub}" SMOKE_MOK_PASSPHRASE="${passphrase}" \
     EXPECT_LOG="${scratch}/expect.log" EXPECT_RC="${expect_rc}" \
     "${BASH}" -c '
       set -uo pipefail
-      fake_sudo() {
-        local -a a=()
-        for x in "$@"; do a+=("${x/\/var\/lib\/dkms/${MOK_DIR}}"); done
-        "${a[@]}"
-      }
-      SUDO=(fake_sudo)
+      . "${PLAIN_SUDO_STUB:?}"
       mokutil() {
         case "${1-}" in
           --test-key) return 0 ;;

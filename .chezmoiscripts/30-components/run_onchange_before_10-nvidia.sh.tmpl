@@ -495,16 +495,40 @@ enroll_dkms_mok() {
   #
   # The exit status is PROPAGATED: a discarded one is the whole defect this
   # replaced.
+  #
+  # LC_ALL=C, an explicit timeout action, and {*} rather than eval. The prompt
+  # strings below are matched literally, so a localized mokutil would defeat them
+  # -- the same reason the fingerprint installer pins its authselect call. Without
+  # a timeout action an unmatched prompt would fall through to `expect eof` and
+  # then block in `wait` on a process still reading stdin, hanging the apply
+  # instead of failing it. And `eval spawn $argv` would re-parse the certificate
+  # path as Tcl; {*} expands the list without a second parse.
+  #
+  # THE INDENTATION IS LOAD-BEARING, unusually for Tcl. Every helper here is
+  # extracted by `sed -n '<start>,/^}$/p'`, so a line that is exactly `}` at
+  # column 0 inside this heredoc truncates enroll_dkms_mok at that brace and the
+  # smoke harness drives half a function. Keep the closing braces indented.
   if ! MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert" \
-    MOK_SUDO="${SUDO[*]-}" expect -f - <<'EXPECT'; then
+    MOK_SUDO="${SUDO[*]-}" LC_ALL=C expect -f - <<'EXPECT'; then
 set timeout 30
 set pw $env(MOK_ENROLL_PASSPHRASE)
 set cert $env(MOK_CERT)
 set argv [concat $env(MOK_SUDO) [list mokutil --import $cert]]
-eval spawn -noecho $argv
-expect "input password:" { send -- "$pw\r" }
-expect "input password again:" { send -- "$pw\r" }
-expect eof
+spawn -noecho {*}$argv
+expect {
+    "input password:" { send -- "$pw\r" }
+    timeout { puts stderr "mokutil did not ask for the enrollment password"; exit 90 }
+    eof { puts stderr "mokutil exited before asking for the enrollment password"; exit 91 }
+  }
+expect {
+    "input password again:" { send -- "$pw\r" }
+    timeout { puts stderr "mokutil did not ask for the password confirmation"; exit 92 }
+    eof { puts stderr "mokutil exited before confirming the enrollment password"; exit 93 }
+  }
+expect {
+    eof {}
+    timeout { puts stderr "mokutil did not exit after the enrollment password"; exit 94 }
+  }
 catch wait result
 exit [lindex $result 3]
 EXPECT

@@ -253,25 +253,19 @@ grep -qx 'resolved=none' <<<"${unlisted_out}" ||
 # --- Idempotence ------------------------------------------------------------
 #
 # Repeated reconciliation writes the same value: the policy is a setopt, not an
-# append, and a second apply on unchanged source must not drift.
-: > "${scratch}/repeat.log"
-for _ in 1 2; do
-  env HOME="${scratch}/home" XDG_STATE_HOME="${scratch}/home/state" \
-    PATH="${scratch}/bin:${PATH}" DNF_LOG="${scratch}/repeat.log" DNF_HAS_RPMFUSION=1 \
-    FACT_GPU_ARCH=pascal RPM_INSTALLED='' \
-    bash -c '
-      set -uo pipefail
-      DNF=(dnf)
-      SUDO=()
-      '"$(cat "${scratch}/policy.sh")"'
-      resolve_nvidia_branch
-      configure_nvidia_repo_policy
-    '
+# append, and a second apply on unchanged source must not drift. run_policy
+# truncates the log each call, so each run is asserted to emit the value exactly
+# once rather than counting two lines in one log.
+for run in first second; do
+  run_policy pascal '
+    resolve_nvidia_branch
+    configure_nvidia_repo_policy
+  ' >/dev/null
+  if [[ $(grep -c 'cuda-fedora\*.excludepkgs=cuda-drivers,' "${scratch}/dnf.log") -ne 1 ]]; then
+    printf 'the %s reconciliation did not emit the CUDA exclusion exactly once. log:\n' "${run}"
+    cat "${scratch}/dnf.log"
+    exit 1
+  fi
 done
-if [[ $(grep -c 'cuda-fedora\*.excludepkgs=cuda-drivers,' "${scratch}/repeat.log") -ne 2 ]]; then
-  printf 'repeated reconciliation must emit the same CUDA exclusion. log:\n'
-  cat "${scratch}/repeat.log"
-  exit 1
-fi
 
 printf 'Fedora NVIDIA repository policy smoke passed (both driver branches).\n'
