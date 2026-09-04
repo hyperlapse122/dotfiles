@@ -208,6 +208,30 @@ commands:
       legacy:
         path: .local/bin/uvx
 
+    bun:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: bun
+      commands:
+        - name: bun
+      legacy:
+        path: .local/bin/bun
+
+    bunx:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: bun
+      commands:
+        - name: bunx
+      legacy:
+        path: .local/bin/bunx
+
     mise:
       producer: external
       safetyProfile: native-single-file

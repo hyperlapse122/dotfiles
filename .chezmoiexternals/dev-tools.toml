@@ -1,6 +1,6 @@
 {{- /*
   Developer CLIs & language servers: android, ast-grep, buf, marksman,
-  shellcheck, wasm-pack, rust-analyzer, uv/uvx, mise.
+  shellcheck, wasm-pack, rust-analyzer, uv/uvx, bun/bunx, mise.
 */ -}}
 
 {{- /* Rust-style triple components, shared by the rust-toolchain-built CLIs below. */ -}}
@@ -165,6 +165,46 @@ url = '{{ $uvArchiveUrl }}'
 executable = true
 targetPath = '.local/share/chezmoi-commands/incomplete/uvx/uvx'
 path = '{{ printf "%suvx" $uvPathPrefix }}'
+
+{{- /* ---------- bun (+ bunx, the same binary under a second name) ---------- */ -}}
+{{- /*
+  Upstream ships one zip per platform holding exactly one file,
+  bun-<os>-<arch>[-musl]/bun. The binary dispatches on argv[0], so `bunx` is
+  that same file extracted a second time under the bunx name — no symlink and
+  no wrapper. Both externals therefore read ONE url and ONE archive-internal
+  path, composed here so they cannot drift from each other or from the lock.
+  Linux has distinct glibc and static-musl builds; the asset name and the
+  directory inside it carry the same "-musl" suffix, so the probe result must
+  reach both.
+*/ -}}
+
+{{- $bunArch := (replace "amd64" "x64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
+{{- $bunMuslSuffix := "" -}}
+{{- if $isMuslLinux -}}{{- $bunMuslSuffix = "-musl" -}}{{- end -}}
+{{- $bunLockArtifact := dict "ctx" . "tool" "bun" "platform" "auto" "musl" $isMuslLinux -}}
+{{- $bunArchiveUrl := includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $bunLockArtifact (dict "field" "url")) -}}
+{{- $bunArchiveSha256 := includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $bunLockArtifact (dict "field" "sha256")) -}}
+{{- $bunArchivePath := printf "bun-%s-%s%s/bun" .chezmoi.os $bunArch $bunMuslSuffix }}
+
+[bun]
+type = "archive-file"
+url = '{{ $bunArchiveUrl }}'
+executable = true
+targetPath = '.local/share/chezmoi-commands/incomplete/bun/bun'
+path = '{{ $bunArchivePath }}'
+
+[bun.checksum]
+sha256 = '{{ $bunArchiveSha256 }}'
+
+[bunx]
+type = "archive-file"
+url = '{{ $bunArchiveUrl }}'
+executable = true
+targetPath = '.local/share/chezmoi-commands/incomplete/bunx/bunx'
+path = '{{ $bunArchivePath }}'
+
+[bunx.checksum]
+sha256 = '{{ $bunArchiveSha256 }}'
 
 {{- /* ---------- mise ---------- */}}
 {{- /*
