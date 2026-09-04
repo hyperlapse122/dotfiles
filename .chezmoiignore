@@ -53,6 +53,10 @@
 {{- if not (default dict $features).flatpaks }}
 .chezmoiscripts/30-components/40-flatpaks.sh
 {{- end }}
+{{- if or (ne .chezmoi.os "linux") (not (default dict $features).flatpaks) }}
+.config/systemd/user/app-discord@autostart.service.d/**
+.config/systemd/user/app-telegram@autostart.service.d/**
+{{- end }}
 {{- if not (default dict $features).dotnet }}
 .chezmoiscripts/30-components/50-dotnet.sh
 {{- end }}

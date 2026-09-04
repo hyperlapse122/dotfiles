@@ -119,6 +119,8 @@ export PATH
 have_sudo=true
 if [[ "${EUID}" -eq 0 ]]; then
   SUDO=()
+elif ! command -v sudo >/dev/null 2>&1; then
+  have_sudo=false
 else
   SUDO=(sudo)
   # `[[ -t 0 ]]` is true only under an interactive apply (chezmoi wires its own

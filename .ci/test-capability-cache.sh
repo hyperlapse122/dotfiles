@@ -427,6 +427,8 @@ if grep -vE '^[[:space:]]*#' "$repo_root/$identity_helper" | grep -qE '\$\$|\$PP
 fi
 grep -qE 'timeout [0-9]+ sudo -nN true' "$repo_root/$hook" \
   || fail "$hook must keep the bounded, non-refreshing sudo -nN probe"
+grep -qE 'timeout [0-9]+ sudo -nN test -f "\$path"' "$repo_root/$hook" \
+  || fail "$hook must keep the bounded, non-refreshing privileged-file probe"
 grep -qF 'capability_with_deadline systemctl --user show-environment' "$repo_root/$hook" \
   || fail 'user-manager-bus must use the portable bounded resolver'
 grep -qF 'capability_with_deadline systemctl --user cat podman.socket' "$repo_root/$hook" \
@@ -827,10 +829,12 @@ reset_cache
 apply_fixture available present
 [[ "$(probe_line)" == 'zsh=available sudo=available bus=available plasma=unavailable' ]] \
   || fail "hook-backed render did not publish live tokens: $(probe_line)"
-[[ "$(count_log 'sudo ')" -eq 1 ]] \
-  || fail "sudo-usable resolved $(count_log 'sudo ') times in one command; it must resolve exactly once"
+[[ "$(count_log 'sudo ')" -eq 2 ]] \
+  || fail "sudo resolvers ran $(count_log 'sudo ') times in one command; expected 2 (sudo-usable and privileged-file)"
 grep -qx 'sudo -nN true' "$log" \
   || fail 'the sudo probe must stay the bounded, non-refreshing `sudo -nN true` check'
+grep -qx 'sudo -nN test -f /etc/pki/akmods/certs/public_key.der' "$log" \
+  || fail 'privileged-file must run bounded, non-refreshing `sudo -nN test -f`'
 [[ "$(cat "$destination/.probe_second")" == 'sudo=available again=available' ]] \
   || fail 'a second consumer in the same command read a different token'
 
@@ -1126,7 +1130,7 @@ podman_run() {
   FIXTURE_PODMAN_RUNTIME_UNIT_RC="$unit_rc" \
     FIXTURE_PODMAN_RUNTIME_LOG="$scratch/podman-runtime.log" \
     HOME="$fixture_home" XDG_STATE_HOME="$runtime_state" PATH="$podman_lifecycle_bin" \
-    /usr/bin/bash "$podman_destination/.podman" >"$output" 2>"$error"
+    /usr/bin/bash "$podman_destination/.podman" </dev/null >"$output" 2>"$error"
 }
 rm -f -- "$scratch/podman-runtime.log"
 podman_run 1 "$scratch/podman-absent.out" "$scratch/podman-absent.err" \
@@ -1173,7 +1177,7 @@ chmod +x "$runtime_bin/systemctl" "$runtime_bin/sudo"
 runtime_started=$SECONDS
 if ! /usr/bin/timeout 8 env -i HOME="$fixture_home" XDG_STATE_HOME="$runtime_state" PATH="$runtime_bin" \
   CAPABILITY_PROBE_DEADLINE_SECS=1 CAPABILITY_PROBE_TERM_GRACE_SECS=1 \
-  /usr/bin/bash "$production_script" >"$scratch/production-runtime.out" \
+  /usr/bin/bash "$production_script" </dev/null >"$scratch/production-runtime.out" \
   2>"$scratch/production-runtime.err"; then
   fail "the rendered Podman script did not converge under a hung user manager: $(cat "$scratch/production-runtime.err")"
 fi
