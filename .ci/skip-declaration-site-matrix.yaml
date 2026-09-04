@@ -38,6 +38,22 @@
 # that can appear later. A `transient-blocking` row additionally names the registry
 # probe its rendered fingerprint must hash and where that fingerprint block lives.
 #
+# ANCHOR_LINE HAS TWO POPULATIONS, AND ONLY ONE IS MAINTAINED. Most rows here are
+# PRE-CONVERSION snapshots: `anchor` and `anchor_line` record what the site looked
+# like at audit time, no gate reads either as a live claim, and later edits have
+# since moved most of those lines. Those are deliberately left where they are --
+# re-reading them would destroy the evidence the freeze exists to hold, and some
+# rows are actively guarded against having their raw shape overwritten (see
+# RAW_ANCHOR_EVIDENCE in .ci/test-capability-cache.sh). The other population is a
+# LIVE CLAIM: `predicate` IS checked against the rendered branch, so when the code
+# changes the anchor text has to be rewritten to match, and from that point the row
+# describes current source. Refresh a live claim's `anchor_line` whenever an edit
+# moves it -- including an edit elsewhere in the file that only shifts it. Two rows
+# were left stale exactly that way and are the reason this paragraph exists.
+# Nothing in the row says which population it belongs to; distinguishing them in
+# the data would need a new field plus an entry in the gate's field allowlist, and
+# that is known follow-up work rather than something a reader can infer today.
+#
 # THE FATAL SUBSET IS EIGHT. Retiring the figma-auth build removed its three
 # causes from the plan's original eleven. Seven are the plan's GNOME parser and
 # Kimi build causes; the eighth,
