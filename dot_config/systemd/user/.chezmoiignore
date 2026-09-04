@@ -1,0 +1,4 @@
+{{- if or (ne .chezmoi.os "linux") (not (default dict .features).flatpaks) }}
+app-discord@autostart.service.d/**
+app-telegram@autostart.service.d/**
+{{- end }}

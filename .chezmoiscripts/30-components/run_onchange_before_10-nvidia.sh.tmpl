@@ -207,12 +207,24 @@ conflicting_nvidia_branch() {
   return 1
 }
 
+clear_nvidia_skip_record() {
+  local site="$1"
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-nvidia-fedora__${site}" 2>/dev/null || true
+}
+
+clear_nvidia_package_skips() {
+  clear_nvidia_skip_record 'nvidia-branch-conflict'
+  clear_nvidia_skip_record 'nvidia-package-availability-unknown'
+  clear_nvidia_skip_record 'nvidia-branch-packages-unavailable'
+}
+
 install_nvidia_packages() {
   local -a missing=()
   local pkg conflict
   for pkg in "${nvidia_packages[@]}"; do
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
+  [[ "${#missing[@]}" -gt 0 ]] || clear_nvidia_package_skips
   if [[ "${#missing[@]}" -eq 0 ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "nvidia-packages-already-present" "reason" "all declared dnf packages are already installed") | trim | indent 6 }}
@@ -223,6 +235,7 @@ install_nvidia_packages() {
   if conflict="$(conflicting_nvidia_branch)" && report_branch_conflict "$conflict"; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-conflict" "direction" "operator-blocking" "reason" "a conflicting NVIDIA driver branch is installed; the operator command to clear it was printed and nothing was installed or removed") | trim | indent 4 }}
   fi
+  clear_nvidia_skip_record 'nvidia-branch-conflict'
 
   setup_nvidia_repos
 
@@ -244,12 +257,14 @@ install_nvidia_packages() {
   if [[ -z "$available" ]] && report_unknown_availability; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-package-availability-unknown" "direction" "operator-blocking" "reason" "the package availability probe returned no output at all, so availability could not be determined; nothing was installed") | trim | indent 4 }}
   fi
+  clear_nvidia_skip_record 'nvidia-package-availability-unknown'
   for pkg in "${missing[@]}"; do
     printf '%s\n' "$available" | grep -qE "^${pkg}\\." || unavailable+=("$pkg")
   done
   if [[ "${#unavailable[@]}" -gt 0 ]] && report_unavailable_packages "${unavailable[@]}"; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-branch-packages-unavailable" "direction" "operator-blocking" "reason" "the resolved branch declares packages the enabled package sources do not offer; nothing was installed") | trim | indent 4 }}
   fi
+  clear_nvidia_skip_record 'nvidia-branch-packages-unavailable'
 
   "${DNF[@]}" install -y "${nvidia_packages[@]}"
 }
@@ -508,6 +523,7 @@ enroll_dkms_mok() {
   if [[ "${mok_state}" != present ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "direction" "operator-blocking" "reason" "the module signing keypair could not be created or could not be probed, so there is no certificate to enroll; remove any half-written pair first, then mint it by hand with sudo /usr/lib/dkms/mok_signing_setup (dkms) or sudo kmodgenca -a (akmods)") | trim | indent 4 }}
   fi
+  clear_nvidia_skip_record 'mok-enroll-no-keypair'
   if mok_key_is_enrolled "${cert}"; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-enrolled" "reason" "DKMS MOK key is already enrolled") | trim | indent 6 }}

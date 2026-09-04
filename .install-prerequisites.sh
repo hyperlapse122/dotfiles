@@ -555,8 +555,8 @@ CAPABILITY_REGISTRY_SCHEMA='capability-registry-v2'
 CAPABILITY_REGISTRY_RELPATH='.chezmoidata/.capability-registry.tsv'
 CAPABILITY_REGISTRY_KINDS=(
   absolute-executable absolute-file command-present graphical-session
-  session-bus sudo-nonrefreshing unix-socket user-manager-bus user-manager-unit
-  user-process
+  privileged-file session-bus sudo-nonrefreshing unix-socket user-manager-bus
+  user-manager-unit user-process
 )
 CAPABILITY_REGISTRY_PLATFORMS=(any linux)
 CAPABILITY_REGISTRY_SIDE_EFFECTS=(none read-only-subprocess sudo-credential-probe)
@@ -687,15 +687,24 @@ resolve_capability() {
       esac
       [[ -x "$path" ]]
       ;;
-    absolute-file)
-      # A file that only has to EXIST, not to be runnable. A signing certificate
-      # a package's build system mints on its first build is the shape this
-      # serves: it is the precondition a transient-blocking skip waits on, and
-      # `-x` would never be true for it.
+    privileged-file)
+      # A root-restricted file that must EXIST. The directory or file mode may
+      # forbid unprivileged stat, so it is tested via non-refreshing sudo -nN.
       case "$key" in
         akmods-signing-key-present) path=/etc/pki/akmods/certs/public_key.der ;;
+        *) capability_cache_fail "privileged-file key ${key@Q} has no reviewed path" ;;
+      esac
+      if [[ "$(id -u)" == 0 ]]; then
+        [[ -f "$path" ]]
+      else
+        timeout 5 sudo -nN test -f "$path" >/dev/null 2>&1
+      fi
+      ;;
+    absolute-file)
+      case "$key" in
         *) capability_cache_fail "absolute-file key ${key@Q} has no reviewed path" ;;
       esac
+      # shellcheck disable=SC2317
       [[ -f "$path" ]]
       ;;
     sudo-nonrefreshing)
