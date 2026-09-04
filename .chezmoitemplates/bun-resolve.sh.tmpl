@@ -2,6 +2,10 @@
 bun-resolve.sh.tmpl — the shared bun resolution ladder for chezmoi scripts that
 build with bun. Emits plain shell; it takes no data argument.
 
+.ci/lib/bun.sh is the same ladder for CI scripts, which run outside chezmoi's
+templating and so cannot include this partial. The two must stay rung-for-rung
+identical. If you change one, change the other.
+
 THE LADDER, in order:
 
   1  bun already on PATH

@@ -12,7 +12,14 @@ mkdir -p "$home_dir/.local/bin"
 
 reconcile_bin="$repo_root/packages/command-reconcile/dist/command-reconcile"
 if [[ ! -x "$reconcile_bin" ]]; then
-  (cd "$repo_root/packages/command-reconcile" && bun build --compile ./src/cli.ts --outfile ./dist/command-reconcile)
+  # shellcheck source=.ci/lib/bun.sh
+  source "$repo_root/.ci/lib/bun.sh"
+  resolve_bun
+  [[ -n "$BUN_BIN" ]] || {
+    printf 'command-reconcile apply test: bun is required to build command-reconcile\n' >&2
+    exit 1
+  }
+  (cd "$repo_root/packages/command-reconcile" && "$BUN_BIN" build --compile ./src/cli.ts --outfile ./dist/command-reconcile)
 fi
 
 mkdir -p "$home_dir/.local/share/chezmoi-command-sources"

@@ -144,9 +144,12 @@ case_name=platform-vocabulary-drift
 out=
 gate_keys=$(sed -n "s/^supported='\(.*\)'\$/\1/p" "$gate" | jq -r '.[]' | sort)
 [ -n "$gate_keys" ] || fail 'could not read the supported platform list out of the gate'
-if command -v bun >/dev/null 2>&1; then
+# shellcheck source=.ci/lib/bun.sh
+source "$repo_root/.ci/lib/bun.sh"
+resolve_bun
+if [ -n "$BUN_BIN" ]; then
   source_keys=$(cd "$repo_root/packages/release-lock" &&
-    bun -e 'const m = await import("./src/platforms.ts"); console.log(m.ALL_PLATFORMS_WITH_MUSL.map(m.platformKey).join("\n"))' |
+    "$BUN_BIN" -e 'const m = await import("./src/platforms.ts"); console.log(m.ALL_PLATFORMS_WITH_MUSL.map(m.platformKey).join("\n"))' |
     sort)
   [ "$gate_keys" = "$source_keys" ] || {
     out=$(printf 'gate:\n%s\nplatforms.ts:\n%s\n' "$gate_keys" "$source_keys")
@@ -157,7 +160,7 @@ else
   # A check that skips itself is a check that passes forever. CI provisions bun
   # for this job, so absence there is a broken job, not a local convenience.
   [ -z "${CI:-}" ] || fail 'bun is required in CI; the support-matrix drift case cannot be skipped'
-  printf 'release-lock digest gate: skipped - bun is not on PATH, cannot compare the support matrix against platforms.ts\n'
+  printf 'release-lock digest gate: skipped - bun is not found on PATH or anywhere in the resolution ladder, cannot compare the support matrix against platforms.ts\n'
 fi
 
 # The rule has to admit the repository we actually have, not only the fixtures.

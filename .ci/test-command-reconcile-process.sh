@@ -10,8 +10,16 @@ trap 'rm -rf -- "$scratch"' EXIT
 home_dir="$scratch/home"
 mkdir -p "$home_dir"
 
+# shellcheck source=.ci/lib/bun.sh
+source "$repo_root/.ci/lib/bun.sh"
+resolve_bun
+[[ -n "$BUN_BIN" ]] || {
+  printf 'command-reconcile process test: bun is required to build command-reconcile\n' >&2
+  exit 1
+}
+
 reconcile_bin="$repo_root/packages/command-reconcile/dist/command-reconcile"
-(cd "$repo_root/packages/command-reconcile" && bun build --compile ./src/cli.ts --outfile ./dist/command-reconcile)
+(cd "$repo_root/packages/command-reconcile" && "$BUN_BIN" build --compile ./src/cli.ts --outfile ./dist/command-reconcile)
 
 staging_unit="$home_dir/.local/share/chezmoi-commands/incomplete/agent-browser"
 mkdir -p "$staging_unit"
