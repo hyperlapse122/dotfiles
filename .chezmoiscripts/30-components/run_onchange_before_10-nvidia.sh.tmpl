@@ -496,7 +496,7 @@ enroll_dkms_mok() {
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-awaiting-builder-key" "direction" "transient-blocking" "probe" "akmods-signing-key-present" "reason" "the out-of-tree module builder has not generated its signing keypair yet, so there is no certificate to enroll; enrollment resumes once its key generator mints the key") | trim | indent 4 }}
   fi
   if [[ "${mok_state}" != present ]]; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "direction" "operator-blocking" "reason" "the module signing keypair could not be created or could not be probed, so there is no certificate to enroll; mint it by hand with sudo /usr/lib/dkms/mok_signing_setup (dkms) or sudo kmodgenca -a (akmods)") | trim | indent 4 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "direction" "operator-blocking" "reason" "the module signing keypair could not be created or could not be probed, so there is no certificate to enroll; remove any half-written pair first, then mint it by hand with sudo /usr/lib/dkms/mok_signing_setup (dkms) or sudo kmodgenca -a (akmods)") | trim | indent 4 }}
   fi
   if mok_key_is_enrolled "${cert}"; then
     (

@@ -596,6 +596,10 @@ grep -Eq 'fp=.*openssl x509.*-fingerprint' "${scratch}/enroll.code" ||
 sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/enroll.sh" > "${scratch}/enroll_nogates.sh"
 
+# Records written by the enrollment fixtures below. run_enroll pins HOME, so this
+# is where every skip declaration it drives lands.
+enroll_skips="${scratch}/home/.local/state/chezmoi/skips"
+
 # $3 = the sudo stub to source, defaulting to the always-succeeds one. The
 # root-only variant below is what models a certificate directory the apply's own
 # user cannot read.
@@ -676,18 +680,93 @@ fake_sudo() {
 SUDO=(fake_sudo)
 STUB
 # The unprivileged view must be EMPTY: that is the whole point of the fixture.
-rm -f "${mokdir}/mok.pub" "${mokdir}/mok.key"
+rm -f "${mokdir}/mok.pub" "${mokdir}/mok.key" \
+  "${enroll_skips}/install-nvidia-fedora__mok-enroll-no-keypair"
 out=$(run_enroll not_enrolled not_queued "${root_only_sudo_stub}")
 [[ "${out}" == *CONTINUED* ]] ||
   fail 'enrollment must not fail on a certificate only root can read'
-# The not-applicable record is the defect. Asserting its ABSENCE is what stays
-# true whether or not this render carries a stored enrollment passphrase.
-if [[ "${out}" == *'no enrollable DKMS MOK keypair'* ]]; then
+# THE RECORD, NOT THE MESSAGE. This used to grep the reason text out of stdout,
+# which disarmed itself twice over the moment that site was reclassified: the
+# reason was reworded, and operator-blocking prints to STDERR while run_enroll
+# captures stdout only. A needle that can no longer match is a guard that passes
+# for free. The record file is the durable artefact and its name is CI-reconciled
+# against the site matrix, so assert on that instead.
+if [[ -e "${enroll_skips}/install-nvidia-fedora__mok-enroll-no-keypair" ]]; then
   fail 'a root-only certificate was recorded as no keypair at all; an unprivileged -f read it as missing'
 fi
 rm -rf "${rootdir}"
 printf cert > "${mokdir}/mok.pub"
 printf key > "${mokdir}/mok.key"
+
+# --- The enrollment guard splits by build system -----------------------------
+#
+# Both honest opt-outs return above this point, so a host that reaches the guard
+# IS eligible: the keypair could not be made, or could not be read. The old
+# not_applicable declaration said the opposite and deleted its own record, so the
+# host went silent. Only ONE of the two states below may take the probe-backed
+# branch, and which one is the whole point -- `absent` is a key the builder will
+# mint by itself, while `unreadable` is a privileged probe that never answered.
+# Routing the second through a probe would let the pruner retire the record on an
+# UNPRIVILEGED verdict for a host nothing ever looked at.
+awaiting_record="${enroll_skips}/install-nvidia-fedora__mok-enroll-awaiting-builder-key"
+nokey_record="${enroll_skips}/install-nvidia-fedora__mok-enroll-no-keypair"
+
+# $1 = build system, $2 = sudo stub. Clears both records and both key trees first,
+# so each case is decided by what THIS call did.
+run_enroll_state() {
+  rm -f "${awaiting_record}" "${nokey_record}" \
+    "${mokdir}/mok.pub" "${mokdir}/mok.key" \
+    "${mokdir}/akmods/certs/public_key.der" "${mokdir}/akmods/private/private_key.priv"
+  write_mok_paths "$1"
+  run_enroll not_enrolled not_queued "${2-}" >/dev/null
+}
+
+run_enroll_state akmod
+[[ -e "${awaiting_record}" ]] ||
+  fail 'an akmod host with no builder key must record the transient-blocking wait'
+grep -Fq 'transient-blocking:akmods-signing-key-present' "${awaiting_record}" ||
+  fail 'the akmod wait must name the probe that retires its record'
+[[ ! -e "${nokey_record}" ]] ||
+  fail 'a self-healing akmod wait must not also record an operator-blocking skip'
+
+run_enroll_state dkms
+[[ -e "${nokey_record}" ]] ||
+  fail 'a dkms host with no keypair must keep a record; not_applicable deleted it'
+grep -Fq 'operator-blocking' "${nokey_record}" ||
+  fail 'a keypair no probe will produce must be operator-blocking, not a silent skip'
+[[ ! -e "${awaiting_record}" ]] ||
+  fail 'the dkms branch has no builder to wait for'
+
+# A half-written pair is an operator action on EITHER build system:
+# ensure_dkms_mok_generated refuses to regenerate it.
+run_enroll_state akmod
+printf cert > "${mokdir}/akmods/certs/public_key.der"
+rm -f "${awaiting_record}" "${nokey_record}"
+run_enroll not_enrolled not_queued >/dev/null
+[[ -e "${nokey_record}" && ! -e "${awaiting_record}" ]] ||
+  fail 'a partial keypair must take the operator-blocking branch, never the probe-backed wait'
+
+# THE REGRESSION THE `== absent` GUARD EXISTS FOR. A privileged probe that could
+# not run at all is not a key that is merely missing. Widening that test back to
+# `!= present` sends this host down the probe-backed branch, and the pruner then
+# retires its record the moment the unprivileged probe reads available.
+fail_sudo_stub="${scratch}/fail-sudo.sh"
+cat > "${fail_sudo_stub}" <<'STUB'
+fake_sudo() { return 1; }
+SUDO=(fake_sudo)
+STUB
+run_enroll_state akmod "${fail_sudo_stub}"
+[[ -e "${nokey_record}" ]] ||
+  fail 'an unreadable probe must still record the host as unconverged'
+[[ ! -e "${awaiting_record}" ]] ||
+  fail 'an unreadable probe must not take the self-retiring branch; cannot-look is not not-there'
+
+rm -f "${awaiting_record}" "${nokey_record}"
+write_mok_paths dkms
+mkdir -p "${mokdir}/akmods/certs" "${mokdir}/akmods/private"
+printf cert > "${mokdir}/mok.pub"
+printf key > "${mokdir}/mok.key"
+
 # --- Non-interactive enrollment ---------------------------------------------
 #
 # `mokutil --import` reads a one-time enrollment password from the terminal, so on

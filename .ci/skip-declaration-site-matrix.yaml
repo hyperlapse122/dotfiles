@@ -38,21 +38,26 @@
 # that can appear later. A `transient-blocking` row additionally names the registry
 # probe its rendered fingerprint must hash and where that fingerprint block lives.
 #
-# ANCHOR_LINE HAS TWO POPULATIONS, AND ONLY ONE IS MAINTAINED. Most rows here are
-# PRE-CONVERSION snapshots: `anchor` and `anchor_line` record what the site looked
-# like at audit time, no gate reads either as a live claim, and later edits have
-# since moved most of those lines. Those are deliberately left where they are --
-# re-reading them would destroy the evidence the freeze exists to hold, and some
-# rows are actively guarded against having their raw shape overwritten (see
-# RAW_ANCHOR_EVIDENCE in .ci/test-capability-cache.sh). The other population is a
-# LIVE CLAIM: `predicate` IS checked against the rendered branch, so when the code
-# changes the anchor text has to be rewritten to match, and from that point the row
-# describes current source. Refresh a live claim's `anchor_line` whenever an edit
-# moves it -- including an edit elsewhere in the file that only shifts it. Two rows
-# were left stale exactly that way and are the reason this paragraph exists.
-# Nothing in the row says which population it belongs to; distinguishing them in
-# the data would need a new field plus an entry in the gate's field allowlist, and
-# that is known follow-up work rather than something a reader can infer today.
+# ANCHOR_LINE IS A SNAPSHOT, AND NO GATE READS IT. `anchor` and `anchor_line`
+# record what a site looked like at audit time. Nothing validates the line, so most
+# rows here hold one that later edits have since moved, and they are deliberately
+# left that way: re-reading them wholesale would destroy the pre-conversion evidence
+# the freeze exists to hold, and some rows are actively guarded against having their
+# raw shape overwritten (see RAW_ANCHOR_EVIDENCE in .ci/test-capability-cache.sh).
+#
+# ONE OBLIGATION SURVIVES, AND IT IS THE EDITOR'S. `predicate` IS checked against
+# the rendered branch, so changing the code forces the anchor text to be rewritten
+# with it -- and from that point the pair claims to describe current source. So:
+# re-read the `anchor_line` of every row YOUR OWN EDIT MOVED, whether the edit
+# rewrote that anchor or merely shifted it from above. Two rows were left stale
+# exactly that way (5213209 and 7b1044f set a line that da6a52d then shifted 25
+# lines further down), and that is the reason this paragraph exists.
+#
+# Do not read that obligation as a licence to refresh every drifted row. Nothing in
+# a row says whether its line was ever a live claim, and 88 of the drifted rows
+# could be relocated mechanically -- doing so is a decision about the freeze, not
+# bookkeeping. Recording the distinction in the data would need a new field plus an
+# entry in the gate's field allowlist; that is known follow-up work.
 #
 # THE FATAL SUBSET IS EIGHT. Retiring the figma-auth build removed its three
 # causes from the plan's original eleven. Seven are the plan's GNOME parser and
@@ -1960,7 +1965,7 @@ owners:
   - owner: 'install-nvidia-fedora/nvidia-architecture-unlisted'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 492
+    anchor_line: 700
     anchor: '  if ! resolve_nvidia_branch && report_unlisted_gpu; then'
     predicate: '! resolve_nvidia_branch && report_unlisted_gpu'
     predicate_digest: 'sha256:1f53e6c18a5f64bcf37f68c2f35b5e0b738fbb99ce58eb5d262f0bfaee5890fe'
@@ -2016,7 +2021,7 @@ owners:
   - owner: 'install-nvidia-fedora/mok-enroll-no-expect'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 471
+    anchor_line: 545
     anchor: '  if ! command -v expect >/dev/null 2>&1; then'
     predicate: '! command -v expect >/dev/null 2>&1'
     predicate_digest: 'sha256:c3f8e00f3feadb7c8e2c437062f1b4423341495378bcccef7fb9acc089f2e71d'
@@ -2032,7 +2037,7 @@ owners:
   - owner: 'install-nvidia-fedora/mok-enroll-passphrase-untypeable'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 481
+    anchor_line: 555
     anchor: '  if ! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"; then'
     predicate: '! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"'
     predicate_digest: 'sha256:6fc2dbac44c96b2c7f5c1cd340c4edb3dcdef6991c7ade10030283a0155b5a88'
@@ -2046,7 +2051,7 @@ owners:
   - owner: 'install-nvidia-fedora/mok-enroll-no-passphrase'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 463
+    anchor_line: 537
     anchor: '  if [[ -z "$MOK_ENROLL_PASSPHRASE" ]]; then'
     predicate: '[[ -z "$MOK_ENROLL_PASSPHRASE" ]]'
     predicate_digest: 'sha256:96c6b6ba8a4e8fdd90f9a99d1623003b403331d08534acd1f713151a976458ad'

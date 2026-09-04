@@ -25,7 +25,7 @@ set -uo pipefail
 # retry jobs) runs on every apply, records nothing, and is therefore out of
 # scope — excluded by its lifecycle, never by a filename exception. The matrix
 # still accounts for the shared-guard instances inside those always-run scripts:
-# they are reported as lifecycle-excluded, so 140 declared instances reconcile as
+# they are reported as lifecycle-excluded, so all 205 declared instances reconcile as
 # rendered + excluded, never as a silently smaller number.
 #
 # RENDER VARIANTS. One render cannot reach every declared instance: some sites
@@ -40,7 +40,7 @@ set -uo pipefail
 #
 # Usage: .ci/check-skip-declarations.sh [--fixture] [root]
 #   --fixture  the tree is a synthetic fixture, so the frozen production totals
-#              (121 owners / 141 instances / 117 + 24) are not asserted; every
+#              (136 owners / 205 instances / 131 + 74) are not asserted; every
 #              other check, including matrix self-consistency, still runs.
 #   root       source tree to scan; defaults to the current directory.
 
