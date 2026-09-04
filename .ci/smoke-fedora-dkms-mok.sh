@@ -128,6 +128,24 @@ done
 awaiting_start=$(grep -n '^report_awaiting_builder_key() {$' "${rendered_installer}" | cut -d: -f1 || true)
 [[ -n "${awaiting_start}" ]] || fail 'rendered Fedora installer is missing report_awaiting_builder_key'
 
+# The two mokutil readers report_stale_mok and enroll_dkms_mok now decide on.
+# They exist because mokutil's exit status is not its answer, so they must be
+# extracted -- and RUN -- rather than stubbed away.
+enrolled_start=$(grep -n '^mok_key_is_enrolled() {$' "${rendered_installer}" | cut -d: -f1 || true)
+queued_start=$(grep -n '^mok_key_is_queued() {$' "${rendered_installer}" | cut -d: -f1 || true)
+for var in enrolled_start queued_start; do
+  [[ -n "${!var}" ]] || fail "rendered Fedora installer is missing the mokutil reader behind ${var}"
+done
+
+# NEITHER MAY PIPE MOKUTIL STRAIGHT INTO GREP. This script runs under
+# `set -o pipefail`, and `mokutil --test-key` exits non-zero for a key that IS
+# enrolled, so the pipeline form evaluates false in exactly the case the guard
+# exists to catch.
+if sed -n "${enrolled_start},/^}$/p;${queued_start},/^}$/p" "${rendered_installer}" |
+   grep -Eq 'mokutil[^|]*\| *grep'; then
+  fail 'a mokutil reader pipes into grep; under pipefail mokutil'"'"'s own exit status then decides, and it is non-zero for an enrolled key'
+fi
+
 # The real reporting and predicate helpers, not stubs. Each is a printf or a
 # grep -- no host state, no privilege -- and stubbing them would hide exactly the
 # branches this harness exists to cover.
@@ -137,6 +155,8 @@ awaiting_start=$(grep -n '^report_awaiting_builder_key() {$' "${rendered_install
   sed -n "${typeable_start},/^}$/p" "${rendered_installer}"
   sed -n "${manual_start},/^}$/p" "${rendered_installer}"
   sed -n "${awaiting_start},/^}$/p" "${rendered_installer}"
+  sed -n "${enrolled_start},/^}$/p" "${rendered_installer}"
+  sed -n "${queued_start},/^}$/p" "${rendered_installer}"
 } > "${scratch}/helpers.sh"
 
 # $1 = build system. The paths follow the RESOLVED branch, so the fixture seeds
@@ -556,7 +576,17 @@ run_enroll() {
     mokutil() {
       case "${1-}" in
         --test-key)
-          [[ "${MOK_TEST_KEY}" == enrolled ]] && printf "%s is already enrolled\n" "${2-}"
+          # THE EXIT STATUS IS MODELLED, not simplified to 0. Real mokutil asks
+          # whether a key still NEEDS enrolling, so it exits non-zero for one that
+          # is already enrolled -- and under `set -o pipefail` the pipeline form
+          # this stub used to let pass read that status as "not enrolled", fell
+          # through to `mokutil --import`, and aborted the apply on a converged
+          # host. A stub that always returns 0 cannot see that.
+          if [[ "${MOK_TEST_KEY}" == enrolled ]]; then
+            printf "%s is already enrolled\n" "${2-}"
+            return 255
+          fi
+          printf "%s is not enrolled\n" "${2-}"
           return 0
           ;;
         --list-new)
@@ -578,8 +608,15 @@ run_enroll() {
 printf cert > "${mokdir}/mok.pub"
 printf key > "${mokdir}/mok.key"
 
-[[ "$(run_enroll enrolled none)" == *CONTINUED* ]] ||
+enrolled_out=$(run_enroll enrolled none)
+[[ "${enrolled_out}" == *CONTINUED* ]] ||
   fail 'enroll_dkms_mok must succeed when key is already enrolled'
+# THE PATH, not just the exit status. Falling through this guard reaches
+# `mokutil --import`, which on an enrolled key exits without ever prompting, so
+# expect fails and the whole apply aborts. The done_here message is the proof the
+# guard fired.
+[[ "${enrolled_out}" == *'already enrolled; nothing to do'* ]] ||
+  fail 'an already-enrolled key must short-circuit; mokutil --test-key exits non-zero for it, and pipefail turned that into a fall-through to the import'
 [[ "$(run_enroll not_enrolled queued)" == *CONTINUED* ]] ||
   fail 'enroll_dkms_mok must succeed when key is already queued'
 [[ "$(run_enroll not_enrolled not_queued)" == *CONTINUED* ]] ||
@@ -736,7 +773,7 @@ run_enroll_import() {
       . "${PLAIN_SUDO_STUB:?}"
       mokutil() {
         case "${1-}" in
-          --test-key) return 0 ;;
+          --test-key) printf "%s is not enrolled\n" "${2-}"; return 0 ;;
           --list-new) return 0 ;;
         esac
         return 1

@@ -2180,10 +2180,10 @@ owners:
   - owner: 'install-nvidia-fedora/mok-already-enrolled'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 497
-    anchor: '  if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q ''is already enrolled''; then'
-    predicate: '"${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q ''is already enrolled'''
-    predicate_digest: 'sha256:c48cb11e6a24bf8dca08cc05ed940d9b5493a6047021bd8db3e61054828dbcca'
+    anchor_line: 481
+    anchor: '  if mok_key_is_enrolled "${cert}"; then'
+    predicate: 'mok_key_is_enrolled "${cert}"'
+    predicate_digest: 'sha256:b1331c6edbbc8d5381f7fb3820f3ad1d50c0fd880af16100be6f4fbcacc7314e'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
@@ -2193,10 +2193,10 @@ owners:
   - owner: 'install-nvidia-fedora/mok-already-queued'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 506
-    anchor: '  if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then'
-    predicate: '[[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"'
-    predicate_digest: 'sha256:3577a9921aff782d97a35f08b989b57ca5760734703115103ed52de58833e0c2'
+    anchor_line: 489
+    anchor: '  if mok_key_is_queued "${fp}"; then'
+    predicate: 'mok_key_is_queued "${fp}"'
+    predicate_digest: 'sha256:3e1715e4d00b89fe3c0304433f791c2ae25ac95830ff9a4ae755948728aeba8d'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'

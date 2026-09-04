@@ -295,6 +295,31 @@ dkms_mok_state() {
     fi' sh "$(mok_cert_path)" "$(mok_key_path)"
 }
 
+# MOKUTIL ANSWERS ON STDOUT AND ITS EXIT STATUS IS NOT THAT ANSWER. `mokutil
+# --test-key` asks whether a key STILL NEEDS ENROLLING, so it exits non-zero for
+# the key that is already enrolled -- and this script runs under `set -o
+# pipefail`, where `mokutil --test-key ... | grep -q ...` therefore evaluates
+# FALSE in exactly the case the guard exists to catch. The apply fell through to
+# `mokutil --import`, which prints `SKIP: <cert> is already enrolled` and exits
+# WITHOUT prompting; expect met eof where it wanted a password, returned 91, and
+# the whole apply aborted on a host that had already converged. Capturing the
+# output first keeps the status out of the decision, which is the same reason
+# dkms_mok_state exists.
+mok_key_is_enrolled() {
+  local out=''
+  out="$("${SUDO[@]}" mokutil --test-key "$1" 2>/dev/null)" || true
+  [[ "$out" == *'is already enrolled'* ]]
+}
+
+# The pending list, read the same way for the same reason. `-F` because a SHA-1
+# fingerprint is a fixed string, never a pattern.
+mok_key_is_queued() {
+  local out=''
+  [[ -n "$1" ]] || return 1
+  out="$(mokutil --list-new 2>/dev/null)" || true
+  printf '%s' "$out" | grep -qiF "$1"
+}
+
 # A certificate enrolled for a branch this host no longer resolves to stays in
 # firmware: MOK enrollment is not something this repository can withdraw, and it
 # forbids teardown. Report it so the trust gap is visible rather than assumed
@@ -319,7 +344,7 @@ report_stale_mok() {
     cert="$(cert_path_for_marker "$marker")" || continue
     [[ "$cert" == "$(mok_cert_path)" ]] && continue
     "${SUDO[@]}" test -f "$cert" 2>/dev/null || continue
-    "${SUDO[@]}" mokutil --test-key "$cert" 2>/dev/null | grep -q 'is already enrolled' || continue
+    mok_key_is_enrolled "$cert" || continue
     printf 'install-nvidia-fedora.sh: %s is still enrolled but belongs to a branch this host no longer resolves to.\n' "$cert" >&2
     printf 'install-nvidia-fedora.sh: withdrawing it is an operator action: sudo mokutil --delete %s\n' "$cert" >&2
   done
@@ -453,7 +478,7 @@ enroll_dkms_mok() {
     )
     return 0
   fi
-  if "${SUDO[@]}" mokutil --test-key "${cert}" 2>/dev/null | grep -q 'is already enrolled'; then
+  if mok_key_is_enrolled "${cert}"; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-enrolled" "reason" "DKMS MOK key is already enrolled") | trim | indent 6 }}
     )
@@ -461,7 +486,7 @@ enroll_dkms_mok() {
   fi
   local fp
   fp="$("${SUDO[@]}" openssl x509 -in "${cert}" -inform DER -noout -fingerprint -sha1 2>/dev/null | sed 's/.*=//')"
-  if [[ -n "${fp}" ]] && mokutil --list-new 2>/dev/null | grep -qi "${fp}"; then
+  if mok_key_is_queued "${fp}"; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-nvidia-fedora" "site" "mok-already-queued" "reason" "DKMS MOK key is already queued for enrollment") | trim | indent 6 }}
     )
