@@ -75,6 +75,21 @@ FOUR DIRECTIONS, for the two skip forms only:
                        direction only there; a missing probe that COULD exist is
                        a probe to add, not a reason to use this.
 
+WHO CLEARS A TRANSIENT RECORD. Not this partial: a wait-only site writes its
+record and has no success-path twin to remove it, so a record used to outlive its
+own condition forever (the NVIDIA akmods wait survived the signing key being
+minted; the mise-trust wait survived mise being installed). The
+read-source-state.pre hook retires them instead — prune_stale_skip_records in
+.install-prerequisites.sh, which already resolves every registry probe once per
+command and so is the only place that knows both the record and the verdict. It
+runs ONLY on a command that executes scripts, and it follows the directions
+declared here: a transient-tolerable record always goes (the script retries on
+every apply and rewrites it if it still fails), a transient-blocking record goes
+once its named probe reads `available` (the fingerprint has therefore changed, so
+that same command re-runs the script), and an operator-blocking record is never
+touched, because nothing re-runs its script and the record is the only thing
+still reporting the host. A record it cannot parse is left alone.
+
 WHY A PROBE AND NOT A MARKER FILE. Measured on chezmoi v2.71.0 against a scratch
 source and destination: a marker whose content changes on each skip re-runs the
 script on EVERY apply (an always-run script); a marker with stable content ran

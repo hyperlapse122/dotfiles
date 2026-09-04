@@ -106,6 +106,7 @@ jobs:
           .ci/test-skip-declaration-gates.sh
           .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh
+          .ci/test-skip-record-pruning.sh
           .ci/test-chezmoiignore-script-paths.sh
 
   fatal-boundary-gates:

@@ -587,6 +587,7 @@ read_capability_registry() {
   CAPABILITY_KEYS=()
   CAPABILITY_KINDS=()
   CAPABILITY_PLATFORMS=()
+  CAPABILITY_TOKENS=()
   [[ -f "$path" && ! -L "$path" ]] || capability_cache_fail "registry $path is missing or not a regular file"
   CAPABILITY_REGISTRY_DIGEST=$(capability_cache_identity_sha256 <"$path")
   [[ -n "$CAPABILITY_REGISTRY_DIGEST" ]] || capability_cache_fail 'no sha256sum/shasum available to digest the registry'
@@ -896,6 +897,10 @@ write_capability_cache() {
       else
         token=unavailable
       fi
+      # KEPT IN MEMORY as well as written. prune_stale_skip_records needs the
+      # same verdicts, and re-reading the record it just published would be a
+      # second parse of bytes this shell already holds.
+      CAPABILITY_TOKENS[index]=$token
       printf '%s\t%s\n' "$key" "$token"
     done
   } >"$tmp_record" || {
@@ -917,6 +922,93 @@ write_capability_cache() {
     || capability_cache_abort "$record" "the published record at $record does not validate"
 
   prune_dead_capability_records "$dir" "$record"
+  return 0
+}
+
+# --- Stale skip records — the other half of the transient skip contract -------
+#
+# A transient skip record (.chezmoitemplates/skip.sh.tmpl) is WRITTEN by the site
+# that took the skip and cleared by nothing. Only a later declaration carrying the
+# same script/site pair removes the file, and a wait-only site has no success-path
+# twin — so a record outlived its own condition forever. Two live cases: the NVIDIA
+# akmods wait survived the signing key being minted, and the mise-trust wait
+# survived mise being installed. `dotfiles-skips` went on reporting both hosts as
+# outstanding when they had converged.
+#
+# WHY THIS FILE OWNS IT. The hook already resolves every registry probe once per
+# chezmoi command, before the source state is read, so the verdict a blocking
+# record waits on is in hand here and nowhere else. `dotfiles-skips` stays what it
+# says it is: a reader that never probes and never mutates.
+#
+# ONLY ON AN APPLYING COMMAND. `status` and `diff` render the source state but run
+# no scripts, so a record pruned there is one nothing would rewrite — the host
+# would read as converged while the script is still pending. On an applying
+# command the pruned record is either re-earned by that same command or genuinely
+# gone.
+#
+# ONE RULE PER DIRECTION, each derived from what that direction already promises:
+#
+#   transient-tolerable  exits 1, so chezmoi never recorded the run and the script
+#                        retries on EVERY apply. Always prunable: this command
+#                        rewrites the record if the precondition is still missing.
+#   transient-blocking   exits 0 behind a probe hashed into the script's
+#                        fingerprint. Prunable exactly when that probe now reads
+#                        `available`: the fingerprint has therefore changed, which
+#                        is the contract's own guarantee that this command re-runs
+#                        the script.
+#   operator-blocking    contractually KEEPS its record. Nothing changes the
+#                        rendered content when the operator clears the condition,
+#                        so the script does not re-run and the record is the only
+#                        thing still reporting the host. Never pruned here.
+#
+# Anything else — an unknown direction, a probe the registry does not declare, a
+# record this reader cannot parse — is LEFT ALONE. Over-reporting a converged host
+# is a nuisance; deleting the only record of an unconverged one is a lie.
+#
+# NEVER FAILS THE HOOK, unlike write_capability_cache. A record that cannot be
+# removed is a stale report, not a wrong render, so there is nothing here worth
+# aborting every chezmoi command over.
+SKIP_RECORD_SCHEMA='v1'
+# The commands that RUN SCRIPTS. `init` earns its place through `init --apply`;
+# a bare `init` has no records to prune on a fresh host, and on a re-init the
+# next apply re-earns anything this retired early.
+SKIP_PRUNE_COMMANDS=(apply update init)
+
+# The verdict this command published for one registry key. Fails when the key is
+# not in the registry, which is what keeps an unknown probe's record.
+capability_token() {
+  local key=$1 index
+  for index in "${!CAPABILITY_KEYS[@]}"; do
+    [[ "${CAPABILITY_KEYS[index]}" == "$key" ]] || continue
+    printf '%s' "${CAPABILITY_TOKENS[index]-}"
+    return 0
+  done
+  return 1
+}
+
+prune_stale_skip_records() {
+  local dir record schema script site direction reason rest probe token
+  capability_has "${CHEZMOI_COMMAND:-}" "${SKIP_PRUNE_COMMANDS[@]}" || return 0
+  dir="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips"
+  [[ -d "$dir" && ! -L "$dir" ]] || return 0
+  for record in "$dir"/*; do
+    [[ -f "$record" && ! -L "$record" ]] || continue
+    # The writer emits ONE tab-separated line and the reason charset excludes
+    # tabs, so a record with a sixth field was not written by skip.sh.tmpl.
+    IFS=$'\t' read -r schema script site direction reason rest <"$record" || continue
+    [[ "$schema" == "$SKIP_RECORD_SCHEMA" ]] || continue
+    [[ -n "$script" && -n "$site" && -n "$reason" && -z "$rest" ]] || continue
+    case "$direction" in
+      transient-tolerable) ;;
+      transient-blocking:?*)
+        probe=${direction#transient-blocking:}
+        token=$(capability_token "$probe") || continue
+        [[ "$token" == available ]] || continue
+        ;;
+      *) continue ;;
+    esac
+    rm -f "$record" 2>/dev/null || true
+  done
   return 0
 }
 
@@ -948,6 +1040,11 @@ write_facts_cache
 # one exits non-zero rather than let a template read a record another command
 # published.
 write_capability_cache "${CHEZMOI_SOURCE_DIR:-}"
+
+# Retire the transient skip records whose condition this command's snapshot shows
+# has cleared. Must follow write_capability_cache — it needs that snapshot — and
+# prunes nothing unless this is a command that actually runs scripts.
+prune_stale_skip_records
 
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.

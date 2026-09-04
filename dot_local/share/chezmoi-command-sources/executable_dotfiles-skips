@@ -4,6 +4,10 @@
 # Reads private skip state records written by .chezmoitemplates/skip.sh.tmpl.
 # Reports outstanding transient-tolerable, transient-blocking and operator-blocking skips without
 # modifying state or probing capabilities.
+#
+# Records are retired by prune_stale_skip_records in .install-prerequisites.sh,
+# the chezmoi read-source-state.pre hook, which holds this command's capability
+# verdicts. This reader deliberately holds none: it reports what is on disk.
 set -euo pipefail
 
 prog=dotfiles-skips
