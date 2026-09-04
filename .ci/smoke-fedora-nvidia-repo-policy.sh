@@ -291,4 +291,75 @@ for run in first second; do
   fi
 done
 
+# --- NVIDIA service enablement -----------------------------------------------
+#
+# enable_nvidia_services must enable the NVIDIA sleep hook units when
+# FACT_HYBRID_GRAPHICS is 1, so the kernel does not abort suspend when
+# PreserveVideoMemoryAllocations=1 is set.
+enable_services_body=$(awk '/^enable_nvidia_services\(\) \{$/ { inside = 1 } inside { print } inside && /^\}$/ { exit }' \
+  "${rendered_installer}")
+[[ -n "${enable_services_body}" ]] ||
+  fail 'rendered Fedora installer is missing enable_nvidia_services'
+
+for unit in nvidia-suspend.service nvidia-resume.service nvidia-hibernate.service nvidia-suspend-then-hibernate.service; do
+  grep -Fq "$unit" <<<"${enable_services_body}" ||
+    fail "enable_nvidia_services does not reference ${unit}"
+done
+grep -Fq 'FACT_HYBRID_GRAPHICS' <<<"${enable_services_body}" ||
+  fail 'enable_nvidia_services does not gate sleep units on FACT_HYBRID_GRAPHICS'
+
+cat > "${scratch}/bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+if [[ "${1-}" == list-unit-files ]]; then
+  shift
+  for u in "$@"; do
+    printf '%s enabled enabled\n' "$u"
+  done
+  exit 0
+fi
+if [[ "${1-}" == enable ]]; then
+  shift
+  for u in "$@"; do
+    printf 'enable %s\n' "$u" >> "${SYSTEMCTL_LOG:?}"
+  done
+  exit 0
+fi
+exit 0
+EOF
+chmod 0755 "${scratch}/bin/systemctl"
+
+# When FACT_HYBRID_GRAPHICS is 1, sleep services must be enabled.
+: > "${scratch}/systemctl.log"
+PATH="${scratch}/bin:${PATH}" SYSTEMCTL_LOG="${scratch}/systemctl.log" \
+  FACT_HYBRID_GRAPHICS=1 bash -c '
+    set -uo pipefail
+    SUDO=()
+    nvidia_branch=pascal
+    nvidia_build_system=akmod
+    '"${enable_services_body}"'
+    enable_nvidia_services
+  '
+for unit in nvidia-suspend.service nvidia-resume.service nvidia-hibernate.service nvidia-suspend-then-hibernate.service; do
+  grep -Fxq "enable ${unit}" "${scratch}/systemctl.log" ||
+    fail "enable_nvidia_services did not enable ${unit} when FACT_HYBRID_GRAPHICS=1"
+done
+
+# When FACT_HYBRID_GRAPHICS is 0, sleep services must NOT be enabled.
+: > "${scratch}/systemctl.log"
+PATH="${scratch}/bin:${PATH}" SYSTEMCTL_LOG="${scratch}/systemctl.log" \
+  FACT_HYBRID_GRAPHICS=0 bash -c '
+    set -uo pipefail
+    SUDO=()
+    nvidia_branch=pascal
+    nvidia_build_system=akmod
+    '"${enable_services_body}"'
+    enable_nvidia_services
+  '
+for unit in nvidia-suspend.service nvidia-resume.service nvidia-hibernate.service nvidia-suspend-then-hibernate.service; do
+  if grep -Fxq "enable ${unit}" "${scratch}/systemctl.log"; then
+    fail "enable_nvidia_services enabled ${unit} when FACT_HYBRID_GRAPHICS=0"
+  fi
+done
+
 printf 'Fedora NVIDIA repository policy smoke passed (both driver branches).\n'
