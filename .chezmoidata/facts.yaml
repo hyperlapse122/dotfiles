@@ -197,7 +197,7 @@ factRegistry:
   gpuArch:
     type: string
     probe: template
-    values: ["", pascal]
+    values: ["", ampere, pascal]
     source: >-
       gpuDeviceId looked up in nvidia.deviceArchitectures (.chezmoidata/nvidia.yaml).
       An id the table does not list resolves to the EMPTY STRING, and so does an absent

@@ -81,11 +81,14 @@ nvidia_build_system=''
 nvidia_conflicting_packages=()
 
 # One marker package per branch: its presence means that branch is installed.
-nvidia_branch_markers=(
-{{- range $arch, $branch := .nvidia.branches }}
-  {{ $branch.marker }}
+{{ $markers := list .nvidia.currentBranch.marker -}}
+{{- range $arch, $branch := .nvidia.branches -}}
+{{-   $markers = mustAppend $markers $branch.marker -}}
 {{- end }}
-  {{ .nvidia.currentBranch.marker }}
+nvidia_branch_markers=(
+{{- range ($markers | uniq | sortAlpha) }}
+  {{ . }}
+{{- end }}
 )
 
 # Resolve the branch this host's GPU architecture needs. Returns 1 when the
@@ -100,7 +103,7 @@ resolve_nvidia_branch() {
       nvidia_branch={{ $branch.name | quote }}
       nvidia_branch_source={{ $branch.source | quote }}
       nvidia_build_system={{ $branch.buildSystem | quote }}
-{{- if $branch.packages }}
+{{- if and (hasKey $branch "packages") $branch.packages }}
       nvidia_packages=(
 {{- range $branch.packages }}
         {{ . }}
@@ -121,10 +124,13 @@ resolve_nvidia_branch() {
   # Everything that marks a DIFFERENT branch is a conflict for this host.
   local marker resolved_marker=''
   case "$nvidia_branch" in
-{{- range $arch, $branch := .nvidia.branches }}
-    {{ $branch.name | quote }}) resolved_marker={{ $branch.marker | quote }} ;;
+{{- $branchesByName := dict .nvidia.currentBranch.name .nvidia.currentBranch.marker -}}
+{{- range $arch, $branch := .nvidia.branches -}}
+{{-   $_ := set $branchesByName $branch.name $branch.marker -}}
+{{- end -}}
+{{- range $name, $marker := $branchesByName }}
+    {{ $name | quote }}) resolved_marker={{ $marker | quote }} ;;
 {{- end }}
-    {{ .nvidia.currentBranch.name | quote }}) resolved_marker={{ .nvidia.currentBranch.marker | quote }} ;;
   esac
   nvidia_conflicting_packages=()
   for marker in "${nvidia_branch_markers[@]}"; do
@@ -288,6 +294,7 @@ mok_key_path() {
 }
 
 dkms_mok_state() {
+  # shellcheck disable=SC2016 # $1 and $2 are positional parameters to sh -c.
   "${SUDO[@]}" sh -c '
     if [ -f "$1" ] && [ -f "$2" ]; then printf present
     elif [ -e "$1" ] || [ -e "$2" ]; then printf partial
@@ -330,10 +337,13 @@ mok_key_is_queued() {
 # resolves correctly.
 cert_path_for_marker() {
   case "$1" in
-{{- range $arch, $branch := .nvidia.branches }}
-    {{ $branch.marker | quote }}) nvidia_build_system={{ $branch.buildSystem | quote }} mok_cert_path ;;
+{{- $buildByMarker := dict .nvidia.currentBranch.marker .nvidia.currentBranch.buildSystem -}}
+{{- range $arch, $branch := .nvidia.branches -}}
+{{-   $_ := set $buildByMarker $branch.marker $branch.buildSystem -}}
+{{- end -}}
+{{- range $marker, $buildSystem := $buildByMarker }}
+    {{ $marker | quote }}) nvidia_build_system={{ $buildSystem | quote }} mok_cert_path ;;
 {{- end }}
-    {{ .nvidia.currentBranch.marker | quote }}) nvidia_build_system={{ .nvidia.currentBranch.buildSystem | quote }} mok_cert_path ;;
     *) return 1 ;;
   esac
 }

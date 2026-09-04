@@ -137,21 +137,30 @@ logged() { grep -Fxq -- "$1" "${scratch}/dnf.log"; }
 #
 # `latest` is the branch an architecture listed as current resolves to. The
 # package set, the RPM Fusion exclusions and the CLEARED CUDA exclusions are all
-# asserted from the resolved state rather than from fixed literals, so a data edit
-# that changes the set changes this assertion with it.
-current_out=$(run_policy '' '
-  nvidia_branch=latest
-  nvidia_branch_source=cuda
-  configure_nvidia_repo_policy
+# asserted from the resolved state rather than from fixed literals, driven
+# through resolve_nvidia_branch on the architecture the table classifies as current.
+current_out=$(run_policy ampere '
+  resolve_nvidia_branch || { printf "resolve-failed\n"; exit 1; }
+  printf "branch=%s\n" "$nvidia_branch"
+  printf "source=%s\n" "$nvidia_branch_source"
+  printf "build=%s\n" "$nvidia_build_system"
   printf "packages=%s\n" "${nvidia_packages[*]}"
   printf "rpmfusion=%s\n" "${nvidia_rpmfusion_excludes[*]}"
+  configure_nvidia_repo_policy
 ')
+grep -q 'source=cuda' <<<"${current_out}" ||
+  fail 'the current branch does not resolve to the cuda package source'
+grep -q 'build=dkms' <<<"${current_out}" ||
+  fail 'the current branch does not resolve to the dkms build system'
+grep -q 'packages=.*kmod-nvidia-latest-dkms' <<<"${current_out}" ||
+  fail 'the current branch does not select the DKMS package set'
+if grep -q 'packages=.*akmod-nvidia-580xx' <<<"${current_out}"; then
+  fail 'the current branch must not include the legacy-branch package set'
+fi
 grep -q 'excludepkgs=akmod-nvidia\*,kmod-nvidia\*' "${scratch}/dnf.log" ||
   { printf 'current branch did not receive the RPM Fusion exclusions. log:\n'; cat "${scratch}/dnf.log"; exit 1; }
 logged 'config-manager setopt cuda-fedora*.excludepkgs=' ||
   { printf 'a cuda-branch host must CLEAR the CUDA exclusions, not leave them set. log:\n'; cat "${scratch}/dnf.log"; exit 1; }
-grep -q 'packages=.*kmod-nvidia-latest-dkms' <<<"${current_out}" ||
-  fail 'the current branch does not select the DKMS package set'
 
 # --- Legacy branch ----------------------------------------------------------
 #
@@ -239,6 +248,20 @@ clean_out=$(RPM_INSTALLED='akmod-nvidia-580xx' run_policy pascal '
 ')
 grep -qx 'conflict=none' <<<"${clean_out}" ||
   { printf 'the resolved branch marker was reported as a conflict. got:\n%s\n' "${clean_out}"; exit 1; }
+
+ampere_conflict_out=$(RPM_INSTALLED='akmod-nvidia-580xx' run_policy ampere '
+  resolve_nvidia_branch
+  if found=$(conflicting_nvidia_branch); then printf "conflict=%s\n" "$found"; else printf "conflict=none\n"; fi
+')
+grep -qx 'conflict=akmod-nvidia-580xx' <<<"${ampere_conflict_out}" ||
+  { printf 'a foreign branch marker was not reported as a conflict on ampere. got:\n%s\n' "${ampere_conflict_out}"; exit 1; }
+
+ampere_clean_out=$(RPM_INSTALLED='kmod-nvidia-latest-dkms' run_policy ampere '
+  resolve_nvidia_branch
+  if found=$(conflicting_nvidia_branch); then printf "conflict=%s\n" "$found"; else printf "conflict=none\n"; fi
+')
+grep -qx 'conflict=none' <<<"${ampere_clean_out}" ||
+  { printf 'the resolved branch marker was reported as a conflict on ampere. got:\n%s\n' "${ampere_clean_out}"; exit 1; }
 
 # --- Unlisted architecture --------------------------------------------------
 #

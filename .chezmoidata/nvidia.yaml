@@ -37,6 +37,9 @@ nvidia:
     # Verified: lspci 10de:1d34, class 0x030200; the 610 branch refuses it with
     # "supported through the NVIDIA 580.xx Legacy drivers".
     "1d34": pascal
+    # GeForce RTX 3060 (GA104, Ampere).
+    # Verified: lspci 10de:2487, class 0x030000.
+    "2487": ampere
 
   # Architecture -> the branch that still supports it. `buildSystem` decides
   # which signing certificate the installer enrolls: `akmod` uses the out-of-tree
@@ -49,6 +52,11 @@ nvidia:
   # inherit a branch by falling through, because that is the fail-open this axis
   # exists to remove.
   branches:
+    ampere:
+      name: "latest"
+      buildSystem: dkms
+      marker: kmod-nvidia-latest-dkms
+      source: cuda
     pascal:
       name: "580xx"
       buildSystem: akmod
