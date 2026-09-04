@@ -1007,6 +1007,29 @@ EOF
     "${SUDO[@]}" dnf install gh zsh git-lfs -y
   fi
 
+  # mise, the same bootstrap responsibility install_ubuntu discharges through
+  # extrepo. Fedora had no equivalent, so the fast path above ("nothing to do
+  # once mise is present") could never be reached on a fresh Fedora host, and
+  # `mise-trust` recorded a transient-blocking wait on a tool nothing here was
+  # going to install.
+  #
+  # COPR, because Fedora's own repositories do not carry mise and this is the
+  # source jdx (mise's author) publishes for Fedora. `dnf copr enable` is the
+  # same mechanism 30-components/80-devtools and the keyd installer already use.
+  # Package signatures are checked as usual; COPR does not sign repository
+  # METADATA, which is a property of every COPR this repository consumes and not
+  # a check disabled here.
+  #
+  # NOT THE SAME BINARY AS THE MANAGED COMMAND, and deliberately so. The
+  # release-locked mise in .chezmoiexternals/dev-tools.toml is what
+  # ~/.local/bin/mise points at, and this hook prepends ~/.local/bin to PATH, so
+  # the pinned one keeps winning once an apply has run. The RPM exists only to
+  # break the bootstrap cycle -- mise has to be on PATH before the source state
+  # that delivers mise is read -- exactly as the apt mise does on Ubuntu.
+  if ! rpm -q mise >/dev/null 2>&1; then
+    "${SUDO[@]}" dnf copr enable -y jdxcode/mise
+    "${SUDO[@]}" dnf install -y mise
+  fi
 }
 
 # Ubuntu: install via apt. Two upstream constraints shape this, neither visible
