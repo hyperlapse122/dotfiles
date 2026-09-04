@@ -1,6 +1,7 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 {{ $misePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "mise-present") -}}
+{{ $bunPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "bun-present") -}}
 #!/usr/bin/env bash
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
@@ -13,18 +14,28 @@ esac
 export PATH
 
 set -euo pipefail
+{{- /* Both probes are hashed, not just the declared one: skip.sh.tmpl accepts a
+   single probe per site, but this script is deferred only while BOTH mise and bun
+   are missing, so either one appearing has to change the rendered content. */ -}}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
       "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/settings-reconcile/package.json" "packages/settings-reconcile/tsconfig.json" "packages/settings-reconcile/vite.config.ts" "packages/settings-reconcile/src/**")
-      "values" (list (dict "name" "mise-present" "value" $misePresent))) }}
+      "values" (list (dict "name" "mise-present" "value" $misePresent) (dict "name" "bun-present" "value" $bunPresent))) }}
 
 SRC="{{ $sourceDir }}"
 DIST="$SRC/packages/settings-reconcile/dist/settings-reconcile"
 STAGING_DIR="$HOME/.local/share/chezmoi-commands/incomplete/settings-reconcile"
 TARGET="$STAGING_DIR/settings-reconcile"
 
-if ! command -v mise >/dev/null 2>&1; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-settings-reconcile" "site" "mise-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "mise is not installed; settings-reconcile build is deferred") | trim | indent 2 }}
+{{ includeTemplate "bun-resolve.sh.tmpl" | trim }}
+
+if ! command -v mise >/dev/null 2>&1 && [[ -z "$BUN_BIN" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-settings-reconcile" "site" "mise-and-bun-absent" "direction" "transient-blocking" "probe" "bun-present" "reason" "neither mise nor bun is installed; settings-reconcile build is deferred") | trim | indent 2 }}
 fi
+if command -v mise >/dev/null 2>&1; then
+{{- /* The two `mise` commands below are the frozen source of the
+   dependency-install-failed and build-failed hard-error rows in
+   .ci/skip-declaration-site-matrix.yaml, which carry their predicate digests.
+   They keep their exact text, including this column. */}}
 if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
   printf '%s\n' 'build-settings-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
   exit 1
@@ -32,6 +43,18 @@ fi
 if ! mise -C "$SRC/packages/settings-reconcile" exec -- vp run build; then
   printf '%s\n' 'build-settings-reconcile: build failed; fix the settings-reconcile build error, then re-apply.' >&2
   exit 1
+fi
+else
+{{- /* The install step is not optional here: settings-reconcile imports
+   smol-toml, so a compile without packages/node_modules cannot resolve it. */}}
+  if ! (cd "$SRC/packages" && "$BUN_BIN" install --frozen-lockfile); then
+    printf '%s\n' 'build-settings-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
+    exit 1
+  fi
+  if ! (cd "$SRC/packages/settings-reconcile" && "$BUN_BIN" build --compile ./src/cli.ts --outfile ./dist/settings-reconcile); then
+    printf '%s\n' 'build-settings-reconcile: build failed; fix the settings-reconcile build error, then re-apply.' >&2
+    exit 1
+  fi
 fi
 if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
   printf '%s\n' 'build-settings-reconcile: build completed without an executable dist artifact; inspect the build output, then re-apply.' >&2
