@@ -472,11 +472,31 @@ enroll_dkms_mok() {
   # recorded a not-applicable enrollment it was entirely eligible for. The probe
   # already reports `present` only when BOTH halves are readable as root, and
   # reports failure -- not `absent` -- when it could not look at all.
+  #
+  # NOT APPLICABLE WAS THE WRONG WORD, AND ONE SITE CANNOT CARRY BOTH BRANCHES.
+  # Both honest opt-outs -- no EFI, Secure Boot off -- have already returned
+  # above, so a host that arrives here IS eligible: the keypair could not be
+  # made or could not be read. `not_applicable` said the opposite and deleted
+  # its own record, so the host went silent while its module stayed untrusted.
+  # The two build systems then want different directions. On the akmod branch
+  # the builder mints the key on its own, and akmods-signing-key-present is
+  # exactly that precondition, so the wait is transient-blocking and the record
+  # retires itself. Everywhere else nothing here will produce the key without an
+  # operator, so the record has to survive and name the action.
+  #
+  # `== absent`, NOT `!= present`, ON THE FIRST BRANCH. dkms_mok_state answers
+  # present/partial/absent and this function records `unreadable` when it could
+  # not run at all. Only `absent` is the self-healing wait. Sending `unreadable`
+  # down the probe-backed branch would let the pruner retire the record the
+  # moment the UNPRIVILEGED probe reads available, on a host whose PRIVILEGED
+  # probe never answered -- the cannot-look/not-there conflation again. And
+  # `partial` is an operator action by construction: ensure_dkms_mok_generated
+  # refuses to regenerate it and prints a manual-removal instruction.
+  if [[ "${mok_state}" == absent && "$nvidia_build_system" == 'akmod' ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-awaiting-builder-key" "direction" "transient-blocking" "probe" "akmods-signing-key-present" "reason" "the out-of-tree module builder has not generated its signing keypair yet, so there is no certificate to enroll; enrollment resumes once its key generator mints the key") | trim | indent 4 }}
+  fi
   if [[ "${mok_state}" != present ]]; then
-    (
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "reason" "no enrollable DKMS MOK keypair is present") | trim | indent 6 }}
-    )
-    return 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "direction" "operator-blocking" "reason" "the module signing keypair could not be created or could not be probed, so there is no certificate to enroll; mint it by hand with sudo /usr/lib/dkms/mok_signing_setup (dkms) or sudo kmodgenca -a (akmods)") | trim | indent 4 }}
   fi
   if mok_key_is_enrolled "${cert}"; then
     (
