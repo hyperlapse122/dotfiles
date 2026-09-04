@@ -673,6 +673,18 @@ enable_nvidia_services() {
   if [[ "$nvidia_build_system" == 'akmod' ]] && systemctl list-unit-files akmods.service 2>/dev/null | grep -q akmods; then
     "${SUDO[@]}" systemctl enable akmods.service 2>/dev/null || true
   fi
+  # When NVreg_PreserveVideoMemoryAllocations=1 is set (gated on hybridGraphics in
+  # system/linux/etc/modprobe.d/nvidia-hybrid-power.conf), the driver requires
+  # systemd sleep units to invoke its procfs interface before kernel suspend.
+  # Without these units, suspend aborts in the kernel with error -5.
+  if [[ "${FACT_HYBRID_GRAPHICS:-0}" -eq 1 ]]; then
+    local unit
+    for unit in nvidia-suspend.service nvidia-resume.service nvidia-hibernate.service nvidia-suspend-then-hibernate.service; do
+      if systemctl list-unit-files "$unit" 2>/dev/null | grep -q "$unit"; then
+        "${SUDO[@]}" systemctl enable "$unit" 2>/dev/null || true
+      fi
+    done
+  fi
 }
 
 # Prints the guidance and always succeeds, so it can sit inside the condition of
