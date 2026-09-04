@@ -8,3 +8,16 @@
 {{ if and (eq .chezmoi.os "linux") (eq $f.desktop "gnome") -}}
 kleopatra.desktop
 {{ end }}
+
+# Discord and Telegram are Flatpak apps, so their autostart entries are dead
+# configuration wherever the app is never installed: a non-Linux target, or a host
+# with features.flatpaks off. That is the same flag the root .chezmoiignore gates
+# .chezmoiscripts/30-components/40-flatpaks.sh on, read through the same
+# `(default dict .features)` form so both gate sites stay greppable as one idiom.
+# That form does not make the lookup fail-safe: chezmoi renders with
+# missingkey=error, so a features.yaml missing the key aborts the apply here
+# instead of silently changing what deploys — same as every other feature flag.
+{{ if or (ne .chezmoi.os "linux") (not (default dict .features).flatpaks) -}}
+discord.desktop
+telegram.desktop
+{{ end }}

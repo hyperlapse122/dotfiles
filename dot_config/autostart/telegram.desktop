@@ -1,0 +1,16 @@
+# Deliberately not the Flatpak-exported entry. That one sets DBusActivatable=true,
+# so a session manager can activate Telegram over D-Bus without reading Exec, which
+# drops -startintray and shows the window. -autostart is omitted for the same class
+# of reason: Telegram quits immediately on that flag when its own launch-on-login
+# setting is off, and this repo owns the autostart entry instead of that setting.
+[Desktop Entry]
+Name=Telegram
+StartupWMClass=TelegramDesktop
+Comment=New era of messaging
+GenericName=Internet Messenger
+Exec=/usr/bin/flatpak run org.telegram.desktop -startintray
+Icon=org.telegram.desktop
+Type=Application
+Terminal=false
+Categories=Network;InstantMessaging;
+X-Flatpak=org.telegram.desktop
