@@ -2167,10 +2167,10 @@ owners:
   - owner: 'install-nvidia-fedora/mok-enroll-no-keypair'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 490
-    anchor: '  if [[ "${mok_state}" != present || ! -f "$cert" ]]; then'
-    predicate: '[[ "${mok_state}" != present || ! -f "$cert" ]]'
-    predicate_digest: 'sha256:60288ad184f857dcc5113dbfc4473b161fa59d02088d386bbeccfb8a1f019fcb'
+    anchor_line: 450
+    anchor: '  if [[ "${mok_state}" != present ]]; then'
+    predicate: '[[ "${mok_state}" != present ]]'
+    predicate_digest: 'sha256:2005b797e67abef4e3525add135749bea7347755a0a5c513b58bec6d42072b46'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'

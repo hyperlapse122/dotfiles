@@ -438,7 +438,16 @@ enroll_dkms_mok() {
   cert="$(mok_cert_path)"
   local mok_state
   mok_state="$(dkms_mok_state)" || mok_state=unreadable
-  if [[ "${mok_state}" != present || ! -f "$cert" ]]; then
+  # dkms_mok_state IS THE WHOLE ANSWER. This used to add `|| ! -f "$cert"`, an
+  # UNPRIVILEGED file test beside a probe that runs under sudo -- the same
+  # conflation of "cannot look" with "not there" that dkms_mok_state exists to
+  # refuse. The DKMS certificate is world-readable, so it never showed there;
+  # kmodgenca creates /etc/pki/akmods/certs as 0750 root:akmods, so on the akmod
+  # branch the test was false for a key that had just been minted and the host
+  # recorded a not-applicable enrollment it was entirely eligible for. The probe
+  # already reports `present` only when BOTH halves are readable as root, and
+  # reports failure -- not `absent` -- when it could not look at all.
+  if [[ "${mok_state}" != present ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-nvidia-fedora" "site" "mok-enroll-no-keypair" "reason" "no enrollable DKMS MOK keypair is present") | trim | indent 6 }}
     )

@@ -529,14 +529,27 @@ if (( probe_line <= seed_line )); then
 fi
 grep -Eq 'mok_state}" (!=|==) present' "${scratch}/enroll.code" ||
   fail 'only a complete keypair may be enrolled; partial and unreadable must not reach mokutil --import'
+
+# AND NOTHING BESIDE IT. An unprivileged `-f "$cert"` next to that privileged
+# probe is the same conflation of "cannot look" with "not there" that
+# dkms_mok_state exists to refuse: kmodgenca creates /etc/pki/akmods/certs as
+# 0750 root:akmods, so the test is false for a certificate that is present and
+# readable to root, and the akmod branch recorded a not-applicable enrollment on
+# an eligible host. The behavioral case is driven below.
+if grep -Eq '\[\[[^]]*-f "\$cert"' "${scratch}/enroll.code"; then
+  fail 'enrollment must decide on dkms_mok_state alone; an unprivileged -f on the certificate reads a root-only directory as a missing key'
+fi
 grep -Eq 'fp=.*openssl x509.*-fingerprint' "${scratch}/enroll.code" ||
   fail 'enroll_dkms_mok must compute certificate fingerprint before checking queued keys'
 
 sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/enroll.sh" > "${scratch}/enroll_nogates.sh"
 
+# $3 = the sudo stub to source, defaulting to the always-succeeds one. The
+# root-only variant below is what models a certificate directory the apply's own
+# user cannot read.
 run_enroll() {
-  env HOME="${scratch}/home" MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${plain_sudo_stub}" \
+  env HOME="${scratch}/home" MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${3:-${plain_sudo_stub}}" \
     MOK_TEST_KEY="${1}" MOK_LIST_NEW="${2}" bash -c '
     set -uo pipefail
     . "${PLAIN_SUDO_STUB:?}"
@@ -571,6 +584,42 @@ printf key > "${mokdir}/mok.key"
   fail 'enroll_dkms_mok must succeed when key is already queued'
 [[ "$(run_enroll not_enrolled not_queued)" == *CONTINUED* ]] ||
   fail 'enroll_dkms_mok must succeed when importing a new key'
+
+# --- A certificate only root can see ----------------------------------------
+#
+# kmodgenca creates /etc/pki/akmods/certs as 0750 root:akmods, so on the akmod
+# branch the keypair is readable to the privileged probe and INVISIBLE to the
+# apply's own user. The sudo stub below models exactly that: the files exist only
+# under a root-view tree, so every privileged call finds them and every
+# unprivileged test does not. An enrollment that adds its own `-f "$cert"` beside
+# dkms_mok_state records not-applicable here, on a host whose key was just minted.
+rootdir="${mokdir}-root"
+rm -rf "${rootdir}"
+mkdir -p "${rootdir}"
+printf cert > "${rootdir}/mok.pub"
+printf key > "${rootdir}/mok.key"
+root_only_sudo_stub="${scratch}/root-only-sudo.sh"
+cat > "${root_only_sudo_stub}" <<'STUB'
+fake_sudo() {
+  local -a a=()
+  for x in "$@"; do a+=("${x//${MOK_DIR}/${MOK_DIR}-root}"); done
+  "${a[@]}"
+}
+SUDO=(fake_sudo)
+STUB
+# The unprivileged view must be EMPTY: that is the whole point of the fixture.
+rm -f "${mokdir}/mok.pub" "${mokdir}/mok.key"
+out=$(run_enroll not_enrolled not_queued "${root_only_sudo_stub}")
+[[ "${out}" == *CONTINUED* ]] ||
+  fail 'enrollment must not fail on a certificate only root can read'
+# The not-applicable record is the defect. Asserting its ABSENCE is what stays
+# true whether or not this render carries a stored enrollment passphrase.
+if [[ "${out}" == *'no enrollable DKMS MOK keypair'* ]]; then
+  fail 'a root-only certificate was recorded as no keypair at all; an unprivileged -f read it as missing'
+fi
+rm -rf "${rootdir}"
+printf cert > "${mokdir}/mok.pub"
+printf key > "${mokdir}/mok.key"
 # --- Non-interactive enrollment ---------------------------------------------
 #
 # `mokutil --import` reads a one-time enrollment password from the terminal, so on
