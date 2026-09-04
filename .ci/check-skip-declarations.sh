@@ -25,7 +25,7 @@ set -uo pipefail
 # retry jobs) runs on every apply, records nothing, and is therefore out of
 # scope — excluded by its lifecycle, never by a filename exception. The matrix
 # still accounts for the shared-guard instances inside those always-run scripts:
-# they are reported as lifecycle-excluded, so 140 declared instances reconcile as
+# they are reported as lifecycle-excluded, so all 205 declared instances reconcile as
 # rendered + excluded, never as a silently smaller number.
 #
 # RENDER VARIANTS. One render cannot reach every declared instance: some sites
@@ -40,7 +40,7 @@ set -uo pipefail
 #
 # Usage: .ci/check-skip-declarations.sh [--fixture] [root]
 #   --fixture  the tree is a synthetic fixture, so the frozen production totals
-#              (121 owners / 141 instances / 117 + 24) are not asserted; every
+#              (136 owners / 205 instances / 131 + 74) are not asserted; every
 #              other check, including matrix self-consistency, still runs.
 #   root       source tree to scan; defaults to the current directory.
 
@@ -194,8 +194,8 @@ CONTINUATIONS = ('terminate-script-exit-0', 'terminate-script-exit-1',
 PLACEMENTS = ('new-header-block', 'existing-header-block')
 # The R5 boundary U5 froze and U6/U7 executed against. Asserted literally so a
 # rendered surface cannot be reconciled against a quietly shrunken oracle.
-FROZEN = {'classified_owners': 135, 'rendered_instances': 204,
-          'phase_local_instances': 130, 'shared_guard_instances': 74}
+FROZEN = {'classified_owners': 136, 'rendered_instances': 205,
+          'phase_local_instances': 131, 'shared_guard_instances': 74}
 
 RUN_NAME = re.compile(r'^run_(?:(once|onchange)_)?(?:(?:before|after)_)?.+')
 SKIP_DIRS = {'.git'}
