@@ -87,10 +87,8 @@ agents:
         custom_agents:
           zsh: zsh
           claude: claude
-          agy: agy
         agent_detect_as:
           claude: claude
-          agy: agy
       tmux:
         status_bar: enabled
         clipboard: enabled
