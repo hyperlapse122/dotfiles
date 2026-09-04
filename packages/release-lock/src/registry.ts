@@ -22,6 +22,11 @@ function bufArch(os: OperatingSystem, arch: Architecture): string {
   return os === "linux" ? "aarch64" : "arm64";
 }
 
+/** bun names amd64 `x64` but arm64 `aarch64`, unlike the npm-adjacent `x64Arch`. */
+function bunArch(arch: Architecture): string {
+  return arch === "amd64" ? "x64" : "aarch64";
+}
+
 function capitalized(os: OperatingSystem): string {
   return os.charAt(0).toUpperCase() + os.slice(1);
 }
@@ -42,6 +47,15 @@ export const REGISTRY: Registry = {
     kind: "githubRelease",
     source: "bufbuild/buf",
     asset: ({ os, arch }) => `buf-${capitalized(os)}-${bufArch(os, arch)}.tar.gz`,
+  },
+
+  bun: {
+    kind: "githubRelease",
+    source: "oven-sh/bun",
+    // linux ships a static musl build next to the glibc one (KTD11).
+    linuxMusl: true,
+    asset: ({ os, arch, libc }) =>
+      `bun-${os}-${bunArch(arch)}${libc === "musl" ? "-musl" : ""}.zip`,
   },
 
   chezmoi: {

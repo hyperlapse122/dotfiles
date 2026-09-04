@@ -167,6 +167,37 @@
           }
         }
       },
+      "bun": {
+        "kind": "githubRelease",
+        "source": "oven-sh/bun",
+        "version": "bun-v1.4.1",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-x64.zip",
+            "sha256": "74c1c3bee7cd998500c8f969cd8972355ac6a07207e94a39eece1999b56ffabf"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-aarch64.zip",
+            "sha256": "580ce77533108dc6b10bec1721397e4f5aa44e909726da2451d483dfc5e581d6"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-darwin-x64.zip",
+            "sha256": "8f34239f276a3f0d27bfcd1ffecfe5d2127e74fb0aa4c0971a0cdec7b225c965"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-darwin-aarch64.zip",
+            "sha256": "d8973ce835fa7867e5cc79afee6fc6f1ae0117aa4bd5fc2546fd00c512f71386"
+          },
+          "linux-amd64-musl": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-x64-musl.zip",
+            "sha256": "ea116fe09f2f764c87b9bf735225b781d1f7674ca58d66040470f38a7943c8ab"
+          },
+          "linux-arm64-musl": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-aarch64-musl.zip",
+            "sha256": "53895807a00508f70e76715947097aa533ec520aac066501c00fb77d2b1a7a6c"
+          }
+        }
+      },
       "chezmoi": {
         "kind": "githubRelease",
         "source": "twpayne/chezmoi",
