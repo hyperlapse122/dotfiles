@@ -704,6 +704,7 @@ resolve_capability() {
       case "$key" in
         *) capability_cache_fail "absolute-file key ${key@Q} has no reviewed path" ;;
       esac
+      # shellcheck disable=SC2317
       [[ -f "$path" ]]
       ;;
     sudo-nonrefreshing)
