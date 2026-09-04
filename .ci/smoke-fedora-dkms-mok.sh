@@ -523,6 +523,37 @@ marker_cert() {
 
 write_mok_paths dkms
 
+# --- The kmod is built during the apply, not at the login screen -------------
+#
+# akmods.service is ordered Before=display-manager.service, so a kmod compiled at
+# boot delays graphical.target by the whole build. The installer builds it itself,
+# AFTER enrollment (the key has to exist before anything is signed with it) and
+# without --force (bare akmods builds only what is missing, so a steady-state
+# apply pays nothing).
+
+build_start=$(grep -n '^build_akmod_modules() {$' "${rendered_installer}" | cut -d: -f1 || true)
+[[ -n "${build_start}" ]] || fail 'rendered Fedora installer is missing build_akmod_modules'
+sed -n "${build_start},/^}$/p" "${rendered_installer}" > "${scratch}/build.sh"
+grep -Fq "nvidia_build_system\" == 'akmod'" "${scratch}/build.sh" ||
+  fail 'the kmod build must be gated on the akmod build system; the DKMS branch has no akmods'
+grep -Fq 'command -v akmods' "${scratch}/build.sh" ||
+  fail 'the kmod build must check for the builder instead of assuming it is installed'
+if grep -Fq -- '--force' "${scratch}/build.sh"; then
+  fail 'bare akmods builds only missing kmods; --force would recompile the driver on every apply'
+fi
+
+main_start=$(grep -n '^main() {$' "${rendered_installer}" | cut -d: -f1 || true)
+[[ -n "${main_start}" ]] || fail 'rendered Fedora installer is missing main'
+sed -n "${main_start},/^}$/p" "${rendered_installer}" > "${scratch}/main.sh"
+enroll_call=$(grep -n 'enroll_dkms_mok' "${scratch}/main.sh" | head -1 | cut -d: -f1 || true)
+build_call=$(grep -n 'build_akmod_modules' "${scratch}/main.sh" | head -1 | cut -d: -f1 || true)
+if [[ -z "${enroll_call}" || -z "${build_call}" ]]; then
+  fail 'main must both enroll the certificate and build the kmod'
+fi
+if (( build_call <= enroll_call )); then
+  fail 'the kmod must be built AFTER enrollment, so it is never signed with a key that does not exist yet'
+fi
+
 # --- Structural contract: enrollment seeds, then re-probes -------------------
 #
 # ensure_dkms_mok_generated used to be reached only from the VirtualBox signing

@@ -595,6 +595,26 @@ EXPECT
   printf 'install-nvidia-fedora.sh: the MokManager screen on the next boot still needs a physical console: choose Enroll MOK and type the stored LUKS passphrase.\n'
 }
 
+# akmods.service is ordered Before=display-manager.service, so a kmod it has to
+# compile at boot holds the login screen for the whole build -- measured at 1m50s
+# for this driver on this laptop, against a 2m21s total boot. Building here moves
+# that cost into an apply the operator is already watching.
+#
+# BARE `akmods`, NEVER `--force`. Without a flag the tool checks whether the kmods
+# for the RUNNING kernel already exist and builds only what is missing, so this is
+# a cheap no-op on every apply after the first; `--force` would recompile the
+# driver every single time. The service stays enabled either way, because a kernel
+# update no apply precedes still needs it.
+#
+# AFTER ENROLLMENT, so the key exists before anything is signed with it, and
+# `|| true` because a build failure is not a reason to strand every later phase --
+# the unbuilt module is reported by akmods itself and the service retries at boot.
+build_akmod_modules() {
+  if [[ "$nvidia_build_system" == 'akmod' ]] && command -v akmods >/dev/null 2>&1; then
+    "${SUDO[@]}" akmods || true
+  fi
+}
+
 enable_nvidia_services() {
   if [[ -n "$nvidia_branch" ]] && systemctl list-unit-files nvidia-persistenced.service 2>/dev/null | grep -q nvidia-persistenced; then
     "${SUDO[@]}" systemctl enable nvidia-persistenced 2>/dev/null || true
@@ -664,6 +684,7 @@ main() {
   install_nvidia_packages
   configure_nvidia_support
   enroll_dkms_mok
+  build_akmod_modules
   enable_nvidia_services
 }
 
