@@ -267,18 +267,32 @@ assert_guard "${secureboot_guard}" 'when Secure Boot is off'
 sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/mok_ensure.sh" > "${scratch}/mok_ensure_nogates.sh"
 
-# $1 = sudo behavior (ok|fail|flaky), $2 = openssl behavior (mint|noop).
+# $1 = sudo behavior (ok|fail|flaky), $2 = openssl behavior (mint|noop),
+# $3 = kmodgenca behavior (absent|mint|noop, default absent).
 # `flaky` models the real incident: a mistyped sudo password fails the FIRST
 # privileged call, and the retry the user gets right succeeds — so the probe
 # fails while the mint that follows it works.
+# kmodgenca is the akmods branch's OWN generator, so it is stubbed as a shell
+# function: `command -v` finds a function, which is what lets `absent` mean
+# "no generator on this host" without rewriting PATH around a fixture that still
+# needs /bin/sh for the privileged probe.
 # Returns ensure_dkms_mok_generated's exit status; prints CONTINUED on success.
 # HOME is redirected into the scratch tree because the declared skips this
 # function now takes clear their own state entry under $XDG_STATE_HOME, and a
 # smoke test must not delete the caller's real skip records.
 run_ensure() {
   rm -f "${mokdir}/.sudo_calls"
-  env HOME="${scratch}/home" MOK_DIR="${mokdir}" MOK_SUDO="${1}" MOK_MINT="${2}" bash -c '
+  env HOME="${scratch}/home" MOK_DIR="${mokdir}" MOK_SUDO="${1}" MOK_MINT="${2}" \
+    MOK_KEYGEN="${3:-absent}" PATH="${4:-${PATH}}" bash -c '
     set -uo pipefail
+    if [[ "${MOK_KEYGEN}" != absent ]]; then
+      kmodgenca() {
+        [[ "${MOK_KEYGEN}" == mint ]] || return 1
+        mkdir -p "${MOK_DIR}/akmods/certs" "${MOK_DIR}/akmods/private"
+        printf KEYGEN > "${MOK_DIR}/akmods/certs/public_key.der"
+        printf KEYGEN > "${MOK_DIR}/akmods/private/private_key.priv"
+      }
+    fi
     fake_sudo() {
       case "${MOK_SUDO}" in
         ok) ;;
@@ -355,10 +369,13 @@ fi
 # --- Both build systems ------------------------------------------------------
 #
 # The legacy branch builds through akmods, which mints its OWN keypair with
-# kmodgenca on the first module build. So the installer must NOT mint one for it:
-# a key minted here would sign the module with a key the builder does not use.
-# The declared wait is what makes that visible, and it is transient-blocking, so
-# the host re-runs itself once the key appears.
+# kmodgenca. The installer must never mint one for it with openssl -- that key
+# would sign nothing, because the builder does not use it -- but it MUST run
+# kmodgenca itself where that generator exists, which is the same command
+# akmods-keygen@.service runs. Waiting instead deadlocked a host whose akmods
+# package never installed: no builder, so no first build, so nothing that could
+# ever clear the wait. The declared wait survives for exactly that host, and it is
+# transient-blocking, so the host re-runs itself once the key appears.
 write_mok_paths akmod
 
 akmod_cert=$(env MOK_DIR="${mokdir}" bash -c '
@@ -397,11 +414,35 @@ sed -e "${efi_guard},/^  fi\$/d" -e "${secureboot_guard},/^  fi\$/d" \
   "${scratch}/mok_ensure.sh" > "${scratch}/mok_ensure_nogates.sh"
 grep -Fq 'mok-generate-awaiting-builder' "${scratch}/mok_ensure_nogates.sh" ||
   fail 'ensure_dkms_mok_generated does not declare the awaiting-builder wait'
+grep -Fq 'kmodgenca' "${scratch}/mok_ensure_nogates.sh" ||
+  fail 'ensure_dkms_mok_generated must run the akmods generator, not only wait for it'
 
-rm -f "${mokdir}/akmods/certs/public_key.der" "${mokdir}/akmods/private/private_key.priv"
 skip_record="${scratch}/home/.local/state/chezmoi/skips/install-nvidia-fedora__mok-generate-awaiting-builder"
-rm -f "${skip_record}"
-run_ensure ok mint >/dev/null
+
+# $1 = kmodgenca behavior. Clears both the key tree and the skip record first, so
+# each case below is decided by what THIS call did.
+run_akmod_ensure() {
+  rm -f "${mokdir}/akmods/certs/public_key.der" \
+    "${mokdir}/akmods/private/private_key.priv" "${mokdir}/mok.pub" "${mokdir}/mok.key" \
+    "${skip_record}"
+  run_ensure ok mint "${1}" "${keygenbin}" >/dev/null
+}
+
+# A PATH with only what this function reaches, so `command -v kmodgenca` is
+# decided by the fixture and not by whether the runner happens to have akmods
+# installed. `sh` is here because the privileged state probe runs `sudo sh -c`.
+keygenbin="${scratch}/keygenbin"
+mkdir -p "${keygenbin}"
+for tool in sh mkdir rm cat bash; do
+  real=$(command -v "${tool}") || fail "the fixture needs ${tool} on PATH"
+  ln -sf "${real}" "${keygenbin}/${tool}"
+done
+[[ ! -e "${keygenbin}/kmodgenca" ]] ||
+  fail 'the absent-generator fixture must not carry kmodgenca'
+
+# No generator on this host: the wait is declared, and NOTHING is minted. This is
+# the deadlocked host, and the record is what keeps it visible.
+run_akmod_ensure absent
 # The state record, not the return value: skip_step deliberately returns 0 so the
 # caller keeps running, so the record is what distinguishes taking the wait from
 # falling through it. dotfiles-skips reads this same file.
@@ -410,7 +451,27 @@ run_ensure ok mint >/dev/null
 grep -Fq 'transient-blocking:akmods-signing-key-present' "${skip_record}" ||
   fail 'the awaiting-builder wait is not recorded against its capability probe'
 if [[ -e "${mokdir}/akmods/certs/public_key.der" || -e "${mokdir}/mok.pub" ]]; then
-  fail 'the akmod branch must never mint a keypair; the module builder owns that key'
+  fail 'the akmod branch must never mint a keypair of its own; kmodgenca owns that key'
+fi
+
+# The generator IS installed: it is run, the pair it writes is accepted, and no
+# wait is recorded -- the enrollment below can queue the certificate on this same
+# apply instead of asking for an extra reboot.
+run_akmod_ensure mint
+[[ "$(cat "${mokdir}/akmods/certs/public_key.der")" == KEYGEN ]] ||
+  fail 'the akmod branch must mint its keypair with kmodgenca when that generator exists'
+[[ ! -e "${mokdir}/mok.pub" ]] ||
+  fail 'the akmod branch must never reach the DKMS openssl mint'
+[[ ! -f "${skip_record}" ]] ||
+  fail 'a keypair kmodgenca just minted must not still record the awaiting-builder wait'
+
+# The generator is installed but fails. Its exit status is not the answer: the
+# re-probe is, so the wait is declared and no DKMS key is minted behind its back.
+run_akmod_ensure noop
+[[ -f "${skip_record}" ]] ||
+  fail 'a kmodgenca that failed must still record the awaiting-builder wait'
+if [[ -e "${mokdir}/akmods/certs/public_key.der" || -e "${mokdir}/mok.pub" ]]; then
+  fail 'a failed kmodgenca must not leave a keypair behind'
 fi
 
 # Once the builder HAS minted its pair, the same call accepts it untouched.

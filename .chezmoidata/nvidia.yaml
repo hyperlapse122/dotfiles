@@ -60,7 +60,15 @@ nvidia:
       # only the current one. The current-branch exclusion policy must therefore
       # NOT apply to this branch's packages.
       source: rpmfusion
+      # `akmods` IS this branch's build system, so it is declared rather than left
+      # to arrive as a dependency of akmod-nvidia-580xx. A dependency is invisible
+      # to the installer's `rpm -q` loop, so when one failed to install -- an rpm
+      # scriptlet the host refused -- nothing noticed: the driver package was
+      # present, no builder was, and the host waited forever for a signing key
+      # only the missing builder could mint. Declared, its absence is a missing
+      # package the next apply installs.
       packages:
+        - akmods
         - akmod-nvidia-580xx
         - xorg-x11-drv-nvidia-580xx
         - xorg-x11-drv-nvidia-580xx-cuda

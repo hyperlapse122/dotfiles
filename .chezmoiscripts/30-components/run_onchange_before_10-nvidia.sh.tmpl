@@ -354,25 +354,45 @@ ensure_dkms_mok_generated() {
       ;;
   esac
 
-  # The out-of-tree builder owns its own keypair and mints it with kmodgenca on
-  # first build. Minting one here would leave the module signed by a key the
-  # builder does not use, so this waits for it and declares the wait rather than
-  # exiting clean -- an eligible Secure Boot host with an unsigned module is not a
-  # converged host, and reusing the DKMS not-applicable site would hide it.
+  # THE BUILDER'S OWN GENERATOR, NOT A SECOND KEYPAIR. The out-of-tree builder
+  # owns its keypair and mints it with kmodgenca -- literally the command
+  # akmods-keygen@.service runs before akmods.service builds anything. Calling it
+  # here therefore mints the SAME key the builder signs with, one apply earlier
+  # rather than one reboot later, which is what lets this apply queue the
+  # certificate for enrollment instead of asking for a second reboot. The DKMS
+  # mint below stays out of it: this branch never reaches it.
   #
-  # TRANSIENT-BLOCKING, NOT HARMLESS. The condition clears the moment the builder
-  # mints its key, so `harmless` -- "this host will never satisfy the condition"
-  # -- would record the unsigned host as converged and never look again. And
-  # `transient-tolerable` cannot be used here either: it exits 1, and this is a
-  # 30-components `before` script, so a non-zero exit strands every later phase
-  # (skip.sh.tmpl reserves that stranding for the elevation guard alone). Naming
-  # the akmods-signing-key-present probe is what makes the rendered content
-  # change once the key appears, so chezmoi re-runs this script by itself.
-  if [[ "$nvidia_build_system" == 'akmod' ]] && report_awaiting_builder_key; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-generate-awaiting-builder" "direction" "transient-blocking" "probe" "akmods-signing-key-present" "reason" "the out-of-tree module builder has not generated its signing keypair yet; it is minted on the first build and enrollment resumes once it appears") | trim | indent 4 }}
+  # WAITING ALONE WAS A DEADLOCK. This used to do nothing but wait, on the
+  # reasoning that the key is minted on the first module build. kmodgenca ships in
+  # the `akmods` package, and on a host where that package's rpm scriptlet was
+  # refused the package never installed -- so no first build was ever going to
+  # happen, and the wait had nothing left that could clear it. The builder is a
+  # declared package of the akmod branch for the same reason.
+  #
+  # TRANSIENT-BLOCKING, NOT HARMLESS. The wait survives for a host where the
+  # generator is still missing or could not run. Its condition clears the moment
+  # the builder is installed and mints its key, so `harmless` -- "this host will
+  # never satisfy the condition" -- would record the unsigned host as converged and
+  # never look again. And `transient-tolerable` cannot be used here either: it
+  # exits 1, and this is a 30-components `before` script, so a non-zero exit
+  # strands every later phase (skip.sh.tmpl reserves that stranding for the
+  # elevation guard alone). Naming the akmods-signing-key-present probe is what
+  # makes the rendered content change once the key appears, so chezmoi re-runs this
+  # script by itself.
+  if [[ "$nvidia_build_system" == 'akmod' ]]; then
+    if command -v kmodgenca >/dev/null 2>&1; then
+      "${SUDO[@]}" kmodgenca -a || true
+    fi
+    # Re-probed, never inferred from kmodgenca's exit status, for the same reason
+    # the DKMS mint below is re-probed: a generator can fail while reporting
+    # success, and `absent` on an unreadable probe would be the conflation
+    # dkms_mok_state exists to refuse -- so an unreadable probe takes the wait.
+    state="$(dkms_mok_state 2>/dev/null || printf absent)"
+    if [[ "$state" != present ]] && report_awaiting_builder_key; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-generate-awaiting-builder" "direction" "transient-blocking" "probe" "akmods-signing-key-present" "reason" "the out-of-tree module builder has not generated its signing keypair yet; enrollment resumes once its key generator is installed and the key appears") | trim | indent 6 }}
+    fi
+    return 0
   fi
-
-
 
   if [[ -x /usr/lib/dkms/mok_signing_setup ]]; then
     "${SUDO[@]}" /usr/lib/dkms/mok_signing_setup || true
@@ -545,6 +565,14 @@ enable_nvidia_services() {
   if [[ -n "$nvidia_branch" ]] && systemctl list-unit-files nvidia-persistenced.service 2>/dev/null | grep -q nvidia-persistenced; then
     "${SUDO[@]}" systemctl enable nvidia-persistenced 2>/dev/null || true
   fi
+  # akmods.service is what actually builds and signs the module for the
+  # out-of-tree branch, and nothing else on the host does. Its enablement comes
+  # from the akmods rpm %post preset call -- the same scriptlet class a host can
+  # refuse -- so an enabled-by-default unit is not something to assume. Enabling
+  # it again costs nothing where the preset already ran.
+  if [[ "$nvidia_build_system" == 'akmod' ]] && systemctl list-unit-files akmods.service 2>/dev/null | grep -q akmods; then
+    "${SUDO[@]}" systemctl enable akmods.service 2>/dev/null || true
+  fi
 }
 
 # Prints the guidance and always succeeds, so it can sit inside the condition of
@@ -588,8 +616,10 @@ report_manual_mok_import() {
 }
 
 report_awaiting_builder_key() {
-  printf 'install-nvidia-fedora.sh: %s has not been generated yet; the akmods key generator creates it on the first module build.\n' \
+  printf 'install-nvidia-fedora.sh: %s has not been generated yet; kmodgenca, the akmods key generator that owns it, is absent or could not create it.\n' \
     "$(mok_cert_path)" >&2
+  printf 'install-nvidia-fedora.sh: install the builder and mint the pair by hand, then re-apply:\n' >&2
+  printf '  sudo dnf install akmods && sudo kmodgenca -a\n' >&2
 }
 
 main() {

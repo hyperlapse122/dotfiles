@@ -2043,10 +2043,10 @@ owners:
   - owner: 'install-nvidia-fedora/mok-generate-awaiting-builder'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
-    anchor_line: 371
-    anchor: '  if [[ "$nvidia_build_system" == ''akmod'' ]] && report_awaiting_builder_key; then'
-    predicate: '[[ "$nvidia_build_system" == ''akmod'' ]] && report_awaiting_builder_key'
-    predicate_digest: 'sha256:94f8c39e7daf7fe13725d5272b48fbc30d9cf19c43541d253705251da5a855a3'
+    anchor_line: 391
+    anchor: '    if [[ "$state" != present ]] && report_awaiting_builder_key; then'
+    predicate: '[[ "$state" != present ]] && report_awaiting_builder_key'
+    predicate_digest: 'sha256:b2a4ff764a78ed3e182efc6b98e0bf329635712dbde4a7498a3b41433a1bf50b'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
