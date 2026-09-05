@@ -328,7 +328,8 @@ Claude Code and Codex are managed again. Three steps stay with the operator:
 
 - If `~/.codex/skills` is a real directory (for example one holding a hand-installed
   skill), move its contents into `~/.agents/skills/` and remove the directory before
-  the first apply, so chezmoi can place the symlink.
+  the first apply, so chezmoi can place the symlink. The apply refuses to run while
+  that directory still holds files, because chezmoi would delete them.
 - On Fedora, run the apply from a plain shell: the SELinux policy reinstall strands
   running `claude`, `agy`, `aoe`, and `codex` processes in `unconfined_t`, and the
   apply script lists the ones to re-exec.

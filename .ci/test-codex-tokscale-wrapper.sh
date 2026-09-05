@@ -124,6 +124,24 @@ run_codex exec --json "two words" -- "-leading dash"
 assert_args "$log_dir/tokscale.args" headless codex exec --json "two words" -- "-leading dash"
 assert_args "$log_dir/real.args" exec --json "two words" -- "-leading dash"
 
+# `e` is the visible alias of `exec`, and root options may precede the subcommand.
+headless_cases=(
+  "e task"
+  "-c key=val exec task"
+  "--config key=val e task"
+  "-m gpt-5 -p work --enable feature exec task"
+  "--oss --search exec task"
+  "-cfoo=bar --model=gpt-5 exec task"
+  "-i img.png -C /tmp --add-dir /srv -s workspace-write -a never exec task"
+)
+for args in "${headless_cases[@]}"; do
+  rm -f "$log_dir"/*
+  read -r -a argv <<<"$args"
+  run_codex "${argv[@]}"
+  assert_args "$log_dir/tokscale.args" headless codex "${argv[@]}"
+  assert_args "$log_dir/real.args" "${argv[@]}"
+done
+
 # passthrough path: every other invocation reaches the real binary with argv unchanged.
 passthrough_cases=(
   ""
@@ -131,6 +149,11 @@ passthrough_cases=(
   "login --help"
   "resume session-123"
   "execx"
+  "ex"
+  "-c exec task"
+  "-m exec"
+  "-- exec task"
+  "prompt exec"
 )
 for args in "${passthrough_cases[@]}"; do
   rm -f "$log_dir"/*

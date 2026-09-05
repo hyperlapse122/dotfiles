@@ -102,4 +102,13 @@ for row in "${PLUGINS[@]}"; do
   fi
 done
 {{- end }}
+
+# Codex records the installed set in config.toml through a temp file and a rename,
+# which carries away the codex_config_t label that config-codex-settings restored
+# earlier in this apply. Restore it again here, after the last Codex write.
+config="${CODEX_HOME:-$HOME/.codex}/config.toml"
+if command -v restorecon >/dev/null 2>&1 && [[ -f $config ]]; then
+  restorecon -F "$config" 2>/dev/null ||
+    printf 'update-codex-plugins: could not restore the SELinux label of %s; until the next apply any unconfined process may write it.\n' "$config" >&2
+fi
 {{- end }}

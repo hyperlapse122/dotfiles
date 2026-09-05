@@ -57,8 +57,10 @@
 # Ownership split: agents.codex.settings owns scalar leaves; agents.mcp.servers
 # owns each declared mcp_servers.<name> table; Codex owns projects, hooks, plugins,
 # marketplaces, and every undeclared mcp_servers.* entry. The reconciler's
-# recursive overlay touches only declared keys, so a hand-added [mcp_servers.foo]
-# and every [projects."..."] table survive. Removing a server from the inventory,
+# recursive overlay changes only declared values, so a hand-added [mcp_servers.foo]
+# and every [projects."..."] table survive; it re-serializes the whole file through
+# smol-toml, so comments and hand formatting in config.toml are not preserved.
+# Removing a server from the inventory,
 # or removing a leaf from the declaration, stops the assertion but restores and
 # prunes nothing. Codex-owned prefixes are rejected at render time by
 # codex-settings-validate.tmpl, not merely avoided by convention.

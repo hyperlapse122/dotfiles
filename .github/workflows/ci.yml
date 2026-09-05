@@ -67,6 +67,7 @@ jobs:
             "$RUNNER_TEMP/codex-plugins.sh"
           .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           .ci/test-codex-tokscale-wrapper.sh
+          .ci/test-codex-skills-guard.sh
           .ci/test-agent-instructions.sh
 
   render-gates:

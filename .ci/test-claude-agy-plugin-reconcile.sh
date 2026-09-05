@@ -208,10 +208,11 @@ esac
 EOF
 chmod 0700 "$bin/agy"
 
-# The Codex stub reproduces the one lifecycle fact the script is written against:
+# The Codex stub reproduces the two lifecycle facts the script is written against:
 # `plugin add` on an already-installed plugin exits non-zero and names that state
-# on stderr. The install record lives under CODEX_STATE so a run never touches
-# the marketplace tree, which Codex must not write to.
+# on stderr, and every install rewrites ~/.codex/config.toml. The install record
+# lives under CODEX_STATE so a run never touches the marketplace tree, which Codex
+# must not write to.
 cat >"$bin/codex" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -226,6 +227,8 @@ case "${1-} ${2-}" in
       exit 1
     fi
     : >"$CODEX_STATE/${id%@*}"
+    mkdir -p "$HOME/.codex"
+    : >>"$HOME/.codex/config.toml"
     ;;
   "plugin remove")
     rm -f "$CODEX_STATE/${3%@*}"
@@ -393,6 +396,11 @@ grep -Fx "restorecon -RF $home/.agents/plugins" "$codex_calls" >/dev/null ||
 [[ $(grep -n 'restorecon' "$codex_calls" | head -1 | cut -d: -f1) -lt \
   $(grep -n 'plugin add' "$codex_calls" | head -1 | cut -d: -f1) ]] ||
   fail 'Codex reconcile installed before relabelling ~/.agents/plugins'
+grep -Fx "restorecon -F $home/.codex/config.toml" "$codex_calls" >/dev/null ||
+  fail 'Codex reconcile did not restore the config.toml label after installing'
+[[ $(grep -n 'plugin add' "$codex_calls" | tail -1 | cut -d: -f1) -lt \
+  $(grep -n "restorecon -F $home/.codex/config.toml" "$codex_calls" | head -1 | cut -d: -f1) ]] ||
+  fail 'Codex reconcile restored the config.toml label before the last plugin add'
 
 # The re-run hits `plugin add` on an already-installed plugin. Tolerating exactly
 # that message keeps a converged apply green without swallowing a genuine
@@ -532,5 +540,26 @@ grep -F 'no eligible plugins or removals are declared' "$scratch/codex-empty.sh"
 if render --override-data "$empty" <"$symlink_tmpl" >/dev/null 2>"$scratch/symlink-empty.err"; then
   fail 'archive symlink template rendered with no codex row referencing its key'
 fi
+
+# A declared removal renders a best-effort `plugin remove` loop that runs before
+# the installs, and the label restore still follows the last Codex write.
+removal='{"agents":{"codex":{"pluginsRemoved":[{"name":"retired","marketplace":"compound-engineering-plugin"}]}}}'
+render --override-data "$removal" <"$source_root/.chezmoiscripts/70-agents/run_onchange_after_update-codex-plugins.sh.tmpl" \
+  >"$scratch/codex-removal.rendered" || fail 'codex updater failed to render with a declared removal'
+rewrite "$scratch/codex-removal.rendered" "$scratch/codex-removal.sh"
+: >"$codex_calls"
+env HOME="$home" PATH="$bin:$PATH" CODEX_CALLS="$codex_calls" CODEX_STATE="$scratch/codex-state" \
+  bash "$scratch/codex-removal.sh" >"$scratch/codex-removal.out" 2>&1 || {
+  cat "$scratch/codex-removal.out" >&2
+  fail 'Codex reconcile with a declared removal failed'
+}
+grep -Fx 'plugin remove retired@dotfiles' "$codex_calls" >/dev/null ||
+  fail 'Codex reconcile did not remove the declared plugin'
+[[ $(grep -n 'plugin remove' "$codex_calls" | head -1 | cut -d: -f1) -lt \
+  $(grep -n 'plugin add' "$codex_calls" | head -1 | cut -d: -f1) ]] ||
+  fail 'Codex reconcile installed before removing the declared plugin'
+[[ $(grep -n 'plugin remove' "$codex_calls" | tail -1 | cut -d: -f1) -lt \
+  $(grep -n "restorecon -F $home/.codex/config.toml" "$codex_calls" | head -1 | cut -d: -f1) ]] ||
+  fail 'Codex reconcile restored the config.toml label before the removal'
 
 printf 'test-claude-agy-plugin-reconcile: ok\n'
