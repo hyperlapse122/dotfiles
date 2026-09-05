@@ -118,9 +118,9 @@ agents:
     settings:
       language: Korean
       skipDangerousModePermissionPrompt: true
-      model: claude-fable-5-1[1m]
+      model: opus[1m]
       modelSettings.claude-fable-5-1.effortLevel: medium
-      modelSettings.claude-opus-5.effortLevel: high
+      modelSettings.claude-opus-5.effortLevel: medium
       inputNeededNotifEnabled: true
       agentPushNotifEnabled: true
       remoteControlAtStartup: false
