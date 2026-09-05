@@ -701,6 +701,14 @@ report_unlisted_gpu() {
   fi
 }
 
+report_integrated_only() {
+  printf 'install-nvidia-fedora.sh: this hybrid host is integrated-only by policy: %s is listed in nvidia.integratedOnlyArchitectures.\n' \
+    "${FACT_GPU_ARCH:-}" >&2
+  printf 'install-nvidia-fedora.sh: the NVIDIA stack is not installed here.\n' >&2
+  printf 'install-nvidia-fedora.sh: to remove an already-installed stack, follow the runbook:\n' >&2
+  printf '  docs/solutions/integration-issues/fedora-pascal-hybrid-integrated-only-stack-removal.md\n' >&2
+}
+
 report_branch_conflict() {
   printf 'install-nvidia-fedora.sh: %s is installed but this host resolves to the %s branch.\n' \
     "$1" "$nvidia_branch" >&2
@@ -735,6 +743,10 @@ report_awaiting_builder_key() {
 }
 
 main() {
+  if [[ "${FACT_INTEGRATED_ONLY:-0}" -eq 1 ]] && report_integrated_only; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-integrated-only" "direction" "harmless" "reason" "the GPU architecture of this hybrid host is declared integrated-only; the runbook for removing an already-installed stack was printed and nothing was installed or removed") | trim | indent 4 }}
+  fi
+
   if ! resolve_nvidia_branch && report_unlisted_gpu; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "nvidia-architecture-unlisted" "direction" "harmless" "reason" "this NVIDIA device is not listed in the declared architecture table; the device id and the row to add were printed and no driver branch was selected") | trim | indent 4 }}
   fi

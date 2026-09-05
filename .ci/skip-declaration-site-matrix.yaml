@@ -92,10 +92,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 136
+  classified_owners: 137
   hard_error_owners: 8
-  rendered_instances: 205
-  phase_local_instances: 131
+  rendered_instances: 206
+  phase_local_instances: 132
   shared_guard_instances: 74
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -117,12 +117,12 @@ plan_contract_scopes:
 
 audited_forms:
   skip_here: 57
-  skip_step: 41
+  skip_step: 42
   done_here: 19
   not_applicable: 19
 
 audited_directions:
-  harmless: 29
+  harmless: 30
   transient-blocking: 62
   transient-tolerable: 3
   operator-blocking: 4
@@ -130,7 +130,7 @@ audited_scopes:
   00-tools: 4
   10-auth: 5
   20-base: 5
-  30-components: 21
+  30-components: 22
   30-linux: 32
   50-linux-gnome: 29
   50-linux-kde: 33
@@ -147,8 +147,8 @@ shared_guard_fanout:
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 29
-    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). One more arrives with the NVIDIA branch axis: an unlisted GPU architecture, which stays here because a device this table does not classify is a fact about the table and not a precondition a later phase supplies. Its two siblings -- a conflicting installed branch, and a declared package set the enabled sources do not offer -- were reclassified OUT of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, but the reason text of the first one prints the dnf command that clears it, so an operator who ran that command was left with a host recorded as provisioned and no driver. A third NVIDIA site joined them there: an availability probe that returned no output at all could not be asked whether the packages exist, which is not the same answer as the sources not offering them. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies.'
+    audited: 30
+    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). One more arrives with the NVIDIA branch axis: an unlisted GPU architecture, which stays here because a device this table does not classify is a fact about the table and not a precondition a later phase supplies. Its two siblings -- a conflicting installed branch, and a declared package set the enabled sources do not offer -- were reclassified OUT of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, but the reason text of the first one prints the dnf command that clears it, so an operator who ran that command was left with a host recorded as provisioned and no driver. A third NVIDIA site joined them there: an availability probe that returned no output at all could not be asked whether the packages exist, which is not the same answer as the sources not offering them. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies. One more with the integrated-only policy: a hybrid host whose GPU architecture is listed in nvidia.integratedOnlyArchitectures never gets the NVIDIA stack, which is a decision recorded in data and not a precondition a later phase supplies.'
   - bucket: 'transient_blocking'
     plan: 47
     audited: 62
@@ -163,8 +163,8 @@ divergence:
     reason: 'The auth phase carries a fifth step owner — auth-tailscale/already-authenticated — that the pre-U4 estimate folded into its four blocking rows.'
   - bucket: 'scope:20-linux-fedora'
     plan: 14
-    audited: 26
-    reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet. Four more arrive with the non-interactive MOK enrollment that replaced the discarded mokutil --import exit status: an availability probe that answered nothing, no stored enrollment passphrase, an absent expect, and a stored passphrase that is not typeable on the MokManager console. Each of the last three prints the mokutil command to run by hand, which is the signal the silent original had none of. One more arrives with the enrollment keypair guard, which is now one owner per build system rather than a single not_applicable site.'
+    audited: 27
+    reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet. Four more arrive with the non-interactive MOK enrollment that replaced the discarded mokutil --import exit status: an availability probe that answered nothing, no stored enrollment passphrase, an absent expect, and a stored passphrase that is not typeable on the MokManager console. Each of the last three prints the mokutil command to run by hand, which is the signal the silent original had none of. One more arrives with the enrollment keypair guard, which is now one owner per build system rather than a single not_applicable site. One more arrives with the integrated-only policy: the NVIDIA installer declares its skip before any branch resolves on a hybrid host whose GPU architecture is listed in nvidia.integratedOnlyArchitectures.'
   - bucket: 'scope:30-linux'
     plan: 19
     audited: 32
@@ -1976,6 +1976,20 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-architecture-unlisted'
+  - owner: 'install-nvidia-fedora/nvidia-integrated-only'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
+    anchor_line: 746
+    anchor: '  if [[ "${FACT_INTEGRATED_ONLY:-0}" -eq 1 ]] && report_integrated_only; then'
+    predicate: '[[ "${FACT_INTEGRATED_ONLY:-0}" -eq 1 ]] && report_integrated_only'
+    predicate_digest: 'sha256:9d77fdc4c87092ef942fcdbd2eab6c318e49c7a7f6d2f9d798cd823c2165b473'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'harmless'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#install-nvidia-fedora/nvidia-integrated-only'
   - owner: 'install-nvidia-fedora/nvidia-branch-conflict'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl'
