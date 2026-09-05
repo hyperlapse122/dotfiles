@@ -1,0 +1,5 @@
+# Hand the driverless discrete NVIDIA GPU to PCI runtime power management.
+# A PCI device with no driver bound and power/control=auto is treated as
+# suspended, so its root port can enter D3cold. The device stays enumerated,
+# which keeps the host facts seeing it on every later apply.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{class}=="0x03*", ATTR{power/control}="auto"
