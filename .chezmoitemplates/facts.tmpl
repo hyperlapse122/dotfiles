@@ -254,6 +254,34 @@ Three rules hold this file together:
 {{- end -}}
 {{- $_ := set $facts "gpuArch" $gpuArch -}}
 
+{{- /* integratedOnly — gpuArch is listed in nvidia.integratedOnlyArchitectures AND
+   the host is hybrid. Policy, like gpuArch: the list is data in
+   .chezmoidata/nvidia.yaml. ONE fact because a manifest entry carries ONE gate
+   expression and the grammar has no conjunction form. Both inputs fail-safe to
+   the skip direction (empty arch, hybridGraphics false), so an unreadable cache
+   keeps the driver stack in place rather than powering off a GPU it cannot
+   classify.
+
+   nvidiaHybridDriver — hybridGraphics AND NOT integratedOnly: the hybrid hosts
+   that keep the proprietary driver and therefore receive the runtime
+   power-management drop-ins. The retirement entry for those drop-ins gates on
+   integratedOnly, so a host is never installed and retired on the same run. */ -}}
+{{- $integratedOnly := false -}}
+{{- $hybridGraphics := index $facts "hybridGraphics" -}}
+{{- if and (ne $gpuArch "") (kindIs "bool" $hybridGraphics) $hybridGraphics -}}
+{{-   if and .nvidia (hasKey .nvidia "integratedOnlyArchitectures") -}}
+{{-     if has $gpuArch .nvidia.integratedOnlyArchitectures -}}
+{{-       $integratedOnly = true -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "integratedOnly" $integratedOnly -}}
+{{- $nvidiaHybridDriver := false -}}
+{{- if and (kindIs "bool" $hybridGraphics) $hybridGraphics (not $integratedOnly) -}}
+{{-   $nvidiaHybridDriver = true -}}
+{{- end -}}
+{{- $_ := set $facts "nvidiaHybridDriver" $nvidiaHybridDriver -}}
+
 {{- /* jetson — /etc/nv_tegra_release, the L4T release stamp apply_binaries.sh
    copies into every flashed rootfs and the file NVIDIA's own BSP documentation
    tells you to read. Deliberately NOT the device-tree model: that is hardware

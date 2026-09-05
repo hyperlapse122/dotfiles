@@ -37,6 +37,8 @@ nvidia: false
 gpuDeviceId: ""
 gpuArch: ""
 hybridGraphics: false
+integratedOnly: false
+nvidiaHybridDriver: false
 battery: false
 fingerprintReader: false
 displayManager: ""
