@@ -804,7 +804,16 @@ jobs:
           mkdir -p "${scratch}/target" "${out}"
           : > "${scratch}/empty.toml"
 
-          export scratch out
+          # This job staged the applied HOME under _artifacts/ inside the
+          # workspace, and chezmoi reads its whole source tree: a dangling
+          # symlink in that staged copy fails every render. Render from a
+          # copy that leaves _artifacts/ out.
+          source_copy="${scratch}/source"
+          mkdir -p "${source_copy}"
+          tar -C "${GITHUB_WORKSPACE}" --exclude=./_artifacts --exclude=./.git -cf - . | \
+            tar -C "${source_copy}" -xf -
+
+          export scratch out source_copy
           num_procs=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 
           find .chezmoiscripts .chezmoiexternals -type f -print0 | \
@@ -817,7 +826,7 @@ jobs:
                 mkdir -p "${worker_scratch}/target"
                 : > "${worker_scratch}/empty.toml"
                 if chezmoi --config "${worker_scratch}/empty.toml" \
-                    --source "'"${GITHUB_WORKSPACE}"'" \
+                    --source "${source_copy}" \
                     --destination "${worker_scratch}/target" \
                     execute-template < "${f}" > "${dest}" 2> "${worker_scratch}/render.stderr"; then
                   :
@@ -851,7 +860,7 @@ jobs:
           test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
           test ! -e "${reconciler}"
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" \
+            --source "${RUNNER_TEMP}/scratch/source" \
             --destination "${RUNNER_TEMP}/scratch/target" \
             execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
           ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
