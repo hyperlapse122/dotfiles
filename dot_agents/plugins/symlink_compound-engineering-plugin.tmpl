@@ -1,0 +1,30 @@
+{{- /* ~/.agents/plugins/compound-engineering-plugin -> the pinned archive.
+
+       The source filename hardcodes the agents.marketplaces registry key, so a
+       second local archive needs a second symlink source. The target is the
+       fourth field of the codex plugin row, resolved by agent-plugin-rows.tmpl
+       and nowhere else. */ -}}
+{{- $key := "compound-engineering-plugin" -}}
+{{- if not (hasKey .agents.marketplaces $key) -}}
+{{-   fail (printf "symlink_%s: agents.marketplaces has no entry %q" $key $key) -}}
+{{- end -}}
+{{- $authority := index .agents.marketplaces $key -}}
+{{- $kind := "" -}}
+{{- if hasKey $authority "kind" -}}{{- $kind = printf "%v" (index $authority "kind") -}}{{- end -}}
+{{- if ne $kind "localArchive" -}}
+{{-   fail (printf "symlink_%s: marketplace %q has kind %q; only a localArchive has an archive path to link" $key $key $kind) -}}
+{{- end -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" . "harness" "codex" "field" "plugins") -}}
+{{- $target := "" -}}
+{{- if ne $rows "" -}}
+{{-   range $line := splitList "\n" $rows -}}
+{{-     $fields := splitList "\t" (printf "%v" (fromJson (trim $line))) -}}
+{{-     if and (eq $target "") (eq (index $fields 1) $key) -}}
+{{-       $target = index $fields 3 -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $target "" -}}
+{{-   fail (printf "symlink_%s: no eligible agents.codex.plugins row references marketplace %q on this host" $key $key) -}}
+{{- end -}}
+{{- $target -}}

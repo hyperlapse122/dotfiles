@@ -18,32 +18,42 @@ for token in \
   "(type protected_agent_config_t)" \
   "(type claude_config_t)" \
   "(type gemini_config_t)" \
+  "(type codex_config_t)" \
   "(roletype object_r protected_agent_config_t)" \
-  "(typeattributeset protected_agent_config_type (protected_agent_config_t claude_config_t gemini_config_t))" \
+  "(roletype object_r codex_config_t)" \
+  "(typeattributeset protected_agent_config_type (protected_agent_config_t claude_config_t gemini_config_t codex_config_t))" \
   "(type chezmoi_t)" \
   "(type claude_t)" \
   "(type agy_t)" \
   "(type aoe_t)" \
+  "(type codex_t)" \
   "(roletype unconfined_r chezmoi_t)" \
   "(roletype unconfined_r claude_t)" \
   "(roletype unconfined_r agy_t)" \
   "(roletype unconfined_r aoe_t)" \
+  "(roletype unconfined_r codex_t)" \
   "(type chezmoi_exec_t)" \
   "(type claude_exec_t)" \
   "(type agy_exec_t)" \
   "(type aoe_exec_t)" \
-  "(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t aoe_t))" \
-  "(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t aoe_exec_t))" \
+  "(type codex_exec_t)" \
+  "(roletype object_r codex_exec_t)" \
+  "(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t aoe_t codex_t))" \
+  "(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t aoe_exec_t codex_exec_t))" \
+  "(typeattribute claude_config_writer)" \
+  "(typeattributeset claude_config_writer (claude_t aoe_t))" \
   "(typeattributeset file_type (dotfiles_agent_exec))" \
   "(typeattributeset exec_type (dotfiles_agent_exec))" \
   "(typetransition unconfined_domain_type chezmoi_exec_t process chezmoi_t)" \
   "(typetransition unconfined_domain_type claude_exec_t process claude_t)" \
   "(typetransition unconfined_domain_type agy_exec_t process agy_t)" \
   "(typetransition unconfined_domain_type aoe_exec_t process aoe_t)" \
+  "(typetransition unconfined_domain_type codex_exec_t process codex_t)" \
   "(allow chezmoi_t chezmoi_exec_t (file (entrypoint" \
   "(allow claude_t claude_exec_t (file (entrypoint" \
   "(allow agy_t agy_exec_t (file (entrypoint" \
   "(allow aoe_t aoe_exec_t (file (entrypoint" \
+  "(allow codex_t codex_exec_t (file (entrypoint" \
   "(typeattributeset domain (dotfiles_agent_domain))" \
   "(typeattributeset unconfined_domain_type (dotfiles_agent_domain))" \
   "(typeattributeset files_unconfined_type (dotfiles_agent_domain))" \
@@ -51,6 +61,7 @@ for token in \
   "(allow claude_t claude_config_t" \
   "(allow aoe_t claude_config_t" \
   "(allow agy_t gemini_config_t" \
+  "(allow codex_t codex_config_t" \
   "(allow unconfined_domain_type protected_agent_config_type" \
   "(allow locate_t protected_agent_config_type (dir (open read getattr search)))" \
   "(allow locate_t protected_agent_config_type (file (open read getattr)))" \
@@ -60,10 +71,10 @@ for token in \
   "(allow protected_agent_config_type noxattrfs (filesystem (associate)))" \
   "(typetransition claude_t user_home_t file \".claude.json\" claude_config_t)" \
   "(typetransition claude_t user_home_t file \".mcp.json\" claude_config_t)" \
-  "(typetransition dotfiles_agent_domain user_home_t file \"settings.json\" claude_config_t)" \
-  "(typetransition dotfiles_agent_domain user_home_t file \"settings.json.lock\" claude_config_t)" \
-  "(filecon \"HOME_DIR/\\.codex/config\\.toml\"" \
-  "(filecon \"HOME_DIR/\\.codex/skills(/.*)?\"" \
+  "(typetransition claude_config_writer user_home_t file \"settings.json\" claude_config_t)" \
+  "(typetransition claude_config_writer user_home_t file \"settings.json.lock\" claude_config_t)" \
+  "(filecon \"HOME_DIR/\\.codex/config\\.toml\" file (unconfined_u object_r codex_config_t" \
+  "(filecon \"HOME_DIR/\\.codex/skills\" symlink (unconfined_u object_r codex_config_t" \
   "(filecon \"HOME_DIR/\\.agents/skills(/.*)?\"" \
   "(filecon \"HOME_DIR/\\.agents/plugins(/.*)?\"" \
   "(filecon \"HOME_DIR/\\.claude\\.json.*\" file (unconfined_u object_r claude_config_t" \
@@ -82,6 +93,7 @@ for token in \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/agy/[^/]+/agy\" file (unconfined_u object_r agy_exec_t" \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/aoe/[^/]+/aoe\" file (unconfined_u object_r aoe_exec_t" \
   "(filecon \"HOME_DIR/\\.local/bin/aoe\" file (unconfined_u object_r aoe_exec_t" \
+  "(filecon \"HOME_DIR/\\.local/lib/commands/store/codex/[^/]+/codex\" file (unconfined_u object_r codex_exec_t" \
   "(allow dotfiles_agent_domain rpm_script_t (process (transition siginh rlimitinh noatsecure)))" \
   "(allow dotfiles_agent_domain rpm_script_t (fd (use)))" \
   "(allow rpm_script_t dotfiles_agent_domain (fd (use)))" \
@@ -107,9 +119,38 @@ fi
 for token in \
   "(typetransition chezmoi_t gconf_home_t file \"claude\" claude_exec_t)" \
   "(typetransition chezmoi_t gconf_home_t file \"agy\" agy_exec_t)" \
-  "(typetransition chezmoi_t gconf_home_t file \"aoe\" aoe_exec_t)"; do
+  "(typetransition chezmoi_t gconf_home_t file \"aoe\" aoe_exec_t)" \
+  "(typetransition chezmoi_t gconf_home_t file \"codex\" codex_exec_t)"; do
   grep -qF -- "$token" "$cil_file" || fail "CIL policy missing upgrade-durability transition: $token"
 done
+
+# The wrapper's store file is named codex-wrapper and carries no exec label by
+# design: tokscale, mise and node run in the launcher's domain, and the
+# transition fires only when the real binary execs. A filecon for the wrapper
+# or for the ~/.local/bin symlink would silently widen codex_t to that chain.
+if grep -qE 'filecon "HOME_DIR/\\\.local/lib/commands/store/codex-wrapper' "$cil_file"; then
+  fail 'CIL policy must not label the codex wrapper store file as an entrypoint'
+fi
+if grep -qE 'filecon "HOME_DIR/\\\.local/bin/codex"' "$cil_file"; then
+  fail 'CIL policy must not label ~/.local/bin/codex: it is a symlink to the wrapper, not the real binary'
+fi
+
+# codex_t joins dotfiles_agent_domain, so every named transition sourced from that
+# attribute fires for Codex too. A codex_t process creating a project's
+# .vscode/settings.json must not be stamped with claude_config_t, a type it
+# cannot write, so the settings.json transitions are sourced from the narrower
+# claude_config_writer attribute instead.
+if grep -qE '^\(typetransition dotfiles_agent_domain .* claude_config_t\)' "$cil_file"; then
+  fail 'no typetransition may be sourced from dotfiles_agent_domain and yield claude_config_t'
+fi
+
+# ~/.codex is user_home_t, and so is every project checkout under ~/src. A
+# config.toml name transition would capture a project's .codex/config.toml and
+# lock git and editors out of it; label durability for ~/.codex/config.toml
+# comes from restorecon and the reclaim sweep instead.
+if grep -qE '^\(typetransition [a-z_]+ user_home_t [a-z_]+ "[^"]*" codex_config_t\)' "$cil_file"; then
+  fail 'no typetransition may label a user_home_t file with codex_config_t'
+fi
 
 # --- the boundary itself: who may NOT write what --------------------------- #
 #
@@ -130,6 +171,18 @@ forbidden_writer 'agy_t' 'claude_config_t'
 forbidden_writer 'agy_t' 'protected_agent_config_t'
 forbidden_writer 'aoe_t' 'gemini_config_t'
 forbidden_writer 'aoe_t' 'protected_agent_config_t'
+forbidden_writer 'claude_t' 'codex_config_t'
+forbidden_writer 'agy_t' 'codex_config_t'
+forbidden_writer 'aoe_t' 'codex_config_t'
+forbidden_writer 'codex_t' 'claude_config_t'
+forbidden_writer 'codex_t' 'gemini_config_t'
+forbidden_writer 'codex_t' 'protected_agent_config_t'
+
+# Relabelling stays chezmoi's: codex_t writes its own config but may not move a
+# file between the protected types.
+if grep -E '^\(allow codex_t ' "$cil_file" | grep -qE 'relabel(from|to)'; then
+  fail 'codex_t must not hold relabelfrom or relabelto on any type'
+fi
 
 if grep -qF "tokscale_t" "$cil_file"; then
   fail "tokscale_t must not be declared in base CIL policy"
@@ -142,12 +195,12 @@ fi
 # it becomes decorative. An earlier revision of this module shipped exactly that
 # and enforced nothing. The three protected types must carry NO attribute other
 # than the module's own grouping attribute.
-for protected in protected_agent_config_t claude_config_t gemini_config_t protected_agent_config_type; do
+for protected in protected_agent_config_t claude_config_t gemini_config_t codex_config_t protected_agent_config_type; do
   if grep -qE "^\(typeattributeset (file_type|exec_type|domain|[a-z_]*unconfined[a-z_]*) \(${protected}\)" "$cil_file"; then
     fail "$protected must not join a base-policy attribute: that grants every unconfined domain write access"
   fi
 done
-if grep -qE '^\(typeattributeset [a-z_]+ \(.*\b(protected_agent_config_t|claude_config_t|gemini_config_t)\b.*\)\)' "$cil_file" |
+if grep -qE '^\(typeattributeset [a-z_]+ \(.*\b(protected_agent_config_t|claude_config_t|gemini_config_t|codex_config_t)\b.*\)\)' "$cil_file" |
   grep -qv 'protected_agent_config_type'; then
   fail 'a protected type was added to an attribute other than protected_agent_config_type'
 fi
@@ -215,9 +268,13 @@ for relabel_path in \
   '"$HOME/.local/bin/aoe"' \
   '"$HOME/.local/lib/commands/store/claude"' \
   '"$HOME/.local/lib/commands/store/agy"' \
-  '"$HOME/.local/lib/commands/store/aoe"'; do
+  '"$HOME/.local/lib/commands/store/aoe"' \
+  '"$HOME/.local/lib/commands/store/codex"'; do
   grep -qF -- "$relabel_path" "$rendered" || fail "rendered script does not relabel $relabel_path"
 done
+if grep -qF '"$HOME/.local/lib/commands/store/codex-wrapper"' "$rendered"; then
+  fail 'rendered script must not relabel the codex wrapper store: it carries no exec label by design'
+fi
 
 grep -qF 'system_chezmoi_binaries=' "$rendered" || fail "rendered script missing system chezmoi restorecon check"
 grep -qF 'restorecon -Fv "${system_chezmoi_binaries[@]}"' "$rendered" || fail "rendered script missing system chezmoi restorecon invocation"
@@ -243,7 +300,8 @@ grep -qF 'reclaiming stale protected labels' "$rendered" ||
 for reclaim_selector in \
   "-context '*:protected_agent_config_t:*'" \
   "-context '*:claude_config_t:*'" \
-  "-context '*:gemini_config_t:*'"; do
+  "-context '*:gemini_config_t:*'" \
+  "-context '*:codex_config_t:*'"; do
   grep -qF -- "$reclaim_selector" "$rendered" ||
     fail "reclaim sweep does not select $reclaim_selector"
 done
@@ -257,17 +315,17 @@ fi
 # assigns the domain at exec, so the old process keeps unconfined_t while its
 # files have just been relabelled, and its writes start failing with EACCES.
 # The script has to say so, because nothing else will.
-grep -qF 'Restart any claude/agy/aoe process started earlier' "$rendered" ||
+grep -qF 'Restart any claude/agy/aoe/codex process started earlier' "$rendered" ||
   fail 'rendered script does not tell the operator to restart running agent sessions'
 
 # The warning is only actionable if it names the processes: a generic notice
 # leaves the operator guessing which of several terminals holds the stale
 # session. Assert the detection itself, not just the sentence.
-grep -qF "pgrep -x -u \"\$(id -u)\" 'claude|agy|aoe'" "$rendered" ||
-  fail 'rendered script does not enumerate domain-owning claude, agy, and aoe processes'
+grep -qF "pgrep -x -u \"\$(id -u)\" 'claude|agy|aoe|codex'" "$rendered" ||
+  fail 'rendered script does not enumerate domain-owning claude, agy, aoe, and codex processes'
 grep -qF '/attr/current' "$rendered" ||
   fail 'rendered script does not read the domain of running agent processes'
-grep -qF '*:claude_t:* | *:agy_t:* | *:aoe_t:* | *:chezmoi_t:*' "$rendered" ||
+grep -qF '*:claude_t:* | *:agy_t:* | *:aoe_t:* | *:codex_t:* | *:chezmoi_t:*' "$rendered" ||
   fail 'rendered script does not treat an already-transitioned process as healthy'
 
 if command -v secilc >/dev/null 2>&1; then
@@ -388,6 +446,10 @@ EOF
   expect_context 'HOME_DIR/\.gemini/skills' 'unconfined_u:object_r:gemini_config_t'
   expect_context 'HOME_DIR/\.mcp\.json' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.agents/skills(/.*)?' 'unconfined_u:object_r:protected_agent_config_t'
+  expect_context 'HOME_DIR/\.agents/plugins(/.*)?' 'unconfined_u:object_r:protected_agent_config_t'
+  expect_context 'HOME_DIR/\.codex/config\.toml' 'unconfined_u:object_r:codex_config_t'
+  expect_context 'HOME_DIR/\.codex/skills' 'unconfined_u:object_r:codex_config_t'
+  expect_context 'HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex' 'unconfined_u:object_r:codex_exec_t'
   expect_context 'HOME_DIR/\.local/lib/commands/store/aoe/[^/]+/aoe' 'unconfined_u:object_r:aoe_exec_t'
   expect_context 'HOME_DIR/\.local/bin/aoe' 'unconfined_u:object_r:aoe_exec_t'
 
@@ -416,21 +478,45 @@ EXPECTED = {
     ('chezmoi_t', 'protected_agent_config_t'): True,
     ('chezmoi_t', 'claude_config_t'): True,
     ('chezmoi_t', 'gemini_config_t'): True,
+    ('chezmoi_t', 'codex_config_t'): True,
     ('claude_t', 'claude_config_t'): True,
     ('claude_t', 'gemini_config_t'): False,
     ('claude_t', 'protected_agent_config_t'): False,
+    ('claude_t', 'codex_config_t'): False,
     ('agy_t', 'gemini_config_t'): True,
     ('agy_t', 'claude_config_t'): False,
     ('agy_t', 'protected_agent_config_t'): False,
+    ('agy_t', 'codex_config_t'): False,
     ('aoe_t', 'claude_config_t'): True,
     ('aoe_t', 'gemini_config_t'): False,
     ('aoe_t', 'protected_agent_config_t'): False,
+    ('aoe_t', 'codex_config_t'): False,
+    ('codex_t', 'codex_config_t'): True,
+    ('codex_t', 'claude_config_t'): False,
+    ('codex_t', 'gemini_config_t'): False,
+    ('codex_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'protected_agent_config_t'): False,
     ('unconfined_t', 'claude_config_t'): False,
     ('unconfined_t', 'gemini_config_t'): False,
+    ('unconfined_t', 'codex_config_t'): False,
     ('rpm_script_t', 'protected_agent_config_t'): False,
     ('rpm_script_t', 'claude_config_t'): False,
     ('rpm_script_t', 'gemini_config_t'): False,
+    ('rpm_script_t', 'codex_config_t'): False,
+}
+READ_ONLY = ('claude_config_t', 'gemini_config_t', 'protected_agent_config_t')
+# A named file transition is keyed by (source, target dir type, class, name);
+# the result is the label a new file receives. ~/.codex, project checkouts and
+# .vscode directories are all user_home_t, so this is exactly the question a
+# codex_t process creating settings.json in a project asks the kernel.
+NAMED_TRANSITIONS = {
+    ('codex_t', 'settings.json'): None,
+    ('codex_t', 'settings.json.lock'): None,
+    ('codex_t', 'config.toml'): None,
+    ('claude_t', 'settings.json'): 'claude_config_t',
+    ('aoe_t', 'settings.json'): 'claude_config_t',
+    ('agy_t', 'settings.json'): None,
+    ('claude_t', '.claude.json'): 'claude_config_t',
 }
 
 
@@ -454,6 +540,39 @@ def may_associate(label):
     return False
 
 
+def may_read(source, target):
+    query = setools.TERuleQuery(policy, source=source, target=target, tclass=['file'])
+    for rule in query.results():
+        if str(rule.ruletype) != 'allow':
+            continue
+        if {'read', 'getattr', 'open', 'map'} <= {str(perm) for perm in rule.perms}:
+            return True
+    return False
+
+
+def may_relabel(source, target):
+    query = setools.TERuleQuery(policy, source=source, target=target, tclass=['file', 'dir', 'lnk_file'])
+    for rule in query.results():
+        if str(rule.ruletype) != 'allow':
+            continue
+        if {'relabelfrom', 'relabelto'} & {str(perm) for perm in rule.perms}:
+            return True
+    return False
+
+
+def named_transition(source, name):
+    query = setools.TERuleQuery(policy, ruletype=['type_transition'], source=source,
+                                target='user_home_t', tclass=['file'])
+    for rule in query.results():
+        try:
+            filename = rule.filename
+        except Exception:
+            continue
+        if filename == name:
+            return str(rule.default)
+    return None
+
+
 def can_transition(source, target):
     query = setools.TERuleQuery(policy, source=source, target=target, tclass=['process'])
     for rule in query.results():
@@ -475,9 +594,29 @@ for (source, target), want in sorted(EXPECTED.items()):
 for label in ('protected_agent_config_t', 'claude_config_t', 'gemini_config_t'):
     if not may_associate(label):
         failures.append(f'{label} may not associate with fs_t, so restorecon cannot label it')
-for domain in ('chezmoi_t', 'claude_t', 'agy_t', 'aoe_t'):
+for label in ('codex_config_t',):
+    if not may_associate(label):
+        failures.append(f'{label} may not associate with fs_t, so restorecon cannot label it')
+for domain in ('chezmoi_t', 'claude_t', 'agy_t', 'aoe_t', 'codex_t'):
     if not can_transition(domain, 'rpm_script_t'):
         failures.append(f'{domain} cannot transition to rpm_script_t in compiled policy')
+# The launcher set for codex_t is unconfined_domain_type, which the other agent
+# domains join through dotfiles_agent_domain: a codex exec started by Claude Code
+# or aoe must land in codex_t, not fall back to the launcher's domain.
+for launcher in ('unconfined_t', 'claude_t', 'agy_t', 'aoe_t', 'chezmoi_t'):
+    if not can_transition(launcher, 'codex_t'):
+        failures.append(f'{launcher} cannot transition to codex_t in compiled policy')
+for target in READ_ONLY:
+    if not may_read('codex_t', target):
+        failures.append(f'codex_t cannot read {target}, expected read/getattr/open/map')
+    if may_relabel('codex_t', target):
+        failures.append(f'codex_t may relabel {target}, expected no relabel permission')
+if may_relabel('codex_t', 'codex_config_t'):
+    failures.append('codex_t may relabel codex_config_t, expected relabel to stay with chezmoi_t')
+for (source, name), want in sorted(NAMED_TRANSITIONS.items()):
+    got = named_transition(source, name)
+    if got != want:
+        failures.append(f'{source} creating {name} in user_home_t yields {got or "user_home_t"}, expected {want or "user_home_t"}')
 for line in failures:
     print(f'test-selinux-protected-configs: {line}', file=sys.stderr)
 sys.exit(1 if failures else 0)

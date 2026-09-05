@@ -37,6 +37,14 @@
 .agents/AGENTS.md
 .agents/CLAUDE.md
 
+# Stray empty Codex target. dot_codex/readonly_codex.toml was a 0-byte file
+# that Codex never reads: its configuration lives in ~/.codex/config.toml, which
+# the codex settings reconciler asserts leaf by leaf. Deleting the source
+# stopped managing it but did not delete the already-deployed 0444 copy — prune
+# it here. There is NO gate: dot_codex/ was never ignored on any OS or in
+# containers, so every host received the file, and it holds no live state.
+.codex/codex.toml
+
 # The omp harness was retired: dot_omp/ and the four phase-70 reconcilers are
 # gone, so nothing deploys into ~/.omp/agent any more. Every path below was
 # WRITTEN BY CHEZMOI and is un-written here, one entry per managed target rather

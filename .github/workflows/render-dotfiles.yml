@@ -156,6 +156,7 @@ jobs:
                    "${HOME}/.agents/skills/playwright-cli" \
                    "${HOME}/.agents/skills/daily-report" \
                    "${HOME}/.agents" \
+                   "${HOME}/.codex" \
                    "${HOME}/.omp/agent" \
                    "${HOME}/src" \
                    "${HOME}/.local/bin" \
@@ -172,6 +173,7 @@ jobs:
           : > "${HOME}/.agents/skills/daily-report/prune-canary"
           : > "${HOME}/.agents/AGENTS.md"
           : > "${HOME}/.agents/CLAUDE.md"
+          : > "${HOME}/.codex/codex.toml"
           mkdir -p "${HOME}/.omp/agent/agents" "${HOME}/.omp/agent/rules"
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
@@ -223,6 +225,7 @@ jobs:
           test ! -e "${home}/.agents/skills/playwright-cli"
           test ! -e "${home}/.agents/AGENTS.md"
           test ! -e "${home}/.agents/CLAUDE.md"
+          test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
           test ! -e "${home}/.omp/agent/AGENTS.md"
           test ! -e "${home}/.omp/agent/mcp.json"
@@ -251,6 +254,12 @@ jobs:
           test -f "${home}/.omp/agent/agent.db"
           test -f "${home}/.local/bin/canary-sibling"
           test -f "${home}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
+
+          # Codex harness targets deploy beside the pruned stray file.
+          test -f "${home}/.codex/AGENTS.md"
+          test -L "${home}/.codex/skills"
+          test -f "${home}/.agents/plugins/marketplace.json"
+          test -L "${home}/.agents/plugins/compound-engineering-plugin"
 
           # Container / fact-gated entries must survive in container CI.
           test -f "${home}/src/garden.yaml"
@@ -647,6 +656,7 @@ jobs:
                    "${HOME}/.agents/skills/playwright-cli" \
                    "${HOME}/.agents/skills/daily-report" \
                    "${HOME}/.agents" \
+                   "${HOME}/.codex" \
                    "${HOME}/.omp/agent" \
                    "${HOME}/src" \
                    "${HOME}/.local/bin" \
@@ -663,6 +673,7 @@ jobs:
           : > "${HOME}/.agents/skills/daily-report/prune-canary"
           : > "${HOME}/.agents/AGENTS.md"
           : > "${HOME}/.agents/CLAUDE.md"
+          : > "${HOME}/.codex/codex.toml"
           mkdir -p "${HOME}/.omp/agent/agents" "${HOME}/.omp/agent/rules"
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
@@ -712,6 +723,7 @@ jobs:
           test ! -e "${home}/.agents/skills/playwright-cli"
           test ! -e "${home}/.agents/AGENTS.md"
           test ! -e "${home}/.agents/CLAUDE.md"
+          test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
           test ! -e "${home}/.omp/agent/AGENTS.md"
           test ! -e "${home}/.omp/agent/mcp.json"
@@ -742,6 +754,12 @@ jobs:
           test -f "${home}/.omp/agent/agent.db"
           test -f "${home}/.local/bin/canary-sibling"
           test -f "${home}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
+
+          # Codex harness targets deploy beside the pruned stray file.
+          test -f "${home}/.codex/AGENTS.md"
+          test -L "${home}/.codex/skills"
+          test -f "${home}/.agents/plugins/marketplace.json"
+          test -L "${home}/.agents/plugins/compound-engineering-plugin"
 
           # ydotool is Linux-gated: macOS is not Linux, so it must survive.
           test -f "${home}/.config/systemd/user/ydotool.service"
@@ -786,7 +804,16 @@ jobs:
           mkdir -p "${scratch}/target" "${out}"
           : > "${scratch}/empty.toml"
 
-          export scratch out
+          # This job staged the applied HOME under _artifacts/ inside the
+          # workspace, and chezmoi reads its whole source tree: a dangling
+          # symlink in that staged copy fails every render. Render from a
+          # copy that leaves _artifacts/ out.
+          source_copy="${scratch}/source"
+          mkdir -p "${source_copy}"
+          tar -C "${GITHUB_WORKSPACE}" --exclude=./_artifacts --exclude=./.git -cf - . | \
+            tar -C "${source_copy}" -xf -
+
+          export scratch out source_copy
           num_procs=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 
           find .chezmoiscripts .chezmoiexternals -type f -print0 | \
@@ -799,7 +826,7 @@ jobs:
                 mkdir -p "${worker_scratch}/target"
                 : > "${worker_scratch}/empty.toml"
                 if chezmoi --config "${worker_scratch}/empty.toml" \
-                    --source "'"${GITHUB_WORKSPACE}"'" \
+                    --source "${source_copy}" \
                     --destination "${worker_scratch}/target" \
                     execute-template < "${f}" > "${dest}" 2> "${worker_scratch}/render.stderr"; then
                   :
@@ -833,7 +860,7 @@ jobs:
           test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
           test ! -e "${reconciler}"
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
-            --source "${GITHUB_WORKSPACE}" \
+            --source "${RUNNER_TEMP}/scratch/source" \
             --destination "${RUNNER_TEMP}/scratch/target" \
             execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
           ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"

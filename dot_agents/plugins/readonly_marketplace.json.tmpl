@@ -1,0 +1,23 @@
+{{- /* ~/.agents/plugins/marketplace.json — the Codex personal plugin marketplace.
+
+       Codex discovers this file without registration and requires every local
+       plugin path to be `./`-relative. Each eligible agents.codex.plugins row
+       becomes one entry whose path is `./<registry key>`; the matching
+       symlink_<registry key>.tmpl source beside this file carries the absolute
+       archive path, so the version segment never appears here. */ -}}
+{{- $ctx := . -}}
+{{- $name := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" . "caller" "marketplace.json") -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}
+{{- $plugins := list -}}
+{{- if ne $rows "" -}}
+{{-   range $line := splitList "\n" $rows -}}
+{{-     $fields := splitList "\t" (printf "%v" (fromJson (trim $line))) -}}
+{{-     $plugin := dict
+          "name" (index $fields 0)
+          "source" (dict "source" "local" "path" (printf "./%s" (index $fields 1)))
+          "policy" (dict "installation" "AVAILABLE" "authentication" "ON_INSTALL")
+          "category" "Coding" -}}
+{{-     $plugins = append $plugins $plugin -}}
+{{-   end -}}
+{{- end -}}
+{{ dict "name" $name "interface" (dict "displayName" (printf "%s (chezmoi-managed)" $name)) "plugins" $plugins | toPrettyJson }}

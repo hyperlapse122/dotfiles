@@ -2,22 +2,24 @@
 ; dotfiles_protected_agent_configs.cil
 ; SELinux Policy Module for protecting user-scope agent, skill, and MCP configs
 ;
-; THREE OBJECT TYPES, ONE WRITER RULE EACH.
+; FOUR OBJECT TYPES, ONE WRITER RULE EACH.
 ;   protected_agent_config_t  chezmoi writes; every other domain only reads.
-;   claude_config_t           chezmoi and Claude Code write; everyone reads.
+;   claude_config_t           chezmoi, Claude Code and aoe write; everyone reads.
 ;   gemini_config_t           chezmoi and Antigravity write; everyone reads.
+;   codex_config_t            chezmoi and Codex write; everyone reads.
 ;
-; WHY THE SPLIT. ~/.claude and ~/.gemini configuration surfaces (skills, MCP
-; configs, hooks, and plugin manifests/marketplaces) are LIVE state their own
-; harness rewrites during ordinary use — the enabled-plugin set, marketplace
-; registries, OAuth credentials — so a chezmoi-only writer would break the very
-; tool the label protects. Each harness therefore gets a domain of its own,
-; which is also what makes the boundary meaningful in the other direction:
-; Claude Code cannot write ~/.gemini, and Antigravity cannot write ~/.claude.
-; Non-config runtime state (caches, sessions, transcripts, SQLite dbs) is left
-; on user_home_t to prevent hardlink label leaks into global caches.
+; WHY THE SPLIT. ~/.claude, ~/.gemini and ~/.codex configuration surfaces
+; (skills, MCP configs, hooks, and plugin manifests/marketplaces) are LIVE state
+; their own harness rewrites during ordinary use — the enabled-plugin set,
+; marketplace registries, project trust, OAuth credentials — so a chezmoi-only
+; writer would break the very tool the label protects. Each harness therefore
+; gets a domain of its own, which is also what makes the boundary meaningful in
+; the other direction: Claude Code cannot write ~/.gemini or ~/.codex,
+; Antigravity cannot write ~/.claude or ~/.codex, and Codex cannot write either
+; of the others. Non-config runtime state (caches, sessions, transcripts, SQLite
+; dbs) is left on user_home_t to prevent hardlink label leaks into global caches.
 ; protected_agent_config_t keeps its original chezmoi-only meaning for the paths
-; no harness owns: the canonical ~/.agents skills and plugins roots, and codex.
+; no harness owns: the canonical ~/.agents skills and plugins roots.
 ;
 ; THE PROTECTED TYPES MUST NOT CARRY THE file_type ATTRIBUTE. This is the whole
 ; enforcement mechanism, and it is the one line a future edit must never "fix"
@@ -34,8 +36,8 @@
 ; is what makes these types unreachable from the base policy, so the rules below
 ; are the complete access set for them.
 ;
-; The three domains still hold files_unconfined_type themselves. That grant is
-; scoped to file_type objects, which these three types are not, so each harness
+; The agent domains still hold files_unconfined_type themselves. That grant is
+; scoped to file_type objects, which these four types are not, so each harness
 ; keeps its ordinary access to the rest of the filesystem — project trees, /tmp,
 ; caches — while the config split above stays enforced.
 ;
@@ -63,7 +65,7 @@
 ; ~/.claude.json and ~/.mcp.json when Claude Code creates them by that name, and
 ; the apply script's restorecon repairs a rename that got past it.
 ;
-; WHY THE CALLER SET IS unconfined_domain_type. These three binaries ran as
+; WHY THE CALLER SET IS unconfined_domain_type. These binaries ran as
 ; unconfined_t before this module existed and must keep launching from wherever
 ; they launch from today — a login shell, a chezmoi script, another agent, an
 ; IDE helper. Naming one source domain would leave every other unconfined
@@ -76,36 +78,48 @@
 (type protected_agent_config_t)
 (type claude_config_t)
 (type gemini_config_t)
+(type codex_config_t)
 (roletype object_r protected_agent_config_t)
 (roletype object_r claude_config_t)
 (roletype object_r gemini_config_t)
+(roletype object_r codex_config_t)
 
 (typeattribute protected_agent_config_type)
-(typeattributeset protected_agent_config_type (protected_agent_config_t claude_config_t gemini_config_t))
+(typeattributeset protected_agent_config_type (protected_agent_config_t claude_config_t gemini_config_t codex_config_t))
 
 ; --- Management domains and their entrypoints -------------------------------
 (type chezmoi_t)
 (type claude_t)
 (type agy_t)
 (type aoe_t)
+(type codex_t)
 (roletype unconfined_r chezmoi_t)
 (roletype unconfined_r claude_t)
 (roletype unconfined_r agy_t)
 (roletype unconfined_r aoe_t)
+(roletype unconfined_r codex_t)
 
 (type chezmoi_exec_t)
 (type claude_exec_t)
 (type agy_exec_t)
 (type aoe_exec_t)
+(type codex_exec_t)
 (roletype object_r chezmoi_exec_t)
 (roletype object_r claude_exec_t)
 (roletype object_r agy_exec_t)
 (roletype object_r aoe_exec_t)
+(roletype object_r codex_exec_t)
 
 (typeattribute dotfiles_agent_domain)
-(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t aoe_t))
+(typeattributeset dotfiles_agent_domain (chezmoi_t claude_t agy_t aoe_t codex_t))
 (typeattribute dotfiles_agent_exec)
-(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t aoe_exec_t))
+(typeattributeset dotfiles_agent_exec (chezmoi_exec_t claude_exec_t agy_exec_t aoe_exec_t codex_exec_t))
+; The domains that write ~/.claude/settings.json. Narrower than
+; dotfiles_agent_domain on purpose: a named transition sourced from the wide
+; attribute would also fire for codex_t, and a Codex-created project
+; .vscode/settings.json would be stamped with a type Codex cannot write.
+(typeattribute claude_config_writer)
+(typeattributeset claude_config_writer (claude_t aoe_t))
 (typeattributeset file_type (dotfiles_agent_exec))
 (typeattributeset exec_type (dotfiles_agent_exec))
 
@@ -114,6 +128,7 @@
 (typetransition unconfined_domain_type claude_exec_t process claude_t)
 (typetransition unconfined_domain_type agy_exec_t process agy_t)
 (typetransition unconfined_domain_type aoe_exec_t process aoe_t)
+(typetransition unconfined_domain_type codex_exec_t process codex_t)
 
 ; Execute the entrypoint and enter the domain. execute_no_trans keeps a launcher
 ; this module never transitioned from failing open — it runs the binary in its
@@ -126,6 +141,7 @@
 (allow claude_t claude_exec_t (file (entrypoint read getattr execute open map)))
 (allow agy_t agy_exec_t (file (entrypoint read getattr execute open map)))
 (allow aoe_t aoe_exec_t (file (entrypoint read getattr execute open map)))
+(allow codex_t codex_exec_t (file (entrypoint read getattr execute open map)))
 
 ; --- Process inheritance and lifecycle --------------------------------------
 (allow dotfiles_agent_domain unconfined_t (process (sigchld signull sigkill signal)))
@@ -160,7 +176,7 @@
 ; Inherit base domain and unconfined permissions. Every one of these attributes
 ; is one unconfined_t already carries, so a harness that moves into its own
 ; domain keeps exactly the privileges it had before this module existed. None of
-; them reaches the three protected types, which carry no attribute at all.
+; them reaches the four protected types, which carry no attribute at all.
 (typeattributeset domain (dotfiles_agent_domain))
 (typeattributeset application_domain_type (dotfiles_agent_domain))
 (typeattributeset unconfined_domain_type (dotfiles_agent_domain))
@@ -217,6 +233,11 @@
 (allow agy_t gemini_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
 (allow agy_t gemini_config_t (lnk_file (create read getattr setattr unlink rename)))
 
+; Codex manages its own configuration and nothing else's.
+(allow codex_t codex_config_t (file (create read write getattr setattr unlink rename open append lock map ioctl link execute execute_no_trans watch watch_reads)))
+(allow codex_t codex_config_t (dir (create read write getattr setattr unlink rename open search add_name remove_name reparent rmdir lock ioctl watch watch_reads)))
+(allow codex_t codex_config_t (lnk_file (create read getattr setattr unlink rename)))
+
 ; Every user domain — including each harness on the other harness's tree —
 ; reads, traverses, maps, executes and watches, and does nothing else.
 (allow unconfined_domain_type protected_agent_config_type (file (read getattr open map ioctl lock execute execute_no_trans watch watch_reads)))
@@ -241,18 +262,25 @@
 (allow protected_agent_config_type noxattrfs (filesystem (associate)))
 
 ; A flat $HOME file Claude Code creates by name keeps its label without waiting
-; for the next restorecon.
+; for the next restorecon. The settings.json pair is sourced from
+; claude_config_writer, not dotfiles_agent_domain: the name is also a project
+; file (.vscode/settings.json) and every checkout is user_home_t, so only the
+; domains that may write claude_config_t may stamp it.
+; There is deliberately NO such rule for ~/.codex/config.toml. ~/.codex is
+; user_home_t, and so is a project's .codex/config.toml under ~/src; a name
+; transition would capture that file too and lock git and editors out of it.
+; Durability for the home copy comes from restorecon and the reclaim sweep.
 (typetransition claude_t user_home_t file ".claude.json" claude_config_t)
 (typetransition claude_t user_home_t file ".mcp.json" claude_config_t)
-(typetransition dotfiles_agent_domain user_home_t file "settings.json" claude_config_t)
-(typetransition dotfiles_agent_domain user_home_t file "settings.json.lock" claude_config_t)
+(typetransition claude_config_writer user_home_t file "settings.json" claude_config_t)
+(typetransition claude_config_writer user_home_t file "settings.json.lock" claude_config_t)
 
 ; The same durability problem on the other side: the command store keys its
 ; directory by version, so an upgrade writes the binary into a directory that
 ; has never been relabelled, and a new file inherits its parent's type. The
 ; filecon below matches any version, but it only takes effect when restorecon
-; runs — and restorecon runs when the POLICY changes, not when claude or agy
-; does. Without these the upgraded binary would be unlabelled, the transition
+; runs — and restorecon runs when the POLICY changes, not when claude, agy or
+; codex does. Without these the upgraded binary would be unlabelled, the transition
 ; would not fire, and the harness would silently drop back to unconfined_t with
 ; its own config now denied to it. Only chezmoi_t creates these files, and only
 ; under the home type that holds ~/.local/lib, so the name cannot be captured
@@ -260,17 +288,23 @@
 (typetransition chezmoi_t gconf_home_t file "claude" claude_exec_t)
 (typetransition chezmoi_t gconf_home_t file "agy" agy_exec_t)
 (typetransition chezmoi_t gconf_home_t file "aoe" aoe_exec_t)
+; The codex tokscale wrapper's store file is named codex-wrapper and is not
+; matched here on purpose: it runs in its launcher's domain, so tokscale, mise
+; and node never enter codex_t, and the transition fires only on the real binary.
+(typetransition chezmoi_t gconf_home_t file "codex" codex_exec_t)
 
 ; --- File Context Specifications (filecon) ----------------------------------
 ; Neutral, chezmoi-only: no harness rewrites these during ordinary use.
-(filecon "HOME_DIR/\.codex/config\.toml" file (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
-(filecon "HOME_DIR/\.codex/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.agents/skills(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
 (filecon "HOME_DIR/\.agents/plugins(/.*)?" any (unconfined_u object_r protected_agent_config_t ((s0)(s0))))
+; Codex: chezmoi and codex. Narrowed to config.toml and the skills symlink.
+; Runtime state (~/.codex/sessions, logs, sqlite) falls back to user_home_t.
+(filecon "HOME_DIR/\.codex/config\.toml" file (unconfined_u object_r codex_config_t ((s0)(s0))))
+(filecon "HOME_DIR/\.codex/skills" symlink (unconfined_u object_r codex_config_t ((s0)(s0))))
 ; Claude Code: chezmoi and claude. Narrowed to skills, MCP/hooks, and plugin state.
 ; Everything else in ~/.claude (cache, sessions, projects, history, backups, etc.)
 ; falls back to user_home_t.
-; The ~/.claude/skills and ~/.gemini/skills symlinks land in their harness's type,
+; The ~/.claude/skills, ~/.gemini/skills and ~/.codex/skills symlinks land in their harness's type,
 ; but they RESOLVE into ~/.agents/skills, which stays chezmoi-only — so the canonical
 ; skills root is still not writable through a harness.
 (filecon "HOME_DIR/\.claude\.json.*" file (unconfined_u object_r claude_config_t ((s0)(s0))))
@@ -297,3 +331,7 @@
 (filecon "HOME_DIR/\.local/bin/agy" file (unconfined_u object_r agy_exec_t ((s0)(s0))))
 (filecon "HOME_DIR/\.local/lib/commands/store/aoe/[^/]+/aoe" file (unconfined_u object_r aoe_exec_t ((s0)(s0))))
 (filecon "HOME_DIR/\.local/bin/aoe" file (unconfined_u object_r aoe_exec_t ((s0)(s0))))
+; codex has no ~/.local/bin spec: that name is a symlink to the wrapper, and the
+; wrapper store (store/codex-wrapper) must stay unlabelled so it runs in its
+; launcher's domain.
+(filecon "HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex" file (unconfined_u object_r codex_exec_t ((s0)(s0))))
