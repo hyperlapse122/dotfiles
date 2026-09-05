@@ -1,0 +1,118 @@
+{{- $settings := .agents.codex.settings -}}
+{{- includeTemplate "codex-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
+{{- /* One declared object from two owners. agents.codex.settings owns scalar
+   leaves: each dotted path is expanded into nested tables here, because the
+   reconciler overlays a nested object, not dotted keys. agents.mcp.servers owns
+   each declared mcp_servers.<name> table, mapped from the neutral inventory into
+   Codex's shape -- no `type` discriminator (a ~/.mcp.json shape Codex does not
+   use) and `http_headers`, not `headers`. op:// header values are resolved at
+   render time exactly as private_readonly_dot_mcp.json.tmpl resolves them. */ -}}
+{{- $declared := dict -}}
+{{- range $path, $value := $settings -}}
+{{-   $segments := splitList "." $path -}}
+{{-   $last := sub (len $segments) 1 -}}
+{{-   $node := $declared -}}
+{{-   range $i, $segment := $segments -}}
+{{-     if eq $i $last -}}
+{{-       $_ := set $node $segment $value -}}
+{{-     else -}}
+{{-       if not (hasKey $node $segment) -}}{{- $_ := set $node $segment dict -}}{{- end -}}
+{{-       $node = index $node $segment -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $servers := dict -}}
+{{- range includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "codex") | fromJson -}}
+{{-   $entry := dict -}}
+{{-   if eq .transport "stdio" -}}
+{{-     $entry = set $entry "command" .command -}}
+{{-     $entry = set $entry "args" .args -}}
+{{-     if hasKey . "env" -}}
+{{-       $entry = set $entry "env" .env -}}
+{{-     end -}}
+{{-   else -}}
+{{-     $entry = set $entry "url" .url -}}
+{{-     if hasKey . "headers" -}}
+{{-       $entry = set $entry "http_headers" (includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson) -}}
+{{-     end -}}
+{{-   end -}}
+{{-   $servers = set $servers .name $entry -}}
+{{- end -}}
+{{- if gt (len $servers) 0 -}}
+{{-   $declared = set $declared "mcp_servers" $servers -}}
+{{- end -}}
+{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# Asserts the declared Codex config.toml content into the live ~/.codex/config.toml
+# on every apply: the scalar leaves of agents.codex.settings and one
+# mcp_servers.<name> table per codex-eligible server in agents.mcp.servers.
+#
+# config.toml is deliberately NOT a chezmoi target: Codex writes project trust
+# decisions, hook state, plugin and marketplace records, and `codex mcp add`
+# results into it during ordinary use. A managed-readonly target would fight all
+# of those. run_after rather than run_onchange because a live vendor edit does not
+# change a chezmoi source fingerprint, so an onchange script would not re-assert a
+# declared value the tool overwrote until the DATA changed.
+#
+# Ownership split: agents.codex.settings owns scalar leaves; agents.mcp.servers
+# owns each declared mcp_servers.<name> table; Codex owns projects, hooks, plugins,
+# marketplaces, and every undeclared mcp_servers.* entry. The reconciler's
+# recursive overlay touches only declared keys, so a hand-added [mcp_servers.foo]
+# and every [projects."..."] table survive. Removing a server from the inventory,
+# or removing a leaf from the declaration, stops the assertion but restores and
+# prunes nothing. Codex-owned prefixes are rejected at render time by
+# codex-settings-validate.tmpl, not merely avoided by convention.
+#
+# Label lifecycle: the reconciler writes through a temp file and a rename, which
+# carries away the file's SELinux label. The label is restored here on every apply
+# and a failure to do so is reported, never swallowed: during an unlabelled window
+# every unconfined process of the user may write the file. An orphaned reconciler
+# temp file would hold resolved 1Password header values, so stale ones are removed
+# before the write.
+set -euo pipefail
+
+{{ if eq (len $declared) 0 -}}
+printf '%s\n' 'config-codex-settings: agents.codex.settings declares no leaf and no server is eligible for codex; nothing to assert.' >&2
+exit 0
+{{- else -}}
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+RECONCILER="${RECONCILER:-$HOME/.local/bin/settings-reconcile}"
+if [[ ! -x "$RECONCILER" ]]; then
+  printf '%s\n' 'config-codex-settings: settings-reconcile is unavailable; run chezmoi apply --force after fixing its build.' >&2
+  exit 1
+fi
+contracts="$("$RECONCILER" contracts)"
+[[ "$contracts" == *'"settings":"settings-reconcile/v1"'* ]] || {
+  printf '%s\n' 'config-codex-settings: installed reconciler has an incompatible settings contract.' >&2
+  exit 1
+}
+if [[ -d "$CODEX_HOME" ]]; then
+  find "$CODEX_HOME" -maxdepth 1 -type f -name '.config.toml.*.tmp' -delete
+fi
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-codex-settings"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
+config="$(mktemp "$scratch/config.XXXXXX.json")"
+cleanup() { rm -f -- "$config"; }
+trap cleanup EXIT
+chmod 0600 "$config"
+cat >"$config" <<'JSON'
+{{ $declared | toPrettyJson | trim }}
+JSON
+"$RECONCILER" settings "$CODEX_HOME" config.toml "$config"
+
+target="$CODEX_HOME/config.toml"
+if command -v restorecon >/dev/null 2>&1; then
+  if ! restorecon -F "$target" 2>/dev/null; then
+    printf 'config-codex-settings: could not restore the SELinux label of %s; until the next apply any unconfined process may write it.\n' "$target" >&2
+  else
+    context="$(stat -c %C "$target" 2>/dev/null || printf '?')"
+    if [[ $context != *:codex_config_t:* ]]; then
+      printf 'config-codex-settings: %s carries the SELinux context %s, not codex_config_t; check that the dotfiles policy module is installed.\n' "$target" "$context" >&2
+    fi
+  fi
+elif [[ -e /sys/fs/selinux/enforce ]]; then
+  printf 'config-codex-settings: restorecon is unavailable on this SELinux host; the label of %s was not restored.\n' "$target" >&2
+fi
+{{- end }}
+{{- end }}
