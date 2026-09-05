@@ -292,11 +292,12 @@ The source-only trees are also excluded from taplo formatting via
 
 ## Managed agent harnesses
 
-This repository manages **Claude Code** (`claude`) and **Google Antigravity CLI** (`agy`).
+This repository manages **Claude Code** (`claude`), **Google Antigravity CLI** (`agy`), and **OpenAI Codex CLI** (`codex`).
 
 - **Single source of truth:** `.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
-- **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time.
-- **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills` and `~/.gemini/skills` pointing to `~/.agents/skills`.
+- **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time, and asserts the same servers into `~/.codex/config.toml`.
+- **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills`, `~/.gemini/skills`, and `~/.codex/skills` pointing to `~/.agents/skills`.
+- **Codex headless metering:** `~/.local/bin/codex` is a wrapper that routes `codex exec` through tokscale and passes every other subcommand to the real binary at `~/.local/bin/codex-bin`.
 - **SELinux Type Enforcement:** On Fedora, `system/linux/selinux/dotfiles_protected_agent_configs.cil` enforces read-open / write-locked security (`unconfined_t` has full read-only access while writes and deletes are strictly restricted to `chezmoi_t`).
 The following cleanup is optional. Remove only the listed Figma data if the
 retired harnesses are no longer in use:
@@ -321,22 +322,25 @@ omp's Figma credential store is retired too; its revocation is ordered
 separately in [`docs/decommission/omp.md`](docs/decommission/omp.md), which reads
 the client id out of the database before deleting it.
 
-## Host cleanup (one-time, this host)
+## Host steps for the Codex harness (one-time)
 
-Claude Code and Codex are now unmanaged. chezmoi does not prune retired
-targets — deleting a source stops management but leaves deployed files in
-place — so on hosts where the retired harnesses are no longer wanted, remove:
+Claude Code and Codex are managed again. Three steps stay with the operator:
 
-- `~/.claude/` and `~/.codex/` — deployed configuration trees.
-- `~/.local/bin/claude` and `~/.local/bin/codex` — the installed CLI
-  binaries and symlinks (and any claude/codex shims under `~/.local/bin/`).
-- `~/.local/share/claude/versions/` and `~/.codex/packages/standalone/` —
-  downloaded external payloads.
-- `~/.local/share/claude-plugins/` and `~/.local/share/codex-plugins/` —
-  deployed plugin trees.
+- If `~/.codex/skills` is a real directory (for example one holding a hand-installed
+  skill), move its contents into `~/.agents/skills/` and remove the directory before
+  the first apply, so chezmoi can place the symlink.
+- On Fedora, run the apply from a plain shell: the SELinux policy reinstall strands
+  running `claude`, `agy`, `aoe`, and `codex` processes in `unconfined_t`, and the
+  apply script lists the ones to re-exec.
+- After the first apply, run `codex plugin --help` and one `codex plugin add` by
+  hand, then check the audit log for denials on `protected_agent_config_t` before
+  trusting the reconciler. `codex mcp list` and `codex mcp get` print resolved
+  header values; do not paste their output into issues or pull requests.
 
-Fresh hosts never receive the retired harnesses. Do not add a `.chezmoiremove`
-entry for these paths.
+`.chezmoiremove` prunes the stray `~/.codex/codex.toml` that an earlier source
+deployed; nothing else under `~/.codex` is touched by removal. Old payloads under
+`~/.codex/packages/standalone/` and `~/.local/share/codex-plugins/` are not used
+by the command store and may be deleted by hand.
 
 ## License
 
