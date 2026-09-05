@@ -38,7 +38,7 @@ chmod 0700 "$neg_bin/op"
 
 render() {
   env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-    chezmoi --config "$render_config" --source "$repo_root" execute-template "$@"
+    chezmoi --config "$render_config" --source "$repo_root" execute-template
 }
 
 # The reconciler under test. RECONCILER wins when set; a provisioned host has the
