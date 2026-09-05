@@ -87,6 +87,19 @@ commands:
         - name: codex-bin
           relPath: codex
 
+    codex-wrapper:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux, macos]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_codex
+      commands:
+        - name: codex
+          relPath: codex-wrapper
+      legacy:
+        path: .local/bin/codex
+
     ast-grep:
       producer: external
       safetyProfile: native-single-file

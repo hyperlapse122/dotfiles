@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# `codex exec` is the headless entrypoint, so only it runs under tokscale for usage metering.
+# The real binary is resolved through the public `codex-bin` link, never through PATH: `codex` on
+# PATH is this wrapper, and the store's internal `current/` layout belongs to command-reconcile.
+
+set -euo pipefail
+
+link="$HOME/.local/bin/codex-bin"
+if ! real="$(readlink -f -- "$link")" || [[ ! -x "$real" ]]; then
+  printf 'codex: real binary link %s is missing or does not resolve\n' "$link" >&2
+  exit 127
+fi
+
+if [[ ${1-} == exec ]]; then
+  PATH="${real%/*}:$PATH" exec tokscale headless codex "$@"
+fi
+
+exec "$real" "$@"
