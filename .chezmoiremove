@@ -151,13 +151,13 @@ src/garden.yaml
 # dot_local/share/omp-plugins/plugins/unmanaged-repo-guard/ no longer has a
 # source. Deleting that source stopped chezmoi managing the tree but left the
 # already-deployed copy behind — prune it here. A directory entry removes the
-# tree recursively and leaves the sibling plugins/mxm4-haptic and the
-# .omp-plugin/marketplace.json catalog root untouched.
+# tree recursively and leaves the .omp-plugin/marketplace.json catalog root
+# untouched.
 #
-# There is NO container gate: .chezmoiignore narrowed the container skip to
-# plugins/mxm4-haptic only, so containers received the guard tree too and must
-# prune it. Every managed OS received it as well, so no host class is exempt
-# and a gate would only create one that never converges. A host that never
+# There is NO container gate: the container skip never covered the guard tree,
+# so containers received it too and must prune it. Every managed OS received it
+# as well, so no host class is exempt and a gate would only create one that
+# never converges. A host that never
 # applied between the guard's introduction and its removal simply takes this
 # as a no-op.
 #

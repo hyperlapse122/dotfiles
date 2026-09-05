@@ -3,8 +3,7 @@ facts-validate.tmpl — fail the apply LOUDLY on a bad fact reference.
 
 Two independent checks, both of which abort the whole chezmoi command (`fail`)
 rather than let a fact silently evaluate false — the same rule the /etc
-installer's unknown-`gate:` abort has always enforced, and the same shape as the
-unknown-waveform guard in the mxm4-haptic hooks manifest:
+installer's unknown-`gate:` abort has always enforced:
 
   1. REGISTRY <-> PROBE PARITY (runs on every call, no arguments needed).
      Every name in .chezmoidata/facts.yaml (factRegistry) must be emitted by

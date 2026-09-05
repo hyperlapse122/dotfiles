@@ -546,24 +546,6 @@ commands:
       legacy:
         path: .local/bin/settings-reconcile
 
-    mxm4-haptic:
-      producer: build
-      safetyProfile: multi-file
-      proofEligible: false
-      mode: "0755"
-      platforms: [linux, macos]
-      gate: "!container"
-      fingerprintGlobs:
-        - crates/mxm4-haptic/Cargo.toml
-        - crates/mxm4-haptic/Cargo.lock
-        - crates/mxm4-haptic/src/**
-      commands:
-        - name: mxm4-hapticd
-        - name: mxm4-haptic
-        - name: mxm4-haptic-notify
-          platforms: [linux]
-      legacy:
-        path: .local/bin/mxm4-haptic
     codegraph:
       producer: existingTree
       safetyProfile: multi-file

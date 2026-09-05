@@ -6,7 +6,7 @@ name: Render dotfiles
 #   * Fedora         — a slim container image (`apply` / `render-internals`).
 #   * macOS          — a native `macos-26` arm64 runner (`apply-macos`); a
 #                      container cannot provide a `darwin` chezmoi, and darwin-only
-#                      templates (e.g. the mxm4-haptic build) render only here.
+#                      templates render only here.
 #
 # Two independent artifacts are produced per OS:
 #   1. rendered-files-<os>     — the dotfiles `chezmoi apply --init` writes into
@@ -587,9 +587,9 @@ jobs:
   # Task 4: macOS — real `chezmoi apply --init` + internals render on a native
   # runner. A container image can't carry a darwin chezmoi, and the darwin
   # `.chezmoiignore` branch (keep `./Library`, drop `./system`) plus every
-  # darwin-only template (e.g. the mxm4-haptic build) only render here. Produces
-  # the same rendered-files-macos / rendered-internals-macos pair as the Linux
-  # matrix so the shellcheck job also lints the darwin variant of each script.
+  # darwin-only template only render here. Produces the same
+  # rendered-files-macos / rendered-internals-macos pair as the Linux matrix so
+  # the shellcheck job also lints the darwin variant of each script.
   #
   # No real 1Password: a PATH-local dummy `op` (identical behaviour to the Linux
   # stub) satisfies op_ready() and onepassword*; a dummy `mise` on PATH makes the

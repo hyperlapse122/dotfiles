@@ -42,8 +42,8 @@
 #   value : the value. Validated at RENDER time against `type` (an unparseable
 #           value, an unknown type, an empty field, a colon, or a shell
 #           metacharacter fails the apply loudly, naming the row) — the same
-#           "bad data aborts, never silently misbehaves" rule the haptic waveform
-#           table and the system.yaml gates follow.
+#           "bad data aborts, never silently misbehaves" rule the system.yaml
+#           gates follow.
 #
 #           The runner always emits `--` before the value, so a negative int
 #           (`DimDisplayIdleTimeoutSec: -1`) is not parsed as a flag.

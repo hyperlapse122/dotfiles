@@ -117,11 +117,6 @@
 ./crates
 ./packages
 
-# The mxm4-haptic Claude Code / Codex plugins pulse the cross-platform
-# mxm4-hapticd daemon (Linux hidraw, macOS IOKit), so the deployed trees ship
-# on every desktop OS. The POSIX hook wrapper covers Linux/macOS. Containers
-# still skip the trees below (no MX Master 4 inside a container).
-
 {{- if $f.jetson }}
 .chezmoiscripts/50-linux-kde/*.sh
 {{- end }}
@@ -137,7 +132,7 @@
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
 # container, deploy the CLI dotfiles only and skip all host provisioning:
 # package installs, /etc system config, GPG/GitHub/Tailscale auth, fonts,
-# KDE/GNOME settings, pro-audio realtime provisioning, and the MX Master haptic build.
+# KDE/GNOME settings, and pro-audio realtime provisioning.
 #
 # distrobox and toolbox are the OPT-OUT: both bind-mount the host $HOME and both
 # create /run/.toolboxenv (distrobox touches it for toolbx compatibility), so an
