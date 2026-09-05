@@ -129,7 +129,7 @@ printf -- '---\nname: demo\n---\n' >"$market/skills/demo/SKILL.md"
 # personal marketplace manifest and the registry-key symlink onto the archive.
 mkdir -p "$home/.agents/plugins"
 cat >"$home/.agents/plugins/marketplace.json" <<'EOF'
-{"name":"dotfiles","plugins":[{"name":"compound-engineering","source":{"source":"local","path":"./compound-engineering-plugin"}}]}
+{"name":"dotfiles","plugins":[{"name":"compound-engineering","source":{"source":"local","path":"./.agents/plugins/compound-engineering-plugin"}}]}
 EOF
 ln -s "$market" "$home/.agents/plugins/compound-engineering-plugin"
 
@@ -208,11 +208,11 @@ esac
 EOF
 chmod 0700 "$bin/agy"
 
-# The Codex stub reproduces the two lifecycle facts the script is written against:
-# `plugin add` on an already-installed plugin exits non-zero and names that state
-# on stderr, and every install rewrites ~/.codex/config.toml. The install record
-# lives under CODEX_STATE so a run never touches the marketplace tree, which Codex
-# must not write to.
+# The Codex stub reproduces the two lifecycle facts the script is written against,
+# both verified against codex-cli 0.153.4: `plugin add` on an already-installed
+# plugin re-asserts the install and exits 0, and every install rewrites
+# ~/.codex/config.toml. The install record lives under CODEX_STATE so a run never
+# touches the marketplace tree, which Codex must not write to.
 cat >"$bin/codex" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -222,10 +222,6 @@ case "${1-} ${2-}" in
   "plugin add")
     id=$3
     [[ -z ${CODEX_ADD_FAILS:-} ]] || { printf 'simulated add failure: %s\n' "$id" >&2; exit 1; }
-    if [[ -e $CODEX_STATE/${id%@*} ]]; then
-      printf 'Error: plugin %s is already installed\n' "$id" >&2
-      exit 1
-    fi
     : >"$CODEX_STATE/${id%@*}"
     mkdir -p "$HOME/.codex"
     : >>"$HOME/.codex/config.toml"
@@ -402,9 +398,9 @@ grep -Fx "restorecon -F $home/.codex/config.toml" "$codex_calls" >/dev/null ||
   $(grep -n "restorecon -F $home/.codex/config.toml" "$codex_calls" | head -1 | cut -d: -f1) ]] ||
   fail 'Codex reconcile restored the config.toml label before the last plugin add'
 
-# The re-run hits `plugin add` on an already-installed plugin. Tolerating exactly
-# that message keeps a converged apply green without swallowing a genuine
-# install failure.
+# The re-run hits `plugin add` on an already-installed plugin, which Codex treats
+# as a successful re-assert, so a converged apply stays green while a genuine
+# install failure below still fails the run.
 : >"$codex_calls"
 run_codex >"$scratch/codex-2.out" 2>&1 || {
   cat "$scratch/codex-2.out" >&2
@@ -479,13 +475,17 @@ render <"$marketplace_tmpl" >"$scratch/marketplace.json" 2>"$scratch/marketplace
 jq -e . "$scratch/marketplace.json" >/dev/null || fail 'rendered marketplace.json is not valid JSON'
 [[ $(jq -r '.name' "$scratch/marketplace.json") == dotfiles ]] ||
   fail 'rendered marketplace.json does not name the dotfiles personal marketplace'
+# Codex resolves a `./`-relative plugin path against $HOME, not against this
+# manifest's own directory, so the path has to spell out ~/.agents/plugins. An
+# absolute path is not an alternative: Codex drops such an entry and then reports
+# the plugin as missing from the marketplace.
 [[ $(jq -r '.plugins[] | select(.name == "compound-engineering") | .source.path' "$scratch/marketplace.json") == \
-  './compound-engineering-plugin' ]] ||
-  fail 'rendered marketplace.json does not map compound-engineering onto ./compound-engineering-plugin'
+  './.agents/plugins/compound-engineering-plugin' ]] ||
+  fail 'rendered marketplace.json does not map compound-engineering onto ./.agents/plugins/compound-engineering-plugin'
 [[ $(jq -r '.plugins[] | select(.name == "compound-engineering") | .source.source' "$scratch/marketplace.json") == local ]] ||
   fail 'rendered marketplace.json plugin source is not local'
-[[ $(jq -r '[.plugins[].source.path | select(startswith("./") | not)] | length' "$scratch/marketplace.json") -eq 0 ]] ||
-  fail 'rendered marketplace.json carries a plugin path that is not ./-relative'
+[[ $(jq -r '[.plugins[].source.path | select(startswith("./.agents/plugins/") | not)] | length' "$scratch/marketplace.json") -eq 0 ]] ||
+  fail 'rendered marketplace.json carries a plugin path that is not relative to $HOME/.agents/plugins'
 ! grep -F "$HOME" "$scratch/marketplace.json" >/dev/null ||
   fail 'rendered marketplace.json leaks the absolute home path'
 
