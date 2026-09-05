@@ -31,12 +31,14 @@ command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is required on PATH'
 
 desktop_installer='.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl'
 hardware_installer='.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl'
+udev_installer='.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl'
 
 mkdir -p "$scratch/source" "$scratch/target" "$scratch/cache/chezmoi" "$scratch/bin" "$scratch/home"
 cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/system" "$scratch/source/"
 mkdir -p "$scratch/source/.chezmoiscripts/30-linux"
 cp -a "$repo_root/$desktop_installer" "$scratch/source/$desktop_installer"
 cp -a "$repo_root/$hardware_installer" "$scratch/source/$hardware_installer"
+cp -a "$repo_root/$udev_installer" "$scratch/source/$udev_installer"
 printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
@@ -73,22 +75,17 @@ render() {
 # actually takes is the REMOVED_GATES entry beside its REMOVED_PATHS entry. The
 # hardware loop interleaves a REMOVED_DISTROS array; only the two named arrays
 # are read, so the extra one is skipped.
-removal_gate() {
-  local drop_in=$1
-  awk -v want="$drop_in" '
-    /^REMOVED_PATHS\+=\(/ { gsub(/^REMOVED_PATHS\+=\("|"\)$/, ""); path = $0; next }
-    /^REMOVED_GATES\+=\(/ { gsub(/^REMOVED_GATES\+=\("|"\)$/, ""); if (path == want) { print; exit } }
+array_entry_for() {
+  local paths=$1 values=$2 want=$3
+  awk -v paths="$paths" -v values="$values" -v want="$want" '
+    $0 ~ "^" paths "\\+=\\(" { sub("^" paths "\\+=\\(\"", ""); sub("\"\\)$", ""); path = $0; next }
+    $0 ~ "^" values "\\+=\\(" { sub("^" values "\\+=\\(\"", ""); sub("\"\\)$", ""); if (path == want) { print; exit } }
   ' "$scratch/rendered.sh"
 }
+removal_gate() { array_entry_for REMOVED_PATHS REMOVED_GATES "$1"; }
 
 # The install loop's gate for one managed file, from the rendered override arrays.
-override_gate() {
-  local rel=$1
-  awk -v want="$rel" '
-    /^override_patterns\+=\(/ { gsub(/^override_patterns\+=\("|"\)$/, ""); path = $0; next }
-    /^override_gates\+=\(/ { gsub(/^override_gates\+=\("|"\)$/, ""); if (path == want) { print; exit } }
-  ' "$scratch/rendered.sh"
-}
+override_gate() { array_entry_for override_patterns override_gates "$1"; }
 
 # Runs the rendered removal loop against a destination seeded with one drop-in
 # and reports whether that drop-in survived. The whole installer needs root, so
@@ -113,6 +110,26 @@ removal_removes() {
   printf 'SUDO=()\n%s' "$(cat "$scratch/removal.sh")" >"$scratch/removal.run.sh"
   bash "$scratch/removal.run.sh" >/dev/null 2>&1 || fail 'the extracted removal loop did not run'
   [[ ! -e "$dest$drop_in" ]]
+}
+
+# Runs the rendered udev install loop against a scratch destination and prints
+# its output. `install -D` is redirected into the destination; SRC_ROOT already
+# points at the fixture's system/linux copy, so the loop reads real rule files.
+udev_install_output() {
+  local dest="$scratch/dest"
+  rm -rf -- "$dest"
+  mkdir -p "$dest"
+  {
+    sed -n '/^  FACT_/p' "$scratch/rendered.sh"
+    printf 'DEST=%q\nSRC_ROOT=%q\nshopt -s globstar nullglob\n' "$dest" "$scratch/source/system/linux"
+    awk '/^gate_ok\(\) \{$/, /^\}$/' "$scratch/rendered.sh"
+    awk '/^fact_gate\(\) \{$/, /^\}$/' "$scratch/rendered.sh"
+    awk '/^override_patterns=\(\)$/, /^done$/' "$scratch/rendered.sh"
+  } >"$scratch/install.sh"
+  sed -i 's|"\${SUDO\[@\]}" install -D -m 644 "$src" "$dst"|install -D -m 644 "$src" "${DEST}${dst}"|' \
+    "$scratch/install.sh"
+  printf 'SUDO=()\n%s' "$(cat "$scratch/install.sh")" >"$scratch/install.run.sh"
+  bash "$scratch/install.run.sh" 2>/dev/null || fail 'the extracted udev install loop did not run'
 }
 
 breeze_drop_in='/etc/sddm.conf.d/90-breeze.conf'
@@ -236,5 +253,79 @@ grep -qx '  FACT_NVIDIA_HYBRID_DRIVER=1' "$scratch/rendered.sh" ||
 [[ "$(override_gate 'etc/modprobe.d/nvidia-hybrid-modeset.conf')" == 'nvidiaHybridDriver' ]] ||
   fail "the hybrid modeset drop-in installs on $(override_gate 'etc/modprobe.d/nvidia-hybrid-modeset.conf'), not on nvidiaHybridDriver"
 pass 'an Ampere hybrid host keeps both hybrid drop-ins and installs them'
+
+# --- Pascal hybrid host: the blacklist installs on integratedOnly -----------
+write_cache 'gpuDeviceId: "1d34"' 'hybridGraphics: true'
+render "$hardware_installer"
+[[ "$(override_gate 'etc/modprobe.d/nvidia-integrated-only.conf')" == 'integratedOnly' ]] ||
+  fail "the driver blacklist installs on $(override_gate 'etc/modprobe.d/nvidia-integrated-only.conf'), not on integratedOnly"
+pass 'the driver blacklist installs on integratedOnly'
+
+# ============================================================================
+# Reversal: a hybrid host that keeps its driver again retires the blacklist and
+# the power-off rule. The gate is the POSITIVE complement fact, so an unknown
+# host removes nothing.
+blacklist='/etc/modprobe.d/nvidia-integrated-only.conf'
+blacklist_content='blacklist nvidia'
+power_rule='/etc/udev/rules.d/80-nvidia-integrated-only.rules'
+power_rule_content='ACTION=="add", SUBSYSTEM=="pci", ATTR{power/control}="auto"'
+
+write_cache 'gpuDeviceId: "2487"' 'hybridGraphics: true'
+render "$hardware_installer"
+[[ "$(removal_gate "$blacklist")" == 'nvidiaHybridDriver' ]] ||
+  fail "the driver blacklist retirement is gated on $(removal_gate "$blacklist"), not on nvidiaHybridDriver"
+removal_removes "$blacklist" "$blacklist_content" ||
+  fail 'an Ampere hybrid host did not retire the driver blacklist'
+render "$udev_installer"
+[[ "$(removal_gate "$power_rule")" == 'nvidiaHybridDriver' ]] ||
+  fail "the power-off rule retirement is gated on $(removal_gate "$power_rule"), not on nvidiaHybridDriver"
+removal_removes "$power_rule" "$power_rule_content" ||
+  fail 'an Ampere hybrid host did not retire the power-off rule'
+pass 'an Ampere hybrid host retires the blacklist and the power-off rule'
+
+write_cache 'gpuDeviceId: "2487"'
+render "$hardware_installer"
+if removal_removes "$blacklist" "$blacklist_content"; then
+  fail 'an unresolved hybridGraphics fact REMOVED the driver blacklist; an unknown fact must skip, never act'
+fi
+render "$udev_installer"
+if removal_removes "$power_rule" "$power_rule_content"; then
+  fail 'an unresolved hybridGraphics fact REMOVED the power-off rule; an unknown fact must skip, never act'
+fi
+pass 'an unresolved hybridGraphics fact keeps the blacklist and the power-off rule'
+
+write_cache 'gpuDeviceId: "1d34"' 'hybridGraphics: true'
+render "$hardware_installer"
+if removal_removes "$blacklist" "$blacklist_content"; then
+  fail 'a Pascal hybrid host REMOVED its own driver blacklist'
+fi
+pass 'a Pascal hybrid host keeps the driver blacklist'
+
+# ============================================================================
+# udev installer: the power-off rule installs only where integratedOnly holds;
+# every other rule file keeps the unconditional path.
+write_cache 'gpuDeviceId: "1d34"' 'hybridGraphics: true'
+render "$udev_installer"
+[[ "$(override_gate 'etc/udev/rules.d/80-nvidia-integrated-only.rules')" == 'integratedOnly' ]] ||
+  fail "the power-off rule installs on $(override_gate 'etc/udev/rules.d/80-nvidia-integrated-only.rules'), not on integratedOnly"
+out=$(udev_install_output)
+[[ -f "$scratch/dest$power_rule" ]] ||
+  fail 'a Pascal hybrid host did not install the power-off rule'
+grep -q 'skipped: gate' <<<"$out" &&
+  fail 'a Pascal hybrid host skipped a udev rule file'
+pass 'a Pascal hybrid host installs the power-off rule'
+
+write_cache 'gpuDeviceId: "2487"' 'hybridGraphics: true'
+render "$udev_installer"
+out=$(udev_install_output)
+[[ ! -e "$scratch/dest$power_rule" ]] ||
+  fail 'an Ampere hybrid host installed the power-off rule'
+grep -q -- "-- $power_rule (skipped: gate integratedOnly failed)" <<<"$out" ||
+  fail 'an Ampere hybrid host did not print the gate skip for the power-off rule'
+other_rules=$(find "$scratch/source/system/linux/etc/udev/rules.d" -type f ! -name '80-nvidia-integrated-only.rules' | wc -l)
+installed=$(find "$scratch/dest/etc/udev/rules.d" -type f | wc -l)
+[[ "$installed" -eq "$other_rules" ]] ||
+  fail "an Ampere hybrid host installed $installed udev rule files, expected $other_rules"
+pass 'an Ampere hybrid host skips the power-off rule and installs every other rule'
 
 printf 'system-removed-gates: all removal-gate assertions passed\n'

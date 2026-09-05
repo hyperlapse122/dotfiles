@@ -31,7 +31,13 @@ override_gates+=({{ get . "gate" | default "" | quote }})
 {{-     $gates = append $gates $gate -}}
 {{-   end -}}
 {{- end -}}
-{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (udev.overrides)" "gates" $gates) -}}
+{{- range .system.linux.udev.removed -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (udev.overrides and udev.removed)" "gates" $gates) -}}
 
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
 gate_ok() {
@@ -63,11 +69,20 @@ for src in "${udev_files[@]}"; do
   "${SUDO[@]}" install -D -m 644 "$src" "$dst"
 done
 
+# A retirement entry may carry a gate. An empty gate is unconditional; a gate
+# that fails skips the removal, so an unknown host removes nothing.
 REMOVED_PATHS=()
+REMOVED_GATES=()
 {{ range .system.linux.udev.removed -}}
 REMOVED_PATHS+=({{ .path | quote }})
+REMOVED_GATES+=({{ get . "gate" | default "" | quote }})
 {{ end }}
-for dst in "${REMOVED_PATHS[@]}"; do
+for i in "${!REMOVED_PATHS[@]}"; do
+  dst="${REMOVED_PATHS[$i]}"
+  gate="${REMOVED_GATES[$i]}"
+  if [[ -n "$gate" ]] && ! gate_ok "$gate"; then
+    continue
+  fi
   if [[ -e "$dst" || -L "$dst" ]]; then
     printf '  -> removing %s\n' "$dst"
     "${SUDO[@]}" rm -f "$dst"

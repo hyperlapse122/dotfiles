@@ -75,6 +75,11 @@ system:
         - path: /etc/udev/rules.d/80-uinput.rules
         - path: /etc/udev/rules.d/logitech-receiver.rules
         - path: /etc/udev/rules.d/70-uinput-solaar.rules
+        # The power-off rule retires where a hybrid host keeps its driver again
+        # (the policy row was removed). A POSITIVE fact gates it: an unknown host
+        # resolves it false and removes nothing.
+        - path: /etc/udev/rules.d/80-nvidia-integrated-only.rules
+          gate: nvidiaHybridDriver
 
     hardware:
       overrides:
@@ -105,6 +110,10 @@ system:
           gate: integratedOnly
         - path: /etc/modprobe.d/nvidia-hybrid-modeset.conf
           gate: integratedOnly
+        # The blacklist retires on the reverse transition, when a hybrid host
+        # keeps its driver again, so a reinstalled stack can load.
+        - path: /etc/modprobe.d/nvidia-integrated-only.conf
+          gate: nvidiaHybridDriver
 
     # Sleep policy is a laptop concern, gated on the battery fact. Its own
     # subsystem rather than a passenger on the hibernation-storage installer,

@@ -50,9 +50,10 @@ nvidia:
   #
   # Pascal is here because its legacy driver reports "Runtime D3 status: Not
   # supported", so the hybrid power-management options never suspend the card
-  # and the laptop pays for a GPU nothing uses. Removing the row restores the
-  # driver stack on the next apply; the installed packages must then be put back
-  # by hand, the reverse of the documented one-time removal.
+  # and the laptop pays for a GPU nothing uses. Removing the row reverses the
+  # policy on the next apply: the blacklist and udev rule are retired and the
+  # hybrid drop-ins return; the packages must then be put back by hand, the
+  # reverse of the documented one-time removal.
   integratedOnlyArchitectures:
     - pascal
 

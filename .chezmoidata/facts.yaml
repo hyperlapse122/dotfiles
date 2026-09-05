@@ -223,13 +223,16 @@ factRegistry:
       bus — what an Optimus-style laptop looks like. Hook-probed for the same reason
       the vendor walk is: /sys/bus/pci/devices/* is a directory of symlinks.
     gates: >-
-      The driver module options that let a laptop's discrete GPU suspend and enter
-      runtime power management, and the render-offload defaults that keep it idle
-      until an application asks for it.
+      Nothing directly in the manifest. It is one input of the two template facts
+      integratedOnly and nvidiaHybridDriver, which own the hybrid drop-ins, the
+      driver blacklist, and the udev power-off rule; the NVIDIA installer reads it
+      as $FACT_HYBRID_GRAPHICS to enable the driver's sleep units.
     whenFalse: >-
-      Neither drop-in is installed. A desktop with a single discrete card must not
-      receive them — offloading to an integrated GPU it does not have would be a
-      broken display, so absent-means-skip is the only safe direction.
+      Both derived facts resolve false, so no hybrid drop-in, blacklist, or udev rule
+      is installed or retired, and the sleep units stay disabled. A desktop with a
+      single discrete card must not receive the hybrid options — offloading to an
+      integrated GPU it does not have would be a broken display, so absent-means-skip
+      is the only safe direction.
   integratedOnly:
     type: bool
     probe: template

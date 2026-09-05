@@ -34,6 +34,8 @@ Dotfiles never removes packages. A host that already carried the stack when the 
 
 Run these on the affected host after `chezmoi apply` has reported the integrated-only skip. The 580xx branch is the one a Pascal host installed.
 
+Do not reboot between the apply and step 1. The installed package ships `nvidia-fallback.service`, which runs an explicit `modprobe nouveau` when the proprietary module is absent. The blacklist dotfiles installed also carries `install nouveau /bin/false`, which makes that explicit load fail, but the package's own udev rule and unit stay active until the removal, so keep the window short.
+
 1. Remove the packages and their dependents.
 
    ```sh
@@ -95,4 +97,4 @@ Suspend and resume once more and repeat the `runtime_status` reads. Both must re
 
 ## Reversal
 
-Remove the architecture from `integratedOnlyArchitectures`, apply, and reinstall the branch packages the installer names. The MOK certificate has to be enrolled again on the next boot; the installer handles that.
+Remove the architecture from `integratedOnlyArchitectures` and apply. The host resolves `nvidiaHybridDriver` again, so the same apply retires `/etc/modprobe.d/nvidia-integrated-only.conf` and `/etc/udev/rules.d/80-nvidia-integrated-only.rules` and reinstalls the two hybrid drop-ins. Then reinstall the branch packages the installer names and run `sudo dracut -f` so the initramfs drops the blacklist. The MOK certificate has to be enrolled again on the next boot; the installer handles that.

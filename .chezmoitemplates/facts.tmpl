@@ -268,7 +268,8 @@ Three rules hold this file together:
    integratedOnly, so a host is never installed and retired on the same run. */ -}}
 {{- $integratedOnly := false -}}
 {{- $hybridGraphics := index $facts "hybridGraphics" -}}
-{{- if and (ne $gpuArch "") (kindIs "bool" $hybridGraphics) $hybridGraphics -}}
+{{- $hybridOn := and (kindIs "bool" $hybridGraphics) $hybridGraphics -}}
+{{- if and (ne $gpuArch "") $hybridOn -}}
 {{-   if and .nvidia (hasKey .nvidia "integratedOnlyArchitectures") -}}
 {{-     if has $gpuArch .nvidia.integratedOnlyArchitectures -}}
 {{-       $integratedOnly = true -}}
@@ -277,7 +278,7 @@ Three rules hold this file together:
 {{- end -}}
 {{- $_ := set $facts "integratedOnly" $integratedOnly -}}
 {{- $nvidiaHybridDriver := false -}}
-{{- if and (kindIs "bool" $hybridGraphics) $hybridGraphics (not $integratedOnly) -}}
+{{- if and $hybridOn (not $integratedOnly) -}}
 {{-   $nvidiaHybridDriver = true -}}
 {{- end -}}
 {{- $_ := set $facts "nvidiaHybridDriver" $nvidiaHybridDriver -}}
