@@ -28,12 +28,25 @@ fail() { printf 'agent instructions: %s\n' "$*" >&2; exit 1; }
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 wrapper=dot_claude/readonly_CLAUDE.md.tmpl
+peer_wrappers=(dot_gemini/readonly_AGENTS.md.tmpl dot_codex/readonly_AGENTS.md.tmpl)
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$wrapper"
+for peer in "${peer_wrappers[@]}"; do
+  require_file "$repo_root" "$scratch" "$chezmoi_bin" "$peer"
+done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
 
 rendered="$scratch/AGENTS.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$rendered"
 [[ -s $rendered ]] || fail 'wrapper rendered empty'
+
+# Every harness wrapper is a one-line include of the same core, so the deployed
+# instruction files must be byte-identical; a wrapper that adds or drops text
+# would split the harnesses' instruction sets without changing the core.
+for peer in "${peer_wrappers[@]}"; do
+  peer_rendered="$scratch/$(basename "$(dirname "$peer")").md"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$peer" "$peer_rendered"
+  cmp -s "$rendered" "$peer_rendered" || fail "$peer render differs from $wrapper render"
+done
 
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
