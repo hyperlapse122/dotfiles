@@ -107,6 +107,9 @@ agents:
     # and verbose are deliberately absent for that reason. hooks, enabledPlugins and
     # extraKnownMarketplaces belong to other writers and are rejected at render time.
     #
+    # model is declared on purpose. The claude-opus-5 effort stays declared because
+    # fast mode runs on Opus.
+    #
     # env.DISABLE_AUTOUPDATER is what pins the updater off on macOS, where
     # dot_config/environment.d/ is not deployed; that file carries the same value for
     # Linux. The binary is pinned in .chezmoidata/releases.json and a version bump
@@ -115,6 +118,8 @@ agents:
     settings:
       language: Korean
       skipDangerousModePermissionPrompt: true
+      model: claude-fable-5-1[1m]
+      modelSettings.claude-fable-5-1.effortLevel: medium
       modelSettings.claude-opus-5.effortLevel: high
       inputNeededNotifEnabled: true
       agentPushNotifEnabled: true
