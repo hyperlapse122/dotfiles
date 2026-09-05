@@ -1,16 +1,7 @@
 {{- $ctx := . -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
 {{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
-{{- if not (hasKey .agents.codex "personalMarketplace") -}}
-{{-   fail "update-codex-plugins: agents.codex.personalMarketplace is not declared" -}}
-{{- end -}}
-{{- $personal := index .agents.codex "personalMarketplace" -}}
-{{- if not (kindIs "string" $personal) -}}
-{{-   fail (printf "update-codex-plugins: agents.codex.personalMarketplace must be a string, got %T" $personal) -}}
-{{- end -}}
-{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" $personal) -}}
-{{-   fail (printf "update-codex-plugins: agents.codex.personalMarketplace %q has an invalid name" $personal) -}}
-{{- end -}}
+{{- $personal := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" . "caller" "update-codex-plugins") -}}
 {{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}
 {{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "pluginsRemoved") -}}
 #!/usr/bin/env bash

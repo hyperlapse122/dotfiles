@@ -6,19 +6,7 @@
        symlink_<registry key>.tmpl source beside this file carries the absolute
        archive path, so the version segment never appears here. */ -}}
 {{- $ctx := . -}}
-{{- if not (hasKey .agents "codex") -}}
-{{-   fail "marketplace.json: agents.codex is not declared" -}}
-{{- end -}}
-{{- if not (hasKey .agents.codex "personalMarketplace") -}}
-{{-   fail "marketplace.json: agents.codex.personalMarketplace is not declared" -}}
-{{- end -}}
-{{- $name := index .agents.codex "personalMarketplace" -}}
-{{- if not (kindIs "string" $name) -}}
-{{-   fail (printf "marketplace.json: agents.codex.personalMarketplace must be a string, got %T" $name) -}}
-{{- end -}}
-{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" $name) -}}
-{{-   fail (printf "marketplace.json: agents.codex.personalMarketplace %q has an invalid name" $name) -}}
-{{- end -}}
+{{- $name := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" . "caller" "marketplace.json") -}}
 {{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}
 {{- $plugins := list -}}
 {{- if ne $rows "" -}}
