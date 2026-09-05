@@ -1,0 +1,35 @@
+{{- /* ~/.agents/plugins/marketplace.json — the Codex personal plugin marketplace.
+
+       Codex discovers this file without registration and requires every local
+       plugin path to be `./`-relative. Each eligible agents.codex.plugins row
+       becomes one entry whose path is `./<registry key>`; the matching
+       symlink_<registry key>.tmpl source beside this file carries the absolute
+       archive path, so the version segment never appears here. */ -}}
+{{- $ctx := . -}}
+{{- if not (hasKey .agents "codex") -}}
+{{-   fail "marketplace.json: agents.codex is not declared" -}}
+{{- end -}}
+{{- if not (hasKey .agents.codex "personalMarketplace") -}}
+{{-   fail "marketplace.json: agents.codex.personalMarketplace is not declared" -}}
+{{- end -}}
+{{- $name := index .agents.codex "personalMarketplace" -}}
+{{- if not (kindIs "string" $name) -}}
+{{-   fail (printf "marketplace.json: agents.codex.personalMarketplace must be a string, got %T" $name) -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" $name) -}}
+{{-   fail (printf "marketplace.json: agents.codex.personalMarketplace %q has an invalid name" $name) -}}
+{{- end -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}
+{{- $plugins := list -}}
+{{- if ne $rows "" -}}
+{{-   range $line := splitList "\n" $rows -}}
+{{-     $fields := splitList "\t" (printf "%v" (fromJson (trim $line))) -}}
+{{-     $plugin := dict
+          "name" (index $fields 0)
+          "source" (dict "source" "local" "path" (printf "./%s" (index $fields 1)))
+          "policy" (dict "installation" "AVAILABLE" "authentication" "ON_INSTALL")
+          "category" "Coding" -}}
+{{-     $plugins = append $plugins $plugin -}}
+{{-   end -}}
+{{- end -}}
+{{ dict "name" $name "interface" (dict "displayName" (printf "%s (chezmoi-managed)" $name)) "plugins" $plugins | toPrettyJson }}

@@ -1,0 +1,114 @@
+{{- $ctx := . -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
+{{- if not (hasKey .agents.codex "personalMarketplace") -}}
+{{-   fail "update-codex-plugins: agents.codex.personalMarketplace is not declared" -}}
+{{- end -}}
+{{- $personal := index .agents.codex "personalMarketplace" -}}
+{{- if not (kindIs "string" $personal) -}}
+{{-   fail (printf "update-codex-plugins: agents.codex.personalMarketplace must be a string, got %T" $personal) -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" $personal) -}}
+{{-   fail (printf "update-codex-plugins: agents.codex.personalMarketplace %q has an invalid name" $personal) -}}
+{{- end -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}
+{{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "pluginsRemoved") -}}
+#!/usr/bin/env bash
+# Reconciles every eligible agents.codex.plugins row into Codex.
+#
+# Codex discovers the chezmoi-owned personal marketplace at
+# ~/.agents/plugins/marketplace.json without registration. Each entry points at
+# ./<registry key>, a symlink beside the manifest whose target is the pinned
+# archive, so a version bump moves the symlink and this script only has to
+# (re)assert the install. Codex records the installed set in ~/.codex/config.toml.
+#
+# The whole eligible set is a render-time constant, so an empty set renders a
+# notice and no loop at all rather than a runtime branch over an empty array.
+set -euo pipefail
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$HOME/.local/sbin:"*) ;;
+  *) PATH="$HOME/.local/sbin:$PATH" ;;
+esac
+export PATH
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $fingerprintInputs) }}
+{{- if and (eq $rows "") (eq $removedRows "") }}
+printf 'update-codex-plugins: %s\n' 'no eligible plugins or removals are declared for this host'
+{{- else }}
+PERSONAL_MARKETPLACE={{ $personal | quote }}
+MARKETPLACE_ROOT="$HOME/.agents/plugins"
+# UNVERIFIED against the codex binary: the stderr text `codex plugin add` prints
+# for a plugin that is already installed. The first host run must confirm it
+# (run the rendered script twice and read the second run's output) and correct
+# this value if Codex words it differently.
+CODEX_ALREADY_INSTALLED='already installed'
+{{- if ne $rows "" }}
+
+PLUGINS=(
+{{ $rows }}
+)
+{{- end }}
+{{- if ne $removedRows "" }}
+PLUGINS_REMOVED=(
+{{ $removedRows }}
+)
+{{- end }}
+
+die() { printf 'update-codex-plugins: %s\n' "$*" >&2; exit 1; }
+
+[[ -n ${HOME:-} && -d $HOME ]] || die 'preflight: HOME is not a directory'
+command -v codex >/dev/null 2>&1 || die 'preflight: codex is not on PATH'
+[[ -f $MARKETPLACE_ROOT/marketplace.json ]] ||
+  die "preflight: personal marketplace manifest is missing: $MARKETPLACE_ROOT/marketplace.json"
+
+# ~/.agents/plugins is created by this apply after 00-selinux-policies ran its
+# restorecon over $HOME, so the directory still carries whatever label its
+# creation inherited. Relabel it here so Codex reads it under the protected type
+# the policy assigns; a host without restorecon has no label to repair.
+if command -v restorecon >/dev/null 2>&1; then
+  restorecon -RF "$HOME/.agents/plugins" 2>/dev/null || true
+fi
+{{- if ne $removedRows "" }}
+
+# Removals run first and stay best-effort: removing a plugin that is already
+# gone is the converged state this loop wants. UNVERIFIED against the codex
+# binary: the removal subcommand name; confirm with `codex plugin --help`.
+for row in "${PLUGINS_REMOVED[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market <<<"$row"
+  codex plugin remove "${name}@${PERSONAL_MARKETPLACE}" >/dev/null 2>&1 || true
+done
+{{- end }}
+{{- if ne $rows "" }}
+
+# Preflight every row before the first mutation: a half-applied set would leave
+# Codex pointing at a marketplace entry it cannot read.
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  [[ -d $source ]] || die "preflight: $kind marketplace $market is missing: $source"
+  [[ -f $source/.codex-plugin/plugin.json ]] ||
+    die "preflight: $kind marketplace $market has no Codex plugin manifest: $source/.codex-plugin/plugin.json"
+  link="$MARKETPLACE_ROOT/$market"
+  [[ -L $link ]] || die "preflight: personal marketplace entry is not a symlink: $link"
+  [[ $(readlink "$link") == "$source" ]] ||
+    die "preflight: personal marketplace entry $link does not point at $source"
+done
+
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  id="${name}@${PERSONAL_MARKETPLACE}"
+  if ! add_output=$(codex plugin add "$id" 2>&1); then
+    case $add_output in
+      *"$CODEX_ALREADY_INSTALLED"*) ;;
+      *) printf '%s\n' "$add_output" >&2; die "plugin add failed for $id" ;;
+    esac
+  fi
+done
+{{- end }}
+{{- end }}
