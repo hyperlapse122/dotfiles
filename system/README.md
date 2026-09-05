@@ -79,7 +79,8 @@ system/linux/etc/locale.conf
 | `etc/dconf/` | GDM greeter password-only (`gdm` gate): profile override adding `system-db:gdm` + `gdm.d` keyfile/lock disabling `enable-fingerprint-authentication`, so the login keyring always unlocks; the user-session lock screen keeps fingerprint. Compiled by the installer's `dconf update` |
 | `etc/libinput/local-overrides.quirks` | mark the keyd virtual keyboard as an internal keyboard |
 | `etc/locale.conf` | system locale (`ko_KR.UTF-8`) |
-| `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable; ThinkPad-only `thinkpad_acpi` (no `fan_control` — retired, nothing managed consumed it); `hybridGraphics`-gated `nvidia-hybrid-modeset.conf` / `nvidia-hybrid-power.conf` (PRIME KMS and discrete-GPU runtime power management) |
+| `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable; ThinkPad-only `thinkpad_acpi` (no `fan_control` — retired, nothing managed consumed it); `nvidiaHybridDriver`-gated `nvidia-hybrid-modeset.conf` / `nvidia-hybrid-power.conf` (PRIME KMS and discrete-GPU runtime power management), retired where `integratedOnly` holds |
+| `etc/modprobe.d/nvidia-integrated-only.conf` | `integratedOnly`-gated blacklist of the NVIDIA, nouveau and `nova_core` drivers, so the discrete GPU stays driverless and PCI runtime PM can power it off |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreezeUsable` installs it only where the theme is present **and** the host runs SDDM, and `sddmBreezeRetirable` retires it from every host with a KNOWN display manager it is not usable on — an unknown display manager removes nothing |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
@@ -87,6 +88,7 @@ system/linux/etc/locale.conf
 | `etc/systemd/sleep.conf.d/` | laptop sleep policy (`battery` gate): `suspend-then-hibernate`, reusing the swapfile and resume path `install-system-26-swap-hibernate` provisions |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
 | `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
+| `etc/udev/rules.d/80-nvidia-integrated-only.rules` | `integratedOnly`-gated: sets `power/control=auto` on the driverless discrete NVIDIA GPU so its root port enters D3cold; the device stays enumerated |
 
 ## The modular install-system script set (30-linux)
 
@@ -98,8 +100,8 @@ scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
 | `run_onchange_after_install-system-10-desktop.sh.tmpl` | locale, SDDM theme drop-in, GDM dconf override + `dconf update` | desktop files or desktop manifest section change |
 | `run_onchange_after_install-system-12-sudoers.sh.tmpl` | password-less sudoers drop-in (mode `0440`, `visudo` check) | `etc/sudoers.d/*` files change |
 | `run_onchange_after_install-system-14-sysctl.sh.tmpl` | sysctl drop-ins + `sysctl --system` reload | `etc/sysctl.d/*` files change |
-| `run_onchange_after_install-system-16-udev.sh.tmpl` | udev rules, libinput quirks, removed rules + `udevadm control --reload` | `etc/udev/rules.d/*` or `libinput/*` files change |
-| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config, `hybridGraphics`-gated NVIDIA hybrid-graphics module options + `modprobe thinkpad_acpi` | modprobe/modules-load files change |
+| `run_onchange_after_install-system-16-udev.sh.tmpl` | udev rules (manifest `udev.overrides` gates), libinput quirks, removed rules + `udevadm control --reload` | `etc/udev/rules.d/*` or `libinput/*` files change |
+| `run_onchange_after_install-system-18-hardware.sh.tmpl` | ThinkPad module config, `nvidiaHybridDriver`-gated NVIDIA hybrid-graphics module options, `integratedOnly`-gated driver blacklist and gated retirement of the hybrid drop-ins + `modprobe thinkpad_acpi` | modprobe/modules-load files change |
 | `run_onchange_after_install-system-20-bluetooth.sh.tmpl` | BlueZ config, autosuspend + `systemctl restart bluetooth` | `etc/bluetooth/*` files change |
 | `run_onchange_after_install-system-22-host.sh.tmpl` | user lingering, rootful podman socket mask | its own content changes |
 | `run_onchange_after_install-system-24-keyd.sh.tmpl` | keyd hardware probe, package install, config generation | keyd keyboards data or quirks file change |

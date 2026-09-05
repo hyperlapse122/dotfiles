@@ -362,4 +362,88 @@ for unit in nvidia-suspend.service nvidia-resume.service nvidia-hibernate.servic
   fi
 done
 
-printf 'Fedora NVIDIA repository policy smoke passed (both driver branches).\n'
+# --- Integrated-only skip ---------------------------------------------------
+#
+# A hybrid host whose GPU architecture is declared integrated-only gets no NVIDIA
+# stack at all: main() must test FACT_INTEGRATED_ONLY before any branch resolves,
+# and the declared skip must return before the package, service, and MOK steps.
+main_body=$(awk '/^main\(\) \{$/ { inside = 1 } inside { print } inside && /^\}$/ { exit }' \
+  "${rendered_installer}")
+[[ -n "${main_body}" ]] || fail 'rendered Fedora installer is missing main'
+integrated_test=$(grep -n 'FACT_INTEGRATED_ONLY' <<<"${main_body}" | cut -d: -f1 | head -1 || true)
+branch_call=$(grep -n 'resolve_nvidia_branch' <<<"${main_body}" | cut -d: -f1 | head -1 || true)
+[[ -n "${integrated_test}" ]] || fail 'main does not test FACT_INTEGRATED_ONLY'
+[[ -n "${branch_call}" ]] || fail 'main does not call resolve_nvidia_branch'
+if ((integrated_test >= branch_call)); then
+  fail 'main must test FACT_INTEGRATED_ONLY before it calls resolve_nvidia_branch'
+fi
+grep -Fq 'site=nvidia-integrated-only form=skip_step direction=harmless' <<<"${main_body}" ||
+  fail 'main does not declare the nvidia-integrated-only skip_step as harmless'
+
+cat > "${scratch}/bin/mokutil" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+printf '%s\n' "$*" >> "${MOKUTIL_LOG:?}"
+exit 0
+EOF
+chmod 0755 "${scratch}/bin/mokutil"
+
+report_body=$(awk '/^report_(unlisted_gpu|integrated_only)\(\) \{$/ { inside = 1 } inside { print } inside && /^\}$/ { inside = 0 }' \
+  "${rendered_installer}")
+
+# The step functions main() calls are replaced by stand-ins that make the same
+# privileged calls the real steps make, so the stub logs show whether main()
+# reached a step at all. The branch policy region is the real one.
+run_main() {
+  local integrated=$1 arch=$2
+  : > "${scratch}/dnf.log"
+  : > "${scratch}/systemctl.log"
+  : > "${scratch}/mokutil.log"
+  env HOME="${scratch}/home" XDG_STATE_HOME="${scratch}/home/state" \
+    PATH="${scratch}/bin:${PATH}" DNF_LOG="${scratch}/dnf.log" \
+    SYSTEMCTL_LOG="${scratch}/systemctl.log" MOKUTIL_LOG="${scratch}/mokutil.log" \
+    DNF_HAS_RPMFUSION=1 RPM_INSTALLED='' \
+    FACT_INTEGRATED_ONLY="${integrated}" FACT_GPU_ARCH="${arch}" FACT_GPU_DEVICE_ID='' \
+    bash -c '
+      set -uo pipefail
+      DNF=(dnf)
+      SUDO=()
+      '"$(cat "${scratch}/policy.sh")"'
+      '"${report_body}"'
+      install_nvidia_packages() { dnf install "${nvidia_packages[@]}"; }
+      configure_nvidia_support() { :; }
+      enroll_dkms_mok() { mokutil --import /var/lib/dkms/mok.pub; }
+      build_akmod_modules() { :; }
+      enable_nvidia_services() { systemctl enable nvidia-persistenced; }
+      '"${main_body}"'
+      main
+    ' 2>&1
+}
+
+integrated_out=$(run_main 1 pascal)
+grep -Fq 'install-nvidia-fedora: the GPU architecture of this hybrid host is declared integrated-only' <<<"${integrated_out}" ||
+  { printf 'an integrated-only host did not declare the skip. got:\n%s\n' "${integrated_out}"; exit 1; }
+grep -Fq 'docs/solutions/integration-issues/fedora-pascal-hybrid-integrated-only-stack-removal.md' <<<"${integrated_out}" ||
+  { printf 'an integrated-only host did not print the stack removal runbook path. got:\n%s\n' "${integrated_out}"; exit 1; }
+for log in dnf systemctl mokutil; do
+  if [[ -s "${scratch}/${log}.log" ]]; then
+    printf 'an integrated-only host must make no %s call. log:\n' "${log}"
+    cat "${scratch}/${log}.log"
+    exit 1
+  fi
+done
+
+# The same architecture without the policy still takes the legacy branch through
+# every step, which is what proves the stand-ins observe a reached step.
+driver_out=$(run_main 0 pascal)
+if grep -Fq 'integrated-only' <<<"${driver_out}"; then
+  fail 'a host outside the integrated-only policy must not declare the integrated-only skip'
+fi
+grep -q 'install .*akmod-nvidia-580xx' "${scratch}/dnf.log" ||
+  { printf 'a pascal host outside the policy did not reach the legacy package install. log:\n'; cat "${scratch}/dnf.log"; exit 1; }
+grep -Fxq 'enable nvidia-persistenced' "${scratch}/systemctl.log" ||
+  fail 'a pascal host outside the policy did not reach service enablement'
+grep -Fq -- '--import' "${scratch}/mokutil.log" ||
+  fail 'a pascal host outside the policy did not reach MOK enrollment'
+
+printf 'Fedora NVIDIA repository policy smoke passed (both driver branches and the integrated-only skip).\n'

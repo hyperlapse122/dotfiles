@@ -6,7 +6,7 @@ set -euo pipefail
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/modprobe.d/thinkpad_acpi.conf" "system/linux/etc/modules-load.d/thinkpad_acpi.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-power.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-modeset.conf")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/modprobe.d/thinkpad_acpi.conf" "system/linux/etc/modules-load.d/thinkpad_acpi.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-power.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-modeset.conf" "system/linux/etc/modprobe.d/nvidia-integrated-only.conf")) }}
 SRC_ROOT="{{ $sourceDir }}/system/linux"
 
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
@@ -19,6 +19,8 @@ override_patterns+=({{ .path | quote }})
 override_modes+=({{ get . "mode" | default "644" | quote }})
 override_gates+=({{ get . "gate" | default "" | quote }})
 {{ end }}
+{{- /* Both lists are validated: a retirement gate that never reached
+   facts-validate would let a typo through to a host un-caught. */ -}}
 {{- $gates := list -}}
 {{- range .system.linux.hardware.overrides -}}
 {{-   $gate := get . "gate" | default "" -}}
@@ -26,7 +28,13 @@ override_gates+=({{ get . "gate" | default "" | quote }})
 {{-     $gates = append $gates $gate -}}
 {{-   end -}}
 {{- end -}}
-{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (hardware.overrides)" "gates" $gates) -}}
+{{- range .system.linux.hardware.removed -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (hardware.overrides and hardware.removed)" "gates" $gates) -}}
 
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
 gate_ok() {
@@ -40,6 +48,7 @@ hw_files=(
   "$SRC_ROOT"/etc/modules-load.d/thinkpad_acpi.conf
   "$SRC_ROOT"/etc/modprobe.d/nvidia-hybrid-power.conf
   "$SRC_ROOT"/etc/modprobe.d/nvidia-hybrid-modeset.conf
+  "$SRC_ROOT"/etc/modprobe.d/nvidia-integrated-only.conf
 )
 for src in "${hw_files[@]}"; do
   [[ -f "$src" ]] || continue
@@ -76,16 +85,25 @@ else
   )
 fi
 
+# A retirement entry may carry a gate as well as a distro filter. An empty gate
+# is unconditional; a gate that fails skips the removal, so an unknown host
+# removes nothing.
 REMOVED_PATHS=()
 REMOVED_DISTROS=()
+REMOVED_GATES=()
 {{ range .system.linux.hardware.removed -}}
 REMOVED_PATHS+=({{ .path | quote }})
 REMOVED_DISTROS+=({{ get . "distro" | default "" | quote }})
+REMOVED_GATES+=({{ get . "gate" | default "" | quote }})
 {{ end }}
 for i in "${!REMOVED_PATHS[@]}"; do
   dst="${REMOVED_PATHS[$i]}"
   distro="${REMOVED_DISTROS[$i]}"
+  gate="${REMOVED_GATES[$i]}"
   [[ -z "$distro" || "$distro" == "$os_id" ]] || continue
+  if [[ -n "$gate" ]] && ! gate_ok "$gate"; then
+    continue
+  fi
   if [[ -e "$dst" || -L "$dst" ]]; then
     printf '  -> removing %s\n' "$dst"
     "${SUDO[@]}" rm -f "$dst"
