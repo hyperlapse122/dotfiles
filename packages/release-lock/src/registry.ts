@@ -164,6 +164,15 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `aoe-${os}-${arch}.tar.gz`,
   },
 
+  codex: {
+    kind: "githubRelease",
+    source: "openai/codex",
+    // The repo also tags npm releases; `rust-v` selects the CLI train, and the
+    // resolver skips its `rust-v…-alpha.N` prereleases. Linux is static musl.
+    tagPrefix: "rust-v",
+    asset: ({ os, arch }) => `codex-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
+  },
+
   /* ---------- version-only githubRelease entries ---------- */
 
   "compound-engineering": {

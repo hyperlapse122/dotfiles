@@ -76,6 +76,17 @@ commands:
       legacy:
         path: .local/bin/aoe
 
+    codex:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: codex
+      commands:
+        - name: codex-bin
+          relPath: codex
+
     ast-grep:
       producer: external
       safetyProfile: native-single-file
