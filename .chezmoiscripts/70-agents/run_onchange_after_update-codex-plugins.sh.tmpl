@@ -32,11 +32,6 @@ printf 'update-codex-plugins: %s\n' 'no eligible plugins or removals are declare
 {{- else }}
 PERSONAL_MARKETPLACE={{ $personal | quote }}
 MARKETPLACE_ROOT="$HOME/.agents/plugins"
-# UNVERIFIED against the codex binary: the stderr text `codex plugin add` prints
-# for a plugin that is already installed. The first host run must confirm it
-# (run the rendered script twice and read the second run's output) and correct
-# this value if Codex words it differently.
-CODEX_ALREADY_INSTALLED='already installed'
 {{- if ne $rows "" }}
 
 PLUGINS=(
@@ -66,8 +61,7 @@ fi
 {{- if ne $removedRows "" }}
 
 # Removals run first and stay best-effort: removing a plugin that is already
-# gone is the converged state this loop wants. UNVERIFIED against the codex
-# binary: the removal subcommand name; confirm with `codex plugin --help`.
+# gone is the converged state this loop wants.
 for row in "${PLUGINS_REMOVED[@]}"; do
   row=${row//\\t/$'\t'}
   IFS=$'\t' read -r name market <<<"$row"
@@ -94,11 +88,10 @@ for row in "${PLUGINS[@]}"; do
   row=${row//\\t/$'\t'}
   IFS=$'\t' read -r name market kind source <<<"$row"
   id="${name}@${PERSONAL_MARKETPLACE}"
+  # `codex plugin add` is idempotent: re-adding an installed plugin succeeds.
   if ! add_output=$(codex plugin add "$id" 2>&1); then
-    case $add_output in
-      *"$CODEX_ALREADY_INSTALLED"*) ;;
-      *) printf '%s\n' "$add_output" >&2; die "plugin add failed for $id" ;;
-    esac
+    printf '%s\n' "$add_output" >&2
+    die "plugin add failed for $id"
   fi
 done
 {{- end }}
