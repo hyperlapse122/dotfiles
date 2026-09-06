@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as net from "node:net";
 
 const SEND_TIMEOUT_MS = 500;
@@ -99,7 +100,13 @@ export class HapticTimeoutError extends HapticError<"TIMEOUT"> {
 // later as SocketMissingError rather than a "runtime dir unset" failure.
 function socketPath(): string {
   const dir = nonEmptyEnv("XDG_RUNTIME_DIR") ?? nonEmptyEnv("TMPDIR") ?? "/tmp";
-  return `${dir.replace(/\/+$/, "")}/mxm4-haptic.sock`;
+  const cleanDir = dir.replace(/\/+$/, "");
+  const logidPath = `${cleanDir}/logid.sock`;
+  const legacyPath = `${cleanDir}/mxm4-haptic.sock`;
+  if (fs.existsSync(logidPath)) {
+    return logidPath;
+  }
+  return legacyPath;
 }
 
 function nonEmptyEnv(name: string): string | undefined {
@@ -200,3 +207,80 @@ function toError(error: unknown): Error {
   }
   return new Error(String(error));
 }
+
+export type ChargingStatus = "Discharging" | "Charging" | "Full" | "Unknown";
+
+export interface BatteryInfo {
+  percentage: number;
+  status: ChargingStatus;
+}
+
+/**
+ * Query current device battery status from logid / mxm4-hapticd.
+ */
+export async function getBatteryStatus(): Promise<BatteryInfo | null> {
+  const path = socketPath();
+
+  return new Promise<BatteryInfo | null>((resolve, reject) => {
+    const socket = net.createConnection({ path });
+    let settled = false;
+    let data = "";
+
+    const timeout = setTimeout(() => {
+      rejectOnce(new HapticTimeoutError(path));
+      socket.destroy();
+    }, SEND_TIMEOUT_MS);
+
+    const clearSendTimeout = () => {
+      clearTimeout(timeout);
+    };
+
+    const resolveOnce = (val: BatteryInfo | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearSendTimeout();
+      resolve(val);
+    };
+
+    const rejectOnce = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearSendTimeout();
+      reject(error);
+    };
+
+    socket.once("connect", () => {
+      socket.write("BATTERY\n");
+    });
+
+    socket.on("data", (chunk) => {
+      data += chunk.toString();
+    });
+
+    socket.once("error", (error) => {
+      rejectOnce(mapSocketError(error, path));
+    });
+
+    socket.once("close", () => {
+      if (settled) {
+        return;
+      }
+      const trimmed = data.trim();
+      if (!trimmed || trimmed === "null") {
+        resolveOnce(null);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(trimmed) as BatteryInfo;
+        resolveOnce(parsed);
+      } catch (err) {
+        rejectOnce(toError(err));
+      }
+    });
+  });
+}
+
