@@ -5,10 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, test } from "vite-plus/test";
 
-import {
-  getBatteryStatus,
-  SocketMissingError,
-} from "../src/index.ts";
+import { getBatteryStatus, SocketMissingError } from "../src/index.ts";
 
 describe("getBatteryStatus", () => {
   test("queries and parses battery status from server", async () => {

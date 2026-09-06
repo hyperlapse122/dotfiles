@@ -283,4 +283,3 @@ export async function getBatteryStatus(): Promise<BatteryInfo | null> {
     });
   });
 }
-
