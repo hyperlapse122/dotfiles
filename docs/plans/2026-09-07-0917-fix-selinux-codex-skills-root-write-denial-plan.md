@@ -13,7 +13,7 @@ execution: code
 ## Goal Capsule
 
 - **Objective:** The operator stops receiving SELinux alerts raised by a confined agent harness for a denial the policy is designed to produce, and the canonical skills root stays writable by chezmoi alone.
-- **Means:** Suppress the by-design denial for the one domain observed producing it, and close the two gaps the diagnosis exposed (`~/.codex/skills` label drift, no per-apply detector for the protected roots). (KTD1)
+- **Means:** Suppress the by-design denial for the one domain observed producing it, and close the gaps the diagnosis and review exposed (`~/.codex/skills` label drift; a CI boundary that accepted a directory-class grant on the protected roots). (KTD1)
 - **Authority hierarchy:** Product Contract requirements (R-IDs) govern behavior. Key Technical Decisions (KTD-IDs) govern mechanism. The `AGENTS.md` SELinux section and `docs/solutions/security-issues/selinux-user-scope-agent-config-protection.md` are binding prior art.
 - **Execution profile:** Small, policy-and-script change in one repository. No runtime service depends on it. U5 needs a live Codex observation before U1 lands; the closing confirmation needs a `chezmoi apply`.
 - **Stop conditions:** Stop and report if any change would grant a write, create, unlink, rename, or relabel permission on `protected_agent_config_t` to a domain other than `chezmoi_t`. Stop if U5 finds the denial causes a user-visible Codex failure. Stop if `.ci/test-selinux-protected-configs.sh` cannot compile the module with `secilc`.
@@ -25,7 +25,7 @@ execution: code
 
 ### Summary
 
-Add one `dontaudit` rule to `system/linux/selinux/dotfiles_protected_agent_configs.cil`, sourced from `codex_t` alone, so the observed writability probe against the chezmoi-only roots stops filling the audit log. Grant no new access. Because the rule removes the only runtime signal these roots had, add a per-apply context assertion that reports a protected root whose label has drifted. Restore the `~/.codex/skills` label on every apply instead of only when the policy file changes. Pin the new rule's exact text in CI and reject a broader one added beside it. Record the episode in the SELinux learning document.
+Add one `dontaudit` rule to `system/linux/selinux/dotfiles_protected_agent_configs.cil`, sourced from `codex_t` alone, so the observed writability probe against the chezmoi-only roots stops filling the audit log. Grant no new access. Restore the `~/.codex/skills` label on every apply instead of only when the policy file changes. Pin the rule as an active line in CI and, from the compiled policy, reject any other `dontaudit` that touches a protected type; the review that found the pre-existing `file`-only write matrix also required widening it to the `dir` class, which the boundary actually gates on. The rule removes the only runtime signal these roots had and nothing replaces it — see R8. Record the episode in the SELinux learning document.
 
 ### Problem Frame
 
@@ -55,7 +55,7 @@ The CI boundary is **not** a gap. `forbidden_writer 'codex_t' 'claude_config_t'`
 
 - **Refuse the `audit2allow` suggestion.** A local module granting `codex_t` write on `protected_agent_config_t` would also open `~/.agents/plugins`, because both roots share the type. Governs R2, R3.
 - **Suppress the denial rather than grant it.** The write is refused by design. Codex discovers and runs skills through read and search, which the policy already grants. Governs R1.
-- **Suppress in the policy module, not in the host's audit configuration.** An `auditctl` exclude rule or a setroubleshoot filter would stop the operator's alert while keeping the AVC in the log, which is the signal `dontaudit` gives up. It is rejected because this repository manages the policy module and does not manage `/etc/audit/rules.d` or setroubleshoot state, so a host-local filter would live outside version control and outside every managed host. The lost log line is replaced by the per-apply detector in U3 rather than accepted uncompensated. Governs R1, R8.
+- **Suppress in the policy module, not in the host's audit configuration.** An `auditctl` exclude rule or a setroubleshoot filter would stop the operator's alert while keeping the AVC in the log, which is the signal `dontaudit` gives up. It is rejected because this repository manages the policy module and does not manage `/etc/audit/rules.d` or setroubleshoot state, so a host-local filter would live outside version control and outside every managed host. The lost log line is not replaced: the per-apply detector this decision assumed was attempted and withdrawn (see R8), so the residual is recorded at the rule and in the solutions document instead. Governs R1.
 
 ### Requirements
 
@@ -68,12 +68,12 @@ The CI boundary is **not** a gap. `forbidden_writer 'codex_t' 'claude_config_t'`
 **Label durability and detection**
 
 - R4. `~/.codex/skills` carries `codex_config_t` after any `chezmoi apply` that deploys or re-creates it, not only after a policy-tree change.
-- R8. Every `chezmoi apply` reports on stderr when `~/.agents/skills` or `~/.agents/plugins` does not carry `protected_agent_config_t`.
+- R8. **Withdrawn during implementation — not delivered.** The intent was a per-apply stderr report when `~/.agents/skills` or `~/.agents/plugins` loses `protected_agent_config_t`. It was implemented in `run_after_config-codex-settings.sh.tmpl` and removed: that script's test isolates only `CODEX_HOME`, injects a stub `stat`, and asserts a converged re-run is silent, so a check reading global `$HOME` state read the stub's canned answer and broke the contract. No runtime detector replaces the suppressed audit record. The gap is recorded at the CIL rule and in the solutions document rather than compensated, and a correct home for the check is left to a follow-up.
 
 **Regression cover**
 
-- R5. `.ci/test-selinux-protected-configs.sh` continues to reject any grant of `codex_t` access to `protected_agent_config_t`, `claude_config_t`, or `gemini_config_t`, and this change adds no duplicate of that assertion.
-- R6. `.ci/test-selinux-protected-configs.sh` fails if the suppression rule is removed, if its text changes, or if a second `dontaudit` naming a protected type or the `protected_agent_config_type` attribute is added beside it.
+- R5. `.ci/test-selinux-protected-configs.sh` rejects any grant of `codex_t` access to `protected_agent_config_t`, `claude_config_t`, or `gemini_config_t` — including one written against the `protected_agent_config_type` attribute or in the `dir` class, which the pre-existing `file`-only matrix accepted. This change adds no duplicate of the assertions that already existed.
+- R6. `.ci/test-selinux-protected-configs.sh` fails if the suppression rule is removed, commented out, or altered, and if any other `dontaudit` in the compiled policy touches a protected type — including one indented, wrapped across lines, or routed through an alias attribute. Each of those evasions ships as an expect-fail mutant.
 
 **Record**
 
@@ -114,9 +114,9 @@ The CI boundary is **not** a gap. `forbidden_writer 'codex_t' 'claude_config_t'`
 
 - KTD1. **Suppress with `(dontaudit codex_t protected_agent_config_t (dir (write)))`.** The rule is scoped four ways. Source is `codex_t` alone — the only domain with an observed denial — rather than `dotfiles_agent_domain`, so the blind spot KTD2 accepts is not multiplied across five domains that have never produced the probe. Target is `protected_agent_config_t` alone rather than the `protected_agent_config_type` attribute, so a harness reaching another harness's config type stays audited (R3). Class is `dir` alone, so file and symlink denials on the protected roots still surface. Permission is `write` alone. The target type labels both `~/.agents/skills` and `~/.agents/plugins`, so the rule covers directory-write denials on both canonical roots, not the skills root only — the plugins root is the more attractive target for an out-of-band install, and a reader must see that blast radius. Chosen over `(allow codex_t protected_agent_config_t …)`, which is the setroubleshoot suggestion.
 
-- KTD2. **Accept that the rule silences every parent-directory-gated mutation attempt, and replace the lost detector.** The kernel checks `dir { write }` in `inode_permission()` before the more specific `dir { add_name }` or `dir { remove_name }`, so a create, unlink, rmdir, or rename by `codex_t` under `~/.agents/skills` or `~/.agents/plugins` is denied at `write` and never reaches the specific permission. The rule therefore hides the same verb set R2 defends, not a probe only. No control this repository ships detects such a runtime attempt after the rule lands: CI inspects the policy source at build time and observes no runtime behavior, and the reclaim sweep finds a label that already escaped, only during an apply, and only when the policy tree changed. That is why R8 exists — the per-apply context assertion in U3 is the replacement detector, and it is a drift detector, not an attempt detector. State the residual honestly rather than presenting CI as covering it.
+- KTD2. **Accept that the rule silences every parent-directory-gated mutation attempt, and record the lost detector rather than replace it.** The kernel checks `dir { write }` in `inode_permission()` before the more specific `dir { add_name }` or `dir { remove_name }`, so a create, unlink, rmdir, or rename by `codex_t` under `~/.agents/skills` or `~/.agents/plugins` is denied at `write` and never reaches the specific permission. The rule therefore hides the same verb set R2 defends, not a probe only. No control this repository ships detects such a runtime attempt after the rule lands: CI inspects the policy source at build time and observes no runtime behavior, and the reclaim sweep finds a label that already escaped, only during an apply, and only when the policy tree changed. R8 attempted a per-apply drift detector and was withdrawn (see R8), so the residual stands unmitigated. State it honestly rather than presenting CI as covering it.
 
-- KTD3. **Restore the `~/.codex/skills` label and assert the protected roots from `run_after_config-codex-settings.sh.tmpl`, not by widening the policy script's trigger.** That script already owns the Codex label-restore concern for `config.toml`, runs on every apply, and already carries the `stat -c %C` context-assertion pattern R8 needs. Widening the `run_onchange` fingerprint in `run_onchange_before_00-selinux-policies.sh.tmpl` to cover the whole source tree would re-run `semodule` and the full-`$HOME` reclaim sweep on every unrelated edit — roughly six seconds and a `sudo` prompt for no gain.
+- KTD3. **Restore the `~/.codex/skills` label from `run_after_config-codex-settings.sh.tmpl`, not by widening the policy script's trigger.** That script already owns the Codex label-restore concern for `config.toml` and runs on every apply. It is the wrong home for a check on the canonical roots — see R8 — but the right one for a `$CODEX_HOME` path. Widening the `run_onchange` fingerprint in `run_onchange_before_00-selinux-policies.sh.tmpl` to cover the whole source tree would re-run `semodule` and the full-`$HOME` reclaim sweep on every unrelated edit — roughly six seconds and a `sudo` prompt for no gain.
 
 - KTD4. **Extend `.ci/test-selinux-protected-configs.sh` rather than add a script.** The file already holds the declaration-token loop (lines 17-102, matched with `grep -qF`) and the `forbidden_writer` helper; a second script would split one boundary's cover across two files. R6's widening clause needs a negative assertion the loop cannot express, so it is added as its own `grep` guard beside `forbidden_writer`.
 
@@ -130,10 +130,9 @@ flowchart TB
   deny -->|today| audit["audit log + setroubleshoot alert"]
   deny -->|after KTD1| quiet["denied, not audited"]
   chezmoi["chezmoi_t"] -->|"allow: full management"| root
-  apply["chezmoi apply<br/>(every run)"] -->|"stat -c %C, report drift"| root
 ```
 
-The access decision does not change. The audit record for one domain does, and a per-apply drift report replaces it.
+The access decision does not change. Only the audit record for one domain does, and nothing replaces it.
 
 ### Assumptions
 
@@ -186,17 +185,18 @@ U5 runs first and gates U1: it establishes whether the denial is user-visible wh
   - Temporarily appending a second `(dontaudit codex_t protected_agent_config_t (dir (write add_name create)))` line fails the negative guard while the token loop still passes, which is the case the guard exists for.
 - **Verification:** `.ci/test-selinux-protected-configs.sh`
 
-### U3. Restore the `~/.codex/skills` label and report protected-root drift on every apply
+### U3. Restore the `~/.codex/skills` label on every apply
 
-- **Goal:** `~/.codex/skills` carries `codex_config_t` after an apply that deploys it, and an apply reports a canonical root whose label has drifted.
-- **Requirements:** R4, R8 (KTD3)
+- **Goal:** `~/.codex/skills` carries `codex_config_t` after an apply that deploys it.
+- **Requirements:** R4 (KTD3)
 - **Files:** `.chezmoiscripts/70-agents/run_after_config-codex-settings.sh.tmpl`
-- **Approach:** Extend the script's existing `restorecon` step to also target `"$CODEX_HOME/skills"`, mirroring the `target="$CODEX_HOME/config.toml"` line above it. Use `$CODEX_HOME`, not `$HOME/.codex`: the script sets `CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"` at line 80 and `.ci/test-codex-settings-reconcile.sh` drives every case through a fixture `CODEX_HOME`, so a hardcoded path would never be exercised by the gate this unit is verified against. Omit `-R` because the target is a single symlink and recursion adds nothing; the policy script's `restorecon -RFv` on the same path is equally safe, since `restorecon` does not follow a symlink argument. Then add the R8 assertion: for `$HOME/.agents/skills` and `$HOME/.agents/plugins`, read `stat -c %C` and report on stderr when the context is not `protected_agent_config_t`, reusing the message shape the script already uses for `config.toml`. Report only; never relabel, because only `chezmoi_t` holds `relabelfrom` and this script does not run in it. Skip a path that does not exist.
+- **Approach:** Extend the script's existing `restorecon` step to also target `"$CODEX_HOME/skills"`, mirroring the `target="$CODEX_HOME/config.toml"` line above it. Use `$CODEX_HOME`, not `$HOME/.codex`: the script sets `CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"` at line 80 and `.ci/test-codex-settings-reconcile.sh` drives every case through a fixture `CODEX_HOME`, so a hardcoded path would never be exercised by the gate this unit is verified against. Omit `-R` because the target is a single symlink and recursion adds nothing; the policy script's `restorecon -RFv` on the same path is equally safe, since `restorecon` does not follow a symlink argument. Skip the skills path when it does not exist.
 - **Test Scenarios:**
-  - Rendering the template through `chezmoi execute-template` on a Fedora-shaped fact set emits the `skills` restorecon target and both context assertions.
+  - A fixture `CODEX_HOME` carrying a `skills` symlink passes both it and `config.toml` to `restorecon`, and the converged run stays silent.
+  - A dangling `skills` symlink is still relabelled and still does not fail the apply.
+  - A wrong resulting context names the skills path in its notice.
   - Rendering on a non-Fedora or container fact set produces the same skip the file already declares, with no new `restorecon` call.
-  - A scratch `CODEX_HOME` without a `skills` entry runs the script to completion without error.
-  - A scratch `HOME` whose `.agents/skills` carries `user_home_t` produces the drift message on stderr and the script still exits successfully.
+  - A scratch `CODEX_HOME` without a `skills` entry runs to completion, stays silent, and hands `restorecon` no skills path.
   - On a host without `restorecon`, the script reports the unrestored label on stderr and exits successfully.
 - **Verification:** `.ci/test-codex-settings-reconcile.sh` and `.ci/test-codex-skills-guard.sh`, plus a rendered-text diff of the template per `AGENTS.md` Verification.
 
@@ -218,14 +218,14 @@ U5 runs first and gates U1: it establishes whether the denial is user-visible wh
 | SELinux boundary | `.ci/test-selinux-protected-configs.sh` | U1, U2 | Token loop, negative `dontaudit` guard, `forbidden_writer`, `secilc` compile, compiled-policy write matrix, and the `file_type` mutant all pass |
 | Codex settings | `.ci/test-codex-settings-reconcile.sh` | U3 | Passes with the added label and drift steps |
 | Codex skills guard | `.ci/test-codex-skills-guard.sh` | U3 | Passes unchanged |
-| Template render | `chezmoi execute-template` per `AGENTS.md` Verification, into a scratch destination with the stub `op` | U3 | Rendered script text differs only in the added `restorecon` target and drift assertions |
+| Template render | `chezmoi execute-template` per `AGENTS.md` Verification, into a scratch destination with the stub `op` | U3 | Rendered script text differs only in the added `restorecon` target |
 | Repository CI | `.github/workflows/ci.yml` and `.github/workflows/render-dotfiles.yml` | all | Both watched to terminal success after push |
 
 Never apply against the live `$HOME` during verification. U5's observation and the confirmation below are operator steps on the live host, outside that gate.
 
 **Live-host confirmation (operator, after merge).** Run `chezmoi apply`. Then check four things, three of which are falsifiable — the ausearch check alone is not, because after U1 an empty result also follows from a module that failed to load:
 
-1. `ls -Zd ~/.codex/skills` reports `codex_config_t`, and the apply printed no drift message for `~/.agents/skills` or `~/.agents/plugins`.
+1. `ls -Zd ~/.codex/skills` reports `codex_config_t`, and `ls -Zd ~/.agents/skills ~/.agents/plugins` still report `protected_agent_config_t`.
 2. `sudo semodule -l | grep dotfiles_protected_agent_configs` confirms the module is loaded, so the quiet log is suppression and not absence.
 3. After restarting Codex, it still enumerates the skills served from `~/.agents/skills`, and `sudo ausearch -m AVC -ts recent` shows no `codex_t` denial on `protected_agent_config_t`.
 4. `touch ~/.agents/skills/probe` from a plain login shell still produces an AVC. This is what distinguishes the narrow rule from an over-broad one; a silent result means the suppression reached further than KTD1 intends.
@@ -253,5 +253,5 @@ A Codex process that started before the policy reinstall keeps its old domain; t
 | U5 | The three observations are recorded, and none of them is a user-visible Codex failure |
 | U1 | The `dontaudit` rule and its four-point comment are in the module, the compile passes, and the write matrix is unchanged |
 | U2 | The token-loop entry and the negative `dontaudit` guard are present, and each fails on its reverted in-place mutant |
-| U3 | The rendered script restores the `~/.codex/skills` label through `$CODEX_HOME` and reports drift on both canonical roots, and both Codex CI scripts pass |
+| U3 | The rendered script restores the `~/.codex/skills` label through `$CODEX_HOME`, the reconcile suite covers that target, and both Codex CI scripts pass |
 | U4 | The solutions document carries the seventh surprise, U5's observation, and the corrected script path, with `last_updated: 2026-09-07`; both `AGENTS.md` paragraphs name the new behavior |

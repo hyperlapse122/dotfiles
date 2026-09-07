@@ -338,6 +338,8 @@ No runtime detector survives the rule. CI reads policy source and observes no ru
 
 ### Diagnostics
 
+A `dontaudit` destroys the record, but not permanently: `sudo semodule -DB` rebuilds the policy with every `dontaudit` disabled, so a suspected out-of-band write to `~/.agents/skills` or `~/.agents/plugins` becomes visible again; `sudo semodule -B` restores the normal build. That is the way back to the signal this module gives up, and an investigation should start there.
+
 Resolve the inode before theorising: `find ~ -xdev -inum <ino>`. An AVC naming `skills` could be `~/.agents/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.codex/skills`, and only the first is chezmoi-only. Then ask the program what it wanted — one non-interactive run of the harness usually prints the operation the kernel refused, which is what turned this from "a probe" into "an installer".
 
 ## Prevention

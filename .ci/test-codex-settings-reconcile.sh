@@ -246,6 +246,53 @@ label_err=$(run "$label_home" "$label_wrong" 2>&1 >/dev/null) || fail 'a wrong l
 grep -qF 'codex_config_t' <<<"$label_err" || fail "a wrong resulting label was not reported; stderr was: $label_err"
 grep -qF 'user_home_t' <<<"$label_err" || fail "the wrong-label notice does not name the observed context: $label_err"
 
+# The skills symlink is the second label target. ~/.codex/skills is deployed by
+# chezmoi but relabelled only by the policy script, which is fingerprinted on
+# system/linux/selinux/**, so an apply that just re-creates the symlink leaves it
+# on user_home_t. Assert the target actually reaches restorecon, and that a
+# CODEX_HOME without it neither breaks the apply nor invents a notice.
+label_log=$scratch/restorecon.log
+label_record=$scratch/label-record
+mkdir -p "$label_record"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >>%q\nexit 0\n' "$label_log" >"$label_record/restorecon"
+printf '#!/usr/bin/env bash\nprintf %%s %q\n' 'unconfined_u:object_r:codex_config_t:s0' >"$label_record/stat"
+chmod 0700 "$label_record/restorecon" "$label_record/stat"
+
+skills_home=$scratch/skills-home
+mkdir -p "$skills_home"
+ln -s ../.agents/skills "$skills_home/skills"
+: >"$label_log"
+skills_err=$(run "$skills_home" "$label_record" 2>&1 >/dev/null) || fail 'a CODEX_HOME carrying a skills symlink should not fail the apply'
+[[ -z $skills_err ]] || fail "a converged label run was not silent: $skills_err"
+grep -qxF -- "$skills_home/config.toml" "$label_log" || fail 'config.toml was not passed to restorecon'
+grep -qxF -- "$skills_home/skills" "$label_log" ||
+  fail "the skills symlink was not passed to restorecon; restorecon saw: $(tr '\n' ' ' <"$label_log")"
+
+# A dangling symlink is still the managed target and still needs its own label.
+dangling_home=$scratch/dangling-home
+mkdir -p "$dangling_home"
+ln -s ./nowhere "$dangling_home/skills"
+: >"$label_log"
+run "$dangling_home" "$label_record" >/dev/null 2>&1 || fail 'a dangling skills symlink should not fail the apply'
+grep -qxF -- "$dangling_home/skills" "$label_log" || fail 'a dangling skills symlink was skipped by the label step'
+
+# No skills entry: one target, and no notice about a path that does not exist.
+bare_home=$scratch/bare-home
+mkdir -p "$bare_home"
+: >"$label_log"
+bare_err=$(run "$bare_home" "$label_record" 2>&1 >/dev/null) || fail 'a CODEX_HOME without skills should not fail the apply'
+[[ -z $bare_err ]] || fail "a CODEX_HOME without skills was not silent: $bare_err"
+if grep -qxF -- "$bare_home/skills" "$label_log"; then
+  fail 'restorecon was handed a skills path that does not exist'
+fi
+
+# The per-target notices name the offending path, so an operator knows which
+# label to chase.
+: >"$label_log"
+skills_wrong=$(run "$skills_home" "$label_wrong" 2>&1 >/dev/null) || fail 'a wrong skills label should not fail the apply'
+grep -qF -- "$skills_home/skills" <<<"$skills_wrong" ||
+  fail "the wrong-label notice does not name the skills symlink: $skills_wrong"
+
 # ---------------------------------------------------------------------------
 # Render-time: the declaration guard. These cases are structurally invisible to
 # every runtime assertion above, which receives an already-rendered script.
