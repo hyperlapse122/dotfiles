@@ -292,8 +292,8 @@
 ; the more specific add_name / remove_name, so a create, unlink, rmdir, or
 ; rename by codex_t under ~/.agents/skills is denied at write and never reaches
 ; the specific permission. This rule therefore silences every
-; parent-directory-gated mutation attempt on that one root, not a probe. NO RUNTIME
-; DETECTOR REPLACES IT, and nothing here pretends otherwise: CI reads policy
+; parent-directory-gated mutation attempt on that one root, not a probe.
+; NO RUNTIME DETECTOR REPLACES IT, and nothing here pretends otherwise: CI reads policy
 ; source and observes no runtime behaviour, and the reclaim sweep in
 ; run_onchange_before_00-selinux-policies.sh.tmpl finds a label that already
 ; escaped rather than a blocked attempt — behind the system/linux/selinux/**

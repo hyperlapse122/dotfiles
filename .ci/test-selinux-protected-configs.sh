@@ -224,8 +224,8 @@ fi
 # and unconfined_t holds files_unconfined_type, so a protected type that joins
 # file_type is writable by every unconfined process and the read-only rule below
 # it becomes decorative. An earlier revision of this module shipped exactly that
-# and enforced nothing. The three protected types must carry NO attribute other
-# than the module's own grouping attribute.
+# and enforced nothing. Every protected type must carry NO attribute other than
+# the module's own grouping attribute.
 for protected in protected_agent_config_t protected_agent_plugins_t claude_config_t gemini_config_t codex_config_t protected_agent_config_type; do
   if grep -qE "^\(typeattributeset (file_type|exec_type|domain|[a-z_]*unconfined[a-z_]*) \(${protected}\)" "$cil_file"; then
     fail "$protected must not join a base-policy attribute: that grants every unconfined domain write access"
@@ -498,7 +498,7 @@ EOF
   # suppression names, where a dir-write denial goes unaudited again. Rebuild
   # that exact defect and require the mapping check to see it.
   plugins_mutant_cil="$scratch/plugins_mutant.cil"
-  sed '/\.agents\/plugins/s/protected_agent_plugins_t/protected_agent_config_t/' \
+  sed '/^(filecon .*\.agents\/plugins/s/protected_agent_plugins_t/protected_agent_config_t/' \
     "$cil_file" > "$plugins_mutant_cil"
   if cmp -s "$cil_file" "$plugins_mutant_cil"; then
     fail 'the plugins-split mutant changed nothing: the module no longer labels the plugins root with its own type'
