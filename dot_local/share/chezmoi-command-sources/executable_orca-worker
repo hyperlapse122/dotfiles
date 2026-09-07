@@ -88,9 +88,12 @@ kube() {
 sanitize_name() {
   local raw=$1 max=$2
   raw=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
-  raw=${raw##-}
-  raw=${raw%%-}
-  printf '%s' "${raw:0:$max}"
+  raw=${raw:0:$max}
+  # Trimming AFTER truncating, and every dash rather than one: a cut that lands
+  # on a dash would otherwise produce a name the API server rejects, which is a
+  # create failure that depends on the length of a workspace id.
+  raw=$(printf '%s' "$raw" | sed -E 's/^-+//; s/-+$//')
+  printf '%s' "$raw"
 }
 
 pod_name_for() {
