@@ -123,16 +123,34 @@ An OAuth client with `devices` and `auth_keys` write scopes, owning
 path to create the first one, because creating it is what gives you API access in
 the first place.
 
-The tailnet policy needs the tags before any key or client can use them:
+The tailnet policy needs the tags before any key or client can use them, and the
+OWNERS matter as much as the names:
 
 ```jsonc
 "tagOwners": {
-  "tag:orca-proxy":     ["autogroup:admin"],
-  "tag:orca-workspace": ["autogroup:admin"],
-  "tag:k8s-operator":   ["autogroup:admin"],
+  "tag:k8s-operator":   ["tag:k8s-operator", "autogroup:admin"],
   "tag:k8s":            ["tag:k8s-operator"],
+  "tag:orca-proxy":     ["tag:k8s-operator", "autogroup:admin"],
+  "tag:orca-workspace": ["autogroup:admin"],
 },
 ```
+
+`tag:k8s-operator` owns ITSELF on purpose. An OAuth client may mint keys only for
+tags whose owners include a tag the client itself carries; it is not a user, so
+`autogroup:admin` does not cover it. The operator's own documentation shows an
+empty owner list (`[]`), and that is not enough here either -- verified per tag
+against `POST /api/v2/tailnet/-/keys`, which answers
+
+```
+requested tags [tag:k8s-operator] are invalid or not permitted
+```
+
+for both the admin-only and the empty form. The operator then dies at startup
+with the same message, which reads like a broken credential rather than a policy
+one.
+
+`tag:orca-workspace` stays admin-owned: those keys are minted by a person in the
+console, never by the operator.
 
 Authentication into a worker is public-key over `sshd`, not Tailscale SSH, so the
 policy needs an ordinary `acls`/`grants` rule from the desktop to

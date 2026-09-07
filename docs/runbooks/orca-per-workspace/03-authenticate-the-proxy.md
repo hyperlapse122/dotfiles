@@ -42,14 +42,35 @@ kubectl -n cliproxyapi get secret cliproxyapi \
 
 ## Log in each agent account
 
+Verified against CPA Manager Plus v1.12.10 and CLIProxyAPI v7.2.152.
+
+Open **OAuth Login** in the panel. It offers Codex, Anthropic, Antigravity
+(Google), Kimi and xAI, plus a Vertex service-account import. Start the one whose
+account the workers should use -- `ANTHROPIC_BASE_URL` points the workers at this
+proxy, so Anthropic is the one that makes `claude` work.
+
+Starting a login does three things: it prints an **Authorization URL**, opens it
+in a new tab, and begins waiting with a **Callback URL** box underneath. That box
+is the important part, and it is what makes this work from a browser that is not
+on the proxy's own host:
+
+1. Sign in and approve the consent screen in the opened tab. This is the step
+   that needs a person -- it authenticates a human's own account.
+2. The provider then redirects to `http://localhost:<port>/callback?code=...`.
+   That port is inside the POD, so the browser shows a connection error. This is
+   expected, and the URL in the address bar is the result.
+3. Copy that whole failed URL into **Callback URL** and press
+   **Submit Callback URL**.
+
+`Copy Link` is there for the case where the sign-in has to happen in another
+browser or on another machine entirely; the callback URL still comes back to
+this box.
+
+
 In the panel, add an authentication for each provider account the workers should
 use, and complete the provider's OAuth flow. This is interactive by nature -- a
 person approves an account they own -- so it is the one step in the whole
 platform that is not automated.
-
-If a provider's OAuth flow insists on a `localhost` callback, keep the
-port-forward open and run the login from the same desktop: the callback then
-lands on the forwarded port and reaches the pod.
 
 Confirm afterwards, in `kubectl -n cliproxyapi logs deploy/cliproxyapi`:
 
