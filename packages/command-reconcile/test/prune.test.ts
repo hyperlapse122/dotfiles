@@ -177,4 +177,64 @@ describe("prune", () => {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }
   });
+
+  it("retains a superseded generation held only through an undeclared file", async () => {
+    const testHome = join(tmpdir(), `test-prune-sibling-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+
+    const storeV1 = join(paths.storeDir, "codex", "v1.0");
+    const storeV2 = join(paths.storeDir, "codex", "v2.0");
+    await mkdir(storeV1, { recursive: true });
+    await mkdir(storeV2, { recursive: true });
+    await writeFile(join(storeV1, "codex"), "bin-v1", "utf-8");
+    await writeFile(join(storeV1, "codex-code-mode-host"), "host-v1", "utf-8");
+    await writeFile(join(storeV2, "codex"), "bin-v2", "utf-8");
+    await writeFile(join(storeV2, "codex-code-mode-host"), "host-v2", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "codex",
+          producer: "external",
+          safetyProfile: "native-multi-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          // The helper is deliberately not a public command, so the proof only
+          // covers it by walking the generation rather than the command list.
+          commands: [{ name: "codex-bin", relPath: "codex" }],
+          identity: "v2.0",
+          stagingPath: "path",
+        },
+      ],
+    };
+
+    const state: CommandState = {
+      schemaVersion: "command-reconcile/v1",
+      revision: 1,
+      updatedAt: new Date().toISOString(),
+      units: {
+        codex: { activeIdentity: "v2.0" },
+      },
+    };
+
+    const heldHost = join(storeV1, "codex-code-mode-host");
+    const mockScanner = async (): Promise<ProcessRoots> => ({
+      paths: new Set([heldHost]),
+      inodes: new Set(),
+      uncertain: false,
+    });
+
+    try {
+      const result = await pruneEligibleUnits(paths, manifest, state, mockScanner);
+      expect(result.retained).toContain("codex/v1.0");
+      expect(result.pruned.length).toBe(0);
+      const st = await lstat(storeV1);
+      expect(st.isDirectory()).toBe(true);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
 });

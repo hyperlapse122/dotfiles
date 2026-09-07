@@ -1,7 +1,12 @@
 import { readFile } from "node:fs/promises";
 
 export type ProducerClass = "external" | "source" | "build" | "existingTree";
-export type SafetyProfile = "native-single-file" | "interpreted" | "multi-file" | "mutable-tree";
+export type SafetyProfile =
+  | "native-single-file"
+  | "native-multi-file"
+  | "interpreted"
+  | "multi-file"
+  | "mutable-tree";
 export type Privacy = "public" | "secret";
 
 export interface CommandEntry {
@@ -64,6 +69,7 @@ export function parseManifest(raw: string): CommandManifest {
     }
     if (
       u["safetyProfile"] !== "native-single-file" &&
+      u["safetyProfile"] !== "native-multi-file" &&
       u["safetyProfile"] !== "interpreted" &&
       u["safetyProfile"] !== "multi-file" &&
       u["safetyProfile"] !== "mutable-tree"

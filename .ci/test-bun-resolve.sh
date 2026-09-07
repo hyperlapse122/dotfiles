@@ -45,6 +45,16 @@ lib_rungs=$(rungs_of "$lib")
 }
 pass 'both ladders declare the same rungs in the same order'
 
+# Rung 1 is the only candidate the ladder does not spell out itself, so it is the
+# only one that can arrive relative. Both copies must reject a non-absolute hit,
+# and the rung list compared above cannot see that guard: it lives in the loop
+# body, not in the word list.
+for ladder in "$partial" "$lib"; do
+  grep -qF '"$bun_candidate" == /*' "$ladder" ||
+    fail "$ladder does not require an absolute rung-1 candidate"
+done
+pass 'both ladders require an absolute candidate'
+
 # A bun stand-in that records the path it was executed from, so a case can prove
 # WHICH rung answered rather than merely that something answered.
 write_fake_bun() {
@@ -140,5 +150,27 @@ write_fake_bun "$home/.local/bin/bun"
 got=$(resolve_in "$home" "$home/ambient" | head -1)
 [[ "$got" == "$home/ambient/bun" ]] || fail "on-PATH case resolved $got"
 pass 'a bun already on PATH answers at rung 1'
+
+# A PATH carrying an empty element makes `command -v bun` answer with a relative
+# `./bun`. Accepting that rung would set BUN_DIR to `.` and prepend the working
+# directory to PATH for every command the caller runs afterwards. The rung is
+# rejected instead, and rung 2 answers.
+home=$(case_home relative)
+mkdir -p "$home/cwd"
+write_fake_bun "$home/cwd/bun"
+write_fake_bun "$home/.local/bin/bun"
+mkdir -p "$scratch/bin"
+out=$(cd "$home/cwd" && env HOME="$home" PATH=":$scratch/bin" /usr/bin/bash -c '
+  set -euo pipefail
+  source "$1"
+  resolve_bun
+  printf "%s\n%s\n" "$BUN_BIN" "$PATH"
+' _ "$lib")
+got=$(printf '%s' "$out" | head -1)
+[[ "$got" == "$home/.local/bin/bun" ]] || fail "a relative rung-1 hit resolved $got"
+if printf '%s' "$out" | tail -1 | tr ':' '\n' | grep -qxF '.'; then
+  fail 'a relative rung-1 hit put the working directory on PATH'
+fi
+pass 'a relative rung-1 candidate is rejected and rung 2 answers'
 
 printf 'bun-resolve gate: all cases passed\n'

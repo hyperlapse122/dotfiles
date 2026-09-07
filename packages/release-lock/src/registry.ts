@@ -52,6 +52,10 @@ export const REGISTRY: Registry = {
   bun: {
     kind: "githubRelease",
     source: "oven-sh/bun",
+    // The repo tags a rolling `canary` release next to the version train, so
+    // `bun-v` pins resolution to the train instead of trusting upstream to keep
+    // flagging canary a prerelease.
+    tagPrefix: "bun-v",
     // linux ships a static musl build next to the glibc one (KTD11).
     linuxMusl: true,
     asset: ({ os, arch, libc }) =>
@@ -80,6 +84,10 @@ export const REGISTRY: Registry = {
   shellcheck: {
     kind: "githubRelease",
     source: "koalaman/shellcheck",
+    // koalaman/shellcheck also carries two rolling, non-prerelease releases
+    // (`latest` and `stable`), so `releases/latest` is one re-push away from
+    // resolving a moving pointer whose assets still match the selector.
+    tagPrefix: "v",
     asset: ({ os, arch }, tag) => `shellcheck-${tag}.${os}.${rustArch(arch)}.tar.gz`,
   },
 
@@ -185,6 +193,19 @@ export const REGISTRY: Registry = {
     // resolver skips its `rust-v…-alpha.N` prereleases. Linux is static musl.
     tagPrefix: "rust-v",
     asset: ({ os, arch }) => `codex-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
+  },
+
+  // Codex spawns this helper for code mode by looking for it next to its own
+  // executable, and ships it as a separate asset of the same `rust-v` release.
+  // A second key is how one release serves two assets: the registry resolves one
+  // asset per tool per platform. Both keys read the same repo and tag train, so
+  // they hold the same tag; nothing enforces it, and a skew self-corrects on the
+  // next refresh.
+  "codex-code-mode-host": {
+    kind: "githubRelease",
+    source: "openai/codex",
+    tagPrefix: "rust-v",
+    asset: ({ os, arch }) => `codex-code-mode-host-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
   },
 
   /* ---------- version-only githubRelease entries ---------- */

@@ -15,6 +15,15 @@ set -euo pipefail
 #      is wired), or is a declared exception below.
 #   2. Every job in `.github/workflows/ci.yml` appears in `delivery`'s `needs`.
 #      `delivery` itself is exempt: a job cannot depend on itself.
+#   3. Every `.ci/lib/*.sh` library is referenced somewhere, and its mode matches
+#      how it is referenced: executable when something runs it as a command,
+#      non-executable when it is only ever sourced.
+#
+# Check 3 is separate from check 1 rather than folded into it, because a library
+# is not a gate: demanding a workflow invoke `.ci/lib/bun.sh` would be wrong. It
+# is here because the same failure mode applies -- a library nothing references
+# is as invisible in a green run as a gate nothing invokes -- and because a mode
+# is the only thing that says whether running a library directly is supported.
 #
 # Check 1 scans EVERY workflow, not just `ci.yml`. Five gates run only in
 # `render-dotfiles.yml` and one only in `merge-commit-only.yml`; a ci.yml-only
@@ -75,6 +84,21 @@ import sys
 import yaml
 
 CI_SCRIPT = re.compile(r"\.ci/([A-Za-z0-9._-]+\.sh)")
+LIB_REF = re.compile(r"\.ci/lib/([A-Za-z0-9._-]+\.sh)")
+
+# `source x`, `. x`, and the same after a separator or a shell keyword.
+SOURCE_LINE = re.compile(r"(?:^|[;&|(]|\b(?:then|do|else)\b)\s*(?:source|\.)\s")
+
+# What can sit between the start of a command and the path: quotes, a variable
+# holding the repository root, and the separators of the path itself.
+LEAD_IN = re.compile(r"""(?:["']|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|[./])*$""")
+
+# What a reference is preceded by when it is being RUN rather than named: the
+# start of the command, a separator, or a runner word. The lead is rstrip'd
+# before this matches, so the runner-word alternative must not require trailing
+# whitespace of its own -- `\s+` here would make that branch unreachable and
+# silently classify `bash .ci/lib/x.sh` as merely named.
+COMMAND_START = re.compile(r"(?:^|[;&|(]|\b(?:exec|sudo|command|bash|sh|env))\s*$")
 
 
 def strings(node):
@@ -102,14 +126,41 @@ def main():
         exceptions[name] = reason
 
     ci_dir = root / ".ci"
+    lib_dir = ci_dir / "lib"
     workflow_dir = root / ".github" / "workflows"
     failures = []
+
+    sourced = set()
+    executed = set()
+
+    def classify(text, origin=None):
+        """Record how each `.ci/lib` reference in `text` is used.
+
+        A path can be sourced, run as a command, or merely named -- assigned to a
+        variable, passed as an argument. Only the first two are usage, which is
+        why this cannot reuse check 1's plain name search.
+        """
+        for line in text.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            is_source = SOURCE_LINE.search(line) is not None
+            for match in LIB_REF.finditer(line):
+                name = match.group(1)
+                if name == origin:
+                    continue
+                if is_source:
+                    sourced.add(name)
+                    continue
+                lead = LEAD_IN.sub("", line[: match.start()]).rstrip()
+                if COMMAND_START.search(lead):
+                    executed.add(name)
 
     invoked = set()
     for workflow in sorted(workflow_dir.glob("*.yml")):
         document = yaml.safe_load(workflow.read_text(encoding="utf-8"))
         for text in strings(document):
             invoked.update(CI_SCRIPT.findall(text))
+            classify(text)
 
     # A helper invoked only by its caller is wired through that caller. Comment
     # lines are dropped first: a mention in prose is not an invocation, and
@@ -124,6 +175,7 @@ def main():
         for name in CI_SCRIPT.findall(code):
             if name != script.name:
                 invoked.add(name)
+        classify(code, origin=script.name)
 
     gates = sorted(
         path.name
@@ -139,6 +191,30 @@ def main():
             f"{name} is invoked by no workflow and no other .ci script; "
             f"wire it into a job or declare it an exception"
         )
+
+    if lib_dir.is_dir():
+        for path in sorted(lib_dir.glob("*.sh")):
+            if not path.is_file():
+                continue
+            name = path.name
+            executable = bool(path.stat().st_mode & 0o111)
+            if name not in sourced and name not in executed:
+                if f"lib/{name}" in exceptions:
+                    continue
+                failures.append(
+                    f"lib/{name} is sourced and executed by nothing; "
+                    f"wire it into a caller, delete it, or declare it an exception"
+                )
+            elif executable and name not in executed:
+                failures.append(
+                    f"lib/{name} is executable but is only ever sourced; "
+                    f"commit it 0644 so the mode says how it is used"
+                )
+            elif name in executed and not executable:
+                failures.append(
+                    f"lib/{name} is run as a command but is not executable; "
+                    f"commit it 0755"
+                )
 
     for name in sorted(exceptions):
         if not (ci_dir / name).exists():
@@ -270,5 +346,99 @@ chmod 700 "$excepted/.ci/test-orphan.sh"
 check_tree "$excepted" 'test-orphan.sh=deliberately not run in CI' >/dev/null 2>&1 ||
   fail 'a declared exception for an existing file should pass'
 pass 'a declared exception for an existing file passes'
+
+# .ci/lib holds libraries rather than gates, so check 3 judges them by how they
+# are used rather than by name.
+lib_fixture() {
+  local tree
+  tree=$(fixture "$1")
+  mkdir -p -- "$tree/.ci/lib"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$tree/.ci/lib/helper.sh"
+  printf '%s' "$tree"
+}
+
+# A library only ever sourced must not carry the executable bit: the mode is the
+# only thing that says whether running it directly is supported.
+sourced_exec=$(lib_fixture sourced-exec)
+printf '#!/usr/bin/env bash\nsource .ci/lib/helper.sh\n' > "$sourced_exec/.ci/test-alpha.sh"
+chmod 700 "$sourced_exec/.ci/test-alpha.sh"
+chmod 755 "$sourced_exec/.ci/lib/helper.sh"
+expect_reject "$sourced_exec" 'a sourced-only library that is executable fails' \
+  'lib/helper.sh is executable but is only ever sourced'
+
+# The same library at 0644 is correct, so it passes.
+sourced_mode=$(lib_fixture sourced-mode)
+printf '#!/usr/bin/env bash\nsource .ci/lib/helper.sh\n' > "$sourced_mode/.ci/test-alpha.sh"
+chmod 700 "$sourced_mode/.ci/test-alpha.sh"
+chmod 644 "$sourced_mode/.ci/lib/helper.sh"
+check_tree "$sourced_mode" >/dev/null 2>&1 ||
+  fail 'a sourced-only library at 0644 should pass'
+pass 'a sourced-only library at 0644 passes'
+
+# The other half of the rule, and the shape .ci/lib/apt-install.sh has: a library
+# a workflow runs as a command keeps its executable bit.
+lib_executed=$(lib_fixture lib-executed)
+cat <<'YAML' > "$lib_executed/.github/workflows/ci.yml"
+name: CI
+jobs:
+  alpha:
+    steps:
+      - run: .ci/lib/helper.sh - somepackage
+      - run: .ci/test-alpha.sh
+  delivery:
+    needs: [alpha]
+    steps:
+      - run: echo aggregate
+YAML
+chmod 755 "$lib_executed/.ci/lib/helper.sh"
+check_tree "$lib_executed" >/dev/null 2>&1 ||
+  fail 'an executable library a workflow runs should pass'
+pass 'an executable library a workflow runs passes'
+
+# A runner word in front of the path is still an execution. This guards the
+# COMMAND_START runner-word branch: the lead is rstrip'd before it is matched,
+# so a pattern demanding trailing whitespace there silently reclassifies this
+# as "merely named" and then wrongly demands the library be 0644.
+lib_runner=$(lib_fixture lib-runner)
+cat <<'YAML' > "$lib_runner/.github/workflows/ci.yml"
+name: CI
+jobs:
+  alpha:
+    steps:
+      - run: bash .ci/lib/helper.sh - somepackage
+      - run: .ci/test-alpha.sh
+  delivery:
+    needs: [alpha]
+    steps:
+      - run: echo aggregate
+YAML
+chmod 755 "$lib_runner/.ci/lib/helper.sh"
+check_tree "$lib_runner" >/dev/null 2>&1 ||
+  fail 'a library run behind `bash` should count as executed and pass at 0755'
+pass 'a library run behind a runner word counts as executed'
+
+# The mirror of the mode rule: a library a workflow runs must be runnable.
+lib_unrunnable=$(lib_fixture lib-unrunnable)
+cat <<'YAML' > "$lib_unrunnable/.github/workflows/ci.yml"
+name: CI
+jobs:
+  alpha:
+    steps:
+      - run: .ci/lib/helper.sh - somepackage
+      - run: .ci/test-alpha.sh
+  delivery:
+    needs: [alpha]
+    steps:
+      - run: echo aggregate
+YAML
+chmod 644 "$lib_unrunnable/.ci/lib/helper.sh"
+expect_reject "$lib_unrunnable" 'a library a workflow runs but cannot execute fails' \
+  'lib/helper.sh is run as a command but is not executable'
+
+# A library nothing sources and nothing runs is as invisible as an unwired gate.
+lib_orphan=$(lib_fixture lib-orphan)
+chmod 644 "$lib_orphan/.ci/lib/helper.sh"
+expect_reject "$lib_orphan" 'a library nothing references fails' \
+  'lib/helper.sh is sourced and executed by nothing'
 
 printf 'test-ci-wiring: all tests passed\n'

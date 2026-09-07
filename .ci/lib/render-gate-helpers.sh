@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# shellcheck shell=bash
 # Shared render-gate helpers, sourced (never executed directly) by
 # .ci/test-fingerprint-gates.sh, .ci/test-agent-instructions.sh and
 # .ci/test-sudo-elevation-guard.sh.

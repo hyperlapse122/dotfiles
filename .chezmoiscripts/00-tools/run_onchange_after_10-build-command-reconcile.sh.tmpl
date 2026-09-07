@@ -1,9 +1,17 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
 #!/usr/bin/env bash
 set -euo pipefail
+{{- /* The `bun-version` value is what makes a lock-driven bun bump rebuild: the
+   compiled binary embeds a bun runtime, but no tracked file changes when the
+   lock moves, so without this the staged binary would stay compiled by the
+   previous bun until an unrelated source edit happened to re-trigger the
+   script. Hashing the version alone rather than globbing the lock keeps an
+   unrelated tool's version out of this script's fingerprint. */ -}}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
-      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/command-reconcile/package.json" "packages/command-reconcile/tsconfig.json" "packages/command-reconcile/vite.config.ts" "packages/command-reconcile/src/**")) }}
+      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/command-reconcile/package.json" "packages/command-reconcile/tsconfig.json" "packages/command-reconcile/vite.config.ts" "packages/command-reconcile/src/**")
+      "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
 
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
@@ -16,6 +24,12 @@ esac
 export PATH
 
 SRC="{{ $sourceDir }}"
+# `vp run build` caches on its declared inputs, all of which live under the
+# packages/ workspace root; .chezmoidata/releases.json sits outside it and no
+# `input` base reaches there. The vite task therefore fingerprints this
+# variable instead, so a bun bump invalidates the vp cache as well as the
+# chezmoi onchange fingerprint above.
+export DOTFILES_BUN_VERSION="{{ $bunVersion }}"
 DIST="$SRC/packages/command-reconcile/dist/command-reconcile"
 LIBEXEC_DIR="$HOME/.local/libexec"
 TARGET="$LIBEXEC_DIR/command-reconcile"

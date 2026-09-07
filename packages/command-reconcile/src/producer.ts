@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmod, copyFile, cp, lstat, open, readFile, rename, rm } from "node:fs/promises";
+import { chmod, copyFile, cp, lstat, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { UnitManifest } from "./manifest.js";
 import { prepareDir, type CommandPaths } from "./paths.js";
@@ -40,6 +40,37 @@ export async function writeCompletionMarker(storeUnitDir: string, mode: number):
     await rm(tmpMarker, { force: true }).catch(() => {});
     throw err;
   }
+}
+
+/**
+ * Top-level staging entries a completed generation does not carry yet.
+ *
+ * Empty whenever the staging path is absent or is not a directory: a run whose
+ * externals were not refreshed this pass must leave a converged generation
+ * alone rather than fail, and a file staging path is copied per declared
+ * command instead of by name.
+ */
+async function missingStagedEntries(stagingPath: string, storeUnitDir: string): Promise<string[]> {
+  let staged: string[];
+  try {
+    const st = await lstat(stagingPath);
+    if (!st.isDirectory()) return [];
+    staged = await readdir(stagingPath);
+  } catch {
+    return [];
+  }
+
+  // The caller has just read this directory's completion marker, so a failure
+  // here is not a converged generation; repairing on that guess could copy over
+  // a live binary, so report nothing missing instead.
+  let present: Set<string>;
+  try {
+    present = new Set(await readdir(storeUnitDir));
+  } catch {
+    return [];
+  }
+
+  return staged.filter((entry) => !present.has(entry));
 }
 
 export async function ensureCompletedUnit(
@@ -121,17 +152,29 @@ export async function ensureCompletedUnit(
   }
 
   const targetStoreDir = join(paths.storeDir, unit.id, identity);
-  if (await isUnitCompleted(targetStoreDir)) {
-    return {
-      backingPath: targetStoreDir,
-      identity,
-      changed: false,
-    };
-  }
-
   const stagingPath = isAbsolute(unit.stagingPath)
     ? unit.stagingPath
     : join(paths.home, unit.stagingPath);
+
+  if (await isUnitCompleted(targetStoreDir)) {
+    // A unit can gain a file without changing identity -- a second external
+    // staged into the same directory. Copy only what the generation lacks:
+    // rewriting an entry already there would fail ETXTBSY against a running
+    // binary, and the entries present are the ones processes are executing.
+    const missing = await missingStagedEntries(stagingPath, targetStoreDir);
+    if (missing.length === 0) {
+      return { backingPath: targetStoreDir, identity, changed: false };
+    }
+    for (const entry of missing) {
+      await cp(join(stagingPath, entry), join(targetStoreDir, entry), {
+        recursive: true,
+        preserveTimestamps: true,
+      });
+    }
+    await writeCompletionMarker(targetStoreDir, unitMode);
+    return { backingPath: targetStoreDir, identity, changed: true };
+  }
+
   let st;
   try {
     st = await lstat(stagingPath);

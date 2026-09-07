@@ -1,10 +1,12 @@
-import { lstat, mkdir, readFile, readlink, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import type { CommandManifest } from "../src/manifest.js";
+import type { CommandManifest, UnitManifest } from "../src/manifest.js";
+import { resolveCommandPaths } from "../src/paths.js";
+import { ensureCompletedUnit, isUnitCompleted, writeCompletionMarker } from "../src/producer.js";
 import { activateUnit, reconcileAll } from "../src/reconcile.js";
-import { readState } from "../src/state.js";
+import { readState, type CommandState } from "../src/state.js";
 
 describe("reconcile", () => {
   it("activates version A, switches to version B atomically via current symlink", async () => {
@@ -77,6 +79,226 @@ describe("reconcile", () => {
 
       const act3 = await activateUnit(testHome, manifestV2, "multi-tool");
       expect(act3.status).toBe("unchanged");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("publishes resolvable links for every declared name of a single-file external unit", async () => {
+    const testHome = join(tmpdir(), `test-rec-agy-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/agy");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "agy"), "#!/bin/sh\necho agy-binary\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "agy",
+          producer: "external",
+          safetyProfile: "native-single-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "agy" }, { name: "antigravity", relPath: "agy" }],
+          identity: "v1.0.0",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agy",
+        },
+      ],
+    };
+
+    try {
+      const act = await activateUnit(testHome, manifest, "agy");
+      expect(act.status).toBe("activated");
+
+      for (const name of ["agy", "antigravity"]) {
+        const link = join(testHome, ".local/bin", name);
+        expect((await lstat(link)).isSymbolicLink()).toBe(true);
+        expect(await readFile(link, "utf-8")).toContain("agy-binary");
+      }
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("fails loudly instead of publishing a dangling link for an unbacked command name", async () => {
+    const testHome = join(tmpdir(), `test-rec-dangling-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/agy");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "agy"), "#!/bin/sh\necho agy-binary\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "agy",
+          producer: "external",
+          safetyProfile: "native-single-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "agy" }, { name: "antigravity" }],
+          identity: "v1.0.0",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agy",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed.some((f) => f.id === "agy" && f.error.includes("antigravity"))).toBe(
+        true,
+      );
+      expect(report.activated).not.toContain("agy");
+
+      await expect(lstat(join(testHome, ".local/bin/antigravity"))).rejects.toThrow();
+      await expect(lstat(join(testHome, ".local/bin/agy"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("reconciles a mutableTree unit whose tree is absent", async () => {
+    const testHome = join(tmpdir(), `test-rec-mutable-${Date.now()}-${Math.random()}`);
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "flutter",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [
+            { name: "flutter", relPath: "bin/flutter" },
+            { name: "dart", relPath: "bin/dart" },
+          ],
+          identity: "stable",
+          stagingPath: ".local/share/flutter/versions",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed).toEqual([]);
+      expect(report.activated).toContain("flutter");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("fails loudly for a mutableTree unit whose present tree lacks a declared relPath", async () => {
+    const testHome = join(tmpdir(), `test-rec-mutable-partial-${Date.now()}-${Math.random()}`);
+    const treeDir = join(testHome, ".local/share/flutter/versions");
+    await mkdir(join(treeDir, "bin"), { recursive: true });
+    await writeFile(join(treeDir, "bin/flutter"), "#!/bin/sh\necho flutter\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "flutter",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [
+            { name: "flutter", relPath: "bin/flutter" },
+            { name: "dart", relPath: "bin/dart" },
+          ],
+          identity: "stable",
+          stagingPath: ".local/share/flutter/versions",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed.some((f) => f.id === "flutter" && f.error.includes("dart"))).toBe(true);
+      expect(report.activated).not.toContain("flutter");
+
+      await expect(lstat(join(testHome, ".local/bin/dart"))).rejects.toThrow();
+      await expect(lstat(join(testHome, ".local/bin/flutter"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("rejects a command whose relPath escapes the unit backing directory", async () => {
+    const testHome = join(tmpdir(), `test-rec-escape-${Date.now()}-${Math.random()}`);
+    const treeDir = join(testHome, ".local/share/escape-tree");
+    const outsideDir = join(testHome, "outside");
+    await mkdir(join(treeDir, "bin"), { recursive: true });
+    await mkdir(outsideDir, { recursive: true });
+    await writeFile(join(outsideDir, "payload"), "#!/bin/sh\necho outside\n", "utf-8");
+    await symlink(join(outsideDir, "payload"), join(treeDir, "bin/escapee"));
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "escape-unit",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "escapee", relPath: "bin/escapee" }],
+          identity: "stable",
+          stagingPath: ".local/share/escape-tree",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(
+        report.failed.some((f) => f.id === "escape-unit" && f.error.includes("outside its store")),
+      ).toBe(true);
+      await expect(lstat(join(testHome, ".local/bin/escapee"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("rejects a command whose relPath resolves to a directory", async () => {
+    const testHome = join(tmpdir(), `test-rec-dir-${Date.now()}-${Math.random()}`);
+    const treeDir = join(testHome, ".local/share/dir-tree");
+    await mkdir(join(treeDir, "bin/notafile"), { recursive: true });
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "dir-unit",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "notafile", relPath: "bin/notafile" }],
+          identity: "stable",
+          stagingPath: ".local/share/dir-tree",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(
+        report.failed.some((f) => f.id === "dir-unit" && f.error.includes("not a regular file")),
+      ).toBe(true);
+      await expect(lstat(join(testHome, ".local/bin/notafile"))).rejects.toThrow();
     } finally {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }
@@ -215,6 +437,172 @@ describe("reconcile", () => {
       const goodLink = join(testHome, ".local/bin/good-cmd");
       const st = await lstat(goodLink);
       expect(st.isSymbolicLink()).toBe(true);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+describe("ensureCompletedUnit repair", () => {
+  const externalUnit = (stagingPath: string): UnitManifest => ({
+    id: "codex",
+    producer: "external",
+    safetyProfile: "native-multi-file",
+    proofEligible: true,
+    mutableTree: false,
+    privacy: "public",
+    mode: "0755",
+    commands: [{ name: "codex-bin", relPath: "codex" }],
+    identity: "rust-v1.2.3",
+    stagingPath,
+  });
+
+  const emptyState: CommandState = {
+    schemaVersion: "command-reconcile/v1",
+    revision: 1,
+    updatedAt: new Date().toISOString(),
+    units: {},
+  };
+
+  it("copies staged entries the completed generation lacks, without rewriting the ones it has", async () => {
+    const testHome = join(tmpdir(), `test-repair-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "staged-codex", { encoding: "utf-8", mode: 0o755 });
+    await writeFile(join(stagingDir, "codex-code-mode-host"), "staged-host", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      const result = await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+
+      expect(result.changed).toBe(true);
+      expect(await readFile(join(storeDir, "codex-code-mode-host"), "utf-8")).toBe("staged-host");
+      // The running entrypoint is never rewritten -- copying over a live binary fails ETXTBSY.
+      expect(await readFile(join(storeDir, "codex"), "utf-8")).toBe("installed-codex");
+      expect(await isUnitCompleted(storeDir)).toBe(true);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("keeps the executable bit on a repaired entry", async () => {
+    const testHome = join(tmpdir(), `test-repair-mode-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "staged-codex", { encoding: "utf-8", mode: 0o755 });
+    await writeFile(join(stagingDir, "codex-code-mode-host"), "staged-host", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+      const st = await lstat(join(storeDir, "codex-code-mode-host"));
+      expect(st.mode & 0o111).not.toBe(0);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("leaves a completed generation alone when it already holds every staged entry", async () => {
+    const testHome = join(tmpdir(), `test-repair-noop-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "staged-codex", { encoding: "utf-8", mode: 0o755 });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      const result = await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+      expect(result.changed).toBe(false);
+      expect(await readFile(join(storeDir, "codex"), "utf-8")).toBe("installed-codex");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("accepts a completed generation whose staging path is gone", async () => {
+    const testHome = join(tmpdir(), `test-repair-nostage-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      const result = await ensureCompletedUnit(
+        paths,
+        externalUnit(".local/share/chezmoi-commands/incomplete/codex"),
+        emptyState,
+      );
+      expect(result.changed).toBe(false);
+      expect(result.identity).toBe("rust-v1.2.3");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("still copies a file staging path per declared command", async () => {
+    const testHome = join(tmpdir(), `test-repair-file-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-command-sources/codex";
+    const stagingFile = join(testHome, stagingRel);
+
+    await mkdir(join(testHome, ".local/share/chezmoi-command-sources"), { recursive: true });
+    await writeFile(stagingFile, "#!/bin/sh\n", { encoding: "utf-8", mode: 0o755 });
+
+    const unit: UnitManifest = {
+      ...externalUnit(stagingRel),
+      id: "codex-wrapper",
+      producer: "source",
+      safetyProfile: "interpreted",
+      proofEligible: false,
+      commands: [{ name: "codex", relPath: "codex-wrapper" }],
+      identity: "sha-abc",
+    };
+
+    try {
+      const result = await ensureCompletedUnit(paths, unit, emptyState);
+      expect(result.changed).toBe(true);
+      const installed = join(paths.storeDir, "codex-wrapper", "sha-abc", "codex-wrapper");
+      expect(await readFile(installed, "utf-8")).toBe("#!/bin/sh\n");
     } finally {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }

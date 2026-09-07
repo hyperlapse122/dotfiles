@@ -38,3 +38,6 @@ targetPath = '.local/share/chezmoi-commands/incomplete/minikube/minikube'
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "url" "platform" "auto") }}'
 path = '{{ printf "out/minikube-%s-%s" .chezmoi.os .chezmoi.arch }}'
 executable = true
+
+[minikube.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "sha256" "platform" "auto") }}'
