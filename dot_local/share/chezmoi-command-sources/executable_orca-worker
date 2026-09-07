@@ -42,20 +42,18 @@ require() {
 # tailnet is the designed shape: the sidecar registers an ephemeral node and the
 # workspace dials its MagicDNS name. nodeport is the shape a cluster has before
 # its tailnet material is seeded -- the worker's sshd published on the node the
-# kubeconfig already points at. auto picks tailnet exactly when the auth key
-# Secret exists, so seeding that Secret promotes the platform with no edit here.
+# kubeconfig already points at.
+#
+# auto decides from BEHAVIOUR, not from configuration: it keeps the sidecar and
+# uses the tailnet when the node actually registers. Asking whether the auth-key
+# Secret exists would be the obvious test and is the wrong one -- the workspace
+# identity deliberately cannot read Secrets, so that question always answers
+# "no" and silently downgrades a tailnet-capable cluster to node addressing.
 resolve_connection_mode() {
   case "$connection_mode" in
-    tailnet|nodeport) return 0 ;;
-    auto) ;;
+    auto|tailnet|nodeport) return 0 ;;
     *) die "ORCA_WORKER_CONNECTION must be auto, tailnet or nodeport" ;;
   esac
-  if kube get secret orca-worker-tailscale >/dev/null 2>&1; then
-    connection_mode=tailnet
-  else
-    connection_mode=nodeport
-  fi
-  log "connection mode: $connection_mode"
 }
 
 # The node's address, taken from the kubeconfig rather than from the API.
@@ -120,8 +118,8 @@ resource_id_from_stdin() {
 # it has not reaped yet, so a name built by string concatenation is right most of
 # the time and wrong exactly when a workspace is recreated quickly.
 worker_dns_name() {
-  local pod=$1 deadline dns
-  deadline=$(( $(date +%s) + 120 ))
+  local pod=$1 window=${2:-120} deadline dns
+  deadline=$(( $(date +%s) + window ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
     dns=$(kube exec "$pod" -c tailscale -- tailscale status --json 2>/dev/null \
       | jq -r '.Self.DNSName // empty' 2>/dev/null || true)
@@ -231,31 +229,43 @@ nodeport_service_manifest() {
   }'
 }
 
-# Returns "<host> <port>" for the mode in force.
+# Returns "<host> <port>", and in auto mode settles which shape this worker got.
 worker_address() {
   local pod=$1 host port uid
-  case "$connection_mode" in
-    tailnet)
-      host=$(worker_dns_name "$pod") || return 1
-      port=22
-      ;;
-    nodeport)
-      uid=$(kube get pod "$pod" -o jsonpath='{.metadata.uid}')
-      [ -n "$uid" ] || return 1
-      nodeport_service_manifest "$pod" "$uid" | kube apply -f - >&2
-      port=$(kube get service "$pod" -o jsonpath='{.spec.ports[0].nodePort}')
-      [ -n "$port" ] || return 1
-      host=$(node_host) || return 1
-      ;;
-  esac
+  if [ "$connection_mode" = tailnet ] || [ "$connection_mode" = auto ]; then
+    # A registered node answers in seconds; a sidecar with no usable auth key
+    # never will. The short window in auto mode is the difference between a
+    # fallback and a stall.
+    if [ "$connection_mode" = tailnet ]; then
+      host=$(worker_dns_name "$pod" 120) || return 1
+    else
+      host=$(worker_dns_name "$pod" 45) || host=
+    fi
+    if [ -n "$host" ]; then
+      connection_mode=tailnet
+      printf '%s 22' "$host"
+      return 0
+    fi
+    log 'no tailnet node for this worker; addressing it on the node instead'
+    connection_mode=nodeport
+  fi
+
+  uid=$(kube get pod "$pod" -o jsonpath='{.metadata.uid}')
+  [ -n "$uid" ] || return 1
+  nodeport_service_manifest "$pod" "$uid" | kube apply -f - >&2
+  port=$(kube get service "$pod" -o jsonpath='{.spec.ports[0].nodePort}')
+  [ -n "$port" ] || return 1
+  host=$(node_host) || return 1
   printf '%s %s' "$host" "$port"
 }
 
 cmd_create() {
   require kubectl jq
-  local pod address host port keep_tailscale=false
+  local pod address host port keep_tailscale=true
   resolve_connection_mode
-  [ "$connection_mode" = tailnet ] && keep_tailscale=true
+  # Only an explicit nodeport drops the sidecar. In auto the sidecar has to be
+  # there for the tailnet answer to be possible at all.
+  [ "$connection_mode" = nodeport ] && keep_tailscale=false
   pod=$(pod_name_for)
   log "creating worker pod $pod"
 

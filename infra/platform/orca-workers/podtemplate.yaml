@@ -129,9 +129,11 @@ template:
                 name: orca-worker-tailscale
                 key: TS_AUTHKEY
                 # Optional so a cluster without seeded tailnet material still
-                # starts workers; the recipe then addresses them over the LAN
-                # instead of over MagicDNS. Seeding the Secret is what promotes
-                # the platform to the tailnet path, with no manifest change.
+                # starts workers. Without a key the sidecar comes up unauthenticated
+                # and never registers a node, which is exactly the signal the recipe
+                # reads before falling back to addressing the worker on its node.
+                # Seeding the Secret promotes the platform to MagicDNS with no
+                # manifest change.
                 optional: true
           # Userspace networking needs neither NET_ADMIN nor /dev/net/tun, and
           # inbound TCP still reaches sshd because the sidecar shares the pod's

@@ -106,10 +106,15 @@ makes a deleted worker's node disappear instead of accumulating; reusable is wha
 lets more than one workspace exist at once.
 
 This is the one Secret whose absence is not an error. The PodTemplate marks it
-`optional`, and `orca-worker` picks its addressing from whether it exists:
-present means MagicDNS, absent means a per-pod NodePort on the cluster node.
-Seeding it later promotes the platform to the tailnet path with no manifest
-change.
+`optional`, and `orca-worker` picks its addressing from whether the worker's
+sidecar actually registers a tailnet node: registered means MagicDNS, and no node
+within 45 seconds means a per-pod NodePort on the cluster node. Seeding it later
+promotes the platform to the tailnet path with no manifest change.
+
+The test is deliberately behavioural. Asking whether this Secret exists is the
+obvious check and the wrong one: the workspace identity cannot read Secrets, so
+that question always answers "no" and quietly downgrades a tailnet-capable
+cluster.
 
 ### `operator-oauth` -- a console step, and the one thing a CLI cannot mint
 
