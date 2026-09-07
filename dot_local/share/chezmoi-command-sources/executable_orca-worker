@@ -356,7 +356,9 @@ USAGE
 
 main() {
   local subcommand=${1:-}
-  [ "$#" -gt 0 ] && shift || true
+  if [ "$#" -gt 0 ]; then
+    shift
+  fi
   case "$subcommand" in
     create) cmd_create "$@" ;;
     suspend) cmd_suspend "$@" ;;
