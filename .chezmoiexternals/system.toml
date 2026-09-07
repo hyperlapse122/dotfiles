@@ -2,6 +2,11 @@
   Host/system-level externals: docker credential helpers, wakatime-cli, the
   prezto zsh framework, and WinBox (MikroTik RouterOS GUI).
 */ -}}
+{{- /* prezto is a zsh framework tree, not a command unit, so it asks the fact
+   directly -- a worker runs agents non-interactively and ships no zsh at all.
+   Read at file scope: a trimmed assignment beside the entry would eat the blank
+   line before its [section] header and glue it to the previous value. */ -}}
+{{- $preztoFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
 
 {{- /* ---------- docker-credential-helpers (one helper per OS credential store) ---------- */ -}}
 
@@ -10,6 +15,7 @@
 
 {{- if eq .chezmoi.os "linux" }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "docker-credential-secretservice")) "true" -}}
 [docker-credential-secretservice]
 type = "file"
 targetPath = '.local/share/chezmoi-commands/incomplete/docker-credential-secretservice/docker-credential-secretservice'
@@ -18,9 +24,11 @@ executable = true
 
 [docker-credential-secretservice.checksum]
 sha256 = '{{ $dockerCredentialHelpersSha256 }}'
+{{- end }}
 
 {{- else if eq .chezmoi.os "darwin" }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "docker-credential-osxkeychain")) "true" -}}
 [docker-credential-osxkeychain]
 type = "file"
 targetPath = '.local/share/chezmoi-commands/incomplete/docker-credential-osxkeychain/docker-credential-osxkeychain'
@@ -29,11 +37,13 @@ executable = true
 
 [docker-credential-osxkeychain.checksum]
 sha256 = '{{ $dockerCredentialHelpersSha256 }}'
+{{- end }}
 
 {{- end }}
 
 {{- /* ---------- wakatime-cli ---------- */}}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "wakatime-cli")) "true" -}}
 [wakatime-cli]
 type = "archive-file"
 targetPath = '.local/share/chezmoi-commands/incomplete/wakatime-cli/wakatime-cli'
@@ -43,9 +53,11 @@ path = '{{ printf "wakatime-cli-%s-%s" .chezmoi.os .chezmoi.arch }}'
 
 [wakatime-cli.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wakatime-cli" "field" "sha256" "platform" "auto") }}'
+{{- end }}
 
 {{- /* ---------- prezto (zsh framework) ---------- */}}
 
+{{ if not $preztoFacts.container -}}
 [prezto]
 type = "git-repo"
 targetPath = ".config/zsh/.zprezto"
@@ -83,6 +95,7 @@ refreshPeriod = "8760h"
 {{- if and (not $winboxFacts.container) (or (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64")) (eq .chezmoi.os "darwin")) -}}
 {{- /* The version is resolved at refresh time by packages/release-lock from
        MikroTik's LATEST.4 endpoint; the render reads the locked version. */ -}}
+{{- end }}
 {{- $winboxVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "winbox") -}}
 {{- $winboxBase := printf "https://download.mikrotik.com/routeros/winbox/%s" $winboxVersion -}}
 

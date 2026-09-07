@@ -1,4 +1,8 @@
 {{- /* Kubernetes CLIs: kubectl (+ kubectl-convert), helm, minikube. */ -}}
+{{- /* Every CLI in this file is project-provisioned rather than universal, so a worker
+   image carries none of them and one guard covers the file. kubectl speaks for the
+   set: they are declared together in commands.yaml and excluded together. */ -}}
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "kubectl")) "true" -}}
 
 {{- /* ---------- kubectl (versioned by the kubernetes/kubernetes tag, served from dl.k8s.io) ---------- */ -}}
 
@@ -41,3 +45,4 @@ executable = true
 
 [minikube.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "minikube" "field" "sha256" "platform" "auto") }}'
+{{- end }}

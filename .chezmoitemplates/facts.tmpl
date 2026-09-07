@@ -399,6 +399,25 @@ Three rules hold this file together:
 {{-     $container = true -}}
 {{-   end -}}
 {{- end -}}
+{{- /* The render-time override, same seam and same reason as musl-probe.tmpl's:
+   the real predicate is a stat of /run/.containerenv, which a render on a host
+   cannot forge and a render inside a container cannot escape. CI and the policy
+   gates need both sides against one tree. Absent the key, the stat stands.
+
+     chezmoi execute-template --override-data '{"renderOverrides":{"container":true}}'
+
+   .chezmoiignore reads this same fact, so an override moves the ignore branch
+   with it rather than letting the two disagree about one render. */ -}}
+{{- if hasKey . "renderOverrides" -}}
+{{-   if hasKey .renderOverrides "container" -}}
+{{-     $override := .renderOverrides.container -}}
+{{-     if kindIs "bool" $override -}}
+{{-       $container = $override -}}
+{{-     else -}}
+{{-       $container = has (lower (toString $override)) (list "true" "1" "yes") -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
 {{- $_ := set $facts "container" $container -}}
 
 {{- /* toYaml sorts the keys, so the emitted map is deterministic — which is what

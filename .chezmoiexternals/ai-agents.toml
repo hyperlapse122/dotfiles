@@ -7,6 +7,9 @@
        `renderOverrides.muslLinux` render-time override. */ -}}
 {{- $isMuslLinux := eq (includeTemplate "musl-probe.tmpl" (dict "ctx" .)) "true" -}}
 
+{{- /* Read once at file scope; the skills loop below rebinds `.` to each entry. */ -}}
+{{- $skillsFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
+
 {{- /* ---------- claude ---------- */ -}}
 
 {{- $claudeLockArtifact := dict "ctx" . "tool" "claude" "platform" "auto" "musl" $isMuslLinux -}}
@@ -25,6 +28,7 @@ size = {{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $claudeLockArt
 
 {{- $agyLockArtifact := dict "ctx" . "tool" "agy" "platform" "auto" }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "agy")) "true" -}}
 [agy]
 type = "archive-file"
 targetPath = '.local/share/chezmoi-commands/incomplete/agy/agy'
@@ -44,7 +48,9 @@ sha512 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArt
        network I/O. An emulated-arch target would be served the amd64 binary via the
        lock's emulated entry, so the URL MUST come from the lock — composing the asset
        name from the host arch would name a build upstream does not publish. ---------- */}}
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "agent-browser")) "true" -}}
 [agent-browser]
 type = "file"
 targetPath = '.local/share/chezmoi-commands/incomplete/agent-browser/agent-browser'
@@ -53,12 +59,14 @@ executable = true
 
 [agent-browser.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
+{{- end }}
 
 
 {{- /* ---------- codegraph ---------- */ -}}
 
 {{- $codegraphTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph") }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "codegraph")) "true" -}}
 [codegraph]
 targetPath = '{{ printf ".codegraph/versions/%s" $codegraphTag }}'
 type = "archive"
@@ -67,11 +75,13 @@ stripComponents = 1
 
 [codegraph.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codegraph" "field" "sha256" "platform" "auto") }}'
+{{- end }}
 
 {{- /* ---------- agent-of-empires (aoe) — the worktree/session orchestrator ---------- */ -}}
 
 {{- $aoeTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe") }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "aoe")) "true" -}}
 [aoe]
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "url" "platform" "auto") | quote }}
@@ -87,6 +97,7 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" 
 
 {{- /* The archive entry is the asset name without `.tar.gz`: `codex-<rust arch>-<rust target>`,
        the same chain packages/release-lock/src/registry.ts composes. Linux is the static musl build. */ -}}
+{{- end }}
 {{- $codexRustArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
 {{- $codexRustTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" .chezmoi.os)) }}
 
@@ -165,17 +176,33 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex
        render pins every glabRelease skill to one atomic tag. */ -}}
 {{- $glabReleaseRef := "" -}}
 {{- range .agents.skills.external }}
+{{- /* container policy, the same string vocabulary agent-mcp-servers-json.tmpl
+       already validates for MCP servers: keep (the documented default) or skip. A
+       skill has no command unit, so ships-in-container.tmpl has nothing to look up
+       and the declaration lives beside the skill instead. An unknown value fails
+       rather than defaulting to keep -- a typo must not put a skill in an image. */ -}}
+{{- $skillContainer := "keep" -}}
+{{- if hasKey . "container" -}}
+  {{- if not (kindIs "string" .container) -}}
+    {{- fail (printf "%s skill: field container must be a string, got %s" .name (kindOf .container)) -}}
+  {{- end }}
+  {{- $skillContainer = .container -}}
+  {{- if not (has $skillContainer (list "keep" "skip")) -}}
+    {{- fail (printf "%s skill: unknown container value %q; valid values: keep, skip" .name $skillContainer) -}}
+  {{- end }}
+{{- end }}
+{{- if not (and $skillsFacts.container (eq $skillContainer "skip")) -}}
 {{- $ref := "" -}}
 {{- if and (hasKey . "versionSource") (hasKey . "ref") -}}
   {{- fail (printf "%s skill: versionSource and ref are mutually exclusive" .name) -}}
-{{- end -}}
+{{- end }}
 {{- if hasKey . "versionSource" -}}
   {{- if eq .versionSource "glabRelease" -}}
-    {{- if eq $glabReleaseRef "" -}}{{- $glabReleaseRef = includeTemplate "glab-release-ref.tmpl" $skillsCtx -}}{{- end -}}
+    {{- if eq $glabReleaseRef "" -}}{{- $glabReleaseRef = includeTemplate "glab-release-ref.tmpl" $skillsCtx -}}{{- end }}
     {{- $ref = $glabReleaseRef -}}
   {{- else -}}
     {{- fail (printf "%s skill: unsupported versionSource %q" .name .versionSource) -}}
-  {{- end -}}
+  {{- end }}
 {{- else if hasKey . "ref" -}}
   {{- /* Branch refs (repos with no releases/tags, e.g. shadcn/improve) resolve to a
          40-character commit sha at refresh time by packages/release-lock, keyed on the
@@ -187,10 +214,10 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex
   {{- $ref = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $skillsCtx "tool" .name) -}}
 {{- end }}
 {{- $host := "github" -}}
-{{- if hasKey . "host" -}}{{- $host = .host -}}{{- end -}}
+{{- if hasKey . "host" -}}{{- $host = .host -}}{{- end }}
 {{- if and (ne $host "github") (ne $host "gitlab") -}}
   {{- fail (printf "%s skill: unsupported host %q" .name $host) -}}
-{{- end -}}
+{{- end }}
 {{- if eq $host "gitlab" -}}
   {{- if not (hasKey . "skillPath") -}}
     {{- fail (printf "%s skill: host gitlab requires skillPath" .name) -}}
@@ -207,6 +234,7 @@ url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
 exact = true
 stripComponents = 3
 include = ["*/skills/{{ .name }}/**"]
+{{- end }}
 {{- end }}
 {{- end }}
 

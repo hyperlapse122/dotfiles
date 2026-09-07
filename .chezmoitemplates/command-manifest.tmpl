@@ -11,7 +11,9 @@
 {{-   if and $eligible (hasKey $unit "gate") -}}
 {{-     $gate := $unit.gate -}}
 {{-     if eq $gate "!container" -}}
-{{-       if $facts.container -}}{{- $eligible = false -}}{{- end -}}
+{{- /* Delegated so the link and the payload cannot drift: ships-in-container.tmpl
+   is what .chezmoiexternals/ reads too. */ -}}
+{{-       if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" $ctx "tool" $unitId)) "false" -}}{{- $eligible = false -}}{{- end -}}
 {{-     else if eq $gate "kde" -}}
 {{-       if ne $facts.desktop "kde" -}}{{- $eligible = false -}}{{- end -}}
 {{-     else if eq $gate "gnome" -}}
