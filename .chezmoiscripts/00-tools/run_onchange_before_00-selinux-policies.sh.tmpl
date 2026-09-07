@@ -95,8 +95,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
             \( -context '*:protected_agent_config_t:*' \
             -o -context '*:claude_config_t:*' \
             -o -context '*:gemini_config_t:*' \
-            -o -context '*:codex_config_t:*' \
-            -o -context '*:agent_plugins_t:*' \) -print0 2>/dev/null |
+            -o -context '*:codex_config_t:*' \) -print0 2>/dev/null |
             xargs -0 -r -n 200 restorecon -Fiv 2>/dev/null || true
         else
           printf 'selinux-policies: %s\n' \

@@ -334,8 +334,8 @@ Claude Code and Codex are managed again. Three steps stay with the operator:
   running `claude`, `agy`, `aoe`, and `codex` processes in `unconfined_t`, and the
   apply script lists the ones to re-exec.
 - After the first apply, run `codex plugin --help` and one `codex plugin add` by
-  hand, then check the audit log for denials on `protected_agent_config_t` and
-  `agent_plugins_t` before trusting the reconciler. `codex mcp list` and `codex mcp get` print resolved
+  hand, then check the audit log for denials on `protected_agent_config_t` before
+  trusting the reconciler. `codex mcp list` and `codex mcp get` print resolved
   header values; do not paste their output into issues or pull requests.
 
 `.chezmoiremove` prunes the stray `~/.codex/codex.toml` that an earlier source
