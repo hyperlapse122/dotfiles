@@ -2,9 +2,15 @@ import { lstat, mkdir, readFile, readlink, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import type { CommandManifest } from "../src/manifest.js";
+import type { CommandManifest, UnitManifest } from "../src/manifest.js";
+import { resolveCommandPaths } from "../src/paths.js";
+import {
+  ensureCompletedUnit,
+  isUnitCompleted,
+  writeCompletionMarker,
+} from "../src/producer.js";
 import { activateUnit, reconcileAll } from "../src/reconcile.js";
-import { readState } from "../src/state.js";
+import { readState, type CommandState } from "../src/state.js";
 
 describe("reconcile", () => {
   it("activates version A, switches to version B atomically via current symlink", async () => {
@@ -215,6 +221,172 @@ describe("reconcile", () => {
       const goodLink = join(testHome, ".local/bin/good-cmd");
       const st = await lstat(goodLink);
       expect(st.isSymbolicLink()).toBe(true);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+describe("ensureCompletedUnit repair", () => {
+  const externalUnit = (stagingPath: string): UnitManifest => ({
+    id: "codex",
+    producer: "external",
+    safetyProfile: "native-multi-file",
+    proofEligible: true,
+    mutableTree: false,
+    privacy: "public",
+    mode: "0755",
+    commands: [{ name: "codex-bin", relPath: "codex" }],
+    identity: "rust-v1.2.3",
+    stagingPath,
+  });
+
+  const emptyState: CommandState = {
+    schemaVersion: "command-reconcile/v1",
+    revision: 1,
+    updatedAt: new Date().toISOString(),
+    units: {},
+  };
+
+  it("copies staged entries the completed generation lacks, without rewriting the ones it has", async () => {
+    const testHome = join(tmpdir(), `test-repair-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "staged-codex", { encoding: "utf-8", mode: 0o755 });
+    await writeFile(join(stagingDir, "codex-code-mode-host"), "staged-host", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      const result = await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+
+      expect(result.changed).toBe(true);
+      expect(await readFile(join(storeDir, "codex-code-mode-host"), "utf-8")).toBe("staged-host");
+      // The running entrypoint is never rewritten -- copying over a live binary fails ETXTBSY.
+      expect(await readFile(join(storeDir, "codex"), "utf-8")).toBe("installed-codex");
+      expect(await isUnitCompleted(storeDir)).toBe(true);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("keeps the executable bit on a repaired entry", async () => {
+    const testHome = join(tmpdir(), `test-repair-mode-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "staged-codex", { encoding: "utf-8", mode: 0o755 });
+    await writeFile(join(stagingDir, "codex-code-mode-host"), "staged-host", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+      const st = await lstat(join(storeDir, "codex-code-mode-host"));
+      expect(st.mode & 0o111).not.toBe(0);
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("leaves a completed generation alone when it already holds every staged entry", async () => {
+    const testHome = join(tmpdir(), `test-repair-noop-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "staged-codex", { encoding: "utf-8", mode: 0o755 });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      const result = await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+      expect(result.changed).toBe(false);
+      expect(await readFile(join(storeDir, "codex"), "utf-8")).toBe("installed-codex");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("accepts a completed generation whose staging path is gone", async () => {
+    const testHome = join(tmpdir(), `test-repair-nostage-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "installed-codex", {
+      encoding: "utf-8",
+      mode: 0o755,
+    });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    try {
+      const result = await ensureCompletedUnit(
+        paths,
+        externalUnit(".local/share/chezmoi-commands/incomplete/codex"),
+        emptyState,
+      );
+      expect(result.changed).toBe(false);
+      expect(result.identity).toBe("rust-v1.2.3");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("still copies a file staging path per declared command", async () => {
+    const testHome = join(tmpdir(), `test-repair-file-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-command-sources/codex";
+    const stagingFile = join(testHome, stagingRel);
+
+    await mkdir(join(testHome, ".local/share/chezmoi-command-sources"), { recursive: true });
+    await writeFile(stagingFile, "#!/bin/sh\n", { encoding: "utf-8", mode: 0o755 });
+
+    const unit: UnitManifest = {
+      ...externalUnit(stagingRel),
+      id: "codex-wrapper",
+      producer: "source",
+      safetyProfile: "interpreted",
+      proofEligible: false,
+      commands: [{ name: "codex", relPath: "codex-wrapper" }],
+      identity: "sha-abc",
+    };
+
+    try {
+      const result = await ensureCompletedUnit(paths, unit, emptyState);
+      expect(result.changed).toBe(true);
+      const installed = join(paths.storeDir, "codex-wrapper", "sha-abc", "codex-wrapper");
+      expect(await readFile(installed, "utf-8")).toBe("#!/bin/sh\n");
     } finally {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }

@@ -29,29 +29,7 @@ async function cleanupQuarantine(
       }
       for (const version of versions) {
         const qPath = join(qUnitDir, version);
-        let inUse = roots.uncertain;
-        if (!inUse) {
-          try {
-            const files = await readdir(qPath, { recursive: true });
-            for (const f of files) {
-              const fullPath = join(qPath, f);
-              if (roots.paths.has(fullPath)) {
-                inUse = true;
-                break;
-              }
-              try {
-                const st = await lstat(fullPath);
-                if (roots.inodes.has(`${st.dev}:${st.ino}`)) {
-                  inUse = true;
-                  break;
-                }
-              } catch {}
-            }
-          } catch {
-            inUse = true;
-          }
-        }
-        if (inUse) {
+        if (await generationInUse(qPath, roots)) {
           const storeVersionDir = join(paths.storeDir, unitId, version);
           await prepareDir(join(paths.storeDir, unitId), 0o755);
           await rename(qPath, storeVersionDir).catch(() => {});
@@ -61,6 +39,34 @@ async function cleanupQuarantine(
       }
     }
   } catch {}
+}
+
+/**
+ * Whether any running process holds a file inside `versionDir`.
+ *
+ * Walks the whole generation rather than the unit's declared commands: a
+ * proof-eligible unit may carry native binaries that are not public commands
+ * (the codex code-mode helper), and those are just as live as the entrypoint.
+ * An unreadable directory counts as in use -- absent evidence never authorises
+ * a delete.
+ */
+async function generationInUse(versionDir: string, roots: ProcessRoots): Promise<boolean> {
+  if (roots.uncertain) return true;
+  let files: string[];
+  try {
+    files = await readdir(versionDir, { recursive: true });
+  } catch {
+    return true;
+  }
+  for (const relative of files) {
+    const fullPath = join(versionDir, relative);
+    if (roots.paths.has(fullPath)) return true;
+    try {
+      const st = await lstat(fullPath);
+      if (roots.inodes.has(`${st.dev}:${st.ino}`)) return true;
+    } catch {}
+  }
+  return false;
 }
 
 export async function pruneEligibleUnits(
@@ -110,27 +116,7 @@ export async function pruneEligibleUnits(
         continue;
       }
 
-      let inUse = false;
-      try {
-        for (const cmd of unit.commands) {
-          const cmdPath = join(versionDir, cmd.relPath ?? cmd.name);
-          if (roots.paths.has(cmdPath)) {
-            inUse = true;
-            break;
-          }
-          try {
-            const st = await lstat(cmdPath);
-            if (roots.inodes.has(`${st.dev}:${st.ino}`)) {
-              inUse = true;
-              break;
-            }
-          } catch {}
-        }
-      } catch {
-        inUse = true;
-      }
-
-      if (inUse) {
+      if (await generationInUse(versionDir, roots)) {
         retained.push(versionLabel);
         continue;
       }
@@ -147,25 +133,7 @@ export async function pruneEligibleUnits(
       }
 
       const recheckedRoots = await rootScanner();
-      let lateUse = recheckedRoots.uncertain;
-      if (!lateUse) {
-        for (const cmd of unit.commands) {
-          const cmdPath = join(quarantinePath, cmd.relPath ?? cmd.name);
-          if (recheckedRoots.paths.has(cmdPath)) {
-            lateUse = true;
-            break;
-          }
-          try {
-            const st = await lstat(cmdPath);
-            if (recheckedRoots.inodes.has(`${st.dev}:${st.ino}`)) {
-              lateUse = true;
-              break;
-            }
-          } catch {}
-        }
-      }
-
-      if (lateUse) {
+      if (await generationInUse(quarantinePath, recheckedRoots)) {
         await rename(quarantinePath, versionDir).catch(() => {});
         retained.push(versionLabel);
       } else {
