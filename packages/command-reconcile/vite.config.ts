@@ -9,6 +9,11 @@ export default defineConfig({
     tasks: {
       build: {
         command: "bun build --compile ./src/cli.ts --outfile ./dist/command-reconcile",
+        // The compiled binary embeds a bun runtime, but the locked bun version
+        // lives in .chezmoidata/releases.json, outside this workspace root and
+        // out of reach of any `input` base. The build scripts export it as
+        // DOTFILES_BUN_VERSION so it can enter the cache key here instead.
+        env: ["DOTFILES_BUN_VERSION"],
         input: [
           "src/**",
           "package.json",
