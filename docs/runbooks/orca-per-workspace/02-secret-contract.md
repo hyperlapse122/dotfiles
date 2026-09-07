@@ -128,8 +128,27 @@ cluster.
 
 ### `operator-oauth` -- a console step, and the one thing a CLI cannot mint
 
-An OAuth client with `devices` and `auth_keys` write scopes, owning
-`tag:orca-proxy`. It is created in the Tailscale admin console; there is no API
+An OAuth client with **three** write scopes -- `devices:core`, `auth_keys` and
+`services` -- owning `tag:orca-proxy`, `tag:k8s-operator` and `tag:k8s`.
+
+`services` is the one that is easy to miss, and it fails in a way that points
+somewhere else: Tailscale answers a request for a scope it has not granted with
+**404, not 403**, so the operator reports
+
+```
+error creating Tailscale Service: not found (404)
+```
+
+which reads like a feature the tailnet does not have. Check the scope rather than
+the plan:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $token" \
+  https://api.tailscale.com/api/v2/tailnet/-/vip-services   # 404 without, 200 with
+```
+
+Scopes on an existing credential are editable in the console, so adding one does
+not invalidate a seeded Secret. It is created in the Tailscale admin console; there is no API
 path to create the first one, because creating it is what gives you API access in
 the first place.
 

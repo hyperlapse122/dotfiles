@@ -126,6 +126,16 @@ Two things in the Tailscale admin console promote it, and neither has a CLI path
 Seed those two Secrets and the next worker is created on the tailnet instead. No
 manifest changes, no recipe changes.
 
+The proxy is exposed as a Tailscale **Service** (`svc:orca-proxy`), not as a
+device, and a Service needs two things a device does not:
+
+- **A free name.** A device already called `orca-proxy` blocks it, and the
+  operator says so precisely: `name exists but is not a service (400)`. Delete
+  the stale device first.
+- **Host approval.** A newly advertised Service sits at *needs approval* in
+  Access controls → Services and answers nothing until its host -- the
+  ProxyGroup replica -- is approved. This is a one-time click per host.
+
 ## 7. Prove it end to end
 
 [06 Validation](06-validation.md).
