@@ -65,12 +65,8 @@
 # prunes nothing. Codex-owned prefixes are rejected at render time by
 # codex-settings-validate.tmpl, not merely avoided by convention.
 #
-# Label lifecycle: the reconciler writes through a temp file and a rename, which
-# carries away the file's SELinux label. The label is restored here on every apply
-# and a failure to do so is reported, never swallowed: during an unlabelled window
-# every unconfined process of the user may write the file. An orphaned reconciler
-# temp file would hold resolved 1Password header values, so stale ones are removed
-# before the write.
+# An orphaned reconciler temp file would hold resolved 1Password header values, so
+# stale ones are removed before the write.
 set -euo pipefail
 
 {{ if eq (len $declared) 0 -}}
@@ -102,28 +98,5 @@ cat >"$config" <<'JSON'
 {{ $declared | toPrettyJson | trim }}
 JSON
 "$RECONCILER" settings "$CODEX_HOME" config.toml "$config"
-
-# The skills symlink joins config.toml here rather than relying on the policy
-# script, which is fingerprinted on system/linux/selinux/** and so does not run
-# on an apply that only re-creates the symlink. That is how ~/.codex/skills came
-# to carry user_home_t while its filecon declares codex_config_t. Addressed
-# through CODEX_HOME, not $HOME/.codex, because the test fixture drives this
-# script through a scratch CODEX_HOME. No -R: the target is a single symlink.
-codex_labelled=("$CODEX_HOME/config.toml")
-[[ -e "$CODEX_HOME/skills" || -L "$CODEX_HOME/skills" ]] && codex_labelled+=("$CODEX_HOME/skills")
-if command -v restorecon >/dev/null 2>&1; then
-  for target in "${codex_labelled[@]}"; do
-    if ! restorecon -F "$target" 2>/dev/null; then
-      printf 'config-codex-settings: could not restore the SELinux label of %s; until the next apply any unconfined process may write it.\n' "$target" >&2
-    else
-      context="$(stat -c %C "$target" 2>/dev/null || printf '?')"
-      if [[ $context != *:codex_config_t:* ]]; then
-        printf 'config-codex-settings: %s carries the SELinux context %s, not codex_config_t; check that the dotfiles policy module is installed.\n' "$target" "$context" >&2
-      fi
-    fi
-  done
-elif [[ -e /sys/fs/selinux/enforce ]]; then
-  printf 'config-codex-settings: restorecon is unavailable on this SELinux host; the labels of %s were not restored.\n' "${codex_labelled[*]}" >&2
-fi
 {{- end }}
 {{- end }}

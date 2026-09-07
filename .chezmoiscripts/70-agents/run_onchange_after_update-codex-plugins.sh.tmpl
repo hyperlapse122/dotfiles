@@ -51,13 +51,6 @@ command -v codex >/dev/null 2>&1 || die 'preflight: codex is not on PATH'
 [[ -f $MARKETPLACE_ROOT/marketplace.json ]] ||
   die "preflight: personal marketplace manifest is missing: $MARKETPLACE_ROOT/marketplace.json"
 
-# ~/.agents/plugins is created by this apply after 00-selinux-policies ran its
-# restorecon over $HOME, so the directory still carries whatever label its
-# creation inherited. Relabel it here so Codex reads it under the protected type
-# the policy assigns; a host without restorecon has no label to repair.
-if command -v restorecon >/dev/null 2>&1; then
-  restorecon -RF "$HOME/.agents/plugins" 2>/dev/null || true
-fi
 {{- if ne $removedRows "" }}
 
 # Removals run first and stay best-effort: removing a plugin that is already
@@ -96,12 +89,4 @@ for row in "${PLUGINS[@]}"; do
 done
 {{- end }}
 
-# Codex records the installed set in config.toml through a temp file and a rename,
-# which carries away the codex_config_t label that config-codex-settings restored
-# earlier in this apply. Restore it again here, after the last Codex write.
-config="${CODEX_HOME:-$HOME/.codex}/config.toml"
-if command -v restorecon >/dev/null 2>&1 && [[ -f $config ]]; then
-  restorecon -F "$config" 2>/dev/null ||
-    printf 'update-codex-plugins: could not restore the SELinux label of %s; until the next apply any unconfined process may write it.\n' "$config" >&2
-fi
 {{- end }}
