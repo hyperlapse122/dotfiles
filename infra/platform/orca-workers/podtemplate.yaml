@@ -70,6 +70,19 @@ template:
               secretKeyRef:
                 name: orca-worker-proxy
                 key: api-key
+          # sshd starts a login session without the pod's environment, so a
+          # variable set here is invisible to the workspace unless the entrypoint
+          # writes it into the login environment. WORKER_EXPORT_VARS is that
+          # list: the platform decides which variables cross, the image only
+          # carries them across.
+          - name: WORKER_EXPORT_VARS
+            value: >-
+              MISE_CACHE_DIR
+              npm_config_cache
+              npm_config_store_dir
+              BUN_INSTALL_CACHE_DIR
+              YARN_CACHE_FOLDER
+              UV_CACHE_DIR
           # Content-addressed caches only (B7). mise's DOWNLOAD cache is shared;
           # its install tree deliberately is not.
           - name: MISE_CACHE_DIR

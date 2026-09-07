@@ -62,9 +62,16 @@ up" cause.
   changes.
 - `projectRoot` is `/home/worker/workspace`. Orca connects over its SSH relay and
   imports the repository itself; the script does not clone.
-- `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` already exported in the login
-  shell and in `~/.bashrc`, so both an interactive session and
-  `ssh worker <command>` see them.
+- A working toolchain on `PATH`. This is not automatic: sshd starts a session
+  without the pod's environment and the image's own `ENV` lines apply to the
+  container process, not to that session -- so the entrypoint writes
+  `/etc/profile.d/99-orca-worker.sh` with the mise shims, `~/.local/bin`, the
+  proxy credential, and every variable the PodTemplate names in
+  `WORKER_EXPORT_VARS` (the shared cache paths). The same file is sourced from
+  `~/.bashrc`, so `ssh worker <command>` -- which is not a login shell -- sees
+  the same environment an interactive session does.
+- `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` among them, so an agent in the
+  worker reaches the model proxy with no further setup.
 - Project `op://` references resolvable through Connect, so `op inject`, `op run`
   and `op read` work in `mise` tasks -- including the ones that need 1Password
   desktop approval on a workstation and therefore run BETTER in a worker.

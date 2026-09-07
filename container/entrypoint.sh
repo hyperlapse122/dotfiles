@@ -104,11 +104,17 @@ chown "$WORKER_USER:$WORKER_USER" "$authorized"
 chmod 0600 "$authorized"
 [[ -s "$authorized" ]] || die 'authorized_keys came back empty; no one could log in'
 
-# --- 6. The proxy credential, resolved ONCE ---------------------------------
-# Not through apiKeyHelper or the Codex auth.command: `op read` takes about 19s on
-# this hardware and the Codex auth.timeout_ms default is 5000ms, so a
-# per-invocation helper times out. Resolve here, write where a LOGIN SHELL will
-# read it -- an export from this process would not survive into an sshd session.
+# --- 6. The environment a workspace actually gets ---------------------------
+# sshd starts a login session from PID 1's children WITHOUT this process's
+# environment, and the image's ENV lines apply to the container process, not to
+# that session. So everything a workspace needs -- its toolchain on PATH, the
+# shared caches, the proxy credential -- has to be written where a shell reads
+# it, or the workspace gets a machine whose tools are installed and invisible.
+profile=/etc/profile.d/99-orca-worker.sh
+
+# The proxy credential, resolved ONCE and never per invocation. Not through
+# apiKeyHelper or the Codex auth.command: `op read` takes about 19s on this
+# hardware and the Codex auth.timeout_ms default is 5000ms.
 #
 # Two sources, in this order. ANTHROPIC_AUTH_TOKEN comes straight from the
 # platform's own Secret and is preferred: the proxy key is issued BY the cluster,
@@ -116,41 +122,59 @@ chmod 0600 "$authorized"
 # already owns -- and two copies that must be rotated together is a drift class,
 # not a safeguard. ANTHROPIC_AUTH_TOKEN_REF stays supported for a platform that
 # would rather keep the value in a vault.
-if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" || -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
-  if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
-    log 'using the model proxy credential supplied by the platform'
-    token=$ANTHROPIC_AUTH_TOKEN
-  else
-    log 'resolving the model proxy credential'
-    token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
-      op read "${ANTHROPIC_AUTH_TOKEN_REF}")
-  fi
+token=
+if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
+  log 'using the model proxy credential supplied by the platform'
+  token=$ANTHROPIC_AUTH_TOKEN
+elif [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
+  log 'resolving the model proxy credential'
+  token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+    op read "${ANTHROPIC_AUTH_TOKEN_REF}")
   [[ -n "$token" ]] || die 'the proxy credential came back empty'
-  # 0640 root:worker, not the 0644 a profile.d drop-in usually carries: this file
-  # holds a live credential, and a login shell reads it as the worker, so group
-  # read is all it needs. Written with a restrictive umask so it is never briefly
-  # world-readable between creation and chmod.
-  profile=/etc/profile.d/99-orca-worker.sh
-  ( umask 037
-  {
-    printf '# Written by worker-entrypoint at pod start. Not baked into any layer.\n'
-    printf 'export ANTHROPIC_AUTH_TOKEN=%q\n' "$token"
-    [[ -n "${ANTHROPIC_BASE_URL:-}" ]] && printf 'export ANTHROPIC_BASE_URL=%q\n' "$ANTHROPIC_BASE_URL"
-    [[ -n "${OP_CONNECT_HOST:-}" ]] && printf 'export OP_CONNECT_HOST=%q\n' "$OP_CONNECT_HOST"
-    [[ -n "${OP_CONNECT_TOKEN:-}" ]] && printf 'export OP_CONNECT_TOKEN=%q\n' "$OP_CONNECT_TOKEN"
-  } >"$profile" )
-  chown "root:$WORKER_USER" "$profile"
-  chmod 0640 "$profile"
-  # /etc/profile.d covers a LOGIN shell, which is what an attached workspace gets.
-  # `ssh worker <command>` is not a login shell and reads ~/.bashrc instead, so the
-  # same file is sourced from there -- otherwise a scripted agent invocation would
-  # silently have no credentials while an interactive one worked.
-  bashrc="${WORKER_HOME}/.bashrc"
-  guard='[ -r /etc/profile.d/99-orca-worker.sh ] && . /etc/profile.d/99-orca-worker.sh'
-  grep -qF "$guard" "$bashrc" 2>/dev/null || printf '%s\n' "$guard" >>"$bashrc"
-  chown "$WORKER_USER:$WORKER_USER" "$bashrc"
-  unset token
 fi
+
+log 'writing the login environment'
+# 0640 root:worker, not the 0644 a profile.d drop-in usually carries: this file
+# can hold a live credential, and a login shell reads it as the worker, so group
+# read is all it needs. Written with a restrictive umask so it is never briefly
+# world-readable between creation and chmod.
+( umask 037
+{
+  printf '# Written by worker-entrypoint at pod start. Not baked into any layer.\n'
+  # mise INSTALLS tools into the image and puts its shims here. Without this
+  # line `node` is present and "command not found", which reads like a broken
+  # image rather than a PATH an sshd session never inherited.
+  printf 'export PATH=%q:%q:"$PATH"\n' \
+    "${WORKER_HOME}/.local/share/mise/shims" "${WORKER_HOME}/.local/bin"
+  [[ -n "$token" ]] && printf 'export ANTHROPIC_AUTH_TOKEN=%q\n' "$token"
+  [[ -n "${ANTHROPIC_BASE_URL:-}" ]] && printf 'export ANTHROPIC_BASE_URL=%q\n' "$ANTHROPIC_BASE_URL"
+  [[ -n "${OP_CONNECT_HOST:-}" ]] && printf 'export OP_CONNECT_HOST=%q\n' "$OP_CONNECT_HOST"
+  [[ -n "${OP_CONNECT_TOKEN:-}" ]] && printf 'export OP_CONNECT_TOKEN=%q\n' "$OP_CONNECT_TOKEN"
+  # WORKER_EXPORT_VARS names variables the PLATFORM wants a workspace shell to
+  # see -- the shared cache paths are what it carries today. The image does not
+  # name them itself: which caches are shared, and where, is a platform decision,
+  # and hard-coding it here would put half of that decision in an image that has
+  # to be rebuilt to change it.
+  for var in ${WORKER_EXPORT_VARS:-}; do
+    if [[ ! $var =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      printf 'worker-entrypoint: ignoring invalid name in WORKER_EXPORT_VARS: %s\n' "$var" >&2
+      continue
+    fi
+    [[ -n "${!var:-}" ]] || continue
+    printf 'export %s=%q\n' "$var" "${!var}"
+  done
+} >"$profile" )
+chown "root:$WORKER_USER" "$profile"
+chmod 0640 "$profile"
+# /etc/profile.d covers a LOGIN shell, which is what an attached workspace gets.
+# `ssh worker <command>` is not a login shell and reads ~/.bashrc instead, so the
+# same file is sourced from there -- otherwise a scripted agent invocation would
+# silently have no credentials and no toolchain while an interactive one worked.
+bashrc="${WORKER_HOME}/.bashrc"
+guard='[ -r /etc/profile.d/99-orca-worker.sh ] && . /etc/profile.d/99-orca-worker.sh'
+grep -qF "$guard" "$bashrc" 2>/dev/null || printf '%s\n' "$guard" >>"$bashrc"
+chown "$WORKER_USER:$WORKER_USER" "$bashrc"
+unset token
 
 # --- 7. Become sshd ---------------------------------------------------------
 # exec, so sshd is PID 1 and receives the pod's signals directly. -D keeps it in
