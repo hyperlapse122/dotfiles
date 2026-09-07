@@ -16,12 +16,14 @@ fail() { printf 'test-selinux-protected-configs: %s\n' "$*" >&2; exit 1; }
 
 for token in \
   "(type protected_agent_config_t)" \
+  "(type protected_agent_plugins_t)" \
   "(type claude_config_t)" \
   "(type gemini_config_t)" \
   "(type codex_config_t)" \
   "(roletype object_r protected_agent_config_t)" \
+  "(roletype object_r protected_agent_plugins_t)" \
   "(roletype object_r codex_config_t)" \
-  "(typeattributeset protected_agent_config_type (protected_agent_config_t claude_config_t gemini_config_t codex_config_t))" \
+  "(typeattributeset protected_agent_config_type (protected_agent_config_t protected_agent_plugins_t claude_config_t gemini_config_t codex_config_t))" \
   "(type chezmoi_t)" \
   "(type claude_t)" \
   "(type agy_t)" \
@@ -76,8 +78,8 @@ for token in \
   "(typetransition claude_config_writer user_home_t file \"settings.json.lock\" claude_config_t)" \
   "(filecon \"HOME_DIR/\\.codex/config\\.toml\" file (unconfined_u object_r codex_config_t" \
   "(filecon \"HOME_DIR/\\.codex/skills\" symlink (unconfined_u object_r codex_config_t" \
-  "(filecon \"HOME_DIR/\\.agents/skills(/.*)?\"" \
-  "(filecon \"HOME_DIR/\\.agents/plugins(/.*)?\"" \
+  "(filecon \"HOME_DIR/\\.agents/skills(/.*)?\" any (unconfined_u object_r protected_agent_config_t" \
+  "(filecon \"HOME_DIR/\\.agents/plugins(/.*)?\" any (unconfined_u object_r protected_agent_plugins_t" \
   "(filecon \"HOME_DIR/\\.claude\\.json.*\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.mcp\\.json\" file (unconfined_u object_r claude_config_t" \
   "(filecon \"HOME_DIR/\\.claude/settings\\.json\" file (unconfined_u object_r claude_config_t" \
@@ -182,6 +184,10 @@ forbidden_writer 'aoe_t' 'codex_config_t'
 forbidden_writer 'codex_t' 'claude_config_t'
 forbidden_writer 'codex_t' 'gemini_config_t'
 forbidden_writer 'codex_t' 'protected_agent_config_t'
+forbidden_writer 'claude_t' 'protected_agent_plugins_t'
+forbidden_writer 'agy_t' 'protected_agent_plugins_t'
+forbidden_writer 'aoe_t' 'protected_agent_plugins_t'
+forbidden_writer 'codex_t' 'protected_agent_plugins_t'
 
 # Suppression must not spread. The token loop above proves the one sanctioned
 # dontaudit is PRESENT; it cannot see a second, broader one added beside it, and
@@ -195,7 +201,7 @@ sanctioned_dontaudit='(dontaudit codex_t protected_agent_config_t (dir (write)))
 while IFS= read -r line; do
   [[ $line == "$sanctioned_dontaudit" ]] && continue
   fail "unsanctioned dontaudit on a protected type widens the audit blind spot: $line"
-done < <(grep -E '^\(dontaudit .*(protected_agent_config_t|protected_agent_config_type|claude_config_t|gemini_config_t|codex_config_t)' "$cil_file")
+done < <(grep -E '^\(dontaudit .*(protected_agent_config_t|protected_agent_plugins_t|protected_agent_config_type|claude_config_t|gemini_config_t|codex_config_t)' "$cil_file")
 
 # grep -qF above matches a substring, so commenting the rule out (`; (dontaudit
 # ...)`) satisfies the pin while the module carries no suppression at all. Pin it
@@ -218,9 +224,9 @@ fi
 # and unconfined_t holds files_unconfined_type, so a protected type that joins
 # file_type is writable by every unconfined process and the read-only rule below
 # it becomes decorative. An earlier revision of this module shipped exactly that
-# and enforced nothing. The three protected types must carry NO attribute other
-# than the module's own grouping attribute.
-for protected in protected_agent_config_t claude_config_t gemini_config_t codex_config_t protected_agent_config_type; do
+# and enforced nothing. Every protected type must carry NO attribute other than
+# the module's own grouping attribute.
+for protected in protected_agent_config_t protected_agent_plugins_t claude_config_t gemini_config_t codex_config_t protected_agent_config_type; do
   if grep -qE "^\(typeattributeset (file_type|exec_type|domain|[a-z_]*unconfined[a-z_]*) \(${protected}\)" "$cil_file"; then
     fail "$protected must not join a base-policy attribute: that grants every unconfined domain write access"
   fi
@@ -228,7 +234,7 @@ done
 # `grep -q` prints nothing, so piping it into another grep made this check dead:
 # the second grep saw an empty stream and the fail was unreachable. Emit the
 # matching lines, drop the sanctioned one, and fail on whatever is left.
-if grep -E '^[[:space:]]*\(typeattributeset [a-z_]+ \(.*\b(protected_agent_config_t|claude_config_t|gemini_config_t|codex_config_t)\b.*\)\)' "$cil_file" |
+if grep -E '^[[:space:]]*\(typeattributeset [a-z_]+ \(.*\b(protected_agent_config_t|protected_agent_plugins_t|claude_config_t|gemini_config_t|codex_config_t)\b.*\)\)' "$cil_file" |
   grep -v '^[[:space:]]*(typeattributeset protected_agent_config_type ' | grep -q .; then
   fail 'a protected type was added to an attribute other than protected_agent_config_type'
 fi
@@ -327,6 +333,7 @@ grep -qF 'reclaiming stale protected labels' "$rendered" ||
   fail 'rendered script does not reclaim stale protected labels left by an earlier policy revision'
 for reclaim_selector in \
   "-context '*:protected_agent_config_t:*'" \
+  "-context '*:protected_agent_plugins_t:*'" \
   "-context '*:claude_config_t:*'" \
   "-context '*:gemini_config_t:*'" \
   "-context '*:codex_config_t:*'"; do
@@ -455,13 +462,18 @@ EOF
   # Compared in bash, not awk: an awk -v assignment resolves escape sequences,
   # so a spec like HOME_DIR/\.claude(/.*)? would arrive with its backslash gone
   # and match nothing.
-  expect_context() {
-    local spec=$1 want=$2 got='' line
+  context_for() {
+    local fc=$1 spec=$2 line
     while IFS= read -r line; do
       [[ ${line%%$'\t'*} == "$spec" ]] || continue
-      got=${line##*$'\t'}
-      break
-    done < "$scratch/file_contexts"
+      printf '%s' "${line##*$'\t'}"
+      return 0
+    done < "$fc"
+    return 1
+  }
+  expect_context() {
+    local spec=$1 want=$2 got=''
+    got=$(context_for "$scratch/file_contexts" "$spec" || true)
     [[ $got == "$want" ]] || fail "file_contexts maps $spec to ${got:-<nothing>}, expected $want"
   }
   expect_context 'HOME_DIR/\.claude/settings\.json' 'unconfined_u:object_r:claude_config_t'
@@ -474,12 +486,32 @@ EOF
   expect_context 'HOME_DIR/\.gemini/skills' 'unconfined_u:object_r:gemini_config_t'
   expect_context 'HOME_DIR/\.mcp\.json' 'unconfined_u:object_r:claude_config_t'
   expect_context 'HOME_DIR/\.agents/skills(/.*)?' 'unconfined_u:object_r:protected_agent_config_t'
-  expect_context 'HOME_DIR/\.agents/plugins(/.*)?' 'unconfined_u:object_r:protected_agent_config_t'
+  expect_context 'HOME_DIR/\.agents/plugins(/.*)?' 'unconfined_u:object_r:protected_agent_plugins_t'
   expect_context 'HOME_DIR/\.codex/config\.toml' 'unconfined_u:object_r:codex_config_t'
   expect_context 'HOME_DIR/\.codex/skills' 'unconfined_u:object_r:codex_config_t'
   expect_context 'HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex' 'unconfined_u:object_r:codex_exec_t'
   expect_context 'HOME_DIR/\.local/lib/commands/store/aoe/[^/]+/aoe' 'unconfined_u:object_r:aoe_exec_t'
   expect_context 'HOME_DIR/\.local/bin/aoe' 'unconfined_u:object_r:aoe_exec_t'
+
+  # The plugins mapping above is only worth having if it would fail on the
+  # revert it exists for: the plugins root back under the type the Codex
+  # suppression names, where a dir-write denial goes unaudited again. Rebuild
+  # that exact defect and require the mapping check to see it.
+  plugins_mutant_cil="$scratch/plugins_mutant.cil"
+  sed '/^(filecon .*\.agents\/plugins/s/protected_agent_plugins_t/protected_agent_config_t/' \
+    "$cil_file" > "$plugins_mutant_cil"
+  if cmp -s "$cil_file" "$plugins_mutant_cil"; then
+    fail 'the plugins-split mutant changed nothing: the module no longer labels the plugins root with its own type'
+  fi
+  secilc -N -o "$scratch/policy_plugins_mutant" -f "$scratch/file_contexts_plugins_mutant" \
+    "$base_stub" "$plugins_mutant_cil" || fail 'secilc failed to compile the plugins-split mutant'
+  mutant_plugins_context=$(context_for "$scratch/file_contexts_plugins_mutant" 'HOME_DIR/\.agents/plugins(/.*)?' || true)
+  if [[ $mutant_plugins_context == 'unconfined_u:object_r:protected_agent_plugins_t' ]]; then
+    fail 'the file_contexts check accepts a module whose plugins root is back under the suppressed type'
+  fi
+  [[ $mutant_plugins_context == 'unconfined_u:object_r:protected_agent_config_t' ]] ||
+    fail "the plugins-split mutant was rejected for the wrong reason: it maps to ${mutant_plugins_context:-<nothing>}"
+  printf 'test-selinux-protected-configs: plugins root split proven against a revert.\n'
 
   # The strongest proof available offline: ask the COMPILED policy who may write
   # what. The stub reproduces Fedora's blanket files_unconfined_type grant, so a
@@ -505,35 +537,43 @@ MUTATING = {'write', 'create', 'unlink', 'rename', 'setattr', 'append',
             'add_name', 'remove_name', 'rmdir', 'reparent'}
 EXPECTED = {
     ('chezmoi_t', 'protected_agent_config_t'): True,
+    ('chezmoi_t', 'protected_agent_plugins_t'): True,
     ('chezmoi_t', 'claude_config_t'): True,
     ('chezmoi_t', 'gemini_config_t'): True,
     ('chezmoi_t', 'codex_config_t'): True,
     ('claude_t', 'claude_config_t'): True,
     ('claude_t', 'gemini_config_t'): False,
     ('claude_t', 'protected_agent_config_t'): False,
+    ('claude_t', 'protected_agent_plugins_t'): False,
     ('claude_t', 'codex_config_t'): False,
     ('agy_t', 'gemini_config_t'): True,
     ('agy_t', 'claude_config_t'): False,
     ('agy_t', 'protected_agent_config_t'): False,
+    ('agy_t', 'protected_agent_plugins_t'): False,
     ('agy_t', 'codex_config_t'): False,
     ('aoe_t', 'claude_config_t'): True,
     ('aoe_t', 'gemini_config_t'): False,
     ('aoe_t', 'protected_agent_config_t'): False,
+    ('aoe_t', 'protected_agent_plugins_t'): False,
     ('aoe_t', 'codex_config_t'): False,
     ('codex_t', 'codex_config_t'): True,
     ('codex_t', 'claude_config_t'): False,
     ('codex_t', 'gemini_config_t'): False,
     ('codex_t', 'protected_agent_config_t'): False,
+    ('codex_t', 'protected_agent_plugins_t'): False,
     ('unconfined_t', 'protected_agent_config_t'): False,
+    ('unconfined_t', 'protected_agent_plugins_t'): False,
     ('unconfined_t', 'claude_config_t'): False,
     ('unconfined_t', 'gemini_config_t'): False,
     ('unconfined_t', 'codex_config_t'): False,
     ('rpm_script_t', 'protected_agent_config_t'): False,
+    ('rpm_script_t', 'protected_agent_plugins_t'): False,
     ('rpm_script_t', 'claude_config_t'): False,
     ('rpm_script_t', 'gemini_config_t'): False,
     ('rpm_script_t', 'codex_config_t'): False,
 }
-READ_ONLY = ('claude_config_t', 'gemini_config_t', 'protected_agent_config_t')
+READ_ONLY = ('claude_config_t', 'gemini_config_t', 'protected_agent_config_t',
+             'protected_agent_plugins_t')
 # A named file transition is keyed by (source, target dir type, class, name);
 # the result is the label a new file receives. ~/.codex, project checkouts and
 # .vscode directories are all user_home_t, so this is exactly the question a
@@ -624,7 +664,7 @@ for (source, target), want in sorted(EXPECTED.items()):
         failures.append(f'{source} {verb} write {target}, expected the opposite')
 # A label that cannot associate with the filesystem cannot be set at all:
 # restorecon fails with `avc: denied { associate } ... tcontext=...:fs_t`.
-for label in ('protected_agent_config_t', 'claude_config_t', 'gemini_config_t'):
+for label in ('protected_agent_config_t', 'protected_agent_plugins_t', 'claude_config_t', 'gemini_config_t'):
     if not may_associate(label):
         failures.append(f'{label} may not associate with fs_t, so restorecon cannot label it')
 for label in ('codex_config_t',):
@@ -656,7 +696,8 @@ for (source, name), want in sorted(NAMED_TRANSITIONS.items()):
 # attribute instead of naming them. The compiled policy has already expanded
 # every attribute, so this sees the real rule set. Exactly one dontaudit may
 # touch a protected type, and these are its exact terms.
-PROTECTED = {'protected_agent_config_t', 'claude_config_t', 'gemini_config_t', 'codex_config_t'}
+PROTECTED = {'protected_agent_config_t', 'protected_agent_plugins_t', 'claude_config_t',
+             'gemini_config_t', 'codex_config_t'}
 SANCTIONED_DONTAUDIT = {('codex_t', 'protected_agent_config_t', 'dir', frozenset({'write'}))}
 observed_dontaudit = set()
 for rule in setools.TERuleQuery(policy, ruletype=['dontaudit']).results():
