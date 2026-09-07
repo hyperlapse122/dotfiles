@@ -1,0 +1,66 @@
+{{- /*
+bun-resolve.sh.tmpl — the shared bun resolution ladder for chezmoi scripts that
+build with bun. Emits plain shell; it takes no data argument.
+
+.ci/lib/bun.sh is the same ladder for CI scripts, which run outside chezmoi's
+templating and so cannot include this partial. The two must stay rung-for-rung
+identical. If you change one, change the other.
+
+THE LADDER, in order:
+
+  1  bun already on PATH
+  2  $HOME/.local/bin/bun                                    public link
+  3  $HOME/.local/lib/commands/current/bun/bun               current generation
+  4  $HOME/.local/share/chezmoi-commands/incomplete/bun/bun  staging
+
+CONTRACT. On success it sets BUN_BIN to the resolved absolute path, BUN_DIR to
+that binary's directory, and PREPENDS BUN_DIR to PATH. When no rung matches it
+leaves BUN_BIN and BUN_DIR empty and leaves PATH untouched — the caller decides
+whether an absent bun is fatal, a skip, or a fallback to another toolchain. The
+partial never exits, prints, or fails on its own.
+
+WHY IT PREPENDS PATH INSTEAD OF ONLY EXPORTING BUN_BIN. `vp run build` spawns
+`bun build --compile` as a subprocess, and that subprocess resolves `bun` from
+PATH, not from any variable this script sets. An absolute BUN_BIN alone would
+therefore build under mise and still fail one level down on a host where bun is
+not on PATH. This is settled as KTD3 in the plan under docs/plans/.
+
+WHY THE STAGING PATH IS THE LAST RUNG RATHER THAN NO RUNG. The public
+~/.local/bin/bun link is created by run_after_90-activate-command-links, which
+needs the command-reconcile binary that 00-tools/10-build-command-reconcile
+builds. On a fresh host's first apply the only bun that exists is the one an
+external just wrote to the staging directory, so the build script must be able
+to see it. The MISE_BIN ladder in that same script already has the equivalent
+rung, for the same reason.
+
+The PATH guard is the repo's `case ":$PATH:"` idiom, so a directory already on
+PATH (rung 1, in particular) is not appended a second time. BUN_DIR is derived
+with a parameter expansion rather than `dirname` so the partial needs nothing on
+PATH to resolve bun — the callers run before any PATH is guaranteed.
+*/ -}}
+BUN_BIN=""
+BUN_DIR=""
+for bun_candidate in \
+  "$(command -v bun 2>/dev/null || true)" \
+  "$HOME/.local/bin/bun" \
+  "$HOME/.local/lib/commands/current/bun/bun" \
+  "$HOME/.local/share/chezmoi-commands/incomplete/bun/bun"; do
+  if [[ -n "$bun_candidate" && -x "$bun_candidate" ]]; then
+    BUN_BIN="$bun_candidate"
+    break
+  fi
+done
+unset bun_candidate
+if [[ -n "$BUN_BIN" ]]; then
+  case "$BUN_BIN" in
+    */*) BUN_DIR="${BUN_BIN%/*}" ;;
+    *) BUN_DIR="" ;;
+  esac
+  if [[ -n "$BUN_DIR" ]]; then
+    case ":$PATH:" in
+      *":$BUN_DIR:"*) ;;
+      *) PATH="$BUN_DIR:$PATH" ;;
+    esac
+    export PATH
+  fi
+fi

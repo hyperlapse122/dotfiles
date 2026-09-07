@@ -35,6 +35,15 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "buf-Darwin-x86_64.tar.gz",
     "darwin-arm64": "buf-Darwin-arm64.tar.gz",
   },
+  bun: {
+    // bun spells amd64 `x64` but arm64 `aarch64`, on both linux and darwin.
+    "linux-amd64": "bun-linux-x64.zip",
+    "linux-arm64": "bun-linux-aarch64.zip",
+    "linux-amd64-musl": "bun-linux-x64-musl.zip",
+    "linux-arm64-musl": "bun-linux-aarch64-musl.zip",
+    "darwin-amd64": "bun-darwin-x64.zip",
+    "darwin-arm64": "bun-darwin-aarch64.zip",
+  },
   chezmoi: {
     "linux-amd64": "chezmoi_0.0.0_linux_amd64.tar.gz",
     "linux-arm64": "chezmoi_0.0.0_linux_arm64.tar.gz",
@@ -165,6 +174,22 @@ describe("registry asset selectors", () => {
           expect(platform, `EXPECTED row ${tool}/${key} names an unknown platform`).toBeDefined();
           expect(spec?.asset?.(platform as Platform, TAG)).toBe(expected);
         });
+      }
+    });
+  }
+});
+
+describe("bun asset variants", () => {
+  // oven-sh/bun publishes -baseline, -profile and -android assets next to the
+  // default builds. Selecting one would silently ship the wrong binary, so the
+  // selector must never emit those suffixes on any target platform.
+  const forbidden = ["-baseline", "-profile", "-android"];
+  for (const platform of ALL_PLATFORMS_WITH_MUSL) {
+    test(platformKey(platform), () => {
+      const name = REGISTRY.bun?.asset?.(platform, TAG);
+      expect(name).toBeDefined();
+      for (const variant of forbidden) {
+        expect(name, `${variant} variant selected`).not.toContain(variant);
       }
     });
   }

@@ -29,8 +29,18 @@ if ! command -v "$MISE_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-if ! command -v "$MISE_BIN" >/dev/null 2>&1 && [[ ! -x "$MISE_BIN" ]] && ! command -v bun >/dev/null 2>&1; then
+{{ includeTemplate "bun-resolve.sh.tmpl" | trim }}
+
+if ! command -v "$MISE_BIN" >/dev/null 2>&1 && [[ ! -x "$MISE_BIN" ]] && [[ -z "$BUN_BIN" ]]; then
   printf '%s\n' 'build-command-reconcile: neither mise nor bun is installed; command-reconcile cannot be built' >&2
+  exit 1
+fi
+# Both branches below compile with bun: the mise branch reaches it through `vp
+# run build`, whose task command is `bun build --compile`. Since bun left mise's
+# tool set, mise being present no longer implies bun is, so say which tool is
+# missing here rather than letting the build fail three levels down.
+if [[ -z "$BUN_BIN" ]]; then
+  printf '%s\n' 'build-command-reconcile: bun is not installed; the build compiles with bun through either toolchain' >&2
   exit 1
 fi
 
@@ -43,8 +53,8 @@ if command -v "$MISE_BIN" >/dev/null 2>&1 || [[ -x "$MISE_BIN" ]]; then
     printf '%s\n' 'build-command-reconcile: build failed; fix the command-reconcile build error, then re-apply.' >&2
     exit 1
   fi
-elif command -v bun >/dev/null 2>&1; then
-  if ! (cd "$SRC/packages/command-reconcile" && bun build --compile ./src/cli.ts --outfile ./dist/command-reconcile); then
+elif [[ -n "$BUN_BIN" ]]; then
+  if ! (cd "$SRC/packages/command-reconcile" && "$BUN_BIN" build --compile ./src/cli.ts --outfile ./dist/command-reconcile); then
     printf '%s\n' 'build-command-reconcile: bun build failed; fix the command-reconcile build error, then re-apply.' >&2
     exit 1
   fi

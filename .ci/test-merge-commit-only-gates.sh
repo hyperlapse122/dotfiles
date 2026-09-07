@@ -32,9 +32,12 @@ fail() { printf 'merge-commit-only gates: %s\n' "$*" >&2; exit 1; }
 
 [[ -x $check ]] || fail "missing executable checker .ci/check-merge-commit-only.sh"
 [[ -f $workflow ]] || fail 'missing .github/workflows/merge-commit-only.yml'
-for tool in bun jq; do
-  command -v "$tool" >/dev/null || fail "$tool is required to audit the workflow"
-done
+
+# shellcheck source=.ci/lib/bun.sh
+source "$repo_root/.ci/lib/bun.sh"
+resolve_bun
+[[ -n "$BUN_BIN" ]] || fail 'bun is required to audit the workflow'
+command -v jq >/dev/null || fail 'jq is required to audit the workflow'
 
 # Disposable Git only: no user/system config, no credential prompt, and every
 # repository below lives under $scratch.
@@ -279,7 +282,7 @@ for (const [pattern, message] of [
 for (const problem of problems) process.stderr.write(`workflow audit: ${problem}\n`);
 process.exit(problems.length === 0 ? 0 : 1);
 JS
-bun "$audit" "$workflow" ||
+"$BUN_BIN" "$audit" "$workflow" ||
   fail 'the post-merge workflow is not a read-only merged-close guard'
 
 # The merged predicate decides invocation. Translate the workflow's own

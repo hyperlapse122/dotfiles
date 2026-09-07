@@ -25,6 +25,20 @@ TARGET="$STAGING_DIR/settings-reconcile"
 if ! command -v mise >/dev/null 2>&1; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "build-settings-reconcile" "site" "mise-absent" "direction" "transient-blocking" "probe" "mise-present" "reason" "mise is not installed; settings-reconcile build is deferred") | trim | indent 2 }}
 fi
+
+{{- /* The ladder runs for its PATH prepend, not to pick a toolchain: `vp run
+   build` shells out to `bun build --compile`, and that subprocess resolves bun
+   from PATH. Without this, a host whose only bun is the staged external builds
+   under mise and still fails one level down.
+
+   There is deliberately no bun-only branch here. The build needs `vp`, which is
+   a mise tool, so bun alone cannot replace mise for this script. Making the skip
+   wait on "neither mise nor bun" would also break its pruning: a
+   transient-blocking record encodes ONE probe, and prune_stale_skip_records
+   clears it only when that probe reads available — so a host that recovered by
+   installing the other tool would carry the record forever. */}}
+{{ includeTemplate "bun-resolve.sh.tmpl" | trim }}
+
 if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
   printf '%s\n' 'build-settings-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
   exit 1

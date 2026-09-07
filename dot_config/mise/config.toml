@@ -5,10 +5,15 @@
 # GitHub-release CLI binaries are NOT mise's job — they come from
 # .chezmoiexternals/ (grouped by domain: ai-agents / dev-tools / vcs / k8s /
 # system / fonts). Add a new standalone CLI there, not here.
+#
+# bun is the one runtime that is NOT here. It ships a single GitHub-release
+# binary, so .chezmoiexternals/dev-tools.toml delivers it with a committed
+# version and sha256 through the release lock. mise pins "latest" against a
+# lockfile that is not in this repository, so bun's version was decided by
+# whenever each host last ran `mise install`. Do not add it back.
 [tools]
 # Core runtimes and package managers
 aube = "latest"
-bun = "latest"
 go = "latest"
 node = "latest"
 python = "latest"
