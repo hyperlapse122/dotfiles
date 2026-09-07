@@ -43,25 +43,24 @@ render() {
   )
 }
 
-ask='{{ includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "%s") }}'
+ships_in_container() {
+  render "$1" '{{ includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "'"$2"'") }}'
+}
 
 # --- 1. A tool whose unit carries gate: "!container".
-# shellcheck disable=SC2059
-got=$(render true "$(printf "$ask" flutter)") || fail 'render failed for flutter'
+got=$(ships_in_container true flutter) || fail 'render failed for flutter'
 [[ "$got" == 'false' ]] || fail "flutter is gated !container; in a container the partial must answer false, got '$got'"
-# shellcheck disable=SC2059
-got=$(render false "$(printf "$ask" flutter)") || fail 'render failed for flutter on a host'
+got=$(ships_in_container false flutter) || fail 'render failed for flutter on a host'
 [[ "$got" == 'true' ]] || fail "on a host flutter must answer true, got '$got'"
 pass 'a !container unit is suppressed in a container and kept on a host'
 
 # --- 2. A tool whose unit carries no gate at all.
-# shellcheck disable=SC2059
-got=$(render true "$(printf "$ask" claude)") || fail 'render failed for claude'
+got=$(ships_in_container true claude) || fail 'render failed for claude'
 [[ "$got" == 'true' ]] || fail "claude declares no container gate and must answer true, got '$got'"
 pass 'an ungated unit ships in a container'
 
 # --- 3. An unknown tool fails loudly. A typo must not silently mean "ship it".
-if render true "$(printf "$ask" definitely-not-a-tool)" >/dev/null 2>&1; then
+if ships_in_container true definitely-not-a-tool >/dev/null 2>&1; then
   fail 'an unknown tool must fail the render, not default to shipping'
 fi
 pass 'an unknown tool fails the render'

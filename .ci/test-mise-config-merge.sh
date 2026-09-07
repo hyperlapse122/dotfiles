@@ -28,15 +28,26 @@ printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
 
+# Rendered from a SCRATCH source carrying only what this target needs. Pointing
+# --source at the repository makes chezmoi read the whole source state, including
+# .chezmoiexternals, and a release-lock URL lookup turns this gate into a network
+# call that fails on a reset connection -- a lint of a local file has no business
+# depending on an upstream host being reachable.
+#
 # `cat` renders one TARGET, which is what sets .chezmoi.sourceFile; the template
 # reads its sibling fragments relative to that. A stdin execute-template leaves it
 # empty and the fragment read fails -- the mistake worth pinning here.
+mkdir -p "$scratch/source"
+cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$scratch/source/"
+mkdir -p "$scratch/source/dot_config"
+cp -a "$repo_root/dot_config/mise" "$scratch/source/dot_config/"
+
 render() {
   (
-    cd -- "$repo_root"
+    cd -- "$scratch/source"
     PATH="$scratch/bin:$PATH" chezmoi \
       --config "$scratch/empty.toml" \
-      --source "$repo_root" \
+      --source "$scratch/source" \
       --destination "$scratch/target" \
       --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fx","osRelease":{"id":"fedora"},"homeDir":"'"$scratch"'/home"},"renderOverrides":{"container":'"$1"'}}' \
       cat "$scratch/target/.config/mise/config.toml"
