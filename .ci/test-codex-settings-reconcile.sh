@@ -75,9 +75,8 @@ toml_json() {
   python3 -c 'import json, sys, tomllib; print(json.dumps(tomllib.load(open(sys.argv[1], "rb"))))' "$1"
 }
 
-real_stat=$(command -v stat)
-identity() { "$real_stat" -c '%i %Y' "$1"; }
-mode() { "$real_stat" -c '%a' "$1"; }
+identity() { stat -c '%i %Y' "$1"; }
+mode() { stat -c '%a' "$1"; }
 
 run() {
   local home=$1
