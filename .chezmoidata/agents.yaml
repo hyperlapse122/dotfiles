@@ -61,6 +61,22 @@ agents:
     - name: writing-guidelines
       source: vercel-labs/agent-skills
       ref: main
+    - name: computer-use
+      source: stablyai/orca
+    - name: linear-tickets
+      source: stablyai/orca
+    - name: orca-cli
+      source: stablyai/orca
+    - name: orca-emulator
+      source: stablyai/orca
+    - name: orca-emulator-android
+      source: stablyai/orca
+    - name: orca-linear
+      source: stablyai/orca
+    - name: orca-per-workspace-env
+      source: stablyai/orca
+    - name: orchestration
+      source: stablyai/orca
     - name: glab
       source: gitlab-org/cli
       host: gitlab

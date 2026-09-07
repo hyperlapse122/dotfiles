@@ -314,6 +314,11 @@
         "source": "everyinc/compound-engineering-plugin",
         "version": "compound-engineering-v3.24.0"
       },
+      "computer-use": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
       "docker-credential-helpers": {
         "kind": "githubRelease",
         "source": "docker/docker-credential-helpers",
@@ -432,6 +437,11 @@
         "source": "kubernetes/kubernetes",
         "version": "v1.37.0"
       },
+      "linear-tickets": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
       "marksman": {
         "kind": "githubRelease",
         "source": "artempyanykh/marksman",
@@ -508,6 +518,36 @@
             "sha256": "0175bbd05839105a99dc9599c0317654e8f01e67c00d2d394ed51e965bda2a51"
           }
         }
+      },
+      "orca-cli": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
+      "orca-emulator": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
+      "orca-emulator-android": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
+      "orca-linear": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
+      "orca-per-workspace-env": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
+      },
+      "orchestration": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197"
       },
       "react-best-practices": {
         "kind": "gitRef",
