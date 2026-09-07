@@ -54,6 +54,7 @@ jobs:
             PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
               --config "$RUNNER_TEMP/empty.toml" \
               --source "$GITHUB_WORKSPACE" \
+              --override-data '{"renderOverrides":{"opAvailable":true}}' \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
           chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
@@ -175,6 +176,7 @@ jobs:
             PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
               --config "$RUNNER_TEMP/empty.toml" \
               --source "$GITHUB_WORKSPACE" \
+              --override-data '{"renderOverrides":{"opAvailable":true}}' \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
             chmod 700 "$RUNNER_TEMP/$output_name"
           done
@@ -241,6 +243,7 @@ jobs:
           PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
             --config "$RUNNER_TEMP/empty.toml" \
             --source "$GITHUB_WORKSPACE" \
+            --override-data '{"renderOverrides":{"opAvailable":true}}' \
             execute-template \
             < .chezmoiscripts/70-agents/run_after_config-codex-settings.sh.tmpl \
             > "$RUNNER_TEMP/codex-settings.sh"

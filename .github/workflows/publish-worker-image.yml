@@ -84,10 +84,18 @@ jobs:
       # Rootless podman. No build secret: the repository is public, so the clone
       # inside the image needs no token, and neither ARG nor ENV ever carries one
       # -- both persist in image metadata where anyone who pulls can read them.
+      # The image clones this repository rather than copying the checkout, so the
+      # build must be told WHICH ref -- the Containerfile defaults to main, which
+      # on a pull request is the published branch and not the change under test.
+      # A PR that builds main is a green check that proves nothing.
       - name: Build
+        env:
+          DOTFILES_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
-          podman build --file container/Containerfile --tag "${IMAGE}:${GITHUB_SHA}" .
+          podman build --file container/Containerfile \
+            --build-arg "DOTFILES_REF=${DOTFILES_REF}" \
+            --tag "${IMAGE}:${GITHUB_SHA}" .
 
       - name: Record image size
         run: |

@@ -87,9 +87,11 @@ encryption = "gpg"
     # `script` (not `command`): on Linux/macOS the `.sh` has no chezmoi interpreter,
     # so it runs through its shebang and executable bit.
     #
-    # The path is relative to $HOME and must track sourceDir above. In a container
-    # that is chezmoi's own default, and pointing this at the host's ~/src layout
-    # would silently skip the hook -- which is write_facts_cache, so every hook
-    # fact including opAvailable would sit on its absentDefault forever and the
-    # pod's runtime apply would resolve nothing.
-    script = "{{ if $inContainer }}.local/share/chezmoi{{ else }}src/github.com/hyperlapse122/dotfiles{{ end }}/.install-prerequisites.sh"
+    # DERIVED, not hardcoded. This has to name wherever the source actually is,
+    # and there are now three answers: the host's ~/src layout, chezmoi's default
+    # in a container, and whatever `--source` says -- which CI passes, and which
+    # overrides sourceDir without touching this string. A path that guesses gets
+    # one of the three wrong, and the failure is silent in the worst way: this
+    # hook IS write_facts_cache, so a miss leaves every hook fact on its
+    # absentDefault and the pod's runtime apply resolves nothing.
+    script = {{ (joinPath .chezmoi.sourceDir ".install-prerequisites.sh") | quote }}
