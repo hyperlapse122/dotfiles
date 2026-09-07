@@ -5,7 +5,8 @@
 
 {{- /* ---------- docker-credential-helpers (one helper per OS credential store) ---------- */ -}}
 
-{{- $dockerCredentialHelpersUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "docker-credential-helpers" "field" "url" "platform" "auto") }}
+{{- $dockerCredentialHelpersUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "docker-credential-helpers" "field" "url" "platform" "auto") -}}
+{{- $dockerCredentialHelpersSha256 := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "docker-credential-helpers" "field" "sha256" "platform" "auto") }}
 
 {{- if eq .chezmoi.os "linux" }}
 
@@ -15,6 +16,9 @@ targetPath = '.local/share/chezmoi-commands/incomplete/docker-credential-secrets
 url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
 
+[docker-credential-secretservice.checksum]
+sha256 = '{{ $dockerCredentialHelpersSha256 }}'
+
 {{- else if eq .chezmoi.os "darwin" }}
 
 [docker-credential-osxkeychain]
@@ -22,6 +26,9 @@ type = "file"
 targetPath = '.local/share/chezmoi-commands/incomplete/docker-credential-osxkeychain/docker-credential-osxkeychain'
 url = {{ $dockerCredentialHelpersUrl | quote }}
 executable = true
+
+[docker-credential-osxkeychain.checksum]
+sha256 = '{{ $dockerCredentialHelpersSha256 }}'
 
 {{- end }}
 
@@ -33,6 +40,9 @@ targetPath = '.local/share/chezmoi-commands/incomplete/wakatime-cli/wakatime-cli
 url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wakatime-cli" "field" "url" "platform" "auto") }}'
 executable = true
 path = '{{ printf "wakatime-cli-%s-%s" .chezmoi.os .chezmoi.arch }}'
+
+[wakatime-cli.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wakatime-cli" "field" "sha256" "platform" "auto") }}'
 
 {{- /* ---------- prezto (zsh framework) ---------- */}}
 

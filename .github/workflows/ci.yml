@@ -113,6 +113,7 @@ jobs:
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
           .ci/test-chezmoiignore-script-paths.sh
+          .ci/check-external-checksum-coverage.sh
 
   fatal-boundary-gates:
     name: fatal boundary gates
