@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# shellcheck shell=bash
 # .ci/lib/bun.sh — bun resolution ladder for .ci scripts, sourced (never
 # executed directly).
 #

@@ -212,6 +212,28 @@ describe("registry selector partition", () => {
   });
 });
 
+describe("rolling-release tag pinning", () => {
+  // A githubRelease entry with no tagPrefix resolves through `releases/latest`,
+  // which is correct only while upstream publishes no rolling non-prerelease
+  // release. These two do, so the prefix is load-bearing, not decoration.
+  test.each([
+    ["bun", "bun-v"],
+    ["shellcheck", "v"],
+  ])("%s pins its release train with tagPrefix %s", (tool, prefix) => {
+    const spec = REGISTRY[tool as keyof typeof REGISTRY] as ToolSpec;
+    expect(spec.kind).toBe("githubRelease");
+    expect((spec as { tagPrefix?: string }).tagPrefix).toBe(prefix);
+  });
+
+  test("shellcheck's prefix excludes its rolling latest and stable tags", () => {
+    const prefix = (REGISTRY.shellcheck as { tagPrefix?: string }).tagPrefix ?? "";
+    expect(prefix).not.toBe("");
+    expect("v0.11.0".startsWith(prefix)).toBe(true);
+    expect("latest".startsWith(prefix)).toBe(false);
+    expect("stable".startsWith(prefix)).toBe(false);
+  });
+});
+
 describe("bun tag pinning", () => {
   const realFetch = globalThis.fetch;
 

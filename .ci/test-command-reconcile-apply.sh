@@ -43,6 +43,17 @@ echo "agy-binary"
 EOF
 chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/agy/agy"
 
+# bun and bunx are deliberately separate units that stage the same upstream
+# archive under their own names, so both public links must resolve independently.
+for tool in bun bunx; do
+  mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/$tool"
+  cat >"$home_dir/.local/share/chezmoi-commands/incomplete/$tool/$tool" <<EOF
+#!/usr/bin/env bash
+echo "$tool-binary"
+EOF
+  chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/$tool/$tool"
+done
+
 mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/foreign-tool"
 cat >"$home_dir/.local/share/chezmoi-commands/incomplete/foreign-tool/foreign-tool" <<'EOF'
 #!/usr/bin/env bash
@@ -92,6 +103,30 @@ cat >"$scratch/manifest.json" <<EOF
       "legacy": { "path": ".local/bin/code" }
     },
     {
+      "id": "bun",
+      "producer": "external",
+      "safetyProfile": "native-single-file",
+      "proofEligible": true,
+      "mutableTree": false,
+      "privacy": "public",
+      "mode": "0755",
+      "commands": [{ "name": "bun" }],
+      "identity": "bun-v1.4.2-deadbeef1234",
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/bun"
+    },
+    {
+      "id": "bunx",
+      "producer": "external",
+      "safetyProfile": "native-single-file",
+      "proofEligible": true,
+      "mutableTree": false,
+      "privacy": "public",
+      "mode": "0755",
+      "commands": [{ "name": "bunx" }],
+      "identity": "bun-v1.4.2-deadbeef1234",
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/bunx"
+    },
+    {
       "id": "agy",
       "producer": "external",
       "safetyProfile": "native-single-file",
@@ -139,6 +174,11 @@ assert_resolvable_link() {
 
 assert_resolvable_link "$home_dir/.local/bin/agent-browser" 'agent-browser-binary'
 assert_resolvable_link "$home_dir/.local/bin/code" 'code-script'
+
+# bunx ships as its own unit beside bun; after activation it must resolve to a real
+# file and run, not merely exist as a link (issue #400).
+assert_resolvable_link "$home_dir/.local/bin/bun" 'bun-binary'
+assert_resolvable_link "$home_dir/.local/bin/bunx" 'bunx-binary'
 
 # A multi-name external unit stages one file; every declared name must resolve to it.
 assert_resolvable_link "$home_dir/.local/bin/agy" 'agy-binary'

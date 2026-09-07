@@ -84,6 +84,10 @@ export const REGISTRY: Registry = {
   shellcheck: {
     kind: "githubRelease",
     source: "koalaman/shellcheck",
+    // koalaman/shellcheck also carries two rolling, non-prerelease releases
+    // (`latest` and `stable`), so `releases/latest` is one re-push away from
+    // resolving a moving pointer whose assets still match the selector.
+    tagPrefix: "v",
     asset: ({ os, arch }, tag) => `shellcheck-${tag}.${os}.${rustArch(arch)}.tar.gz`,
   },
 
