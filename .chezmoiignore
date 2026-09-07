@@ -130,6 +130,10 @@
 # never linked into $HOME. Same repo-only tree convention as ./system and ./crates.
 ./container
 
+# k3s platform manifests reconciled by Flux from this repository (issue #412);
+# never linked into $HOME. Same repo-only tree convention as ./system and ./container.
+./infra
+
 # internal documentations
 ./docs
 

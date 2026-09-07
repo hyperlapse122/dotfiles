@@ -1,0 +1,64 @@
+# Two identities, deliberately separate.
+#
+# orca-worker is what a worker POD runs as. It needs no API access at all, so it
+# is bound to nothing -- it exists only so the pods do not run as `default`, and
+# every pod created from the template sets automountServiceAccountToken false.
+#
+# orca-workspace-admin is what the DESKTOP uses to create and delete workers. Its
+# Role is namespace-scoped and lists exactly the verbs the recipe scripts use.
+# Its token is not in this repository: seed it with kubectl (runbook step 2).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orca-worker
+  namespace: orca-workers
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orca-workspace-admin
+  namespace: orca-workers
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orca-workspace-admin
+  namespace: orca-workers
+rules:
+  # The recipe reads the PodTemplate to build a pod, so read access to it is the
+  # whole point of keeping the pod shape under GitOps.
+  - apiGroups: [""]
+    resources: ["podtemplates"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Logs and exec are what make a failed create diagnosable from the desktop
+  # instead of only from the cluster.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # Read-only. The scripts report the quota when a create is refused; they never
+  # raise it.
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orca-workspace-admin
+  namespace: orca-workers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: orca-workspace-admin
+subjects:
+  - kind: ServiceAccount
+    name: orca-workspace-admin
+    namespace: orca-workers

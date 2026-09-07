@@ -1,0 +1,59 @@
+# 1Password Connect.
+#
+# Connect is here for exactly one reason: a worker resolves project `op://`
+# references at RUNTIME, and a runtime reference cannot be pre-seeded. Every
+# other Secret in this cluster is seeded once with kubectl instead.
+#
+# The 1Password OPERATOR and its OnePasswordItem CRD are deliberately off. The
+# operator turns 1Password items into cluster Secrets, which would put a second,
+# automated writer next to the manual seed and re-introduce exactly the drift
+# the CLI-seed decision removes (B2/B3).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: onepassword-connect
+  namespace: onepassword
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: connect
+      version: "2.4.1"
+      sourceRef:
+        kind: HelmRepository
+        name: onepassword
+        namespace: onepassword
+      interval: 24h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    connect:
+      create: true
+      replicas: 1
+      # Secret name only. `connect.credentials` and `connect.credentials_base64`
+      # would put the credential file in this repository; both stay unset.
+      credentialsName: op-credentials
+      credentialsKey: 1password-credentials.json
+      serviceType: ClusterIP
+      api:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+      sync:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+    operator:
+      # See the header: the CRD-driven Secret writer is the thing this design
+      # replaced with a manual seed.
+      create: false

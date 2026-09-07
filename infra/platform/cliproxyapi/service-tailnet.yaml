@@ -1,0 +1,27 @@
+# The path the operator uses for web management.
+#
+# A second Service, not an annotation on the first: the tailnet exposure is for
+# humans doing OAuth logins and reading status, while the ClusterIP Service is
+# the workers' data path. Separating them means the tailnet node can be removed
+# or renamed without touching what the workers dial.
+#
+# Management shares port 8317 with the API, so anything that reaches this node
+# reaches the management routes too -- hence the ACL, which grants only the
+# desktop and denies tag:orca-workspace.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cliproxyapi-tailnet
+  namespace: cliproxyapi
+  annotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: "orca-proxy"
+    tailscale.com/tags: "tag:orca-proxy"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: cliproxyapi
+  ports:
+    - name: http
+      port: 8317
+      targetPort: http

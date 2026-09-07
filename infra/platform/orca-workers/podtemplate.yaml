@@ -1,0 +1,148 @@
+# The worker pod shape, under GitOps; the pods themselves are created
+# imperatively by the recipe scripts.
+#
+# That split is the point of the design: resource limits, sidecars and mounts are
+# reviewed and version-controlled, while pod creation stays an ordinary
+# imperative call at workspace-create time. It mirrors how a GitLab Runner keeps
+# its configuration in git and still creates job pods dynamically.
+#
+# What the create script overrides per pod: metadata.name, the workspace labels,
+# and TS_HOSTNAME. Nothing else.
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: orca-worker
+  namespace: orca-workers
+  labels:
+    app.kubernetes.io/name: orca-worker
+template:
+  metadata:
+    labels:
+      app.kubernetes.io/name: orca-worker
+  spec:
+    # Never: a worker that dies has lost its state, and restarting it in place
+    # would hand the workspace a machine that silently is not the one it set up.
+    # The failure has to stay visible.
+    restartPolicy: Never
+    serviceAccountName: orca-worker
+    automountServiceAccountToken: false
+    terminationGracePeriodSeconds: 30
+    # An agent-controlled pod is the one thing here that should never be able to
+    # ask the API server for anything, so it gets no token and no DNS surprises.
+    enableServiceLinks: false
+    securityContext:
+      # sshd is root and the worker is uid 1000, so the shared volumes have to be
+      # group-owned by the worker. OnRootMismatch keeps a 50 GB cache from being
+      # re-chowned on every single pod start.
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+    containers:
+      - name: worker
+        image: ghcr.io/hyperlapse122/dotfiles/orca-worker:latest
+        imagePullPolicy: Always
+        ports:
+          - name: ssh
+            containerPort: 22
+        env:
+          # Connect is in-cluster, so this is a Service name, not a tailnet name.
+          - name: OP_CONNECT_HOST
+            value: http://onepassword-connect.onepassword.svc.cluster.local:8080
+          - name: OP_CONNECT_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: orca-worker-connect
+                key: token
+          # The public half of the desktop's 1Password SSH key. A reference, not
+          # a value: rotating the key restarts a pod instead of rebuilding the
+          # image.
+          - name: WORKER_SSH_PUBKEY_REF
+            value: "op://tum6wsa7azjvbkgwnp6fgamcvm/SSH-Key/public key"
+          # The agent OAuth never reaches a worker. It gets a base URL and a
+          # proxy API key, and the proxy holds the credentials.
+          - name: ANTHROPIC_BASE_URL
+            value: http://cliproxyapi.cliproxyapi.svc.cluster.local:8317
+          - name: ANTHROPIC_AUTH_TOKEN_REF
+            value: "op://tum6wsa7azjvbkgwnp6fgamcvm/CLIProxyAPI/worker api key"
+          # Content-addressed caches only (B7). mise's DOWNLOAD cache is shared;
+          # its install tree deliberately is not.
+          - name: MISE_CACHE_DIR
+            value: /cache/mise
+          - name: npm_config_cache
+            value: /cache/npm
+          - name: npm_config_store_dir
+            value: /cache/pnpm-store
+          - name: BUN_INSTALL_CACHE_DIR
+            value: /cache/bun
+          - name: YARN_CACHE_FOLDER
+            value: /cache/yarn
+          - name: UV_CACHE_DIR
+            value: /cache/uv
+        volumeMounts:
+          - name: cache
+            mountPath: /cache
+          - name: workspace
+            mountPath: /home/worker/workspace
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            cpu: "6"
+            memory: 12Gi
+        readinessProbe:
+          tcpSocket:
+            port: ssh
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          # The first start runs a chezmoi apply against Connect, which is not
+          # instant. A short failure budget here would mark a healthy worker
+          # unready while it is still legitimately setting itself up.
+          failureThreshold: 60
+      - name: tailscale
+        image: ghcr.io/tailscale/tailscale:v1.102.3
+        env:
+          - name: TS_AUTHKEY
+            valueFrom:
+              secretKeyRef:
+                name: orca-worker-tailscale
+                key: TS_AUTHKEY
+          # Userspace networking needs neither NET_ADMIN nor /dev/net/tun, and
+          # inbound TCP still reaches sshd because the sidecar shares the pod's
+          # network namespace.
+          - name: TS_USERSPACE
+            value: "true"
+          # A writable state dir, not mem:. Without it tailscaled has no var root,
+          # which is what silently disables SSH host keys (see the issue's
+          # Findings). An emptyDir is enough: the node is ephemeral by design.
+          - name: TS_STATE_DIR
+            value: /var/lib/tailscale
+          # The worker resolves 1Password Connect and the proxy through cluster
+          # DNS. Letting tailscaled take over DNS would break both.
+          - name: TS_ACCEPT_DNS
+            value: "false"
+          # Overridden per pod by the create script.
+          - name: TS_HOSTNAME
+            value: orca-worker
+        volumeMounts:
+          - name: tailscale-state
+            mountPath: /var/lib/tailscale
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+    volumes:
+      - name: cache
+        persistentVolumeClaim:
+          claimName: orca-worker-cache
+      # Build output and the checkout: per-pod on purpose. node_modules and
+      # target/ are not content-addressed, so sharing them corrupts them.
+      - name: workspace
+        emptyDir: {}
+      - name: tailscale-state
+        emptyDir: {}

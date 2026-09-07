@@ -1,0 +1,41 @@
+# Flux entry point for the Orca per-workspace platform.
+#
+# Applied by hand once per cluster, after the Secrets are seeded
+# (docs/runbooks/orca-per-workspace/02-secret-contract.md). Everything below it
+# is reconciled from git, so this file is the only imperative kubectl apply the
+# platform needs.
+#
+# The name is deliberately NOT flux-system: this cluster may already carry an
+# unrelated flux-system GitRepository, and replacing that one would take its
+# workloads down. A second source reconciling a disjoint set of namespaces
+# coexists with it.
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: orca-platform
+  namespace: flux-system
+spec:
+  interval: 10m
+  url: https://github.com/hyperlapse122/dotfiles.git
+  ref:
+    branch: main
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: orca-platform
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 2m
+  timeout: 5m
+  path: ./infra/clusters/hp-z1-g6-01
+  # prune deletes what this Kustomization created and stops there: it is scoped
+  # by its own inventory, never by namespace, so an unrelated workload in this
+  # cluster is not a candidate.
+  prune: true
+  wait: false
+  sourceRef:
+    kind: GitRepository
+    name: orca-platform

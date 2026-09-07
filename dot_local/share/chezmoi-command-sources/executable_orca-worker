@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# orca-worker -- Orca per-workspace environment lifecycle against the k3s
+# platform in infra/ (issue #412).
+#
+# Orca reads `environmentRecipes` from each project's own orca.yaml, so this
+# implementation is installed once as a command and each project points a
+# two-line wrapper at it. One implementation, one place to fix it.
+#
+# STDOUT IS THE RESULT. `create` and `resume` print exactly one JSON object and
+# nothing else; every message goes to stderr. A stray echo on stdout corrupts the
+# recipe result and Orca rejects the workspace.
+set -euo pipefail
+
+readonly DEFAULT_NAMESPACE=orca-workers
+readonly DEFAULT_TEMPLATE=orca-worker
+readonly DEFAULT_USERNAME=worker
+readonly DEFAULT_PROJECT_ROOT=/home/worker/workspace
+readonly DEFAULT_IDENTITY_AGENT="$HOME/.1password/agent.sock"
+readonly DEFAULT_KUBECONFIG="$HOME/.kube/orca-platform.yaml"
+
+namespace=${ORCA_WORKER_NAMESPACE:-$DEFAULT_NAMESPACE}
+template=${ORCA_WORKER_TEMPLATE:-$DEFAULT_TEMPLATE}
+username=${ORCA_WORKER_USERNAME:-$DEFAULT_USERNAME}
+project_root=${ORCA_WORKER_PROJECT_ROOT:-$DEFAULT_PROJECT_ROOT}
+identity_agent=${ORCA_WORKER_IDENTITY_AGENT:-$DEFAULT_IDENTITY_AGENT}
+ready_timeout=${ORCA_WORKER_READY_TIMEOUT:-900}
+
+log() { printf 'orca-worker: %s\n' "$*" >&2; }
+die() { printf 'orca-worker: %s\n' "$*" >&2; exit 1; }
+
+require() {
+  local tool
+  for tool in "$@"; do
+    command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not on PATH"
+  done
+}
+
+kube() {
+  # A dedicated kubeconfig, never the desktop's current context: a recipe that
+  # followed whatever context happened to be selected would create workers in
+  # whichever cluster the user last touched.
+  KUBECONFIG=${ORCA_WORKER_KUBECONFIG:-$DEFAULT_KUBECONFIG} kubectl -n "$namespace" "$@"
+}
+
+# RFC 1123: lowercase alphanumerics and dashes, and short enough that the
+# instance suffix -- the only unique part -- always survives.
+sanitize_name() {
+  local raw=$1 max=$2
+  raw=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+  raw=${raw##-}
+  raw=${raw%%-}
+  printf '%s' "${raw:0:$max}"
+}
+
+pod_name_for() {
+  local recipe instance prefix suffix
+  recipe=${ORCA_RECIPE_ID:-orca}
+  instance=${ORCA_VM_INSTANCE_ID:-$(date +%s)}
+  suffix=$(sanitize_name "$instance" 20)
+  [ -n "$suffix" ] || suffix=$(date +%s)
+  # 63 is the label limit; reserve the suffix and the two joining dashes.
+  prefix=$(sanitize_name "$recipe" $((40 - ${#suffix})))
+  [ -n "$prefix" ] || prefix=orca
+  printf 'orca-%s-%s' "$prefix" "$suffix"
+}
+
+resource_id_from_stdin() {
+  local payload
+  payload=$(cat)
+  [ -n "$payload" ] || die 'no lifecycle payload on stdin'
+  printf '%s' "$payload" | jq -r '.recipeResult.userData.resourceId // empty'
+}
+
+# The MagicDNS name is read from the node itself, never assembled from the pod
+# name. Tailscale appends a numeric suffix when a name is still taken by a node
+# it has not reaped yet, so a name built by string concatenation is right most of
+# the time and wrong exactly when a workspace is recreated quickly.
+worker_dns_name() {
+  local pod=$1 deadline dns
+  deadline=$(( $(date +%s) + 120 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    dns=$(kube exec "$pod" -c tailscale -- tailscale status --json 2>/dev/null \
+      | jq -r '.Self.DNSName // empty' 2>/dev/null || true)
+    dns=${dns%.}
+    if [ -n "$dns" ]; then
+      printf '%s' "$dns"
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+emit_result() {
+  local pod=$1 host=$2
+  jq -n \
+    --arg label "$pod" \
+    --arg host "$host" \
+    --arg username "$username" \
+    --arg identityAgent "$identity_agent" \
+    --arg projectRoot "$project_root" \
+    --arg resourceId "$pod" \
+    '{
+      schemaVersion: 1,
+      connection: {
+        type: "ssh",
+        projectRoot: $projectRoot,
+        target: {
+          label: $label,
+          host: $host,
+          port: 22,
+          username: $username,
+          identityAgent: $identityAgent
+        }
+      },
+      userData: {
+        provider: "k3s",
+        resourceId: $resourceId
+      }
+    }'
+}
+
+pod_manifest() {
+  local pod=$1
+  # The pod shape comes from the Flux-managed PodTemplate, so limits, sidecars
+  # and mounts are reviewed in git. Only identity is patched here.
+  kube get podtemplate "$template" -o json \
+    | jq --arg name "$pod" --arg ns "$namespace" '
+      .template as $t
+      | {
+          apiVersion: "v1",
+          kind: "Pod",
+          metadata: {
+            name: $name,
+            namespace: $ns,
+            labels: (($t.metadata.labels // {}) + { "orca.workspace/pod": $name })
+          },
+          spec: (
+            $t.spec
+            | .containers = (
+                .containers
+                | map(
+                    if .name == "tailscale"
+                    then .env = ((.env // []) | map(if .name == "TS_HOSTNAME" then .value = $name else . end))
+                    else . end
+                  )
+              )
+          )
+        }'
+}
+
+cmd_create() {
+  require kubectl jq
+  local pod host
+  pod=$(pod_name_for)
+  log "creating worker pod $pod"
+
+  # Arm cleanup before create: a half-started worker that outlives a failed
+  # create would hold a quota slot nothing ever reclaims.
+  cleanup_on_error() {
+    local status=$?
+    if [ "$status" -ne 0 ]; then
+      log "create failed; removing $pod"
+      kube delete pod "$pod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+    fi
+    return 0
+  }
+  trap cleanup_on_error EXIT
+
+  pod_manifest "$pod" | kube apply -f - >&2
+
+  log "waiting for $pod to become ready (timeout ${ready_timeout}s)"
+  if ! kube wait --for=condition=Ready "pod/$pod" --timeout="${ready_timeout}s" >&2; then
+    log "--- pod events ---"
+    kube describe pod "$pod" >&2 || true
+    log "--- worker log ---"
+    kube logs "$pod" -c worker --tail=100 >&2 || true
+    die "worker pod $pod did not become ready"
+  fi
+
+  host=$(worker_dns_name "$pod") || die "the tailscale sidecar never reported a MagicDNS name for $pod"
+  log "worker reachable at $host"
+
+  emit_result "$pod" "$host"
+  trap - EXIT
+}
+
+cmd_resume() {
+  require kubectl jq
+  local pod host
+  pod=$(resource_id_from_stdin)
+  [ -n "$pod" ] || die 'no resourceId in the lifecycle payload'
+
+  kube get pod "$pod" >/dev/null 2>&1 \
+    || die "worker pod $pod no longer exists; delete the workspace and create a new one"
+
+  # Re-emit rather than replay: the node may have been reaped and re-registered
+  # under a suffixed name while the workspace slept, so the address is read back
+  # from the node instead of assumed.
+  host=$(worker_dns_name "$pod") || die "the tailscale sidecar never reported a MagicDNS name for $pod"
+  emit_result "$pod" "$host"
+}
+
+cmd_suspend() {
+  require kubectl jq
+  local pod
+  pod=$(resource_id_from_stdin)
+  [ -n "$pod" ] || die 'no resourceId in the lifecycle payload'
+  # Deliberately keeps the pod running. Kubernetes has no suspend that preserves
+  # a pod's filesystem, and a worker's uncommitted work lives on its own
+  # emptyDir -- so "suspend" by deletion would silently destroy exactly what the
+  # user expects to find again on resume. The paired resume re-reads the address.
+  log "workspace suspended; worker pod $pod is left running so its uncommitted work survives"
+}
+
+cmd_destroy() {
+  require kubectl jq
+  local pod
+  pod=$(resource_id_from_stdin)
+  [ -n "$pod" ] || die 'no resourceId in the lifecycle payload'
+  log "deleting worker pod $pod"
+  kube delete pod "$pod" --ignore-not-found --wait=false >&2
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: orca-worker <create|suspend|resume|destroy>
+
+Lifecycle hooks for an Orca per-workspace environment backed by the k3s
+platform. create prints the SSH recipe result on stdout; suspend, resume and
+destroy read Orca's lifecycle payload on stdin.
+
+Environment:
+  ORCA_WORKER_KUBECONFIG      kubeconfig for the platform cluster
+                              (default: ~/.kube/orca-platform.yaml)
+  ORCA_WORKER_NAMESPACE       worker namespace (default: orca-workers)
+  ORCA_WORKER_TEMPLATE        PodTemplate name (default: orca-worker)
+  ORCA_WORKER_USERNAME        SSH user inside the worker (default: worker)
+  ORCA_WORKER_PROJECT_ROOT    checkout path Orca imports into
+  ORCA_WORKER_IDENTITY_AGENT  SSH agent socket (default: ~/.1password/agent.sock)
+  ORCA_WORKER_READY_TIMEOUT   seconds to wait for pod readiness (default: 900)
+USAGE
+}
+
+main() {
+  local subcommand=${1:-}
+  [ "$#" -gt 0 ] && shift || true
+  case "$subcommand" in
+    create) cmd_create "$@" ;;
+    suspend) cmd_suspend "$@" ;;
+    resume) cmd_resume "$@" ;;
+    destroy) cmd_destroy "$@" ;;
+    -h|--help|help|'') usage; [ -n "$subcommand" ] ;;
+    *) usage; die "unknown subcommand: $subcommand" ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,16 @@
+# The path workers use. ClusterIP only: a worker reaches the proxy inside the
+# cluster and never over the tailnet, which is what lets the tailnet policy deny
+# tag:orca-workspace to tag:orca-proxy without cutting off model access.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cliproxyapi
+  namespace: cliproxyapi
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: cliproxyapi
+  ports:
+    - name: http
+      port: 8317
+      targetPort: http

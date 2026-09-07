@@ -1,0 +1,114 @@
+# CLIProxyAPI: one instance per cluster.
+#
+# replicas 1 + Recreate is load-bearing, not tidiness. Two replicas would share
+# the auth-dir PVC and become two concurrent token-refresh writers, which is how
+# a provider refresh token gets lost (B4). RollingUpdate would do the same thing
+# for the length of one rollout.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cliproxyapi
+  namespace: cliproxyapi
+  labels:
+    app.kubernetes.io/name: cliproxyapi
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cliproxyapi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cliproxyapi
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        # Compose the real config from the ConfigMap template plus the two
+        # secret-bearing settings. Appending is what keeps the credentials out of
+        # the ConfigMap: no substitution into a template line, so no value can be
+        # mangled by a shell metacharacter on its way in.
+        - name: render-config
+          image: docker.io/library/busybox:1.37.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              cp /template/config.yaml /config/config.yaml
+              {
+                printf 'api-keys:\n'
+                printf '  - "%s"\n' "$WORKER_API_KEY"
+                printf 'remote-management:\n'
+                printf '  allow-remote: true\n'
+                printf '  secret-key: "%s"\n' "$MANAGEMENT_SECRET_KEY"
+                printf '  disable-control-panel: false\n'
+                printf '  disable-auto-update-panel: true\n'
+                printf '  panel-github-repository: "https://github.com/seakee/CPA-Manager-Plus"\n'
+              } >>/config/config.yaml
+              chmod 0600 /config/config.yaml
+          env:
+            - name: WORKER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cliproxyapi
+                  key: worker-api-key
+            - name: MANAGEMENT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cliproxyapi
+                  key: management-secret-key
+          volumeMounts:
+            - name: config-template
+              mountPath: /template
+              readOnly: true
+            - name: config
+              mountPath: /config
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: cliproxyapi
+          image: docker.io/eceasy/cli-proxy-api:v7.2.152
+          workingDir: /CLIProxyAPI
+          command: ["./CLIProxyAPI"]
+          args: ["--config", "/config/config.yaml"]
+          ports:
+            - name: http
+              containerPort: 8317
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: auth
+              mountPath: /CLIProxyAPI/auth
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: config-template
+          configMap:
+            name: cliproxyapi-config
+        - name: config
+          emptyDir: {}
+        - name: auth
+          persistentVolumeClaim:
+            claimName: cliproxyapi-auth

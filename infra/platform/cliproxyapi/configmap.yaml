@@ -1,0 +1,66 @@
+# The config TEMPLATE, not the config.
+#
+# Two settings carry secrets -- `api-keys` and `remote-management.secret-key` --
+# so they are absent here and appended at pod start from the `cliproxyapi`
+# Secret by the init container in deployment.yaml. That is why this ConfigMap
+# declares neither key: a duplicate YAML key would be a silent override, and a
+# ConfigMap is not a place for a credential.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cliproxyapi-config
+  namespace: cliproxyapi
+data:
+  config.yaml: |
+    # Bind on all interfaces INSIDE the pod. The pod is reachable only through
+    # its ClusterIP Service and through the tailnet proxy the operator creates,
+    # so the network boundary is Kubernetes and the tailnet ACL, not a loopback
+    # bind that would also cut off the Service.
+    host: ""
+    port: 8317
+
+    tls:
+      enable: false
+      cert: ""
+      key: ""
+
+    # The single copy of the agent OAuth credentials. Backed by the RWO PVC.
+    auth-dir: "/CLIProxyAPI/auth"
+
+    debug: false
+    logging-to-file: false
+    commercial-mode: true
+    usage-statistics-enabled: true
+
+    pprof:
+      enable: false
+
+    plugins:
+      enabled: false
+
+    # The workers run the real Claude Code client, so the disguise this option
+    # turns off would replace a genuine system prompt with a fabricated one.
+    disable-claude-cloak-mode: true
+
+    # Forward filtered upstream response headers downstream. Claude Code reads
+    # rate-limit headers off the response; dropping them makes the client blind
+    # to a limit it is already subject to.
+    passthrough-headers: true
+
+    request-retry: 3
+    max-retry-credentials: 0
+    max-retry-interval: 30
+
+    quota-exceeded:
+      switch-project: true
+      switch-preview-model: true
+      antigravity-credits: true
+
+    routing:
+      strategy: "round-robin"
+      # One workspace is one long conversation; keeping it on the credential it
+      # started on keeps prompt caching warm and failure attribution simple.
+      session-affinity: true
+      session-affinity-ttl: "4h"
+
+    ws-auth: true
