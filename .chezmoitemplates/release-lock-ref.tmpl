@@ -22,6 +22,9 @@ Input (dict):
 Every lookup fails the render with the missing key named (R6): a consumer
 whose tool or platform the lock does not carry aborts, and no call site ever
 falls back to a live lookup, unless the caller passes optional:true.
+optional:true never rescues an unknown tool or an unsupported field name --
+both fail unconditionally. It rescues only a missing artifacts block, a
+missing platform key, and a missing or null field value.
 Version-only entries (no artifacts block) still resolve "version", and an
 optional:true artifact-field call against one returns "" (KTD1). An emulated
 entry returns its recorded (amd64) URL and sha256 verbatim — url/digest

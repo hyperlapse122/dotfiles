@@ -93,12 +93,14 @@ for u in linux_data["units"] + macos_data["units"]:
 ' "$linux_json" "$macos_json"
 
 render_source() {
-  local src="$1" os="$2" arch="$3" tmpl="$4"
+  local src="$1" os="$2" arch="$3" tmpl="$4" extra="${5:-}"
   printf '%s' "$tmpl" | \
     env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$src" --destination "$scratch/target" \
-      --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"}}" \
+      --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"}$extra}" \
       execute-template
 }
+
+musl_override=',"renderOverrides":{"muslLinux":true}'
 
 # A full source tree, so producer: build units still resolve their fingerprint
 # globs, with .chezmoidata copied so the lock can be mutated in place.
@@ -113,7 +115,14 @@ make_lock_fixture() {
     ln -s "$entry" "$dest/$(basename -- "$entry")"
   done
   rm -f "$dest/.chezmoidata"
-  cp -a "$repo_root/.chezmoidata" "$dest/"
+  # -L dereferences: when $repo_root is itself a symlink farm (this helper's own
+  # output, when a gate runs from a fixture), a plain `cp -a` copies the SYMLINK,
+  # and mutate_lock then writes through it into the repository's real
+  # .chezmoidata/releases.json. Observed live. Dereference, then refuse to
+  # continue unless the fixture owns a regular file.
+  cp -a -L "$repo_root/.chezmoidata" "$dest/"
+  [[ -f "$dest/.chezmoidata/releases.json" && ! -L "$dest/.chezmoidata/releases.json" ]] ||
+    fail "lock fixture $dest/.chezmoidata/releases.json is not a regular file; refusing to mutate a lock outside the fixture"
   printf '%s\n' "$dest"
 }
 
@@ -207,6 +216,70 @@ for unit_id, unit in externals(bumped_units).items():
     if unit_id not in ("bun", "bunx"):
         assert unit["identity"] == linux_ext[unit_id]["identity"], unit_id
 ' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
+
+# The external identity names the artifact the host downloads, so a musl host
+# keys it on the -musl digest while every tool without a -musl lock key keeps
+# its plain-platform digest.
+musl_json=$(render_source "$repo_root" linux amd64 '{{ includeTemplate "command-manifest.tmpl" . }}' "$musl_override")
+musl_bumped=$(make_lock_fixture musl-digest-bump)
+python3 -c '
+import json, sys
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+data["releases"]["tools"]["bun"]["artifacts"]["linux-amd64-musl"]["sha256"] = "b" * 64
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f)
+' "$musl_bumped/.chezmoidata/releases.json"
+musl_bumped_json=$(render_source "$musl_bumped" linux amd64 '{{ includeTemplate "command-manifest.tmpl" . }}' "$musl_override")
+
+python3 -c '
+import json, sys
+
+lock_path, linux_raw, musl_raw, musl_bumped_raw = sys.argv[1:5]
+
+with open(lock_path, "r", encoding="utf-8") as f:
+    tools = json.load(f)["releases"]["tools"]
+
+def externals(raw):
+    return {u["id"]: u for u in json.loads(raw)["units"] if u["producer"] == "external"}
+
+linux_ext = externals(linux_raw)
+musl_ext = externals(musl_raw)
+musl_bumped_ext = externals(musl_bumped_raw)
+
+# A musl host resolves the musl artifact digest, not the glibc one.
+bun_version = tools["bun"]["version"]
+bun_musl_sha = tools["bun"]["artifacts"]["linux-amd64-musl"]["sha256"]
+assert musl_ext["bun"]["identity"] == f"{bun_version}-{bun_musl_sha[:12]}", musl_ext["bun"]["identity"]
+assert musl_ext["bun"]["identity"] != linux_ext["bun"]["identity"]
+assert musl_ext["bun"]["identity"] == musl_ext["bunx"]["identity"]
+
+# Every tool carrying a -musl lock key moves with the host libc.
+for unit_id in ("bun", "claude", "mise", "agent-browser"):
+    assert musl_ext[unit_id]["identity"] != linux_ext[unit_id]["identity"], unit_id
+
+# R30 on the musl leg: a re-published musl asset moves the identity.
+assert musl_bumped_ext["bun"]["identity"] == bun_version + "-" + ("b" * 12), musl_bumped_ext["bun"]["identity"]
+
+# The regression guard: a tool with no -musl lock key falls back to the plain
+# platform key and keeps a digest-bearing identity instead of a bare version.
+for unit_id, tool in (("gh", "gh"), ("uv", "uv")):
+    assert "linux-amd64-musl" not in tools[tool]["artifacts"], f"{tool} now has a -musl key; pick another case"
+    identity = musl_ext[unit_id]["identity"]
+    assert identity == linux_ext[unit_id]["identity"], identity
+    assert identity != tools[tool]["version"], f"{unit_id} regressed to a bare version on musl"
+    assert identity.rsplit("-", 1)[-1] == tools[tool]["artifacts"]["linux-amd64"]["sha256"][:12], identity
+
+# Every external still renders a non-empty identity on the musl leg.
+for unit_id, unit in musl_ext.items():
+    assert unit["identity"], f"external unit {unit_id} rendered an empty identity on musl"
+
+# The version-only units keep the bare version on both legs.
+for unit_id, tool in (("kubectl", "kubectl"), ("kubectl-convert", "kubectl"), ("helm", "helm"), ("glab", "glab")):
+    for scope in (linux_ext, musl_ext):
+        assert scope[unit_id]["identity"] == tools[tool]["version"], scope[unit_id]["identity"]
+' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$musl_json" "$musl_bumped_json"
 
 # The accessor change is contained: optional:true rescues a missing artifacts block,
 # but a non-optional call against one still fails loudly (R6, no live fallback).

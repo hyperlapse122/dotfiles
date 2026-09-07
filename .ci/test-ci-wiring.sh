@@ -94,8 +94,11 @@ SOURCE_LINE = re.compile(r"(?:^|[;&|(]|\b(?:then|do|else)\b)\s*(?:source|\.)\s")
 LEAD_IN = re.compile(r"""(?:["']|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|[./])*$""")
 
 # What a reference is preceded by when it is being RUN rather than named: the
-# start of the command, a separator, or a runner word.
-COMMAND_START = re.compile(r"(?:^|[;&|(]|\b(?:exec|sudo|command|bash|sh|env)\s+)\s*$")
+# start of the command, a separator, or a runner word. The lead is rstrip'd
+# before this matches, so the runner-word alternative must not require trailing
+# whitespace of its own -- `\s+` here would make that branch unreachable and
+# silently classify `bash .ci/lib/x.sh` as merely named.
+COMMAND_START = re.compile(r"(?:^|[;&|(]|\b(?:exec|sudo|command|bash|sh|env))\s*$")
 
 
 def strings(node):
@@ -391,6 +394,28 @@ chmod 755 "$lib_executed/.ci/lib/helper.sh"
 check_tree "$lib_executed" >/dev/null 2>&1 ||
   fail 'an executable library a workflow runs should pass'
 pass 'an executable library a workflow runs passes'
+
+# A runner word in front of the path is still an execution. This guards the
+# COMMAND_START runner-word branch: the lead is rstrip'd before it is matched,
+# so a pattern demanding trailing whitespace there silently reclassifies this
+# as "merely named" and then wrongly demands the library be 0644.
+lib_runner=$(lib_fixture lib-runner)
+cat <<'YAML' > "$lib_runner/.github/workflows/ci.yml"
+name: CI
+jobs:
+  alpha:
+    steps:
+      - run: bash .ci/lib/helper.sh - somepackage
+      - run: .ci/test-alpha.sh
+  delivery:
+    needs: [alpha]
+    steps:
+      - run: echo aggregate
+YAML
+chmod 755 "$lib_runner/.ci/lib/helper.sh"
+check_tree "$lib_runner" >/dev/null 2>&1 ||
+  fail 'a library run behind `bash` should count as executed and pass at 0755'
+pass 'a library run behind a runner word counts as executed'
 
 # The mirror of the mode rule: a library a workflow runs must be runnable.
 lib_unrunnable=$(lib_fixture lib-unrunnable)

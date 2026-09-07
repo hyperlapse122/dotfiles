@@ -2,14 +2,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
-mkdir -p "$scratch_root"
-scratch=$(mktemp -d "$scratch_root/command-external-render.XXXXXX")
-trap 'rm -rf -- "$scratch"' EXIT
-mkdir -p "$scratch/bin" "$scratch/target"
-printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
-chmod 700 "$scratch/bin/op"
-printf '[data]\n' >"$scratch/empty.toml"
+# shellcheck source=.ci/lib/render-scratch.sh
+source "$repo_root/.ci/lib/render-scratch.sh"
+setup_render_scratch command-external-render
 
 fail() { printf 'command external render: %s\n' "$*" >&2; exit 1; }
 
@@ -122,6 +117,23 @@ stanza_records() {
   ' "$1"
 }
 
+# Vacuity guard for the assertions built on stanza_records. A broken extractor
+# emits nothing, and every loop below it then completes without testing a single
+# stanza. Every platform-composed unit renders on every leg, so demand them all:
+# the floor moves with the unit list instead of being a number that rots.
+assert_stanza_coverage() {
+  local rendered=$1 label=$2 unit
+  local -a seen
+  mapfile -t seen < <(stanza_records "$rendered" | cut -f1)
+  for unit in "${platform_composed_units[@]}"; do
+    in_list "$unit" "${seen[@]}" || {
+      fail "$label: stanza_records yielded no record for platform-composed unit
+  '$unit' (${#seen[@]} records in total). The extractor is broken, so every
+  assertion over its output is passing vacuously."
+    }
+  done
+}
+
 assert_url_path_agreement() {
   local rendered=$1 os=$2 arch=$3 label=$4
   local -a tokens
@@ -191,6 +203,7 @@ for plat in "${platforms[@]}"; do
     fail "missing .local/share/chezmoi-commands/incomplete/ targets in $out"
   }
 
+  assert_stanza_coverage "$out" "$label"
   assert_url_path_agreement "$out" "$os" "$arch" "$label"
 
   # Leg sanity: the musl override must actually select the musl assets, and
@@ -209,6 +222,75 @@ for plat in "${platforms[@]}"; do
     fi
   fi
 done
+
+# --- negative fixtures ------------------------------------------------------
+#
+# Everything above runs over genuine renders, which agree by construction, so a
+# hollowed-out assertion would pass just as quietly as a correct one. The cases
+# below feed deliberately broken input to the same functions and require each to
+# reject it, which is what makes the checks above evidence rather than decor.
+#
+# The genuine linux/amd64 render is the baseline: the loop already accepted it,
+# so any rejection below comes from the mutation and nothing else.
+
+negative_case() {
+  local label=$1 fixture=$2 os=$3 arch=$4 want=$5
+  local report="$scratch/negative-report" status=0
+  (assert_url_path_agreement "$fixture" "$os" "$arch" "negative") >"$report" 2>&1 || status=$?
+  [[ $status -ne 0 ]] || {
+    fail "negative fixture '$label' was accepted; assert_url_path_agreement no
+  longer detects it and the whole check is decoration."
+  }
+  grep -qF "$want" "$report" || {
+    fail "negative fixture '$label' was rejected, but not for '$want': $(tr '\n' ' ' <"$report")"
+  }
+  printf 'negative fixture bites: %s\n' "$label"
+}
+
+genuine="$scratch/externals-linux-amd64-musl-false.toml"
+[[ -f "$genuine" ]] || fail "the linux/amd64 render is missing; the negative fixtures have nothing to mutate"
+
+bun_path=$(stanza_records "$genuine" | awk -F'\t' '$1 == "bun" { print $3; exit }')
+[[ "$bun_path" == *linux-x64* ]] || {
+  fail "expected the linux/amd64 bun path to carry 'linux-x64', got '$bun_path'.
+  Retarget the mutations below at whatever token it carries now."
+}
+
+# 1. A path whose platform token is a *different* token from the same leg's
+#    vocabulary: the asset-name/archive-path drift this gate exists to catch.
+mismatch="$scratch/negative-token-mismatch.toml"
+sed "s|^path = '$bun_path'\$|path = '${bun_path/linux-x64/linux-amd64}'|" "$genuine" >"$mismatch"
+grep -qF "path = '${bun_path/linux-x64/linux-amd64}'" "$mismatch" || fail 'the token-mismatch mutation did not apply'
+negative_case 'a path token disagreeing with the url asset' "$mismatch" linux amd64 'disagrees'
+
+# 2. A path carrying another platform's token entirely, which is not in this
+#    leg's vocabulary at all.
+foreign="$scratch/negative-foreign-token.toml"
+sed "s|^path = '$bun_path'\$|path = '${bun_path/linux-x64/linux-aarch64}'|" "$genuine" >"$foreign"
+grep -qF "path = '${bun_path/linux-x64/linux-aarch64}'" "$foreign" || fail 'the foreign-token mutation did not apply'
+negative_case 'a path token from another platform' "$foreign" linux amd64 'carries no known platform token'
+
+# 3. A stanza that declares `path` but is classified neither way, which is how a
+#    newly added external slips past the agreement rule unnoticed.
+unclassified="$scratch/negative-unclassified.toml"
+cat >"$unclassified" <<'TOML'
+[not-a-declared-unit]
+type = 'archive-file'
+url = 'https://example.invalid/tool-linux-x64.zip'
+path = 'tool-linux-x64/tool'
+TOML
+negative_case 'a stanza in neither classification list' "$unclassified" linux amd64 'but is in neither'
+
+# 4. The vacuity guard itself: an extractor that yields nothing must fail rather
+#    than let the empty stream satisfy every assertion downstream.
+empty_records="$scratch/negative-empty.toml"
+: >"$empty_records"
+coverage_status=0
+(assert_stanza_coverage "$empty_records" negative) >"$scratch/negative-report" 2>&1 || coverage_status=$?
+[[ $coverage_status -ne 0 ]] || fail 'assert_stanza_coverage accepted a render with no stanzas at all'
+grep -qF 'passing vacuously' "$scratch/negative-report" ||
+  fail "the empty-render rejection came from somewhere else: $(tr '\n' ' ' <"$scratch/negative-report")"
+printf 'negative fixture bites: %s\n' 'a render yielding no stanza records'
 
 rendered_flutter="$scratch/flutter.sh"
 

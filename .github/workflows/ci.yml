@@ -108,12 +108,14 @@ jobs:
           .ci/test-system-removed-gates.sh
           .ci/test-capability-cache.sh
           .ci/test-bun-resolve.sh
+          .ci/test-build-bun-version-fingerprint.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
           .ci/test-chezmoiignore-script-paths.sh
           .ci/check-external-checksum-coverage.sh
+          .ci/test-check-external-checksum-coverage.sh
 
   fatal-boundary-gates:
     name: fatal boundary gates

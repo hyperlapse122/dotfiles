@@ -30,20 +30,17 @@ export interface ReconcileReport {
   pruned: string[];
 }
 
-/**
- * A `mutableTree` unit is skipped: `ensureCompletedUnit` returns its raw tree path
- * with no store copy, and that tree may legitimately be absent on a host.
- */
 async function findUnresolvableCommand(
   unit: UnitManifest,
   backingPath: string,
 ): Promise<string | undefined> {
-  if (unit.mutableTree) return undefined;
-
   let backingRoot: string;
   try {
     backingRoot = await realpath(backingPath);
   } catch (err) {
+    // `ensureCompletedUnit` returns a `mutableTree` unit's raw tree path with no
+    // store copy, and that tree may legitimately be absent on a host.
+    if (unit.mutableTree) return undefined;
     return `Unit ${unit.id}: backing store ${backingPath} is unreadable (${String(err)})`;
   }
 
@@ -54,7 +51,10 @@ async function findUnresolvableCommand(
     try {
       resolvedTarget = await realpath(targetPath);
     } catch {
-      return `Unit ${unit.id} command ${cmd.name} has no backing file at ${targetPath}; declare relPath for an existing file`;
+      const remedy = cmd.relPath
+        ? `relPath ${cmd.relPath} does not resolve to an existing file`
+        : "declare relPath for an existing file";
+      return `Unit ${unit.id} command ${cmd.name} has no backing file at ${targetPath}; ${remedy}`;
     }
     try {
       contained(backingRoot, resolvedTarget);
