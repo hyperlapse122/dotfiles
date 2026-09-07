@@ -20,6 +20,13 @@
 # caller decides whether an absent bun is fatal, a skip, or a fallback. This
 # function never exits, prints, or fails on its own.
 #
+# EVERY CANDIDATE MUST BE ABSOLUTE. Rung 1 is the only candidate the ladder does
+# not spell out itself, so it is the only one that can arrive relative: a PATH
+# element that is empty or `.` makes `command -v bun` answer `./bun`, and
+# prepending that directory would put the working directory on PATH for every
+# command the caller runs afterwards. A non-absolute hit is rejected and the
+# next rung answers.
+#
 # WHY IT PREPENDS PATH INSTEAD OF ONLY SETTING BUN_BIN. Some callers spawn bun
 # as a subprocess (for example a workflow audit script invoking `bun
 # "$audit"`), and that subprocess resolves `bun` from PATH, not from a variable
@@ -37,7 +44,7 @@ resolve_bun() {
     "$HOME/.local/bin/bun" \
     "$HOME/.local/lib/commands/current/bun/bun" \
     "$HOME/.local/share/chezmoi-commands/incomplete/bun/bun"; do
-    if [[ -n "$bun_candidate" && -x "$bun_candidate" ]]; then
+    if [[ "$bun_candidate" == /* && -x "$bun_candidate" ]]; then
       BUN_BIN="$bun_candidate"
       break
     fi
