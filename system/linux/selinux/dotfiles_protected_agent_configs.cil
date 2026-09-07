@@ -252,6 +252,47 @@
 ; pasta rootless container networking inherits an unused open descriptor to the DRI render node.
 (dontaudit pasta_t dri_device_t (chr_file (read write)))
 
+; Codex installs its bundled "system skills" into the canonical skills root on
+; EVERY session start: codex_skills_extension removes and recreates
+; ~/.agents/skills/.system and writes a marker into it. That root is
+; protected_agent_config_t and chezmoi_t is its only writer, so the kernel
+; refuses, Codex logs `failed to install system skills: ... Permission denied`,
+; and the session continues. The refusal is the boundary working. There is no
+; Codex setting that turns the install off — `skills.enabled=false` and the
+; skip_host_skill_discovery flag would also remove the shared skills this
+; repository deploys — so the denial repeats forever and floods the audit log.
+;
+; NEVER "fix" this with the setroubleshoot suggestion. audit2allow proposes
+; `allow codex_t protected_agent_config_t ...`, and that type also labels
+; ~/.agents/plugins, so the grant would open BOTH canonical roots to a harness.
+; .ci/test-selinux-protected-configs.sh rejects that grant; this rule adds none.
+;
+; Scoped four ways on purpose. codex_t alone, because it is the only domain
+; observed producing the denial; another harness is added on its own evidence,
+; never pre-emptively. protected_agent_config_t alone, not the
+; protected_agent_config_type attribute, so a harness reaching another harness's
+; config type stays audited. dir alone, so file and symlink denials still
+; surface. write alone.
+;
+; What this hides: the kernel checks dir { write } in inode_permission() before
+; the more specific add_name / remove_name, so a create, unlink, rmdir, or
+; rename by codex_t under ~/.agents/skills or ~/.agents/plugins is denied at
+; write and never reaches the specific permission. This rule therefore silences
+; every parent-directory-gated mutation attempt, not a probe. NO RUNTIME
+; DETECTOR REPLACES IT, and nothing here pretends otherwise: CI reads policy
+; source and observes no runtime behaviour, and the reclaim sweep in
+; run_onchange_before_00-selinux-policies.sh.tmpl finds a label that already
+; escaped rather than a blocked attempt — behind the system/linux/selinux/**
+; fingerprint, so only when the policy tree changes. A per-apply context
+; assertion on both canonical roots was tried in
+; run_after_config-codex-settings.sh.tmpl and removed: that script's test
+; isolates only CODEX_HOME and injects a stub stat, so a check reading global
+; $HOME state broke its converged-re-run-is-silent contract. The gap is
+; recorded in docs/solutions/security-issues/, not compensated. To get the
+; signal back for an investigation, rebuild the policy with dontaudit rules
+; disabled (`semodule -DB`), reproduce, then restore with `semodule -B`.
+(dontaudit codex_t protected_agent_config_t (dir (write)))
+
 ; The filesystem association file_type used to confer, reproduced verbatim for
 ; types that deliberately carry no attribute. Without this, no label can be set:
 ; the check is file-label against filesystem-label, not a domain access grant.

@@ -103,18 +103,27 @@ cat >"$config" <<'JSON'
 JSON
 "$RECONCILER" settings "$CODEX_HOME" config.toml "$config"
 
-target="$CODEX_HOME/config.toml"
+# The skills symlink joins config.toml here rather than relying on the policy
+# script, which is fingerprinted on system/linux/selinux/** and so does not run
+# on an apply that only re-creates the symlink. That is how ~/.codex/skills came
+# to carry user_home_t while its filecon declares codex_config_t. Addressed
+# through CODEX_HOME, not $HOME/.codex, because the test fixture drives this
+# script through a scratch CODEX_HOME. No -R: the target is a single symlink.
+codex_labelled=("$CODEX_HOME/config.toml")
+[[ -e "$CODEX_HOME/skills" || -L "$CODEX_HOME/skills" ]] && codex_labelled+=("$CODEX_HOME/skills")
 if command -v restorecon >/dev/null 2>&1; then
-  if ! restorecon -F "$target" 2>/dev/null; then
-    printf 'config-codex-settings: could not restore the SELinux label of %s; until the next apply any unconfined process may write it.\n' "$target" >&2
-  else
-    context="$(stat -c %C "$target" 2>/dev/null || printf '?')"
-    if [[ $context != *:codex_config_t:* ]]; then
-      printf 'config-codex-settings: %s carries the SELinux context %s, not codex_config_t; check that the dotfiles policy module is installed.\n' "$target" "$context" >&2
+  for target in "${codex_labelled[@]}"; do
+    if ! restorecon -F "$target" 2>/dev/null; then
+      printf 'config-codex-settings: could not restore the SELinux label of %s; until the next apply any unconfined process may write it.\n' "$target" >&2
+    else
+      context="$(stat -c %C "$target" 2>/dev/null || printf '?')"
+      if [[ $context != *:codex_config_t:* ]]; then
+        printf 'config-codex-settings: %s carries the SELinux context %s, not codex_config_t; check that the dotfiles policy module is installed.\n' "$target" "$context" >&2
+      fi
     fi
-  fi
+  done
 elif [[ -e /sys/fs/selinux/enforce ]]; then
-  printf 'config-codex-settings: restorecon is unavailable on this SELinux host; the label of %s was not restored.\n' "$target" >&2
+  printf 'config-codex-settings: restorecon is unavailable on this SELinux host; the labels of %s were not restored.\n' "${codex_labelled[*]}" >&2
 fi
 {{- end }}
 {{- end }}

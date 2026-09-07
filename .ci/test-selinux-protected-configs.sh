@@ -66,6 +66,7 @@ for token in \
   "(allow locate_t protected_agent_config_type (dir (open read getattr search)))" \
   "(allow locate_t protected_agent_config_type (file (open read getattr)))" \
   "(dontaudit pasta_t dri_device_t (chr_file (read write)))" \
+  "(dontaudit codex_t protected_agent_config_t (dir (write)))" \
   "(allow protected_agent_config_type fs_t (filesystem (associate)))" \
   "(allow protected_agent_config_type tmpfs_t (filesystem (associate)))" \
   "(allow protected_agent_config_type noxattrfs (filesystem (associate)))" \
@@ -159,9 +160,13 @@ fi
 # the module, which is the whole allow-set for these types: nothing outside it
 # grants access to a type the base policy has never heard of.
 
+# The attribute spelling counts too. protected_agent_config_type expands to all
+# four protected types, so `allow codex_t protected_agent_config_type ...` grants
+# everything `allow codex_t protected_agent_config_t ...` would and more, while
+# the literal-name anchor alone never sees it.
 forbidden_writer() {
   local domain=$1 target=$2
-  if grep -qE "^\(allow ${domain} ${target} " "$cil_file"; then
+  if grep -qE "^[[:space:]]*\(allow ${domain} (${target}|protected_agent_config_type) " "$cil_file"; then
     fail "$domain must not be granted any access to $target"
   fi
 }
@@ -177,6 +182,26 @@ forbidden_writer 'aoe_t' 'codex_config_t'
 forbidden_writer 'codex_t' 'claude_config_t'
 forbidden_writer 'codex_t' 'gemini_config_t'
 forbidden_writer 'codex_t' 'protected_agent_config_t'
+
+# Suppression must not spread. The token loop above proves the one sanctioned
+# dontaudit is PRESENT; it cannot see a second, broader one added beside it, and
+# neither can the checks around it -- forbidden_writer anchors on `^\(allow ` and
+# the compiled-policy query filters on ruletype == 'allow'. A rule such as
+# (dontaudit dotfiles_agent_domain protected_agent_config_type (dir (write add_name)))
+# would therefore widen the audit blind spot to every protected type and every
+# agent domain with a green build. Enumerate instead: any dontaudit naming a
+# protected type other than the sanctioned line is a failure.
+sanctioned_dontaudit='(dontaudit codex_t protected_agent_config_t (dir (write)))'
+while IFS= read -r line; do
+  [[ $line == "$sanctioned_dontaudit" ]] && continue
+  fail "unsanctioned dontaudit on a protected type widens the audit blind spot: $line"
+done < <(grep -E '^\(dontaudit .*(protected_agent_config_t|protected_agent_config_type|claude_config_t|gemini_config_t|codex_config_t)' "$cil_file")
+
+# grep -qF above matches a substring, so commenting the rule out (`; (dontaudit
+# ...)`) satisfies the pin while the module carries no suppression at all. Pin it
+# as a whole line instead, which a `;`-prefixed copy cannot satisfy.
+grep -qxF -- "$sanctioned_dontaudit" "$cil_file" ||
+  fail "the sanctioned dontaudit must be an active rule on its own line, not commented out: $sanctioned_dontaudit"
 
 # Relabelling stays chezmoi's: codex_t writes its own config but may not move a
 # file between the protected types.
@@ -200,8 +225,11 @@ for protected in protected_agent_config_t claude_config_t gemini_config_t codex_
     fail "$protected must not join a base-policy attribute: that grants every unconfined domain write access"
   fi
 done
-if grep -qE '^\(typeattributeset [a-z_]+ \(.*\b(protected_agent_config_t|claude_config_t|gemini_config_t|codex_config_t)\b.*\)\)' "$cil_file" |
-  grep -qv 'protected_agent_config_type'; then
+# `grep -q` prints nothing, so piping it into another grep made this check dead:
+# the second grep saw an empty stream and the fail was unreachable. Emit the
+# matching lines, drop the sanctioned one, and fail on whatever is left.
+if grep -E '^[[:space:]]*\(typeattributeset [a-z_]+ \(.*\b(protected_agent_config_t|claude_config_t|gemini_config_t|codex_config_t)\b.*\)\)' "$cil_file" |
+  grep -v '^[[:space:]]*(typeattributeset protected_agent_config_type ' | grep -q .; then
   fail 'a protected type was added to an attribute other than protected_agent_config_type'
 fi
 
@@ -473,7 +501,8 @@ import sys
 import setools
 
 policy = setools.SELinuxPolicy(sys.argv[1])
-MUTATING = {'write', 'create', 'unlink', 'rename', 'setattr', 'append'}
+MUTATING = {'write', 'create', 'unlink', 'rename', 'setattr', 'append',
+            'add_name', 'remove_name', 'rmdir', 'reparent'}
 EXPECTED = {
     ('chezmoi_t', 'protected_agent_config_t'): True,
     ('chezmoi_t', 'claude_config_t'): True,
@@ -521,7 +550,11 @@ NAMED_TRANSITIONS = {
 
 
 def may_mutate(source, target):
-    query = setools.TERuleQuery(policy, source=source, target=target, tclass=['file'])
+    # dir is the class the boundary actually gates: creating or unlinking inside
+    # ~/.agents/skills is dir add_name / remove_name, checked after dir write.
+    # A file-only query cannot see the grant that would open those roots.
+    query = setools.TERuleQuery(policy, source=source, target=target,
+                                tclass=['file', 'dir', 'lnk_file'])
     for rule in query.results():
         if str(rule.ruletype) != 'allow':
             continue
@@ -617,6 +650,35 @@ for (source, name), want in sorted(NAMED_TRANSITIONS.items()):
     got = named_transition(source, name)
     if got != want:
         failures.append(f'{source} creating {name} in user_home_t yields {got or "user_home_t"}, expected {want or "user_home_t"}')
+# THE SUPPRESSION SURFACE, asked of the compiled policy rather than the source
+# text. A text scan is defeated by one leading space, by a rule wrapped across
+# lines, and by a dontaudit that reaches the protected types through an alias
+# attribute instead of naming them. The compiled policy has already expanded
+# every attribute, so this sees the real rule set. Exactly one dontaudit may
+# touch a protected type, and these are its exact terms.
+PROTECTED = {'protected_agent_config_t', 'claude_config_t', 'gemini_config_t', 'codex_config_t'}
+SANCTIONED_DONTAUDIT = {('codex_t', 'protected_agent_config_t', 'dir', frozenset({'write'}))}
+observed_dontaudit = set()
+for rule in setools.TERuleQuery(policy, ruletype=['dontaudit']).results():
+    try:
+        targets = {str(x) for x in rule.target.expand()}
+    except AttributeError:
+        targets = {str(rule.target)}
+    hit = targets & PROTECTED
+    if not hit:
+        continue
+    try:
+        sources = {str(x) for x in rule.source.expand()}
+    except AttributeError:
+        sources = {str(rule.source)}
+    for src in sources:
+        for tgt in hit:
+            observed_dontaudit.add((src, tgt, str(rule.tclass), frozenset(str(p) for p in rule.perms)))
+for extra in sorted(observed_dontaudit - SANCTIONED_DONTAUDIT):
+    failures.append(f'unsanctioned dontaudit in the compiled policy widens the audit blind spot: {extra}')
+for missing in sorted(SANCTIONED_DONTAUDIT - observed_dontaudit):
+    failures.append(f'the sanctioned dontaudit is absent from the compiled policy: {missing}')
+
 for line in failures:
     print(f'test-selinux-protected-configs: {line}', file=sys.stderr)
 sys.exit(1 if failures else 0)
@@ -650,6 +712,31 @@ SETOOLS
     grep -qF 'unconfined_t may write protected_agent_config_t' "$mutant_report" ||
       fail "mutant policy was rejected for the wrong reason: $(tr '\n' ';' <"$mutant_report")"
     printf 'test-selinux-protected-configs: write boundary proven against the file_type regression.\n'
+
+    # Same bar for the suppression surface. A text scan of the module is defeated
+    # by indentation, by a wrapped rule, and by an alias attribute, so the checks
+    # above ask the COMPILED policy instead. Prove that: each mutant below is a
+    # real widening that a source-text guard would miss, and every one must make
+    # the compiled-policy check fail.
+    while IFS='|' read -r name body; do
+      [[ -n $name ]] || continue
+      supp_cil="$scratch/supp.cil"
+      { cat -- "$cil_file"; printf '%b\n' "$body"; } > "$supp_cil"
+      secilc -N -o "$scratch/policy_supp" -f "$scratch/file_contexts_supp" \
+        "$base_stub" "$supp_cil" || fail "secilc failed to compile the $name mutant"
+      supp_report="$scratch/supp_report"
+      if "$selinux_python" "$policy_check" "$scratch/policy_supp" >"$supp_report" 2>&1; then
+        fail "the suppression-surface check accepts a $name; the audit blind spot can be widened with a green build"
+      fi
+      grep -qF 'unsanctioned dontaudit in the compiled policy' "$supp_report" ||
+        fail "the $name mutant was rejected for the wrong reason: $(tr '\n' ';' <"$supp_report")"
+    done <<'MUTANTS'
+indented broader dontaudit|  (dontaudit dotfiles_agent_domain protected_agent_config_type (dir (write add_name)))
+wrapped broader dontaudit|(dontaudit codex_t protected_agent_config_t\n  (dir (write add_name)))
+alias-laundered dontaudit|(typeattribute quiet_roots)\n(typeattributeset quiet_roots (protected_agent_config_type))\n(dontaudit dotfiles_agent_domain quiet_roots (dir (write add_name)))
+second suppressed domain|(dontaudit claude_t protected_agent_config_t (dir (write)))
+MUTANTS
+    printf 'test-selinux-protected-configs: suppression surface proven against widening.\n'
   fi
 fi
 
