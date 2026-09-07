@@ -128,6 +128,7 @@ jobs:
           .ci/test-op-ref-gating.sh
           .ci/test-container-policy.sh
           .ci/test-mise-config-merge.sh
+          .ci/test-container-secret-gate.sh
           .ci/check-external-checksum-coverage.sh
           .ci/test-check-external-checksum-coverage.sh
 
