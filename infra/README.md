@@ -33,6 +33,14 @@ infra/
   cluster Secrets are seeded by CLI, so a second automated Secret writer would
   only add drift.
 
+## Before the tailnet exists
+
+The `orca-worker-tailscale` Secret is optional and the PodTemplate marks it so.
+Without it a worker still starts and the recipe addresses it on a per-pod
+NodePort at the cluster node's own address; with it, the sidecar registers an
+ephemeral tailnet node and the recipe emits its MagicDNS name. Seeding the Secret
+is the whole promotion -- there is no manifest to edit.
+
 ## Deploying
 
 Read `docs/runbooks/orca-per-workspace/`. Bootstrap order is: seed the Secrets,

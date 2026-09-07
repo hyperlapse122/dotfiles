@@ -104,6 +104,28 @@ Check it:
 KUBECONFIG=~/.kube/orca-platform.yaml kubectl get podtemplate
 ```
 
-## 6. Prove it end to end
+## 6. The tailnet, later
+
+A cluster is usable before its tailnet material exists. Without the
+`orca-worker-tailscale` Secret the recipe publishes each worker's sshd on a
+per-pod NodePort and emits the node's own address, which is the right answer on a
+LAN where the desktop already reaches the node. `orca-tailscale-operator` reads
+NotReady meanwhile, and that is the only component allowed to.
+
+Two things in the Tailscale admin console promote it, and neither has a CLI path
+-- creating the OAuth client is what grants API access in the first place:
+
+1. `tagOwners` for `tag:orca-proxy` and `tag:orca-workspace` (plus
+   `tag:k8s-operator` and `tag:k8s`, which the operator uses for itself and its
+   proxies).
+2. An OAuth client with `devices` and `auth_keys` write scopes owning
+   `tag:orca-proxy`, seeded as `operator-oauth`.
+3. An ephemeral, reusable auth key tagged `tag:orca-workspace`, seeded as
+   `orca-worker-tailscale`.
+
+Seed those two Secrets and the next worker is created on the tailnet instead. No
+manifest changes, no recipe changes.
+
+## 7. Prove it end to end
 
 [06 Validation](06-validation.md).
