@@ -66,6 +66,22 @@ on the proxy's own host:
 browser or on another machine entirely; the callback URL still comes back to
 this box.
 
+Either path ends the same way, and both signals are worth checking:
+
+```
+kubectl -n cliproxyapi logs deploy/cliproxyapi | tail
+  ... You can now use Claude services through this CLI
+  ... callback forwarder on port 54545 stopped
+```
+
+and the credential now exists:
+
+```sh
+curl -s -H "Authorization: Bearer $management_key" \
+  http://orca-proxy:8317/v0/management/auth-files
+{"files":[{"account":"you@example.com","provider":"claude","failed":0, ...}]}
+```
+
 
 In the panel, add an authentication for each provider account the workers should
 use, and complete the provider's OAuth flow. This is interactive by nature -- a
