@@ -9,13 +9,9 @@
 {{- $muslTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" .chezmoi.os)) -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
-       static-musl build. */ -}}
-{{- $isMuslLinux := false -}}
-{{- if eq .chezmoi.os "linux" -}}
-  {{- if eq (output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim) "0" -}}
-    {{- $isMuslLinux = true -}}
-  {{- end -}}
-{{- end -}}
+       static-musl build. See .chezmoitemplates/musl-probe.tmpl for the probe and its
+       `renderOverrides.muslLinux` render-time override. */ -}}
+{{- $isMuslLinux := eq (includeTemplate "musl-probe.tmpl" (dict "ctx" .)) "true" -}}
 
 {{- /* ---------- android (Google Android CLI) ---------- */ -}}
 

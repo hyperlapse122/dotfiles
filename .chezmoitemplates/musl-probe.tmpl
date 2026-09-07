@@ -1,0 +1,55 @@
+{{- /*
+musl-probe.tmpl — the ONLY definition of the host-libc probe.
+
+Returns the string "true" on a musl Linux and "false" everywhere else. A
+template returns a string, so every caller converts once, at the call site:
+
+  {{- $isMuslLinux := eq (includeTemplate "musl-probe.tmpl" (dict "ctx" .)) "true" -}}
+
+Input (dict):
+  ctx  required; root chezmoi context (carries .chezmoi and any override key)
+
+Resolution order:
+  1. Not linux (ctx.chezmoi.os != "linux") -> "false". The override never
+     applies off linux, because no other platform has a musl lock key.
+  2. Override present -> its truthiness, with no subprocess. The key is
+     `renderOverrides.muslLinux`; it is absent from .chezmoidata by design and
+     exists only so a render can select the musl branch:
+
+       chezmoi execute-template --override-data '{"renderOverrides":{"muslLinux":true}}'
+
+     Both the JSON boolean true and the strings "true"/"1"/"yes" count as true.
+  3. Otherwise -> the `ldd /bin/ls` probe, which is what a real apply runs.
+
+Step 3 shells out through `output`, so `--override-data` cannot reach it; step 2
+is the seam that lets CI render the `-musl` platform keys (bun, claude, mise,
+agent-browser) without a musl runner (R28).
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "musl-probe.tmpl: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if not (hasKey . "ctx") -}}
+{{-   fail "musl-probe.tmpl: ctx is required" -}}
+{{- end -}}
+{{- $ctx := .ctx -}}
+{{- $isMuslLinux := false -}}
+{{- if eq $ctx.chezmoi.os "linux" -}}
+{{-   $override := "" -}}
+{{-   $haveOverride := false -}}
+{{-   if hasKey $ctx "renderOverrides" -}}
+{{-     if hasKey $ctx.renderOverrides "muslLinux" -}}
+{{-       $override = $ctx.renderOverrides.muslLinux -}}
+{{-       $haveOverride = true -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if $haveOverride -}}
+{{-     if kindIs "bool" $override -}}
+{{-       $isMuslLinux = $override -}}
+{{-     else -}}
+{{-       $isMuslLinux = has (lower (toString $override)) (list "true" "1" "yes") -}}
+{{-     end -}}
+{{-   else if eq (output "sh" "-c" "ldd /bin/ls 2>&1 | grep -q musl; echo $?" | trim) "0" -}}
+{{-     $isMuslLinux = true -}}
+{{-   end -}}
+{{- end -}}
+{{- $isMuslLinux | toString -}}
