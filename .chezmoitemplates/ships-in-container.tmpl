@@ -1,0 +1,52 @@
+{{- /*
+ships-in-container.tmpl — the ONE answer to "does this entry belong in a worker image?"
+
+Input (dict):
+  ctx   required; root chezmoi context
+  tool  required; a commands.units `tool:` value, or a unit id for a unit that
+        declares no tool. Companion artifacts of a primary tool (bunx from bun,
+        uvx from uv, sg from ast-grep, the buf man page and completions) pass
+        their PRIMARY tool's name -- they ship exactly when it does, and an alias
+        table would be a second place to forget.
+
+Emits the literal "true" or "false".
+
+WHY THIS EXISTS. .chezmoidata/commands.yaml already carried `gate: "!container"`,
+but only command-manifest.tmpl read it, and a command link is not a payload: the
+external still downloaded into the image and the gate withheld nothing but a
+symlink. The externals files now ask the same question through this partial, so
+one declaration governs both the download and the link. Gate ASSIGNMENT stays
+data in commands.yaml; gate RESOLUTION is here, exactly as facts.yaml splits them.
+
+AN UNKNOWN TOOL FAILS THE RENDER. The alternative is that a typo answers "ship
+it", which is silent and lands in a published image.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "ships-in-container.tmpl: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- range $required := list "ctx" "tool" -}}
+{{-   if not (hasKey $ (printf "%s" $required)) -}}
+{{-     fail (printf "ships-in-container.tmpl: %s is required" $required) -}}
+{{-   end -}}
+{{- end -}}
+{{- $ctx := .ctx -}}
+{{- $tool := .tool -}}
+{{- $facts := includeTemplate "facts.tmpl" $ctx | fromYaml -}}
+{{- $found := false -}}
+{{- $ships := true -}}
+{{- range $unitId, $unit := $ctx.commands.units -}}
+{{-   $names := list $unitId -}}
+{{-   if hasKey $unit "tool" -}}{{- $names = append $names $unit.tool -}}{{- end -}}
+{{-   if has $tool $names -}}
+{{-     $found = true -}}
+{{-     if hasKey $unit "gate" -}}
+{{-       if and (eq $unit.gate "!container") $facts.container -}}
+{{-         $ships = false -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if not $found -}}
+{{-   fail (printf "ships-in-container.tmpl: %q names no unit id and no unit tool in .chezmoidata/commands.yaml; declare the unit or pass its primary tool" $tool) -}}
+{{- end -}}
+{{- $ships -}}

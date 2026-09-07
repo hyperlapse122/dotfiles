@@ -381,6 +381,26 @@ fact_headless() {
   [[ "$default_target" != "graphical.target" && ! -L /etc/systemd/system/display-manager.service ]]
 }
 
+# opAvailable — can this run resolve `op://` references at all?
+#
+# TWO ARMS, and the second one is why this is not just op_ready. op_ready runs
+# `op vault list`, which 1Password does not serve through Connect: the documented
+# Connect surface is `op read`, `op inject`, `op run` and `op item get`. A worker
+# pod holds only Connect credentials, so op_ready fails there — and a fact built on
+# it alone would report false in every worker, silently skipping the runtime apply
+# that is the whole reason the fact exists. The Connect arm is that environment
+# stated directly; the op_ready arm keeps the host on the probe that works there.
+#
+# Both Connect variables are required: one alone is a half-configured environment
+# that will fail at the first `op read`, and reporting true for it would move that
+# failure from the probe to the middle of an apply.
+fact_op_available() {
+  if [[ -n "${OP_CONNECT_HOST:-}" && -n "${OP_CONNECT_TOKEN:-}" ]]; then
+    return 0
+  fi
+  op_ready
+}
+
 # vm and virt are TWO facts on purpose — the repo already treats them as two
 # conditions and collapsing them would flip a consumer:
 #   vm   = `systemd-detect-virt --vm`  (VMs only) — system.yaml's `vm` gate, the
@@ -436,6 +456,7 @@ write_facts_cache() {
     printf '# Rewritten once per chezmoi command; read by .chezmoitemplates/facts.tmpl.\n'
     printf '# Do NOT edit — every value here is a probe result, not a setting.\n'
     printf 'headless: %s\n'     "$(fact_bool fact_headless)"
+    printf 'opAvailable: %s\n' "$(fact_bool fact_op_available)"
     printf 'nvidia: %s\n'       "$(fact_bool fact_nvidia)"
     printf 'gpuDeviceId: %s\n'  "$(fact_string fact_gpu_device_id)"
     printf 'hybridGraphics: %s\n' "$(fact_bool fact_hybrid_graphics)"
@@ -1074,10 +1095,19 @@ if is_container; then
     printf 'Bake op + mise into the image; this hook never installs packages inside a container.\n' >&2
     exit 1
   fi
-  printf 'install-prerequisites.sh: container detected, but op is not authenticated.\n' >&2
-  printf 'Export a 1Password service-account token before applying:\n' >&2
-  printf '  export OP_SERVICE_ACCOUNT_TOKEN=...   # see: op service account create --help\n' >&2
-  exit 1
+  # op present but not usable is NOT a failure in a container any more. That
+  # demand predates the opAvailable fact and contradicts it: an image BUILD is a
+  # container with no credentials by design, and every target that would resolve
+  # an op:// reference is gated on the fact and skipped. Failing here would make
+  # the secret-free build this repository now requires impossible to perform.
+  #
+  # The pod is the other side of the same fact: 1Password Connect is present, the
+  # fact is true, and the entrypoint's apply resolves exactly those targets. So
+  # both container cases are correct, and neither needs a service-account token.
+  printf 'install-prerequisites.sh: container without usable op; skipping every op-dependent target.\n' >&2
+  printf 'This is the image-build path. In a pod, OP_CONNECT_HOST/OP_CONNECT_TOKEN make opAvailable true\n' >&2
+  printf 'and the entrypoint re-applies those targets against 1Password Connect.\n' >&2
+  exit 0
 fi
 
 # Fedora: install via dnf (1Password's

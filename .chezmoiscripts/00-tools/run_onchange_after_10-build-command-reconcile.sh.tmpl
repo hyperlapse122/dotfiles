@@ -58,6 +58,26 @@ if [[ -z "$BUN_BIN" ]]; then
   exit 1
 fi
 
+{{ if (includeTemplate "facts.tmpl" . | fromYaml).container -}}
+# CONTAINER: compile with bun directly, never through mise.
+#
+# `mise -C "$SRC/packages" exec` resolves the tools in this REPOSITORY's own
+# mise.toml -- aube, codegraph, a pinned rust toolchain, and postinstall hooks
+# that fetch cargo crates and run `codegraph init`. That is the toolchain for
+# working ON this repository, and an image that builds FROM it has no use for
+# any of it. It also cannot get it: a clean `aube` install fails today, its
+# attestation naming aubepkg/aube where mise resolves jdx/aube.
+#
+# bun alone builds command-reconcile, and bun is in the worker keep set.
+if ! (cd "$SRC/packages" && "$BUN_BIN" install --frozen-lockfile); then
+  printf '%s\n' 'build-command-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
+  exit 1
+fi
+if ! (cd "$SRC/packages/command-reconcile" && "$BUN_BIN" build --compile ./src/cli.ts --outfile ./dist/command-reconcile); then
+  printf '%s\n' 'build-command-reconcile: bun build failed; fix the command-reconcile build error, then re-apply.' >&2
+  exit 1
+fi
+{{ else -}}
 if command -v "$MISE_BIN" >/dev/null 2>&1 || [[ -x "$MISE_BIN" ]]; then
   if ! "$MISE_BIN" -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
     printf '%s\n' 'build-command-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
@@ -73,6 +93,7 @@ elif [[ -n "$BUN_BIN" ]]; then
     exit 1
   fi
 fi
+{{ end -}}
 
 if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
   printf '%s\n' 'build-command-reconcile: build completed without an executable dist artifact; inspect the build output, then re-apply.' >&2

@@ -23,6 +23,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: android
       commands:
         - name: android
@@ -47,6 +48,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: agy
       commands:
         - name: agy
@@ -60,6 +62,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: agent-browser
       commands:
         - name: agent-browser
@@ -72,6 +75,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: aoe
       commands:
         - name: aoe
@@ -110,6 +114,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: ast-grep
       commands:
         - name: ast-grep
@@ -122,6 +127,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: ast-grep
       commands:
         - name: sg
@@ -134,6 +140,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: buf
       commands:
         - name: buf
@@ -146,6 +153,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: buf
       commands:
         - name: protoc-gen-buf-breaking
@@ -158,6 +166,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: buf
       commands:
         - name: protoc-gen-buf-lint
@@ -170,6 +179,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: marksman
       commands:
         - name: marksman
@@ -182,6 +192,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: shellcheck
       commands:
         - name: shellcheck
@@ -194,6 +205,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: wasm-pack
       commands:
         - name: wasm-pack
@@ -206,6 +218,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: rust-analyzer
       commands:
         - name: rust-analyzer
@@ -218,6 +231,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: uv
       commands:
         - name: uv
@@ -230,6 +244,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: uv
       commands:
         - name: uvx
@@ -278,6 +293,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: kubectl
       commands:
         - name: kubectl
@@ -290,6 +306,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: kubectl
       commands:
         - name: kubectl-convert
@@ -302,6 +319,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: helm
       commands:
         - name: helm
@@ -314,6 +332,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: minikube
       commands:
         - name: minikube
@@ -326,6 +345,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux]
+      gate: "!container"
       tool: docker-credential-helpers
       commands:
         - name: docker-credential-secretservice
@@ -338,6 +358,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [macos]
+      gate: "!container"
       tool: docker-credential-helpers
       commands:
         - name: docker-credential-osxkeychain
@@ -350,6 +371,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: wakatime-cli
       commands:
         - name: wakatime-cli
@@ -386,6 +408,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: garden
       commands:
         - name: garden
@@ -398,6 +421,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_auth-glab
       commands:
         - name: auth-glab
@@ -410,6 +434,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_code
       commands:
         - name: code
@@ -422,6 +447,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_docker-credential-dockerhub
       commands:
         - name: docker-credential-dockerhub
@@ -434,6 +460,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_dotfiles-skips
       commands:
         - name: dotfiles-skips
@@ -446,6 +473,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_encryption-status
       commands:
         - name: encryption-status
@@ -470,6 +498,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_host-facts.tmpl
       commands:
         - name: host-facts
@@ -508,6 +537,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_src-audit
       commands:
         - name: src-audit
@@ -521,6 +551,7 @@ commands:
       privacy: secret
       mode: "0700"
       platforms: [linux]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password.tmpl
       commands:
         - name: import-wifi-1password
@@ -534,6 +565,7 @@ commands:
       privacy: secret
       mode: "0700"
       platforms: [macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password-macos.sh.tmpl
       commands:
         - name: import-wifi-1password-macos.sh
@@ -546,6 +578,7 @@ commands:
       proofEligible: false
       mode: "0700"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/private_executable_tokscale.tmpl
       commands:
         - name: tokscale
@@ -558,7 +591,12 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
-      gate: "!container"
+      # NOT gated !container any more. 70-agents/config-codex-settings requires
+      # this binary and hard-fails without it, so gating it made the container
+      # path unable to configure Codex at all -- the agent settings carryover is
+      # most of what a worker image is for. The gate existed because building it
+      # needed the repository toolchain; the build script now compiles it with
+      # bun in a container, so the reason is gone.
       fingerprintGlobs:
         - mise.toml
         - packages/package.json
@@ -580,6 +618,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: codegraph
       treePath: .codegraph/versions
       commands:

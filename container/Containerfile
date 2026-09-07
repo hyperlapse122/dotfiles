@@ -1,0 +1,100 @@
+# Orca per-workspace worker image.
+#
+# Built from this repository's container path: `chezmoi init --apply` with the
+# container fact true and opAvailable false, which skips every target that would
+# resolve a 1Password reference. The pod's entrypoint re-applies exactly those
+# targets against 1Password Connect at start, so no credential is ever in a layer.
+#
+# NO BUILD SECRETS. This repository is public, so the clone needs no token. If one
+# is ever required, use `podman build --secret`, never ARG or ENV -- both persist
+# in image metadata.
+#
+# Fedora to match the host, which is what keeps .install-prerequisites.sh and the
+# 00-tools scripts on ground they already run on.
+#
+# Pinned by digest, not by tag: a tag moves, and a worker image that silently
+# changes its base is a worker image whose failures cannot be reproduced. The tag
+# this digest resolved from is recorded beside it so a refresh is a one-line diff
+# with a checkable provenance.
+#   registry.fedoraproject.org/fedora:44, resolved 2026-09-07
+FROM registry.fedoraproject.org/fedora@sha256:f59ce614aba37211165e711d732fd4785f1c0329c4a3a4289cf29e333cf36c52 AS worker
+
+ARG WORKER_USER=worker
+ARG WORKER_UID=1000
+
+# libatomic and libstdc++ are what node links against. Without them the binary
+# exists and exits 127, which reads like a missing command rather than a missing
+# library, and takes `mise install` down with it. The minimal Fedora image ships
+# neither, and only the loader error names which one is absent.
+#
+# diffutils is not optional despite looking it: the compound-engineering overlay
+# script compares files with `cmp`, and without it every overlay silently
+# reports "command not found" and reinstalls on each apply.
+#
+# git and openssh-server are the worker's own contract: git because AGENTS.md
+# mandates the branch and MR/PR workflow, sshd because public-key SSH is how a
+# workspace attaches. The rest is what the bootstrap needs to fetch and unpack.
+RUN dnf install -y --setopt=install_weak_deps=False \
+      bash ca-certificates curl diffutils git jq libatomic libstdc++ openssh-server tar gzip xz which \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+RUN useradd --create-home --uid "${WORKER_UID}" --shell /bin/bash "${WORKER_USER}" \
+ && install -d -m 0700 -o "${WORKER_USER}" -g "${WORKER_USER}" "/home/${WORKER_USER}/.ssh"
+
+# The tripwire, on PATH for the whole build. See container/op-stub-failing.sh.
+COPY container/op-stub-failing.sh /usr/local/bin/op
+RUN chmod 0755 /usr/local/bin/op
+
+USER ${WORKER_USER}
+WORKDIR /home/${WORKER_USER}
+ENV HOME=/home/${WORKER_USER} \
+    LANG=C.UTF-8 \
+    PATH=/home/${WORKER_USER}/.local/share/mise/shims:/home/${WORKER_USER}/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# chezmoi and mise from the committed release lock, verified by digest -- not from
+# get.chezmoi.io. render-dotfiles.yml uses the unpinned installer deliberately, to
+# exercise whatever chezmoi does today; a published image wants the opposite, and
+# STRATEGY.md names hermetic supply chain as a track: every artifact is
+# version-and-digest addressed.
+# Build context is the REPOSITORY ROOT, not container/: the lock is the only
+# thing the image needs before it can clone itself.
+COPY --chown=${WORKER_USER}:${WORKER_USER} .chezmoidata/releases.json /tmp/releases.json
+RUN set -euo pipefail; \
+    mkdir -p "${HOME}/.local/bin"; \
+    for tool in chezmoi mise; do \
+      url=$(jq -r --arg t "$tool" '.releases.tools[$t].artifacts["linux-amd64"].url' /tmp/releases.json); \
+      sha=$(jq -r --arg t "$tool" '.releases.tools[$t].artifacts["linux-amd64"].sha256' /tmp/releases.json); \
+      curl -fsSL "$url" -o "/tmp/$tool.dl"; \
+      printf '%s  %s\n' "$sha" "/tmp/$tool.dl" | sha256sum --check -; \
+      case "$url" in \
+        *.tar.gz|*.tgz) tar -xzf "/tmp/$tool.dl" -C "${HOME}/.local/bin" "$tool" ;; \
+        *)              install -m 0755 "/tmp/$tool.dl" "${HOME}/.local/bin/$tool" ;; \
+      esac; \
+      rm -f "/tmp/$tool.dl"; \
+    done; \
+    rm -f /tmp/releases.json
+
+# The apply itself. chezmoi's own default source directory: ~/src is a host
+# concept (the garden registry, aoe worktrees, 90-src), all container-skipped, so
+# .chezmoi.toml.tmpl omits sourceDir here and the image does not imitate that path.
+#
+# --no-tty because the Fedora config template prompts for a LUKS passphrase; a
+# blank answer skips the per-host secret, which a worker has no use for.
+ARG DOTFILES_REPO=https://github.com/hyperlapse122/dotfiles.git
+ARG DOTFILES_REF=main
+RUN set -euo pipefail; \
+    chezmoi init --apply --no-tty --depth 1 --branch "${DOTFILES_REF}" "${DOTFILES_REPO}" </dev/null
+
+# The worker's global mise tool set is declared by the container fragment the
+# apply just rendered, so this installs node and python and nothing else.
+RUN set -euo pipefail; mise install
+
+# sshd needs a place to write per-pod host keys; the entrypoint generates them.
+USER root
+RUN install -d -m 0755 /etc/ssh /run/sshd
+COPY container/entrypoint.sh /usr/local/bin/worker-entrypoint
+RUN chmod 0755 /usr/local/bin/worker-entrypoint
+
+EXPOSE 22
+ENTRYPOINT ["/usr/local/bin/worker-entrypoint"]

@@ -1,5 +1,8 @@
 {{- /* ~/.mcp.json — universal MCP configuration rendered from .chezmoidata/agents.yaml.
        Consumed by Claude Code, Antigravity, and tool orchestrators. */ -}}
+{{- /* Read once at file scope: the op:// call site below sits inside a range,
+   where `.` is the loop item and facts.tmpl could not be reached. */ -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $servers := dict -}}
 {{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "claude") | fromJson -}}
 {{- range $mcpServers -}}
@@ -14,7 +17,7 @@
 {{- $entry = set $entry "type" "http" -}}
 {{- $entry = set $entry "url" .url -}}
 {{- if hasKey . "headers" -}}
-{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers") "resolveSecrets" $facts.opAvailable) | fromJson -}}
 {{- $entry = set $entry "headers" $headers -}}
 {{- end -}}
 {{- end -}}

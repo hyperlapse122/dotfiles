@@ -1,4 +1,14 @@
 {{- $userFontDir := (replace "linux" ".local/share/fonts" (replace "darwin" "Library/Fonts" .chezmoi.os)) -}}
+{{- /* A pod has no display. .config/fontconfig was already container-ignored, so until
+   now the CONFIG was skipped while every archive still downloaded -- the gating was
+   inconsistent, not absent. One guard covers every family; a per-family policy would
+   carry no information, since the answer is the same for all of them.
+
+   The fact directly, not ships-in-container.tmpl: a font family is not a command
+   unit, and inventing one so the partial had something to look up would put a
+   non-command in the command manifest. */ -}}
+{{- $fontFacts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if not $fontFacts.container -}}
 
 {{/*
   Each release archive is extracted into its OWN subdirectory of the user font
@@ -31,4 +41,5 @@
     targetPath = {{ printf "%s/%s" $userFontDir $subdir | quote }}
 
 {{ end }}
+{{- end }}
 {{- end }}

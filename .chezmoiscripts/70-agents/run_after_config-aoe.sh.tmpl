@@ -1,3 +1,8 @@
+{{- /* aoe is the host worktree and session manager, and it is excluded from a
+   worker image: Orca owns the workspace there, and 90-src is already skipped. Its
+   config script has nothing to configure, and it fails outright because the binary
+   it configures was never installed. */ -}}
+{{- if not (includeTemplate "facts.tmpl" . | fromYaml).container -}}
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 #!/usr/bin/env bash
 # Reasserts only the declared aoe TOML leaves (agents.aoe in
@@ -30,3 +35,4 @@ cat >"$config" <<'JSON'
 JSON
 "$RECONCILER" settings "$AOE_HOME" config.toml "$config"
 {{ end -}}
+{{- end -}}

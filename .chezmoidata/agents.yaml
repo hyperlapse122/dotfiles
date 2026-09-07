@@ -5,6 +5,7 @@ agents:
     servers:
     - name: codegraph
       transport: stdio
+      container: skip
       command: codegraph
       args:
       - serve
@@ -17,6 +18,7 @@ agents:
       - serve
     - name: agent-browser
       transport: stdio
+      container: skip
       command: agent-browser
       args:
       - mcp
@@ -41,6 +43,7 @@ agents:
     external:
     - name: agent-browser
       source: vercel-labs/agent-browser
+      container: skip
     - name: improve
       source: shadcn/improve
       ref: main

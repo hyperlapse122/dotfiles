@@ -1,0 +1,38 @@
+# Shared by every environment. The variant fragment beside this file adds what
+# only that environment needs; config.toml.tmpl merges the two as parsed TOML.
+[tools]
+# Core runtimes and package managers. node and python are the worker baseline:
+# node because the agent tooling and most scripts run on it, python because it
+# backs pipx and is reached for constantly even in projects that are not written
+# in it. Everything else is a project's own mise.toml to declare.
+node = "latest"
+python = "latest"
+
+# mise internals. usage is its completions; pipx is python-dependent and backs
+# the "pipx:" backend.
+pipx = { version = "latest", os = ["linux", "macos"], depends = ["python"] }
+usage = "latest"
+
+[settings]
+all_compile = false
+experimental = true
+idiomatic_version_file_enable_tools = []
+minimum_release_age = "24h"
+minimum_release_age_excludes = [
+  "pipx",
+  "npm:@sentry/dotagents",
+  "npm:npm",
+  "npm:tokscale",
+  "viteplus",
+]
+lockfile = true
+locked = false
+
+[settings.github]
+use_git_credentials = true
+
+[settings.ruby]
+compile = false
+
+[settings.python]
+compile = false

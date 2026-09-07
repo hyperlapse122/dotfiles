@@ -1,3 +1,8 @@
+{{- /* A worker image carries no Flutter SDK: its command unit is gated !container
+   in .chezmoidata/commands.yaml, and without this the SDK still downloaded and the
+   gate withheld only the command link. Same shape as android-sdk and winbox-macos,
+   which were already guarded. */ -}}
+{{- if not (includeTemplate "facts.tmpl" . | fromYaml).container -}}
 {{- $tag := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter")) -}}
 {{- $url := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter" "field" "url" "platform" "auto")) -}}
 {{- $sha := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "flutter" "field" "sha256" "platform" "auto")) -}}
@@ -56,3 +61,4 @@ if [ ! -x "$dest/bin/flutter" ]; then
   rm -rf "$dest"
   mv "$scratch/extracted/flutter" "$dest"
 fi
+{{- end -}}

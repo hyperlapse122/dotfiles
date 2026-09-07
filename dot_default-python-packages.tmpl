@@ -1,4 +1,7 @@
-# Linux-only
-{{- if eq .chezmoi.os "linux" }}
+# Linux-only, and not in a container: PyGObject is a GTK/GLib binding for the
+# desktop, it needs gobject-introspection headers to build, and a worker pod has
+# no display to use it from. Left in, it fails the python install during an image
+# build and takes `mise install` down with it.
+{{- if and (eq .chezmoi.os "linux") (not (includeTemplate "facts.tmpl" . | fromYaml).container) }}
 PyGObject
 {{- end }}

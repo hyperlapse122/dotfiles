@@ -17,6 +17,7 @@
 
 {{- $androidUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "android" "field" "url" "platform" "auto") }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "android")) "true" -}}
 [android]
 type = "file"
 targetPath = '.local/share/chezmoi-commands/incomplete/android/android'
@@ -24,12 +25,14 @@ url = {{ $androidUrl | quote }}
 executable = true
 [android.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "android" "field" "sha256" "platform" "auto") }}'
+{{- end }}
 
 {{- /* ---------- ast-grep (ships the `sg` alias from the same archive) ---------- */ -}}
 
 {{- $astGrepArchiveUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "ast-grep" "field" "url" "platform" "auto") -}}
 {{- $astGrepArchiveSha256 := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "ast-grep" "field" "sha256" "platform" "auto") }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "ast-grep")) "true" -}}
 [ast-grep]
 type = "archive-file"
 url = '{{ $astGrepArchiveUrl }}'
@@ -39,7 +42,9 @@ path = 'ast-grep'
 
 [ast-grep.checksum]
 sha256 = '{{ $astGrepArchiveSha256 }}'
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "ast-grep")) "true" -}}
 [sg]
 type = "archive-file"
 url = '{{ $astGrepArchiveUrl }}'
@@ -49,12 +54,14 @@ path = 'sg'
 
 [sg.checksum]
 sha256 = '{{ $astGrepArchiveSha256 }}'
+{{- end }}
 
 {{- /* ---------- buf (+ its protoc plugins, zsh completion and man pages) ---------- */ -}}
 
 {{- $bufArchiveUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "buf" "field" "url" "platform" "auto") -}}
 {{- $bufArchiveSha256 := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "buf" "field" "sha256" "platform" "auto") }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "buf")) "true" -}}
 [buf]
 type = "archive-file"
 url = '{{ $bufArchiveUrl }}'
@@ -64,7 +71,9 @@ targetPath = '.local/share/chezmoi-commands/incomplete/buf/buf'
 
 [buf.checksum]
 sha256 = '{{ $bufArchiveSha256 }}'
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "buf")) "true" -}}
 [protoc-gen-buf-breaking]
 type = "archive-file"
 url = '{{ $bufArchiveUrl }}'
@@ -74,7 +83,9 @@ targetPath = '.local/share/chezmoi-commands/incomplete/protoc-gen-buf-breaking/p
 
 [protoc-gen-buf-breaking.checksum]
 sha256 = '{{ $bufArchiveSha256 }}'
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "buf")) "true" -}}
 [protoc-gen-buf-lint]
 type = "archive-file"
 url = '{{ $bufArchiveUrl }}'
@@ -84,7 +95,9 @@ targetPath = '.local/share/chezmoi-commands/incomplete/protoc-gen-buf-lint/proto
 
 [protoc-gen-buf-lint.checksum]
 sha256 = '{{ $bufArchiveSha256 }}'
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "buf")) "true" -}}
 [buf-zsh-completion]
 type = "archive-file"
 targetPath = '.local/share/zsh/site-functions/_buf'
@@ -94,7 +107,9 @@ executable = false
 
 [buf-zsh-completion.checksum]
 sha256 = '{{ $bufArchiveSha256 }}'
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "buf")) "true" -}}
 [buf-man]
 type = "archive"
 targetPath = '.local/share/man/man1'
@@ -105,12 +120,14 @@ executable = false
 
 [buf-man.checksum]
 sha256 = '{{ $bufArchiveSha256 }}'
+{{- end }}
 
 {{- /* ---------- marksman (bare binaries; asset naming differs per OS) ---------- */ -}}
 
 {{- $marksmanUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "marksman" "field" "url" "platform" "auto") -}}
 {{- $marksmanSha256 := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "marksman" "field" "sha256" "platform" "auto") }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "marksman")) "true" -}}
 [marksman]
 type = "file"
 targetPath = '.local/share/chezmoi-commands/incomplete/marksman/marksman'
@@ -125,10 +142,12 @@ sha256 = '{{ $marksmanSha256 }}'
   Assets are per-arch (shellcheck-<tag>.<os>.<arch>.tar.gz) and nest the
   binary under a shellcheck-<tag>/ directory.
 */ -}}
+{{- end }}
 
 {{- $shellcheckTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "shellcheck") -}}
 {{- $shellcheckPath := (printf "shellcheck-%s/shellcheck" $shellcheckTag) }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "shellcheck")) "true" -}}
 [shellcheck]
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "shellcheck" "field" "url" "platform" "auto") | quote }}
@@ -143,10 +162,12 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "shell
 {{- /*
   Linux is published only as a static musl build, which runs fine on glibc.
 */ -}}
+{{- end }}
 
 {{- $wasmPackTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wasm-pack") -}}
 {{- $wasmPackStem := (printf "wasm-pack-%s-%s-%s" $wasmPackTag $rustArch $muslTarget) }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "wasm-pack")) "true" -}}
 [wasm-pack]
 type = "archive-file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wasm-pack" "field" "url" "platform" "auto") | quote }}
@@ -163,7 +184,9 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "wasm-
   The asset is a raw gzipped BINARY, not a tarball, so it is a
   type = "file" external with decompress = "gzip".
 */}}
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "rust-analyzer")) "true" -}}
 [rust-analyzer]
 type = "file"
 url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "rust-analyzer" "field" "url" "platform" "auto") | quote }}
@@ -179,12 +202,14 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "rust-
   The tag carries NO leading "v" (e.g. 0.11.28). Archives nest both
   binaries under uv-<arch>-<target>/.
 */ -}}
+{{- end }}
 
 {{- $uvStem := (printf "uv-%s-%s" $rustArch $muslTarget) -}}
 {{- $uvArchiveUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "uv" "field" "url" "platform" "auto") -}}
 {{- $uvArchiveSha256 := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "uv" "field" "sha256" "platform" "auto") -}}
 {{- $uvPathPrefix := (printf "%s/" $uvStem) }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "uv")) "true" -}}
 [uv]
 type = "archive-file"
 url = '{{ $uvArchiveUrl }}'
@@ -194,7 +219,9 @@ path = '{{ printf "%suv" $uvPathPrefix }}'
 
 [uv.checksum]
 sha256 = '{{ $uvArchiveSha256 }}'
+{{- end }}
 
+{{ if eq (includeTemplate "ships-in-container.tmpl" (dict "ctx" . "tool" "uv")) "true" -}}
 [uvx]
 type = "archive-file"
 url = '{{ $uvArchiveUrl }}'
@@ -216,10 +243,11 @@ sha256 = '{{ $uvArchiveSha256 }}'
   directory inside it carry the same "-musl" suffix, so the probe result must
   reach both.
 */ -}}
+{{- end }}
 
 {{- $bunArch := (replace "amd64" "x64" (replace "arm64" "aarch64" .chezmoi.arch)) -}}
 {{- $bunMuslSuffix := "" -}}
-{{- if $isMuslLinux -}}{{- $bunMuslSuffix = "-musl" -}}{{- end -}}
+{{- if $isMuslLinux -}}{{- $bunMuslSuffix = "-musl" -}}{{- end }}
 {{- $bunLockArtifact := dict "ctx" . "tool" "bun" "platform" "auto" "musl" $isMuslLinux -}}
 {{- $bunArchiveUrl := includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $bunLockArtifact (dict "field" "url")) -}}
 {{- $bunArchiveSha256 := includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $bunLockArtifact (dict "field" "sha256")) -}}

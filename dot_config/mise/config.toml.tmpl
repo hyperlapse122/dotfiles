@@ -1,0 +1,36 @@
+{{- /*
+~/.config/mise/config.toml — the global mise tool set, merged from a shared base
+and exactly one variant.
+
+DIVISION OF LABOUR (unchanged, and it lives here now because the rendered file
+carries no comments): mise owns the language runtimes, the registry backends
+("npm:" / "cargo:" / "pipx:"), and its own internals. Standalone GitHub-release
+CLI binaries are NOT mise's job — they come from .chezmoiexternals/ (grouped by
+domain: ai-agents / dev-tools / vcs / k8s / system / fonts). Add a new standalone
+CLI there, not here.
+
+bun is the one runtime that is NOT here. It ships a single GitHub-release binary,
+so .chezmoiexternals/dev-tools.toml delivers it with a committed version and
+sha256 through the release lock. mise pins "latest" against a lockfile that is
+not in this repository, so bun's version would be decided by whenever each host
+last ran `mise install`. Do not add it back.
+
+WHY A MERGE AND NOT AN INCLUDE. dot_config/git/config.tmpl and dot_ssh/config.tmpl
+inline a sibling fragment as TEXT, which works because their formats tolerate a
+repeated section header. TOML does not: a second [tools] table is a parse error,
+so a textual split would have to be shaped around where the tables happen to
+open. Merging parsed maps has no such constraint.
+
+Two consequences, both accepted. Comments do not survive toToml, which is why the
+ones worth keeping are in these sources rather than in the rendered file. And the
+output is normalized — inline tables become sub-tables, arrays of inline tables
+become [[array.of.tables]], keys sort. mise reads TOML, not text, so this is
+semantics-preserving; .chezmoitemplates/facts.tmpl records the same sorted-output
+property as the thing that makes a generated file diffable.
+*/ -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $variant := "baremetal" -}}
+{{- if $facts.container -}}{{- $variant = "container" -}}{{- end -}}
+{{- $base := include (joinPath .chezmoi.sourceFile ".." ".config_base") | fromToml -}}
+{{- $overlay := include (joinPath .chezmoi.sourceFile ".." (printf ".config_%s" $variant)) | fromToml -}}
+{{ mergeOverwrite $base $overlay | toToml }}

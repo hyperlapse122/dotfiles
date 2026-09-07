@@ -54,6 +54,7 @@ jobs:
             PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
               --config "$RUNNER_TEMP/empty.toml" \
               --source "$GITHUB_WORKSPACE" \
+              --override-data '{"renderOverrides":{"opAvailable":true}}' \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
           chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
@@ -93,6 +94,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # test-mise-config-merge.sh asserts through mise itself, because mise is what
+      # reads the file it renders. Same locked-artifact shape as chezmoi above.
+      - name: Install locked mise
+        run: |
+          set -euo pipefail
+          artifact_url=$(jq -r '.releases.tools.mise.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.mise.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/bin/mise"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/bin/mise" | sha256sum --check -
+          chmod +x "$RUNNER_TEMP/bin/mise"
       - name: Run render and declaration gates
         run: |
           set -euo pipefail
@@ -115,6 +126,10 @@ jobs:
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
           .ci/test-chezmoiignore-script-paths.sh
+          .ci/test-op-ref-gating.sh
+          .ci/test-container-policy.sh
+          .ci/test-mise-config-merge.sh
+          .ci/test-container-secret-gate.sh
           .ci/check-external-checksum-coverage.sh
           .ci/test-check-external-checksum-coverage.sh
 
@@ -161,6 +176,7 @@ jobs:
             PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
               --config "$RUNNER_TEMP/empty.toml" \
               --source "$GITHUB_WORKSPACE" \
+              --override-data '{"renderOverrides":{"opAvailable":true}}' \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
             chmod 700 "$RUNNER_TEMP/$output_name"
           done
@@ -227,6 +243,7 @@ jobs:
           PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
             --config "$RUNNER_TEMP/empty.toml" \
             --source "$GITHUB_WORKSPACE" \
+            --override-data '{"renderOverrides":{"opAvailable":true}}' \
             execute-template \
             < .chezmoiscripts/70-agents/run_after_config-codex-settings.sh.tmpl \
             > "$RUNNER_TEMP/codex-settings.sh"

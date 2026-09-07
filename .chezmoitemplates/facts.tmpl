@@ -179,6 +179,27 @@ Three rules hold this file together:
 {{-   end -}}
 {{- end -}}
 
+{{- /* opAvailable's render-time override — the same seam musl-probe.tmpl exposes
+   for muslLinux, and for the same reason: the real value comes from a subprocess
+   the hook ran, so `--override-data` cannot otherwise reach it. CI needs BOTH
+   values of this one fact against one tree — the build combination (op absent)
+   and the runtime combination (Connect present) — to prove that what the build
+   skips, the pod's apply writes. Absent the key, the cached probe result stands.
+
+     chezmoi execute-template --override-data '{"renderOverrides":{"opAvailable":true}}'
+
+   Both the JSON boolean and the strings "true"/"1"/"yes" count as true. */ -}}
+{{- if hasKey . "renderOverrides" -}}
+{{-   if hasKey .renderOverrides "opAvailable" -}}
+{{-     $override := .renderOverrides.opAvailable -}}
+{{-     if kindIs "bool" $override -}}
+{{-       $_ := set $facts "opAvailable" $override -}}
+{{-     else -}}
+{{-       $_ := set $facts "opAvailable" (has (lower (toString $override)) (list "true" "1" "yes")) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+
 {{- /* ---- Layer 2a: chezmoi builtins ---------------------------------------- */ -}}
 {{- $_ := set $facts "os" .chezmoi.os -}}
 {{- $distro := "" -}}
@@ -376,6 +397,25 @@ Three rules hold this file together:
 {{- if or (stat "/run/.containerenv") (stat "/.dockerenv") -}}
 {{-   if not (stat "/run/.toolboxenv") -}}
 {{-     $container = true -}}
+{{-   end -}}
+{{- end -}}
+{{- /* The render-time override, same seam and same reason as musl-probe.tmpl's:
+   the real predicate is a stat of /run/.containerenv, which a render on a host
+   cannot forge and a render inside a container cannot escape. CI and the policy
+   gates need both sides against one tree. Absent the key, the stat stands.
+
+     chezmoi execute-template --override-data '{"renderOverrides":{"container":true}}'
+
+   .chezmoiignore reads this same fact, so an override moves the ignore branch
+   with it rather than letting the two disagree about one render. */ -}}
+{{- if hasKey . "renderOverrides" -}}
+{{-   if hasKey .renderOverrides "container" -}}
+{{-     $override := .renderOverrides.container -}}
+{{-     if kindIs "bool" $override -}}
+{{-       $container = $override -}}
+{{-     else -}}
+{{-       $container = has (lower (toString $override)) (list "true" "1" "yes") -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
 {{- $_ := set $facts "container" $container -}}

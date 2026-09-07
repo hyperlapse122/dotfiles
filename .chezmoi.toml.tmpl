@@ -7,7 +7,22 @@ pagerArgs = ["--quit-if-one-screen", "--no-init", "--RAW-CONTROL-CHARS"]
 # Pin chezmoi-managed normal files/directories to 0644/0755 on POSIX hosts,
 # independent of a distribution's login umask.
 umask = 0o022
+{{- /* ~/src is a HOST concept: the garden registry, aoe worktrees and the 90-src
+   reconcile all live there and are container-skipped. An image would have to
+   imitate that path for no reason, so a container uses chezmoi's own default
+   source directory instead. The predicate is inlined rather than read from
+   facts.tmpl because this config template renders before the source state, so
+   .chezmoidata (and therefore the fact registry) is not yet available here.
+   Keep it byte-identical to the one in facts.tmpl. */ -}}
+{{- $inContainer := false -}}
+{{- if or (stat "/run/.containerenv") (stat "/.dockerenv") -}}
+{{-   if not (stat "/run/.toolboxenv") -}}
+{{-     $inContainer = true -}}
+{{-   end -}}
+{{- end -}}
+{{- if not $inContainer }}
 sourceDir = "{{ .chezmoi.homeDir }}/src/github.com/hyperlapse122/dotfiles"
+{{- end }}
 
 # GPG encryption for `encrypted_` source files (the ~/src garden project
 # registry — kept ciphertext-only in this public repo).
@@ -48,7 +63,11 @@ encryption = "gpg"
    rather than silently discarding what was typed; a blank answer (also what
    non-interactive/CI init gets) stores "" and keeps the skip path. Consumers
    decrypt at apply-render time with the read-only config-secrets-key.tmpl. */}}
-{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- /* Not in a container. A worker pod has no LUKS volume to enrol and no
+   desktop keyring to encrypt an answer with, so the prompt has nothing to do --
+   and an image build has no one to answer it: promptString fails with EOF under
+   --no-tty, which is a build that stops on a question about disk encryption. */}}
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") (not $inContainer) -}}
 {{-   $luksPassphraseCipher := "" -}}
 {{-   if hasKey . "luksPassphraseCipher" -}}
 {{-     $luksPassphraseCipher = .luksPassphraseCipher -}}
@@ -63,9 +82,16 @@ encryption = "gpg"
 {{-     end -}}
 {{-   end -}}
     luksPassphraseCipher = {{ $luksPassphraseCipher | quote }}
-{{ end -}}
-
+{{ end }}
 [hooks.read-source-state.pre]
     # `script` (not `command`): on Linux/macOS the `.sh` has no chezmoi interpreter,
     # so it runs through its shebang and executable bit.
-    script = "src/github.com/hyperlapse122/dotfiles/.install-prerequisites.sh"
+    #
+    # DERIVED, not hardcoded. This has to name wherever the source actually is,
+    # and there are now three answers: the host's ~/src layout, chezmoi's default
+    # in a container, and whatever `--source` says -- which CI passes, and which
+    # overrides sourceDir without touching this string. A path that guesses gets
+    # one of the three wrong, and the failure is silent in the worst way: this
+    # hook IS write_facts_cache, so a miss leaves every hook fact on its
+    # absentDefault and the pod's runtime apply resolves nothing.
+    script = {{ (joinPath .chezmoi.sourceDir ".install-prerequisites.sh") | quote }}

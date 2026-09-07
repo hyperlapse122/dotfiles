@@ -60,6 +60,20 @@ render() {
   )
 }
 
+# Same render with an extra top-level override key merged in. opAvailable is the
+# only fact whose value CI must be able to pin against one tree.
+render_with_overrides() {
+  (
+    cd -- "$scratch/source"
+    PATH="$scratch/bin:$PATH" XDG_CACHE_HOME="$scratch/cache" chezmoi \
+      --config "$scratch/empty.toml" \
+      --source "$PWD" \
+      --destination "$scratch/target" \
+      --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fx","osRelease":{"id":"fedora"},"homeDir":"'"$scratch"'/home"},"renderOverrides":'"$1"'}' \
+      execute-template <<<'{{ includeTemplate "facts.tmpl" . }}'
+  )
+}
+
 # The map is emitted with toYaml, which quotes a string only when it would
 # otherwise parse as something else — the empty string, and a numeric-looking id
 # such as `2704`. Consumers read the map back through fromYaml and see a plain
@@ -200,5 +214,36 @@ printf 'nvidia: true\ngpuDeviceId: "%s"\nvm: false\nvirt: false\nheadless: false
 out=$(render) || fail 'render failed on a cache missing hybridGraphics'
 assert_fact "$out" integratedOnly false 'missing hybridGraphics line'
 assert_fact "$out" nvidiaHybridDriver false 'missing hybridGraphics line'
+
+# --- opAvailable: the cached value, its fail-safe default, and the CI seam.
+# The default matters more than it looks. opAvailable false SKIPS the op-resolving
+# targets, so an unreadable cache line must not resolve true and send a build
+# reaching for a vault it cannot -- and must not -- reach.
+printf 'nvidia: false\nvm: false\nvirt: false\nheadless: false\nopAvailable: true\n' >"$cache_file"
+out=$(render) || fail 'render failed on a cache declaring opAvailable true'
+assert_fact "$out" opAvailable true 'a cached opAvailable line'
+
+printf 'nvidia: false\nvm: false\nvirt: false\nheadless: false\nopAvailable: false\n' >"$cache_file"
+out=$(render) || fail 'render failed on a cache declaring opAvailable false'
+assert_fact "$out" opAvailable false 'a cached opAvailable line'
+
+# No opAvailable line at all -- the empty-config renders the repo already does.
+printf 'nvidia: false\nvm: false\nvirt: false\nheadless: false\n' >"$cache_file"
+out=$(render) || fail 'render failed on a cache with no opAvailable line'
+assert_fact "$out" opAvailable false 'a cache missing the opAvailable line'
+
+# The CI seam: both combinations must be reachable against one tree, whatever the
+# cache says, or the secret gate can only ever test the half this runner happens
+# to be in.
+printf 'nvidia: false\nvm: false\nvirt: false\nheadless: false\nopAvailable: false\n' >"$cache_file"
+out=$(render_with_overrides '{"opAvailable":true}') || fail 'render failed with an opAvailable override'
+assert_fact "$out" opAvailable true 'an override must outrank a cached false'
+
+printf 'nvidia: false\nvm: false\nvirt: false\nheadless: false\nopAvailable: true\n' >"$cache_file"
+out=$(render_with_overrides '{"opAvailable":false}') || fail 'render failed with an opAvailable override'
+assert_fact "$out" opAvailable false 'an override must outrank a cached true'
+
+out=$(render_with_overrides '{"opAvailable":"yes"}') || fail 'render failed with a string opAvailable override'
+assert_fact "$out" opAvailable true 'the string form of the override'
 
 printf 'fact-cache-parsing: OK\n'
