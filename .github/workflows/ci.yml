@@ -110,6 +110,7 @@ jobs:
           .ci/test-bun-resolve.sh
           .ci/test-build-bun-version-fingerprint.sh
           .ci/test-skip-declaration-gates.sh
+          .ci/test-direct-rpms-render.sh
           .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
@@ -255,7 +256,6 @@ jobs:
           .ci/test-git-prune-local-branches.sh
           .ci/check-release-lock-digests.sh
           .ci/test-release-lock-digest-gate.sh
-          .ci/test-direct-rpms-render.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
