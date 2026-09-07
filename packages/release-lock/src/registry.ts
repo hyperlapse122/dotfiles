@@ -201,6 +201,18 @@ export const REGISTRY: Registry = {
     tagPrefix: "compound-engineering-",
   },
 
+  // The orca skills all ship from one repo, one key each because
+  // agents.skills.external looks the lock up by skill name. The repo also tags a
+  // `mobile-android-v` train, so `v` selects the desktop release train.
+  "computer-use": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  "linear-tickets": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  "orca-cli": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  "orca-emulator": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  "orca-emulator-android": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  "orca-linear": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  "orca-per-workspace-env": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+  orchestration: { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+
   /* ---------- gitlabRelease ---------- */
 
   // One key serves the vcs.toml binary and both bundled skills (AE5).
