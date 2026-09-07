@@ -83,15 +83,21 @@ if [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
   token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
     op read "${ANTHROPIC_AUTH_TOKEN_REF}")
   [[ -n "$token" ]] || die 'the proxy credential came back empty'
+  # 0640 root:worker, not the 0644 a profile.d drop-in usually carries: this file
+  # holds a live credential, and a login shell reads it as the worker, so group
+  # read is all it needs. Written with a restrictive umask so it is never briefly
+  # world-readable between creation and chmod.
   profile=/etc/profile.d/99-orca-worker.sh
+  ( umask 037
   {
     printf '# Written by worker-entrypoint at pod start. Not baked into any layer.\n'
     printf 'export ANTHROPIC_AUTH_TOKEN=%q\n' "$token"
     [[ -n "${ANTHROPIC_BASE_URL:-}" ]] && printf 'export ANTHROPIC_BASE_URL=%q\n' "$ANTHROPIC_BASE_URL"
     [[ -n "${OP_CONNECT_HOST:-}" ]] && printf 'export OP_CONNECT_HOST=%q\n' "$OP_CONNECT_HOST"
     [[ -n "${OP_CONNECT_TOKEN:-}" ]] && printf 'export OP_CONNECT_TOKEN=%q\n' "$OP_CONNECT_TOKEN"
-  } >"$profile"
-  chmod 0644 "$profile"
+  } >"$profile" )
+  chown "root:$WORKER_USER" "$profile"
+  chmod 0640 "$profile"
   # /etc/profile.d covers a LOGIN shell, which is what an attached workspace gets.
   # `ssh worker <command>` is not a login shell and reads ~/.bashrc instead, so the
   # same file is sourced from there -- otherwise a scripted agent invocation would

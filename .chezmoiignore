@@ -126,6 +126,10 @@
 # Advisor improvement plans (repo-meta docs); never linked into $HOME.
 ./plans
 
+# Worker image build inputs (Containerfile, entrypoint, the build-time op stub);
+# never linked into $HOME. Same repo-only tree convention as ./system and ./crates.
+./container
+
 # internal documentations
 ./docs
 
