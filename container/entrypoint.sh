@@ -64,6 +64,21 @@ ssh-keygen -A
 # references rather than values. With Connect present the fact flips and the same
 # chezmoi renders the real thing. One renderer, no second templating layer over
 # what chezmoi already wrote.
+# The config was rendered at BUILD time, where there was no Connect. Its
+# 1Password mode follows the environment, so it has to be re-rendered here or
+# chezmoi refuses every op:// reference with "onepassword.mode is account, but
+# OP_CONNECT_HOST and OP_CONNECT_TOKEN are set". Re-rendering the template is
+# what `chezmoi init` would do, without its git fetch: a pod's start must not
+# depend on reaching a git host.
+log 'rendering the chezmoi config for Connect'
+config_dir="${WORKER_HOME}/.config/chezmoi"
+config_tmpl="${WORKER_HOME}/.local/share/chezmoi/.chezmoi.toml.tmpl"
+[[ -f "$config_tmpl" ]] || die "no config template at $config_tmpl"
+as_worker install -d -m 0700 "$config_dir"
+as_worker env HOME="$WORKER_HOME" \
+  OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+  sh -c 'chezmoi execute-template --init --no-tty <"$1" >"$2"' sh "$config_tmpl" "$config_dir/chezmoi.toml"
+
 log 'applying the op-dependent targets against 1Password Connect'
 # --exclude=externals is what makes this targeted. Every external is already in
 # the image, and re-fetching them would put a pod's start time and success at the

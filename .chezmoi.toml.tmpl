@@ -47,6 +47,25 @@ encryption = "gpg"
     command = "codium"
     args = ["--wait"]
 
+{{- /* 1Password resolution mode.
+
+   chezmoi REFUSES to resolve an op:// reference when the config says `account`
+   and OP_CONNECT_HOST/OP_CONNECT_TOKEN are set -- it will not guess which
+   credential the run meant. A worker pod holds only Connect credentials, so
+   without this block its runtime apply stops at the first reference with
+   "onepassword.mode is account, but OP_CONNECT_HOST and OP_CONNECT_TOKEN are
+   set".
+
+   The mode follows the environment rather than the host: a desktop has an
+   account and no Connect variables, a pod has Connect variables and no account.
+   This config is rendered at init time, so a pod re-renders it from this same
+   template at start -- see container/entrypoint.sh. */ -}}
+{{- if and (env "OP_CONNECT_HOST") (env "OP_CONNECT_TOKEN") }}
+
+[onepassword]
+    mode = "connect"
+{{- end }}
+
 [data]
 {{- /* Prompted secrets are stored AES-encrypted (encryptAES + the user-keyring
    key), never plaintext — the rendered chezmoi.toml carries only ciphertext.
