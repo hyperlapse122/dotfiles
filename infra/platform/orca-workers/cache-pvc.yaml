@@ -1,0 +1,23 @@
+# The shared package cache.
+#
+# Only content-addressed stores live here. They are integrity-checked by hash
+# and built for concurrent readers, so a poisoned entry fails its own hash rather
+# than silently corrupting a build (B7). Everything that is NOT content-addressed
+# -- mise INSTALLS, node_modules, target/, dist/ -- stays on the pod's own
+# emptyDir, because concurrent writers corrupt those.
+#
+# ReadWriteOnce is enough today and that is a property of this cluster, not of
+# the design: RWO binds a volume to one NODE, and every worker lands on the only
+# node there is. A second node makes this an RWX requirement, and RWX here means
+# NFS, Longhorn or similar -- read the second-cluster checklist before adding one.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orca-worker-cache
+  namespace: orca-workers
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi

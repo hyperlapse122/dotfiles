@@ -36,14 +36,30 @@ done
   || die 'WORKER_SSH_PUBKEY_REF must name the op:// reference holding the public key this worker accepts'
 
 
-# --- 2. Per-pod SSH host keys ----------------------------------------------
+# --- 2. Say that this is a container ----------------------------------------
+# chezmoi's `container` fact is a stat of /run/.containerenv or /.dockerenv, and
+# those markers are written by Podman and Docker -- not by containerd, which is
+# what runs this image in k3s. Without one, the apply below believes it is on a
+# host and tries to provision packages, which asks for a password no pod has:
+#
+#   sudo: a terminal is required to read the password
+#
+# The build already ran under Podman, so the marker existed then and the failure
+# appears only at runtime, in the cluster. Stating the fact here is the fix; the
+# alternative would be teaching the platform to mount a file the image needs.
+if [[ ! -f /run/.containerenv && ! -f /.dockerenv ]]; then
+  log 'no container marker (containerd runtime); creating /run/.containerenv'
+  : >/run/.containerenv
+fi
+
+# --- 3. Per-pod SSH host keys ----------------------------------------------
 # Generated here, never baked. Each worker has its own MagicDNS name, so the
 # known_hosts collision that shared keys avoid does not arise -- and a host key
 # in a public image is a host key everyone has.
 log 'generating per-pod SSH host keys'
 ssh-keygen -A
 
-# --- 3. The runtime apply ---------------------------------------------------
+# --- 4. The runtime apply ---------------------------------------------------
 # The build rendered these targets with opAvailable false, so they carry op://
 # references rather than values. With Connect present the fact flips and the same
 # chezmoi renders the real thing. One renderer, no second templating layer over
@@ -60,7 +76,7 @@ as_worker env HOME="$WORKER_HOME" \
   OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
   chezmoi apply --no-tty --exclude=externals </dev/null
 
-# --- 4. authorized_keys -----------------------------------------------------
+# --- 5. authorized_keys -----------------------------------------------------
 # Fetched at start rather than baked, so rotating the key restarts a pod instead
 # of rebuilding an image. The public half is not a secret; this is about the
 # rotation path, not confidentiality.
@@ -73,15 +89,27 @@ chown "$WORKER_USER:$WORKER_USER" "$authorized"
 chmod 0600 "$authorized"
 [[ -s "$authorized" ]] || die 'authorized_keys came back empty; no one could log in'
 
-# --- 5. The proxy credential, resolved ONCE ---------------------------------
+# --- 6. The proxy credential, resolved ONCE ---------------------------------
 # Not through apiKeyHelper or the Codex auth.command: `op read` takes about 19s on
 # this hardware and the Codex auth.timeout_ms default is 5000ms, so a
 # per-invocation helper times out. Resolve here, write where a LOGIN SHELL will
 # read it -- an export from this process would not survive into an sshd session.
-if [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
-  log 'resolving the model proxy credential'
-  token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
-    op read "${ANTHROPIC_AUTH_TOKEN_REF}")
+#
+# Two sources, in this order. ANTHROPIC_AUTH_TOKEN comes straight from the
+# platform's own Secret and is preferred: the proxy key is issued BY the cluster,
+# so routing it through 1Password would add a second copy of a value the cluster
+# already owns -- and two copies that must be rotated together is a drift class,
+# not a safeguard. ANTHROPIC_AUTH_TOKEN_REF stays supported for a platform that
+# would rather keep the value in a vault.
+if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" || -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
+  if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
+    log 'using the model proxy credential supplied by the platform'
+    token=$ANTHROPIC_AUTH_TOKEN
+  else
+    log 'resolving the model proxy credential'
+    token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+      op read "${ANTHROPIC_AUTH_TOKEN_REF}")
+  fi
   [[ -n "$token" ]] || die 'the proxy credential came back empty'
   # 0640 root:worker, not the 0644 a profile.d drop-in usually carries: this file
   # holds a live credential, and a login shell reads it as the worker, so group
@@ -109,7 +137,7 @@ if [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
   unset token
 fi
 
-# --- 6. Become sshd ---------------------------------------------------------
+# --- 7. Become sshd ---------------------------------------------------------
 # exec, so sshd is PID 1 and receives the pod's signals directly. -D keeps it in
 # the foreground; -e sends its log to stderr, where the pod log collector is.
 log 'starting sshd as PID 1'

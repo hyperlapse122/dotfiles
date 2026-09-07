@@ -1,0 +1,22 @@
+# One namespace per platform concern. The worker namespace is the only one an
+# agent-controlled pod ever lands in, so it is the only one carrying a quota.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tailscale
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: onepassword
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cliproxyapi
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orca-workers

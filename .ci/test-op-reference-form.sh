@@ -77,8 +77,14 @@ container_block=$(
 
 [[ -n $container_block ]] || fail 'could not read the container guard block from .chezmoiignore; check 2 cannot compute its target set and must not pass vacuously'
 
-# Sources that resolve a host-vault reference at render time.
-host_refs=$(grep -rlE "${scheme}$HOST_VAULT/" --include='*.tmpl' --include='*.yaml' --exclude-dir=.git --exclude-dir=docs . || true)
+# Sources that resolve a host-vault reference at RENDER time. `infra` joins
+# `docs` as an exclusion for the same reason: `.chezmoiignore` excludes it
+# wholesale, so chezmoi renders nothing there and its `op://` references are
+# seeding instructions for a human running `op inject`, not template inputs.
+# Scanning it would ask this check to prove a container guard for a target that
+# does not exist.
+host_refs=$(grep -rlE "${scheme}$HOST_VAULT/" --include='*.tmpl' --include='*.yaml' \
+  --exclude-dir=.git --exclude-dir=docs --exclude-dir=infra . || true)
 
 [[ -n $host_refs ]] || fail 'no source references the host vault; the reference map has drifted from this gate'
 

@@ -1,0 +1,73 @@
+# One Flux Kustomization per component, deliberately NOT one for the whole tree.
+#
+# Every component consumes a Secret this repository does not carry. A single
+# Kustomization would make one missing Secret hold back every other component,
+# which is exactly the silent-default failure B3 forbids: a component whose
+# Secret is missing must be the thing that reads NotReady.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: orca-tailscale-operator
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 2m
+  timeout: 10m
+  path: ./infra/platform/tailscale-operator
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: orca-platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: orca-onepassword-connect
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 2m
+  timeout: 10m
+  path: ./infra/platform/onepassword-connect
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: orca-platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: orca-cliproxyapi
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 2m
+  timeout: 10m
+  path: ./infra/platform/cliproxyapi
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: orca-platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: orca-workers
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 2m
+  timeout: 10m
+  path: ./infra/platform/orca-workers
+  prune: true
+  # Not wait: true. The shared cache PVC is WaitForFirstConsumer, so it stays
+  # Pending until the first worker mounts it -- a health gate here would report
+  # the namespace permanently unhealthy for a volume that is behaving correctly.
+  wait: false
+  sourceRef:
+    kind: GitRepository
+    name: orca-platform

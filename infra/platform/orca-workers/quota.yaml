@@ -1,0 +1,41 @@
+# The quota is the blast radius.
+#
+# Workers are agent-controlled pods on the same node as everything else in this
+# cluster. The measured headroom was 16 CPU and 32 GB with ~2% CPU and ~23%
+# memory in use, so this leaves the node comfortably able to run the platform
+# itself even with every worker slot filled.
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: orca-workers
+  namespace: orca-workers
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "24"
+    limits.memory: 48Gi
+    pods: "6"
+    persistentvolumeclaims: "2"
+---
+# A pod created imperatively can omit resources entirely, and one that does
+# would be BestEffort -- first to be killed and, worse, uncapped while it runs.
+# The LimitRange makes the namespace refuse that shape rather than accept it.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: orca-workers
+  namespace: orca-workers
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "4"
+        memory: 8Gi
+      defaultRequest:
+        cpu: 500m
+        memory: 1Gi
+      max:
+        cpu: "8"
+        memory: 16Gi

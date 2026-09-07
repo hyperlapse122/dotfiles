@@ -1,0 +1,18 @@
+# The auth-dir volume is the ONLY copy of the agent OAuth credentials, and that
+# is a decision, not an oversight: recovery is the same web-UI authentication
+# used at first bring-up (runbook step 3), so a backup would duplicate a
+# procedure that already exists.
+#
+# ReadWriteOnce is also what enforces the single-writer property the proxy needs:
+# one replica, Recreate strategy, one token-refresh writer.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cliproxyapi-auth
+  namespace: cliproxyapi
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
