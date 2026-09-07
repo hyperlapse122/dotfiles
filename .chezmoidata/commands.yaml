@@ -591,7 +591,12 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
-      gate: "!container"
+      # NOT gated !container any more. 70-agents/config-codex-settings requires
+      # this binary and hard-fails without it, so gating it made the container
+      # path unable to configure Codex at all -- the agent settings carryover is
+      # most of what a worker image is for. The gate existed because building it
+      # needed the repository toolchain; the build script now compiles it with
+      # bun in a container, so the reason is gone.
       fingerprintGlobs:
         - mise.toml
         - packages/package.json

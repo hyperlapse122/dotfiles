@@ -22,11 +22,15 @@ FROM registry.fedoraproject.org/fedora@sha256:f59ce614aba37211165e711d732fd4785f
 ARG WORKER_USER=worker
 ARG WORKER_UID=1000
 
+# diffutils is not optional despite looking it: the compound-engineering overlay
+# script compares files with `cmp`, and without it every overlay silently
+# reports "command not found" and reinstalls on each apply.
+#
 # git and openssh-server are the worker's own contract: git because AGENTS.md
 # mandates the branch and MR/PR workflow, sshd because public-key SSH is how a
 # workspace attaches. The rest is what the bootstrap needs to fetch and unpack.
 RUN dnf install -y --setopt=install_weak_deps=False \
-      bash ca-certificates curl git jq openssh-server tar gzip xz which \
+      bash ca-certificates curl diffutils git jq openssh-server tar gzip xz which \
  && dnf clean all \
  && rm -rf /var/cache/dnf
 

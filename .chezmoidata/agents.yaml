@@ -5,6 +5,7 @@ agents:
     servers:
     - name: codegraph
       transport: stdio
+      container: skip
       command: codegraph
       args:
       - serve

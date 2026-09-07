@@ -1,3 +1,7 @@
+{{- /* agy (Antigravity) is not in a worker image -- the agent set there is Claude
+   Code and Codex -- so this reconciler has no binary to drive and fails outright.
+   Same shape as config-aoe: a script whose tool the trim removed. */ -}}
+{{- if not (includeTemplate "facts.tmpl" . | fromYaml).container -}}
 {{- $ctx := . -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
 {{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
@@ -116,3 +120,4 @@ for row in "${PLUGINS[@]}"; do
 done
 {{- end }}
 {{- end }}
+{{- end -}}
