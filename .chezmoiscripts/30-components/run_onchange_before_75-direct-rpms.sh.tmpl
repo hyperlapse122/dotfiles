@@ -78,9 +78,13 @@ resolve_action() {
 }
 
 fetch_rpm() {
-  local pkg=$1 url=$2 archive="${scratch}/${2##*/}"
-  printf '%s: downloading %s\n' "${pkg}" "${url}"
-  if ! curl -fsSL "${url}" -o "${archive}"; then
+  local pkg=$1 url=$2
+  local archive="${scratch}/${url##*/}"
+  # This function returns the archive path on stdout, so every other word it
+  # emits goes to stderr — a progress line here lands inside the caller's
+  # command substitution and the path stops being a path.
+  printf '%s: downloading %s\n' "${pkg}" "${url}" >&2
+  if ! curl -fsSL --connect-timeout 15 --max-time 900 "${url}" -o "${archive}"; then
     printf '%s: download failed for %s\n' "${pkg}" "${url}" >&2
     exit 1
   fi
@@ -123,8 +127,8 @@ install_teamviewer() {
   local pkg='teamviewer' url='{{ $tvUrl }}' archive
   resolve_action "${pkg}" '{{ $tvVersion }}'
   if [[ "${action}" == 'install' ]]; then
-    "${SUDO[@]}" rpm --import https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc
-    "${SUDO[@]}" rpm --import https://linux.teamviewer.com/pubkey/currentkey.asc
+    "${SUDO[@]}" timeout 60 rpm --import https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc
+    "${SUDO[@]}" timeout 60 rpm --import https://linux.teamviewer.com/pubkey/currentkey.asc
     archive="$(fetch_rpm "${pkg}" "${url}")"
     require_signing_key "${pkg}" "${url}" "${archive}" 'ef9dbdc73b7d1a07'
     "${DNF[@]}" install -y --setopt=localpkg_gpgcheck=1 "${archive}"

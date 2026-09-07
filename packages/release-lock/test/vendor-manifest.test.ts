@@ -303,6 +303,19 @@ describe("resolveVendorManifest teamviewer", () => {
     expect(error).toBeInstanceOf(ResolutionError);
   });
 
+  // sameRegistrableDomain exists for exactly this: a look-alike host that keeps
+  // the vendor name as a prefix of someone else's domain.
+  test("a redirect that leaves the vendor domain fails", async () => {
+    stubRoutes({
+      [source]: redirect(
+        "https://dl.teamviewer.invalid.evil.invalid/download/linux/version_15x/teamviewer_15.81.5.x86_64.rpm",
+      ),
+    });
+
+    const error = await resolveVendorManifest("teamviewer", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+  });
+
   test("a non-https redirect target fails", async () => {
     stubRoutes({
       [source]: redirect(

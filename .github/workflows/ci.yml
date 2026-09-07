@@ -282,6 +282,7 @@ jobs:
           .ci/test-git-prune-local-branches.sh
           .ci/check-release-lock-digests.sh
           .ci/test-release-lock-digest-gate.sh
+          .ci/test-direct-rpms-render.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
