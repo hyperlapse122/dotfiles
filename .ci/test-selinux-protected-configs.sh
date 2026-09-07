@@ -97,6 +97,8 @@ for token in \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/aoe/[^/]+/aoe\" file (unconfined_u object_r aoe_exec_t" \
   "(filecon \"HOME_DIR/\\.local/bin/aoe\" file (unconfined_u object_r aoe_exec_t" \
   "(filecon \"HOME_DIR/\\.local/lib/commands/store/codex/[^/]+/codex\" file (unconfined_u object_r codex_exec_t" \
+  "(filecon \"HOME_DIR/\\.local/lib/commands/store/codex/[^/]+/codex-code-mode-host\" file (unconfined_u object_r codex_exec_t" \
+  "(typetransition chezmoi_t gconf_home_t file \"codex-code-mode-host\" codex_exec_t)" \
   "(allow dotfiles_agent_domain rpm_script_t (process (transition siginh rlimitinh noatsecure)))" \
   "(allow dotfiles_agent_domain rpm_script_t (fd (use)))" \
   "(allow rpm_script_t dotfiles_agent_domain (fd (use)))" \
@@ -490,6 +492,7 @@ EOF
   expect_context 'HOME_DIR/\.codex/config\.toml' 'unconfined_u:object_r:codex_config_t'
   expect_context 'HOME_DIR/\.codex/skills' 'unconfined_u:object_r:codex_config_t'
   expect_context 'HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex' 'unconfined_u:object_r:codex_exec_t'
+  expect_context 'HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex-code-mode-host' 'unconfined_u:object_r:codex_exec_t'
   expect_context 'HOME_DIR/\.local/lib/commands/store/aoe/[^/]+/aoe' 'unconfined_u:object_r:aoe_exec_t'
   expect_context 'HOME_DIR/\.local/bin/aoe' 'unconfined_u:object_r:aoe_exec_t'
 

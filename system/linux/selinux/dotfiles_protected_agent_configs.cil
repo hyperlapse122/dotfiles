@@ -347,6 +347,10 @@
 ; matched here on purpose: it runs in its launcher's domain, so tokscale, mise
 ; and node never enter codex_t, and the transition fires only on the real binary.
 (typetransition chezmoi_t gconf_home_t file "codex" codex_exec_t)
+; The code-mode host sits in the same store generation as the codex binary and
+; is spawned by it, so it carries the same entrypoint type rather than staying
+; on the generic home type its sibling left behind.
+(typetransition chezmoi_t gconf_home_t file "codex-code-mode-host" codex_exec_t)
 
 ; --- File Context Specifications (filecon) ----------------------------------
 ; Neutral, chezmoi-only: no harness rewrites these during ordinary use.
@@ -390,3 +394,4 @@
 ; wrapper store (store/codex-wrapper) must stay unlabelled so it runs in its
 ; launcher's domain.
 (filecon "HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex" file (unconfined_u object_r codex_exec_t ((s0)(s0))))
+(filecon "HOME_DIR/\.local/lib/commands/store/codex/[^/]+/codex-code-mode-host" file (unconfined_u object_r codex_exec_t ((s0)(s0))))
