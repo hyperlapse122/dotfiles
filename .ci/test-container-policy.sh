@@ -110,6 +110,43 @@ bad=$(grep -n 'container:' "$repo_root/.chezmoidata/agents.yaml" |
 [[ -z "$bad" ]] || fail "agents.yaml has container values outside keep|skip: $bad"
 pass 'every declared container policy in agents.yaml is keep or skip'
 
+# --- 5b. Every command the manifest still declares must have a payload.
+# This is the coupling the other checks miss. Gating an externals entry stops the
+# download; it does NOT retire the command unit that expects the download, and a
+# companion unit (sg from ast-grep, uvx from uv, the two protoc plugins from buf)
+# has its own unit that no one thinks to gate. command-reconcile then fails at
+# image-build time looking for a staging path that was never created -- which is a
+# broken build, not a smaller image.
+manifest_units() {
+  render "$1" '{{ includeTemplate "command-manifest.tmpl" (dict "ctx" .) }}' |
+    grep -oE '^  "[^"]+' | tr -d ' "' | sort -u
+}
+externals_sections() {
+  local f
+  for f in "$scratch/source/.chezmoiexternals"/*.toml; do render "$1" "$(cat "$f")"; done |
+    grep -oE '^\[[a-zA-Z][a-zA-Z0-9_.-]*\]' | tr -d '[]' | grep -v '\.checksum$' | sort -u
+}
+if manifest=$(manifest_units true 2>/dev/null) && [[ -n "$manifest" ]]; then
+  have=$(externals_sections true)
+  orphans=""
+  while IFS= read -r unit; do
+    [[ -n "$unit" ]] || continue
+    tool=$(python3 - "$repo_root" "$unit" <<'PY' 2>/dev/null || true
+import sys, yaml
+repo, unit = sys.argv[1], sys.argv[2]
+d = yaml.safe_load(open(f"{repo}/.chezmoidata/commands.yaml"))["commands"]["units"]
+u = d.get(unit) or {}
+print(u.get("tool", "") if u.get("producer") == "external" else "")
+PY
+)
+    [[ -n "$tool" ]] || continue
+    grep -qx "$tool" <<<"$have" || orphans+=" $unit(needs $tool)"
+  done <<<"$manifest"
+  [[ -z "$orphans" ]] || fail "these command units survive a container render but their payload does not:$orphans
+  Gate the unit !container too, or stop gating its externals entry."
+  pass 'every command the container manifest declares has a payload'
+fi
+
 # --- 6. The container predicate exists twice, and both copies must agree.
 # facts.tmpl owns it for everything that renders from the source state, but
 # .chezmoi.toml.tmpl renders BEFORE the source state, so it cannot read the fact

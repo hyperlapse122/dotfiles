@@ -53,6 +53,32 @@ fi
    installing the other tool would carry the record forever. */}}
 {{ includeTemplate "bun-resolve.sh.tmpl" | trim }}
 
+{{ if (includeTemplate "facts.tmpl" . | fromYaml).container -}}
+# CONTAINER: bun directly, never `mise exec` inside the source tree.
+#
+# `mise -C "$SRC/..." exec` resolves THIS repository's own mise.toml -- the
+# toolchain for working ON this repository: aube, codegraph, a pinned rust
+# toolchain, and postinstall hooks that fetch cargo crates. An image that builds
+# FROM this repository needs none of it and cannot install it anyway, because a
+# clean `aube` install fails today (its attestation names aubepkg/aube where mise
+# resolves jdx/aube).
+#
+# The comment above says bun cannot replace mise here because the build needs
+# `vp`. That is true of the HOST ladder and its task cache; it is not true of the
+# build itself. `vp run build`'s task in packages/settings-reconcile/vite.config.ts
+# is literally `bun build --compile ./src/cli.ts --outfile ./dist/settings-reconcile`,
+# and the workspace's package manager is bun (CI caches on packages/bun.lock). So
+# an image gets the same artifact; what it gives up is vp's caching, which an
+# image builds exactly once anyway.
+if ! (cd "$SRC/packages" && "$BUN_BIN" install --frozen-lockfile); then
+  printf '%s\n' 'build-settings-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
+  exit 1
+fi
+if ! (cd "$SRC/packages/settings-reconcile" && "$BUN_BIN" build --compile ./src/cli.ts --outfile ./dist/settings-reconcile); then
+  printf '%s\n' 'build-settings-reconcile: build failed; fix the settings-reconcile build error, then re-apply.' >&2
+  exit 1
+fi
+{{ else -}}
 if ! mise -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
   printf '%s\n' 'build-settings-reconcile: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
   exit 1
@@ -61,6 +87,7 @@ if ! mise -C "$SRC/packages/settings-reconcile" exec -- vp run build; then
   printf '%s\n' 'build-settings-reconcile: build failed; fix the settings-reconcile build error, then re-apply.' >&2
   exit 1
 fi
+{{ end -}}
 if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
   printf '%s\n' 'build-settings-reconcile: build completed without an executable dist artifact; inspect the build output, then re-apply.' >&2
   exit 1
