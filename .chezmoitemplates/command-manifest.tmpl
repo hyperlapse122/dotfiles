@@ -27,7 +27,17 @@
 {{-     $identity := "" -}}
 {{-     $stagingPath := "" -}}
 {{-     if eq $unit.producer "external" -}}
-{{-       $identity = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
+{{-       $version := includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
+{{-       $digest := includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool "field" "sha256" "platform" "auto" "optional" true) -}}
+{{-       if not $digest -}}
+{{-         $digest = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool "field" "sha512" "platform" "auto" "optional" true) -}}
+{{-       end -}}
+{{-       $suffix := regexReplaceAll "[^0-9a-f]" (lower $digest) "" | trunc 12 -}}
+{{-       if eq (len $suffix) 12 -}}
+{{-         $identity = printf "%s-%s" $version $suffix -}}
+{{-       else -}}
+{{-         $identity = $version -}}
+{{-       end -}}
 {{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
 {{-     else if eq $unit.producer "source" -}}
 {{-       if ne $privacy "secret" -}}

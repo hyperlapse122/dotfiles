@@ -14,17 +14,21 @@ Input (dict):
             caller's musl-linux probe result verbatim (KTD11: distinct glibc
             and musl builds get their own lock keys, always-musl tools keep
             plain keys)
-  optional  optional bool; a missing/null field returns "" instead of
-            failing (for digests upstream does not publish — KTD8)
+  optional  optional bool; returns "" instead of failing when the field is
+            missing/null, when the entry carries no artifacts block, and when
+            it carries no artifact for the platform (for digests upstream
+            does not publish, and for version-only entries — KTD8, KTD1)
 
 Every lookup fails the render with the missing key named (R6): a consumer
 whose tool or platform the lock does not carry aborts, and no call site ever
-falls back to a live lookup. Version-only entries (no artifacts block) still
-resolve "version". An emulated entry returns its recorded (amd64) URL and
-sha256 verbatim — url/digest consumers never special-case emulation. The one
-special-case is an archive-file external composing its archive-internal
-`path` from the platform: it reads field "emulated" (optional:true) and
-composes the path for the served amd64 build instead. Lockstep groups
+falls back to a live lookup, unless the caller passes optional:true.
+Version-only entries (no artifacts block) still resolve "version", and an
+optional:true artifact-field call against one returns "" (KTD1). An emulated
+entry returns its recorded (amd64) URL and sha256 verbatim — url/digest
+consumers never special-case emulation. The one special-case is an
+archive-file external composing its archive-internal `path` from the
+platform: it reads field "emulated" (optional:true) and composes the path
+for the served amd64 build instead. Lockstep groups
 (glab binary + skills and compound-engineering's six direct consumers) hold
 structurally because every consumer reads the same one lock key (R7).
 */ -}}
@@ -65,16 +69,21 @@ structurally because every consumer reads the same one lock key (R7).
 {{-     if and (hasKey . "musl") .musl -}}{{- $platform = printf "%s-musl" $platform -}}{{- end -}}
 {{-   end -}}
 {{-   if or (not (hasKey $entry "artifacts")) (not (hasKey $entry.artifacts $platform)) -}}
-{{-     fail (printf "release-lock-ref.tmpl: lock entry %q has no artifact for platform %q — refresh .chezmoidata/releases.json; no live fallback exists (R6)" $tool $platform) -}}
-{{-   end -}}
-{{-   $value := index (index $entry.artifacts $platform) $field -}}
-{{-   if not $value -}}
 {{-     if $optional -}}
 {{-       "" -}}
 {{-     else -}}
-{{-       fail (printf "release-lock-ref.tmpl: lock entry %q platform %q has no %s — upstream publishes no digest here; pass optional:true and skip the checksum (KTD8)" $tool $platform $field) -}}
+{{-       fail (printf "release-lock-ref.tmpl: lock entry %q has no artifact for platform %q — refresh .chezmoidata/releases.json; no live fallback exists (R6)" $tool $platform) -}}
 {{-     end -}}
 {{-   else -}}
-{{-     $value | toString -}}
+{{-     $value := index (index $entry.artifacts $platform) $field -}}
+{{-     if not $value -}}
+{{-       if $optional -}}
+{{-         "" -}}
+{{-       else -}}
+{{-         fail (printf "release-lock-ref.tmpl: lock entry %q platform %q has no %s — upstream publishes no digest here; pass optional:true and skip the checksum (KTD8)" $tool $platform $field) -}}
+{{-       end -}}
+{{-     else -}}
+{{-       $value | toString -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
