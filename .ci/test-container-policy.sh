@@ -110,4 +110,22 @@ bad=$(grep -n 'container:' "$repo_root/.chezmoidata/agents.yaml" |
 [[ -z "$bad" ]] || fail "agents.yaml has container values outside keep|skip: $bad"
 pass 'every declared container policy in agents.yaml is keep or skip'
 
+# --- 6. The container predicate exists twice, and both copies must agree.
+# facts.tmpl owns it for everything that renders from the source state, but
+# .chezmoi.toml.tmpl renders BEFORE the source state, so it cannot read the fact
+# and carries its own copy. Two copies of a predicate is exactly the shape that
+# drifts silently: the config would keep pointing sourceDir at a host path in an
+# image whose every other decision had already switched.
+predicate_of() {
+  grep -A4 'stat "/run/.containerenv"' "$1" |
+    tr -d ' \t' | grep -oE 'stat"[^"]+"' | sort
+}
+facts_pred=$(predicate_of "$repo_root/.chezmoitemplates/facts.tmpl")
+config_pred=$(predicate_of "$repo_root/.chezmoi.toml.tmpl")
+[[ -n "$facts_pred" ]] || fail 'the container predicate was not found in facts.tmpl'
+[[ "$facts_pred" == "$config_pred" ]] || fail "the container predicate in .chezmoi.toml.tmpl has drifted from facts.tmpl.
+  facts.tmpl:        $(tr '\n' ' ' <<<"$facts_pred")
+  .chezmoi.toml.tmpl: $(tr '\n' ' ' <<<"$config_pred")"
+pass 'both copies of the container predicate stat the same markers'
+
 printf 'container-policy: OK\n'

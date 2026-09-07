@@ -1095,10 +1095,19 @@ if is_container; then
     printf 'Bake op + mise into the image; this hook never installs packages inside a container.\n' >&2
     exit 1
   fi
-  printf 'install-prerequisites.sh: container detected, but op is not authenticated.\n' >&2
-  printf 'Export a 1Password service-account token before applying:\n' >&2
-  printf '  export OP_SERVICE_ACCOUNT_TOKEN=...   # see: op service account create --help\n' >&2
-  exit 1
+  # op present but not usable is NOT a failure in a container any more. That
+  # demand predates the opAvailable fact and contradicts it: an image BUILD is a
+  # container with no credentials by design, and every target that would resolve
+  # an op:// reference is gated on the fact and skipped. Failing here would make
+  # the secret-free build this repository now requires impossible to perform.
+  #
+  # The pod is the other side of the same fact: 1Password Connect is present, the
+  # fact is true, and the entrypoint's apply resolves exactly those targets. So
+  # both container cases are correct, and neither needs a service-account token.
+  printf 'install-prerequisites.sh: container without usable op; skipping every op-dependent target.\n' >&2
+  printf 'This is the image-build path. In a pod, OP_CONNECT_HOST/OP_CONNECT_TOKEN make opAvailable true\n' >&2
+  printf 'and the entrypoint re-applies those targets against 1Password Connect.\n' >&2
+  exit 0
 fi
 
 # Fedora: install via dnf (1Password's
