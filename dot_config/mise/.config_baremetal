@@ -1,0 +1,52 @@
+# Host-only additions, merged over .config_base on a bare-metal host or VM.
+#
+# aube is here rather than in the base because a CLEAN install of it currently
+# fails: mise resolves `aube` to aqua:jdx/aube, and that release's GitHub artifact
+# attestation now presents `aubepkg/aube` as its certificate identity, so
+# verification rejects it. An already-provisioned host does not notice; an image
+# build is nothing but clean installs. The npm package_manager setting goes with
+# it -- a worker falls back to npm's own, which is the visible consequence.
+[tools]
+aube = "latest"
+go = "latest"
+ruby = [
+  { version = "latest", os = [
+    "linux",
+    "macos",
+  ] },
+  { version = "3.4", os = [
+    "linux",
+    "macos",
+  ] },
+]
+# rustup ships a rust-analyzer inside the toolchain via `components`; the
+# newer standalone release train lives in .chezmoiexternals/dev-tools.toml and
+# is what PATH resolves. Both on purpose -- do not "dedupe" them.
+rust = { version = "latest", components = "rust-analyzer,rust-src" }
+yarn = "latest"
+
+"cargo:git-trim" = "latest"
+"cargo:kdotool" = { version = "latest", os = ["linux"] }
+viteplus = "latest"
+"npm:vscode-langservers-extracted" = "latest"
+"npm:@biomejs/biome" = "latest"
+"npm:@colbymchenry/codegraph" = "latest"
+"npm:@electron/asar" = "latest"
+"npm:bash-language-server" = "latest"
+"npm:node-gyp" = "latest"
+"npm:npm" = "latest"
+"npm:portless" = "latest"
+"npm:shadcn" = "latest"
+"npm:sharp-cli" = "latest"
+"npm:tokscale" = "latest"
+"npm:typescript-language-server" = "latest"
+"npm:typescript" = "latest"
+"npm:wrangler" = "latest"
+"npm:yaml-language-server" = "latest"
+"npm:cypress" = { version = "latest", allow_builds = ["cypress"] }
+"pipx:mmdc" = "latest"
+
+gcloud = "latest"
+
+[settings.npm]
+package_manager = "aube"

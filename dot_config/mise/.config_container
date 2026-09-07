@@ -1,0 +1,9 @@
+# Worker-image additions, merged over .config_base inside a container.
+#
+# Deliberately empty of tools. The base is the whole worker baseline; a project
+# brings its own toolchain through its own mise.toml, which is what makes the
+# image small enough to be worth shipping.
+#
+# No [settings.npm] package_manager either: aube is host-only (see .config_baremetal),
+# so a worker uses npm's own package manager.
+[tools]
