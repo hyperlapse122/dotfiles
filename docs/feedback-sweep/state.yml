@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-08-19T15:25:15Z"
+    cursor: "2026-09-07T01:13:26Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -654,61 +654,219 @@ items:
     updated_at: "2026-08-19T00:54:30Z"
   "gh-issues:hyperlapse122/dotfiles#260":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     title: "reduce claude-fable-5 usage: dedicated fable role, opus-5 slow, xhigh default"
     body: "reduce claude-fable-5 usage: dedicated fable role, opus-5 slow, xhigh default: restructure model roles so Fable moves to a dedicated role and the default thinking level drops, to stop weekly Fable quota exhaustion."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/266"
+    verified_merge_sha: "cf3ffa2f16d817bb2d1c007bbb574e1f39f5b980"
+    verified_at: "2026-09-07T10:16:00+09:00"
     author_class: "teammate"
     category: "chore"
     cursor: "2026-08-19T15:10:33Z"
     existing_ack: true
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#260"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/260"
     requirement_id: "R20"
-    updated_at: "2026-08-19T15:10:33Z"
+    updated_at: "2026-08-20T04:31:58Z"
   "gh-issues:hyperlapse122/dotfiles#261":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     title: "seat task, designer, and security-reviewer on gemini-3.7-flash:high"
     body: "seat task, designer, and security-reviewer on gemini-3.7-flash:high: switch those three subagent seats to gemini-3.7-flash:high to reduce Claude Sonnet 5 consumption against Anthropic quotas."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/266"
+    verified_merge_sha: "cf3ffa2f16d817bb2d1c007bbb574e1f39f5b980"
+    verified_at: "2026-09-07T10:16:00+09:00"
     author_class: "teammate"
     category: "chore"
     cursor: "2026-08-19T15:09:24Z"
     existing_ack: true
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#261"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/261"
     requirement_id: "R19"
-    updated_at: "2026-08-19T15:09:24Z"
+    updated_at: "2026-08-20T04:31:58Z"
   "gh-issues:hyperlapse122/dotfiles#262":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     title: "web_search silently falls back to anthropic: gemini grounding-model override breaks it"
     body: "web_search silently falls back to anthropic: gemini grounding-model override breaks it: overriding providers.webSearchGeminiModel to gemini-3.7-flash breaks Google Search grounding and silently redirects searches to Anthropic."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/266"
+    verified_merge_sha: "cf3ffa2f16d817bb2d1c007bbb574e1f39f5b980"
+    verified_at: "2026-09-07T10:16:00+09:00"
     author_class: "teammate"
     category: "bug"
     cursor: "2026-08-19T15:25:15Z"
     existing_ack: true
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#262"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/262"
     requirement_id: "R21"
-    updated_at: "2026-08-19T15:25:15Z"
+    updated_at: "2026-08-20T04:31:58Z"
+  "gh-issues:hyperlapse122/dotfiles#371":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "refactor(ghostty): declare the quick-terminal chord as a KDE desktop action"
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#371"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/371"
+    updated_at: "2026-09-07T01:03:32Z"
+  "gh-issues:hyperlapse122/dotfiles#395":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "refactor(agents): replace the skills symlink with per-skill links on every harness"
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#395"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/395"
+    updated_at: "2026-09-07T01:07:11Z"
+  "gh-issues:hyperlapse122/dotfiles#396":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "fix(selinux): give ~/.agents/plugins its own type so the skills suppression stops covering it"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/405"
+    verified_merge_sha: "82a41879a9b57ae78d00afb93d79a6fe736b13f0"
+    verified_at: "2026-09-07T11:10:00+09:00"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#396"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/396"
+    updated_at: "2026-09-07T01:03:37Z"
+  "gh-issues:hyperlapse122/dotfiles#397":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(externals): verify artifact digests for every lock-backed external - most externals install an executable that nothing verifies"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#397"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/397"
+    updated_at: "2026-09-07T01:11:30Z"
+  "gh-issues:hyperlapse122/dotfiles#398":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(release-lock): pin bun resolution so it cannot follow canary - the bun registry entry declares no tagPrefix, so resolveGitHubRelease reads releases/latest"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#398"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/398"
+    updated_at: "2026-09-07T01:11:53Z"
+  "gh-issues:hyperlapse122/dotfiles#399":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(build): rebuild the reconcilers when the locked bun version changes - a lock-driven bun bump does not rebuild anything"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#399"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/399"
+    updated_at: "2026-09-07T01:11:54Z"
+  "gh-issues:hyperlapse122/dotfiles#400":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "test(ci): cover musl and darwin-amd64 renders and bunx activation - two declared platform combinations are never exercised, so asset-name/archive-path drift would surface late"
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#400"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/400"
+    updated_at: "2026-09-07T01:12:21Z"
+  "gh-issues:hyperlapse122/dotfiles#401":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "chore(ci): fix .ci/lib mode and wiring scope, harden ladder rung 1 - two hygiene items on the bun resolution ladder found during review of #392"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#401"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/401"
+    updated_at: "2026-09-07T01:12:22Z"
+  "gh-issues:hyperlapse122/dotfiles#402":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "refactor(command-reconcile): decide whether external store identity should be content-addressed - store identity for a producer:external unit is the lock version string, not a content digest"
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#402"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/402"
+    updated_at: "2026-09-07T01:12:48Z"
+  "gh-issues:hyperlapse122/dotfiles#403":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(command-reconcile): multi-command external units leave a dangling public link - a commands.yaml unit declaring two command names publishes a link for the second name with nothing behind it"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#403"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/403"
+    updated_at: "2026-09-07T01:12:49Z"
+  "gh-issues:hyperlapse122/dotfiles#404":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "docs(agents): close the gaps that let a review finding go unapplied - the agents instruction template already says an agent must fix review findings in the run that found them"
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#404"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/404"
+    updated_at: "2026-09-07T01:13:26Z"
 last_run:
-  timestamp: "2026-08-20T00:12:32Z"
+  timestamp: "2026-09-07T10:17:00+09:00"
   outcome: "completed"
-  writer: "sweep-JOOSUNGPARK-JPI-omp-20260820T000000Z"
+  writer: "sweep-MS-7D91-dffeb1cc-2026-09-07"
   counts:
     gh-issues:
       ack_deferred: 0
-      acknowledged: 4
-      closed: 15
-      fetched: 22
-      in_plan: 3
+      acknowledged: 11
+      closed: 3
+      fetched: 11
+      in_plan: 11
       media_analyzed: 0
-      new: 4
-      new_ack_labels: 4
-      new_closeout_labels: 15
+      new: 11
+      new_ack_labels: 11
+      new_closeout_labels: 3

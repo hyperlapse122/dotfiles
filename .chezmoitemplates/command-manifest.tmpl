@@ -27,7 +27,39 @@
 {{-     $identity := "" -}}
 {{-     $stagingPath := "" -}}
 {{-     if eq $unit.producer "external" -}}
-{{-       $identity = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
+{{-       $version := includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
+{{- /* The identity must name the artifact this host actually downloads, so on a
+       musl host the musl lock key is probed first (R30: a re-published musl
+       asset has to move the identity). Only bun, claude, mise and
+       agent-browser carry -musl keys; every other external falls through to
+       the plain platform key, which keeps its digest instead of regressing to
+       a bare version. */ -}}
+{{-       $isMuslLinux := eq (includeTemplate "musl-probe.tmpl" (dict "ctx" $ctx)) "true" -}}
+{{-       $digest := "" -}}
+{{-       if $isMuslLinux -}}
+{{-         $digest = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool "field" "sha256" "platform" "auto" "musl" true "optional" true) -}}
+{{-       end -}}
+{{-       if not $digest -}}
+{{-         $digest = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool "field" "sha256" "platform" "auto" "optional" true) -}}
+{{-       end -}}
+{{-       if and (not $digest) $isMuslLinux -}}
+{{-         $digest = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool "field" "sha512" "platform" "auto" "musl" true "optional" true) -}}
+{{-       end -}}
+{{-       if not $digest -}}
+{{-         $digest = includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool "field" "sha512" "platform" "auto" "optional" true) -}}
+{{-       end -}}
+{{- /* The lock only ever holds "" or an already-lowercased 64/128-hex digest:
+       release-lock validates and lowercases every digest before writing it
+       (normalizeDigest / normalizeHex). This sanitizing pass is therefore a
+       no-op today and is kept as defense-in-depth, so a future digest source
+       that is not pre-validated cannot produce an unsafe store directory
+       name. The length gate below is what actually selects the fallback. */ -}}
+{{-       $suffix := regexReplaceAll "[^0-9a-f]" (lower $digest) "" | trunc 12 -}}
+{{-       if eq (len $suffix) 12 -}}
+{{-         $identity = printf "%s-%s" $version $suffix -}}
+{{-       else -}}
+{{-         $identity = $version -}}
+{{-       end -}}
 {{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
 {{-     else if eq $unit.producer "source" -}}
 {{-       if ne $privacy "secret" -}}

@@ -36,6 +36,24 @@ echo "agent-browser-binary"
 EOF
 chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/agent-browser/agent-browser"
 
+mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/agy"
+cat >"$home_dir/.local/share/chezmoi-commands/incomplete/agy/agy" <<'EOF'
+#!/usr/bin/env bash
+echo "agy-binary"
+EOF
+chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/agy/agy"
+
+# bun and bunx are deliberately separate units that stage the same upstream
+# archive under their own names, so both public links must resolve independently.
+for tool in bun bunx; do
+  mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/$tool"
+  cat >"$home_dir/.local/share/chezmoi-commands/incomplete/$tool/$tool" <<EOF
+#!/usr/bin/env bash
+echo "$tool-binary"
+EOF
+  chmod 0755 "$home_dir/.local/share/chezmoi-commands/incomplete/$tool/$tool"
+done
+
 mkdir -p "$home_dir/.local/share/chezmoi-commands/incomplete/foreign-tool"
 cat >"$home_dir/.local/share/chezmoi-commands/incomplete/foreign-tool/foreign-tool" <<'EOF'
 #!/usr/bin/env bash
@@ -85,6 +103,42 @@ cat >"$scratch/manifest.json" <<EOF
       "legacy": { "path": ".local/bin/code" }
     },
     {
+      "id": "bun",
+      "producer": "external",
+      "safetyProfile": "native-single-file",
+      "proofEligible": true,
+      "mutableTree": false,
+      "privacy": "public",
+      "mode": "0755",
+      "commands": [{ "name": "bun" }],
+      "identity": "bun-v1.4.2-deadbeef1234",
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/bun"
+    },
+    {
+      "id": "bunx",
+      "producer": "external",
+      "safetyProfile": "native-single-file",
+      "proofEligible": true,
+      "mutableTree": false,
+      "privacy": "public",
+      "mode": "0755",
+      "commands": [{ "name": "bunx" }],
+      "identity": "bun-v1.4.2-deadbeef1234",
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/bunx"
+    },
+    {
+      "id": "agy",
+      "producer": "external",
+      "safetyProfile": "native-single-file",
+      "proofEligible": true,
+      "mutableTree": false,
+      "privacy": "public",
+      "mode": "0755",
+      "commands": [{ "name": "agy" }, { "name": "antigravity", "relPath": "agy" }],
+      "identity": "v1.0.0",
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/agy"
+    },
+    {
       "id": "foreign-tool",
       "producer": "external",
       "safetyProfile": "native-single-file",
@@ -102,15 +156,33 @@ EOF
 
 "$reconcile_bin" reconcile-all --manifest "$scratch/manifest.json" --home "$home_dir"
 
-[[ -L "$home_dir/.local/bin/agent-browser" ]] || {
-  printf 'Failed: agent-browser is not a symbolic link\n' >&2
-  exit 1
+assert_resolvable_link() {
+  local link=$1 expected=$2
+  [[ -L "$link" ]] || {
+    printf 'Failed: %s is not a symbolic link\n' "$link" >&2
+    exit 1
+  }
+  [[ -e "$link" ]] || {
+    printf 'Failed: %s is a dangling link (target %s does not exist)\n' "$link" "$(readlink "$link")" >&2
+    exit 1
+  }
+  [[ $("$link") == "$expected" ]] || {
+    printf 'Failed: %s did not run and print %s\n' "$link" "$expected" >&2
+    exit 1
+  }
 }
 
-[[ -L "$home_dir/.local/bin/code" ]] || {
-  printf 'Failed: legacy code was not migrated to a symlink\n' >&2
-  exit 1
-}
+assert_resolvable_link "$home_dir/.local/bin/agent-browser" 'agent-browser-binary'
+assert_resolvable_link "$home_dir/.local/bin/code" 'code-script'
+
+# bunx ships as its own unit beside bun; after activation it must resolve to a real
+# file and run, not merely exist as a link (issue #400).
+assert_resolvable_link "$home_dir/.local/bin/bun" 'bun-binary'
+assert_resolvable_link "$home_dir/.local/bin/bunx" 'bunx-binary'
+
+# A multi-name external unit stages one file; every declared name must resolve to it.
+assert_resolvable_link "$home_dir/.local/bin/agy" 'agy-binary'
+assert_resolvable_link "$home_dir/.local/bin/antigravity" 'agy-binary'
 
 [[ ! -L "$home_dir/.local/bin/foreign-tool" ]] || {
   printf 'Failed: unproven foreign-tool was overwritten\n' >&2
@@ -132,4 +204,47 @@ json_output=$("$reconcile_bin" reconcile-all --manifest "$scratch/manifest.json"
   printf 'Failed: reconcile-all --json did not emit JSON: %s\n' "$json_output" >&2
   exit 1
 }
+
+# A declared command name with no backing file must fail loudly, not publish a
+# dangling link.
+dangling_home="$scratch/home-dangling"
+mkdir -p "$dangling_home/.local/share/chezmoi-commands/incomplete/agy"
+cp "$home_dir/.local/share/chezmoi-commands/incomplete/agy/agy" \
+  "$dangling_home/.local/share/chezmoi-commands/incomplete/agy/agy"
+
+cat >"$scratch/manifest-dangling.json" <<EOF
+{
+  "schemaVersion": "command-manifest/v1",
+  "units": [
+    {
+      "id": "agy",
+      "producer": "external",
+      "safetyProfile": "native-single-file",
+      "proofEligible": true,
+      "mutableTree": false,
+      "privacy": "public",
+      "mode": "0755",
+      "commands": [{ "name": "agy" }, { "name": "antigravity" }],
+      "identity": "v1.0.0",
+      "stagingPath": ".local/share/chezmoi-commands/incomplete/agy"
+    }
+  ]
+}
+EOF
+
+dangling_status=0
+dangling_output=$("$reconcile_bin" reconcile-all --manifest "$scratch/manifest-dangling.json" --home "$dangling_home" 2>&1) || dangling_status=$?
+[[ $dangling_status -ne 0 ]] || {
+  printf 'Failed: unbacked command name did not fail the reconcile: %s\n' "$dangling_output" >&2
+  exit 1
+}
+[[ "$dangling_output" == *antigravity* ]] || {
+  printf 'Failed: reconcile failure did not name the unbacked command: %s\n' "$dangling_output" >&2
+  exit 1
+}
+[[ ! -e "$dangling_home/.local/bin/antigravity" && ! -L "$dangling_home/.local/bin/antigravity" ]] || {
+  printf 'Failed: a dangling antigravity link was published\n' >&2
+  exit 1
+}
+
 printf '%s\n' 'command-reconcile apply integration test passed'
