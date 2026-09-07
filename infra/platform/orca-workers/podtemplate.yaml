@@ -140,6 +140,15 @@ template:
           # network namespace.
           - name: TS_USERSPACE
             value: "true"
+          # Keep tailscaled off the Kubernetes API entirely. Its boot script
+          # otherwise stores node state in a Secret it creates for itself, which
+          # needs a ServiceAccount token this pod deliberately does not mount --
+          # and it fails closed, with an error about a missing namespace file
+          # rather than about the API access it wanted:
+          #   error initializing kube client: open
+          #   /var/run/secrets/kubernetes.io/serviceaccount/namespace: no such file
+          - name: TS_KUBE_SECRET
+            value: ""
           # A writable state dir, not mem:. Without it tailscaled has no var root,
           # which is what silently disables SSH host keys (see the issue's
           # Findings). An emptyDir is enough: the node is ephemeral by design.
