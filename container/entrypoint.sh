@@ -12,6 +12,15 @@ set -euo pipefail
 log() { printf 'worker-entrypoint: %s\n' "$*" >&2; }
 die() { printf 'worker-entrypoint: FATAL: %s\n' "$*" >&2; exit 1; }
 
+# This process is root, because sshd needs to be. Anything that writes into the
+# worker's HOME must NOT be: a root-owned ~/.mcp.json or ~/.ssh is a home the
+# worker cannot rewrite, and sshd's strict mode refuses an authorized_keys it
+# does not trust the ownership of.
+WORKER_USER=${WORKER_USER:-worker}
+WORKER_HOME=$(getent passwd "$WORKER_USER" | cut -d: -f6)
+[[ -n "$WORKER_HOME" ]] || die "no home directory for user $WORKER_USER"
+as_worker() { runuser -u "$WORKER_USER" -- "$@"; }
+
 # --- 1. Refuse to start half-configured ------------------------------------
 # A worker missing its Connect credentials starts fine and fails at the first
 # thing an agent tries, far from the cause. Name what is missing, here.
@@ -40,18 +49,29 @@ ssh-keygen -A
 # chezmoi renders the real thing. One renderer, no second templating layer over
 # what chezmoi already wrote.
 log 'applying the op-dependent targets against 1Password Connect'
-chezmoi apply --no-tty </dev/null
+# --exclude=externals is what makes this targeted. Every external is already in
+# the image, and re-fetching them would put a pod's start time and success at the
+# mercy of upstream release hosts. Files and scripts DO re-render, and that is
+# precisely the set that changes: opAvailable flipped, so every target holding an
+# op:// reference now renders its value, and the run_onchange scripts among them
+# re-run because their rendered content changed. Nothing else did, so nothing
+# else moves.
+as_worker env HOME="$WORKER_HOME" \
+  OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+  chezmoi apply --no-tty --exclude=externals </dev/null
 
 # --- 4. authorized_keys -----------------------------------------------------
 # Fetched at start rather than baked, so rotating the key restarts a pod instead
 # of rebuilding an image. The public half is not a secret; this is about the
 # rotation path, not confidentiality.
 log 'writing authorized_keys'
-install -d -m 0700 "${HOME}/.ssh"
-umask 077
-op read "${WORKER_SSH_PUBKEY_REF}" >"${HOME}/.ssh/authorized_keys"
-chmod 0600 "${HOME}/.ssh/authorized_keys"
-[[ -s "${HOME}/.ssh/authorized_keys" ]] || die 'authorized_keys came back empty; no one could log in'
+install -d -m 0700 -o "$WORKER_USER" -g "$WORKER_USER" "${WORKER_HOME}/.ssh"
+authorized="${WORKER_HOME}/.ssh/authorized_keys"
+as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+  op read "${WORKER_SSH_PUBKEY_REF}" >"$authorized"
+chown "$WORKER_USER:$WORKER_USER" "$authorized"
+chmod 0600 "$authorized"
+[[ -s "$authorized" ]] || die 'authorized_keys came back empty; no one could log in'
 
 # --- 5. The proxy credential, resolved ONCE ---------------------------------
 # Not through apiKeyHelper or the Codex auth.command: `op read` takes about 19s on
@@ -60,7 +80,8 @@ chmod 0600 "${HOME}/.ssh/authorized_keys"
 # read it -- an export from this process would not survive into an sshd session.
 if [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
   log 'resolving the model proxy credential'
-  token=$(op read "${ANTHROPIC_AUTH_TOKEN_REF}")
+  token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+    op read "${ANTHROPIC_AUTH_TOKEN_REF}")
   [[ -n "$token" ]] || die 'the proxy credential came back empty'
   profile=/etc/profile.d/99-orca-worker.sh
   {
@@ -71,6 +92,14 @@ if [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
     [[ -n "${OP_CONNECT_TOKEN:-}" ]] && printf 'export OP_CONNECT_TOKEN=%q\n' "$OP_CONNECT_TOKEN"
   } >"$profile"
   chmod 0644 "$profile"
+  # /etc/profile.d covers a LOGIN shell, which is what an attached workspace gets.
+  # `ssh worker <command>` is not a login shell and reads ~/.bashrc instead, so the
+  # same file is sourced from there -- otherwise a scripted agent invocation would
+  # silently have no credentials while an interactive one worked.
+  bashrc="${WORKER_HOME}/.bashrc"
+  guard='[ -r /etc/profile.d/99-orca-worker.sh ] && . /etc/profile.d/99-orca-worker.sh'
+  grep -qF "$guard" "$bashrc" 2>/dev/null || printf '%s\n' "$guard" >>"$bashrc"
+  chown "$WORKER_USER:$WORKER_USER" "$bashrc"
   unset token
 fi
 
