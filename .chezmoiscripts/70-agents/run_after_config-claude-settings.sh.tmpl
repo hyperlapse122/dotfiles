@@ -44,9 +44,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-if [[ ! -d "$SETTINGS_DIR" ]]; then
-  mkdir -p "$SETTINGS_DIR"
-fi
+mkdir -p "$SETTINGS_DIR"
 
 decode_b64() {
   printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D
