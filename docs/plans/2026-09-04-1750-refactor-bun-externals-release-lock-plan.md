@@ -24,7 +24,7 @@ execution: code
 
 ## Product Contract
 
-**Product Contract preservation:** 범위 변경 없음. Outstanding Questions의 `Deferred to Planning` 3건이 KTD2, KTD4, KTD5와 Assumptions로 해소되어 그 섹션은 제거됐다. Dependencies의 `bunx` 가정은 검증된 사실로 승격됐다. R1–R10과 Key Decisions는 원문 그대로다.
+**Product Contract preservation:** 변경됨 — R6. 원래 R6는 mise 없이 settings-reconcile을 빌드한다는 요구였으나, 그 형태가 skip 레코드 정리를 깨뜨린다는 것이 리뷰에서 확인되어 R6를 이 스크립트의 하위 프로세스가 bun을 해석한다는 요구로 좁혔다. 사유는 KTD6, 남은 부분은 Deferred to Follow-Up Work에 있다. Outstanding Questions의 `Deferred to Planning` 3건은 KTD2, KTD4, KTD5와 Assumptions로 해소되어 그 섹션은 제거됐고, Dependencies의 `bunx` 가정은 검증된 사실로 승격됐다. 나머지 R과 Key Decisions는 원문 그대로다.
 
 ### Summary
 
@@ -76,7 +76,7 @@ flowchart TB
 **스크립트의 bun 해석**
 
 - R5. bun을 호출하는 chezmoi 스크립트는 bun이 PATH에 없어도 관리 설치 경로에서 bun을 찾는다.
-- R6. `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl`은 `mise`가 없어도 bun 경로로 빌드를 완료한다.
+- R6. `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl`이 띄우는 `vp run build`의 하위 `bun` 프로세스가 관리 설치 경로의 bun을 해석한다.
 - R7. `.ci/`에서 bun을 호출하는 스크립트도 R5와 같은 해석 경로를 쓴다.
 
 **마이그레이션과 문서**
@@ -101,9 +101,9 @@ flowchart TB
   - **Then** glibc 빌드가 아니라 musl bun 아티팩트가 배치된다.
 - AE2. PATH에 bun이 없는 apply
   - **Covers R5, R6.**
-  - **Given** bun과 mise가 모두 PATH에 없고 관리 설치 경로에는 bun이 있다.
-  - **When** settings-reconcile 빌드 스크립트가 실행된다.
-  - **Then** 스크립트가 관리 경로의 bun으로 빌드를 완료한다.
+  - **Given** bun이 PATH에 없고 관리 설치 경로에만 있다.
+  - **When** 빌드 스크립트가 실행된다.
+  - **Then** 스크립트와 그것이 띄우는 `bun build` 하위 프로세스가 모두 관리 경로의 bun을 해석한다.
 - AE3. bun이 어디에도 없는 apply
   - **Covers R5.**
   - **Given** PATH와 관리 설치 경로 어디에도 bun이 없다.
@@ -134,6 +134,7 @@ flowchart TB
 
 - 다중 명령 단위의 실제 결함: `command-manifest.tmpl`이 `producer: external` 단위의 스테이징 경로를 디렉터리로 주는 탓에 `producer.ts`의 명령별 복사 루프가 죽어 있고, 그래서 `~/.local/bin/antigravity`가 끊어진 링크로 남아 있다. 이 계획은 `uv`/`uvx` 형태로 우회하므로 결함 자체는 건드리지 않는다. 별도 과제로 제기한다.
 - 개발 툴체인 bun 핀 두 곳을 `.chezmoidata/releases.json`에서 끌어올지 결정하는 것.
+- mise 없이 settings-reconcile을 빌드하는 경로. 원래 R6가 요구했으나 보류한다. 빌드가 요구하는 `vp`가 mise 도구라 bun만으로는 대체되지 않고, skip을 이접으로 넓히면 정리가 깨진다(KTD6). 진짜로 하려면 `skip.sh.tmpl`과 `prune_stale_skip_records`가 probe 목록을 받아 any-of로 정리하도록 공유 계약을 넓혀야 하는데, 그건 199개 사이트에 걸친 변경이라 이 브랜치의 범위 밖이다.
 - 나머지 mise 도구를 externals나 커밋된 lock으로 옮기는 후속 과제.
 
 ### Dependencies / Assumptions
@@ -146,6 +147,7 @@ flowchart TB
 - 확인됨: `producer: external` 단위는 스테이징 **디렉터리**를 받으므로 명령별 복사 루프를 타지 않는다. 단위 하나에 명령 이름 두 개를 다는 형태는 두 번째 이름을 끊어진 링크로 남긴다. 이 호스트의 `antigravity`가 그 상태다(`command not found`).
 - 확인됨: `packages/settings-reconcile`은 `smol-toml` 런타임 의존성을 갖고 `src/reconcile.ts`가 그것을 import한다. `packages/command-reconcile`은 런타임 의존성이 없다. 두 빌드의 폴백 경로는 같을 수 없다.
 - 확인됨: `skip.sh.tmpl`은 사이트마다 probe를 하나만 받고, `.ci/check-skip-declarations.sh`는 선언 probe가 매트릭스 probe와 같고 그 토큰이 지문 블록에 있기를 요구한다.
+- 확인됨: `.install-prerequisites.sh`의 `prune_stale_skip_records`는 레코드에 담긴 그 **하나의** probe가 `available`일 때만 낡은 skip 레코드를 지운다. 그래서 이접 술어를 쓰면 다른 쪽 도구로 조건을 해소한 호스트가 레코드를 영원히 안고 간다. 같은 파일의 주석이 이 실패 유형을 과거 실제 사고로 기록하고 있다.
 - 확인됨: `vp`는 node로 실행된다. bun이 mise를 떠나도 `mise exec -- vp`의 실행 자체는 깨지지 않는다.
 - 확인됨: `vp run build` 태스크의 명령이 `bun build --compile`이다. 그래서 mise 경로로 빌드해도 bun이 PATH에 있어야 한다.
 - 가정: 관리 대상 x86_64 호스트는 AVX2를 지원하므로 `-baseline` 변형이 필요 없다 (KTD4).
@@ -161,7 +163,7 @@ flowchart TB
 - KTD3. **bun 해석 사다리는 공유 템플릿 partial 하나로 만들고, 찾은 bun의 디렉터리를 PATH 앞에 붙인다.** 절대 경로 호출만으로는 부족하다. `vp run build`가 `bun build --compile`을 하위 프로세스로 띄우고 그 프로세스는 PATH에서 bun을 찾기 때문이다. Governs R5, R6, R7.
 - KTD4. **`-baseline` 빌드를 쓰지 않는다.** 비-baseline x64 빌드는 AVX2를 요구한다. 실패 신호는 `bun` 실행 시 SIGILL이고, 그때 레지스트리에 baseline 변형을 추가한다.
 - KTD5. **기존 mise bun 설치를 자동으로 정리하지 않는다.** `~/.local/bin`이 PATH 최선두이고 mise 설치 트리는 chezmoi 대상 상태가 아니다. mise 설정에서 bun이 빠지면 mise가 그 경로 주입을 멈춘다. Governs R10.
-- KTD6. **`60-build`의 skip 선언을 넓히되 선언 probe는 `bun-present` 하나로 하고 지문에는 두 probe를 모두 해시한다.** `skip.sh.tmpl`은 사이트마다 probe를 하나만 받고 게이트는 그 토큰이 지문 블록에 있기를 요구하므로, `mise 또는 bun` 술어를 토큰 하나로는 추적할 수 없다. 두 토큰을 모두 해시하면 어느 쪽이 나타나도 지문이 바뀌어 스킵 기록이 재평가된다. 선언 probe를 bun 쪽으로 잡는 이유는 이 계획 이후 bun이 이 스크립트의 기본 경로이기 때문이다. Governs R6.
+- KTD6. **`60-build`의 skip 선언은 건드리지 않는다.** 이 스크립트에는 bun 전용 빌드 분기를 두지 않고 사다리를 PATH prepend 목적으로만 포함한다. 빌드가 요구하는 `vp`는 mise 도구라 bun이 mise를 대체할 수 없고, skip을 `mise도 bun도 없음`으로 넓히면 정리가 깨진다. transient-blocking 레코드는 probe를 하나만 담고 `prune_stale_skip_records`가 그 하나가 `available`일 때만 지우므로, 다른 쪽 도구를 설치해 조건을 해소한 호스트는 레코드를 영원히 안고 간다. Governs R6.
 
 ### High-Level Technical Design
 
@@ -265,31 +267,18 @@ flowchart TB
 
 ### U4. settings-reconcile 빌드의 bun 경로
 
-- **Goal:** mise가 없는 호스트에서도 settings-reconcile이 빌드된다.
+- **Goal:** settings-reconcile 빌드가 띄우는 `bun build` 하위 프로세스가 관리 경로의 bun을 해석한다.
 - **Requirements:** R6
 - **Dependencies:** U3
 - **Files:**
   - `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl`
-  - `.chezmoidata/.capability-registry.tsv`
-  - `.ci/skip-declaration-site-matrix.yaml`
-  - `.ci/test-build-settings-reconcile.sh`
 - **Approach:**
-  1. `bun-resolve.sh.tmpl`을 이 스크립트에도 넣는다.
-  2. mise가 있으면 기존 `mise exec -- vp` 경로를 그대로 쓴다. 그 두 줄은 **한 글자도 바꾸지 않고** 새 분기 안으로 감싸기만 한다. 두 hard-error 매트릭스 항목이 그 줄의 `predicate_digest`를 들고 있어서, 다시 쓰면 게이트가 렌더된 표면에서 그 경계를 찾지 못한다.
-  3. mise가 없고 bun이 있으면 bun만으로 내려간다. `$SRC/packages`에서 `bun install --frozen-lockfile`을 먼저 돌린 뒤 `bun build --compile`한다. 설치 단계는 생략할 수 없다. `packages/settings-reconcile`은 `smol-toml` 런타임 의존성을 갖고 `src/reconcile.ts`가 그것을 import한다. command-reconcile은 `node:` 내장만 쓰기 때문에 설치 없이 빌드되지만 여기서는 아니다.
-  4. `mise-absent` skip의 술어를 `mise도 bun도 없음`으로 바꾸고 owner 이름을 그에 맞게 고친다.
-  5. `.capability-registry.tsv`에 `bun-present`를 `command-present` 종류, 플랫폼 `any`로 추가한다.
-  6. skip 선언은 probe를 하나만 받는다. 이 사이트가 선언하는 probe는 `bun-present`로 하고, `fingerprint.tmpl`의 `values`에는 `mise-present`와 `bun-present`를 **둘 다** 해시한다. 그래야 어느 쪽이 나타나도 지문이 바뀌어 스크립트가 다시 돈다.
-  7. `skip-declaration-site-matrix.yaml`에서 이 템플릿을 가리키는 항목은 다섯 개다. `mise-absent`, `install-target-unsafe`, `dependency-install-failed`, `build-failed`, `missing-dist`. 전부 숫자 `anchor_line`을 들고 있으므로 편집 후 다섯 개를 모두 다시 읽어 갱신한다. `mise-absent`는 owner, anchor, predicate, 두 digest, probe도 함께 바뀐다.
-- **Patterns to follow:** `.chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl`의 mise-우선 bun-폴백 분기가 구조의 참고다. 다만 그 스크립트에는 의존성 설치 단계가 없으므로 3단계는 그대로 베끼지 않는다.
-- **Test scenarios:**
-  - mise가 있는 호스트에서 기존 `mise exec -- vp` 경로가 그대로 쓰인다.
-  - mise가 없고 bun만 있으며 `packages/node_modules`가 **없는** 호스트에서 빌드가 성공한다. `smol-toml`이 해석되지 않으면 이 케이스가 실패한다. Covers AE2.
-  - 둘 다 없으면 선언된 skip이 발동하고 스크립트가 0으로 끝난다.
-  - 빌드가 성공했는데 dist가 실행 파일이 아니면 기존 치명 메시지로 실패한다.
-  - 설치 대상이 심볼릭 링크면 기존 `install-target-unsafe` skip이 그대로 발동한다.
-  - mise 분기의 두 hard-error 줄이 편집 전후로 바이트 동일하다.
-- **Verification:** `.ci/check-skip-declarations.sh`와 `.ci/test-skip-declaration-gates.sh`가 통과한다. `.ci/test-capability-cache.sh`가 새 probe 키를 받아들인다. `.ci/test-build-settings-reconcile.sh`가 통과한다.
+  1. `bun-resolve.sh.tmpl`을 skip 블록 뒤에 넣는다. 목적은 PATH prepend 하나다. `vp run build`가 `bun build --compile`을 하위 프로세스로 띄우고 그 프로세스는 PATH에서 bun을 찾는다.
+  2. 기존 `mise-absent` skip과 두 `mise exec -- vp` 줄은 손대지 않는다. skip 술어와 두 hard-error 줄이 매트릭스의 digest로 고정돼 있고, KTD6에 따라 이 사이트는 넓히지 않는다.
+  3. bun 전용 빌드 분기를 만들지 않는다. 따라서 새 capability probe도, 매트릭스 수정도 없다.
+- **Patterns to follow:** `.chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl`이 같은 partial을 포함하는 방식.
+- **Test scenarios:** Test expectation: none — 이 단위는 스크립트에 해석 사다리를 포함시킬 뿐 분기를 바꾸지 않는다. 대체 검증은 아래 Verification의 렌더 확인과 기존 게이트다.
+- **Verification:** 렌더된 스크립트에 사다리가 들어 있고, `.ci/test-build-settings-reconcile.sh`, `.ci/check-skip-declarations.sh`, `.ci/test-skip-declaration-gates.sh`가 기존 그대로 통과한다.
 
 ### U5. .ci 스크립트의 bun 해석
 
@@ -341,8 +330,7 @@ flowchart TB
 | 명령 external 렌더 | `.ci/test-command-external-render.sh`, `.ci/test-command-manifest.sh` | U2 |
 | 명령 리콘사일 | `.ci/test-command-reconcile-apply.sh`, `.ci/test-command-reconcile-process.sh` | U2, U5 |
 | 치명 경계 | `.ci/test-build-command-reconcile.sh`, `.ci/test-build-settings-reconcile.sh` | U3, U4 |
-| skip 선언 | `.ci/check-skip-declarations.sh`, `.ci/test-skip-declaration-gates.sh` | U4 |
-| capability 캐시 | `.ci/test-capability-cache.sh` | U4 |
+| skip 선언 | `.ci/check-skip-declarations.sh`, `.ci/test-skip-declaration-gates.sh` | U4 (회귀 없음 확인) |
 | CI 배선 | `.ci/test-ci-wiring.sh` | U5 |
 | 멱등 apply | `chezmoi apply` 두 번 연속, 두 번째가 대상 0건 변경 | U6 |
 
@@ -375,14 +363,14 @@ flowchart TB
 - `.chezmoiexternals/dev-tools.toml:155-167`, `.chezmoidata/commands.yaml:187-209` — `uv`/`uvx`. 한 아카이브에서 external 두 개, `tool`을 공유하는 단위 두 개. KTD2가 따르는 형태.
 - `.chezmoitemplates/command-manifest.tmpl:31` — `producer: external` 단위의 스테이징 경로를 단위 디렉터리로 설정하는 지점.
 - `packages/command-reconcile/src/producer.ts:142-152` — 디렉터리면 재귀 복사, 파일이면 명령별 복사. 앞 줄 때문에 external 단위는 늘 앞쪽 분기를 탄다. `.chezmoidata/commands.yaml:43-54`의 `agy` 단위가 그 결과로 깨져 있다.
-- `.chezmoitemplates/skip.sh.tmpl:158,179-183`, `.ci/check-skip-declarations.sh:920-921,1030-1044` — 사이트당 probe 하나 제약과 지문 페어링 규칙. KTD6의 근거.
+- `.chezmoitemplates/skip.sh.tmpl:158,179-183`, `.ci/check-skip-declarations.sh:920-921,1030-1044` — 사이트당 probe 하나 제약과 지문 페어링 규칙.
+- `.install-prerequisites.sh:937-945,998-1020` — 낡은 skip 레코드 정리. 단일 probe로만 지우며, 주석이 과거 사고 두 건을 기록한다. KTD6의 근거.
 - `packages/settings-reconcile/package.json`, `packages/settings-reconcile/src/reconcile.ts:5` — `smol-toml` 런타임 의존성. U4 3단계의 근거.
 - `packages/package.json:5`, `.github/workflows/refresh-release-lock.yml:31` — 범위 밖으로 명시한 개발 툴체인 bun 핀 두 곳.
 - `.chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl:23-49` — `MISE_BIN` 사다리와 bun PATH 폴백.
 - `.chezmoiscripts/00-tools/run_after_90-activate-command-links.sh.tmpl` — 공개 링크 생성 시점. 부트스트랩 순환의 다른 쪽 끝.
 - `.chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:25-32` — mise 하드 요구와 `mise-absent` skip.
-- `.ci/skip-declaration-site-matrix.yaml:1781-1796` — 갱신 대상 skip 선언 항목.
-- `.chezmoidata/.capability-registry.tsv` — `command-present` probe 목록. `bun-present` 추가 지점.
+- `.ci/skip-declaration-site-matrix.yaml:1781-1796` — 건드리지 않는 skip 선언 항목. 술어와 digest가 여기 고정돼 있다.
 - `packages/command-reconcile/vite.config.ts`, `packages/settings-reconcile/vite.config.ts` — build 태스크가 `bun build --compile`인 지점. KTD3의 근거.
 - `STRATEGY.md` — "Hermetic supply chain" 트랙, idempotent-apply cleanliness 및 duplicate-knowledge defects 지표.
 - `docs/plans/2026-08-31-1800-feat-manage-mise-binary-plan.md` — mise 바이너리를 externals로 옮긴 선행 계획.

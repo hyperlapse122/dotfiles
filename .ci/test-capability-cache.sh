@@ -346,7 +346,7 @@ if registry_lines[-1] != '':
     problems.append('registry must end with a newline')
 # The frozen probe count. It is named once so the check and the message it prints
 # can never disagree; a new registry row moves this single number.
-EXPECTED_PROBES = 37
+EXPECTED_PROBES = 36
 keys, kinds, platforms, previous = [], {}, {}, ''
 for number, line in enumerate(registry_lines[1:-1], start=2):
     fields = line.split('\t')
@@ -374,9 +374,8 @@ for number, line in enumerate(registry_lines[1:-1], start=2):
 if len(keys) != EXPECTED_PROBES:
     problems.append(f'registry has {len(keys)} probes, expected {EXPECTED_PROBES}')
 if {key for key, platform in platforms.items() if platform == 'any'} != {
-        'mise-present', 'gh-present', 'glab-present', 'tokscale-present', 'bun-present'}:
-    problems.append('only mise-present, gh-present, glab-present, tokscale-present, and '
-                    'bun-present may be any-platform probes')
+        'mise-present', 'gh-present', 'glab-present', 'tokscale-present'}:
+    problems.append('only mise-present, gh-present, glab-present, and tokscale-present may be any-platform probes')
 if platforms.get('podman-socket-unit-present') != 'linux':
     problems.append('podman-socket-unit-present must remain Linux-scoped')
 if kinds.get('podman-socket-unit-present') != 'user-manager-unit':
@@ -612,7 +611,7 @@ case "$*" in
   *) exit 1 ;;
 esac
 STUB
-for tool in mise gh glab tokscale bun; do
+for tool in mise gh glab tokscale; do
   printf '#!/usr/bin/env bash\nexit 0\n' >"$stub_bin/$tool"
   chmod +x "$stub_bin/$tool"
 done
