@@ -93,6 +93,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           printf 'selinux-policies: reclaiming stale protected labels...\n'
           find "$HOME" -xdev \
             \( -context '*:protected_agent_config_t:*' \
+            -o -context '*:protected_agent_plugins_t:*' \
             -o -context '*:claude_config_t:*' \
             -o -context '*:gemini_config_t:*' \
             -o -context '*:codex_config_t:*' \) -print0 2>/dev/null |
