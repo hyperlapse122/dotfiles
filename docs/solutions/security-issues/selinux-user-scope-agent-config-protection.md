@@ -203,13 +203,17 @@ The three domains keep `files_unconfined_type` themselves, so they retain ordina
 
 By granting `(file (read getattr open map ioctl lock execute execute_no_trans watch watch_reads))` to `unconfined_domain_type`, user tools and agents can freely read configuration files, resolve symlinks, watch them, and execute skill scripts in `~/.agents/skills/` without permission denials.
 
-## Current shape: three types, one writer rule each
+## Current shape: five types, one writer rule each
 
 | Type | Paths | Writers |
 |---|---|---|
-| `protected_agent_config_t` | `~/.codex/config.toml`, `~/.codex/skills/**`, `~/.agents/skills/**`, `~/.agents/plugins/**` | `chezmoi_t` |
-| `claude_config_t` | `~/.claude.json*`, `~/.mcp.json`, `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/plugins/installed_plugins.json`, `~/.claude/plugins/known_marketplaces.json`, `~/.claude/plugins/marketplaces/**` | `chezmoi_t`, `claude_t` |
+| `protected_agent_config_t` | `~/.agents/skills/**` | `chezmoi_t` |
+| `protected_agent_plugins_t` | `~/.agents/plugins/**` | `chezmoi_t` |
+| `claude_config_t` | `~/.claude.json*`, `~/.mcp.json`, `~/.claude/settings.json`, `~/.claude/settings.json.lock`, `~/.claude/skills`, `~/.claude/plugins/installed_plugins.json`, `~/.claude/plugins/known_marketplaces.json`, `~/.claude/plugins/marketplaces/**` | `chezmoi_t`, `claude_t`, `aoe_t` |
 | `gemini_config_t` | `~/.gemini/config/**`, `~/.gemini/skills` | `chezmoi_t`, `agy_t` |
+| `codex_config_t` | `~/.codex/config.toml`, `~/.codex/skills` | `chezmoi_t`, `codex_t` |
+
+The two `~/.agents` roots share one writer rule and differ only in name. The split exists so the Codex suppression below, which is keyed by type, reaches the skills root and not the plugins root.
 
 A harness needs its own domain because it rewrites its own configuration during ordinary use — the enabled-plugin set, marketplace registries, settings — so a chezmoi-only writer would break the tool the label protects. Non-config runtime state (`plugins/cache`, `plugins/data`, `sessions`, `projects`, `history.jsonl`, `daemon*`, `backups`, and `~/.gemini/antigravity-cli/**`) falls back to `user_home_t`. `~/.claude/skills` and `~/.gemini/skills` take their harness's type but resolve into `~/.agents/skills`, so the canonical skills root stays chezmoi-only through the symlink.
 
@@ -259,6 +263,7 @@ The apply script gained a reclaim sweep, because `chezmoi_t` is the only domain 
 ```sh
 find "$HOME" -xdev \
   \( -context '*:protected_agent_config_t:*' \
+  -o -context '*:protected_agent_plugins_t:*' \
   -o -context '*:claude_config_t:*' \
   -o -context '*:gemini_config_t:*' \) -print0 |
   xargs -0 -r -n 200 restorecon -Fiv
@@ -314,7 +319,7 @@ The session itself succeeds — `codex exec` returns 0 and produces its output. 
 
 ### Two suggestions to refuse
 
-`setroubleshoot`'s own advice was `ausearch -c 'tokio-rt-worker' | audit2allow -M my-tokiortworker && semodule -X 300 -i`. That module is `allow codex_t protected_agent_config_t ...`, and the same type labels `~/.agents/plugins`, so it opens BOTH canonical roots to a harness. `.ci/test-selinux-protected-configs.sh` has rejected that exact grant since 2026-09-05 (`forbidden_writer 'codex_t' 'protected_agent_config_t'`, plus the compiled-policy matrix).
+`setroubleshoot`'s own advice was `ausearch -c 'tokio-rt-worker' | audit2allow -M my-tokiortworker && semodule -X 300 -i`. That module is `allow codex_t protected_agent_config_t ...`, which opens the canonical skills root to a harness outright instead of only leaving the refusal unaudited. `.ci/test-selinux-protected-configs.sh` has rejected that exact grant since 2026-09-05 (`forbidden_writer 'codex_t' 'protected_agent_config_t'`, plus the compiled-policy matrix).
 
 The second, subtler option was to silence the alert outside the kernel — an `auditctl` exclude rule or a `setroubleshoot` filter, which stops the notification while keeping the AVC in the log. It was refused because this repository manages the policy module and does not manage `/etc/audit/rules.d` or setroubleshoot state: the filter would live outside version control and outside every managed host.
 
@@ -324,9 +329,9 @@ The second, subtler option was to silence the alert outside the kernel — an `a
 (dontaudit codex_t protected_agent_config_t (dir (write)))
 ```
 
-Scoped four ways. `codex_t` alone, because it is the only domain observed producing the denial — another harness is added on its own evidence, never pre-emptively. `protected_agent_config_t` alone rather than the `protected_agent_config_type` attribute, so a harness reaching another harness's config type stays audited. `dir` alone, so file and symlink denials still surface. `write` alone.
+Scoped four ways. `codex_t` alone, because it is the only domain observed producing the denial — another harness is added on its own evidence, never pre-emptively. `protected_agent_config_t` alone rather than the `protected_agent_config_type` attribute, so a harness reaching another harness's config type stays audited — and, since `~/.agents/plugins` carries `protected_agent_plugins_t`, so does a `codex_t` write attempt on the plugins root. That root holds the personal marketplace manifest every harness only reads, so a write there is the out-of-band install this boundary refuses, not routine traffic. `dir` alone, so file and symlink denials still surface. `write` alone.
 
-It hides more than the install attempt, and the reason is worth knowing. The kernel checks `dir { write }` in `inode_permission()` **before** the more specific `dir { add_name }` or `dir { remove_name }`, so a create, unlink, rmdir, or rename by `codex_t` under `~/.agents/skills` or `~/.agents/plugins` is denied at `write` and never reaches the specific permission. A `dontaudit` on `write` therefore cannot distinguish a probe from a create, and silences the whole verb set the boundary defends.
+It hides more than the install attempt, and the reason is worth knowing. The kernel checks `dir { write }` in `inode_permission()` **before** the more specific `dir { add_name }` or `dir { remove_name }`, so a create, unlink, rmdir, or rename by `codex_t` under `~/.agents/skills` is denied at `write` and never reaches the specific permission. A `dontaudit` on `write` therefore cannot distinguish a probe from a create, and silences the whole verb set the boundary defends on that one root.
 
 No runtime detector survives the rule. CI reads policy source and observes no runtime behavior. The reclaim sweep in the apply script finds a label that already escaped, not a blocked attempt, and it sits behind the `system/linux/selinux/**` fingerprint so it runs only when the policy tree changes. A per-apply context assertion on both canonical roots was tried in `run_after_config-codex-settings.sh.tmpl` and removed: that script's test isolates only `CODEX_HOME`, injects a stub `stat`, and asserts a converged re-run is silent, so a check reading global `$HOME` state broke the contract and read the stub's canned answer rather than the host's. The gap is recorded rather than papered over.
 
@@ -338,7 +343,7 @@ No runtime detector survives the rule. CI reads policy source and observes no ru
 
 ### Diagnostics
 
-A `dontaudit` destroys the record, but not permanently: `sudo semodule -DB` rebuilds the policy with every `dontaudit` disabled, so a suspected out-of-band write to `~/.agents/skills` or `~/.agents/plugins` becomes visible again; `sudo semodule -B` restores the normal build. That is the way back to the signal this module gives up, and an investigation should start there.
+A `dontaudit` destroys the record, but not permanently: `sudo semodule -DB` rebuilds the policy with every `dontaudit` disabled, so a suspected out-of-band write to `~/.agents/skills` becomes visible again — a write to `~/.agents/plugins` is audited without it; `sudo semodule -B` restores the normal build. That is the way back to the signal this module gives up, and an investigation should start there.
 
 Resolve the inode before theorising: `find ~ -xdev -inum <ino>`. An AVC naming `skills` could be `~/.agents/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.codex/skills`, and only the first is chezmoi-only. Then ask the program what it wanted — one non-interactive run of the harness usually prints the operation the kernel refused, which is what turned this from "a probe" into "an installer".
 
