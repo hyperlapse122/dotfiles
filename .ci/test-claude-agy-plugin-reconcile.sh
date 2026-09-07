@@ -69,12 +69,10 @@ done
 
 # The Codex updater installs from the chezmoi-owned personal marketplace, so the
 # row it carries is the registry key the marketplace.json entry and the archive
-# symlink are both named after. The relabel line is what repairs the label on
-# ~/.agents/plugins, a directory created after the policy script's restorecon.
+# symlink are both named after.
 for needle in \
   'compound-engineering\tcompound-engineering-plugin\tlocalArchive\t' \
   'codex plugin add' \
-  'restorecon -RF "$HOME/.agents/plugins"' \
   'preflight: codex is not on PATH' \
   '.codex-plugin/plugin.json' \
   'PERSONAL_MARKETPLACE="dotfiles"'; do
@@ -234,15 +232,6 @@ esac
 EOF
 chmod 0700 "$bin/codex"
 
-# A restorecon stub records the relabel so its order against the first `plugin
-# add` can be asserted; the real one on a SELinux host would relabel the fixture
-# HOME, which is not what this test is about.
-cat >"$bin/restorecon" <<'EOF'
-#!/usr/bin/env bash
-printf 'restorecon %s\n' "$*" >>"$CODEX_CALLS"
-EOF
-chmod 0700 "$bin/restorecon"
-
 claude_calls="$scratch/claude-calls"
 agy_calls="$scratch/agy-calls"
 codex_calls="$scratch/codex-calls"
@@ -387,16 +376,6 @@ run_codex >"$scratch/codex.out" 2>&1 || {
 }
 grep -Fx 'plugin add compound-engineering@dotfiles' "$codex_calls" >/dev/null ||
   fail 'Codex reconcile did not install the plugin from the personal marketplace'
-grep -Fx "restorecon -RF $home/.agents/plugins" "$codex_calls" >/dev/null ||
-  fail 'Codex reconcile did not relabel ~/.agents/plugins'
-[[ $(grep -n 'restorecon' "$codex_calls" | head -1 | cut -d: -f1) -lt \
-  $(grep -n 'plugin add' "$codex_calls" | head -1 | cut -d: -f1) ]] ||
-  fail 'Codex reconcile installed before relabelling ~/.agents/plugins'
-grep -Fx "restorecon -F $home/.codex/config.toml" "$codex_calls" >/dev/null ||
-  fail 'Codex reconcile did not restore the config.toml label after installing'
-[[ $(grep -n 'plugin add' "$codex_calls" | tail -1 | cut -d: -f1) -lt \
-  $(grep -n "restorecon -F $home/.codex/config.toml" "$codex_calls" | head -1 | cut -d: -f1) ]] ||
-  fail 'Codex reconcile restored the config.toml label before the last plugin add'
 
 # The re-run hits `plugin add` on an already-installed plugin, which Codex treats
 # as a successful re-assert, so a converged apply stays green while a genuine
@@ -558,8 +537,4 @@ grep -Fx 'plugin remove retired@dotfiles' "$codex_calls" >/dev/null ||
 [[ $(grep -n 'plugin remove' "$codex_calls" | head -1 | cut -d: -f1) -lt \
   $(grep -n 'plugin add' "$codex_calls" | head -1 | cut -d: -f1) ]] ||
   fail 'Codex reconcile installed before removing the declared plugin'
-[[ $(grep -n 'plugin remove' "$codex_calls" | tail -1 | cut -d: -f1) -lt \
-  $(grep -n "restorecon -F $home/.codex/config.toml" "$codex_calls" | head -1 | cut -d: -f1) ]] ||
-  fail 'Codex reconcile restored the config.toml label before the removal'
-
 printf 'test-claude-agy-plugin-reconcile: ok\n'

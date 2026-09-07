@@ -46,13 +46,6 @@ fi
 
 if [[ ! -d "$SETTINGS_DIR" ]]; then
   mkdir -p "$SETTINGS_DIR"
-  # A filecon spec only takes effect when restorecon runs, and no type transition
-  # covers chezmoi_t creating this directory -- so on a first provision it lands as
-  # a plain home type and anything staged inside would inherit that. Relabel it
-  # HERE, before the staging below depends on the inheritance.
-  if command -v restorecon >/dev/null 2>&1; then
-    restorecon -F "$SETTINGS_DIR" 2>/dev/null || true
-  fi
 fi
 
 decode_b64() {
@@ -176,9 +169,8 @@ if [[ $drifted -eq 0 ]]; then
   exit 0
 fi
 
-# Staged in the target's own directory so it inherits that directory's SELinux type
-# and the replacement is a same-filesystem rename. Staging under TMPDIR would strip
-# the label (see docs/solutions/security-issues/selinux-user-scope-agent-config-protection.md).
+# Staged in the target's own directory so the replacement is a same-filesystem
+# rename; staging under TMPDIR would cross filesystems.
 tmp="$(mktemp "$SETTINGS_DIR/.settings.XXXXXX")"
 chmod 0600 "$tmp"
 # `write_paths` is the classifier's verdict, not the declaration: a blocked path
@@ -203,9 +195,6 @@ cat "$tmp" > "$SETTINGS"
 chmod 0600 "$SETTINGS"
 rm -f "$tmp"
 tmp=''
-if command -v restorecon >/dev/null 2>&1; then
-  restorecon -F "$SETTINGS" 2>/dev/null || true
-fi
 printf 'config-claude-settings: asserted %d of %d declared settings paths\n' "$drifted" "$examined"
 {{- end }}
 {{- end }}

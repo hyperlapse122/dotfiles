@@ -79,26 +79,9 @@ real_stat=$(command -v stat)
 identity() { "$real_stat" -c '%i %Y' "$1"; }
 mode() { "$real_stat" -c '%a' "$1"; }
 
-# The label step is host-dependent: restorecon may be absent, and no scratch
-# directory carries codex_config_t. Stub both ends so every run is deterministic;
-# `label_ok` makes the step quiet, the other two force each notice.
-make_label_bin() {
-  local dir=$1 restorecon_rc=$2 context=$3
-  mkdir -p "$dir"
-  printf '#!/usr/bin/env bash\nexit %s\n' "$restorecon_rc" >"$dir/restorecon"
-  printf '#!/usr/bin/env bash\nprintf %%s %q\n' "$context" >"$dir/stat"
-  chmod 0700 "$dir/restorecon" "$dir/stat"
-}
-label_ok=$scratch/label-ok
-label_fail=$scratch/label-fail
-label_wrong=$scratch/label-wrong
-make_label_bin "$label_ok" 0 'unconfined_u:object_r:codex_config_t:s0'
-make_label_bin "$label_fail" 1 'unconfined_u:object_r:codex_config_t:s0'
-make_label_bin "$label_wrong" 0 'unconfined_u:object_r:user_home_t:s0'
-
 run() {
-  local home=$1 label_bin=${2:-$label_ok}
-  CODEX_HOME="$home" RECONCILER="$reconciler" PATH="$label_bin:$PATH" bash "$settings_script"
+  local home=$1
+  CODEX_HOME="$home" RECONCILER="$reconciler" bash "$settings_script"
 }
 
 # ---------------------------------------------------------------------------
@@ -225,7 +208,7 @@ absent=$scratch/absent
 mkdir -p "$absent"
 printf 'approval_policy = "on-request"\n' >"$absent/config.toml"
 absent_before=$(cat "$absent/config.toml")
-absent_err=$(CODEX_HOME="$absent" RECONCILER="$scratch/no-such-reconciler" PATH="$label_ok:$PATH" \
+absent_err=$(CODEX_HOME="$absent" RECONCILER="$scratch/no-such-reconciler" \
   bash "$settings_script" 2>&1 >/dev/null) && fail 'a missing reconciler did not fail the apply'
 grep -qF 'settings-reconcile is unavailable' <<<"$absent_err" \
   || fail "a missing reconciler was not reported clearly; stderr was: $absent_err"
@@ -235,69 +218,32 @@ wrong_contract=$scratch/wrong-contract
 mkdir -p "$wrong_contract"
 printf '#!/usr/bin/env bash\nprintf %%s\\\\n %s\n' "'{\"settings\":\"settings-reconcile/v0\"}'" >"$wrong_contract/settings-reconcile"
 chmod 0700 "$wrong_contract/settings-reconcile"
-contract_err=$(CODEX_HOME="$absent" RECONCILER="$wrong_contract/settings-reconcile" PATH="$label_ok:$PATH" \
+contract_err=$(CODEX_HOME="$absent" RECONCILER="$wrong_contract/settings-reconcile" \
   bash "$settings_script" 2>&1 >/dev/null) && fail 'an incompatible reconciler contract did not fail the apply'
 grep -qF 'incompatible settings contract' <<<"$contract_err" \
   || fail "an incompatible contract was not reported clearly; stderr was: $contract_err"
 [[ $(cat "$absent/config.toml") == "$absent_before" ]] || fail 'an incompatible reconciler still touched config.toml'
 
-# The label step reports rather than swallows: a failed restorecon and a wrong
-# resulting context each print a notice, and neither fails the apply, because the
-# declared leaves were already asserted.
-label_home=$scratch/label
-label_err=$(run "$label_home" "$label_fail" 2>&1 >/dev/null) || fail 'a failed restorecon should not fail the apply'
-grep -qF 'could not restore' <<<"$label_err" || fail "a failed restorecon was not reported; stderr was: $label_err"
-assert_declared_present "$label_home/config.toml" 'restorecon failure'
-label_err=$(run "$label_home" "$label_wrong" 2>&1 >/dev/null) || fail 'a wrong label should not fail the apply'
-grep -qF 'codex_config_t' <<<"$label_err" || fail "a wrong resulting label was not reported; stderr was: $label_err"
-grep -qF 'user_home_t' <<<"$label_err" || fail "the wrong-label notice does not name the observed context: $label_err"
-
-# The skills symlink is the second label target. ~/.codex/skills is deployed by
-# chezmoi but relabelled only by the policy script, which is fingerprinted on
-# system/linux/selinux/**, so an apply that just re-creates the symlink leaves it
-# on user_home_t. Assert the target actually reaches restorecon, and that a
-# CODEX_HOME without it neither breaks the apply nor invents a notice.
-label_log=$scratch/restorecon.log
-label_record=$scratch/label-record
-mkdir -p "$label_record"
-printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >>%q\nexit 0\n' "$label_log" >"$label_record/restorecon"
-printf '#!/usr/bin/env bash\nprintf %%s %q\n' 'unconfined_u:object_r:codex_config_t:s0' >"$label_record/stat"
-chmod 0700 "$label_record/restorecon" "$label_record/stat"
-
+# ~/.codex/skills is a chezmoi-deployed symlink beside config.toml. Whatever shape
+# it has -- resolvable, dangling, or absent -- the reconciler only writes
+# config.toml, so the apply converges silently in every case.
 skills_home=$scratch/skills-home
 mkdir -p "$skills_home"
 ln -s ../.agents/skills "$skills_home/skills"
-: >"$label_log"
-skills_err=$(run "$skills_home" "$label_record" 2>&1 >/dev/null) || fail 'a CODEX_HOME carrying a skills symlink should not fail the apply'
-[[ -z $skills_err ]] || fail "a converged label run was not silent: $skills_err"
-grep -qxF -- "$skills_home/config.toml" "$label_log" || fail 'config.toml was not passed to restorecon'
-grep -qxF -- "$skills_home/skills" "$label_log" ||
-  fail "the skills symlink was not passed to restorecon; restorecon saw: $(tr '\n' ' ' <"$label_log")"
+skills_err=$(run "$skills_home" 2>&1 >/dev/null) || fail 'a CODEX_HOME carrying a skills symlink should not fail the apply'
+[[ -z $skills_err ]] || fail "a converged run was not silent: $skills_err"
+assert_declared_present "$skills_home/config.toml" 'a CODEX_HOME carrying a skills symlink'
 
-# A dangling symlink is still the managed target and still needs its own label.
 dangling_home=$scratch/dangling-home
 mkdir -p "$dangling_home"
 ln -s ./nowhere "$dangling_home/skills"
-: >"$label_log"
-run "$dangling_home" "$label_record" >/dev/null 2>&1 || fail 'a dangling skills symlink should not fail the apply'
-grep -qxF -- "$dangling_home/skills" "$label_log" || fail 'a dangling skills symlink was skipped by the label step'
+dangling_err=$(run "$dangling_home" 2>&1 >/dev/null) || fail 'a dangling skills symlink should not fail the apply'
+[[ -z $dangling_err ]] || fail "a dangling skills symlink was not silent: $dangling_err"
 
-# No skills entry: one target, and no notice about a path that does not exist.
 bare_home=$scratch/bare-home
 mkdir -p "$bare_home"
-: >"$label_log"
-bare_err=$(run "$bare_home" "$label_record" 2>&1 >/dev/null) || fail 'a CODEX_HOME without skills should not fail the apply'
+bare_err=$(run "$bare_home" 2>&1 >/dev/null) || fail 'a CODEX_HOME without skills should not fail the apply'
 [[ -z $bare_err ]] || fail "a CODEX_HOME without skills was not silent: $bare_err"
-if grep -qxF -- "$bare_home/skills" "$label_log"; then
-  fail 'restorecon was handed a skills path that does not exist'
-fi
-
-# The per-target notices name the offending path, so an operator knows which
-# label to chase.
-: >"$label_log"
-skills_wrong=$(run "$skills_home" "$label_wrong" 2>&1 >/dev/null) || fail 'a wrong skills label should not fail the apply'
-grep -qF -- "$skills_home/skills" <<<"$skills_wrong" ||
-  fail "the wrong-label notice does not name the skills symlink: $skills_wrong"
 
 # ---------------------------------------------------------------------------
 # Render-time: the declaration guard. These cases are structurally invisible to

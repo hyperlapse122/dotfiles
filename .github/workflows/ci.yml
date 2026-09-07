@@ -230,36 +230,6 @@ jobs:
           (cd packages && bun install --frozen-lockfile)
           .ci/test-codex-settings-reconcile.sh "$RUNNER_TEMP/codex-settings.sh"
 
-  selinux-policy:
-    name: SELinux policy
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      # Without these the test falls through to its text assertions and never
-      # compiles the modules or asks the compiled policy who may write what --
-      # which is the only check that catches a protected type regaining the
-      # file_type attribute. Install unconditionally with the `-` sentinel: the
-      # helper's first argument is a probe that short-circuits the whole install,
-      # so naming one package there would skip the other.
-      - name: Install SELinux policy tooling
-        run: .ci/lib/apt-install.sh - secilc python3-setools
-      - name: Install locked chezmoi
-        run: |
-          set -euo pipefail
-          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
-          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
-          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
-          mkdir -p "$RUNNER_TEMP/bin"
-          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Assert the protected-config write boundary
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache"
-          .ci/test-selinux-protected-configs.sh
-
   repo-meta:
     name: repo meta
     runs-on: ubuntu-latest
@@ -354,7 +324,6 @@ jobs:
         render-gates,
         fatal-boundary-gates,
         command-reconcile,
-        selinux-policy,
         repo-meta,
         ts-workspace,
         rust-crate,

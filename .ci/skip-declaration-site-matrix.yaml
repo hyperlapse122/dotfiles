@@ -81,8 +81,9 @@
 # WakaTime keyring site after that inventory, and config-kde-theme-dark adds four
 # more, while retiring the omp harness and the figma-auth build removed nine
 # owners (six classified, three hard errors), and splitting the NVIDIA MOK
-# enrollment keypair guard by build system added one. The frozen totals — 136
-# owners, 8 hard errors, 205 instances, 131 + 74 — are CI-enforced and must be
+# enrollment keypair guard by build system added one, while retiring the SELinux
+# policy script removed one sudo-elevation-guard consumer. The frozen totals —
+# 137 owners, 8 hard errors, 205 instances, 132 + 73 — are CI-enforced and must be
 # re-frozen in .ci/check-skip-declarations.sh and .ci/test-capability-cache.sh
 # together with this file.
 
@@ -94,9 +95,9 @@ runtime_input: false
 totals:
   classified_owners: 137
   hard_error_owners: 8
-  rendered_instances: 206
+  rendered_instances: 205
   phase_local_instances: 132
-  shared_guard_instances: 74
+  shared_guard_instances: 73
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -143,7 +144,7 @@ shared_guard_fanout:
   headless-guard: 12
   kde-guard: 10
   shared-host-guard: 22
-  sudo-elevation-guard: 23
+  sudo-elevation-guard: 22
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -337,7 +338,6 @@ owners:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-28-sleep.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl#sudo-elevation-guard/no-elevation-path'
-      - '.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
   - owner: 'mise-trust/mise-absent'
     scope: '00-tools'
     template: '.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl'
