@@ -534,6 +534,21 @@
         "source": "stablyai/orca",
         "version": "v1.4.197"
       },
+      "orca-ide": {
+        "kind": "githubRelease",
+        "source": "stablyai/orca",
+        "version": "v1.4.197",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.197/orca-ide-1.4.197.x86_64.rpm",
+            "sha256": "a324a92045198d4b884575b48f410532d92f88ae54369937ed855b069e6a0995"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.197/orca-ide-1.4.197.aarch64.rpm",
+            "sha256": "53d9234c1363b4db87a380b93c520bf0172591fbefd7c32797ebc45ba64d2535"
+          }
+        }
+      },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
@@ -604,6 +619,11 @@
             "sha256": "339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f"
           }
         }
+      },
+      "teamviewer": {
+        "kind": "vendorManifest",
+        "source": "https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm",
+        "version": "15.81.5"
       },
       "uv": {
         "kind": "githubRelease",
