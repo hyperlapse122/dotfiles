@@ -56,7 +56,7 @@ This plan owns credential availability only. The breakdown below is how the surr
 
 **Credential declaration**
 
-- R1. `agents.omp.auth.env` in `.chezmoidata/agents.yaml` declares `OPENROUTER_API_KEY` from `op://Private/OpenRouter/API Key` and `OPENCODE_API_KEY` from `op://Private/Opencode/API Key`, alongside the existing `ZAI_API_KEY` and `EXA_API_KEY` entries.
+- R1. `agents.omp.auth.env` in `.chezmoidata/agents.yaml` declares `OPENROUTER_API_KEY` from `op://tum6wsa7azjvbkgwnp6fgamcvm/OpenRouter/API Key` and `OPENCODE_API_KEY` from `op://tum6wsa7azjvbkgwnp6fgamcvm/Opencode/API Key`, alongside the existing `ZAI_API_KEY` and `EXA_API_KEY` entries.
 - R2. The explanatory comment above that map states the current four-variable set and records that one `OPENCODE_API_KEY` serves both `opencode-zen` and `opencode-go`.
 
 **Routing boundary**
@@ -193,7 +193,7 @@ The isolated provider probe runs `omp models` from a clean scratch HOME with the
 - **Requirements:** R1, R2, R3, R4, R5, R6, R7, R8. Implements KD1, KD2, KD3, KD4 and KTD1-KTD4.
 - **Dependencies:** None.
 - **Files:** `.chezmoidata/agents.yaml`, `.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl`, `.chezmoiscripts/70-agents/run_after_config-omp-auth.ps1.tmpl`.
-- **Approach:** Add the `OPENROUTER_API_KEY` and `OPENCODE_API_KEY` records with the exact `op://Private/.../API Key` references. Update the explanatory comment to state the four-variable set and the shared OpenCode key. Extend each `$required` list to four names. Build the unsupported-variable message with `join ", " $required`. Keep all existing validation and reconcile logic unchanged.
+- **Approach:** Add the `OPENROUTER_API_KEY` and `OPENCODE_API_KEY` records with the exact `op://tum6wsa7azjvbkgwnp6fgamcvm/.../API Key` references. Update the explanatory comment to state the four-variable set and the shared OpenCode key. Extend each `$required` list to four names. Build the unsupported-variable message with `join ", " $required`. Keep all existing validation and reconcile logic unchanged.
 - **Patterns to follow:** The existing `list`, `has`, `append`, and `join` template idioms in the two provisioners and `.chezmoitemplates/agent-mcp-servers-json.tmpl`.
 - **Test scenarios:** Render the POSIX and PowerShell templates with a stubbed secret resolver that returns distinct sentinels per `op://` URI. Confirm both templates embed the intended sentinel under each variable and the same ordered names. Render an out-of-set variable, an empty list, a duplicate, an empty key, and a non-string key and confirm both templates reject each before writing a target.
 - **Verification:** `chezmoi execute-template` for both OS gates with `--source "$PWD"` and a URI-aware newline-free `op` stub; `bash -n` on the rendered POSIX script; use the repository's explicit PowerShell parser or analyzer against the rendered auth script; compare the two rendered managed-name sets and values.

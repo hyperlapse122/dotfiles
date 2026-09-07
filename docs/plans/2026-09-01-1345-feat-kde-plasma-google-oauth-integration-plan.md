@@ -11,7 +11,7 @@ execution: code
 
 - **Objective**: Enable full Google account integration (Google Drive, Calendar, Tasks, Contacts) in KDE Plasma using a dedicated private Google Cloud OAuth 2.0 application managed securely via 1Password and Chezmoi.
 - **Product Authority**: Single-user workstation configuration in `github.com/hyperlapse122/dotfiles` with 1Password secret resolution and Fedora KDE Spin desktop environment.
-- **Means**: Provision `~/.local/share/accounts/providers/kde/google.provider` via a Chezmoi template reading private OAuth credentials from 1Password (`op://Private/Google-KDE-OAuth/...`), and declare required KDE KAccounts/KIO/Akonadi packages. (KTD1, KTD2)
+- **Means**: Provision `~/.local/share/accounts/providers/kde/google.provider` via a Chezmoi template reading private OAuth credentials from 1Password (`op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/...`), and declare required KDE KAccounts/KIO/Akonadi packages. (KTD1, KTD2)
 - **Execution Profile**: `code`
 - **Open Blockers**: None
 
@@ -47,7 +47,7 @@ Using a personal Google Cloud project with a private OAuth 2.0 client resolves a
 **OAuth Provider & Credential Management**
 - R1. Provide a user-level KDE accounts provider template at `dot_local/share/accounts/providers/kde/google.provider.tmpl` that overrides `/usr/share/accounts/providers/kde/google.provider` with dedicated Client ID and Client Secret values.
 - R2. Resolve the OAuth Client ID and Client Secret in `google.provider.tmpl` from 1Password via Chezmoi's `onepasswordRead` / `op://` reference resolver.
-- R3. Support configuring the 1Password item reference path in `.chezmoidata/kde.yaml` (defaulting to standard path `op://Private/Google-KDE-OAuth/client_id` and `op://Private/Google-KDE-OAuth/client_secret`).
+- R3. Support configuring the 1Password item reference path in `.chezmoidata/kde.yaml` (defaulting to standard path `op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_id` and `op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_secret`).
 - R4. Configure the OAuth provider XML with redirect URI `http://localhost/oauth2callback` and scopes covering `drive`, `calendar`, `tasks`, `https://www.google.com/m8/feeds/`, `userinfo.email`, and `userinfo.profile`.
 
 **Package Provisioning & Desktop Integration**
@@ -121,7 +121,7 @@ Product Contract unchanged. Requirements R1–R7, Actors A1–A4, Flows F1–F2,
   - **Governs:** R1, R4.
 
 - **KTD2. Dynamic 1Password reference path with fallback in `.chezmoidata/kde.yaml`**
-  - **Decision:** Resolve 1Password reference strings through `.chezmoidata/kde.yaml` (defaulting to `op://Private/Google-KDE-OAuth/client_id` and `op://Private/Google-KDE-OAuth/client_secret`) with fallback support. (session-settled: user-directed — chosen over hardcoded string: enables flexible vault configuration across environments).
+  - **Decision:** Resolve 1Password reference strings through `.chezmoidata/kde.yaml` (defaulting to `op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_id` and `op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_secret`) with fallback support. (session-settled: user-directed — chosen over hardcoded string: enables flexible vault configuration across environments).
   - **Governs:** R2, R3.
 
 - **KTD3. Loopback redirect URI `http://localhost/oauth2callback` and Web Client OAuth type**
@@ -161,7 +161,7 @@ flowchart TB
   - `.chezmoidata/kde.yaml`
 - **Approach:**
   1. Add a `googleOAuth` block under `kde:` in `.chezmoidata/kde.yaml`.
-  2. Declare `clientIdRef: "op://Private/Google-KDE-OAuth/client_id"` and `clientSecretRef: "op://Private/Google-KDE-OAuth/client_secret"`.
+  2. Declare `clientIdRef: "op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_id"` and `clientSecretRef: "op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_secret"`.
 - **Patterns to follow:**
   - Structure in `.chezmoidata/kde.yaml` alongside `kde.calendar` and `kde.settings`.
 - **Test scenarios:**
@@ -180,7 +180,7 @@ flowchart TB
   - `dot_local/share/accounts/providers/kde/google.provider.tmpl`
 - **Approach:**
   1. Mirror the provider structure of `/usr/share/accounts/providers/kde/google.provider`.
-  2. Retrieve `clientIdRef` and `clientSecretRef` from `.kde.googleOAuth` (defaulting to `op://Private/Google-KDE-OAuth/...`).
+  2. Retrieve `clientIdRef` and `clientSecretRef` from `.kde.googleOAuth` (defaulting to `op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/...`).
   3. Resolve secrets using `onepasswordRead` helper.
   4. Ensure `RedirectUri` is set to `http://localhost/oauth2callback`.
   5. Include all required scopes: `https://www.googleapis.com/auth/userinfo.email`, `https://www.googleapis.com/auth/userinfo.profile`, `https://www.googleapis.com/auth/calendar`, `https://www.googleapis.com/auth/tasks`, `https://www.google.com/m8/feeds/`, `https://www.googleapis.com/auth/drive`, `https://www.googleapis.com/auth/youtube.upload`.

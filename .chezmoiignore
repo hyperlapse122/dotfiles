@@ -162,4 +162,12 @@
 # and would hard-fail on the then-absent registry — skip both.
 .chezmoiscripts/90-src/*.sh
 .config/garden/garden.yaml
+# Both of these resolve host-only vault references at RENDER time -- the
+# KAccounts provider reads Google-KDE-OAuth and the Wi-Fi tool reads the
+# per-network items, all of which live in the vault a worker Connect token
+# cannot read. A worker apply would demand a vault outside its token's scope
+# and fail. Neither has meaning in a container anyway: one is a desktop
+# online-accounts provider, the other is host network provisioning.
+.local/share/accounts/providers/google.provider
+.local/share/chezmoi-command-sources/import-wifi-1password
 {{- end }}

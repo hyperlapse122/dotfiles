@@ -29,12 +29,12 @@ The JPI GitLab item is referenced by UUID (stable across renames), matching
 against a trailing newline in `op read` output, and `toJson` quotes the
 composed value.
 */ -}}
-{{- $ghUser := onepasswordRead "op://Private/GitHub/username" | trim -}}
-{{- $ghPat := onepasswordRead "op://Private/GitHub/PAT" | trim -}}
-{{- $jpiUser := onepasswordRead "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/username" | trim -}}
-{{- $jpiPat := onepasswordRead "op://Private/ayf4zcy2khkrvdoexfdvbqgzka/PAT" | trim -}}
-{{- $glUser := onepasswordRead "op://Private/GitLab/username" | trim -}}
-{{- $glPat := onepasswordRead "op://Private/GitLab/PAT" | trim -}}
+{{- $ghUser := onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/username" | trim -}}
+{{- $ghPat := onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/PAT" | trim -}}
+{{- $jpiUser := onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/JPI-GitLab/username" | trim -}}
+{{- $jpiPat := onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/JPI-GitLab/PAT" | trim -}}
+{{- $glUser := onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/GitLab/username" | trim -}}
+{{- $glPat := onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/GitLab/PAT" | trim -}}
 {{- $ghAuth := printf "%s:%s" $ghUser $ghPat | b64enc -}}
 {{- $jpiAuth := printf "%s:%s" $jpiUser $jpiPat | b64enc -}}
 {{- $glAuth := printf "%s:%s" $glUser $glPat | b64enc -}}

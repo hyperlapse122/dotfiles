@@ -40,7 +40,7 @@ OMP defaults its Gemini search grounding model to `gemini-2.5-flash` when unspec
 
 **MCP and Auth Closed-Set Narrowing**
 - R4. `.chezmoidata/agents.yaml`'s `agents.mcp.servers` contains no `websearch` (https://mcp.exa.ai/mcp) entry.
-- R5. `.chezmoidata/agents.yaml`'s `agents.omp.auth.env` declares exactly `OPENROUTER_API_KEY` (with `op://Private/OpenRouter/API Key`), containing no `EXA_API_KEY` record.
+- R5. `.chezmoidata/agents.yaml`'s `agents.omp.auth.env` declares exactly `OPENROUTER_API_KEY` (with `op://tum6wsa7azjvbkgwnp6fgamcvm/OpenRouter/API Key`), containing no `EXA_API_KEY` record.
 - R6. `.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl` enforces the narrowed single-variable closed set (`$required := list "OPENROUTER_API_KEY"`).
 
 **CI & Test Alignment**

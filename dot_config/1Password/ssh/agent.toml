@@ -1,6 +1,13 @@
 # Reference: https://developer.1password.com/docs/ssh/agent/config
+# Keys are selected by vault UUID plus item NAME, never by item UUID: an item
+# UUID does not survive re-creation, and this file carries no `op://` string, so
+# the reference-form gate cannot see a stale one. A missed entry here does not
+# error -- the agent simply stops offering the key and every SSH login fails
+# with no obvious cause.
 [[ssh-keys]]
-item = "cwgsuvmyhwtnwiir3sqcdeaglm"
+vault = "njbkpy6emfxkbl7n6zmwmz7jfu"
+item = "SSH-Key"
 
 [[ssh-keys]]
-item = "5rocflo3i7h7yyich4e4k4zqgi"
+vault = "ycd2lq7mikqcsb3yinnfdt7soa"
+item = "Linux Servers"

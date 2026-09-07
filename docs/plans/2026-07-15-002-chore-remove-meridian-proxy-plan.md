@@ -94,7 +94,7 @@ R11. The existing Meridian `opencode-scrub` entries (and their explanatory comme
 
 ### Dependencies / Assumptions
 
-- Pi resolves a built-in `zai` provider using the existing `op://Private/Z.ai/API Key` (api_key auth) without a `models.json` baseUrl override — the basis for deleting `readonly_models.json`. Verify at apply time (A1).
+- Pi resolves a built-in `zai` provider using the existing `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` (api_key auth) without a `models.json` baseUrl override — the basis for deleting `readonly_models.json`. Verify at apply time (A1).
 - `defaultThinkingLevel: max` is honored by `glm-5.2`, or degrades gracefully if not. Verify at apply time (A2).
 - Deleting the managed `meridian.service` / plist sources does not stop an already-running, already-enabled service; disabling it is a manual step the maintainer owns (per Scope Boundaries).
 
@@ -146,7 +146,7 @@ KTD5. **Verification is render-validity + dangling-reference sweep + CI YAML val
 
 ### Assumptions
 
-- A1. Pi resolves `zai` / `glm-5.2` directly via its built-in `zai` provider and the existing `op://Private/Z.ai/API Key` api_key auth, with no `models.json` baseUrl override. If Pi has no built-in `zai` provider, a minimal `zai` provider definition would be needed instead of deleting `readonly_models.json` — surface as a blocker rather than guessing. Verify at apply.
+- A1. Pi resolves `zai` / `glm-5.2` directly via its built-in `zai` provider and the existing `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` api_key auth, with no `models.json` baseUrl override. If Pi has no built-in `zai` provider, a minimal `zai` provider definition would be needed instead of deleting `readonly_models.json` — surface as a blocker rather than guessing. Verify at apply.
 - A2. `glm-5.2` honors `defaultThinkingLevel: max` (or degrades gracefully). Verify at apply.
 - A3. Deleting the managed `readonly_models.json`, `meridian.service`, and plist sources removes their deployed targets on the next apply; deleting scripts/externals stops provisioning but does not stop an already-running service.
 - A4. Removing whole CI steps and the interleaved Meridian lines leaves each job with valid remaining steps and no orphaned shell variables; `render-dotfiles.yml` still parses as valid YAML.

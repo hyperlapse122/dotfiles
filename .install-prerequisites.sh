@@ -511,7 +511,7 @@ ensure_github_token() {
   printf 'To set one, inject the PAT from 1Password and re-run in the same shell:\n' >&2
   # SC2016: the $(op read ...) is literal text for the user to copy, not for us to expand.
   # shellcheck disable=SC2016
-  printf '  export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")\n' >&2
+  printf '  export GITHUB_TOKEN=$(op read "op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/PAT")\n' >&2
   return 0
 }
 
