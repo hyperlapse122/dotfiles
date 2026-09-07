@@ -54,6 +54,7 @@ gdm: false
 fprintdPam: false
 headless: false
 container: false
+opAvailable: false
 sharedHost: false
 FACTS
 

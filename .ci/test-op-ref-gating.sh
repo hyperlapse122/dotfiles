@@ -41,7 +41,7 @@ render() {
 }
 
 # --- 1. The partial resolves only when asked, and recurses with the answer.
-nested='{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (dict "outer" (dict "key" "op://vault/item/field")) "resolveSecrets" %s) }}'
+nested='{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (dict "outer" (dict "key" "op://tum6wsa7azjvbkgwnp6fgamcvm/Fixture/field")) "resolveSecrets" %s) }}'
 
 # shellcheck disable=SC2059  # the format string is the fixture
 out=$(printf "$nested" true | render) || fail 'render failed with resolveSecrets true'
@@ -51,15 +51,15 @@ pass 'resolveSecrets true resolves a nested reference'
 
 # shellcheck disable=SC2059
 out=$(printf "$nested" false | render) || fail 'render failed with resolveSecrets false'
-[[ "$out" == *'op://vault/item/field'* ]] || fail "resolveSecrets false must emit the reference, got: $out"
+[[ "$out" == *'op://tum6wsa7azjvbkgwnp6fgamcvm/Fixture/field'* ]] || fail "resolveSecrets false must emit the reference, got: $out"
 [[ "$out" != *dummy-secret* ]] || fail "resolveSecrets false must not resolve, got: $out"
 pass 'resolveSecrets false emits the reference unresolved, through recursion'
 
 # --- 2. The default is fail-closed. A consumer that forgets the argument gets a
 # visible unresolved reference; the alternative default bakes a credential.
-out=$(printf '{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" "op://vault/item/field") }}' | render) \
+out=$(printf '{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" "op://tum6wsa7azjvbkgwnp6fgamcvm/Fixture/field") }}' | render) \
   || fail 'render failed with resolveSecrets absent'
-[[ "$out" == *'op://vault/item/field'* ]] || fail "an absent resolveSecrets must not resolve, got: $out"
+[[ "$out" == *'op://tum6wsa7azjvbkgwnp6fgamcvm/Fixture/field'* ]] || fail "an absent resolveSecrets must not resolve, got: $out"
 [[ "$out" != *dummy-secret* ]] || fail "an absent resolveSecrets must not resolve, got: $out"
 pass 'the absent-argument default is fail-closed'
 
