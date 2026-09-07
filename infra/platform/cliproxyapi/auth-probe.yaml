@@ -32,16 +32,28 @@ spec:
                 - -c
                 - |
                   set -eu
+                  # Verified against v7.2.152: /v0/management/auth-files answers
+                  # 200 to Authorization: Bearer <management key> (and to
+                  # X-Management-Key), 401 to a query parameter or no header.
                   body=$(curl -fsS --max-time 20 \
                     -H "Authorization: Bearer ${MANAGEMENT_SECRET_KEY}" \
                     "http://cliproxyapi.cliproxyapi.svc.cluster.local:8317/v0/management/auth-files")
-                  printf '%s\n' "$body"
-                  # An unauthenticated or errored answer is a failure, and so is
-                  # an empty credential set: a proxy with no auth files serves
-                  # nothing, which is exactly the outage this probe is for.
+                  # The body names credential files, so it is not printed. An
+                  # EMPTY list is a failure, not a pass: a proxy with no auth
+                  # files is healthy in every way except the one that matters,
+                  # and that is exactly the outage this probe exists to catch.
                   case "$body" in
-                    *'"files"'*|*'"data"'*) ;;
-                    *) echo "unexpected auth-files response" >&2; exit 1 ;;
+                    *'"files":[]'*|*'"files": []'*)
+                      echo "no authenticated agent credentials; see runbook 03" >&2
+                      exit 1
+                      ;;
+                    *'"files"'*)
+                      echo "auth-files reachable and non-empty"
+                      ;;
+                    *)
+                      echo "unexpected auth-files response shape" >&2
+                      exit 1
+                      ;;
                   esac
               env:
                 - name: MANAGEMENT_SECRET_KEY
