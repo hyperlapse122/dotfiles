@@ -63,7 +63,8 @@ export type VendorName =
   | "flutter"
   | "android"
   | "claude"
-  | "antigravity";
+  | "antigravity"
+  | "teamviewer";
 
 /**
  * Asset selection for one tool.

@@ -246,6 +246,75 @@ describe("resolveVendorManifest winbox", () => {
   });
 });
 
+describe("resolveVendorManifest teamviewer", () => {
+  const source = "https://download.teamviewer.invalid/download/linux/teamviewer.x86_64.rpm";
+  const spec: ToolSpec = { kind: "vendorManifest", vendor: "teamviewer", source };
+
+  /**
+   * The vendor answers the rolling URL with a 302 to a versioned filename. The
+   * stub must not follow it, so it returns the redirect verbatim; a resolver
+   * that let fetch follow would never see the `location` header.
+   */
+  function redirect(location: string): () => Response {
+    return () => new Response(null, { status: 302, headers: { location } });
+  }
+
+  const versioned =
+    "https://dl.teamviewer.invalid/download/linux/version_15x/teamviewer_15.81.5.x86_64.rpm";
+
+  test("records the redirect target's version, version-only", async () => {
+    const requests = stubRoutes({ [source]: redirect(versioned) });
+
+    const locked = await resolveVendorManifest("teamviewer", spec);
+
+    expect(locked.version).toBe("15.81.5");
+    expect(locked.artifacts).toBeUndefined();
+    // The 115 MB package body is never fetched: only the rolling URL is requested.
+    expect(requests).toEqual([source]);
+  });
+
+  test("a 200 with no location fails with the source named", async () => {
+    stubRoutes({ [source]: text("not a redirect") });
+
+    const error = await resolveVendorManifest("teamviewer", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toMatch(/teamviewer\.invalid/);
+  });
+
+  test("a redirect target with no parseable version fails", async () => {
+    stubRoutes({
+      [source]: redirect("https://dl.teamviewer.invalid/download/linux/teamviewer.x86_64.rpm"),
+    });
+
+    const error = await resolveVendorManifest("teamviewer", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+  });
+
+  // The extracted value is interpolated into a URL a root install consumes, so
+  // an unanchored pattern that accepted trailing junk would carry it through.
+  test("a version segment with trailing characters fails", async () => {
+    stubRoutes({
+      [source]: redirect(
+        "https://dl.teamviewer.invalid/download/linux/version_15x/teamviewer_15.81.5-rc1.x86_64.rpm",
+      ),
+    });
+
+    const error = await resolveVendorManifest("teamviewer", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+  });
+
+  test("a non-https redirect target fails", async () => {
+    stubRoutes({
+      [source]: redirect(
+        "http://dl.teamviewer.invalid/download/linux/version_15x/teamviewer_15.81.5.x86_64.rpm",
+      ),
+    });
+
+    const error = await resolveVendorManifest("teamviewer", spec).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+  });
+});
+
 describe("resolveVendorManifest onePassword", () => {
   test("selects the newest local feed item and records only its arm64 artifact", async () => {
     const requests = stubRoutes({ [ONE_PASSWORD_SOURCE]: text(ONE_PASSWORD_FEED) });

@@ -12,6 +12,10 @@ export { ResolutionError };
  *   publishes no digest anywhere, so the entry is version-only.
  * - onePassword: an RSS feed whose latest dated item names the Linux version.
  *   Its arm64 tarball has no published checksum, so it is never downloaded here.
+ * - teamviewer: a rolling unversioned RPM URL that 302s to a versioned one. The
+ *   vendor publishes no digest, so hashing it would mean downloading 115 MB on
+ *   every hourly refresh; the entry is version-only and its consumer composes
+ *   the artifact URL, exactly as winbox's does.
  */
 
 const HEADERS = { "user-agent": "h82-release-lock" } as const;
@@ -136,6 +140,56 @@ async function resolveAntigravity(name: string, spec: ToolSpec): Promise<LockedT
   }
 
   return { kind: spec.kind, source: spec.source, version, artifacts };
+}
+
+/**
+ * Anchored at both ends of the version segment. The extracted value reaches a
+ * root install through a composed URL, so a pattern that accepted a trailing
+ * suffix (`15.81.5-rc1`) would carry vendor-controlled text into that command.
+ */
+const TEAMVIEWER_VERSION = /\/teamviewer_([0-9]+(?:\.[0-9]+)*)\.[a-z0-9_]+\.rpm$/;
+
+/** True when both hosts share their last two labels, e.g. dl. and download.teamviewer.com. */
+function sameRegistrableDomain(a: string, b: string): boolean {
+  const tail = (host: string) => host.split(".").slice(-2).join(".");
+  return tail(a) === tail(b) && tail(a).includes(".");
+}
+
+async function resolveTeamViewer(name: string, spec: ToolSpec): Promise<LockedTool> {
+  // `fetchOrThrow` checks `response.ok`, which is false for the 302 this
+  // resolver exists to read, so the redirect is taken manually here.
+  const response = await fetch(spec.source, {
+    headers: HEADERS,
+    redirect: "manual",
+    signal: AbortSignal.timeout(30_000),
+  });
+  const location = response.headers.get("location");
+  if (location === null) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: ${spec.source} returned HTTP ${response.status} with no location header`,
+    );
+  }
+  let target: URL;
+  try {
+    target = new URL(location, spec.source);
+  } catch {
+    throw new ResolutionError(spec.source, `${name}: unparseable redirect target "${location}"`);
+  }
+  if (target.protocol !== "https:") {
+    throw new ResolutionError(spec.source, `${name}: redirect target is not https: ${target.href}`);
+  }
+  if (!sameRegistrableDomain(target.hostname, new URL(spec.source).hostname)) {
+    throw new ResolutionError(spec.source, `${name}: redirect leaves the vendor: ${target.href}`);
+  }
+  const version = TEAMVIEWER_VERSION.exec(target.pathname)?.[1];
+  if (version === undefined) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: redirect target names no version: ${target.href}`,
+    );
+  }
+  return { kind: spec.kind, source: spec.source, version };
 }
 
 async function resolveWinbox(name: string, spec: ToolSpec): Promise<LockedTool> {
@@ -414,6 +468,8 @@ export async function resolveVendorManifest(name: string, spec: ToolSpec): Promi
       return resolveClaude(name, spec);
     case "antigravity":
       return resolveAntigravity(name, spec);
+    case "teamviewer":
+      return resolveTeamViewer(name, spec);
     default:
       throw new ResolutionError(spec.source, `${name}: unknown vendor "${String(spec.vendor)}"`);
   }

@@ -199,7 +199,9 @@ export const REGISTRY: Registry = {
 
   // The orca skills all ship from one repo, one key each because
   // agents.skills.external looks the lock up by skill name. The repo also tags a
-  // `mobile-android-v` train, so `v` selects the desktop release train.
+  // `mobile-android-v` train, so `v` selects the desktop release train. The
+  // desktop app itself is a ninth key on that same train (`orca-ide` below), so
+  // the installed application and the skills that drive it stay in lockstep.
   "computer-use": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
   "linear-tickets": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
   "orca-cli": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
@@ -208,6 +210,17 @@ export const REGISTRY: Registry = {
   "orca-linear": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
   "orca-per-workspace-env": { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
   orchestration: { kind: "githubRelease", source: "stablyai/orca", tagPrefix: "v" },
+
+  // The desktop app, unlike the skills above, needs artifacts: the RPM URL and
+  // its digest. The published name carries the bare version, so the selector
+  // strips the tag's leading `v`. macOS gets .dmg/.zip, never an RPM.
+  "orca-ide": {
+    kind: "githubRelease",
+    source: "stablyai/orca",
+    tagPrefix: "v",
+    asset: ({ os, arch }, tag) =>
+      os === "linux" ? `orca-ide-${versionFromTag(tag)}.${rustArch(arch)}.rpm` : null,
+  },
 
   /* ---------- gitlabRelease ---------- */
 
@@ -220,6 +233,15 @@ export const REGISTRY: Registry = {
     kind: "vendorManifest",
     vendor: "antigravity",
     source: "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
+  },
+
+  // Rolling unversioned URL; the resolver follows its 302 to read the version
+  // and records nothing else. `.chezmoiscripts/30-components/` composes the
+  // versioned artifact URL from that value.
+  teamviewer: {
+    kind: "vendorManifest",
+    vendor: "teamviewer",
+    source: "https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm",
   },
 
   "1password": {
