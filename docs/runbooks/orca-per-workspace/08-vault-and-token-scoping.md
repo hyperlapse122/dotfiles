@@ -7,11 +7,12 @@ This document is the boundary.
 ## The rule
 
 A worker needs exactly two project secrets -- Context7 and Exa -- plus its own SSH
-public key and the proxy API key. Everything else is out.
+public key. The proxy API key does not come from 1Password at all: the cluster
+issues it and hands it to the pod from its own Secret. Everything else is out.
 
 | Category | Vault | Worker token |
 |---|---|---|
-| Agent keys: Context7, Exa, the CLIProxyAPI worker key, the SSH public key | agents vault | **reachable** |
+| Agent keys: Context7, Exa, the SSH public key | agents vault | **reachable** |
 | Host material: GPG, Wi-Fi, LUKS, Google OAuth, registry PATs | host vault | not reachable |
 | Infrastructure: CLIProxyAPI OAuth and management key, Tailscale, the Connect credential | infrastructure vault | not reachable |
 | `platform-break-glass` | its own vault | **never**, under any circumstance |
@@ -67,8 +68,7 @@ worker than on the host.
 
 References are addresses, not secrets, and they appear in exactly two places:
 
-- `infra/platform/orca-workers/podtemplate.yaml`: `WORKER_SSH_PUBKEY_REF` and
-  `ANTHROPIC_AUTH_TOKEN_REF`.
+- `infra/platform/orca-workers/podtemplate.yaml`: `WORKER_SSH_PUBKEY_REF`.
 - `infra/secrets/*.op.yaml`: the seeding templates.
 
 Both are committed on purpose. Moving an item between vaults means editing them.

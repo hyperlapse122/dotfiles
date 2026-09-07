@@ -18,7 +18,7 @@ CLI cannot be approved non-interactively, create the same Secret with
 `kubectl create secret` instead -- the contract is the name and the keys, not the
 tool.
 
-## The five Secrets
+## The six Secrets
 
 | Secret | Namespace | Keys | Consumed by |
 |---|---|---|---|
@@ -26,6 +26,7 @@ tool.
 | `op-credentials` | `onepassword` | `1password-credentials.json` | Connect chart `connect.credentialsName` |
 | `cliproxyapi` | `cliproxyapi` | `worker-api-key`, `management-secret-key` | the `render-config` init container, and the auth-probe CronJob |
 | `orca-worker-connect` | `orca-workers` | `token` | worker pod `OP_CONNECT_TOKEN` |
+| `orca-worker-proxy` | `orca-workers` | `api-key` | worker pod `ANTHROPIC_AUTH_TOKEN` |
 | `orca-worker-tailscale` | `orca-workers` | `TS_AUTHKEY` | worker tailscale sidecar |
 
 ### `op-credentials` -- raw JSON, not base64
@@ -78,16 +79,25 @@ kubectl -n cliproxyapi create secret generic cliproxyapi \
   --from-literal=management-secret-key="$management_secret_key"
 ```
 
-`worker-api-key` has a second home, and this is the step that is easy to miss:
-the worker resolves it through Connect at pod start from
-`op://<agents vault>/CLIProxyAPI/worker api key`, so the identical value must
-exist as a 1Password item **in the vault the worker token can reach**, with a
-field labelled exactly `worker api key`. The PodTemplate names that reference in
-`ANTHROPIC_AUTH_TOKEN_REF`.
+`worker-api-key` needs a second home, because Secrets are namespace-scoped and
+the worker is in another namespace. Same value, no second credential:
 
-Store `management-secret-key` in the infrastructure vault, which the worker token
-must NOT reach. CLIProxyAPI hashes it on startup, so the plaintext exists only in
-this Secret and in the vault.
+```sh
+kubectl -n orca-workers create secret generic orca-worker-proxy \
+  --from-literal=api-key="$worker_api_key"
+```
+
+Rotate them together. A value changed in one namespace only means every worker
+gets a 401 from the proxy at its first model call.
+
+1Password holds neither of these. The cluster issues them, so a vault copy would
+be a second thing to rotate in step with the first and nothing else. The worker
+image still accepts `ANTHROPIC_AUTH_TOKEN_REF` for a platform that would rather
+keep the value in a vault; this one does not.
+
+Store `management-secret-key` where the operator can find it -- the infrastructure
+vault, which the worker token must not reach. CLIProxyAPI hashes it on startup,
+so the plaintext exists only in this Secret and wherever you put it.
 
 ### `orca-worker-tailscale` -- optional, and what it switches on
 
@@ -137,8 +147,8 @@ independently.
 Each of these is replaced by seeding the Secret again and restarting the
 consumer. Three have a second copy that must move at the same time:
 
-- `worker-api-key`: the 1Password item AND this Secret. Change one only and every
-  worker gets a 401 from the proxy at first model call.
+- `worker-api-key`: the `cliproxyapi` Secret AND `orca-worker-proxy`. Change one
+  only and every worker gets a 401 from the proxy at first model call.
 - `op-credentials` and `orca-worker-connect`: both come from the same Connect
   server. Re-creating the server invalidates every token it issued.
 - `operator-oauth`: revoking the client makes the operator unable to mint proxy

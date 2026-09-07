@@ -65,7 +65,7 @@ Connect, fetch `authorized_keys`, resolve the proxy credential into
 | `the platform did not supply: OP_CONNECT_TOKEN` | the `orca-worker-connect` Secret is missing or its key is not `token` |
 | `sudo: a terminal is required to read the password` | the container marker is absent, so the apply thinks it is on a host. Fixed in the entrypoint; an old image predates the fix |
 | `authorized_keys came back empty` | `WORKER_SSH_PUBKEY_REF` points at an item or field the worker token cannot reach |
-| `the proxy credential came back empty` | the `CLIProxyAPI` item does not exist in the agent vault, or its field is not labelled `worker api key` |
+| `the proxy credential came back empty` | the `orca-worker-proxy` Secret holds an empty `api-key`, or `ANTHROPIC_AUTH_TOKEN_REF` points at an item the worker token cannot reach |
 
 All four are the image refusing to start half-configured, which is the design:
 the alternative is a worker that starts and fails later, far from the cause.

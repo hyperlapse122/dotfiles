@@ -94,10 +94,22 @@ chmod 0600 "$authorized"
 # this hardware and the Codex auth.timeout_ms default is 5000ms, so a
 # per-invocation helper times out. Resolve here, write where a LOGIN SHELL will
 # read it -- an export from this process would not survive into an sshd session.
-if [[ -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
-  log 'resolving the model proxy credential'
-  token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
-    op read "${ANTHROPIC_AUTH_TOKEN_REF}")
+#
+# Two sources, in this order. ANTHROPIC_AUTH_TOKEN comes straight from the
+# platform's own Secret and is preferred: the proxy key is issued BY the cluster,
+# so routing it through 1Password would add a second copy of a value the cluster
+# already owns -- and two copies that must be rotated together is a drift class,
+# not a safeguard. ANTHROPIC_AUTH_TOKEN_REF stays supported for a platform that
+# would rather keep the value in a vault.
+if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" || -n "${ANTHROPIC_AUTH_TOKEN_REF:-}" ]]; then
+  if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
+    log 'using the model proxy credential supplied by the platform'
+    token=$ANTHROPIC_AUTH_TOKEN
+  else
+    log 'resolving the model proxy credential'
+    token=$(as_worker env OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN" \
+      op read "${ANTHROPIC_AUTH_TOKEN_REF}")
+  fi
   [[ -n "$token" ]] || die 'the proxy credential came back empty'
   # 0640 root:worker, not the 0644 a profile.d drop-in usually carries: this file
   # holds a live credential, and a login shell reads it as the worker, so group
