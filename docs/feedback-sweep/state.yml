@@ -737,9 +737,12 @@ items:
     updated_at: "2026-09-07T01:07:11Z"
   "gh-issues:hyperlapse122/dotfiles#396":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(selinux): give ~/.agents/plugins its own type so the skills suppression stops covering it"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/405"
+    verified_merge_sha: "82a41879a9b57ae78d00afb93d79a6fe736b13f0"
+    verified_at: "2026-09-07T11:10:00+09:00"
     author_class: "teammate"
     category: "bug"
     existing_ack: true

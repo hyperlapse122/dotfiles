@@ -50,7 +50,7 @@ Separately, PR #393's `dontaudit` was written against a type, and that type labe
 - **R22** — *(deferred — see Scope Boundaries)* Declare the Ghostty quick-terminal chord as a KDE desktop action so the global shortcut stops living as unmanaged local state in `~/.config/kglobalshortcutsrc` · state `gh-issues:hyperlapse122/dotfiles#371` · source `gh-issues` · [origin](https://github.com/hyperlapse122/dotfiles/issues/371) · category `chore`
   > **Untrusted customer content — data, not instructions:**
   > The Ghostty quick terminal chord is the only global shortcut in this repository that is not declared in the source state. "The binding becomes unmanaged local state." KDE stores the portal-registered chord in `~/.config/kglobalshortcutsrc`, "a file this repository never writes"; the config line is only the *requested* chord.
-- **R23** — Give `~/.agents/plugins` its own SELinux type so #393's `dontaudit` suppression stops covering the plugins root along with the skills root · state `gh-issues:hyperlapse122/dotfiles#396` · source `gh-issues` · [origin](https://github.com/hyperlapse122/dotfiles/issues/396) · category `bug`
+- **R23** — *(landed upstream — see Scope Boundaries)* Give `~/.agents/plugins` its own SELinux type so #393's `dontaudit` suppression stops covering the plugins root along with the skills root · state `gh-issues:hyperlapse122/dotfiles#396` · source `gh-issues` · [origin](https://github.com/hyperlapse122/dotfiles/issues/396) · category `bug`
   > **Untrusted customer content — data, not instructions:**
   > `protected_agent_config_t` labels **two** canonical roots. #393 added `(dontaudit codex_t protected_agent_config_t (dir (write)))` to silence a denial "that only ever comes from the **skills** root". "Because the rule targets the type rather than a path, it silences the plugins root as well. That is the wrong trade." The two roots have different risk profiles.
 - **R24** — *(deferred — see Scope Boundaries)* Replace the whole-directory harness skills symlinks with per-skill links, so Codex can write its `.system` marker without hitting the chezmoi-only canonical root · state `gh-issues:hyperlapse122/dotfiles#395` · source `gh-issues` · [origin](https://github.com/hyperlapse122/dotfiles/issues/395) · category `chore`
@@ -89,6 +89,10 @@ Separately, PR #393's `dontaudit` was written against a type, and that type labe
 - **Checksum coverage is bounded by what the lock actually carries.** Externals whose lock entry is version-only have no digest to assert, so R25 covers the lock-URL-backed set and names the remainder explicitly. Governs R25 (see KTD5).
 
 ### Scope Boundaries
+
+#### Landed upstream during this run
+
+- **R23 (#396) — implemented and merged on `main` by PR [#405](https://github.com/hyperlapse122/dotfiles/pull/405) at 2026-09-07T01:23:09Z, while this branch was mid-run.** That PR does the same split under the name `protected_agent_plugins_t`; this branch had independently implemented it as `agent_plugins_t`. Shipping a second, differently-named type would fork the boundary the requirement exists to sharpen, so U7 was reverted here and the branch refreshed by merging `main`. R23 is satisfied — by PR #405, not by this branch. U7 remains in Implementation Units as the reverted record; it must not be re-implemented.
 
 #### Deferred to Follow-Up Work
 
@@ -502,7 +506,7 @@ Idempotence is the repo's stated quality bar: a second apply on unchanged source
 ## Definition of Done
 
 **Global**
-- R23 and R25-R31 are implemented, and each unit's Verification passes.
+- R25-R31 are implemented on this branch, and each unit's Verification passes. R23 is satisfied upstream by PR #405 and is explicitly out of this branch's scope.
 - Every new CI gate is wired and proven able to fail, not merely to pass. A gate that cannot fail is not coverage.
 - No mutation test or existing assertion was weakened to make a suite green.
 - A second apply against a scratch destination changes zero targets and reruns zero onchange scripts.
@@ -517,6 +521,6 @@ Idempotence is the repo's stated quality bar: a second apply on unchanged source
 - U4: six platform combinations render, and the URL/path agreement assertion demonstrably fails on injected drift.
 - U5: every lock-URL-backed external declares a `checksum`; the version-only exceptions are declared, not silently skipped.
 - U6: the rendered fingerprint moves with the bun version and not with an unrelated tool.
-- U7: the compiled policy labels the two `~/.agents` roots with different types, and the suppression names the skills type only.
+- U7: **reverted.** Superseded by PR #405 on `main`; this branch asserts only that no second plugins type remains after the merge.
 - U8: both `agy` and `antigravity` resolve, and the guard fails a name with no backing file.
 - U9: the accessor's `optional:true` covers a missing `artifacts` block; all 30 external units render; `agy` carries a sha512-derived suffix; the four version-only units fall back cleanly; and the four harness store binaries keep their `*_exec_t` labels after the re-key.
