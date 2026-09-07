@@ -66,6 +66,7 @@ for token in \
   "(allow locate_t protected_agent_config_type (dir (open read getattr search)))" \
   "(allow locate_t protected_agent_config_type (file (open read getattr)))" \
   "(dontaudit pasta_t dri_device_t (chr_file (read write)))" \
+  "(dontaudit codex_t protected_agent_config_t (dir (write)))" \
   "(allow protected_agent_config_type fs_t (filesystem (associate)))" \
   "(allow protected_agent_config_type tmpfs_t (filesystem (associate)))" \
   "(allow protected_agent_config_type noxattrfs (filesystem (associate)))" \
@@ -177,6 +178,20 @@ forbidden_writer 'aoe_t' 'codex_config_t'
 forbidden_writer 'codex_t' 'claude_config_t'
 forbidden_writer 'codex_t' 'gemini_config_t'
 forbidden_writer 'codex_t' 'protected_agent_config_t'
+
+# Suppression must not spread. The token loop above proves the one sanctioned
+# dontaudit is PRESENT; it cannot see a second, broader one added beside it, and
+# neither can the checks around it -- forbidden_writer anchors on `^\(allow ` and
+# the compiled-policy query filters on ruletype == 'allow'. A rule such as
+# (dontaudit dotfiles_agent_domain protected_agent_config_type (dir (write add_name)))
+# would therefore widen the audit blind spot to every protected type and every
+# agent domain with a green build. Enumerate instead: any dontaudit naming a
+# protected type other than the sanctioned line is a failure.
+sanctioned_dontaudit='(dontaudit codex_t protected_agent_config_t (dir (write)))'
+while IFS= read -r line; do
+  [[ $line == "$sanctioned_dontaudit" ]] && continue
+  fail "unsanctioned dontaudit on a protected type widens the audit blind spot: $line"
+done < <(grep -E '^\(dontaudit .*(protected_agent_config_t|protected_agent_config_type|claude_config_t|gemini_config_t|codex_config_t)' "$cil_file")
 
 # Relabelling stays chezmoi's: codex_t writes its own config but may not move a
 # file between the protected types.

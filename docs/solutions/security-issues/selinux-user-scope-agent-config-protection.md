@@ -1,7 +1,7 @@
 ---
 title: SELinux CIL Type Enforcement for Protecting User-Scope Agent and MCP Configs
 date: 2026-08-31
-last_updated: 2026-09-02
+last_updated: 2026-09-07
 category: security-issues
 module: selinux
 problem_type: security_issue
@@ -284,8 +284,66 @@ As agent confinement matured, four operational and policy defects emerged across
    - `pasta` (Podman rootless networking) inherits an open file descriptor to `/dev/dri/renderD128` (`dri_device_t`), generating spurious denials: suppressed via `(dontaudit pasta_t dri_device_t (chr_file (read write)))`.
    - `plocate-updatedb` / `mlocate-updatedb` traverses `/home` for search indexing: granted read, getattr, and search access across `protected_agent_config_type` without write permissions.
 
+## The seventh surprise: Codex reinstalls bundled skills into the chezmoi-only root on every session (2026-09-07)
+
+`setroubleshoot` reported a repeating denial on host MS-7D91:
+
+```
+avc: denied { write } for pid=2121859 comm="tokio-rt-worker" name="skills"
+  dev="dm-0" ino=15071
+  scontext=unconfined_u:unconfined_r:codex_t:s0-s0:c0.c1023
+  tcontext=unconfined_u:object_r:protected_agent_config_t:s0 tclass=dir permissive=0
+```
+
+The AVC names an inode, not a path, and the inode is the tell. `find ~ -xdev -inum 15071` resolves it to `~/.agents/skills` — the canonical skills root, whose only writer is `chezmoi_t`. Codex reaches it through the `~/.codex/skills` symlink. The denial is the split working.
+
+### It is an installer, not a probe
+
+A single `codex exec` reproduces it, and Codex says what it was doing:
+
+```
+ERROR codex_skills_extension::host_service: failed to install system skills:
+  io error while create system skills dir: Permission denied (os error 13)
+```
+
+Five such lines, and five fresh AVCs, per session. The strings in the binary spell out the sequence — `create skills root dir`, `remove existing system skills dir`, `create system skills subdir`, `write system skill file`, `write system skills marker` — so Codex removes and recreates a `.system` subdirectory inside the skills root every time it starts. That is a genuine `mkdir` against a chezmoi-only tree, not a writability check.
+
+No Codex setting turns it off. `codex features list` on 0.153.4 offers `skip_host_skill_discovery` (under development) and the config carries `skills.enabled`, but both would also drop the shared skills this repository deploys, which is the reason the root exists. So the denial repeats on every session, forever.
+
+The session itself succeeds — `codex exec` returns 0 and produces its output. What is lost is Codex's own bundled system skills, and what is gained is five ERROR lines on stderr per session that this policy cannot silence, because Codex emits them, not the kernel.
+
+### Two suggestions to refuse
+
+`setroubleshoot`'s own advice was `ausearch -c 'tokio-rt-worker' | audit2allow -M my-tokiortworker && semodule -X 300 -i`. That module is `allow codex_t protected_agent_config_t ...`, and the same type labels `~/.agents/plugins`, so it opens BOTH canonical roots to a harness. `.ci/test-selinux-protected-configs.sh` has rejected that exact grant since 2026-09-05 (`forbidden_writer 'codex_t' 'protected_agent_config_t'`, plus the compiled-policy matrix).
+
+The second, subtler option was to silence the alert outside the kernel — an `auditctl` exclude rule or a `setroubleshoot` filter, which stops the notification while keeping the AVC in the log. It was refused because this repository manages the policy module and does not manage `/etc/audit/rules.d` or setroubleshoot state: the filter would live outside version control and outside every managed host.
+
+### The rule, and what it hides
+
+```cil
+(dontaudit codex_t protected_agent_config_t (dir (write)))
+```
+
+Scoped four ways. `codex_t` alone, because it is the only domain observed producing the denial — another harness is added on its own evidence, never pre-emptively. `protected_agent_config_t` alone rather than the `protected_agent_config_type` attribute, so a harness reaching another harness's config type stays audited. `dir` alone, so file and symlink denials still surface. `write` alone.
+
+It hides more than the install attempt, and the reason is worth knowing. The kernel checks `dir { write }` in `inode_permission()` **before** the more specific `dir { add_name }` or `dir { remove_name }`, so a create, unlink, rmdir, or rename by `codex_t` under `~/.agents/skills` or `~/.agents/plugins` is denied at `write` and never reaches the specific permission. A `dontaudit` on `write` therefore cannot distinguish a probe from a create, and silences the whole verb set the boundary defends.
+
+No runtime detector survives the rule. CI reads policy source and observes no runtime behavior. The reclaim sweep in the apply script finds a label that already escaped, not a blocked attempt, and it sits behind the `system/linux/selinux/**` fingerprint so it runs only when the policy tree changes. A per-apply context assertion on both canonical roots was tried in `run_after_config-codex-settings.sh.tmpl` and removed: that script's test isolates only `CODEX_HOME`, injects a stub `stat`, and asserts a converged re-run is silent, so a check reading global `$HOME` state broke the contract and read the stub's canned answer rather than the host's. The gap is recorded rather than papered over.
+
+### The label drift beside it
+
+`~/.codex/skills` carried `user_home_t` while its `filecon` declares `codex_config_t`. Nothing had gone wrong at apply time: the relabel lives in `run_onchange_before_00-selinux-policies.sh.tmpl`, which is fingerprinted on `system/linux/selinux/**`, and chezmoi deployed the symlink on an apply where the policy tree had not changed. Any managed protected path chezmoi re-creates between policy edits has the same gap.
+
+`~/.codex/config.toml` was already compensated for — the Codex settings reconciler restores its label after each write. The skills symlink now joins it in the same step, addressed through `$CODEX_HOME` rather than `$HOME/.codex` because the test fixture drives that script through a scratch `CODEX_HOME`. No `-R`: the target is a single symlink, and `restorecon` does not follow a symlink argument, which is also why the policy script's existing `restorecon -RFv` on the same path never reached the differently-typed tree behind it.
+
+### Diagnostics
+
+Resolve the inode before theorising: `find ~ -xdev -inum <ino>`. An AVC naming `skills` could be `~/.agents/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.codex/skills`, and only the first is chezmoi-only. Then ask the program what it wanted — one non-interactive run of the harness usually prints the operation the kernel refused, which is what turned this from "a probe" into "an installer".
+
 ## Prevention
 
+- **Suppress a by-design denial, never grant it**: a harness that repeatedly attempts a write the boundary exists to refuse produces a permanent AVC stream. `dontaudit` scoped to the one observed domain, type, class and permission is the answer; `audit2allow` is not, because its output is an `allow` rule against a type that labels more than the path in the alert.
+- **A `dontaudit` on `dir { write }` hides every parent-gated mutation**: `inode_permission()` runs before `add_name` and `remove_name`, so create, unlink, rmdir, and rename go silent with the probe. Record what a suppression hides at the rule itself.
 - **Never protect package manager caches**: Package caches (like `node_modules` in plugin directories) use hardlinks into machine-wide caches. Placing a cache under a protected SELinux type leaks that type onto shared inodes during `restorecon`.
 - **Narrow `filecon` specifications**: Protect only exact configuration files, skill symlinks/roots, and plugin manifest/marketplace trees. Let runtime cache, log, and session directories fall back to `user_home_t`.
 - **Pass only discrete paths to `restorecon`**: Never pass whole-home harness directories (`$HOME/.claude`, `$HOME/.gemini`) recursively to `restorecon`.
@@ -301,5 +359,6 @@ As agent confinement matured, four operational and policy defects emerged across
 - Plan: `docs/plans/2026-09-02-1124-feat-manage-claude-antigravity-harnesses-selinux-protection-plan.md`
 - Plan: `docs/plans/2026-09-02-1637-fix-selinux-narrow-protected-agent-configs-plan.md`
 - Plan: `docs/plans/2026-09-03-2315-fix-selinux-early-install-avc-fixes-plan.md`
+- Plan: `docs/plans/2026-09-07-0917-fix-selinux-codex-skills-root-write-denial-plan.md`
 - Issue: https://github.com/hyperlapse122/dotfiles/issues/338
 - Issue: https://github.com/hyperlapse122/dotfiles/issues/374
