@@ -95,19 +95,6 @@ EOF
   "${DNF[@]}" makecache -y
 }
 
-install_direct_rpms() {
-  local host_arch
-  host_arch="$(uname -m)"
-  if ! rpm -q teamviewer >/dev/null 2>&1; then
-    "${SUDO[@]}" rpm --import https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc || true
-    "${SUDO[@]}" rpm --import https://linux.teamviewer.com/pubkey/currentkey.asc || true
-    case "${host_arch}" in
-      x86_64) "${DNF[@]}" install -y https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm || true ;;
-      aarch64) "${DNF[@]}" install -y https://download.teamviewer.com/download/linux/teamviewer.aarch64.rpm || true ;;
-    esac
-  fi
-}
-
 install_app_packages() {
   local -a missing=()
   local pkg
@@ -118,7 +105,6 @@ install_app_packages() {
     setup_app_repos
     "${DNF[@]}" install -y "${missing[@]}" || true
   fi
-  install_direct_rpms
 }
 
 install_app_packages

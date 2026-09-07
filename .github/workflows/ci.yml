@@ -110,6 +110,7 @@ jobs:
           .ci/test-bun-resolve.sh
           .ci/test-build-bun-version-fingerprint.sh
           .ci/test-skip-declaration-gates.sh
+          .ci/test-direct-rpms-render.sh
           .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh

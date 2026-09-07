@@ -52,6 +52,14 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "chezmoi_0.0.0_darwin_amd64.tar.gz",
     "darwin-arm64": "chezmoi_0.0.0_darwin_arm64.tar.gz",
   },
+  "orca-ide": {
+    // The RPM name carries the bare version, so the selector must strip the
+    // tag's leading `v`. Upstream ships .dmg/.zip on macOS, never an RPM.
+    "linux-amd64": "orca-ide-0.0.0.x86_64.rpm",
+    "linux-arm64": "orca-ide-0.0.0.aarch64.rpm",
+    "darwin-amd64": null,
+    "darwin-arm64": null,
+  },
   marksman: {
     "linux-amd64": "marksman-linux-x64",
     "linux-arm64": "marksman-linux-arm64",

@@ -1,0 +1,140 @@
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- if $isFedora -}}
+{{- /*
+  Vendor RPMs that no signed repository serves. 70-apps owns everything that
+  comes from a configured yum repo; this entry owns the packages installed
+  straight from a locked artifact, which that repo pattern cannot express.
+
+  ONCHANGE TRIGGER. Each entry's locked version, URL and digest are rendered
+  into the body below, so a lock refresh changes the rendered content and
+  re-runs the install. That is the whole update mechanism: nothing here polls,
+  and an unchanged lock re-runs nothing.
+
+  THE GUARD IS A VERSION COMPARISON, NOT AN EQUALITY TEST. A host the user
+  upgraded out of band sits ABOVE the lock, and an equality guard would send it
+  into installing an older RPM — which `set -e` then turns into a failed apply
+  on a host that is perfectly fine. At-or-above is left alone and re-converges
+  when the lock catches up.
+
+  INTEGRITY IS PER ENTRY, VERIFIED HERE, NEVER BLANKET-DISABLED. `dnf install
+  <url>` consults no digest, so a recorded sha256 is only a record until
+  something compares the bytes; that comparison is what makes the lock a
+  control. Verified on the v1.4.197 / 15.81.5 artifacts:
+    * orca-ide carries NO signature at all (SIGPGP, SIGGPG, DSAHEADER and
+      RSAHEADER are all empty), so gpg checking cannot apply to it. Its control
+      is the locked sha256, and local-package gpg checking is disabled for that
+      one install with the reason stated — never as a global `--nogpgcheck`.
+    * teamviewer IS signed (RSA/SHA256, key ef9dbdc73b7d1a07) but its lock entry
+      is version-only, because the vendor publishes no digest and hashing it
+      would mean downloading 115 MB on every hourly refresh. Its control is that
+      signature, so the key id is pinned here and checked before the install
+      rather than trusting whatever key the keyring happens to hold.
+*/ -}}
+{{- $orcaTag := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "orca-ide") -}}
+{{- $orcaUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "orca-ide" "field" "url" "platform" "auto") -}}
+{{- $orcaSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "orca-ide" "field" "sha256" "platform" "auto") -}}
+{{- $tvVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "teamviewer") -}}
+{{- /* The lock records the upstream tag verbatim (`v1.4.197`) while rpm reports
+       the bare version, so the `v` is stripped before any comparison. */ -}}
+{{- $orcaVersion := trimPrefix "v" $orcaTag -}}
+{{- $rpmArch := "x86_64" -}}
+{{- if eq .chezmoi.arch "arm64" -}}{{- $rpmArch = "aarch64" -}}{{- end -}}
+{{- /* TeamViewer's version-only entry composes its own URL, as winbox's does.
+       The major-version directory is derived rather than pinned. */ -}}
+{{- $tvMajor := first (splitList "." $tvVersion) -}}
+{{- $tvUrl := printf "https://dl.teamviewer.com/download/linux/version_%sx/teamviewer_%s.%s.rpm" $tvMajor $tvVersion $rpmArch -}}
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-direct-rpms") }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-direct-rpms") -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/direct-rpm.XXXXXX")"
+cleanup() { rm -rf "${scratch}"; }
+trap cleanup EXIT INT TERM
+
+# True when installed version $1 is at or above locked version $2.
+version_ge() {
+  [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
+}
+
+# Sets `action` to `install` or `skip` for the named package. This is ordinary
+# idempotence, the same shape `install_app_packages` uses in the 70-apps entry —
+# not an abandoned step, so it declares no skip. It is written without a
+# conditional `return 0`, which the repository forbids on any script path.
+action=''
+resolve_action() {
+  local pkg=$1 locked=$2 current
+  action='install'
+  if current="$(rpm -q --queryformat '%{VERSION}' "${pkg}" 2>/dev/null)" \
+    && version_ge "${current}" "${locked}"; then
+    printf '%s: %s installed, lock is %s — leaving it alone\n' "${pkg}" "${current}" "${locked}"
+    action='skip'
+  fi
+}
+
+fetch_rpm() {
+  local pkg=$1 url=$2
+  local archive="${scratch}/${url##*/}"
+  # This function returns the archive path on stdout, so every other word it
+  # emits goes to stderr — a progress line here lands inside the caller's
+  # command substitution and the path stops being a path.
+  printf '%s: downloading %s\n' "${pkg}" "${url}" >&2
+  if ! curl -fsSL --connect-timeout 15 --max-time 900 "${url}" -o "${archive}"; then
+    printf '%s: download failed for %s\n' "${pkg}" "${url}" >&2
+    exit 1
+  fi
+  printf '%s' "${archive}"
+}
+
+require_digest() {
+  local pkg=$1 url=$2 archive=$3 expected=$4 actual
+  actual="$(sha256sum "${archive}" | cut -d' ' -f1)"
+  if [[ "${actual}" != "${expected}" ]]; then
+    printf '%s: checksum mismatch for %s (expected %s, got %s)\n' \
+      "${pkg}" "${url}" "${expected}" "${actual}" >&2
+    exit 1
+  fi
+}
+
+require_signing_key() {
+  local pkg=$1 url=$2 archive=$3 expected=$4 signature
+  signature="$(rpm -qp --queryformat '%{RSAHEADER:pgpsig}' "${archive}" 2>/dev/null)"
+  if [[ "${signature}" != *"${expected}"* ]]; then
+    printf '%s: %s is not signed by the expected key %s (got: %s)\n' \
+      "${pkg}" "${url}" "${expected}" "${signature}" >&2
+    exit 1
+  fi
+}
+
+install_orca_ide() {
+  local pkg='orca-ide' url='{{ $orcaUrl }}' archive
+  resolve_action "${pkg}" '{{ $orcaVersion }}'
+  if [[ "${action}" == 'install' ]]; then
+    archive="$(fetch_rpm "${pkg}" "${url}")"
+    require_digest "${pkg}" "${url}" "${archive}" '{{ $orcaSha }}'
+    # Unsigned upstream artifact; the verified digest above is the control that
+    # replaces a signature check, so gpg checking is disabled for this file only.
+    "${DNF[@]}" install -y --setopt=localpkg_gpgcheck=0 "${archive}"
+  fi
+}
+
+install_teamviewer() {
+  local pkg='teamviewer' url='{{ $tvUrl }}' archive
+  resolve_action "${pkg}" '{{ $tvVersion }}'
+  if [[ "${action}" == 'install' ]]; then
+    "${SUDO[@]}" timeout 60 rpm --import https://download.teamviewer.com/download/linux/signature/TeamViewer2017.asc
+    "${SUDO[@]}" timeout 60 rpm --import https://linux.teamviewer.com/pubkey/currentkey.asc
+    archive="$(fetch_rpm "${pkg}" "${url}")"
+    require_signing_key "${pkg}" "${url}" "${archive}" 'ef9dbdc73b7d1a07'
+    "${DNF[@]}" install -y --setopt=localpkg_gpgcheck=1 "${archive}"
+  fi
+}
+
+install_orca_ide
+install_teamviewer
+{{ end -}}

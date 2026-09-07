@@ -95,9 +95,9 @@ runtime_input: false
 totals:
   classified_owners: 137
   hard_error_owners: 8
-  rendered_instances: 205
+  rendered_instances: 207
   phase_local_instances: 132
-  shared_guard_instances: 73
+  shared_guard_instances: 75
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -143,8 +143,8 @@ shared_guard_fanout:
   gnome-guard: 7
   headless-guard: 12
   kde-guard: 10
-  shared-host-guard: 22
-  sudo-elevation-guard: 22
+  shared-host-guard: 23
+  sudo-elevation-guard: 23
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -222,6 +222,7 @@ owners:
       - '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-components/run_onchange_before_70-apps.sh.tmpl#shared-host-guard/shared-host'
+      - '.chezmoiscripts/30-components/run_onchange_before_75-direct-rpms.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#shared-host-guard/shared-host'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl#shared-host-guard/shared-host'
@@ -324,6 +325,7 @@ owners:
       - '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-components/run_onchange_before_70-apps.sh.tmpl#sudo-elevation-guard/no-elevation-path'
+      - '.chezmoiscripts/30-components/run_onchange_before_75-direct-rpms.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl#sudo-elevation-guard/no-elevation-path'
