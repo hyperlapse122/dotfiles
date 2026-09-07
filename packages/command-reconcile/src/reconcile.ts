@@ -1,7 +1,13 @@
-import { lstat, readlink } from "node:fs/promises";
+import { lstat, readlink, realpath, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import type { CommandManifest, UnitManifest } from "./manifest.js";
-import { atomicSymlink, prepareDir, resolveCommandPaths, type CommandPaths } from "./paths.js";
+import {
+  atomicSymlink,
+  contained,
+  prepareDir,
+  resolveCommandPaths,
+  type CommandPaths,
+} from "./paths.js";
 import { ensureCompletedUnit } from "./producer.js";
 import { pruneEligibleUnits } from "./prune.js";
 import { readState, writeState, type CommandState } from "./state.js";
@@ -24,12 +30,62 @@ export interface ReconcileReport {
   pruned: string[];
 }
 
+/**
+ * A `mutableTree` unit is skipped: `ensureCompletedUnit` returns its raw tree path
+ * with no store copy, and that tree may legitimately be absent on a host.
+ */
+async function findUnresolvableCommand(
+  unit: UnitManifest,
+  backingPath: string,
+): Promise<string | undefined> {
+  if (unit.mutableTree) return undefined;
+
+  let backingRoot: string;
+  try {
+    backingRoot = await realpath(backingPath);
+  } catch (err) {
+    return `Unit ${unit.id}: backing store ${backingPath} is unreadable (${String(err)})`;
+  }
+
+  for (const cmd of unit.commands) {
+    const rel = cmd.relPath ?? cmd.name;
+    const targetPath = join(backingPath, rel);
+    let resolvedTarget: string;
+    try {
+      resolvedTarget = await realpath(targetPath);
+    } catch {
+      return `Unit ${unit.id} command ${cmd.name} has no backing file at ${targetPath}; declare relPath for an existing file`;
+    }
+    try {
+      contained(backingRoot, resolvedTarget);
+    } catch {
+      return `Unit ${unit.id} command ${cmd.name} resolves to ${resolvedTarget}, outside its store directory ${backingRoot}`;
+    }
+    if (!(await stat(resolvedTarget)).isFile()) {
+      return `Unit ${unit.id} command ${cmd.name} resolves to ${resolvedTarget}, which is not a regular file`;
+    }
+  }
+
+  return undefined;
+}
+
 export async function activateUnitInternal(
   paths: CommandPaths,
   unit: UnitManifest,
   state: CommandState,
 ): Promise<ActivationResult> {
   const completed = await ensureCompletedUnit(paths, unit, state);
+
+  const unresolved = await findUnresolvableCommand(unit, completed.backingPath);
+  if (unresolved) {
+    return {
+      unitId: unit.id,
+      identity: completed.identity,
+      changed: false,
+      status: "failed",
+      error: unresolved,
+    };
+  }
 
   await prepareDir(paths.currentDir, 0o755);
   const currentLink = join(paths.currentDir, unit.id);
@@ -155,6 +211,8 @@ export async function reconcileAll(
         report.activated.push(unit.id);
       } else if (result.status === "unchanged") {
         report.unchanged.push(unit.id);
+      } else if (result.status === "failed") {
+        report.failed.push({ id: unit.id, error: result.error ?? "Activation failed" });
       } else if (result.status === "conflict") {
         report.conflicts.push({
           id: unit.id,

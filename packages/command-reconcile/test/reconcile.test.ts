@@ -82,6 +82,115 @@ describe("reconcile", () => {
     }
   });
 
+  it("publishes resolvable links for every declared name of a single-file external unit", async () => {
+    const testHome = join(tmpdir(), `test-rec-agy-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/agy");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "agy"), "#!/bin/sh\necho agy-binary\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "agy",
+          producer: "external",
+          safetyProfile: "native-single-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "agy" }, { name: "antigravity", relPath: "agy" }],
+          identity: "v1.0.0",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agy",
+        },
+      ],
+    };
+
+    try {
+      const act = await activateUnit(testHome, manifest, "agy");
+      expect(act.status).toBe("activated");
+
+      for (const name of ["agy", "antigravity"]) {
+        const link = join(testHome, ".local/bin", name);
+        expect((await lstat(link)).isSymbolicLink()).toBe(true);
+        expect(await readFile(link, "utf-8")).toContain("agy-binary");
+      }
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("fails loudly instead of publishing a dangling link for an unbacked command name", async () => {
+    const testHome = join(tmpdir(), `test-rec-dangling-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/agy");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "agy"), "#!/bin/sh\necho agy-binary\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "agy",
+          producer: "external",
+          safetyProfile: "native-single-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "agy" }, { name: "antigravity" }],
+          identity: "v1.0.0",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agy",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed.some((f) => f.id === "agy" && f.error.includes("antigravity"))).toBe(
+        true,
+      );
+      expect(report.activated).not.toContain("agy");
+
+      await expect(lstat(join(testHome, ".local/bin/antigravity"))).rejects.toThrow();
+      await expect(lstat(join(testHome, ".local/bin/agy"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("reconciles a mutableTree unit whose tree is absent", async () => {
+    const testHome = join(tmpdir(), `test-rec-mutable-${Date.now()}-${Math.random()}`);
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "flutter",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [
+            { name: "flutter", relPath: "bin/flutter" },
+            { name: "dart", relPath: "bin/dart" },
+          ],
+          identity: "stable",
+          stagingPath: ".local/share/flutter/versions",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed).toEqual([]);
+      expect(report.activated).toContain("flutter");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
   it("handles secret commands with opaque private generations", async () => {
     const testHome = join(tmpdir(), `test-rec-secret-${Date.now()}-${Math.random()}`);
     const stagingDir = join(testHome, ".local/share/chezmoi-command-sources");

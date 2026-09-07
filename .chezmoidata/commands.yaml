@@ -50,6 +50,7 @@ commands:
       commands:
         - name: agy
         - name: antigravity
+          relPath: agy
       legacy:
         path: .local/bin/agy
     agent-browser:
