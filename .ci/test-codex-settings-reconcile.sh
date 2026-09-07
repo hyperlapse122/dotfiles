@@ -43,19 +43,25 @@ render() {
 
 # The reconciler under test. RECONCILER wins when set; a provisioned host has the
 # built binary in ~/.local/bin; a bare CI runner compiles it from source, which
-# needs `bun` and an installed packages/ workspace (smol-toml).
+# needs `bun` and an installed packages/ workspace (smol-toml). bun is resolved
+# through the shared ladder rather than PATH alone, because a host that gets bun
+# from the chezmoi external has it under ~/.local/lib or the staging directory
+# before any public link exists.
 resolve_reconciler() {
   if [[ -n ${RECONCILER:-} ]]; then
     printf '%s' "$RECONCILER"
   elif [[ -x "$HOME/.local/bin/settings-reconcile" ]]; then
     printf '%s' "$HOME/.local/bin/settings-reconcile"
-  elif command -v bun >/dev/null 2>&1; then
-    bun build --compile "$repo_root/packages/settings-reconcile/src/cli.ts" \
+  else
+    # shellcheck source=.ci/lib/bun.sh
+    source "$repo_root/.ci/lib/bun.sh"
+    resolve_bun
+    [[ -n "$BUN_BIN" ]] \
+      || fail 'no settings-reconcile available: set RECONCILER, install ~/.local/bin/settings-reconcile, or provide bun'
+    "$BUN_BIN" build --compile "$repo_root/packages/settings-reconcile/src/cli.ts" \
       --outfile "$scratch/settings-reconcile" >"$scratch/bun-build.log" 2>&1 \
       || { sed 's/^/  /' "$scratch/bun-build.log" >&2; fail 'could not compile settings-reconcile from source'; }
     printf '%s' "$scratch/settings-reconcile"
-  else
-    fail 'no settings-reconcile available: set RECONCILER, install ~/.local/bin/settings-reconcile, or provide bun'
   fi
 }
 reconciler=$(resolve_reconciler)

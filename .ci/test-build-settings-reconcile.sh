@@ -82,4 +82,43 @@ env HOME="$home_dir" PATH="$fake_bin:$PATH" bash "$case_dir/build.sh" \
 [[ -d "$target" ]]
 grep -F 'the settings-reconcile install target is not a regular file' "$case_dir/stdout" >/dev/null
 
-printf 'build-settings-reconcile fatal-boundary and target-safety tests passed\n'
+# The only reason this script carries the bun resolution ladder is the grandchild
+# `vp run build` spawns: its task command is `bun build --compile`, and that
+# process resolves `bun` from PATH, not from any variable the script sets. This
+# mise stand-in reproduces that shape, so the case fails unless the ladder found
+# the staged bun AND prepended its directory to PATH.
+prepare_case bun-subprocess-path
+printf old-executable >"$target"; chmod 0755 "$target"
+for tool in env bash mkdir mktemp chmod cp mv rm printf; do
+  real=$(command -v "$tool") && ln -sf "$real" "$fake_bin/$tool"
+done
+cat >"$fake_bin/mise" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *'vp run build'*) exec bun build --compile ;;
+esac
+exit 0
+EOF
+chmod 0755 "$fake_bin/mise"
+staged_bun="$home_dir/.local/share/chezmoi-commands/incomplete/bun/bun"
+mkdir -p "${staged_bun%/*}"
+cat >"$staged_bun" <<EOF
+#!/usr/bin/env bash
+printf '%s' "\$0" >"$case_dir/bun-invoked"
+exit 0
+EOF
+chmod 0755 "$staged_bun"
+env HOME="$home_dir" PATH="$fake_bin" /usr/bin/bash "$case_dir/build.sh" \
+  >"$case_dir/stdout" 2>"$case_dir/stderr"
+[[ -f "$case_dir/bun-invoked" ]] || {
+  printf 'bun-subprocess-path never reached bun through PATH\n' >&2
+  cat "$case_dir/stderr" >&2
+  exit 1
+}
+[[ $(cat "$case_dir/bun-invoked") == "$staged_bun" ]] || {
+  printf 'bun-subprocess-path resolved bun as %s, expected %s\n' \
+    "$(cat "$case_dir/bun-invoked")" "$staged_bun" >&2
+  exit 1
+}
+
+printf 'build-settings-reconcile fatal-boundary, target-safety and bun-ladder tests passed\n'

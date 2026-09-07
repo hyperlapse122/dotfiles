@@ -35,6 +35,14 @@ if ! command -v "$MISE_BIN" >/dev/null 2>&1 && [[ ! -x "$MISE_BIN" ]] && [[ -z "
   printf '%s\n' 'build-command-reconcile: neither mise nor bun is installed; command-reconcile cannot be built' >&2
   exit 1
 fi
+# Both branches below compile with bun: the mise branch reaches it through `vp
+# run build`, whose task command is `bun build --compile`. Since bun left mise's
+# tool set, mise being present no longer implies bun is, so say which tool is
+# missing here rather than letting the build fail three levels down.
+if [[ -z "$BUN_BIN" ]]; then
+  printf '%s\n' 'build-command-reconcile: bun is not installed; the build compiles with bun through either toolchain' >&2
+  exit 1
+fi
 
 if command -v "$MISE_BIN" >/dev/null 2>&1 || [[ -x "$MISE_BIN" ]]; then
   if ! "$MISE_BIN" -C "$SRC/packages" exec -- vp install --frozen-lockfile; then

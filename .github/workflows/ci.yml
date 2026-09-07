@@ -107,6 +107,7 @@ jobs:
           .ci/test-host-fact-probes.sh
           .ci/test-system-removed-gates.sh
           .ci/test-capability-cache.sh
+          .ci/test-bun-resolve.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh

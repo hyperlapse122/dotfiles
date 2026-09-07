@@ -123,6 +123,21 @@ set -e
 grep -F 'build-command-reconcile: neither mise nor bun is installed' "$case_dir/stderr" >/dev/null
 [[ $(cat "$target") == old-executable ]]
 
+# mise present, bun absent everywhere. Reachable since bun left mise's tool set:
+# the mise branch would run `vp run build`, whose task shells out to `bun build`,
+# and fail three levels down with a build error that never names bun.
+prepare_case missing-bun
+printf old-executable >"$target"; chmod 0755 "$target"
+sandbox_tools
+set +e
+env HOME="$home_dir" PATH="$fake_bin" /usr/bin/bash "$case_dir/build.sh" \
+  >"$case_dir/stdout" 2>"$case_dir/stderr"
+status=$?
+set -e
+[[ $status -ne 0 ]]
+grep -F 'build-command-reconcile: bun is not installed' "$case_dir/stderr" >/dev/null
+[[ $(cat "$target") == old-executable ]]
+
 # Ladder rung 4. On a fresh host's first apply the public ~/.local/bin/bun link
 # does not exist yet — it is created by run_after_90-activate-command-links,
 # which needs the binary this very script builds — so the staging directory an
@@ -143,14 +158,26 @@ sandbox_tools
 write_fake_bun "$home_dir/.local/lib/commands/current/bun/bun" "$case_dir/bun-invoked"
 assert_bun_build bun-current-generation "$home_dir/.local/lib/commands/current/bun/bun"
 
-# An earlier rung wins over a later one: the public link beats staging.
-prepare_case bun-precedence
+# A bun the script can already see beats staging. The script prepends
+# $HOME/.local/bin to PATH before the ladder runs, so this pair is decided at
+# rung 1, not rung 2 — which is exactly the state a provisioned host is in.
+prepare_case bun-public-link-beats-staging
 printf old-executable >"$target"; chmod 0755 "$target"
 rm "$fake_bin/mise"
 sandbox_tools
 write_fake_bun "$home_dir/.local/bin/bun" "$case_dir/bun-invoked"
 write_fake_bun "$home_dir/.local/share/chezmoi-commands/incomplete/bun/bun" "$case_dir/bun-invoked"
-assert_bun_build bun-precedence "$home_dir/.local/bin/bun"
+assert_bun_build bun-public-link-beats-staging "$home_dir/.local/bin/bun"
+
+# Neither of these two rungs is reachable from PATH, so only the ladder's own
+# ordering can decide between them. Reorder the candidate list and this fails.
+prepare_case bun-current-beats-staging
+printf old-executable >"$target"; chmod 0755 "$target"
+rm "$fake_bin/mise"
+sandbox_tools
+write_fake_bun "$home_dir/.local/lib/commands/current/bun/bun" "$case_dir/bun-invoked"
+write_fake_bun "$home_dir/.local/share/chezmoi-commands/incomplete/bun/bun" "$case_dir/bun-invoked"
+assert_bun_build bun-current-beats-staging "$home_dir/.local/lib/commands/current/bun/bun"
 
 # The mise path spawns `bun build --compile` as a grandchild that resolves `bun`
 # from PATH, not from BUN_BIN. This mise stand-in reproduces that shape, so the
