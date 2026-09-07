@@ -1,0 +1,21 @@
+# The ingress ProxyGroup that backs this cluster's Tailscale Services.
+#
+# Cluster-scoped, which is why it is here and not in the cliproxyapi component:
+# that component's kustomization sets a namespace, and kustomize would stamp one
+# onto a resource that cannot have one.
+#
+# On a first bring-up this fails to apply until the operator's CRDs exist, and
+# Flux retries until they do. That is the only ordering this tree has, and it
+# resolves itself rather than needing a dependsOn between components.
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyGroup
+metadata:
+  name: orca-ingress
+spec:
+  type: ingress
+  # One replica: it fronts a single-replica proxy whose auth-dir is an RWO
+  # volume, so a second ingress replica would add availability the thing behind
+  # it does not have.
+  replicas: 1
+  tags:
+    - "tag:orca-proxy"

@@ -98,6 +98,42 @@ server clients and configuration updated: N clients (N auth entries + ...)
 fail with no available credential -- the proxy itself stays healthy, which is why
 this line is the check that matters.
 
+## What survives a restart, and what does not
+
+Worth knowing before it looks like a bug. Verified by restarting the Deployment
+with two accounts authenticated:
+
+| | |
+|---|---|
+| Agent credentials (the OAuth logins) | **survive** — they are files under `auth-dir`, which is the PVC |
+| Anything changed in the panel's Config Panel | **lost** — `/config/config.yaml` is an emptyDir regenerated from the ConfigMap and the Secret at every start |
+| The panel's own login | per browser, and only remembered when you tick *Remember credential* |
+
+After a restart with a Claude and a Codex account logged in:
+
+```
+server clients and configuration updated: 2 clients (2 auth entries + ...)
+```
+
+and both answer: `/v1/messages` with a `claude-*` model and `/v1/chat/completions`
+with a `gpt-*` model both return content.
+
+The dashboard counters mislead here, and this is the thing that reads as data
+loss: **AI Providers** and **Credential Management** on the Dashboard count what
+the CONFIG declares — API keys and configured providers — not the OAuth
+credentials. Two authenticated accounts and a dashboard reading `0` is the normal
+state of this deployment, because this platform configures no provider API keys
+at all. The list that reflects reality is Credential Management itself, or:
+
+```sh
+curl -s -H "Authorization: Bearer $management_key" \
+  http://orca-proxy:8317/v0/management/auth-files | jq '.files[].account'
+```
+
+Change configuration in `infra/platform/cliproxyapi/configmap.yaml`, not in the
+panel. The rendered file carries a banner saying so, at the top of what the
+Config Panel shows.
+
 ## The probe that tells you it broke later
 
 `cliproxyapi-auth-probe` is a CronJob that GETs the management API's auth-files

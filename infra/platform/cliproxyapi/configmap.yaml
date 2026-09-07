@@ -12,6 +12,14 @@ metadata:
   namespace: cliproxyapi
 data:
   config.yaml: |
+    # THIS FILE IS REGENERATED AT EVERY POD START, from this ConfigMap plus the
+    # cliproxyapi Secret. The management panel can edit the running config, and
+    # those edits are LOST on the next restart -- change them here instead, where
+    # Flux can reconcile them. The panel's own job is OAuth logins and status.
+    #
+    # What the panel writes that DOES survive: the agent credentials themselves.
+    # They are files under auth-dir, which is the PVC, not this file.
+    #
     # Bind on all interfaces INSIDE the pod. The pod is reachable only through
     # its ClusterIP Service and through the tailnet proxy the operator creates,
     # so the network boundary is Kubernetes and the tailnet ACL, not a loopback

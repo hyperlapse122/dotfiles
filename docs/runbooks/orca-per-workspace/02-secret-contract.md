@@ -99,6 +99,16 @@ Store `management-secret-key` where the operator can find it -- the infrastructu
 vault, which the worker token must not reach. CLIProxyAPI hashes it on startup,
 so the plaintext exists only in this Secret and wherever you put it.
 
+The item title carries the cluster name: `CLIProxyAPI-Management-<cluster>`, with
+the key in the item's built-in `credential` field. Each cluster issues its own
+management key, so a single shared title would resolve to the wrong one as soon
+as there are two clusters -- and it would do so silently, since a wrong key looks
+exactly like a revoked one. For `hp-z1-g6-01`:
+
+```sh
+op read "op://<infra vault>/CLIProxyAPI-Management-hp-z1-g6-01/credential"
+```
+
 ### `orca-worker-tailscale` -- optional, and what it switches on
 
 An ephemeral, reusable auth key tagged `tag:orca-workspace`. Ephemeral is what

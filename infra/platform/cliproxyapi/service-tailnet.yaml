@@ -2,11 +2,18 @@
 #
 # A second Service, not an annotation on the first: the tailnet exposure is for
 # humans doing OAuth logins and reading status, while the ClusterIP Service is
-# the workers' data path. Separating them means the tailnet node can be removed
-# or renamed without touching what the workers dial.
+# the workers' data path. Separating them means the tailnet exposure can be
+# renamed or removed without touching what the workers dial.
 #
-# Management shares port 8317 with the API, so anything that reaches this node
-# reaches the management routes too -- hence the ACL, which grants only the
+# Exposed as a Tailscale SERVICE, not as a device. A device is one node whose
+# identity is the pod that happens to back it; a Service is a name the tailnet
+# owns, with its own DNS name, its own ACL subject and a ProxyGroup behind it --
+# so the backing pod can be replaced, or made highly available by raising the
+# ProxyGroup's replicas, without the address changing. The ProxyGroup itself is
+# cluster-scoped and lives in the cluster directory.
+#
+# Management shares port 8317 with the API, so anything that reaches this
+# service reaches the management routes too -- hence the ACL, which grants the
 # desktop and denies tag:orca-workspace.
 apiVersion: v1
 kind: Service
@@ -15,6 +22,7 @@ metadata:
   namespace: cliproxyapi
   annotations:
     tailscale.com/expose: "true"
+    tailscale.com/proxy-group: "orca-ingress"
     tailscale.com/hostname: "orca-proxy"
     tailscale.com/tags: "tag:orca-proxy"
 spec:
