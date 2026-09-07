@@ -101,10 +101,12 @@ template:
             port: ssh
           initialDelaySeconds: 10
           periodSeconds: 5
-          # The first start runs a chezmoi apply against Connect, which is not
-          # instant. A short failure budget here would mark a healthy worker
-          # unready while it is still legitimately setting itself up.
-          failureThreshold: 60
+          # The first start runs a chezmoi apply against Connect and several
+          # `op read` calls, each of which takes seconds. 120 failures at 5s is a
+          # ten-minute budget: long enough that a healthy worker is never marked
+          # unready while it is still legitimately setting itself up, and short
+          # enough that a wedged one is not waited on forever.
+          failureThreshold: 120
       - name: tailscale
         image: ghcr.io/tailscale/tailscale:v1.102.3
         env:
