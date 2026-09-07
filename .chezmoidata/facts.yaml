@@ -478,6 +478,27 @@ factRegistry:
     whenFalse: >-
       Inverted: headless=false is the DESKTOP host, which is the one that gets
       configured. A server (headless=true) is skipped.
+  opAvailable:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      Both OP_CONNECT_HOST and OP_CONNECT_TOKEN set (a 1Password Connect
+      environment), OR the installer's own op_ready() succeeds. Two arms because
+      neither covers both environments: op_ready runs `op vault list`, which
+      Connect does not serve -- 1Password documents `op read`, `op inject`,
+      `op run` and `op item get` as the Connect surface -- so a worker pod holding
+      only Connect credentials fails it. One Connect variable alone is a
+      half-configured environment and resolves false.
+    gates: >-
+      Every target that resolves an `op://` reference at render time. False skips
+      them, which is what keeps a credential out of a container image layer at
+      build; true is the running pod, where the entrypoint re-applies exactly
+      those targets against Connect. It is honest on hosts too: an apply where op
+      is absent or locked skips them instead of failing the whole apply.
+    whenFalse: >-
+      The op-resolving targets are skipped. Not an error -- the fact is how build
+      and runtime are told apart while `container` is true in both.
   container:
     type: bool
     probe: template

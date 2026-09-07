@@ -34,12 +34,13 @@ probes="$scratch/probes.sh"
   sed -n '/^scan_pci_bus()/,/^}/p' "$repo_root/.install-prerequisites.sh"
   sed -n '/^fact_nvidia()/,/^}/p;/^fact_hybrid_graphics()/,/^}/p;/^fact_battery()/,/^}/p;/^fact_fingerprint_reader()/,/^}/p;/^fact_display_manager()/,/^}/p;/^fact_gpu_device_id()/,/^}/p' \
     "$repo_root/.install-prerequisites.sh"
+  sed -n '/^op_ready()/,/^}/p;/^fact_op_available()/,/^}/p' "$repo_root/.install-prerequisites.sh"
 } >"$probes"
 # Guard EVERY extracted function. An anchored sed range that matches nothing
 # fails silently, so without these a rename or a restyling to `function fact_x()`
 # would leave this file asserting against an empty extraction and still pass.
 for fn in scan_pci_bus fact_nvidia fact_hybrid_graphics fact_gpu_device_id \
-  fact_battery fact_fingerprint_reader fact_display_manager; do
+  fact_battery fact_fingerprint_reader fact_display_manager op_ready fact_op_available; do
   grep -q "^${fn}()" "$probes" || fail "${fn} was not extracted from the hook"
 done
 # shellcheck disable=SC1090
@@ -225,5 +226,59 @@ ln -sfn /usr/lib/systemd/system/does-not-exist.service \
 got="$(probe_output_under "$dm_dangling" fact_display_manager)"
 [[ "$got" == 'does-not-exist' ]] \
   || fail "a dangling alias still names its unit, probe returned '${got:-<empty>}'"
+
+# --- opAvailable ------------------------------------------------------------
+# The two-armed probe (KTD1). 1Password documents only `op read`, `inject`, `run`
+# and `item get` as Connect-supported, so `op vault list` -- what op_ready runs --
+# FAILS inside a Connect-only worker pod. A probe using op_ready alone would report
+# false in every worker and silently skip the whole runtime apply, which is the
+# failure the fact exists to prevent. Each arm is driven on its own here.
+op_bin_dir="$scratch/op-bin"
+mkdir -p "$op_bin_dir"
+# A stub whose `vault list` fails, exactly like a Connect-only environment.
+printf '%s\n' '#!/usr/bin/env bash' 'case "${1-}" in vault) exit 1 ;; *) exit 0 ;; esac' \
+  >"$op_bin_dir/op"
+chmod 0755 "$op_bin_dir/op"
+
+probe_op() (
+  PATH="$1:$PATH"
+  unset OP_CONNECT_HOST OP_CONNECT_TOKEN
+  [[ -n "${2-}" ]] && export OP_CONNECT_HOST="$2"
+  [[ -n "${3-}" ]] && export OP_CONNECT_TOKEN="$3"
+  if fact_op_available; then printf 'true'; else printf 'false'; fi
+)
+
+got="$(probe_op "$op_bin_dir" https://connect.invalid tok)"
+[[ "$got" == 'true' ]] \
+  || fail "the Connect arm must report true when both OP_CONNECT_* are set even though op vault list fails, probe returned '$got'"
+
+got="$(probe_op "$op_bin_dir")"
+[[ "$got" == 'false' ]] \
+  || fail "with no Connect variables and a failing op vault list the probe must report false, probe returned '$got'"
+
+got="$(probe_op "$op_bin_dir" https://connect.invalid)"
+[[ "$got" == 'false' ]] \
+  || fail "one Connect variable alone is a half-configured environment and must report false, probe returned '$got'"
+
+# The host arm: a stub whose `vault list` succeeds is a working desktop/service-account op.
+ok_bin_dir="$scratch/op-bin-ok"
+mkdir -p "$ok_bin_dir"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$ok_bin_dir/op"
+chmod 0755 "$ok_bin_dir/op"
+got="$(probe_op "$ok_bin_dir")"
+[[ "$got" == 'true' ]] \
+  || fail "the host arm must report true when op vault list succeeds, probe returned '$got'"
+
+# op absent from PATH entirely, with no Connect variables: the image build's shape.
+empty_bin_dir="$scratch/op-bin-empty"
+mkdir -p "$empty_bin_dir"
+got="$(
+  PATH="$empty_bin_dir"
+  export PATH
+  unset OP_CONNECT_HOST OP_CONNECT_TOKEN
+  if fact_op_available; then printf 'true'; else printf 'false'; fi
+)"
+[[ "$got" == 'false' ]] \
+  || fail "with op absent from PATH and no Connect variables the probe must report false, probe returned '$got'"
 
 printf 'host-fact-probes: OK\n'
