@@ -270,8 +270,8 @@ describe("bun tag pinning", () => {
   test("a release list holding only canary fails rather than resolving it", async () => {
     stubReleaseList([{ tag_name: "canary" }]);
 
-    await expect(
-      resolveGitHubRelease("bun", REGISTRY.bun as ToolSpec, undefined),
-    ).rejects.toThrow(/no stable release tag carries the prefix "bun-v"/);
+    await expect(resolveGitHubRelease("bun", REGISTRY.bun as ToolSpec, undefined)).rejects.toThrow(
+      /no stable release tag carries the prefix "bun-v"/,
+    );
   });
 });
