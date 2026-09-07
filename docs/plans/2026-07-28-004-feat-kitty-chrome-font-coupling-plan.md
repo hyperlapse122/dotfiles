@@ -27,7 +27,7 @@ Restore kitty's window chrome on Linux — a KWin titlebar on KDE, kitty's own c
 
 ### Problem Frame
 
-kitty ships from this repo as the default Linux terminal (`docs/plans/add-kitty-default-terminal-linux.md`). Its managed config, `dot_config/kitty/kitty.conf`, sets `hide_window_decorations yes` (line 9), so on Linux the window has no titlebar, borders, or window buttons — confirmed by a user screenshot on KDE Wayland (kitty 0.47.1). The same config sets no `font_family`, so kitty renders in its fallback monospace instead of the repo's managed mono family, and its header records a deliberate choice not to couple to `fonts.yaml` (KTD-5 of the prior plan).
+kitty ships from this repo as the default Linux terminal (`docs/plans/2026-07-25-003-feat-add-kitty-default-terminal-linux-plan.md`). Its managed config, `dot_config/kitty/kitty.conf`, sets `hide_window_decorations yes` (line 9), so on Linux the window has no titlebar, borders, or window buttons — confirmed by a user screenshot on KDE Wayland (kitty 0.47.1). The same config sets no `font_family`, so kitty renders in its fallback monospace instead of the repo's managed mono family, and its header records a deliberate choice not to couple to `fonts.yaml` (KTD-5 of the prior plan).
 
 ### Key Decisions
 
@@ -75,7 +75,7 @@ kitty ships from this repo as the default Linux terminal (`docs/plans/add-kitty-
 
 - `dot_config/kitty/kitty.conf` — current managed config; `hide_window_decorations yes` at line 9, no `font_family`.
 - `.chezmoidata/fonts.yaml` — `families.mono`, `monoFallbacks`, `sizes`; header documents the consumer list this plan extends.
-- `docs/plans/add-kitty-default-terminal-linux.md` — KTD-5 records the deliberate `hide_window_decorations yes` + no-fonts.yaml-coupling decision this plan reverses.
+- `docs/plans/2026-07-25-003-feat-add-kitty-default-terminal-linux-plan.md` — KTD-5 records the deliberate `hide_window_decorations yes` + no-fonts.yaml-coupling decision this plan reverses.
 - [kitty changelog](https://sw.kovidgoyal.net/kitty/changelog/) — kitty's GNOME window decorations are client-side, now fully functional with buttons and system dark/light following; see also the `wayland_titlebar_color` option in the [kitty.conf docs](https://sw.kovidgoyal.net/kitty/conf/).
 
 ## Planning Contract
