@@ -39,6 +39,17 @@ for plat in "${platforms[@]}"; do
   grep -F '.local/share/chezmoi-commands/incomplete/' "$out" >/dev/null || {
     fail "missing .local/share/chezmoi-commands/incomplete/ targets in $out"
   }
+
+  # codex is the one unit fed by two externals: the entrypoint and the
+  # code-mode helper codex resolves as its sibling. Both must land in the same
+  # staging directory or command-reconcile copies an incomplete unit.
+  codex_staged=$(grep -oE "\.local/share/chezmoi-commands/incomplete/codex/[A-Za-z0-9._-]+" "$out" | sort -u)
+  expected_staged=$(printf '%s\n' \
+    '.local/share/chezmoi-commands/incomplete/codex/codex' \
+    '.local/share/chezmoi-commands/incomplete/codex/codex-code-mode-host' | sort)
+  if [[ "$codex_staged" != "$expected_staged" ]]; then
+    fail "codex unit must stage exactly codex and codex-code-mode-host in $out, got: ${codex_staged//$'\n'/, }"
+  fi
 done
 
 rendered_flutter="$scratch/flutter.sh"
