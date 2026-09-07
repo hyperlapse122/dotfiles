@@ -50,10 +50,7 @@ export async function writeCompletionMarker(storeUnitDir: string, mode: number):
  * alone rather than fail, and a file staging path is copied per declared
  * command instead of by name.
  */
-async function missingStagedEntries(
-  stagingPath: string,
-  storeUnitDir: string,
-): Promise<string[]> {
+async function missingStagedEntries(stagingPath: string, storeUnitDir: string): Promise<string[]> {
   let staged: string[];
   try {
     const st = await lstat(stagingPath);

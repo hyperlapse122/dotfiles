@@ -205,8 +205,7 @@ export const REGISTRY: Registry = {
     kind: "githubRelease",
     source: "openai/codex",
     tagPrefix: "rust-v",
-    asset: ({ os, arch }) =>
-      `codex-code-mode-host-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
+    asset: ({ os, arch }) => `codex-code-mode-host-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
   },
 
   /* ---------- version-only githubRelease entries ---------- */

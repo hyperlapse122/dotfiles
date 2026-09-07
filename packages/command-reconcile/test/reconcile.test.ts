@@ -4,11 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import type { CommandManifest, UnitManifest } from "../src/manifest.js";
 import { resolveCommandPaths } from "../src/paths.js";
-import {
-  ensureCompletedUnit,
-  isUnitCompleted,
-  writeCompletionMarker,
-} from "../src/producer.js";
+import { ensureCompletedUnit, isUnitCompleted, writeCompletionMarker } from "../src/producer.js";
 import { activateUnit, reconcileAll } from "../src/reconcile.js";
 import { readState, type CommandState } from "../src/state.js";
 
