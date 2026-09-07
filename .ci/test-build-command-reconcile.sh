@@ -34,6 +34,14 @@ EOF
 
 assert_fatal() {
   local label=$1 diagnostic=$2
+  # Every assert_fatal case is about a diagnostic the mise branch emits, and the
+  # script now requires bun before it reaches that branch — the build compiles
+  # with bun through either toolchain. The fixture supplies one so the case can
+  # reach the failure it is actually asserting; a real host taking the mise
+  # branch has bun for the same reason. This job has no bun of its own, which is
+  # why the fixture cannot rely on the ambient PATH.
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$fake_bin/bun"
+  chmod 0755 "$fake_bin/bun"
   set +e
   env HOME="$home_dir" PATH="$fake_bin:$PATH" COMMAND_RECONCILE_MISE_MODE="$label" bash "$case_dir/build.sh" \
     >"$case_dir/stdout" 2>"$case_dir/stderr"
