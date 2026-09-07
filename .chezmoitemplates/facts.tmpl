@@ -189,7 +189,16 @@ Three rules hold this file together:
      chezmoi execute-template --override-data '{"renderOverrides":{"opAvailable":true}}'
 
    Both the JSON boolean and the strings "true"/"1"/"yes" count as true. */ -}}
-{{- $_ := set $facts "opAvailable" (eq (includeTemplate "render-override.tmpl" (dict "ctx" . "key" "opAvailable" "fallback" (index $facts "opAvailable"))) "true") -}}
+{{- if hasKey . "renderOverrides" -}}
+{{-   if hasKey .renderOverrides "opAvailable" -}}
+{{-     $override := .renderOverrides.opAvailable -}}
+{{-     if kindIs "bool" $override -}}
+{{-       $_ := set $facts "opAvailable" $override -}}
+{{-     else -}}
+{{-       $_ := set $facts "opAvailable" (has (lower (toString $override)) (list "true" "1" "yes")) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
 
 {{- /* ---- Layer 2a: chezmoi builtins ---------------------------------------- */ -}}
 {{- $_ := set $facts "os" .chezmoi.os -}}
@@ -399,7 +408,16 @@ Three rules hold this file together:
 
    .chezmoiignore reads this same fact, so an override moves the ignore branch
    with it rather than letting the two disagree about one render. */ -}}
-{{- $container = eq (includeTemplate "render-override.tmpl" (dict "ctx" . "key" "container" "fallback" $container)) "true" -}}
+{{- if hasKey . "renderOverrides" -}}
+{{-   if hasKey .renderOverrides "container" -}}
+{{-     $override := .renderOverrides.container -}}
+{{-     if kindIs "bool" $override -}}
+{{-       $container = $override -}}
+{{-     else -}}
+{{-       $container = has (lower (toString $override)) (list "true" "1" "yes") -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
 {{- $_ := set $facts "container" $container -}}
 
 {{- /* toYaml sorts the keys, so the emitted map is deterministic — which is what
