@@ -1,4 +1,7 @@
 {{- $settings := .agents.codex.settings -}}
+{{- /* Read once at file scope: the op:// call site below sits inside a range,
+   where `.` is the loop item and facts.tmpl could not be reached. */ -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- includeTemplate "codex-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- /* One declared object from two owners. agents.codex.settings owns scalar
    leaves: each dotted path is expanded into nested tables here, because the
@@ -33,7 +36,7 @@
 {{-   else -}}
 {{-     $entry = set $entry "url" .url -}}
 {{-     if hasKey . "headers" -}}
-{{-       $entry = set $entry "http_headers" (includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson) -}}
+{{-       $entry = set $entry "http_headers" (includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers") "resolveSecrets" $facts.opAvailable) | fromJson) -}}
 {{-     end -}}
 {{-   end -}}
 {{-   $servers = set $servers .name $entry -}}

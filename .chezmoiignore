@@ -170,4 +170,10 @@
 # online-accounts provider, the other is host network provisioning.
 .local/share/accounts/providers/google.provider
 .local/share/chezmoi-command-sources/import-wifi-1password
+# Registry auth is a HOST concept. A worker pulls no images -- kubelet does that
+# with the cluster's own imagePullSecrets -- so this file has no consumer in a
+# pod, and it is the one target that composes a base64 `user:PAT` from four
+# op:// reads. Excluding it is simpler and safer than gating it: there is no
+# runtime apply that should ever write it.
+.config/containers
 {{- end }}

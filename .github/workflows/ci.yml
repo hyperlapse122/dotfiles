@@ -115,6 +115,7 @@ jobs:
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
           .ci/test-chezmoiignore-script-paths.sh
+          .ci/test-op-ref-gating.sh
           .ci/check-external-checksum-coverage.sh
           .ci/test-check-external-checksum-coverage.sh
 

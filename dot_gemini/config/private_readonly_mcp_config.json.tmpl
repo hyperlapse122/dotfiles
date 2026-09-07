@@ -1,4 +1,7 @@
 {{- /* ~/.gemini/config/mcp_config.json — Antigravity CLI MCP configuration */ -}}
+{{- /* Read once at file scope: the op:// call site below sits inside a range,
+   where `.` is the loop item and facts.tmpl could not be reached. */ -}}
+{{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $servers := dict -}}
 {{- $mcpServers := includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "agy") | fromJson -}}
 {{- range $mcpServers -}}
@@ -7,7 +10,7 @@
 {{- else -}}
 {{- $e := dict "serverUrl" .url -}}
 {{- if hasKey . "headers" -}}
-{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers")) | fromJson -}}
+{{- $headers := includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (get . "headers") "resolveSecrets" $facts.opAvailable) | fromJson -}}
 {{- $e = set $e "headers" $headers -}}
 {{- end -}}
 {{- $servers = set $servers .name $e -}}

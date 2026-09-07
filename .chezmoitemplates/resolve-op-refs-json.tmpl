@@ -7,17 +7,37 @@ Input (dict):
   indent    optional; indentation of the value's containing line (default "")
 
 Every string beginning exactly with "op://" is resolved by a direct
-onepasswordRead (which CI stubs). Every other scalar and type is serialized
+onepasswordRead (which CI stubs) WHEN resolveSecrets is true, and emitted verbatim
+as a reference when it is false. Every other scalar and type is serialized
 unchanged. Maps and slices recurse, so the rule applies uniformly to heterogeneous
 provider options, nested headers, model definitions, MCP data, and auth data
 without field-specific branches.
 
+resolveSecrets is this repository's single seam between an image build and a
+running pod. Both have the `container` fact true, so only `opAvailable` tells them
+apart: false at build (no credential enters a layer; the reference is what lands),
+true in the pod, where the entrypoint re-applies exactly these targets against
+1Password Connect and the real value replaces the reference.
+
+IT DEFAULTS TO FALSE ON PURPOSE. A consumer that forgets the argument emits an
+unresolved reference, which whatever reads that file will report loudly. The other
+default fails silently and in the worst direction — a credential baked into a
+public image layer.
+
 Map keys are emitted in deterministic lexical order.
 
-Usage (a consuming template passes only value, and optionally indent):
+Input (continued):
+  resolveSecrets  optional bool; resolve op:// references (default false)
+
+Usage (a consuming template reads the fact once and passes it down):
+  {{ $facts := includeTemplate "facts.tmpl" . | fromYaml }}
   {{ includeTemplate "resolve-op-refs-json.tmpl" (dict
        "value" .agents.mcp.servers
-       "indent" "  ") }}
+       "indent" "  "
+       "resolveSecrets" $facts.opAvailable) }}
+
+The fact is read by the CONSUMER, once, not here: facts.tmpl globs and stats, and
+this partial recurses once per node.
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "resolve-op-refs-json.tmpl: expected a dict, got %s" (kindOf .)) -}}
@@ -28,6 +48,13 @@ Usage (a consuming template passes only value, and optionally indent):
 {{- $value := .value -}}
 {{-   $indent := "" -}}
 {{-   if hasKey . "indent" -}}{{- $indent = .indent -}}{{- end -}}
+{{-   $resolveSecrets := false -}}
+{{-   if hasKey . "resolveSecrets" -}}
+{{-     if not (kindIs "bool" .resolveSecrets) -}}
+{{-       fail (printf "resolve-op-refs-json.tmpl: resolveSecrets must be a bool, got %s" (kindOf .resolveSecrets)) -}}
+{{-     end -}}
+{{-     $resolveSecrets = .resolveSecrets -}}
+{{-   end -}}
 {{-   $childIndent := printf "%s  " $indent -}}
 {{-   if kindIs "map" $value -}}
 {{-     if eq (len $value) 0 -}}
@@ -37,7 +64,7 @@ Usage (a consuming template passes only value, and optionally indent):
 {
 {{-       $last := sub (len $orderedKeys) 1 -}}
 {{-       range $index, $key := $orderedKeys }}
-{{ $childIndent }}{{ $key | toJson }}: {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "indent" $childIndent) }}{{ if lt $index $last }},{{ end }}
+{{ $childIndent }}{{ $key | toJson }}: {{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" (index $value $key) "indent" $childIndent "resolveSecrets" $resolveSecrets) }}{{ if lt $index $last }},{{ end }}
 {{-       end }}
 {{ $indent }}}
 {{-     end -}}
@@ -48,12 +75,16 @@ Usage (a consuming template passes only value, and optionally indent):
 [
 {{-       $last := sub (len $value) 1 -}}
 {{-       range $index, $item := $value }}
-{{ $childIndent }}{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "indent" $childIndent) }}{{ if lt $index $last }},{{ end }}
+{{ $childIndent }}{{ includeTemplate "resolve-op-refs-json.tmpl" (dict "value" $item "indent" $childIndent "resolveSecrets" $resolveSecrets) }}{{ if lt $index $last }},{{ end }}
 {{-       end }}
 {{ $indent }}]
 {{-     end -}}
 {{-   else if and (kindIs "string" $value) (hasPrefix "op://" $value) -}}
+{{-     if $resolveSecrets -}}
 {{- onepasswordRead $value | toJson }}
+{{-     else -}}
+{{ $value | toJson }}
+{{-     end -}}
 {{-   else -}}
 {{ $value | toJson }}
 {{-   end -}}
