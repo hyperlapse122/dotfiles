@@ -176,4 +176,38 @@
 # op:// reads. Excluding it is simpler and safer than gating it: there is no
 # runtime apply that should ever write it.
 .config/containers
+
+# The rest of the worker trim (R13). These are whole-file targets with no owning
+# entry in commands.yaml or agents.yaml, so a per-entry policy has nothing to
+# attach to and the path is the only place the decision can live. Everything that
+# DOES have an owning entry is declared there instead -- see
+# .chezmoitemplates/ships-in-container.tmpl.
+#
+# Desktop applications. A pod has no session, no display and no audio server.
+.config/1Password
+.config/VSCodium
+.config/autostart
+.config/fcitx5
+.config/ghostty
+.config/wezterm
+.config/wireplumber
+.local/share/applications
+.local/share/accounts
+# A pod has no systemd, so neither of these is ever loaded. Note the consequence:
+# DOCKER_HOST from environment.d/65-containers.conf is NOT set in a worker.
+.config/systemd
+.config/environment.d
+# Interactive shell experience. Agents run non-interactively; the worker's shell
+# is bash from the base image, and the two things dot_zshenv actually did -- mise
+# activation and a PATH entry -- are ENV lines in the Containerfile.
+.config/zsh
+.zshenv
+# tmux was only ever here because the instruction core mandated it; that rule was
+# removed in #414 and .ci/test-agent-instructions.sh now bans the wording.
+.config/tmux
+# tokscale's auth step is in 10-auth, already skipped above, so the config has
+# nothing to authenticate against.
+.config/tokscale
+# The agent set in a worker is Claude Code and Codex; agy is excluded with it.
+.gemini
 {{- end }}
