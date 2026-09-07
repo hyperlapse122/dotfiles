@@ -29,7 +29,7 @@ async function cleanupQuarantine(
       }
       for (const version of versions) {
         const qPath = join(qUnitDir, version);
-        if (await generationInUse(qPath, roots)) {
+        if (await versionInUse(qPath, roots)) {
           const storeVersionDir = join(paths.storeDir, unitId, version);
           await prepareDir(join(paths.storeDir, unitId), 0o755);
           await rename(qPath, storeVersionDir).catch(() => {});
@@ -44,13 +44,13 @@ async function cleanupQuarantine(
 /**
  * Whether any running process holds a file inside `versionDir`.
  *
- * Walks the whole generation rather than the unit's declared commands: a
+ * Walks the whole version directory rather than the unit's declared commands: a
  * proof-eligible unit may carry native binaries that are not public commands
  * (the codex code-mode helper), and those are just as live as the entrypoint.
  * An unreadable directory counts as in use -- absent evidence never authorises
  * a delete.
  */
-async function generationInUse(versionDir: string, roots: ProcessRoots): Promise<boolean> {
+async function versionInUse(versionDir: string, roots: ProcessRoots): Promise<boolean> {
   if (roots.uncertain) return true;
   let files: string[];
   try {
@@ -116,7 +116,7 @@ export async function pruneEligibleUnits(
         continue;
       }
 
-      if (await generationInUse(versionDir, roots)) {
+      if (await versionInUse(versionDir, roots)) {
         retained.push(versionLabel);
         continue;
       }
@@ -133,7 +133,7 @@ export async function pruneEligibleUnits(
       }
 
       const recheckedRoots = await rootScanner();
-      if (await generationInUse(quarantinePath, recheckedRoots)) {
+      if (await versionInUse(quarantinePath, recheckedRoots)) {
         await rename(quarantinePath, versionDir).catch(() => {});
         retained.push(versionLabel);
       } else {

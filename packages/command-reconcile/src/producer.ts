@@ -63,15 +63,17 @@ async function missingStagedEntries(
     return [];
   }
 
-  const missing: string[] = [];
-  for (const entry of staged) {
-    try {
-      await lstat(join(storeUnitDir, entry));
-    } catch {
-      missing.push(entry);
-    }
+  // The caller has just read this directory's completion marker, so a failure
+  // here is not a converged generation; repairing on that guess could copy over
+  // a live binary, so report nothing missing instead.
+  let present: Set<string>;
+  try {
+    present = new Set(await readdir(storeUnitDir));
+  } catch {
+    return [];
   }
-  return missing;
+
+  return staged.filter((entry) => !present.has(entry));
 }
 
 export async function ensureCompletedUnit(
