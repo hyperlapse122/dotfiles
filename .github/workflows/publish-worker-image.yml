@@ -1,0 +1,122 @@
+name: Publish worker image
+
+# Builds and publishes the Orca per-workspace worker image.
+#
+# The secret gate runs FIRST and the push depends on it. That ordering is the
+# point: a published image is public and permanent, so "no credential in a layer"
+# has to be decided before anything leaves the runner, not after.
+#
+# Public visibility on purpose. This repository is already public, and the render
+# gates guarantee the image carries no resolved secret -- so a public image spares
+# the platform (#412) an imagePullSecrets Secret and the PAT lifecycle behind it.
+# What it does publish is the toolchain inventory and versions, which are not
+# secrets but are visible.
+
+on:
+  # A pull request BUILDS but does not push. Without this the Containerfile is
+  # never exercised until after merge, and the first signal that the image cannot
+  # be built is a red main.
+  pull_request:
+    paths:
+      - 'container/**'
+      - '.chezmoidata/**'
+      - '.chezmoiexternals/**'
+      - '.chezmoitemplates/**'
+      - '.chezmoiignore'
+      - '.chezmoi.toml.tmpl'
+      - '.install-prerequisites.sh'
+      - '.github/workflows/publish-worker-image.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'container/**'
+      - '.chezmoidata/**'
+      - '.chezmoiexternals/**'
+      - '.chezmoitemplates/**'
+      - '.chezmoiignore'
+      - '.chezmoi.toml.tmpl'
+      - '.install-prerequisites.sh'
+      - '.github/workflows/publish-worker-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-worker-image
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/orca-worker
+
+jobs:
+  secret-gate:
+    name: no secret may reach a layer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install locked chezmoi
+        run: |
+          set -euo pipefail
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Assert the container render carries no secret
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.cache"
+          .ci/test-container-secret-gate.sh
+
+  publish:
+    name: build and push
+    needs: secret-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      # Rootless podman. No build secret: the repository is public, so the clone
+      # inside the image needs no token, and neither ARG nor ENV ever carries one
+      # -- both persist in image metadata where anyone who pulls can read them.
+      - name: Build
+        run: |
+          set -euo pipefail
+          podman build --file container/Containerfile --tag "${IMAGE}:${GITHUB_SHA}" .
+
+      - name: Record image size
+        run: |
+          set -euo pipefail
+          # "Development essentials" only means something against a number, so the
+          # number goes in the job summary where it is comparable run to run.
+          size=$(podman image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{.Size}}')
+          printf 'worker image size: %s bytes (%.2f GiB)\n' "$size" "$(echo "$size / 1073741824" | bc -l)" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Log in to ghcr.io
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          printf '%s' '${{ secrets.GITHUB_TOKEN }}' \
+            | podman login ghcr.io --username '${{ github.actor }}' --password-stdin
+
+      # Two references to the same image: the digest is what #412 pins in its
+      # PodTemplate, and `latest` exists for a human reading the registry. No
+      # semantic version -- this image has no release cadence of its own.
+      - name: Push
+        if: github.event_name != 'pull_request'
+        id: push
+        run: |
+          set -euo pipefail
+          podman push "${IMAGE}:${GITHUB_SHA}"
+          podman tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:latest"
+          podman push "${IMAGE}:latest"
+          digest=$(podman image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{.Digest}}')
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          printf 'Pin this in the PodTemplate (#412):\n\n    %s@%s\n' "${IMAGE}" "$digest" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
