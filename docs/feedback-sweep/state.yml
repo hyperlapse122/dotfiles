@@ -753,9 +753,12 @@ items:
     updated_at: "2026-09-07T01:03:37Z"
   "gh-issues:hyperlapse122/dotfiles#397":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(externals): verify artifact digests for every lock-backed external - most externals install an executable that nothing verifies"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -766,9 +769,12 @@ items:
     updated_at: "2026-09-07T01:11:30Z"
   "gh-issues:hyperlapse122/dotfiles#398":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(release-lock): pin bun resolution so it cannot follow canary - the bun registry entry declares no tagPrefix, so resolveGitHubRelease reads releases/latest"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -779,9 +785,12 @@ items:
     updated_at: "2026-09-07T01:11:53Z"
   "gh-issues:hyperlapse122/dotfiles#399":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(build): rebuild the reconcilers when the locked bun version changes - a lock-driven bun bump does not rebuild anything"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -792,9 +801,12 @@ items:
     updated_at: "2026-09-07T01:11:54Z"
   "gh-issues:hyperlapse122/dotfiles#400":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "test(ci): cover musl and darwin-amd64 renders and bunx activation - two declared platform combinations are never exercised, so asset-name/archive-path drift would surface late"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
@@ -805,9 +817,12 @@ items:
     updated_at: "2026-09-07T01:12:21Z"
   "gh-issues:hyperlapse122/dotfiles#401":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "chore(ci): fix .ci/lib mode and wiring scope, harden ladder rung 1 - two hygiene items on the bun resolution ladder found during review of #392"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -818,9 +833,12 @@ items:
     updated_at: "2026-09-07T01:12:22Z"
   "gh-issues:hyperlapse122/dotfiles#402":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "refactor(command-reconcile): decide whether external store identity should be content-addressed - store identity for a producer:external unit is the lock version string, not a content digest"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
@@ -831,9 +849,12 @@ items:
     updated_at: "2026-09-07T01:12:48Z"
   "gh-issues:hyperlapse122/dotfiles#403":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(command-reconcile): multi-command external units leave a dangling public link - a commands.yaml unit declaring two command names publishes a link for the second name with nothing behind it"
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/406"
+    verified_merge_sha: "674e5416d616d8a93a941b97bc6bb7862af3aceb"
+    verified_at: "2026-09-07T12:22:00+09:00"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
