@@ -600,23 +600,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-08-31",
+        "version": "2026-09-07",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "a775f9edb543bb0c077da339b783e89446092986cde921c9d8e1733b091080c6"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "a3500183aa08bf740c0da6e030ad262d4cfa1c19e7ce195ab5f772bdf9ddfb12"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "d7617a9a7760cb615ae2d6e3b3a9456a0719959daad766fdda45bf58ec13661d"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "484de96ea9e5daf9e6361b6fa91be9521a7e6c652111af54a7ead80f900b1e55"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "a3b3e06da42b4df781891359ccbb57d6a84f311f0506de5f98dd0553460b1f8d"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "41161c05bd7e2396a5cea86a691d37919ec0af331a06bbdc0f323979034f9dad"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "5de5c20b8b49bdc9339ef537b4029af7f97214fb88d6fc86af57ab9344467625"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "16e9b2af9db7c0ce015ffe88f85db27669b05c84887a59c737d697d2c5f8d349"
           }
         }
       },
