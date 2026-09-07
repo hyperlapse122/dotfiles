@@ -43,6 +43,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
+  # One NodePort Service per worker, for a cluster whose tailnet material is not
+  # seeded yet. Each Service is owned by its pod, so deleting the worker deletes
+  # it too.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "delete"]
   # Read-only. The scripts report the quota when a create is refused; they never
   # raise it.
   - apiGroups: [""]

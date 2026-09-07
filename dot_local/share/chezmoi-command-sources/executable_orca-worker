@@ -24,6 +24,8 @@ username=${ORCA_WORKER_USERNAME:-$DEFAULT_USERNAME}
 project_root=${ORCA_WORKER_PROJECT_ROOT:-$DEFAULT_PROJECT_ROOT}
 identity_agent=${ORCA_WORKER_IDENTITY_AGENT:-$DEFAULT_IDENTITY_AGENT}
 ready_timeout=${ORCA_WORKER_READY_TIMEOUT:-900}
+# auto | tailnet | nodeport. See resolve_connection_mode.
+connection_mode=${ORCA_WORKER_CONNECTION:-auto}
 
 log() { printf 'orca-worker: %s\n' "$*" >&2; }
 die() { printf 'orca-worker: %s\n' "$*" >&2; exit 1; }
@@ -33,6 +35,45 @@ require() {
   for tool in "$@"; do
     command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not on PATH"
   done
+}
+
+# Which address the desktop uses to reach a worker.
+#
+# tailnet is the designed shape: the sidecar registers an ephemeral node and the
+# workspace dials its MagicDNS name. nodeport is the shape a cluster has before
+# its tailnet material is seeded -- the worker's sshd published on the node the
+# kubeconfig already points at. auto picks tailnet exactly when the auth key
+# Secret exists, so seeding that Secret promotes the platform with no edit here.
+resolve_connection_mode() {
+  case "$connection_mode" in
+    tailnet|nodeport) return 0 ;;
+    auto) ;;
+    *) die "ORCA_WORKER_CONNECTION must be auto, tailnet or nodeport" ;;
+  esac
+  if kube get secret orca-worker-tailscale >/dev/null 2>&1; then
+    connection_mode=tailnet
+  else
+    connection_mode=nodeport
+  fi
+  log "connection mode: $connection_mode"
+}
+
+# The node's address, taken from the kubeconfig rather than from the API.
+# Reading it from a Node object would need a cluster-scoped permission the
+# workspace identity deliberately does not have.
+node_host() {
+  local server
+  if [ -n "${ORCA_WORKER_NODE_HOST:-}" ]; then
+    printf '%s' "$ORCA_WORKER_NODE_HOST"
+    return 0
+  fi
+  server=$(KUBECONFIG=${ORCA_WORKER_KUBECONFIG:-$DEFAULT_KUBECONFIG} \
+    kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+  server=${server#*://}
+  server=${server%%/*}
+  server=${server%%:*}
+  [ -n "$server" ] || return 1
+  printf '%s' "$server"
 }
 
 kube() {
@@ -92,7 +133,7 @@ worker_dns_name() {
 }
 
 emit_result() {
-  local pod=$1 host=$2
+  local pod=$1 host=$2 port=$3
   jq -n \
     --arg label "$pod" \
     --arg host "$host" \
@@ -100,6 +141,7 @@ emit_result() {
     --arg identityAgent "$identity_agent" \
     --arg projectRoot "$project_root" \
     --arg resourceId "$pod" \
+    --argjson port "$port" \
     '{
       schemaVersion: 1,
       connection: {
@@ -108,7 +150,7 @@ emit_result() {
         target: {
           label: $label,
           host: $host,
-          port: 22,
+          port: $port,
           username: $username,
           identityAgent: $identityAgent
         }
@@ -121,11 +163,11 @@ emit_result() {
 }
 
 pod_manifest() {
-  local pod=$1
+  local pod=$1 keep_tailscale=$2
   # The pod shape comes from the Flux-managed PodTemplate, so limits, sidecars
   # and mounts are reviewed in git. Only identity is patched here.
   kube get podtemplate "$template" -o json \
-    | jq --arg name "$pod" --arg ns "$namespace" '
+    | jq --arg name "$pod" --arg ns "$namespace" --argjson keepTailscale "$keep_tailscale" '
       .template as $t
       | {
           apiVersion: "v1",
@@ -144,14 +186,73 @@ pod_manifest() {
                     then .env = ((.env // []) | map(if .name == "TS_HOSTNAME" then .value = $name else . end))
                     else . end
                   )
+                # Without an auth key the sidecar would restart-loop and log a
+                # failure that has nothing to do with the workspace, so a
+                # nodeport worker simply does not carry it.
+                | if $keepTailscale then . else map(select(.name != "tailscale")) end
+              )
+            | .volumes = (
+                (.volumes // [])
+                | if $keepTailscale then . else map(select(.name != "tailscale-state")) end
               )
           )
         }'
 }
 
+# The NodePort that publishes one worker's sshd. Owned by the pod so that
+# deleting the pod deletes the Service with it -- there is no second thing to
+# forget in destroy, and an orphaned Service cannot outlive its worker.
+nodeport_service_manifest() {
+  local pod=$1 uid=$2
+  jq -n --arg pod "$pod" --arg ns "$namespace" --arg uid "$uid" '{
+    apiVersion: "v1",
+    kind: "Service",
+    metadata: {
+      name: $pod,
+      namespace: $ns,
+      labels: { "orca.workspace/pod": $pod },
+      ownerReferences: [{
+        apiVersion: "v1",
+        kind: "Pod",
+        name: $pod,
+        uid: $uid,
+        controller: true,
+        blockOwnerDeletion: false
+      }]
+    },
+    spec: {
+      type: "NodePort",
+      selector: { "orca.workspace/pod": $pod },
+      ports: [{ name: "ssh", port: 22, targetPort: 22, protocol: "TCP" }]
+    }
+  }'
+}
+
+# Returns "<host> <port>" for the mode in force.
+worker_address() {
+  local pod=$1 host port uid
+  case "$connection_mode" in
+    tailnet)
+      host=$(worker_dns_name "$pod") || return 1
+      port=22
+      ;;
+    nodeport)
+      uid=$(kube get pod "$pod" -o jsonpath='{.metadata.uid}')
+      [ -n "$uid" ] || return 1
+      nodeport_service_manifest "$pod" "$uid" | kube apply -f - >&2
+      port=$(kube get service "$pod" -o jsonpath='{.spec.ports[0].nodePort}')
+      [ -n "$port" ] || return 1
+      host=$(node_host) || return 1
+      ;;
+  esac
+  printf '%s %s' "$host" "$port"
+}
+
 cmd_create() {
   require kubectl jq
-  local pod host
+  local pod address host port keep_tailscale=false
+  resolve_connection_mode
+  [ "$connection_mode" = tailnet ] && keep_tailscale=true
   pod=$(pod_name_for)
   log "creating worker pod $pod"
 
@@ -167,7 +268,7 @@ cmd_create() {
   }
   trap cleanup_on_error EXIT
 
-  pod_manifest "$pod" | kube apply -f - >&2
+  pod_manifest "$pod" "$keep_tailscale" | kube apply -f - >&2
 
   log "waiting for $pod to become ready (timeout ${ready_timeout}s)"
   if ! kube wait --for=condition=Ready "pod/$pod" --timeout="${ready_timeout}s" >&2; then
@@ -178,27 +279,32 @@ cmd_create() {
     die "worker pod $pod did not become ready"
   fi
 
-  host=$(worker_dns_name "$pod") || die "the tailscale sidecar never reported a MagicDNS name for $pod"
-  log "worker reachable at $host"
+  address=$(worker_address "$pod") || die "could not resolve an address for $pod"
+  host=${address%% *}
+  port=${address##* }
+  log "worker reachable at $host:$port"
 
-  emit_result "$pod" "$host"
+  emit_result "$pod" "$host" "$port"
   trap - EXIT
 }
 
 cmd_resume() {
   require kubectl jq
-  local pod host
+  local pod address host port
+  resolve_connection_mode
   pod=$(resource_id_from_stdin)
   [ -n "$pod" ] || die 'no resourceId in the lifecycle payload'
 
   kube get pod "$pod" >/dev/null 2>&1 \
     || die "worker pod $pod no longer exists; delete the workspace and create a new one"
 
-  # Re-emit rather than replay: the node may have been reaped and re-registered
-  # under a suffixed name while the workspace slept, so the address is read back
-  # from the node instead of assumed.
-  host=$(worker_dns_name "$pod") || die "the tailscale sidecar never reported a MagicDNS name for $pod"
-  emit_result "$pod" "$host"
+  # Re-emit rather than replay: the address is read back from live state, not
+  # assumed. On the tailnet a reaped node re-registers under a suffixed name, and
+  # on a NodePort the allocated port is not the one a previous create returned.
+  address=$(worker_address "$pod") || die "could not resolve an address for $pod"
+  host=${address%% *}
+  port=${address##* }
+  emit_result "$pod" "$host" "$port"
 }
 
 cmd_suspend() {
@@ -219,6 +325,7 @@ cmd_destroy() {
   pod=$(resource_id_from_stdin)
   [ -n "$pod" ] || die 'no resourceId in the lifecycle payload'
   log "deleting worker pod $pod"
+  # The NodePort Service, when there is one, is owned by the pod and goes with it.
   kube delete pod "$pod" --ignore-not-found --wait=false >&2
 }
 
@@ -239,6 +346,11 @@ Environment:
   ORCA_WORKER_PROJECT_ROOT    checkout path Orca imports into
   ORCA_WORKER_IDENTITY_AGENT  SSH agent socket (default: ~/.1password/agent.sock)
   ORCA_WORKER_READY_TIMEOUT   seconds to wait for pod readiness (default: 900)
+  ORCA_WORKER_CONNECTION      auto (default), tailnet or nodeport. auto uses the
+                              tailnet when the orca-worker-tailscale Secret is
+                              seeded and the node's published port otherwise
+  ORCA_WORKER_NODE_HOST       node address for nodeport mode
+                              (default: the kubeconfig server host)
 USAGE
 }
 

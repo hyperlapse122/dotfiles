@@ -64,7 +64,10 @@ spec:
   timeout: 10m
   path: ./infra/platform/orca-workers
   prune: true
-  wait: true
+  # Not wait: true. The shared cache PVC is WaitForFirstConsumer, so it stays
+  # Pending until the first worker mounts it -- a health gate here would report
+  # the namespace permanently unhealthy for a volume that is behaving correctly.
+  wait: false
   sourceRef:
     kind: GitRepository
     name: orca-platform
