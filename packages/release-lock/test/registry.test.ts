@@ -149,6 +149,12 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "codex-x86_64-apple-darwin.tar.gz",
     "darwin-arm64": "codex-aarch64-apple-darwin.tar.gz",
   },
+  "codex-code-mode-host": {
+    "linux-amd64": "codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+    "linux-arm64": "codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+    "darwin-amd64": "codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+    "darwin-arm64": "codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+  },
 };
 
 describe("registry asset selectors", () => {

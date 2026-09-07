@@ -304,6 +304,29 @@
           }
         }
       },
+      "codex-code-mode-host": {
+        "kind": "githubRelease",
+        "source": "openai/codex",
+        "version": "rust-v0.153.4",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.153.4/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "f95830a869590957664bbfc67bccb08773806b693670baf15908176f89b4cd31"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.153.4/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "d8047b8d33370d6090e729d27eb76de60a2686baa1c143c138c9b05dc70d813b"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.153.4/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+            "sha256": "2ffaebd0103d976232c358419a508859da862e128f3ca0bb071541346fbe3bf7"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.153.4/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+            "sha256": "45a9b0fdf53b98b85a6bb91e175dd90e961328a7a14fb50a40902205199df1df"
+          }
+        }
+      },
       "composition-patterns": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",

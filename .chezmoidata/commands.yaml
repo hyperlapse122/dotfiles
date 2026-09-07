@@ -8,6 +8,7 @@ commands:
       - existingTree
     safetyProfiles:
       - native-single-file
+      - native-multi-file
       - interpreted
       - multi-file
       - mutable-tree
@@ -79,7 +80,9 @@ commands:
 
     codex:
       producer: external
-      safetyProfile: native-single-file
+      # Two native binaries share this unit: the codex entrypoint and the
+      # codex-code-mode-host helper codex resolves next to its own executable.
+      safetyProfile: native-multi-file
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]

@@ -16,7 +16,8 @@ fail() { printf 'command external render: %s\n' "$*" >&2; exit 1; }
 # between the asset name in `url` and the directory or filename inside it makes
 # the extraction miss. These are checked by assert_url_path_agreement below.
 platform_composed_units=(
-  aoe bun bunx codex garden helm minikube uv uvx wakatime-cli wasm-pack
+  aoe bun bunx codex codex-code-mode-host garden helm minikube uv uvx
+  wakatime-cli wasm-pack
 )
 
 # Every other stanza that declares `path` is an explicit exemption: its `path`
@@ -202,6 +203,17 @@ for plat in "${platforms[@]}"; do
   grep -F '.local/share/chezmoi-commands/incomplete/' "$out" >/dev/null || {
     fail "missing .local/share/chezmoi-commands/incomplete/ targets in $out"
   }
+
+  # codex is the one unit fed by two externals: the entrypoint and the
+  # code-mode helper codex resolves as its sibling. Both must land in the same
+  # staging directory or command-reconcile copies an incomplete unit.
+  codex_staged=$(grep -oE "\.local/share/chezmoi-commands/incomplete/codex/[A-Za-z0-9._-]+" "$out" | sort -u)
+  expected_staged=$(printf '%s\n' \
+    '.local/share/chezmoi-commands/incomplete/codex/codex' \
+    '.local/share/chezmoi-commands/incomplete/codex/codex-code-mode-host' | sort)
+  if [[ "$codex_staged" != "$expected_staged" ]]; then
+    fail "codex unit must stage exactly codex and codex-code-mode-host in $out, got: ${codex_staged//$'\n'/, }"
+  fi
 
   assert_stanza_coverage "$out" "$label"
   assert_url_path_agreement "$out" "$os" "$arch" "$label"
