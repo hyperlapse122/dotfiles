@@ -82,8 +82,8 @@ In `dot_local/share/accounts/providers/google.provider.tmpl`:
               'https://www.googleapis.com/auth/youtube.upload'
           ]</setting>
           <setting name="AllowedSchemes" type="as">['https']</setting>
-          <setting name="ClientId">{{ onepasswordRead (default "op://Private/Google-KDE-OAuth/client_id" (dig "googleOAuth" "clientIdRef" "" .kde)) }}</setting>
-          <setting name="ClientSecret">{{ onepasswordRead (default "op://Private/Google-KDE-OAuth/client_secret" (dig "googleOAuth" "clientSecretRef" "" .kde)) }}</setting>
+          <setting name="ClientId">{{ onepasswordRead (default "op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_id" (dig "googleOAuth" "clientIdRef" "" .kde)) }}</setting>
+          <setting name="ClientSecret">{{ onepasswordRead (default "op://njbkpy6emfxkbl7n6zmwmz7jfu/Google-KDE-OAuth/client_secret" (dig "googleOAuth" "clientSecretRef" "" .kde)) }}</setting>
           <setting name="ForceClientAuthViaRequestBody" type="b">true</setting>
         </group>
       </group>

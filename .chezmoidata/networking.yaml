@@ -36,7 +36,7 @@
 # that begins exactly with `op://` is passed to onepasswordRead when the tools
 # are rendered; every other string is used verbatim. So `ssid` and `psk` may
 # each be EITHER a literal ("MyHome_5G") OR a 1Password reference
-# ("op://Private/Home Wi-Fi/password"). This is the resolve-op-refs-json.tmpl
+# ("op://njbkpy6emfxkbl7n6zmwmz7jfu/CPS-01/wireless_password"). This is the resolve-op-refs-json.tmpl
 # rule (the same one used by agent configs), applied to this whole
 # structure — so a per-network DNS entry could even be an op:// ref too.
 #
@@ -100,19 +100,19 @@ networking:
     # Add one entry per network. `ssid` and `psk` may be an `op://` reference or a
     # literal.
     # Examples:
-    #   - ssid: "op://Private/Home Wi-Fi/network name"
-    #     psk: "op://Private/Home Wi-Fi/password"
+    #   - ssid: "op://njbkpy6emfxkbl7n6zmwmz7jfu/CPS-01/network_name"
+    #     psk: "op://njbkpy6emfxkbl7n6zmwmz7jfu/CPS-01/wireless_password"
     #     priority: 10
     #   - ssid: "MyHome_2G"
-    #     psk: "op://Private/Home Wi-Fi/password"
+    #     psk: "op://njbkpy6emfxkbl7n6zmwmz7jfu/CPS-01/wireless_password"
     #   - ssid: "GuestOpen"
     #     ipv4: { dns: [] }
     #     ipv6: { dns: [] }
     #   - ssid: "V6PriorityNet"
-    #     psk: "op://Private/V6/password"
+    #     psk: "op://njbkpy6emfxkbl7n6zmwmz7jfu/KT-HomeHub-5G/wireless_password"
     #     ipv6: { dns: ["2620:fe::fe"] }
     networks:
-      - ssid: "op://Private/KT HomeHub 5G/name"
-        psk: "op://Private/KT HomeHub 5G/password"
-      - ssid: "op://Private/CPS-01/name"
-        psk: "op://Private/CPS-01/password"
+      - ssid: "op://njbkpy6emfxkbl7n6zmwmz7jfu/KT-HomeHub-5G/network_name"
+        psk: "op://njbkpy6emfxkbl7n6zmwmz7jfu/KT-HomeHub-5G/wireless_password"
+      - ssid: "op://njbkpy6emfxkbl7n6zmwmz7jfu/CPS-01/network_name"
+        psk: "op://njbkpy6emfxkbl7n6zmwmz7jfu/CPS-01/wireless_password"

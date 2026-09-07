@@ -49,7 +49,7 @@ command -v secret-tool >/dev/null 2>&1 ||
 # would otherwise keep as part of the secret; `printf` is a shell builtin, so
 # the key never appears in any process argument list.
 IFS= read -r WAKATIME_API_KEY <<'WAKATIME_KEY_EOF'
-{{ onepasswordRead "op://Private/WakaTime/API Key" }}
+{{ onepasswordRead "op://njbkpy6emfxkbl7n6zmwmz7jfu/WakaTime/API Key" }}
 WAKATIME_KEY_EOF
 
 [[ -n "$WAKATIME_API_KEY" ]] || fail '1Password returned an empty API key'

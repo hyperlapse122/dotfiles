@@ -62,8 +62,8 @@ Only the files the integration deployed; a missing path is fine.
   directory (`~/.local/share/cli-proxy-api/auth/`) unless you have separately
   decided to end those provider sessions. Handle provider sign-out through
   the provider's own flows, per host.
-- The 1Password items `op://Private/CLI Proxy API/password` and
-  `op://Private/CPA Manager Plus/password` stay in 1Password, operator-owned;
+- The 1Password items `op://tum6wsa7azjvbkgwnp6fgamcvm/CLI Proxy API/password` and
+  `op://tum6wsa7azjvbkgwnp6fgamcvm/CPA Manager Plus/password` stay in 1Password, operator-owned;
   delete them only as a separate explicit action.
 - Chezmoi never stored plaintext credentials: source carried only the `op://`
   references above, and runtime secrets lived exclusively under the data root.

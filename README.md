@@ -168,7 +168,7 @@ installs the 1Password app and CLI but cannot yet resolve secrets. So:
    [GitHub API token](#github-api-token-important) below):
 
    ```sh
-   export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")  # optional
+   export GITHUB_TOKEN=$(op read "op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/PAT")  # optional
    chezmoi apply
    ```
 4. On a Jetson, after the first apply, run
@@ -193,7 +193,7 @@ stops the bootstrap.
 To set one, inject the PAT from 1Password in the same shell:
 
 ```sh
-export GITHUB_TOKEN=$(op read "op://Private/GitHub/PAT")
+export GITHUB_TOKEN=$(op read "op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/PAT")
 chezmoi apply
 ```
 

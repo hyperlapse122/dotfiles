@@ -87,8 +87,8 @@ Managing multiple AI coding agents across machines requires consistent access to
 
 #### Exa Web Search Re-integration
 
-- R19. `agents.mcp.servers` in `.chezmoidata/agents.yaml` must re-add the `websearch` Exa MCP server (`https://mcp.exa.ai/mcp` with `x-api-key: op://Private/Exa/API Key`) for shared MCP tool consumption in `~/.mcp.json`.
-- R20. `agents.omp.auth.env` and `.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl` closed set must re-add `EXA_API_KEY` (`op://Private/Exa/API Key`).
+- R19. `agents.mcp.servers` in `.chezmoidata/agents.yaml` must re-add the `websearch` Exa MCP server (`https://mcp.exa.ai/mcp` with `x-api-key: op://tum6wsa7azjvbkgwnp6fgamcvm/Exa/API Key`) for shared MCP tool consumption in `~/.mcp.json`.
+- R20. `agents.omp.auth.env` and `.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl` closed set must re-add `EXA_API_KEY` (`op://tum6wsa7azjvbkgwnp6fgamcvm/Exa/API Key`).
 - R21. `agents.omp.settings` must re-add `providers.webSearchOrder: [exa, gemini]` and `exa.enabled: true`.
 
 ### Key Flows
@@ -268,7 +268,7 @@ flowchart TB
   - `dot_claude/symlink_skills.tmpl`
   - `dot_gemini/symlink_skills.tmpl`
 - **Approach:**
-  1. In `.chezmoidata/agents.yaml`, add `websearch` Exa server to `agents.mcp.servers` (`https://mcp.exa.ai/mcp`, `x-api-key: op://Private/Exa/API Key`).
+  1. In `.chezmoidata/agents.yaml`, add `websearch` Exa server to `agents.mcp.servers` (`https://mcp.exa.ai/mcp`, `x-api-key: op://tum6wsa7azjvbkgwnp6fgamcvm/Exa/API Key`).
   2. Author `readonly_dot_mcp.json.tmpl` rendering all active `agents.mcp.servers` with `mcpServers` JSON structure, resolving `op://` references.
   3. Author `dot_claude/symlink_skills.tmpl` declaring target `.agents/skills`.
   4. Author `dot_gemini/symlink_skills.tmpl` declaring target `.agents/skills`.

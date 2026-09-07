@@ -95,7 +95,7 @@ The brainstorm's deferred questions (data-file name and key structure; neutral t
 
 ### Assumptions
 
-- The two opencode provider-auth op-item references, currently resolved inside the to-be-deleted secret files, are `op://Private/Opencode/API Key` and `op://Private/OpenRouter/API Key` (verified from `dot_config/opencode/exact_private_secrets/create_private_readonly_*.tmpl`). They move verbatim into the opencode template.
+- The two opencode provider-auth op-item references, currently resolved inside the to-be-deleted secret files, are `op://tum6wsa7azjvbkgwnp6fgamcvm/Opencode/API Key` and `op://tum6wsa7azjvbkgwnp6fgamcvm/OpenRouter/API Key` (verified from `dot_config/opencode/exact_private_secrets/create_private_readonly_*.tmpl`). They move verbatim into the opencode template.
 - Go-template `range` over a YAML **sequence** (list) is order-stable, so the rendered server/skill order is deterministic across the three consumers. The data must use lists, not maps, for `servers` and `remote`.
 
 ### Risks
@@ -152,7 +152,7 @@ The brainstorm's deferred questions (data-file name and key structure; neutral t
 - **Requirements:** R4, R6, R7, R8
 - **Dependencies:** U1
 - **Files:** `dot_config/opencode/readonly_opencode.json.tmpl` (modified); `dot_config/opencode/exact_private_secrets/` (removed, all four `.tmpl` files)
-- **Approach:** The `mcp` block becomes `{{ range .agents.mcp.servers }}` and is **behavior-preserving** — the rendered per-server fields must match the current output exactly. For stdio: `type: "local"` with `command` = `[command] + args` as a single array (opencode local servers take one command array, no separate `args`). For http: `type: "remote"` + `"enabled": true` + `url` + `headers` (value `onepasswordRead` of the data op-ref). Emit object entries with no trailing comma. The two provider-auth `apiKey` values replace `{file:./secrets/opencode-api-key}` / `{file:./secrets/openrouter-api-key}` with inline `{{ onepasswordRead "op://Private/Opencode/API Key" }}` / `{{ onepasswordRead "op://Private/OpenRouter/API Key" }}`. Delete `exact_private_secrets/` and its four templates (context7, exa, opencode, openrouter).
+- **Approach:** The `mcp` block becomes `{{ range .agents.mcp.servers }}` and is **behavior-preserving** — the rendered per-server fields must match the current output exactly. For stdio: `type: "local"` with `command` = `[command] + args` as a single array (opencode local servers take one command array, no separate `args`). For http: `type: "remote"` + `"enabled": true` + `url` + `headers` (value `onepasswordRead` of the data op-ref). Emit object entries with no trailing comma. The two provider-auth `apiKey` values replace `{file:./secrets/opencode-api-key}` / `{file:./secrets/openrouter-api-key}` with inline `{{ onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/Opencode/API Key" }}` / `{{ onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/OpenRouter/API Key" }}`. Delete `exact_private_secrets/` and its four templates (context7, exa, opencode, openrouter).
 - **Patterns to follow:** existing `opencode.json.tmpl` `mcp` block shape.
 - **Test scenarios:**
   - Renders 3 mcp servers byte-identical to the current output: codegraph `local` with `command: ["codegraph","serve","--mcp"]`; context7/websearch `remote` with `"enabled": true`, url, and inline header keys.

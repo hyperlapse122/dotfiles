@@ -30,7 +30,7 @@ On an NVIDIA Jetson AGX Thor developer kit (`jetson` fact = true), Tailscale is 
 ### Problem Frame
 
 1. `.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl` was listed in `.chezmoiignore` as `.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl`. Because chezmoi script targets omit `.tmpl`, this ignore rule did not match the rendered script target `.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh`.
-2. When `run_once_after_auth-tailscale.sh.tmpl` rendered without gating on Jetson, line 41 executed `onepasswordRead "op://Private/Tailscale/Auth Key"`. On a Jetson machine without tailnet credentials, this causes a render failure, and if executed, attempts to join Tailscale against policy.
+2. When `run_once_after_auth-tailscale.sh.tmpl` rendered without gating on Jetson, line 41 executed `onepasswordRead "op://njbkpy6emfxkbl7n6zmwmz7jfu/Tailscale/Auth Key"`. On a Jetson machine without tailnet credentials, this causes a render failure, and if executed, attempts to join Tailscale against policy.
 3. The clean, established pattern in this repository for host-gated scripts is to evaluate `$facts.jetson` within the template and emit a declared skip via `skip.sh.tmpl` (`form: "not_applicable"`, `reason: "Jetson host intentionally stays off the tailnet"`), enclosing the `onepasswordRead` and execution logic inside the `{{ else }}` block.
 4. For mxm4-haptic, Jetson hosts have no MX Master 4 hardware. The build script `run_after_build-mxm4-haptic.sh` and systemd units are ignored via `.chezmoiignore`, and the `h82-dotfiles` marketplace (`.local/share/omp-plugins`) and plugin updater must also cleanly skip `mxm4-haptic` on Jetson.
 
@@ -39,7 +39,7 @@ On an NVIDIA Jetson AGX Thor developer kit (`jetson` fact = true), Tailscale is 
 **Tailscale Authentication Gating**
 
 - R1. `.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl` resolves `$facts.jetson` via `facts.tmpl`. When `jetson` is true, the script emits a declared skip via `skip.sh.tmpl` with `form: "not_applicable"`, `site: "jetson-off-tailnet"`, and `reason: "Jetson host intentionally stays off the tailnet"`.
-- R2. When `jetson` is true, `onepasswordRead "op://Private/Tailscale/Auth Key"` is never evaluated during template rendering.
+- R2. When `jetson` is true, `onepasswordRead "op://njbkpy6emfxkbl7n6zmwmz7jfu/Tailscale/Auth Key"` is never evaluated during template rendering.
 - R3. On non-Jetson hosts (`jetson` is false), the existing Tailscale authentication flow remains byte-for-byte identical.
 
 **Skip Declaration Matrix & Verification**
@@ -68,7 +68,7 @@ On an NVIDIA Jetson AGX Thor developer kit (`jetson` fact = true), Tailscale is 
 ```
 run_once_after_auth-tailscale.sh.tmpl
   ├── $facts.jetson == true  ──> skip.sh.tmpl (not_applicable / jetson-off-tailnet) [no op:// read]
-  └── $facts.jetson == false ──> full Tailscale auth flow + op://Tailscale/Auth Key read
+  └── $facts.jetson == false ──> full Tailscale auth flow + op://njbkpy6emfxkbl7n6zmwmz7jfu/Tailscale/Auth Key read
 ```
 
 ### Key Technical Decisions (KTDs)

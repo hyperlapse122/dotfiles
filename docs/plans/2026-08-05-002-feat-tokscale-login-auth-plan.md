@@ -13,7 +13,7 @@ product_contract_source: ce-plan-bootstrap
 ## Goal Capsule
 
 - **Objective:** Provision the Tokscale API token from 1Password into `~/.config/tokscale/credentials.json` via `tokscale login --token`, mirroring the established `auth-gitlab` / `auth-github` onchange pattern.
-- **Authority:** The user request names the exact command shape (`tokscale login --token <token>`), the 1Password reference (`op://Private/Tokscale/API Token`), and the pattern to mirror (the `glab` CLI). Repository chezmoi conventions govern placement, fingerprinting, and verification.
+- **Authority:** The user request names the exact command shape (`tokscale login --token <token>`), the 1Password reference (`op://njbkpy6emfxkbl7n6zmwmz7jfu/Tokscale/API Token`), and the pattern to mirror (the `glab` CLI). Repository chezmoi conventions govern placement, fingerprinting, and verification.
 - **Execution profile:** A bounded managed auth script and isolated render-parity test; do not apply the source state to the live home directory.
 - **Stop conditions:** Stop if `tokscale login --token` writes persistent state changes beyond `~/.config/tokscale/credentials.json` (a read-only API validation call is expected and excluded), or if the script cannot soft-skip cleanly when tokscale is absent.
 - **Tail ownership:** Commit, push, PR creation, CI, and review handling are owned by the invoking LFG pipeline.
@@ -32,7 +32,7 @@ Tokscale persists its account token to `~/.config/tokscale/credentials.json` onl
 
 ### Requirements
 
-- R1. A `run_onchange_after_auth-tokscale.sh.tmpl` script in `.chezmoiscripts/10-auth/` reads the Tokscale API token from `op://Private/Tokscale/API Token` via `secret-read.tmpl`.
+- R1. A `run_onchange_after_auth-tokscale.sh.tmpl` script in `.chezmoiscripts/10-auth/` reads the Tokscale API token from `op://njbkpy6emfxkbl7n6zmwmz7jfu/Tokscale/API Token` via `secret-read.tmpl`.
 - R2. The script runs `tokscale login --token <token>` to persist the token to `~/.config/tokscale/credentials.json`.
 - R3. The rendered token content IS the onchange fingerprint trigger; a token rotation changes the rendered hash and re-runs login on the next apply. Verified write set: `tokscale login --token` writes `~/.config/tokscale/credentials.json` (token + profile, mode 0600) and expands `settings.json` with UI defaults on first login (mode 0644, no secrets); `device.json` and `star-cache.json` are untouched. Re-runs are idempotent upserts — both writes overwrite rather than accumulate.
 - R4. The script soft-skips (exit 0) when `tokscale` is not on PATH, matching `auth-github`'s behavior when `gh` is absent. The managed wrapper at `~/.local/bin/tokscale` is always deployed on POSIX hosts (no `.chezmoiignore` entry), so the only host where this soft-skip fires is one where the wrapper was manually removed.
@@ -43,7 +43,7 @@ Tokscale persists its account token to `~/.config/tokscale/credentials.json` onl
 
 - **In scope:** A POSIX auth script mirroring `auth-gitlab` / `auth-github`, and an isolated render-parity test wired into CI.
 - **Out of scope:** A Windows `.ps1` counterpart (the existing `tokscale` wrapper is POSIX-only and has no `.chezmoiignore` entry, so it already deploys a non-functional bash file on Windows — out of parity with this task), changing the `tokscale` runtime wrapper, changing Tokscale installation (`dot_config/mise/config.toml`), and applying the source state to the live home directory.
-- **Pre-merge verification:** Confirm `op://Private/Tokscale/API Token` resolves live (or via the GPG cache) on the target host — the CI op stub returns a fixed dummy value regardless of the ref string, so a misspelled vault/item/field passes CI green and fails only on live apply.
+- **Pre-merge verification:** Confirm `op://njbkpy6emfxkbl7n6zmwmz7jfu/Tokscale/API Token` resolves live (or via the GPG cache) on the target host — the CI op stub returns a fixed dummy value regardless of the ref string, so a misspelled vault/item/field passes CI green and fails only on live apply.
 
 ### Key Decision
 
@@ -64,7 +64,7 @@ Tokscale persists its account token to `~/.config/tokscale/credentials.json` onl
 - `tokscale login --token <token>` validates the token via the Tokscale API and writes `~/.config/tokscale/credentials.json` (`{token, username, avatarUrl, createdAt}`, mode 0600). The full write set is verified during implementation (R3); if `device.json` or other config files are also written, the script must account for it.
 - The `TOKSCALE_API_TOKEN` environment variable does not trigger a credential-file write — it overrides saved credentials for a single invocation only (confirmed via Tokscale README and issue #203).
 - The `tokscale` wrapper at `dot_local/bin/private_executable_tokscale.tmpl` is POSIX-only and deploys on all platforms (no `.chezmoiignore` entry); the auth script is POSIX-only to match.
-- `secret-read.tmpl` resolves `op://Private/Tokscale/API Token` through the GPG cache or live `op`, identical to how it resolves the GitLab and GitHub PATs.
+- `secret-read.tmpl` resolves `op://njbkpy6emfxkbl7n6zmwmz7jfu/Tokscale/API Token` through the GPG cache or live `op`, identical to how it resolves the GitLab and GitHub PATs.
 - `~/.config/tokscale/credentials.json` is already mode 0600 (tokscale-enforced); the script does not need to `chmod` it, but a defensive `chmod 600` after a successful login is harmless.
 
 ### Sources and Research
@@ -91,7 +91,7 @@ Tokscale persists its account token to `~/.config/tokscale/credentials.json` onl
   1. Add a POSIX `run_onchange_after_auth-tokscale.sh.tmpl` guarded by `{{ if ne .chezmoi.os "windows" -}}`.
   2. Extend `~/.local/bin` onto PATH when absent (matching `auth-github` / `auth-gitlab`).
   3. Resolve the tokscale command: `command -v tokscale` → use it, else warn and soft-skip (exit 0). No `mise exec` fallback (KTD3 — the wrapper is always deployed).
-  4. Read the token via `{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://Private/Tokscale/API Token") }}` into a shell variable.
+  4. Read the token via `{{ includeTemplate "secret-read.tmpl" (dict "ctx" . "ref" "op://njbkpy6emfxkbl7n6zmwmz7jfu/Tokscale/API Token") }}` into a shell variable.
   5. Run `tokscale login --token "$TOKEN"`; exit non-zero on failure so chezmoi retries on the next apply.
   6. After a successful login, defensively `chmod 600 ~/.config/tokscale/credentials.json` (tokscale already sets 0600; this is belt-and-suspenders).
   7. Header comments document the onchange trigger, the after-phase reasoning, the argv-exposure tradeoff, and the plaintext at-rest posture (KTD1).

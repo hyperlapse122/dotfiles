@@ -14,7 +14,7 @@ origin: user request
 
 ## Goal Capsule
 
-- **Objective:** Remove the expired Z.ai coding plan from the chezmoi source state — the `zai` hops in omp's fallback chains, the `ZAI_API_KEY` credential and every `op://Private/Z.ai/API Key` reference, and the `claude-glm` wrapper that fronted Z.ai's Anthropic-compatible endpoint — prune the deployed wrapper, and report the residue no mechanism can prune. A fresh host converges with no Z.ai surface.
+- **Objective:** Remove the expired Z.ai coding plan from the chezmoi source state — the `zai` hops in omp's fallback chains, the `ZAI_API_KEY` credential and every `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` reference, and the `claude-glm` wrapper that fronted Z.ai's Anthropic-compatible endpoint — prune the deployed wrapper, and report the residue no mechanism can prune. A fresh host converges with no Z.ai surface.
 - **Product authority:** The user's request governs scope. The root `AGENTS.md` governs chezmoi source attributes, the no-teardown rule, and isolated verification. `.agents/skills/sync-omp-models/SKILL.md` governs every edit to `modelRoles`, `task.agentModelOverrides`, and `retry.fallbackChains`.
 - **Execution profile:** A bounded data-and-script removal plus knowledge-file realignment. Verification is isolated rendering and the existing reconcile test; never apply the source state to live `$HOME`, and never edit a live credential file without the user's explicit consent.
 - **Stop conditions:** Stop if removing a `zai` hop would leave any role without a primary, or would newly break the anchor rule for a role that satisfied it before. Stop if a prune entry would delete a path chezmoi never deployed.
@@ -26,7 +26,7 @@ origin: user request
 
 ### Summary
 
-Delete the `zai` provider surface from this repository. Five omp fallback chains drop their `zai/` hop, the `ZAI_API_KEY` credential leaves the closed set that `run_after_config-omp-auth` reconciles, the two wrappers that read `op://Private/Z.ai/API Key` lose that reference (one is deleted outright), and the `sync-omp-models` knowledge files record which GLM families are still reachable. The already-deployed `~/.local/bin/claude-glm` is pruned through `.chezmoiremove`. The residue no mechanism can prune — a live secret inside a live-written dotenv, stale keys inside a live-written TOML, and the credential's own lifecycle at 1Password and at Z.ai — is reported to the operator with exact steps.
+Delete the `zai` provider surface from this repository. Five omp fallback chains drop their `zai/` hop, the `ZAI_API_KEY` credential leaves the closed set that `run_after_config-omp-auth` reconciles, the two wrappers that read `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` lose that reference (one is deleted outright), and the `sync-omp-models` knowledge files record which GLM families are still reachable. The already-deployed `~/.local/bin/claude-glm` is pruned through `.chezmoiremove`. The residue no mechanism can prune — a live secret inside a live-written dotenv, stale keys inside a live-written TOML, and the credential's own lifecycle at 1Password and at Z.ai — is reported to the operator with exact steps.
 
 ### Problem Frame
 
@@ -50,7 +50,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 
 - R5. `agents.omp.auth.env` declares exactly `EXA_API_KEY`, `OPENROUTER_API_KEY`, and `OPENCODE_API_KEY`, and its explanatory comment states that three-variable closed set.
 - R6. `.chezmoiscripts/70-agents/run_after_config-omp-auth.sh.tmpl` enforces that same three-name set through the existing strict name allowlist — a membership test against `$required`, never a name-shape check — so its render-time diagnostics report three names from the single existing `join`.
-- R7. No file outside `docs/plans/**` resolves `op://Private/Z.ai/API Key`.
+- R7. No file outside `docs/plans/**` resolves `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key`.
 
 **claude-glm wrapper**
 
@@ -83,7 +83,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 - AE2. **Covers R5, R6, R13.** **Given** an existing `~/.omp/agent/.env` holding an unrelated token and duplicate managed assignments, **When** the rendered auth script runs against it, **Then** exactly one assignment exists for each of the three managed names, the unrelated token is byte-identical, and the file is mode 0600.
 - AE3. **Covers R6.** **Given** `agents.omp.auth.env` rendered with an empty list, **When** the auth template renders, **Then** it fails naming `EXA_API_KEY` as the first missing required variable.
 - AE4. **Covers R10.** **Given** a host that received `~/.local/bin/claude-glm`, **When** `.chezmoiremove` renders on Linux and in a container, **Then** `.local/bin/claude-glm` is present in both.
-- AE5. **Covers R7.** **Given** the whole worktree except `docs/plans/**`, **When** searched for `op://Private/Z.ai`, **Then** there are no matches.
+- AE5. **Covers R7.** **Given** the whole worktree except `docs/plans/**`, **When** searched for `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai`, **Then** there are no matches.
 
 ### Scope Boundaries
 
@@ -91,7 +91,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
 - **`opencode-go/glm-5.2`** — kept. It is the `advisor` role primary and the `reviewer` subagent target through `"@advisor"`. Only `zai/`-served GLM ids leave.
 - **`vision`'s missing `anthropic` anchor** — pre-existing and out of scope. R3 records it; fixing it is a provider move, which the sync skill makes a separate human decision.
 - **`dot_config/tokscale/custom-pricing.json`** — untouched. Its GLM entries still price `opencode-go` GLM usage.
-- **Tokscale itself** — the wrapper keeps its own `op://Private/Tokscale/API Token` auth script and its mise provisioning. Only the `ZAI_API_KEY` line leaves.
+- **Tokscale itself** — the wrapper keeps its own `op://njbkpy6emfxkbl7n6zmwmz7jfu/Tokscale/API Token` auth script and its mise provisioning. Only the `ZAI_API_KEY` line leaves.
 - **Live `$HOME`, 1Password, and Z.ai** — not mutated by this run. R15 reports; the operator acts.
 - **`docs/plans/**`** — not rewritten. See KTD6.
 - **Deferred to Follow-Up Work** — none.
@@ -114,7 +114,7 @@ Two removal mechanics matter and are easy to get wrong. First, omp only sees a p
   The entry is therefore scoped, not permanent: its comment names the removal trigger, and R15.1 couples deleting it to deleting the dotenv line. Chosen over two alternatives — credential removal alone (leaves the scan window open, and makes the branch's correctness depend on an operator step) and a permanent `disabledProviders` entry (dead data once the key is gone, and a second edit needed to ever re-enable the provider). Governs R4b, R5, R6, R15.
 - KTD2. **No teardown script; the unprunable residue is reported, not automated.** The root `AGENTS.md` forbids teardown/revert scripts and sanctions exactly three alternatives: delete the managed source, use `.chezmoidata/system.yaml` `removed:`, or document a one-time manual reversal. The mechanical reason the third applies here is that neither reconciler can be asked to delete a *line*: both preserve undeclared entries by design, and `system.yaml` `removed:` accepts only absolute `/etc` **file** paths for `rm -f`, so it cannot reach inside `~/.omp/agent/.env` or `~/.config/agent-of-empires/config.toml`. Chosen over adding a prune step to either provisioner. Governs R15.
 - KTD3. **The deployed `claude-glm` binary is pruned through `.chezmoiremove`, ungated.** The asymmetry with KTD2 is mechanical, not a preference: `claude-glm` is a whole **file** chezmoi itself deployed, which is exactly what `.chezmoiremove` deletes, whereas the dotenv secret is a **line inside a file omp writes and owns**. `.local/bin/chezmoi-secrets-sync` is the same shape as `claude-glm`: a `dot_local/bin/executable_*.tmpl` wrapper, pruned with no container gate because the container ignore rules do not exclude `.local/bin`. A prune entry is a target-state declaration, not a teardown script, so KTD2 does not cover it. Governs R10.
-- KTD4. **Purge the tokscale `ZAI_API_KEY` too.** (session-settled: user-approved — chosen over leaving `dot_local/bin/private_executable_tokscale.tmpl` untouched: it is the last `op://Private/Z.ai/API Key` reference, so deleting the now-useless 1Password item would otherwise fail every `chezmoi apply`.) This is what makes R15's 1Password step safe. Governs R7.
+- KTD4. **Purge the tokscale `ZAI_API_KEY` too.** (session-settled: user-approved — chosen over leaving `dot_local/bin/private_executable_tokscale.tmpl` untouched: it is the last `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` reference, so deleting the now-useless 1Password item would otherwise fail every `chezmoi apply`.) This is what makes R15's 1Password step safe. Governs R7.
 - KTD5. **Retain the unreachable GLM families in `model-notes.md` with a dated note.** That file is keyed by family, not by provider, and already documents unreachable families (GPT Sol, Terra, mini) with a dated line rather than deleting them — which is what keeps its substitution tables meaningful. The residual risk is that a substitution row's first swap can name a family with no provider today; the dated note inside the family entry is the mitigation, and R11 requires the row stay traceable to it. Chosen over deleting the GLM Flash and vision sections. Governs R11.
 - KTD6. **`docs/plans/**` is historical and is not rewritten.** The sync skill states plans are not an input and their frozen values are stale by construction; prior provider removals left their plan records intact. Governs the `docs/plans/**` scope boundary.
 
@@ -172,7 +172,7 @@ graph LR
   - `.chezmoidata/agents.yaml` parses, and the rendered settings script still asserts the same declared paths.
 - **Verification:** the settings provisioner renders, and the chain/anchor checks above hold on the rendered data.
 
-### U2. Retire the `ZAI_API_KEY` credential and every `op://Private/Z.ai` reference
+### U2. Retire the `ZAI_API_KEY` credential and every `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai` reference
 
 - **Goal:** The omp dotenv closed set is three variables, and no file resolves the Z.ai secret.
 - **Requirements:** R5, R6, R7, R15. Implements KTD4.
@@ -270,7 +270,7 @@ Run every check from the worktree root with an isolated destination. Never apply
 - **Manifest gating.** Render `.chezmoiremove` on Linux and with the container fact true; `.local/bin/claude-glm` must appear in both, with no change to existing entries.
 - **Shell syntax.** `bash -n` on each rendered POSIX script.
 - **Reconciliation coverage.** `.ci/test-omp-agent-reconcile.sh <rendered-auth> <rendered-plugins> <built-haptic-package> <rendered-settings>`, matching the argument order in `.github/workflows/ci.yml`.
-- **Absence proof.** Search the worktree excluding `docs/plans/**` for `zai`, `ZAI_API_KEY`, `op://Private/Z.ai`, `api.z.ai`, and `claude-glm`. Permitted matches: the past-tense removal notes and the R4b `disabledProviders` entry and comment in `.chezmoidata/agents.yaml`, the self-marked unreachable family entries in `model-notes.md`, the R10 prune entry and its comment in `.chezmoiremove`, and the base64 substring false positive in `packages/bun.lock`. Anything else is a miss.
+- **Absence proof.** Search the worktree excluding `docs/plans/**` for `zai`, `ZAI_API_KEY`, `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai`, `api.z.ai`, and `claude-glm`. Permitted matches: the past-tense removal notes and the R4b `disabledProviders` entry and comment in `.chezmoidata/agents.yaml`, the self-marked unreachable family entries in `model-notes.md`, the R10 prune entry and its comment in `.chezmoiremove`, and the base64 substring false positive in `packages/bun.lock`. Anything else is a miss.
 - **Repository hygiene.** `git diff --check`, `git status`, and a diff limited to the requested scope.
 
 **Apply-time side effects.** None of the changed scripts restart a network or system service, so no console-only apply is required. `run_after_config-omp-auth` already retries on every apply because its rendered secrets are not a safe fingerprint input; `.chezmoiremove` acts in the target-application phase.
@@ -291,7 +291,7 @@ Run every check from the worktree root with an isolated destination. Never apply
 **Per unit**
 
 - U1: no chain names `zai`; no role's anchor status is worse than before, with `vision` recorded as the unchanged pre-existing exception; `disabledProviders` carries the temporary `zai` entry with its removal trigger named; every touched comment describes the surviving order.
-- U2: the closed set is three names in the data, the template, and the comment; the allowlist stays a strict membership test; no `op://Private/Z.ai` reference remains.
+- U2: the closed set is three names in the data, the template, and the comment; the allowlist stays a strict membership test; no `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai` reference remains.
 - U3: the wrapper source is gone, neither aoe map names `claude-glm`, and `.chezmoiremove` prunes `.local/bin/claude-glm` in both gate states.
 - U4: the reconcile test asserts the three-name managed set and keeps `NODE_OPTIONS` coverage plus one managed variable per reconcile property (collapse, overwrite, insert-when-missing); separately, the guard test's model-credential probe no longer names `ZAI_API_KEY`.
 - U5: GLM main text lists only `opencode-go/glm-5*`; the Flash and vision entries carry a dated unreachable note; no live example names an unreachable id.

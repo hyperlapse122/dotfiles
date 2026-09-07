@@ -26,5 +26,5 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 
 env -u GITHUB_TOKEN gh auth login --hostname github.com --git-protocol https --with-token <<EOF
-{{ onepasswordRead "op://Private/GitHub/PAT" }}
+{{ onepasswordRead "op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/PAT" }}
 EOF

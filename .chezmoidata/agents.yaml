@@ -26,7 +26,7 @@ agents:
       transport: http
       url: https://mcp.context7.com/mcp
       headers:
-        CONTEXT7_API_KEY: op://Private/Context7/API Key
+        CONTEXT7_API_KEY: op://tum6wsa7azjvbkgwnp6fgamcvm/Context7/API Key
     - name: mdn
       transport: http
       url: https://mcp.mdn.mozilla.net/
@@ -36,7 +36,7 @@ agents:
       transport: http
       url: https://mcp.exa.ai/mcp
       headers:
-        x-api-key: op://Private/Exa/API Key
+        x-api-key: op://tum6wsa7azjvbkgwnp6fgamcvm/Exa/API Key
   skills:
     external:
     - name: agent-browser

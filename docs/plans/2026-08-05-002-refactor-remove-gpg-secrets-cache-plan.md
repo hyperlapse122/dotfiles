@@ -305,7 +305,7 @@ flowchart TB
 
 | Gate | Command | Applies to | Done signal |
 |---|---|---|---|
-| Render parity | `chezmoi --config <scratch>/empty.toml --source "$PWD" --destination <scratch>/target execute-template < <file>` with a counting `op` stub on `PATH` and a scratch `HOME`, run per call site before and after | U1, U2 | Output byte-identical per file; total stub reads stay at 17 across 15 distinct references, with `op://Private/Z.ai/API Key` read three times |
+| Render parity | `chezmoi --config <scratch>/empty.toml --source "$PWD" --destination <scratch>/target execute-template < <file>` with a counting `op` stub on `PATH` and a scratch `HOME`, run per call site before and after | U1, U2 | Output byte-identical per file; total stub reads stay at 17 across 15 distinct references, with `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` read three times |
 | Windows trust | `.ci/test-windows-trust.sh` | U3 | Exits zero, renders three PowerShell scripts |
 | omp reconcile | `.ci/test-omp-agent-reconcile.sh` | U5 | Exits zero, unchanged behavior |
 | Manifest gating | `chezmoi … execute-template < .chezmoiremove` on Linux, with an `os=windows` override, and with the container fact true | U4 | Path present on Linux and in containers, absent on Windows, other entries unchanged |
@@ -332,7 +332,7 @@ Do not run `chezmoi apply` against the real `$HOME` as a verification step. The 
 
 - `docs/plans/2026-07-22-002-refactor-secrets-gpg-cache-plan.md` — the plan this reverses, including the original ~1-minute apply estimate and the accepted-risk note on permanent public ciphertext.
 - `docs/plans/2026-08-01-001-feat-omp-openrouter-opencode-keys-plan.md:130,137` — the second historical reference to the bundle and sync CLI.
-- Measured on this worktree by rendering every Linux call site against a counting `op` stub: 17 `op read` invocations across 15 distinct references per full render pass, with `op://Private/Z.ai/API Key` read three times. One of the 15, the private-key import reference, was never served by the cache — it delivers the key that decrypts the bundle. Cache-served traffic was therefore 16 reads across 14 references.
+- Measured on this worktree by rendering every Linux call site against a counting `op` stub: 17 `op read` invocations across 15 distinct references per full render pass, with `op://tum6wsa7azjvbkgwnp6fgamcvm/Z.ai/API Key` read three times. One of the 15, the private-key import reference, was never served by the cache — it delivers the key that decrypts the bundle. Cache-served traffic was therefore 16 reads across 14 references.
 - `.chezmoitemplates/resolve-op-refs-json.tmpl:40-45,55,66,71` — the cache code to strip; `:8-12,14-21,25-29` — the doc-comment contract to rewrite.
 - `.chezmoiignore:41-46` — the Windows gate on `.local/bin/*` that already makes the manifest entry inert there, independent of the entry's own gate.
 - `.chezmoiremove:42-55` — the `src/garden.yaml` precedent for a gated prune entry; its gate is at `:53-55`.

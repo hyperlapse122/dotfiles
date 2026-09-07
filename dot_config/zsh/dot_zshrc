@@ -44,7 +44,7 @@ chezmoi() {
     GITHUB_TOKEN="$token" command chezmoi "$@"
     return
   fi
-  if command -v op >/dev/null 2>&1 && token="$(op read 'op://Private/GitHub/PAT' 2>/dev/null)" && [[ -n "$token" ]]; then
+  if command -v op >/dev/null 2>&1 && token="$(op read 'op://tum6wsa7azjvbkgwnp6fgamcvm/GitHub/PAT' 2>/dev/null)" && [[ -n "$token" ]]; then
     GITHUB_TOKEN="$token" command chezmoi "$@"
     return
   fi
