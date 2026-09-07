@@ -94,6 +94,7 @@ for u in linux_data["units"] + macos_data["units"]:
 
 rejects unknown-producer 'producer: external' 'producer: madeUpProducer' 'unknown producer'
 rejects unknown-safety 'safetyProfile: native-single-file' 'safetyProfile: unknownProfile' 'unknown safetyProfile'
+rejects native-multi-unproven $'safetyProfile: native-multi-file\n      proofEligible: true' $'safetyProfile: native-multi-file\n      proofEligible: false' 'with native-multi-file must have proofEligible: true'
 rejects windows-platform 'platforms: [linux, macos]' 'platforms: [linux, macos, windows]' 'unsupported platform'
 rejects duplicate-command 'name: agent-browser' $'name: agent-browser\n        - name: agent-browser' 'duplicate public command'
 rejects path-traversal 'name: agent-browser' 'name: ../../bin/evil' 'path traversal'

@@ -25,10 +25,13 @@
 {{-   if not (has $unit.producer $producerClasses) -}}{{- fail (printf "commands.yaml: unit %q has unknown producer %q" $unitId $unit.producer) -}}{{- end -}}
 {{-   if not (has $unit.safetyProfile $safetyProfiles) -}}{{- fail (printf "commands.yaml: unit %q has unknown safetyProfile %q" $unitId $unit.safetyProfile) -}}{{- end -}}
 {{-   $proofEligible := false -}}{{- if hasKey $unit "proofEligible" -}}{{- $proofEligible = $unit.proofEligible -}}{{- end -}}
-{{-   if and (eq $unit.safetyProfile "native-single-file") (not $proofEligible) -}}
-{{-     fail (printf "commands.yaml: unit %q with native-single-file must have proofEligible: true" $unitId) -}}
+{{- /* The native profiles are the prune-proof-eligible ones: every file in the unit
+       is a native executable, so a running process proves itself through /proc. */ -}}
+{{-   $nativeProfile := has $unit.safetyProfile (list "native-single-file" "native-multi-file") -}}
+{{-   if and $nativeProfile (not $proofEligible) -}}
+{{-     fail (printf "commands.yaml: unit %q with %s must have proofEligible: true" $unitId $unit.safetyProfile) -}}
 {{-   end -}}
-{{-   if and (ne $unit.safetyProfile "native-single-file") $proofEligible -}}
+{{-   if and (not $nativeProfile) $proofEligible -}}
 {{-     fail (printf "commands.yaml: unit %q with safetyProfile %q cannot have proofEligible: true" $unitId $unit.safetyProfile) -}}{{- end -}}
 {{-   $mutableTree := false -}}{{- if hasKey $unit "mutableTree" -}}{{- $mutableTree = $unit.mutableTree -}}{{- end -}}
 {{-   if and $mutableTree (ne $unit.safetyProfile "mutable-tree") -}}
