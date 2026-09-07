@@ -14,6 +14,9 @@ path = 'bin/gh'
 executable = true
 stripComponents = 1
 
+[gh.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "gh" "field" "sha256" "platform" "auto") }}'
+
 {{- /* ---------- glab (GitLab-hosted release, not GitHub) ---------- */ -}}
 
 {{- /* The tag is single-sourced with the bundled-skill externals in
@@ -50,3 +53,6 @@ url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden" "
 executable = true
 targetPath = '.local/share/chezmoi-commands/incomplete/garden/garden'
 path = '{{ printf "%s/garden" $gardenStem }}'
+
+[garden.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "garden" "field" "sha256" "platform" "auto") }}'

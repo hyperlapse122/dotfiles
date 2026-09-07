@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, readlink, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -83,6 +83,226 @@ describe("reconcile", () => {
 
       const act3 = await activateUnit(testHome, manifestV2, "multi-tool");
       expect(act3.status).toBe("unchanged");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("publishes resolvable links for every declared name of a single-file external unit", async () => {
+    const testHome = join(tmpdir(), `test-rec-agy-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/agy");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "agy"), "#!/bin/sh\necho agy-binary\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "agy",
+          producer: "external",
+          safetyProfile: "native-single-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "agy" }, { name: "antigravity", relPath: "agy" }],
+          identity: "v1.0.0",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agy",
+        },
+      ],
+    };
+
+    try {
+      const act = await activateUnit(testHome, manifest, "agy");
+      expect(act.status).toBe("activated");
+
+      for (const name of ["agy", "antigravity"]) {
+        const link = join(testHome, ".local/bin", name);
+        expect((await lstat(link)).isSymbolicLink()).toBe(true);
+        expect(await readFile(link, "utf-8")).toContain("agy-binary");
+      }
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("fails loudly instead of publishing a dangling link for an unbacked command name", async () => {
+    const testHome = join(tmpdir(), `test-rec-dangling-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/agy");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "agy"), "#!/bin/sh\necho agy-binary\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "agy",
+          producer: "external",
+          safetyProfile: "native-single-file",
+          proofEligible: true,
+          mutableTree: false,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "agy" }, { name: "antigravity" }],
+          identity: "v1.0.0",
+          stagingPath: ".local/share/chezmoi-commands/incomplete/agy",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed.some((f) => f.id === "agy" && f.error.includes("antigravity"))).toBe(
+        true,
+      );
+      expect(report.activated).not.toContain("agy");
+
+      await expect(lstat(join(testHome, ".local/bin/antigravity"))).rejects.toThrow();
+      await expect(lstat(join(testHome, ".local/bin/agy"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("reconciles a mutableTree unit whose tree is absent", async () => {
+    const testHome = join(tmpdir(), `test-rec-mutable-${Date.now()}-${Math.random()}`);
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "flutter",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [
+            { name: "flutter", relPath: "bin/flutter" },
+            { name: "dart", relPath: "bin/dart" },
+          ],
+          identity: "stable",
+          stagingPath: ".local/share/flutter/versions",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed).toEqual([]);
+      expect(report.activated).toContain("flutter");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("fails loudly for a mutableTree unit whose present tree lacks a declared relPath", async () => {
+    const testHome = join(tmpdir(), `test-rec-mutable-partial-${Date.now()}-${Math.random()}`);
+    const treeDir = join(testHome, ".local/share/flutter/versions");
+    await mkdir(join(treeDir, "bin"), { recursive: true });
+    await writeFile(join(treeDir, "bin/flutter"), "#!/bin/sh\necho flutter\n", "utf-8");
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "flutter",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [
+            { name: "flutter", relPath: "bin/flutter" },
+            { name: "dart", relPath: "bin/dart" },
+          ],
+          identity: "stable",
+          stagingPath: ".local/share/flutter/versions",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(report.failed.some((f) => f.id === "flutter" && f.error.includes("dart"))).toBe(true);
+      expect(report.activated).not.toContain("flutter");
+
+      await expect(lstat(join(testHome, ".local/bin/dart"))).rejects.toThrow();
+      await expect(lstat(join(testHome, ".local/bin/flutter"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("rejects a command whose relPath escapes the unit backing directory", async () => {
+    const testHome = join(tmpdir(), `test-rec-escape-${Date.now()}-${Math.random()}`);
+    const treeDir = join(testHome, ".local/share/escape-tree");
+    const outsideDir = join(testHome, "outside");
+    await mkdir(join(treeDir, "bin"), { recursive: true });
+    await mkdir(outsideDir, { recursive: true });
+    await writeFile(join(outsideDir, "payload"), "#!/bin/sh\necho outside\n", "utf-8");
+    await symlink(join(outsideDir, "payload"), join(treeDir, "bin/escapee"));
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "escape-unit",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "escapee", relPath: "bin/escapee" }],
+          identity: "stable",
+          stagingPath: ".local/share/escape-tree",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(
+        report.failed.some((f) => f.id === "escape-unit" && f.error.includes("outside its store")),
+      ).toBe(true);
+      await expect(lstat(join(testHome, ".local/bin/escapee"))).rejects.toThrow();
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("rejects a command whose relPath resolves to a directory", async () => {
+    const testHome = join(tmpdir(), `test-rec-dir-${Date.now()}-${Math.random()}`);
+    const treeDir = join(testHome, ".local/share/dir-tree");
+    await mkdir(join(treeDir, "bin/notafile"), { recursive: true });
+
+    const manifest: CommandManifest = {
+      schemaVersion: "command-manifest/v1",
+      units: [
+        {
+          id: "dir-unit",
+          producer: "existingTree",
+          safetyProfile: "mutable-tree",
+          proofEligible: false,
+          mutableTree: true,
+          privacy: "public",
+          mode: "0755",
+          commands: [{ name: "notafile", relPath: "bin/notafile" }],
+          identity: "stable",
+          stagingPath: ".local/share/dir-tree",
+        },
+      ],
+    };
+
+    try {
+      const report = await reconcileAll(testHome, manifest);
+      expect(
+        report.failed.some((f) => f.id === "dir-unit" && f.error.includes("not a regular file")),
+      ).toBe(true);
+      await expect(lstat(join(testHome, ".local/bin/notafile"))).rejects.toThrow();
     } finally {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }
