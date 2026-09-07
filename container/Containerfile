@@ -92,6 +92,35 @@ RUN set -euo pipefail; mise install
 
 # sshd needs a place to write per-pod host keys; the entrypoint generates them.
 USER root
+
+# The real 1Password CLI, installed LAST and only now.
+#
+# Order is the guarantee. The failing stub owns `op` for the whole build, so any
+# target that tries to resolve a reference during the apply above fails loudly
+# instead of baking a secret into a layer. Installing the real binary earlier
+# would take that tripwire away; installing it here gives the POD the CLI its
+# entrypoint needs -- `op read` for authorized_keys, and chezmoi's own
+# onepasswordRead for every op:// target -- without ever offering it a credential
+# at build time.
+#
+# The stub is removed in the same layer because /usr/local/bin precedes /usr/bin
+# on PATH: leaving it would shadow the binary this step just installed.
+RUN set -eux; \
+    rpm --import https://downloads.1password.com/linux/keys/1password.asc; \
+    printf '%s\n' \
+      '[1password]' \
+      'name=1Password' \
+      'baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch' \
+      'enabled=1' \
+      'gpgcheck=1' \
+      'repo_gpgcheck=1' \
+      'gpgkey=https://downloads.1password.com/linux/keys/1password.asc' \
+      > /etc/yum.repos.d/1password.repo; \
+    dnf install -y --setopt=install_weak_deps=False 1password-cli; \
+    dnf clean all; \
+    rm -rf /var/cache/dnf; \
+    rm -f /usr/local/bin/op; \
+    op --version
 RUN install -d -m 0755 /etc/ssh /run/sshd
 COPY container/entrypoint.sh /usr/local/bin/worker-entrypoint
 RUN chmod 0755 /usr/local/bin/worker-entrypoint

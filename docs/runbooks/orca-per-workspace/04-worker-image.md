@@ -37,6 +37,25 @@ podman push ghcr.io/hyperlapse122/dotfiles/orca-worker:latest
 entrypoint change is testable in a local build before it is committed. Everything
 else comes from the clone at `DOTFILES_REF`.
 
+## The op CLI, and why it is installed last
+
+The build runs with a deliberately FAILING `op` on PATH -- `container/op-stub-failing.sh`
+-- so any target that tries to resolve a reference during the image's own
+`chezmoi apply` fails loudly instead of baking a secret into a layer. The real
+1Password CLI is installed in the final layer, after that apply, and removes the
+stub in the same step because `/usr/local/bin` precedes `/usr/bin` on PATH.
+
+So the tripwire covers the whole build and the pod still gets the CLI its
+entrypoint needs: `op read` for `authorized_keys`, and chezmoi's own
+`onepasswordRead` for every `op://` target it renders against Connect.
+
+Verify both properties on a built image:
+
+```sh
+podman run --rm --entrypoint /usr/bin/op <image> --version   # the real CLI is there
+podman run --rm --entrypoint /bin/bash <image> -lc 'command -v op'  # and nothing shadows it
+```
+
 ## How a rebuild propagates
 
 The PodTemplate references `:latest` with `imagePullPolicy: Always`, so a new

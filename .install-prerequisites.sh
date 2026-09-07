@@ -1104,9 +1104,18 @@ if is_container; then
   # The pod is the other side of the same fact: 1Password Connect is present, the
   # fact is true, and the entrypoint's apply resolves exactly those targets. So
   # both container cases are correct, and neither needs a service-account token.
-  printf 'install-prerequisites.sh: container without usable op; skipping every op-dependent target.\n' >&2
-  printf 'This is the image-build path. In a pod, OP_CONNECT_HOST/OP_CONNECT_TOKEN make opAvailable true\n' >&2
-  printf 'and the entrypoint re-applies those targets against 1Password Connect.\n' >&2
+  # Say WHICH container this is. The two cases look identical from `op_ready`,
+  # which runs `op vault list` -- a command Connect does not serve -- so a pod
+  # with working Connect credentials used to be reported as "without usable op"
+  # while its apply went on to resolve every reference successfully. A message
+  # that contradicts what the run then does is worse than no message.
+  if [[ -n "${OP_CONNECT_HOST:-}" && -n "${OP_CONNECT_TOKEN:-}" ]]; then
+    printf 'install-prerequisites.sh: container with 1Password Connect; op-dependent targets resolve through it.\n' >&2
+  else
+    printf 'install-prerequisites.sh: container without usable op; skipping every op-dependent target.\n' >&2
+    printf 'This is the image-build path. In a pod, OP_CONNECT_HOST/OP_CONNECT_TOKEN make opAvailable true\n' >&2
+    printf 'and the entrypoint re-applies those targets against 1Password Connect.\n' >&2
+  fi
   exit 0
 fi
 
