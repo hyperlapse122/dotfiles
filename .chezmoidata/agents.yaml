@@ -151,13 +151,18 @@ agents:
     # and the plugin reconciler) and must not be declared here.
     #
     # The headless posture below runs `codex exec` unattended inside the
-    # workspace sandbox with network access. model is deliberately undeclared so
-    # the CLI default tracks the installed release.
+    # workspace sandbox with network access. model and model_reasoning_effort are
+    # the operator's chosen pair and are asserted on every apply, so a model or
+    # effort switched inside Codex is reverted until this declaration is updated.
+    # They are a pinned literal with no upstream tracking: a retired model id is
+    # cleared by editing this value and the guard-test literal in
+    # .ci/test-codex-settings-reconcile.sh together.
     settings:
       approval_policy: never
       sandbox_mode: workspace-write
       sandbox_workspace_write.network_access: true
-      model_reasoning_effort: high
+      model: gpt-6-astra
+      model_reasoning_effort: medium
     personalMarketplace: dotfiles
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
