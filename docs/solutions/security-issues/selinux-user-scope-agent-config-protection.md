@@ -203,11 +203,13 @@ The three domains keep `files_unconfined_type` themselves, so they retain ordina
 
 By granting `(file (read getattr open map ioctl lock execute execute_no_trans watch watch_reads))` to `unconfined_domain_type`, user tools and agents can freely read configuration files, resolve symlinks, watch them, and execute skill scripts in `~/.agents/skills/` without permission denials.
 
-## Current shape: three types, one writer rule each
+## Current shape: five types, one writer rule each
 
 | Type | Paths | Writers |
 |---|---|---|
-| `protected_agent_config_t` | `~/.codex/config.toml`, `~/.codex/skills/**`, `~/.agents/skills/**`, `~/.agents/plugins/**` | `chezmoi_t` |
+| `protected_agent_config_t` | `~/.agents/skills/**` | `chezmoi_t` |
+| `agent_plugins_t` | `~/.agents/plugins/**` | `chezmoi_t` |
+| `codex_config_t` | `~/.codex/config.toml`, `~/.codex/skills` | `chezmoi_t`, `codex_t` |
 | `claude_config_t` | `~/.claude.json*`, `~/.mcp.json`, `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/plugins/installed_plugins.json`, `~/.claude/plugins/known_marketplaces.json`, `~/.claude/plugins/marketplaces/**` | `chezmoi_t`, `claude_t` |
 | `gemini_config_t` | `~/.gemini/config/**`, `~/.gemini/skills` | `chezmoi_t`, `agy_t` |
 
@@ -314,7 +316,7 @@ The session itself succeeds — `codex exec` returns 0 and produces its output. 
 
 ### Two suggestions to refuse
 
-`setroubleshoot`'s own advice was `ausearch -c 'tokio-rt-worker' | audit2allow -M my-tokiortworker && semodule -X 300 -i`. That module is `allow codex_t protected_agent_config_t ...`, and the same type labels `~/.agents/plugins`, so it opens BOTH canonical roots to a harness. `.ci/test-selinux-protected-configs.sh` has rejected that exact grant since 2026-09-05 (`forbidden_writer 'codex_t' 'protected_agent_config_t'`, plus the compiled-policy matrix).
+`setroubleshoot`'s own advice was `ausearch -c 'tokio-rt-worker' | audit2allow -M my-tokiortworker && semodule -X 300 -i`. That module is `allow codex_t protected_agent_config_t ...`. Until 2026-09-07 that type labelled `~/.agents/plugins` as well, so the grant opened BOTH canonical roots to a harness; the plugins root now carries its own `agent_plugins_t`, so the proposed grant reaches only the skills root — still a refusal, but for the narrower reason that a harness may not write the canonical skills root at all. `.ci/test-selinux-protected-configs.sh` has rejected that exact grant since 2026-09-05 (`forbidden_writer 'codex_t' 'protected_agent_config_t'`, plus the compiled-policy matrix).
 
 The second, subtler option was to silence the alert outside the kernel — an `auditctl` exclude rule or a `setroubleshoot` filter, which stops the notification while keeping the AVC in the log. It was refused because this repository manages the policy module and does not manage `/etc/audit/rules.d` or setroubleshoot state: the filter would live outside version control and outside every managed host.
 
