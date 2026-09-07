@@ -111,7 +111,7 @@ expected_settings=$(render <<<'{{ .agents.codex.settings | toJson }}' \
   || fail 'the declared settings leaves do not expand to the rendered agents.codex.settings'
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
-  and .model_reasoning_effort == "high" and (has("model") | not)' <<<"$declared" >/dev/null \
+  and .model_reasoning_effort == "medium" and .model == "gpt-6-astra"' <<<"$declared" >/dev/null \
   || fail 'the declared headless posture is not the one agents.yaml declares'
 
 # The MCP half must carry exactly the codex-eligible inventory, in Codex's shape.
