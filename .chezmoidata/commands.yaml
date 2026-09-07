@@ -127,6 +127,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: ast-grep
       commands:
         - name: sg
@@ -152,6 +153,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: buf
       commands:
         - name: protoc-gen-buf-breaking
@@ -164,6 +166,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: buf
       commands:
         - name: protoc-gen-buf-lint
@@ -241,6 +244,7 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       tool: uv
       commands:
         - name: uvx
@@ -417,6 +421,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_auth-glab
       commands:
         - name: auth-glab
@@ -429,6 +434,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_code
       commands:
         - name: code
@@ -441,6 +447,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_docker-credential-dockerhub
       commands:
         - name: docker-credential-dockerhub
@@ -453,6 +460,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_dotfiles-skips
       commands:
         - name: dotfiles-skips
@@ -465,6 +473,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_encryption-status
       commands:
         - name: encryption-status
@@ -489,6 +498,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_host-facts.tmpl
       commands:
         - name: host-facts
@@ -527,6 +537,7 @@ commands:
       proofEligible: false
       mode: "0755"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/executable_src-audit
       commands:
         - name: src-audit
@@ -540,6 +551,7 @@ commands:
       privacy: secret
       mode: "0700"
       platforms: [linux]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password.tmpl
       commands:
         - name: import-wifi-1password
@@ -553,6 +565,7 @@ commands:
       privacy: secret
       mode: "0700"
       platforms: [macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/private_executable_import-wifi-1password-macos.sh.tmpl
       commands:
         - name: import-wifi-1password-macos.sh
@@ -565,6 +578,7 @@ commands:
       proofEligible: false
       mode: "0700"
       platforms: [linux, macos]
+      gate: "!container"
       sourcePath: dot_local/share/chezmoi-command-sources/private_executable_tokscale.tmpl
       commands:
         - name: tokscale

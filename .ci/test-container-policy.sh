@@ -110,42 +110,34 @@ bad=$(grep -n 'container:' "$repo_root/.chezmoidata/agents.yaml" |
 [[ -z "$bad" ]] || fail "agents.yaml has container values outside keep|skip: $bad"
 pass 'every declared container policy in agents.yaml is keep or skip'
 
-# --- 5b. Every command the manifest still declares must have a payload.
-# This is the coupling the other checks miss. Gating an externals entry stops the
-# download; it does NOT retire the command unit that expects the download, and a
-# companion unit (sg from ast-grep, uvx from uv, the two protoc plugins from buf)
-# has its own unit that no one thinks to gate. command-reconcile then fails at
-# image-build time looking for a staging path that was never created -- which is a
-# broken build, not a smaller image.
-manifest_units() {
-  render "$1" '{{ includeTemplate "command-manifest.tmpl" (dict "ctx" .) }}' |
-    grep -oE '^  "[^"]+' | tr -d ' "' | sort -u
-}
-externals_sections() {
-  local f
-  for f in "$scratch/source/.chezmoiexternals"/*.toml; do render "$1" "$(cat "$f")"; done |
-    grep -oE '^\[[a-zA-Z][a-zA-Z0-9_.-]*\]' | tr -d '[]' | grep -v '\.checksum$' | sort -u
-}
-if manifest=$(manifest_units true 2>/dev/null) && [[ -n "$manifest" ]]; then
-  have=$(externals_sections true)
-  orphans=""
-  while IFS= read -r unit; do
-    [[ -n "$unit" ]] || continue
-    tool=$(python3 - "$repo_root" "$unit" <<'PY' 2>/dev/null || true
-import sys, yaml
-repo, unit = sys.argv[1], sys.argv[2]
-d = yaml.safe_load(open(f"{repo}/.chezmoidata/commands.yaml"))["commands"]["units"]
-u = d.get(unit) or {}
-print(u.get("tool", "") if u.get("producer") == "external" else "")
-PY
-)
-    [[ -n "$tool" ]] || continue
-    grep -qx "$tool" <<<"$have" || orphans+=" $unit(needs $tool)"
-  done <<<"$manifest"
-  [[ -z "$orphans" ]] || fail "these command units survive a container render but their payload does not:$orphans
+# --- 5b. Every external command the container manifest declares must have a
+# payload. This is the coupling the other checks miss, and the one that breaks a
+# BUILD rather than merely bloating an image: gating an externals entry stops the
+# download but does not retire the command unit expecting it, and a companion
+# unit (sg from ast-grep, uvx from uv, the two protoc plugins from buf) has its
+# own unit nobody thinks to gate. command-reconcile then fails at image-build
+# time looking for a staging path that was never created.
+#
+# Rendered with the ROOT context, not a dict: command-manifest.tmpl reads
+# .commands off `.`. A manifest that will not render is a hard failure here, never
+# a skip -- a silently-skipped version of this check is what let the gap reach a
+# real build.
+command -v jq >/dev/null 2>&1 || fail 'jq is required on PATH'
+manifest=$(render true '{{ includeTemplate "command-manifest.tmpl" . }}') \
+  || fail 'the container command manifest does not render'
+[[ -n "$manifest" ]] || fail 'the container command manifest rendered empty'
+
+have=$(sections_for true)
+orphans=""
+while IFS=$'\t' read -r unit staging; do
+  [[ -n "$unit" ]] || continue
+  grep -qx "${staging##*/}" <<<"$have" || orphans+="
+  $unit (needs the externals entry ${staging##*/})"
+done < <(jq -r '.units[] | select(.producer == "external") | "\(.id)\t\(.stagingPath)"' <<<"$manifest")
+
+[[ -z "$orphans" ]] || fail "these commands survive a container render but their payload does not:$orphans
   Gate the unit !container too, or stop gating its externals entry."
-  pass 'every command the container manifest declares has a payload'
-fi
+pass 'every external command the container manifest declares has a payload'
 
 # --- 6. The container predicate exists twice, and both copies must agree.
 # facts.tmpl owns it for everything that renders from the source state, but
