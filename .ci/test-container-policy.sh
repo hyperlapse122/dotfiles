@@ -123,8 +123,18 @@ pass 'every declared container policy in agents.yaml is keep or skip'
 # a skip -- a silently-skipped version of this check is what let the gap reach a
 # real build.
 command -v jq >/dev/null 2>&1 || fail 'jq is required on PATH'
-manifest=$(render true '{{ includeTemplate "command-manifest.tmpl" . }}') \
-  || fail 'the container command manifest does not render'
+# Rendered against the REAL tree, not the fixture: units carry fingerprintGlobs
+# over paths like packages/package.json, and fingerprint.tmpl fails hard on a glob
+# that matches nothing. Copying an ever-growing file list into the fixture would
+# be a second inventory to keep in step; the manifest is about the whole
+# repository anyway.
+manifest=$(
+  cd -- "$repo_root"
+  PATH="$scratch/bin:$PATH" XDG_CACHE_HOME="$scratch/cache" chezmoi \
+    --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
+    --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fx","osRelease":{"id":"fedora"},"homeDir":"'"$scratch"'/home"},"renderOverrides":{"container":true}}' \
+    execute-template <<<'{{ includeTemplate "command-manifest.tmpl" . }}'
+) || fail 'the container command manifest does not render'
 [[ -n "$manifest" ]] || fail 'the container command manifest rendered empty'
 
 have=$(sections_for true)
