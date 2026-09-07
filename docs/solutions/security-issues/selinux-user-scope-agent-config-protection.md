@@ -2,6 +2,7 @@
 title: SELinux CIL Type Enforcement for Protecting User-Scope Agent and MCP Configs
 date: 2026-08-31
 last_updated: 2026-09-07
+superseded: true
 category: security-issues
 module: selinux
 problem_type: security_issue
@@ -26,6 +27,11 @@ tags:
 ---
 
 # SELinux CIL Type Enforcement for Protecting User-Scope Agent and MCP Configs
+
+> **Superseded on 2026-09-07.** This policy was removed from the repository and the
+> protection boundary was abandoned without a replacement. Nothing below describes
+> current behavior. The document is kept for its SELinux CIL mechanics and for the
+> incident record in the numbered surprises, which outlive the policy itself.
 
 ## Problem
 
