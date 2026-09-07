@@ -41,6 +41,22 @@ nvidia:
     # Verified: lspci 10de:2487, class 0x030000.
     "2487": ampere
 
+  # Architectures whose HYBRID hosts run on the integrated GPU alone. A listed
+  # architecture next to another vendor's display device installs no NVIDIA
+  # stack at all: the installer skips, the hybrid modprobe drop-ins are retired,
+  # and the discrete GPU is left driverless under PCI runtime power management
+  # so its root port powers it down. A desktop with the same architecture and no
+  # integrated GPU is unaffected; the fact that reads this list requires both.
+  #
+  # Pascal is here because its legacy driver reports "Runtime D3 status: Not
+  # supported", so the hybrid power-management options never suspend the card
+  # and the laptop pays for a GPU nothing uses. Removing the row reverses the
+  # policy on the next apply: the blacklist and udev rule are retired and the
+  # hybrid drop-ins return; the packages must then be put back by hand, the
+  # reverse of the documented one-time removal.
+  integratedOnlyArchitectures:
+    - pascal
+
   # Architecture -> the branch that still supports it. `buildSystem` decides
   # which signing certificate the installer enrolls: `akmod` uses the out-of-tree
   # builder's own generated certificate, `dkms` keeps /var/lib/dkms/mok.pub.

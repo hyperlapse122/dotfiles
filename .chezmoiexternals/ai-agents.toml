@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, codegraph, aoe, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, codegraph, aoe, codex, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
        static-musl build. Used by the agent-browser external below; probed here so the
@@ -82,6 +82,23 @@ path = '{{ printf "aoe-%s-%s" .chezmoi.os .chezmoi.arch }}'
 [aoe.checksum]
 # The sidecar is sha256sum output ("<hash>  <file>"), so take the first field.
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "aoe" "field" "sha256" "platform" "auto") }}'
+
+{{- /* ---------- codex — the OpenAI Codex CLI, real binary; the public `codex` is the wrapper unit ---------- */ -}}
+
+{{- /* The archive entry is the asset name without `.tar.gz`: `codex-<rust arch>-<rust target>`,
+       the same chain packages/release-lock/src/registry.ts composes. Linux is the static musl build. */ -}}
+{{- $codexRustArch := (replace "arm64" "aarch64" (replace "amd64" "x86_64" .chezmoi.arch)) -}}
+{{- $codexRustTarget := (replace "linux" "unknown-linux-musl" (replace "darwin" "apple-darwin" .chezmoi.os)) }}
+
+[codex]
+type = "archive-file"
+url = {{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex" "field" "url" "platform" "auto") | quote }}
+executable = true
+targetPath = '.local/share/chezmoi-commands/incomplete/codex/codex'
+path = '{{ printf "codex-%s-%s" $codexRustArch $codexRustTarget }}'
+
+[codex.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex" "field" "sha256" "platform" "auto") }}'
 
 {{- /* ---------- agent skills (~/.agents/skills/<name>) — formerly dotagents remote skills.
        The LIST is data in .chezmoidata/agents.yaml (agents.skills.external); this section

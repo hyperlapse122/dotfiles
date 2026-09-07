@@ -11,20 +11,78 @@ SRC_ROOT="{{ $sourceDir }}/system/linux"
 
 shopt -s globstar nullglob
 
+{{- /* udev.overrides is optional; a manifest without it renders empty arrays
+   and every rule file keeps the unconditional path. */ -}}
+{{- $overrides := list -}}
+{{- if hasKey .system.linux.udev "overrides" -}}
+{{-   $overrides = .system.linux.udev.overrides | default list -}}
+{{- end }}
+
+override_patterns=()
+override_gates=()
+{{ range $overrides -}}
+override_patterns+=({{ .path | quote }})
+override_gates+=({{ get . "gate" | default "" | quote }})
+{{ end }}
+{{- $gates := list -}}
+{{- range $overrides -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- range .system.linux.udev.removed -}}
+{{-   $gate := get . "gate" | default "" -}}
+{{-   if ne $gate "" -}}
+{{-     $gates = append $gates $gate -}}
+{{-   end -}}
+{{- end -}}
+{{- includeTemplate "facts-validate.tmpl" (dict "ctx" . "source" ".chezmoidata/system.yaml (udev.overrides and udev.removed)" "gates" $gates) -}}
+
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+gate_ok() {
+  fact_gate "$1"
+}
+
 udev_files=("$SRC_ROOT"/etc/udev/rules.d/** "$SRC_ROOT"/etc/libinput/**)
 for src in "${udev_files[@]}"; do
   [[ -f "$src" ]] || continue
   rel="${src#"$SRC_ROOT"/}"
   dst="/$rel"
+  gate=
+  for i in "${!override_patterns[@]}"; do
+    # shellcheck disable=SC2254 # manifest entries are deliberate glob patterns
+    case "$rel" in
+      ${override_patterns[$i]})
+        gate="${override_gates[$i]}"
+        break
+        ;;
+    esac
+  done
+
+  if ! gate_ok "$gate"; then
+    printf '  -- %s (skipped: gate %s failed)\n' "$dst" "$gate"
+    continue
+  fi
+
   printf '  -> %s (mode 644)\n' "$dst"
   "${SUDO[@]}" install -D -m 644 "$src" "$dst"
 done
 
+# A retirement entry may carry a gate. An empty gate is unconditional; a gate
+# that fails skips the removal, so an unknown host removes nothing.
 REMOVED_PATHS=()
+REMOVED_GATES=()
 {{ range .system.linux.udev.removed -}}
 REMOVED_PATHS+=({{ .path | quote }})
+REMOVED_GATES+=({{ get . "gate" | default "" | quote }})
 {{ end }}
-for dst in "${REMOVED_PATHS[@]}"; do
+for i in "${!REMOVED_PATHS[@]}"; do
+  dst="${REMOVED_PATHS[$i]}"
+  gate="${REMOVED_GATES[$i]}"
+  if [[ -n "$gate" ]] && ! gate_ok "$gate"; then
+    continue
+  fi
   if [[ -e "$dst" || -L "$dst" ]]; then
     printf '  -> removing %s\n' "$dst"
     "${SUDO[@]}" rm -f "$dst"

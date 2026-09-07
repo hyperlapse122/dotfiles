@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# `codex exec` is the headless entrypoint, so only it runs under tokscale for usage metering.
+# The real binary is resolved through the public `codex-bin` link, never through PATH: `codex` on
+# PATH is this wrapper, and the store's internal `current/` layout belongs to command-reconcile.
+
+set -euo pipefail
+
+link="$HOME/.local/bin/codex-bin"
+if ! real="$(readlink -f -- "$link")" || [[ ! -x "$real" ]]; then
+  printf 'codex: real binary link %s is missing or does not resolve\n' "$link" >&2
+  exit 127
+fi
+
+# Codex accepts its root options before the subcommand (`codex -c k=v exec ...`) and
+# `e` is the visible alias of `exec`, so the headless check reads the first
+# positional argument. The value-taking root options are those of codex-rs
+# rust-v0.153.4 (CliConfigOverrides, FeatureToggles, InteractiveRemoteOptions,
+# SharedCliOptions); an unknown dash token is treated as a bare flag.
+value_options=(
+  -c --config --enable --disable --remote --remote-auth-token-env
+  -i --image -m --model --local-provider -p --profile -s --sandbox
+  -a --ask-for-approval -C --cd --add-dir
+)
+headless=0
+skip_value=0
+for arg in "$@"; do
+  if (( skip_value )); then
+    skip_value=0
+    continue
+  fi
+  case $arg in
+    --) break ;;
+    --*=* | -[A-Za-z]?*) ;;
+    -*)
+      for option in "${value_options[@]}"; do
+        if [[ $arg == "$option" ]]; then
+          skip_value=1
+          break
+        fi
+      done
+      ;;
+    exec | e)
+      headless=1
+      break
+      ;;
+    *) break ;;
+  esac
+done
+
+if (( headless )); then
+  PATH="${real%/*}:$PATH" exec tokscale headless codex "$@"
+fi
+
+exec "$real" "$@"

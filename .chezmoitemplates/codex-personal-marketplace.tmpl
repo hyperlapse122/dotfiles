@@ -1,0 +1,26 @@
+{{- /* codex-personal-marketplace.tmpl — the validated name of the Codex personal marketplace.
+
+  ctx     required; root chezmoi context
+  caller  required; prefix for failure messages
+
+Returns agents.codex.personalMarketplace as a string. Codex names the marketplace
+in `codex plugin add <plugin>@<marketplace>`, so the grammar is the lowercase
+dns-label shape that command accepts. Consumed by dot_agents/plugins/
+readonly_marketplace.json.tmpl and run_onchange_after_update-codex-plugins.sh.tmpl
+so the two cannot drift. */ -}}
+{{- $ctx := .ctx -}}
+{{- $caller := .caller -}}
+{{- if not (hasKey $ctx.agents "codex") -}}
+{{-   fail (printf "%s: agents.codex is not declared" $caller) -}}
+{{- end -}}
+{{- if not (hasKey $ctx.agents.codex "personalMarketplace") -}}
+{{-   fail (printf "%s: agents.codex.personalMarketplace is not declared" $caller) -}}
+{{- end -}}
+{{- $name := index $ctx.agents.codex "personalMarketplace" -}}
+{{- if not (kindIs "string" $name) -}}
+{{-   fail (printf "%s: agents.codex.personalMarketplace must be a string, got %T" $caller $name) -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$" $name) -}}
+{{-   fail (printf "%s: agents.codex.personalMarketplace %q has an invalid name" $caller $name) -}}
+{{- end -}}
+{{- $name -}}

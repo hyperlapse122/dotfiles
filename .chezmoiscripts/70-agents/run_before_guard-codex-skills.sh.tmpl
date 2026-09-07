@@ -1,0 +1,15 @@
+{{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+#!/usr/bin/env bash
+# dot_codex/symlink_skills replaces ~/.codex/skills with a symlink to ~/.agents/skills.
+# chezmoi performs that replacement by deleting the existing directory, contents
+# included, without asking. Refuse the apply while a real directory still holds
+# hand-installed skills; an empty real directory or an existing symlink is safe.
+set -euo pipefail
+
+skills="$HOME/.codex/skills"
+if [[ -d $skills && ! -L $skills ]] && [[ -n $(find "$skills" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
+  printf 'guard-codex-skills: %s is a real directory with contents; chezmoi would delete them to place the skills symlink. Move them into %s and remove the directory, then apply again.\n' \
+    "$skills" "$HOME/.agents/skills" >&2
+  exit 1
+fi
+{{- end }}

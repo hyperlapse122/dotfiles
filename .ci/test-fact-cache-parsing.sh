@@ -158,5 +158,47 @@ printf 'nvidia: false\ngpuDeviceId: ""\nvm: false\nvirt: false\nheadless: false\
 out=$(render) || fail 'render failed with no NVIDIA device'
 assert_fact "$out" gpuArch '' 'no NVIDIA device'
 assert_fact "$out" gpuDeviceId '' 'no NVIDIA device'
+assert_fact "$out" integratedOnly false 'no NVIDIA device'
+assert_fact "$out" nvidiaHybridDriver false 'no NVIDIA device'
+
+# --- 10. integratedOnly is the policy conjunction: a listed architecture AND a
+#         hybrid host. Its complement nvidiaHybridDriver is the hybrid host that
+#         keeps its driver. The listed and unlisted ids are read from
+#         nvidia.yaml so a table edit cannot silently invalidate the case.
+integrated_arch=$(sed -n 's/^ *- *\([a-z][a-z0-9]*\) *$/\1/p' \
+  <(sed -n '/^ *integratedOnlyArchitectures:/,/^ *[a-zA-Z]*:/p' "$repo_root/.chezmoidata/nvidia.yaml") | head -1)
+[[ -n "$integrated_arch" ]] || fail 'nvidia.yaml lists no integrated-only architecture'
+integrated_id=$(sed -n "s/^ *\"\([0-9a-f]\{4\}\)\": *${integrated_arch}.*/\1/p" \
+  "$repo_root/.chezmoidata/nvidia.yaml" | head -1)
+[[ -n "$integrated_id" ]] || fail "no device id maps to ${integrated_arch} in nvidia.yaml"
+other_id=$(sed -n 's/^ *"\([0-9a-f]\{4\}\)": *[a-z].*/\1/p' "$repo_root/.chezmoidata/nvidia.yaml" |
+  grep -vx "$integrated_id" | head -1)
+[[ -n "$other_id" ]] || fail 'nvidia.yaml lists no architecture outside the integrated-only set'
+
+printf 'nvidia: true\ngpuDeviceId: "%s"\nhybridGraphics: true\nvm: false\nvirt: false\nheadless: false\n' \
+  "$integrated_id" >"$cache_file"
+out=$(render) || fail 'render failed on an integrated-only hybrid host'
+assert_fact "$out" integratedOnly true 'listed architecture on a hybrid host'
+assert_fact "$out" nvidiaHybridDriver false 'listed architecture on a hybrid host'
+
+printf 'nvidia: true\ngpuDeviceId: "%s"\nhybridGraphics: false\nvm: false\nvirt: false\nheadless: false\n' \
+  "$integrated_id" >"$cache_file"
+out=$(render) || fail 'render failed on a listed-architecture desktop'
+assert_fact "$out" integratedOnly false 'listed architecture without a hybrid host'
+assert_fact "$out" nvidiaHybridDriver false 'listed architecture without a hybrid host'
+
+printf 'nvidia: true\ngpuDeviceId: "%s"\nhybridGraphics: true\nvm: false\nvirt: false\nheadless: false\n' \
+  "$other_id" >"$cache_file"
+out=$(render) || fail 'render failed on a hybrid host outside the integrated-only set'
+assert_fact "$out" integratedOnly false 'unlisted architecture on a hybrid host'
+assert_fact "$out" nvidiaHybridDriver true 'unlisted architecture on a hybrid host'
+
+# A cache that lost its hybridGraphics line must fall to the skip direction on
+# both facts: nothing is powered off and nothing is retired on an unreadable host.
+printf 'nvidia: true\ngpuDeviceId: "%s"\nvm: false\nvirt: false\nheadless: false\n' \
+  "$integrated_id" >"$cache_file"
+out=$(render) || fail 'render failed on a cache missing hybridGraphics'
+assert_fact "$out" integratedOnly false 'missing hybridGraphics line'
+assert_fact "$out" nvidiaHybridDriver false 'missing hybridGraphics line'
 
 printf 'fact-cache-parsing: OK\n'

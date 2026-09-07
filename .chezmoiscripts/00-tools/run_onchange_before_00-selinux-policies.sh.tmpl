@@ -68,6 +68,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           "$HOME/.local/lib/commands/store/claude" \
           "$HOME/.local/lib/commands/store/agy" \
           "$HOME/.local/lib/commands/store/aoe" \
+          "$HOME/.local/lib/commands/store/codex" \
           2>/dev/null || true
 
         # LEGACY LABEL RECLAIM. An earlier revision of this module claimed the
@@ -93,7 +94,8 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
           find "$HOME" -xdev \
             \( -context '*:protected_agent_config_t:*' \
             -o -context '*:claude_config_t:*' \
-            -o -context '*:gemini_config_t:*' \) -print0 2>/dev/null |
+            -o -context '*:gemini_config_t:*' \
+            -o -context '*:codex_config_t:*' \) -print0 2>/dev/null |
             xargs -0 -r -n 200 restorecon -Fiv 2>/dev/null || true
         else
           printf 'selinux-policies: %s\n' \
@@ -104,7 +106,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
       # SELinux fixes a process's domain at exec, and installing a module never
       # moves a process that is already running. An agent session started before
       # this ran therefore keeps unconfined_t while its files are now labelled
-      # claude_config_t / gemini_config_t, and its own writes — transcripts,
+      # claude_config_t / gemini_config_t / codex_config_t, and its own writes — transcripts,
       # session state — are denied with EACCES. Only a re-exec fixes it, so say
       # so: this script only runs when the policy actually changed.
       # Name the offenders rather than warning in the abstract. An operator who
@@ -115,14 +117,14 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
       while read -r pid; do
         [[ -r "/proc/$pid/attr/current" ]] || continue
         case "$(tr -d '\0' <"/proc/$pid/attr/current")" in
-        *:claude_t:* | *:agy_t:* | *:aoe_t:* | *:chezmoi_t:*) ;;
+        *:claude_t:* | *:agy_t:* | *:aoe_t:* | *:codex_t:* | *:chezmoi_t:*) ;;
         *) stale+=("$pid") ;;
         esac
-      done < <(pgrep -x -u "$(id -u)" 'claude|agy|aoe' 2>/dev/null || true)
+      done < <(pgrep -x -u "$(id -u)" 'claude|agy|aoe|codex' 2>/dev/null || true)
 
       if [[ ${#stale[@]} -gt 0 ]]; then
         printf 'selinux-policies: WARNING %s\n' \
-          'Restart any claude/agy/aoe process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
+          'Restart any claude/agy/aoe/codex process started earlier. SELinux assigns a domain at exec, so these processes stay unconfined_t while their files are now labelled claude_config_t / gemini_config_t / codex_config_t, and their own writes are denied with EACCES until they re-exec. Closing the terminal is NOT enough for a "claude daemon run" process: it is parented to systemd and outlives the session, so kill it explicitly. The stale processes are:'
         for pid in "${stale[@]}"; do
           # ps pads lstart to a fixed width under LC_ALL=C but not under every
           # locale, so trim rather than relying on a leading space in the format.
@@ -133,7 +135,7 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
         done
       else
         printf 'selinux-policies: %s\n' \
-          'policy reinstalled; no claude/agy/aoe process is left in a stale domain. Restart any agent session started earlier if one appears later.'
+          'policy reinstalled; no claude/agy/aoe/codex process is left in a stale domain. Restart any agent session started earlier if one appears later.'
       fi
     fi
   fi

@@ -1,0 +1,100 @@
+{{- /*
+codex-settings-validate.tmpl — fail the apply LOUDLY on a bad Codex config.toml
+settings declaration, before the provisioner renders a single line of script.
+
+The config-codex-settings provisioner is this partial's caller. Validation lives
+here rather than inline in that script on purpose: a guard written inline can
+silently exist for one consumer only.
+
+Every check here aborts the whole chezmoi command. None of them can be satisfied
+by a runtime skip, because a declaration this file rejects is wrong on every host.
+
+  1. SHAPE. agents.codex.settings is a map. An EMPTY map is valid and means
+     "assert no scalar leaf" — the MCP half of the provisioner still renders —
+     so it returns here rather than failing.
+  2. PATH GRAMMAR. Each key is a dot-separated path to a LEAF in config.toml.
+     Every dot is a separator, so a segment must be non-empty: a leading,
+     trailing, or doubled dot is rejected. Segments admit digits, underscore and
+     hyphen, which is the bare-key charset TOML allows without quoting. A quoted
+     TOML key (a project path under `projects`, a model id with a dot) has no
+     expressible form here; the tables that hold such keys are Codex-owned and
+     rejected by check 5 anyway.
+  3. LEAF VALUES ONLY. A declared path names a LEAF. A container value would be
+     overlaid as a whole table and would fight the other members Codex or the MCP
+     half put inside it -- the exact clobbering this whole design removes.
+  4. NO PATH OVERLAP. Two declared paths where one is an ancestor of the other
+     pass every per-path check, then the reconciler raises "scalar conflicts with
+     table" against state the declaration itself produced. Only this render-time
+     check can report it usefully.
+  5. NO OTHER WRITER'S NAMESPACE. mcp_servers is composed by the MCP half of the
+     same provisioner from agents.mcp.servers, so a scalar leaf there would collide
+     with a table the script itself declares. projects (trust decisions), hooks,
+     plugins and marketplaces are written by Codex during ordinary use, and
+     `codex mcp add` writes undeclared mcp_servers.* entries. Asserting into any of
+     them would fight a writer that rewrites the same file, and the loser would be
+     whichever ran last. A comment saying "do not declare these" is a convention
+     the next edit breaks; this is the check that holds.
+  6. SECURITY-SENSITIVE KEYS ARE ALLOWLISTED, NOT BLOCKLISTED. Check 5 screens for
+     OWNERSHIP -- who else writes the key. It cannot tell a TUI toggle from a key
+     that widens what an unattended `codex exec` may do, so a sandbox declaration
+     would enter through the same data edit as model_reasoning_effort. This check
+     screens for RISK instead: a path under a security-sensitive prefix, or one of
+     the security-sensitive exact keys, is accepted ONLY when its full path appears
+     in the reviewed allowlist. An allowlist and not a blocklist, because a
+     blocklist would need a new entry for every sandbox key the vendor adds and
+     would fail open until someone noticed.
+
+     The reviewed set is the headless posture: approval_policy, sandbox_mode and
+     sandbox_workspace_write.network_access. sandbox_workspace_write.writable_roots
+     is a LIST, and check 3 already rejects a container value; owning single
+     entries would need a path syntax for list membership that the grammar in
+     check 2 does not have. That is a scope boundary, not a gap waiting on a
+     mechanism.
+
+  {{ includeTemplate "codex-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- if not $ctx -}}{{- fail "codex-settings-validate.tmpl: ctx is required" -}}{{- end -}}
+{{- $settings := .settings -}}
+{{- if not (kindIs "map" $settings) -}}
+{{-   fail (printf "config-codex-settings: agents.codex.settings must be a map, got %s" (kindOf $settings)) -}}
+{{- end -}}
+{{- /* Segments start with a letter and admit digits, underscore and hyphen. The
+   trailing hyphen in the class is a literal, not a range. This regexp rejects an
+   empty path, an empty segment, and any segment a TOML bare key cannot hold. */ -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9_-]*([.][A-Za-z][A-Za-z0-9_-]*)*$" -}}
+{{- $ownedElsewhere := list "mcp_servers" "projects" "hooks" "plugins" "marketplaces" -}}
+{{- /* Check 6's three lists. `$securityPrefixes` holds first segments whose whole
+   subtree widens the sandbox or approval posture; `$securityExactKeys` holds
+   single keys that do the same without a prefix to key on; `$reviewedSecurityPaths`
+   is the full-path allowlist both are measured against. Adding a path here is a
+   reviewed change to this partial, which is the point -- it cannot happen as a
+   data edit. */ -}}
+{{- $securityPrefixes := list "sandbox_workspace_write" -}}
+{{- $securityExactKeys := list "approval_policy" "sandbox_mode" -}}
+{{- $reviewedSecurityPaths := list "approval_policy" "sandbox_mode" "sandbox_workspace_write.network_access" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch $pathRe $path) -}}
+{{-     fail (printf "config-codex-settings: %q is not a valid config.toml path; use dot-separated bare-key segments naming a leaf, each segment non-empty and starting with a letter" $path) -}}
+{{-   end -}}
+{{-   if or (kindIs "map" $value) (kindIs "slice" $value) -}}
+{{-     fail (printf "config-codex-settings: %s declares a %s value, but a declared path must name a LEAF; asserting a container would overlay the whole table and fight every sibling another writer put there" $path (kindOf $value)) -}}
+{{-   end -}}
+{{-   $first := index (splitList "." $path) 0 -}}
+{{-   if has $first $ownedElsewhere -}}
+{{-     fail (printf "config-codex-settings: declared path %s addresses %s, which another writer owns (mcp_servers -> the MCP half of this provisioner and `codex mcp add`; projects, hooks, plugins, marketplaces -> Codex itself). Asserting it would fight that writer on every apply" $path $first) -}}
+{{-   end -}}
+{{-   if and (or (has $first $securityPrefixes) (has $path $securityExactKeys)) (not (has $path $reviewedSecurityPaths)) -}}
+{{-     fail (printf "config-codex-settings: declared path %s changes the Codex approval or sandbox posture, and only these paths are reviewed for that: %s. sandbox_workspace_write.writable_roots is a list, so asserting it would replace the whole list; owning single entries would need a path syntax for list membership that this grammar does not have. Declare a reviewed path, or leave the key undeclared so it stays adjustable" $path (join ", " $reviewedSecurityPaths)) -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Overlap is checked only after EVERY path has passed the grammar rule above:
+   Go template map iteration has no defined order, so a shared pass would let this
+   check fire on a malformed path and report the wrong reason. */ -}}
+{{- range $path, $value := $settings -}}
+{{-   range $other, $_ := $settings -}}
+{{-     if and (ne $other $path) (hasPrefix (printf "%s." $path) $other) -}}
+{{-       fail (printf "config-codex-settings: declared path %s is an ancestor of %s; only one of them can name a leaf, and declaring both makes the reconciler raise a scalar-versus-table conflict on every apply" $path $other) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}

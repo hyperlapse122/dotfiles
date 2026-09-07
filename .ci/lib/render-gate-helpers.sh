@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Shared render-gate helpers, sourced (never executed directly) by
-# .ci/test-mxm4-haptic-gates.sh.
+# .ci/test-fingerprint-gates.sh, .ci/test-agent-instructions.sh and
+# .ci/test-sudo-elevation-guard.sh.
 #
 # Every function takes repo_root, scratch, and chezmoi_bin as leading
 # positional arguments instead of reading them from caller-declared globals:

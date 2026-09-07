@@ -65,11 +65,21 @@ system:
     sysctl: {}
 
     udev:
+      overrides:
+        # Power the driverless discrete GPU off on an integrated-only host. It
+        # must never land on a desktop or on a hybrid host that keeps its driver.
+        - path: etc/udev/rules.d/80-nvidia-integrated-only.rules
+          gate: integratedOnly
       removed:
         # Retired uinput and receiver udev rules
         - path: /etc/udev/rules.d/80-uinput.rules
         - path: /etc/udev/rules.d/logitech-receiver.rules
         - path: /etc/udev/rules.d/70-uinput-solaar.rules
+        # The power-off rule retires where a hybrid host keeps its driver again
+        # (the policy row was removed). A POSITIVE fact gates it: an unknown host
+        # resolves it false and removes nothing.
+        - path: /etc/udev/rules.d/80-nvidia-integrated-only.rules
+          gate: nvidiaHybridDriver
 
     hardware:
       overrides:
@@ -79,15 +89,31 @@ system:
         - path: etc/modules-load.d/thinkpad_acpi.conf
           gate: thinkpad
         # Render offload and runtime power management for a laptop's discrete
-        # GPU. A desktop with a single discrete card has nothing to offload to.
+        # GPU. A desktop with a single discrete card has nothing to offload to,
+        # and an integrated-only host has no driver to configure.
         - path: etc/modprobe.d/nvidia-hybrid-power.conf
-          gate: hybridGraphics
+          gate: nvidiaHybridDriver
         - path: etc/modprobe.d/nvidia-hybrid-modeset.conf
-          gate: hybridGraphics
+          gate: nvidiaHybridDriver
+        # Driver blacklist for a hybrid host the fleet runs integrated-only.
+        - path: etc/modprobe.d/nvidia-integrated-only.conf
+          gate: integratedOnly
       removed:
         # Retired kernel-install(8) drop-in for VirtualBox module signing
         - path: /etc/kernel/install.d/50-vbox-sign.install
           distro: fedora
+        # The hybrid drop-ins retire where the driver stack is withdrawn. A
+        # POSITIVE fact gates the retirement, as sddmBreezeRetirable does for the
+        # desktop subsystem: an unknown host resolves it false and removes
+        # nothing.
+        - path: /etc/modprobe.d/nvidia-hybrid-power.conf
+          gate: integratedOnly
+        - path: /etc/modprobe.d/nvidia-hybrid-modeset.conf
+          gate: integratedOnly
+        # The blacklist retires on the reverse transition, when a hybrid host
+        # keeps its driver again, so a reinstalled stack can load.
+        - path: /etc/modprobe.d/nvidia-integrated-only.conf
+          gate: nvidiaHybridDriver
 
     # Sleep policy is a laptop concern, gated on the battery fact. Its own
     # subsystem rather than a passenger on the hibernation-storage installer,

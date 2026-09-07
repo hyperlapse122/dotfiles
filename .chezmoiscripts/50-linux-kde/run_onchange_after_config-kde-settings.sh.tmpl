@@ -16,8 +16,8 @@ killrunner, krunner, spectacle) that were each nothing but a guard, a
 RENDER-TIME VALIDATION (R14) — a bad row aborts the apply, it never misbehaves.
 
 Every row is checked here, before a single byte of bash is emitted, exactly the
-way the haptic waveform table and the system.yaml gate names are: an unknown
-type, an empty field, a value that does not parse for its declared type, a colon
+way the system.yaml gate names are: an unknown type, an empty field, a value
+that does not parse for its declared type, a colon
 (the rows are colon-delimited), or a character outside the allowed set (the rows
 are interpolated into bash) each `fail` with a message naming the offending row.
 

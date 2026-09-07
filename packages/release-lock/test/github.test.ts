@@ -156,9 +156,18 @@ describe("resolveGitHubRelease", () => {
 });
 
 describe("resolveGitHubRelease tagPrefix", () => {
-  function stubReleaseList(tags: string[]): void {
+  interface StubListedRelease {
+    tag_name: string;
+    prerelease?: boolean;
+    draft?: boolean;
+  }
+
+  function stubReleaseList(releases: (string | StubListedRelease)[]): void {
+    const body = releases.map((entry) =>
+      typeof entry === "string" ? { tag_name: entry, assets: [] } : { ...entry, assets: [] },
+    );
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify(tags.map((tag_name) => ({ tag_name, assets: [] }))), {
+      new Response(JSON.stringify(body), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as typeof globalThis.fetch;
@@ -174,6 +183,24 @@ describe("resolveGitHubRelease tagPrefix", () => {
     );
 
     expect(locked.version).toBe("compound-engineering-v3.20.0");
+  });
+
+  test("skips prereleases and drafts that carry the prefix, selecting the stable release", async () => {
+    stubReleaseList([
+      { tag_name: "rust-v0.154.0-alpha.2", prerelease: true },
+      { tag_name: "rust-v0.154.0-alpha.1", prerelease: true, draft: false },
+      { tag_name: "rust-v0.153.5", draft: true },
+      { tag_name: "rust-v0.153.4", prerelease: false, draft: false },
+      "rust-v0.153.3",
+    ]);
+
+    const locked = await resolveGitHubRelease(
+      "codex",
+      { kind: "githubRelease", source: "openai/codex", tagPrefix: "rust-v" },
+      undefined,
+    );
+
+    expect(locked.version).toBe("rust-v0.153.4");
   });
 
   test("no release matching the prefix fails with the source named", async () => {

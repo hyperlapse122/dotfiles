@@ -11,6 +11,16 @@ license = "MIT"
 name = "mxm4_haptic"
 path = "src/lib.rs"
 
+# Unified CLI for Logitech device management (battery, haptic, status)
+[[bin]]
+name = "logictl"
+path = "src/bin/logictl.rs"
+
+# Headless daemon: sole owner of hidraw, battery poller, SNI publisher, AF_UNIX server
+[[bin]]
+name = "logid"
+path = "src/bin/logid.rs"
+
 # Thin one-shot client spawned from CLI / scripts; forwards
 # a waveform to the daemon over the AF_UNIX socket and exits.
 [[bin]]
@@ -39,6 +49,9 @@ hidapi = { version = "=2.6.6", default-features = false, features = [
     "linux-static-hidraw",
     "macos-shared-device",
 ] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+zbus = { version = "=5.19.0", features = ["blocking-api"] }
 
 # Optimize release binaries for fast cold start and small size. The client
 # is invoked once per button-hold/CLI event, so startup latency is

@@ -28,6 +28,9 @@ interface GitHubAsset {
 interface GitHubRelease {
   readonly tag_name: string;
   readonly assets: readonly GitHubAsset[];
+  /** Set on the release-list entries; `releases/latest` never returns one flagged. */
+  readonly prerelease?: boolean;
+  readonly draft?: boolean;
 }
 
 export function authHeaders(token: string | undefined): Record<string, string> {
@@ -80,10 +83,13 @@ export async function fetchLatestRelease(
 }
 
 /**
- * The newest release whose tag carries `tagPrefix`, from one release-list
- * call. KTD10: a repo that interleaves several tag trains
+ * The newest stable release whose tag carries `tagPrefix`, from one
+ * release-list call. KTD10: a repo that interleaves several tag trains
  * (compound-engineering-* next to marketplace-*, cli-*) must filter, because
- * `releases/latest` would eventually land on the wrong train.
+ * `releases/latest` would eventually land on the wrong train. Unlike
+ * `releases/latest`, the list also carries prereleases and drafts
+ * (openai/codex publishes `rust-v…-alpha.N` under the same prefix), so both
+ * flags are skipped to keep parity with what `releases/latest` would select.
  */
 export async function fetchLatestReleaseByPrefix(
   source: string,
@@ -103,10 +109,12 @@ export async function fetchLatestReleaseByPrefix(
     (candidate) =>
       typeof candidate.tag_name === "string" &&
       candidate.tag_name.startsWith(tagPrefix) &&
+      candidate.prerelease !== true &&
+      candidate.draft !== true &&
       Array.isArray(candidate.assets),
   );
   if (!release) {
-    throw new ResolutionError(source, `no release tag carries the prefix "${tagPrefix}"`);
+    throw new ResolutionError(source, `no stable release tag carries the prefix "${tagPrefix}"`);
   }
   return release;
 }

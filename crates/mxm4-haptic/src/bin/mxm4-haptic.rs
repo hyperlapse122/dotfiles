@@ -56,9 +56,7 @@ fn main() -> ExitCode {
             match mxm4_haptic::send_command(&name) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
-                    eprintln!(
-                        "mxm4-haptic: cannot reach mxm4-hapticd ({e}); is the daemon running?"
-                    );
+                    eprintln!("mxm4-haptic: cannot reach daemon ({e}); is logid running?");
                     ExitCode::from(1)
                 }
             }

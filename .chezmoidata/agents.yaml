@@ -87,8 +87,10 @@ agents:
         custom_agents:
           zsh: zsh
           claude: claude
+          codex: codex
         agent_detect_as:
           claude: claude
+          codex: codex
       tmux:
         status_bar: enabled
         clipboard: enabled
@@ -107,6 +109,9 @@ agents:
     # and verbose are deliberately absent for that reason. hooks, enabledPlugins and
     # extraKnownMarketplaces belong to other writers and are rejected at render time.
     #
+    # model is declared on purpose. The claude-opus-5 effort stays declared because
+    # fast mode runs on Opus.
+    #
     # env.DISABLE_AUTOUPDATER is what pins the updater off on macOS, where
     # dot_config/environment.d/ is not deployed; that file carries the same value for
     # Linux. The binary is pinned in .chezmoidata/releases.json and a version bump
@@ -115,7 +120,9 @@ agents:
     settings:
       language: Korean
       skipDangerousModePermissionPrompt: true
-      modelSettings.claude-opus-5.effortLevel: high
+      model: opus[1m]
+      modelSettings.claude-fable-5-1.effortLevel: medium
+      modelSettings.claude-opus-5.effortLevel: medium
       inputNeededNotifEnabled: true
       agentPushNotifEnabled: true
       remoteControlAtStartup: false
@@ -128,6 +135,30 @@ agents:
     pluginsRemoved: []
   agy:
     settings: {}
+    plugins:
+    - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    pluginsRemoved: []
+  codex:
+    # Codex CLI config.toml VALUES asserted into the live ~/.codex/config.toml by
+    # the codex settings reconciler. Each key is a dot-separated path to a LEAF;
+    # the reconciler asserts that leaf alone, so undeclared keys and the other
+    # members of the tables above it survive. config.toml is NOT a chezmoi
+    # target: Codex writes project trust, `codex mcp add` results, and hook
+    # state to it during normal use.
+    #
+    # settings owns scalar leaves only. mcp_servers, projects, hooks, plugins,
+    # and marketplaces belong to other writers (the MCP reconciler, Codex itself,
+    # and the plugin reconciler) and must not be declared here.
+    #
+    # The headless posture below runs `codex exec` unattended inside the
+    # workspace sandbox with network access. model is deliberately undeclared so
+    # the CLI default tracks the installed release.
+    settings:
+      approval_policy: never
+      sandbox_mode: workspace-write
+      sandbox_workspace_write.network_access: true
+      model_reasoning_effort: high
+    personalMarketplace: dotfiles
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     pluginsRemoved: []
