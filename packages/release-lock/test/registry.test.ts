@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test } from "vite-plus/test";
+import { resolveGitHubRelease } from "../src/github.js";
 import {
   ALL_PLATFORMS,
   ALL_PLATFORMS_WITH_MUSL,
@@ -6,6 +7,7 @@ import {
   type Platform,
 } from "../src/platforms.js";
 import { REGISTRY } from "../src/registry.js";
+import type { ToolSpec } from "../src/types.js";
 
 /**
  * Sentinel tag for the tag-embedding selectors (shellcheck, wasm-pack, gh,
@@ -207,5 +209,69 @@ describe("registry selector partition", () => {
       if (tool in EXPECTED) continue;
       expect(spec.asset, tool).toBeUndefined();
     }
+  });
+});
+
+describe("bun tag pinning", () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  interface StubListedRelease {
+    tag_name: string;
+    prerelease?: boolean;
+    draft?: boolean;
+  }
+
+  /** Every asset the bun selector names for `tag`, as the release would publish them. */
+  function bunAssets(tag: string): { name: string; browser_download_url: string }[] {
+    return ALL_PLATFORMS_WITH_MUSL.map((platform) => REGISTRY.bun?.asset?.(platform, tag))
+      .filter((name): name is string => typeof name === "string")
+      .map((name) => ({
+        name,
+        browser_download_url: `https://example.invalid/download/${tag}/${name}`,
+      }));
+  }
+
+  function stubReleaseList(releases: StubListedRelease[]): void {
+    const body = releases.map((entry) => ({ ...entry, assets: bunAssets(entry.tag_name) }));
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof globalThis.fetch;
+  }
+
+  test("the registry entry declares a tag prefix", () => {
+    // Without it, resolution falls back to releases/latest, which follows
+    // oven-sh/bun's rolling `canary` tag the moment upstream stops flagging it
+    // a prerelease.
+    expect(REGISTRY.bun?.tagPrefix).toBe("bun-v");
+  });
+
+  test("the prefix matches the tag the committed lock already records", () => {
+    expect("bun-v1.4.1".startsWith(REGISTRY.bun?.tagPrefix ?? "")).toBe(true);
+  });
+
+  test("resolution skips the canary train and selects the newest bun-v tag", async () => {
+    stubReleaseList([
+      { tag_name: "canary" },
+      { tag_name: "bun-v1.4.1" },
+      { tag_name: "bun-v1.4.0" },
+    ]);
+
+    const locked = await resolveGitHubRelease("bun", REGISTRY.bun as ToolSpec, undefined);
+
+    expect(locked.version).toBe("bun-v1.4.1");
+  });
+
+  test("a release list holding only canary fails rather than resolving it", async () => {
+    stubReleaseList([{ tag_name: "canary" }]);
+
+    await expect(
+      resolveGitHubRelease("bun", REGISTRY.bun as ToolSpec, undefined),
+    ).rejects.toThrow(/no stable release tag carries the prefix "bun-v"/);
   });
 });

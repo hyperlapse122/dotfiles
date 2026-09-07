@@ -52,6 +52,10 @@ export const REGISTRY: Registry = {
   bun: {
     kind: "githubRelease",
     source: "oven-sh/bun",
+    // The repo tags a rolling `canary` release next to the version train, so
+    // `bun-v` pins resolution to the train instead of trusting upstream to keep
+    // flagging canary a prerelease.
+    tagPrefix: "bun-v",
     // linux ships a static musl build next to the glibc one (KTD11).
     linuxMusl: true,
     asset: ({ os, arch, libc }) =>
