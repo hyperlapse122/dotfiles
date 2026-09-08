@@ -514,31 +514,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.1",
+        "version": "v2026.9.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-x64",
-            "sha256": "c98423c8470d6dc416d9f7036d0646d8ef5ae92ad9186907f8fcc84cbe7db4ea"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.2/mise-v2026.9.2-linux-x64",
+            "sha256": "2950f8e1c59f3d9716bc3ee7d9242de94f9ab4054d97e65e12f2e67867c5f8fd"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-arm64",
-            "sha256": "0ef0a778eaa8599f3e90a8a0979c9fc3f79922cafb5fa6d39f366d974da33bba"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.2/mise-v2026.9.2-linux-arm64",
+            "sha256": "2cea9423c16afa5e1f90646c35ebb3bc8d4647671a605d5856eb96dbbbf87e47"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-macos-x64",
-            "sha256": "0718a2aa14a96545a287f77a172d700247bb2d33016e5cf29fce1a05e45ac47a"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.2/mise-v2026.9.2-macos-x64",
+            "sha256": "8860b0de942f3a7c782ae0bafcd5474d78f20ce989846713ee57cf757b6faa08"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-macos-arm64",
-            "sha256": "3cfbe3295dba1a7e43bd02653517a8cc21135ba91f0635b45c98f1ebecc5513f"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.2/mise-v2026.9.2-macos-arm64",
+            "sha256": "ed2ea8c994d98d0bfdc214d19c7351fb5bb506164dc368840bd09992d1bd07c5"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-x64-musl",
-            "sha256": "fb5111a3e46389bcfc026632e5dc0cfdd45b6565146c21bdb9c7a75ccefbc193"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.2/mise-v2026.9.2-linux-x64-musl",
+            "sha256": "149021ad12ce503a816a4abc7693e680a6c7ddb10409a5998d9c3dcd38334db5"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.1/mise-v2026.9.1-linux-arm64-musl",
-            "sha256": "0175bbd05839105a99dc9599c0317654e8f01e67c00d2d394ed51e965bda2a51"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.2/mise-v2026.9.2-linux-arm64-musl",
+            "sha256": "25ffa60ad5a6f76ac2cf438ed63572b80375f615f7d61776c7b0f02e958aab0a"
           }
         }
       },
@@ -600,23 +600,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-08-31",
+        "version": "2026-09-07",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "a775f9edb543bb0c077da339b783e89446092986cde921c9d8e1733b091080c6"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "a3500183aa08bf740c0da6e030ad262d4cfa1c19e7ce195ab5f772bdf9ddfb12"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "d7617a9a7760cb615ae2d6e3b3a9456a0719959daad766fdda45bf58ec13661d"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "484de96ea9e5daf9e6361b6fa91be9521a7e6c652111af54a7ead80f900b1e55"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "a3b3e06da42b4df781891359ccbb57d6a84f311f0506de5f98dd0553460b1f8d"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "41161c05bd7e2396a5cea86a691d37919ec0af331a06bbdc0f323979034f9dad"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-08-31/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "5de5c20b8b49bdc9339ef537b4029af7f97214fb88d6fc86af57ab9344467625"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "16e9b2af9db7c0ce015ffe88f85db27669b05c84887a59c737d697d2c5f8d349"
           }
         }
       },
