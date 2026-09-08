@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Orca hardcodes bare `orca` in its queued-message pointer and its injected worker preamble, and
+# /usr/bin/orca on Linux is the GNOME screen reader, so a dispatched agent starts speech before it
+# can read the orca-ide rule. Candidates are explicit paths: a PATH lookup of `orca` finds this
+# wrapper and recurses. The overrides exist so the CI gate can exercise every branch.
+
+set -euo pipefail
+
+tried=()
+for candidate in \
+  "${ORCA_IDE_CLI:-}" \
+  "${HOME:-}/.local/bin/orca-ide" \
+  "${ORCA_PREFIX:-/opt/Orca}/resources/bin/orca-ide"
+do
+  [[ -n $candidate ]] || continue
+  tried+=("$candidate")
+  [[ -x $candidate ]] || continue
+  exec "$candidate" "$@"
+done
+
+screen_reader="${ORCA_SYSTEM_ORCA:-/usr/bin/orca}"
+tried+=("$screen_reader")
+if [[ -x $screen_reader ]]; then
+  exec "$screen_reader" "$@"
+fi
+
+printf 'orca: no Orca IDE CLI and no screen reader found; tried %s\n' "${tried[*]}" >&2
+exit 127

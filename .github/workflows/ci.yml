@@ -257,6 +257,7 @@ jobs:
           .ci/test-ci-wiring.sh
           .ci/test-garden-path-mirror-check.sh
           .ci/test-orca-register.sh
+          .ci/test-orca-cli-shadow.sh
           .ci/test-op-reference-form.sh
           .ci/test-merge-commit-only-gates.sh
           .ci/test-git-prune-local-branches.sh
