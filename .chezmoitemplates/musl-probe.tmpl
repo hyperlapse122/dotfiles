@@ -23,7 +23,7 @@ Resolution order:
 
 Step 3 shells out through `output`, so `--override-data` cannot reach it; step 2
 is the seam that lets CI render the `-musl` platform keys (bun, claude, mise,
-agent-browser) without a musl runner (R28).
+agent-browser, fff-mcp) without a musl runner (R28).
 */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "musl-probe.tmpl: expected a dict, got %s" (kindOf .)) -}}
