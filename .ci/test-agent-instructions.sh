@@ -61,7 +61,10 @@ for peer_render in "${renders[@]:1}"; do
     || fail "$(basename "$peer_render") diverges from $(basename "$rendered") outside its harness paragraph"
 done
 
-# Each harness must receive its own native file-tool names and no other harness's.
+# Each harness must receive its own paragraph content and no other harness's: the
+# native file-tool names for all three, plus the delegation carve-out Claude Code
+# alone carries. Rows are `owner|needle`; the owner id precedes the first `|` and
+# the needle is the whole remainder.
 while IFS='|' read -r owner needle; do
   [[ -z $owner ]] && continue
   for i in "${!harness_ids[@]}"; do
@@ -73,6 +76,8 @@ while IFS='|' read -r owner needle; do
   done
 done <<'HARNESS_NEEDLES'
 claude|This harness is Claude Code. Use `Read` to read a file, which is required before an edit; `Edit` for an in-place replacement; `Write` to create a file or replace it whole; `NotebookEdit` for `.ipynb` cells; `Glob` and `Grep` to search.
+claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
+claude|that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
 HARNESS_NEEDLES
