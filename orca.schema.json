@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/hyperlapse122/dotfiles/orca.schema.json",
+  "title": "orca.yaml",
+  "description": "Orca IDE project configuration. Derived from the orca.yaml parser in Orca 2026.x; Orca ignores unknown keys and invalid values silently.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "scripts": {
+      "type": "object",
+      "description": "Lifecycle scripts run in the worktree shell.",
+      "additionalProperties": false,
+      "properties": {
+        "setup": {
+          "type": "string",
+          "description": "Runs when a new worktree is created."
+        },
+        "archive": {
+          "type": "string",
+          "description": "Runs when a worktree is archived."
+        }
+      }
+    },
+    "setupAgentStartupPolicy": {
+      "description": "Whether the agent starts before the setup script finishes.",
+      "enum": ["start-immediately", "wait-for-setup"],
+      "default": "start-immediately"
+    },
+    "issueCommand": {
+      "type": "string",
+      "description": "Command run to fetch linked issue context."
+    },
+    "defaultTabs": {
+      "type": "array",
+      "description": "Terminal tabs opened in a new worktree. An entry needs at least one of title, color, command.",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string" },
+          "command": { "type": "string" },
+          "color": {
+            "type": "string",
+            "description": "Hex color, #rgb or #rrggbb.",
+            "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+          }
+        }
+      }
+    },
+    "environmentRecipes": {
+      "type": "array",
+      "description": "Per-workspace environment recipes (disposable sandboxes or VMs).",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name"],
+        "anyOf": [
+          { "required": ["create"] },
+          { "required": ["command"] }
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique recipe id: 1-64 lowercase letters, numbers, dot, dash, underscore; must start with a letter or number.",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "create": {
+            "type": "string",
+            "description": "Command that provisions the environment."
+          },
+          "command": {
+            "type": "string",
+            "description": "Deprecated alias for create; used only when create is absent."
+          },
+          "checkoutMode": {
+            "enum": ["orca-worktree", "provisioned-root"]
+          },
+          "suspend": { "type": "string" },
+          "resume": { "type": "string" },
+          "destroy": {
+            "type": "string",
+            "description": "Teardown command. The literal value \"none\" disables teardown."
+          },
+          "cleanup": {
+            "type": "string",
+            "description": "Deprecated alias for destroy; used only when destroy is absent."
+          }
+        }
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sharedDirectories": {
+          "type": "array",
+          "description": "Repo-relative directories shared across worktrees. Absolute paths, .., . and .git are rejected.",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "pattern": "^(?!/|[a-zA-Z]:)(?!.*(^|/)(\\.|\\.\\.|\\.git)(/|$)).+$"
+          }
+        }
+      }
+    }
+  }
+}
