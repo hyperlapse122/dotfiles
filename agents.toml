@@ -1,0 +1,13 @@
+version = 1
+agents = ["claude", "codex"]
+
+[trust]
+allow_all = true
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents"
+
+[[skills]]
+name = "find-skills"
+source = "vercel-labs/skills"
