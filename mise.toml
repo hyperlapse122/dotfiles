@@ -1,12 +1,14 @@
 [tools]
 aube = "latest"
 "npm:@colbymchenry/codegraph" = "latest"
+"npm:@sentry/dotagents" = "latest"
 rust = { version = "1.98.0", components = "rust-analyzer,rust-src" }
 
 [hooks]
 postinstall = [
   { run = "bash -c \"cd packages; vp install\"" },
   { run = "bash -c \"cd crates/mxm4-haptic; cargo fetch\"" },
+  { run = "dotagents --project install" },
   { run = "codegraph init" },
   { run = "codegraph sync" },
 ]
