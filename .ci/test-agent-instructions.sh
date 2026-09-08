@@ -180,9 +180,10 @@ A receipt that reports the worker released settles that dispatch on its own.
 the run MUST read the receipt's retention reason and make one Orca-side query of that dispatch's state
 When that query reports the dispatch still active, the run MUST issue the guide's stop for that dispatch and query once more.
 is settled once the query reports the dispatch no longer active
-A retention Orca could not bind to a process is never settled by that query
-record the dispatch id, the verbatim receipt, and the query's verbatim output as an unproven release
-only after the query itself failed, and then MUST record the command it ran and that command's verbatim error
+A retention Orca could not bind to a process, and a retention whose reason the receipt does not state, are never settled by that query
+When the query after a stop still reports the dispatch active, the run MUST record it the same way and proceed.
+it MUST NOT carry terminal previews, pane content, host paths, or any other verbatim command output
+only after the query itself failed, and then MUST also record the command it ran and that command's error text
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
 Every worker under this contract MUST be attached through the guide's lifecycle-supervised worker path, never an unsupervised injected dispatch
@@ -200,6 +201,7 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+counting a receipt that reclaimed no process as satisfying that
 The harness's own in-process subagent tool is not the dispatch this rule routes.
 viewerPermission
 project_access

@@ -4,7 +4,8 @@
 # an accessibility toggle launches under the same name. Argv shape separates them, because GNOME
 # Orca accepts no positional argument while every Orca IDE CLI entry point is a bare subcommand
 # word: a bare-word first argument is the Orca IDE CLI, no argument or a leading `-` is the screen
-# reader. An Orca-IDE-shaped invocation with no Orca IDE CLI is an error, never a fall through to
+# reader. Dash-first belongs to the screen reader by design, including `-h` and `-v`, which the Orca
+# IDE CLI also accepts. An Orca-IDE-shaped invocation with no Orca IDE CLI is an error, never a fall through to
 # speech, which is the incident this wrapper exists to prevent. Candidates are explicit paths: a
 # PATH lookup of `orca` finds this wrapper and recurses. The overrides exist so the CI gate can
 # exercise every branch.

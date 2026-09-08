@@ -8,7 +8,7 @@ Affected product: Orca IDE 1.4.198 (`/opt/Orca`, `orca-ide` RPM)
 
 ## Why these are recorded rather than filed
 
-Both defects are in Orca, not in this repository. The shared instruction core requires the agent to
+All three defects are in Orca, not in this repository. The shared instruction core requires the agent to
 ask the user before filing an issue in a repository that is not theirs, and forbids an unattended
 run from asking. The run that found them was unattended, so it uses the committed-record fallback:
 the reports are drafted here for the operator to file unchanged.
