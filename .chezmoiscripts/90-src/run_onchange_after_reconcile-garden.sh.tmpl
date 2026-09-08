@@ -11,6 +11,14 @@
 # aoe worktree — aoe owns worktree lifecycle, and trees dropped from the
 # manifest are left in place for `src-audit` to report.
 #
+# TWO HARD GATES. Before grow, the path-mirror gate refuses any declaration
+# whose path is not the one derived from its own url — the ~/src layout rule,
+# owned by the "Repository layout and garden ownership" section of the agent
+# instructions. It lives here rather than in CI because the registry is
+# GPG-encrypted and no runner holds the key; `.ci/test-garden-path-mirror-check.sh`
+# covers the shared checker's logic against fixtures instead. After grow, the
+# completeness check re-verifies every declared tree is a real work tree.
+#
 # GATING. Runs on Linux and macOS on a real host. The container skip lives in
 # the single gated .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the
 # sanctioned mechanism that also skips .config/garden/garden.yaml.
@@ -69,11 +77,70 @@ command -v garden >/dev/null 2>&1 || { echo "reconcile-garden: garden not on PAT
 command -v aoe    >/dev/null 2>&1 || { echo "reconcile-garden: aoe not on PATH (externals not applied? see .chezmoiexternals/ai-agents.toml)" >&2; exit 1; }
 [ -f "$reg" ] || { echo "reconcile-garden: $reg missing (chezmoi apply did not deploy it)" >&2; exit 1; }
 
-# 1. Grow every declared tree (idempotent; already-grown trees are no-ops).
+# 1. Enumerate declared trees, their resolved paths, AND their remote urls in
+#    ONE `garden ls -v` call, shared by the path-mirror gate (step 2) and the
+#    completeness check (step 4). Capture garden's OWN exit status first: a hard
+#    `ls` failure (crash, non-zero) must fail the apply, not pass vacuously — an
+#    empty tree_info would otherwise skip both loops entirely. garden prints
+#    grown-tree lines to STDERR and missing-tree lines to STDOUT, so 2>&1 merges
+#    both (same reason as dot_local/share/chezmoi-command-sources/executable_src-audit);
+#    "# <name> [branch] <path>" (grown) and "#- <name> <path>" (missing) both
+#    carry the resolved path as the last field, and each is followed by an
+#    indented "origin: <url>" line.
+#
+#    This call deliberately omits --no-remotes, which the completeness check
+#    used to pass: that flag suppresses the remotes block, and with it every
+#    url the path-mirror gate needs. The header lines it does emit are
+#    unchanged, so the existing extraction below still works.
+#
+#    Declaration-derived, so it runs BEFORE grow: the gate in step 2 must
+#    refuse a bad declaration before any directory is created. Paths do not
+#    change across grow, so step 4 reuses this same capture.
+raw_ls="$(garden --config "$reg" ls --all --no-commands --no-gardens --no-groups -v 2>&1)" || {
+  echo "reconcile-garden: 'garden ls' failed — cannot verify the registry:" >&2
+  printf '%s\n' "$raw_ls" >&2
+  exit 1
+}
+tree_info="$(printf '%s\n' "$raw_ls" | sed -n -e 's/^# //p' -e 's/^#- //p')"
+
+# 2. Path-mirror gate — the ~/src layout rule, enforced before anything is
+#    grown. A declared path must equal the one derived from its own url; the
+#    derivation and comparison live in the shared helper below, which the CI
+#    fixture test .ci/test-garden-path-mirror-check.sh drives with the same
+#    record shape. Enforcement is HERE rather than in CI because the registry
+#    is GPG-encrypted and no runner holds the key.
+GARDEN_PATH_MIRROR_SOURCED=1
+{{ includeTemplate "garden-path-mirror-check.sh" . }}
+
+# Pair each header line with the indented `origin:` line that follows it, and
+# reduce the absolute path garden prints to the root-relative form the registry
+# declares and the rule derives. A tree resolved outside the root is passed
+# through as-is, which the helper reports as a deviation.
+garden_root="$(garden --config "$reg" eval '${GARDEN_ROOT}' 2>/dev/null || printf '%s/src' "$HOME")"
+mirror_records="$(printf '%s\n' "$raw_ls" | awk -v root="$garden_root/" '
+  /^#- / { name = $2; path = $NF; next }
+  /^# /  { name = $2; path = $NF; next }
+  /^[[:space:]]+origin:[[:space:]]/ {
+    if (name != "" && name != ".") {
+      rel = path
+      sub("^" root, "", rel)
+      printf "%s\t%s\t%s\n", name, rel, $2
+    }
+    name = ""
+    next
+  }
+')"
+if ! printf '%s\n' "$mirror_records" | garden_path_mirror_check; then
+  echo "reconcile-garden: registry declarations violate the ~/src layout rule (see above) — failing apply before grow" >&2
+  echo "reconcile-garden: the rule is owned by the \"Repository layout and garden ownership\" section of the agent instructions" >&2
+  exit 1
+fi
+
+# 3. Grow every declared tree (idempotent; already-grown trees are no-ops).
 echo "reconcile-garden: garden grow '*'"
 garden --config "$reg" grow '*'
 
-# 2. Completeness check — the real hard-fail gate. `garden grow '*'` exits 0
+# 4. Completeness check — the second hard-fail gate. `garden grow '*'` exits 0
 #    even when trees fail to clone, so re-verify each DECLARED tree is a valid
 #    git work tree. Missing/broken/half-cloned => exit non-zero, naming the
 #    tree, so a silent clone failure fails the apply.
@@ -89,20 +156,8 @@ check_tree() {
   fi
 }
 
-# Enumerate declared trees AND their resolved paths in ONE `garden ls -v` call.
-# Capture garden's OWN exit status first: a hard `ls` failure (crash, non-zero)
-# must fail the apply, not pass vacuously — an empty tree_info would otherwise
-# skip the completeness loop entirely. garden prints grown-tree lines to STDERR
-# and missing-tree lines to STDOUT, so 2>&1 merges both (same reason as
-# dot_local/bin/executable_src-audit); "# <name> [branch] <path>" (grown) and
-# "#- <name> <path>" (missing) both carry the resolved path as the last field.
-raw_ls="$(garden --config "$reg" ls --all --no-commands --no-remotes --no-gardens --no-groups -v 2>&1)" || {
-  echo "reconcile-garden: 'garden ls' failed — cannot verify grow completeness:" >&2
-  printf '%s\n' "$raw_ls" >&2
-  exit 1
-}
-tree_info="$(printf '%s\n' "$raw_ls" | sed -n -e 's/^# //p' -e 's/^#- //p')"
-
+# tree_info was captured in step 1 from the same `garden ls` call; paths are
+# declaration-derived and do not change across grow.
 rc=0
 # Heredoc (not a pipe) so the loop runs in THIS shell and rc survives it.
 while IFS= read -r line; do
@@ -120,7 +175,7 @@ if [ "$rc" -ne 0 ]; then
   exit 1
 fi
 
-# 3. Bootstrap: set upstreams and session each tree in aoe directly on the
+# 5. Bootstrap: set upstreams and session each tree in aoe directly on the
 #    checkout on its default branch and enforce its group policy. Idempotent.
 echo "reconcile-garden: garden cmd '*' setup-upstream aoe-session"
 garden --config "$reg" cmd '*' setup-upstream aoe-session
