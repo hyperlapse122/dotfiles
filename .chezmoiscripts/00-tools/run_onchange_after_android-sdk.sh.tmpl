@@ -2,12 +2,20 @@
 {{- $androidVersion := (includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "android")) -}}
 #!/usr/bin/env bash
 #
-# Provisions Android SDK platform-tools, build-tools, platforms, and agent
-# environment headlessly into ~/.local/share/android-sdk using the Android CLI.
+# Provisions Android SDK platform-tools, build-tools, and platforms headlessly
+# into ~/.local/share/android-sdk using the Android CLI.
 #
 # android CLI version: {{ $androidVersion }}
 #
 # This script re-runs when rendered content changes (e.g. when android CLI version updates).
+#
+# It deliberately does NOT run `android init`. That subcommand's only effect is
+# to install the android-cli skill into every agent's global skills directory,
+# and on this host ~/.claude/skills, ~/.codex/skills and ~/.gemini/skills are all
+# symlinks to the chezmoi-managed ~/.agents/skills tree, so it silently
+# overwrites whatever chezmoi put there with unpinned bytes from the CLI bundle.
+# The skill is an ordinary pinned external instead (agents.skills.external ->
+# android/skills devtools/android-cli). `android sdk install` needs no init.
 
 set -euo pipefail
 
@@ -24,9 +32,6 @@ if [ ! -x "$ANDROID_BIN" ]; then
 fi
 
 if [ -x "$ANDROID_BIN" ]; then
-  # Initialize the agent environment and skills
-  "$ANDROID_BIN" init || true
-
   # Install required SDK components idempotently
   "$ANDROID_BIN" --sdk="$ANDROID_HOME" sdk install "platform-tools" "build-tools/35.0.0" "platforms/android-36" || true
 fi
