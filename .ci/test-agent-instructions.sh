@@ -13,6 +13,13 @@ set -euo pipefail
 # prevent retired instruction mandates from returning — including the aoe
 # branch/worktree/session mandates Orca replaced, which no wrapper may
 # reintroduce without this gate catching it.
+#
+# KNOWN GAP: the `This harness is ` lines are sampled by substring, never
+# compared whole. The peer diff strips them and the needles only assert that
+# quoted text is present, so text APPENDED to a harness line reaches a deployed
+# instruction file unasserted. Every load-bearing sentence on those lines must
+# therefore carry its own needle. Closing the gap properly means asserting each
+# harness line byte-for-byte against a committed fixture.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -69,15 +76,16 @@ while IFS='|' read -r owner needle; do
   [[ -z $owner ]] && continue
   for i in "${!harness_ids[@]}"; do
     if [[ ${harness_ids[$i]} == "$owner" ]]; then
-      grep -F "$needle" "${renders[$i]}" >/dev/null || fail "$owner lost its tool rule: $needle"
+      grep -F "$needle" "${renders[$i]}" >/dev/null || fail "$owner lost its harness rule: $needle"
     elif grep -F "$needle" "${renders[$i]}" >/dev/null; then
-      fail "${harness_ids[$i]} leaked $owner's tool rule: $needle"
+      fail "${harness_ids[$i]} leaked $owner's harness rule: $needle"
     fi
   done
 done <<'HARNESS_NEEDLES'
 claude|This harness is Claude Code. Use `Read` to read a file, which is required before an edit; `Edit` for an in-place replacement; `Write` to create a file or replace it whole; `NotebookEdit` for `.ipynb` cells; `Glob` and `Grep` to search.
 claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
-claude|that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation
+claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
+claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
 HARNESS_NEEDLES
@@ -123,11 +131,16 @@ MUST NOT run without explicit same-turn user approval, exactly like the destruct
 Orca has NO command that adopts an already-checked-out worktree
 NEEDLES
 
+# Scanned against EVERY render, not just the Claude one: the harness lines are
+# stripped before the peer diff, so a retired mandate re-entering through a peer
+# harness paragraph would otherwise pass both halves of this gate unseen.
 while IFS= read -r banned; do
   [[ -z $banned ]] && continue
-  if grep -F "$banned" "$rendered" >/dev/null; then
-    fail "retired instruction reintroduced: $banned"
-  fi
+  for i in "${!harness_ids[@]}"; do
+    if grep -F "$banned" "${renders[$i]}" >/dev/null; then
+      fail "retired instruction reintroduced in ${harness_ids[$i]}: $banned"
+    fi
+  done
 done <<'BANNED'
 viewerPermission
 project_access
