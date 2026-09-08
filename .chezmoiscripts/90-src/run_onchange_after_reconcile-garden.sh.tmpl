@@ -4,12 +4,13 @@
 # Apply-time garden provisioning + reconcile. Turns the documented manual
 # bootstrap into an automatic step of `chezmoi apply`: whenever the ~/src
 # project registry changes, grow every declared tree and run the custom
-# bootstrap commands (setup-upstream, aoe-session). aoe-session
-# additionally self-heals each session's group to the host-inclusive policy.
+# bootstrap command (setup-upstream). Registering those trees with Orca is the
+# job of the run_after_orca-register script beside this one, which runs on every
+# apply because Orca's registry is state this repository does not fingerprint.
 #
 # ADDITIVE ONLY. This never removes, relocates, or unlocks a tree, clone, or
-# aoe worktree — aoe owns worktree lifecycle, and trees dropped from the
-# manifest are left in place for `src-audit` to report.
+# worktree — Orca owns worktree lifecycle, and trees dropped from the manifest
+# are left in place for `src-audit` to report.
 #
 # TWO HARD GATES. Before grow, the path-mirror gate refuses any declaration
 # whose path is not the one derived from its own url — the ~/src layout rule,
@@ -23,11 +24,11 @@
 # the single gated .chezmoiignore block (`.chezmoiscripts/90-src/*.sh`), the
 # sanctioned mechanism that also skips .config/garden/garden.yaml.
 #
-# PLACEMENT (90-src, last). Deliberately the last after-phase script. It must
+# PLACEMENT (90-src). It must
 # run after 10-auth's after-scripts (which configure the gh/glab git credential
 # helpers the private https clones need) and after target application (the
-# registry now deploys to ~/.config/garden/garden.yaml; the garden + aoe
-# externals materialize under ~/.local/bin). Unlike the old target, deploying
+# registry now deploys to ~/.config/garden/garden.yaml; the garden external
+# materializes under ~/.local/bin). Unlike the old target, deploying
 # the registry there has no ~/src side effect — `garden grow` below creates
 # ~/src itself when absent, so per Risk-4 ~/src may be absent for the ENTIRE
 # after-phase if an apply aborts before this script runs. Placing it LAST
@@ -49,8 +50,8 @@
 #
 # Dependency fingerprint — chezmoi hashes this rendered script to decide whether
 # to re-run it, so embedding the sha256 of the ENCRYPTED registry SOURCE forces
-# a re-run whenever the manifest changes (trees added, or the aoe-session group
-# formula edited). gpg is non-deterministic, so any re-encrypt re-triggers even
+# a re-run whenever the manifest changes (trees added, or a bootstrap command
+# edited). gpg is non-deterministic, so any re-encrypt re-triggers even
 # on identical plaintext — a harmless over-trigger, since the reconcile is
 # idempotent. Hashing the ciphertext (raw source bytes) never exposes a secret.
 # Comment-only; never executed.
@@ -70,11 +71,10 @@ export PATH
 export GIT_TERMINAL_PROMPT=0
 reg="$HOME/.config/garden/garden.yaml"
 
-# Prerequisites are hard requirements: the garden + aoe externals and the
-# decrypted registry are all materialized during target application, before
-# this after-phase script. Their absence is a real failure, not a soft skip.
+# Prerequisites are hard requirements: the garden external and the decrypted
+# registry are both materialized during target application, before this
+# after-phase script. Their absence is a real failure, not a soft skip.
 command -v garden >/dev/null 2>&1 || { echo "reconcile-garden: garden not on PATH (externals not applied? see .chezmoiexternals/vcs.toml)" >&2; exit 1; }
-command -v aoe    >/dev/null 2>&1 || { echo "reconcile-garden: aoe not on PATH (externals not applied? see .chezmoiexternals/ai-agents.toml)" >&2; exit 1; }
 [ -f "$reg" ] || { echo "reconcile-garden: $reg missing (chezmoi apply did not deploy it)" >&2; exit 1; }
 
 # The shared record parser, derivation, and comparison. Inlined here so step 1
@@ -181,9 +181,8 @@ if [ "$rc" -ne 0 ]; then
   exit 1
 fi
 
-# 5. Bootstrap: set upstreams and session each tree in aoe directly on the
-#    checkout on its default branch and enforce its group policy. Idempotent.
-echo "reconcile-garden: garden cmd '*' setup-upstream aoe-session"
-garden --config "$reg" cmd '*' setup-upstream aoe-session
+# 5. Bootstrap: set each tree's upstream on its default branch. Idempotent.
+echo "reconcile-garden: garden cmd '*' setup-upstream"
+garden --config "$reg" cmd '*' setup-upstream
 
 echo "reconcile-garden: done"
