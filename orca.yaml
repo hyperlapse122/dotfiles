@@ -1,0 +1,5 @@
+scripts:
+  setup: |
+    mise trust -yq
+    mise install -yq
+  archive: mise untrust -yq
