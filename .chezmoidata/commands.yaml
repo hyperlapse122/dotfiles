@@ -104,6 +104,17 @@ commands:
       legacy:
         path: .local/bin/codex
 
+    orca-wrapper:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_orca
+      commands:
+        - name: orca
+          relPath: orca-wrapper
+
     ast-grep:
       producer: external
       safetyProfile: native-single-file
