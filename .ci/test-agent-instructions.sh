@@ -129,6 +129,16 @@ Membership is declared, never derived from the path
 It reports garden drift only; it does not audit Orca registration.
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree
+that dispatch MUST go through the `orchestration` skill and the Orca CLI it resolves
+The harness's own in-process subagent tool is not the dispatch this rule routes.
+never copy command details here, because they change between Orca releases
+MUST NOT run a plugin-bundled job runner, peer-review launcher, or fan-out script to obtain a peer opinion
+the prohibition covers every script of that shape, named here or not, in this plugin version or a later one
+MUST NOT reach a peer model by running an agent CLI such as `claude -p`, `codex exec`, or `cursor-agent` for that opinion
+is not dispatch and stays allowed
+This rule fixes the path a dispatch takes, never whether to dispatch.
+in an unattended run that record goes in the MR/PR description, beside the unapplied-findings checklist
+It does not stop, and it does not fall back to the bundled script.
 NEEDLES
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
