@@ -112,6 +112,7 @@ jobs:
           .ci/test-build-bun-version-fingerprint.sh
           .ci/test-skip-declaration-gates.sh
           .ci/test-direct-rpms-render.sh
+          .ci/test-android-sdk-provision.sh
           .ci/test-sudo-elevation-guard.sh
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
@@ -254,6 +255,7 @@ jobs:
           mkdir -p "$HOME/.cache"
           .ci/test-ci-wiring.sh
           .ci/test-garden-path-mirror-check.sh
+          .ci/test-orca-register.sh
           .ci/test-op-reference-form.sh
           .ci/test-merge-commit-only-gates.sh
           .ci/test-git-prune-local-branches.sh

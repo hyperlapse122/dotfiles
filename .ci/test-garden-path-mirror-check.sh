@@ -57,6 +57,100 @@ run_checker "$conforming"
 [ -z "$checker_out" ] || fail "conforming stream printed output: $checker_out"
 pass 'a conforming stream exits zero and prints nothing'
 
+# --- garden_path_mirror_enumerate: the wrapper both 90-src scripts depend on ---
+#
+# It is on the critical path of the reconciler AND the Orca registration script,
+# and its record-count-vs-header-count guard is itself an anti-silent-pass
+# mechanism: without it a `garden ls` whose format changed would leave every
+# consumer iterating zero times, green, with nothing done. Driven here with a
+# stub `garden` because no runner has a real one.
+
+enum_scratch=$(mktemp -d "${XDG_RUNTIME_DIR:-${HOME:?}/.cache}/gpm-enumerate.XXXXXX")
+trap 'rm -rf -- "$enum_scratch"' EXIT
+
+make_garden_stub() {
+  mkdir -p "$enum_scratch/bin"
+  cat >"$enum_scratch/bin/garden" <<'GARDENSTUB'
+#!/usr/bin/env bash
+for word in "$@"; do
+  case "$word" in
+    ls)   [ -f "$GARDEN_STUB_DIR/ls.fails" ] && { echo 'stub: garden ls exploded' >&2; exit 2; }
+          cat "$GARDEN_STUB_DIR/ls.out"; exit 0 ;;
+    eval) [ -f "$GARDEN_STUB_DIR/eval.fails" ] && { echo 'stub: garden eval exploded' >&2; exit 2; }
+          cat "$GARDEN_STUB_DIR/root"; exit 0 ;;
+  esac
+done
+exit 0
+GARDENSTUB
+  chmod +x "$enum_scratch/bin/garden"
+  export GARDEN_STUB_DIR="$enum_scratch"
+  printf '%s\n' "$enum_scratch/src" >"$enum_scratch/root"
+  rm -f "$enum_scratch/ls.fails" "$enum_scratch/eval.fails"
+}
+
+# `garden ls -v` shape: a header line per tree, each followed by its origin.
+write_ls_out() {
+  cat >"$enum_scratch/ls.out" <<LSOUT
+# dotfiles [main] $enum_scratch/src/github.com/hyperlapse122/dotfiles
+    origin: https://github.com/hyperlapse122/dotfiles.git
+# pacs-scp [develop] $enum_scratch/src/git.jpi.app/products/365flow/pacs-scp
+    origin: https://git.jpi.app/products/365flow/pacs-scp.git
+LSOUT
+}
+
+run_enumerate() {
+  set +e
+  enum_out=$(PATH="$enum_scratch/bin:$PATH" GARDEN_STUB_DIR="$enum_scratch" bash -c '
+    set -euo pipefail
+    GARDEN_PATH_MIRROR_SOURCED=1
+    . "$1"
+    garden_path_mirror_enumerate "$2" test-prefix test-verb
+  ' _ "$checker" "$enum_scratch/registry.yaml" 2>&1)
+  enum_rc=$?
+  set -e
+}
+
+make_garden_stub
+write_ls_out
+run_enumerate
+[ "$enum_rc" -eq 0 ] || fail "enumerate on a healthy garden exited $enum_rc: $enum_out"
+[ "$(printf '%s\n' "$enum_out" | grep -c .)" -eq 2 ] || fail "enumerate did not emit one record per tree: $enum_out"
+case "$enum_out" in *dotfiles*) : ;; *) fail "enumerate dropped a declared tree: $enum_out" ;; esac
+pass 'enumerate emits one record per declared tree'
+
+make_garden_stub
+write_ls_out
+: >"$enum_scratch/ls.fails"
+run_enumerate
+[ "$enum_rc" -ne 0 ] || fail 'a failing garden ls exited zero'
+case "$enum_out" in *test-prefix*) : ;; *) fail "failure was not prefixed by the caller's name: $enum_out" ;; esac
+pass 'a failing garden ls fails, named by its caller'
+
+# A garden eval failure falls back to $HOME/src rather than aborting, but must
+# say so: silently guessing the root would strip nothing and fail every tree.
+make_garden_stub
+write_ls_out
+: >"$enum_scratch/eval.fails"
+run_enumerate
+case "$enum_out" in *"falling back"*) : ;; *) fail "an eval failure did not announce its fallback: $enum_out" ;; esac
+pass 'a garden eval failure announces its fallback to $HOME/src'
+
+# The count guard. `garden ls` output the parser recognizes no headers in --
+# a format change upstream, or a garden that printed nothing useful -- must fail
+# loudly: proceeding would mean iterating zero trees and reporting success.
+make_garden_stub
+cat >"$enum_scratch/ls.out" <<'LSOUT'
+some completely unrecognized output shape
+LSOUT
+run_enumerate
+[ "$enum_rc" -ne 0 ] || fail "unrecognized garden ls output exited zero: $enum_out"
+case "$enum_out" in
+  *"output format changed"*) : ;;
+  *) fail "unrecognized output did not name the format change: $enum_out" ;;
+esac
+case "$enum_out" in *test-verb*) : ;; *) fail "refusal did not name the caller's verb: $enum_out" ;; esac
+pass 'garden ls output with no recognizable headers refuses to proceed unverified'
+
 # --- reject: an umbrella segment dropped from the declared path ---------------
 
 run_checker "$(rec pacs-scp 'git.jpi.app/365flow/pacs-scp' 'https://git.jpi.app/products/365flow/pacs-scp.git')"

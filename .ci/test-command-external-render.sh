@@ -16,7 +16,7 @@ fail() { printf 'command external render: %s\n' "$*" >&2; exit 1; }
 # between the asset name in `url` and the directory or filename inside it makes
 # the extraction miss. These are checked by assert_url_path_agreement below.
 platform_composed_units=(
-  aoe bun bunx codex codex-code-mode-host garden helm minikube uv uvx
+  bun bunx codex codex-code-mode-host garden helm minikube uv uvx
   wakatime-cli wasm-pack
 )
 
@@ -41,7 +41,7 @@ path_exempt_units=(
 # instead of the leading directory. All three forms are listed here so the
 # check compares like with like:
 #
-#   <os>-<arch>          aoe-linux-amd64, helm .../linux-amd64/helm
+#   <os>-<arch>          helm .../linux-amd64/helm, minikube-linux-amd64
 #   <os>-<altarch>       bun-linux-x64, bun-darwin-aarch64
 #   <os>-<altarch>-musl  bun-linux-x64-musl (musl leg only in practice)
 #   Rust target triple   codex/uv/wasm-pack x86_64-unknown-linux-musl,

@@ -68,7 +68,7 @@ cannot carry at all.
 ### Project garden and worktrees
 
 The `~/src` layout mirrored verbatim from each remote namespace, the encrypted
-project registry, aoe session/worktree ownership, and `src-audit` reconciliation.
+project registry, Orca session/worktree ownership, and `src-audit` reconciliation.
 
 _Why it serves the approach:_ declares the working environment itself as data, not just
 the config around it.

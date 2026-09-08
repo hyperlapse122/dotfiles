@@ -136,7 +136,6 @@ EXPECTED_LOCK_BACKED = frozenset(
         "agent-browser",
         "agy",
         "android",
-        "aoe",
         "ast-grep",
         "buf",
         "buf-man",

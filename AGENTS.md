@@ -33,9 +33,9 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 | `50-linux-kde`, `50-linux-gnome` | desktop configuration |
 | `60-build` | Vite+ helper/CLI builds |
 | `65-commands` | full command reconciliation, drift repair, and proof-classified pruning |
-| `70-agents` | Claude Code/Antigravity/Codex plugin reconciliation, Claude Code and Codex settings, and aoe config |
+| `70-agents` | Claude Code/Antigravity/Codex plugin reconciliation, and Claude Code and Codex settings |
 | `80-keys` | one-time GPG and age imports |
-| `90-src` | reconcile the `~/src` garden on manifest change (grow-all, the bootstrap commands, aoe group self-heal); runs last so a garden failure cannot abort other provisioning |
+| `90-src` | reconcile the `~/src` garden on manifest change (grow-all, the `setup-upstream` bootstrap), then register every grown tree with Orca on every apply; runs last so a garden failure cannot abort other provisioning |
 
 Package installation is owned modularly by feature scripts in `.chezmoiscripts/30-components/` and base installers in `.chezmoiscripts/20-base/`. Package installation scripts MUST always inspect which packages are not yet installed (e.g. `rpm -q` on Fedora, `dpkg-query -W` on Ubuntu, `brew list` on macOS, `dotnet tool list -g` for global .NET tools) and only install missing packages, never blindly passing all declared packages to the package manager unconditionally.
 

@@ -103,29 +103,6 @@
         "source": "android/skills",
         "version": "v1.0.11"
       },
-      "aoe": {
-        "kind": "githubRelease",
-        "source": "agent-of-empires/agent-of-empires",
-        "version": "v1.15.3",
-        "artifacts": {
-          "linux-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.3/aoe-linux-amd64.tar.gz",
-            "sha256": "050a7a7726967656c02faf887dad50f977d6b447c751db440079ba3df6be7623"
-          },
-          "linux-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.3/aoe-linux-arm64.tar.gz",
-            "sha256": "7a08302f87b6a6b50b620840b0693e1e8fb2a8df2e4b303cdb1208e149e14c55"
-          },
-          "darwin-amd64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.3/aoe-darwin-amd64.tar.gz",
-            "sha256": "55da93c8e818a22509e9c2766e7a85a2dddf7f964c837cb525369dceb15f7609"
-          },
-          "darwin-arm64": {
-            "url": "https://github.com/agent-of-empires/agent-of-empires/releases/download/v1.15.3/aoe-darwin-arm64.tar.gz",
-            "sha256": "7a8d51f2c1d188b5b5803c9be4d6f9ec3e07f8e5f425c273599498b49a226054"
-          }
-        }
-      },
       "ast-grep": {
         "kind": "githubRelease",
         "source": "ast-grep/ast-grep",

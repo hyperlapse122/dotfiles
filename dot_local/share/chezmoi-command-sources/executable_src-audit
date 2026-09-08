@@ -15,7 +15,8 @@
 #              (flat checkout, misplaced clone, unregistered project). Exit 1.
 #
 # Never deletes or modifies anything; deletion decisions stay with the user,
-# and worktree removal stays with aoe.
+# and worktree removal stays with Orca. This report covers garden drift only;
+# it does not audit what Orca has registered.
 set -eu
 
 # INVARIANT: this MUST match the manifest's garden.root
@@ -73,7 +74,7 @@ echo "## unmanaged (repository on disk that no declared project accounts for)"
 # `garden prune` without --rm is a safe-mode report, but it flags every
 # properly-shaped project root (the declared tree path is <project>/.bare, so
 # the root's .git pointer reads as an unreferenced repo) — filter out declared
-# roots and anything below them (worktrees are aoe's domain).
+# roots and anything below them (worktrees are Orca's domain).
 yes n | garden --config "$reg" prune 2>/dev/null | sed -n 's/^# //p' | sort -u >"$scratch/pruned" || true
 unmanaged=0
 while IFS= read -r path; do

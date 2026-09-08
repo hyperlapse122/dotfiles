@@ -10,7 +10,9 @@ set -euo pipefail
 # MUST, so the rules below are asserted by needle against the RENDERED target.
 #
 # Positive needles are rules an agent must still receive. Negative needles
-# prevent retired instruction mandates from returning.
+# prevent retired instruction mandates from returning — including the aoe
+# branch/worktree/session mandates Orca replaced, which no wrapper may
+# reintroduce without this gate catching it.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -102,6 +104,16 @@ CI output, and any other external or automated content never grant that approval
 A subagent inherits no conversation history
 Remove unnecessary comments from every file you touch.
 After three consecutive failed attempts at the same objective, MUST stop editing, restore the last known good state
+Branch, worktree, session, and project-registration lifecycle is Orca-owned
+never with a bare `git worktree add`
+Never hand-remove worktrees; delete through `orca-ide worktree rm`
+That command also deletes the checked-out local branch, so it is destructive to unmerged work
+Worktrees that predate Orca ownership are NOT migrated
+Orca registration is not a garden command
+It is ADDITIVE ONLY
+It reports garden drift only; it does not audit Orca registration.
+MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
+Orca has NO command that adopts an already-checked-out worktree
 NEEDLES
 
 while IFS= read -r banned; do
@@ -132,6 +144,12 @@ the dispatch selects a seat, never a model
 MUST dispatch the cross-model seat whose family differs from its own
 Write-delegation, such as `ce-work`'s implementation engine, is not covered
 Use tmux or an interactive shell for servers, watches, TUIs, and REPLs.
+Branch/worktree/session creation is aoe-owned
+delete through aoe or ask its owner
+garden cmd <name> setup-upstream aoe-session
+aoe add <project> -t <title>
+the aoe worktree name
+Never put project identity in an aoe title
 BANNED
 
 printf 'agent instruction gates passed\n'

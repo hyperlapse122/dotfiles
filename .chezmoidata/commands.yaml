@@ -66,18 +66,6 @@ commands:
       legacy:
         path: .local/bin/agent-browser
 
-    aoe:
-      producer: external
-      safetyProfile: native-single-file
-      proofEligible: true
-      mode: "0755"
-      platforms: [linux, macos]
-      tool: aoe
-      commands:
-        - name: aoe
-      legacy:
-        path: .local/bin/aoe
-
     codex:
       producer: external
       # Two native binaries share this unit: the codex entrypoint and the

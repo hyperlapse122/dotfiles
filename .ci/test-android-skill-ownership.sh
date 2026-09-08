@@ -98,7 +98,11 @@ while IFS= read -r invocation; do
     break
   done
   case $subcommand in
-    sdk) ;;
+    # `sdk` installs components; `emulator` lists and creates AVDs. Neither
+    # touches a skills directory. Every subcommand is allowlisted one at a time
+    # on purpose: adding one is a reviewed edit here, not a silent change in
+    # the SDK script.
+    sdk | emulator) ;;
     init | skills)
       fail "the SDK script invokes \`android $subcommand\`, which writes into ~/.agents/skills: $invocation"
       ;;

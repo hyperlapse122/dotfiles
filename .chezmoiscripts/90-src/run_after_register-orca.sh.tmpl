@@ -1,0 +1,97 @@
+{{- $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+#
+# Registers every declared ~/src tree into Orca, so opening Orca after an apply
+# shows the projects the garden registry declares — grouped the way the ~/src
+# layout groups them, with worktrees in their established location.
+#
+# ADDITIVE ONLY, like the reconciler beside it. A tree Orca already has a local
+# setup for is left exactly as the operator left it; a tree dropped from the
+# manifest is left registered. Orca's registry lives in the application's own
+# state, not in a chezmoi target, and this contract is what makes that
+# acceptable: nothing here overwrites a decision made in the UI.
+#
+# WHY run_after AND NOT run_onchange. chezmoi re-runs an onchange script only
+# when its rendered content changes, which for the reconciler beside it means
+# only when the registry ciphertext or the script text changes. Registration has
+# to converge against state this repository does not own — a project the
+# operator deleted in the Orca UI is invisible to every fingerprint — so it runs
+# on every apply and is a no-op when there is nothing to do.
+# `.chezmoiscripts/00-tools/run_after_90-activate-command-links.sh.tmpl` is the
+# same shape for the same reason.
+#
+# PLACEMENT (90-src, after the reconciler) — AND THE FILENAME IS LOAD-BEARING.
+# chezmoi strips the `run_`, `before_`/`after_`, `onchange_` attributes and the
+# `.tmpl` suffix before sorting same-phase scripts, so `onchange_` does not
+# order anything: what remains is compared lexically. The earlier name
+# `orca-register` sorted BEFORE `reconcile-garden` and this script ran first,
+# which meant a newly declared tree was registered only on the SECOND apply
+# (grow had not happened yet on the first). `register-orca` sorts after
+# `reconcile-garden`, which is the order this script needs. Renaming it back
+# reintroduces that one-apply lag silently.
+#
+# It still re-verifies each tree is a real work tree rather than assuming grow
+# ran this apply, because on the common apply the onchange reconciler does not
+# run at all.
+#
+# GATING. The container skip lives in the single gated .chezmoiignore block
+# (`.chezmoiscripts/90-src/*.sh`), the same one that skips the reconciler and
+# the registry itself. No new declaration.
+#
+# HARD-FAIL. A registration failure fails the apply (set -euo pipefail plus the
+# helper's own non-zero returns). Nothing is swallowed: the alternative is a
+# host that silently has no projects in the tool that now owns them.
+#
+# Dependency fingerprint — this script runs on every apply, so the fingerprint
+# below is not what triggers it. It is here so a registry edit still re-renders
+# the script and the diff shows the two are coupled. Hashing the ciphertext
+# never exposes a secret. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/garden/encrypted_readonly_garden.yaml.asc")) }}
+set -euo pipefail
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+export GIT_TERMINAL_PROMPT=0
+reg="$HOME/.config/garden/garden.yaml"
+
+# Prerequisites are hard requirements for the same reason the reconciler treats
+# them that way: both are materialized during target application, before this
+# after-phase script. The Orca CLI is the exception — the helper resolves it
+# itself, because the `~/.local/bin/orca-ide` symlink only exists after the
+# application's first launch and the RPM path is the fallback.
+command -v garden >/dev/null 2>&1 || { echo "orca-register: garden not on PATH (externals not applied? see .chezmoiexternals/vcs.toml)" >&2; exit 1; }
+[ -f "$reg" ] || { echo "orca-register: $reg missing (chezmoi apply did not deploy it)" >&2; exit 1; }
+
+# The shared record producer and the registration helper. Both are inlined for
+# the same reason: .chezmoitemplates is the only directory includeTemplate can
+# read, and .ci drives the same two files with fixtures.
+GARDEN_PATH_MIRROR_SOURCED=1
+{{ includeTemplate "garden-path-mirror-check.sh" . }}
+ORCA_REGISTER_SOURCED=1
+{{ includeTemplate "orca-register.sh" . }}
+
+# One `garden ls -v` call through the shared helper, so the declared path and
+# the url behind each record are the ones the path-mirror gate already accepted.
+tree_records="$(garden_path_mirror_enumerate "$reg" orca-register register)" || exit 1
+
+# Only trees that are actually on disk can be registered; a declared-but-not-grown
+# tree is the reconciler's business, not an error here.
+grown_records=""
+record_sep="$(printf '\t')"
+while IFS="$record_sep" read -r name abspath relpath url; do
+  [ -n "$name" ] || continue
+  if git -C "$abspath" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    grown_records="$grown_records$name$record_sep$abspath$record_sep$relpath$record_sep$url
+"
+  fi
+done <<EOF
+$tree_records
+EOF
+
+echo "orca-register: registering declared trees with Orca"
+printf '%s' "$grown_records" | orca_register_main
+
+echo "orca-register: done"

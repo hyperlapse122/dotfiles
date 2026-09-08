@@ -71,6 +71,50 @@ garden_path_mirror_header_count() {
   grep -c '^#-\{0,1\} ' || true
 }
 
+# Enumerate every declared tree as `name<TAB>abspath<TAB>relpath<TAB>url`
+# records on stdout, or exit non-zero having explained why not. Both 90-src
+# scripts need exactly this — the reconciler before its gate and grow, the
+# registration script before it talks to Orca — and each still makes its own
+# `garden ls` call at its own point in its own script; only the surrounding
+# boilerplate lives here.
+#
+# $1 registry path, $2 log prefix, $3 the verb for the refusal message.
+garden_path_mirror_enumerate() {
+  gpm_en_reg=$1
+  gpm_en_prefix=$2
+  gpm_en_verb=$3
+
+  gpm_en_raw="$(garden --config "$gpm_en_reg" ls --all --no-commands --no-gardens --no-groups -v 2>&1)" || {
+    echo "$gpm_en_prefix: 'garden ls' failed — cannot enumerate declared trees:" >&2
+    printf '%s\n' "$gpm_en_raw" >&2
+    return 1
+  }
+
+  # A garden eval failure is reported, never swallowed: silently guessing the
+  # root would strip nothing, and every tree would then fail the gate as
+  # "outside the registry root" with the real cause invisible.
+  if ! gpm_en_root="$(garden --config "$gpm_en_reg" eval '${GARDEN_ROOT}' 2>&1)"; then
+    echo "$gpm_en_prefix: 'garden eval' could not resolve the registry root, falling back to \$HOME/src: $gpm_en_root" >&2
+    gpm_en_root="$HOME/src"
+  fi
+  [ -n "$gpm_en_root" ] || gpm_en_root="$HOME/src"
+
+  gpm_en_records="$(printf '%s\n' "$gpm_en_raw" | garden_path_mirror_records "$gpm_en_root")"
+
+  # Every declared tree must have produced exactly one record. A `garden ls`
+  # that succeeds but whose output this parser no longer recognizes would
+  # otherwise leave every consumer iterating zero times — green, with nothing
+  # checked.
+  gpm_en_headers="$(printf '%s\n' "$gpm_en_raw" | garden_path_mirror_header_count)"
+  gpm_en_count="$(printf '%s' "$gpm_en_records" | grep -c . || true)"
+  if [ "$gpm_en_count" -ne "$gpm_en_headers" ] || [ "$gpm_en_headers" -eq 0 ]; then
+    echo "$gpm_en_prefix: parsed $gpm_en_count records from $gpm_en_headers 'garden ls' tree headers — output format changed; refusing to $gpm_en_verb unverified" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$gpm_en_records"
+}
+
 garden_path_mirror_derive() {
   gpm_url=$1
   gpm_scheme=''

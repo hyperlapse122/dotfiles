@@ -145,12 +145,6 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "codegraph-darwin-x64.tar.gz",
     "darwin-arm64": "codegraph-darwin-arm64.tar.gz",
   },
-  aoe: {
-    "linux-amd64": "aoe-linux-amd64.tar.gz",
-    "linux-arm64": "aoe-linux-arm64.tar.gz",
-    "darwin-amd64": "aoe-darwin-amd64.tar.gz",
-    "darwin-arm64": "aoe-darwin-arm64.tar.gz",
-  },
   codex: {
     "linux-amd64": "codex-x86_64-unknown-linux-musl.tar.gz",
     "linux-arm64": "codex-aarch64-unknown-linux-musl.tar.gz",
